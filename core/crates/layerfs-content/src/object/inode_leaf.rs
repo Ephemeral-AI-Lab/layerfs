@@ -170,7 +170,7 @@ impl InodeValue {
             self.kind == InodeKind::Directory && self.namespace_ref_count == 0
         } else {
             self.namespace_ref_count >= 1
-                && (self.kind == InodeKind::RegularFile || self.namespace_ref_count == 1)
+                && (self.kind != InodeKind::Directory || self.namespace_ref_count == 1)
         };
         if valid {
             Ok(())

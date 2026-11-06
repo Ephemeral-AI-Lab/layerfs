@@ -1,17 +1,23 @@
-//! Inode-table branches stored against their predecessor (#360 item 3).
+//! Tree pages stored against their predecessor: inode-table branches (#360
+//! item 3), directory leaves and branches, and extent leaves and branches
+//! (layerfs-project #92).
 //!
-//! An `InodeBranch` lives in the ordinary lane. Tag zero is the canonical page
-//! as it always was. Tag one is the pooled COPY/INSERT grammar
-//! ([`super::delta`]) against one direct base branch: `1 || base || output
-//! length || count || program`, the canonical page being the output. The
-//! locator's role decides the interpretation, exactly as it does for a pooled
-//! leaf, so a Store written before this form reads unchanged and a mixed chain
-//! of whole and delta branches is ordinary.
+//! A program page lives in the ordinary lane. Tag zero is the canonical page as
+//! it always was. Tag one is the pooled COPY/INSERT grammar ([`super::delta`])
+//! against one direct base page of the same role: `1 || base || output length ||
+//! count || program`, the canonical page being the output. The locator's role
+//! decides the interpretation, exactly as it does for a pooled leaf, so a Store
+//! written before this form reads unchanged and a mixed chain of whole and delta
+//! pages is ordinary. Every ordinary pack is now written at
+//! [`crate::pack::layout::VERSION_ORDINARY_PAGES`], so a 2.0 reader, which
+//! accepts tag one for inode-table branches only, refuses a pack that may hold a
+//! directory or extent program by its version instead of failing inside a decode.
 //!
-//! A branch chain is read like a pooled leaf chain: walked root to base through
+//! A page chain is read like a pooled leaf chain: walked root to base through
 //! the caller's caches, bounded by the metadata depth cap and charged record
 //! bytes against the metadata chain budgets, then decoded base first, every
-//! element authenticated against its own locator.
+//! element authenticated against its own locator. Every element has the root's
+//! role.
 
 use layerfs_content::{ObjectId, ObjectRole};
 
@@ -23,6 +29,24 @@ use crate::policy::StorageCapacities;
 use crate::source::Source;
 
 use super::read::PooledCaches;
+
+/// True for the roles whose records may be a COPY/INSERT program against a
+/// direct base page of the same role.
+pub const fn is_program_role(role: ObjectRole) -> bool {
+    matches!(
+        role,
+        ObjectRole::InodeBranch
+            | ObjectRole::DirectoryLeaf
+            | ObjectRole::DirectoryBranch
+            | ObjectRole::ExtentLeaf
+            | ObjectRole::ExtentBranch
+    )
+}
+
+/// Largest stored record of a program page: the whole tag and a canonical page
+/// at the metadata record limit. A program is kept only when it is shorter
+/// than the whole record, so it is never wider.
+pub const PAGE_RECORD_LIMIT: usize = crate::policy::METADATA_RECORD_LIMIT + 1;
 
 /// Record tag of a branch stored whole.
 pub const BRANCH_FULL_TAG: u8 = 0;
@@ -47,12 +71,12 @@ pub enum BranchRecord<'a> {
     },
 }
 
-/// Parses one stored `InodeBranch` record.
+/// Parses one stored program-page record.
 pub fn parse(record: &[u8]) -> StorageResult<BranchRecord<'_>> {
     match record.first() {
         Some(&BRANCH_FULL_TAG) => {
             let page = &record[1..];
-            if page.is_empty() {
+            if page.is_empty() || record.len() > PAGE_RECORD_LIMIT {
                 return Err(StorageError::Integrity("branch record width"));
             }
             Ok(BranchRecord::Full(page))
@@ -85,7 +109,7 @@ pub fn stored_base(record: &[u8]) -> StorageResult<Option<ObjectId>> {
     })
 }
 
-/// Work one branch reconstruction charged: depth and the chain budgets.
+/// Work one page reconstruction charged: depth and the chain budgets.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct BranchChain {
     /// Dependency edges below the requested branch.
@@ -97,7 +121,7 @@ pub struct BranchChain {
 }
 
 impl PoolReader {
-    /// The authenticated canonical page of one stored `InodeBranch`.
+    /// The authenticated canonical page of one stored program page.
     pub(crate) fn branch_canonical_with_caches(
         &mut self,
         connection: &dyn Source,
@@ -109,12 +133,24 @@ impl PoolReader {
     ) -> StorageResult<(Vec<u8>, BranchChain)> {
         let result =
             self.reconstruct_branch(connection, capacities, ceiling, workspace, root, caches);
-        self.counters.branch_requests = self.counters.branch_requests.saturating_add(1);
+        let counters = &mut self.counters;
+        let inode = root.role == ObjectRole::InodeBranch;
+        let (requests, edges) = match inode {
+            true => (
+                &mut counters.branch_requests,
+                &mut counters.branch_chain_edges,
+            ),
+            false => (&mut counters.page_requests, &mut counters.page_chain_edges),
+        };
+        *requests = requests.saturating_add(1);
         if let Ok((_, chain)) = &result {
-            self.counters.branch_chain_edges = self
-                .counters
-                .branch_chain_edges
-                .saturating_add(u64::from(chain.depth));
+            *edges = edges.saturating_add(u64::from(chain.depth));
+            counters.program_chain_canonical = counters
+                .program_chain_canonical
+                .saturating_add(chain.canonical);
+            counters.program_chain_encoded =
+                counters.program_chain_encoded.saturating_add(chain.encoded);
+            counters.program_max_depth = counters.program_max_depth.max(u64::from(chain.depth));
         }
         result
     }
@@ -128,7 +164,7 @@ impl PoolReader {
         root: ObjectLocation,
         mut caches: Option<PooledCaches<'_>>,
     ) -> StorageResult<(Vec<u8>, BranchChain)> {
-        if root.role != ObjectRole::InodeBranch {
+        if !is_program_role(root.role) {
             return Err(StorageError::Integrity("branch record role"));
         }
         let cap = usize::from(capacities.metadata_delta_max_depth);
@@ -162,7 +198,7 @@ impl PoolReader {
             let location = connection
                 .base_location(base, ceiling)?
                 .ok_or(StorageError::ObjectMissing(base))?;
-            if location.role != ObjectRole::InodeBranch {
+            if location.role != root.role {
                 return Err(StorageError::Integrity("branch chain role"));
             }
             if connection.ordered_dependencies()
@@ -222,8 +258,11 @@ impl PoolReader {
             }
             page = Some((location.object_id, decoded));
         }
-        self.counters.branch_delta_applies =
-            self.counters.branch_delta_applies.saturating_add(applies);
+        let applied = match root.role {
+            ObjectRole::InodeBranch => &mut self.counters.branch_delta_applies,
+            _ => &mut self.counters.page_delta_applies,
+        };
+        *applied = applied.saturating_add(applies);
         let (id, canonical) = page.ok_or(StorageError::Integrity("branch chain empty"))?;
         if id != root.object_id {
             return Err(StorageError::Integrity("branch canonical root"));

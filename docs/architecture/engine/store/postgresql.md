@@ -23,10 +23,10 @@ Without it, selecting a PostgreSQL Store fails `BackendUnavailable`.
  +--------------------------------------------------------------+
  | schema <selection.schema>      (one Store; [a-z_][a-z0-9_]*) |
  |  store_lane (id=1)   <-- the row every writer locks          |
- |  store_policy, pack, object_location, inode_value,           |
+ |  store_policy, pack, object_location, inode_value_block,     |
  |  content_signature, store_totals                             |
  |  history_meta, layer_stack, layer, "commit", branch,         |
- |  scope_allocator, binding_hint                               |
+ |  scope_allocator, binding_hint_block                         |
  |  layer_lineage, commit_lineage, absorbed, reach, file_digest |
  |  init_operation, init_entry, init_host_file   (if created)   |
  +--------------------------------------------------------------+
@@ -40,10 +40,13 @@ Without it, selecting a PostgreSQL Store fails `BackendUnavailable`.
 | Types | `bigint` for integers, `bytea` for BLOBs | [`schema.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/schema.sql) |
 | Name order | history names `COLLATE "C"`, so paging matches SQLite byte order | same |
 | Pack bodies | one `bytea` per pack, `STORAGE EXTERNAL` (uncompressed, out of line) for ranged `substring` reads | same |
-| Pack units | absent: group rows are a SQLite physical layout | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
+| Pack units | absent: group rows are a SQLite physical layout. Explicit 8,100-byte `PLAIN` chunk rows were measured and not taken (#90): one chunk per page and a partly filled page per pack tail made D10's packs 44.0 MB, against 43.2 MB with `EXTERNAL` |
+| Object locations | narrow rows (#90): `pack_id bigint`, `canonical_length integer`, `role`, `group_number`, `record_number` `smallint`, then `object_id bytea STORAGE PLAIN`; no unique key on the id but a B-tree `object_location_prefix` on its first eight bytes as a signed big-endian `bigint`, with the full id compared in the heap. A location is inserted only when its id is absent (`INSERT … WHERE NOT EXISTS`), which is unique because every location insert holds the lane; the lost-race and Collision read-back are unchanged. A signature must name a location of its publication or a stored one, checked in the same statement (the foreign key needed a unique key). D10: 9.70 → 5.82 MB | [`publish.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/publish.rs), [`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
+| No TOAST for short values | every bounded `bytea`/`text` column of `object_location`, `content_signature`, `file_digest`, `layer_stack`, `branch`, `scope_allocator`, `layer_lineage`, `commit_lineage`, `absorbed` and the acquisition tables is `STORAGE PLAIN`, so those tables have no TOAST relation (8 KiB each); `pack`, `layer`, `commit`, `history_meta` and `reach` keep one for their unbounded columns | [`schema.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/schema.sql) |
+| Blocks | `inode_value_block.body` and `binding_hint_block.body` are `bytea STORAGE PLAIN` in the `CREATE TABLE` (PostgreSQL 16 or newer): two 4,000-byte rows per 8 KiB page, never TOASTed or compressed, and no TOAST table | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
 | Lane | `store_lane`, one row | [`schema.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/schema.sql) |
 | Merge records | temporary tables of the writer connection | [`merge_records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/merge_records.rs) |
-| Schema version | `SCHEMA_VERSION = 1`, engine-scoped | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
+| Schema version | `SCHEMA_VERSION = 2` (#91: inode value and binding hint blocks; #90: narrow locations, no short-value TOAST), engine-scoped; a version 1 schema is refused at open (`Integrity`), never converted | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
 
 `PostgresHandles::create` checks `pg_namespace` and refuses an existing
 schema (`Refused "schema exists"`) before writing. It then creates the
@@ -77,8 +80,8 @@ session keeps the frozen policy and the server version the check read, so
  | lane: Mutex<Option<Client>>   second connection, opened on   |
  |                               first hold_lane                |
  | settings: schema, synchronous_commit, lock_timeout_ms        |
- | connector: Config + the process's one TLS connector          |
- |            (sslmode from the connection string, as given)    |
+ | connector: Config + the process's one TLS connector, or none |
+ |            for sslmode=disable (sslmode as given)            |
  +--------------------------------------------------------------+
 ```
 
@@ -102,13 +105,27 @@ counters (zero on SQLite):
 A connection's handshake (TCP, the SSL probe of `sslmode=prefer`, startup
 and authentication) is one `connects`, not part of `round_trips`.
 
+Each statement waits for its reply before the next is sent; nothing is
+pipelined. The session uses the synchronous `postgres` client, which does not
+expose the `tokio_postgres` client inside it, so pipelining independent
+statements would mean rewriting the session layer on `tokio-postgres` with
+its own runtime. That was left out of layerfs-project #95; it reduced round
+trips by batching instead (a Commit validates through its Workspace's reader,
+reads a Commit or Layer by id in one statement, and difference walks read
+the pages they expand in batched demands). A fresh daemon's first Commit
+still opens the lazy lane connection (owner decision 2026-11-06: every
+Commit holds the lane; the connection is not opened eagerly).
+
 The connection string's `sslmode` is used exactly as given; nothing changes
 it. The driver's default, `prefer`, sends an SSLRequest first and costs one
 more round trip per connection on a server without TLS. On a loopback or
 private network route (a server on the same host, a Docker network) give
 `sslmode=disable` to skip it; on any other route give `require` or
 `verify-full`. The TLS connector, which loads the system's trust roots, is
-built once per process. The Store
+built once per process, at the first connection whose `sslmode` may
+negotiate TLS; a connection string with `sslmode=disable` never builds it
+(#96). On Linux the build costs a process about 40–70 ms, and every Sandbox
+create starts a new daemon process. The Store
 service reports the writer session and every Workspace reader session,
 live and retired, as on SQLite
 ([`bootstrap.rs`](../../../../engine/crates/layerfs-store-service/src/bootstrap.rs)).
@@ -122,7 +139,7 @@ live and retired, as on SQLite
 | `Stage` | `READ COMMITTED` + `synchronous_commit` | no | schema create, merge records | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs) |
 | `Publish` | `READ COMMITTED` + `synchronous_commit` + `lock_timeout` | `FOR UPDATE` after the pack bodies, unless nested in the held lane | one Save publication wave, up to 16 MiB − 1 (`publication_bytes`; SQLite keeps 4 MiB − 1) | same |
 | `Immutable` | none; autocommit statements | no | locates, pack reads, inode values | same |
-| `Statement` | none; exactly one autocommit statement (a second is refused before it is sent) | no | `branch_snapshot`, `file_roots` (`digest_roots`, one statement for up to `FILE_DIGEST_WINDOW` = 1,024 contents) | same |
+| `Statement` | none; exactly one autocommit statement (a second is refused before it is sent) | no | `branch_snapshot`, `commit` and `layer` by id (a Commit's `logical.known`, #95), a LayerStack by name (a Sandbox create's reach check finds its project, #96), `file_roots` (`digest_roots`, one statement for up to `FILE_DIGEST_WINDOW` = 1,024 contents) | same |
 
 A single PostgreSQL statement sees one snapshot, so `Statement` reads a Branch
 and the rows it resolves to coherently without `BEGIN`/`COMMIT`. Statements run

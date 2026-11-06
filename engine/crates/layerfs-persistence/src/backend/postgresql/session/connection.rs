@@ -3,7 +3,9 @@ use super::{profile::Settings, rows};
 use crate::backend::{admission::Admission, records::BackendError};
 use crate::{PostgresSelection, SqlWork};
 use layerfs_storage::StoragePolicy;
-use postgres::{Client, Config, SimpleQueryMessage, SimpleQueryRow, Statement};
+use postgres::{
+    config::SslMode, Client, Config, NoTls, SimpleQueryMessage, SimpleQueryRow, Statement,
+};
 use postgres_native_tls::MakeTlsConnector;
 use std::{
     collections::HashMap,
@@ -44,7 +46,10 @@ impl State {
 
 /// The process's one TLS connector (#63): building one loads the system's
 /// trust roots, so every connection shares it. `None` when it could not be
-/// built; every connection is then refused as before.
+/// built; every connection that may negotiate TLS is then refused as before.
+/// A connection string with `sslmode=disable` never builds it (#96): the
+/// driver never negotiates TLS for one, and on Linux the build costs a
+/// process about 40-70 ms (`postgresql_first_open`).
 fn tls() -> Result<MakeTlsConnector, BackendError> {
     static TLS: OnceLock<Option<MakeTlsConnector>> = OnceLock::new();
     TLS.get_or_init(|| {
@@ -63,24 +68,28 @@ fn tls() -> Result<MakeTlsConnector, BackendError> {
 #[derive(Clone)]
 pub(crate) struct Connector {
     config: Config,
-    tls: MakeTlsConnector,
+    /// `None` for `sslmode=disable`, which never uses TLS.
+    tls: Option<MakeTlsConnector>,
 }
 
 impl Connector {
     pub(crate) fn new(selection: &PostgresSelection) -> Result<Self, BackendError> {
         let config = Config::from_str(&selection.url).map_err(|_| BackendError::Integrity)?;
-        Ok(Self {
-            config,
-            tls: tls()?,
-        })
+        let tls = match config.get_ssl_mode() {
+            SslMode::Disable => None,
+            _ => Some(tls()?),
+        };
+        Ok(Self { config, tls })
     }
     /// One new client, with the driver's own error (for a status read).
     pub(crate) fn connect_raw(&self) -> Result<Client, postgres::Error> {
-        self.config.connect(self.tls.clone())
+        match &self.tls {
+            Some(tls) => self.config.connect(tls.clone()),
+            None => self.config.connect(NoTls),
+        }
     }
     pub(crate) fn connect(&self) -> Result<Client, BackendError> {
-        self.config
-            .connect(self.tls.clone())
+        self.connect_raw()
             .map_err(|e| match (rows::error(&e), e.code()) {
                 // No session exists, so no work can have started: the
                 // server refused it with an error, or no connection was made.

@@ -145,7 +145,7 @@ leaves no name row. Sealed rows are never rewritten.
 | Operation | Published finals | Refusals |
 | --- | --- | --- |
 | create, mkdir, symlink | new inode (`born` = active generation), its name, parent mtime and `entries + 1`; a symlink's target is its one creation cell | Exists; parent Missing or NotDirectory; set-id/sticky bits outside the portable grammar NotPermitted; empty symlink target Missing |
-| link | target `nlink + 1` (mtime unchanged), its new name, parent | NotPermitted for a directory or symlink; Missing for an absent or already removed inode; Exists; TooManyLinks |
+| link | target `nlink + 1` (mtime unchanged), its new name, parent | NotPermitted for a directory; symlinks share their serial and opaque target without following it; Missing for an absent or already removed inode; Exists; TooManyLinks |
 | unlink, rmdir | name removed, target `nlink - 1` (directory: 0), parent mtime and `entries - 1` | Missing; IsDirectory / NotDirectory; NotEmpty when `entries != 0` |
 | rename | source name removed, destination bound to the same serial, both parents, replaced inode's reference dropped | Missing; Exists under no-replace; NotDirectory / IsDirectory / NotEmpty for an incompatible or non-empty replaced inode; Invalid, AncestryRequired, AncestryMismatch for directory moves |
 | chmod, utimens | the inode's mode and/or mtime | Unsupported for a symlink mode; NotPermitted for unrepresentable bits; Invalid nanoseconds; Missing |

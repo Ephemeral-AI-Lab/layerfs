@@ -87,7 +87,7 @@ Answer = "LFSA\x02" | id u64 BE           | reply kind | fields
 | 5 | `Fork` | 13 | `Cleanup(token)` |
 | 6 | `History` | 14 | `Branches { stack, page }` |
 | 7 | `Hello(HelloRequest)` | 20 | `Sdk(SdkCall { method, args })` |
-| 8 | `EndSession` | | |
+| 8 | `EndSession` | 15 | `MountNamed { workspace, project, branch }` |
 
 An `Observed` wrapper may not wrap `Hello`, `EndSession` or another
 observation. `Reply` variants: `Cleanup`, `SessionEnded`, `Hello`,

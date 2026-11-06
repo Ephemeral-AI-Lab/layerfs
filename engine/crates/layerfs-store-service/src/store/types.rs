@@ -10,6 +10,30 @@ pub struct BindRequest {
     pub branch: BranchId,
     pub workspace: WorkspaceId,
 }
+/// A bind of the Branch a project and Branch name select (#64): the daemon
+/// finds it on the Workspace's own reader, so its caller reads no Store.
+#[derive(Clone, Debug)]
+pub struct NamedBindRequest {
+    pub workspace: WorkspaceId,
+    /// The project's name (its LayerStack).
+    pub project: String,
+    /// The Branch's name in that project.
+    pub branch: String,
+}
+/// What a bind selected: a Branch by identity or by names.
+#[derive(Clone, Debug)]
+pub enum BindIntent {
+    Id(BindRequest),
+    Named(NamedBindRequest),
+}
+impl BindIntent {
+    pub fn workspace(&self) -> WorkspaceId {
+        match self {
+            Self::Id(request) => request.workspace,
+            Self::Named(request) => request.workspace,
+        }
+    }
+}
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BindPhase {
     Snapshot,
@@ -23,6 +47,10 @@ pub enum BindError {
         cause: Arc<PortError>,
     },
     MissingBranch(BranchId),
+    /// A named bind's project does not exist (its name as given).
+    NoSuchProject(String),
+    /// A named bind's project has no such Branch (its name as given).
+    NoSuchBranch(String),
     History(HistoryError),
     Read(Arc<PortError>),
     Content {
@@ -34,7 +62,7 @@ pub enum BindError {
 #[derive(Debug)]
 pub struct BindRefusal {
     pub phase: BindPhase,
-    pub request: BindRequest,
+    pub request: BindIntent,
     pub snapshot: Option<BranchSnapshot>,
     pub error: BindError,
 }

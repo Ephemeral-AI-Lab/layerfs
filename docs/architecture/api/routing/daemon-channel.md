@@ -66,10 +66,10 @@ does not share the Docker host's loopback (`pool::daemon_host`).
  workspace call (control)            host Sandbox code      daemon
    |                                 (serve.rs, files.rs)
    | mount(sandbox, branch, name?)        |
-   |------------------------------------->| Branch id: Store's own
-   |                                      | route (never the daemon)
+   |------------------------------------->| reads no Store (#64)
    |                                      | lend Control
-   |                                      |-- Mount{workspace,branch} -->
+   |                                      |-- MountNamed{workspace,  --->
+   |                                      |   project, branch}
    |                                      |<-- Bound{token, binding} ----
    |                                      |-- Attach(token) ------------>
    |                                      |<-- Ready(mount dir, profile)-
@@ -82,7 +82,7 @@ does not share the Docker host's loopback (`pool::daemon_host`).
 
 | Call | Daemon requests | Answer shaped by | Source |
 | --- | --- | --- | --- |
-| `workspace.mount` | `Mount` (bind), then `Attach` (kernel Ready): two acknowledged steps; a failed attach leaves the Workspace bound | `values::mounted` | [`daemon/workspace/mount.rs`](../../../../api/crates/layerfs-control/src/daemon/workspace/mount.rs), [`recovery.rs`](../../../../api/crates/layerfs-control/src/daemon/workspace/recovery.rs) |
+| `workspace.mount` | `MountNamed` (bind the Branch the daemon finds by project and Branch name; `SdkRefused` `NoSuchProject` / `NoSuchBranch` when missing), then `Attach` (kernel Ready): two acknowledged steps; a failed attach leaves the Workspace bound | `values::mounted` | [`daemon/workspace/mount.rs`](../../../../api/crates/layerfs-control/src/daemon/workspace/mount.rs), [`recovery.rs`](../../../../api/crates/layerfs-control/src/daemon/workspace/recovery.rs) |
 | `workspace.commit` | `Commit` | `values::commit`: Committed, Merged (with `merged`), or `Conflict` | [`daemon/workspace/commit.rs`](../../../../api/crates/layerfs-control/src/daemon/workspace/commit.rs), [`daemon/values.rs`](../../../../api/crates/layerfs-control/src/daemon/values.rs) |
 | `workspace.unmount` | `Unmount{token, discard}`, or `ForceUnmount` with `force` | `values::unmounted` (`Dirty` refusal) or `force_unmounted` | [`daemon/workspace/unmount.rs`](../../../../api/crates/layerfs-control/src/daemon/workspace/unmount.rs) |
 | `workspace.status` | `Status(token)`; the Branch head is read separately on the Store's route | `values::status` | [`daemon/workspace/status.rs`](../../../../api/crates/layerfs-control/src/daemon/workspace/status.rs) |

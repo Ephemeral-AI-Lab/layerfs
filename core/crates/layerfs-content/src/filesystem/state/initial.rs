@@ -72,7 +72,7 @@ impl InitialCursor<'_, '_, '_> {
                 .ok_or(ContentError::InvalidRecord("new inode value"))?;
             // The same single-binding invariant the reducer enforces on an
             // update's final values; a build takes its rows from here instead.
-            if value.kind != crate::object::inode_leaf::InodeKind::RegularFile && count > 1 {
+            if value.kind == crate::object::inode_leaf::InodeKind::Directory && count > 1 {
                 return Err(ContentError::InvalidRecord("multiple parents"));
             }
             let root = self.roots.get(serial)?;

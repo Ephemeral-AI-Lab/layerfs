@@ -106,6 +106,13 @@ manager does after removing `node_modules`. New inodes, equal bytes.
    none              --> build; record_file_digests    (digests_recorded)
 ```
 
+The Store keeps a digest only for a chunked file, at or above the Store's
+`small_file_threshold_bytes` (#91): `record_file_digests` drops smaller rows
+and `file_roots` answers none for a smaller length without a statement. A
+small file is one whole-file object, so building it again yields the same
+object id, which wave admission finds stored and does not encode again: it
+counts as built, not as `files_reused`, and stores nothing new.
+
 | Step | Source |
 | --- | --- |
 | The overlay keeps a whole-content digest for a file it followed from creation; an open file has none | [`digest.rs`](../../../../engine/crates/layerfs-overlay/src/payload/digest.rs) |

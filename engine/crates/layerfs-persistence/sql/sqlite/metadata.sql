@@ -16,9 +16,11 @@ CREATE TABLE object_location (
  group_number INTEGER NOT NULL CHECK(group_number BETWEEN 0 AND 255),
  record_number INTEGER NOT NULL CHECK(record_number BETWEEN 0 AND 8190)
 ) STRICT, WITHOUT ROWID;
-CREATE TABLE inode_value (
- ordinal INTEGER PRIMARY KEY CHECK(ordinal BETWEEN 1 AND 4294967295),
- value BLOB NOT NULL CHECK(length(value)=73)
+CREATE TABLE inode_value_block (
+ first_ordinal INTEGER PRIMARY KEY CHECK(first_ordinal BETWEEN 1 AND 4294967295),
+ last_ordinal INTEGER NOT NULL
+  CHECK(last_ordinal BETWEEN first_ordinal AND 4294967295 AND last_ordinal-first_ordinal<255),
+ body BLOB NOT NULL CHECK(length(body) BETWEEN 9 AND 4000)
 ) STRICT;
 CREATE TABLE content_signature (
  slot INTEGER PRIMARY KEY CHECK(slot BETWEEN 0 AND 8191),

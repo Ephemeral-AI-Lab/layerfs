@@ -1,15 +1,19 @@
-//! Selection of an inode-table branch record: whole, or a COPY/INSERT program
-//! against its predecessor (#360 item 3).
+//! Selection of a program-page record: whole, or a COPY/INSERT program against
+//! its predecessor. Inode-table branches since #360 item 3; directory leaves and
+//! branches and extent leaves and branches since layerfs-project #92.
 //!
-//! The candidate is the first advisory predecessor the construction carries (the
-//! page this branch replaces), when it is a stored `InodeBranch`. Its chain must
-//! be below the metadata depth cap and, with this branch on it, within the
-//! metadata chain budgets; otherwise the base is the whole branch at the root of
-//! that chain (#89), so a chain at its limits restarts at depth one instead of
-//! storing the branch whole. The root must fit the budgets in the same way.
-//! Exactly one trial runs, with the pooled producer and its match budget; the
-//! program is kept only when it is shorter than the whole record. Every refusal
-//! stores the branch whole, which is what every Store before this form holds.
+//! The candidate is the first advisory predecessor the construction carries: the
+//! page this one replaces (`sorted/page.rs` for directory and inode pages) or the
+//! stored page at the same level and logical position (extent pages), when it is
+//! stored with this page's role. Its chain must be below the metadata depth cap
+//! and, with this page on it, within the metadata chain budgets; otherwise the
+//! base is the whole page at the root of that chain (#89), so a chain at its
+//! limits restarts at depth one instead of storing the page whole. The root must
+//! fit the budgets in the same way. Exactly one trial runs, with the pooled
+//! producer and its match budget; the program is kept only when it is shorter
+//! than the whole record, and for a directory page only when it saves at least a
+//! quarter of it (`worth`). Every refusal stores the page whole, which
+//! is what every Store before this form holds.
 
 use layerfs_content::{ObjectId, ObjectRole};
 
@@ -23,7 +27,8 @@ use crate::policy::StorageCapacities;
 use crate::save::SaveProfile;
 use std::time::Instant;
 
-/// What branch selection did, apart from the payload counts (#360 item 3).
+/// What program-page selection did for one role class, apart from the payload
+/// counts (#360 item 3, #92).
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct BranchCounters {
     /// Branches offered.
@@ -62,18 +67,31 @@ impl BranchCounters {
     }
 }
 
-/// Chooses the record of one `InodeBranch` whose whole record is `full`.
+/// The counters of `role`'s class: inode-table branches, directory pages or
+/// extent pages.
+fn counters(counters: &mut super::select::DeltaCounters, role: ObjectRole) -> &mut BranchCounters {
+    match role {
+        ObjectRole::DirectoryLeaf | ObjectRole::DirectoryBranch => &mut counters.directory,
+        ObjectRole::ExtentLeaf | ObjectRole::ExtentBranch => &mut counters.extent,
+        _ => &mut counters.branch,
+    }
+}
+
+/// Chooses the record of one program page of `role` whose whole record is
+/// `full`.
 pub(super) fn select(
     input: &mut SelectInput<'_>,
+    role: ObjectRole,
     canonical: &[u8],
     advisory: &[ObjectId],
     full: EncodedRecord,
 ) -> StorageResult<EncodedRecord> {
-    input.counters.branch.branches = input.counters.branch.branches.saturating_add(1);
-    if let Some(record) = trial(input, canonical, advisory, &full)? {
+    let class = counters(input.counters, role);
+    class.branches = class.branches.saturating_add(1);
+    if let Some(record) = trial(input, role, canonical, advisory, &full)? {
         return Ok(record);
     }
-    let branch = &mut input.counters.branch;
+    let branch = counters(input.counters, role);
     branch.full_branches = branch.full_branches.saturating_add(1);
     note_depth(&mut branch.depths, 0);
     Ok(full)
@@ -81,6 +99,7 @@ pub(super) fn select(
 
 fn trial(
     input: &mut SelectInput<'_>,
+    role: ObjectRole,
     canonical: &[u8],
     advisory: &[ObjectId],
     full: &EncodedRecord,
@@ -91,7 +110,7 @@ fn trial(
     let Some(location) = input.connection.location(base_id, i64::MAX)? else {
         return Ok(None);
     };
-    if location.role != ObjectRole::InodeBranch {
+    if location.role != role {
         return Ok(None);
     }
     let capacities = input.capacities;
@@ -99,7 +118,7 @@ fn trial(
     let (mut base, mut chain) = acquire(input, location)?;
     let capped = chain.depth >= capacities.metadata_delta_max_depth;
     if capped {
-        let branch = &mut input.counters.branch;
+        let branch = counters(input.counters, role);
         branch.depth_capped = branch.depth_capped.saturating_add(1);
     }
     if (capped || !fits(capacities, chain, canonical, full)) && chain.depth > 0 {
@@ -114,12 +133,12 @@ fn trial(
             return Err(crate::error::StorageError::Integrity("branch chain root"));
         }
         base_id = root.object_id;
-        let branch = &mut input.counters.branch;
+        let branch = counters(input.counters, role);
         branch.rebased = branch.rebased.saturating_add(1);
     } else if capped {
         return Ok(None);
     }
-    let branch = &mut input.counters.branch;
+    let branch = counters(input.counters, role);
     if !fits(capacities, chain, canonical, full) {
         branch.work_exceeded = branch.work_exceeded.saturating_add(1);
         return Ok(None);
@@ -132,9 +151,10 @@ fn trial(
     let Some(program) = program? else {
         return Ok(None);
     };
-    if program.len() >= full.record.len() {
+    if !worth(role, program.len(), full.record.len()) {
         return Ok(None);
     }
+    let branch = counters(input.counters, role);
     branch.delta_branches = branch.delta_branches.saturating_add(1);
     note_depth(&mut branch.depths, chain.depth.saturating_add(1));
     Ok(Some(EncodedRecord {
@@ -146,7 +166,8 @@ fn trial(
     }))
 }
 
-/// The authenticated page of one stored branch and the chain work it charged.
+/// The authenticated page of one stored program page and the chain work it
+/// charged.
 fn acquire(
     input: &mut SelectInput<'_>,
     location: ObjectLocation,
@@ -168,7 +189,27 @@ fn acquire(
     base
 }
 
-/// True when `chain` with this branch on it stays within the metadata budgets.
+/// True when a program of `program` bytes is kept over the whole record of
+/// `whole` bytes.
+///
+/// An inode-table branch or an extent page keeps any shorter program: its rows
+/// are mostly object identities, which no group compression shortens, so the
+/// uncompressed comparison is the stored one. A directory page keeps a program
+/// only when it saves at least a quarter of the whole record (#92): both forms
+/// are compressed inside the same ordinary group, and on a small directory whose
+/// rows all changed (every name renamed over) the whole page's names compress
+/// better than a program of short copies and literals that is only marginally
+/// shorter, so the program would store more bytes and still lengthen the chain.
+fn worth(role: ObjectRole, program: usize, whole: usize) -> bool {
+    match role {
+        ObjectRole::DirectoryLeaf | ObjectRole::DirectoryBranch => {
+            program.saturating_mul(4) <= whole.saturating_mul(3)
+        }
+        _ => program < whole,
+    }
+}
+
+/// True when `chain` with this page on it stays within the metadata budgets.
 fn fits(
     capacities: &StorageCapacities,
     chain: BranchChain,

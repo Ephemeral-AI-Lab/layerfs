@@ -33,6 +33,11 @@ impl ChunkRuns {
             logical_len: 0,
         }
     }
+    /// Offers the mapping pages this construction emits positional delta bases
+    /// from an earlier version of the file (#92).
+    pub(crate) fn set_page_hints(&mut self, hints: crate::file::mapping::PageHints) {
+        self.builder.set_page_hints(hints);
+    }
     pub(crate) fn data(
         &mut self,
         bytes: &[u8],

@@ -490,15 +490,40 @@ fn unreachable_and_miscounted_inodes_are_refused() {
 }
 
 #[test]
+fn symlink_aliases_require_exact_reachable_binding_counts() {
+    let symlink = InodeKind::Symlink;
+    let (store, root) = craft(&[
+        (1, DIR, 0, &[("first", 2), ("second", 2)]),
+        (2, symlink, 2, &[]),
+    ]);
+    let (result, ..) = qualify(&store, root);
+    assert_eq!(result.expect("exact symlink aliases").bindings(), 2);
+
+    let (store, root) = craft(&[(1, DIR, 0, &[("first", 2)]), (2, symlink, 2, &[])]);
+    assert_eq!(
+        refused(&store, root),
+        ContentError::InvalidRecord("qualified inode binding count")
+    );
+    let (store, root) = craft(&[
+        (1, DIR, 0, &[("first", 2), ("second", 2)]),
+        (2, symlink, 1, &[]),
+    ]);
+    assert_eq!(
+        refused(&store, root),
+        ContentError::InvalidRecord("qualified binding count exceeds the inode")
+    );
+}
+
+#[test]
 fn invalid_inode_rows_and_a_missing_root_inode_are_refused() {
     let invariant = ContentError::InvalidRecord("inode value invariant");
     // The root must be an unbound directory; nothing else may be unbound; only
-    // a regular file may be bound more than once.
+    // a directory must not be bound more than once.
     for inodes in [
         &[(1, FILE, 0, &[][..])][..],
         &[(1, DIR, 1, &[])],
         &[(1, DIR, 0, &[("a", 2)]), (2, FILE, 0, &[])],
-        &[(1, DIR, 0, &[("a", 2)]), (2, InodeKind::Symlink, 2, &[])],
+        &[(1, DIR, 0, &[("a", 2)]), (2, InodeKind::Symlink, 0, &[])],
         &[(1, DIR, 0, &[("a", 2)]), (2, DIR, 2, &[])],
     ] {
         let (store, root) = craft(inodes);

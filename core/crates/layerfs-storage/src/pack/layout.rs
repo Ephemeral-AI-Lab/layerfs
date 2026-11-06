@@ -27,7 +27,9 @@
 //! stored zeros. The sized versions write exactly `group_count` entries; the
 //! reserved versions stay readable at their own offsets. Placement still charges
 //! the reserved width when it decides whether a group fits, which is safe
-//! because a sized pack is never longer.
+//! because a sized pack is never longer. v26 is the sized ordinary framing
+//! unchanged, written since directory and extent pages may be delta programs
+//! (#92): the version marks the record grammar, not the layout.
 //!
 //! Versions 1, 2, 4, 6 and 7 are the **pre-v9 framings**: a directory that grows
 //! at the front and no declared length. They belong to the schema-8 Store, which
@@ -114,7 +116,19 @@ pub const TIGHT_GROUPS: usize = 16;
 /// 21 and 22 belonged to the retired pooled value-group lane and stay refused.
 pub const VERSION_WHOLE_FILE_SIZED: u32 = 23;
 /// Ordinary groups with a directory of exactly the pack's groups.
+///
+/// Still read, and no longer written: see [`VERSION_ORDINARY_PAGES`].
 pub const VERSION_ORDINARY_SIZED: u32 = 24;
+/// Sized ordinary groups whose directory and extent pages may be COPY/INSERT
+/// programs against a predecessor page (layerfs-project #92).
+///
+/// The framing is [`VERSION_ORDINARY_SIZED`]'s, byte for byte; what moved is the
+/// record grammar of four roles, which gained tag one (`encoding::pool::branch`).
+/// A reader that predates it accepts tag one for inode-table branches only and
+/// would fail inside a decode, so it refuses the pack by this version instead,
+/// as the payload lanes did when their records gained the stored tag. A reader
+/// that has it reads every ordinary version.
+pub const VERSION_ORDINARY_PAGES: u32 = 26;
 /// Chunk groups with a directory of exactly the pack's groups.
 pub const VERSION_CHUNK_SIZED: u32 = 25;
 /// Singleton framing that may carry a payload stored verbatim.
@@ -149,7 +163,7 @@ impl PackLane {
     /// which is what keeps every pack this Store has already written readable.
     pub const fn version(self) -> u32 {
         match self {
-            Self::Ordinary => VERSION_ORDINARY_SIZED,
+            Self::Ordinary => VERSION_ORDINARY_PAGES,
             Self::Chunk => VERSION_CHUNK_SIZED,
             Self::WholeFile => VERSION_WHOLE_FILE_SIZED,
             Self::Singleton => VERSION_SINGLETON_STORED,
@@ -394,7 +408,10 @@ pub fn parse_control_header(bytes: &[u8], total_length: usize) -> StorageResult<
             .map_err(|_| StorageError::Integrity("pack version"))?,
     );
     let lane = match version {
-        VERSION_ORDINARY | VERSION_ORDINARY_TIGHT | VERSION_ORDINARY_SIZED => PackLane::Ordinary,
+        VERSION_ORDINARY
+        | VERSION_ORDINARY_TIGHT
+        | VERSION_ORDINARY_SIZED
+        | VERSION_ORDINARY_PAGES => PackLane::Ordinary,
         VERSION_CHUNK | VERSION_CHUNK_STORED | VERSION_CHUNK_TIGHT | VERSION_CHUNK_SIZED => {
             PackLane::Chunk
         }
@@ -417,7 +434,10 @@ pub fn parse_control_header(bytes: &[u8], total_length: usize) -> StorageResult<
     ) as usize;
     let sized = matches!(
         version,
-        VERSION_ORDINARY_SIZED | VERSION_CHUNK_SIZED | VERSION_WHOLE_FILE_SIZED
+        VERSION_ORDINARY_SIZED
+            | VERSION_ORDINARY_PAGES
+            | VERSION_CHUNK_SIZED
+            | VERSION_WHOLE_FILE_SIZED
     );
     let slots = match version {
         VERSION_ORDINARY_TIGHT | VERSION_CHUNK_TIGHT | VERSION_WHOLE_FILE_TIGHT => TIGHT_GROUPS,

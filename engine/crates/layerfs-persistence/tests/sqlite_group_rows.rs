@@ -96,7 +96,7 @@ fn explicit_creation_reopens_declared_units_and_keeps_sparse_canonical_order() {
     assert_eq!(
         db.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
             .unwrap(),
-        17
+        37
     );
     assert_eq!(
         db.query_row("SELECT count(*) FROM pack_unit", [], |r| r.get::<_, i64>(0))

@@ -54,6 +54,7 @@ impl<'a> PredecessorBase<'a> {
 pub struct PredecessorCursor<'a, 'r, 's> {
     reader: &'a dyn AuthenticatedObjects,
     scope: &'s TimingScope<'r, Active>,
+    state: crate::file::mapping::FileState,
     walk: Walk,
     current: Option<(u64, u64, ExtentSlice)>,
     descriptors: usize,
@@ -82,6 +83,7 @@ impl<'a, 'r, 's> PredecessorCursor<'a, 'r, 's> {
         Ok(Some(Self {
             reader: base.reader,
             scope,
+            state,
             walk: Walk::new(state),
             current: None,
             descriptors: 0,
@@ -125,6 +127,17 @@ impl<'a, 'r, 's> PredecessorCursor<'a, 'r, 's> {
                 return Ok(None);
             }
         }
+    }
+
+    /// The base's branch levels, collected once for positional page hints (#92).
+    ///
+    /// Reads at most [`crate::file::mapping::PAGE_HINT_BRANCH_READS`] branch pages
+    /// and never a leaf or a payload.
+    pub fn page_hints(&self) -> ContentResult<crate::file::mapping::PageHints> {
+        let (reader, scope) = (self.reader, self.scope);
+        crate::file::mapping::PageHints::collect(&self.state, &mut |id, _| {
+            reader.read_canonical_scoped(id, scope.child("mapping.predecessor"))
+        })
     }
 
     /// Advances the frontier to the next extent at or after `start`.

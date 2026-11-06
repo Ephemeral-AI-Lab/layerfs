@@ -486,6 +486,14 @@ program is built against the whole branch at the root of that chain instead
 (#89), so the branch chain restarts at depth one rather than storing the branch
 whole every ninth Commit; the root must fit the same budgets
 ([branch selection](../../core/crates/layerfs-storage/src/encoding/delta/branch.rs)).
+Directory leaves and branches and extent leaves and branches take the same
+program since layerfs-project #92. A directory page is offered the page it replaces, or the
+page it was split from or merged into. An extent page is offered the earlier
+version's page at the same level and logical position
+([extent page hints](../../core/crates/layerfs-content/src/file/mapping/hints.rs)).
+A chain never crosses roles and is read under the same depth cap, so one page read
+reconstructs at most nine records. Ordinary packs that may hold these programs
+are framing version 26, which a 2.0 reader refuses by version.
 Value pooling, full-object CAS, and leaf delta encoding are three distinct reuse
 mechanisms. This guide's FULL/PREFIX selection diagram describes payloads only.
 

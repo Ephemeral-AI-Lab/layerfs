@@ -31,6 +31,9 @@ pub use ports::{PortError, StorePorts};
 pub use read_handle::StoreReader;
 pub use read_service::{ReadAdmissionError, ReadServiceWork, ReaderFactory};
 pub use recognizer::{Recognizer, RecognizerWork, RECOGNIZER_SLOTS};
-pub use types::{BindError, BindPhase, BindRefusal, BindRequest, BindSuccess, CloseError};
+pub use types::{
+    BindError, BindIntent, BindPhase, BindRefusal, BindRequest, BindSuccess, CloseError,
+    NamedBindRequest,
+};
 
 pub use commit_types::owner_uncertain;

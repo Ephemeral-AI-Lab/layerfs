@@ -580,7 +580,7 @@ fn a_stored_directory_bound_again_is_refused_by_its_derived_count_after_director
 }
 
 #[test]
-fn a_symlink_bound_twice_is_refused_by_its_derived_count() {
+fn fresh_and_stored_symlink_aliases_have_exact_derived_counts() {
     let base = small();
     let fresh = base.tree.next;
     // A fresh symlink with two bindings in one batch.
@@ -589,19 +589,50 @@ fn a_symlink_bound_twice_is_refused_by_its_derived_count() {
         .bind(ROOT, "s1", fresh)
         .bind(base.h, "s2", fresh);
     let run = update_backed(&base.tree, &rows, resources());
-    refused(&run, "multiple parents");
-    // The two rebuilt directory pages were offered; no inode page, no root.
+    let result = accepted(&run);
+    let store = run.folded(&base.tree);
     assert_eq!(
-        run.offered(),
-        vec![ObjectRole::DirectoryLeaf, ObjectRole::DirectoryLeaf]
+        inode(&store, result.root, fresh)
+            .expect("fresh symlink")
+            .namespace_ref_count,
+        2
     );
+    assert_eq!(
+        listing(&store, result.root, base.h),
+        vec![("s2".to_owned(), fresh)]
+    );
+    assert_eq!(resident_root(&base.tree, &rows).root, result.root);
     assert_eq!(traffic(&run), (0, 0, 0));
 
     // A stored symlink that keeps its base binding and gains another.
     let rows = Rowset::new().bind(base.h, "again", base.l);
     let run = update_backed(&base.tree, &rows, resources());
-    refused(&run, "multiple parents");
-    assert_eq!(run.offered(), vec![ObjectRole::DirectoryLeaf]);
+    let result = accepted(&run);
+    let store = run.folded(&base.tree);
+    let value = inode(&store, result.root, base.l).expect("stored symlink");
+    assert_eq!(value.namespace_ref_count, 2);
+    assert_eq!(value.content_root, base.tree.stored(base.l).content_root);
+    assert_eq!(resident_root(&base.tree, &rows).root, result.root);
+}
+
+#[test]
+fn fresh_symlink_aliases_build_identically_on_resident_and_indexed_routes() {
+    let rows = Rowset::new()
+        .fresh(ROOT, InodeKind::Directory)
+        .mkdir(ROOT, "dir", 2)
+        .fresh(3, InodeKind::Symlink)
+        .bind(ROOT, "first", 3)
+        .bind(2, "second", 3);
+    let (resident, _) = build_resident(&rows);
+    let resident = resident.expect("resident build");
+    let (indexed, store, _) = build_backed(&rows);
+    let indexed = indexed.expect("indexed build");
+    assert_eq!(resident.root, indexed.root);
+    let value = inode(&store, indexed.root, 3).expect("symlink");
+    assert_eq!(
+        (value.kind, value.namespace_ref_count),
+        (InodeKind::Symlink, 2)
+    );
 }
 
 #[test]
@@ -750,22 +781,85 @@ fn a_stored_directory_bound_or_moved_inside_a_dropped_directory_is_refused() {
 }
 
 #[test]
-fn a_stored_symlink_bound_again_inside_a_dropped_directory_has_two_parents() {
-    // Symlinks are outside the topology proof: the derived count decides.
+fn fresh_and_stored_nondirectories_cannot_gain_references_in_a_dropped_parent() {
     let base = small();
     let dead = base.tree.next;
-    let rows = Rowset::new()
-        .fresh(dead, InodeKind::Directory)
-        .bind(dead, "again", base.l);
+    for (kind, existing) in [
+        (InodeKind::RegularFile, base.f),
+        (InodeKind::Symlink, base.l),
+    ] {
+        for fresh in [false, true] {
+            let child = if fresh { dead + 1 } else { existing };
+            let rows =
+                Rowset::new()
+                    .fresh(dead, InodeKind::Directory)
+                    .bind(dead, "unreachable", child);
+            let rows = if fresh { rows.fresh(child, kind) } else { rows };
+            let run = update_backed(&base.tree, &rows, resources());
+            refused(&run, "binding in dropped directory");
+            assert!(run.emitted.is_empty(), "a dropped parent builds no page");
+            assert_eq!(
+                update_resident(&base.tree, &rows, resources()).0.err(),
+                Some(ContentError::InvalidRecord("binding in dropped directory"))
+            );
+
+            // The same aliases are valid once their parent has a reachable name.
+            let live = rows.bind(ROOT, "live", dead).bind(ROOT, "other", child);
+            let run = update_backed(&base.tree, &live, resources());
+            let result = accepted(&run);
+            assert_eq!(resident_root(&base.tree, &live).root, result.root);
+            assert_eq!(
+                inode(&run.folded(&base.tree), result.root, child)
+                    .unwrap()
+                    .namespace_ref_count,
+                if fresh { 2 } else { 3 }
+            );
+        }
+    }
+}
+
+#[test]
+fn an_empty_dropped_fresh_directory_header_still_changes_nothing() {
+    let base = small();
+    let dead = base.tree.next;
+    let rows = Rowset::new().fresh(dead, InodeKind::Directory).header(dead);
     let run = update_backed(&base.tree, &rows, resources());
-    refused(&run, "multiple parents");
-    // The dropped directory builds no page and no other directory changed.
-    assert!(run.emitted.is_empty());
-    assert_eq!(traffic(&run), (0, 0, 0));
-    assert_eq!(
-        update_resident(&base.tree, &rows, resources()).0.err(),
-        Some(ContentError::InvalidRecord("multiple parents"))
-    );
+    let result = accepted(&run);
+    assert_eq!(result.root, base.tree.root);
+    assert_eq!(resident_root(&base.tree, &rows).root, result.root);
+    assert!(inode(&run.folded(&base.tree), result.root, dead).is_none());
+}
+
+#[test]
+fn an_initial_build_rejects_aliases_hidden_under_a_dropped_parent() {
+    for kind in [InodeKind::RegularFile, InodeKind::Symlink] {
+        let rows = Rowset::new()
+            .fresh(ROOT, InodeKind::Directory)
+            .fresh(2, InodeKind::Directory)
+            .fresh(3, kind)
+            .bind(ROOT, "visible", 3)
+            .bind(2, "unreachable", 3);
+        let (result, _) = build_resident(&rows);
+        assert_eq!(
+            result.err(),
+            Some(ContentError::InvalidRecord("binding in dropped directory"))
+        );
+        let (result, _, _) = build_backed(&rows);
+        assert_eq!(
+            result.err(),
+            Some(ContentError::InvalidRecord("binding in dropped directory"))
+        );
+
+        let rows = rows.bind(ROOT, "live", 2);
+        let (resident, _) = build_resident(&rows);
+        let (indexed, store, _) = build_backed(&rows);
+        let indexed = indexed.expect("reachable parent");
+        assert_eq!(resident.unwrap().root, indexed.root);
+        assert_eq!(
+            inode(&store, indexed.root, 3).unwrap().namespace_ref_count,
+            2
+        );
+    }
 }
 
 #[test]

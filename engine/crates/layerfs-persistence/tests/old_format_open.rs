@@ -1,4 +1,4 @@
-//! A Store written before the `binding_hint` table existed opens writable and
+//! A Store written before the binding hint table existed opens writable and
 //! gains the table (#352 F-011, REBUILD.md kind 2): nothing it holds is
 //! rewritten, and hints are recorded from then on.
 mod support;
@@ -14,7 +14,7 @@ const DIGESTS: &str = include_str!("../sql/sqlite/file_digest.sql");
 /// The table's definition as the history schema writes it, with its trailing
 /// blank line: the text an old Store's recorded schema source lacks.
 fn hint_table() -> String {
-    let start = HISTORY.find("CREATE TABLE binding_hint (").unwrap();
+    let start = HISTORY.find("CREATE TABLE binding_hint_block (").unwrap();
     let end = start + HISTORY[start..].find(";\n").unwrap() + 2;
     format!("{}\n", &HISTORY[start..end])
 }
@@ -37,7 +37,7 @@ fn definition(sql: &rusqlite::Connection) -> String {
 fn make_old(path: &std::path::Path) {
     let sql = rusqlite::Connection::open(path).unwrap();
     sql.execute_batch(
-        "DROP TABLE binding_hint; DROP TABLE layer_lineage; DROP TABLE commit_lineage; \
+        "DROP TABLE binding_hint_block; DROP TABLE layer_lineage; DROP TABLE commit_lineage; \
          DROP TABLE absorbed; DROP TABLE reach; DROP TABLE merge_operation; \
          DROP TABLE merge_record; DROP TABLE file_digest;",
     )

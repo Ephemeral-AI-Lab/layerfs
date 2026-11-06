@@ -80,6 +80,23 @@ fn a_pooled_body_keeps_the_prefix_and_the_serials() {
 }
 
 #[test]
+fn only_directories_require_a_single_nonroot_binding() {
+    assert!(value(InodeKind::Symlink, 2, 9).validate(false).is_ok());
+    assert!(value(InodeKind::RegularFile, 2, 9).validate(false).is_ok());
+    assert!(value(InodeKind::Directory, 1, 9).validate(false).is_ok());
+    assert!(value(InodeKind::Directory, 0, 9).validate(true).is_ok());
+    for (kind, count, root) in [
+        (InodeKind::Directory, 2, false),
+        (InodeKind::Symlink, 0, false),
+        (InodeKind::RegularFile, 0, false),
+        (InodeKind::Symlink, 2, true),
+        (InodeKind::Directory, 1, true),
+    ] {
+        assert!(value(kind, count, 9).validate(root).is_err());
+    }
+}
+
+#[test]
 fn an_inode_value_round_trips_and_rejects_a_foreign_kind() {
     for (kind, code) in [
         (InodeKind::RegularFile, 1_u8),

@@ -9,6 +9,9 @@ use layerfs_history::{
     Page, WorkspaceId,
 };
 pub(crate) const MAGIC: &[u8] = b"LFSC\x01";
+/// A named mount's project and Branch names travel as given, invalid ones
+/// too (the daemon refuses them as its lookup does), up to the field limit.
+const NAME_FIELD: usize = u16::MAX as usize;
 impl Call {
     /// Encodes one checked request. Failure before send has no remote effect.
     pub fn encode(&self) -> Result<Vec<u8>, ControlError> {
@@ -37,6 +40,16 @@ impl Call {
                 out.byte(1)?;
                 out.put(&workspace.to_bytes())?;
                 out.put(&branch.to_bytes())?;
+            }
+            Request::MountNamed {
+                workspace,
+                project,
+                branch,
+            } => {
+                out.byte(15)?;
+                out.put(&workspace.to_bytes())?;
+                out.blob(project.as_bytes())?;
+                out.blob(branch.as_bytes())?;
             }
             Request::Sdk(value) => {
                 out.byte(20)?;
@@ -150,6 +163,11 @@ impl Call {
             1 => Request::Mount {
                 workspace: history(WorkspaceId::from_authority(input.array()?))?,
                 branch: history(BranchId::from_bytes(input.array()?))?,
+            },
+            15 => Request::MountNamed {
+                workspace: history(WorkspaceId::from_authority(input.array()?))?,
+                project: input.text(NAME_FIELD)?,
+                branch: input.text(NAME_FIELD)?,
             },
             2 => Request::Commit(crate::control_merge::commit_control(&mut input)?),
             20 => Request::Sdk(crate::control_sdk::call(&mut input)?),

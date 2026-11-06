@@ -22,7 +22,7 @@ pub const FILE: u8 = 1;
 pub const DIRECTORY: u8 = 2;
 pub const SYMLINK: u8 = 3;
 /// The canonical format's fixed counts: the root is named by nothing and every
-/// other directory or symlink by exactly one binding.
+/// other directory by exactly one binding; files and symlinks count all names.
 pub const ROOT_LINKS: u64 = 0;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -222,6 +222,7 @@ impl Model {
                 } else {
                     let (body, mode) = if m.file_type().is_symlink() {
                         let target = fs::read_link(entry.path()).unwrap();
+                        aliases.insert((m.dev(), m.ino()), id);
                         (Body::Symlink(target.as_os_str().as_bytes().to_vec()), 0o777)
                     } else if m.is_dir() {
                         pending.push((entry.path(), id));
@@ -303,7 +304,10 @@ impl Model {
     }
     pub fn link(&mut self, existing: impl AsRef<[u8]>, path: impl AsRef<[u8]>, now: Stamp) {
         let id = self.id(existing.as_ref());
-        assert!(matches!(self.node(id).body, Body::File(_)));
+        assert!(matches!(
+            self.node(id).body,
+            Body::File(_) | Body::Symlink(_)
+        ));
         let (parent, name) = self.parent(path.as_ref());
         assert!(self.names(parent).insert(name.to_vec(), id).is_none());
         self.node(id).links += 1;

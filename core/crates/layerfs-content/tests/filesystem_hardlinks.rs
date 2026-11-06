@@ -7,10 +7,12 @@
 mod support;
 
 use layerfs_content::filesystem::references::ReferenceReducer;
-use layerfs_content::filesystem::{DirectoryUpdate, InodeUpdate, LogicalPath, PathName};
+use layerfs_content::filesystem::{
+    DirectoryUpdate, InodeUpdate, LogicalPath, PathName, SymlinkTarget,
+};
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::ContentError;
-use support::filesystem::{synthetic, value, Session};
+use support::filesystem::{synthetic, value, with_objects, Session};
 
 fn name(value: &str) -> PathName {
     PathName::new(value).expect("name")
@@ -304,6 +306,87 @@ fn a_regular_file_keeps_at_least_one_binding() {
         outcome,
         Err(ContentError::InvalidRecord("new inode without binding"))
     ));
+}
+
+#[test]
+fn symlink_aliases_keep_opaque_targets_until_the_last_binding_is_removed() {
+    for target in [b"../missing".as_slice(), b"./relative/\xff".as_slice()] {
+        let mut session = Session::new(1).expect("empty");
+        let symlink = session.allocate();
+        let directory = session.allocate();
+        let content_root = with_objects(&mut session.store, |objects| {
+            layerfs_content::filesystem::symlink::emit_symlink(
+                objects,
+                SymlinkTarget::new(target.to_vec())?,
+            )
+        })
+        .expect("opaque symlink target");
+        let link_value = value(InodeKind::Symlink, content_root, synthetic("symlink/meta"));
+        session
+            .apply(
+                &[
+                    DirectoryUpdate {
+                        parent: 1,
+                        changes: vec![
+                            (name("dir"), Some(directory)),
+                            (name("first"), Some(symlink)),
+                        ],
+                    },
+                    DirectoryUpdate {
+                        parent: directory,
+                        changes: vec![(name("second"), Some(symlink))],
+                    },
+                ],
+                &ordered(vec![
+                    InodeUpdate {
+                        serial: symlink,
+                        value: link_value,
+                    },
+                    InodeUpdate {
+                        serial: directory,
+                        value: dir_value(),
+                    },
+                ]),
+                &ordered_serials(vec![symlink, directory]),
+            )
+            .expect("fresh symlink aliases");
+        for path in ["first", "dir/second"] {
+            let path = LogicalPath::new(path).unwrap();
+            let mut read = session.read().unwrap();
+            let resolved = read.resolve(&path).unwrap();
+            assert_eq!(resolved.serial, symlink);
+            assert_eq!(resolved.value.namespace_ref_count, 2);
+            assert_eq!(read.readlink(&path).unwrap().as_bytes(), target);
+        }
+        session
+            .apply(
+                &[DirectoryUpdate {
+                    parent: 1,
+                    changes: vec![(name("first"), None)],
+                }],
+                &[],
+                &[],
+            )
+            .expect("one alias removed");
+        let path = LogicalPath::new("dir/second").unwrap();
+        let mut read = session.read().unwrap();
+        assert_eq!(read.stat(&path).unwrap().namespace_ref_count, 1);
+        assert_eq!(read.readlink(&path).unwrap().as_bytes(), target);
+        session
+            .apply(
+                &[DirectoryUpdate {
+                    parent: directory,
+                    changes: vec![(name("second"), None)],
+                }],
+                &[],
+                &[],
+            )
+            .expect("last alias removed");
+        assert_eq!(
+            session.read().unwrap().lookup_inodes(&[symlink]).unwrap(),
+            vec![None]
+        );
+    }
 }
 
 #[test]

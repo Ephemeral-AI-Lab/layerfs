@@ -165,7 +165,13 @@ fn create_mkdir_symlink_and_link_publish_parent_and_reference_effects_atomically
         assert_eq!(b.lookup(parent, alias), Some(linked.clone()));
     }
     assert_eq!(b.refused(link(4, 1, "dir-link")), Refusal::NotPermitted);
-    assert_eq!(b.refused(link(3, 1, "symlink-link")), Refusal::NotPermitted);
+    let linked_symlink = b.applied(link(3, 1, "symlink-link"), T1).unwrap();
+    assert_eq!(
+        (linked_symlink.serial, linked_symlink.namespace_refs),
+        (3, 2)
+    );
+    assert_eq!(linked_symlink.kind, InodeKind::Symlink);
+    assert_eq!(b.lookup(1, "symlink-link"), b.lookup(1, "symlink"));
     assert_eq!(b.refused(link(999, 1, "missing-link")), Refusal::Missing);
     assert_eq!(b.refused(link(2, 1, "alias")), Refusal::Exists);
     assert_eq!(b.refused(link(2, 2, "under-file")), Refusal::NotDirectory);
@@ -174,6 +180,56 @@ fn create_mkdir_symlink_and_link_publish_parent_and_reference_effects_atomically
     // rather than recycle them.
     assert_eq!(b.allocator.calls.load(Ordering::Relaxed), 1);
     assert!((1000..1000 + SERIAL_REFILL).contains(&symlink.serial));
+}
+
+#[test]
+fn symlink_aliases_keep_opaque_targets_and_release_each_name() {
+    let b = Bench::new("symlink-aliases");
+    for (name, bytes) in [
+        ("dangling", b"missing".as_slice()),
+        ("opaque", b"../relative/\xff"),
+    ] {
+        let target = SymlinkTarget::new(bytes.to_vec()).unwrap();
+        let made = b
+            .applied(
+                Operation::Symlink {
+                    parent: 1,
+                    name: common::name(name),
+                    target: target.clone(),
+                },
+                T1,
+            )
+            .unwrap();
+        let alias = format!("{name}-alias");
+        let linked = b.applied(link(made.serial, 1, &alias), T2).unwrap();
+        assert_eq!(linked.serial, made.serial);
+        assert_eq!(linked.namespace_refs, 2);
+        assert_eq!(
+            linked.metadata, made.metadata,
+            "LINK preserves symlink metadata"
+        );
+        assert_eq!(b.lookup(1, name), Some(linked.clone()));
+        assert_eq!(b.lookup(1, &alias), Some(linked));
+        assert_eq!(
+            b.window(|view| view.readlink(&b.overlay, made.serial))
+                .unwrap(),
+            target
+        );
+        b.applied(unlink(1, name), T2);
+        assert_eq!(b.lookup(1, &alias).unwrap().namespace_refs, 1);
+        assert_eq!(
+            b.window(|view| view.readlink(&b.overlay, made.serial))
+                .unwrap(),
+            target
+        );
+        b.applied(unlink(1, &alias), T2);
+        assert_eq!(b.stat(made.serial).unwrap().namespace_refs, 0);
+        assert_eq!(b.refused(link(made.serial, 1, "revived")), Refusal::Missing);
+    }
+    assert_eq!(
+        b.refused(link(4, 1, "directory-alias")),
+        Refusal::NotPermitted
+    );
 }
 
 #[test]

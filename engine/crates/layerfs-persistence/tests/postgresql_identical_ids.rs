@@ -412,27 +412,41 @@ fn hints_and_digests_in_arrays_read_back_as_on_sqlite() {
     }
 
     // Content 0 first names a root the Store lacks, then (past the first
-    // array of 1024 rows) the saved root: the later row wins.
+    // array of 1024 rows) the saved root: the later row wins. Only chunked
+    // files (at or above the small-file threshold) keep a digest (#91): the
+    // small content 2 is not recorded, so it has no root.
+    let floor = StoragePolicy::frozen_default().small_file_threshold_bytes();
     let content = |i: u32| *ObjectId::for_bytes(&i.to_le_bytes()).as_bytes();
     let missing = *root(77).as_bytes();
     let mut digests: Vec<FileDigest> = (0..1100u32)
         .map(|i| FileDigest {
             root: missing,
-            length: u64::from(i),
+            length: floor + u64::from(i),
             digest: content(i),
         })
         .collect();
     digests[1050] = FileDigest {
         root: *saved.as_bytes(),
-        length: 0,
+        length: floor,
         digest: content(0),
     };
-    let asked = [(content(0), 0), (content(1), 1), (content(5000), 5000)];
+    digests.push(FileDigest {
+        root: *saved.as_bytes(),
+        length: floor - 1,
+        digest: content(2),
+    });
+    let asked = [
+        (content(0), floor),
+        (content(1), floor + 1),
+        (content(2), floor - 1),
+        (content(5000), floor + 5000),
+    ];
     for engine in engines {
         engine.record_file_digests(&digests).unwrap();
         assert_eq!(
             engine.file_roots(&asked).unwrap(),
-            vec![Some(*saved.as_bytes()), None, None]
+            vec![Some(*saved.as_bytes()), None, None, None]
         );
+        assert_eq!(engine.file_roots(&asked[2..3]).unwrap(), vec![None]);
     }
 }

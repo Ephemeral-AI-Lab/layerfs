@@ -78,19 +78,23 @@ The Workspace is recorded as `workspace/<id>.json` in the Sandbox's folder.
                              started? else NoSuchSandbox
                              name free? else Exists
                              guard: < 16 Workspaces? else Capacity
-                             Branch id (the Store's own route)
-                             workspace.mount(id, branch) -------> bind root,
-                                                                 overlay file,
-                                                                 kernel mount
+                             MountNamed(id, project, branch) ---> find Branch,
+                                                                 bind root,
+                                                                 overlay file
+                             Attach ----------------------------> kernel mount
                              record workspace/<id>.json
  add ws to the answer
 ```
 
-The Branch is looked up through the Store's route, not the daemon; the
-daemon binds its id. For a PostgreSQL Store it is looked up on the
-process's one held read session for that Store, not a Store service (#65,
-[`store/reader.rs`](../../../../../api/crates/layerfs-control/src/store/reader.rs)):
-at most one connection per process, reused by later calls within 60 s. See the [routing table](../../routing/routing-table.md)
+The caller reads no Store (#64): it sends the daemon the project's name
+and the Branch's (`Request::MountNamed`), and the daemon finds the Branch
+with its snapshot in one statement on the Workspace's own Store reader
+(`Store::bind_named`). A PostgreSQL daemon takes that reader from its idle
+readers: the one it opened after it reported ready, or one an earlier
+unmount left; it opens one only when it has none
+([Store service](../../../engine/store-calls/service.md)). A missing project or Branch
+is the daemon's `SdkRefused` answer, `NoSuchProject` or `NoSuchBranch`
+with the Store service lookup's message, and nothing stays admitted. See the [routing table](../../routing/routing-table.md)
 and the [daemon channel](../../routing/daemon-channel.md). Under a folder
 scope only `main` is accepted and is mounted as the Branch `<ns>.main`
 ([`calls/scope.rs`](../../../../../api/crates/layerfs-control/src/calls/scope.rs)).
@@ -101,7 +105,7 @@ scope only `main` is accepted and is mounted as the Branch `<ns>.main`
 | --- | --- | --- | --- |
 | `InvalidInput` | no `sandbox`; `branch` is `main`; a bad `name`; out of scope | no | [`workspace/serve.rs`](../../../../../api/crates/layerfs-control/src/workspace/serve.rs) |
 | `NoSuchSandbox` | no such Sandbox, or its daemon ended itself when idle | no | same |
-| `NoSuchBranch` | the Branch is missing | no | [`store/service.rs`](../../../../../api/crates/layerfs-control/src/store/service.rs) |
+| `NoSuchProject`, `NoSuchBranch` | the project or Branch is missing (the daemon's lookup) | no | [`store/bind.rs`](../../../../../engine/crates/layerfs-store-service/src/store/bind.rs) `named` |
 | `Exists` | the Sandbox already has a Workspace of that name | no | [`workspace/serve.rs`](../../../../../api/crates/layerfs-control/src/workspace/serve.rs) |
 | `Capacity` | the Sandbox holds 16 Workspaces (`WORKSPACES`) | no | same |
 | `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox | no | [`sandbox/record.rs`](../../../../../api/crates/layerfs-control/src/sandbox/record.rs) `free` |

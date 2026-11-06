@@ -378,22 +378,17 @@ fn run_body<'b>(
             let bases = lookup_many(reader, table, &parents, &mut InodeReadWork::default())?;
             for update in &updates {
                 if dropped.contains(update.header.parent)? {
-                    // Nothing binds this directory in the result, so no page of it
-                    // is worth building. Its bindings are still this operation's
-                    // edges and stay accounted: every final binding of a directory
-                    // this operation allocates is an addition.
+                    // No reachable name binds this fresh directory, so none of
+                    // its children can contribute a namespace reference. Do not
+                    // publish an inflated count for an inode that also has a
+                    // reachable alias. Empty dropped headers remain harmless.
                     for change in update.changes()? {
                         let (_, binding) = change?;
-                        let Some(child) = binding else {
-                            continue;
-                        };
-                        note_retained_binding(
-                            &mut reducer,
-                            initial.then_some(state),
-                            input,
-                            child,
-                        )?;
-                        counters.bindings_added = counters.bindings_added.saturating_add(1);
+                        if binding.is_some() {
+                            return Err(ContentError::InvalidRecord(
+                                "binding in dropped directory",
+                            ));
+                        }
                     }
                     continue;
                 }
