@@ -135,6 +135,25 @@ fn apple_container_reads_its_gateway_only_for_a_loopback_url() {
     assert_eq!(code, Code::Unavailable);
 }
 
+/// #66: a gateway its last start recorded is used with no `container`
+/// call; a stale one is dialled as recorded (the connection then fails,
+/// explicitly), never looked up again. A record without one (from before
+/// #66) still reads it from the machine.
+#[test]
+fn apple_container_uses_the_gateway_its_start_recorded() {
+    let scratch = Scratch::new("reach-apple-recorded");
+    let mut spec = spec(&scratch, Platform::AppleContainer, None);
+    spec.state.gateway = Some("192.168.65.1".parse().unwrap());
+    for (url, want) in loopback_urls().iter().zip(rewritten("192.168.65.1")) {
+        assert_eq!(machine::reach(&spec, url), Ok(want));
+    }
+    assert_eq!(scratch.log(), "", "no container inspect with a recorded gateway");
+    spec.state.gateway = None;
+    let outcome = machine::reach(&spec, &loopback_urls()[0]);
+    assert_eq!(outcome, Ok(rewritten("192.168.64.1")[0].clone()));
+    assert_eq!(scratch.log(), "container inspect lfs-dev\n");
+}
+
 #[test]
 fn every_other_host_is_dialled_as_given_everywhere() {
     let scratch = Scratch::new("reach-remote");
