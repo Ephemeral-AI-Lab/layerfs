@@ -6,7 +6,7 @@
 //! the test runs its own binary again as the filtered command (whose test
 //! harness starts threads, which `clone3`'s `ENOSYS` sends to `clone`), and
 //! that command reports how many filters it runs under and what each call
-//! answered.
+//! answered: `unshare` and `clone` with `CLONE_NEWUSER`, and `clone3`.
 #[cfg(target_os = "linux")]
 mod linux {
     use nix::libc;
@@ -22,6 +22,32 @@ mod linux {
         #[allow(unsafe_code)]
         let answered = unsafe { libc::syscall(libc::SYS_clone3, 0usize, 0usize) };
         (answered, std::io::Error::last_os_error().raw_os_error())
+    }
+
+    /// `clone` with `CLONE_NEWUSER` (the filter's first-argument check), and
+    /// the errno it answered. A child it made, were the call let through,
+    /// exits at once and is reaped.
+    fn newuser_clone() -> Option<i32> {
+        let flags = (libc::CLONE_NEWUSER | libc::SIGCHLD) as libc::c_ulong;
+        // SAFETY: no new stack (the child runs on a copy of this one) and
+        // no tid or tls pointers; a child only calls `_exit`
+        #[allow(unsafe_code)]
+        let answered =
+            unsafe { libc::syscall(libc::SYS_clone, flags, 0usize, 0usize, 0usize, 0usize) };
+        match answered {
+            0 => {
+                #[allow(unsafe_code)]
+                unsafe {
+                    libc::_exit(0)
+                }
+            }
+            -1 => std::io::Error::last_os_error().raw_os_error(),
+            child => {
+                let pid = nix::unistd::Pid::from_raw(child as i32);
+                let _ = nix::sys::wait::waitpid(pid, None);
+                Some(0)
+            }
+        }
     }
 
     /// How many seccomp filters this process runs under (Linux 5.9 and
@@ -45,7 +71,11 @@ mod linux {
             (0, _) => 0,
             (_, errno) => errno.unwrap_or(-1),
         };
-        println!("filters={} newuser={newuser} clone3={clone3}", filters());
+        let clone = newuser_clone().unwrap_or(-1);
+        println!(
+            "filters={} newuser={newuser} clone={clone} clone3={clone3}",
+            filters()
+        );
     }
 
     #[test]
@@ -77,8 +107,9 @@ mod linux {
         assert_eq!(
             line,
             format!(
-                "filters={} newuser={} clone3={}",
+                "filters={} newuser={} clone={} clone3={}",
                 filters() + 1,
+                libc::EPERM,
                 libc::EPERM,
                 libc::ENOSYS
             ),

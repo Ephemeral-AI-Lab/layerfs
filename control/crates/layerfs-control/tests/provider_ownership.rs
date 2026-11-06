@@ -56,25 +56,30 @@ impl Drop for ProjectFixture {
     }
 }
 
-#[test]
-fn native_resource_paths_are_validated_before_launch() {
-    use layerfs_bridge::{
-        daemon_setup::{DaemonLimits, DaemonSetup},
-        duplex,
-    };
-    use layerfs_bridge::{DaemonStore, KernelRoute};
-    use layerfs_sandbox::{ProviderCreate, SandboxApi, SandboxPhase};
-    use layerfs_sandbox_backend::{
-        host_process::HostProcessProvider, CommandIdentity, LaunchRequest, ProviderLaunchOptions,
-        Runtime,
-    };
-    use std::{
-        os::unix::fs::{MetadataExt, PermissionsExt},
-        sync::Arc,
-    };
-    let fixture = ProjectFixture::new();
+use layerfs_bridge::{
+    daemon_setup::{DaemonLimits, DaemonSetup},
+    duplex,
+};
+use layerfs_bridge::{DaemonStore, KernelRoute};
+use layerfs_sandbox::{ProviderCreate, SandboxApi, SandboxPhase};
+use layerfs_sandbox_backend::{
+    host_process::HostProcessProvider, local::LocalPaths, CommandIdentity, LaunchRequest,
+    ProviderLaunchOptions, Runtime,
+};
+use std::{
+    os::unix::fs::{MetadataExt, PermissionsExt},
+    sync::Arc,
+};
+
+/// A host-process runtime over `<fixture>/runtime`, the paths of its
+/// Sandbox `one` and a well-formed create of it on the fixture's Store,
+/// installing `install` (none: the Store is opened as it is).
+fn native_create(
+    fixture: &ProjectFixture,
+    install: Option<layerfs_bridge::provision::StoreManifest>,
+) -> (SandboxApi, LocalPaths, ProviderCreate) {
     let root = fixture.directory.join("runtime");
-    fs::create_dir(&root).unwrap();
+    fs::create_dir_all(&root).unwrap();
     fs::set_permissions(&root, fs::Permissions::from_mode(0o755)).unwrap();
     let provider = HostProcessProvider::new(&root).unwrap();
     let paths = provider.paths("one").unwrap();
@@ -92,9 +97,13 @@ fn native_resource_paths_are_validated_before_launch() {
         mounts: paths.mounts.display().to_string(),
         command_uid: identity.uid,
         command_gid: identity.gid,
+        // an install names the Store where its manifest locates it
         store: DaemonStore::Sqlite {
-            locator: fixture.project.store.path.display().to_string(),
-            install: None,
+            locator: match &install {
+                Some(manifest) => manifest.locator.clone(),
+                None => fixture.project.store.path.display().to_string(),
+            },
+            install,
         },
         limits: DaemonLimits {
             connections: 2,
@@ -122,6 +131,14 @@ fn native_resource_paths_are_validated_before_launch() {
         },
     };
     let api = SandboxApi::with_runtime(Arc::new(Runtime::HostProcess(provider)));
+    (api, paths, request)
+}
+
+#[test]
+fn native_resource_paths_are_validated_before_launch() {
+    let fixture = ProjectFixture::new();
+    let (api, paths, request) = native_create(&fixture, None);
+    let root = fixture.directory.join("runtime");
     for field in ["overlay", "mounts", "store", "listen"] {
         let mut invalid = request.clone();
         match field {
@@ -144,5 +161,51 @@ fn native_resource_paths_are_validated_before_launch() {
         assert_eq!(failure.phase, SandboxPhase::Validate);
         assert!(failure.runtime.is_none() && failure.control.is_none());
         assert!(!paths.directory.exists());
+    }
+}
+
+/// The Store a create selects to install must be the existing project's
+/// (its manifest, whatever the daemon's SQLite version): another is
+/// refused before any launch or control effect. Ported from the docker
+/// `sandbox_operations` test (D-8); the check holds for every backend.
+#[test]
+fn a_mismatched_existing_project_refuses_before_any_launch() {
+    let fixture = ProjectFixture::new();
+    let mut manifest = fixture.project.manifest.clone();
+    manifest.root[0] ^= 1;
+    let (api, paths, request) = native_create(&fixture, Some(manifest));
+    let failure = api
+        .create_provider_file(request, &fixture.project.store, &fixture.project.manifest)
+        .err()
+        .unwrap();
+    assert_eq!(failure.phase, SandboxPhase::Validate);
+    assert!(
+        format!("{:?}", failure.cause).contains("selected existing Project"),
+        "{:?}",
+        failure.cause
+    );
+    assert!(failure.runtime.is_none() && failure.control.is_none() && failure.installed.is_none());
+    assert!(!paths.directory.exists());
+}
+
+/// The matching project passes that check (with the daemon's own SQLite
+/// version) and every other: the failure comes from the runtime's one
+/// launch (here its Store file, at the manifest's locator, is absent).
+#[test]
+fn the_matching_existing_project_passes_to_the_launch() {
+    let fixture = ProjectFixture::new();
+    let mut manifest = fixture.project.manifest.clone();
+    manifest.daemon_sqlite = Some("3.51.0".into());
+    let (api, _paths, request) = native_create(&fixture, Some(manifest));
+    let mut failure = api
+        .create_provider_file(request, &fixture.project.store, &fixture.project.manifest)
+        .err()
+        .unwrap();
+    let cause = format!("{:?}", failure.cause);
+    assert!(cause.starts_with("Provider(LaunchFailure"), "{cause}");
+    assert!(failure.control.is_none() && failure.installed.is_none());
+    if let Some(mut runtime) = failure.runtime.take() {
+        let _ = runtime.stop(1);
+        let _ = runtime.delete();
     }
 }
