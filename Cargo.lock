@@ -715,6 +715,7 @@ dependencies = [
  "layerfs-persistence",
  "layerfs-platform",
  "layerfs-project",
+ "layerfs-sandbox",
  "layerfs-storage",
  "layerfs-store",
  "layerfs-store-service",
@@ -775,14 +776,13 @@ dependencies = [
  "layerfs-machine",
  "layerfs-overlay",
  "layerfs-persistence",
- "layerfs-platform",
  "layerfs-project",
+ "layerfs-sandbox",
  "layerfs-storage",
  "layerfs-store",
  "layerfs-store-service",
  "layerfs-telemetry",
  "layerfs-workspace",
- "libc",
  "nix",
 ]
 
@@ -948,6 +948,21 @@ dependencies = [
  "layerfs-bridge",
  "pyo3",
  "pyo3-build-config",
+]
+
+[[package]]
+name = "layerfs-sandbox"
+version = "2.0.0"
+dependencies = [
+ "layerfs-bridge",
+ "layerfs-history",
+ "layerfs-home",
+ "layerfs-isolation",
+ "layerfs-machine",
+ "layerfs-persistence",
+ "layerfs-project",
+ "layerfs-store",
+ "libc",
 ]
 
 [[package]]

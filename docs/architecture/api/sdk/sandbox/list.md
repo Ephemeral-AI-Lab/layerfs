@@ -11,7 +11,7 @@ time, from the home's records alone.
 | --- | --- |
 | Family | [sandbox](README.md) |
 | Library entry | [`sandbox/list.rs`](../../../../../api/crates/layerfs-api/src/sandbox/list.rs) |
-| Implemented in | `layerfs_control::sandbox::family::sandbox` → `list::list` ([`sandbox/list.rs`](../../../../../control/crates/layerfs-control/src/sandbox/list.rs)) |
+| Implemented in | `layerfs_sandbox::family::sandbox` → `list::list` ([`list.rs`](../../../../../control/crates/layerfs-sandbox/src/list.rs)) |
 | Runs in | the caller's process; reads `sandbox/<name>/record.json` only |
 
 ## Signature
@@ -36,13 +36,13 @@ layerfs sandbox list [<project>] [--page-size <n>] [--page-pos <n>]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project, optional | `<store>/<project>`; keeps only records whose `project` matches. A project with no Sandboxes, or none recorded, gives an empty page | [`sandbox/list.rs`](../../../../../control/crates/layerfs-control/src/sandbox/list.rs) |
+| `project` | Project, optional | `<store>/<project>`; keeps only records whose `project` matches. A project with no Sandboxes, or none recorded, gives an empty page | [`list.rs`](../../../../../control/crates/layerfs-sandbox/src/list.rs) |
 
 ## Options
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `page_size` | Int | 50 | clamped to 1..=1000 | [`sandbox/family.rs`](../../../../../control/crates/layerfs-control/src/sandbox/family.rs) `page` |
+| `page_size` | Int | 50 | clamped to 1..=1000 | [`family.rs`](../../../../../control/crates/layerfs-sandbox/src/family.rs) `page` |
 | `page_pos` | Int | 0 | a negative value counts as 0 | `family.rs` `page` |
 
 Under a folder scope the call is refused `InvalidInput`
@@ -61,7 +61,7 @@ Under a folder scope the call is refused `InvalidInput`
 | Field | Kind | Meaning |
 | --- | --- | --- |
 | `items` | list | one page of records, each `SandboxRecord::to_sdk(View::List)`: the stored fields but `v`, `runtime_id`, `daemon` |
-| `items[].state` | text | `creating`, `closing`, `unresolved`, `gone` or `running`, derived from the record and its `op`; never asks a machine ([`sandbox/record.rs`](../../../../../control/crates/layerfs-control/src/sandbox/record.rs) `state`) |
+| `items[].state` | text | `creating`, `closing`, `unresolved`, `gone` or `running`, derived from the record and its `op`; never asks a machine ([`record.rs`](../../../../../control/crates/layerfs-sandbox/src/record.rs) `state`) |
 | `items[].op` | map | the in-flight or uncertain intent, when the record holds one ([`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) `to_sdk`) |
 | `next_page_pos` | int or null | pass back as `page_pos`; null after the last page |
 

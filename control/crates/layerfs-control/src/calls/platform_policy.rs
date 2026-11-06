@@ -2,10 +2,10 @@
 //! dispatch. Read-only inspection and explicit teardown retain their routes.
 //! This also runs in builds without machine adapters, so a recorded worker or
 //! a forwarded daemon cannot bypass the product policy.
-use crate::sandbox::record::SandboxRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::refused;
 use layerfs_machine::record::MachineRecord;
+use layerfs_sandbox::record::SandboxRecord;
 use layerfs_store::record::{StoreKind, StoreRecord};
 use std::path::Path;
 

@@ -18,11 +18,15 @@ behalf of the engine:
   `postgresql/` (which never import each other; a test checks it),
   `backup/` and `project/`. Who uses a Store comes from its caller
   (`Related`).
-- `crates/layerfs-control`: the management library (#536; moved here from
-  `api/crates` by #101 D-2): Sandboxes and their Workspaces, and what spans
-  entities (the worker server, `inventory`, `doctor`, `migrate`, and the
-  machine, Store, project and backup calls with their `Related` reads).
-  #101 continues the split into `layerfs-sandbox`.
+- `crates/layerfs-sandbox`: Sandboxes and their Workspaces (#106): records,
+  launch, host operations, exec, the daemon channel (`daemon/`) and the
+  `workspace/` module. Sandbox modules never import `workspace/` (a test
+  checks it); a host operation's local runner is passed in (`route::Local`).
+- `crates/layerfs-control`: what spans entities (#536; moved here from
+  `api/crates` by #101 D-2): the worker server, `inventory`, `doctor`,
+  `migrate`, and the machine, Store, project and backup calls with the
+  `Related` reads they need from other entities; until #107 also the call
+  machinery (`calls/`).
 - `crates/layerfs-platform` (was `layerfs-machine`): *where* Sandboxes can
   run. One folder per platform under `src/platforms/` (`native`, `docker`,
   `apple_container`, `microsandbox`, `lima`, `firecracker`, `ssh`). Host
@@ -47,9 +51,13 @@ design and the [compute plane 2.0 spec](../core/docs/proposals/compute-plane-2.0
   **Nothing in `engine/` or `core/` may depend on `control/`**; the
   [boundary guard](../tools/check_product_boundary.py) refuses the edge, and
   unknown crates fail closed. `api/` depends on control, never the reverse.
-- Inside control: `layerfs-control ──► layerfs-store ──► layerfs-machine
-  ──► layerfs-home`; `layerfs-store ──► layerfs-bucket`; `layerfs-control
-  ──► layerfs-isolation, layerfs-bucket`; `layerfs-machine
+- Inside control: `layerfs-control ──► layerfs-sandbox ──► layerfs-store
+  ──► layerfs-machine ──► layerfs-home`; `layerfs-sandbox ──►
+  layerfs-isolation`; `layerfs-store ──► layerfs-bucket`. Edges that skip
+  down the chain are allowed (`layerfs-control` and `layerfs-sandbox` reach
+  `layerfs-machine` and `layerfs-store` directly, and `layerfs-control`
+  reads the old backup layout through `layerfs-bucket` in `migrate`);
+  nothing points up. `layerfs-machine
   ──► layerfs-platform` only through its optional `machine` feature, which
   `layerfs-control` and `layerfs-api` pass through; `layerfs-home ──►
   layerfs-isolation` (the process identity records name); `layerfs-platform ──►

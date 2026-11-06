@@ -102,7 +102,7 @@ fn machines(scanned: &Scanned, findings: &mut Findings) {
         if let Some(daemon) = machine.daemon().filter(|d| !Path::new(d).is_file()) {
             findings.error(
                 entity,
-                crate::sandbox::deploy::missing_daemon(name, daemon),
+                layerfs_sandbox::deploy::missing_daemon(name, daemon),
                 format!("`layerfs machine update {name} --daemon <path>`"),
             );
         }

@@ -67,7 +67,7 @@ LayerStack and first Branch.
 | `create_store` | nothing | a new empty SQLite Store with acquisition tables, then sealed | `store.create` ([`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs)) |
 | `create_postgresql_store` | nothing | a new PostgreSQL schema with acquisition tables (feature `postgresql`) | [`project/postgres_init.rs`](../../../../control/crates/layerfs-store/src/project/postgres_init.rs) |
 | `init`, `init_observed` | the complete source directory | a new SQLite Store holding one project, Init statistics, then sealed | tests and examples (for example [`host_install.rs`](../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs)) |
-| `install`, `install_file` | a sealed Store file | the file, streamed to a daemon over the bridge | [`daemon/channel.rs`](../../../../control/crates/layerfs-control/src/daemon/channel.rs) |
+| `install`, `install_file` | a sealed Store file | the file, streamed to a daemon over the bridge | [`daemon/channel.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/channel.rs) |
 | `projects` | the Store's catalog | nothing | project listing ([`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs)) |
 
 Source: [`store/init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs),

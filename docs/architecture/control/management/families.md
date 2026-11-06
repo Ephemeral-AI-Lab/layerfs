@@ -9,7 +9,7 @@ How control implements each call family.
 | | |
 | --- | --- |
 | Component | [Control](README.md) |
-| Source | [`control/crates/layerfs-control/src/machine`](../../../../control/crates/layerfs-machine/src), [`control/crates/layerfs-control/src/store`](../../../../control/crates/layerfs-store/src), [`project`](../../../../control/crates/layerfs-store/src/project), [`control/crates/layerfs-control/src/sandbox`](../../../../control/crates/layerfs-control/src/sandbox), [`control/crates/layerfs-control/src/workspace`](../../../../control/crates/layerfs-control/src/workspace), [`backup`](../../../../control/crates/layerfs-store/src/backup) |
+| Source | [`control/crates/layerfs-control/src/machine`](../../../../control/crates/layerfs-machine/src), [`control/crates/layerfs-control/src/store`](../../../../control/crates/layerfs-store/src), [`project`](../../../../control/crates/layerfs-store/src/project), [`control/crates/layerfs-control/src/sandbox`](../../../../control/crates/layerfs-sandbox/src), [`control/crates/layerfs-control/src/workspace`](../../../../control/crates/layerfs-sandbox/src/workspace), [`backup`](../../../../control/crates/layerfs-store/src/backup) |
 
 Every family function takes the running call's `Context` (its home and
 its event stream) and the checked arguments, and answers one `Outcome`
@@ -120,17 +120,17 @@ A lost answer is `Unknown` and the home gains no project record.
 
 | Call | Does | Source |
 | --- | --- | --- |
-| `create` | claims the name under the home lock with `op` `sandbox.create`, starts the Sandbox on its machine (its sqlite Store's machine, else `native`), records the result and drops the `op` in one write | [`sandbox/create.rs`](../../../../control/crates/layerfs-control/src/sandbox/create.rs) |
-| `list`, `get` | Sandbox records with derived state; `get` adds one page of Workspaces | [`sandbox/list.rs`](../../../../control/crates/layerfs-control/src/sandbox/list.rs), [`sandbox/get.rs`](../../../../control/crates/layerfs-control/src/sandbox/get.rs) |
-| `close` | records `op` `sandbox.close`, stops the runtime, removes the record; `MountsActive` without `force`; clears an unresolved create | [`sandbox/close.rs`](../../../../control/crates/layerfs-control/src/sandbox/close.rs) |
+| `create` | claims the name under the home lock with `op` `sandbox.create`, starts the Sandbox on its machine (its sqlite Store's machine, else `native`), records the result and drops the `op` in one write | [`create.rs`](../../../../control/crates/layerfs-sandbox/src/create.rs) |
+| `list`, `get` | Sandbox records with derived state; `get` adds one page of Workspaces | [`list.rs`](../../../../control/crates/layerfs-sandbox/src/list.rs), [`get.rs`](../../../../control/crates/layerfs-sandbox/src/get.rs) |
+| `close` | records `op` `sandbox.close`, stops the runtime, removes the record; `MountsActive` without `force`; clears an unresolved create | [`close.rs`](../../../../control/crates/layerfs-sandbox/src/close.rs) |
 
 Host operations run through `route::on_machine`: in this process when the
 machine is local, else as a worker `sandbox.host` request carrying the
-Store and project records ([`sandbox/route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs)). For a
+Store and project records ([`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs)). For a
 PostgreSQL Store this process resolves the password and the create checks
 the server is reachable from the machine first. Where this host reaches a
 Sandbox's daemon (`ssh`, `lima`, `docker`), the keys go to
-`sandbox/<name>/control.json` ([`sandbox/direct.rs`](../../../../control/crates/layerfs-control/src/sandbox/direct.rs)).
+`sandbox/<name>/control.json` ([`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs)).
 
 ## workspace
 
@@ -149,8 +149,8 @@ Sandbox's daemon (`ssh`, `lima`, `docker`), the keys go to
 
 | Call | Daemon or runtime | Source |
 | --- | --- | --- |
-| `mount`, `commit`, `unmount`, `status` | the Sandbox's daemon | [`workspace/calls.rs`](../../../../control/crates/layerfs-control/src/workspace/calls.rs), [`workspace/serve.rs`](../../../../control/crates/layerfs-control/src/workspace/serve.rs) |
-| `exec` | the Sandbox runtime runs `bash -c` in the Workspace; no daemon | [`sandbox/exec.rs`](../../../../control/crates/layerfs-control/src/sandbox/exec.rs) |
+| `mount`, `commit`, `unmount`, `status` | the Sandbox's daemon | [`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs), [`workspace/serve.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
+| `exec` | the Sandbox runtime runs `bash -c` in the Workspace; no daemon | [`exec.rs`](../../../../control/crates/layerfs-sandbox/src/exec.rs) |
 
 The daemon serves no Store calls. See
 [Daemon channel](../routing/daemon-channel.md).

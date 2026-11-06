@@ -56,7 +56,7 @@ commands (see [glossary](../../glossary.md)).
 | Call | What the Sandbox side does | Source |
 | --- | --- | --- |
 | `sandbox.create` | `Runtime::launch_with_binds` starts one daemon once with its private 0600 setup, waits for its `LAYERFS_DAEMON_LISTEN <addr>` line, and returns the owner. A failure after an effect returns the owner in `LaunchFailure::instance` for one stop and delete. | [`runtime.rs`](../../../../control/crates/layerfs-isolation/src/runtime.rs) |
-| `workspace.exec` | API control builds an `ExecRequest` (`bash -c <command>`, the command identity, `HOME=<scratch>`, the Workspace directory, no stdin) and calls `Sandbox::run`, which streams stdout and stderr to sinks and returns `ExecExit`. The daemon is not involved. | [`sandbox/runtime.rs`](../../../../control/crates/layerfs-control/src/sandbox/runtime.rs), [`sandbox/exec.rs`](../../../../control/crates/layerfs-control/src/sandbox/exec.rs) |
+| `workspace.exec` | API control builds an `ExecRequest` (`bash -c <command>`, the command identity, `HOME=<scratch>`, the Workspace directory, no stdin) and calls `Sandbox::run`, which streams stdout and stderr to sinks and returns `ExecExit`. The daemon is not involved. | [`runtime.rs`](../../../../control/crates/layerfs-sandbox/src/runtime.rs), [`exec.rs`](../../../../control/crates/layerfs-sandbox/src/exec.rs) |
 | `sandbox.close` | `stop`, then `delete`, each attempted once. | [`runtime.rs`](../../../../control/crates/layerfs-isolation/src/runtime.rs) |
 | reopen | `Runtime::reopen` checks the recorded identity (container, or pid + start time + boot) and starts nothing. | [`runtime.rs`](../../../../control/crates/layerfs-isolation/src/runtime.rs) |
 
@@ -73,7 +73,7 @@ Which backend a machine uses is fixed by its platform:
 | Rule | Enforced by |
 | --- | --- |
 | The `host_process` backend is stored and shown as `"native"`. | `HostProcessBackend::stored_name` ([`host_process/adapter.rs`](../../../../control/crates/layerfs-isolation/src/backend/host_process/adapter.rs)); checked by `stored_names_parse_back_and_do_not_follow_the_rust_names` ([`runtime_enum.rs`](../../../../control/crates/layerfs-isolation/tests/runtime_enum.rs)) |
-| Sandbox, not the daemon, owns command launch, streams and exit status. | `Sandbox::run` in [`runtime.rs`](../../../../control/crates/layerfs-isolation/src/runtime.rs); API `exec` "the daemon is not involved" ([`sandbox/exec.rs`](../../../../control/crates/layerfs-control/src/sandbox/exec.rs)) |
+| Sandbox, not the daemon, owns command launch, streams and exit status. | `Sandbox::run` in [`runtime.rs`](../../../../control/crates/layerfs-isolation/src/runtime.rs); API `exec` "the daemon is not involved" ([`exec.rs`](../../../../control/crates/layerfs-sandbox/src/exec.rs)) |
 | One attempt per operation; no resend, adoption or implicit cleanup. | Each owner's `*_attempted` flags (`docker/sandbox.rs`, `host_process/sandbox.rs`, `namespaces/sandbox.rs`); `WireFailure` keeps what was sent ([`types/failure.rs`](../../../../control/crates/layerfs-isolation/src/types/failure.rs)) |
 | Commands run as a nonroot identity. | `CommandIdentity::check` refuses uid or gid 0 ([`types/execution.rs`](../../../../control/crates/layerfs-isolation/src/types/execution.rs)) |
 | A record is reopened only by the backend that wrote it. | `SandboxRecord` variants; each provider refuses another's record ([`types/options.rs`](../../../../control/crates/layerfs-isolation/src/types/options.rs)) |

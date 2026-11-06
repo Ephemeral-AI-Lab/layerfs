@@ -9,7 +9,7 @@ How Workspace calls reach a daemon.
 | | |
 | --- | --- |
 | Component | [Routing and workers](README.md) |
-| Source | [`control/crates/layerfs-control/src/daemon`](../../../../control/crates/layerfs-control/src/daemon), [`sandbox/files.rs`](../../../../control/crates/layerfs-control/src/sandbox/files.rs), [`sandbox/registry.rs`](../../../../control/crates/layerfs-control/src/sandbox/registry.rs), [`workspace/serve.rs`](../../../../control/crates/layerfs-control/src/workspace/serve.rs), [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs) |
+| Source | [`daemon`](../../../../control/crates/layerfs-sandbox/src/daemon), [`files.rs`](../../../../control/crates/layerfs-sandbox/src/files.rs), [`registry.rs`](../../../../control/crates/layerfs-sandbox/src/registry.rs), [`workspace/serve.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs), [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs) |
 
 The process that serves a Sandbox (the caller on `native` or for a forwarded
 Sandbox, else the machine's worker) holds that Sandbox's control connections
@@ -43,11 +43,11 @@ side of the channel is in [Engine: Daemon](../../engine/daemon/README.md).
 
 | Part | What it is | Source |
 | --- | --- | --- |
-| `Control` | one sequential authenticated connection; numbers its calls; once an exchange fails it is quarantined and refuses every later call before sending | [`daemon/channel.rs`](../../../../control/crates/layerfs-control/src/daemon/channel.rs) |
-| `Dial` | how to open another connection to the same daemon instance: endpoint, optional dial host, secret, peer key, instance | [`daemon/pool.rs`](../../../../control/crates/layerfs-control/src/daemon/pool.rs) |
-| `Controls` | the Sandbox's pool: up to `CONNECTIONS` (6) per process; the daemon admits `DAEMON_CONNECTIONS` (8), leaving the rest to other processes | `daemon/pool.rs`, [`sandbox/serve.rs`](../../../../control/crates/layerfs-control/src/sandbox/serve.rs) |
+| `Control` | one sequential authenticated connection; numbers its calls; once an exchange fails it is quarantined and refuses every later call before sending | [`daemon/channel.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/channel.rs) |
+| `Dial` | how to open another connection to the same daemon instance: endpoint, optional dial host, secret, peer key, instance | [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
+| `Controls` | the Sandbox's pool: up to `CONNECTIONS` (6) per process; the daemon admits `DAEMON_CONNECTIONS` (8), leaving the rest to other processes | `daemon/pool.rs`, [`serve.rs`](../../../../control/crates/layerfs-sandbox/src/serve.rs) |
 | `Lease` | one connection lent for one call's exchanges, returned on drop | `daemon/pool.rs` |
-| `Traced` | a lease whose requests travel as traced observations while the thread traces; its wait is the call's queue time | [`daemon/trace.rs`](../../../../control/crates/layerfs-control/src/daemon/trace.rs) |
+| `Traced` | a lease whose requests travel as traced observations while the thread traces; its wait is the call's queue time | [`daemon/trace.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/trace.rs) |
 
 The pool exists because the daemon serves each authenticated connection on
 its own worker: one shared connection made every call wait for the one before
@@ -82,19 +82,19 @@ does not share the Docker host's loopback (`pool::daemon_host`).
 
 | Call | Daemon requests | Answer shaped by | Source |
 | --- | --- | --- | --- |
-| `workspace.mount` | `Mount` (bind), then `Attach` (kernel Ready): two acknowledged steps; a failed attach leaves the Workspace bound | `values::mounted` | [`daemon/workspace/mount.rs`](../../../../control/crates/layerfs-control/src/daemon/workspace/mount.rs), [`daemon/workspace/recovery.rs`](../../../../control/crates/layerfs-control/src/daemon/workspace/recovery.rs) |
-| `workspace.commit` | `Commit` | `values::commit`: Committed, Merged (with `merged`), or `Conflict` | [`daemon/workspace/commit.rs`](../../../../control/crates/layerfs-control/src/daemon/workspace/commit.rs), [`daemon/values.rs`](../../../../control/crates/layerfs-control/src/daemon/values.rs) |
-| `workspace.unmount` | `Unmount{token, discard}`, or `ForceUnmount` with `force` | `values::unmounted` (`Dirty` refusal) or `force_unmounted` | [`daemon/workspace/unmount.rs`](../../../../control/crates/layerfs-control/src/daemon/workspace/unmount.rs) |
-| `workspace.status` | `Status(token)`; the Branch head is read separately on the Store's route | `values::status` | [`daemon/workspace/status.rs`](../../../../control/crates/layerfs-control/src/daemon/workspace/status.rs) |
-| `sandbox.get` Workspace list | SDK method `sandbox.list_workspaces`, the one daemon backend method sent | `sandbox/dispatch.rs` | [`daemon/operator.rs`](../../../../control/crates/layerfs-control/src/daemon/operator.rs) |
-| `workspace.exec` | none on this channel: `bash -c` runs through the Sandbox's runtime | — | [`sandbox/exec.rs`](../../../../control/crates/layerfs-control/src/sandbox/exec.rs) |
+| `workspace.mount` | `Mount` (bind), then `Attach` (kernel Ready): two acknowledged steps; a failed attach leaves the Workspace bound | `values::mounted` | [`daemon/workspace/mount.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/workspace/mount.rs), [`daemon/workspace/recovery.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/workspace/recovery.rs) |
+| `workspace.commit` | `Commit` | `values::commit`: Committed, Merged (with `merged`), or `Conflict` | [`daemon/workspace/commit.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/workspace/commit.rs), [`daemon/values.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
+| `workspace.unmount` | `Unmount{token, discard}`, or `ForceUnmount` with `force` | `values::unmounted` (`Dirty` refusal) or `force_unmounted` | [`daemon/workspace/unmount.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/workspace/unmount.rs) |
+| `workspace.status` | `Status(token)`; the Branch head is read separately on the Store's route | `values::status` | [`daemon/workspace/status.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/workspace/status.rs) |
+| `sandbox.get` Workspace list | SDK method `sandbox.list_workspaces`, the one daemon backend method sent | `sandbox/dispatch.rs` | [`daemon/operator.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/operator.rs) |
+| `workspace.exec` | none on this channel: `bash -c` runs through the Sandbox's runtime | — | [`exec.rs`](../../../../control/crates/layerfs-sandbox/src/exec.rs) |
 
 `Locate` and `Cleanup` are read-only observations for a caller whose
 acknowledgement was lost; they bind, attach and remove nothing
-([`daemon/workspace/recovery.rs`](../../../../control/crates/layerfs-control/src/daemon/workspace/recovery.rs)).
+([`daemon/workspace/recovery.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/workspace/recovery.rs)).
 Every Workspace record (`workspace/<id>.json`) and unmount guard lives in the
-serving side's Sandbox folder ([`workspace/serve.rs`](../../../../control/crates/layerfs-control/src/workspace/serve.rs),
-[`workspace/unmount_guard.rs`](../../../../control/crates/layerfs-control/src/workspace/unmount_guard.rs)).
+serving side's Sandbox folder ([`workspace/serve.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs),
+[`unmount_guard.rs`](../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs)).
 A Sandbox holds at most 16 Workspaces (`WORKSPACES`); a mount into a full one
 is `Capacity`.
 
@@ -110,12 +110,12 @@ is `Capacity`.
 
 | Failure | Becomes | Outcome known? | Source |
 | --- | --- | --- | --- |
-| Daemon refusal (`Reply::Refused`) | its `ControlCode` as the code: `Busy`, `HeadMoved`, `Missing`, `Capacity`, `Invalid`, `Failed` or `Unknown`; `detail.phase` | yes, except code `Unknown` | [`daemon/failure.rs`](../../../../control/crates/layerfs-control/src/daemon/failure.rs), [`daemon/values.rs`](../../../../control/crates/layerfs-control/src/daemon/values.rs) `refusal`, [`control_types.rs`](../../../../engine/crates/layerfs-bridge/src/control_types.rs) |
-| Request larger than one control record, before sending | `TooLarge` | yes: not sent | [`daemon/call.rs`](../../../../control/crates/layerfs-control/src/daemon/call.rs) |
-| Transport or protocol failure (`OperationCause::Exchange`) | `Failed`, its message the failure's debug text with `phase` and `attempted` | no when `attempted` is true | [`sandbox/serve.rs`](../../../../control/crates/layerfs-control/src/sandbox/serve.rs) `operation` |
+| Daemon refusal (`Reply::Refused`) | its `ControlCode` as the code: `Busy`, `HeadMoved`, `Missing`, `Capacity`, `Invalid`, `Failed` or `Unknown`; `detail.phase` | yes, except code `Unknown` | [`daemon/failure.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/failure.rs), [`daemon/values.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) `refusal`, [`control_types.rs`](../../../../engine/crates/layerfs-bridge/src/control_types.rs) |
+| Request larger than one control record, before sending | `TooLarge` | yes: not sent | [`daemon/call.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/call.rs) |
+| Transport or protocol failure (`OperationCause::Exchange`) | `Failed`, its message the failure's debug text with `phase` and `attempted` | no when `attempted` is true | [`serve.rs`](../../../../control/crates/layerfs-sandbox/src/serve.rs) `operation` |
 | Terminal step stopped after effects (`Retained`) | `Failed`; the daemon keeps custody | partly | `daemon/failure.rs` |
 | Reply of the wrong kind (`Unexpected`) | `Failed` | not established from source | `daemon/failure.rs` |
-| No free connection in 60 s | `Busy`, "nothing was attempted" | yes | [`daemon/pool.rs`](../../../../control/crates/layerfs-control/src/daemon/pool.rs) |
+| No free connection in 60 s | `Busy`, "nothing was attempted" | yes | [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
 | Saved daemon not `ControlReady` | `StaleSandbox` | yes | `daemon/pool.rs` |
 | Commit conflict | `Conflict` with `head`, `base`, `markers`, `conflicts`, `written` | yes: nothing committed | `values.rs` `commit` |
 | Unmount with uncommitted changes | `Dirty` with `changed`, `pendingMerge` | yes | `values.rs` `unmounted` |

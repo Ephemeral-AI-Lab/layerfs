@@ -63,11 +63,11 @@ fn native_resource_paths_are_validated_before_launch() {
         duplex,
     };
     use layerfs_bridge::{DaemonStore, KernelRoute};
-    use layerfs_control::{sandbox::ProviderCreate, SandboxApi, SandboxPhase};
     use layerfs_isolation::{
         host_process::HostProcessProvider, CommandIdentity, LaunchRequest, ProviderLaunchOptions,
         Runtime,
     };
+    use layerfs_sandbox::{ProviderCreate, SandboxApi, SandboxPhase};
     use std::{
         os::unix::fs::{MetadataExt, PermissionsExt},
         sync::Arc,

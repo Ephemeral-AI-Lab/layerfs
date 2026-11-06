@@ -54,6 +54,10 @@ pub use endpoint::running;
 pub use get::get;
 #[cfg(feature = "machine")]
 pub use image::docker_default;
+/// The platform driver, for the Sandbox code that reaches a machine's
+/// adapters through its machine (layerfs-project#106).
+#[cfg(feature = "machine")]
+pub use layerfs_platform as platform;
 #[cfg(feature = "machine")]
 pub use list::list;
 pub use local::runs_here;

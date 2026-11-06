@@ -70,7 +70,7 @@ fields added from `probe`: `ready`, `missing` and `version`
 `machine create` and `sandbox create` call `sandbox_allowed` and refuse
 `Unsupported` with its reason
 ([`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs),
-[`sandbox/create.rs`](../../../../control/crates/layerfs-control/src/sandbox/create.rs)).
+[`create.rs`](../../../../control/crates/layerfs-sandbox/src/create.rs)).
 
 ## Invariants
 

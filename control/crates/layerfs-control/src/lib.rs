@@ -1,16 +1,13 @@
-//! The management library under the SDK call surface (`layerfs-api`): the
-//! home and its records, machines and their workers, Stores, projects,
-//! Sandboxes and their Workspaces, and backups (#536), and the call
-//! machinery (`calls`). `layerfs-api` holds the call table's entries, one
-//! file per call, and runs each call here.
+//! What spans the control entities (#536; split by layerfs-project#101):
+//! the worker's server, `inventory` (the relationships no record stores),
+//! `doctor`, the home's conversions (`migrate`), and the machine, Store,
+//! project and backup calls with the reads they need from other entities
+//! (`Related`). Until #107 it also holds the call machinery (`calls`).
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-#[doc(hidden)]
-pub use daemon::internal;
 pub mod backup;
 pub mod calls;
-pub mod daemon;
 pub mod doctor;
 #[doc(hidden)]
 pub mod inventory;
@@ -18,23 +15,11 @@ pub mod inventory;
 pub mod machine;
 pub mod migrate;
 pub mod project;
-pub mod sandbox;
 pub mod store;
 pub mod worker_server;
-pub mod workspace;
-pub use daemon::call::{SdkError, SdkResult};
-pub use daemon::failure::{OperationCause, OperationFailure};
-pub use daemon::workspace::{
-    BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
-};
 pub use layerfs_project::store::{
     projects, AddFailure, AddRequest, AddedProject, CreateRequest, InitError, InitFailure,
     InitRequest, InstallError, InstallFailure, InstallWork, Installed, ProjectApi, SealedProject,
 };
 pub use layerfs_project::{InitCounters, InitCounts, InitStep, ProjectError, SourceRefusal};
 pub use layerfs_store_service::methods::call;
-#[cfg(unix)]
-pub use sandbox::{
-    connect_address, ProviderCreate, ProviderFailure, ProviderSandbox, SandboxApi, SandboxCause,
-    SandboxPhase,
-};

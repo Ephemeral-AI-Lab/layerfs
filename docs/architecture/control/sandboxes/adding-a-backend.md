@@ -57,7 +57,7 @@ The `profile.rs` of each platform that uses the backend names it in
 | 4 | Write the provider (`launch`, or `launch_with_binds` if it binds; `reopen`; `reopen_stopped`) and the owner (`identity`, `endpoint`, `run`, `track`, `log_tail`, `inspect`, `stop`, `delete`). Reuse `local/` for a process on this kernel. | `<b>/` | — |
 | 5 | Add `Runtime::<B>` and `Sandbox::<B>` with every arm in [`runtime.rs`](../../../../control/crates/layerfs-isolation/src/runtime.rs); refuse binds before any effect if it takes none. | `runtime.rs` | every `match self` |
 | 6 | Map the platforms that use it (`Profile::backend`) and their rows in the support table. | [`platform.rs`](../../../../control/crates/layerfs-platform/src/platform.rs), [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs) | `SUPPORT.json` comparison test |
-| 7 | Map its stored name in the API's Sandbox records and launch (`ProviderCreate` options). | [`control/crates/layerfs-control/src/sandbox`](../../../../control/crates/layerfs-control/src/sandbox) | Not established from source in full; follow the compiler from `Runtime`. |
+| 7 | Map its stored name in the API's Sandbox records and launch (`ProviderCreate` options). | [`control/crates/layerfs-control/src/sandbox`](../../../../control/crates/layerfs-sandbox/src) | Not established from source in full; follow the compiler from `Runtime`. |
 
 Rules each backend keeps, from the existing three:
 

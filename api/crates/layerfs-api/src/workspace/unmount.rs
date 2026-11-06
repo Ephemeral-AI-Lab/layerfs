@@ -17,5 +17,5 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `workspace.unmount`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::workspace::calls::workspace(context, "unmount", args)
+    layerfs_sandbox::workspace::calls::workspace(context, "unmount", args)
 }

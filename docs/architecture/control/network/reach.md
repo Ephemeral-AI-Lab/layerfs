@@ -47,7 +47,7 @@ Notes from the receipts:
 - On `apple-container` the gateway reaches a host server only when it
   listens on the bridge (`0.0.0.0`), not on `127.0.0.1` alone. The API adds
   that as a hint to a failed reach check
-  ([`sandbox/route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs)).
+  ([`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs)).
 - Verified live per platform in the
   [G7 live receipt](../../../../core/docs/issues/535/receipts/g7-live/RECEIPT.md);
   network facts per guest in the

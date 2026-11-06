@@ -96,8 +96,8 @@ and log settings, and its Store mount against the record
 
 | Item | Rule | Source |
 | --- | --- | --- |
-| Container name | `<prefix><id>`; prefix `deploy.containerPrefix`, else `layerfs-`. Engine rule: an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at most 128. A name another container holds fails the create; it is never replaced or adopted. | `sandbox_name` in [`sandbox/serve.rs`](../../../../control/crates/layerfs-control/src/sandbox/serve.rs), `naming` in [`http.rs`](../../../../control/crates/layerfs-isolation/src/docker_engine/http.rs) |
-| Labels set by the API | `layerfs.role=sandbox`, `layerfs.project=<project>`, `layerfs.sandbox=<id>`, and `layerfs.store=<store>` for a shared Store. | `labels` in [`sandbox/serve.rs`](../../../../control/crates/layerfs-control/src/sandbox/serve.rs) |
+| Container name | `<prefix><id>`; prefix `deploy.containerPrefix`, else `layerfs-`. Engine rule: an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at most 128. A name another container holds fails the create; it is never replaced or adopted. | `sandbox_name` in [`serve.rs`](../../../../control/crates/layerfs-sandbox/src/serve.rs), `naming` in [`http.rs`](../../../../control/crates/layerfs-isolation/src/docker_engine/http.rs) |
+| Labels set by the API | `layerfs.role=sandbox`, `layerfs.project=<project>`, `layerfs.sandbox=<id>`, and `layerfs.store=<store>` for a shared Store. | `labels` in [`serve.rs`](../../../../control/crates/layerfs-sandbox/src/serve.rs) |
 | Label text | Each key once; key and value 1 to 128 of `[A-Za-z0-9_.-]`. | `SandboxRequest::check` in [`sandbox.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/sandbox.rs) |
 | Reopen | The container must carry every recorded label with its value; the image may add others. | `config` in [`topology.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/topology.rs) |
 | Volume name | 1 to 128, alphanumeric first, then `[A-Za-z0-9_.-]`. | `volume_name` in [`sandbox.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/sandbox.rs) |

@@ -4,11 +4,11 @@
 //! files (0600). A Store folder with projects and no Store record is
 //! reported here too.
 use super::report::Findings;
-use crate::sandbox::record::SandboxRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{paths, read_record, RECORD_VERSION};
 use layerfs_home::outcome::failed;
 use layerfs_machine::record::MachineRecord;
+use layerfs_sandbox::record::SandboxRecord;
 use layerfs_store::record::StoreRecord;
 use std::collections::BTreeSet;
 use std::os::unix::fs::PermissionsExt;

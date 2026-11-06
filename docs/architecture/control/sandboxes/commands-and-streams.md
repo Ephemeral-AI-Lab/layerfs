@@ -78,8 +78,8 @@ Docker's steps, each attempted once
 | Counts are what each sink accepted (`ExecExit::stdout_bytes`, `stderr_bytes`), not what was queued. | [`local/streams.rs`](../../../../control/crates/layerfs-isolation/src/local/streams.rs), `OutputProgress` in [`streams.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/streams.rs) |
 | A sink failure closes the command's pipes, still waits for its exit, and returns the sink's error. | [`host_process/exec.rs`](../../../../control/crates/layerfs-isolation/src/backend/host_process/exec.rs), [`namespaces/exec.rs`](../../../../control/crates/layerfs-isolation/src/backend/namespaces/exec.rs) |
 | End of stream is transport completion only, never the exit. | `copy_to` in [`streams.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/streams.rs) |
-| No output is cut: a stream over the 1 MiB inline window is spooled (`truncated` is always false). | `INLINE` in [`sandbox/output.rs`](../../../../control/crates/layerfs-control/src/sandbox/output.rs), [`sandbox/exec.rs`](../../../../control/crates/layerfs-control/src/sandbox/exec.rs) |
-| The API also emits the output as `stdout` / `stderr` events after the call, for front ends that stream. | [`workspace/calls.rs`](../../../../control/crates/layerfs-control/src/workspace/calls.rs) |
+| No output is cut: a stream over the 1 MiB inline window is spooled (`truncated` is always false). | `INLINE` in [`output.rs`](../../../../control/crates/layerfs-sandbox/src/output.rs), [`exec.rs`](../../../../control/crates/layerfs-sandbox/src/exec.rs) |
+| The API also emits the output as `stdout` / `stderr` events after the call, for front ends that stream. | [`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) |
 
 ## Exit status
 

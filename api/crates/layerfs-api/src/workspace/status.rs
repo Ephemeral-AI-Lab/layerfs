@@ -17,5 +17,5 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `workspace.status`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::workspace::calls::workspace(context, "status", args)
+    layerfs_sandbox::workspace::calls::workspace(context, "status", args)
 }

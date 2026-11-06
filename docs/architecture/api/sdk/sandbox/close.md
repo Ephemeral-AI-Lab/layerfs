@@ -12,7 +12,7 @@ its record removed; it is also the call that clears an uncertain
 | --- | --- |
 | Family | [sandbox](README.md) |
 | Library entry | [`sandbox/close.rs`](../../../../../api/crates/layerfs-api/src/sandbox/close.rs) |
-| Implemented in | `layerfs_control::sandbox::family::sandbox` → `close::close` ([`sandbox/close.rs`](../../../../../control/crates/layerfs-control/src/sandbox/close.rs)), then `serve::close` on the machine ([`sandbox/serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs)) |
+| Implemented in | `layerfs_sandbox::family::sandbox` → `close::close` ([`close.rs`](../../../../../control/crates/layerfs-sandbox/src/close.rs)), then `serve::close` on the machine ([`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs)) |
 | Runs in | the caller's process (records, locks), then the caller's process for a local machine or the machine's worker (`sandbox.host`) |
 
 ## Signature
@@ -37,13 +37,13 @@ layerfs sandbox close <name> [--force]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | a recorded Sandbox, else `NoSuchSandbox` | [`sandbox/family.rs`](../../../../../control/crates/layerfs-control/src/sandbox/family.rs) `sandbox_of` |
+| `name` | Name | a recorded Sandbox, else `NoSuchSandbox` | [`family.rs`](../../../../../control/crates/layerfs-sandbox/src/family.rs) `sandbox_of` |
 
 ## Options
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `force` | Bool | false | stop even with Workspaces mounted; their uncommitted changes and processes end with the Sandbox | [`sandbox/serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs) `close` |
+| `force` | Bool | false | stop even with Workspaces mounted; their uncommitted changes and processes end with the Sandbox | [`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs) `close` |
 
 Under a folder scope the call is refused `InvalidInput`
 ([`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs)).
@@ -88,7 +88,7 @@ Under a folder scope the call is refused `InvalidInput`
 
 | Outcome on the machine | Home record | Source |
 | --- | --- | --- |
-| `Closed` | removed; forward ended | [`sandbox/close.rs`](../../../../../control/crates/layerfs-control/src/sandbox/close.rs) |
+| `Closed` | removed; forward ended | [`close.rs`](../../../../../control/crates/layerfs-sandbox/src/close.rs) |
 | `NoSuchSandbox` (already gone) | removed; answer `was_gone` | `close.rs` |
 | `Unknown` | kept, `op` marked uncertain, logged | `close.rs` |
 | any other refusal | kept, `op` dropped: the Sandbox is as it was | `close.rs` |
@@ -100,9 +100,9 @@ See the [routing table](../../../control/routing/routing-table.md).
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
 | `InvalidInput` | bad name; folder scope | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
-| `NoSuchSandbox` | no record of that name | no | [`sandbox/family.rs`](../../../../../control/crates/layerfs-control/src/sandbox/family.rs) |
-| `Busy` | another live operation's `op` holds the Sandbox (`detail {entity, phase, op}`); an unmount is in progress | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs), [`workspace/unmount_guard.rs`](../../../../../control/crates/layerfs-control/src/workspace/unmount_guard.rs) |
-| `MountsActive` | without `force`, Workspaces are mounted; `detail.workspaces` lists their paths | no | [`sandbox/serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs) |
+| `NoSuchSandbox` | no record of that name | no | [`family.rs`](../../../../../control/crates/layerfs-sandbox/src/family.rs) |
+| `Busy` | another live operation's `op` holds the Sandbox (`detail {entity, phase, op}`); an unmount is in progress | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs), [`unmount_guard.rs`](../../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs) |
+| `MountsActive` | without `force`, Workspaces are mounted; `detail.workspaces` lists their paths | no | [`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs) |
 | `Unavailable` | the machine's worker is not recorded or does not answer (nothing sent); a lock held too long | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
 | `Failed` | the stop or delete failed (a failed stop is not followed by a delete); the Sandbox stays as it was | no | `serve.rs` |
 | `Unknown` | **the machine's answer was lost after the request was sent: the Sandbox may be stopped or not** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs), `close.rs` |

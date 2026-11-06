@@ -51,12 +51,12 @@ pub mod worker {
 }
 pub use layerfs_control::store::close_idle;
 pub use layerfs_control::{
-    daemon, projects, AddFailure, AddRequest, AddedProject, CreateRequest, InitCounters,
-    InitCounts, InitError, InitFailure, InitRequest, InitStep, InstallError, InstallFailure,
-    InstallWork, Installed, OperationCause, OperationFailure, ProjectApi, ProjectError, SdkError,
-    SdkResult, SealedProject, SourceRefusal,
+    projects, AddFailure, AddRequest, AddedProject, CreateRequest, InitCounters, InitCounts,
+    InitError, InitFailure, InitRequest, InitStep, InstallError, InstallFailure, InstallWork,
+    Installed, ProjectApi, ProjectError, SealedProject, SourceRefusal,
 };
-pub use layerfs_control::{
+pub use layerfs_sandbox::{daemon, OperationCause, OperationFailure, SdkError, SdkResult};
+pub use layerfs_sandbox::{
     BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
 };
 

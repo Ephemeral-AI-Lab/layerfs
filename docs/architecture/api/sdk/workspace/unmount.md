@@ -12,7 +12,7 @@ changes refuse the call unless they are discarded.
 | --- | --- |
 | Family | [workspace](README.md) |
 | Library entry | [`workspace/unmount.rs`](../../../../../api/crates/layerfs-api/src/workspace/unmount.rs) |
-| Implemented in | `layerfs_control::workspace::calls::workspace` → host operation `workspace.unmount` → `workspace::serve::unmount` ([`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs), [`workspace/unmount_guard.rs`](../../../../../control/crates/layerfs-control/src/workspace/unmount_guard.rs)) |
+| Implemented in | `layerfs_sandbox::workspace::calls::workspace` → host operation `workspace.unmount` → `workspace::serve::unmount` ([`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs), [`unmount_guard.rs`](../../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs)) |
 | Runs in | the Sandbox's machine (records, guard) and the Sandbox's daemon (teardown) |
 
 ## Signature
@@ -42,7 +42,7 @@ layerfs workspace unmount <ws> [--discard] [--force]
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `discard` | Bool | false | drop uncommitted changes instead of refusing `Dirty` | [`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs) |
+| `discard` | Bool | false | drop uncommitted changes instead of refusing `Dirty` | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `force` | Bool | false | one abort write ends the connection, also after a normal unmount stalled at Join; uncommitted changes are dropped | same |
 
 ## Returns
@@ -56,9 +56,9 @@ layerfs workspace unmount <ws> [--discard] [--force]
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `kind` | text | `Unmounted` or `ForceUnmounted` | [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) |
+| `kind` | text | `Unmounted` or `ForceUnmounted` | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
 | `abort`, `detach`, `cleanup` | text | what the forced teardown established | same, `force_unmounted` |
-| `cleanup_error` | text | a local cleanup failure after a known success | [`workspace/unmount_guard.rs`](../../../../../control/crates/layerfs-control/src/workspace/unmount_guard.rs) |
+| `cleanup_error` | text | a local cleanup failure after a known success | [`unmount_guard.rs`](../../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs) |
 
 A Workspace the daemon no longer knows (`Missing`) answers `Unmounted`.
 
@@ -91,12 +91,12 @@ answers `Busy` while a process still holds the mount. See the
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
 | `InvalidInput` | a bad `ws` | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
-| `NoSuchSandbox`, `NotMounted` | no such Sandbox; the Workspace is not mounted or already unmounted | no | [`workspace/unmount_guard.rs`](../../../../../control/crates/layerfs-control/src/workspace/unmount_guard.rs) |
-| `Dirty` | uncommitted changes and no `discard` (`detail.changed`, `pending_merge`, `truncated`) | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) `unmounted` |
-| `Busy` | another unmount of it is in progress; a process holds the mount; another control operation runs; a `sandbox.create`/`close` holds the Sandbox | no | [`workspace/unmount_guard.rs`](../../../../../control/crates/layerfs-control/src/workspace/unmount_guard.rs), [`control/registry.rs`](../../../../../engine/crates/layerfs-daemon/src/control/registry.rs) |
-| other daemon refusal codes | refused with `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) |
-| `Unavailable` | the worker is not recorded or does not answer | no | [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
-| `Failed` | **a daemon exchange failed; `attempted` says whether teardown may have begun** | **maybe** | [`sandbox/serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs) |
+| `NoSuchSandbox`, `NotMounted` | no such Sandbox; the Workspace is not mounted or already unmounted | no | [`unmount_guard.rs`](../../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs) |
+| `Dirty` | uncommitted changes and no `discard` (`detail.changed`, `pending_merge`, `truncated`) | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) `unmounted` |
+| `Busy` | another unmount of it is in progress; a process holds the mount; another control operation runs; a `sandbox.create`/`close` holds the Sandbox | no | [`unmount_guard.rs`](../../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs), [`control/registry.rs`](../../../../../engine/crates/layerfs-daemon/src/control/registry.rs) |
+| other daemon refusal codes | refused with `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
+| `Unavailable` | the worker is not recorded or does not answer | no | [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) |
+| `Failed` | **a daemon exchange failed; `attempted` says whether teardown may have begun** | **maybe** | [`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs) |
 | `Unknown` | **the worker's answer was lost** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After an uncertain unmount**, call `workspace.unmount` again: a recorded

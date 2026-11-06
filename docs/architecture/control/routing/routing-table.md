@@ -9,7 +9,7 @@ Where each call runs.
 | | |
 | --- | --- |
 | Component | [Routing and workers](README.md) |
-| Source | [`control/crates/layerfs-control/src/calls`](../../../../control/crates/layerfs-control/src/calls), [`resolve.rs`](../../../../control/crates/layerfs-store/src/resolve.rs), [`control/crates/layerfs-control/src/sandbox/route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs), [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`call.rs`](../../../../control/crates/layerfs-store/src/call.rs), [`workspace/calls.rs`](../../../../control/crates/layerfs-control/src/workspace/calls.rs) |
+| Source | [`control/crates/layerfs-control/src/calls`](../../../../control/crates/layerfs-control/src/calls), [`resolve.rs`](../../../../control/crates/layerfs-store/src/resolve.rs), [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs), [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`call.rs`](../../../../control/crates/layerfs-store/src/call.rs), [`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) |
 
 ## By Store kind
 
@@ -113,15 +113,15 @@ secret guards it on every bind address.
 
 | Call | Route | Starts nothing? | Source |
 | --- | --- | --- | --- |
-| `workspace.mount` | direct when forwarded, else the machine | yes; a mount never starts a Sandbox | [`workspace/calls.rs`](../../../../control/crates/layerfs-control/src/workspace/calls.rs), [`workspace/serve.rs`](../../../../control/crates/layerfs-control/src/workspace/serve.rs) |
-| `workspace.exec` | always the machine (`bash -c` through the Sandbox runtime) | yes | `workspace/calls.rs`, [`sandbox/direct.rs`](../../../../control/crates/layerfs-control/src/sandbox/direct.rs) |
+| `workspace.mount` | direct when forwarded, else the machine | yes; a mount never starts a Sandbox | [`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs), [`workspace/serve.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
+| `workspace.exec` | always the machine (`bash -c` through the Sandbox runtime) | yes | `workspace/calls.rs`, [`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs) |
 | `workspace.commit`, `workspace.unmount` | direct when forwarded, else the machine | yes | `workspace/calls.rs` |
 | `workspace.status` | direct when forwarded, else `reach` without loading an image; an unreached worker is the refusal | yes | `workspace/calls.rs` (`reach(..., false)`) |
 
 A Sandbox is forwarded when its record's `daemon.forward` holds an address:
 on `ssh` and `lima` an `ssh -L` carries the daemon's port to this host, and a
 `docker` Sandbox publishes its daemon's port on the host's loopback
-([`sandbox/direct.rs`](../../../../control/crates/layerfs-control/src/sandbox/direct.rs)).
+([`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs)).
 The daemon itself serves no Store calls: a Branch lookup or head read for a
 mount or status goes the Store's own route above. How a call reaches the
 daemon is in [Daemon channel](daemon-channel.md).

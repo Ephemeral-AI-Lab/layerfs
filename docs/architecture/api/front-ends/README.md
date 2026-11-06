@@ -74,9 +74,9 @@ inside the library are on [Table](../call-table/table.md).
 Events come from the call's one event stream
 ([`Context`](../../../../control/crates/layerfs-home/src/context.rs)).
 `workspace.exec` sends its output after the command ends: an inline stream
-as one event ([`workspace/calls.rs`](../../../../control/crates/layerfs-control/src/workspace/calls.rs)),
+as one event ([`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs)),
 a stream over 1 MiB as 1 MiB pages from the host's spool, with the result
-marked `streamed` ([`sandbox/route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs) `drain`).
+marked `streamed` ([`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `drain`).
 
 Entries outside the table: `doctor` in every front end (report-only, see
 [Doctor](../../control/management/doctor.md)); `close` in Node and Python, which runs

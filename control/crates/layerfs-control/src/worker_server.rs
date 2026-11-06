@@ -179,7 +179,12 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
             )
         }
         // a Sandbox or Workspace operation on this machine's own native
-        "sandbox.host" => crate::sandbox::route::in_worker(root, &args, events),
+        "sandbox.host" => layerfs_sandbox::route::in_worker(
+            root,
+            &args,
+            events,
+            layerfs_sandbox::workspace::dispatch::call,
+        ),
         // drops one project from the Store under this worker's root (2.0):
         // `{ store, project, store_record }`
         "project.remove" => layerfs_store::identity::remove_project(&with_home(args, root)),

@@ -1,0 +1,130 @@
+//! The `workspace` family: each call goes to its Sandbox's machine, or,
+//! for a Sandbox whose daemon this host reaches (#535 G4), straight to its
+//! daemon; an exec always runs through the Sandbox's runtime, in its machine.
+use crate::direct;
+use crate::family::sandbox_of;
+use crate::route::{on_machine, reach};
+use layerfs_bridge::control::SdkValue;
+use layerfs_home::context::Context;
+use layerfs_home::home;
+use layerfs_home::names::{WorkspaceAt, WorkspaceName, WorkspaceRef};
+use layerfs_home::outcome::{refused, Outcome};
+use layerfs_machine::worker::Unreached;
+
+/// Runs one `workspace` call.
+pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
+    let home = context.home.clone();
+    if call == "mount" {
+        let name = args.get_text("sandbox").unwrap_or("");
+        let record = sandbox_of(&home, name)?;
+        // refused while a create or close holds the Sandbox, or left it
+        // unresolved (#536 §7.1)
+        record.free()?;
+        let branch = args.get("branch").cloned().unwrap_or_default();
+        let mut more = vec![("branch", branch)];
+        // a name, unique in the Sandbox, which `ws` then uses (#536 C3)
+        let named = match args.get_text("name") {
+            Some(text) => Some(WorkspaceName::parse(text)?),
+            None => None,
+        };
+        if let Some(named) = &named {
+            more.push(("name", SdkValue::text(named.as_str())));
+        }
+        // a Sandbox whose daemon this host reaches is mounted from here
+        // (#535 G4); every other through its machine
+        let mounted = match direct::forwarded(&record) {
+            true => crate::workspace::direct::call(context, &record, "workspace.mount", more)?,
+            false => on_machine(
+                context,
+                &record,
+                "workspace.mount",
+                more,
+                crate::workspace::dispatch::call,
+            )?,
+        };
+        let path = mounted.get_text("path").unwrap_or("").to_owned();
+        let ws = WorkspaceRef {
+            sandbox: name.to_owned(),
+            at: named.map_or(WorkspaceAt::Path(path), WorkspaceAt::Name),
+        };
+        return Ok(home::with_field(
+            mounted,
+            "ws",
+            SdkValue::text(ws.to_string()),
+        ));
+    }
+    let ws = WorkspaceRef::parse(args.get_text("ws").unwrap_or(""))?;
+    let record = sandbox_of(&home, &ws.sandbox)?;
+    // a status only reads; every other call is refused while an intent
+    // holds the Sandbox
+    if call != "status" {
+        record.free()?;
+    }
+    // a path, or a name the Sandbox's side resolves to its path
+    let mut more = vec![("path", SdkValue::text(ws.at.as_str()))];
+    let forwarded = direct::forwarded(&record);
+    // an exec runs through the Sandbox's runtime, in its machine, even when
+    // this host reaches its daemon: its directory is checked here, where
+    // its Workspace records are (#535 G4)
+    if forwarded && call == "exec" {
+        let directory = crate::workspace::direct::exec_directory(&home, &record, ws.at.as_str())?;
+        more = vec![
+            ("path", SdkValue::text(&directory)),
+            ("directory", SdkValue::Text(directory)),
+        ];
+    }
+    let op = match call {
+        "exec" => {
+            more.push(("command", args.get("command").cloned().unwrap_or_default()));
+            more.push(("message", args.get("message").cloned().unwrap_or_default()));
+            "workspace.exec"
+        }
+        "commit" => {
+            more.push(("message", args.get("message").cloned().unwrap_or_default()));
+            // publish over a moved head instead of merging
+            if let Some(force) = args.get("force") {
+                more.push(("force", force.clone()));
+            }
+            "workspace.commit"
+        }
+        "unmount" => {
+            for flag in ["discard", "force"] {
+                if let Some(value) = args.get(flag) {
+                    more.push((flag, value.clone()));
+                }
+            }
+            "workspace.unmount"
+        }
+        "status" => "backend.daemon.workspace.status",
+        _ => return Err(refused("InvalidInput", format!("no call workspace.{call}"))),
+    };
+    // a status starts no machine (P4)
+    let out = match call {
+        _ if forwarded && call != "exec" => {
+            crate::workspace::direct::call(context, &record, op, more)
+        }
+        "status" => reach(
+            context,
+            &record,
+            op,
+            more,
+            false,
+            crate::workspace::dispatch::call,
+        )
+        .unwrap_or_else(|Unreached(why)| Err(why)),
+        _ => on_machine(context, &record, op, more, crate::workspace::dispatch::call),
+    }?;
+    if call == "exec" {
+        // the command's output as events too, for front ends that stream
+        for stream in ["stdout", "stderr"] {
+            match out.get(stream) {
+                Some(SdkValue::Text(text)) if !text.is_empty() => {
+                    context.output(stream, text.as_bytes())
+                }
+                Some(SdkValue::Bytes(bytes)) if !bytes.is_empty() => context.output(stream, bytes),
+                _ => {}
+            }
+        }
+    }
+    Ok(out)
+}

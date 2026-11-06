@@ -22,5 +22,5 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `workspace.exec`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::workspace::calls::workspace(context, "exec", args)
+    layerfs_sandbox::workspace::calls::workspace(context, "exec", args)
 }

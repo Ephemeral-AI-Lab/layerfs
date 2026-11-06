@@ -12,10 +12,10 @@ use layerfs_bridge::{
     duplex,
 };
 use layerfs_bridge::{DaemonStore, KernelRoute};
-use layerfs_control::{ProviderCreate, ProviderSandbox, SandboxApi, SandboxPhase};
 use layerfs_isolation::docker::DockerProvider;
 use layerfs_isolation::Runtime;
 use layerfs_isolation::{LaunchRequest, ProviderLaunchOptions};
+use layerfs_sandbox::{ProviderCreate, ProviderSandbox, SandboxApi, SandboxPhase};
 use std::{
     fs,
     net::TcpListener,
@@ -249,7 +249,7 @@ fn create_matching_existing_project_keeps_one_original_hello_and_does_not_reinst
     let owner = fixture.owner.take().unwrap();
     assert_eq!(owner.startup.phase, DaemonPhase::ControlReady);
     assert!(owner.installed.is_none());
-    let (mut runtime, control, _) = layerfs_control::internal::split_provider(owner);
+    let (mut runtime, control, _) = layerfs_sandbox::internal::split_provider(owner);
     assert_eq!(control.channel_work().0.records, 1);
     // stop once, then delete once, as the removed `SandboxApi::close` did
     runtime.stop(1).unwrap();

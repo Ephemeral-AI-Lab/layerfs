@@ -17,5 +17,5 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `sandbox.create`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::sandbox::family::sandbox(context, "create", args)
+    layerfs_sandbox::family::sandbox(context, "create", args)
 }

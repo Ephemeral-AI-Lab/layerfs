@@ -79,7 +79,7 @@ id and uses the caller's home id sent with each request
 | --- | --- |
 | One JSON value per file, replaced whole by one rename | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) |
 | Entity records carry `"v": 1` first (`RECORD_VERSION`) | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) |
-| A record holds facts and at most one `op` intent; states such as `running` are derived when read | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs), [`sandbox/record.rs`](../../../../control/crates/layerfs-control/src/sandbox/record.rs) |
+| A record holds facts and at most one `op` intent; states such as `running` are derived when read | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs), [`record.rs`](../../../../control/crates/layerfs-sandbox/src/record.rs) |
 | Logs are appended JSON lines in `log/` (0600) | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) `log_line` |
 
 The `op` intent, from [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs):
@@ -111,7 +111,7 @@ not the owner ([`lease.rs`](../../../../control/crates/layerfs-store/src/lease.r
 | `layerfs.lock` | record writes, name claims, Sandbox-name uniqueness | 120 s, then `Unavailable` | [`home/lock.rs`](../../../../control/crates/layerfs-home/src/home/lock.rs) |
 | `machine/<m>/start.lock` | a start, stop, create or remove | 600 s | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
 | `store/<s>/lock` | leases, `op` and phase writes, the record | 120 s | [`home/entity_lock.rs`](../../../../control/crates/layerfs-home/src/home/entity_lock.rs) |
-| `sandbox/<n>/lock` | the Sandbox and Workspace records | 120 s | [`sandbox/record.rs`](../../../../control/crates/layerfs-control/src/sandbox/record.rs) |
+| `sandbox/<n>/lock` | the Sandbox and Workspace records | 120 s | [`record.rs`](../../../../control/crates/layerfs-sandbox/src/record.rs) |
 | `store/<s>/open/<pid>` | a lease: this process uses the Store | taken under the Store lock | [`lease.rs`](../../../../control/crates/layerfs-store/src/lease.rs) |
 
 Order is home, start, store, sandbox. No lock is held across a worker

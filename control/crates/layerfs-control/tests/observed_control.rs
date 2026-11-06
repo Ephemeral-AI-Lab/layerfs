@@ -3,11 +3,9 @@ use layerfs_bridge::{
     control::{Answer, Call, CleanupObservation, Reply, Request, UnmountControl, WorkspaceToken},
     duplex,
 };
-use layerfs_control::{
-    internal::{Control, ControlPhase},
-    WorkspaceApi,
-};
 use layerfs_history::WorkspaceId;
+use layerfs_sandbox::internal::{Control, ControlPhase};
+use layerfs_sandbox::WorkspaceApi;
 use std::{
     net::{TcpListener, TcpStream},
     thread,
@@ -68,19 +66,19 @@ fn facade_observation_is_explicit_and_does_not_persist_on_channel() {
         }
     });
     assert_eq!(
-        layerfs_control::internal::workspace(&mut control)
+        layerfs_sandbox::internal::workspace(&mut control)
             .cleanup(token())
             .unwrap(),
         CleanupObservation::Gone
     );
     assert_eq!(
-        layerfs_control::internal::with_observations(&mut control, &[7; 32])
+        layerfs_sandbox::internal::with_observations(&mut control, &[7; 32])
             .cleanup(token())
             .unwrap(),
         CleanupObservation::Gone
     );
     assert_eq!(
-        layerfs_control::internal::workspace(&mut control)
+        layerfs_sandbox::internal::workspace(&mut control)
             .cleanup(token())
             .unwrap(),
         CleanupObservation::Gone
@@ -161,16 +159,16 @@ fn unmount_force_selects_one_original_request_without_unknown_relinquishment() {
         }
     });
     assert_eq!(
-        layerfs_control::internal::workspace(&mut control)
+        layerfs_sandbox::internal::workspace(&mut control)
             .unmount(token(), false)
             .unwrap(),
         None
     );
-    let failure = layerfs_control::internal::workspace(&mut control)
+    let failure = layerfs_sandbox::internal::workspace(&mut control)
         .unmount(token(), true)
         .unwrap_err();
     assert!(
-        matches!(failure.cause, layerfs_control::OperationCause::Remote(ref cause) if cause.code == ControlCode::Busy && cause.phase == "force:admission")
+        matches!(failure.cause, layerfs_sandbox::OperationCause::Remote(ref cause) if cause.code == ControlCode::Busy && cause.phase == "force:admission")
     );
     worker.join().unwrap();
 }

@@ -67,7 +67,7 @@ be served at once; each connection still carries one request.
 | `worker.ping` | answers `{kind: "worker", version, pid}` | `server.rs` `run` |
 | `store.call` | one Store method on `store/<name>/store.sqlite` under the worker's root, holding the Store's lease there | `server.rs`, [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs) |
 | `store.file` | one step of a Store push, pull, remove, stat or backup | [`sqlite/transfer/steps.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) |
-| `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native` | [`sandbox/route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs) `in_worker` |
+| `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native` | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `in_worker` |
 | `project.stage` | writes or discards one part of a caller's folder copy | [`project/staged.rs`](../../../../control/crates/layerfs-store/src/project/staged.rs) |
 | `project.init` | adds the staged copy as a new project | [`project/init.rs`](../../../../control/crates/layerfs-store/src/project/init.rs) |
 | `project.remove` | drops one project from a Store under the root | [`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs) |
@@ -113,7 +113,7 @@ without a request; `machine.start` and doctor use it
 
 | Step | What happens | Source |
 | --- | --- | --- |
-| Find the bundle | `bundle()` reads `bundle.json`; none is `Unsupported` naming `tools/linux_bundle.py` | [`bundle.rs`](../../../../control/crates/layerfs-machine/src/bundle.rs), [`sandbox/deploy.rs`](../../../../control/crates/layerfs-control/src/sandbox/deploy.rs) `bundle_dir` |
+| Find the bundle | `bundle()` reads `bundle.json`; none is `Unsupported` naming `tools/linux_bundle.py` | [`bundle.rs`](../../../../control/crates/layerfs-machine/src/bundle.rs), [`deploy.rs`](../../../../control/crates/layerfs-sandbox/src/deploy.rs) `bundle_dir` |
 | Start | the machine adapter starts the machine and its worker from the bundle; a `docker` machine with no image uses the bundle's default image | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) `start` |
 | Record | `worker.json` is written under the home lock; the machine's state becomes `running` | [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs) `save_running` |
 | Check | the new worker's hello is compared; a stale bundle is refused (see below) | `endpoint.rs` `start` |

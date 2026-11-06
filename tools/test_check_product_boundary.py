@@ -151,8 +151,11 @@ class ProductBoundaryTests(unittest.TestCase):
             self.assertTrue(dependency_violations(f'[package]\nname="{name}"\n'), name)
 
     def test_sdk_source_edges_and_unsafe_boundary(self):
-        path = Path("control/crates/layerfs-control/src/project/init.rs")
+        path = Path("control/crates/layerfs-store/src/project/init.rs")
         self.assertFalse(violations(path, "use layerfs_persistence::SqliteHandles;"))
+        # #106: what spans entities no longer opens a Store itself
+        control_src = Path("control/crates/layerfs-control/src/doctor/scan.rs")
+        self.assertTrue(violations(control_src, "use layerfs_persistence::SqliteHandles;"))
         self.assertTrue(violations(path, "use layerfs_server::Server;"))
         self.assertTrue(unsafe_violations(path, "unsafe fn extend_lifetime() {}"))
         root = Path("api/crates/layerfs-api/src/lib.rs")
@@ -257,7 +260,17 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertTrue(violations(Path("api/crates/layerfs-api/src/store/push.rs"), "use layerfs_project::Init;"))
         self.assertFalse(violations(Path("api/crates/layerfs-api/src/store/push.rs"), "use layerfs_control::family;"))
         control = '[package]\nname="layerfs-control"\n[dependencies]\n'
-        self.assertFalse(dependency_violations(control + 'layerfs-persistence={path="../../layerfs-persistence"}'))
+        self.assertTrue(dependency_violations(control + 'layerfs-persistence={path="../../layerfs-persistence"}'))
+        store = '[package]\nname="layerfs-store"\n[dependencies]\n'
+        self.assertFalse(dependency_violations(store + 'layerfs-persistence={path="../../layerfs-persistence"}'))
+        # rule 5 and the chain: the home knows no entity, an entity never points up
+        home = '[package]\nname="layerfs-home"\n[dependencies]\n'
+        self.assertTrue(dependency_violations(home + 'layerfs-machine={path="../layerfs-machine"}'))
+        machine = '[package]\nname="layerfs-machine"\n[dependencies]\n'
+        self.assertTrue(dependency_violations(machine + 'layerfs-store={path="../layerfs-store"}'))
+        sandbox = '[package]\nname="layerfs-sandbox"\n[dependencies]\n'
+        self.assertTrue(dependency_violations(sandbox + 'layerfs-control={path="../layerfs-control"}'))
+        self.assertFalse(dependency_violations(sandbox + 'layerfs-store={path="../layerfs-store"}'))
         self.assertTrue(dependency_violations(control + 'layerfs-server={path="../../layerfs-server"}'))
         self.assertFalse(dependency_violations(control + 'layerfs-project={path="../../layerfs-project"}'))
         self.assertTrue(dependency_violations(control + 'layerfs-workspace={path="../../layerfs-workspace"}'))

@@ -17,5 +17,5 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `workspace.mount`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::workspace::calls::workspace(context, "mount", args)
+    layerfs_sandbox::workspace::calls::workspace(context, "mount", args)
 }

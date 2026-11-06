@@ -109,7 +109,7 @@ The permanent product restriction supersedes those enablements for SSH and
 Firecracker without changing the receipts. A
 refusal reaches the caller as `Unsupported`; `sandbox create` wraps it as
 "a Sandbox of <kind> Store <s> cannot run on machine <m> (<platform>):
-<reason>" ([`sandbox/create.rs`](../../../../control/crates/layerfs-control/src/sandbox/create.rs)).
+<reason>" ([`create.rs`](../../../../control/crates/layerfs-sandbox/src/create.rs)).
 
 ## Related
 

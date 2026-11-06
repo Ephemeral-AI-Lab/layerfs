@@ -17,5 +17,5 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `workspace.commit`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::workspace::calls::workspace(context, "commit", args)
+    layerfs_sandbox::workspace::calls::workspace(context, "commit", args)
 }

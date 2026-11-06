@@ -11,13 +11,14 @@ mod support;
 use layerfs_bridge::control::{
     Call, ControlCode, MountPhase, ReadyMount, Reply, Request, WorkspaceToken,
 };
-use layerfs_control::{internal::Control, OperationCause};
 use layerfs_daemon::{
     control::{Failure, Success},
     install::receive_install,
     install_types::{InstalledStore, StoreSettings},
 };
 use layerfs_history::{BranchId, WorkspaceId};
+use layerfs_sandbox::internal::Control;
+use layerfs_sandbox::OperationCause;
 use mounted::{until, Harness};
 use nix::fcntl::OFlag;
 use std::{
@@ -38,7 +39,7 @@ fn installed(label: &str) -> (support::Fixture, InstalledStore, Harness) {
     let (mut client, worker) = support::pair(move |connection| {
         receive_install(connection, &target, StoreSettings::default())
     });
-    layerfs_control::internal::install(&kernel.project, &mut client).unwrap();
+    layerfs_sandbox::internal::install(&kernel.project, &mut client).unwrap();
     let installed = worker.join().unwrap();
     let branch = BranchId::from_bytes(installed.manifest.branch).unwrap();
     let harness = Harness::new(installed.opened.store.clone(), &kernel.directory, branch);
@@ -160,7 +161,7 @@ fn session(h: &Harness) -> (Control, support::Worker<usize>) {
     (Control::new(channel), worker)
 }
 fn refusal(
-    result: Result<impl std::fmt::Debug, Box<layerfs_control::OperationFailure>>,
+    result: Result<impl std::fmt::Debug, Box<layerfs_sandbox::OperationFailure>>,
 ) -> (ControlCode, String) {
     match result.unwrap_err().cause {
         OperationCause::Remote(refusal) => (refusal.code, refusal.phase),
@@ -173,7 +174,7 @@ fn lost_bind_and_attach_acknowledgements_are_located_without_replay() {
     let (kernel, installed, h) = installed("routes");
     let workspace = WorkspaceId::from_authority([7; 32]).unwrap();
     let (mut control, worker) = session(&h);
-    let mut api = layerfs_control::internal::workspace(&mut control);
+    let mut api = layerfs_sandbox::internal::workspace(&mut control);
     assert_eq!(
         refusal(api.locate(workspace)).0,
         ControlCode::Missing,

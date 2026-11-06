@@ -11,7 +11,7 @@ mount, what it is doing, and how many changes it holds, changing nothing.
 | --- | --- |
 | Family | [workspace](README.md) |
 | Library entry | [`workspace/status.rs`](../../../../../api/crates/layerfs-api/src/workspace/status.rs) |
-| Implemented in | `layerfs_control::workspace::calls::workspace` → host operation `backend.daemon.workspace.status` → `workspace::serve::status` ([`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs)) |
+| Implemented in | `layerfs_sandbox::workspace::calls::workspace` → host operation `backend.daemon.workspace.status` → `workspace::serve::status` ([`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs)) |
 | Runs in | the Sandbox's daemon (status, reads no Store) and one head read on the Store's own route |
 
 ## Signature
@@ -52,12 +52,12 @@ None.
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `base`, `base_layer` | text | the Commit and Layer the Workspace is bound to now | [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) `status` |
-| `branch` | text or null | the Branch it was mounted from | [`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs) |
+| `base`, `base_layer` | text | the Commit and Layer the Workspace is bound to now | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) `status` |
+| `branch` | text or null | the Branch it was mounted from | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `branch_head` | text or null | the Branch's head now; null when that read failed | same, `status` |
-| `head_moved_since_mount` | bool or null | the head differs from `base`; null when unread | [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) |
+| `head_moved_since_mount` | bool or null | the head differs from `base`; null when unread | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
 | `activity` | text | `Idle`, `Committing`, `Closing`, `Attaching`, `Uncertain` (an unknown outcome keeps custody; Commit and unmount are refused) or `LocalFailure` (published, but the local install did not finish) | [`control_types.rs`](../../../../../engine/crates/layerfs-bridge/src/control_types.rs) `Activity` |
-| `overlay.inodes`, `overlay.entries` | int | uncaptured changed inodes and directory entries | [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) |
+| `overlay.inodes`, `overlay.entries` | int | uncaptured changed inodes and directory entries | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
 | `overlay.pending_merge` | bool | the overlay's base root is not the binding's root (a merge is pending) | same |
 
 ## Where it runs
@@ -82,10 +82,10 @@ Sandbox, and it starts no machine (P4). See the
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
 | `InvalidInput` | a bad `ws` | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
-| `NoSuchSandbox`, `NotMounted` | no such Sandbox or Workspace | no | [`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs) |
-| `Unavailable` | the machine is stopped or its worker gone | no | [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) `reach` |
-| daemon refusal codes | refused with `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) |
-| `Failed` | a daemon exchange failed | read-only | [`sandbox/serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs) |
+| `NoSuchSandbox`, `NotMounted` | no such Sandbox or Workspace | no | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
+| `Unavailable` | the machine is stopped or its worker gone | no | [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) `reach` |
+| daemon refusal codes | refused with `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
+| `Failed` | a daemon exchange failed | read-only | [`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs) |
 | `Unknown` | the worker's answer was lost | read-only; call again | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 `workspace.status` is the read to make after an uncertain

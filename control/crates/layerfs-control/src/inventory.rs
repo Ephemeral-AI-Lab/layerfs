@@ -5,7 +5,6 @@
 //! Sandboxes), and the checks the calls that need them make. Layout 3
 //! keeps each Sandbox at `sandbox/<name>/`: a Sandbox by name is one read;
 //! only the relationships (by machine, Store or project) list `sandbox/*`.
-use crate::sandbox::record::SandboxRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused};
@@ -32,19 +31,7 @@ pub fn machines(home: &Path) -> Result<Vec<MachineRecord>> {
     Ok(found)
 }
 
-/// Every Sandbox record, by name.
-pub fn sandboxes(home: &Path) -> Result<Vec<SandboxRecord>> {
-    let mut found = Vec::new();
-    for name in names(&home.join("sandbox"))? {
-        found.extend(SandboxRecord::read(home, &name)?);
-    }
-    Ok(found)
-}
-
-/// The Sandbox named `name`: one read of `sandbox/<name>/record.json`.
-pub fn sandbox(home: &Path, name: &str) -> Result<Option<SandboxRecord>> {
-    SandboxRecord::read(home, name)
-}
+pub use layerfs_sandbox::record::{sandbox, sandboxes};
 
 /// The sqlite Stores whose record names machine `machine`. A Store record
 /// of a kind LayerFS does not write is refused, as before.

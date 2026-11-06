@@ -12,7 +12,7 @@ calls take.
 | --- | --- |
 | Family | [workspace](README.md) |
 | Library entry | [`workspace/mount.rs`](../../../../../api/crates/layerfs-api/src/workspace/mount.rs) |
-| Implemented in | `layerfs_control::workspace::calls::workspace` → host operation `workspace.mount` → `workspace::serve::mount` ([`workspace/calls.rs`](../../../../../control/crates/layerfs-control/src/workspace/calls.rs), [`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs)) |
+| Implemented in | `layerfs_sandbox::workspace::calls::workspace` → host operation `workspace.mount` → `workspace::serve::mount` ([`workspace/calls.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs), [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs)) |
 | Runs in | the caller's process, the Sandbox's machine (here or its worker) and the Sandbox's daemon |
 
 ## Signature
@@ -36,7 +36,7 @@ layerfs workspace mount <sandbox> <branch> [--name NAME]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `sandbox` | Name | a running Sandbox from [sandbox.create](../sandbox/create.md); a mount never starts one | [`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs) |
+| `sandbox` | Name | a running Sandbox from [sandbox.create](../sandbox/create.md); a mount never starts one | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `branch` | Name | a Branch of the Sandbox's project; `main` is refused (fork a Branch from it) | same |
 
 ## Options
@@ -56,11 +56,11 @@ layerfs workspace mount <sandbox> <branch> [--name NAME]
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `path` | text | the mount directory in the Sandbox | [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) `mounted` |
+| `path` | text | the mount directory in the Sandbox | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) `mounted` |
 | `workspace`, `namespace` | text, int | the daemon's Workspace id and namespace | same |
 | `base`, `base_layer`, `root` | text | the Branch head and base Layer it is bound to, and its root | same |
-| `sandbox`, `container`, `image`, `platform`, `runtime` | text | where it lives | [`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs) |
-| `ws` | text | the handle for exec, commit, unmount and status | [`workspace/calls.rs`](../../../../../control/crates/layerfs-control/src/workspace/calls.rs) |
+| `sandbox`, `container`, `image`, `platform`, `runtime` | text | where it lives | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
+| `ws` | text | the handle for exec, commit, unmount and status | [`workspace/calls.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) |
 
 The mount binds the whole root without a tree scan or copy; its only new
 file is the Workspace's own overlay database, copied from the template.
@@ -99,15 +99,15 @@ scope only `main` is accepted and is mounted as the Branch `<ns>.main`
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | no `sandbox`; `branch` is `main`; a bad `name`; out of scope | no | [`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs) |
+| `InvalidInput` | no `sandbox`; `branch` is `main`; a bad `name`; out of scope | no | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `NoSuchSandbox` | no such Sandbox, or its daemon ended itself when idle | no | same |
 | `NoSuchBranch` | the Branch is missing | no | [`service.rs`](../../../../../control/crates/layerfs-store/src/service.rs) |
-| `Exists` | the Sandbox already has a Workspace of that name | no | [`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs) |
+| `Exists` | the Sandbox already has a Workspace of that name | no | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `Capacity` | the Sandbox holds 16 Workspaces (`WORKSPACES`) | no | same |
-| `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox | no | [`sandbox/record.rs`](../../../../../control/crates/layerfs-control/src/sandbox/record.rs) `free` |
-| `Unavailable` | the machine's worker is not recorded or does not answer | no | [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
-| daemon refusal codes | the daemon refused before effect; its own code and `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) `refusal` |
-| `Failed` | **a daemon exchange failed; the message carries the `OperationFailure`, whose `attempted` says whether the mount may have taken effect** | **maybe** | [`sandbox/serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs) `operation` |
+| `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox | no | [`record.rs`](../../../../../control/crates/layerfs-sandbox/src/record.rs) `free` |
+| `Unavailable` | the machine's worker is not recorded or does not answer | no | [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) |
+| daemon refusal codes | the daemon refused before effect; its own code and `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) `refusal` |
+| `Failed` | **a daemon exchange failed; the message carries the `OperationFailure`, whose `attempted` says whether the mount may have taken effect** | **maybe** | [`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs) `operation` |
 | `Unknown` | **the worker's answer was lost** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After an uncertain mount**, read [sandbox.get](../sandbox/get.md) for the

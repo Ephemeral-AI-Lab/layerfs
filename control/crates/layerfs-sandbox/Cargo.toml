@@ -1,0 +1,23 @@
+[package]
+name = "layerfs-sandbox"
+description = "Sandboxes and their Workspaces (layerfs-project#106): Sandbox records, launch, host operations, exec, the daemon channel, and the workspace/ module"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
+layerfs-history = { path = "../../../core/crates/layerfs-history" }
+layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
+layerfs-project = { path = "../../../engine/crates/layerfs-project" }
+layerfs-home = { path = "../layerfs-home" }
+layerfs-machine = { path = "../layerfs-machine" }
+layerfs-store = { path = "../layerfs-store" }
+# How a Sandbox runs on its machine's kernel: docker, native, namespaces.
+layerfs-isolation = { path = "../layerfs-isolation" }
+libc = "=0.2.189"
+
+[features]
+# The machine calls (2.0, #533): host builds only.
+machine = ["layerfs-machine/machine"]

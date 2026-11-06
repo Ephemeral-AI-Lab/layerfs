@@ -46,6 +46,7 @@ UNSAFE_FREE_CRATES = (
     "layerfs-home",
     "layerfs-machine",
     "layerfs-store",
+    "layerfs-sandbox",
 )
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
@@ -70,6 +71,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-home": "#![forbid(unsafe_code)]",
     "layerfs-machine": "#![forbid(unsafe_code)]",
     "layerfs-store": "#![forbid(unsafe_code)]",
+    "layerfs-sandbox": "#![forbid(unsafe_code)]",
 }
 
 
@@ -156,23 +158,27 @@ ALLOWED_DEPENDENCIES = {
     },
     # The SDK call surface (#536): the call table over the control crates
     # (#101: layerfs-api may call any control crate).
-    "layerfs-api": {"layerfs-control", "layerfs-home", "layerfs-machine", "layerfs-store", "layerfs-bridge"},
-    # The management library (#536): home records, machines and workers,
-    # Stores, projects, Sandboxes, Workspaces and backups.
-    "layerfs-control": {
-        "layerfs-content",
-        "layerfs-storage",
-        "layerfs-history",
-        "layerfs-persistence",
-        "layerfs-telemetry",
-        "layerfs-bridge",
-        "layerfs-project",
+    "layerfs-api": {
+        "layerfs-control",
         "layerfs-home",
         "layerfs-machine",
         "layerfs-store",
-        "layerfs-isolation",
-        "layerfs-platform",
+        "layerfs-sandbox",
+        "layerfs-bridge",
+    },
+    # What spans the control entities (#536, #101): the worker server,
+    # inventory, doctor, migrate (which reads the old backup layout) and the
+    # calls that pass Related; until #107 the call machinery, which reads the
+    # platform policy from the isolation driver.
+    "layerfs-control": {
+        "layerfs-bridge",
+        "layerfs-project",
         "layerfs-store-service",
+        "layerfs-home",
+        "layerfs-machine",
+        "layerfs-store",
+        "layerfs-sandbox",
+        "layerfs-isolation",
         "layerfs-bucket",
     },
     # The home and its records (#103): knows no entity. The isolation driver
@@ -195,6 +201,17 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-home",
         "layerfs-machine",
         "layerfs-bucket",
+    },
+    # Sandboxes and their workspace/ module (#106), over the isolation driver.
+    "layerfs-sandbox": {
+        "layerfs-bridge",
+        "layerfs-history",
+        "layerfs-persistence",
+        "layerfs-project",
+        "layerfs-home",
+        "layerfs-machine",
+        "layerfs-store",
+        "layerfs-isolation",
     },
     "layerfs-bridge": {"layerfs-content", "layerfs-history"},
     # The drivers (#101 D-5): isolation (was layerfs-sandbox), platform (was
@@ -234,6 +251,7 @@ LAYER = {
     "layerfs-home": CONTROL,
     "layerfs-machine": CONTROL,
     "layerfs-store": CONTROL,
+    "layerfs-sandbox": CONTROL,
     # The public surface under api/crates: the call surface and the 2.0 front
     # ends (#533), the `layerfs` binary, the Node binding and the PyO3 module.
     "layerfs-api": API,

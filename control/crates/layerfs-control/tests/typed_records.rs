@@ -101,7 +101,7 @@ fn a_bucket_shows_its_record() {
 
 #[test]
 fn a_sandbox_shows_its_record() {
-    use layerfs_control::sandbox::record::SandboxRecord;
+    use layerfs_sandbox::record::SandboxRecord;
     let text = r#"{"name":"t1","project":"shop/api","machine":"native","created":3,"id":"t1","platform":"macos","runtime":"native","image":null,"backend":"native","route":"nfs"}"#;
     // its state is derived, never stored (#536 H4), and shown last
     let shown = text.replacen('}', r#","state":"running"}"#, 1);
@@ -313,10 +313,7 @@ fn a_store_state_is_busy_unresolved_down_idle_or_in_use() {
 }
 
 /// A record with an id or none and a `name` intent owned by `pid`.
-fn sandbox_with(
-    id: bool,
-    op: Option<(&str, i64, bool)>,
-) -> layerfs_control::sandbox::record::SandboxRecord {
+fn sandbox_with(id: bool, op: Option<(&str, i64, bool)>) -> layerfs_sandbox::record::SandboxRecord {
     let mut text = String::from(r#"{"name":"b""#);
     if id {
         text.push_str(r#","id":"b""#);
@@ -327,7 +324,7 @@ fn sandbox_with(
         ));
     }
     text.push('}');
-    layerfs_control::sandbox::record::SandboxRecord::from_record("b", value(&text))
+    layerfs_sandbox::record::SandboxRecord::from_record("b", value(&text))
 }
 
 #[test]
