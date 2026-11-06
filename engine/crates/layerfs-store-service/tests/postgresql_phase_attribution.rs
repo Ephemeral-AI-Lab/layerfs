@@ -11,6 +11,8 @@
 //!   `store/reader.rs`): attach with the light check, find the project.
 //! - `create.daemon_open`: the daemon's Store (daemon `application/owner.rs`
 //!   selection, light check) and, timed apart, its overlay template.
+//! - `create.daemon_idle_reader`: the one idle Store reader the daemon opens
+//!   after it reported ready, on its own thread (#64), which the mount takes.
 //! - The mount's caller reads no Store (#64 option B: the daemon finds the
 //!   Branch by its project's name and its own).
 //! - `mount.daemon_bind`, `mount.daemon_serials`: the daemon's named bind
@@ -420,9 +422,23 @@ impl Run {
                 ("readers", work_json(&readers)),
             ],
         );
-        // mount: the caller reads no Store (#64 option B); the daemon finds
-        // the Branch by name on the Workspace's own reader
+        // create, after the daemon reported ready: its one idle reader, on a
+        // thread of its own (#64 eager reader; not part of the create reply)
         let daemon_work = || daemon.work();
+        self.step(
+            case,
+            "create.daemon_idle_reader",
+            &daemon_work,
+            || {
+                assert!(matches!(
+                    daemon.service.store.prefill_reader(),
+                    Some(Ok(()))
+                ))
+            },
+            vec![],
+        );
+        // mount: the caller reads no Store (#64 option B); the daemon finds
+        // the Branch by name on the idle reader it took
         let workspace = self.step(
             case,
             "mount.daemon_bind",

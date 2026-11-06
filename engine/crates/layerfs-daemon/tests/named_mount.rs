@@ -99,6 +99,8 @@ fn a_named_mount_binds_its_branch_and_refuses_as_the_lookup_does() {
         assert_eq!((got_code.as_str(), got_message.as_str()), (code, message));
     }
 
+    // a SQLite Store keeps no idle Workspace readers: no eager reader
+    assert!(store.prefill_reader().is_none());
     let token = match named(&f, 7, "project", "work") {
         Reply::Bound { token, binding } => {
             assert_eq!(

@@ -210,12 +210,17 @@ impl Application {
                                 _
                             ))
                         );
+                    let ready = reported_ready(&outcome);
                     let served = match crate::control::answer_call(
                         &mut connection,
                         call,
                         outcome,
                         telemetry,
                     ) {
+                        Ok(served) if ready => {
+                            self.reader_after_ready();
+                            served
+                        }
                         Ok(served) => served,
                         Err(cause) => {
                             return Err(ConnectionFailure {
@@ -292,6 +297,35 @@ impl Application {
     ) -> Result<crate::control::Success, crate::control::Failure> {
         self.control_operation(&call.request, slot)
     }
+    /// After the daemon reported ready (a `Hello` answered ControlReady was
+    /// sent), opens one idle Store reader on a thread of its own, so the
+    /// first mount takes it instead of connecting (#64, owner decision
+    /// 2026-11-06). It never delays readiness, opens at most once per Store
+    /// (later calls return at once) and only where readers are shared
+    /// (PostgreSQL). A failure is written to the daemon's log and counted
+    /// (`ReuseWork::prefill_failures`), never tried again.
+    fn reader_after_ready(&self) {
+        let Ok(state) = self.state.lock() else {
+            return;
+        };
+        let Some(service) = state.startup.service.clone() else {
+            return;
+        };
+        drop(state);
+        let store = service.store.clone();
+        let spawned = std::thread::Builder::new()
+            .name("layerfs-idle-reader".into())
+            .spawn(move || {
+                if let Some(Err(error)) = store.prefill_reader() {
+                    eprintln!(
+                        "layerfs-daemon: idle Store reader after readiness not opened: {error}"
+                    );
+                }
+            });
+        if let Err(error) = spawned {
+            eprintln!("layerfs-daemon: idle Store reader thread not started: {error}");
+        }
+    }
     pub(super) fn control_operation(
         &self,
         request: &Request,
@@ -331,4 +365,12 @@ impl Application {
             )),
         }
     }
+}
+
+/// Whether `outcome` answers a `Hello` with the daemon ControlReady.
+fn reported_ready(outcome: &Result<crate::control::Success, crate::control::Failure>) -> bool {
+    matches!(outcome, Ok(success) if matches!(
+        &success.reply,
+        Reply::Hello(status) if status.phase == layerfs_bridge::control::DaemonPhase::ControlReady
+    ))
 }
