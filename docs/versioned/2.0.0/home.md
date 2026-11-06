@@ -177,9 +177,10 @@ one pass:
    `sandbox/<name>/record.json`, without layout 2's `state` and creator
    `pid` (a 2.0 record names its creator by pid alone, so that is how the
    check above reads it). A Sandbox whose native runtime had ended, or
-   whose create's process ended, is written with no id (`gone`); an ended
-   runtime is deleted once and its numbered folder removed; `sandbox
-   close` then answers `was: gone`. A create whose outcome was `unknown`
+   whose create's process ended, is written with no id, so its state
+   derives as `closed`; an ended runtime is deleted once and its numbered
+   folder removed; `sandbox close` then answers `was: closed`. A create
+   whose outcome was `unknown`
    is written with an uncertain `sandbox.create` `op` owned by no process
    (`unresolved`; `sandbox close` clears it). It drops a Store record's
    `in_progress` whose process ended (2.0 did not let it hold the Store;

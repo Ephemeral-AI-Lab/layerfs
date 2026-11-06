@@ -196,14 +196,17 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   the `op` in one write, a refused start removes the record. A create
   whose outcome is not known (its machine's answer was lost) is `Unknown`
   and its record keeps the `op`, marked `uncertain`.
-- Every Sandbox's `state` is derived, never stored: `creating` or
-  `closing` while that call's process runs it, `unresolved` once a create
-  or close lost its answer and its process ended, `gone` with no id (or
-  when `get` hears from its machine that it no longer runs), else
-  `running`. While a create or close runs, `close` and the `workspace`
-  calls but `status` are `Busy`; an `unresolved` Sandbox refuses them
-  `Unresolved`, naming `layerfs sandbox get <name>` and `layerfs sandbox
-  close <name>`, the call that clears it.
+- Every Sandbox's `state` is derived, never stored, and is one of
+  `creating`, `provisioning`, `starting`, `ready`, `busy`, `draining`,
+  `closed`, `lost` or `unresolved` (#548). A live create's intent is
+  `creating`, `provisioning` or `starting`; a live close is `draining`; a
+  live exec lease is `busy`; a stopped and reclaimed Sandbox, or one whose
+  `get` hears from its machine that it no longer runs, is `closed`; an
+  expired lease or a provider that no longer has it is `lost`; an operation
+  whose outcome is not known is `unresolved`. While a create or close runs,
+  `close` and the `workspace` calls but `status` are `Busy`; an
+  `unresolved` Sandbox refuses them `Unresolved`, naming `layerfs sandbox
+  get <name>` and `layerfs sandbox close <name>`, the call that clears it.
 - A sqlite project's Sandbox runs on the machine that holds its Store;
   another machine is `Unsupported`, naming the Store's machine.
 - On `docker`, the image is `image`, else the one `machine update docker
@@ -237,9 +240,9 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 - A record with no id yet (a create in flight, one whose outcome was
   unknown, or one whose process ended) is closed too: `Busy` while the
   creating process lives, else the record goes and the name is free
-  (`{closed, was}`, `was` being `gone` or `unresolved`; for
+  (`{closed, was}`, `was` being `closed` or `unresolved`; for
   `unresolved`, `left` says a Sandbox may remain on its machine). A Sandbox the layout 3 conversion found ended is closed this
-  way too, with `was: "gone"` ([the home](home.md#a-layout-2-home)).
+  way too, with `was: "closed"` ([the home](home.md#a-layout-2-home)).
 - Not run for this manual. See
   [limitations](limitations.md#not-built-refused-as-unsupported).
 
