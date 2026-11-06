@@ -35,6 +35,16 @@ starts from the page-skipping difference of two such trees.
    [P a3]                   [P a3]   -> shared, skipped
 ```
 
+A page the walk opens is read in one demand with the pages after it on its
+side at the same level that it will certainly open too (layerfs-project #95):
+only while no page of the other frontier is above that level, and leaving
+out any identity the other frontier shows, since that page may be skipped as
+shared. Every page read ahead is then opened exactly once; at most
+`READ_AHEAD_PAGES` = 128 are held (128 × `MAXIMUM_PAGE_BYTES` = 1 MiB). A
+Store answers such a demand with one locator read and one inode-value read
+instead of one of each per page, so a Commit's logical count and binding
+hints over 10,000 new files stop paying a round trip per leaf.
+
 | Function | Answers | Source |
 | --- | --- | --- |
 | `difference::<F>` | Every key whose value differs, in key order; an absent tree is empty. Counts `DifferenceWork` (`pages_read`, `pages_shared`, `rows_compared`). | [`sorted.rs`](../../../../core/crates/layerfs-content/src/compare/sorted.rs) |
