@@ -35,6 +35,33 @@ thread_local! {
     /// Wait already reported by a node on this thread, by kind.
     static ATTRIBUTED: Cell<[u64; WAITS]> = const { Cell::new([0; WAITS]) };
     static FINISHED: RefCell<Vec<TimingReport>> = const { RefCell::new(Vec::new()) };
+    /// The caller's SQL counter reader, while it attributes SQL work to phases.
+    static SQL_PROBE: RefCell<Option<SqlProbe>> = const { RefCell::new(None) };
+    /// Each finished phase's SQL work, in finishing order.
+    static PHASE_SQL: RefCell<Vec<(&'static str, SqlWork)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Reads the counters a caller attributes to phases, such as its Store's
+/// session totals.
+pub type SqlProbe = Box<dyn Fn() -> SqlWork>;
+
+/// While this thread records ([`Recording`]), every [`phase`] it runs reads
+/// `probe` before and after and keeps the difference; [`phase_sql`] takes
+/// them. Nested phases are each inclusive. The probe sees whatever its
+/// counters count: a caller that reads session totals must keep other work
+/// off those sessions to read one phase's cost. `None` stops attribution.
+pub fn attribute_sql(probe: Option<SqlProbe>) {
+    SQL_PROBE.set(probe);
+    PHASE_SQL.with_borrow_mut(Vec::clear);
+}
+
+/// The SQL work of each phase finished since the last call, by phase name.
+pub fn phase_sql() -> Vec<(&'static str, SqlWork)> {
+    PHASE_SQL.with_borrow_mut(std::mem::take)
+}
+
+fn probe() -> Option<SqlWork> {
+    SQL_PROBE.with_borrow(|probe| probe.as_ref().map(|probe| probe()))
 }
 
 /// Recording for one traced request on this thread, one at a time; dropping
@@ -135,7 +162,13 @@ pub fn phase<T, E>(
         let mark = phase
             .is_recording()
             .then(|| (FINISHED.with_borrow(Vec::len), WaitMark::now()));
+        // Attributed while the thread records, even past the timing tree's
+        // node bound, which stops recording late phases of large Commits.
+        let sql = recording().then(probe).flatten();
         let result = operation();
+        if let (Some(before), Some(after)) = (sql, sql.and_then(|_| probe())) {
+            PHASE_SQL.with_borrow_mut(|done| done.push((name, after.since(&before))));
+        }
         if let Some((mark, waited)) = mark {
             let inner =
                 FINISHED.with_borrow_mut(|finished| finished.split_off(mark.min(finished.len())));
