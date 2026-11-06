@@ -31,8 +31,20 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// The Sandbox named `name`, or `NoSuchSandbox`.
+/// The Sandbox named `name`, or `NoSuchSandbox`; one recorded under the
+/// retired docker backend is refused `Unsupported` before any call is
+/// routed (D-8, layerfs-project#111): only `sandbox.close` takes it, and
+/// forgets it.
 pub fn sandbox_of(home: &Path, name: &str) -> Result<SandboxRecord> {
+    let record = named(home, name)?;
+    match record.retired_container(home)? {
+        Some(container) => Err(super::recorded::retired(name, &container)),
+        None => Ok(record),
+    }
+}
+
+/// The Sandbox named `name`, or `NoSuchSandbox`, whatever its backend.
+pub fn named(home: &Path, name: &str) -> Result<SandboxRecord> {
     layerfs_home::names::SandboxName::parse(name)?;
     super::record::sandbox(home, name)?.ok_or_else(|| {
         refused(

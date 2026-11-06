@@ -4,7 +4,7 @@
 //! `<root>/sandbox/<name>/` holds its record (`record.json`, with what
 //! reopens it under `daemon`), its daemon keys (`control.json`) and one
 //! record per Workspace (`workspace/<id>.json`). No mutation replay.
-use crate::recorded::{gone, recorded, Recorded};
+use crate::recorded::{gone, recorded};
 use crate::registry::{Mount, SandboxState};
 #[cfg(target_os = "linux")]
 use crate::runtime::NAMESPACES;
@@ -262,13 +262,7 @@ fn observed(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(Box<Sandbox>
     let container = helpers::text(value, "container")?;
     let recorded = recorded(args, id, value)?;
     // a local daemon listens on this kernel's loopback; no other host reaches it
-    let host = match recorded {
-        Recorded::Docker(..) => crate::daemon::pool::daemon_host(args),
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
-        Recorded::Local { .. } => None,
-        #[cfg(target_os = "linux")]
-        Recorded::Namespaces(..) => None,
-    };
+    let host = None;
     let runtime = recorded.reopen().map_err(|failure| {
         if failure.container_gone() || failure.container_stopped() {
             gone(id, container, failure.container_stopped())

@@ -1,20 +1,22 @@
-//! What a Sandbox's record says runs it (#536 §9.2): a Docker container,
-//! a local daemon process (native) or a namespaces Sandbox, read from the
-//! record alone and reopened or deleted through its backend.
+//! What a Sandbox's record says runs it (#536 §9.2): a local daemon process
+//! (native) or a namespaces Sandbox, read from the record alone and
+//! reopened or deleted through its backend. A record of the retired docker
+//! backend (D-8, layerfs-project#111) is refused: nothing it names is
+//! reopened or deleted here.
 #[cfg(target_os = "linux")]
 use crate::runtime::NAMESPACES;
 use crate::runtime::NATIVE;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::helpers;
 use layerfs_home::outcome::{failed, refused};
-use layerfs_sandbox_backend::docker::{Docker, DockerProvider, SandboxRequest};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_sandbox_backend::host_process;
 use layerfs_sandbox_backend::local::LocalProcess;
+use layerfs_sandbox_backend::LocalRecord;
+#[cfg(target_os = "linux")]
+use layerfs_sandbox_backend::SandboxRecord;
 use layerfs_sandbox_backend::{ContainerId, Sandbox, WireFailure};
-use layerfs_sandbox_backend::{LocalRecord, SandboxRecord};
 use std::path::PathBuf;
-use std::time::Duration;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -37,6 +39,28 @@ pub fn gone(id: &str, container: &str, stopped: bool) -> SdkRefusal {
         ]),
     }
 }
+/// The refusal of every call but `sandbox.close` on Sandbox `id`, recorded
+/// under the retired docker backend (D-8, layerfs-project#111): its
+/// container `container` is never reopened, stopped or deleted here.
+pub fn retired(id: &str, container: &str) -> SdkRefusal {
+    refused(
+        "Unsupported",
+        format!(
+            "Sandbox {id} was created on the docker Sandbox backend, which this build no longer \
+             runs (a docker machine's Sandboxes now run in namespaces in its worker): \
+             `layerfs sandbox close {id}` forgets it, `docker rm -f {container}` removes its \
+             container, and `layerfs sandbox create` makes it again"
+        ),
+    )
+}
+
+/// Whether a side's daemon record (`record.json`'s `daemon` on `native`, a
+/// worker's own record) names the retired docker backend: `runtime`
+/// `docker`, or none at all, which only a docker record lacked.
+pub fn retired_record(value: &SdkValue) -> bool {
+    matches!(value.get_text("runtime"), None | Some("docker"))
+}
+
 /// The labels a Sandbox record keeps; a record written before #373 has none.
 fn labels(value: &SdkValue) -> Result<Vec<(String, String)>> {
     match value.get("labels") {
@@ -52,26 +76,10 @@ fn labels(value: &SdkValue) -> Result<Vec<(String, String)>> {
         _ => Ok(Vec::new()),
     }
 }
-/// The Engine, container and deployment a Docker Sandbox record names.
-fn runtime(value: &SdkValue) -> Result<(DockerProvider, ContainerId, SandboxRecord)> {
-    let docker =
-        Docker::new(helpers::text(value, "docker")?, Duration::from_secs(30)).map_err(failed)?;
-    let request = SandboxRequest {
-        image: helpers::text(value, "image")?.to_owned(),
-        // a PostgreSQL Store's Sandbox mounts no volume (#506)
-        store_volume: value.get_text("volume").map(str::to_owned),
-        port: 30421,
-        labels: labels(value)?,
-    };
-    let container = ContainerId::parse(helpers::text(value, "container")?).map_err(failed)?;
-    let provider = DockerProvider::new(docker);
-    Ok((provider, container, SandboxRecord::Docker(request.into())))
-}
-/// What a Sandbox record names: a Docker container, a local daemon process
-/// (`runtime` `native`) with its directory and port, or a namespace Sandbox
-/// (`runtime` `namespaces`) with its own runtime, record and directory.
+/// What a Sandbox record names: a local daemon process (`runtime`
+/// `native`) with its directory and port, or a namespace Sandbox (`runtime`
+/// `namespaces`) with its own runtime, record and directory.
 pub enum Recorded {
-    Docker(DockerProvider, ContainerId, SandboxRecord),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     Local {
         directory: PathBuf,
@@ -94,10 +102,11 @@ pub fn recorded(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded>
     if value.get_text("runtime") == Some(NATIVE) {
         return local_record(args, id, value);
     }
-    if let Some(other) = value.get_text("runtime") {
+    match value.get_text("runtime") {
+        None | Some("docker") => Err(retired(id, value.get_text("name").unwrap_or(""))),
         // the former `local` runtime (an earlier, unmerged build), or one
         // this host does not run: nothing it names is used or deleted
-        return Err(refused(
+        Some(other) => Err(refused(
             "InvalidInput",
             format!(
                 "Sandbox {id} is a {other} Sandbox, which this host never reopens, so the record \
@@ -105,10 +114,8 @@ pub fn recorded(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded>
                  the folder {}",
                 crate::files::sandbox_dir(args)?.display()
             ),
-        ));
+        )),
     }
-    let (docker, container, request) = runtime(value)?;
-    Ok(Recorded::Docker(docker, container, request))
 }
 /// A local record is used only where this deployment puts that Sandbox:
 /// its directory must be exactly `<LAYERFS_LOCAL_DIR>/<prefix><id>`
@@ -266,10 +273,7 @@ fn namespaces(
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn unchecked(id: &str, value: &SdkValue) -> Result<Recorded> {
     match value.get_text("runtime") {
-        None => {
-            let (docker, container, request) = runtime(value)?;
-            Ok(Recorded::Docker(docker, container, request))
-        }
+        None | Some("docker") => Err(retired(id, value.get_text("name").unwrap_or(""))),
         Some(NATIVE) => {
             let (directory, record) = local_parts(value)?;
             local(directory, record, value)
@@ -299,9 +303,6 @@ impl Recorded {
     /// The runtime, observed running once (it starts nothing).
     pub fn reopen(self) -> std::result::Result<Box<Sandbox>, Box<WireFailure>> {
         match self {
-            Self::Docker(provider, id, record) => provider
-                .reopen(id, &record)
-                .map(|s| Box::new(Sandbox::Docker(s))),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Local {
                 directory,
@@ -318,13 +319,6 @@ impl Recorded {
     /// The runtime found stopped: only its one Delete is admitted.
     pub fn stopped(self) -> Box<Sandbox> {
         match self {
-            Self::Docker(provider, id, record) => {
-                let instance = provider
-                    .reopen_stopped(id, &record)
-                    .map_err(failed)
-                    .expect("validated record");
-                Box::new(Sandbox::Docker(instance))
-            }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Local {
                 directory,

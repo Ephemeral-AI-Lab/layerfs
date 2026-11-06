@@ -349,7 +349,9 @@ fn probe(home: &Path, entry: &Numbered) -> Found {
 
 /// A local runtime's directory is in the home's old local root.
 fn inside(home: &Path, recorded: &Recorded) -> std::result::Result<(), String> {
+    // macOS reopens only local records, Linux namespaces ones too
     #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[allow(irrefutable_let_patterns)]
     if let Recorded::Local { directory, .. } = recorded {
         let root = paths::machine_dir(home, "native").join("sandbox-root");
         let plain = !(directory.components()).any(|c| {

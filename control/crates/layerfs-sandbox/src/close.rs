@@ -7,7 +7,7 @@
 //! call that clears it.
 use super::create::remove_folder;
 use super::direct;
-use super::family::sandbox_of;
+use super::family::named;
 use super::record::{self, SandboxRecord};
 use crate::route::on_machine;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -23,7 +23,9 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 pub fn close(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
     let home = home.to_path_buf();
     let name = args.get_text("name").unwrap_or("");
-    sandbox_of(&home, name)?;
+    if let Some(container) = named(&home, name)?.retired_container(&home)? {
+        return forget(&home, events, name, &container);
+    }
     let force = matches!(args.get("force"), Some(SdkValue::Bool(true)));
     let op = Op::begin(
         "sandbox.close",
@@ -111,6 +113,67 @@ pub fn close(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
             Err(refusal)
         }
     }
+}
+
+/// Forgets Sandbox `name`, recorded under the retired docker backend (D-8,
+/// layerfs-project#111), whose container is `container`: its machine's
+/// worker is asked once to forget its own record of it (a worker that
+/// cannot be reached or refuses leaves that record, and the answer says
+/// so), then the home's record goes. The container is left for the user
+/// to remove; the answer names the command.
+fn forget(home: &Path, events: &mut Events<'_>, name: &str, container: &str) -> Outcome {
+    let record = {
+        let _lock = home::lock::take(home)?;
+        let _sandbox = record::lock(home, name)?;
+        let Some(record) = SandboxRecord::read(home, name)? else {
+            return Err(refused("NoSuchSandbox", format!("no Sandbox named {name}")));
+        };
+        clearable(&record)?;
+        record
+    };
+    let left = match record.machine() {
+        // a `native` Sandbox's record is the folder removed below
+        "native" => None,
+        _ => on_machine(
+            home,
+            events,
+            &record,
+            "sandbox.close",
+            vec![("force", SdkValue::Bool(true))],
+            crate::dispatch::call,
+        )
+        .err()
+        .filter(|refusal| refusal.code != "NoSuchSandbox")
+        .map(|refusal| refusal.message),
+    };
+    let _lock = home::lock::take(home)?;
+    let dir = record.dir(home);
+    {
+        let _sandbox = record::lock(home, name)?;
+        direct::release(home, &record);
+    }
+    remove_folder(&dir)?;
+    let mut fields = vec![
+        ("closed", SdkValue::text(name)),
+        ("forgotten", SdkValue::Bool(true)),
+        ("container", SdkValue::text(container)),
+        (
+            "remove",
+            SdkValue::text(format!("docker rm -f {container}")),
+        ),
+    ];
+    if let Some(left) = left {
+        fields.push((
+            "left",
+            SdkValue::text(format!(
+                "its machine {}'s worker keeps its record: {left}",
+                record.machine()
+            )),
+        ));
+    }
+    Ok(SdkValue::Map(
+        fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
+    ))
 }
 
 /// Refuses a close while another operation's intent holds Sandbox

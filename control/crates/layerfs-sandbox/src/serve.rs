@@ -487,11 +487,14 @@ pub fn create(args: &SdkValue) -> Outcome {
 pub fn close(args: &SdkValue) -> Outcome {
     let id = text(args, "sandbox")?.to_owned();
     let directory = crate::files::sandbox_dir(args)?;
-    if crate::files::started(&directory)?.is_none() {
+    let Some(recorded) = crate::files::started(&directory)? else {
         return Err(refused(
             "NoSuchSandbox",
             format!("no Sandbox {id} runs on this machine"),
         ));
+    };
+    if crate::recorded::retired_record(&recorded) {
+        return forget(&id, &directory, &recorded);
     }
     let state = match crate::registry::sandbox_live(args) {
         Ok(state) => state,
@@ -554,6 +557,26 @@ pub fn close(args: &SdkValue) -> Outcome {
         (
             "unknown",
             SdkValue::List(mounted.into_iter().map(SdkValue::Text).collect()),
+        ),
+    ]))
+}
+
+/// Forgets Sandbox `id`, recorded in `directory` (its daemon record
+/// `recorded`) under the retired docker backend (D-8, layerfs-project#111):
+/// its folder goes and the answer names its container, which is left for
+/// the user to remove (`docker rm -f`); nothing else is touched.
+fn forget(id: &str, directory: &Path, recorded: &SdkValue) -> Outcome {
+    let _guard = layerfs_store::project::discovery::guard(directory)?;
+    lock(&SANDBOXES)?.remove(directory);
+    std::fs::remove_dir_all(directory).map_err(failed)?;
+    let container = recorded.get_text("name").unwrap_or("").to_owned();
+    Ok(SdkValue::map([
+        ("kind", SdkValue::text("Forgotten")),
+        ("sandbox", SdkValue::text(id)),
+        ("container", SdkValue::text(&container)),
+        (
+            "remove",
+            SdkValue::text(format!("docker rm -f {container}")),
         ),
     ]))
 }

@@ -154,6 +154,32 @@ impl SandboxRecord {
         self.fields.get_text("image")
     }
 
+    /// The container of a Sandbox recorded under the retired docker
+    /// backend (D-8, layerfs-project#111): `backend` or `runtime` `docker`,
+    /// or a started Sandbox of the docker machine with no `runtime` (a
+    /// record converted from before runtimes were kept). The name is the
+    /// one its daemon record keeps, else the one the docker backend gave
+    /// it, `lfs-<home id prefix>-<name>`. `None` for every other record.
+    pub fn retired_container(&self, home: &Path) -> Result<Option<String>> {
+        let runtime = self.fields.get_text("runtime");
+        let retired = runtime == Some("docker")
+            || self.fields.get_text("backend") == Some("docker")
+            || (runtime.is_none() && self.machine() == "docker" && self.id().is_some());
+        if !retired {
+            return Ok(None);
+        }
+        let kept = (self.fields.get("daemon"))
+            .and_then(|daemon| daemon.get_text("name"))
+            .map(str::to_owned);
+        Ok(Some(match kept {
+            Some(name) => name,
+            None => {
+                let id = layerfs_home::home::opened(home)?.id;
+                format!("lfs-{}-{}", &id[..8.min(id.len())], self.name)
+            }
+        }))
+    }
+
     /// The Sandbox's state (#536 §7.2), from its record, its `op` and,
     /// where the call asked, the daemon's answer (`gone`: its machine
     /// answered that no such Sandbox runs): `creating` or `closing` while
