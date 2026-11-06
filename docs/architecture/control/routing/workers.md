@@ -65,12 +65,12 @@ be served at once; each connection still carries one request.
 | Operation | Runs on the machine | Source |
 | --- | --- | --- |
 | `worker.ping` | answers `{kind: "worker", version, pid}` | `server.rs` `run` |
-| `store.call` | one Store method on `store/<name>/store.sqlite` under the worker's root, holding the Store's lease there | `server.rs`, [`store/open.rs`](../../../../control/crates/layerfs-control/src/store/open.rs) |
-| `store.file` | one step of a Store push, pull, remove, stat or backup | [`store/transfer/steps.rs`](../../../../control/crates/layerfs-control/src/store/transfer/steps.rs) |
+| `store.call` | one Store method on `store/<name>/store.sqlite` under the worker's root, holding the Store's lease there | `server.rs`, [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs) |
+| `store.file` | one step of a Store push, pull, remove, stat or backup | [`sqlite/transfer/steps.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) |
 | `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native` | [`sandbox/route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs) `in_worker` |
-| `project.stage` | writes or discards one part of a caller's folder copy | [`project/staged.rs`](../../../../control/crates/layerfs-control/src/project/staged.rs) |
-| `project.init` | adds the staged copy as a new project | [`project/init.rs`](../../../../control/crates/layerfs-control/src/project/init.rs) |
-| `project.remove` | drops one project from a Store under the root | [`store/identity.rs`](../../../../control/crates/layerfs-control/src/store/identity.rs) |
+| `project.stage` | writes or discards one part of a caller's folder copy | [`project/staged.rs`](../../../../control/crates/layerfs-store/src/project/staged.rs) |
+| `project.init` | adds the staged copy as a new project | [`project/init.rs`](../../../../control/crates/layerfs-store/src/project/init.rs) |
+| `project.remove` | drops one project from a Store under the root | [`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs) |
 | anything else | `InvalidInput` "the worker has no operation" | `server.rs` |
 
 The worker sets `home` (and `storePath`, for a named Store) to its own root on
@@ -126,7 +126,7 @@ without a request; `machine.start` and doctor use it
 | Event | Effect | Source |
 | --- | --- | --- |
 | `machine.start` | dials the recorded worker; if it answers its secret, done; else starts the machine and worker under `machine/<name>/start.lock` (wait up to 600 s) and waits until ready | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) `running` |
-| any other call | dials `worker.json` once; no worker recorded, or no answer, is `Unavailable` naming `layerfs machine start`; nothing is started | [`place.rs`](../../../../control/crates/layerfs-control/src/common/place.rs) |
+| any other call | dials `worker.json` once; no worker recorded, or no answer, is `Unavailable` naming `layerfs machine start`; nothing is started | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
 | `machine.stop` | refused `InUse` while Sandboxes run on it; else stops worker and VM under `start.lock` and removes `worker.json` | [`power.rs`](../../../../control/crates/layerfs-machine/src/power.rs) |
 | idle | nothing: there is no idle stop (#535 D11) | `worker/mod.rs`, `layerfs-cli/src/worker.rs` |
 | `native` on macOS or Linux | no worker; `start` and `stop` answer at once | `endpoint.rs` `running`, `power.rs` |

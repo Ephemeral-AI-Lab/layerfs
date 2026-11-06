@@ -108,7 +108,7 @@ counting at most 96 bytes per line (`MANIFEST_LINE` in
 transfer thread instead of a `Cell`: it keeps each phase's exact last count
 and every piece count, and the calling thread sends them with the call's
 own phases (`check`, `snapshot`, `send`)
-([`api/…/backup/progress.rs`](../../../../control/crates/layerfs-control/src/backup/progress.rs);
+([`backup/progress.rs`](../../../../control/crates/layerfs-store/src/backup/progress.rs);
 [SDK: backup progress](../../api/sdk/backup/README.md#progress)).
 
 ## Related

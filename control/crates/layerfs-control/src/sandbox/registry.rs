@@ -8,20 +8,11 @@
 //! exchange at a time, and concurrent calls take separate connections.
 use crate::MountedWorkspace;
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
-use layerfs_bridge::provision::StoreManifest;
 use layerfs_home::helpers::lock;
 use layerfs_home::outcome::refused;
 use layerfs_isolation::CommandIdentity;
 use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock, Mutex};
-
-/// One project, read from or saved to its home entry.
-pub(crate) struct Project {
-    pub(crate) store: layerfs_persistence::SealedStore,
-    pub(crate) manifest: StoreManifest,
-    /// The installed manifest once Import installed the Store in the volume.
-    pub(crate) installed: Option<StoreManifest>,
-}
 
 /// One mounted Workspace.
 pub(crate) struct Mount {

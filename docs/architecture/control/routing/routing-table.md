@@ -9,7 +9,7 @@ Where each call runs.
 | | |
 | --- | --- |
 | Component | [Routing and workers](README.md) |
-| Source | [`control/crates/layerfs-control/src/calls`](../../../../control/crates/layerfs-control/src/calls), [`control/crates/layerfs-control/src/store/resolve.rs`](../../../../control/crates/layerfs-control/src/store/resolve.rs), [`control/crates/layerfs-control/src/sandbox/route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs), [`common/place.rs`](../../../../control/crates/layerfs-control/src/common/place.rs), [`store/call.rs`](../../../../control/crates/layerfs-control/src/store/call.rs), [`workspace/calls.rs`](../../../../control/crates/layerfs-control/src/workspace/calls.rs) |
+| Source | [`control/crates/layerfs-control/src/calls`](../../../../control/crates/layerfs-control/src/calls), [`resolve.rs`](../../../../control/crates/layerfs-store/src/resolve.rs), [`control/crates/layerfs-control/src/sandbox/route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs), [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`call.rs`](../../../../control/crates/layerfs-store/src/call.rs), [`workspace/calls.rs`](../../../../control/crates/layerfs-control/src/workspace/calls.rs) |
 
 ## By Store kind
 
@@ -37,10 +37,10 @@ Where each call runs.
 ```
 
 The decision is made once per call from the Store's record, read under its
-lock ([`store/call.rs`](../../../../control/crates/layerfs-control/src/store/call.rs)).
+lock ([`call.rs`](../../../../control/crates/layerfs-store/src/call.rs)).
 `plan` reads no worker record and dials nothing; the first worker call dials
 the address in `machine/<name>/worker.json`
-([`place.rs`](../../../../control/crates/layerfs-control/src/common/place.rs)).
+([`place.rs`](../../../../control/crates/layerfs-store/src/place.rs)).
 
 | Store kind | Machine | Runs in | Source |
 | --- | --- | --- | --- |
@@ -48,7 +48,7 @@ the address in `machine/<name>/worker.json`
 | SQLite | a machine whose platform's executor is `Local` on this host | the caller's process, on `store/<name>/store.sqlite` | `place::plan`, `place::local` |
 | SQLite | any other machine | that machine's worker; the worker holds the Store's lease under its root | `place::Worker::call`, [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) `store.call` |
 
-The same open-Store cache ([`store/open.rs`](../../../../control/crates/layerfs-control/src/store/open.rs))
+The same open-Store cache ([`open.rs`](../../../../control/crates/layerfs-store/src/open.rs))
 serves both sides: a Store is opened once per process and closed after 60 s
 unused (`IDLE`), never while a call runs on it.
 
@@ -56,12 +56,12 @@ unused (`IDLE`), never while a call runs on it.
 
 | Call | Caller's process does | A worker does (when the Store's machine is not local) | Source |
 | --- | --- | --- | --- |
-| `project.init` | checks, copies the folder to the machine | `project.stage` (each part), then `project.init` | [`project/family.rs`](../../../../control/crates/layerfs-control/src/project/family.rs), [`project/send.rs`](../../../../control/crates/layerfs-control/src/project/send.rs) |
+| `project.init` | checks, copies the folder to the machine | `project.stage` (each part), then `project.init` | [`project/family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs), [`project/send.rs`](../../../../control/crates/layerfs-store/src/project/send.rs) |
 | `project.remove` | record and lock work | `project.remove` | `project/family.rs` |
-| `store.push`, `store.pull` | phases, records, locks | `store.file` steps on the source and target machine | [`store/transfer/phases.rs`](../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) |
-| `store.remove` | records and locks | `store.file` step `remove` | [`store/remove.rs`](../../../../control/crates/layerfs-control/src/store/remove.rs) |
-| `store.status`, `store.list` | records | `store.file` stat, when reached | [`store/status.rs`](../../../../control/crates/layerfs-control/src/store/status.rs), [`store/list.rs`](../../../../control/crates/layerfs-control/src/store/list.rs) |
-| `backup.create` | upload to the bucket | `store.file` (the Store's snapshot is sent back) | [`backup/create.rs`](../../../../control/crates/layerfs-control/src/backup/create.rs) |
+| `store.push`, `store.pull` | phases, records, locks | `store.file` steps on the source and target machine | [`sqlite/transfer/phases.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
+| `store.remove` | records and locks | `store.file` step `remove` | [`sqlite/remove.rs`](../../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
+| `store.status`, `store.list` | records | `store.file` stat, when reached | [`status.rs`](../../../../control/crates/layerfs-store/src/status.rs), [`list.rs`](../../../../control/crates/layerfs-store/src/list.rs) |
+| `backup.create` | upload to the bucket | `store.file` (the Store's snapshot is sent back) | [`backup/create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) |
 | `machine.*`, `store.create`, `store.connect`, `backup.connect`, `backup.list`, `backup.restore` | all of it | nothing | [Families](../management/families.md) |
 
 ## By platform

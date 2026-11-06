@@ -2,11 +2,11 @@
 //! the records were typed (#536 §10 "Result keys stay stable"), byte for
 //! byte as JSON text, and reads past a layout-3 `v`.
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::backup::record::BucketRecord;
-use layerfs_control::project::record::ProjectRecord;
-use layerfs_control::store::record::{StoreDerived, StoreRecord, StoreState};
 use layerfs_home::json::{parse, print};
 use layerfs_home::outcome::View;
+use layerfs_store::backup::record::BucketRecord;
+use layerfs_store::project::record::ProjectRecord;
+use layerfs_store::record::{StoreDerived, StoreRecord, StoreState};
 
 fn value(text: &str) -> SdkValue {
     parse(text).unwrap()

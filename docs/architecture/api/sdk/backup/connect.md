@@ -11,7 +11,7 @@ bucket answers with the given key.
 | --- | --- |
 | Family | [backup](README.md) |
 | Library entry | [`backup/connect.rs`](../../../../../api/crates/layerfs-api/src/backup/connect.rs) |
-| Implemented in | `layerfs_control::backup::family::run` → `connect` ([`backup/family.rs`](../../../../../control/crates/layerfs-control/src/backup/family.rs)) |
+| Implemented in | `layerfs_control::backup::family::run` → `connect` ([`backup/family.rs`](../../../../../control/crates/layerfs-store/src/backup/family.rs)) |
 | Runs in | the caller's process; it lists the bucket over the network |
 
 ## Signature
@@ -38,7 +38,7 @@ layerfs backup connect <name> <url> [--key REF] [--region R] [--part-size SIZE]
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
 | `name` | Name | a bucket name (`BucketName::parse`), not yet connected | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
-| `url` | Text | see the URL table below | [`backup/record.rs`](../../../../../control/crates/layerfs-control/src/backup/record.rs) `bucket_record` |
+| `url` | Text | see the URL table below | [`backup/record.rs`](../../../../../control/crates/layerfs-store/src/backup/record.rs) `bucket_record` |
 
 | URL form | Provider | Recorded fields |
 | --- | --- | --- |
@@ -52,7 +52,7 @@ The prefix may be empty; a URL with no bucket is `InvalidInput`.
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
 | `key` | Text | `env:LAYERFS_BUCKET_<NAME>` (name upper-cased, `-` and `.` as `_`) | `env:LAYERFS_<UPPER_DIGITS_>` reads `<prefix>_ACCESS_KEY` and `<prefix>_SECRET_KEY`; `file:/absolute/path` must not be readable by group or others | [`bucket/credentials.rs`](../../../../../control/crates/layerfs-bucket/src/bucket/credentials.rs) `CredentialRef` |
-| `region` | Text | `us-east-1` | MinIO only; r2 records `auto` | [`backup/record.rs`](../../../../../control/crates/layerfs-control/src/backup/record.rs) |
+| `region` | Text | `us-east-1` | MinIO only; r2 records `auto` | [`backup/record.rs`](../../../../../control/crates/layerfs-store/src/backup/record.rs) |
 | `part_size` | Size | 64 MiB (`DEFAULT_PART_SIZE`) | bytes, or text with `K`, `M`, `G`, made whole bytes before dispatch | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs), [`bucket/minio/provider.rs`](../../../../../control/crates/layerfs-bucket/src/bucket/minio/provider.rs) |
 
 The key is a reference, never a secret: only the reference is written.
@@ -68,7 +68,7 @@ The key is a reference, never a secret: only the reference is written.
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `name`, `provider` | text | the bucket's name here, `r2` or `minio` | [`backup/record.rs`](../../../../../control/crates/layerfs-control/src/backup/record.rs) |
+| `name`, `provider` | text | the bucket's name here, `r2` or `minio` | [`backup/record.rs`](../../../../../control/crates/layerfs-store/src/backup/record.rs) |
 | `account`, `jurisdiction` | text | r2 account and jurisdiction (empty for none) | same |
 | `endpoint` | text | MinIO `http(s)://host:port` | same |
 | `bucket`, `prefix` | text | where objects go: `<prefix>/<file>/store.sqlite` | same |
@@ -96,9 +96,9 @@ hold bucket keys.
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad name or URL; a key reference that is not `env:LAYERFS_…` or an absolute `file:`; the variable is unset; a credential file readable by others; a folder-scoped client | no | [`backup/record.rs`](../../../../../control/crates/layerfs-control/src/backup/record.rs), [`bucket/credentials.rs`](../../../../../control/crates/layerfs-bucket/src/bucket/credentials.rs) |
-| `Exists` | a bucket of that name is connected | no | [`backup/family.rs`](../../../../../control/crates/layerfs-control/src/backup/family.rs) |
-| `Failed` | the listing failed (wrong key, no bucket, network) | no | [`backup/record.rs`](../../../../../control/crates/layerfs-control/src/backup/record.rs) `remote_error` |
+| `InvalidInput` | a bad name or URL; a key reference that is not `env:LAYERFS_…` or an absolute `file:`; the variable is unset; a credential file readable by others; a folder-scoped client | no | [`backup/record.rs`](../../../../../control/crates/layerfs-store/src/backup/record.rs), [`bucket/credentials.rs`](../../../../../control/crates/layerfs-bucket/src/bucket/credentials.rs) |
+| `Exists` | a bucket of that name is connected | no | [`backup/family.rs`](../../../../../control/crates/layerfs-store/src/backup/family.rs) |
+| `Failed` | the listing failed (wrong key, no bucket, network) | no | [`backup/record.rs`](../../../../../control/crates/layerfs-store/src/backup/record.rs) `remote_error` |
 | `Unknown` | the driver reports the listing's outcome uncertain | yes, but a listing changes nothing; call again | same |
 
 ## Examples

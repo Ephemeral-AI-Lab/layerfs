@@ -8,7 +8,7 @@ public surface:
 - `crates/layerfs-api`: the SDK call surface: the call table, argument
   checks, scopes and the JSON text form; one route per call into
   `layerfs-control`. It depends only on the control crates
-  (`layerfs-control`, `layerfs-home`, `layerfs-machine`) and `layerfs-bridge` and re-exports
+  (`layerfs-control`, `layerfs-home`, `layerfs-machine`, `layerfs-store`) and `layerfs-bridge` and re-exports
   what the front ends use (#536). The
   management library `layerfs-control` it calls is a control crate
   (`control/crates/layerfs-control`; layerfs-project#101 D-2 supersedes

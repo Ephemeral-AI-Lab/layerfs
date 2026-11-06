@@ -4,8 +4,8 @@
 //! exact count, and a failed transfer ending on what it moved.
 use layerfs_bridge::control::SdkValue;
 use layerfs_bucket::bucket::progress as bucket;
-use layerfs_control::backup::progress::Shown;
 use layerfs_home::context::Context;
+use layerfs_store::backup::progress::Shown;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;

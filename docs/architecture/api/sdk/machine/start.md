@@ -95,7 +95,7 @@ The home lock is held only to write the records, never while the VM boots.
 | `ssh` | starts the worker and its `ssh -L` forward | [`platforms/ssh/power.rs`](../../../../../control/crates/layerfs-platform/src/platforms/ssh/power.rs) |
 
 Every other call on a stopped machine is refused `Unavailable`, naming
-`layerfs machine start` ([`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs)).
+`layerfs machine start` ([`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs)).
 See [workers](../../../control/routing/workers.md#lifecycle) and the
 [routing table](../../../control/routing/routing-table.md).
 

@@ -15,11 +15,8 @@
 //! checked here. Create, close and a machine with no forward use the
 //! worker as before.
 use super::record::SandboxRecord;
-use crate::common::lease;
 use crate::sandbox::registry::{self, SandboxState, SANDBOXES};
 use crate::sandbox::{dispatch, files};
-use crate::store::call::store_call;
-use crate::store::resolve::{self, Target};
 use crate::workspace::{serve, unmount_guard};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, CommitId};
@@ -28,6 +25,9 @@ use layerfs_home::helpers;
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::Unreached;
+use layerfs_store::call::store_call;
+use layerfs_store::lease;
+use layerfs_store::resolve::{self, Target};
 use std::net::SocketAddr;
 use std::path::Path;
 
@@ -430,7 +430,7 @@ pub(crate) fn held(home: &Path, record: &SandboxRecord) -> Result<Vec<String>> {
             .map(|(_, workspace)| Ok(helpers::text(workspace, "path")?.to_owned()))
             .collect();
     };
-    let _guard = files::guard(&state.directory)?;
+    let _guard = layerfs_store::project::discovery::guard(&state.directory)?;
     let recoverable = unmount_guard::check_all(&state)?;
     files::refresh_except(&state, &recoverable)?;
     let mounted = helpers::lock(&state.mounts)?

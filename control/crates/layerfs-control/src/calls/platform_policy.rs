@@ -3,10 +3,10 @@
 //! This also runs in builds without machine adapters, so a recorded worker or
 //! a forwarded daemon cannot bypass the product policy.
 use crate::sandbox::record::SandboxRecord;
-use crate::store::record::{StoreKind, StoreRecord};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::refused;
 use layerfs_machine::record::MachineRecord;
+use layerfs_store::record::{StoreKind, StoreRecord};
 use std::path::Path;
 
 type Result = std::result::Result<(), SdkRefusal>;
@@ -61,7 +61,7 @@ fn transfer(home: &Path, name: &str) -> Result {
     if let Some(record) = StoreRecord::read(home, name)? {
         // A new transfer must not implicitly retire a historical copy on a
         // disabled machine before it checks the newly selected destination.
-        if let Some(left) = crate::store::transfer::resolve::leftover(&record) {
+        if let Some(left) = layerfs_store::sqlite::transfer::resolve::leftover(&record) {
             machine(home, &left.from)?;
             machine(home, &left.to)?;
         }

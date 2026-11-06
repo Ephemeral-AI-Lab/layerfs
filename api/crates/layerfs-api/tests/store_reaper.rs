@@ -3,7 +3,7 @@
 //! waiting: the reaper's own pass is run with a chosen idle period.
 use layerfs_api::home::{self};
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::common::lease;
+use layerfs_store::lease;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;

@@ -4,13 +4,13 @@
 use super::direct;
 use super::record::{self, SandboxRecord};
 use crate::sandbox::route::on_machine;
-use crate::store::record::StoreRef;
-use crate::store::resolve;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::context::Context;
 use layerfs_home::home::{self, paths};
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{refused, Outcome, View};
+use layerfs_store::record::StoreRef;
+use layerfs_store::resolve;
 
 /// `sandbox.create(project, name, machine?, { image })`: with no `machine`,
 /// a sqlite Store's machine, or `native` for a PostgreSQL Store (#536 §10).

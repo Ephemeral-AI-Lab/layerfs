@@ -36,9 +36,9 @@ layerfs branch merge <store>/<project> <name> <a> <b> [--message TEXT] [--units 
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
+| `project` | Project | `<store>/<project>` | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `name` | Name | the new Branch; not `main`, not taken | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
-| `a` | Name | the left side ("ours"), sent as `branch`; may be `main` | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
+| `a` | Name | the left side ("ours"), sent as `branch`; may be `main` | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |
 | `b` | Name | the right side ("theirs"), sent as `with`; may be `main`; not equal to `a` | same |
 
 ## Options
@@ -98,7 +98,7 @@ side is `main`, else `a`'s base. See the
 | `NoMergeBase` | the sides share no history | no | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `Conflict` | conflicting paths; nothing created; `detail` has `sources`, `merge_base`, `conflicts`, `lww`, `units` and the truncation flags | no | same |
 | `HeadMoved` | the catalog moved under the publish | no | same, [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs) |
+| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`call.rs`](../../../../../control/crates/layerfs-store/src/call.rs) |
 | `Failed` | a Store without merge scratch (`BackendUnavailable`); other failures | no | [`store/open.rs`](../../../../../engine/crates/layerfs-store-service/src/store/open.rs) |
 | `Unknown` | **the worker's answer was lost, or the publish outcome is unknown** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 

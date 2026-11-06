@@ -11,7 +11,7 @@ for byte, so its projects are served from that machine afterwards.
 | --- | --- |
 | Family | [store](README.md) |
 | Library entry | [`store/push.rs`](../../../../../api/crates/layerfs-api/src/store/push.rs) |
-| Implemented in | `layerfs_control::store::family::run` → `transfer::phases::push` ([`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs)) |
+| Implemented in | `layerfs_control::store::family::run` → `transfer::phases::push` ([`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs)) |
 | Runs in | the caller's process (records, locks, `op`, the bytes in transit); the source steps run here on `native`, the target steps in the target machine's worker as `store.file` |
 
 ## Signature
@@ -38,13 +38,13 @@ layerfs store push <name> <machine> [--progress]
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
 | `name` | Name | a sqlite Store on `native` (`StoreName::parse`) | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs), [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_push` |
-| `machine` | Name | a recorded machine other than `native` (`MachineName::parse`) | [`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) `push` |
+| `machine` | Name | a recorded machine other than `native` (`MachineName::parse`) | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) `push` |
 
 ## Options
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `on_progress` | Function | none | called with `{ phase, done, total }`; `done` and `total` are bytes during `send`, null otherwise; the CLI prints them with `--progress` | [`store/family.rs`](../../../../../control/crates/layerfs-control/src/store/family.rs) `progress` |
+| `on_progress` | Function | none | called with `{ phase, done, total }`; `done` and `total` are bytes during `send`, null otherwise; the CLI prints them with `--progress` | [`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs) `progress` |
 
 ## Returns
 
@@ -54,10 +54,10 @@ layerfs store push <name> <machine> [--progress]
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `store` | text | the Store | [`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) `phases` |
+| `store` | text | the Store | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) `phases` |
 | `from`, `to` | text | `native` and the target machine | same |
 | `bytes` | int | the snapshot's size, the bytes sent | same |
-| `heads` | text | hex digest of the Store's history heads, checked on the target | [`store/transfer/steps.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/steps.rs) `digest` |
+| `heads` | text | hex digest of the Store's history heads, checked on the target | [`sqlite/transfer/steps.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) `digest` |
 
 The record now names `machine: <to>` and keeps a `last_transfer`
 `{ call, from, to, at, bytes, sha256, heads, retired }`.
@@ -82,7 +82,7 @@ The record now names `machine: <to>` and keeps a `last_transfer`
 
 | Phase | Written to `op` first | A failure here is | Source |
 | --- | --- | --- | --- |
-| `check` | before `op` exists | certain; nothing changed | [`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) `run`, `reach` |
+| `check` | before `op` exists | certain; nothing changed | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) `run`, `reach` |
 | `snapshot`, `send`, `verify` | yes | certain; the partial copy stays as `.incoming` | same, `phases` |
 | `install` | yes, uncertain | uncertain only when the step answers `Unknown` | same |
 | `record` | yes | **always uncertain**: both copies exist | same, `transfer` |
@@ -100,22 +100,22 @@ Every refusal's message starts `store push, <phase>:` and carries
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
 | `InvalidInput` | bad names; a PostgreSQL Store; the Store is not on `native`; `machine` is `native`; a folder-scoped client | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_push`, [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
-| `NotFound` | no such Store or machine; no Store file at snapshot | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs), [`store/transfer/steps.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/steps.rs) |
-| `InUse` | a live process holds the Store, or a Sandbox of one of its projects is recorded (`detail.related`) | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle`, [`store/family.rs`](../../../../../control/crates/layerfs-control/src/store/family.rs) `settle` |
+| `NotFound` | no such Store or machine; no Store file at snapshot | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs), [`sqlite/transfer/steps.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) |
+| `InUse` | a live process holds the Store, or a Sandbox of one of its projects is recorded (`detail.related`) | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle`, [`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs) `settle` |
 | `Busy` / `Unresolved` | another operation runs on the Store / an earlier one's outcome is unknown | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) `blocks` |
-| `Exists` | the target already holds a Store file of that name | no | [`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) `reach` |
+| `Exists` | the target already holds a Store file of that name | no | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) `reach` |
 | `Capacity` | the target has too little free disk (`detail.needed`, `detail.free`) | no | same |
-| `Unavailable` | the target machine is stopped or its worker gone; names `layerfs machine start`, nothing is started | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
-| `Unsupported` | the target's worker does not report free disk (an older bundle) | no | [`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) |
+| `Unavailable` | the target machine is stopped or its worker gone; names `layerfs machine start`, nothing is started | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
+| `Unsupported` | the target's worker does not report free disk (an older bundle) | no | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
 | `Conflict` | the Store moved between check and `op` | no | same, `run` |
-| `Failed` | an unfinished `-wal` at snapshot; a digest mismatch at verify; I/O | no, unless at `record` | [`store/transfer/steps.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/steps.rs) |
-| `Unknown` | **a worker's answer was lost, or any failure of `record`** | **yes** | [`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) `transfer` |
+| `Failed` | an unfinished `-wal` at snapshot; a digest mismatch at verify; I/O | no, unless at `record` | [`sqlite/transfer/steps.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) |
+| `Unknown` | **a worker's answer was lost, or any failure of `record`** | **yes** | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) `transfer` |
 
 **After an uncertain push**, both copies are kept, `op` stays marked
 uncertain and the event is appended to `log/uncertain.jsonl`. Read
 [store.status](status.md) (its `op` and `state: "unresolved"`), then run
 the same `store push` again: it first deletes the copy the record does not
-name ([`store/transfer/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/resolve.rs)).
+name ([`sqlite/transfer/resolve.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/resolve.rs)).
 
 ## Examples
 

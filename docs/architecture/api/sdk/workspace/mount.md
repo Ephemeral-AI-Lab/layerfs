@@ -89,7 +89,7 @@ The Workspace is recorded as `workspace/<id>.json` in the Sandbox's folder.
 The Branch is looked up through the Store's route, not the daemon; the
 daemon binds its id. For a PostgreSQL Store it is looked up on the
 process's one held read session for that Store, not a Store service (#65,
-[`store/reader.rs`](../../../../../control/crates/layerfs-control/src/store/reader.rs)):
+[`postgresql/reader.rs`](../../../../../control/crates/layerfs-store/src/postgresql/reader.rs)):
 at most one connection per process, reused by later calls within 60 s. See the [routing table](../../../control/routing/routing-table.md)
 and the [daemon channel](../../../control/routing/daemon-channel.md). Under a folder
 scope only `main` is accepted and is mounted as the Branch `<ns>.main`
@@ -101,7 +101,7 @@ scope only `main` is accepted and is mounted as the Branch `<ns>.main`
 | --- | --- | --- | --- |
 | `InvalidInput` | no `sandbox`; `branch` is `main`; a bad `name`; out of scope | no | [`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs) |
 | `NoSuchSandbox` | no such Sandbox, or its daemon ended itself when idle | no | same |
-| `NoSuchBranch` | the Branch is missing | no | [`store/service.rs`](../../../../../control/crates/layerfs-control/src/store/service.rs) |
+| `NoSuchBranch` | the Branch is missing | no | [`service.rs`](../../../../../control/crates/layerfs-store/src/service.rs) |
 | `Exists` | the Sandbox already has a Workspace of that name | no | [`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs) |
 | `Capacity` | the Sandbox holds 16 Workspaces (`WORKSPACES`) | no | same |
 | `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox | no | [`sandbox/record.rs`](../../../../../control/crates/layerfs-control/src/sandbox/record.rs) `free` |

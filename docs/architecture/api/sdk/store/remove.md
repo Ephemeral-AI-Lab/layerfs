@@ -11,7 +11,7 @@ It is also the call that clears an unresolved operation on the Store.
 | --- | --- |
 | Family | [store](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/store/remove.rs`](../../../../../api/crates/layerfs-api/src/store/remove.rs) |
-| Implemented in | `layerfs_control::store::family::run` → `remove` ([`store/remove.rs`](../../../../../control/crates/layerfs-control/src/store/remove.rs)) |
+| Implemented in | `layerfs_control::store::family::run` → `remove` ([`sqlite/remove.rs`](../../../../../control/crates/layerfs-store/src/sqlite/remove.rs)) |
 | Runs in | the caller's process; the step `remove` in the machine's worker when the file is not under the home |
 
 ## Signature
@@ -37,7 +37,7 @@ layerfs store remove <name>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | a sqlite Store; a PostgreSQL Store is refused (use [store.disconnect](disconnect.md)) | [`store/remove.rs`](../../../../../control/crates/layerfs-control/src/store/remove.rs) |
+| `name` | Name | a sqlite Store; a PostgreSQL Store is refused (use [store.disconnect](disconnect.md)) | [`sqlite/remove.rs`](../../../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
 
 ## Options
 
@@ -51,7 +51,7 @@ None.
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `removed` | text | the Store whose folder under the home is gone | [`store/remove.rs`](../../../../../control/crates/layerfs-control/src/store/remove.rs) |
+| `removed` | text | the Store whose folder under the home is gone | [`sqlite/remove.rs`](../../../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
 
 What goes: the Store's file, its `-wal`/`-shm`, its folder under the home
 (`store/<name>/`, with the record and project entries) and, on a worker
@@ -79,32 +79,32 @@ their buckets.
 
 | Machine of the Store | What deletes the file | Source |
 | --- | --- | --- |
-| a machine whose Stores open in this process (`native`) | removing `store/<name>/` under the home | [`store/remove.rs`](../../../../../control/crates/layerfs-control/src/store/remove.rs) |
-| a worker machine | the worker step `remove`, then the home folder | [`transfer/steps.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/steps.rs) `remove` |
+| a machine whose Stores open in this process (`native`) | removing `store/<name>/` under the home | [`sqlite/remove.rs`](../../../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
+| a worker machine | the worker step `remove`, then the home folder | [`sqlite/transfer/steps.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) `remove` |
 
 The doc comment on `remove` says a stopped machine is started first; the
 code does not. `Worker::ready` only reads the recorded endpoint and a
 stopped machine is `Unavailable` (#535 D11,
-[`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs)).
+[`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs)).
 See the [routing table](../../../control/routing/routing-table.md).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad name; a PostgreSQL Store; a folder-scoped client | no | [`store/remove.rs`](../../../../../control/crates/layerfs-control/src/store/remove.rs) |
-| `NotFound` | no Store of that name | no | [`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) |
-| `Unavailable` | its machine is stopped or has no recorded worker | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
-| `Conflict` | the Store moved to another machine meanwhile; nothing removed | no | [`store/remove.rs`](../../../../../control/crates/layerfs-control/src/store/remove.rs) |
-| `Busy` | another live process's operation runs on the Store | no | [`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) `unblocked` |
-| `InUse` | a live process holds it, this process holds it, or a Sandbox of one of its projects is recorded | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle`, [`family.rs`](../../../../../control/crates/layerfs-control/src/store/family.rs) `settle` |
-| `Failed` | a record or folder cannot be written or removed | no | [`store/remove.rs`](../../../../../control/crates/layerfs-control/src/store/remove.rs) |
+| `InvalidInput` | a bad name; a PostgreSQL Store; a folder-scoped client | no | [`sqlite/remove.rs`](../../../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
+| `NotFound` | no Store of that name | no | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) |
+| `Unavailable` | its machine is stopped or has no recorded worker | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
+| `Conflict` | the Store moved to another machine meanwhile; nothing removed | no | [`sqlite/remove.rs`](../../../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
+| `Busy` | another live process's operation runs on the Store | no | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) `unblocked` |
+| `InUse` | a live process holds it, this process holds it, or a Sandbox of one of its projects is recorded | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle`, [`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs) `settle` |
+| `Failed` | a record or folder cannot be written or removed | no | [`sqlite/remove.rs`](../../../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
 | `Unknown` | **the worker's answer to `remove` was lost** | **yes** | same, `ended` |
 
 An `Unresolved` intent of a process that has ended does not refuse a
 remove: remove is its clearing call (except a push's or pull's, whose
 refusal names the same push or pull,
-[`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) `clearing_call`).
+[`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) `clearing_call`).
 On a certain failure the earlier unresolved intent is put back.
 **After `Unknown`**, `op` stays marked uncertain at phase `remove`; read
 [store.status](status.md) and run `store remove` again.

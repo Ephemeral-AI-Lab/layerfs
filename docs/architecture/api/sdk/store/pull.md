@@ -12,7 +12,7 @@ swapped.
 | --- | --- |
 | Family | [store](README.md) |
 | Library entry | [`store/pull.rs`](../../../../../api/crates/layerfs-api/src/store/pull.rs) |
-| Implemented in | `layerfs_control::store::family::run` → `transfer::phases::pull` ([`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs)) |
+| Implemented in | `layerfs_control::store::family::run` → `transfer::phases::pull` ([`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs)) |
 | Runs in | the caller's process (records, locks, `op`, the bytes in transit); the source steps in the source machine's worker as `store.file`, the target steps here on `native` |
 
 ## Signature
@@ -47,7 +47,7 @@ Store between two other machines, pull it, then push it.
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `on_progress` | Function | none | called with `{ phase, done, total }`; bytes during `send`, null otherwise; CLI `--progress` | [`store/family.rs`](../../../../../control/crates/layerfs-control/src/store/family.rs) `progress` |
+| `on_progress` | Function | none | called with `{ phase, done, total }`; bytes during `send`, null otherwise; CLI `--progress` | [`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs) `progress` |
 
 ## Returns
 
@@ -57,10 +57,10 @@ Store between two other machines, pull it, then push it.
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `store` | text | the Store | [`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) `phases` |
+| `store` | text | the Store | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) `phases` |
 | `from`, `to` | text | the machine the record named, and `native` | same |
 | `bytes` | int | the snapshot's size | same |
-| `heads` | text | hex digest of the history heads, checked on `native` | [`store/transfer/steps.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/steps.rs) `digest` |
+| `heads` | text | hex digest of the history heads, checked on `native` | [`sqlite/transfer/steps.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) `digest` |
 
 ## Where it runs
 
@@ -91,19 +91,19 @@ Every refusal's message starts `store pull, <phase>:` and carries
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
 | `InvalidInput` | a bad name; a PostgreSQL Store; the Store is already on `native`; a folder-scoped client | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_pull` |
-| `NotFound` | no such Store; no file on the source at snapshot | no | [`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs), [`store/transfer/steps.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/steps.rs) |
+| `NotFound` | no such Store; no file on the source at snapshot | no | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs), [`sqlite/transfer/steps.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) |
 | `InUse` | a live process holds it, or a Sandbox of one of its projects is recorded | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle` |
 | `Busy` / `Unresolved` | another operation runs / an earlier one's outcome is unknown | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
-| `Exists` | `native` already holds a Store file of that name | no | [`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) `reach` |
+| `Exists` | `native` already holds a Store file of that name | no | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) `reach` |
 | `Capacity` | `native` lacks bytes plus headroom (`detail.needed`, `detail.free`) | no | same |
-| `Unavailable` | the source machine is stopped or its worker gone; nothing is started | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
-| `Conflict` | the Store moved between check and `op` | no | [`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) |
-| `Failed` | a `-wal` left on the source; a digest mismatch; I/O | no, unless at `record` | [`store/transfer/steps.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/steps.rs) |
-| `Unknown` | **the worker's answer was lost, or any failure of `record`** | **yes** | [`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) `transfer` |
+| `Unavailable` | the source machine is stopped or its worker gone; nothing is started | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
+| `Conflict` | the Store moved between check and `op` | no | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
+| `Failed` | a `-wal` left on the source; a digest mismatch; I/O | no, unless at `record` | [`sqlite/transfer/steps.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) |
+| `Unknown` | **the worker's answer was lost, or any failure of `record`** | **yes** | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) `transfer` |
 
 **After an uncertain pull**, read [store.status](status.md), then run
 `store pull` again: it deletes the copy the record does not name first
-([`store/transfer/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/resolve.rs)).
+([`sqlite/transfer/resolve.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/resolve.rs)).
 A `Failed` snapshot on a `-wal` means a process ended with the Store open
 on its machine; open it there once (any Store call) and pull again.
 

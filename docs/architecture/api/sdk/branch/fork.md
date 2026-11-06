@@ -35,10 +35,10 @@ layerfs branch fork <store>/<project> <name> <from_branch> [<from_commit>]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
+| `project` | Project | `<store>/<project>` | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `name` | Name | a new Branch name; not `main`, not taken | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `from_branch` | Name | the source Branch, or `main` | same |
-| `from_commit` | Name, optional | a 66-hex Commit or Layer id; when given it replaces `from_branch` as the source | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
+| `from_commit` | Name, optional | a 66-hex Commit or Layer id; when given it replaces `from_branch` as the source | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |
 
 Control sends one `from`: `from_commit` if given, else `from_branch`.
 
@@ -98,10 +98,10 @@ namespace is therefore not confined (an open gap,
 | `InvalidInput` | a bad name; a Commit with no Branch in its metadata; out of scope | no | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `ReservedName` | `name` is `main` | no | same |
 | `NameTaken` | a Branch of that name exists | no | same |
-| `NoSuchStore`, `NoSuchProject` | not recorded | no | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
+| `NoSuchStore`, `NoSuchProject` | not recorded | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `NoSuchBranch`, `NoSuchCommit`, `NotFound` | the source Branch, Commit or Layer is missing | no | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `Busy`, `Unresolved` | a push, pull or remove holds the Store | no | [`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) |
-| `Unavailable` | the worker or server does not answer before the call is sent | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
+| `Busy`, `Unresolved` | a push, pull or remove holds the Store | no | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) |
+| `Unavailable` | the worker or server does not answer before the call is sent | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
 | `Unknown` | **the worker's answer was lost, or the Store reports an unknown outcome** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After `Unknown`**, read [branch.get](get.md) for `name`: it exists if the

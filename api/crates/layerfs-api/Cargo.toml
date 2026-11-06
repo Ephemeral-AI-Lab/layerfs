@@ -12,6 +12,7 @@ layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
 layerfs-control = { path = "../../../control/crates/layerfs-control" }
 layerfs-home = { path = "../../../control/crates/layerfs-home" }
 layerfs-machine = { path = "../../../control/crates/layerfs-machine" }
+layerfs-store = { path = "../../../control/crates/layerfs-store" }
 
 [features]
 # PostgreSQL Stores (#506, #533): open, attach, create and Init.

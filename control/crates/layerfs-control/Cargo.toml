@@ -12,6 +12,7 @@ layerfs-content = { path = "../../../core/crates/layerfs-content" }
 layerfs-history = { path = "../../../core/crates/layerfs-history" }
 layerfs-home = { path = "../layerfs-home" }
 layerfs-machine = { path = "../layerfs-machine" }
+layerfs-store = { path = "../layerfs-store" }
 layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
 layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
 layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
@@ -28,13 +29,14 @@ nix = { version = "=0.31.3", default-features = false, features = ["fs", "user",
 # PostgreSQL Stores (#506, #533): open, attach, create and Init.
 # Off by default; the sealed Linux build the worker runs turns it on.
 postgresql = [
+    "layerfs-store/postgresql",
     "layerfs-persistence/postgresql",
     "layerfs-project/postgresql",
     "layerfs-store-service/postgresql",
 ]
 # https:// remotes: Cloudflare R2, MinIO behind TLS. Off by default; the
 # sealed Linux build the worker runs turns it on.
-tls = ["layerfs-bucket/tls"]
+tls = ["layerfs-store/tls", "layerfs-bucket/tls"]
 # The machine calls (2.0, #533): host builds only. The guest worker is built
 # without it, so no machine adapter runs inside a machine.
 machine = ["dep:layerfs-platform", "layerfs-machine/machine"]

@@ -13,11 +13,16 @@ behalf of the engine:
 - `crates/layerfs-machine`: machine records, their lifecycle, the sealed
   bundle and the worker protocol and client (#104). What a machine holds
   comes from its caller (`Related`).
+- `crates/layerfs-store`: Store records and calls (#105): the kind-neutral
+  root (records, Store calls, placement, leases), `sqlite/` and
+  `postgresql/` (which never import each other; a test checks it),
+  `backup/` and `project/`. Who uses a Store comes from its caller
+  (`Related`).
 - `crates/layerfs-control`: the management library (#536; moved here from
-  `api/crates` by #101 D-2): Stores, projects, Sandboxes and their
-  Workspaces, and backups, and what spans entities (the worker server,
-  `inventory`, `doctor`, `migrate`). #101 continues the split into
-  `layerfs-store` and `layerfs-sandbox`.
+  `api/crates` by #101 D-2): Sandboxes and their Workspaces, and what spans
+  entities (the worker server, `inventory`, `doctor`, `migrate`, and the
+  machine, Store, project and backup calls with their `Related` reads).
+  #101 continues the split into `layerfs-sandbox`.
 - `crates/layerfs-platform` (was `layerfs-machine`): *where* Sandboxes can
   run. One folder per platform under `src/platforms/` (`native`, `docker`,
   `apple_container`, `microsandbox`, `lima`, `firecracker`, `ssh`). Host
@@ -42,8 +47,9 @@ design and the [compute plane 2.0 spec](../core/docs/proposals/compute-plane-2.0
   **Nothing in `engine/` or `core/` may depend on `control/`**; the
   [boundary guard](../tools/check_product_boundary.py) refuses the edge, and
   unknown crates fail closed. `api/` depends on control, never the reverse.
-- Inside control: `layerfs-control ──► layerfs-machine ──► layerfs-home`;
-  `layerfs-control ──► layerfs-isolation, layerfs-bucket`; `layerfs-machine
+- Inside control: `layerfs-control ──► layerfs-store ──► layerfs-machine
+  ──► layerfs-home`; `layerfs-store ──► layerfs-bucket`; `layerfs-control
+  ──► layerfs-isolation, layerfs-bucket`; `layerfs-machine
   ──► layerfs-platform` only through its optional `machine` feature, which
   `layerfs-control` and `layerfs-api` pass through; `layerfs-home ──►
   layerfs-isolation` (the process identity records name); `layerfs-platform ──►

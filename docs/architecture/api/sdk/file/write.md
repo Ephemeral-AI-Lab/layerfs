@@ -35,10 +35,10 @@ layerfs file write <store>/<project> <branch> <path> [--from FILE] \
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>`; both records must exist | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
+| `project` | Project | `<store>/<project>`; both records must exist | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `branch` | Name | the Branch to commit to; `main` is `ReadOnly` | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 | `path` | Text | absolute, at most 4096 bytes, no NUL, no trailing `/`, no empty, `.` or `..` component | [`files::path`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
-| `content` | Content | text (JS string, Python `str`) or bytes (`Uint8Array`/`Buffer`, `bytes`); the CLI reads stdin or `--from` | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
+| `content` | Content | text (JS string, Python `str`) or bytes (`Uint8Array`/`Buffer`, `bytes`); the CLI reads stdin or `--from` | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |
 
 ## Options
 
@@ -92,10 +92,10 @@ mounted or shared. See the [routing table](../../../control/routing/routing-tabl
 | --- | --- | --- | --- |
 | `InvalidInput` | a bad project, path, mode or option; a path outside a folder scope | no | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs), [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
 | `ReadOnly` | `branch` is `main`; `main` changes only through [branch.publish](../branch/publish.md) | no | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
-| `NoSuchStore`, `NoSuchProject`, `NoSuchBranch` | not recorded, or no such Branch | no | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
+| `NoSuchStore`, `NoSuchProject`, `NoSuchBranch` | not recorded, or no such Branch | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `Conflict` | the Branch's head moved since the call bound it and a changed path conflicts; nothing committed (`detail.branch`, `head`, `conflicts`) | no | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 | `HeadMoved`, `Busy`, `Capacity`, `Failed` | the Commit failed and was settled locally | no | same |
-| `Unresolved`, `Unavailable` | the Store's `op`, or its worker not reached | no | [`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs) |
+| `Unresolved`, `Unavailable` | the Store's `op`, or its worker not reached | no | [`call.rs`](../../../../../control/crates/layerfs-store/src/call.rs) |
 | `IsDirectory`, `NotDirectory`, `NoSuchPath` | the path is a folder, or a parent is not a folder or missing | no | [`write/mutation.rs`](../../../../../engine/crates/layerfs-store-service/src/write/mutation.rs) |
 | `Unknown` | **a change or the Commit ended with an unknown outcome (the private Workspace is kept), or the worker's answer was lost** | **yes** | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs), [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 

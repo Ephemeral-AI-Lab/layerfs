@@ -45,6 +45,7 @@ UNSAFE_FREE_CRATES = (
     "layerfs-platform",
     "layerfs-home",
     "layerfs-machine",
+    "layerfs-store",
 )
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
@@ -68,6 +69,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-platform": "#![forbid(unsafe_code)]",
     "layerfs-home": "#![forbid(unsafe_code)]",
     "layerfs-machine": "#![forbid(unsafe_code)]",
+    "layerfs-store": "#![forbid(unsafe_code)]",
 }
 
 
@@ -154,7 +156,7 @@ ALLOWED_DEPENDENCIES = {
     },
     # The SDK call surface (#536): the call table over the control crates
     # (#101: layerfs-api may call any control crate).
-    "layerfs-api": {"layerfs-control", "layerfs-home", "layerfs-machine", "layerfs-bridge"},
+    "layerfs-api": {"layerfs-control", "layerfs-home", "layerfs-machine", "layerfs-store", "layerfs-bridge"},
     # The management library (#536): home records, machines and workers,
     # Stores, projects, Sandboxes, Workspaces and backups.
     "layerfs-control": {
@@ -167,6 +169,7 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-project",
         "layerfs-home",
         "layerfs-machine",
+        "layerfs-store",
         "layerfs-isolation",
         "layerfs-platform",
         "layerfs-store-service",
@@ -178,6 +181,21 @@ ALLOWED_DEPENDENCIES = {
     # Machine records, lifecycle and the worker client (#104), over the
     # platform driver (host builds only, through its `machine` feature).
     "layerfs-machine": {"layerfs-bridge", "layerfs-home", "layerfs-platform"},
+    # Store records and calls (#105): sqlite/ and postgresql/ apart, backups,
+    # projects, placement and leases, over the bucket driver and the engine.
+    "layerfs-store": {
+        "layerfs-content",
+        "layerfs-storage",
+        "layerfs-history",
+        "layerfs-persistence",
+        "layerfs-telemetry",
+        "layerfs-bridge",
+        "layerfs-project",
+        "layerfs-store-service",
+        "layerfs-home",
+        "layerfs-machine",
+        "layerfs-bucket",
+    },
     "layerfs-bridge": {"layerfs-content", "layerfs-history"},
     # The drivers (#101 D-5): isolation (was layerfs-sandbox), platform (was
     # layerfs-machine) and bucket (was layerfs-store-backup).
@@ -215,6 +233,7 @@ LAYER = {
     "layerfs-control": CONTROL,
     "layerfs-home": CONTROL,
     "layerfs-machine": CONTROL,
+    "layerfs-store": CONTROL,
     # The public surface under api/crates: the call surface and the 2.0 front
     # ends (#533), the `layerfs` binary, the Node binding and the PyO3 module.
     "layerfs-api": API,

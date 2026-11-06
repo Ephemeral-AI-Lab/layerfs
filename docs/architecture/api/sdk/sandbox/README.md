@@ -76,7 +76,7 @@ Sandbox may run for its Store kind is the support table's
 | `Unsupported` | the machine cannot run a Sandbox of this Store kind, or the sqlite Store is on another machine | [`sandbox/create.rs`](../../../../../control/crates/layerfs-control/src/sandbox/create.rs) |
 | `MountsActive` | `close` without `force` while Workspaces are mounted | [`sandbox/serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs) |
 | `Busy`, `Unresolved` | another live operation holds the Sandbox or its Store; a gone owner's uncertain `op` | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
-| `Unavailable` | the machine's worker is not recorded or does not answer; a PostgreSQL server the machine cannot reach | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs), [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
+| `Unavailable` | the machine's worker is not recorded or does not answer; a PostgreSQL server the machine cannot reach | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs), [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
 | `Unknown` | **uncertain:** the machine's answer to `create` or `close` was lost | [`sandbox/create.rs`](../../../../../control/crates/layerfs-control/src/sandbox/create.rs), [`sandbox/close.rs`](../../../../../control/crates/layerfs-control/src/sandbox/close.rs) |
 
 After `Unknown` the record keeps its `op` with `uncertain: true` and a line

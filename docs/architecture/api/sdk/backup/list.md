@@ -11,7 +11,7 @@ whether it and the Store linked to it changed since their last transfer.
 | --- | --- |
 | Family | [backup](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/backup/list.rs`](../../../../../api/crates/layerfs-api/src/backup/list.rs) |
-| Implemented in | `layerfs_control::backup::family::run` → `list` ([`backup/list.rs`](../../../../../control/crates/layerfs-control/src/backup/list.rs)) |
+| Implemented in | `layerfs_control::backup::family::run` → `list` ([`backup/list.rs`](../../../../../control/crates/layerfs-store/src/backup/list.rs)) |
 | Runs in | the caller's process; one listing per bucket; heads read from Store files on `native` |
 
 ## Signature
@@ -37,7 +37,7 @@ layerfs backup list [<bucket>]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `bucket` | Name, optional | one connected bucket; left off, every bucket under `backup/` | [`backup/list.rs`](../../../../../control/crates/layerfs-control/src/backup/list.rs) |
+| `bucket` | Name, optional | one connected bucket; left off, every bucket under `backup/` | [`backup/list.rs`](../../../../../control/crates/layerfs-store/src/backup/list.rs) |
 
 ## Options
 
@@ -55,7 +55,7 @@ None. The answer is not paged.
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `bucket`, `file` | text | the bucket and the file (`<prefix>/<file>/store.sqlite`) | [`backup/list.rs`](../../../../../control/crates/layerfs-control/src/backup/list.rs) |
+| `bucket`, `file` | text | the bucket and the file (`<prefix>/<file>/store.sqlite`) | [`backup/list.rs`](../../../../../control/crates/layerfs-store/src/backup/list.rs) |
 | `bytes` | int | the object's size | same |
 | `modified` | int or null | last-modified time from the listing | same |
 | `heads` | text or null | the heads digest the object's metadata records | same |
@@ -96,7 +96,7 @@ reached; a Store on another machine shows `unknown`.
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad bucket name; a bad key reference; a folder-scoped client | no | [`backup/record.rs`](../../../../../control/crates/layerfs-control/src/backup/record.rs) |
+| `InvalidInput` | a bad bucket name; a bad key reference; a folder-scoped client | no | [`backup/record.rs`](../../../../../control/crates/layerfs-store/src/backup/record.rs) |
 | `NotFound` | the named bucket is not connected | no | same |
 | `Failed` | a listing failed; a record cannot be read; a record names no known provider | no | same, `remote_error` |
 | `Unknown` | the driver reports a listing uncertain | read-only; call again | same |

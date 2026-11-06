@@ -82,7 +82,7 @@ name. `read`, `write` and `history` take typed values (paths, `Snap`,
 ([`methods/mod.rs`](../../../../engine/crates/layerfs-store-service/src/methods/mod.rs)).
 This keeps one engine under every front end: `layerfs-control` re-exports
 `methods::call` and runs it in the caller's process
-([`layerfs-control/src/store/service.rs`](../../../../control/crates/layerfs-control/src/store/service.rs)).
+([`service.rs`](../../../../control/crates/layerfs-store/src/service.rs)).
 
 Every call runs once, in the process that opened the Store. A read resolves a
 snapshot and reads immutable objects. A file change binds one private

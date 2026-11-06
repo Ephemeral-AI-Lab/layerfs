@@ -10,7 +10,7 @@ Where each call runs: in the caller's process, in a machine's worker, or in a Sa
 | --- | --- |
 | Layer | [Control](../README.md) |
 | Crates | `layerfs-control`, `layerfs-cli` |
-| Source | [`control/crates/layerfs-control/src/calls`](../../../../control/crates/layerfs-control/src/calls), [`control/crates/layerfs-control/src/daemon`](../../../../control/crates/layerfs-control/src/daemon), [`api/crates/layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs), [`common/place.rs`](../../../../control/crates/layerfs-control/src/common/place.rs), [`sandbox/route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs), [`sandbox/direct.rs`](../../../../control/crates/layerfs-control/src/sandbox/direct.rs) |
+| Source | [`control/crates/layerfs-control/src/calls`](../../../../control/crates/layerfs-control/src/calls), [`control/crates/layerfs-control/src/daemon`](../../../../control/crates/layerfs-control/src/daemon), [`api/crates/layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs), [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`sandbox/route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs), [`sandbox/direct.rs`](../../../../control/crates/layerfs-control/src/sandbox/direct.rs) |
 | Uses | [Control: Network](../network/README.md), [Engine: Daemon](../../engine/daemon/README.md) |
 | Used by | [Management](../management/README.md) |
 | Flows | [A call, end to end](../../flows/call.md), [A Workspace session](../../flows/workspace.md) |
@@ -57,7 +57,7 @@ itself is the [Routing table](routing-table.md).
 
 | Call | Runs in | Decided by |
 | --- | --- | --- |
-| Store call on a PostgreSQL Store | the caller's process | [`place::plan`](../../../../control/crates/layerfs-control/src/common/place.rs) |
+| Store call on a PostgreSQL Store | the caller's process | [`place::plan`](../../../../control/crates/layerfs-store/src/place.rs) |
 | Store call on a SQLite Store whose machine runs calls locally | the caller's process | `place::plan` → `local` |
 | Store call on a SQLite Store on any other machine | that machine's worker, op `store.call` | `place::plan` → `Executor::Worker` |
 | Sandbox create, get, close; Workspace mount, exec, commit, unmount, status | the Sandbox's machine: here, or its worker as `sandbox.host` | [`sandbox::route::on_machine`](../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
@@ -75,8 +75,8 @@ serves until `machine.stop` ends it
 
 | Rule | Enforced by |
 | --- | --- |
-| SQLite Store calls run on the Store's kernel: in process on `native` (macOS, Linux), else in that machine's worker. | [`place.rs`](../../../../control/crates/layerfs-control/src/common/place.rs) `plan`, `local`; executor per platform in [`layerfs-platform` `platform.rs`](../../../../control/crates/layerfs-platform/src/platform.rs) |
-| PostgreSQL Store calls run in the caller's process; the password is resolved per call and never written to a record. | `place::plan` (`StoreRef::Postgres` → `Local`); [`store/call.rs`](../../../../control/crates/layerfs-control/src/store/call.rs) `postgresql` |
+| SQLite Store calls run on the Store's kernel: in process on `native` (macOS, Linux), else in that machine's worker. | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) `plan`, `local`; executor per platform in [`layerfs-platform` `platform.rs`](../../../../control/crates/layerfs-platform/src/platform.rs) |
+| PostgreSQL Store calls run in the caller's process; the password is resolved per call and never written to a record. | `place::plan` (`StoreRef::Postgres` → `Local`); [`call.rs`](../../../../control/crates/layerfs-store/src/call.rs) `postgresql` |
 | Workspace calls go to the daemon; the daemon serves no Store calls. | [`daemon/call.rs`](../../../../control/crates/layerfs-control/src/daemon/call.rs) ("Store calls are not daemon calls"); [`daemon/operator.rs`](../../../../control/crates/layerfs-control/src/daemon/operator.rs) admits one read-model method |
 | A worker gets one attempt per call; nothing is resent. A lost answer after the request was sent is `Unknown`. | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `send_once`, `answer`, `lost` |
 | No call starts a machine except `machine.start`; an unreached worker is `Unavailable` naming it. | `place.rs` `recorded`, `stopped` (#535 D11) |
@@ -92,7 +92,7 @@ serves until `machine.stop` ends it
 | Worker frame size | 512 MiB (`MAX_FRAME`); first frame 4 KiB (`MAX_HELLO`); larger is `TooLarge` | [`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs) |
 | Worker connect and secret-answer waits | 10 s each (`CONNECT`, `HELLO_WAIT`), then `Unavailable` | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 | Worker wait between request bytes | 30 s (`REQUEST_WAIT`) | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
-| Machine with no `worker.json` | `Unavailable`: "start it with `layerfs machine start`" | [`place.rs`](../../../../control/crates/layerfs-control/src/common/place.rs) |
+| Machine with no `worker.json` | `Unavailable`: "start it with `layerfs machine start`" | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
 | Daemon connections per process per Sandbox | 6 (`CONNECTIONS`); the daemon admits 8 (`DAEMON_CONNECTIONS`) | [`daemon/pool.rs`](../../../../control/crates/layerfs-control/src/daemon/pool.rs), [`sandbox/serve.rs`](../../../../control/crates/layerfs-control/src/sandbox/serve.rs) |
 | Wait for a free daemon connection | 60 s (`LEND_WAIT`), then `Busy`; nothing attempted | `daemon/pool.rs` |
 

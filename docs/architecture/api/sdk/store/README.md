@@ -9,7 +9,7 @@ The `store` calls.
 | | |
 | --- | --- |
 | Component | [Call table](../../call-table/README.md) |
-| Source | [`api/crates/layerfs-api/src/store`](../../../../../api/crates/layerfs-api/src/store), [`control/crates/layerfs-control/src/store`](../../../../../control/crates/layerfs-control/src/store) |
+| Source | [`api/crates/layerfs-api/src/store`](../../../../../api/crates/layerfs-api/src/store), [`control/crates/layerfs-control/src/store`](../../../../../control/crates/layerfs-store/src) |
 
 ## Calls
 
@@ -46,13 +46,13 @@ history ([glossary](../../../glossary.md)).
 | [`remove`](remove.md) | `name` | — | `{ removed: name }` |
 | [`disconnect`](disconnect.md) | `name` | — | `{ disconnected: name }`; the database keeps its data |
 
-Sources: [`store/list.rs`](../../../../../control/crates/layerfs-control/src/store/list.rs),
-[`store/status.rs`](../../../../../control/crates/layerfs-control/src/store/status.rs),
-[`store/create.rs`](../../../../../control/crates/layerfs-control/src/store/create.rs),
-[`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs),
-[`store/connect.rs`](../../../../../control/crates/layerfs-control/src/store/connect.rs),
-[`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs),
-[`store/remove.rs`](../../../../../control/crates/layerfs-control/src/store/remove.rs).
+Sources: [`list.rs`](../../../../../control/crates/layerfs-store/src/list.rs),
+[`status.rs`](../../../../../control/crates/layerfs-store/src/status.rs),
+[`sqlite/create.rs`](../../../../../control/crates/layerfs-store/src/sqlite/create.rs),
+[`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs),
+[`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs),
+[`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs),
+[`sqlite/remove.rs`](../../../../../control/crates/layerfs-store/src/sqlite/remove.rs).
 `create` makes the Disposable profile, the only permitted sqlite profile.
 
 ## Arguments and options
@@ -60,10 +60,10 @@ Sources: [`store/list.rs`](../../../../../control/crates/layerfs-control/src/sto
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
 | `name` | Name | a Store name (`StoreName::parse`) | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
-| `url` | Text | a PostgreSQL URL with no password in it | [`store/connect.rs`](../../../../../control/crates/layerfs-control/src/store/connect.rs) |
-| `password` | Text | a reference, `env:NAME` or `file:/path`, resolved on each call and never written down | [`store/connect.rs`](../../../../../control/crates/layerfs-control/src/store/connect.rs) |
-| `synchronous_commit` | Text | `off` (default), `local`, `remote_write`, `on` or `remote_apply` | [`store/connect.rs`](../../../../../control/crates/layerfs-control/src/store/connect.rs) |
-| `machine` | Name | `push` target; `pull` always brings the Store to `native` | [`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) |
+| `url` | Text | a PostgreSQL URL with no password in it | [`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs) |
+| `password` | Text | a reference, `env:NAME` or `file:/path`, resolved on each call and never written down | [`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs) |
+| `synchronous_commit` | Text | `off` (default), `local`, `remote_write`, `on` or `remote_apply` | [`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs) |
+| `machine` | Name | `push` target; `pull` always brings the Store to `native` | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
 | `on_progress` | Function | `PROGRESS`; events `{ progress: { phase, done, total } }` | [`calls/table.rs`](../../../../../control/crates/layerfs-control/src/calls/table.rs) |
 
 ```text
@@ -76,22 +76,22 @@ Sources: [`store/list.rs`](../../../../../control/crates/layerfs-control/src/sto
 A push or pull writes its `op` under the home lock and the Store's lock,
 then works past the locks; a failure names its phase in
 `detail.phase` and keeps whatever exists
-([`store/family.rs`](../../../../../control/crates/layerfs-control/src/store/family.rs)).
+([`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs)).
 
 ## Errors
 
 | Code | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a bad name, URL with a password, bad `synchronous_commit`; `remove` of a PostgreSQL Store | [`store/connect.rs`](../../../../../control/crates/layerfs-control/src/store/connect.rs), [`store/remove.rs`](../../../../../control/crates/layerfs-control/src/store/remove.rs) |
-| `NotFound` | no Store of that name | [`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) |
-| `Exists` | the name is taken, the database is connected already, or the target machine has the file | [`store/create.rs`](../../../../../control/crates/layerfs-control/src/store/create.rs), [`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) |
-| `InUse` | a process holds the Store open or a Sandbox of it runs | [`store/family.rs`](../../../../../control/crates/layerfs-control/src/store/family.rs), [`store/open.rs`](../../../../../control/crates/layerfs-control/src/store/open.rs) |
+| `InvalidInput` | a bad name, URL with a password, bad `synchronous_commit`; `remove` of a PostgreSQL Store | [`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`sqlite/remove.rs`](../../../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
+| `NotFound` | no Store of that name | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) |
+| `Exists` | the name is taken, the database is connected already, or the target machine has the file | [`sqlite/create.rs`](../../../../../control/crates/layerfs-store/src/sqlite/create.rs), [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
+| `InUse` | a process holds the Store open or a Sandbox of it runs | [`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs), [`open.rs`](../../../../../control/crates/layerfs-store/src/open.rs) |
 | `Busy`, `Unresolved` | another operation's `op`; shown by `store status`, cleared by `store remove` | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
-| `Capacity` | the target machine lacks room (`detail.needed`, `detail.free`) | [`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) |
-| `Conflict` | the Store moved meanwhile | [`store/remove.rs`](../../../../../control/crates/layerfs-control/src/store/remove.rs), [`store/transfer/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/resolve.rs) |
-| `Unavailable` | a stopped machine, or a server that does not answer | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs), [`store/postgres.rs`](../../../../../control/crates/layerfs-control/src/store/postgres.rs) |
-| `Unsupported` | a build without the `postgresql` feature | [`store/service.rs`](../../../../../control/crates/layerfs-control/src/store/service.rs) |
-| `Unknown` | **uncertain:** a step's answer was lost, or any failure of the `record` phase after both copies exist | [`store/family.rs`](../../../../../control/crates/layerfs-control/src/store/family.rs) |
+| `Capacity` | the target machine lacks room (`detail.needed`, `detail.free`) | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
+| `Conflict` | the Store moved meanwhile | [`sqlite/remove.rs`](../../../../../control/crates/layerfs-store/src/sqlite/remove.rs), [`sqlite/transfer/resolve.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/resolve.rs) |
+| `Unavailable` | a stopped machine, or a server that does not answer | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs), [`store/postgres.rs`](../../../../../control/crates/layerfs-store/src/postgresql/open.rs) |
+| `Unsupported` | a build without the `postgresql` feature | [`service.rs`](../../../../../control/crates/layerfs-store/src/service.rs) |
+| `Unknown` | **uncertain:** a step's answer was lost, or any failure of the `record` phase after both copies exist | [`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs) |
 
 An uncertain push, pull or remove keeps both copies, leaves `op` marked
 uncertain and appends to `log/uncertain.jsonl`; nothing is cleaned up on a
@@ -110,7 +110,7 @@ guess. See [error kinds](../../call-table/errors.md#error-kinds) and
 
 `family::step` runs a step with `transfer::steps::run` in this process for
 `Executor::Local`, else sends it as `store.file`
-([`store/family.rs`](../../../../../control/crates/layerfs-control/src/store/family.rs),
+([`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs),
 [`worker_server.rs`](../../../../../control/crates/layerfs-control/src/worker_server.rs)).
 A PostgreSQL Store has no machine. The Store calls on a Store's projects
 are the `branch`, `commit` and `file` families. See the

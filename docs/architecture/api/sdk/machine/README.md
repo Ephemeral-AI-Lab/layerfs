@@ -118,7 +118,7 @@ adapter runs inside a machine
 ([`layerfs-api/Cargo.toml`](../../../../../api/crates/layerfs-api/Cargo.toml)).
 Nothing but `machine start` starts a machine (#535 D11): other calls on a
 stopped machine are refused `Unavailable`
-([`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs)).
+([`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs)).
 See the [routing table](../../../control/routing/routing-table.md) and
 [workers](../../../control/routing/workers.md).
 

@@ -9,7 +9,7 @@ The `project` calls.
 | | |
 | --- | --- |
 | Component | [Call table](../../call-table/README.md) |
-| Source | [`api/crates/layerfs-api/src/project`](../../../../../api/crates/layerfs-api/src/project), [`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs) |
+| Source | [`api/crates/layerfs-api/src/project`](../../../../../api/crates/layerfs-api/src/project), [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs) |
 
 ## Calls
 
@@ -41,7 +41,7 @@ snake_case after the dispatcher's
 | [`remove`](remove.md) | `project` (Project) | — | `{ stack, packs_kept: true, project }` | caller's process, or `project.remove` in the Store's worker |
 
 The summary is `ProjectRecord::to_sdk`
-([`project/record.rs`](../../../../../control/crates/layerfs-control/src/project/record.rs)):
+([`project/record.rs`](../../../../../control/crates/layerfs-store/src/project/record.rs)):
 `{ project: "<store>/<name>", store, name, kind, machine, created }`.
 `kind` and `machine` come from the Store's record; `machine` defaults to
 `native`.
@@ -51,10 +51,10 @@ The summary is `ProjectRecord::to_sdk`
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
 | `project` | Project | `<store>/<project>`, checked by `names::project` before dispatch | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs) |
-| `folder` | Text | an absolute path on the caller's host | [`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs) |
-| `timeout` | Int | Init time limit in ms, sent as `timeoutMs`; default `INIT_TIMEOUT_MS` = 3,600,000 (one hour) | [`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs) |
+| `folder` | Text | an absolute path on the caller's host | [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs) |
+| `timeout` | Int | Init time limit in ms, sent as `timeoutMs`; default `INIT_TIMEOUT_MS` = 3,600,000 (one hour) | [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs) |
 | `on_progress` | Function | the shared `PROGRESS` option; the front end strips it, so it never reaches the library | [`calls/table.rs`](../../../../../control/crates/layerfs-control/src/calls/table.rs) |
-| `page_size`, `page_pos` | Int | the shared `PAGE` set; `list` clamps `page_size` to 1..=1000 (default 50) and `page_pos` to 0 or more | [`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs) |
+| `page_size`, `page_pos` | Int | the shared `PAGE` set; `list` clamps `page_size` to 1..=1000 (default 50) and `page_pos` to 0 or more | [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs) |
 
 `init` reports `{ progress: { phase, done, total } }` with the phases
 `check`, `send` (bytes, only when the folder is copied to a worker),
@@ -64,15 +64,15 @@ The summary is `ProjectRecord::to_sdk`
 
 | Code | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | no `/` in `project`, a bad project name, a relative `folder` | [`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs) |
-| `NotFound` | `init` or `list` names a Store with no record | [`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs) |
-| `NoSuchStore`, `NoSuchProject` | `get` or `remove` of a missing Store or project | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
-| `Exists` | `init` of a project the home already records | [`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs) |
+| `InvalidInput` | no `/` in `project`, a bad project name, a relative `folder` | [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs) |
+| `NotFound` | `init` or `list` names a Store with no record | [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs) |
+| `NoSuchStore`, `NoSuchProject` | `get` or `remove` of a missing Store or project | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
+| `Exists` | `init` of a project the home already records | [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs) |
 | `InUse` | `remove` while a Sandbox of the project runs (`detail.related`) | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) |
 | `Busy`, `Unresolved` | the Store's record holds another operation's `op` | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
-| `Capacity` | the worker's machine has no room for the folder copy | [`project/send.rs`](../../../../../control/crates/layerfs-control/src/project/send.rs) |
-| `Unsupported` | `remove` on a PostgreSQL Store ("not built") | [`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs) |
-| `Unavailable` | the Store's machine records no worker, or the worker does not answer | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
+| `Capacity` | the worker's machine has no room for the folder copy | [`project/send.rs`](../../../../../control/crates/layerfs-store/src/project/send.rs) |
+| `Unsupported` | `remove` on a PostgreSQL Store ("not built") | [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs) |
+| `Unavailable` | the Store's machine records no worker, or the worker does not answer | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
 | `Unknown` | **uncertain:** the worker's answer to `project.init` or `project.remove` was lost | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 After an `Unknown` `init` the home writes no project record, so
@@ -100,7 +100,7 @@ See [error kinds](../../call-table/errors.md#error-kinds) and
 ```
 
 `place::plan` picks the route from the Store's record
-([`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs)).
+([`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs)).
 A PostgreSQL Store runs in the caller's process. A sqlite Store runs in the
 caller's process when its machine's platform executes locally on this host
 (`native`, except on Windows), else in that machine's worker. The folder is

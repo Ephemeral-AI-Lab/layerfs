@@ -5,33 +5,23 @@
 //! Sandboxes), and the checks the calls that need them make. Layout 3
 //! keeps each Sandbox at `sandbox/<name>/`: a Sandbox by name is one read;
 //! only the relationships (by machine, Store or project) list `sandbox/*`.
-use crate::common::lease;
 use crate::sandbox::record::SandboxRecord;
-use crate::store::record::{Placement, StoreRecord, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused};
 use layerfs_machine::record::MachineRecord;
+use layerfs_store::lease;
+use layerfs_store::record::{Placement, StoreRef};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
-
-/// The machine that is this host.
-const NATIVE: &str = "native";
 
 /// The folder names under `dir`, sorted; none when it is absent.
 fn names(dir: &Path) -> Result<Vec<String>> {
     paths::names(dir).map_err(failed)
 }
 
-/// Every Store record, by name.
-pub fn stores(home: &Path) -> Result<Vec<StoreRecord>> {
-    let mut found = Vec::new();
-    for store in names(&home.join("store"))? {
-        found.extend(StoreRecord::read(home, &store)?);
-    }
-    Ok(found)
-}
+pub use layerfs_store::record::stores;
 
 /// Every machine record, by name.
 pub fn machines(home: &Path) -> Result<Vec<MachineRecord>> {
@@ -176,58 +166,6 @@ pub fn can_change_machine(home: &Path, name: &str) -> Result<()> {
             running.join(", ")
         ),
     ))
-}
-
-/// `store.push`: refused `InvalidInput` unless `record` is a sqlite Store
-/// on `native` and `to` another machine; `NotFound` for an unknown `to`.
-/// Its in-use half, [`store_idle`], runs under the Store's lock.
-pub fn can_push(home: &Path, record: &StoreRecord, to: &str) -> Result<()> {
-    let name = record.name();
-    let on = sqlite_machine(record)?;
-    if on != NATIVE {
-        return Err(refused(
-            "InvalidInput",
-            format!("Store {name} is on machine {on}; `layerfs store pull {name}` brings it to {NATIVE} first"),
-        ));
-    }
-    if to == NATIVE {
-        return Err(refused(
-            "InvalidInput",
-            format!("Store {name} is already on {NATIVE}"),
-        ));
-    }
-    if MachineRecord::read(home, to)?.is_none() {
-        return Err(refused("NotFound", format!("no machine named {to}")));
-    }
-    Ok(())
-}
-
-/// `store.pull`: refused `InvalidInput` unless `record` is a sqlite Store
-/// on a machine other than `native`; answers that machine. Its in-use half,
-/// [`store_idle`], runs under the Store's lock.
-pub fn can_pull(record: &StoreRecord) -> Result<String> {
-    let on = sqlite_machine(record)?;
-    if on == NATIVE {
-        return Err(refused(
-            "InvalidInput",
-            format!("Store {} is already on {NATIVE}", record.name()),
-        ));
-    }
-    Ok(on)
-}
-
-/// The machine of sqlite Store `record`; a PostgreSQL Store never moves.
-fn sqlite_machine(record: &StoreRecord) -> Result<String> {
-    if let StoreRef::Postgres { .. } = record.store_ref()? {
-        return Err(refused(
-            "InvalidInput",
-            format!(
-                "Store {} is a PostgreSQL database; it does not move",
-                record.name()
-            ),
-        ));
-    }
-    record.machine()
 }
 
 /// `store.push`, `store.pull`, `store.remove`, `store.disconnect` and

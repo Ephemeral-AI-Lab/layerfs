@@ -11,7 +11,7 @@ schema keep every byte; [store.connect](connect.md) can record it again.
 | --- | --- |
 | Family | [store](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/store/disconnect.rs`](../../../../../api/crates/layerfs-api/src/store/disconnect.rs) |
-| Implemented in | `layerfs_control::store::connect::run` → `disconnect` ([`store/connect.rs`](../../../../../control/crates/layerfs-control/src/store/connect.rs)) |
+| Implemented in | `layerfs_control::store::connect::run` → `disconnect` ([`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs)) |
 | Runs in | the caller's process; no server is contacted |
 
 ## Signature
@@ -37,7 +37,7 @@ layerfs store disconnect <name>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | a PostgreSQL Store (`StoreName::parse`); a sqlite Store is refused (use [store.remove](remove.md)) | [`store/connect.rs`](../../../../../control/crates/layerfs-control/src/store/connect.rs) |
+| `name` | Name | a PostgreSQL Store (`StoreName::parse`); a sqlite Store is refused (use [store.remove](remove.md)) | [`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs) |
 
 ## Options
 
@@ -51,7 +51,7 @@ None.
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `disconnected` | text | the Store whose record folder is gone | [`store/connect.rs`](../../../../../control/crates/layerfs-control/src/store/connect.rs) `disconnect` |
+| `disconnected` | text | the Store whose record folder is gone | [`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs) `disconnect` |
 
 ## Where it runs
 
@@ -68,7 +68,7 @@ None.
 
 | Store kind | Result | Source |
 | --- | --- | --- |
-| PostgreSQL | the record goes; the schema stays | [`store/connect.rs`](../../../../../control/crates/layerfs-control/src/store/connect.rs) |
+| PostgreSQL | the record goes; the schema stays | [`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs) |
 | sqlite | `InvalidInput`; `store remove` deletes it | same |
 
 A Sandbox's daemon dials the server from its machine and holds no lease
@@ -79,10 +79,10 @@ in this home, so recorded Sandboxes refuse the call too. See the
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad name; a sqlite Store; a folder-scoped client | no | [`store/connect.rs`](../../../../../control/crates/layerfs-control/src/store/connect.rs) |
+| `InvalidInput` | a bad name; a sqlite Store; a folder-scoped client | no | [`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs) |
 | `NotFound` | no Store of that name | no | same |
-| `InUse` | another live process holds its lease, a Sandbox of one of its projects is recorded, or a call in this process is running on it | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle`, [`store/open.rs`](../../../../../control/crates/layerfs-control/src/store/open.rs) |
-| `Failed` | the folder cannot be removed | no | [`store/connect.rs`](../../../../../control/crates/layerfs-control/src/store/connect.rs) |
+| `InUse` | another live process holds its lease, a Sandbox of one of its projects is recorded, or a call in this process is running on it | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle`, [`open.rs`](../../../../../control/crates/layerfs-store/src/open.rs) |
+| `Failed` | the folder cannot be removed | no | [`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs) |
 
 No outcome of this call is uncertain: it writes only local records.
 

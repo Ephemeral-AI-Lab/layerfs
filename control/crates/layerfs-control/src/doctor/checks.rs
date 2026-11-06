@@ -7,11 +7,11 @@
 //! and a copy a push or pull did not retire (from the record).
 use super::report::Findings;
 use super::scan::Scanned;
-use crate::common::lease;
-use crate::store::record::{Placement, StoreRecord, StoreRef};
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::home::paths;
 use layerfs_home::op::{Op, Standing};
+use layerfs_store::lease;
+use layerfs_store::record::{Placement, StoreRecord, StoreRef};
 use std::path::Path;
 
 /// `native` and `docker` exist with or without a record.
@@ -33,7 +33,7 @@ pub(super) fn check(
         if let Some(op) = &op {
             let (show, clear) = (
                 format!("store status {name}"),
-                crate::store::record::clearing_call(op, name),
+                layerfs_store::record::clearing_call(op, name),
             );
             intent(entity, op, &show, &clear, findings);
         }
@@ -202,7 +202,7 @@ fn intent(entity: (&str, &str), op: &Op, show: &str, clear: &str, findings: &mut
 /// next push or pull deletes the old copy first. Read from the record:
 /// another machine's files are not.
 fn leftover(store: &StoreRecord, machine: &str, findings: &mut Findings) {
-    let Some(left) = crate::store::transfer::resolve::leftover(store) else {
+    let Some(left) = layerfs_store::sqlite::transfer::resolve::leftover(store) else {
         return;
     };
     let name = store.name();

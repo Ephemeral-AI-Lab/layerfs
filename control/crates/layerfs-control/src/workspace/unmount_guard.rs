@@ -39,7 +39,7 @@ fn lease(path: &std::path::Path, exclusive: bool) -> Result<Option<Lease>, SdkRe
         .custom_flags(libc::O_NOFOLLOW)
         .open(path)
         .map_err(failed)?;
-    discovery::private(path, false)?;
+    layerfs_store::project::discovery::private(path, false)?;
     if layerfs_home::home::flock::try_lock(&file, exclusive).map_err(failed)? {
         Ok(Some(Lease(file)))
     } else {
@@ -98,7 +98,7 @@ fn progress(value: &SdkValue, active: bool) -> SdkRefusal {
     }
 }
 fn observed(path: &std::path::Path) -> Result<Option<SdkValue>, SdkRefusal> {
-    match discovery::load(path) {
+    match layerfs_store::project::discovery::load(path) {
         Ok(value) => Ok(Some(value)),
         Err(_) if !path.exists() => Ok(None),
         Err(error) => Err(error),
@@ -234,7 +234,7 @@ pub(crate) fn begin(
         path: path_record,
         started: millis(),
     };
-    discovery::save(
+    layerfs_store::project::discovery::save(
         &attempt.path,
         SdkValue::map([
             ("state", SdkValue::text("Unmounting")),
@@ -261,7 +261,7 @@ pub(crate) fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result
                     error.detail.clone(),
                 ),
             };
-            discovery::save(
+            layerfs_store::project::discovery::save(
                 &attempt.path,
                 SdkValue::map([
                     ("state", SdkValue::text(state)),

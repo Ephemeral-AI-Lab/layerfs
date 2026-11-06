@@ -23,6 +23,7 @@ mod get;
 mod image;
 #[cfg(feature = "machine")]
 mod list;
+mod local;
 #[cfg(feature = "machine")]
 mod platforms;
 #[cfg(feature = "machine")]
@@ -55,6 +56,7 @@ pub use get::get;
 pub use image::docker_default;
 #[cfg(feature = "machine")]
 pub use list::list;
+pub use local::runs_here;
 #[cfg(feature = "machine")]
 pub use platforms::platforms;
 #[cfg(feature = "machine")]

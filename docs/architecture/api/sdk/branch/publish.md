@@ -36,7 +36,7 @@ layerfs branch publish <store>/<project> <branch> [<commit>]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
+| `project` | Project | `<store>/<project>` | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `branch` | Name | a Branch; `main` is `NoSuchBranch` | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) `branch` |
 | `commit` | Name, optional | a 66-hex Commit id (a Layer id is `InvalidInput`); default the Branch's head | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 
@@ -93,7 +93,7 @@ a scope without `branch`, is refused before any effect); see
 | `NoCommit` | the Branch has no saved Commit | no | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `HeadMoved` | `main`'s head or the Branch's base moved since they were read | no | same |
 | `NotInHistory` | the Commit is not on the Branch's history | no | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs) |
+| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`call.rs`](../../../../../control/crates/layerfs-store/src/call.rs) |
 | `Unknown` | **the worker's answer was lost, or the add's outcome is unknown** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After `Unknown`**, read [branch.get](get.md) for `main`: its `base` is the

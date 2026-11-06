@@ -9,7 +9,7 @@ Whole-Store backup and restore.
 | | |
 | --- | --- |
 | Component | [Backups](README.md) |
-| Source | [`control/crates/layerfs-bucket/src/backup`](../../../../control/crates/layerfs-bucket/src/backup); the calls in [`control/crates/layerfs-control/src/backup`](../../../../control/crates/layerfs-control/src/backup) |
+| Source | [`control/crates/layerfs-bucket/src/backup`](../../../../control/crates/layerfs-bucket/src/backup); the calls in [`backup`](../../../../control/crates/layerfs-store/src/backup) |
 
 The unit is a whole sqlite Store with every project in it, held on the
 bucket as `<prefix>/<file>/store.sqlite` (`store_object(file)`). LayerFS
@@ -40,7 +40,7 @@ Metadata a backup carries, besides `layerfs-sha256`, `layerfs-bytes` and
 | `layerfs-sqlite` | SQLite version that wrote the snapshot (`SQLITE_VERSION`) | [`backup/create.rs`](../../../../control/crates/layerfs-bucket/src/backup/create.rs) |
 | `layerfs-binding` | the Store's binding key, hex; not a secret; the cursor key never leaves its holder (`BINDING`) | same |
 | `layerfs-heads` | history heads digest of the snapshot (`HEADS`), when readable | [`backup/heads.rs`](../../../../control/crates/layerfs-bucket/src/backup/heads.rs) |
-| `layerfs-exported-from` | `<home id>/<machine>`, added by the API | [`api/…/backup/create.rs`](../../../../control/crates/layerfs-control/src/backup/create.rs) |
+| `layerfs-exported-from` | `<home id>/<machine>`, added by the API | [`backup/create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) |
 
 The crate also has `backup::push(opened, store, driver, name, binding,
 expected)`, the same sequence in one process:
@@ -70,7 +70,7 @@ check and the upload is not detected.
 
 A copy stored as pieces whose metadata was not read is counted at the sum
 of its pieces' sizes. `backup.list` compares each copy with the Store's
-link to report its state ([`api/…/backup/list.rs`](../../../../control/crates/layerfs-control/src/backup/list.rs)).
+link to report its state ([`backup/list.rs`](../../../../control/crates/layerfs-store/src/backup/list.rs)).
 
 ## Heads
 
@@ -86,7 +86,7 @@ and is equal on two machines with the same history
 A backup records it as `layerfs-heads`; a restore reads it from the
 downloaded file. The API uses it to tell whether a Store changed since its
 last transfer (`replaceable` in
-[`api/…/backup/restore.rs`](../../../../control/crates/layerfs-control/src/backup/restore.rs)).
+[`backup/restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs)).
 
 ## Link
 
@@ -94,7 +94,7 @@ Two link formats exist:
 
 | Format | Where | Who reads it | Source |
 | --- | --- | --- | --- |
-| 2.0 `StoreLink` | the Store record's `backups.<bucket>`: `file`, `heads`, `last` (`op`, `at`, `bytes`, `sha256`) | `backup.create`, `backup.restore`, `backup.list` | [`api/…/backup/record.rs`](../../../../control/crates/layerfs-control/src/backup/record.rs) |
+| 2.0 `StoreLink` | the Store record's `backups.<bucket>`: `file`, `heads`, `last` (`op`, `at`, `bytes`, `sha256`) | `backup.create`, `backup.restore`, `backup.list` | [`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) |
 | `remotes` file and `remote-state/<store>` (`Remotes`, `Provider`, `Transfer`) | the LayerFS home, text, 0600, staged and renamed | the home migration from 1.1.0 | [`backup/link.rs`](../../../../control/crates/layerfs-bucket/src/backup/link.rs), [`migrate/v110.rs`](../../../../control/crates/layerfs-control/src/migrate/v110.rs) |
 
 In both, the bucket side is named by its `file`; the name need not be the

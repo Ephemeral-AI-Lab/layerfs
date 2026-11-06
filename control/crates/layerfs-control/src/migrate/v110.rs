@@ -16,13 +16,13 @@
 //! nothing is deleted. An unknown file is left where it is and reported.
 //! `layerfs.json` is written last, so a conversion stopped part way is
 //! continued by the next call, and a second run changes nothing.
-use crate::store::record::{kind_of, StoreKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup::{link as state, Provider, Remotes};
 use layerfs_home::home::layout::OLD;
 use layerfs_home::home::paths;
 use layerfs_home::home::records::{now_ms, private_dir, read_record, with_field, write_record};
 use layerfs_home::outcome::{failed, refused};
+use layerfs_store::record::{kind_of, StoreKind};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -174,7 +174,7 @@ fn shared_store(home: &Path, store: &str, report: &mut Report) -> Result<()> {
     let dir = home.join(".stores").join(store);
     let old = dir.join("store.record");
     if old.is_file() && read_record(&paths::store_record(home, store))?.is_none() {
-        let value = crate::sandbox::files::load(&old)?;
+        let value = layerfs_store::project::discovery::load(&old)?;
         let kind = kind_of(&value)?;
         let mut record = SdkValue::map([
             ("name", SdkValue::text(store)),
@@ -222,7 +222,7 @@ fn sqlite_defaults(record: SdkValue) -> SdkValue {
 /// A project with its own 1.1.0 Store: Store `<p>` holding project `<p>`.
 fn own_store(home: &Path, name: &str, dir: &Path, report: &mut Report) -> Result<()> {
     if read_record(&paths::store_record(home, name))?.is_none() {
-        let value = crate::sandbox::files::load(&dir.join("project.record"))?;
+        let value = layerfs_store::project::discovery::load(&dir.join("project.record"))?;
         let manifest = match value.get("manifest") {
             Some(SdkValue::Bytes(bytes)) => {
                 layerfs_bridge::provision::StoreManifest::decode(bytes).map_err(failed)?
@@ -277,7 +277,7 @@ fn move_project(
     fs::rename(from, &to).map_err(failed)?;
     let old = to.join("project.record");
     if old.is_file() {
-        let value = crate::sandbox::files::load(&old)?;
+        let value = layerfs_store::project::discovery::load(&old)?;
         let record = SdkValue::map([
             ("name", SdkValue::text(project)),
             ("store", SdkValue::text(store)),

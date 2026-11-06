@@ -716,6 +716,7 @@ dependencies = [
  "layerfs-platform",
  "layerfs-project",
  "layerfs-storage",
+ "layerfs-store",
  "layerfs-store-service",
  "layerfs-telemetry",
  "layerfs-workspace",
@@ -777,6 +778,7 @@ dependencies = [
  "layerfs-platform",
  "layerfs-project",
  "layerfs-storage",
+ "layerfs-store",
  "layerfs-store-service",
  "layerfs-telemetry",
  "layerfs-workspace",
@@ -957,6 +959,25 @@ dependencies = [
  "layerfs-telemetry",
  "sha2 0.11.0",
  "zstd-sys",
+]
+
+[[package]]
+name = "layerfs-store"
+version = "2.0.0"
+dependencies = [
+ "layerfs-bridge",
+ "layerfs-bucket",
+ "layerfs-content",
+ "layerfs-history",
+ "layerfs-home",
+ "layerfs-machine",
+ "layerfs-persistence",
+ "layerfs-project",
+ "layerfs-storage",
+ "layerfs-store-service",
+ "layerfs-telemetry",
+ "libc",
+ "nix",
 ]
 
 [[package]]

@@ -12,7 +12,7 @@ or restore through that bucket.
 | --- | --- |
 | Family | [backup](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/backup/restore.rs`](../../../../../api/crates/layerfs-api/src/backup/restore.rs) |
-| Implemented in | `layerfs_control::backup::family::run` → `restore` ([`backup/restore.rs`](../../../../../control/crates/layerfs-control/src/backup/restore.rs)), which calls `layerfs_bucket::backup::load` |
+| Implemented in | `layerfs_control::backup::family::run` → `restore` ([`backup/restore.rs`](../../../../../control/crates/layerfs-store/src/backup/restore.rs)), which calls `layerfs_bucket::backup::load` |
 | Runs in | the caller's process, on `native`; no machine is reached |
 
 ## Signature
@@ -38,15 +38,15 @@ layerfs backup restore <store> <bucket> [<file>] [--progress]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `store` | Name | the Store to make or replace (`StoreName::parse`) | [`backup/restore.rs`](../../../../../control/crates/layerfs-control/src/backup/restore.rs) |
-| `bucket` | Name | a connected bucket | [`backup/record.rs`](../../../../../control/crates/layerfs-control/src/backup/record.rs) |
-| `file` | Name, optional | default: the file the Store's link to this bucket names, else the Store's name | [`backup/restore.rs`](../../../../../control/crates/layerfs-control/src/backup/restore.rs) |
+| `store` | Name | the Store to make or replace (`StoreName::parse`) | [`backup/restore.rs`](../../../../../control/crates/layerfs-store/src/backup/restore.rs) |
+| `bucket` | Name | a connected bucket | [`backup/record.rs`](../../../../../control/crates/layerfs-store/src/backup/record.rs) |
+| `file` | Name, optional | default: the file the Store's link to this bucket names, else the Store's name | [`backup/restore.rs`](../../../../../control/crates/layerfs-store/src/backup/restore.rs) |
 
 ## Options
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `on_progress` | Function | none | called with `{ phase, done, total, pieces }`: `check`, `download` (with bytes, and pieces when the file is stored as pieces), `verify`, `install`; see [Progress](README.md#progress) | [`backup/progress.rs`](../../../../../control/crates/layerfs-control/src/backup/progress.rs) `Shown` |
+| `on_progress` | Function | none | called with `{ phase, done, total, pieces }`: `check`, `download` (with bytes, and pieces when the file is stored as pieces), `verify`, `install`; see [Progress](README.md#progress) | [`backup/progress.rs`](../../../../../control/crates/layerfs-store/src/backup/progress.rs) `Shown` |
 
 ## Returns
 
@@ -56,7 +56,7 @@ layerfs backup restore <store> <bucket> [<file>] [--progress]
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `store`, `bucket`, `file` | text | what was restored, from where | [`backup/restore.rs`](../../../../../control/crates/layerfs-control/src/backup/restore.rs) |
+| `store`, `bucket`, `file` | text | what was restored, from where | [`backup/restore.rs`](../../../../../control/crates/layerfs-store/src/backup/restore.rs) |
 | `bytes`, `sha256` | int, text | the downloaded copy | `backup::load` |
 | `heads` | text or null | its heads digest | same |
 | `projects` | list of text | the projects the restored file holds; their records are rebuilt, and records of projects it lacks are removed | same, `write_projects` |
@@ -90,7 +90,7 @@ is left alone.
 
 | Case | What happens | Source |
 | --- | --- | --- |
-| no Store of that name | a new Store record (`StoreRecord::restored`) with a new cursor key | [`backup/restore.rs`](../../../../../control/crates/layerfs-control/src/backup/restore.rs) |
+| no Store of that name | a new Store record (`StoreRecord::restored`) with a new cursor key | [`backup/restore.rs`](../../../../../control/crates/layerfs-store/src/backup/restore.rs) |
 | an idle sqlite Store on `native`, unchanged | its file is replaced; its cursor key is kept; the backup's binding must be its own | same |
 | a Store on another machine | `Unsupported`: pull it first | same, `replaceable` |
 
@@ -100,10 +100,10 @@ See the [routing table](../../../control/routing/routing-table.md).
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | bad names; a PostgreSQL Store; a folder-scoped client | no | [`backup/restore.rs`](../../../../../control/crates/layerfs-control/src/backup/restore.rs) |
+| `InvalidInput` | bad names; a PostgreSQL Store; a folder-scoped client | no | [`backup/restore.rs`](../../../../../control/crates/layerfs-store/src/backup/restore.rs) |
 | `NotFound` | no such bucket; the Store was removed during the download | no | same |
 | `Unsupported` | the Store to replace is not on `native` | no | same, `replaceable` |
-| `Busy` / `Unresolved` | an operation runs on the Store / an earlier one is unresolved | no | [`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) `unblocked` |
+| `Busy` / `Unresolved` | an operation runs on the Store / an earlier one is unresolved | no | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) `unblocked` |
 | `InUse` | a process holds the Store, a Sandbox of it is recorded, or its `-wal`/`-shm` exists | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle`, `replaceable` |
 | `Conflict` | the Store changed since its last backup or restore through this bucket, has no link, or was replaced during the download | no | same |
 | `Exists` | a Store of that name was made during the download | no | same |

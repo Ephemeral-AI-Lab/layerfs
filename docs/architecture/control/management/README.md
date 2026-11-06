@@ -55,7 +55,7 @@ The management library under the call table: the home and its records, machines 
 
 Every call first opens the home ([Home and records](home-and-records.md)),
 then runs one family function ([Families](families.md)). Where the work
-runs is decided by [`common/place.rs`](../../../../control/crates/layerfs-control/src/common/place.rs);
+runs is decided by [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs);
 the routes are described in [Routing and workers](../routing/README.md).
 The [Doctor](doctor.md) reads the same records and changes nothing.
 
@@ -65,18 +65,16 @@ The [Doctor](doctor.md) reads the same records and changes nothing.
 | --- | --- | --- |
 | `calls/` | Table shape, argument checks, folder scope, snake_case keys, the one dispatcher | [`calls/`](../../../../control/crates/layerfs-control/src/calls) |
 | `layerfs-home` | Its own crate, knowing no entity (layerfs-project#103): `layerfs.json`, record files, the home lock, entity locks (`home/`); names, the `op` intent, outcomes, secrets, the call trace, JSON, the process identity records name, the general helpers and, until #107 moves it to `layerfs-api`, a running call's `Context` | [`layerfs-home/src/`](../../../../control/crates/layerfs-home/src) |
-| `common/` | Placement and Store leases | [`common/`](../../../../control/crates/layerfs-control/src/common) |
 | `migrate/` | Opening the home: its conversions from 1.1.0 and layout 2, and `import-env`; above the entities because they read every entity's old layout | [`migrate/`](../../../../control/crates/layerfs-control/src/migrate) |
 | `inventory.rs` | Reads by name and the relationships no record stores | [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
 | `layerfs-machine` | Its own crate (layerfs-project#104): machine records, `worker.json`, start/stop, the sealed bundle and the worker protocol and client; what a machine holds (its Stores and Sandboxes) is passed in as `Related` | [`layerfs-machine/src/`](../../../../control/crates/layerfs-machine/src) |
 | `machine.rs` | The machine calls with `Related` read from `inventory` | [`machine.rs`](../../../../control/crates/layerfs-control/src/machine.rs) |
 | `worker_server.rs` | The worker's server: it runs every entity's operations | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
-| `store/` | Store records, Store calls (`branch`, `commit`, `file`), push, pull, remove, PostgreSQL connect | [`store/`](../../../../control/crates/layerfs-control/src/store) |
-| `project/` | Project records, `project.init` on each route, folder copy to a worker | [`project/`](../../../../control/crates/layerfs-control/src/project) |
+| `layerfs-store` | Its own crate (layerfs-project#105): Store records, Store calls (`branch`, `commit`, `file`), placement and leases at its root; `sqlite/` (create, the `store` family, remove, push, pull) and `postgresql/` (connect, open, reader), which never import each other; `project/` (project records, `project.init` on each route, folder copy to a worker, the project discovery records) and `backup/` (bucket records, Store backup links, create, restore, list). Who uses a Store comes from the caller (`Related`) | [`layerfs-store/src/`](../../../../control/crates/layerfs-store/src) |
+| `store.rs`, `project.rs`, `backup.rs` | The `store`, `project` and `backup` families with `Related` read from `inventory` | [`store.rs`](../../../../control/crates/layerfs-control/src/store.rs) |
 | `sandbox/` | Sandbox records, create/close, host operations, direct daemon calls | [`sandbox/`](../../../../control/crates/layerfs-control/src/sandbox) |
 | `workspace/` | The `workspace` calls and their serving side | [`workspace/`](../../../../control/crates/layerfs-control/src/workspace) |
 | `daemon/` | The authenticated daemon channel and its pool | [`daemon/`](../../../../control/crates/layerfs-control/src/daemon) |
-| `backup/` | Bucket records, Store backup links, create, restore, list | [`backup/`](../../../../control/crates/layerfs-control/src/backup) |
 | `doctor/` | `layerfs doctor`, outside the call table | [`doctor/`](../../../../control/crates/layerfs-control/src/doctor) |
 
 The home is a folder of JSON records (layout 3): `layerfs.json`,
@@ -100,12 +98,12 @@ buckets.
 | A folder scope checks call arguments, not processes: `workspace.exec` is a `cd` prefix, not confinement; Commit and Layer ids and a Workspace's Branch are not confined ([open gaps](../../api/call-table/table.md#scopes)) | [`calls/scope.rs`](../../../../control/crates/layerfs-control/src/calls/scope.rs) |
 | Every call opens (creates or converts) its home first | [`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs), [`migrate/open.rs`](../../../../control/crates/layerfs-control/src/migrate/open.rs) |
 | LayerFS reads `LAYERFS_*` settings only and names no plugin; `HOME` and `XDG_CACHE_HOME` are read only as fallback folders | [`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs) (`LAYERFS_HOME`, else `~/.layerfs`), [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs) (`LAYERFS_TRACE`), [`sandbox/deploy.rs`](../../../../control/crates/layerfs-control/src/sandbox/deploy.rs) (bundle cache) |
-| Records never hold a PostgreSQL password: the URL is stored without it and the password as `env:NAME` or `file:/path`, resolved per call | [`store/connect.rs`](../../../../control/crates/layerfs-control/src/store/connect.rs) (`refuse_password`), [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) |
-| Bucket records hold a key reference, never a secret | [`backup/record.rs`](../../../../control/crates/layerfs-control/src/backup/record.rs) |
+| Records never hold a PostgreSQL password: the URL is stored without it and the password as `env:NAME` or `file:/path`, resolved per call | [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs) (`refuse_password`), [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) |
+| Bucket records hold a key reference, never a secret | [`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) |
 | A record is replaced whole by one rename; files 0600, folders 0700 | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) |
 | At most one `op` intent per entity; a live owner refuses others `Busy`, a gone owner's uncertain intent `Unresolved` | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) |
-| One attempt per call; a lost worker answer is `Unknown`, never resent | [`common/place.rs`](../../../../control/crates/layerfs-control/src/common/place.rs), [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
-| Nothing but `machine.start` starts a machine (#535 D11) | [`common/place.rs`](../../../../control/crates/layerfs-control/src/common/place.rs), [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
+| One attempt per call; a lost worker answer is `Unknown`, never resent | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| Nothing but `machine.start` starts a machine (#535 D11) | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
 | Locks are taken home, start, store, sandbox, never the reverse; none is held across a worker call or a transfer | [`home/entity_lock.rs`](../../../../control/crates/layerfs-home/src/home/entity_lock.rs) |
 | A guest never reads the home; a worker's root is never converted and has no id of its own | [`home/guest.rs`](../../../../control/crates/layerfs-home/src/home/guest.rs) |
 
@@ -121,10 +119,10 @@ buckets.
 | Home lock, Store lock, Sandbox lock wait | 120 s, then `Unavailable` (a readiness wait, not a retry) | [`home/lock.rs`](../../../../control/crates/layerfs-home/src/home/lock.rs), [`home/entity_lock.rs`](../../../../control/crates/layerfs-home/src/home/entity_lock.rs) |
 | Machine `start.lock` wait | 600 s | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
 | Removing, stopping or changing a machine that holds Stores or Sandboxes | `InUse`, `detail.related` | [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
-| Push, pull, remove or disconnect a Store with a live lease or a recorded Sandbox | `InUse` | [`common/lease.rs`](../../../../control/crates/layerfs-control/src/common/lease.rs), [`store/family.rs`](../../../../control/crates/layerfs-control/src/store/family.rs) |
+| Push, pull, remove or disconnect a Store with a live lease or a recorded Sandbox | `InUse` | [`lease.rs`](../../../../control/crates/layerfs-store/src/lease.rs), [`sqlite/family.rs`](../../../../control/crates/layerfs-store/src/sqlite/family.rs) |
 | An operation runs on the entity | `Busy`; after a gone owner's uncertain outcome, `Unresolved` | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) |
-| An open Store unused | closed after 60 s (`IDLE`) by a reaper thread | [`store/open.rs`](../../../../control/crates/layerfs-control/src/store/open.rs) |
-| The last call on an open SQLite Store returns, or a Sandbox on it closes | one `wal_checkpoint(TRUNCATE)` on its open session (#86): after a call, on its own thread once the call is answered; after `sandbox.close`, before the close is answered. The Store stays open. Left, never retried, when another process holds the writer lane or a reader is in the log. A close (`close_idle`, the CLI's close before it exits, or `close`) waits for a running one, then closes the Store, so SQLite folds any log left at that close | [`store/open.rs`](../../../../control/crates/layerfs-control/src/store/open.rs), [`sandbox/route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
+| An open Store unused | closed after 60 s (`IDLE`) by a reaper thread | [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs) |
+| The last call on an open SQLite Store returns, or a Sandbox on it closes | one `wal_checkpoint(TRUNCATE)` on its open session (#86): after a call, on its own thread once the call is answered; after `sandbox.close`, before the close is answered. The Store stays open. Left, never retried, when another process holds the writer lane or a reader is in the log. A close (`close_idle`, the CLI's close before it exits, or `close`) waits for a running one, then closes the Store, so SQLite folds any log left at that close | [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs), [`sandbox/route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
 
 The full code list is in [Errors](../../api/call-table/errors.md#error-kinds).
 

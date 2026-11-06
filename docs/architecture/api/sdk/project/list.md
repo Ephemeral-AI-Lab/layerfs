@@ -11,7 +11,7 @@ or for one Store, without opening any Store.
 | --- | --- |
 | Family | [project](README.md) |
 | Library entry | [`project/list.rs`](../../../../../api/crates/layerfs-api/src/project/list.rs) |
-| Implemented in | `layerfs_control::project::family::run` → `list` ([`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs)) |
+| Implemented in | `layerfs_control::project::family::run` → `list` ([`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs)) |
 | Runs in | the caller's process, reading home records only |
 
 ## Signature
@@ -36,7 +36,7 @@ layerfs project list [<store>] [--page-size <page-size>] [--page-pos <page-pos>]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `store` (optional) | Name | a Store name (`StoreName::parse`); its record must exist, else `NotFound`. Omitted: every Store folder in the home. | [`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs) `list` |
+| `store` (optional) | Name | a Store name (`StoreName::parse`); its record must exist, else `NotFound`. Omitted: every Store folder in the home. | [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs) `list` |
 
 ## Options
 
@@ -62,7 +62,7 @@ layerfs project list [<store>] [--page-size <page-size>] [--page-pos <page-pos>]
 
 There is no `has_more` field here, unlike the Store-backed lists. The
 summary is `ProjectRecord::to_sdk`
-([`project/record.rs`](../../../../../control/crates/layerfs-control/src/project/record.rs)).
+([`project/record.rs`](../../../../../control/crates/layerfs-store/src/project/record.rs)).
 
 ## Where it runs
 

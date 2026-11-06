@@ -38,7 +38,7 @@ fn no_sandbox(mut refusal: SdkRefusal) -> SdkRefusal {
 /// guard is taken; its record and count are checked under it.
 pub(crate) fn mount(args: &SdkValue) -> Outcome {
     mount_with(args, &mut |branch| {
-        crate::store::service::branch_id(args, branch)
+        layerfs_store::service::branch_id(args, branch)
     })
 }
 
@@ -86,7 +86,7 @@ pub(crate) fn mount_with(
         "NoSuchSandbox" => no_sandbox(refusal),
         _ => refusal,
     })?;
-    let _guard = crate::sandbox::files::guard(&state.directory)?;
+    let _guard = layerfs_store::project::discovery::guard(&state.directory)?;
     // under the Sandbox's guard: a close may have removed it, or mounts filled it
     let Some(saved) = crate::sandbox::files::started(&directory)? else {
         return Err(missing());
@@ -200,7 +200,7 @@ fn platform_of(record: &SdkValue) -> SdkValue {
 /// process.
 pub(crate) fn status(args: &SdkValue) -> Outcome {
     status_with(args, &mut |branch, _| {
-        crate::store::service::head(args, branch).ok()
+        layerfs_store::service::head(args, branch).ok()
     })
 }
 
@@ -247,7 +247,7 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
     if let Some(value) = crate::workspace::unmount_guard::find(&state, path)? {
         return crate::workspace::unmount_guard::repeat(&value);
     }
-    let guard = crate::sandbox::files::guard(&state.directory)?;
+    let guard = layerfs_store::project::discovery::guard(&state.directory)?;
     // Another process may have registered while this call waited for the
     // short admission section. Check again before sending anything.
     if let Some(value) = crate::workspace::unmount_guard::find(&state, path)? {
@@ -297,7 +297,7 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
     }
     if outcome.is_ok() {
         let cleanup = (|| {
-            let _guard = crate::sandbox::files::guard(&state.directory)?;
+            let _guard = layerfs_store::project::discovery::guard(&state.directory)?;
             let _sandbox = crate::sandbox::record::lock_in(&state.directory, &state.id)?;
             match std::fs::remove_file(crate::sandbox::files::workspace_file(&state, token)) {
                 Ok(()) => {}

@@ -9,7 +9,7 @@ The `branch` calls.
 | | |
 | --- | --- |
 | Component | [Call table](../../call-table/README.md) |
-| Source | [`api/crates/layerfs-api/src/branch`](../../../../../api/crates/layerfs-api/src/branch), [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs), [`engine/crates/layerfs-store-service/src/methods`](../../../../../engine/crates/layerfs-store-service/src/methods) |
+| Source | [`api/crates/layerfs-api/src/branch`](../../../../../api/crates/layerfs-api/src/branch), [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs), [`engine/crates/layerfs-store-service/src/methods`](../../../../../engine/crates/layerfs-store-service/src/methods) |
 
 ## Calls
 
@@ -80,14 +80,14 @@ and [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/r
 | Code | When | Source |
 | --- | --- | --- |
 | `InvalidInput` | a bad argument; an empty or out-of-range page | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs), [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
-| `NoSuchStore`, `NoSuchProject` | the project's Store or project is missing | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
-| `NoSuchBranch`, `NoSuchCommit`, `NotFound` | a named Branch, Commit or Layer is missing | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs), [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
+| `NoSuchStore`, `NoSuchProject` | the project's Store or project is missing | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
+| `NoSuchBranch`, `NoSuchCommit`, `NotFound` | a named Branch, Commit or Layer is missing | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs), [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |
 | `ReservedName`, `NameTaken` | `fork` or `merge` to `main` or to an existing name | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `Conflict`, `NoMergeBase` | `merge` conflicts (nothing is created), or the sides share no history | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `NoCommit` | `publish` of a Branch with no saved Commit | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `Busy`, `Unresolved` | the Store's record holds another operation's `op` | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
-| `Unavailable` | the Store's worker is not recorded or does not answer | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
-| `Failed` | a list made no progress | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
+| `Unavailable` | the Store's worker is not recorded or does not answer | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
+| `Failed` | a list made no progress | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |
 | `Unknown` | **uncertain:** a worker's answer was lost, or the Store reported an unknown outcome | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 
 An `Unknown` `fork`, `merge` or `publish` may have published. Read the
@@ -109,8 +109,8 @@ Branch with `branch.get` or `branch.list` before acting again. See
                                    open::run on the worker's Store file
 ```
 
-See [`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs)
-and [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs).
+See [`call.rs`](../../../../../control/crates/layerfs-store/src/call.rs)
+and [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs).
 A sqlite Store runs locally when its machine's platform executes locally on
 this host (`native`, except on Windows). The caller holds the Store's lease
 while the worker runs the call. No daemon serves a Store call. See the

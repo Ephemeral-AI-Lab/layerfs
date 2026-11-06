@@ -9,7 +9,7 @@ The LayerFS home and its records.
 | | |
 | --- | --- |
 | Component | [Control](README.md) |
-| Source | [`control/crates/layerfs-control/src/common`](../../../../control/crates/layerfs-control/src/common), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
+| Source | [`control/crates/layerfs-control/src/common`](../../../../control/crates/layerfs-store/src), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
 
 ## Home layout
 
@@ -102,7 +102,7 @@ The `op` intent, from [`op.rs`](../../../../control/crates/layerfs-home/src/op.r
 | no | false | `Stale` | proceeds; the intent holds nothing |
 
 Liveness compares pid, kernel start time and boot id, so a reused pid is
-not the owner ([`common/lease.rs`](../../../../control/crates/layerfs-control/src/common/lease.rs) `recorded_alive`).
+not the owner ([`lease.rs`](../../../../control/crates/layerfs-store/src/lease.rs) `recorded_alive`).
 
 ### Locks and leases
 
@@ -112,7 +112,7 @@ not the owner ([`common/lease.rs`](../../../../control/crates/layerfs-control/sr
 | `machine/<m>/start.lock` | a start, stop, create or remove | 600 s | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
 | `store/<s>/lock` | leases, `op` and phase writes, the record | 120 s | [`home/entity_lock.rs`](../../../../control/crates/layerfs-home/src/home/entity_lock.rs) |
 | `sandbox/<n>/lock` | the Sandbox and Workspace records | 120 s | [`sandbox/record.rs`](../../../../control/crates/layerfs-control/src/sandbox/record.rs) |
-| `store/<s>/open/<pid>` | a lease: this process uses the Store | taken under the Store lock | [`common/lease.rs`](../../../../control/crates/layerfs-control/src/common/lease.rs) |
+| `store/<s>/open/<pid>` | a lease: this process uses the Store | taken under the Store lock | [`lease.rs`](../../../../control/crates/layerfs-store/src/lease.rs) |
 
 Order is home, start, store, sandbox. No lock is held across a worker
 call, a VM boot or a byte transfer, except `start.lock` across its start.
@@ -136,8 +136,8 @@ A bad name is `InvalidInput`. Each name is checked once by its type's
 
 | Secret | Where it lives | Source |
 | --- | --- | --- |
-| PostgreSQL password | never stored; the record holds the URL without it and a reference `env:NAME` or `file:/abs/path`, resolved on each call | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs), [`store/connect.rs`](../../../../control/crates/layerfs-control/src/store/connect.rs) |
-| Bucket key | a reference in `backup/<bucket>/record.json`, never the key | [`backup/record.rs`](../../../../control/crates/layerfs-control/src/backup/record.rs) |
+| PostgreSQL password | never stored; the record holds the URL without it and a reference `env:NAME` or `file:/abs/path`, resolved on each call | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs), [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs) |
+| Bucket key | a reference in `backup/<bucket>/record.json`, never the key | [`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) |
 | Worker secret | `machine/<m>/worker.json` (0600) | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) `worker_secret` |
 | Sandbox daemon keys | `sandbox/<n>/control.json` (0600) | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) `daemon_keys` |
 

@@ -10,7 +10,7 @@ Whole-Store backup to a bucket and restore, over bucket drivers that know nothin
 | --- | --- |
 | Layer | [Control](../README.md) |
 | Crates | `layerfs-bucket` |
-| Source | [`control/crates/layerfs-bucket/src/backup`](../../../../control/crates/layerfs-bucket/src/backup), [`control/crates/layerfs-bucket/src/bucket`](../../../../control/crates/layerfs-bucket/src/bucket); the calls in [`control/crates/layerfs-control/src/backup`](../../../../control/crates/layerfs-control/src/backup) |
+| Source | [`control/crates/layerfs-bucket/src/backup`](../../../../control/crates/layerfs-bucket/src/backup), [`control/crates/layerfs-bucket/src/bucket`](../../../../control/crates/layerfs-bucket/src/bucket); the calls in [`backup`](../../../../control/crates/layerfs-store/src/backup) |
 | Uses | [Engine: Store](../../engine/store/README.md), [Engine: Store calls](../../engine/store-calls/README.md) |
 | Used by | [Control: Management](../management/README.md) |
 | Flows | [Backup and restore](../../flows/backup.md) |
@@ -49,8 +49,8 @@ into one such file and back. Terms: [glossary](../../glossary.md).
 
 | Call | Copies | When | Source |
 | --- | --- | --- | --- |
-| `backup.create` | One consistent snapshot of a live sqlite Store, every project in it, as `<file>/store.sqlite` with its sha256, size, layout, SQLite version, history heads, binding and `layerfs-exported-from`. | Checked against the expected copy before the snapshot and again before the upload. | [`api/…/backup/create.rs`](../../../../control/crates/layerfs-control/src/backup/create.rs), [`bucket/pieces.rs`](../../../../control/crates/layerfs-bucket/src/bucket/pieces.rs) |
-| `backup.restore` | Downloads the file, verifies every piece and the whole file, opens it as a Disposable Store, then installs it as a sqlite Store on `native`. | New Store: hard link. Replacing: only an idle Store unchanged since its last transfer through that bucket. | [`api/…/backup/restore.rs`](../../../../control/crates/layerfs-control/src/backup/restore.rs), [`backup/restore.rs`](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
+| `backup.create` | One consistent snapshot of a live sqlite Store, every project in it, as `<file>/store.sqlite` with its sha256, size, layout, SQLite version, history heads, binding and `layerfs-exported-from`. | Checked against the expected copy before the snapshot and again before the upload. | [`backup/create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs), [`bucket/pieces.rs`](../../../../control/crates/layerfs-bucket/src/bucket/pieces.rs) |
+| `backup.restore` | Downloads the file, verifies every piece and the whole file, opens it as a Disposable Store, then installs it as a sqlite Store on `native`. | New Store: hard link. Replacing: only an idle Store unchanged since its last transfer through that bucket. | [`backup/restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs), [`backup/restore.rs`](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
 | `backup.list` | Stats and lists Store files without downloading. | Read live. | [`backup/copies.rs`](../../../../control/crates/layerfs-bucket/src/backup/copies.rs) |
 
 | Provider | Feature | Transport | Source |
@@ -73,7 +73,7 @@ A PostgreSQL Store is not backed up here: `backup.create` refuses it
 | A manifest goes up only after all its pieces. | `pieces::upload` |
 | Settings and records hold credential references, never secrets; `Credentials` `Debug` is redacted. | [`credentials.rs`](../../../../control/crates/layerfs-bucket/src/bucket/credentials.rs) |
 | Only this crate's providers implement `Driver` (sealed). | `sealed::Sealed` ([`driver.rs`](../../../../control/crates/layerfs-bucket/src/bucket/driver.rs)) |
-| Bucket I/O runs in the caller's process; a worker never sees the key. | [control guide](../../../../control/AGENTS.md); [`api/…/backup/create.rs`](../../../../control/crates/layerfs-control/src/backup/create.rs) |
+| Bucket I/O runs in the caller's process; a worker never sees the key. | [control guide](../../../../control/AGENTS.md); [`backup/create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) |
 
 ## Limits and failures
 

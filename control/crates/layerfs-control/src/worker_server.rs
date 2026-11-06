@@ -158,13 +158,13 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
             let file = layerfs_home::home::paths::store_file(root, store);
             // the worker holds the Store's lease under its root while it
             // keeps the Store open
-            let lease = crate::common::lease::hold_locked(root, store)?;
+            let lease = layerfs_store::lease::hold_locked(root, store)?;
             let inner = layerfs_home::home::with_field(
                 inner,
                 "storePath",
                 SdkValue::text(file.display().to_string()),
             );
-            crate::store::open::run(&name, inner, Some(lease))
+            layerfs_store::open::run(&name, inner, Some(lease))
         }
         // one step of a Store move or remove on this machine
         "store.file" => {
@@ -172,7 +172,7 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
                 .get_text("op")
                 .ok_or_else(|| refused("InvalidInput", "Store step name"))?
                 .to_owned();
-            crate::store::transfer::steps::run(
+            layerfs_store::sqlite::transfer::steps::run(
                 root,
                 &name,
                 &args.get("args").cloned().unwrap_or_default(),
@@ -182,13 +182,13 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
         "sandbox.host" => crate::sandbox::route::in_worker(root, &args, events),
         // drops one project from the Store under this worker's root (2.0):
         // `{ store, project, store_record }`
-        "project.remove" => crate::store::identity::remove_project(&with_home(args, root)),
+        "project.remove" => layerfs_store::identity::remove_project(&with_home(args, root)),
         // writes or discards one part of a caller's folder copy under this
         // worker's root (#536 H11a)
-        "project.stage" => crate::project::staged::run(root, &args),
+        "project.stage" => layerfs_store::project::staged::run(root, &args),
         // adds a folder copy the caller sent as a new project of a Store
         // under this worker's root (#536 H11, H11a)
-        "project.init" => crate::project::init::in_worker(&with_home(args, root)),
+        "project.init" => layerfs_store::project::init::in_worker(&with_home(args, root)),
         _ => Err(refused(
             "InvalidInput",
             format!("the worker has no operation {op}"),

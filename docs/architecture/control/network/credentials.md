@@ -70,7 +70,7 @@ written down.
 | --- | --- | --- |
 | 1 | The `postgresql` field of one `sandbox.host` request to the machine's worker; not on `native`, where the call runs in the caller. | `reached`, `on_machine` path in [`sandbox/route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
 | 2 | The worker drops `url` and `password` from the Store record it was sent and keeps only a thin record. | `in_worker` in [`sandbox/route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
-| 3 | `DaemonStore::Postgres { url, … }` in the daemon setup. | `sandbox_store` in [`store/postgres.rs`](../../../../control/crates/layerfs-control/src/store/postgres.rs), [`store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs) |
+| 3 | `DaemonStore::Postgres { url, … }` in the daemon setup. | `sandbox_store` in [`store/postgres.rs`](../../../../control/crates/layerfs-store/src/postgresql/open.rs), [`store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs) |
 | 4 | The setup file: 0600 in a 0700 directory, written once. | `prepare` in [`local/create.rs`](../../../../control/crates/layerfs-isolation/src/local/create.rs) and [`backend/namespaces/create.rs`](../../../../control/crates/layerfs-isolation/src/backend/namespaces/create.rs); `upload` in [`backend/docker/upload.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/upload.rs) |
 
 The worker's reach check, before the launch, reads the schema's binding and
@@ -78,7 +78,7 @@ finds the project on one session to the server with the rewritten URL (the
 process's held host session, #65, opened if none is held); a failure names
 the machine and the host it tried, never the URL (`reach_check` in
 [`sandbox/route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs),
-[`store/reader.rs`](../../../../control/crates/layerfs-control/src/store/reader.rs)).
+[`postgresql/reader.rs`](../../../../control/crates/layerfs-store/src/postgresql/reader.rs)).
 
 ## Where it never appears
 

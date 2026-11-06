@@ -121,7 +121,7 @@ pub(crate) fn labels(project: &str, store: Option<&str>, id: &str) -> Vec<(Strin
 /// project's installed Store file, or a PostgreSQL Store (#506), whose
 /// Sandbox mounts no volume.
 pub(crate) enum OpenedStore {
-    File(Box<(crate::sandbox::registry::Project, StoreManifest)>),
+    File(Box<(layerfs_store::project::discovery::Project, StoreManifest)>),
     Postgres(Box<DaemonStore>),
 }
 
@@ -129,10 +129,10 @@ pub(crate) enum OpenedStore {
 fn installed(args: &SdkValue) -> Result<OpenedStore, SdkRefusal> {
     let name = text(args, "project")?;
     if args.get_text("store").is_some() {
-        let identity = crate::store::identity::identity(args)?;
-        crate::store::identity::sqlite_only(&identity, "a Sandbox of a Store file")?;
+        let identity = layerfs_store::identity::identity(args)?;
+        layerfs_store::identity::sqlite_only(&identity, "a Sandbox of a Store file")?;
     }
-    let project = crate::sandbox::files::project(args)?;
+    let project = layerfs_store::project::discovery::project(args)?;
     let Some(installed) = project.installed.clone() else {
         return Err(refused(
             "NoStore",
@@ -247,7 +247,7 @@ fn start_claimed(
         daemon_store,
         KernelRoute::Fuse,
     );
-    let store = crate::store::identity::shared_store(args)?;
+    let store = layerfs_store::identity::shared_store(args)?;
     let container_name = sandbox_name(args, id)?;
     let docker = Docker::new(docker, ENGINE)
         .map_err(failed)?
@@ -427,14 +427,14 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
     let platform =
         crate::sandbox::runtime::platform(args, crate::sandbox::runtime::backend(deploy)?)?;
     // a PostgreSQL Store's URL is the call's
-    let store = match crate::store::postgres::sandbox_store(args)? {
+    let store = match layerfs_store::postgresql::open::sandbox_store(args)? {
         Some(selected) => OpenedStore::Postgres(Box::new(selected)),
         None => installed(args)?,
     };
     let directory = crate::sandbox::files::sandbox_dir(args)?;
     layerfs_home::home::private_dir(&directory)?;
     let made = (|| {
-        let _guard = crate::sandbox::files::guard(&directory)?;
+        let _guard = layerfs_store::project::discovery::guard(&directory)?;
         if crate::sandbox::files::started(&directory)?.is_some() {
             return Err(refused(
                 "Exists",
@@ -452,7 +452,8 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
             // a worker's folder held only this call's turn; on `native` the
             // folder keeps the caller's record, which the caller removes
             if refusal.code == "Failed" || refusal.code == "InvalidInput" {
-                let _ = std::fs::remove_file(directory.join(crate::sandbox::files::TURN));
+                let _ =
+                    std::fs::remove_file(directory.join(layerfs_store::project::discovery::TURN));
                 let _ = std::fs::remove_dir(&directory);
             }
             return Err(refusal);
@@ -509,7 +510,7 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
         }
         Err(refusal) => return Err(refusal),
     };
-    let _guard = crate::sandbox::files::guard(&state.directory)?;
+    let _guard = layerfs_store::project::discovery::guard(&state.directory)?;
     let recoverable = crate::workspace::unmount_guard::check_all(&state)?;
     crate::sandbox::files::refresh_except(&state, &recoverable)?;
     // Explicit close can take over an orphaned/retained unmount, but must
@@ -577,7 +578,7 @@ const STOP_S: u16 = 5;
 pub(crate) fn reclaim(args: &SdkValue, container: &str, stopped: bool) -> Outcome {
     let id = text(args, "sandbox")?;
     let directory = crate::sandbox::files::sandbox_dir(args)?;
-    let _guard = crate::sandbox::files::guard(&directory)?;
+    let _guard = layerfs_store::project::discovery::guard(&directory)?;
     let Some(value) = crate::sandbox::files::started(&directory)? else {
         return Err(refused(
             "NoSuchSandbox",

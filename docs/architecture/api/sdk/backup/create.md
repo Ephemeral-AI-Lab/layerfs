@@ -11,7 +11,7 @@ overwrite a copy this home did not last write there.
 | --- | --- |
 | Family | [backup](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/backup/create.rs`](../../../../../api/crates/layerfs-api/src/backup/create.rs) |
-| Implemented in | `layerfs_control::backup::family::run` → `create` ([`backup/create.rs`](../../../../../control/crates/layerfs-control/src/backup/create.rs)) |
+| Implemented in | `layerfs_control::backup::family::run` → `create` ([`backup/create.rs`](../../../../../control/crates/layerfs-store/src/backup/create.rs)) |
 | Runs in | the snapshot on the Store's machine (here for `native`, else `store.file` in its worker); the upload in the caller's process |
 
 ## Signature
@@ -37,15 +37,15 @@ layerfs backup create <store> <bucket> [<file>] [--progress]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `store` | Name | a sqlite Store; PostgreSQL is refused | [`backup/create.rs`](../../../../../control/crates/layerfs-control/src/backup/create.rs) |
-| `bucket` | Name | a connected bucket | [`backup/record.rs`](../../../../../control/crates/layerfs-control/src/backup/record.rs) |
+| `store` | Name | a sqlite Store; PostgreSQL is refused | [`backup/create.rs`](../../../../../control/crates/layerfs-store/src/backup/create.rs) |
+| `bucket` | Name | a connected bucket | [`backup/record.rs`](../../../../../control/crates/layerfs-store/src/backup/record.rs) |
 | `file` | Name, optional | default the Store's name; `[A-Za-z0-9._-]`, at most 128, no leading dot; the object is `<file>/store.sqlite` under the prefix | [`link.rs`](../../../../../control/crates/layerfs-bucket/src/backup/link.rs) `store_object` |
 
 ## Options
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `on_progress` | Function | none | called with `{ phase, done, total, pieces }`: `check`, `snapshot`, `send` (worker machines only, with bytes), `check`, `hash` and `upload` (with bytes; `upload` with pieces when the file goes up as pieces); see [Progress](README.md#progress) | [`backup/progress.rs`](../../../../../control/crates/layerfs-control/src/backup/progress.rs) `Shown` |
+| `on_progress` | Function | none | called with `{ phase, done, total, pieces }`: `check`, `snapshot`, `send` (worker machines only, with bytes), `check`, `hash` and `upload` (with bytes; `upload` with pieces when the file goes up as pieces); see [Progress](README.md#progress) | [`backup/progress.rs`](../../../../../control/crates/layerfs-store/src/backup/progress.rs) `Shown` |
 
 ## Returns
 
@@ -55,7 +55,7 @@ layerfs backup create <store> <bucket> [<file>] [--progress]
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `store`, `bucket`, `file` | text | what was backed up, and where | [`backup/create.rs`](../../../../../control/crates/layerfs-control/src/backup/create.rs) |
+| `store`, `bucket`, `file` | text | what was backed up, and where | [`backup/create.rs`](../../../../../control/crates/layerfs-store/src/backup/create.rs) |
 | `object` | text | `<file>/store.sqlite` | same |
 | `bytes`, `pieces` | int | uploaded size and piece count | `pieces::upload` |
 | `sha256` | text | hex sha256 of the snapshot | same |
@@ -85,7 +85,7 @@ The Store's record keeps a link `backups.<bucket>` =
 
 | Expected in the bucket | When | Source |
 | --- | --- | --- |
-| the copy with the link's `last.sha256` | the Store links this bucket with this `file` and a sha256 | [`backup/create.rs`](../../../../../control/crates/layerfs-control/src/backup/create.rs) `expected` |
+| the copy with the link's `last.sha256` | the Store links this bucket with this `file` and a sha256 | [`backup/create.rs`](../../../../../control/crates/layerfs-store/src/backup/create.rs) `expected` |
 | nothing | no link, another file, or a link with no sha256 | same |
 
 The object's metadata `layerfs-exported-from` is `<home id>/<machine>`.
@@ -97,15 +97,15 @@ backup does not refuse other calls. See the
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | bad names or `file`; a PostgreSQL Store ("back it up with PostgreSQL's tools"); a folder-scoped client | no | [`backup/create.rs`](../../../../../control/crates/layerfs-control/src/backup/create.rs) |
+| `InvalidInput` | bad names or `file`; a PostgreSQL Store ("back it up with PostgreSQL's tools"); a folder-scoped client | no | [`backup/create.rs`](../../../../../control/crates/layerfs-store/src/backup/create.rs) |
 | `NotFound` | no such Store or bucket | no | same |
-| `Busy` / `Unresolved` | a push, pull or remove runs on the Store / an earlier one's outcome is unknown | no | [`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) `unblocked` |
-| `Busy` | another `backup.create` of the Store runs in this home (both would stage at one path); nothing was changed | no | [`backup/create.rs`](../../../../../control/crates/layerfs-control/src/backup/create.rs) `Creating` |
+| `Busy` / `Unresolved` | a push, pull or remove runs on the Store / an earlier one's outcome is unknown | no | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) `unblocked` |
+| `Busy` | another `backup.create` of the Store runs in this home (both would stage at one path); nothing was changed | no | [`backup/create.rs`](../../../../../control/crates/layerfs-store/src/backup/create.rs) `Creating` |
 | `Exists` | another home wrote the object | no | same, `check` |
 | `Conflict` | the object is not the copy this home last moved (or exists when none was expected) | no | same |
-| `Unavailable` | the Store's machine is stopped or its worker gone | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
-| `Failed` | snapshot, piece read or upload failed; the fetched copy's sha256 is not the snapshot's | no | [`backup/create.rs`](../../../../../control/crates/layerfs-control/src/backup/create.rs) |
-| `Unknown` | **the driver reports the upload uncertain, or a worker's answer was lost** | **yes** | [`backup/record.rs`](../../../../../control/crates/layerfs-control/src/backup/record.rs) `remote_error` |
+| `Unavailable` | the Store's machine is stopped or its worker gone | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
+| `Failed` | snapshot, piece read or upload failed; the fetched copy's sha256 is not the snapshot's | no | [`backup/create.rs`](../../../../../control/crates/layerfs-store/src/backup/create.rs) |
+| `Unknown` | **the driver reports the upload uncertain, or a worker's answer was lost** | **yes** | [`backup/record.rs`](../../../../../control/crates/layerfs-store/src/backup/record.rs) `remote_error` |
 
 **After `Unknown`** the link is not updated, so the next create may refuse
 `Conflict` if the upload did land. Read [backup.list](list.md): a

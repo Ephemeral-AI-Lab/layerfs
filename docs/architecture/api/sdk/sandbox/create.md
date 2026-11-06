@@ -38,7 +38,7 @@ layerfs sandbox create <project> <name> [<machine>] [--image <image>]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>`; the Store and project must exist (`NoSuchStore`, `NoSuchProject`) | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs), [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
+| `project` | Project | `<store>/<project>`; the Store and project must exist (`NoSuchStore`, `NoSuchProject`) | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs), [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `name` | Name | 1–63 lowercase letters, digits, `_ . -`, starting and ending with a letter or digit; not a Windows device name; not `native` or `docker`; unique across the home | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs), [`sandbox/create.rs`](../../../../../control/crates/layerfs-control/src/sandbox/create.rs) |
 | `machine` | Name, optional | default: a sqlite Store's machine, else `native` (PostgreSQL Store). A sqlite Store's Sandbox must run on the Store's machine; the support table's `sandbox_allowed` must accept the platform and Store kind | [`sandbox/create.rs`](../../../../../control/crates/layerfs-control/src/sandbox/create.rs) |
 
@@ -99,14 +99,14 @@ The record hides `v`, `runtime_id` and `daemon`
 | --- | --- | --- | --- |
 | `native`, macOS host | caller's process | daemon host process, loopback NFS | [`sandbox/launch/local.rs`](../../../../../control/crates/layerfs-control/src/sandbox/launch/local.rs) |
 | `native`, Linux host | caller's process | namespaces, FUSE | `launch/local.rs` |
-| `docker` | the docker machine's worker, every host | container; daemon port published on loopback | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs), [`sandbox/deploy.rs`](../../../../../control/crates/layerfs-control/src/sandbox/deploy.rs) |
+| `docker` | the docker machine's worker, every host | container; daemon port published on loopback | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs), [`sandbox/deploy.rs`](../../../../../control/crates/layerfs-control/src/sandbox/deploy.rs) |
 | any other machine | that machine's worker | the guest's own `native` | [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) `in_worker` |
 
 For a PostgreSQL Store the caller resolves the password and sends the URL
 only in this request; the side that launches runs a reach check first. The
 reach check reads the schema's binding and finds the project in one read
 session, the process's held host session for that Store (#65:
-[`store/reader.rs`](../../../../../control/crates/layerfs-control/src/store/reader.rs)),
+[`postgresql/reader.rs`](../../../../../control/crates/layerfs-store/src/postgresql/reader.rs)),
 opened with the light check if none is held, so the host side of a create
 opens at most one PostgreSQL connection and no Store service. A project the
 schema does not hold is `NoSuchProject` there, before anything starts. The
@@ -122,12 +122,12 @@ Nothing starts a stopped machine. See the
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
 | `InvalidInput` | bad name, `native`/`docker`, malformed image digest, folder scope | no | [`sandbox/create.rs`](../../../../../control/crates/layerfs-control/src/sandbox/create.rs), [`sandbox/serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs) |
-| `NoSuchStore`, `NoSuchProject`, `NotFound` | missing Store, project or machine | no | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs), `create.rs` |
+| `NoSuchStore`, `NoSuchProject`, `NotFound` | missing Store, project or machine | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs), `create.rs` |
 | `NoStore` | the project has no installed Store | no | `serve.rs` `installed` |
 | `Exists` | the name is taken in the home, or the machine already records a started Sandbox there | no | `create.rs`, `serve.rs` |
 | `Unsupported` | platform cannot run this Store kind; sqlite Store on another machine; no image archive in the bundle | no | `create.rs`, [`sandbox/deploy.rs`](../../../../../control/crates/layerfs-control/src/sandbox/deploy.rs) |
 | `Busy`, `Unresolved` | the Store holds an `op` (push, pull, remove) | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
-| `Unavailable` | worker not recorded or not answering (nothing sent); a lock held too long; PostgreSQL server not reached | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs), [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
+| `Unavailable` | worker not recorded or not answering (nothing sent); a lock held too long; PostgreSQL server not reached | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs), [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
 | `Failed` | the start failed and every effect is known: the container was stopped and deleted, `detail {container, removed, log}` | no | `serve.rs` `abandon` |
 | `Unknown` | **the worker's answer was lost; or the start's effect on the Store volume or Engine is unknown; or it started but could not be recorded** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs), `serve.rs` `abandon`, `unrecorded` |
 

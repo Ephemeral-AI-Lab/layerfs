@@ -35,7 +35,7 @@ layerfs commit list <store>/<project> <branch> [--page-size N] [--page-pos N]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
+| `project` | Project | `<store>/<project>` | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `branch` | Name | a Branch; `main` has no Commits and is `NoSuchBranch` | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) `branch` |
 
 ## Options
@@ -90,7 +90,7 @@ See the [routing table](../../../control/routing/routing-table.md).
 | --- | --- | --- | --- |
 | `InvalidInput` | a bad project or paging; a folder-scoped client | no | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
 | `NoSuchBranch` | no such Branch, or `main` | no | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs) |
+| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`call.rs`](../../../../../control/crates/layerfs-store/src/call.rs) |
 | `Unknown` | the worker's answer was lost | read-only; call again | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 `commit.list` is the read to make after an uncertain

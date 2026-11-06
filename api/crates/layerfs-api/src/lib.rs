@@ -33,10 +33,10 @@ pub use layerfs_home::names;
 /// (`layerfs-control` `migrate`) and the Store leases, as the front ends
 /// used them before the control split (layerfs-project#103).
 pub mod home {
-    pub use layerfs_control::common::lease;
     pub use layerfs_control::migrate::{import_env, note_failure, open, open_from};
     pub use layerfs_home::home::*;
     pub use layerfs_home::process;
+    pub use layerfs_store::lease;
 }
 /// `layerfs doctor` (#536 H7): report-only, outside the call table.
 pub use layerfs_control::doctor::{doctor, doctor_json};

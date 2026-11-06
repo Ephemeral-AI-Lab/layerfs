@@ -9,10 +9,10 @@
 //! `<branch>.<name>`. A scope guards calls; it is not filesystem isolation
 //! (a command can still `cd` anywhere in the mounted tree). Every refusal
 //! comes before dispatch.
-use crate::store::calls::NAMESPACE;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::with_field;
 use layerfs_home::outcome::refused;
+use layerfs_store::calls::NAMESPACE;
 use std::path::Path;
 
 /// A checked scope.

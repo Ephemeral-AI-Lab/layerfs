@@ -79,7 +79,7 @@ methods::call(service, call)
 Source of the table: [`methods/dispatch.rs`](../../../../engine/crates/layerfs-store-service/src/methods/dispatch.rs).
 The front ends reach it through `layerfs-control`, which strips its own
 routing fields and calls `methods::call` once
-([`layerfs-control/src/store/service.rs`](../../../../control/crates/layerfs-control/src/store/service.rs));
+([`service.rs`](../../../../control/crates/layerfs-store/src/service.rs));
 see [API: Call table](../../api/call-table/README.md).
 
 ## Refusal order

@@ -4,15 +4,15 @@
 //! streamed back as events.
 use super::deploy::{self, Deploy, Side};
 use super::record::SandboxRecord;
-use crate::common::place::{self, Executor};
-use crate::project::record::ProjectRecord;
-use crate::store::record::{StoreKind, StoreRecord};
-use crate::store::resolve;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::context::Context;
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_machine::worker::Unreached;
+use layerfs_store::place::{self, Executor};
+use layerfs_store::project::record::ProjectRecord;
+use layerfs_store::record::{StoreKind, StoreRecord};
+use layerfs_store::resolve;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -105,7 +105,7 @@ fn reached(
     machine: &str,
     record: &StoreRecord,
 ) -> Result<(SdkValue, Option<&'static str>)> {
-    let url = crate::store::record::url(record)?;
+    let url = layerfs_store::record::url(record)?;
     // a build without machines (the guest's) runs its own Sandboxes on the
     // machine it is, which shares its loopback
     #[cfg(feature = "machine")]
@@ -124,7 +124,10 @@ fn reached(
         let _ = (home, machine);
         None
     };
-    Ok((crate::store::connect::selection_at(record, url), hint))
+    Ok((
+        layerfs_store::postgresql::connect::selection_at(record, url),
+        hint,
+    ))
 }
 
 /// The reach check of a PostgreSQL Sandbox's create (#535 §7.4 step 4), on
@@ -145,8 +148,8 @@ fn reach_check(
     let host = layerfs_isolation::PostgresUrl::parse(url)
         .map(|url| url.host().to_owned())
         .unwrap_or_default();
-    let reached =
-        crate::store::reader::reach(key, store, postgresql, project).map_err(|refusal| {
+    let reached = layerfs_store::postgresql::reader::reach(key, store, postgresql, project)
+        .map_err(|refusal| {
             let name = store.name();
             let message = match (refusal.code.as_str(), hint) {
                 ("Unsupported", _) => {
@@ -175,7 +178,7 @@ fn reach_check(
                 postgresql.get_text("schema").unwrap_or("")
             ),
         )),
-        Err(crate::store::reader::OtherStore) => Err(refused(
+        Err(layerfs_store::postgresql::reader::OtherStore) => Err(refused(
             "Unavailable",
             format!(
                 "the PostgreSQL server {who} reaches at {host} holds another Store than {}",
@@ -299,10 +302,10 @@ fn host_op(
             // (a create's reach check, a mount's Branch, a status's head)
             // runs on the process's one held read session, opened when one
             // is needed; exec, Commit, unmount and close open nothing.
-            let lease = crate::common::lease::hold(&home, &target.store)?;
+            let lease = layerfs_store::lease::hold(&home, &target.store)?;
             let (_lease, opened) = match held {
                 true => (Some(lease), None),
-                false => (None, Some(crate::store::open::hold(&args, Some(lease))?)),
+                false => (None, Some(layerfs_store::open::hold(&args, Some(lease))?)),
             };
             if op == "backend.daemon.workspace.status" {
                 return crate::sandbox::dispatch::backend(op.to_owned(), args);
@@ -460,7 +463,7 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
     // on the held read session
     let opened = match held {
         true => None,
-        false => Some(crate::store::open::hold(&host, None)?),
+        false => Some(layerfs_store::open::hold(&host, None)?),
     };
     if op == "backend.daemon.workspace.status" {
         return crate::sandbox::dispatch::backend(op.to_owned(), host);
@@ -481,7 +484,7 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
 /// checkpointed and truncated before the close is answered (#86).
 fn closed(op: &str, opened: Option<&Path>, out: &Outcome) {
     if let (Some(path), "sandbox.close", true) = (opened, op, out.is_ok()) {
-        let _ = crate::store::open::released(path);
+        let _ = layerfs_store::open::released(path);
     }
 }
 

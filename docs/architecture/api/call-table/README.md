@@ -96,7 +96,7 @@ Details: [Table](table.md) for kinds, keys, scopes and checks;
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| Page size of a list | `page_size` 1 to 1000, default 50, for `sandbox` lists and a scoped `branch.list`; other lists take the Store engine's page rules | [`sandbox/family.rs`](../../../../control/crates/layerfs-control/src/sandbox/family.rs) `page`, [`store/calls.rs`](../../../../control/crates/layerfs-control/src/store/calls.rs) `branches_in` |
+| Page size of a list | `page_size` 1 to 1000, default 50, for `sandbox` lists and a scoped `branch.list`; other lists take the Store engine's page rules | [`sandbox/family.rs`](../../../../control/crates/layerfs-control/src/sandbox/family.rs) `page`, [`calls.rs`](../../../../control/crates/layerfs-store/src/calls.rs) `branches_in` |
 | `commit.get` | pages the Branch's Commits 1000 at a time to the end; an id prefix of 8 or more characters matches | `store/calls.rs` `commit_get` |
 | A list page that does not move on | `Failed` "a list made no progress"; not asked again | `store/calls.rs` `page_of` |
 | Worker frame | 512 MiB; larger is `TooLarge`, nothing sent | [`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs) |

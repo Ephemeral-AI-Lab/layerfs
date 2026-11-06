@@ -11,7 +11,7 @@ Store, the Store's kind and machine, and when it was recorded.
 | --- | --- |
 | Family | [project](README.md) |
 | Library entry | [`project/get.rs`](../../../../../api/crates/layerfs-api/src/project/get.rs) |
-| Implemented in | `layerfs_control::project::family::run` → `"get"` arm ([`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs)), `store::resolve::target` ([`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs)) |
+| Implemented in | `layerfs_control::project::family::run` → `"get"` arm ([`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs)), `store::resolve::target` ([`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs)) |
 | Runs in | the caller's process, reading home records only |
 
 ## Signature
@@ -58,7 +58,7 @@ None.
 | `created` | int or null | when the home recorded the project |
 
 The answer is `ProjectRecord::to_sdk` with `View::Full`
-([`project/record.rs`](../../../../../control/crates/layerfs-control/src/project/record.rs)),
+([`project/record.rs`](../../../../../control/crates/layerfs-store/src/project/record.rs)),
 the same shape as one [`project.list`](list.md) item. It holds no Branch,
 Layer or size: read those with [`branch.list`](../branch/list.md).
 
@@ -81,7 +81,7 @@ project. See the [routing table](../../../control/routing/routing-table.md).
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
 | `InvalidInput` | `project` is not `<store>/<name>` with valid names | no | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs) |
-| `NoSuchStore` | no record for the Store | no | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
+| `NoSuchStore` | no record for the Store | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `NoSuchProject` | no `record.json` for the project, including the entry a failed local Init keeps | no | `store/resolve.rs` |
 
 ## Examples

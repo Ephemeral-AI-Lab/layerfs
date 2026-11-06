@@ -5,9 +5,9 @@
 //! machine is never read.
 use layerfs_bridge::control::SdkValue;
 use layerfs_control::inventory;
-use layerfs_control::store::record::StoreRecord;
 use layerfs_home::home::{paths, write_record};
 use layerfs_home::json::parse;
+use layerfs_store::record::StoreRecord;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -204,29 +204,47 @@ fn push_and_pull_check_the_stores_side() {
         r#"{"name":"pg","kind":"postgresql","url":"postgresql://u@h/d"}"#,
     );
     let code = |result: Result<(), layerfs_bridge::control::SdkRefusal>| result.unwrap_err().code;
-    assert_eq!(inventory::can_pull(&on_dev).unwrap(), "dev");
-    assert_eq!(inventory::can_pull(&here).unwrap_err().code, "InvalidInput");
-    let refusal = inventory::can_pull(&pg).unwrap_err();
+    assert_eq!(
+        layerfs_store::sqlite::transfer::resolve::can_pull(&on_dev).unwrap(),
+        "dev"
+    );
+    assert_eq!(
+        layerfs_store::sqlite::transfer::resolve::can_pull(&here)
+            .unwrap_err()
+            .code,
+        "InvalidInput"
+    );
+    let refusal = layerfs_store::sqlite::transfer::resolve::can_pull(&pg).unwrap_err();
     assert!(
         refusal.message.contains("does not move"),
         "{}",
         refusal.message
     );
-    let refusal = inventory::can_push(&home, &on_dev, "fc").unwrap_err();
+    let refusal =
+        layerfs_store::sqlite::transfer::resolve::can_push(&home, &on_dev, "fc").unwrap_err();
     assert!(
         refusal.message.contains("`layerfs store pull shop`"),
         "{}",
         refusal.message
     );
-    assert!(inventory::can_push(&home, &here, "dev").is_ok());
+    assert!(layerfs_store::sqlite::transfer::resolve::can_push(&home, &here, "dev").is_ok());
     assert_eq!(
-        code(inventory::can_push(&home, &here, "native")),
+        code(layerfs_store::sqlite::transfer::resolve::can_push(
+            &home, &here, "native"
+        )),
         "InvalidInput"
     );
     assert_eq!(
-        code(inventory::can_push(&home, &here, "nosuch")),
+        code(layerfs_store::sqlite::transfer::resolve::can_push(
+            &home, &here, "nosuch"
+        )),
         "NotFound"
     );
-    assert_eq!(code(inventory::can_push(&home, &pg, "dev")), "InvalidInput");
+    assert_eq!(
+        code(layerfs_store::sqlite::transfer::resolve::can_push(
+            &home, &pg, "dev"
+        )),
+        "InvalidInput"
+    );
     let _ = std::fs::remove_dir_all(&home);
 }

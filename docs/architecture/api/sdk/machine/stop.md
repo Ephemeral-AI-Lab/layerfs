@@ -71,7 +71,7 @@ caller's process                                   machine
 Nothing stops a machine because it is unused. After a stop, Store,
 project, Sandbox and Workspace calls that need the machine are refused
 `Unavailable`, naming `layerfs machine start`
-([`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs)).
+([`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs)).
 All in the caller ([routing table](../../../control/routing/routing-table.md)).
 
 ## Errors

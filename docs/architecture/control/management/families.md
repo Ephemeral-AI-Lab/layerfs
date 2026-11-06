@@ -9,7 +9,7 @@ How control implements each call family.
 | | |
 | --- | --- |
 | Component | [Control](README.md) |
-| Source | [`control/crates/layerfs-control/src/machine`](../../../../control/crates/layerfs-machine/src), [`control/crates/layerfs-control/src/store`](../../../../control/crates/layerfs-control/src/store), [`control/crates/layerfs-control/src/project`](../../../../control/crates/layerfs-control/src/project), [`control/crates/layerfs-control/src/sandbox`](../../../../control/crates/layerfs-control/src/sandbox), [`control/crates/layerfs-control/src/workspace`](../../../../control/crates/layerfs-control/src/workspace), [`control/crates/layerfs-control/src/backup`](../../../../control/crates/layerfs-control/src/backup) |
+| Source | [`control/crates/layerfs-control/src/machine`](../../../../control/crates/layerfs-machine/src), [`control/crates/layerfs-control/src/store`](../../../../control/crates/layerfs-store/src), [`project`](../../../../control/crates/layerfs-store/src/project), [`control/crates/layerfs-control/src/sandbox`](../../../../control/crates/layerfs-control/src/sandbox), [`control/crates/layerfs-control/src/workspace`](../../../../control/crates/layerfs-control/src/workspace), [`backup`](../../../../control/crates/layerfs-store/src/backup) |
 
 Every family function takes the running call's `Context` (its home and
 its event stream) and the checked arguments, and answers one `Outcome`
@@ -65,11 +65,11 @@ Records in `machine/<name>/`, adapters from `layerfs-platform`
 
 | Call | Kind | Runs | Source |
 | --- | --- | --- | --- |
-| `list`, `get`, `status` | both | reads records and leases in this process; take no Store lock | [`store/list.rs`](../../../../control/crates/layerfs-control/src/store/list.rs), [`store/status.rs`](../../../../control/crates/layerfs-control/src/store/status.rs) |
-| `create` | sqlite | an empty Store on `native` | [`store/create.rs`](../../../../control/crates/layerfs-control/src/store/create.rs) |
-| `connect`, `disconnect` | PostgreSQL | record the database in schema `layerfs` with a password reference; forget it (data stays); `disconnect` is `InUse` while leased | [`store/connect.rs`](../../../../control/crates/layerfs-control/src/store/connect.rs) |
-| `push`, `pull` | sqlite | move the file `native` to a machine, or back; phases `check`, `snapshot`, `send`, `verify`, `install`, `record`, `retire` | [`store/transfer/phases.rs`](../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) |
-| `remove` | sqlite | delete the file wherever it is, with its projects; a PostgreSQL Store is refused `InvalidInput` (use `disconnect`) | [`store/remove.rs`](../../../../control/crates/layerfs-control/src/store/remove.rs) |
+| `list`, `get`, `status` | both | reads records and leases in this process; take no Store lock | [`list.rs`](../../../../control/crates/layerfs-store/src/list.rs), [`status.rs`](../../../../control/crates/layerfs-store/src/status.rs) |
+| `create` | sqlite | an empty Store on `native` | [`sqlite/create.rs`](../../../../control/crates/layerfs-store/src/sqlite/create.rs) |
+| `connect`, `disconnect` | PostgreSQL | record the database in schema `layerfs` with a password reference; forget it (data stays); `disconnect` is `InUse` while leased | [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs) |
+| `push`, `pull` | sqlite | move the file `native` to a machine, or back; phases `check`, `snapshot`, `send`, `verify`, `install`, `record`, `retire` | [`sqlite/transfer/phases.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
+| `remove` | sqlite | delete the file wherever it is, with its projects; a PostgreSQL Store is refused `InvalidInput` (use `disconnect`) | [`sqlite/remove.rs`](../../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
 
 ```text
  push / pull / remove
@@ -82,13 +82,13 @@ Records in `machine/<name>/`, adapters from `layerfs-platform`
 ```
 
 The `branch`, `commit` and `file` families are Store calls too
-([`store/calls.rs`](../../../../control/crates/layerfs-control/src/store/calls.rs)): each translates to one Store
+([`calls.rs`](../../../../control/crates/layerfs-store/src/calls.rs)): each translates to one Store
 method (`fs.read`, `branch.fork`, …) and runs through `store_call`
-([`store/call.rs`](../../../../control/crates/layerfs-control/src/store/call.rs)) under the Store's lease, in this
+([`call.rs`](../../../../control/crates/layerfs-store/src/call.rs)) under the Store's lease, in this
 process or in the machine's worker
 ([Routing table](../routing/routing-table.md)). Open Stores are cached
 per process and closed after 60 s idle
-([`store/open.rs`](../../../../control/crates/layerfs-control/src/store/open.rs)). When the last call on an open
+([`open.rs`](../../../../control/crates/layerfs-store/src/open.rs)). When the last call on an open
 SQLite Store returns, or a Sandbox on it closes, its write-ahead log is
 checkpointed and truncated once while it stays open (#86), so a quiesced
 Store's size is its file.
@@ -97,9 +97,9 @@ Store's size is its file.
 
 | Call | Does | Source |
 | --- | --- | --- |
-| `list`, `get` | project records, by Store then name | [`project/family.rs`](../../../../control/crates/layerfs-control/src/project/family.rs) |
-| `init` | adds a host folder as a new project to an existing Store, a live add through the Store's writer | [`project/family.rs`](../../../../control/crates/layerfs-control/src/project/family.rs) |
-| `remove` | drops the project's Layers, Branches and Commits in one write, then its record; its Sandboxes must be closed first | [`project/family.rs`](../../../../control/crates/layerfs-control/src/project/family.rs) |
+| `list`, `get` | project records, by Store then name | [`project/family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs) |
+| `init` | adds a host folder as a new project to an existing Store, a live add through the Store's writer | [`project/family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs) |
+| `remove` | drops the project's Layers, Branches and Commits in one write, then its record; its Sandboxes must be closed first | [`project/family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs) |
 
 ```text
  project.init(project, folder)
@@ -159,11 +159,11 @@ The daemon serves no Store calls. See
 
 | Call | Does | Source |
 | --- | --- | --- |
-| `connect` | one listing proves the bucket answers with the key, then `backup/<bucket>/record.json` (a key reference) | [`backup/family.rs`](../../../../control/crates/layerfs-control/src/backup/family.rs), [`backup/record.rs`](../../../../control/crates/layerfs-control/src/backup/record.rs) |
-| `disconnect` | forgets the bucket and the Stores' links to it | [`backup/family.rs`](../../../../control/crates/layerfs-control/src/backup/family.rs) |
-| `list` | every Store file on the connected buckets | [`backup/list.rs`](../../../../control/crates/layerfs-control/src/backup/list.rs) |
-| `create` | the Store's machine stages a snapshot (`store.file`); this process uploads it; `Exists` if another home wrote the object | [`backup/create.rs`](../../../../control/crates/layerfs-control/src/backup/create.rs) |
-| `restore` | downloads into `store/.restore-<random>/`, installs as a sqlite Store on `native`; `Conflict` if the Store changed since its last backup or restore, `InUse` while held | [`backup/restore.rs`](../../../../control/crates/layerfs-control/src/backup/restore.rs) |
+| `connect` | one listing proves the bucket answers with the key, then `backup/<bucket>/record.json` (a key reference) | [`backup/family.rs`](../../../../control/crates/layerfs-store/src/backup/family.rs), [`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) |
+| `disconnect` | forgets the bucket and the Stores' links to it | [`backup/family.rs`](../../../../control/crates/layerfs-store/src/backup/family.rs) |
+| `list` | every Store file on the connected buckets | [`backup/list.rs`](../../../../control/crates/layerfs-store/src/backup/list.rs) |
+| `create` | the Store's machine stages a snapshot (`store.file`); this process uploads it; `Exists` if another home wrote the object | [`backup/create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) |
+| `restore` | downloads into `store/.restore-<random>/`, installs as a sqlite Store on `native`; `Conflict` if the Store changed since its last backup or restore, `InUse` while held | [`backup/restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs) |
 
 Bytes go through the caller's process: machines never hold bucket keys,
 and LayerFS never deletes a bucket object. See

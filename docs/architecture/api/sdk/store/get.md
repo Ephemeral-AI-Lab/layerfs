@@ -11,7 +11,7 @@ home alone.
 | --- | --- |
 | Family | [store](README.md) |
 | Library entry | [`store/get.rs`](../../../../../api/crates/layerfs-api/src/store/get.rs) |
-| Implemented in | `layerfs_control::store::family::run` → `public(record_of(..), View::Full)` ([`store/family.rs`](../../../../../control/crates/layerfs-control/src/store/family.rs)) |
+| Implemented in | `layerfs_control::store::family::run` → `public(record_of(..), View::Full)` ([`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs)) |
 | Runs in | the caller's process; nothing else is contacted |
 
 ## Signature
@@ -37,7 +37,7 @@ layerfs store get <name>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | a Store name: 1–63 lowercase letters, digits, `_`, `.`, `-`, starting and ending with a letter or digit, not a Windows device name | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) `StoreName`, [`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) `StoreRecord::of` |
+| `name` | Name | a Store name: 1–63 lowercase letters, digits, `_`, `.`, `-`, starting and ending with a letter or digit, not a Windows device name | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) `StoreName`, [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) `StoreRecord::of` |
 
 ## Options
 
@@ -67,17 +67,17 @@ None.
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `name` | text | the Store's name, always first | [`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) `to_sdk` |
+| `name` | text | the Store's name, always first | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) `to_sdk` |
 | `kind` | text | `sqlite` or `postgresql`; a record without `kind` is sqlite | `kind_of` |
-| `machine` | text | sqlite: the machine that holds the file | `created_on_native`, [`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) |
+| `machine` | text | sqlite: the machine that holds the file | `created_on_native`, [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
 | `profile` | text | `disposable`, the only sqlite profile LayerFS makes | `created_on_native`, `restored` |
 | `created` | int | milliseconds since the Unix epoch | same |
-| `sqlite` | text | the SQLite version that made the file (`store.create` only; a restored Store has none) | [`store/create.rs`](../../../../../control/crates/layerfs-control/src/store/create.rs) |
-| `last_transfer` | map | the last push or pull; `retired: false` means the source copy is not yet deleted | [`store/transfer/phases.rs`](../../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) |
-| `backups` | map | one link per bucket: the file, its heads and the last `create` or `restore` | [`backup/record.rs`](../../../../../control/crates/layerfs-control/src/backup/record.rs) `StoreLink` |
-| `url`, `schema`, `synchronous_commit`, `password` | text | PostgreSQL: the URL without a password, the fixed schema, the setting, and the password reference | [`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) `connected` |
+| `sqlite` | text | the SQLite version that made the file (`store.create` only; a restored Store has none) | [`sqlite/create.rs`](../../../../../control/crates/layerfs-store/src/sqlite/create.rs) |
+| `last_transfer` | map | the last push or pull; `retired: false` means the source copy is not yet deleted | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
+| `backups` | map | one link per bucket: the file, its heads and the last `create` or `restore` | [`backup/record.rs`](../../../../../control/crates/layerfs-store/src/backup/record.rs) `StoreLink` |
+| `url`, `schema`, `synchronous_commit`, `password` | text | PostgreSQL: the URL without a password, the fixed schema, the setting, and the password reference | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) `connected` |
 | `op` | map | the recorded intent, when there is one | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) `to_sdk` |
-| `projects` | list of text | the home's project records for this Store, sorted | [`store/family.rs`](../../../../../control/crates/layerfs-control/src/store/family.rs) `public` |
+| `projects` | list of text | the home's project records for this Store, sorted | [`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs) `public` |
 
 `cursor`, `binding` and `v` are never shown. `get` shows no `state`; use
 [store.status](status.md).
@@ -101,7 +101,7 @@ is contacted. See the [routing table](../../../control/routing/routing-table.md)
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
 | `InvalidInput` | a bad Store name; the client has a folder scope | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs), [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
-| `NotFound` | no Store record of that name | no | [`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) `StoreRecord::of` |
+| `NotFound` | no Store record of that name | no | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) `StoreRecord::of` |
 | `Failed` | the record cannot be read, is not JSON, or is not a map | no | [`home/records.rs`](../../../../../control/crates/layerfs-home/src/home/records.rs) |
 
 ## Examples

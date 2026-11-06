@@ -27,16 +27,16 @@
 //! A crash before the flip leaves a layout 2 home that converts again (each
 //! write is idempotent); after it, the next open finds the marker and
 //! finishes step 3 ([`finish`]).
-use crate::common::lease;
 use crate::sandbox::record::SandboxRecord;
 use crate::sandbox::recorded::{unchecked, Recorded};
-use crate::store::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::layout::{write, HomeFile, LAYOUT_VERSION};
 use layerfs_home::home::{paths, read_record, with_field, write_entity, write_record};
 use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::{failed, refused};
 use layerfs_machine::record::MachineRecord;
+use layerfs_store::lease;
+use layerfs_store::record::StoreRecord;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -317,7 +317,7 @@ fn numbered(home: &Path, plan: &mut Plan) -> Result<Vec<Numbered>> {
                 if !file.exists() {
                     continue;
                 }
-                let record = crate::sandbox::files::load(&file)?;
+                let record = layerfs_store::project::discovery::load(&file)?;
                 found.push(Numbered {
                     project: name.clone(),
                     id,
