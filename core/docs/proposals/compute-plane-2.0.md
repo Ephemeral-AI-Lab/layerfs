@@ -4,6 +4,10 @@
 > Written against `layerfs_v2_0_0` at `8b701f42f0` (2026-11-06); repository
 > links resolve on that branch. Production LOC is from that commit's
 > `tools/production_loc.py --files`.
+> **Amended 2026-11-06** (owner decisions D-7 to D-12): per-exec network
+> isolation is deferred to v3.0.0; the docker platform moves to the
+> `namespaces` backend; the Sandbox driver is `layerfs-sandbox-backend`; exec
+> records belong to their Workspace. Superseded text is kept and marked.
 
 This is our own spec for the 2.0 compute plane. It takes over from the
 #545 index where the two differ. Owner decisions are marked **decided** with
@@ -16,9 +20,15 @@ their date. Everything else is a proposal until the owner accepts it.
 | D-1 | **No snapshot.** The capability's `snapshot: Option<SnapshotCapability>` field is removed from the capability contract (#567). A Family 2 machine admits only PostgreSQL Stores; the "SQLite snapshot → admitted" placement row, its test and the B12 snapshot Store kind are gone, not deferred (#557). The `snapshot` step inside `store push`, `store pull` and `backup create` stays. | owner, 2026-11-06 |
 | D-2 | **Management code leaves `api/`**, after the trimmed #545 PRs merge. Supersedes #536 C1 ("in the api layer"). Where it goes is D-5 and D-6. | owner, 2026-11-06 |
 | D-3 | **Exec and cancel are one model on `workspace.exec`** (§5). PR #569 (#555, the separate `step.*` family) is rejected. | owner, 2026-11-06 |
-| D-4 | **Per-exec network isolation is optional** for the exec SDK (§4). | owner, 2026-11-06 (requested) |
-| D-5 | **One crate per concern, plain names for entities** (§6.2): `layerfs-home`, `layerfs-machine`, `layerfs-store`, `layerfs-sandbox` (with `workspace/`), `layerfs-control`; drivers renamed `layerfs-platform`, `layerfs-bucket`, `layerfs-isolation`. Refines D-2. | owner, 2026-11-06 |
+| D-4 | ~~**Per-exec network isolation is optional** for the exec SDK (§4).~~ **Superseded by D-7.** | owner, 2026-11-06 (requested) |
+| D-5 | **One crate per concern, plain names for entities** (§6.2): `layerfs-home`, `layerfs-machine`, `layerfs-store`, `layerfs-sandbox` (with `workspace/`), `layerfs-control`; drivers renamed `layerfs-platform`, `layerfs-bucket`, `layerfs-isolation` (the last revised to `layerfs-sandbox-backend` by D-9). Refines D-2. | owner, 2026-11-06 |
 | D-6 | **The `connect/` layer is renamed `control/`.** Layers: `core < engine < control < api`. | owner, 2026-11-06 |
+| D-7 | **Per-exec network isolation is deferred to v3.0.0.** No `isolateNetwork` option and no `network` result field in 2.0; exec runs on the Sandbox's network. §4 is kept as the v3 starting point. O-1 and O-2 are superseded. | owner, 2026-11-06 |
+| D-8 | **The docker platform runs the `namespaces` backend.** The docker machine's worker container (privileged; cgroup v2 with `cgroup.kill`, Linux 5.14+) runs namespaces Sandboxes inside it, as a VM does. Backends are `namespaces` (every Linux kernel) and `host_process` (macOS, stored `"native"`). The docker backend and the Engine client are deleted. A docker-machine Sandbox displays `backend: "namespaces"`; a Sandbox recorded under the old docker backend is refused with a message to recreate it. | owner, 2026-11-06 |
+| D-9 | **The Sandbox driver is `layerfs-sandbox-backend`** (revises D-5's `layerfs-isolation`): it builds a Sandbox's box and puts processes in it; "isolation" is false for `host_process`. The type stays `Backend`; no stored or displayed value changes. | owner, 2026-11-06 |
+| D-10 | **Exec records belong to their Workspace** (§5.2): `sandbox/<name>/workspace/<workspace-id>/exec/<execId>.json`, `execId` unique within its Workspace. `workspace.unmount`, like `sandbox.close`, is refused `Busy` while a live exec record exists; `force: true` cancels first. | owner, 2026-11-06 |
+| D-11 | **The cancel call is `workspace.exec_cancel` everywhere**, including to a machine's worker, where it rides the existing `sandbox.host` frame. There is no `sandbox.exec_cancel` worker op. | owner, 2026-11-06 |
+| D-12 | **Order:** exec records and cancel (§5) are built after #566 merges and after D-8, so they are written once, for the two remaining backends (§7). | owner, 2026-11-06 |
 
 ## 2. Model
 
@@ -29,7 +39,7 @@ their date. Everything else is a proposal until the owner accepts it.
    sandbox/<name>/record.json          a Sandbox: names its machine and its Store (#536 C2)
    store/<store>/record.json           a Store: sqlite on one machine, or PostgreSQL
 
- machine ──runs──▶ Sandbox ──through──▶ backend (docker | native | namespaces)
+ machine ──runs──▶ Sandbox ──through──▶ backend (namespaces | host_process, D-8)
                      │
                      └──mounts──▶ Workspace ──exec──▶ command (bash -c)
 ```
@@ -51,7 +61,7 @@ measured at its head on 2026-11-06. Every PR is stacked on #556.
 | PR | Area | Prod LOC | Proposal |
 | --- | --- | --- | --- |
 | #556 | worker liveness, protocol 3 | +570 | **Keep.** A dead worker is `Unavailable`/`Unknown` in bounded time; a live command is not cut off. |
-| #587 | per-exec netns, data-root modes | +6 | **Keep, then make the netns optional** (§4). |
+| #587 | per-exec netns, data-root modes | +6 | ~~**Keep, then make the netns optional** (§4).~~ The per-exec netns is **deferred to v3.0.0** (D-7); the data-root modes are for its assignee to keep or split out. |
 | #558 | Sandbox-owned scratch | +486 | **Keep.** Sweep `Closed`/`Lost` only, re-check ownership before delete. |
 | #557 | placement guard | +158 | **Keep without snapshot** (D-1). |
 | #566 | lifecycle | +1,087 | **Trim** (P-1 to P-3). |
@@ -85,6 +95,9 @@ Proposals:
 
 ## 4. Exec network option
 
+> **Deferred to v3.0.0 (D-7).** Not built in 2.0. Kept unchanged as the v3
+> starting point; the `docker` row no longer applies after D-8.
+
 `workspace.exec(ws, command, { spool?, isolateNetwork? })`
 
 | Backend | omitted | `true` | `false` |
@@ -112,12 +125,13 @@ Proposals:
 ### 5.1 Calls
 
 ```
-workspace.exec(ws, command, { spool?, isolateNetwork?, execId? })
-    execId: the caller's name for this command, unique among the Sandbox's
-            running commands; when omitted, control makes one and sends it
-            in the first progress event: { exec: { id } }
-    result: as today, plus execId and network; a cancelled command has
-            kind "cancelled" and exitCode 128 + signal (143 TERM, 137 KILL)
+workspace.exec(ws, command, { spool?, execId? })
+    execId: the caller's name for this command, unique among its Workspace's
+            running commands (D-10); when omitted, control makes one and
+            sends it in the first progress event: { exec: { id } }
+    result: as today, plus execId and stop ("cgroup" | "group", §5.3); a
+            cancelled command has kind "cancelled" and exitCode 128 + signal
+            (143 TERM, 137 KILL)
 
 workspace.exec_cancel(ws, execId, { graceMs? })   graceMs defaults to 5000
     → { outcome: "cancelled" | "ended" | "unknown", signal? }
@@ -130,22 +144,41 @@ One new call in the call table, with its CLI, Node and Python forms
 
 ### 5.2 The exec record
 
-A running command has `sandbox/<name>/exec/<execId>.json`: its owner
-process (pid, kernel start time, boot, as Store leases name theirs), where it
-runs (local or a machine's worker) and how to stop it (cgroup path or process
-group). It is written under the Sandbox lock when the command starts and
-removed when it ends. The record is how a different process cancels a command,
-and how `sandbox.close` knows commands are running. A record whose owner is
-dead is stale; close and cancel remove it under the Sandbox lock and log it.
+A running command has
+`sandbox/<name>/workspace/<workspace-id>/exec/<execId>.json` (D-10). The
+Workspace id is the 64-hex stem of the Workspace record
+`workspace/<workspace-id>.json`, which stays where it is; the
+`workspace/<workspace-id>/` folder sits beside it, so the home layout needs
+no migration.
+
+The record holds:
+
+- its owner process (pid, kernel start time, boot, as Store leases name theirs);
+- its route: `local`, or `machine:<name>` for a machine's worker;
+- its stop handle: `Cgroup { path }` or `Group { pgid, leader }` (§5.3).
+
+It is created with create-new (a duplicate `execId` is refused without a
+scan) under the Sandbox lock when the command starts, and removed when it
+ends. The record is how a different process cancels a command, and how
+`sandbox.close` and `workspace.unmount` know commands are running. A record
+whose owner is dead is stale; close, unmount and cancel remove it under the
+Sandbox lock and log it, ending the command first through its stop handle if
+it still runs. Terminal unmount removes the Workspace's folder with its
+record. `layerfs doctor` checks exec records too.
 
 ### 5.3 How each backend stops one command
 
-| Backend | Group | Cancel |
-| --- | --- | --- |
-| `namespaces` | a child cgroup per command, `<sandbox cgroup>/exec-<id>`; the helper joins it instead of the Sandbox's cgroup | SIGTERM to the cgroup's processes, then `cgroup.kill`; this also catches children that left the process group |
-| `native` | a new session per command (`setsid` at spawn) | `killpg` SIGTERM, then SIGKILL. On macOS there is no cgroup, so a child that calls `setsid` itself escapes; documented |
-| `docker` | the command runs under a small wrapper that starts a new session and writes its id to the Sandbox's scratch | a second Engine exec in the container runs `kill -TERM -<pgid>`, then `-KILL`. The Engine has no per-exec kill (`docker/streams.rs` refuses one today) |
-| worker route | the worker holds the command and its group | a new worker op, `sandbox.exec_cancel`, in the next worker protocol version |
+After D-8 there are two backends and two stop handles. The backend fills the
+handle in at spawn and acts on it at cancel.
+
+| Backend | Stop handle | Group | Cancel |
+| --- | --- | --- | --- |
+| `namespaces` (every Linux kernel, including the docker machine) | `Cgroup { path }` | a child cgroup per command, `<sandbox cgroup>/ws-<workspace-id>/exec-<execId>`, mirroring the home layout; the helper joins it instead of the Sandbox's cgroup | SIGTERM to the cgroup's processes, wait up to `graceMs`, then `cgroup.kill`, then check it is empty; this also catches children that left the process group. One `cgroup.kill` on `ws-<workspace-id>` ends a Workspace's commands |
+| `host_process` (macOS) | `Group { pgid, leader }` | its own process group (`process_group(0)` at spawn, as today); `leader` is pid plus start time, against pid reuse | `killpg` SIGTERM, wait up to `graceMs`, then SIGKILL. There is no cgroup, so a child that calls `setsid` itself escapes; documented |
+| worker route | the record's route is `machine:<name>` | the worker holds the command; the cgroup path follows from the Sandbox and the ids, so the worker keeps no table | `workspace.exec_cancel` inside the existing `sandbox.host` frame (D-11); a worker that does not answer gives `unknown` |
+
+The docker row of the first draft (a wrapper and a second Engine exec) is
+dropped with the docker backend (D-8).
 
 ### 5.4 Rules
 
@@ -155,7 +188,8 @@ dead is stale; close and cancel remove it under the Sandbox lock and log it.
 - The daemon supervises no commands; cancel lives in control and the Sandbox
   backend, like exec.
 - Exiting `bash` is not proof every descendant is gone; only the cgroup form
-  (`namespaces`) can promise that, and the result says which form ran.
+  (`namespaces`) can promise that, and the result's `stop` says which form
+  ran.
 
 ## 6. Code layout
 
@@ -187,7 +221,8 @@ between "API" and "control" is not where the folders say it is:
 
 Decided (D-5, D-6): layers are `core < engine < control < api`. The
 `connect/` layer is renamed `control/`. Drivers are named for what they drive
-(platform, isolation, bucket); entities take the plain names. Production LOC
+(platform, Sandbox backend, bucket; D-9 renamed `layerfs-isolation` to
+`layerfs-sandbox-backend`); entities take the plain names. Production LOC
 is the files each crate receives, at `8b701f42f0`; the total does not change.
 
 ```diff
@@ -202,8 +237,8 @@ is the files each crate receives, at `8b701f42f0`; the total does not change.
     layerfs-platform/                       [4157]   (driver, one folder per platform; renamed from layerfs-machine)
 +   layerfs-store/                          [5817]   (Store records, sqlite/, postgresql/, backup/, project/, placement, leases)
     layerfs-bucket/                         [3301]   (driver, one folder per bucket provider; renamed from layerfs-store-backup)
-+   layerfs-sandbox/                        [6081]   (Sandbox records, launch, exec, daemon channel, workspace/; the name's old crate is now layerfs-isolation)
-    layerfs-isolation/                      [8610]   (driver: docker, native, namespaces; renamed from layerfs-sandbox)
++   layerfs-sandbox/                        [6081]   (Sandbox records, launch, exec, daemon channel, workspace/; the name's old crate is now layerfs-sandbox-backend)
+    layerfs-sandbox-backend/                [8610]   (driver: namespaces, host_process; renamed from layerfs-sandbox via layerfs-isolation, D-9; loses docker, about 3,200, under D-8)
     layerfs-control/                        [2234]   (moved from api/crates; keeps worker server, doctor, inventory, migrate)
 ```
 
@@ -214,7 +249,9 @@ is the files each crate receives, at `8b701f42f0`; the total does not change.
   Stores exist and where) and the engine's `layerfs-store-service` (opens
   the database).
 - Stored and displayed values do not follow crate renames (#535 G6): a
-  Sandbox backend is still stored as `docker`, `native` or `namespaces`.
+  Sandbox backend is still stored as `native` or `namespaces` (and `docker`
+  for a Sandbox recorded before D-8, which is refused with a message to
+  recreate it).
 
 ### 6.3 Dependencies (Cargo enforces them)
 
@@ -222,7 +259,7 @@ is the files each crate receives, at `8b701f42f0`; the total does not change.
  layerfs-api ──▶ layerfs-control ──▶ layerfs-sandbox ──▶ layerfs-store ──▶ layerfs-machine ──▶ layerfs-home
                  (worker server,      │  └ workspace/     │                 │
                   doctor, inventory,  ▼                   ▼                 ▼
-                  migrate)        layerfs-isolation   layerfs-bucket    layerfs-platform
+                  migrate)   layerfs-sandbox-backend  layerfs-bucket    layerfs-platform
                                   (driver)            (driver), engine  (driver)
                                                       store-service
 ```
@@ -244,7 +281,9 @@ Rules:
 4. **Workspace isolation.** In `layerfs-sandbox`, `workspace/` may use the
    Sandbox modules; the Sandbox modules do not import `workspace/`. A module
    test checks it.
-5. **Management is `layerfs-home` only:** it knows no entity.
+5. **Management is `layerfs-home` only:** it knows no entity, and depends
+   on no driver (its process facts move below the drivers; today it reaches
+   `LocalProcess` in the Sandbox driver, §6.6).
 6. **Drivers take every input as arguments**, know nothing of the home and
    write no records.
 
@@ -280,6 +319,24 @@ layerfs-control/src/                2234
   ├── doctor/                        618
   └── migrate/                      1218   v110, v2, volume, open, import_env
 ```
+
+Planned in phase C (architecture review, 2026-11-06):
+
+- **`layerfs-sandbox`:**
+  - one table of Sandbox and Workspace ops replaces three separate lists
+    (`route.rs`, `dispatch.rs`, `workspace/dispatch.rs`);
+  - `recorded.rs` becomes `reopen.rs`;
+  - `serve.rs` loses the docker start under D-8 and becomes `lifecycle.rs`
+    (close, reclaim);
+  - exec records and cancel get an `exec/` module.
+- **`layerfs-store`:**
+  - `calls.rs` becomes plain typed functions, removing its second string
+    match;
+  - `identity.rs` keeps only the identity codec, with project add and remove
+    moving to `project/`.
+- **`layerfs-control`:** the wrappers that pass `Related` become typed
+  functions. `Related` itself stays, because its checks run inside the Store
+  lock.
 
 ### 6.5 API: one folder per op family, one file per op
 
@@ -339,6 +396,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 | `store` → `inventory` (remove, push, pull "in use" checks) | the check reads Sandbox records | the check moves up to the `layerfs-control` op (§6.5) |
 | `sandbox` → `workspace` (`direct.rs`, `dispatch.rs`, `registry.rs`, `serve.rs`) | Workspace routing sits in Sandbox code | `direct.rs` moves to `workspace/`; the rest is resolved when the crate is cut (rule 4), or moves up |
 | `machine` → `inventory` (`list` shows Stores and Sandboxes) | a machine's summary includes derived counts | composed in `layerfs-control` (§6.5) |
+| `layerfs-home` → `layerfs-isolation` (found after phase A; `home/process.rs`) | process identity (`LocalProcess`) lives in the Sandbox driver | move the process facts, with the one audited macOS unsafe file and its guard entry, below the drivers; own commit after D-9 |
 
 The table covers every backward edge the import scan found at `8b701f42f0`.
 Some may need a small body change rather than a move; each one is listed in
@@ -350,7 +408,7 @@ the commit that resolves it.
 | --- | --- | --- |
 | A | Rename `connect/` to `control/` and the three drivers; cut the entity crates (§6.2) and fix §6.6. Cargo rejects any edge left. | about 0 (moves, renames, import paths, helper relocation) |
 | B | API out: `calls/`, `Context`, `daemon/values.rs` and the family dispatch move to `layerfs-api`; each op file calls one function (§6.5); control gets an `Events` type for progress. | small; measured |
-| C | Typed operations per entity (rule 1). Start with `layerfs-sandbox`, where exec and cancel (§5) are built typed from the start. | grows (typed requests, results and records); measured per commit |
+| C | Typed operations per entity (rule 1): `layerfs-sandbox` and `layerfs-store`/`layerfs-machine` in parallel. Exec and cancel (§5) follow on the typed Sandbox code (D-12). | grows (typed requests, results and records); measured per commit |
 
 Phase A also updates: the Cargo workspace members (`control/crates/*`);
 `tools/production_loc.py` (scope `connect` → `control`; `layerfs-control`
@@ -376,30 +434,52 @@ and #536 C1 marked superseded.
 Each commit builds and passes the same tests; phase A and B commits report
 their production LOC delta against their parent.
 
+**Amended order (2026-11-06).** Phases A and B are done on the
+`control-split` branch, ahead of steps 1–4 (the owner chose to start before
+the #545 PRs merged). From there:
+
+1. This amendment (D-7 to D-12).
+2. Merge the current `layerfs_v2_0_0` into the branch.
+3. Rename `layerfs-isolation` to `layerfs-sandbox-backend` (D-9).
+4. The docker platform onto `namespaces`; delete the docker backend (D-8).
+5. Phase C: typed `layerfs-sandbox` operations, and in parallel typed
+   `layerfs-store` and `layerfs-machine` operations.
+6. Exec and cancel (§5) after #566 merges (D-12).
+7. Move the process facts below the drivers (§6.6, last row).
+
 ## 8. Acceptance
 
-- `isolateNetwork`: on `namespaces`, `true` (and omitted) gives a command
+- ~~`isolateNetwork`: on `namespaces`, `true` (and omitted) gives a command
   with only `lo` (up) that cannot reach the worker port; `false` reaches the
   machine's network; `true` on `docker` and `native` is refused
-  `Unavailable`. The result's `network` names what ran.
+  `Unavailable`. The result's `network` names what ran.~~ Deferred to v3.0.0
+  (D-7).
+- `execId`: a caller-named id is used; an omitted one arrives in the first
+  progress event; a duplicate among the Workspace's running commands is
+  refused.
 - Cancel: a `sleep 600` started by one process is cancelled by another
   through `workspace.exec_cancel`; the exec call returns `kind:
   "cancelled"`; the command's background children are gone (cgroup empty on
   `namespaces`); cancelling an ended command answers `ended`; a cancel
   against an unreachable worker answers `unknown` and changes nothing.
-- Close: refused `Busy` while an exec record is live; `force: true` cancels
-  and then closes; a stale record (dead owner) is removed and logged.
-- `lost` is reachable: remove a Sandbox's container behind control's back;
-  `sandbox.get` answers `lost`; `sandbox.close` clears it.
+- Close and unmount: refused `Busy` while an exec record of theirs is live;
+  `force: true` cancels and then closes or unmounts; a stale record (dead
+  owner) is removed and logged.
+- `lost` is reachable: kill a Sandbox's process tree behind control's back
+  (after D-8 there is no per-Sandbox container to remove); `sandbox.get`
+  answers `lost`; `sandbox.close` clears it.
+- D-8: a docker-machine Sandbox runs as `namespaces` and shows
+  `backend: "namespaces"`; a Sandbox recorded under the old docker backend is
+  refused with a message to recreate it.
 - Phases A and B change no behavior: the same test set passes before and
   after. After phase A, Cargo rejects every dependency edge outside §6.3,
   and no `layerfs-api` op file passes an op name as a string after phase B.
 
 ## 9. Open questions
 
-| Id | Question | Recommendation |
-| --- | --- | --- |
-| O-1 | Default for `isolateNetwork` on `namespaces` when omitted | isolated (D-4 asks for an opt-out, which implies isolated by default) |
-| O-2 | Bring `lo` up in isolated mode | yes; local test servers need it |
-| O-3 | Accept trims P-1 to P-6 | yes |
-| O-5 | `execId` chosen by the caller, by control, or both | both (caller may name it; else control) |
+| Id | Question | Recommendation | Answer |
+| --- | --- | --- | --- |
+| O-1 | Default for `isolateNetwork` on `namespaces` when omitted | isolated (D-4 asks for an opt-out, which implies isolated by default) | accepted, then superseded by D-7 (owner, 2026-11-06) |
+| O-2 | Bring `lo` up in isolated mode | yes; local test servers need it | accepted, then superseded by D-7 (owner, 2026-11-06) |
+| O-3 | Accept trims P-1 to P-6 | yes | open; belongs to the compute-plane assignee |
+| O-5 | `execId` chosen by the caller, by control, or both | both (caller may name it; else control) | accepted (owner, 2026-11-06); unique per Workspace (D-10) |
