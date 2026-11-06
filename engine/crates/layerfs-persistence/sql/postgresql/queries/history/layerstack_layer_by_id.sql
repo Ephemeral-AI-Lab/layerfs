@@ -1,0 +1,1 @@
+SELECT y.layer_id, y.layer_stack_id, y.parent_layer_id, y.root_id, y.source_branch_id, y.source_commit_id, y.logical, l.overwrote_count FROM {s}.layer y JOIN {s}.layer_lineage l ON l.layer_id = y.layer_id WHERE y.layer_id = $1;

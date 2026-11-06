@@ -83,12 +83,13 @@ impl HistoryCatalog for HistoryProvider {
         })
     }
 
+    // One statement each (#95): a Commit's `logical.known` reads one row.
     fn commit(&self, id: CommitId) -> HistoryResult<Option<CommitRecord>> {
-        self.read(|tx| commit::commit(tx, id))
+        self.read_statement(|tx| commit::commit(tx, id))
     }
 
     fn layer(&self, id: LayerId) -> HistoryResult<Option<LayerRecord>> {
-        self.read(|tx| layerstack::layer(tx, id))
+        self.read_statement(|tx| layerstack::layer(tx, id))
     }
 
     fn commit_history(
