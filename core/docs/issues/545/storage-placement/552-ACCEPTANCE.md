@@ -5,7 +5,7 @@
 > (the #557 guard commits `d009eaa92`…`42c4fa53a` plus the #552 work below).
 > Docs-only commits `126284cbe42c` (this report) and later README/report
 > edits follow it and change no code.
-> **Base:** `main` at `9f97a7ec9`; the PR branch at `42c4fa53a` is the branch's
+> **Base:** `layerfs_v2_0_0` at `02133596a`; the PR branch at `42c4fa53a` is the branch's
 > first parent. Acceptance record for Ephemeral-AI-Lab/layerfs#552.
 >
 > LayerFS Commits on `agent-b552` carry the files; the repository's own `.git`
