@@ -46,8 +46,9 @@ impl HistoryCatalog for HistoryProvider {
         })
     }
 
+    // One statement (#96): a Sandbox create's reach check finds its project.
     fn layer_stack_named(&self, name: &HistoryName) -> HistoryResult<Option<LayerStackRecord>> {
-        self.read(|tx| layerstack::layer_stack_named(tx, name))
+        self.read_statement(|tx| layerstack::layer_stack_named(tx, name))
     }
 
     fn branch(&self, id: BranchId) -> HistoryResult<Option<BranchRecord>> {
