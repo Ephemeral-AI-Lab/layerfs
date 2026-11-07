@@ -2,28 +2,35 @@
 //! Store's worker).
 use crate::identity::{identity, legacy, save_record, store_dir};
 use crate::open_args::OpenArgs;
-use crate::project::discovery;
+use crate::project::frame::RemoveFrame;
 use layerfs_bridge::control::SdkValue;
 use layerfs_bridge::sdk_values::hex;
-use layerfs_home::helpers::text;
+use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused, Outcome};
+use std::path::Path;
 
 /// `project.remove`'s work on the Store's machine (here, or in its worker
-/// as the worker op `project.remove`), `{ home, store, storePath, project }`:
+/// as the worker op `project.remove`), in `home` (the caller's, or the
+/// worker's root; checked by the caller with [`home_of`](super::discovery::home_of)):
 /// drops the project's stack (its Layers, Branches and Commits) from the
 /// Store in one write, then its entry from the home. The other projects
 /// stay. The entry of the project a Store was made by (its own Init) holds
 /// the Store's identity, so a Store record is saved before that entry goes.
 /// Its packs and objects stay in the Store; reclaiming them is A8 (#411).
 /// The caller stops the project's Sandboxes and clients first.
-pub fn remove_project(args: &SdkValue) -> Outcome {
-    let home = discovery::home(args)?;
-    let store = text(args, "store")?;
-    let name = text(args, "project")?;
-    let open = OpenArgs::read(args);
+pub fn remove_project(home: &Path, request: &RemoveFrame) -> Outcome {
+    let (store, name) = (request.store.as_str(), request.project.as_str());
+    let open = OpenArgs {
+        home: Some(home.to_path_buf()),
+        store: Some(store.to_owned()),
+        project: Some(name.to_owned()),
+        store_path: Some(paths::store_file(home, store).display().to_string()),
+        store_record: request.store_record.clone(),
+        postgresql: None,
+    };
     let identity = identity(&open)?;
-    let own = name == store && legacy(&home, store)?;
-    let entry = layerfs_home::home::paths::project_dir(&home, store, name);
+    let own = name == store && legacy(home, store)?;
+    let entry = layerfs_home::home::paths::project_dir(home, store, name);
     let stack = crate::service::with_service(&open, |service| {
         let stacks = service
             .store
@@ -48,8 +55,8 @@ pub fn remove_project(args: &SdkValue) -> Outcome {
     })?;
     // the own project's entry carried the Store's identity until now
     if own {
-        layerfs_home::home::private_dir(&store_dir(&home, store)?)?;
-        save_record(&home, store, &identity)?;
+        layerfs_home::home::private_dir(&store_dir(home, store)?)?;
+        save_record(home, store, &identity)?;
     }
     if entry.exists() {
         std::fs::remove_dir_all(&entry).map_err(failed)?;

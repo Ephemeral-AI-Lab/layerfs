@@ -1,15 +1,17 @@
 //! Init into a PostgreSQL Store (#533 step 10b): `store.connect` makes the
 //! fixed schema in an empty database, and `project.init` adds a project
 //! to it through the same live add as a sqlite Store, in this process.
-//! The schema's URL is the call's (`postgresql: { url, schema,
-//! synchronousCommit }`) and is never stored.
+//! The schema's URL is the call's ([`PgProjectAdd::postgresql`]) and is
+//! never stored.
 use crate::identity as stores;
 use crate::identity::Identity;
-use crate::open_args::{OpenArgs, PgSelection};
+use crate::open_args::PgSelection;
+use crate::project::add::ProjectAdd;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
-use layerfs_home::helpers::{random, text};
+use layerfs_home::helpers::random;
 use layerfs_home::outcome::{refused, Outcome};
+use std::path::Path;
 use std::sync::Arc;
 
 #[cfg(not(feature = "postgresql"))]
@@ -64,21 +66,29 @@ pub fn create_schema(postgresql: &PgSelection, identity: &Identity) -> Result<bo
     }
 }
 
-/// `{ store, store_record, name, path, timeoutMs, postgresql }`: Inits the
-/// folder `path` as the new project `name` of the PostgreSQL Store.
-/// Answers `{ layer, root, stack }`; the caller writes the project record.
-pub fn add_project(args: &SdkValue) -> Outcome {
-    let store = text(args, "store")?;
-    let name = text(args, "name")?;
-    let open = OpenArgs::read(args);
-    let identity = stores::identity(&open)?;
+/// `project.init`'s add into a PostgreSQL Store: the add (with the Store's
+/// record) and the server it dials. No `Debug`: the URL holds the password.
+pub struct PgProjectAdd {
+    /// The add.
+    pub add: ProjectAdd,
+    /// The Store's server.
+    pub postgresql: PgSelection,
+}
+
+/// Inits the folder as the new project of the PostgreSQL Store. Answers
+/// `{ layer, root, stack }`; the caller writes the project record.
+pub fn add_project(request: &PgProjectAdd) -> Outcome {
+    let add = &request.add;
+    let (store, name) = (add.store.as_str(), add.name.as_str());
+    let identity = stores::identity(&add.open())?;
     if !matches!(identity.kind, stores::Kind::Postgresql { .. }) {
         return Err(refused("InvalidInput", "the Store is not PostgreSQL"));
     }
-    let deadline = crate::project::init::deadline(args)?;
+    let deadline = crate::project::init::deadline(add.timeout_ms)?;
     let counters = Arc::new(layerfs_project::InitCounters::new());
-    let postgresql = open.postgresql.unwrap_or_default();
-    let (added, stack) = run(args, &postgresql, &identity, name, deadline, counters)?;
+    let postgresql = &request.postgresql;
+    let source = add.source.as_path();
+    let (added, stack) = run(source, postgresql, &identity, name, deadline, counters)?;
     let added = added
         .map_err(|failure| crate::project::add::add_failure(failure.error, None, name, store))?;
     Ok(SdkValue::map([
@@ -97,7 +107,7 @@ pub fn add_project(args: &SdkValue) -> Outcome {
 type Added = Result<layerfs_project::store::AddedProject, Box<layerfs_project::store::AddFailure>>;
 
 fn run(
-    args: &SdkValue,
+    source: &Path,
     postgresql: &PgSelection,
     identity: &Identity,
     name: &str,
@@ -113,7 +123,7 @@ fn run(
         let stack = LayerStackId::from_authority(crate::project::init::sixteen(random()?));
         let branch = BranchId::from_authority(crate::project::init::sixteen(random()?));
         let request = AddRequest {
-            source: std::path::PathBuf::from(text(args, "path")?),
+            source: source.to_path_buf(),
             store: layerfs_persistence::StoreSelection::Postgres(selection(
                 postgresql.url()?,
                 &postgresql.schema()?,
@@ -135,7 +145,9 @@ fn run(
     }
     #[cfg(not(feature = "postgresql"))]
     {
-        let _ = (args, postgresql, identity, name, deadline, counters, random);
+        let _ = (
+            source, postgresql, identity, name, deadline, counters, random,
+        );
         Err(refused("Unsupported", UNBUILT))
     }
 }

@@ -11,6 +11,7 @@
 //! while it is read is refused, as Init refuses it. Each request is sent
 //! once: a certain failure discards the copy with one more request; a lost
 //! answer is `Unknown`, naming the copy it may leave on the machine.
+use super::frame::{StageFrame, StageStep};
 use super::tree::{header, Record};
 use crate::place::Worker;
 use crate::sqlite::transfer::steps::CHUNK;
@@ -242,18 +243,14 @@ struct Sender<'s, 'c, 'p> {
 }
 
 impl Sender<'_, '_, '_> {
-    fn request(&self, step: &str, part: Option<Vec<u8>>) -> SdkValue {
-        let mut fields = vec![
-            ("store", SdkValue::text(self.copy.store)),
-            ("name", SdkValue::text(self.copy.name)),
-            ("staged", SdkValue::text(&self.copy.id)),
-            ("step", SdkValue::text(step)),
-        ];
-        if let Some(part) = part {
-            fields.push(("part", SdkValue::Bytes(part)));
+    fn request(&self, step: StageStep) -> SdkValue {
+        StageFrame {
+            store: self.copy.store.to_owned(),
+            name: self.copy.name.to_owned(),
+            id: self.copy.id.clone(),
+            step,
         }
-        let fields = fields.into_iter().map(|(n, v)| (n.to_owned(), v));
-        SdkValue::Map(fields.collect())
+        .encode()
     }
 
     /// Sends the part being filled, if it holds anything.
@@ -262,7 +259,7 @@ impl Sender<'_, '_, '_> {
             return Ok(());
         }
         let part = std::mem::take(&mut self.part);
-        let request = self.request("write", Some(part));
+        let request = self.request(StageStep::Write(part));
         // a worker not reached was sent nothing
         match self.worker.attempt("project.stage", request, &mut |_| {}) {
             Ok(outcome) => {
@@ -407,7 +404,7 @@ pub fn send(
     if !sender.asked {
         return Err(refusal);
     }
-    let discard = sender.request("discard", None);
+    let discard = sender.request(StageStep::Discard);
     if let Err(why) = sender.worker.call("project.stage", discard, &mut |_| {}) {
         refusal.message = format!(
             "{}; its copy was not discarded ({}) and may remain at {left}",

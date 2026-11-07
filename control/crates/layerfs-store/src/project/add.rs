@@ -8,7 +8,9 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_history::{BranchId, HistoryName, LayerStackId};
-use layerfs_home::helpers::{random, text};
+use layerfs_home::helpers::random;
+use layerfs_home::home::paths;
+use layerfs_home::names::StoreName;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_persistence::{PersistenceConfig, SealedStore, SqlitePersistenceProfile};
 use layerfs_project::store::{AddRequest, InitError, ProjectApi};
@@ -83,23 +85,52 @@ pub fn make_entry(home: &Path, store: &str, name: &str) -> Result<PathBuf> {
     Ok(entry)
 }
 
-/// `project.init`'s add into a sqlite Store, `{ home, store, storePath, name, path, timeoutMs }`:
-/// Inits the folder `path` as the new project `name` of the live SQLite
-/// Store, through its admission and writer lane, then records its entry.
-/// A Store policy is the Store's own, so `policy` is refused here.
-pub fn add_project(args: &SdkValue) -> Outcome {
-    let store = text(args, "store")?;
-    let name = text(args, "name")?;
-    let source = PathBuf::from(text(args, "path")?);
-    if args.get("policy").is_some() {
-        return Err(refused(
-            "InvalidInput",
-            "a project added to a Store uses the Store's policy; policy is refused",
-        ));
+/// `project.init`'s add of folder `source` as the new project `name` of
+/// Store `store` in `home` (the caller's, or a worker's root), whose file is
+/// `<home>/store/<store>/store.sqlite`.
+#[derive(Clone, Debug)]
+pub struct ProjectAdd {
+    /// The home, or a worker's root.
+    pub home: PathBuf,
+    /// The Store.
+    pub store: StoreName,
+    /// The new project's name.
+    pub name: String,
+    /// The folder.
+    pub source: PathBuf,
+    /// Init's time limit in milliseconds ([`deadline`](super::init::deadline)).
+    pub timeout_ms: Option<i64>,
+    /// The Store's record, sent to a worker with the call.
+    pub store_record: Option<SdkValue>,
+}
+
+impl ProjectAdd {
+    /// What opens the Store: its home, name, file and record.
+    pub fn open(&self) -> OpenArgs {
+        OpenArgs {
+            home: Some(self.home.clone()),
+            store: Some(self.store.to_string()),
+            store_path: Some(self.store_file().display().to_string()),
+            store_record: self.store_record.clone(),
+            ..OpenArgs::default()
+        }
     }
-    let deadline = crate::project::init::deadline(args)?;
-    let open = OpenArgs::read(args);
-    let store_file = open.store_path()?;
+
+    /// The Store's file.
+    pub fn store_file(&self) -> PathBuf {
+        paths::store_file(&self.home, &self.store)
+    }
+}
+
+/// Inits the folder as the new project of the live SQLite Store, through
+/// its admission and writer lane, then records its entry. A Store policy is
+/// the Store's own; a project added to it has none.
+pub fn add_project(request: &ProjectAdd) -> Outcome {
+    let (store, name) = (request.store.as_str(), request.name.as_str());
+    let source = request.source.clone();
+    let deadline = crate::project::init::deadline(request.timeout_ms)?;
+    let open = request.open();
+    let store_file = request.store_file();
     let global = store_file.parent().unwrap_or(&store_file);
     layerfs_store_service::kernel_guard::check(global)
         .map_err(|reason| refused("Unsupported", reason.0))?;
@@ -111,7 +142,7 @@ pub fn add_project(args: &SdkValue) -> Outcome {
             format!("no Store file at {}", store_file.display()),
         ));
     }
-    let home = discovery::home(args)?;
+    let home = discovery::home_of(Some(&request.home))?;
     if name == store && legacy(&home, store)? {
         return Err(refused(
             "Exists",

@@ -4,6 +4,7 @@ pub mod add;
 pub mod discovery;
 #[doc(hidden)]
 pub mod family;
+pub mod frame;
 pub mod init;
 pub mod postgres_init;
 #[doc(hidden)]

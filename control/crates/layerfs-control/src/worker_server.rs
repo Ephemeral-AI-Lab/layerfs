@@ -23,6 +23,9 @@ use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::{
     read_frame, read_frame_within, write_frame, Hello, HELLO_WAIT, MAX_HELLO,
 };
+use layerfs_store::project::discovery::home_of;
+use layerfs_store::project::frame::{InitFrame, RemoveFrame, StageFrame};
+use layerfs_store::project::{init::in_worker, remove::remove_project, staged};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -174,36 +177,22 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
         ),
         // drops one project from the Store under this worker's root (2.0):
         // `{ store, project, store_record }`
-        "project.remove" => layerfs_store::project::remove::remove_project(&with_home(args, root)),
+        "project.remove" => {
+            let root = home_of(Some(root))?;
+            remove_project(&root, &RemoveFrame::decode(&args)?)
+        }
         // writes or discards one part of a caller's folder copy under this
         // worker's root (#536 H11a)
-        "project.stage" => layerfs_store::project::staged::run(root, &args),
+        "project.stage" => staged::run(root, &StageFrame::decode(&args)?),
         // adds a folder copy the caller sent as a new project of a Store
         // under this worker's root (#536 H11, H11a)
-        "project.init" => layerfs_store::project::init::in_worker(&with_home(args, root)),
+        "project.init" => {
+            let root = home_of(Some(root))?;
+            in_worker(&root, &InitFrame::decode(&args)?)
+        }
         _ => Err(refused(
             "InvalidInput",
             format!("the worker has no operation {op}"),
         )),
-    }
-}
-
-/// `args` with `home` set to the worker's root, whatever the caller sent.
-/// A call that names a valid `store` gets that Store's file under the root
-/// as its `storePath`, whatever the caller sent.
-fn with_home(args: SdkValue, root: &Path) -> SdkValue {
-    let file = args
-        .get_text("store")
-        .filter(|store| layerfs_home::names::StoreName::parse(store).is_ok())
-        .map(|store| layerfs_home::home::paths::store_file(root, store));
-    let text = SdkValue::text(root.display().to_string());
-    let args = layerfs_home::home::with_field(args, "home", text);
-    match file {
-        Some(file) => layerfs_home::home::with_field(
-            args,
-            "storePath",
-            SdkValue::text(file.display().to_string()),
-        ),
-        None => args,
     }
 }

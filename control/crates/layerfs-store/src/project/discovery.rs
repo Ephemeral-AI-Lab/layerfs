@@ -30,11 +30,8 @@ pub struct Project {
     pub installed: Option<StoreManifest>,
 }
 
-pub fn home(args: &SdkValue) -> Result<PathBuf> {
-    home_of(args.get_text("home").map(Path::new))
-}
-
-/// [`home`] of a typed request's `home` (layerfs-project#108).
+/// The home a call names, else `LAYERFS_HOME`: absolute, and a private
+/// directory of this user's, made if absent.
 pub fn home_of(home: Option<&Path>) -> Result<PathBuf> {
     let home = home
         .map(Path::to_path_buf)
@@ -88,7 +85,7 @@ pub fn project_dir(args: &SdkValue) -> Result<PathBuf> {
 pub fn project_entry(args: &SdkValue) -> Result<PathBuf> {
     let name = helpers::text(args, "project")?;
     layerfs_history::HistoryName::new(name).map_err(failed)?;
-    let home = home(args)?;
+    let home = home_of(args.get_text("home").map(Path::new))?;
     // 2.0 (#533 step 4): every project is named with its Store
     let store = args.get_text("store").unwrap_or(name);
     crate::identity::store_dir(&home, store)?;

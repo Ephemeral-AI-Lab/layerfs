@@ -9,7 +9,12 @@
 //! project's history from its Store.
 use crate::calls::Page;
 use crate::lease;
+use crate::open_args::PgSelection;
 use crate::place::{self, Executor};
+use crate::project::add::{add_project, ProjectAdd};
+use crate::project::discovery::home_of;
+use crate::project::frame::{InitFrame, RemoveFrame};
+use crate::project::postgres_init::PgProjectAdd;
 use crate::project::record::ProjectRecord;
 use crate::record::{StoreRecord, StoreRef};
 use crate::resolve;
@@ -101,21 +106,22 @@ pub fn list(home: &Path, request: &ProjectList) -> Outcome {
     ]))
 }
 
-/// The host operation's arguments for project `name` of Store `store`.
-fn host_args(home: &Path, store: &str, more: Vec<(&str, SdkValue)>) -> SdkValue {
-    let mut fields = vec![
-        (
-            "home".to_owned(),
-            SdkValue::text(home.display().to_string()),
-        ),
-        ("store".to_owned(), SdkValue::text(store)),
-        (
-            "storePath".to_owned(),
-            SdkValue::text(paths::store_file(home, store).display().to_string()),
-        ),
-    ];
-    fields.extend(more.into_iter().map(|(n, v)| (n.to_owned(), v)));
-    SdkValue::Map(fields)
+/// The add of `folder` as project `name` of Store `store` in `home`.
+fn project_add(
+    home: &Path,
+    store: &StoreName,
+    name: &str,
+    folder: &str,
+    timeout: i64,
+) -> ProjectAdd {
+    ProjectAdd {
+        home: home.to_path_buf(),
+        store: store.clone(),
+        name: name.to_owned(),
+        source: folder.into(),
+        timeout_ms: Some(timeout),
+        store_record: None,
+    }
 }
 
 /// `project.init(project, folder, { timeout, on_progress })`. Its progress
@@ -124,10 +130,7 @@ fn host_args(home: &Path, store: &str, more: Vec<(&str, SdkValue)>) -> SdkValue 
 /// Store) and `record` (the home's project record), whatever the route.
 pub fn init(home: &Path, events: &mut Events<'_>, request: &ProjectInit) -> Outcome {
     let home = home.to_path_buf();
-    let (store, name) = (
-        request.project.store.as_str(),
-        request.project.project.as_str(),
-    );
+    let (store, name) = (&request.project.store, request.project.project.as_str());
     let folder = request.folder.as_str();
     if !Path::new(folder).is_absolute() {
         return Err(refused(
@@ -160,17 +163,9 @@ pub fn init(home: &Path, events: &mut Events<'_>, request: &ProjectInit) -> Outc
         return init_on_worker(&home, events, worker, call);
     }
     let _lease = lease::hold(&home, store)?;
-    let call = host_args(
-        &home,
-        store,
-        vec![
-            ("name", SdkValue::text(name)),
-            ("path", SdkValue::text(folder)),
-            ("timeoutMs", SdkValue::Int(timeout)),
-        ],
-    );
+    let add = project_add(&home, store, name, folder, timeout);
     progress(events, "install", None);
-    let added = crate::project::add::add_project(&call)?;
+    let added = add_project(&add)?;
     // the project's record keeps when it was made
     progress(events, "record", None);
     {
@@ -190,7 +185,7 @@ pub fn init(home: &Path, events: &mut Events<'_>, request: &ProjectInit) -> Outc
 
 /// What one `project.init` into a worker's Store names.
 struct InitCall<'a> {
-    store: &'a str,
+    store: &'a StoreName,
     name: &'a str,
     machine: &'a str,
     folder: &'a str,
@@ -239,13 +234,14 @@ fn init_on_worker(
     // the lease is taken under the Store's lock with the record read there
     let (lease, record) = lease::claim(&home, store)?;
     send::send(events, &mut worker, &copy, total)?;
-    let request = SdkValue::map([
-        ("store", SdkValue::text(store)),
-        ("name", SdkValue::text(name)),
-        ("staged", SdkValue::text(&copy.id)),
-        ("timeoutMs", SdkValue::Int(timeout)),
-        ("store_record", record.to_record().clone()),
-    ]);
+    let request = InitFrame {
+        store: store.clone(),
+        name: Some(name.to_owned()),
+        staged: copy.id.clone(),
+        timeout_ms: Some(timeout),
+        store_record: Some(record.to_record().clone()),
+    }
+    .encode();
     progress(events, "install", None);
     let added = worker.call("project.init", request, &mut |event| events.event(event));
     drop(lease);
@@ -280,7 +276,7 @@ fn init_on_worker(
 fn init_postgresql(
     home: &Path,
     events: &mut Events<'_>,
-    store: &str,
+    store: &StoreName,
     name: &str,
     folder: &str,
     timeout: i64,
@@ -294,21 +290,18 @@ fn init_postgresql(
             format!("Store {store} already has a project named {name}"),
         ));
     }
-    let call = host_args(
-        &home,
-        store,
-        vec![
-            ("name", SdkValue::text(name)),
-            ("path", SdkValue::text(folder)),
-            ("timeoutMs", SdkValue::Int(timeout)),
-            ("store_record", record.to_record().clone()),
-            ("postgresql", crate::postgresql::connect::selection(record)?),
-        ],
-    );
+    let selection = crate::postgresql::connect::selection(record)?;
+    let add = PgProjectAdd {
+        add: ProjectAdd {
+            store_record: Some(record.to_record().clone()),
+            ..project_add(&home, store, name, folder, timeout)
+        },
+        postgresql: PgSelection::read(&selection),
+    };
     // this process uses the Store meanwhile, as a sqlite Init does
     let _lease = lease::hold(&home, store)?;
     progress(events, "install", None);
-    let added = crate::project::postgres_init::add_project(&call)?;
+    let added = crate::project::postgres_init::add_project(&add)?;
     let stack = added.get("stack").cloned().unwrap_or_default();
     progress(events, "record", None);
     ProjectRecord::initialised(store, name, stack).write(&home)?;
@@ -330,15 +323,16 @@ pub fn remove(
     project: &ProjectRef,
     related: Related,
 ) -> Outcome {
-    let project = project.to_string();
+    let text = project.to_string();
     let home = home.to_path_buf();
-    let target = resolve::target(&home, &project)?;
+    let target = resolve::target(&home, &text)?;
     target.record.unblocked()?;
-    (related.can_remove_project)(&home, &project)?;
-    let args = vec![
-        ("project", SdkValue::text(&target.project)),
-        ("store_record", target.record.to_record().clone()),
-    ];
+    (related.can_remove_project)(&home, &text)?;
+    let request = RemoveFrame {
+        store: project.store.clone(),
+        project: target.project.clone(),
+        store_record: Some(target.record.to_record().clone()),
+    };
     if let StoreRef::Postgres { .. } = target.store_ref {
         return Err(refused(
             "Unsupported",
@@ -348,15 +342,11 @@ pub fn remove(
     let removed = match place::plan(&home, &target.store_ref)? {
         Executor::Local => {
             let _lease = lease::hold(&home, &target.store)?;
-            crate::project::remove::remove_project(&host_args(&home, &target.store, args))?
+            crate::project::remove::remove_project(&home_of(Some(&home))?, &request)?
         }
         Executor::Worker(mut worker) => {
             let _lease = lease::hold(&home, &target.store)?;
-            let mut fields = vec![("store".to_owned(), SdkValue::text(&target.store))];
-            fields.extend(args.into_iter().map(|(n, v)| (n.to_owned(), v)));
-            worker.call("project.remove", SdkValue::Map(fields), &mut |e| {
-                events.event(e)
-            })?
+            worker.call("project.remove", request.encode(), &mut |e| events.event(e))?
         }
     };
     let entry = paths::project_dir(&home, &target.store, &target.project);
@@ -366,6 +356,6 @@ pub fn remove(
     Ok(layerfs_home::home::with_field(
         removed,
         "project",
-        SdkValue::text(&project),
+        SdkValue::text(text),
     ))
 }

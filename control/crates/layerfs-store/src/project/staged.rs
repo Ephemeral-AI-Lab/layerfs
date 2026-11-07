@@ -4,6 +4,7 @@
 //! source, and removed on every outcome the worker knows. Paths come from
 //! the root and the copy's id only; an entry's path stays inside its
 //! staging folder and goes through no link.
+use super::frame::{StageFrame, StageStep};
 use super::tree::{Reader, Record};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{failed, refused, Outcome};
@@ -18,46 +19,26 @@ use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// The copy's id: 16 lowercase hex digits the caller chose.
-pub fn id(args: &SdkValue) -> Result<&str> {
-    let id = args.get_text("staged").unwrap_or("");
-    let hex = |c: u8| c.is_ascii_digit() || (b'a'..=b'f').contains(&c);
-    if id.len() != 16 || !id.bytes().all(hex) {
-        return Err(refused(
-            "InvalidInput",
-            "`staged` must be a folder copy's id: 16 lowercase hex digits",
-        ));
-    }
-    Ok(id)
-}
-
 /// Where copy `id` is staged under the worker's `root`.
 pub fn folder(root: &Path, id: &str) -> PathBuf {
     root.join("incoming").join(format!("init-{id}"))
 }
 
-/// `project.stage` `{ staged, step, part }`: `write` applies one part of
-/// the copy, `discard` removes the staging folder.
-pub fn run(root: &Path, args: &SdkValue) -> Outcome {
-    let dir = folder(root, id(args)?);
-    match args.get_text("step").unwrap_or("") {
-        "write" => {
-            let Some(SdkValue::Bytes(part)) = args.get("part") else {
-                return Err(refused("InvalidInput", "`part` must be bytes"));
-            };
+/// `project.stage`: `write` applies one part of the copy, `discard`
+/// removes the staging folder.
+pub fn run(root: &Path, frame: &StageFrame) -> Outcome {
+    let dir = folder(root, &frame.id);
+    match &frame.step {
+        StageStep::Write(part) => {
             layerfs_home::home::private_dir(&dir)?;
             let records = apply(&dir, part)?;
             Ok(SdkValue::map([("records", SdkValue::Int(records as i64))]))
         }
-        "discard" => {
+        StageStep::Discard => {
             let existed = dir.exists();
             remove(&dir)?;
             Ok(SdkValue::map([("discarded", SdkValue::Bool(existed))]))
         }
-        step => Err(refused(
-            "InvalidInput",
-            format!("no folder copy step `{step}`"),
-        )),
     }
 }
 
