@@ -777,3 +777,314 @@ fn a_commit_holds_what_the_same_operations_make_of_a_host_tree() {
     assert_eq!(outstanding, 0);
     fs::remove_dir_all(base).unwrap();
 }
+
+#[derive(Default)]
+struct JobCounts {
+    observe: std::sync::atomic::AtomicU64,
+    mutate: std::sync::atomic::AtomicU64,
+    close_file: std::sync::atomic::AtomicU64,
+    forget: std::sync::atomic::AtomicU64,
+}
+impl JobCounts {
+    fn snapshot(&self) -> (u64, u64, u64, u64) {
+        (
+            self.observe.load(Ordering::Acquire),
+            self.mutate.load(Ordering::Acquire),
+            self.close_file.load(Ordering::Acquire),
+            self.forget.load(Ordering::Acquire),
+        )
+    }
+}
+struct CountingMount {
+    inner: Arc<dyn layerfs_mount_ports::ports::MountServices>,
+    counts: Arc<JobCounts>,
+}
+struct CountingRequest {
+    inner: Arc<dyn layerfs_mount_ports::ports::RequestServices>,
+    counts: Arc<JobCounts>,
+}
+impl layerfs_mount_ports::ports::MountServices for CountingMount {
+    fn request(
+        &self,
+        fence: &layerfs_mount_ports::ports::Fence,
+    ) -> Result<
+        Arc<dyn layerfs_mount_ports::ports::RequestServices>,
+        layerfs_mount_ports::ports::ServiceError,
+    > {
+        Ok(Arc::new(CountingRequest {
+            inner: self.inner.request(fence)?,
+            counts: self.counts.clone(),
+        }))
+    }
+}
+impl layerfs_mount_ports::ports::RequestServices for CountingRequest {
+    fn directory_visit(
+        &self,
+        mount: layerfs_overlay::KernelMount,
+        serial: u64,
+        handle: u64,
+        offset: u64,
+        after: Option<Vec<u8>>,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<
+        '_,
+        layerfs_mount_ports::ports::ServiceReply<Arc<layerfs_workspace::KernelDirectoryWindow>>,
+    > {
+        self.inner
+            .directory_visit(mount, serial, handle, offset, after)
+    }
+    fn publish_cookies(
+        &self,
+        offer: layerfs_overlay::KernelCookieOffer,
+        names: Vec<Vec<u8>>,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_mount_ports::ports::ServiceReply<()>>
+    {
+        self.inner.publish_cookies(offer, names)
+    }
+    fn close_directory(
+        &self,
+        mount: layerfs_overlay::KernelMount,
+        serial: u64,
+        handle: u64,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_mount_ports::ports::ServiceReply<()>>
+    {
+        self.inner.close_directory(mount, serial, handle)
+    }
+    fn read_visit(
+        &self,
+        mount: layerfs_overlay::KernelMount,
+        serial: u64,
+        handle: Option<u64>,
+        offset: u64,
+        length: u32,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<
+        '_,
+        layerfs_mount_ports::ports::ServiceReply<Arc<layerfs_workspace::KernelWindow>>,
+    > {
+        self.inner.read_visit(mount, serial, handle, offset, length)
+    }
+    fn close_file(
+        &self,
+        mount: layerfs_overlay::KernelMount,
+        serial: u64,
+        handle: u64,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_mount_ports::ports::ServiceReply<()>>
+    {
+        self.counts.close_file.fetch_add(1, Ordering::AcqRel);
+        self.inner.close_file(mount, serial, handle)
+    }
+    fn provider_failure(
+        &self,
+    ) -> Result<
+        Option<layerfs_mount_ports::ports::ServiceError>,
+        layerfs_mount_ports::ports::ServiceError,
+    > {
+        self.inner.provider_failure()
+    }
+    fn failed_base_read(
+        &self,
+        step: layerfs_mount_ports::ports::ServiceError,
+    ) -> layerfs_mount_ports::ports::ServiceError {
+        self.inner.failed_base_read(step)
+    }
+    fn observe_visit(
+        &self,
+        mount: layerfs_overlay::KernelMount,
+        request: u64,
+        serial: u64,
+        handle: Option<u64>,
+        operation: layerfs_workspace::KernelReadOperation,
+        facts: Arc<layerfs_workspace::VisitFacts>,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<
+        '_,
+        layerfs_mount_ports::ports::ServiceReply<Arc<layerfs_workspace::KernelReadOutcome>>,
+    > {
+        self.counts.observe.fetch_add(1, Ordering::AcqRel);
+        self.inner
+            .observe_visit(mount, request, serial, handle, operation, facts)
+    }
+    fn base(&self) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_workspace::BaseView> {
+        self.inner.base()
+    }
+    fn mutate_visit(
+        &self,
+        request: layerfs_workspace::KernelVisitRequest,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<
+        '_,
+        layerfs_mount_ports::ports::ServiceReply<Arc<layerfs_workspace::KernelMutationOutcome>>,
+    > {
+        self.counts.mutate.fetch_add(1, Ordering::AcqRel);
+        self.inner.mutate_visit(request)
+    }
+    fn recognize(
+        &self,
+        serial: u64,
+        offset: u64,
+        data: layerfs_workspace::WriteData,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_workspace::WriteData> {
+        self.inner.recognize(serial, offset, data)
+    }
+    fn forget(
+        &self,
+        mount: layerfs_overlay::KernelMount,
+        serial: u64,
+        count: u64,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_mount_ports::ports::ServiceReply<()>>
+    {
+        self.counts.forget.fetch_add(1, Ordering::AcqRel);
+        self.inner.forget(mount, serial, count)
+    }
+    fn reserve_serial(&self) -> Result<Option<u64>, layerfs_mount_ports::ports::ServiceError> {
+        self.inner.reserve_serial()
+    }
+    fn reply_attempted(
+        &self,
+        publication: layerfs_overlay::Publication,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_mount_ports::ports::ServiceReply<()>>
+    {
+        self.inner.reply_attempted(publication)
+    }
+}
+
+#[test]
+fn create_write_remove_and_apple_double_avoid_redundant_owner_jobs_and_orphans() {
+    let base = temp("job-counts");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let counts = Arc::new(JobCounts::default());
+    let services = Arc::new(CountingMount {
+        inner: Arc::new(Mounted(rig.bound.clone())),
+        counts: counts.clone(),
+    });
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let server = rig.export_services(listener, services, UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    // Warm the root directory's base facts with one initial MKDIR+RMDIR so
+    // subsequent single-visit assertions measure resident steady-state jobs.
+    let warm = c.mkdir(&root, b"warm", 0o755).unwrap();
+    assert!(warm.directory.before.is_some() && warm.directory.after.is_some());
+    let warm_rm = c.rmdir(&root, b"warm").unwrap();
+    assert!(warm_rm.before.is_some() && warm_rm.after.is_some());
+
+    // 1. CREATE opens an implicit writable handle in the same visit and
+    //    carries wcc_data from the transaction with 0 observe_visit calls.
+    let before = counts.snapshot();
+    let made = c.touch(&root, b"single.txt", 0o644).unwrap();
+    assert!(made.directory.before.is_some() && made.directory.after.is_some());
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 1, before.2, before.3),
+        "CREATE: 1 mutate_visit, 0 observe_visit, 0 close_file, 0 forget"
+    );
+    assert_eq!((server.held().files, server.held().lookups), (1, 1));
+
+    // 2. SETATTR carries wcc_data from the transaction with 0 observe_visit calls.
+    let before = counts.snapshot();
+    let chmod = Set {
+        mode: Some(0o600),
+        ..Set::default()
+    };
+    let wcc = c.setattr(&made.handle, chmod, None).unwrap();
+    assert!(wcc.before.is_some() && wcc.after.is_some());
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 1, before.2, before.3),
+        "SETATTR: 1 mutate_visit, 0 observe_visit"
+    );
+
+    // 3. WRITE reuses the implicit writable handle from CREATE (0 open_file
+    //    observe_visit) and carries wcc_data with 0 extra getattr calls.
+    let before = counts.snapshot();
+    let (written, _, _, wcc) = c.write(&made.handle, 0, b"payload").unwrap();
+    assert_eq!(written, 7);
+    assert!(wcc.before.is_some() && wcc.after.is_some());
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 1, before.2, before.3),
+        "WRITE: 1 mutate_visit, 0 observe_visit"
+    );
+
+    // 4. AppleDouble companion changing lifecycle (CREATE, WRITE, SETATTR,
+    //    REMOVE) issues 0 SQLite owner jobs (0 observe_visit, 0 mutate_visit),
+    //    and LOOKUP of an absent companion issues 0 lookup observe_visit
+    //    (only the 1 parent getattr in nfs.rs proc 3).
+    let before = counts.snapshot();
+    let ad = c.touch(&root, b"._single.txt", 0o644).unwrap();
+    let (ad_written, _, _, ad_wcc) = c.write(&ad.handle, 0, b"xattr").unwrap();
+    assert_eq!(ad_written, 5);
+    assert!(ad_wcc.before.is_some() && ad_wcc.after.is_some());
+    let ad_set = c.setattr(&ad.handle, chmod, None).unwrap();
+    assert!(ad_set.before.is_some() && ad_set.after.is_some());
+    c.remove(&root, b"._single.txt").unwrap();
+    assert_eq!(
+        counts.snapshot(),
+        before,
+        "AppleDouble CREATE+WRITE+SETATTR+REMOVE must issue 0 engine owner jobs"
+    );
+    assert_eq!(c.lookup(&root, b"._single.txt").map(|_| ()), Err(NOENT));
+    assert_eq!(
+        counts.snapshot(),
+        (before.0 + 1, before.1, before.2, before.3),
+        "AppleDouble LOOKUP avoids the target lookup visit"
+    );
+
+    // 5. REMOVE drops the last link and retires the synthetic kernel's file
+    //    and lookup custody inside the publishing transaction: 1 mutate_visit,
+    //    0 observe_visit (no existing() lookup), 0 close_file, 0 forget, and
+    //    0 fake orphans in the overlay.
+    let before = counts.snapshot();
+    let rm_wcc = c.remove(&root, b"single.txt").unwrap();
+    assert!(rm_wcc.before.is_some() && rm_wcc.after.is_some());
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 1, before.2, before.3),
+        "REMOVE: 1 mutate_visit, 0 observe_visit, 0 close_file, 0 forget"
+    );
+    assert_eq!((server.held().files, server.held().lookups), (0, 0));
+    let resources = rig
+        .bound
+        .operation()
+        .unwrap()
+        .overlay()
+        .resources()
+        .unwrap();
+    assert_eq!(resources.open.orphan_files, 0, "no fake orphan created");
+    assert_eq!(resources.open.file_handles, 0);
+    assert_eq!(
+        resources.open.file_custody, 1,
+        "only the root mount reference remains"
+    );
+
+    // 6. FILES_HELD (1024) holds > 256 created+written files without LRU
+    //    close_file evictions, and removing them issues 0 close_file/forget.
+    let before = counts.snapshot();
+    for i in 0..300 {
+        let name = format!("batch-{i}");
+        let f = c.touch(&root, name.as_bytes(), 0o644).unwrap();
+        c.write(&f.handle, 0, b"x").unwrap();
+    }
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 600, before.2, before.3),
+        "300 files created+written: 600 mutate_visit, 0 observe_visit, 0 close_file evictions"
+    );
+    assert_eq!(server.held().files, 300);
+    for i in 0..300 {
+        let name = format!("batch-{i}");
+        c.remove(&root, name.as_bytes()).unwrap();
+    }
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 900, before.2, before.3),
+        "300 files removed: 300 mutate_visit, 0 observe_visit, 0 close_file, 0 forget"
+    );
+    assert_eq!((server.held().files, server.held().lookups), (0, 0));
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}

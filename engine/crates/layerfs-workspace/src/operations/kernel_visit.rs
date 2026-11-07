@@ -13,7 +13,7 @@ use crate::operations::kernel_read::decide_read;
 use crate::{
     BaseFacts, BaseView, JobOutcome, KernelMutationOutcome, KernelReadDecision,
     KernelReadOperation, KernelReadOutcome, NamespaceJob, Need, Operation, Position, Refusal, Time,
-    VisitFacts, Workspace, WorkspaceError, WorkspaceResult, WriteData,
+    ViewStat, VisitFacts, Workspace, WorkspaceError, WorkspaceResult, WriteData,
 };
 use layerfs_content::{
     filesystem::{identity::MAXIMUM_INODE_SERIAL, PathName},
@@ -317,8 +317,37 @@ impl KernelMutationVisit {
             fresh,
             ..
         } = self.request;
+        let detached_handle = handle.filter(|_| {
+            open == Some(false)
+                && matches!(
+                    self.request.input,
+                    KernelInput::Named(
+                        Operation::Unlink { .. }
+                            | Operation::Rmdir { .. }
+                            | Operation::Rename { .. }
+                    )
+                )
+        });
+        let handle = handle.filter(|_| detached_handle.is_none());
         let mut decided = None;
         let mut published = None;
+        let mut wcc: [(Option<ViewStat>, Option<ViewStat>); 2] = Default::default();
+        let mut detached = None;
+        let before_stat = |rows: SourceRows<'_>, facts: &BaseFacts, target: u64| {
+            rows.inode(target)
+                .ok()
+                .flatten()
+                .or_else(|| facts.inode(target).and_then(Clone::clone))
+                .map(ViewStat::from)
+        };
+        let after_stat = |changes: &layerfs_overlay::Changes, target: u64| {
+            changes
+                .inodes
+                .iter()
+                .find(|inode| inode.serial == target)
+                .cloned()
+                .map(ViewStat::from)
+        };
         let applied = db.mutate_kernel_visit(mount, request, serial, handle, |rows, file| {
             let source = rows.source();
             let Some(operation) = self.request.input.operation(file) else {
@@ -349,12 +378,74 @@ impl KernelMutationVisit {
                         round += 1;
                     }
                     Ok(Decided::Final(outcome)) => {
+                        if let JobOutcome::Unchanged { ref inode } = outcome {
+                            if let Operation::Rename {
+                                parent, new_parent, ..
+                            } = &job.operation
+                            {
+                                let from = before_stat(rows, &job.facts, *parent);
+                                wcc[0] = (from.clone(), from);
+                                wcc[1] = if new_parent == parent {
+                                    wcc[0].clone()
+                                } else {
+                                    let to = before_stat(rows, &job.facts, *new_parent);
+                                    (to.clone(), to)
+                                };
+                            } else {
+                                let stat = inode
+                                    .clone()
+                                    .map(ViewStat::from)
+                                    .or_else(|| before_stat(rows, &job.facts, serial));
+                                wcc[0] = (stat.clone(), stat);
+                            }
+                        }
                         decided = Some(Ok(outcome));
                         return Ok(None);
                     }
                     Ok(Decided::Publish { changes, inode }) => {
+                        if let Operation::Rename {
+                            parent, new_parent, ..
+                        } = &job.operation
+                        {
+                            wcc[0] = (
+                                before_stat(rows, &job.facts, *parent),
+                                after_stat(&changes, *parent),
+                            );
+                            wcc[1] = if new_parent == parent {
+                                wcc[0].clone()
+                            } else {
+                                (
+                                    before_stat(rows, &job.facts, *new_parent),
+                                    after_stat(&changes, *new_parent),
+                                )
+                            };
+                            let dirs = if new_parent == parent { 1 } else { 2 };
+                            if changes.inodes.len() > dirs {
+                                detached = changes.inodes.last().cloned().map(ViewStat::from);
+                            }
+                        } else {
+                            wcc[0] = (
+                                before_stat(rows, &job.facts, serial),
+                                after_stat(&changes, serial),
+                            );
+                            if matches!(
+                                job.operation,
+                                Operation::Unlink { .. } | Operation::Rmdir { .. }
+                            ) {
+                                detached = changes.inodes.first().cloned().map(ViewStat::from);
+                            }
+                        }
+                        let effect = effect(&job.operation, job.serial, open);
+                        db.prepare_kernel_mutation(
+                            mount,
+                            request.to_be_bytes(),
+                            &changes,
+                            effect,
+                            open == Some(false),
+                            detached_handle,
+                        )?;
                         published = Some(inode);
-                        return Ok(Some((*changes, effect(&job.operation, job.serial, open))));
+                        return Ok(Some((*changes, effect)));
                     }
                     Err(WorkspaceError::Overlay(error)) => return Err(error),
                     Err(error) => {
@@ -377,6 +468,11 @@ impl KernelMutationVisit {
             (Ok(None), Some(decided), _) => decided,
             _ => Err(ContentError::InvalidRecord("undecided kernel visit").into()),
         };
-        KernelMutationOutcome { result, file }
+        KernelMutationOutcome {
+            result,
+            file,
+            wcc,
+            detached,
+        }
     }
 }

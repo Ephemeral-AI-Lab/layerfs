@@ -115,7 +115,7 @@ itself ([`attributes.rs`](../../../../engine/crates/layerfs-nfs/src/attributes.r
 | --- | --- | --- | --- |
 | `LOOKUPS_HELD` (default `lookups_held`) | 65,536 | References are forgotten, least recently used first, down to three quarters of the bound; a serial with a descriptor, a silly name or a held child is skipped; names are kept | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
 | `RECENT_KEPT` | 64 most recent uses | Never collected | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
-| `FILES_HELD`, `DIRECTORIES_HELD` | 256 each | Least recently used descriptor closed | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
+| `FILES_HELD`, `DIRECTORIES_HELD` | 1024 files, 256 directories | Least recently used descriptor closed | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
 | `VERIFIERS_HELD` | 1024 | EXCLUSIVE CREATE verifiers remembered for retransmission | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
 | `NAMES_HELD` | 4 Mi names | No further new name is remembered; a collected serial with no name is stale | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
 
@@ -160,7 +160,7 @@ itself ([`attributes.rs`](../../../../engine/crates/layerfs-nfs/src/attributes.r
 | A publication ticket is released only after the reply's one send attempt, whether or not it reached the client. | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs), [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |
 | WRITE splits into `WRITE_WINDOW` (128 KiB) publications; a failure after the first window is a short write of the windows already published. One call carries at most 1 MiB. | [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs), [`changing.rs`](../../../../engine/crates/layerfs-nfs/src/changing.rs) |
 | WRITE answers `FILE_SYNC`: every window was published before the reply. That is publication, not durability. | [`changing.rs`](../../../../engine/crates/layerfs-nfs/src/changing.rs) |
-| `wcc_data` pre- and post-op reads are separate visits, not atomic with the change. | [`changing.rs`](../../../../engine/crates/layerfs-nfs/src/changing.rs) |
+| `wcc_data` pre- and post-op attributes come from the publishing visit's own pre- and post-change inode state (`RENAME` still uses separate visits). | [`changing.rs`](../../../../engine/crates/layerfs-nfs/src/changing.rs) |
 | A client silly rename (`.nfs` + 24 hex digits on Linux, `.nfs.` + 8 hex + `.` + 4 hex on macOS) is served as an UNLINK of the source; the export keeps the inode by its own reference and descriptor until the final REMOVE. | [`names.rs`](../../../../engine/crates/layerfs-nfs/src/names.rs) |
 | A serial whose last name this export removed gives back its reference and descriptor at once; its handle is stale afterwards. | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
 | SETATTR's guard compares a fresh GETATTR ctime first; the check is not atomic with the change. Access time is decoded and dropped. | [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |

@@ -56,7 +56,7 @@ use std::{
 };
 
 /// Implicit file descriptors kept open at once.
-pub const FILES_HELD: usize = 256;
+pub const FILES_HELD: usize = 1024;
 /// Implicit directory descriptors (enumerations) kept open at once.
 pub const DIRECTORIES_HELD: usize = 256;
 /// EXCLUSIVE CREATE verifiers remembered for retransmissions.
@@ -104,6 +104,8 @@ pub(crate) struct Table {
     /// Serial -> the name it was last reached by, kept after its reference
     /// is collected so a later handle can be resolved again.
     pub names: HashMap<u64, Named>,
+    /// (directory, name) -> serial last seen under that name.
+    pub by_name: HashMap<Named, u64>,
     /// Serial -> last use, for the collection order.
     pub used: HashMap<u64, u64>,
     /// Serials marked for a cache refresh, and when (see [`crate::refresh`]).
@@ -294,7 +296,11 @@ impl Kernel {
             .get(&serial)
             .is_some_and(|(p, n)| *p == parent && *n == name)
         {
-            table.names.remove(&serial);
+            if let Some(old) = table.names.remove(&serial) {
+                if table.by_name.get(&old) == Some(&serial) {
+                    table.by_name.remove(&old);
+                }
+            }
         }
         self.unresolved.fetch_add(1, Ordering::Relaxed);
         Err(Status::Stale)
@@ -374,6 +380,12 @@ impl Kernel {
         if let Some(stat) = self.companion_named(parent, name) {
             return Ok(stat);
         }
+        if self.refuses_apple_double() && crate::names::apple_double(name) {
+            if parent != self.root() && !self.table().parents.contains_key(&parent) {
+                return Err(Status::NotDir);
+            }
+            return Err(Status::NoEnt);
+        }
         let silly = self.table().silly.get(&(parent, name.to_vec())).copied();
         if let Some(serial) = silly {
             return self.getattr(serial);
@@ -403,7 +415,13 @@ impl Kernel {
                 let tick = table.tick();
                 table.used.insert(stat.serial, tick);
                 if table.names.len() < NAMES_HELD || table.names.contains_key(&stat.serial) {
-                    table.names.insert(stat.serial, (parent, name.to_vec()));
+                    let named = (parent, name.to_vec());
+                    if let Some(old) = table.names.insert(stat.serial, named.clone()) {
+                        if table.by_name.get(&old) == Some(&stat.serial) {
+                            table.by_name.remove(&old);
+                        }
+                    }
+                    table.by_name.insert(named, stat.serial);
                 }
             }
             let extra = root || !table.lookups.insert(stat.serial);
@@ -427,8 +445,13 @@ impl Kernel {
     /// Records that `serial` is now reached as `name` in `parent` (RENAME).
     pub(crate) fn renamed(&self, serial: u64, parent: u64, name: &[u8]) {
         let mut table = self.table();
-        if table.names.contains_key(&serial) {
-            table.names.insert(serial, (parent, name.to_vec()));
+        let named = (parent, name.to_vec());
+        if let Some(slot) = table.names.get_mut(&serial) {
+            let old = std::mem::replace(slot, named.clone());
+            if table.by_name.get(&old) == Some(&serial) {
+                table.by_name.remove(&old);
+            }
+            table.by_name.insert(named, serial);
         }
     }
     pub(crate) fn forget(&self, serial: u64, count: u64) {
@@ -440,13 +463,26 @@ impl Kernel {
     /// is gone: its descriptor, its reference and its parent record. Later
     /// handles of it are stale.
     pub(crate) fn unlinked(&self, serial: u64) {
+        self.drop_unlinked(serial, false, None);
+    }
+    /// Drops table state for `serial` after a mutation that already retired
+    /// its kernel lookup reference (and `retired_handle`, if given) in the
+    /// publishing transaction.
+    pub(crate) fn unlinked_retired(&self, serial: u64, retired_handle: Option<u64>) {
+        self.drop_unlinked(serial, true, retired_handle);
+    }
+    fn drop_unlinked(&self, serial: u64, retired_in_job: bool, retired_handle: Option<u64>) {
         if serial == self.root() {
             return;
         }
         let (file, directories, held) = {
             let mut table = self.table();
             table.parents.remove(&serial);
-            table.names.remove(&serial);
+            if let Some(old) = table.names.remove(&serial) {
+                if table.by_name.get(&old) == Some(&serial) {
+                    table.by_name.remove(&old);
+                }
+            }
             table.used.remove(&serial);
             table.verifiers.retain(|_, entry| entry.1 != serial);
             let directories: Vec<u64> = table
@@ -465,12 +501,16 @@ impl Kernel {
             )
         };
         if let Some(file) = file {
-            self.close_file(serial, file.handle);
+            if !retired_in_job || retired_handle != Some(file.handle) {
+                self.close_file(serial, file.handle);
+            }
         }
         for handle in directories {
-            self.close_directory(serial, handle);
+            if !retired_in_job || retired_handle != Some(handle) {
+                self.close_directory(serial, handle);
+            }
         }
-        if held {
+        if held && !retired_in_job {
             self.forget(serial, 1);
         }
     }
@@ -521,6 +561,18 @@ impl Kernel {
         let operation = KernelReadOperation::Open { serial, writable };
         let (stat, file, _) = self.observe(serial, None, operation)?;
         let handle = file.ok_or(Status::ServerFault)?;
+        Ok(self.file_taken(serial, handle, stat.logical_len, writable))
+    }
+    /// Records an open file descriptor (from `OPEN` or `CREATE`), evicting
+    /// the oldest unpinned descriptor when the bound is reached.
+    pub(crate) fn file_taken(
+        &self,
+        serial: u64,
+        handle: u64,
+        size: u64,
+        writable: bool,
+    ) -> OpenFile {
+        let limit = FILES_HELD.min((self.lookups_held / 2).max(1));
         let (evicted, closed, chosen) = {
             let mut table = self.table();
             let tick = table.tick();
@@ -531,7 +583,7 @@ impl Kernel {
                     (None, Some((serial, handle)), theirs)
                 }
                 _ => {
-                    let evicted = if current.is_none() && table.files.len() >= FILES_HELD {
+                    let evicted = if current.is_none() && table.files.len() >= limit {
                         let pinned: HashSet<u64> = table.silly.values().copied().collect();
                         oldest(
                             table
@@ -551,7 +603,7 @@ impl Kernel {
                     };
                     let held = Held {
                         handle,
-                        size: stat.logical_len,
+                        size,
                         tick,
                         writable,
                     };
@@ -566,10 +618,10 @@ impl Kernel {
         if let Some((old, descriptor)) = closed {
             self.close_file(old, descriptor);
         }
-        Ok(OpenFile {
+        OpenFile {
             handle: chosen.handle,
             size: chosen.size,
-        })
+        }
     }
     pub(crate) fn close_file(&self, serial: u64, handle: u64) {
         if let Ok((services, _)) = self.request() {
