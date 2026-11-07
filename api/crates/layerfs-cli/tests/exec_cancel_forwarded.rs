@@ -13,6 +13,9 @@
 //! - A worker that takes a cancel and never answers leaves the call waiting
 //!   until the connection closes (no operation timeout, by design); then it
 //!   answers `unknown`, and the record is kept.
+//! - A cancel before the command runs (its record has no stop handle yet)
+//!   is answered `cancelled` (SIGKILL) and only marked; when the worker
+//!   tells that it started, the owner ends it there with zero grace.
 #![cfg(all(unix, feature = "machine"))]
 mod common;
 use common::{layerfs, run, tempdir, text};
@@ -23,6 +26,7 @@ use layerfs_bridge::process::LocalProcess;
 use std::net::{SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -106,6 +110,87 @@ fn refusal(code: &str) -> SdkValue {
         "refused",
         SdkValue::map([("code", t(code)), ("message", t("stand-in"))]),
     )])
+}
+
+/// A stand-in worker that holds `workspace.exec` until `go`: it tells
+/// `arrived` that the exec came, waits for `go`, sends the
+/// `{ exec_started: { stop } }` event, then waits for a cancel of that id
+/// (each connection on a thread of its own) and answers exit 137, as a
+/// command ended by SIGKILL does; without one it answers exit 0. A cancel
+/// is answered `cancelled`. Every wait is bounded.
+fn holding(seen: Seen, arrived: Sender<()>, go: Receiver<()>) -> SocketAddr {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let go = Arc::new(Mutex::new(go));
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { return };
+            let (seen, arrived, go) = (seen.clone(), arrived.clone(), go.clone());
+            std::thread::spawn(move || {
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
+                if read_frame(&mut stream).ok().flatten().is_none() {
+                    return;
+                }
+                let hello = SdkValue::map([
+                    ("ready", SdkValue::Bool(true)),
+                    ("protocol", SdkValue::Int(layerfs_api::worker::PROTOCOL)),
+                    ("bundle", SdkValue::Null),
+                ]);
+                write_frame(&mut stream, &hello).unwrap();
+                let Some(request) = read_frame(&mut stream).ok().flatten() else {
+                    return;
+                };
+                let args = request.get("args").cloned().unwrap_or_default();
+                let more = args.get("more").cloned().unwrap_or_default();
+                let op = args.get_text("op").unwrap_or("").to_owned();
+                seen.lock()
+                    .unwrap()
+                    .push(SdkValue::map([("op", t(&op)), ("more", more.clone())]));
+                let id = more.get_text("execId").unwrap_or("").to_owned();
+                let answer = match op.as_str() {
+                    "workspace.exec" => {
+                        arrived.send(()).unwrap();
+                        let wait = Duration::from_secs(30);
+                        go.lock().unwrap().recv_timeout(wait).unwrap();
+                        let path = format!("/sys/fs/cgroup/layerfs/b1/ws-{WS}/exec-{id}");
+                        let stop = SdkValue::map([("cgroup", SdkValue::map([("path", t(&path))]))]);
+                        let started = SdkValue::map([("stop", stop)]);
+                        let event = SdkValue::map([("exec_started", started)]);
+                        write_frame(&mut stream, &SdkValue::map([("event", event)])).unwrap();
+                        let until = Instant::now() + wait;
+                        let killed = loop {
+                            if cancels(&seen).iter().any(|(of, ..)| *of == id) {
+                                break true;
+                            }
+                            if Instant::now() > until {
+                                break false;
+                            }
+                            std::thread::sleep(Duration::from_millis(10));
+                        };
+                        let code = if killed { 137 } else { 0 };
+                        SdkValue::map([(
+                            "value",
+                            SdkValue::map([
+                                ("kind", t(&format!("exit:{code}"))),
+                                ("exitCode", SdkValue::Int(code)),
+                                ("stdout", t("")),
+                                ("stderr", t("")),
+                                ("execId", t(&id)),
+                                ("stop", t("cgroup")),
+                            ]),
+                        )])
+                    }
+                    "workspace.exec_cancel" => SdkValue::map([(
+                        "value",
+                        SdkValue::map([("outcome", t("cancelled")), ("signal", t("SIGKILL"))]),
+                    )]),
+                    _ => refusal("Failed"),
+                };
+                let _ = write_frame(&mut stream, &answer);
+            });
+        }
+    });
+    address
 }
 
 /// An address nothing listens on.
@@ -379,5 +464,51 @@ fn a_worker_that_never_answers_leaves_the_cancel_waiting_until_it_closes() {
         std::fs::read_to_string(exec_file(&home, "stale")).unwrap(),
         stale
     );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_cancel_before_the_command_starts_is_answered_cancelled_and_its_owner_ends_it() {
+    let seen = Seen::default();
+    let (arrived, came) = channel();
+    let (go, held) = channel();
+    let home = home_with("early", holding(seen.clone(), arrived, held));
+    let child = layerfs(
+        &home,
+        &[
+            "workspace",
+            "exec",
+            "b1:one",
+            "sleep 600",
+            "--exec-id",
+            "e9",
+        ],
+    )
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .spawn()
+    .unwrap();
+    // the exec is in the worker and has not started: no stop handle yet
+    came.recv_timeout(Duration::from_secs(30)).unwrap();
+    let recorded = read_record(&exec_file(&home, "e9")).unwrap().unwrap();
+    assert_eq!(recorded.get("stop"), Some(&SdkValue::Null), "{recorded:?}");
+    // the cancel is answered at once, and only marks the record
+    let (code, out, err) = cli(&home, &["workspace", "exec-cancel", "b1:one", "e9"]);
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(out.trim(), r#"{"outcome":"cancelled","signal":"SIGKILL"}"#);
+    assert!(cancels(&seen).is_empty(), "nothing was sent to the worker");
+    let marked = read_record(&exec_file(&home, "e9")).unwrap().unwrap();
+    assert!(marked.get_int("cancel").is_some(), "{marked:?}");
+    // the command starts: its owner ends it there, with zero grace
+    go.send(()).unwrap();
+    let ran = common::finish(child);
+    let (out, err) = (text(&ran.stdout), text(&ran.stderr));
+    assert_eq!(cancels(&seen), [("e9".to_owned(), Some(0), WS.to_owned())]);
+    assert!(
+        out.contains("\"kind\":\"cancelled\"") && out.contains("\"exit_code\":137"),
+        "{:?}: {out} {err}",
+        ran.status.code()
+    );
+    assert!(!exec_file(&home, "e9").exists());
     std::fs::remove_dir_all(home).unwrap();
 }

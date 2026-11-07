@@ -58,6 +58,7 @@ fn host(root: &Path) -> Host {
         deploy: None,
         postgresql: None,
         message: Message::Absent,
+        started: None,
     }
 }
 

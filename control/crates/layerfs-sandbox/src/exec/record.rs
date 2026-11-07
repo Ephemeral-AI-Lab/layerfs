@@ -115,7 +115,10 @@ impl ExecRecord {
             ("name", SdkValue::opt_text(self.name.clone())),
             ("owner", self.owner.clone()),
             ("route", SdkValue::Text(route)),
-            ("stop", self.stop.as_ref().map_or(SdkValue::Null, stop)),
+            (
+                "stop",
+                self.stop.as_ref().map_or(SdkValue::Null, stop_value),
+            ),
             ("started", SdkValue::Int(self.started)),
         ];
         fields.extend(self.cancel.map(|at| ("cancel", SdkValue::Int(at))));
@@ -143,7 +146,8 @@ impl ExecRecord {
     }
 }
 
-fn stop(stop: &Stop) -> SdkValue {
+/// A stop handle as a record (and a worker's `exec_started` event) writes it.
+pub fn stop_value(stop: &Stop) -> SdkValue {
     match stop {
         Stop::Cgroup { path } => SdkValue::map([(
             "cgroup",
@@ -164,7 +168,8 @@ fn stop(stop: &Stop) -> SdkValue {
     }
 }
 
-fn stop_of(value: &SdkValue) -> Option<Stop> {
+/// The stop handle [`stop_value`] wrote, if `value` is one.
+pub fn stop_of(value: &SdkValue) -> Option<Stop> {
     if let Some(cgroup) = value.get("cgroup") {
         return Some(Stop::Cgroup {
             path: PathBuf::from(cgroup.get_text("path")?),
@@ -315,8 +320,11 @@ impl Running {
         })
     }
 
-    /// Records the command's stop handle once it is known. A cancel that
-    /// came first ends the command at once: refused.
+    /// Records the command's stop handle once it is known: once the
+    /// command runs in it, so a cancel before that finds no handle and is
+    /// answered as one this owner carries out. Such a cancel, marked
+    /// first, is refused here as interrupted: the runtime then ends the
+    /// command at once.
     pub fn spawned(&self, stop: &Stop) -> std::io::Result<()> {
         let io = |refusal: SdkRefusal| std::io::Error::other(refusal.message);
         let _sandbox = lock_in(&self.dir, &self.sandbox).map_err(io)?;
@@ -324,7 +332,8 @@ impl Running {
             .map_err(io)?
             .ok_or_else(|| std::io::Error::other("the command's record was removed"))?;
         if record.cancel.is_some() {
-            return Err(std::io::Error::other(
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
                 "the command was cancelled as it started",
             ));
         }

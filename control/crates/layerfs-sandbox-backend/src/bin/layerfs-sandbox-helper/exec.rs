@@ -14,6 +14,11 @@
 //! is never in the command's group, so a cancel's signals and `cgroup.kill`
 //! reach the command and what it started, never the helper, which then
 //! reports how the command ended; a child that cannot join never runs.
+//! Once the command runs (its exec succeeded, so it is in its group), the
+//! helper writes one byte to its standard input, which the backend gives
+//! it as one end of a socket: only then is the command's stop handle
+//! recorded, so a cancel never finds the group empty while the command is
+//! still to start. The command itself gets no standard input.
 use nix::{
     sched::{setns, CloneFlags},
     sys::prctl::set_no_new_privs,
@@ -22,9 +27,10 @@ use std::{
     ffi::OsString,
     fs::{self, File},
     io::Write,
+    os::fd::AsFd,
     os::unix::process::{CommandExt, ExitStatusExt},
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
 };
 
 /// One parsed exec stage.
@@ -59,6 +65,7 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
         .uid(run.uid)
         .gid(run.gid)
         .current_dir(&run.directory)
+        .stdin(Stdio::null())
         .process_group(0);
     if let Some(procs) = command_procs {
         layerfs_sandbox_backend::local::start_in_cgroup(&mut command, procs);
@@ -70,6 +77,15 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
         // never look like the command's status
         Err(error) => fail(&format!("starting {}: {error}", program.to_string_lossy())),
     };
+    // the command is in its group: the backend may record its stop handle
+    if run.command_cgroup.is_some() {
+        let ready = std::io::stdin().as_fd().try_clone_to_owned();
+        if let Err(error) = ready.and_then(|fd| File::from(fd).write_all(b"r")) {
+            let _ = child.kill();
+            let _ = child.wait();
+            fail(&format!("telling the command started: {error}"));
+        }
+    }
     let status = child
         .wait()
         .map_err(|error| format!("waiting for the command: {error}"))?;

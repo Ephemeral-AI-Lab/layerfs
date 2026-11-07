@@ -278,6 +278,7 @@ pub fn host(home: &Path, record: &SandboxRecord, target: &Target, message: Messa
         deploy: None,
         postgresql: None,
         message,
+        started: None,
     }
 }
 

@@ -233,6 +233,10 @@ pub struct Host {
     pub postgresql: Option<PgSelection>,
     /// The request's Commit message.
     pub message: Message,
+    /// Where a forwarded command's exec tells, while it runs, that the
+    /// command started (`{ exec_started: { stop } }`): the caller that keeps
+    /// its record records the stop handle then (layerfs-project#113).
+    pub started: Option<std::sync::mpsc::Sender<SdkValue>>,
 }
 
 impl Host {

@@ -111,7 +111,9 @@ pub fn cancel(
         record
     };
     match (&record.route, &record.stop) {
-        (Route::Machine(_), _) => Ok(remote(&record, grace)),
+        // not started yet: its owner ends it when the worker says it did
+        (Route::Machine(_), None) => Ok(Outcome::Cancelled("SIGKILL")),
+        (Route::Machine(_), Some(_)) => Ok(remote(&record, grace)),
         (Route::Local, Some(handle)) => stop(handle, grace),
         (Route::Local, None) => Ok(Outcome::Cancelled("SIGKILL")),
     }
