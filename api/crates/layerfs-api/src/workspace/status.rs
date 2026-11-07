@@ -19,7 +19,7 @@ pub(crate) const CALL: Call = call(
 /// Runs `workspace.status`: its side's answer.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let request = StatusRequest {
-        ws: super::ws(args),
+        ws: args.get_text("ws").unwrap_or("").to_owned(),
     };
     let (home, events) = context.parts();
     status(home, events, &request)

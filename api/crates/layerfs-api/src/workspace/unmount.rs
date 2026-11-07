@@ -19,9 +19,9 @@ pub(crate) const CALL: Call = call(
 /// Runs `workspace.unmount`: its side's answer.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let request = UnmountRequest {
-        ws: super::ws(args),
-        discard: super::flag(args, "discard"),
-        force: super::flag(args, "force"),
+        ws: args.get_text("ws").unwrap_or("").to_owned(),
+        discard: args.get("discard").map(|_| args.get_bool("discard")),
+        force: args.get("force").map(|_| args.get_bool("force")),
     };
     let (home, events) = context.parts();
     unmount(home, events, &request)
