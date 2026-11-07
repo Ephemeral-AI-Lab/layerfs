@@ -300,7 +300,7 @@ form.
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `list` | — | — | every machine, with what it supports (`supports`) |
-| `platforms` | — | — | the platforms this host and build support: backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox runs and why not, readiness and options (#535; the rows of `connect/SUPPORT.json`) |
+| `platforms` | — | — | the platforms this host and build support: backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox runs and why not, readiness and options (#535; the rows of `control/SUPPORT.json`) |
 | `get` | `name` | — | a machine's record |
 | `status` | `name` | — | a machine's live state, free disk and tool version; `op` while a create, connect, remove or disconnect holds it (#536 H6) |
 | `start` | `name` | — | starts a stopped machine and its worker and waits until ready; a running one, and `native`, answer at once (#535 P1) |

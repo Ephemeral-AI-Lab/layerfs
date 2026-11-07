@@ -43,7 +43,7 @@ exists. The platform-specific mechanics below are retained reference only.
   backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox
   runs here and why not, `ready`, `missing` (such as `tool:msb`), the tool's
   `version` and the options `machine create` takes; the same rows as
-  `connect/SUPPORT.json`. Neither starts a machine. A VM or ssh machine's `state` is read live, as
+  `control/SUPPORT.json`. Neither starts a machine. A VM or ssh machine's `state` is read live, as
   `machine status` reads it, for all of them at once within 10 s; it starts
   nothing and writes nothing. A machine whose probe fails or does not answer
   in time is `unknown`, with the reason in `error`. A machine that an

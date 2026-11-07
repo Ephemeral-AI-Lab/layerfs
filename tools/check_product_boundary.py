@@ -80,17 +80,7 @@ UNSAFE_ROOT_ATTR = {
 # First-party production edges; third-party approvals and the locked graph are
 # checked separately. The combined SQLite adapter is the active provider.
 ALLOWED_DEPENDENCIES = {
-    "layerfs-node": {
-        "layerfs-project",
-        "layerfs-api",
-        "layerfs-bridge",
-        "layerfs-history",
-        "layerfs-persistence",
-        "layerfs-sandbox-backend",
-        "layerfs-storage",
-        "layerfs-store-service",
-        "layerfs-telemetry",
-    },
+    "layerfs-node": {"layerfs-api", "layerfs-bridge"},
     "layerfs-telemetry": set(),
     "layerfs-content": {"layerfs-telemetry"},
     "layerfs-storage": {"layerfs-content", "layerfs-telemetry"},
@@ -140,7 +130,6 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-history",
         "layerfs-persistence",
         "layerfs-telemetry",
-        "layerfs-bucket",
     },
     # Concrete Store open/install belongs to application composition. The
     # provider-independent daemon store/ subtree has a narrower source boundary.

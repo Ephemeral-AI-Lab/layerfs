@@ -12,9 +12,10 @@ pub fn lock<T>(mutex: &Mutex<T>) -> Result<MutexGuard<'_, T>, SdkRefusal> {
         .map_err(|_| refused("Failed", "binding state poisoned"))
 }
 
-/// A required text argument.
-pub fn text<'a>(args: &'a SdkValue, name: &str) -> Result<&'a str, SdkRefusal> {
-    args.get_text(name)
+/// A required text field `name` of a map (`value`, a record's or a frame's).
+pub fn text<'a>(value: &'a SdkValue, name: &str) -> Result<&'a str, SdkRefusal> {
+    value
+        .get_text(name)
         .ok_or_else(|| refused("InvalidInput", format!("missing text argument `{name}`")))
 }
 

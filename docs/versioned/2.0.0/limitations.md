@@ -37,7 +37,7 @@ for this manual.
 
 | What | Refusal |
 | --- | --- |
-| A Sandbox on a platform and Store kind the support table refuses (`layerfs machine platforms`, `connect/SUPPORT.json`): docker on Windows | the table's reason, word for word, such as "docker through WSL2 is not designed yet" |
+| A Sandbox on a platform and Store kind the support table refuses (`layerfs machine platforms`, `control/SUPPORT.json`): docker on Windows | the table's reason, word for word, such as "docker through WSL2 is not designed yet" |
 | A Sandbox on a machine other than its sqlite Store's | names the Store's machine; `store pull` and `store push` move the Store |
 | `project remove` from a PostgreSQL Store | "removing a project from a PostgreSQL Store is not built" |
 | `backup restore` over a Store that is not on `native` | `store pull` it to `native` first |
