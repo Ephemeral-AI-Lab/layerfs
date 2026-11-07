@@ -140,3 +140,51 @@ fn a_ping_whose_answer_never_comes_times_out_unknown() {
         "{waited:?}"
     );
 }
+
+#[test]
+fn the_worker_waits_for_the_client_to_close_after_its_answer() {
+    // Apple Container's published port drops what it still holds for the
+    // host when the guest closes first: the client must close first
+    let (endpoint, dir) = worker("close", "k");
+    let mut stream = TcpStream::connect(endpoint.address).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    write_frame(
+        &mut stream,
+        &SdkValue::map([("secret", SdkValue::text("k"))]),
+    )
+    .unwrap();
+    let ready = read_frame_within(&mut stream, MAX_HELLO).unwrap().unwrap();
+    assert!(ready.get("ready").is_some(), "{ready:?}");
+    let request = worker::request("worker.ping", SdkValue::Null).unwrap();
+    stream.write_all(&request).unwrap();
+    let answer = worker::read_frame(&mut stream).unwrap().unwrap();
+    assert!(answer.get("value").is_some(), "{answer:?}");
+    // the answer is complete, and the worker has not closed
+    stream
+        .set_read_timeout(Some(Duration::from_millis(300)))
+        .unwrap();
+    let mut byte = [0u8; 1];
+    let open = stream.read(&mut byte).unwrap_err();
+    assert!(
+        matches!(
+            open.kind(),
+            std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+        ),
+        "{open:?}"
+    );
+    // once the client closes its side, the worker closes at once
+    stream.shutdown(std::net::Shutdown::Write).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    let started = Instant::now();
+    let closed = stream.read(&mut byte);
+    assert!(matches!(closed, Ok(0)) || closed.is_err(), "{closed:?}");
+    assert!(
+        started.elapsed() < Duration::from_secs(3),
+        "closed after the client"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}

@@ -138,7 +138,25 @@ fn answer(mut stream: TcpStream, secret: &str, ready: &SdkValue, root: &Path) ->
         let steps = layerfs_home::trace::steps_value(layerfs_home::trace::steps_take());
         frame = layerfs_home::home::with_field(frame, "steps", steps);
     }
-    write_frame(&mut stream, &frame).is_ok()
+    let sent = write_frame(&mut stream, &frame).is_ok();
+    if sent {
+        await_close(&mut stream);
+    }
+    sent
+}
+
+/// Waits for the client to close first, once the answer is written. The
+/// client sends nothing after its request and closes when it has read the
+/// answer. Apple Container's published port drops what it still holds for
+/// the host when the guest side closes first, which cut the tail off large
+/// answers (an export's last parts). Reads only that close, at most one
+/// [`REQUEST_WAIT`]; a client that never closes then loses nothing worse
+/// than before.
+fn await_close(stream: &mut TcpStream) {
+    use std::io::Read;
+    if stream.set_read_timeout(Some(REQUEST_WAIT)).is_ok() {
+        let _ = stream.read(&mut [0u8; 1]);
+    }
 }
 
 /// A request's `op` and its `args` (moved out, not copied: they may hold a
