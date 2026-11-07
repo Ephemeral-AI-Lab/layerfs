@@ -14,6 +14,10 @@
 //! helper, which then reports how the command ended. It blocks `SIGTERM`
 //! for that; the command's filter hook empties the child's signal mask just
 //! before exec (a forked child inherits its parent's), so it can be.
+//!
+//! With `--trace <file>` (a traced call, `LAYERFS_TRACE_STEP`) it writes
+//! when each stage ended to that file, which the worker made, once the
+//! command ended ([`Stamps`]).
 use nix::{
     sched::{setns, CloneFlags},
     sys::prctl::set_no_new_privs,
@@ -26,6 +30,7 @@ use std::{
     os::unix::process::{CommandExt, ExitStatusExt},
     path::{Path, PathBuf},
     process::Command,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 /// One parsed exec stage.
@@ -33,6 +38,7 @@ struct Run {
     init: u32,
     cgroup: PathBuf,
     leave: Option<PathBuf>,
+    trace: Option<PathBuf>,
     uid: u32,
     gid: u32,
     directory: PathBuf,
@@ -44,6 +50,9 @@ struct Run {
 /// never reads it as a command's exit code.
 pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
     let run = parse(arguments)?;
+    // opened before the Sandbox's mount namespace hides this host path
+    let mut stamps = Stamps::open(run.trace.as_deref());
+    stamps.mark("helper.start");
     if run.leave.is_some() {
         let mut terminate = SigSet::empty();
         terminate.add(Signal::SIGTERM);
@@ -57,9 +66,11 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
         None => None,
     };
     join(&run.cgroup)?;
+    stamps.mark("helper.cgroup_join");
     let namespaces = Namespaces::open(run.init)?;
     namespaces.enter()?;
     set_no_new_privs().map_err(|error| format!("setting no-new-privs: {error}"))?;
+    stamps.mark("helper.setns");
     let (program, rest) = run.arguments.split_first().ok_or("no command")?;
     let mut command = Command::new(program);
     command
@@ -75,6 +86,7 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
         // never look like the command's status
         Err(error) => fail(&format!("starting {}: {error}", program.to_string_lossy())),
     };
+    stamps.mark("helper.bash_spawn");
     // `0` names the writer: the helper goes back to the Sandbox's group
     if let Some(mut leave) = leave {
         if let Err(error) = leave.write_all(b"0") {
@@ -82,14 +94,43 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
             let _ = child.wait();
             fail(&format!("leaving the command's cgroup: {error}"));
         }
+        stamps.mark("helper.leave");
     }
     let status = child
         .wait()
         .map_err(|error| format!("waiting for the command: {error}"))?;
+    stamps.mark("helper.bash");
+    stamps.write();
     Ok(status
         .code()
         .or_else(|| status.signal().map(|signal| 128 + signal))
         .unwrap_or(super::EXIT_FAILURE))
+}
+
+/// The stage times of a traced command: `<step> <microseconds since the
+/// epoch>` lines, kept here and written to the worker's file once the
+/// command ended, so tracing adds no write before it. Untraced, nothing.
+struct Stamps(Option<(File, String)>);
+
+impl Stamps {
+    fn open(file: Option<&Path>) -> Self {
+        let file = file.and_then(|file| fs::OpenOptions::new().write(true).open(file).ok());
+        Self(file.map(|file| (file, String::new())))
+    }
+
+    fn mark(&mut self, step: &str) {
+        if let Some((_, text)) = &mut self.0 {
+            let at = SystemTime::now().duration_since(UNIX_EPOCH);
+            let at = at.map_or(0, |at| at.as_micros());
+            text.push_str(&format!("{step} {at}\n"));
+        }
+    }
+
+    fn write(self) {
+        if let Some((mut file, text)) = self.0 {
+            let _ = file.write_all(text.as_bytes());
+        }
+    }
 }
 
 /// The three namespace handles of a Sandbox's init stage, all opened before
@@ -155,7 +196,7 @@ fn fail(message: &str) -> ! {
 fn parse(arguments: &[OsString]) -> Result<Run, String> {
     let (mut init, mut uid, mut gid) = (0, 0, 0);
     let (mut cgroup, mut directory) = (PathBuf::new(), PathBuf::new());
-    let mut leave = None;
+    let (mut leave, mut trace) = (None, None);
     let mut command = Vec::new();
     let mut index = 0;
     while index < arguments.len() {
@@ -173,6 +214,7 @@ fn parse(arguments: &[OsString]) -> Result<Run, String> {
             Some("--gid") => gid = number(value)?,
             Some("--cgroup") => cgroup = PathBuf::from(value),
             Some("--leave") => leave = Some(PathBuf::from(value)),
+            Some("--trace") => trace = Some(PathBuf::from(value)),
             Some("--cwd") => directory = PathBuf::from(value),
             _ => {
                 return Err(format!(
@@ -196,6 +238,7 @@ fn parse(arguments: &[OsString]) -> Result<Run, String> {
         init,
         cgroup,
         leave,
+        trace,
         uid,
         gid,
         directory,

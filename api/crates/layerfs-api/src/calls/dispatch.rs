@@ -46,8 +46,22 @@ pub fn call(
 }
 
 /// [`call`] for a client with a folder scope (O32): the scope guards and
-/// rewrites the checked arguments before any effect.
+/// rewrites the checked arguments before any effect. With
+/// `LAYERFS_TRACE_STEP` set, its steps are traced (`trace::stepped`).
 pub fn call_scoped(
+    families: &'static [Family],
+    home_path: Option<&Path>,
+    scope: Option<&super::Scope>,
+    name: &str,
+    args: SdkValue,
+    events: &mut dyn FnMut(SdkValue),
+) -> Outcome {
+    layerfs_home::trace::stepped(name, || {
+        scoped(families, home_path, scope, name, args, events)
+    })
+}
+
+fn scoped(
     families: &'static [Family],
     home_path: Option<&Path>,
     scope: Option<&super::Scope>,
@@ -75,6 +89,7 @@ pub fn call_scoped(
     if let Some(scope) = scope {
         scope.owns(&home, name, &args)?;
     }
+    layerfs_home::trace::step("dispatch");
     let mut context = Context::new(home, events);
     let value = (spec.run)(&mut context, &args)?;
     // a scoped `branch.list` names its Branches relative to the namespace

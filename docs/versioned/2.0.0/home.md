@@ -16,7 +16,7 @@ writes every record itself.
 | Setting | Meaning |
 | --- | --- |
 | `LAYERFS_HOME` | the home folder. Unset, it is `~/.layerfs` (O28) |
-| `LAYERFS_TRACE`, `LAYERFS_TRACE_STEP`, `LAYERFS_TRACE_START` | tracing. Today only `LAYERFS_TRACE` is read: each connection to a machine's worker appends `{at, event: "worker.connection", op, worker, sent, ms}` to the file it names |
+| `LAYERFS_TRACE`, `LAYERFS_TRACE_STEP`, `LAYERFS_TRACE_START` | tracing. `LAYERFS_TRACE` names a file: each connection to a machine's worker appends `{at, event: "worker.connection", op, worker, sent, ms}` to it. With `LAYERFS_TRACE_STEP` also set (any non-empty value), each call appends one `{at, event: "step", op, step, us, ms}` line per step it timed: the caller's (`dispatch`, `route`, `connect`, `ready`, `request`, `answer`) and, for a worker-routed call, the worker's as `worker.<step>`, which the worker sends back in its answer (a namespaces `workspace.exec` adds `worker.exec.*` and its helper's `worker.helper.*` stages). `LAYERFS_TRACE_START` is still not read |
 | `LAYERFS_CONSTRUCTION_WORKERS` | measurement |
 
 LayerFS reads no other user setting. A Node or Python client can name

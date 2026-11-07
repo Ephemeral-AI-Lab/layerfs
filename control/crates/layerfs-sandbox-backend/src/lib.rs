@@ -6,7 +6,8 @@
 //! machine runs namespaces Sandboxes). `runtime.rs` matches over the backends'
 //! providers and Sandboxes; `backend/adapter.rs` is the one match for what is
 //! fixed per backend (G2); `types/` holds what they share; `json/`,
-//! `helper_spec.rs` and `postgres_url.rs` are the shared formats. The
+//! `helper_spec.rs` and `postgres_url.rs` are the shared formats;
+//! `steps.rs` times a traced command's steps. The
 //! kernels Sandboxes run on live in the
 //! `layerfs-platform` crate (host only).
 // unsafe only in local/os/linux/seccomp.rs (the namespaces command filter's
@@ -26,6 +27,7 @@ pub mod platform_policy;
 mod postgres_url;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod runtime;
+pub mod steps;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod stop;
 mod types;

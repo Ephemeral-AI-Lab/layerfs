@@ -97,10 +97,10 @@ that file and compares it in constant time (`same` in
    |--- frame {secret} --------------------------->| reads <= 4 KiB, <= 10 s
    |<-- frame {ready:true, protocol, bundle} -------| or {refused: Denied}
    |    other build? send nothing, close           |
-   |--- frame {op, args, home_id?} ---------------->| <= 30 s between bytes
+   |--- frame {op, args, home_id?, trace_step?} --->| <= 30 s between bytes
    |         from here nothing is resent           | runs op once, root =
    |<-- frame {event} ... (progress, output) -------|  /layerfs/data
-   |<-- frame {value} | {refused} -----------------|
+   |<-- frame {value} | {refused} (+ steps?) ------|
    x  connection closes                            x
 ```
 

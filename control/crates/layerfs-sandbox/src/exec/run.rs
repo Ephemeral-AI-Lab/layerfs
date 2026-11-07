@@ -39,7 +39,9 @@ pub struct Exec<'a> {
 /// One command to its end: exit code, stdout, stderr and its stop handle's
 /// form. `spool` sends every non-empty stream to its file instead of
 /// keeping it inline. Its home is the Sandbox's scratch directory, since
-/// the command identity has no account there.
+/// the command identity has no account there. While this thread's steps
+/// are timed, so are the runtime's (`layerfs_sandbox_backend::steps`), and
+/// `command` is the whole run.
 fn run(
     state: &SandboxState,
     directory: &str,
@@ -48,14 +50,25 @@ fn run(
     slot: ExecSlot<'_>,
 ) -> Result<(i32, Spool, Spool), SdkRefusal> {
     let runtime = state.runtime()?;
-    crate::runtime::run(
+    let stepped = layerfs_home::trace::stepping();
+    if stepped {
+        layerfs_sandbox_backend::steps::begin();
+    }
+    let ran = crate::runtime::run(
         runtime,
         state.identity,
         arguments,
         vec![format!("HOME={}", crate::runtime::scratch(runtime))],
         (directory, spool),
         slot,
-    )
+    );
+    if stepped {
+        for (name, took) in layerfs_sandbox_backend::steps::take() {
+            layerfs_home::trace::step_of(name, took);
+        }
+    }
+    layerfs_home::trace::step("command");
+    ran
 }
 
 /// `workspace.exec(ws, command, { spool?, exec_id? })` on the Workspace at
@@ -73,6 +86,7 @@ fn run(
 /// in; that caller keeps the command's record too.
 pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
     let state = sandbox(host)?;
+    layerfs_home::trace::step("registry");
     let path = required(exec.path, "path")?;
     let command = required(exec.command, "command")?;
     let id = match exec.exec_id {
@@ -115,11 +129,13 @@ pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
         spawned: &mut spawned,
     };
     let arguments = vec!["bash".into(), "-c".into(), command.into()];
+    layerfs_home::trace::step("exec_record");
     let ran = run(&state, &directory, arguments, exec.spool, slot);
     let cancelled = match running {
         Some(running) => running.end()?,
         None => false,
     };
+    layerfs_home::trace::step("exec_record_end");
     let (code, stdout, stderr) = ran?;
     let kind = match cancelled && code > 128 {
         true => "cancelled".to_owned(),

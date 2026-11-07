@@ -6,6 +6,7 @@
 use super::{cgroup, sandbox::Sandbox};
 use crate::local::search::search_path;
 use crate::local::streams;
+use crate::steps;
 use crate::stop::{self, ExecSlot, Stop};
 use crate::ExecExit;
 use crate::{ExecRequest, RuntimeError, WireFailure};
@@ -49,14 +50,17 @@ impl Sandbox {
             .init
             .ok_or_else(|| self.invalid("running command admission"))?;
         self.endpoint()?;
+        steps::mark("exec.endpoint");
         let group = match slot {
             Some(slot) => Some(self.exec_group(slot)?),
             None => None,
         };
+        steps::mark("exec.cgroup_create");
         let outcome = self.spawn_in(request, init.pid, group.as_deref(), stdout, stderr);
         if let Some(group) = &group {
             cgroup::remove_exec(group);
         }
+        steps::mark("exec.cgroup_remove");
         outcome
     }
 
@@ -88,7 +92,9 @@ impl Sandbox {
     }
 
     /// Spawns the helper for `request` in group `group` (the Sandbox's own
-    /// when `None`) and waits for it.
+    /// when `None`) and waits for it. While this thread's steps are timed,
+    /// the helper writes its stages' times to a file of its own
+    /// (`--trace`, [`steps::helper_file`]).
     fn spawn_in(
         &self,
         request: &ExecRequest,
@@ -106,6 +112,10 @@ impl Sandbox {
             .arg(group.unwrap_or(&self.cgroup));
         if group.is_some() {
             command.arg("--leave").arg(&self.cgroup);
+        }
+        let traced = steps::helper_file();
+        if let Some(file) = &traced {
+            command.arg("--trace").arg(file);
         }
         command
             .arg("--uid")
@@ -128,7 +138,13 @@ impl Sandbox {
                 command.env(name, value);
             }
         }
-        let mut child = command.spawn().map_err(|error| {
+        let spawned = traced.is_some().then(std::time::SystemTime::now);
+        let child = command.spawn();
+        steps::mark("exec.helper_spawn");
+        let mut child = child.map_err(|error| {
+            if let Some(file) = &traced {
+                let _ = std::fs::remove_file(file);
+            }
             let mut failure = self.io(error);
             failure.attempted = true;
             failure
@@ -146,6 +162,10 @@ impl Sandbox {
         });
         // the pipes are closed here either way; the exit is still waited for
         let status = child.wait();
+        steps::mark("exec.helper_wait");
+        if let (Some(file), Some(spawned)) = (&traced, spawned) {
+            steps::helper(file, spawned);
+        }
         let (out_bytes, err_bytes) = copied.map_err(|error| self.io(error))?;
         let status = status.map_err(|error| self.io(error))?;
         let code = (status.code())

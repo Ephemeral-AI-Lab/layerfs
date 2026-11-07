@@ -34,9 +34,9 @@ Where the worker sits on each platform and how its port is carried is in
 | --- | --- | --- | --- |
 | secret | caller | `{secret}` | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `greet` |
 | hello | worker | `{ready: true, protocol, bundle}`, or `{refused}` for a wrong secret | [`worker/hello.rs`](../../../../control/crates/layerfs-machine/src/worker/hello.rs) `to_frame`, [`server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) `answer` |
-| request | caller | `{op, args, home_id?}` | `client.rs` `request` |
+| request | caller | `{op, args, home_id?, trace_step?}`; `trace_step: true` only while the caller times its steps (`LAYERFS_TRACE_STEP`) | `client.rs` `request` |
 | event | worker | `{event}`, zero or more: progress, command output | `server.rs` `answer` |
-| answer | worker | `{value}` or `{refused: {code, message, detail}}` | `server.rs` `refusal_frame` |
+| answer | worker | `{value}` or `{refused: {code, message, detail}}`, with `steps: [{step, us}]` beside it when the request had `trace_step` | `server.rs` `answer`, `refusal_frame` |
 
 ```text
  caller (host)                                worker (machine)
