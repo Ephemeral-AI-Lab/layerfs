@@ -3,6 +3,7 @@
 //! reopened or deleted through its backend. A record of the retired docker
 //! backend (D-8, layerfs-project#111) is refused: nothing it names is
 //! reopened or deleted here.
+use crate::record::DaemonRecord;
 #[cfg(target_os = "linux")]
 use crate::runtime::NAMESPACES;
 use crate::runtime::NATIVE;
@@ -17,6 +18,11 @@ use layerfs_sandbox_backend::LocalRecord;
 use layerfs_sandbox_backend::SandboxRecord;
 use layerfs_sandbox_backend::{ContainerId, Sandbox, WireFailure};
 use std::path::PathBuf;
+
+/// A daemon record's runtime id, required.
+fn container(value: &DaemonRecord) -> Result<&str> {
+    helpers::required(value.container(), "container")
+}
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -56,24 +62,8 @@ pub fn retired(id: &str, container: &str) -> SdkRefusal {
 /// Whether a side's daemon record (`record.json`'s `daemon` on `native`, a
 /// worker's own record) names the retired docker backend: `runtime`
 /// `docker`, or none at all, which only a docker record lacked.
-pub fn retired_record(value: &SdkValue) -> bool {
-    matches!(value.get_text("runtime"), None | Some("docker"))
-}
-
-/// The labels a Sandbox record keeps; a record written before #373 has none.
-fn labels(value: &SdkValue) -> Result<Vec<(String, String)>> {
-    match value.get("labels") {
-        Some(SdkValue::List(items)) => items
-            .iter()
-            .map(|item| {
-                Ok((
-                    helpers::text(item, "key")?.to_owned(),
-                    helpers::text(item, "value")?.to_owned(),
-                ))
-            })
-            .collect(),
-        _ => Ok(Vec::new()),
-    }
+pub fn retired_record(value: &DaemonRecord) -> bool {
+    value.retired()
 }
 /// What a Sandbox record names: a local daemon process (`runtime`
 /// `native`) with its directory and port, or a namespace Sandbox (`runtime`
@@ -93,16 +83,16 @@ pub enum Recorded {
 /// Reads Sandbox `id`'s record's runtime.
 /// The record alone decides (#529): a caller's deployment backend is not
 /// consulted, so every call on a Sandbox reopens it by its own runtime.
-pub fn recorded(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded> {
+pub fn recorded(args: &SdkValue, id: &str, value: &DaemonRecord) -> Result<Recorded> {
     #[cfg(target_os = "linux")]
-    if value.get_text("runtime") == Some(NAMESPACES) {
+    if value.runtime() == Some(NAMESPACES) {
         return namespaces_record(args, id, value);
     }
-    if value.get_text("runtime") == Some(NATIVE) {
+    if value.runtime() == Some(NATIVE) {
         return local_record(args, id, value);
     }
-    match value.get_text("runtime") {
-        None | Some("docker") => Err(retired(id, value.get_text("name").unwrap_or(""))),
+    match value.runtime() {
+        None | Some("docker") => Err(retired(id, value.name().unwrap_or(""))),
         // the former `local` runtime (an earlier, unmerged build), or one
         // this host does not run: nothing it names is used or deleted
         Some(other) => Err(refused(
@@ -123,16 +113,16 @@ pub fn recorded(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded>
 /// without `boot` was written before boot ids were kept: its daemon is
 /// matched by id and start time as then, and never signalled.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded> {
+fn local_record(args: &SdkValue, id: &str, value: &DaemonRecord) -> Result<Recorded> {
     let (directory, record) = local_record_of(args, id, value)?;
     local(directory, record, value)
 }
 /// The local Sandbox in `directory` that `record` names.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-fn local(directory: PathBuf, record: LocalRecord, value: &SdkValue) -> Result<Recorded> {
+fn local(directory: PathBuf, record: LocalRecord, value: &DaemonRecord) -> Result<Recorded> {
     Ok(Recorded::Local {
         directory,
-        id: ContainerId::parse(helpers::text(value, "container")?).map_err(failed)?,
+        id: ContainerId::parse(container(value)?).map_err(failed)?,
         process: LocalProcess {
             pid: record.pid,
             start: record.start_time,
@@ -149,11 +139,15 @@ fn local(directory: PathBuf, record: LocalRecord, value: &SdkValue) -> Result<Re
 /// name this deployment gives Sandbox `id` and be owned by this record
 /// ([`crate::launch::local::owned`]).
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-fn local_record_of(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(PathBuf, LocalRecord)> {
-    let directory = PathBuf::from(helpers::text(value, "directory")?);
+fn local_record_of(
+    args: &SdkValue,
+    id: &str,
+    value: &DaemonRecord,
+) -> Result<(PathBuf, LocalRecord)> {
+    let directory = PathBuf::from(helpers::required(value.directory(), "directory")?);
     let expected = crate::launch::local::directory(args, id, directory.parent())?;
     // the Sandbox's own directory name, exactly as this deployment names it
-    let name = helpers::text(value, "name")?;
+    let name = helpers::required(value.name(), "name")?;
     if directory != expected || expected.file_name().and_then(|n| n.to_str()) != Some(name) {
         return Err(refused(
             "InvalidInput",
@@ -179,12 +173,12 @@ fn local_record_of(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(PathB
 }
 /// A local record's directory and physical facts, unchecked.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-fn local_parts(value: &SdkValue) -> Result<(PathBuf, LocalRecord)> {
-    let directory = PathBuf::from(helpers::text(value, "directory")?);
-    let name = helpers::text(value, "name")?;
+fn local_parts(value: &DaemonRecord) -> Result<(PathBuf, LocalRecord)> {
+    let directory = PathBuf::from(helpers::required(value.directory(), "directory")?);
+    let name = helpers::required(value.name(), "name")?;
     let process = recorded_process(value)?;
     let port = value
-        .get_int("port")
+        .port()
         .ok_or_else(|| refused("InvalidInput", "local Sandbox record port"))?;
     let record = LocalRecord {
         name: name.to_owned(),
@@ -192,18 +186,18 @@ fn local_parts(value: &SdkValue) -> Result<(PathBuf, LocalRecord)> {
         start_time: process.start,
         boot: process.boot,
         port: u16::try_from(port).map_err(failed)?,
-        labels: labels(value)?,
+        labels: value.labels()?,
     };
     Ok((directory, record))
 }
 /// The daemon (native) or init (namespaces) process a local record names:
 /// its id, start time and boot. A record from before boot ids has none.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-fn recorded_process(value: &SdkValue) -> Result<LocalProcess> {
+fn recorded_process(value: &DaemonRecord) -> Result<LocalProcess> {
     let pid = value
-        .get_int("pid")
+        .pid()
         .ok_or_else(|| refused("InvalidInput", "local Sandbox record pid"))?;
-    let boot = match value.get_text("boot") {
+    let boot = match value.boot() {
         None => None,
         Some(hex) => Some(
             (hex.len() == 32)
@@ -214,7 +208,7 @@ fn recorded_process(value: &SdkValue) -> Result<LocalProcess> {
     };
     Ok(LocalProcess {
         pid: u32::try_from(pid).map_err(failed)?,
-        start: helpers::text(value, "start")?
+        start: helpers::required(value.start(), "start")?
             .parse::<u64>()
             .map_err(failed)?,
         boot,
@@ -224,7 +218,7 @@ fn recorded_process(value: &SdkValue) -> Result<LocalProcess> {
 /// Sandbox ([`local_record_of`]), by any deployment (#529: the record
 /// decides).
 #[cfg(target_os = "linux")]
-fn namespaces_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded> {
+fn namespaces_record(args: &SdkValue, id: &str, value: &DaemonRecord) -> Result<Recorded> {
     let (directory, local) = local_record_of(args, id, value)?;
     namespaces(id, directory, local, value)
 }
@@ -234,18 +228,18 @@ fn namespaces(
     id: &str,
     directory: PathBuf,
     local: LocalRecord,
-    value: &SdkValue,
+    value: &DaemonRecord,
 ) -> Result<Recorded> {
-    let image =
-        layerfs_sandbox_backend::Image::parse(helpers::text(value, "image")?).map_err(|error| {
-            refused(
-                "InvalidInput",
-                format!(
-                    "Sandbox {id} is a namespaces Sandbox whose record names no image digest \
+    let image = helpers::required(value.image(), "image")?;
+    let image = layerfs_sandbox_backend::Image::parse(image).map_err(|error| {
+        refused(
+            "InvalidInput",
+            format!(
+                "Sandbox {id} is a namespaces Sandbox whose record names no image digest \
                  ({error}); it cannot be given a root, so it is neither reopened nor deleted"
-                ),
-            )
-        })?;
+            ),
+        )
+    })?;
     let record = layerfs_sandbox_backend::NamespaceRecord { local, image };
     let root = (directory.parent())
         .ok_or_else(|| refused("InvalidInput", "namespaces Sandbox directory"))?;
@@ -261,7 +255,7 @@ fn namespaces(
         })?;
     Ok(Recorded::Namespaces(
         layerfs_sandbox_backend::Runtime::Namespaces(provider),
-        ContainerId::parse(helpers::text(value, "container")?).map_err(failed)?,
+        ContainerId::parse(container(value)?).map_err(failed)?,
         SandboxRecord::Namespaces(record),
     ))
 }
@@ -270,9 +264,9 @@ fn namespaces(
 /// conversion with no directory check: the conversion checks that a local
 /// one's directory is in the home's old local root itself.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-pub fn unchecked(id: &str, value: &SdkValue) -> Result<Recorded> {
-    match value.get_text("runtime") {
-        None | Some("docker") => Err(retired(id, value.get_text("name").unwrap_or(""))),
+pub fn unchecked(id: &str, value: &DaemonRecord) -> Result<Recorded> {
+    match value.runtime() {
+        None | Some("docker") => Err(retired(id, value.name().unwrap_or(""))),
         Some(NATIVE) => {
             let (directory, record) = local_parts(value)?;
             local(directory, record, value)
@@ -290,7 +284,7 @@ pub fn unchecked(id: &str, value: &SdkValue) -> Result<Recorded> {
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-fn local_record(_: &SdkValue, id: &str, _: &SdkValue) -> Result<Recorded> {
+fn local_record(_: &SdkValue, id: &str, _: &DaemonRecord) -> Result<Recorded> {
     Err(refused(
         "Unsupported",
         format!(

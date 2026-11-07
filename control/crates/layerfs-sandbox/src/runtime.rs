@@ -188,8 +188,8 @@ pub fn kind(runtime: &Sandbox) -> &'static str {
 /// A record's `runtime` as a caller reads it: `native`, `namespaces`,
 /// another recorded name as it is, or `docker` for a record with none
 /// (only the retired docker backend wrote none).
-pub fn runtime_name(record: &SdkValue) -> &str {
-    record.get_text("runtime").unwrap_or("docker")
+pub fn runtime_name(record: &crate::record::DaemonRecord) -> &str {
+    record.runtime().unwrap_or("docker")
 }
 
 /// The image a Sandbox reports: the digest a namespaces Sandbox's root is

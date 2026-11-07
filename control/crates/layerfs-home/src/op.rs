@@ -65,6 +65,13 @@ impl Op {
         }
     }
 
+    /// The intent a record's `op` field holds (`value`), when it is a map.
+    pub fn decode(value: &SdkValue) -> Option<Self> {
+        matches!(value, SdkValue::Map(_)).then(|| Self {
+            fields: value.clone(),
+        })
+    }
+
     /// The intent's id, `op-<16 hex>`.
     pub fn id(&self) -> &str {
         self.fields.get_text("id").unwrap_or("")

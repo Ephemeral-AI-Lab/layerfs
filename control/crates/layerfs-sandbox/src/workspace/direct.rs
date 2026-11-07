@@ -94,16 +94,18 @@ fn branch_of(
 /// and while an unmount holds it.
 pub fn exec_directory(home: &Path, record: &SandboxRecord, at: &str) -> Result<String> {
     let dir = record.dir(home);
-    let field = if at.starts_with('/') { "path" } else { "name" };
-    let found = (files::workspaces(&dir)?.into_iter())
-        .find(|(_, workspace)| workspace.get_text(field) == Some(at));
+    let by_path = at.starts_with('/');
+    let found = (files::workspaces(&dir)?.into_iter()).find(|(_, workspace)| match by_path {
+        true => workspace.path() == Some(at),
+        false => workspace.name() == Some(at),
+    });
     let Some((_, workspace)) = found else {
         return Err(refused(
             "NotMounted",
             format!("{}:{at} is not mounted", record.name()),
         ));
     };
-    let path = helpers::text(&workspace, "path")?.to_owned();
+    let path = helpers::required(workspace.path(), "path")?.to_owned();
     unmount_guard::check_in(&dir, &path)?;
     Ok(path)
 }

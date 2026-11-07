@@ -8,6 +8,7 @@
 //! when it ended by itself. A record of the retired docker backend is
 //! forgotten by its close. Nothing is retried on the caller's behalf.
 use crate::daemon::values;
+use crate::record::DaemonRecord;
 use crate::registry::{SandboxState, SANDBOXES};
 use crate::OperationFailure;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -318,7 +319,7 @@ pub fn close(args: &SdkValue) -> Outcome {
 /// `recorded`) under the retired docker backend (D-8, layerfs-project#111):
 /// its folder goes and the answer names its container, which is left for
 /// the user to remove (`docker rm -f`); nothing else is touched.
-fn forget(id: &str, directory: &Path, recorded: &SdkValue) -> Outcome {
+fn forget(id: &str, directory: &Path, recorded: &DaemonRecord) -> Outcome {
     let _guard = layerfs_store::project::discovery::guard(directory)?;
     let container = discard(directory, recorded)?;
     std::fs::remove_dir_all(directory).map_err(failed)?;
@@ -336,7 +337,7 @@ fn forget(id: &str, directory: &Path, recorded: &SdkValue) -> Outcome {
 /// Removes what folder `directory` holds of a Sandbox the retired docker
 /// backend recorded (`recorded`, its daemon record), under the folder's
 /// guard, whose turn file stays; answers the container's name.
-fn discard(directory: &Path, recorded: &SdkValue) -> Result<String, SdkRefusal> {
+fn discard(directory: &Path, recorded: &DaemonRecord) -> Result<String, SdkRefusal> {
     lock(&SANDBOXES)?.remove(directory);
     for entry in std::fs::read_dir(directory).map_err(failed)? {
         let entry = entry.map_err(failed)?;
@@ -350,7 +351,7 @@ fn discard(directory: &Path, recorded: &SdkValue) -> Result<String, SdkRefusal> 
         }
         .map_err(failed)?;
     }
-    Ok(recorded.get_text("name").unwrap_or("").to_owned())
+    Ok(recorded.name().unwrap_or("").to_owned())
 }
 
 /// Seconds a closing Sandbox's daemon has to exit before it is killed.
@@ -371,7 +372,7 @@ pub fn reclaim(args: &SdkValue, container: &str, stopped: bool) -> Outcome {
             format!("no Sandbox {id} runs on this machine"),
         ));
     };
-    if text(&value, "container")? != container {
+    if layerfs_home::helpers::required(value.container(), "container")? != container {
         return Err(refused(
             "Busy",
             format!("Sandbox {id} was started again while it was reclaimed; nothing was removed"),

@@ -70,11 +70,11 @@ sandbox.create`) ([`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/c
 | `runtime`, `backend` | text | `native` (macOS host process) or `namespaces` (Linux, including the `docker` machine's worker container) |
 | `image` | text | the namespaces root's digest, or `local` |
 | `route` | text | the kernel route: `nfs` for a macOS host process, else `fuse` ([`files.rs`](../../../../../control/crates/layerfs-sandbox/src/files.rs) `route`) |
-| `state` | text | `running` once recorded ([`record.rs`](../../../../../control/crates/layerfs-sandbox/src/record.rs) `state`) |
+| `state` | text | `running` once recorded ([`record/sandbox.rs`](../../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) `state`) |
 | `forward_failed` | text | why the caller could not reach the daemon directly; its Workspace calls then go through the worker |
 
 The record hides `v`, `runtime_id` and `daemon`
-([`record.rs`](../../../../../control/crates/layerfs-sandbox/src/record.rs) `HIDDEN`).
+([`record/sandbox.rs`](../../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) `HIDDEN`).
 
 ## Where it runs
 

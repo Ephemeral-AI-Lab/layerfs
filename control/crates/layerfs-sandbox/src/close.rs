@@ -204,7 +204,7 @@ fn close_unstarted(home: &Path, record: &SandboxRecord) -> Outcome {
         ));
     }
     // a layout 2 Sandbox whose runtime the conversion found ended
-    if let Some(left) = record.to_record().get_text("left") {
+    if let Some(left) = record.left() {
         fields.push(("left", SdkValue::text(left)));
     }
     Ok(SdkValue::Map(

@@ -4,6 +4,7 @@
 //! `<root>/sandbox/<name>/` holds its record (`record.json`, with what
 //! reopens it under `daemon`), its daemon keys (`control.json`) and one
 //! record per Workspace (`workspace/<id>.json`). No mutation replay.
+use crate::record::{DaemonRecord, Local, SandboxRecord, WorkspaceRecord};
 use crate::recorded::{gone, recorded};
 use crate::registry::{Mount, SandboxState};
 #[cfg(target_os = "linux")]
@@ -12,11 +13,11 @@ use crate::runtime::{LOCAL, NATIVE};
 use crate::{internal::workspace, BoundWorkspace, MountedWorkspace};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::helpers;
-use layerfs_home::home::{paths, read_record, write_entity};
+use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused};
 use layerfs_sandbox_backend::LocalRecord;
 #[cfg(target_os = "linux")]
-use layerfs_sandbox_backend::SandboxRecord;
+use layerfs_sandbox_backend::SandboxRecord as BackendRecord;
 use layerfs_sandbox_backend::{CommandIdentity, Sandbox};
 use layerfs_store::project::discovery::{home, private};
 use std::{
@@ -44,25 +45,9 @@ pub fn sandbox_dir(args: &SdkValue) -> Result<PathBuf> {
 }
 /// What reopens the Sandbox recorded in `directory` (its record's
 /// `daemon`), or `None` before its start recorded one.
-pub fn started(directory: &Path) -> Result<Option<SdkValue>> {
-    let record = read_record(&directory.join("record.json"))?;
-    Ok(record.and_then(|record| match record.get("daemon") {
-        Some(daemon @ SdkValue::Map(_)) => Some(daemon.clone()),
-        _ => None,
-    }))
-}
-/// The labels a record keeps, as the value map its reader expects.
-fn label_values(labels: &[(String, String)]) -> SdkValue {
-    SdkValue::List(
-        (labels.iter())
-            .map(|(key, value)| {
-                SdkValue::map([
-                    ("key", SdkValue::text(key)),
-                    ("value", SdkValue::text(value)),
-                ])
-            })
-            .collect(),
-    )
+pub fn started(directory: &Path) -> Result<Option<DaemonRecord>> {
+    let record = SandboxRecord::read_in(directory, "")?;
+    Ok(record.and_then(|record| record.daemon().cloned()))
 }
 
 /// Records started Sandbox `state` in its folder `directory`: its daemon
@@ -82,39 +67,23 @@ pub fn save_sandbox(
     // the platform the call named, checked by `create` before any effect (#529)
     let platform = crate::runtime::platform(args, deploy)?;
     let runtime = state.runtime()?;
-    let mut fields = vec![
-        ("platform", SdkValue::text(platform)),
-        ("name", SdkValue::text(&state.name)),
-        ("container", SdkValue::text(runtime.identity().to_string())),
-    ];
-    match runtime {
+    let daemon = match runtime {
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         Sandbox::HostProcess(runtime) => {
             let record = runtime
                 .local_record()
                 .ok_or_else(|| refused("Failed", "local Sandbox has no daemon process"))?;
-            fields.extend(local_fields(args, state, &record, NATIVE, LOCAL)?);
+            local_fields(args, state, platform, &record, NATIVE, LOCAL)?
         }
         #[cfg(target_os = "linux")]
         Sandbox::Namespaces(runtime) => {
-            let Some(SandboxRecord::Namespaces(record)) = runtime.record() else {
+            let Some(BackendRecord::Namespaces(record)) = runtime.record() else {
                 return Err(refused("Failed", "namespace Sandbox has no init process"));
             };
             let image = record.image().as_str().to_owned();
-            fields.extend(local_fields(
-                args,
-                state,
-                record.local(),
-                NAMESPACES,
-                &image,
-            )?);
+            local_fields(args, state, platform, record.local(), NAMESPACES, &image)?
         }
-    }
-    let daemon = SdkValue::Map(
-        (fields.into_iter())
-            .map(|(name, value)| (name.to_owned(), value))
-            .collect(),
-    );
+    };
     // the keys first: a record with `daemon` is a started Sandbox
     layerfs_home::secrets::save_daemon_keys(
         directory,
@@ -131,22 +100,16 @@ pub fn save_sandbox(
     // on `native` this is the home's record, which keeps its other fields
     // (its `op` among them): changed under the Sandbox lock (#536 §8)
     let _sandbox = crate::record::lock_in(directory, &state.id)?;
-    let mut record = read_record(&directory.join("record.json"))?.unwrap_or_default();
+    let record = SandboxRecord::read_in(directory, &state.id)?
+        .unwrap_or_else(|| SandboxRecord::from_record(&state.id, SdkValue::Null));
     let store = args.get_text("store").unwrap_or(&state.project);
-    for (field, value) in [
-        ("name", SdkValue::text(&state.id)),
-        (
-            "project",
-            SdkValue::text(format!("{store}/{}", state.project)),
-        ),
-        ("backend", SdkValue::text(crate::runtime::kind(runtime))),
-        ("route", SdkValue::text(route(runtime))),
-        ("runtime_id", SdkValue::text(runtime.identity().to_string())),
-        ("daemon", daemon),
-    ] {
-        record = layerfs_home::home::with_field(record, field, value);
-    }
-    write_entity(&directory.join("record.json"), &record)
+    let facts = [
+        crate::runtime::kind(runtime).to_owned(),
+        route(runtime).to_owned(),
+        runtime.identity().to_string(),
+    ];
+    let record = record.with_start(format!("{store}/{}", state.project), facts, daemon);
+    record.write_in(directory)
 }
 /// The kernel route a running Sandbox's Workspaces use: loopback NFS for a
 /// native (macOS) one, FUSE for every other.
@@ -166,32 +129,28 @@ pub fn route(runtime: &Sandbox) -> &'static str {
 fn local_fields(
     args: &SdkValue,
     state: &SandboxState,
+    platform: String,
     record: &LocalRecord,
     runtime: &'static str,
     image: &str,
-) -> Result<Vec<(&'static str, SdkValue)>> {
+) -> Result<DaemonRecord> {
     let boot = record
         .boot
         .ok_or_else(|| refused("Failed", "local Sandbox daemon has no boot id"))?;
-    Ok(vec![
-        ("runtime", SdkValue::text(runtime)),
-        ("uid", SdkValue::Int(i64::from(state.identity.uid))),
-        ("gid", SdkValue::Int(i64::from(state.identity.gid))),
-        (
-            "directory",
-            SdkValue::text(
-                crate::launch::local::directory(args, &state.id, None)?
-                    .display()
-                    .to_string(),
-            ),
-        ),
-        ("pid", SdkValue::Int(i64::from(record.pid))),
-        ("start", SdkValue::text(record.start_time.to_string())),
-        ("boot", SdkValue::text(format!("{boot:032x}"))),
-        ("port", SdkValue::Int(i64::from(record.port))),
-        ("image", SdkValue::text(image)),
-        ("labels", label_values(&record.labels)),
-    ])
+    let directory = crate::launch::local::directory(args, &state.id, None)?;
+    Ok(DaemonRecord::local(Local {
+        platform,
+        name: state.name.clone(),
+        container: state.runtime()?.identity().to_string(),
+        runtime,
+        uid: state.identity.uid,
+        gid: state.identity.gid,
+        directory: directory.display().to_string(),
+        process: (record.pid, record.start_time, format!("{boot:032x}")),
+        port: record.port,
+        image: image.to_owned(),
+        labels: record.labels.clone(),
+    }))
 }
 
 /// Reopens the Sandbox a call names from its folder: its record's `daemon`
@@ -212,7 +171,7 @@ pub fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
     let project = helpers::text(args, "project")?;
     // a Sandbox in a machine whose daemon's port is forwarded here (#535
     // G4): only its forward is checked; its runtime is the machine's
-    let (runtime, endpoint) = match crate::direct::forward_of(&value) {
+    let (runtime, endpoint) = match value.forward().and_then(|f| f.address()) {
         Some(address) => {
             crate::direct::check(&home(args)?, id, &value)?;
             (None, address)
@@ -237,7 +196,7 @@ pub fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
     let state = Arc::new(SandboxState {
         id: id.to_owned(),
         project: project.to_owned(),
-        name: value.get_text("name").unwrap_or_default().to_owned(),
+        name: value.name().unwrap_or_default().to_owned(),
         directory,
         runtime,
         identity: recorded_identity(&value),
@@ -249,8 +208,8 @@ pub fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
 }
 /// The runtime a Sandbox record's `daemon` names, observed running once;
 /// its daemon listens on this kernel's loopback.
-fn observed(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Box<Sandbox>> {
-    let container = helpers::text(value, "container")?;
+fn observed(args: &SdkValue, id: &str, value: &DaemonRecord) -> Result<Box<Sandbox>> {
+    let container = helpers::required(value.container(), "container")?;
     recorded(args, id, value)?.reopen().map_err(|failure| {
         if failure.container_stopped() {
             gone(id, container, true)
@@ -261,9 +220,9 @@ fn observed(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Box<Sandbox>>
 }
 /// The command identity a Sandbox record names: a native Sandbox's is the
 /// user who started it (`uid`, `gid`); every other runs as 501:20.
-fn recorded_identity(value: &SdkValue) -> CommandIdentity {
-    let id = |key: &str| value.get_int(key).and_then(|n| u32::try_from(n).ok());
-    match (id("uid"), id("gid")) {
+fn recorded_identity(value: &DaemonRecord) -> CommandIdentity {
+    let id = |n: Option<i64>| n.and_then(|n| u32::try_from(n).ok());
+    match (id(value.uid()), id(value.gid())) {
         (Some(uid), Some(gid)) => CommandIdentity { uid, gid },
         _ => CommandIdentity { uid: 501, gid: 20 },
     }
@@ -278,7 +237,7 @@ pub fn refresh(state: &SandboxState) -> Result<()> {
 pub fn refresh_except(state: &SandboxState, retained: &[String]) -> Result<()> {
     let mut mounts = std::collections::BTreeMap::new();
     for (_, value) in workspaces(&state.directory)? {
-        let path = helpers::text(&value, "path")?;
+        let path = helpers::required(value.path(), "path")?;
         if retained.iter().any(|kept| kept == path) {
             continue;
         }
@@ -307,7 +266,7 @@ pub fn refresh_except(state: &SandboxState, retained: &[String]) -> Result<()> {
                     },
                     ready,
                 },
-                branch: helpers::text(&value, "branch")?.to_owned(),
+                branch: helpers::required(value.branch(), "branch")?.to_owned(),
             },
         );
     }
@@ -317,7 +276,7 @@ pub fn refresh_except(state: &SandboxState, retained: &[String]) -> Result<()> {
 /// The Workspace records in Sandbox folder `directory`
 /// (`workspace/<id>.json`), each with its file; one its owner removed after
 /// the listing is left out (#352 F-017).
-pub fn workspaces(directory: &Path) -> Result<Vec<(PathBuf, SdkValue)>> {
+pub fn workspaces(directory: &Path) -> Result<Vec<(PathBuf, WorkspaceRecord)>> {
     let mut found = Vec::new();
     let entries = match fs::read_dir(directory.join("workspace")) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(found),
@@ -329,15 +288,15 @@ pub fn workspaces(directory: &Path) -> Result<Vec<(PathBuf, SdkValue)>> {
         if name.starts_with('.') || !name.ends_with(".json") {
             continue;
         }
-        if let Some(value) = read_record(&path)? {
+        if let Some(value) = WorkspaceRecord::read(&path)? {
             found.push((path, value));
         }
     }
     Ok(found)
 }
 /// A Workspace record's token: its id (64 hex digits) and namespace.
-fn token_of(value: &SdkValue) -> Result<layerfs_bridge::control::WorkspaceToken> {
-    let id = helpers::text(value, "id")?;
+fn token_of(value: &WorkspaceRecord) -> Result<layerfs_bridge::control::WorkspaceToken> {
+    let id = helpers::required(value.id(), "id")?;
     let bytes: Vec<u8> = (0..id.len())
         .step_by(2)
         .map(|i| {
@@ -350,7 +309,7 @@ fn token_of(value: &SdkValue) -> Result<layerfs_bridge::control::WorkspaceToken>
     Ok(layerfs_bridge::control::WorkspaceToken {
         workspace: layerfs_history::WorkspaceId::from_slice(&bytes).map_err(failed)?,
         namespace: value
-            .get_int("namespace")
+            .namespace()
             .ok_or_else(|| refused("InvalidInput", "namespace"))?,
     })
 }
@@ -378,26 +337,9 @@ pub fn save_workspace(
     name: Option<&str>,
 ) -> Result<()> {
     let token = mount.bound.token;
-    let mut fields = vec![(
-        "id",
-        SdkValue::text(layerfs_bridge::sdk_values::hex(&token.workspace.to_bytes())),
-    )];
-    if let Some(name) = name {
-        fields.push(("name", SdkValue::text(name)));
-    }
-    fields.extend([
-        ("branch", SdkValue::text(branch)),
-        ("path", SdkValue::text(&mount.ready.directory)),
-        ("namespace", SdkValue::Int(token.namespace)),
-        ("created", SdkValue::Int(layerfs_home::home::now_ms())),
-    ]);
+    let id = layerfs_bridge::sdk_values::hex(&token.workspace.to_bytes());
+    let record =
+        WorkspaceRecord::mounted(id, name, branch, &mount.ready.directory, token.namespace);
     let _sandbox = crate::record::lock_in(&state.directory, &state.id)?;
-    write_entity(
-        &workspace_file(state, token),
-        &SdkValue::Map(
-            (fields.into_iter())
-                .map(|(n, v)| (n.to_owned(), v))
-                .collect(),
-        ),
-    )
+    record.write(&workspace_file(state, token))
 }

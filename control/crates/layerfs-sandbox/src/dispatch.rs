@@ -38,12 +38,8 @@ fn listed(answer: SdkValue, directory: &std::path::Path) -> Outcome {
     let name_at = |path: Option<&str>| {
         let found = records
             .iter()
-            .find(|(_, r)| path.is_some() && r.get_text("path") == path);
-        SdkValue::opt_text(
-            found
-                .and_then(|(_, r)| r.get_text("name"))
-                .map(str::to_owned),
-        )
+            .find(|(_, r)| path.is_some() && r.path() == path);
+        SdkValue::opt_text(found.and_then(|(_, r)| r.name()).map(str::to_owned))
     };
     let named = |item: SdkValue| {
         let path = item.get("directory").cloned().unwrap_or_default();

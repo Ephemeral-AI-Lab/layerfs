@@ -97,7 +97,7 @@ the Store's lane. See the [routing table](../../../control/routing/routing-table
 | `NoSuchSandbox`, `NotMounted` | no such Sandbox or Workspace | no | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `Conflict` | the head moved and files conflict: markers are written into the Workspace and nothing is committed; or files still hold markers (`detail.head`, `base`, `markers`, `conflicts`, `written`, `lww`) | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
 | `Busy` | another control operation runs on the Workspace; or a `sandbox.create`/`close` holds the Sandbox | no | [`control/registry.rs`](../../../../../engine/crates/layerfs-daemon/src/control/registry.rs) `idle` |
-| `Unresolved` | the Sandbox's intent is unresolved | no | [`record.rs`](../../../../../control/crates/layerfs-sandbox/src/record.rs) |
+| `Unresolved` | the Sandbox's intent is unresolved | no | [`record/sandbox.rs`](../../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) |
 | `Unknown`, phase `admission` | **an earlier Commit's install was uncertain or failed; the daemon keeps that custody and refuses new Commits** | **yes (the earlier one)** | [`control/registry.rs`](../../../../../engine/crates/layerfs-daemon/src/control/registry.rs) `idle` |
 | other daemon refusal codes | refused with `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) `refusal` |
 | `Unavailable` | the worker is not recorded or does not answer | no | [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) |

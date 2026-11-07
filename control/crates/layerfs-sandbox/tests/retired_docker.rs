@@ -58,7 +58,11 @@ fn a_retired_docker_record_is_refused_with_how_to_recreate_it() {
     for runtime in [None, Some("docker")] {
         let root = root(&format!("refused-{}", runtime.unwrap_or("none")));
         let daemon = docker_record(&root, runtime);
-        let refusal = match layerfs_sandbox::recorded::recorded(&args(&root), "old", &daemon) {
+        let refusal = match layerfs_sandbox::recorded::recorded(
+            &args(&root),
+            "old",
+            &layerfs_sandbox::record::DaemonRecord::from_record(&daemon),
+        ) {
             Ok(_) => panic!("a retired docker record was reopened"),
             Err(refusal) => refusal,
         };

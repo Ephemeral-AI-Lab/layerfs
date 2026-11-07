@@ -12,6 +12,7 @@
 use crate::daemon::values;
 use crate::internal::workspace;
 use crate::lifecycle::{operation, WORKSPACES};
+use crate::record::{DaemonRecord, WorkspaceRecord};
 use crate::registry::{sandbox, sandbox_live, Mount};
 use crate::OperationCause;
 use crate::Unmounted;
@@ -114,7 +115,7 @@ pub fn mount(args: &SdkValue) -> Outcome {
         // a forwarded Sandbox's runtime is its machine's: its record says
         let image = match &state.runtime {
             Some(runtime) => crate::runtime::image(runtime),
-            None => saved.get_text("image").unwrap_or_default().to_owned(),
+            None => saved.image().unwrap_or_default().to_owned(),
         };
         fields.push(("image".to_owned(), SdkValue::text(image)));
         // what its record names (#529)
@@ -144,13 +145,13 @@ pub fn mount(args: &SdkValue) -> Outcome {
 /// carries `name` (#536 C3).
 fn free(
     sandbox: &str,
-    records: &[(std::path::PathBuf, SdkValue)],
+    records: &[(std::path::PathBuf, WorkspaceRecord)],
     name: Option<&WorkspaceName>,
 ) -> Result<(), SdkRefusal> {
     let Some(name) = name else {
         return Ok(());
     };
-    if (records.iter()).any(|(_, record)| record.get_text("name") == Some(name.as_str())) {
+    if (records.iter()).any(|(_, record)| record.name() == Some(name.as_str())) {
         return Err(layerfs_home::outcome::refused(
             "Exists",
             format!("Sandbox {sandbox} already has a Workspace named {name}: pick another name, or unmount `{sandbox}:{name}` first"),
@@ -170,7 +171,7 @@ pub fn by_name(args: SdkValue) -> Result<SdkValue, SdkRefusal> {
     let name = WorkspaceName::parse(name)?;
     let directory = crate::files::sandbox_dir(&args)?;
     let found = (crate::files::workspaces(&directory)?.into_iter())
-        .find(|(_, record)| record.get_text("name") == Some(name.as_str()));
+        .find(|(_, record)| record.name() == Some(name.as_str()));
     let Some((_, record)) = found else {
         let sandbox = args.get_text("sandbox").unwrap_or("");
         return Err(layerfs_home::outcome::refused(
@@ -178,7 +179,7 @@ pub fn by_name(args: SdkValue) -> Result<SdkValue, SdkRefusal> {
             format!("{sandbox}:{name} is not mounted"),
         ));
     };
-    let path = text(&record, "path")?.to_owned();
+    let path = layerfs_home::helpers::required(record.path(), "path")?.to_owned();
     Ok(layerfs_home::home::with_field(
         args,
         "path",
@@ -188,8 +189,8 @@ pub fn by_name(args: SdkValue) -> Result<SdkValue, SdkRefusal> {
 
 /// A record's `platform` (#529), or null for a record from before it, which
 /// the agent reads as the platform its runtime and home imply.
-fn platform_of(record: &SdkValue) -> SdkValue {
-    SdkValue::opt_text(record.get_text("platform").map(str::to_owned))
+fn platform_of(record: &DaemonRecord) -> SdkValue {
+    SdkValue::opt_text(record.platform().map(str::to_owned))
 }
 
 /// `backend.daemon.workspace.status(ws)`: the daemon's Status, which reads no

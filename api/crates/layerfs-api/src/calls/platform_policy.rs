@@ -47,7 +47,7 @@ fn sandbox(home: &Path, name: &str) -> Result {
     layerfs_home::names::SandboxName::parse(name)?;
     if let Some(record) = SandboxRecord::read(home, name)? {
         // A saved daemon still names its platform if the machine record is gone.
-        platform(record.to_record().get_text("platform").unwrap_or(""))?;
+        platform(record.platform().unwrap_or(""))?;
         machine(home, record.machine())?;
         if let Some(name) = record.project() {
             project(home, name)?;

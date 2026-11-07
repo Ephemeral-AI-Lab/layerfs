@@ -13,7 +13,7 @@
 //! in the machine: it still goes through the worker, with the directory
 //! checked here. Create, close and a machine with no forward use the
 //! worker as before.
-use super::record::SandboxRecord;
+use super::record::{DaemonRecord, Forward, SandboxRecord};
 use crate::registry::{self, SandboxState, SANDBOXES};
 use crate::unmount_guard;
 use crate::{dispatch, files};
@@ -29,22 +29,15 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// The field of a Sandbox record's `daemon` that names its forward.
-const FORWARD: &str = "forward";
-
 /// The host address a Sandbox record's `daemon` reaches its daemon at, when
 /// its port is forwarded to this host.
-pub fn forward_of(daemon: &SdkValue) -> Option<SocketAddr> {
-    daemon.get(FORWARD)?.get_text("address")?.parse().ok()
+pub fn forward_of(daemon: &DaemonRecord) -> Option<SocketAddr> {
+    daemon.forward()?.address()
 }
 
 /// Whether the home reaches Sandbox `record`'s daemon directly.
 pub fn forwarded(record: &SandboxRecord) -> bool {
-    record
-        .to_record()
-        .get("daemon")
-        .and_then(forward_of)
-        .is_some()
+    record.daemon().and_then(forward_of).is_some()
 }
 
 /// Refuses Sandbox `id` of `home` (its record's `daemon`) while its
@@ -52,11 +45,11 @@ pub fn forwarded(record: &SandboxRecord) -> bool {
 /// and when the process that forwards its daemon's port has ended, matched
 /// by id, start time and boot (never by id alone). A port nothing carries
 /// has no process to check.
-pub fn check(home: &Path, id: &str, daemon: &SdkValue) -> Result<()> {
-    let Some(forward) = daemon.get(FORWARD) else {
+pub fn check(home: &Path, id: &str, daemon: &DaemonRecord) -> Result<()> {
+    let Some(forward) = daemon.forward() else {
         return Ok(());
     };
-    let machine = forward.get_text("machine").unwrap_or("");
+    let machine = forward.machine().unwrap_or("");
     if !paths::worker_record(home, machine).exists() {
         return Err(refused(
             "Unavailable",
@@ -65,7 +58,7 @@ pub fn check(home: &Path, id: &str, daemon: &SdkValue) -> Result<()> {
             ),
         ));
     }
-    if forward.get_int("pid").is_none() || layerfs_home::process::recorded_alive(forward) {
+    if forward.pid().is_none() || forward.alive() {
         return Ok(());
     }
     Err(refused(
@@ -74,7 +67,7 @@ pub fn check(home: &Path, id: &str, daemon: &SdkValue) -> Result<()> {
             "the forward to Sandbox {id}'s daemon (pid {}) has ended: machine {machine} \
              stopped or the forward was ended. Start the machine if it is stopped \
              (`layerfs machine start {machine}`), then `layerfs sandbox close {id}`",
-            forward.get_int("pid").unwrap_or(0)
+            forward.pid().unwrap_or(0)
         ),
     ))
 }
@@ -96,7 +89,7 @@ pub fn live(state: &SandboxState) -> Result<()> {
 /// The refusal of a forwarded Sandbox `id` whose daemon did not answer a
 /// new connection: `Unavailable`, naming the calls that say why. A busy
 /// daemon's `Busy` and a restarted one's `StaleSandbox` stay as they are.
-pub fn unanswered(id: &str, daemon: &SdkValue, refusal: SdkRefusal) -> SdkRefusal {
+pub fn unanswered(id: &str, daemon: &DaemonRecord, refusal: SdkRefusal) -> SdkRefusal {
     if matches!(refusal.code.as_str(), "Busy" | "StaleSandbox") {
         return refusal;
     }
@@ -127,7 +120,7 @@ pub fn with_keys(root: &Path, name: &str, out: SdkValue) -> Outcome {
 /// through the worker.
 pub struct Opened {
     keys: Option<SdkValue>,
-    daemon: Option<SdkValue>,
+    daemon: Option<DaemonRecord>,
     /// A forward that failed: the Sandbox is reached through its worker.
     pub failed: Option<String>,
 }
@@ -160,33 +153,13 @@ pub fn open(home: &Path, record: &SandboxRecord, started: &SdkValue) -> Opened {
             return opened;
         }
     };
-    let mut fields = vec![
-        ("address", SdkValue::text(forward.0.to_string())),
-        ("machine", SdkValue::text(record.machine())),
-    ];
-    if let Some(pid) = forward.1 {
-        fields.push(("pid", SdkValue::Int(i64::from(pid))));
-        // the forward's identity, so a reused id is never taken for it
-        if let Ok(process) = layerfs_sandbox_backend::local::LocalProcess::observe(pid) {
-            fields.push(("pid_start", SdkValue::text(process.start.to_string())));
-            if let Some(boot) = process.boot {
-                fields.push(("pid_boot", SdkValue::text(format!("{boot:032x}"))));
-            }
-        }
-    }
-    let forward = SdkValue::Map(
-        (fields.into_iter())
-            .map(|(n, v)| (n.to_owned(), v))
-            .collect(),
-    );
-    let copied = |name: &str| started.get(name).cloned().unwrap_or_default();
-    opened.daemon = Some(SdkValue::map([
-        (FORWARD, forward),
-        ("name", copied("name")),
-        ("runtime", copied("runtime")),
-        ("platform", copied("platform")),
-        ("image", copied("image")),
-    ]));
+    // the forward's identity, so a reused id is never taken for it
+    let process = forward.1.map(|pid| {
+        let observed = layerfs_sandbox_backend::local::LocalProcess::observe(pid).ok();
+        (pid, observed.map(|process| (process.start, process.boot)))
+    });
+    let forward = Forward::new(forward.0, record.machine(), process);
+    opened.daemon = Some(DaemonRecord::forwarded(forward, started));
     opened.keys = Some(SdkValue::map([
         ("endpoint", SdkValue::text(endpoint_of(&opened))),
         ("secret", keys.get("secret").cloned().unwrap_or_default()),
@@ -217,7 +190,7 @@ pub fn save(home: &Path, record: SandboxRecord, opened: &Opened) -> Result<Sandb
         end(home, record.machine(), daemon);
         return Err(refusal);
     }
-    Ok(record.with("daemon", daemon.clone()))
+    Ok(record.with_daemon(daemon.clone()))
 }
 
 /// The address machine `machine` carries its Sandbox daemon's `endpoint`
@@ -248,14 +221,14 @@ fn carried(_: &Path, _: &str, _: SocketAddr) -> Result<Option<(SocketAddr, Optio
 
 /// Ends the forward a record's `daemon` names, if it still is that
 /// process (`layerfs_machine::platform::forward_close` checks its command line too).
-fn end(home: &Path, machine: &str, daemon: &SdkValue) {
-    let Some(forward) = daemon.get(FORWARD) else {
+fn end(home: &Path, machine: &str, daemon: &DaemonRecord) {
+    let Some(forward) = daemon.forward() else {
         return;
     };
-    let Some(pid) = forward.get_int("pid").and_then(|p| u32::try_from(p).ok()) else {
+    let Some(pid) = forward.pid().and_then(|p| u32::try_from(p).ok()) else {
         return;
     };
-    if !layerfs_home::process::recorded_alive(forward) {
+    if !forward.alive() {
         return;
     }
     #[cfg(feature = "machine")]
@@ -285,7 +258,7 @@ pub fn release(home: &Path, record: &SandboxRecord) {
     if let Ok(mut live) = helpers::lock(&SANDBOXES) {
         live.remove(&dir);
     }
-    if let Some(daemon) = record.to_record().get("daemon") {
+    if let Some(daemon) = record.daemon() {
         end(home, record.machine(), daemon);
     }
 }
@@ -342,7 +315,7 @@ pub fn held(home: &Path, record: &SandboxRecord) -> Result<Vec<String>> {
     let args = args(home, record, &target, vec![]);
     let Ok(state) = registry::sandbox_live(&args) else {
         return (files::workspaces(&record.dir(home))?.iter())
-            .map(|(_, workspace)| Ok(helpers::text(workspace, "path")?.to_owned()))
+            .map(|(_, workspace)| Ok(helpers::required(workspace.path(), "path")?.to_owned()))
             .collect();
     };
     let _guard = layerfs_store::project::discovery::guard(&state.directory)?;

@@ -18,6 +18,12 @@ pub fn text<'a>(args: &'a SdkValue, name: &str) -> Result<&'a str, SdkRefusal> {
         .ok_or_else(|| refused("InvalidInput", format!("missing text argument `{name}`")))
 }
 
+/// A required text field `name` of a typed request or record: refused as
+/// [`text`] refuses a missing argument.
+pub fn required<'a>(value: Option<&'a str>, name: &str) -> Result<&'a str, SdkRefusal> {
+    value.ok_or_else(|| refused("InvalidInput", format!("missing text argument `{name}`")))
+}
+
 /// 32 fresh random bytes from the transport's key generator.
 pub fn random() -> Result<[u8; 32], SdkRefusal> {
     layerfs_bridge::duplex::generate_keypair()

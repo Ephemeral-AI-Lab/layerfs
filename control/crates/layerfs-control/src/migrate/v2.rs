@@ -35,7 +35,7 @@ use layerfs_home::home::{paths, read_record, with_field, write_entity, write_rec
 use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::{failed, refused};
 use layerfs_machine::record::MachineRecord;
-use layerfs_sandbox::record::SandboxRecord;
+use layerfs_sandbox::record::{DaemonRecord, SandboxRecord};
 use layerfs_sandbox::recorded::{retired_record, unchecked, Recorded};
 use layerfs_store::lease;
 use layerfs_store::record::StoreRecord;
@@ -52,7 +52,7 @@ struct Numbered {
     project: String,
     id: String,
     dir: PathBuf,
-    record: SdkValue,
+    record: DaemonRecord,
 }
 
 /// What a numbered Sandbox's runtime was found to be.
@@ -196,7 +196,7 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
             let home_retired = record.retired_container(home)?;
             if kept.is_some() || home_retired.is_some() {
                 let entry = kept.map(|at| numbered.remove(at));
-                let daemon = entry.as_ref().and_then(|e| e.record.get_text("name"));
+                let daemon = entry.as_ref().and_then(|e| e.record.name());
                 let container = daemon.map(str::to_owned).or(home_retired);
                 plan.notes
                     .push(forgotten(&name, &container.unwrap_or_default()));
@@ -212,8 +212,8 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
                 Found::Unknown(why) => plan.live("sandbox", &name, format!("cannot be checked ({why}); close it with the build that started it (`layerfs sandbox close {name}`)")),
                 // no id: layout 3 derives `gone`
                 Found::Ended => {
-                    let gone = SandboxRecord::from_record(&name, value).with("id", SdkValue::Null);
-                    plan.sandboxes.push((name, layout_3(gone.to_record().clone())?));
+                    let gone = SandboxRecord::from_record(&name, value).ended();
+                    plan.sandboxes.push((name, layout_3(gone.to_record())?));
                     plan.ended.push(entry);
                 }
             }
@@ -223,7 +223,7 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
     for entry in numbered {
         let name = format!("{}#{}", entry.project, entry.id);
         if retired_record(&entry.record) {
-            let container = entry.record.get_text("name").unwrap_or("");
+            let container = entry.record.name().unwrap_or("");
             plan.notes.push(forgotten(&name, container));
             continue;
         }
@@ -347,7 +347,8 @@ fn numbered(home: &Path, plan: &mut Plan) -> Result<Vec<Numbered>> {
                 if !file.exists() {
                     continue;
                 }
-                let record = layerfs_store::project::discovery::load(&file)?;
+                let record =
+                    DaemonRecord::from_record(&layerfs_store::project::discovery::load(&file)?);
                 found.push(Numbered {
                     project: name.clone(),
                     id,

@@ -61,7 +61,7 @@ Under a folder scope the call is refused `InvalidInput`
 | Field | Kind | Meaning |
 | --- | --- | --- |
 | `items` | list | one page of records, each `SandboxRecord::to_sdk(View::List)`: the stored fields but `v`, `runtime_id`, `daemon` |
-| `items[].state` | text | `creating`, `closing`, `unresolved`, `gone` or `running`, derived from the record and its `op`; never asks a machine ([`record.rs`](../../../../../control/crates/layerfs-sandbox/src/record.rs) `state`) |
+| `items[].state` | text | `creating`, `closing`, `unresolved`, `gone` or `running`, derived from the record and its `op`; never asks a machine ([`record/sandbox.rs`](../../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) `state`) |
 | `items[].op` | map | the in-flight or uncertain intent, when the record holds one ([`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) `to_sdk`) |
 | `next_page_pos` | int or null | pass back as `page_pos`; null after the last page |
 

@@ -64,7 +64,7 @@ layerfs sandbox get <name> [--page-size <n>] [--page-pos <n>]
 | Field | Kind | Meaning |
 | --- | --- | --- |
 | record fields | | as [`sandbox.list`](list.md) shows them |
-| `state` | text | derived again with the machine's answer: `gone` when it says no such Sandbox runs ([`record.rs`](../../../../../control/crates/layerfs-sandbox/src/record.rs) `state`) |
+| `state` | text | derived again with the machine's answer: `gone` when it says no such Sandbox runs ([`record/sandbox.rs`](../../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) `state`) |
 | `workspaces[].ws` | text | `<sandbox>:<name>` when the mount named it, else `<sandbox>:<path>` ([`get.rs`](../../../../../control/crates/layerfs-sandbox/src/get.rs) `with_ws`) |
 | `workspaces[].name`, `path` | text | the mount's name or null; the mount directory |
 | `workspaces[].*` | | the daemon's read model per Workspace: id, namespace, Branch, base Commit and Layer, root, `activity`, dirty counts ([`operator/inspect.rs`](../../../../../engine/crates/layerfs-store-service/src/operator/inspect.rs) `workspace_value`) |

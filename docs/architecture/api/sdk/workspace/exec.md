@@ -118,7 +118,7 @@ A non-zero exit is not an error: it is `kind: "exit:<code>"`.
 | --- | --- | --- | --- |
 | `InvalidInput` | a bad `ws` or option; out of scope | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
 | `NoSuchSandbox`, `NotMounted` | no such Sandbox; the path or name is not mounted | no | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
-| `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox | no | [`record.rs`](../../../../../control/crates/layerfs-sandbox/src/record.rs) |
+| `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox | no | [`record/sandbox.rs`](../../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) |
 | `Unavailable` | the worker is not recorded or does not answer | no | [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) |
 | `Failed` | the runtime could not run the command, or spooling or draining failed | no | [`exec.rs`](../../../../../control/crates/layerfs-sandbox/src/exec.rs) |
 | `Unknown` | **the worker's answer was lost; the command may have run, in full or in part** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |

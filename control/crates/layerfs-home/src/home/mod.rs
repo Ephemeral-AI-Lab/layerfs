@@ -2,6 +2,7 @@
 //! `machine/`, `store/`, `backup/`, `trace/` and `log/`. Only host
 //! processes read or write it; guests never see it (§7.7).
 pub mod entity_lock;
+pub mod fields;
 pub mod flock;
 pub mod guest;
 pub mod layout;

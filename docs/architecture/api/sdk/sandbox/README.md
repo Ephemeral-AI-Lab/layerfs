@@ -40,7 +40,7 @@ unique across the home.
 | [`close`](close.md) | `name` (Name) | `force` (Bool) | `{ kind: "Closed", sandbox, unknown, closed }`, or `{ closed, was_gone: true }`, or `{ closed, was, left? }` for a record with no id | its machine: here or `sandbox.host` in the worker |
 
 The record is `SandboxRecord::to_sdk`
-([`record.rs`](../../../../../control/crates/layerfs-sandbox/src/record.rs)):
+([`record/sandbox.rs`](../../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs)):
 its stored fields except `v`, `runtime_id` and `daemon`, plus the derived
 `state` and, while an operation holds it, `op` as
 `{ id, name, phase, started, uncertain }`

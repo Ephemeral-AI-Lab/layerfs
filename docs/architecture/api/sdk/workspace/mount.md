@@ -108,7 +108,7 @@ scope only `main` is accepted and is mounted as the Branch `<ns>.main`
 | `NoSuchProject`, `NoSuchBranch` | the project or Branch is missing (the daemon's lookup) | no | [`store/bind.rs`](../../../../../engine/crates/layerfs-store-service/src/store/bind.rs) `named` |
 | `Exists` | the Sandbox already has a Workspace of that name | no | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `Capacity` | the Sandbox holds 16 Workspaces (`WORKSPACES`) | no | same |
-| `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox | no | [`record.rs`](../../../../../control/crates/layerfs-sandbox/src/record.rs) `free` |
+| `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox | no | [`record/sandbox.rs`](../../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) `free` |
 | `Unavailable` | the machine's worker is not recorded or does not answer | no | [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) |
 | daemon refusal codes | the daemon refused before effect; its own code and `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) `refusal` |
 | `Failed` | **a daemon exchange failed; the message carries the `OperationFailure`, whose `attempted` says whether the mount may have taken effect** | **maybe** | [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `operation` |
