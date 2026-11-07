@@ -103,9 +103,9 @@ impl Sandbox {
             .arg("--init")
             .arg(init.to_string())
             .arg("--cgroup")
-            .arg(group.unwrap_or(&self.cgroup));
-        if group.is_some() {
-            command.arg("--leave").arg(&self.cgroup);
+            .arg(&self.cgroup);
+        if let Some(group) = group {
+            command.arg("--command-cgroup").arg(group);
         }
         command
             .arg("--uid")

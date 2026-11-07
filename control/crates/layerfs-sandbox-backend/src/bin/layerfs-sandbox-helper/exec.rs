@@ -7,17 +7,16 @@
 //! filter that refuses it a user namespace (`local::deny_user_namespaces`,
 //! D-8); a command whose filter cannot be installed never starts.
 //!
-//! With `--leave <sandbox cgroup>` (a command with its own group,
-//! layerfs-project#113) the helper joins the command's group, starts the
-//! command there and moves itself back to the Sandbox's group, so a cancel's
-//! signals and `cgroup.kill` reach the command and what it started, not the
-//! helper, which then reports how the command ended. It blocks `SIGTERM`
-//! for that; the command's filter hook empties the child's signal mask just
-//! before exec (a forked child inherits its parent's), so it can be.
+//! With `--command-cgroup <group>` (a command with its own group,
+//! layerfs-project#113) the helper opens that group's `cgroup.procs` before
+//! entering the namespaces, and the command's child process moves itself
+//! into it just before exec (`local::start_in_cgroup`). The helper itself
+//! is never in the command's group, so a cancel's signals and `cgroup.kill`
+//! reach the command and what it started, never the helper, which then
+//! reports how the command ended; a child that cannot join never runs.
 use nix::{
     sched::{setns, CloneFlags},
     sys::prctl::set_no_new_privs,
-    sys::signal::{SigSet, Signal},
 };
 use std::{
     ffi::OsString,
@@ -32,7 +31,7 @@ use std::{
 struct Run {
     init: u32,
     cgroup: PathBuf,
-    leave: Option<PathBuf>,
+    command_cgroup: Option<PathBuf>,
     uid: u32,
     gid: u32,
     directory: PathBuf,
@@ -44,15 +43,8 @@ struct Run {
 /// never reads it as a command's exit code.
 pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
     let run = parse(arguments)?;
-    if run.leave.is_some() {
-        let mut terminate = SigSet::empty();
-        terminate.add(Signal::SIGTERM);
-        terminate
-            .thread_block()
-            .map_err(|error| format!("blocking SIGTERM: {error}"))?;
-    }
     // opened before the Sandbox's mount namespace hides this host path
-    let leave = match &run.leave {
+    let command_procs = match &run.command_cgroup {
         Some(group) => Some(procs(group)?),
         None => None,
     };
@@ -68,6 +60,9 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
         .gid(run.gid)
         .current_dir(&run.directory)
         .process_group(0);
+    if let Some(procs) = command_procs {
+        layerfs_sandbox_backend::local::start_in_cgroup(&mut command, procs);
+    }
     layerfs_sandbox_backend::local::deny_user_namespaces(&mut command);
     let mut child = match command.spawn() {
         Ok(child) => child,
@@ -75,14 +70,6 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
         // never look like the command's status
         Err(error) => fail(&format!("starting {}: {error}", program.to_string_lossy())),
     };
-    // `0` names the writer: the helper goes back to the Sandbox's group
-    if let Some(mut leave) = leave {
-        if let Err(error) = leave.write_all(b"0") {
-            let _ = child.kill();
-            let _ = child.wait();
-            fail(&format!("leaving the command's cgroup: {error}"));
-        }
-    }
     let status = child
         .wait()
         .map_err(|error| format!("waiting for the command: {error}"))?;
@@ -134,8 +121,8 @@ fn procs(cgroup: &Path) -> Result<File, String> {
         .map_err(|error| format!("opening {}: {error}", cgroup.display()))
 }
 
-/// The command's cgroup (the Sandbox's own, or one of its own below it), so
-/// `cgroup.kill` ends this command too.
+/// The Sandbox's cgroup, joined by this helper (and so by a command with no
+/// group of its own), so the Sandbox's `cgroup.kill` ends them too.
 fn join(cgroup: &Path) -> Result<(), String> {
     let pid = nix::unistd::getpid().as_raw();
     let mut file =
@@ -155,7 +142,7 @@ fn fail(message: &str) -> ! {
 fn parse(arguments: &[OsString]) -> Result<Run, String> {
     let (mut init, mut uid, mut gid) = (0, 0, 0);
     let (mut cgroup, mut directory) = (PathBuf::new(), PathBuf::new());
-    let mut leave = None;
+    let mut command_cgroup = None;
     let mut command = Vec::new();
     let mut index = 0;
     while index < arguments.len() {
@@ -172,7 +159,7 @@ fn parse(arguments: &[OsString]) -> Result<Run, String> {
             Some("--uid") => uid = number(value)?,
             Some("--gid") => gid = number(value)?,
             Some("--cgroup") => cgroup = PathBuf::from(value),
-            Some("--leave") => leave = Some(PathBuf::from(value)),
+            Some("--command-cgroup") => command_cgroup = Some(PathBuf::from(value)),
             Some("--cwd") => directory = PathBuf::from(value),
             _ => {
                 return Err(format!(
@@ -195,7 +182,7 @@ fn parse(arguments: &[OsString]) -> Result<Run, String> {
     Ok(Run {
         init,
         cgroup,
-        leave,
+        command_cgroup,
         uid,
         gid,
         directory,

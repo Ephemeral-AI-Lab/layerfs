@@ -134,14 +134,31 @@ fn program() -> Vec<sock_filter> {
     program
 }
 
+/// Makes `command` start in the cgroup whose `cgroup.procs` is `procs`
+/// (opened by the caller, whose credentials the kernel checks the move
+/// against): its process writes `0` there just before exec, so the
+/// command and everything it starts are in that group while its parent
+/// never is (layerfs-project#113). A failed move fails the spawn: the
+/// command never runs outside its group.
+pub fn start_in_cgroup(command: &mut Command, procs: std::fs::File) {
+    // SAFETY: the hook runs in the forked child before exec. It allocates
+    // nothing and takes no lock: one `write` system call on a descriptor
+    // opened before the fork, which is async-signal-safe.
+    #[allow(unsafe_code)]
+    unsafe {
+        command.pre_exec(move || {
+            use std::io::Write;
+            (&procs).write_all(b"0")
+        });
+    }
+}
+
 /// Makes `command` run under the filter: in its process, after everything
 /// `Command` sets up there (identity, directory, process group) and just
 /// before exec, it empties the signal mask (a forked child inherits its
-/// parent's: the helper blocks `SIGTERM` while it sits in a command's own
-/// cgroup, layerfs-project#113, and the command must not), sets
-/// no-new-privs (the kernel's condition for an unprivileged filter) and
-/// installs the filter. A failure of any fails the spawn, so the command
-/// never runs without it.
+/// parent's), sets no-new-privs (the kernel's condition for an
+/// unprivileged filter) and installs the filter. A failure of any fails
+/// the spawn, so the command never runs without it.
 pub fn deny_user_namespaces(command: &mut Command) {
     let filter = program();
     let known = cfg!(any(target_arch = "x86_64", target_arch = "aarch64"));
