@@ -18,7 +18,7 @@ runs it once on the connection's worker thread.
 | --- | --- | --- | --- | --- |
 | `Mount { workspace, branch }` | 1 | Bind: overlay file, Store reader, registry entry | `Bound { token, binding }` | [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
 | `MountNamed { workspace, project, branch }` | 15 | `Mount` of the Branch found by its project's name and its own on the Workspace's reader, with its snapshot in one statement (#64; the SDK's mount) | `Bound`, or `SdkRefused` `NoSuchProject` / `NoSuchBranch` with the admission withdrawn | [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs), [`bind.rs`](../../../../engine/crates/layerfs-store-service/src/store/bind.rs) |
-| `Commit(CommitControl)` | 2 | Capture, construct, merge or publish, install | `Committed`, `MergeCommitted` or `Conflict` | [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
+| `Commit(CommitControl)` | 2 | Capture, construct, merge or publish, install; after the answer, the released reader's reclamation on the same thread | `Committed`, `MergeCommitted` or `Conflict` | [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
 | `Status(token)` | 3 | Copy registry fields, one engine `state` job | `Status` | [`status.rs`](../../../../engine/crates/layerfs-daemon/src/control/status.rs) |
 | `Unmount(UnmountControl)` | 4 | Dirty check, terminal teardown | `Unmounted` or `Dirty` | [`unmount.rs`](../../../../engine/crates/layerfs-daemon/src/control/unmount.rs) |
 | `Fork`, `History`, `Branches` | 5, 6, 14 | Refused: Store calls | — | [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |

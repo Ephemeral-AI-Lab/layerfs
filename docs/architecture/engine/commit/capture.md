@@ -99,7 +99,8 @@ lock, run on the Commit thread, never on a kernel request worker.
          --> acquire_operation(request)
          --> CapturedNamespace::construct ... (outcome known)
          --> drop attempt custody
-         --> release_captured_reader --> release_operation
+         --> release_captured_reader --> release_operation_deferred
+         --> answer;  then reclaim (the reclamation both releases readied)
 ```
 
 | Owner | Acquired by | Released when | Source |
@@ -108,6 +109,11 @@ lock, run on the Commit thread, never on a kernel request worker.
 | `CapturedReader` | `acquire_captured_reader` | After the outcome is known; first in the release order | [`captured_reader.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/captured_reader.rs) |
 | `OperationOwner` | `acquire_operation` | After the reader | [`captured.rs`](../../../../engine/crates/layerfs-store-service/src/store/captured.rs) |
 | Captured generation | `Overlay::capture` | Install, or `resolve_failed_capture` after a definite nonpublication | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs), [`composition.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/composition.rs) |
+
+Neither release drains the maintenance it readies (owner approval,
+2026-11-07): the daemon drains it with `BoundWorkspace::reclaim` after it
+sent the Commit's answer, and without that the next job of the Workspace
+does; see [Lifetimes and reclamation](../overlay/lifetimes-and-reclamation.md#maintenance-work).
 
 `CapturedConstruction` is the receipt: it names any reader or owner not known
 released, the work counted and the release error that stopped the sequence

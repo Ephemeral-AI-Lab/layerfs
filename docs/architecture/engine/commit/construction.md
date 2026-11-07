@@ -23,7 +23,8 @@ Constructing the captured namespace.
            .construct(policy, capacities, save, Staging{save.sink()})
        classify(result, first original cause)
    })
-   release_captured  (reader, then operation owner)
+   release_captured  (reader, then operation owner; their reclamation
+                      stays queued for reclaim after the answer)
 ```
 
 | Piece | What it does | Source |

@@ -183,10 +183,20 @@ impl BoundWorkspace {
             }
         }
     }
+    /// Drains, on this thread, the overlay reclamation a Commit's releases
+    /// left queued: the captured generation's retired rows and the attempt's
+    /// operation records. The daemon calls it after it answered the Commit.
+    /// Without it the next job of this Workspace drains them, and terminal
+    /// close deletes them with the file. A failed step is retained as the
+    /// Workspace's maintenance failure, as for any maintenance.
+    pub fn reclaim(&self) -> Result<(), OwnerError> {
+        self.job(|job_client: &crate::OwnerClient, route| job_client.reclaim(route))
+    }
     /// The attempt's custody is dropped first, then the reader is released,
     /// then the operation owner. A release that is refused or fails stops the
     /// sequence; what it did not release stays named in the receipt. A done
-    /// release's receipt is dropped at once.
+    /// release's receipt is dropped at once. Neither release drains the
+    /// reclamation it readies: that follows the answer (`reclaim`).
     fn release_captured(&self, held: &mut CapturedConstruction) {
         held.custody = None;
         if let Some(reader) = held.reader {
@@ -204,7 +214,7 @@ impl BoundWorkspace {
         if let Some(owner) = held.operation {
             if self.released(
                 |job_client: &crate::OwnerClient, job_route| {
-                    job_client.release_operation(job_route, owner)
+                    job_client.release_operation_deferred(job_route, owner)
                 },
                 held,
             ) {
