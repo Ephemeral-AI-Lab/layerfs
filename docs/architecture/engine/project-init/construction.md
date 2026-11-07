@@ -90,12 +90,15 @@ The Init-and-seal route also records `InitStatistics` once per Store
 
 | Property | Init (this page) | Commit |
 | --- | --- | --- |
-| Producers | 4 file constructors (`INIT_WORKERS`) feeding one Save owner | one construction producer per Commit |
-| Who writes the Save and backing | the owner thread only | the one producer |
-| Selected by | the constant in [`files.rs`](../../../../engine/crates/layerfs-project/src/import/files.rs) | design; see [Commit: Construction](../commit/construction.md) |
+| Producers | 4 file constructors (`INIT_WORKERS`) feeding one Save owner | one construction producer thread feeding one Save owner (owner approval, 2026-11-07) |
+| Who writes the Save | the owner thread only | the Commit thread only |
+| Queue | 32 batches of at most 256 KiB | the same bounds, plus same-Save read requests |
+| Selected by | the constant in [`files.rs`](../../../../engine/crates/layerfs-project/src/import/files.rs) | design; see [Commit: Construction](../commit/construction.md#one-producer) |
 
 Init keeps this parallel profile by owner rule; Commit and other measured
 operations use one producer and run with `LAYERFS_CONSTRUCTION_WORKERS=1`.
+A Commit's one producer runs beside its Save on a second thread; it is not a
+second producer.
 No file under `engine/crates/*/src` reads that variable
 ([`r5_10_producer_profile.rs`](../../../../engine/crates/layerfs-daemon/tests/r5_10_producer_profile.rs));
 Init's worker count is fixed in source.

@@ -136,8 +136,10 @@ visible ([SQLite: Sessions](sqlite.md#sessions)).
      rows <= 8 191; canonical and physical bytes <= publication_bytes
        (SQLite 4 MiB - 1, PostgreSQL 16 MiB - 1)
        (a single payload pack with one object is exempt)
-     pack ids unique and > 0; length 32..=SINGLETON_PACK_LIMIT;
-       metadata packs <= 256 KiB; key = hash(body); header lane = domain
+     pack ids unique and > 0; length 32..=SINGLETON_PACK_LIMIT and
+       = body length; metadata packs <= 256 KiB; header lane = domain;
+       declared length; the key is not hashed again: PublishedPack::seal
+       computed it when Storage sealed the pack
      object ids unique; ordinals unique, nonzero; signature slots valid
    SQLite: pack bytes leave >= 64 MiB free (counted twice)   headroom.rs
    one write transaction                   sqlite/objects/publish.rs

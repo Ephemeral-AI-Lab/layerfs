@@ -23,6 +23,15 @@ impl SqlitePersistenceProfile {
     pub(crate) fn fullfsync(self) -> i64 {
         i64::from(self == Self::Durable)
     }
+    /// Pages after which a COMMIT checkpoints the log itself. Disposable
+    /// leaves it to its session's checkpoint thread, off the commit path
+    /// (`background.rs`; owner approval, 2026-11-07).
+    pub(crate) fn wal_autocheckpoint(self) -> i64 {
+        match self {
+            Self::Durable => 1000,
+            Self::Disposable => 0,
+        }
+    }
 }
 pub(crate) fn apply(
     c: &Connection,
@@ -72,7 +81,7 @@ pub(crate) fn apply(
     for (name, value) in [
         ("foreign_keys", 1),
         ("checkpoint_fullfsync", 1),
-        ("wal_autocheckpoint", 1000),
+        ("wal_autocheckpoint", selected.wal_autocheckpoint()),
         ("journal_size_limit", 4194304),
         ("cache_size", -2048),
         ("mmap_size", 0),
@@ -92,7 +101,7 @@ pub(crate) fn check(p: &ConnectionProfile) -> Result<(), BackendError> {
         || p.page_size != 4096
         || !matches!(p.auto_vacuum, 0 | 2)
         || (p.auto_vacuum == 2 && p.acquisition != crate::SqliteAcquisitionSchema::Tables)
-        || p.wal_autocheckpoint != 1000
+        || p.wal_autocheckpoint != selected.wal_autocheckpoint()
         || p.journal_size_limit != 4194304
         || p.cache_size != -2048
         || p.busy_timeout != 0

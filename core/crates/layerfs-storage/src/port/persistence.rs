@@ -1,7 +1,9 @@
 //! Bounded atomic physical persistence; one transaction attempt per operation.
 
-use super::{PackReadPlan, PersistedPack, PersistedPackRead};
-use crate::location::{InodeValueRow, LocatedObject, ObjectLocation, PackInfo, SignatureRow};
+use super::{ObjectKey, PackReadPlan, PersistedPack, PersistedPackRead};
+use crate::location::{
+    InodeValueRow, LocatedObject, ObjectLocation, PackDomain, PackInfo, SignatureRow,
+};
 use crate::policy::StoragePolicy;
 use layerfs_content::ObjectId;
 use std::{fmt, sync::Arc};
@@ -25,12 +27,35 @@ pub struct Reserved {
 }
 
 /// Immutable pack registration; all domains carry a body.
+///
+/// The digest is computed once, when Storage seals the pack: [`Self::seal`]
+/// is the only constructor and hashes the body it is given. Private fields
+/// keep the descriptor bound to those exact bytes, so Persistence trusts
+/// `info().key` and does not hash the body again.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublishedPack {
-    /// Digest, size and routing domain.
-    pub info: PackInfo,
+    info: PackInfo,
+    body: Arc<Vec<u8>>,
+}
+impl PublishedPack {
+    /// Seals `body` as pack `pack_id` in `domain`: its length and SHA-256.
+    pub fn seal(pack_id: i64, domain: PackDomain, body: Arc<Vec<u8>>) -> Self {
+        let info = PackInfo {
+            pack_id,
+            domain,
+            key: ObjectKey::for_bytes(&body),
+            length: body.len(),
+        };
+        Self { info, body }
+    }
+    /// Digest, size and routing domain of [`Self::body`].
+    pub const fn info(&self) -> PackInfo {
+        self.info
+    }
     /// Complete immutable bytes, acknowledged atomically with locators.
-    pub body: Arc<Vec<u8>>,
+    pub fn body(&self) -> &Arc<Vec<u8>> {
+        &self.body
+    }
 }
 
 /// One atomic batch, closed under direct references before this call.
@@ -154,7 +179,7 @@ pub trait PackPersistence: Send + Sync {
         &self,
         pack: &PublishedPack,
     ) -> Result<(usize, u64), PersistenceError> {
-        Ok((1, pack.body.len() as u64))
+        Ok((1, pack.body().len() as u64))
     }
     /// Atomically registers at most TRANSACTION_ROW_LIMIT rows and the canonical
     /// byte budget, with first-wins object insertion. All sealed bodies, inode

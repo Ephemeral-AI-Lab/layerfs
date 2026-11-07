@@ -1,6 +1,7 @@
 //! The product Commit constructor: one captured namespace attempt inside the
 //! unchanged driver. Its reader and operation owner are released only after
 //! the driver's outcome is known; unresolved custody stays with the failure.
+use super::pipeline::Piped;
 use super::{
     BoundWorkspace, CapturedConstruction, CommitError, CommitFailure, CommitOptions, CommitSuccess,
     PortError, ReleasedOwner, StoreOperation,
@@ -12,10 +13,11 @@ use layerfs_content::{
 };
 use layerfs_overlay::Capture;
 use layerfs_storage::{Save, SaveSink};
+use layerfs_telemetry::timer::{Timing, TimingNode, TimingReport};
 use layerfs_workspace::{
     CapturedNamespace, CapturedNamespaceAttempt, ConstructedObjects, WorkspaceError,
 };
-use std::{cell::RefCell, sync::Arc};
+use std::{cell::RefCell, convert::Infallible, sync::Arc};
 
 /// The Save's sink, and beside it the namespace objects this attempt
 /// constructed. They stay with the attempt: nothing is placed in the shared
@@ -35,9 +37,10 @@ impl FinalizedConsumer for Staging<'_, '_, '_> {
 
 impl BoundWorkspace {
     /// Commits the shared published frontier: every locally published change,
-    /// whichever process made it. One attempt; this thread runs the
-    /// synchronous captured ports, so it is never a kernel receive or
-    /// request-service worker.
+    /// whichever process made it. One attempt. This thread holds the Save
+    /// and publishes; the one construction producer runs the synchronous
+    /// captured ports on a thread it spawns for this Commit, never on a
+    /// kernel receive or request-service worker.
     pub fn commit_captured(
         &self,
         options: &CommitOptions,
@@ -133,31 +136,70 @@ impl BoundWorkspace {
             .map_err(CommitError::Owner)?;
         held.operation = Some(owner);
         let policy = self.store.policy().construction();
+        let capacities = policy.capacities();
         let mut sink = Staging {
             sink: save.sink(),
             constructed,
         };
         let digests = super::digests::StoreDigests(&*self.store.history);
-        let attempt = crate::telemetry::timed("captured.namespace", |scope| {
-            Ok::<_, std::convert::Infallible>(
-                CapturedNamespace::new(operation.workspace(), operation.overlay(), reader, owner)
-                    .with_digests(&digests)
-                    .construct(
+        let (workspace, overlay) = (operation.workspace(), operation.overlay());
+        // The one producer runs on its own thread; this thread keeps the
+        // Save and accepts what it builds (`pipeline`).
+        let piped = crate::telemetry::timed("captured.namespace", |scope| {
+            let recording = scope.is_recording();
+            let piped = super::pipeline::construct(save, &mut sink, |objects, consumer| {
+                let namespace = CapturedNamespace::new(workspace, overlay, reader, owner)
+                    .with_digests(&digests);
+                if !recording {
+                    let attempt =
+                        namespace.construct_untimed(policy, &capacities, objects, consumer);
+                    return (attempt, None);
+                }
+                let (attempt, report) = Timing::record("producer", |root| {
+                    Ok::<_, Infallible>(namespace.construct(
                         policy,
-                        &policy.capacities(),
-                        save,
-                        &mut sink,
-                        scope.child("construct"),
-                    ),
-            )
-        });
+                        &capacities,
+                        objects,
+                        consumer,
+                        root.child("construct"),
+                    ))
+                });
+                let attempt = attempt.unwrap_or_else(|never| match never {});
+                (attempt, Some(report))
+            });
+            if let Ok(Piped {
+                produced: (_, Some(report)),
+                accept,
+                ..
+            }) = &piped
+            {
+                // The producer's tree keeps its place below this root.
+                for node in report.root().map_or(&[][..], TimingNode::children) {
+                    scope.attach(Some(TimingReport::from_root(node.clone())));
+                }
+                scope.attach(Some(TimingReport::from_root(TimingNode::new(
+                    "save.accept",
+                    *accept,
+                ))));
+            }
+            Ok::<_, Infallible>(piped)
+        })
+        .unwrap_or_else(|never| match never {})
+        .map_err(|_| CommitError::Context("commit construction thread not started"))?;
+        let Piped {
+            produced: (attempt, _),
+            rejected,
+            ..
+        } = piped;
         let CapturedNamespaceAttempt {
-            result,
+            mut result,
             mut custody,
-        } = match attempt {
-            Ok(attempt) => attempt,
-            Err(never) => match never {},
-        };
+        } = attempt;
+        // The Save refused an object the producer had already handed over:
+        // its error is the first cause, as when construction stopped there.
+        if rejected && result.is_ok() {
+            result = Err(ContentError::OutputRejected);
+        }
         held.work = Some(custody.work);
         // Exactly one slot holds the first original cause: the namespace's or
         // reader's, else the failing file's own or its record scope's, else
@@ -183,10 +225,20 @@ impl BoundWorkspace {
             }
         }
     }
+    /// Drains, on this thread, the overlay reclamation a Commit's releases
+    /// left queued: the captured generation's retired rows and the attempt's
+    /// operation records. The daemon calls it after it answered the Commit.
+    /// Without it the next job of this Workspace drains them, and terminal
+    /// close deletes them with the file. A failed step is retained as the
+    /// Workspace's maintenance failure, as for any maintenance.
+    pub fn reclaim(&self) -> Result<(), OwnerError> {
+        self.job(|job_client: &crate::OwnerClient, route| job_client.reclaim(route))
+    }
     /// The attempt's custody is dropped first, then the reader is released,
     /// then the operation owner. A release that is refused or fails stops the
     /// sequence; what it did not release stays named in the receipt. A done
-    /// release's receipt is dropped at once.
+    /// release's receipt is dropped at once. Neither release drains the
+    /// reclamation it readies: that follows the answer (`reclaim`).
     fn release_captured(&self, held: &mut CapturedConstruction) {
         held.custody = None;
         if let Some(reader) = held.reader {
@@ -204,7 +256,7 @@ impl BoundWorkspace {
         if let Some(owner) = held.operation {
             if self.released(
                 |job_client: &crate::OwnerClient, job_route| {
-                    job_client.release_operation(job_route, owner)
+                    job_client.release_operation_deferred(job_route, owner)
                 },
                 held,
             ) {

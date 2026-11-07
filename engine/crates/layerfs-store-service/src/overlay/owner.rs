@@ -238,12 +238,57 @@ impl OwnerClient {
     where
         F: FnOnce(&Overlay, Option<Route>) -> Result<T, OwnerError> + Send + 'static,
     {
+        self.job(route, class, ready, true, action)
+    }
+    /// One short operation, as `call`, that leaves the maintenance it readies
+    /// queued instead of draining it on this thread. The next job of any
+    /// caller, or `reclaim`, drains it; terminal close deletes it with the
+    /// file. Commit's releases use it so their reclamation follows the reply.
+    pub fn call_deferred<T, F>(&self, route: Route, action: F) -> Result<T, OwnerError>
+    where
+        F: FnOnce(&Overlay) -> layerfs_overlay::OverlayResult<T> + Send + 'static,
+    {
+        self.job(
+            Some(route),
+            ServiceClass::General,
+            None,
+            false,
+            move |db, _| action(db).map_err(OwnerError::Overlay),
+        )
+        .map(|(value, _)| value)
+    }
+    /// Drains the Workspace's ready maintenance on this thread, one bounded
+    /// step per hold of its lock, as the end of a job does. A failed step is
+    /// retained as the maintenance failure; it is not returned here.
+    pub fn reclaim(&self, route: Route) -> Result<(), OwnerError> {
+        match self.roster() {
+            Some(pool) => pool.client(route.namespace())?.reclaim(route),
+            None if self.connection()?.route.get() != Some(&route) => {
+                Err(OwnerError::Overlay(OverlayError::Stale))
+            }
+            None => {
+                self.maintain();
+                Ok(())
+            }
+        }
+    }
+    fn job<T, F>(
+        &self,
+        route: Option<Route>,
+        class: ServiceClass,
+        ready: Option<Readiness>,
+        drain: bool,
+        action: F,
+    ) -> Result<(T, JobWork), OwnerError>
+    where
+        F: FnOnce(&Overlay, Option<Route>) -> Result<T, OwnerError> + Send + 'static,
+    {
         if let Some(pool) = self.roster() {
             let client = route
                 .ok_or(OwnerError::InvalidAdmission)
                 .and_then(|route| pool.client(route.namespace()));
             return match client {
-                Ok(client) => client.call_observed(route, class, ready, action),
+                Ok(client) => client.job(route, class, ready, drain, action),
                 Err(cause) => Err(OwnerError::Unattempted {
                     cause: Box::new(cause),
                     input: OriginalInput::new(action),
@@ -398,7 +443,7 @@ impl OwnerClient {
         drop(state);
         shared.changed.notify_all();
         drop(disposals);
-        if needs_maintenance {
+        if needs_maintenance && drain {
             self.maintain();
         }
         match result {

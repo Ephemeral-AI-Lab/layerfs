@@ -105,6 +105,7 @@ impl State<'_> {
             capacities: &capacities,
             candidates: &mut self.candidates,
             depths: &mut self.depths,
+            losing: &mut self.losing,
             packs: &mut self.packs,
             pool: &mut self.pool,
             decode: &mut self.decode,

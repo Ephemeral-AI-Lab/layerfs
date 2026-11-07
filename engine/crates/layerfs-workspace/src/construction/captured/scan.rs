@@ -4,7 +4,7 @@ use crate::{OverlayCapturedRuns, OverlayOperationRecords};
 use layerfs_content::{ContentError, ContentResult, FileRun};
 use layerfs_overlay::{
     CapturedGap, CapturedReader, CapturedRunCursor, CapturedRunStep, InodeKind, LocalRead,
-    READ_REFERENCES, RUN_BYTES,
+    READ_REFERENCES, READ_WINDOW,
 };
 
 enum Pending {
@@ -203,16 +203,16 @@ impl Scan {
                     if valid(next)
                         && read.offset == at
                         && !read.data.is_empty()
-                        && read.data.len() <= RUN_BYTES
-                        && read.data.capacity() <= RUN_BYTES
-                        && read.inherited.capacity() <= RUN_BYTES / 8
+                        && read.data.len() <= READ_WINDOW
+                        && read.data.capacity() <= READ_WINDOW
+                        && read.inherited.capacity() <= READ_WINDOW / 8
                         && read.kind == InodeKind::File
                         && read.size == self.size
                         && read.base_root == Some(self.reader.root())
                         && (read.inherited.is_empty()
                             || read.inherited.len() == read.data.len().div_ceil(8))
                         && read.references.len() <= READ_REFERENCES
-                        && read.referenced.capacity() <= RUN_BYTES / 8
+                        && read.referenced.capacity() <= READ_WINDOW / 8
                         && read.referenced.len()
                             == if read.references.is_empty() {
                                 0

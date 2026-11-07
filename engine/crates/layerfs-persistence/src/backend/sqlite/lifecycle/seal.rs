@@ -6,10 +6,12 @@ use crate::{backend::records::BackendError, SealedStore};
 use layerfs_storage::port::PersistenceError;
 
 impl Session {
-    pub(crate) fn seal(self) -> Result<SealedStore, PersistenceError> {
+    pub(crate) fn seal(mut self) -> Result<SealedStore, PersistenceError> {
         if !self.writable {
             return Err(BackendError::ReadOnly.into());
         }
+        // The checkpoint thread ends and closes its connection first.
+        drop(self.background.take());
         let state = self
             .state
             .into_inner()

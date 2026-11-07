@@ -428,7 +428,12 @@ fixtures, examples and tools do not contribute to production LOC.
   Open verifies WAL and never converts an
   existing Store. Select profile/layout before open; Postgres stays unavailable.
   Owner supersession2026-10-07 keeps WAL throughout Init and Commit; no private
-  MEMORY import or journal promotion remains. The measured host Init regression
+  MEMORY import or journal promotion remains. Owner approval, 2026-11-07:
+  Disposable runs `wal_autocheckpoint=0`; each writable Disposable session's
+  own checkpoint thread copies a log past 4 MiB with
+  `wal_checkpoint(PASSIVE)` on a second SQLite connection, off the commit
+  path. Durable keeps `wal_autocheckpoint=1000`. A non-WAL journal was
+  measured and refused: it broke concurrent sessions and other processes. The measured host Init regression
   is retained as FAIL and accepted as the new baseline for that exact scope.
   Host seal consumes sole ownership, checkpoints, closes and verifies one file.
   Its macOS completion releases unused extents beyond logical EOF through the

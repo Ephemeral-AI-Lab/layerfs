@@ -297,7 +297,7 @@ impl layerfs_storage::port::PackPersistence for PackObserved {
         &self,
         batch: &layerfs_storage::port::Publication,
     ) -> Result<layerfs_storage::port::Published, layerfs_storage::port::PersistenceError> {
-        eprintln!("PUBLICATION_DIAGNOSTIC packs={} body_bytes={} objects={} inode_values={} signatures={} release={:?}",batch.packs.len(),batch.packs.iter().map(|p|p.body.len()).sum::<usize>(),batch.objects.len(),batch.inode_values.len(),batch.signatures.len(),batch.release_ordinals);
+        eprintln!("PUBLICATION_DIAGNOSTIC packs={} body_bytes={} objects={} inode_values={} signatures={} release={:?}",batch.packs.len(),batch.packs.iter().map(|p|p.body().len()).sum::<usize>(),batch.objects.len(),batch.inode_values.len(),batch.signatures.len(),batch.release_ordinals);
         self.call("storage.publish", || self.handles.storage.publish(batch))
     }
 }

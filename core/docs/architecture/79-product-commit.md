@@ -33,8 +33,11 @@ captured wrapper invokes the already-admitted driver; it does not acquire anothe
 guard. It retains admission through the reader and operation releases after known
 install or definite local settlement. An `InFlight` refusal owns no guard and
 cannot clear another call's admission. Disjoint Workspaces keep independent
-admission and may Commit concurrently. No construction thread is
-spawned.
+admission and may Commit concurrently. Since owner approval on 2026-11-07
+the one producer runs on one construction thread the Commit thread spawns,
+and hands its objects through a bounded queue to the Commit thread, which
+keeps the Save and publishes; the current description is
+[Commit: Construction](../../../docs/architecture/engine/commit/construction.md#one-producer).
 
 Every owner job of the Commit thread — Capture, the reader and owner
 acquisitions, each captured port call of the producer, the local resolution,

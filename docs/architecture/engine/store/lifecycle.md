@@ -128,6 +128,7 @@ StoreFile::checkpoint(&self)                  (live shared session; stays open)
     quarantined or open transaction? ---------------------------> Unknown
     Writer::try_acquire: Linux directory lane, one attempt
       another holder (EWOULDBLOCK) ----------------------------> Ok(false)
+    a background checkpoint pass running? wait for it to end
     PRAGMA wal_checkpoint(TRUNCATE), once; release the lane
       busy (a reader still in the log) ------------------------> Ok(false)
   -> Ok(true): the -wal is 0 bytes
@@ -154,6 +155,39 @@ The macOS file control is the one module allowed `unsafe` code
 Sources: [`seal.rs`](../../../../engine/crates/layerfs-persistence/src/store/seal.rs),
 [`lifecycle/seal.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/seal.rs).
 
+## Background checkpoint
+
+Owner approval, 2026-11-07: a Disposable Store's COMMIT no longer
+checkpoints. Its connections run `wal_autocheckpoint=0`, so a COMMIT only
+appends its frames to the log, and each writable Disposable session keeps a
+checkpoint thread with its own connection to the Store file.
+
+```text
+Session::run(true, ..) commits, releases the writer lane
+  -wal longer than 4 MiB (journal_size_limit)? -- no ----------> nothing
+  wake the session's checkpoint thread (a pending wake covers it)
+    PRAGMA wal_checkpoint(PASSIVE) on its own connection
+      copies the frames no reader still needs; never takes the
+      WAL write lock, never waits; the writer goes on meanwhile
+  the next write after a complete pass restarts the log from its
+  beginning: the log stays near 4 MiB while the thread keeps up
+```
+
+A pass that cannot copy every frame (a reader still in the log) leaves them
+valid; the next wake, the idle checkpoint (#86) or the last close copies
+them. Each wake is a new pass, not a retry. A PASSIVE checkpoint takes no
+lock a writer of this or another process needs, so it adds no `Busy`. The
+idle checkpoint waits for a running pass before its TRUNCATE. Seal and
+close end the thread and close its connection before the session's own
+connection. Durable keeps `wal_autocheckpoint=1000` and has no thread.
+Measured in-process (Linux release, medians of 15 interleaved Saves on a
+loaded host), 500 MiB of incompressible data in one Save: COMMIT 471 to
+208 ms, SQL transactions 851 to 591 ms, Save 2373 to 2283 ms; the log is
+still 4 MiB after the Save and the Store file is the same size. A non-WAL journal (v0.1.x `MEMORY`/`EXCLUSIVE`, or `TRUNCATE`)
+saved more but failed the concurrent-session, second-process, idle
+checkpoint and lock-custody tests, so WAL stays.
+Source: [`session/background.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/background.rs).
+
 ## The Disposable profile
 
 | Setting | Disposable | Durable (disabled) | Source |
@@ -162,7 +196,8 @@ Sources: [`seal.rs`](../../../../engine/crates/layerfs-persistence/src/store/sea
 | `journal_mode` | `wal` | `wal` | same |
 | `synchronous` | 0 (OFF) | 2 (FULL) | same |
 | `fullfsync` | 0 | 1 | same |
-| shared | `foreign_keys=1`, `checkpoint_fullfsync=1`, `wal_autocheckpoint=1000`, `journal_size_limit=4194304`, `cache_size=-2048`, `mmap_size=0`, `temp_store=2`, `page_size=4096`, `busy_timeout=0` | same | same |
+| `wal_autocheckpoint` | 0 (the session's checkpoint thread copies the log; owner approval, 2026-11-07) | 1000 | same, [`background.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/background.rs) |
+| shared | `foreign_keys=1`, `checkpoint_fullfsync=1`, `journal_size_limit=4194304`, `cache_size=-2048`, `mmap_size=0`, `temp_store=2`, `page_size=4096`, `busy_timeout=0` | same | same |
 
 Disposable / WAL / synchronous=OFF is the only permitted SQLite Store
 profile. It survives process termination; a kernel or VM crash can corrupt

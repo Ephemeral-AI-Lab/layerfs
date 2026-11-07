@@ -125,7 +125,7 @@ impl Fetch {
         let infos: BTreeMap<i64, PackInfo> = batch
             .packs
             .iter()
-            .map(|pack| (pack.info.pack_id, pack.info))
+            .map(|pack| (pack.info().pack_id, pack.info()))
             .collect();
         for row in &batch.objects {
             let id = row.object_id;
@@ -163,8 +163,8 @@ impl Fetch {
         }
         let mut published = self.published.borrow_mut();
         for pack in &batch.packs {
-            if pack.info.domain == PackDomain::Metadata {
-                published.insert(pack.info, pack.body.clone());
+            if pack.info().domain == PackDomain::Metadata {
+                published.insert(pack.info(), pack.body().clone());
             }
         }
         for row in &batch.inode_values {
@@ -212,6 +212,12 @@ impl Fetch {
             }
         }
         let missing: Vec<_> = missing.into_iter().collect();
+        // The whole demand is protected from eviction, searched sorted.
+        let mut protected = Vec::new();
+        if !missing.is_empty() {
+            protected = ids.to_vec();
+            protected.sort_unstable();
+        }
         for page in missing.chunks(READ_OBJECT_LIMIT) {
             let mut rows = Vec::new();
             self.note(|c| c.locate += 1);
@@ -222,7 +228,7 @@ impl Fetch {
             {
                 let mut cache = self.locators.borrow_mut();
                 if cache.len().saturating_add(rows.len()) > READ_OBJECT_LIMIT {
-                    let work = cache.make_room(rows.len(), ids);
+                    let work = cache.make_room(rows.len(), &protected);
                     self.note(|c| {
                         c.locator_evictions += work.removed;
                         c.locator_eviction_probes += work.probes;

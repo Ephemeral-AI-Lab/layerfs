@@ -188,7 +188,7 @@ fn disposable_create_publish_seal_and_reopen_all_layouts() {
                 profile.wal_autocheckpoint,
                 profile.journal_size_limit
             ),
-            (4096, 1, 1000, 4194304)
+            (4096, 1, 0, 4194304)
         );
         assert_eq!(
             (profile.cache_size, profile.mmap_size, profile.temp_store),

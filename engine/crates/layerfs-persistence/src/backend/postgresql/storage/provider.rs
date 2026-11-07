@@ -132,7 +132,7 @@ impl PackPersistence for PostgresStorage {
         &self,
         pack: &PublishedPack,
     ) -> Result<(usize, u64), PersistenceError> {
-        Ok((1, pack.body.len() as u64))
+        Ok((1, pack.body().len() as u64))
     }
     fn publish(&self, batch: &Publication) -> Result<Published, PersistenceError> {
         publication::validate(batch, self.publication_bytes())?;

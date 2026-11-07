@@ -55,6 +55,9 @@ Durable implementation may compile, but report its execution as
 Durable receipts and their original verdicts. This execution policy does not
 claim that the Durable API has been removed. Each Workspace's daemon overlay
 remains a separate MEMORY/OFF/EXCLUSIVE database file.
+Disposable's COMMIT does not checkpoint (`wal_autocheckpoint=0`); its writing
+session's own thread checkpoints the WAL off the commit path (owner approval,
+2026-11-07; [lifecycle](docs/architecture/engine/store/lifecycle.md#background-checkpoint)).
 
 ## LayerFS mental model
 
@@ -120,9 +123,10 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   The one resident exception is a Workspace's open state, which grows with open
   files and with the files the kernel currently references.
 - Automatic bounded local reclamation follows last-owner release, including
-  during live activity and idle periods. Terminal unmount drains requests,
-  closes the Workspace's overlay connection and deletes its file. Neither
-  deletes global history.
+  during live activity and idle periods. A Commit's own reclamation (its
+  captured generation's retired rows) follows its answer (owner approval,
+  2026-11-07). Terminal unmount drains requests, closes the Workspace's
+  overlay connection and deletes its file. Neither deletes global history.
 - Target (owner direction 2026-10-07, Store calls revised 2026-10-18): every
   daemon opens the global Store directly from a volume the daemons share and
   reads, saves and publishes in-process. Project Init adds a project to an
@@ -309,7 +313,11 @@ remain binding; moving them out of this file does not weaken them.
 8. Commit/capture/snapshot have one construction producer in normal wiring and
    each measured operation; export `LAYERFS_CONSTRUCTION_WORKERS=1`.
    Namespace Init alone retains its supported parallel construction profile.
-   No extra helper/lane to pass a gate; FUSE dispatch is a separate concern.
+   A Commit's one producer runs on its own thread and hands objects through
+   one bounded queue to the calling thread, which keeps the one Save and
+   publishes (owner approval, 2026-11-07); see
+   [Commit construction](docs/architecture/engine/commit/construction.md#one-producer).
+   No other helper/lane to pass a gate; FUSE dispatch is a separate concern.
 9. Measure both speed and storage. Reject about 50% speed loss for about 5%
    storage benefit; report raw deltas and preserve frozen-gate failures.
 

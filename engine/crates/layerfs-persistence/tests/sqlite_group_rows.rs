@@ -6,7 +6,7 @@ use layerfs_persistence::{
     PersistenceConfig, SqliteHandles, SqlitePackLayout, SqlitePersistenceProfile,
 };
 use layerfs_storage::{
-    location::{ObjectLocation, PackDomain, PackInfo},
+    location::{ObjectLocation, PackDomain},
     pack::{assemble, build_group, layout::PackLane},
     port::*,
     Storage, StoragePolicy,
@@ -59,15 +59,7 @@ fn fixture(h: &SqliteHandles) -> Vec<FinalizedObject> {
     let body = assemble(PackLane::Ordinary, &groups).unwrap();
     h.storage
         .publish(&Publication {
-            packs: vec![PublishedPack {
-                info: PackInfo {
-                    pack_id: 1,
-                    domain: PackDomain::Metadata,
-                    key: ObjectKey::for_bytes(&body),
-                    length: body.len(),
-                },
-                body: Arc::new(body),
-            }],
+            packs: vec![PublishedPack::seal(1, PackDomain::Metadata, Arc::new(body))],
             objects: objects
                 .iter()
                 .enumerate()
@@ -162,16 +154,13 @@ fn complete_reads_reassemble_exact_bytes_and_digest_for_every_lane() {
         )
         .unwrap();
         let id = n as i64 + 1;
-        let info = PackInfo {
-            pack_id: id,
-            domain: PackDomain::for_lane(lane),
-            key: ObjectKey::for_bytes(&body),
-            length: body.len(),
-        };
-        let pack = PublishedPack {
-            info,
-            body: Arc::new(body.clone()),
-        };
+        let pack = PublishedPack::seal(id, PackDomain::for_lane(lane), Arc::new(body.clone()));
+        let info = pack.info();
+        // Sealing binds the descriptor to the bytes: their length and SHA-256.
+        assert_eq!(
+            (info.length, info.key),
+            (body.len(), ObjectKey::for_bytes(&body))
+        );
         assert_eq!(
             h.storage.publication_pack_cost(&pack).unwrap(),
             (2, body.len() as u64 + 88)
@@ -260,15 +249,7 @@ fn late_locator_failure_rolls_back_control_and_every_unit() {
         &[build_group(PackLane::Ordinary, &[vec![0; 64]], None).unwrap()],
     )
     .unwrap();
-    let pack = PublishedPack {
-        info: PackInfo {
-            pack_id: 1,
-            domain: PackDomain::Metadata,
-            key: ObjectKey::for_bytes(&body),
-            length: body.len(),
-        },
-        body: Arc::new(body),
-    };
+    let pack = PublishedPack::seal(1, PackDomain::Metadata, Arc::new(body));
     let batch = Publication {
         packs: vec![pack],
         objects: vec![ObjectLocation {
@@ -302,15 +283,7 @@ fn exact_physical_fanout_refuses_over_budget_batch_before_begin() {
         .map(|_| build_group(PackLane::Ordinary, &[vec![0; 64]], None).unwrap())
         .collect::<Vec<_>>();
     let body = assemble(PackLane::Ordinary, &groups).unwrap();
-    let pack = PublishedPack {
-        info: PackInfo {
-            pack_id: 1,
-            domain: PackDomain::Metadata,
-            key: ObjectKey::for_bytes(&body),
-            length: body.len(),
-        },
-        body: Arc::new(body),
-    };
+    let pack = PublishedPack::seal(1, PackDomain::Metadata, Arc::new(body));
     let batch = Publication {
         packs: vec![pack],
         objects: (0u64..8180)

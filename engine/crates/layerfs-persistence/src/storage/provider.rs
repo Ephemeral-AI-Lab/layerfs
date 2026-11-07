@@ -113,7 +113,7 @@ impl PackPersistence for StorageProvider {
         pack: &PublishedPack,
     ) -> Result<(usize, u64), PersistenceError> {
         match self.session.layout {
-            crate::SqlitePackLayout::Monolithic => Ok((1, pack.body.len() as u64)),
+            crate::SqlitePackLayout::Monolithic => Ok((1, pack.body().len() as u64)),
             crate::SqlitePackLayout::GroupRows | crate::SqlitePackLayout::GroupRowsIndexed => {
                 crate::backend::sqlite::objects::unit_layout::cost(pack)
             }
@@ -127,7 +127,11 @@ impl PackPersistence for StorageProvider {
         // Only pack bytes are guarded; metadata-only batches may use the margin.
         #[cfg(any(target_os = "macos", target_os = "linux"))]
         if !batch.packs.is_empty() {
-            let bytes = batch.packs.iter().map(|pack| pack.body.len() as u64).sum();
+            let bytes = batch
+                .packs
+                .iter()
+                .map(|pack| pack.body().len() as u64)
+                .sum();
             crate::backend::sqlite::lifecycle::headroom::admit(&self.session.path, bytes)?;
         }
         self.session.run(true, |tx| publication::publish(tx, batch))
