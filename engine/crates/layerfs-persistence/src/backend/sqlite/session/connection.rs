@@ -151,6 +151,9 @@ pub(crate) struct State {
     pub(crate) writer_hold: Option<crate::backend::sqlite::lane::writer_admission::Writer>,
 }
 pub(crate) struct Session {
+    /// A writable Disposable session's checkpoint thread; dropped first, so
+    /// it ends before the session's own connection closes.
+    pub(crate) background: Option<super::background::Checkpointer>,
     pub(crate) admission: crate::backend::admission::Admission,
     pub(crate) state: Mutex<State>,
     pub(crate) writable: bool,
@@ -263,7 +266,11 @@ impl Session {
         };
         profile::check(&profile)?;
         super::thread_work::add(&work.borrow());
+        let background = (writable && selected == SqlitePersistenceProfile::Disposable)
+            .then(|| super::background::Checkpointer::start(path))
+            .transpose()?;
         Ok(Self {
+            background,
             admission: crate::backend::admission::Admission::default(),
             path: path.to_path_buf(),
             state: Mutex::new(State {

@@ -52,13 +52,13 @@ pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published
     let metadata = batch
         .packs
         .iter()
-        .filter(|pack| pack.info.domain == PackDomain::Metadata)
-        .map(|pack| pack.info.length as u64)
+        .filter(|pack| pack.info().domain == PackDomain::Metadata)
+        .map(|pack| pack.info().length as u64)
         .sum::<u64>();
     let stored = batch
         .packs
         .iter()
-        .map(|pack| pack.info.length as u64)
+        .map(|pack| pack.info().length as u64)
         .sum::<u64>();
     // One totals UPDATE per publication that adds bytes. Signature, inode
     // value and ordinal-only publications add none and leave the row clean.
@@ -99,9 +99,9 @@ fn write_packs(tx: &Transaction<'_>, packs: &[PublishedPack]) -> Result<(), Back
         // binding charge within the preceding one-ordinary-pack statement bound.
         // An existing large singleton remains alone, with no companion bodies.
         let mut count = 1;
-        let mut bytes = remaining[0].body.len() as u64 + 56;
+        let mut bytes = remaining[0].body().len() as u64 + 56;
         while count < remaining.len().min(limit) {
-            let next = remaining[count].body.len() as u64 + 56;
+            let next = remaining[count].body().len() as u64 + 56;
             if bytes.saturating_add(next) > layerfs_storage::policy::PACK_LIMIT as u64 + 56 {
                 break;
             }
@@ -120,16 +120,17 @@ fn write_packs(tx: &Transaction<'_>, packs: &[PublishedPack]) -> Result<(), Back
         let encoded = page
             .iter()
             .map(|p| {
+                let info = p.info();
                 (
-                    p.info.pack_id,
-                    if p.info.domain == PackDomain::Metadata {
+                    info.pack_id,
+                    if info.domain == PackDomain::Metadata {
                         0i64
                     } else {
                         1
                     },
-                    p.info.key.as_bytes().as_slice(),
-                    p.info.length as i64,
-                    p.body.as_slice(),
+                    *info.key.as_bytes(),
+                    info.length as i64,
+                    p.body().as_slice(),
                 )
             })
             .collect::<Vec<_>>();
@@ -140,7 +141,7 @@ fn write_packs(tx: &Transaction<'_>, packs: &[PublishedPack]) -> Result<(), Back
         tx.borrowed(&sql, &values, bytes)?;
         let mut w = tx.work.borrow_mut();
         w.sealed_inserts += page.len() as u64;
-        w.sealed_body_bytes += page.iter().map(|p| p.body.len() as u64).sum::<u64>();
+        w.sealed_body_bytes += page.iter().map(|p| p.body().len() as u64).sum::<u64>();
     }
     Ok(())
 }

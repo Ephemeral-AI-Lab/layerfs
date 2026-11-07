@@ -125,7 +125,7 @@ impl Fetch {
         let infos: BTreeMap<i64, PackInfo> = batch
             .packs
             .iter()
-            .map(|pack| (pack.info.pack_id, pack.info))
+            .map(|pack| (pack.info().pack_id, pack.info()))
             .collect();
         for row in &batch.objects {
             let id = row.object_id;
@@ -163,8 +163,8 @@ impl Fetch {
         }
         let mut published = self.published.borrow_mut();
         for pack in &batch.packs {
-            if pack.info.domain == PackDomain::Metadata {
-                published.insert(pack.info, pack.body.clone());
+            if pack.info().domain == PackDomain::Metadata {
+                published.insert(pack.info(), pack.body().clone());
             }
         }
         for row in &batch.inode_values {

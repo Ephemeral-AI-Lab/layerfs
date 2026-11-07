@@ -9,7 +9,7 @@ use layerfs_persistence::{
     PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile,
 };
 use layerfs_storage::{
-    location::{ObjectLocation, PackDomain, PackInfo},
+    location::{ObjectLocation, PackDomain},
     pack::{assemble, build_group, layout::PackLane},
     port::acquisition::{Acquisition, Begin, EntryKey, HostIdentity, NewEntry},
     port::*,
@@ -66,15 +66,7 @@ fn publish(h: &SqliteHandles) -> Vec<FinalizedObject> {
     let body = assemble(PackLane::Ordinary, &groups).unwrap();
     h.storage
         .publish(&Publication {
-            packs: vec![PublishedPack {
-                info: PackInfo {
-                    pack_id: 1,
-                    domain: PackDomain::Metadata,
-                    key: ObjectKey::for_bytes(&body),
-                    length: body.len(),
-                },
-                body: Arc::new(body),
-            }],
+            packs: vec![PublishedPack::seal(1, PackDomain::Metadata, Arc::new(body))],
             objects: objects
                 .iter()
                 .enumerate()

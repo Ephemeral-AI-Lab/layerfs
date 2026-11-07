@@ -30,6 +30,9 @@ impl Session {
         if turn.nested {
             return Ok(false);
         }
+        // A checkpoint thread's pass (`background.rs`) ends first, so it
+        // does not leave this one `Busy`.
+        let _pass = self.background.as_ref().map(|b| b.hold());
         let mut state = self.state.lock().map_err(|_| BackendError::Unknown)?;
         super::thread_work::attributed(&mut state, |state| {
             if state.quarantined {
@@ -66,7 +69,7 @@ impl Session {
 }
 
 /// The length of the Store's `-wal` file; zero when there is none.
-fn wal_bytes(path: &std::path::Path) -> Result<u64, BackendError> {
+pub(crate) fn wal_bytes(path: &std::path::Path) -> Result<u64, BackendError> {
     let mut wal = path.as_os_str().to_os_string();
     wal.push("-wal");
     match std::fs::symlink_metadata(wal) {
