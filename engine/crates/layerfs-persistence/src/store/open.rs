@@ -17,9 +17,8 @@ impl SqliteHandles {
         policy: StoragePolicy,
         history: &HistoryCatalogConfig,
     ) -> Result<Self, PersistenceError> {
-        if !cfg!(any(target_os = "macos", target_os = "linux")) {
-            return Err(PersistenceError::BackendUnavailable);
-        }
+        // Windows reaches the Store in-process over the same SQLite engine
+        // (#352 F-020 / #454): the engine gate is the platform list.
         let policy = policy
             .validated()
             .map_err(|_| PersistenceError::Malformed)?;
@@ -67,9 +66,7 @@ impl SqliteHandles {
         cursor_key: [u8; 32],
         writable: bool,
     ) -> Result<Self, PersistenceError> {
-        if !cfg!(any(target_os = "macos", target_os = "linux")) {
-            return Err(PersistenceError::BackendUnavailable);
-        }
+        // Windows reaches the Store in-process over the same SQLite engine.
         let directory = config.path.parent().map(Path::to_path_buf);
         let session = Arc::new(Session::connect(
             &config.path,

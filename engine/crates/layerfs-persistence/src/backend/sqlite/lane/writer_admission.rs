@@ -47,14 +47,17 @@ impl Writer {
                 Err(_) => Err(BackendError::Integrity),
             }
         }
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             // Darwin's flock conflicts with SQLite's open-file locks. Host Init
             // is sole-owner; cross-session contention retains exact SQLite Busy.
+            // Windows keeps the same shape for its in-process route (#352
+            // F-020, #454): one opener process, SQLite Busy as the answer;
+            // a named-mutex lane returns if multi-opener sharing does.
             let _ = path;
             Ok(Self {})
         }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         {
             let _ = path;
             Err(BackendError::Integrity)

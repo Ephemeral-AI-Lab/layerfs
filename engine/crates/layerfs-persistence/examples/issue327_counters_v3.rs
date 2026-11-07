@@ -36,6 +36,12 @@ fn fixture() -> Vec<Vec<u8>> {
         })
         .collect()
 }
+#[cfg(not(unix))]
+fn main() {
+    eprintln!("this screen measures unix stat blocks; not offered on Windows");
+}
+
+#[cfg(unix)]
 fn main() {
     assert_eq!(
         std::env::var("SCREEN_SCENARIO").as_deref(),

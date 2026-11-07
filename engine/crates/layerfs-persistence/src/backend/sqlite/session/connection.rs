@@ -168,9 +168,8 @@ impl Session {
         creation_layout: crate::SqlitePackLayout,
         creation_acquisition: crate::SqliteAcquisitionSchema,
     ) -> Result<Self, BackendError> {
-        if !cfg!(any(target_os = "macos", target_os = "linux")) {
-            return Err(BackendError::Integrity);
-        }
+        // The engine is the same SQLite everywhere; the platform list was
+        // the pre-Windows build boundary (#454).
         let flags = if writable {
             OpenFlags::SQLITE_OPEN_READ_WRITE
         } else {
