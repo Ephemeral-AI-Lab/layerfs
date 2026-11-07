@@ -41,7 +41,7 @@ The table is code: one file per call under its family folder in
 the `run` function that hands it to `layerfs-control`
 ([`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs),
 [`table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs)).
-There are 61 calls in nine families. `layerfs.table` is the JSON form front
+There are 62 calls in nine families. `layerfs.table` is the JSON form front
 ends build their functions from (`table_json`); `layerfs doctor` and
 `layerfs worker` sit outside it.
 
@@ -52,7 +52,7 @@ ends build their functions from (`table_json`); `layerfs doctor` and
 | [commit](../sdk/commit/README.md) | list, get, diff | 3 |
 | [file](../sdk/file/README.md) | read, stat, list, glob, grep, blame, diff, write, edit, rm, mkdir, mv, cp, apply | 14 |
 | [sandbox](../sdk/sandbox/README.md) | create, list, get, close | 4 |
-| [workspace](../sdk/workspace/README.md) | mount, exec, commit, unmount, status | 5 |
+| [workspace](../sdk/workspace/README.md) | mount, exec, exec_cancel, commit, unmount, status | 6 |
 | [machine](../sdk/machine/README.md) | list, platforms, get, status, start, stop, create, connect, remove, disconnect, update | 11 |
 | [store](../sdk/store/README.md) | list, get, status, create, connect, push, pull, remove, disconnect | 9 |
 | [backup](../sdk/backup/README.md) | connect, disconnect, list, create, restore | 5 |

@@ -68,7 +68,7 @@ inside the library are on [Table](../call-table/table.md).
 
 | Event | Shape | CLI | Node and Python |
 | --- | --- | --- | --- |
-| progress (`project.init`, `store.push`, `store.pull`, `backup.create`, `backup.restore`) | `{ progress: … }` | `--progress`: one JSON line per event on stderr | the `on_progress` function |
+| progress (`project.init`, `workspace.exec` (its exec id), `store.push`, `store.pull`, `backup.create`, `backup.restore`) | `{ progress: … }` | `--progress`: one JSON line per event on stderr | the `on_progress` function |
 | exec output (`workspace.exec`) | `{ stream, bytes }` | `--stream`: bytes to stdout or stderr | the `stdout` and `stderr` functions; `stream: true` without them writes to the process's own streams |
 
 Events come from the call's one event stream

@@ -137,4 +137,4 @@ layerfs workspace commit s1:build --message 'tests pass'
 
 ---
 
-← [workspace.exec](exec.md) · [Up: workspace](README.md) · [workspace.unmount](unmount.md) →
+← [workspace.exec_cancel](exec_cancel.md) · [Up: workspace](README.md) · [workspace.unmount](unmount.md) →

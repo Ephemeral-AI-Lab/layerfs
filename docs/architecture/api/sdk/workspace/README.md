@@ -20,6 +20,7 @@ The `workspace` calls.
                 |
                 v
    +---> exec <ws> <command>   (bash -c via the Sandbox runtime)
+   |        |   exec_cancel <ws> <exec_id>  (from any process)
    |        |
    |     status <ws>           (base, head moved?, activity, overlay)
    |        |
@@ -29,7 +30,7 @@ The `workspace` calls.
          unmount <ws>          (Dirty unless committed or discard)
 ```
 
-Five calls, in help order
+Six calls, in help order
 ([`workspace/mod.rs`](../../../../../api/crates/layerfs-api/src/workspace/mod.rs)).
 Each runs its own function of `layerfs_sandbox::workspace::calls`. A Workspace is
 named `ws`: `<sandbox>:<path>`, or `<sandbox>:<name>` when its mount named
@@ -38,7 +39,8 @@ it ([`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs)).
 | Call | Arguments | Options | Returns | Host operation |
 | --- | --- | --- | --- | --- |
 | [`mount`](mount.md) | `sandbox` (Name), `branch` (Name) | `name` (Name) | `{ kind: "Mounted", path, workspace, namespace, branch, base, base_layer, root, sandbox, container, image, platform, runtime, name, ws }` | `workspace.mount` |
-| [`exec`](exec.md) | `ws` (Text), `command` (Text) | `message` (Text), `stream` (Bool), `stdout`, `stderr` (Function) | `{ kind: "exit:<code>", exit_code, stdout, stderr, message, truncated }`; a stream over 1 MiB is spooled and sent as `{ stream, bytes }` events, the answer keeping it null with `stdout_bytes`, `stderr_bytes` and `streamed: true` | `workspace.exec` |
+| [`exec`](exec.md) | `ws` (Text), `command` (Text) | `message` (Text), `stream` (Bool), `stdout`, `stderr`, `on_progress` (Function), `exec_id` (Text) | `{ kind: "exit:<code>", exit_code, stdout, stderr, message, truncated, exec_id, stop }` (`kind` is `cancelled` when a cancel ended it); its exec id is the first progress event, `{ exec: { id } }`; a stream over 1 MiB is spooled and sent as `{ stream, bytes }` events, the answer keeping it null with `stdout_bytes`, `stderr_bytes` and `streamed: true` | `workspace.exec` |
+| [`exec_cancel`](exec_cancel.md) | `ws`, `exec_id` (Text) | `grace_ms` (Int) | `{ outcome: "cancelled", signal }`, `{ outcome: "ended" }` or `{ outcome: "unknown" }` | `workspace.exec_cancel` |
 | [`commit`](commit.md) | `ws` | `message`, `force` (Bool) | `{ kind: "Committed", head, commit, displaced_head, merged, lww, lww_truncated }` or `{ kind: "UpToDate", head, root, merged, lww, lww_truncated }` | `workspace.commit` |
 | [`unmount`](unmount.md) | `ws` | `discard`, `force` (Bool) | `{ kind: "Unmounted" }`, or with `force` `{ kind: "ForceUnmounted", abort, detach, cleanup }` | `workspace.unmount` |
 | [`status`](status.md) | `ws` | — | `{ kind: "ok", base, base_layer, branch_head, head_moved_since_mount, activity, overlay: { inodes, entries, pending_merge } }` | `backend.daemon.workspace.status` |
@@ -46,7 +48,7 @@ it ([`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs)).
 Answers are built in
 [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs),
 [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs),
-[`exec.rs`](../../../../../control/crates/layerfs-sandbox/src/exec.rs)
+[`exec/run.rs`](../../../../../control/crates/layerfs-sandbox/src/exec/run.rs)
 and [`output.rs`](../../../../../control/crates/layerfs-sandbox/src/output.rs).
 After the call, `exec` also sends its `stdout` and `stderr` as
 `{ stream, bytes }` events for front ends that stream.
@@ -58,10 +60,12 @@ After the call, `exec` also sends its `stdout` and `stderr` as
 | `branch` | Name | a side Branch; `main` is refused (fork a Branch from it) | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `name` | Name | unique among the Sandbox's mounted Workspaces | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `ws` | Text | parsed by `WorkspaceRef::parse`; a name is resolved to its path on the Sandbox's side | [`workspace/calls.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) |
-| `command` | Text | run as `bash -c` in the Workspace directory by the Sandbox runtime | [`exec.rs`](../../../../../control/crates/layerfs-sandbox/src/exec.rs) |
+| `command` | Text | run as `bash -c` in the Workspace directory by the Sandbox runtime | [`exec/run.rs`](../../../../../control/crates/layerfs-sandbox/src/exec/run.rs) |
 | `message` | Text | the shared `MESSAGE` option | [`calls/table.rs`](../../../../../api/crates/layerfs-api/src/calls/table.rs) |
 | `force` (commit) | Bool | publish over a moved head instead of merging | [`workspace/calls.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) |
-| `discard`, `force` (unmount) | Bool | drop uncommitted changes; abort the connection | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
+| `discard`, `force` (unmount) | Bool | drop uncommitted changes; cancel running commands first and abort the connection | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
+| `exec_id` | Text | a command's id, unique among its Workspace's running commands; control makes one when `exec` is given none | [`exec/id.rs`](../../../../../control/crates/layerfs-sandbox/src/exec/id.rs) |
+| `grace_ms` (exec_cancel) | Int | ms between SIGTERM and SIGKILL, 5000 by default | [`exec/cancel.rs`](../../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) |
 | `stream`, `stdout`, `stderr` | Bool, Function | front-end options; the functions never reach the library | [`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs) |
 
 A Sandbox holds at most `WORKSPACES` = 16 Workspaces; inline exec output
@@ -78,11 +82,11 @@ Under a folder scope, `mount` takes only `main`, mounted as
 | --- | --- | --- |
 | `InvalidInput` | a bad `ws`, `main` as the Branch, out of scope | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `NoSuchSandbox`, `NoSuchBranch` | a missing Sandbox or Branch | [`family.rs`](../../../../../control/crates/layerfs-sandbox/src/family.rs), [`direct.rs`](../../../../../control/crates/layerfs-sandbox/src/direct.rs) |
-| `Exists`, `Capacity` | `mount` with a name in use, or past 16 Workspaces | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
+| `Exists`, `Capacity` | `mount` with a name in use, or past 16 Workspaces; `exec` with the `exec_id` of a running command | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `NotMounted` | a `ws` whose path or name is not mounted | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `Conflict` | `commit` conflicts: markers are written, nothing is committed (`detail.conflicts`, `written`) | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
 | `Dirty` | `unmount` without `discard` while changes are uncommitted (`detail.changed`) | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
-| `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox (not for `status`); a daemon connection not lent in time | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs), [`daemon/pool.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
+| `Busy`, `Unresolved` | `unmount` without `force` while commands run (`detail.execs`); a `sandbox.create` or `close` holds the Sandbox (not for `status`); a daemon connection not lent in time | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs), [`daemon/pool.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
 | `StaleSandbox` | a saved daemon that is not `ControlReady` | [`daemon/pool.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
 | `TooLarge` | a request over one control record | [`daemon/call.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/call.rs) |
 | `Unavailable` | the machine's worker is not recorded or does not answer | [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) |
@@ -115,7 +119,7 @@ again. See
 
 Mount, commit, unmount and status reach the Sandbox's daemon; `exec` goes
 through the Sandbox's runtime on its machine and the daemon runs no
-command ([`exec.rs`](../../../../../control/crates/layerfs-sandbox/src/exec.rs)).
+command ([`exec/run.rs`](../../../../../control/crates/layerfs-sandbox/src/exec/run.rs)).
 The daemon serves no Store calls. A mount's caller reads no Store: the
 daemon finds the Branch by name as it binds (#64). A status's head read
 takes the Store's own route

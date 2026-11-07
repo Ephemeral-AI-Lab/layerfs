@@ -114,7 +114,8 @@ secret guards it on every bind address.
 | Call | Route | Starts nothing? | Source |
 | --- | --- | --- | --- |
 | `workspace.mount` | direct when forwarded, else the machine | yes; a mount never starts a Sandbox | [`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs), [`workspace/serve.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
-| `workspace.exec` | always the machine (`bash -c` through the Sandbox runtime) | yes | `workspace/calls.rs`, [`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs) |
+| `workspace.exec` | always the machine (`bash -c` through the Sandbox runtime); when forwarded, its command record is kept here with route `machine:<name>` | yes | [`workspace/exec.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/exec.rs), [`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs) |
+| `workspace.exec_cancel` | to the side that keeps the command's record: here when forwarded (its cancel then rides `sandbox.host` to the machine's worker), else `reach`; an unreached worker answers `{ outcome: "unknown" }`, nothing changed | yes | `workspace/exec.rs`, [`exec/cancel.rs`](../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) |
 | `workspace.commit`, `workspace.unmount` | direct when forwarded, else the machine | yes | `workspace/calls.rs` |
 | `workspace.status` | direct when forwarded, else `reach`; an unreached worker is the refusal | yes | `workspace/calls.rs` (`reach`) |
 

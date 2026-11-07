@@ -43,7 +43,7 @@ layerfs sandbox close <name> [--force]
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `force` | Bool | false | stop even with Workspaces mounted; their uncommitted changes and processes end with the Sandbox | [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `close` |
+| `force` | Bool | false | stop even with Workspaces mounted or commands running: each running command is cancelled first ([workspace.exec_cancel](../workspace/exec_cancel.md), 5000 ms grace); uncommitted changes and processes end with the Sandbox | [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `close`, [`exec/cancel.rs`](../../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) `settle` |
 
 Under a folder scope the call is refused `InvalidInput`
 ([`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs)).
@@ -82,7 +82,9 @@ Under a folder scope the call is refused `InvalidInput`
   4 route::on_machine(record, "sandbox.close", [force, held?])
        Executor::Local --> lifecycle::close here
        Executor::Worker -> "sandbox.host" -> worker -> lifecycle::close
-         guard; MountsActive unless force; stop (5 s), then delete,
+         guard; running commands' records: Busy unless force, which
+         cancels each first (stale ones are ended and removed);
+         MountsActive unless force; stop (5 s), then delete,
          each once; remove the machine-side folder
   5 home lock: release the forward; remove sandbox/<name>/
 ```
@@ -102,11 +104,11 @@ See the [routing table](../../../control/routing/routing-table.md).
 | --- | --- | --- | --- |
 | `InvalidInput` | bad name; folder scope | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
 | `NoSuchSandbox` | no record of that name | no | [`family.rs`](../../../../../control/crates/layerfs-sandbox/src/family.rs) |
-| `Busy` | another live operation's `op` holds the Sandbox (`detail {entity, phase, op}`); an unmount is in progress | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs), [`unmount_guard.rs`](../../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs) |
+| `Busy` | another live operation's `op` holds the Sandbox (`detail {entity, phase, op}`); an unmount is in progress; without `force`, commands still run (`detail.execs` lists their exec ids, [`exec/cancel.rs`](../../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) `settle`) | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs), [`unmount_guard.rs`](../../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs) |
 | `MountsActive` | without `force`, Workspaces are mounted; `detail.workspaces` lists their paths | no | [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
 | `Unavailable` | the machine's worker is not recorded or does not answer (nothing sent); a lock held too long | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
 | `Failed` | the stop or delete failed (a failed stop is not followed by a delete); the Sandbox stays as it was | no | `lifecycle.rs` |
-| `Unknown` | **the machine's answer was lost after the request was sent: the Sandbox may be stopped or not** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs), `close.rs` |
+| `Unknown` | **the machine's answer was lost after the request was sent: the Sandbox may be stopped or not**; or, with `force`, a running command's cancel was not confirmed (`detail.execs`) and nothing more was done | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs), `close.rs` |
 
 After `Unknown`, read [`sandbox.get`](get.md) (its `state` is
 `unresolved`), then call `close` again: it clears the uncertain intent.

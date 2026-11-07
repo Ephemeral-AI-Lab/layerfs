@@ -67,8 +67,8 @@ the Workspace through ordinary file calls on the mount.
 | Counts are what each sink accepted (`ExecExit::stdout_bytes`, `stderr_bytes`), not what was queued. | [`local/streams.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/streams.rs) |
 | A sink failure closes the command's pipes, still waits for its exit, and returns the sink's error. | [`host_process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/exec.rs), [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs) |
 | End of stream is never the exit: the exit comes from waiting on the process. | [`local/streams.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/streams.rs), each `exec.rs` |
-| No output is cut: a stream over the 1 MiB inline window is spooled (`truncated` is always false). | `INLINE` in [`output.rs`](../../../../control/crates/layerfs-sandbox/src/output.rs), [`exec.rs`](../../../../control/crates/layerfs-sandbox/src/exec.rs) |
-| The API also emits the output as `stdout` / `stderr` events after the call, for front ends that stream. | [`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) |
+| No output is cut: a stream over the 1 MiB inline window is spooled (`truncated` is always false). | `INLINE` in [`output.rs`](../../../../control/crates/layerfs-sandbox/src/output.rs), [`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs) |
+| The API also emits the output as `stdout` / `stderr` events after the call, for front ends that stream. | [`workspace/exec.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/exec.rs) |
 
 ## Exit status
 
@@ -80,6 +80,42 @@ the Workspace through ordinary file calls on the mount.
 The exit is the root process's. Descendants, open descriptors and the
 filesystem drain are separate facts ([`execution.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/execution.rs));
 a command's exit does not prove its children ended.
+
+## Exec records and cancel
+
+Each command has an exec id and, while it runs, a record beside its
+Workspace's own (compute-plane 2.0 §5.2, D-10, layerfs-project#113):
+
+```text
+ sandbox/<name>/workspace/<workspace id>.json          the Workspace
+ sandbox/<name>/workspace/<workspace id>/exec/<id>.json one running command
+   { v, id, workspace, path, name, owner, route, stop, started, cancel? }
+   owner  the process that runs the exec (pid, start, boot)
+   route  local | machine:<name> (a Sandbox this home reaches directly,
+          whose command a cancel reaches through its worker, D-11)
+   stop   null until spawn, then { cgroup: { path } }
+          or { group: { pgid, pid, pid_start, pid_boot } }
+```
+
+The record is on the side that keeps the Workspace's record: the home on
+`native` and for a forwarded Sandbox, the worker's root otherwise. It is
+created new under the Sandbox lock (a live duplicate is `Exists`, with no
+scan), told its stop handle at spawn and removed when the command ends
+([`exec/record.rs`](../../../../control/crates/layerfs-sandbox/src/exec/record.rs)).
+
+| Backend | Stop handle | At spawn | Cancel | Source |
+| --- | --- | --- | --- | --- |
+| Namespaces | `Cgroup { path }`: `<sandbox cgroup>/ws-<workspace id>/exec-<exec id>` | the helper (`exec --leave`) joins the command's cgroup, spawns it, then moves itself back to the Sandbox's cgroup, with SIGTERM blocked, so the cgroup holds only the command and its children | SIGTERM to each process in it, wait the grace, `cgroup.kill`, check it is empty; the cgroup is removed when the command ends | [`namespaces/cgroup.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/cgroup.rs), [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs) |
+| HostProcess | `Group { pgid, leader }`: the command's own process group and its leader's identity | after the group is named | SIGTERM to the group (leader and boot checked against id reuse), wait the grace, SIGKILL | [`local/groups.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/groups.rs), [`host_process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/exec.rs) |
+
+| Rule | Source |
+| --- | --- |
+| A cancel marks the record (`cancel`) under the Sandbox lock, then signals once outside it; nothing times out, retries or replays. | [`exec/cancel.rs`](../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) `cancel`, [`stop.rs`](../../../../control/crates/layerfs-sandbox-backend/src/stop.rs) |
+| A cancel before the stop handle is known: the owner sees the mark at spawn and ends the command at once. | `exec/record.rs` `Running::spawned` |
+| `workspace.unmount` and `sandbox.close` read their records first: a live one refuses them `Busy` (`detail.execs`); `force` cancels each first with the default grace; one not confirmed refuses `Unknown`. | `exec/cancel.rs` `settle` |
+| A record whose owner process is gone is stale: the next start, cancel, unmount or close that finds it ends its command (zero grace), removes it and logs it to `log/exec.jsonl`; `layerfs doctor` reports it without acting. | `exec/cancel.rs` `stale`, [`doctor/scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `execs` |
+| A worker that is not reached, or does not answer, makes a cancel `{ outcome: "unknown" }`: nothing is known to have changed. | [`workspace/exec.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/exec.rs) `exec_cancel` |
+| A terminal unmount removes the Workspace's folder `workspace/<workspace id>/`. | [`workspace/serve.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 
 ## Keep-alive and stop
 
