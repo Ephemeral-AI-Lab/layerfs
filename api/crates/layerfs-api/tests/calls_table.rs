@@ -342,8 +342,9 @@ fn an_explicit_home_must_be_absolute() {
 
 #[test]
 fn the_source_is_one_file_per_call_under_its_family() {
-    // src/ holds lib.rs and one folder per family; each folder holds its
-    // mod.rs and one <call>.rs per call, nothing else
+    // src/ holds lib.rs, the call machinery (calls/, layerfs-project#107)
+    // and one folder per family; each family folder holds its mod.rs and
+    // one <call>.rs per call, nothing else
     let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let names = |dir: &std::path::Path| -> Vec<String> {
         let mut names: Vec<String> = std::fs::read_dir(dir)
@@ -355,6 +356,7 @@ fn the_source_is_one_file_per_call_under_its_family() {
     };
     let mut expected: Vec<String> = families().iter().map(|f| f.name.to_owned()).collect();
     expected.push("lib.rs".to_owned());
+    expected.push("calls".to_owned());
     expected.sort();
     assert_eq!(names(&src), expected);
     for family in families() {

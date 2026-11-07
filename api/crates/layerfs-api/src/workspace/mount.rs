@@ -1,9 +1,11 @@
 //! `workspace.mount`: mount a Branch in a Sandbox.
+use crate::calls::table::Kind::Name;
+use crate::calls::table::{a, call, opt, Call};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::Name;
-use layerfs_control::calls::table::{a, call, opt, Call};
-use layerfs_control::calls::Context;
-use layerfs_control::common::outcome::Outcome;
+use layerfs_home::home::with_field;
+use layerfs_home::outcome::Outcome;
+use layerfs_sandbox::workspace::calls::{mount, MountRequest};
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -15,7 +17,15 @@ pub(crate) const CALL: Call = call(
     run,
 );
 
-/// Runs `workspace.mount`.
+/// Runs `workspace.mount`: its side's answer with the Workspace's `ws`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::workspace::calls::workspace(context, "mount", args)
+    let text = |name: &str| args.get_text(name).map(str::to_owned);
+    let request = MountRequest {
+        sandbox: text("sandbox").unwrap_or_default(),
+        branch: text("branch"),
+        name: text("name"),
+    };
+    let (home, events) = context.parts();
+    let mounted = mount(home, events, &request)?;
+    Ok(with_field(mounted.answer, "ws", SdkValue::Text(mounted.ws)))
 }

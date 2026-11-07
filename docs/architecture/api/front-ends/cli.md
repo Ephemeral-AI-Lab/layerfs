@@ -63,7 +63,7 @@ given; a stdin that is closed or empty is empty content, so `file write`
 writes an empty file and `file apply` is exit 2 (empty is not JSON). A
 `--from` file that cannot be read is exit 2.
 Values are only shaped here; the library checks them again
-([`check.rs`](../../../../api/crates/layerfs-control/src/calls/check.rs)),
+([`check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs)),
 so a value the shell accepts can still be refused `InvalidInput`.
 
 | Switch | Calls | Effect |
@@ -152,15 +152,15 @@ sink ignores write errors and the command's code is returned.
 `LAYERFS_WORKER_LISTEN` (address), `LAYERFS_WORKER_SECRET` (a file holding
 the secret) and, for tests, `LAYERFS_WORKER_ROOT` (default
 `/layerfs/data`), then serves until ended; a missing setting exits 125.
-Its protocol is on [Workers](../routing/workers.md).
+Its protocol is on [Workers](../../control/routing/workers.md).
 
 ## Related
 
 - [Front ends](README.md): the three front ends side by side.
 - [Table](../call-table/table.md): the entries the parser and help read.
 - [Errors](../call-table/errors.md#error-kinds): the codes a refusal carries.
-- [Workers](../routing/workers.md): what `layerfs worker` serves.
-- [Doctor](../control/doctor.md): what `layerfs doctor` reports.
+- [Workers](../../control/routing/workers.md): what `layerfs worker` serves.
+- [Doctor](../../control/management/doctor.md): what `layerfs doctor` reports.
 
 ---
 

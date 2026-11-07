@@ -97,7 +97,9 @@ class LinuxBundleTests(unittest.TestCase):
         for step in ("daemon", "worker", "helper"):
             bundle.build(self.record, step, "debug", 120)
         cargo = [c for c, _ in self.commands]
-        self.assertEqual([c[c.index("-p") + 1] for c in cargo], ["layerfs-daemon", "layerfs-cli", "layerfs-sandbox"])
+        self.assertEqual(
+            [c[c.index("-p") + 1] for c in cargo], ["layerfs-daemon", "layerfs-cli", "layerfs-sandbox-backend"]
+        )
         self.assertIn("layerfs-daemon/postgresql", cargo[0])
         self.assertIn("--no-default-features", cargo[1])
         self.assertTrue(all(t == 120 for _, t in self.commands))

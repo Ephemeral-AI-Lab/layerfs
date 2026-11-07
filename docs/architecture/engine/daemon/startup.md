@@ -127,7 +127,7 @@ Source: [`owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/ow
 - [Control calls](control-calls.md): what `ControlReady` serves.
 - [Overlay: Database](../overlay/database.md): the template made in step 1.
 - [Store: Lifecycle](../store/lifecycle.md): opening the global Store.
-- [API: Routing and workers](../../api/routing/README.md): who connects.
+- [Control: Routing and workers](../../control/routing/README.md): who connects.
 - [Glossary](../../glossary.md).
 
 ---

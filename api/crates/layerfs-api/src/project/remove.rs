@@ -1,9 +1,10 @@
 //! `project.remove`: remove one project from its Store.
+use crate::calls::table::Kind::Project;
+use crate::calls::table::{a, call, Call};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::Project;
-use layerfs_control::calls::table::{a, call, Call};
-use layerfs_control::calls::Context;
-use layerfs_control::common::outcome::Outcome;
+use layerfs_home::names::ProjectRef;
+use layerfs_home::outcome::Outcome;
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -17,5 +18,7 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `project.remove`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::project::family::run(context, "remove", args)
+    let project = ProjectRef::parse(args.get_text("project").unwrap_or(""))?;
+    let (home, events) = context.parts();
+    layerfs_control::project::remove(home, events, &project)
 }

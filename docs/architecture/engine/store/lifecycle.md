@@ -135,7 +135,7 @@ StoreFile::checkpoint(&self)                  (live shared session; stays open)
 
 The control layer's open-Store cache runs it when the last call on a SQLite
 Store returns, or a Sandbox on it closes, with no other call running in that
-process ([`store/open.rs`](../../../../api/crates/layerfs-control/src/store/open.rs)). The Store stays open: a
+process ([`open.rs`](../../../../control/crates/layerfs-store/src/open.rs)). The Store stays open: a
 live daemon still keeps its Store across Saves and Commits, and the 60 s idle
 close is unchanged. A checkpoint left by `Ok(false)` is never retried; its
 frames stay valid and the last close checkpoints them. A process-level close (`close_idle`, which the CLI runs before it exits) waits for a checkpoint still running and then closes the Store; it never skips it. The lane is taken

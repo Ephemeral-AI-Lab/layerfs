@@ -23,7 +23,7 @@
 | `ms` | the connection's whole time: connect, secret, request, events and answer |
 
 One worker-routed call is one line (R1). Written by
-`api/crates/layerfs-control/src/common/trace.rs` `connection`; a line that
+`control/crates/layerfs-home/src/trace.rs` `connection`; a line that
 cannot be written changes no outcome.
 
 ## Where it stands

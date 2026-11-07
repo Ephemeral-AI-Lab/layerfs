@@ -68,7 +68,7 @@ hold a password or a bucket key. They are not settings; see
   Every machine, Store, project, bucket, Sandbox and Workspace record
   carries `"v": 1` as its first field; call results never show it.
 - **`layerfs.json`** holds `{"layout": 3, "id": "<32 hex digits>"}`. The id
-  is written once. The `docker` machine names its containers with it (O33),
+  is written once. The `docker` machine names its worker container with it (O33),
   VM names carry its first 8 digits (`lfs-<id8>-<machine>`), and backups
   record it as where they were exported from. A home of a newer layout is
   refused `Unsupported`; a layout 2 home is converted once
@@ -106,8 +106,8 @@ hold a password or a bucket key. They are not settings; see
   held across a machine or daemon call; the call that runs a native
   Sandbox takes turns on `serve.lock`, a different file. On `native` the side
   that runs the Sandbox adds what reopens its runtime (`daemon`) to the
-  same file, and its daemon keys to `control.json`. A Sandbox on `ssh`,
-  `lima` or `docker` whose daemon the caller reaches directly (#535 G4)
+  same file, and its daemon keys to `control.json`. A Sandbox on `ssh`
+  or `lima` whose daemon the caller reaches directly (#535 G4)
   has its keys in `control.json` too, and a `daemon` of `{ forward:
   { address, machine, pid?, pid_start?, pid_boot? }, name, runtime,
   platform, image }`: the host loopback address the caller dials and, on

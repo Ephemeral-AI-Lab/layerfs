@@ -70,23 +70,23 @@ chooses the route, attaches it and tears it down.
 ## What it does
 
 The route for each platform comes from the `kernel` field of
-[`connect/SUPPORT.json`](../../../../connect/SUPPORT.json), generated from
-[`support.rs`](../../../../connect/crates/layerfs-machine/src/support.rs):
+[`control/SUPPORT.json`](../../../../control/SUPPORT.json), generated from
+[`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs):
 
 | Host | Platform | `backend` | `kernel` |
 | --- | --- | --- | --- |
 | macos | native | `native` | `"nfs"` |
-| macos | docker | `docker` | `"fuse"` |
+| macos | docker | `namespaces` | `"fuse"` |
 | macos | apple-container, microsandbox, lima, firecracker, ssh | `namespaces` | `"fuse"` |
 | linux | native, microsandbox, ssh | `namespaces` | `"fuse"` |
-| linux | docker | `docker` | `"fuse"` |
+| linux | docker | `namespaces` | `"fuse"` |
 | linux | apple-container, lima, firecracker | `null` | `null` (unsupported on this host) |
 | windows | microsandbox, ssh | `namespaces` | `"fuse"` |
 | windows | native, docker, apple-container, lima, firecracker | `null` | `null` (unsupported on this host) |
 
 So NFS serves exactly one row, the macOS native platform; every other
 supported row runs a Linux kernel and uses FUSE. The table is owned by the
-[support matrix](../../connect/support-matrix/README.md).
+[support matrix](../../control/support-matrix/README.md).
 
 | Given to both routes by the ports | FUSE adds | NFS adds |
 | --- | --- | --- |

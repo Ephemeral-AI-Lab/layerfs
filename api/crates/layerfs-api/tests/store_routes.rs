@@ -157,7 +157,7 @@ fn leases_are_held_counted_and_stale_ones_removed() {
     // a lease of a process that is gone is stale: removed and logged
     let dead = paths::lease_dir(&home, "shop").join("2147483646");
     std::fs::write(&dead, "1\n").unwrap();
-    assert!(!lease::alive(2147483646));
+    assert!(!layerfs_home::process::alive(2147483646));
     assert_eq!(lease::holders(&home, "shop").unwrap(), Vec::<u32>::new());
     assert!(!dead.exists());
     let log = std::fs::read_to_string(home.join("log/leases.jsonl")).unwrap();
@@ -169,7 +169,7 @@ fn leases_are_held_counted_and_stale_ones_removed() {
 fn a_lease_names_its_process_so_a_reused_or_group_pid_never_holds() {
     // ids 0 and above i32::MAX are process groups to kill(2): never alive
     for pid in [0, i32::MAX as u32 + 1, u32::MAX] {
-        assert!(!lease::alive(pid), "{pid}");
+        assert!(!layerfs_home::process::alive(pid), "{pid}");
     }
     let home = home_with(sqlite_record(t("native")));
     let dir = paths::lease_dir(&home, "shop");
@@ -187,7 +187,7 @@ fn a_lease_names_its_process_so_a_reused_or_group_pid_never_holds() {
         .spawn()
         .unwrap();
     let pid = child.id();
-    let seen = layerfs_sandbox::local::LocalProcess::observe(pid).unwrap();
+    let seen = layerfs_bridge::process::LocalProcess::observe(pid).unwrap();
     let boot = seen.boot.unwrap();
     let lease = dir.join(pid.to_string());
     std::fs::write(&lease, format!("1 {} {boot:032x}\n", seen.start)).unwrap();
@@ -199,7 +199,7 @@ fn a_lease_names_its_process_so_a_reused_or_group_pid_never_holds() {
     // this process's own lease records its start time
     let mine = lease::hold(&home, "shop").unwrap();
     let text = std::fs::read_to_string(dir.join(std::process::id().to_string())).unwrap();
-    let me = layerfs_sandbox::local::LocalProcess::observe(std::process::id()).unwrap();
+    let me = layerfs_bridge::process::LocalProcess::observe(std::process::id()).unwrap();
     assert!(text.contains(&me.start.to_string()), "{text}");
     drop(mine);
     let _ = child.kill();

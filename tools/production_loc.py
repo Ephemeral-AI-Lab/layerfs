@@ -2,8 +2,8 @@
 """Count first-party production source lines for the per-commit LOC rule.
 
 Production code is nonblank, non-comment first-party product implementation:
-the product under core/crates/*/src, engine/crates/*/src, connect/crates/*/src
-and api/crates/*/src
+the product under core/crates/*/src, engine/crates/*/src, control/crates/*/src
+(connect/crates before the control split, #101) and api/crates/*/src
 (layerfs-api and the layerfs-node binding were api/layerfs-api and api/binding
 before the api/ regrouping, then engine/crates, and are counted there too), and
 the reference product under crates/*/src, plus shipped runtime SQL under
@@ -12,12 +12,15 @@ development tools, docs, manifests and generated artifacts are excluded. Legacy
 inline #[cfg(test)] items are removed before counting, because the reference tree
 keeps tests inside src/.
 
-Rust crates are assigned by name to core, engine, connect or api in every
-layout: the call surface layerfs-api, the management library layerfs-control
-and the front ends layerfs-cli, layerfs-node and layerfs-python are api
-crates wherever they sit, and layerfs-sandbox, layerfs-machine and
-layerfs-store-backup are connect crates wherever they sit,
-so a pre-move tree counts them under connect too. Unknown historical crates
+Rust crates are assigned by name to core, engine, control or api in every
+layout: the call surface layerfs-api and the front ends layerfs-cli,
+layerfs-node and layerfs-python are api crates wherever they sit; the control
+crates (layerfs-home, layerfs-machine, layerfs-platform, layerfs-store,
+layerfs-bucket, layerfs-sandbox, layerfs-sandbox-backend and
+layerfs-control, and the earlier driver names layerfs-isolation,
+layerfs-store-backup and layerfs-remote-storage) are control crates wherever they sit, so a pre-move
+tree counts them under control too (the `control` scope was `connect`, and
+layerfs-control was an api crate, before #101). Unknown historical crates
 remain counted in core.
 
 The `api` scope includes api/python/src/layerfs Python implementation and
@@ -393,7 +396,7 @@ def counted_lines(path: Path) -> int:
     return sum(1 for line in text.splitlines() if line.strip())
 
 
-SCOPES = ("core", "engine", "connect", "reference", "api", "dsh")
+SCOPES = ("core", "engine", "control", "reference", "api", "dsh")
 ENGINE_CRATES = {
     "layerfs-bridge",
     "layerfs-daemon",
@@ -407,20 +410,29 @@ ENGINE_CRATES = {
     # The NFS export was missing here and counted under core (#533 step 2).
     "layerfs-nfs",
 }
-# The connect layer (#535): the crates that reach a machine or the network.
-# Classified by name in every layout, so a pre-move tree counts them under
-# connect too and per-layer comparisons stay honest on both sides of a move.
-CONNECT_CRATES = {
-    "layerfs-sandbox",
+# The control layer (#535; renamed from connect and split by concern, #101):
+# the entity crates, the drivers and layerfs-control. Classified by name in
+# every layout, so a pre-move tree counts them under control too and
+# per-layer comparisons stay honest on both sides of a move.
+CONTROL_CRATES = {
+    "layerfs-home",
     "layerfs-machine",
+    "layerfs-platform",
+    "layerfs-store",
+    "layerfs-bucket",
+    "layerfs-sandbox",
+    "layerfs-sandbox-backend",
+    "layerfs-control",
+    # Earlier driver names: before #101 layerfs-platform was layerfs-machine,
+    # layerfs-sandbox-backend was layerfs-sandbox and layerfs-bucket was
+    # layerfs-store-backup; from #101 D-5 to D-9 layerfs-sandbox-backend was
+    # layerfs-isolation; before move 1.6 there was layerfs-remote-storage.
+    "layerfs-isolation",
     "layerfs-store-backup",
-    # The name layerfs-store-backup had before move 1.6: a pre-move tree
-    # counts it under connect too.
     "layerfs-remote-storage",
 }
-# The call surface, the management library under it (#536) and the 2.0 front
-# ends (#533): the binary, Node and Python.
-API_CRATES = {"layerfs-api", "layerfs-control", "layerfs-cli", "layerfs-node", "layerfs-python"}
+# The call surface and the 2.0 front ends (#533): the binary, Node and Python.
+API_CRATES = {"layerfs-api", "layerfs-cli", "layerfs-node", "layerfs-python"}
 # Crate folders directly under api/ before the regrouping, by folder name.
 OLD_API_CRATES = {"layerfs-api": "layerfs-api", "binding": "layerfs-node"}
 
@@ -428,8 +440,8 @@ OLD_API_CRATES = {"layerfs-api": "layerfs-api", "binding": "layerfs-node"}
 def crate_layer(name: str) -> str:
     if name in ENGINE_CRATES:
         return "engine"
-    if name in CONNECT_CRATES:
-        return "connect"
+    if name in CONTROL_CRATES:
+        return "control"
     if name in API_CRATES:
         return "api"
     # Historical and synthetic crates remain counted rather than disappearing.
@@ -444,6 +456,7 @@ def replacement_packages(root: Path) -> list:
                 root / "core/crates",
                 root / "engine/crates",
                 root / "connect/crates",
+                root / "control/crates",
                 root / "api/crates",
             )
             for p in base.glob("*")
@@ -459,7 +472,7 @@ def package_crate(root: Path, package: Path) -> str:
 
 
 def scope_base(root: Path, scope: str) -> Path:
-    if scope in {"core", "engine", "connect"}:
+    if scope in {"core", "engine", "control"}:
         return root
     if scope == "api":
         return root
@@ -549,14 +562,14 @@ def rust_crate(root: Path, path: Path):
     parts = path.relative_to(root).parts
     if len(parts) > 1 and parts[0] == "api" and parts[1] in OLD_API_CRATES:
         return OLD_API_CRATES[parts[1]]
-    if len(parts) > 2 and parts[0] in {"core", "engine", "connect", "api"} and parts[1] == "crates":
+    if len(parts) > 2 and parts[0] in {"core", "engine", "connect", "control", "api"} and parts[1] == "crates":
         return parts[2]
     return None
 
 
 def crate_of(root: Path, scope: str, path: Path) -> str:
     base = scope_base(root, scope)
-    if scope in {"core", "engine", "connect", "api"} and rust_crate(root, path):
+    if scope in {"core", "engine", "control", "api"} and rust_crate(root, path):
         return rust_crate(root, path)
     if scope == "api":
         return api_crate(root, path)
@@ -590,7 +603,7 @@ def rust_files(base: Path) -> list:
 
 
 def scope_files(root: Path, scope: str) -> list:
-    if scope in {"core", "engine", "connect", "api"}:
+    if scope in {"core", "engine", "control", "api"}:
         files = []
         packages = replacement_packages(root)
         for base in sorted({package.parent for package in packages}):

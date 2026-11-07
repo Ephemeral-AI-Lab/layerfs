@@ -1,0 +1,253 @@
+//! A Sandbox's control connections (#352 F-017).
+//!
+//! The daemon serves each authenticated connection on its own worker, so
+//! concurrent callers need separate connections: one shared connection made
+//! every call wait for the one before it, a 1 ms read behind a whole Commit. A
+//! Sandbox keeps up to [`CONNECTIONS`] connections and opens one only when
+//! every open one is busy. Each exchange runs whole on one connection, sent
+//! once. A connection whose exchange failed is quarantined by its `Control`
+//! and is closed rather than reused; the failed call is never sent again.
+//! When the daemon admits no more connections, the Sandbox keeps the ones it
+//! has and callers take turns on them, each waiting at most [`LEND_WAIT`]
+//! before it is refused `Busy`. Opening a connection is not an attempt
+//! of any operation: nothing is sent before the connection is ready.
+use crate::internal::Control;
+use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkRefusal};
+use layerfs_bridge::duplex::initiate_observed;
+use layerfs_home::outcome::{failed, refused};
+use std::net::SocketAddr;
+use std::ops::{Deref, DerefMut};
+use std::sync::{Condvar, Mutex};
+use std::time::{Duration, Instant};
+
+/// Most control connections one process keeps to one Sandbox. A Sandbox this
+/// binding creates admits [`crate::lifecycle::DAEMON_CONNECTIONS`]; the rest
+/// stay for other processes.
+pub const CONNECTIONS: usize = 6;
+
+/// How to open another connection to the same daemon instance.
+#[derive(Clone)]
+pub struct Dial {
+    pub endpoint: SocketAddr,
+    pub secret: [u8; 32],
+    pub peer: [u8; 32],
+    pub instance: [u8; 32],
+}
+
+/// How long a process waits for the daemon to admit its first connection
+/// while other processes hold every admitted one (the same bound as the
+/// project's discovery lock).
+pub const ADMISSION_WAIT: Duration = Duration::from_secs(60);
+
+/// How long a call waits for one of this process's connections to come free
+/// once every one is lent (#508). Control replies have no deadline, so behind
+/// calls that never end an unbounded wait would last forever while holding
+/// the caller's discovery turn. The wait is readiness: nothing is attempted
+/// before it ends, and its `Busy` refusal is not retried.
+pub const LEND_WAIT: Duration = ADMISSION_WAIT;
+
+/// Whether a failed open is the daemon closing a connection it did not admit:
+/// the stream ended before the Hello reply. Through a port proxy the client
+/// reads the end (`UnexpectedEof`); dialing the daemon directly, its handshake
+/// write can meet the closed socket first (`BrokenPipe`, `ConnectionReset`).
+/// Nothing but Hello was sent, so no operation was attempted and opening
+/// again is safe.
+fn not_admitted(refusal: &SdkRefusal) -> bool {
+    refusal.code == "Failed"
+        && ["UnexpectedEof", "BrokenPipe", "ConnectionReset"]
+            .iter()
+            .any(|kind| refusal.message.contains(kind))
+}
+
+impl Dial {
+    /// The first connection a process opens to a Sandbox. While the daemon
+    /// admits no more connections (other processes hold all of them), waits
+    /// for one to be released, up to [`ADMISSION_WAIT`], instead of failing
+    /// the caller's operation with a bare `UnexpectedEof`.
+    pub fn open_waiting(&self) -> Result<Control, SdkRefusal> {
+        self.open_admitted(ADMISSION_WAIT)
+    }
+
+    /// [`Dial::open_waiting`], waiting at most `wait`.
+    fn open_admitted(&self, wait: Duration) -> Result<Control, SdkRefusal> {
+        let started = Instant::now();
+        let mut pause = Duration::from_millis(20);
+        loop {
+            match self.open() {
+                Err(refusal) if not_admitted(&refusal) && started.elapsed() < wait => {
+                    std::thread::sleep(pause);
+                    pause = (pause * 2).min(Duration::from_millis(500));
+                }
+                Err(refusal) if not_admitted(&refusal) => {
+                    return Err(refused(
+                        "Busy",
+                        format!(
+                            "the Sandbox's daemon admitted no connection for {}s: other processes hold all {} of its connections",
+                            wait.as_secs(),
+                            crate::lifecycle::DAEMON_CONNECTIONS
+                        ),
+                    ))
+                }
+                other => return other,
+            }
+        }
+    }
+
+    /// One authenticated connection, checked to reach the same daemon.
+    pub fn open(&self) -> Result<Control, SdkRefusal> {
+        let stream = std::net::TcpStream::connect_timeout(&self.endpoint, Duration::from_secs(10))
+            .map_err(failed)?;
+        stream
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .map_err(failed)?;
+        stream
+            .set_write_timeout(Some(Duration::from_secs(10)))
+            .map_err(failed)?;
+        let connection = initiate_observed(stream, &self.secret, self.peer)
+            .result
+            .map_err(failed)?;
+        connection.clear_io_waits().map_err(failed)?;
+        let mut control = Control::new(connection);
+        match control
+            .call(Request::Hello(HelloRequest {
+                expected_instance: Some(self.instance),
+                wait_for_store: false,
+            }))
+            .map_err(failed)?
+        {
+            Reply::Hello(status) if status.phase == DaemonPhase::ControlReady => Ok(control),
+            _ => Err(refused("StaleSandbox", "saved daemon is not ControlReady")),
+        }
+    }
+}
+
+struct Pool {
+    idle: Vec<Control>,
+    /// Connections open, idle or lent.
+    open: usize,
+    /// Most connections this Sandbox keeps: [`CONNECTIONS`], or fewer once
+    /// the daemon admitted no more.
+    limit: usize,
+}
+
+/// A Sandbox's connections.
+pub struct Controls {
+    pool: Mutex<Pool>,
+    freed: Condvar,
+    dial: Dial,
+}
+
+/// One connection lent for one call's exchanges.
+pub struct Lease<'a> {
+    controls: &'a Controls,
+    control: Option<Control>,
+}
+
+impl Controls {
+    /// The connections of a Sandbox whose first connection is `first`.
+    pub fn new(first: Control, dial: Dial) -> Self {
+        Self {
+            pool: Mutex::new(Pool {
+                idle: vec![first],
+                open: 1,
+                limit: CONNECTIONS,
+            }),
+            freed: Condvar::new(),
+            dial,
+        }
+    }
+
+    /// A connection for one call, and how long the call waited for it.
+    pub fn lend(&self) -> Result<(Lease<'_>, Duration), SdkRefusal> {
+        let started = Instant::now();
+        let poisoned = || refused("Failed", "binding state poisoned");
+        let mut pool = self.pool.lock().map_err(|_| poisoned())?;
+        loop {
+            if let Some(control) = pool.idle.pop() {
+                return Ok((self.lease(control), started.elapsed()));
+            }
+            if pool.open < pool.limit {
+                pool.open += 1;
+                // the only connection: like a process's first, wait to be admitted
+                let only = pool.open == 1;
+                drop(pool);
+                let opened = if only {
+                    self.dial.open_waiting()
+                } else {
+                    self.dial.open()
+                };
+                pool = self.pool.lock().map_err(|_| poisoned())?;
+                match opened {
+                    Ok(control) => return Ok((self.lease(control), started.elapsed())),
+                    Err(refusal) => {
+                        pool.open -= 1;
+                        if pool.open == 0 {
+                            return Err(refusal);
+                        }
+                        // The daemon admits no more: take turns on the open ones.
+                        pool.limit = pool.open;
+                        continue;
+                    }
+                }
+            }
+            let remaining = LEND_WAIT.saturating_sub(started.elapsed());
+            if remaining.is_zero() {
+                return Err(refused(
+                    "Busy",
+                    format!(
+                        "all {} of this process's connections to the Sandbox stayed in use for {}s; nothing was attempted",
+                        pool.open,
+                        LEND_WAIT.as_secs()
+                    ),
+                ));
+            }
+            pool = self
+                .freed
+                .wait_timeout(pool, remaining)
+                .map_err(|_| poisoned())?
+                .0;
+        }
+    }
+
+    fn lease(&self, control: Control) -> Lease<'_> {
+        Lease {
+            controls: self,
+            control: Some(control),
+        }
+    }
+}
+
+impl Drop for Lease<'_> {
+    fn drop(&mut self) {
+        let Some(control) = self.control.take() else {
+            return;
+        };
+        let mut pool = self
+            .controls
+            .pool
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if control.is_failed() {
+            // Quarantined: closed, and a later call may open another.
+            pool.open -= 1;
+            drop(control);
+        } else {
+            pool.idle.push(control);
+        }
+        drop(pool);
+        self.controls.freed.notify_one();
+    }
+}
+
+impl Deref for Lease<'_> {
+    type Target = Control;
+    fn deref(&self) -> &Control {
+        self.control.as_ref().expect("lent connection")
+    }
+}
+
+impl DerefMut for Lease<'_> {
+    fn deref_mut(&mut self) -> &mut Control {
+        self.control.as_mut().expect("lent connection")
+    }
+}

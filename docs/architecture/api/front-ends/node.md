@@ -49,7 +49,7 @@ lfs.file.read(p, b, path, {..})
 | Rule | Behaviour | Source |
 | --- | --- | --- |
 | Building | `table = decode(native.table())`; `client({home, scope})` makes one function per entry, grouped by family, and freezes the client | [`index.js`](../../../../api/node/src/index.js) |
-| Defaults | the default export and the named family exports use `client()`: home from `LAYERFS_HOME`, else `~/.layerfs`, decided by the library | [`dispatch.rs`](../../../../api/crates/layerfs-control/src/calls/dispatch.rs) `home` |
+| Defaults | the default export and the named family exports use `client()`: home from `LAYERFS_HOME`, else `~/.layerfs`, decided by the library | [`dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home` |
 | Options object | a trailing plain object is the options when there are more values than positionals, or when its slot is not a `json` positional; so an optional positional can be left off | `bind` |
 | Checks before the call | options not an object, too many positionals, an unknown option, a function option that is not a function: `LayerFSError("InvalidInput")` | `bind` |
 | `null` / `undefined` | a positional or option with either is left out, so the library sees it as absent | `bind` |

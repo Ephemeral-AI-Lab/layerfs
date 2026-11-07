@@ -9,11 +9,13 @@
 //!   password, to a database with no `layerfs` schema; one is left behind),
 //!   LAYERFS_TEST_PG_PASSWORD, LAYERFS_TEST_DAEMON (a host daemon built with
 //!   `postgresql`); the docker half also LAYERFS_TEST_IMAGE (a local image
-//!   digest) and LAYERFS_BUNDLE (a sealed Linux bundle whose daemon has
-//!   `postgresql`). macOS reaches a loopback server from the container as
-//!   `host.docker.internal`.
+//!   digest, the worker container's) and LAYERFS_BUNDLE (a sealed Linux
+//!   bundle whose daemon has `postgresql`). macOS reaches a loopback server
+//!   from the container as `host.docker.internal`.
 //! - a sqlite Store pushed to the docker machine and its Sandbox, through the
-//!   docker worker on macOS: LAYERFS_TEST_IMAGE and LAYERFS_BUNDLE. The test
+//!   docker worker: LAYERFS_TEST_IMAGE and LAYERFS_BUNDLE. The Sandbox runs
+//!   in namespaces inside the privileged worker container and shows
+//!   `backend: "namespaces"` with `platform: "docker"` (D-8). The test
 //!   removes its worker container and data volume.
 //!
 //! A test whose settings are missing says NOT_RUN and passes.
@@ -171,10 +173,10 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
     // stopped machine is refused naming its start; elsewhere the support
     // table's reason, word for word (#535 §7.3)
     let (code, message) = create("dev");
-    match layerfs_machine::sandbox_allowed(
-        layerfs_machine::Platform::Lima,
-        layerfs_machine::HostOs::current(),
-        layerfs_machine::StoreKind::Postgresql,
+    match layerfs_platform::sandbox_allowed(
+        layerfs_platform::Platform::Lima,
+        layerfs_platform::HostOs::current(),
+        layerfs_platform::StoreKind::Postgresql,
     ) {
         Ok(()) => {
             assert_eq!(code, "Unavailable", "{message}");
@@ -189,7 +191,7 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
     let (code, message) = create("box");
     assert_eq!(code, "Unsupported", "{message}");
     assert!(
-        message == layerfs_sandbox::platform_policy::SSH_DISABLED,
+        message == layerfs_sandbox_backend::platform_policy::SSH_DISABLED,
         "{message}"
     );
     let (code, message) = call(
@@ -217,7 +219,7 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
 /// platform, a sqlite Store on each and one PostgreSQL Store, all records.
 #[test]
 fn every_platform_refusal_is_the_support_table_s() {
-    use layerfs_machine::{sandbox_allowed, HostOs, Platform, StoreKind};
+    use layerfs_platform::{sandbox_allowed, HostOs, Platform, StoreKind};
     let home = tempdir("support");
     home::open(&home).unwrap();
     ok(&home, "machine.list", &[]);
@@ -305,7 +307,7 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
     };
     let home = tempdir("pg");
     let folder = source("pg-src");
-    home::open(&home).unwrap();
+    let id = home::open(&home).unwrap().id;
     home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
     ok(
         &home,
@@ -341,17 +343,25 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
             "machine.update",
             &[("name", t("docker")), ("image", t(&image))],
         );
-        ok(
-            &home,
-            "sandbox.create",
-            &[
-                ("project", t("pg/app")),
-                ("name", t("d")),
-                ("machine", t("docker")),
-            ],
-        );
-        work(&home, "pg/app", "d", "on-docker", "docker.txt");
-        ok(&home, "sandbox.close", &[("name", t("d"))]);
+        let outcome = std::panic::catch_unwind(|| {
+            // only `machine.start` starts a machine (D11)
+            ok(&home, "machine.start", &[("name", t("docker"))]);
+            ok(
+                &home,
+                "sandbox.create",
+                &[
+                    ("project", t("pg/app")),
+                    ("name", t("d")),
+                    ("machine", t("docker")),
+                ],
+            );
+            work(&home, "pg/app", "d", "on-docker", "docker.txt");
+            ok(&home, "sandbox.close", &[("name", t("d"))]);
+        });
+        remove_worker(&id);
+        if let Err(panic) = outcome {
+            std::panic::resume_unwind(panic);
+        }
     } else {
         eprintln!("NOT_RUN (docker half): LAYERFS_TEST_IMAGE / LAYERFS_BUNDLE unset");
     }
@@ -369,6 +379,19 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
     }
     std::fs::remove_dir_all(&home).unwrap();
     std::fs::remove_dir_all(&folder).unwrap();
+}
+
+/// Removes the docker worker container and data volume of the home `id`,
+/// whatever its test did.
+fn remove_worker(id: &str) {
+    let worker = format!("lfs-{}-docker", &id[..8]);
+    let volume = format!("{worker}-data");
+    for args in [
+        ["rm", "-f", worker.as_str()],
+        ["volume", "rm", volume.as_str()],
+    ] {
+        let _ = std::process::Command::new("docker").args(args).output();
+    }
 }
 
 #[cfg(feature = "postgresql")]
@@ -408,13 +431,15 @@ fn a_sqlite_store_s_sandbox_on_the_docker_machine() {
             ("folder", t(&folder.display().to_string())),
         ],
     );
-    let moved = ok(
-        &home,
-        "store.push",
-        &[("name", t("shop")), ("machine", t("docker"))],
-    );
-    assert_eq!(moved.get_text("to"), Some("docker"), "{moved:?}");
     let outcome = std::panic::catch_unwind(|| {
+        // only `machine.start` starts a machine (D11)
+        ok(&home, "machine.start", &[("name", t("docker"))]);
+        let moved = ok(
+            &home,
+            "store.push",
+            &[("name", t("shop")), ("machine", t("docker"))],
+        );
+        assert_eq!(moved.get_text("to"), Some("docker"), "{moved:?}");
         let created = ok(
             &home,
             "sandbox.create",
@@ -424,19 +449,23 @@ fn a_sqlite_store_s_sandbox_on_the_docker_machine() {
                 ("machine", t("docker")),
             ],
         );
-        assert_eq!(created.get_text("runtime"), Some("docker"), "{created:?}");
+        // namespaces in the docker machine's worker container, which keeps
+        // showing the docker platform (D-8)
+        assert_eq!(
+            created.get_text("runtime"),
+            Some("namespaces"),
+            "{created:?}"
+        );
+        assert_eq!(
+            created.get_text("backend"),
+            Some("namespaces"),
+            "{created:?}"
+        );
+        assert_eq!(created.get_text("platform"), Some("docker"), "{created:?}");
         work(&home, "shop/app", "t", "on-docker", "docker.txt");
         ok(&home, "sandbox.close", &[("name", t("t"))]);
     });
-    // this test's own worker container and its data volume, whatever happened
-    let worker = format!("lfs-{}-docker", &id[..8]);
-    let volume = format!("{worker}-data");
-    for args in [
-        ["rm", "-f", worker.as_str()],
-        ["volume", "rm", volume.as_str()],
-    ] {
-        let _ = std::process::Command::new("docker").args(args).output();
-    }
+    remove_worker(&id);
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&folder);
     if let Err(panic) = outcome {

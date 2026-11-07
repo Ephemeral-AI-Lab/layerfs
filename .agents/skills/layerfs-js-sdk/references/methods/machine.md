@@ -54,7 +54,7 @@ Each machine also carries `supports` (`sqlite`, `postgresql_sandbox`,
 `reason`). `machine.platforms()` (`layerfs machine platforms`) answers each
 platform on this host: backend, kernel route, where Store calls run, whether
 a PostgreSQL Sandbox runs and why not, `ready`, `missing`, `version` and the
-options `machine.create` takes (the rows of `connect/SUPPORT.json`). Neither
+options `machine.create` takes (the rows of `control/SUPPORT.json`). Neither
 call starts a machine.
 
 `machine.get(name)` is the record:

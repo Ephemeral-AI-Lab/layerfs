@@ -9,7 +9,7 @@
 | | |
 | --- | --- |
 | Component | [Call table](README.md) |
-| Source | [`api/crates/layerfs-control/src/calls`](../../../../api/crates/layerfs-control/src/calls), [`api/crates/layerfs-api/src/lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs), [`calls/table.rs`](../../../../api/crates/layerfs-control/src/calls/table.rs), [`calls/check.rs`](../../../../api/crates/layerfs-control/src/calls/check.rs), [`calls/keys.rs`](../../../../api/crates/layerfs-control/src/calls/keys.rs), [`calls/scope.rs`](../../../../api/crates/layerfs-control/src/calls/scope.rs) |
+| Source | [`api/crates/layerfs-api/src/calls`](../../../../api/crates/layerfs-api/src/calls), [`api/crates/layerfs-api/src/lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs), [`calls/table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs), [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs), [`calls/keys.rs`](../../../../api/crates/layerfs-api/src/calls/keys.rs), [`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 
 ## layerfs.table
 
@@ -40,7 +40,7 @@ The table is code: one file per call under its family folder in
 `layerfs-api` (owner decision D15), each holding the call's `CALL` entry and
 the `run` function that hands it to `layerfs-control`
 ([`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs),
-[`table.rs`](../../../../api/crates/layerfs-control/src/calls/table.rs)).
+[`table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs)).
 There are 61 calls in nine families. `layerfs.table` is the JSON form front
 ends build their functions from (`table_json`); `layerfs doctor` and
 `layerfs worker` sit outside it.
@@ -60,7 +60,7 @@ ends build their functions from (`table_json`); `layerfs doctor` and
 | Kind | Accepts | Shell form | Source |
 | --- | --- | --- | --- |
 | `Name` | a machine, Store, bucket, Branch or Sandbox name, or a Commit id | word | `table.rs` |
-| `Project` | `<store>/<project>`, checked by `names::project` | word | [`check.rs`](../../../../api/crates/layerfs-control/src/calls/check.rs) |
+| `Project` | `<store>/<project>`, checked by `names::project` | word | [`check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs) |
 | `Text` | a path or URL | word | `table.rs` |
 | `Int` | a whole number | word | `table.rs` |
 | `Bool` | true or false | flag | `table.rs` |
@@ -69,7 +69,7 @@ ends build their functions from (`table_json`); `layerfs doctor` and
 | `Size` | bytes, or text `512`, `64K`, `512M`, `8G` (powers of 1024) | word | `check.rs` `size` |
 | `Function` | `on_progress`, `stdout`, `stderr`; stays in the front end | none (`--progress`, `--stream`) | `table.rs` |
 
-Shared option sets in [`table.rs`](../../../../api/crates/layerfs-control/src/calls/table.rs):
+Shared option sets in [`table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs):
 `PAGE` (`page_size`, `page_pos`), `DIFF` (`paths_only`, `page_size`,
 `page_pos`, `cursor`), `MESSAGE` (`message`), `PROGRESS` (`on_progress`).
 Positionals go from the outside in: owner, Branch, path or new name, other
@@ -81,9 +81,9 @@ inputs, an optional Commit last (D7).
 | --- | --- | --- |
 | Argument names are snake_case and the same in every front end | `start_line`, `from_path` | `table.rs` |
 | A shell option is the name with `-` for `_` | `--start-line` | `table.rs`, [`layerfs-cli/src/parse.rs`](../../../../api/crates/layerfs-cli/src/parse.rs) |
-| Result keys become snake_case before they leave the library | `exitCode` → `exit_code` | [`keys.rs`](../../../../api/crates/layerfs-control/src/calls/keys.rs) `snake`, applied in `dispatch.rs` |
+| Result keys become snake_case before they leave the library | `exitCode` → `exit_code` | [`keys.rs`](../../../../api/crates/layerfs-api/src/calls/keys.rs) `snake`, applied in `dispatch.rs` |
 | Only identifier-like keys starting with a lowercase letter change; a key holding a path or name never does | `/src/main.rs` stays | `keys.rs` `snake_name` |
-| The Store methods still take 1.1.0 camelCase names; the `branch`, `commit`, `file` families rename on the way in | `start_line` → `startLine`, `old` → `oldText`, `from_path` → `from` | [`store/calls.rs`](../../../../api/crates/layerfs-control/src/store/calls.rs) `take`, `renamed` |
+| The Store methods still take 1.1.0 camelCase names; the `branch`, `commit`, `file` families rename on the way in | `start_line` → `startLine`, `old` → `oldText`, `from_path` → `from` | [`calls.rs`](../../../../control/crates/layerfs-store/src/calls.rs) `take`, `renamed` |
 
 ## Scopes
 
@@ -117,9 +117,9 @@ inputs, an optional Commit last (D7).
 A folder scope (O32) is a client option of every front end; it guards the
 arguments of a call, not processes: `workspace.exec` is only a `cd` prefix,
 and a command can still reach anywhere in the mounted tree
-([`scope.rs`](../../../../api/crates/layerfs-control/src/calls/scope.rs)).
+([`scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs)).
 A scoped `branch.get` answer is renamed back relative to the namespace in
-the dispatcher ([`dispatch.rs`](../../../../api/crates/layerfs-control/src/calls/dispatch.rs)).
+the dispatcher ([`dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs)).
 
 A Branch reference is a Branch name, composed as `<ns>.<name>`, or a
 66-character hex id, left as it is. `file` calls apply this to `branch`,
@@ -151,7 +151,7 @@ confine the process `workspace.exec` starts.
    2 check(spec, args)             names, required, kinds; sizes -> bytes
    3 scope.apply                   (when scoped)
    4 home(explicit | LAYERFS_HOME | $HOME/.layerfs), must be absolute
-   5 common::home::open            refusals noted by note_failure
+   5 migrate::open                 refusals noted by note_failure
    6 machine::ensure_built_ins     native, docker (feature "machine")
    7 scope.owns                    (when scoped)
    8 (spec.run)(Context{home, events}, args)
@@ -160,7 +160,7 @@ confine the process `workspace.exec` starts.
 
 | Check | Refusal | Source |
 | --- | --- | --- |
-| Arguments not a map (null is no arguments) | `InvalidInput` "arguments must be named fields" | [`check.rs`](../../../../api/crates/layerfs-control/src/calls/check.rs) |
+| Arguments not a map (null is no arguments) | `InvalidInput` "arguments must be named fields" | [`check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs) |
 | Unknown name, or a `Function` argument reaching the library | `InvalidInput` "unknown argument" | `check.rs` |
 | Required positional missing or null | `InvalidInput` "`x` is required" | `check.rs` |
 | Value of the wrong kind | `InvalidInput` "`x` must be …" | `check.rs` `kind`, `describe` |
@@ -169,7 +169,7 @@ confine the process `workspace.exec` starts.
 Checked arguments are kept in the table's order. The call then runs once
 with a `Context` that holds the home and the one event stream: progress
 (`{progress}`), worker events, and command output (`{stream, bytes}`)
-([`common/context.rs`](../../../../api/crates/layerfs-control/src/common/context.rs)).
+([`events.rs`](../../../../control/crates/layerfs-home/src/events.rs)).
 Nothing in the dispatcher retries.
 
 ## Help text
@@ -191,7 +191,7 @@ writes help, so the table and help cannot disagree.
 - [Errors](errors.md#refusals): refusals before any effect.
 - [Front ends: CLI](../front-ends/cli.md): parsing against the table.
 - [Front ends: Node](../front-ends/node.md), [Python](../front-ends/python.md): functions built from `table_json`.
-- [Control: Families](../control/families.md): what each `run` reaches.
+- [Control: Families](../../control/management/families.md): what each `run` reaches.
 
 ---
 

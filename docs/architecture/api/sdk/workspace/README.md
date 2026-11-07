@@ -9,7 +9,7 @@ The `workspace` calls.
 | | |
 | --- | --- |
 | Component | [Call table](../../call-table/README.md) |
-| Source | [`api/crates/layerfs-api/src/workspace`](../../../../../api/crates/layerfs-api/src/workspace), [`api/crates/layerfs-control/src/workspace/calls.rs`](../../../../../api/crates/layerfs-control/src/workspace/calls.rs), [`api/crates/layerfs-control/src/daemon/values.rs`](../../../../../api/crates/layerfs-control/src/daemon/values.rs) |
+| Source | [`api/crates/layerfs-api/src/workspace`](../../../../../api/crates/layerfs-api/src/workspace), [`workspace/calls.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs), [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
 
 ## Calls
 
@@ -31,9 +31,9 @@ The `workspace` calls.
 
 Five calls, in help order
 ([`workspace/mod.rs`](../../../../../api/crates/layerfs-api/src/workspace/mod.rs)).
-Each runs `layerfs_control::workspace::calls::workspace`. A Workspace is
+Each runs its own function of `layerfs_sandbox::workspace::calls`. A Workspace is
 named `ws`: `<sandbox>:<path>`, or `<sandbox>:<name>` when its mount named
-it ([`common/names.rs`](../../../../../api/crates/layerfs-control/src/common/names.rs)).
+it ([`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs)).
 
 | Call | Arguments | Options | Returns | Host operation |
 | --- | --- | --- | --- | --- |
@@ -44,10 +44,10 @@ it ([`common/names.rs`](../../../../../api/crates/layerfs-control/src/common/nam
 | [`status`](status.md) | `ws` | — | `{ kind: "ok", base, base_layer, branch_head, head_moved_since_mount, activity, overlay: { inodes, entries, pending_merge } }` | `backend.daemon.workspace.status` |
 
 Answers are built in
-[`daemon/values.rs`](../../../../../api/crates/layerfs-control/src/daemon/values.rs),
-[`workspace/serve.rs`](../../../../../api/crates/layerfs-control/src/workspace/serve.rs),
-[`sandbox/exec.rs`](../../../../../api/crates/layerfs-control/src/sandbox/exec.rs)
-and [`sandbox/output.rs`](../../../../../api/crates/layerfs-control/src/sandbox/output.rs).
+[`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs),
+[`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs),
+[`exec.rs`](../../../../../control/crates/layerfs-sandbox/src/exec.rs)
+and [`output.rs`](../../../../../control/crates/layerfs-sandbox/src/output.rs).
 After the call, `exec` also sends its `stdout` and `stderr` as
 `{ stream, bytes }` events for front ends that stream.
 
@@ -55,39 +55,39 @@ After the call, `exec` also sends its `stdout` and `stderr` as
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `branch` | Name | a side Branch; `main` is refused (fork a Branch from it) | [`workspace/serve.rs`](../../../../../api/crates/layerfs-control/src/workspace/serve.rs) |
-| `name` | Name | unique among the Sandbox's mounted Workspaces | [`workspace/serve.rs`](../../../../../api/crates/layerfs-control/src/workspace/serve.rs) |
-| `ws` | Text | parsed by `WorkspaceRef::parse`; a name is resolved to its path on the Sandbox's side | [`workspace/calls.rs`](../../../../../api/crates/layerfs-control/src/workspace/calls.rs) |
-| `command` | Text | run as `bash -c` in the Workspace directory by the Sandbox runtime | [`sandbox/exec.rs`](../../../../../api/crates/layerfs-control/src/sandbox/exec.rs) |
-| `message` | Text | the shared `MESSAGE` option | [`calls/table.rs`](../../../../../api/crates/layerfs-control/src/calls/table.rs) |
-| `force` (commit) | Bool | publish over a moved head instead of merging | [`workspace/calls.rs`](../../../../../api/crates/layerfs-control/src/workspace/calls.rs) |
-| `discard`, `force` (unmount) | Bool | drop uncommitted changes; abort the connection | [`daemon/values.rs`](../../../../../api/crates/layerfs-control/src/daemon/values.rs) |
-| `stream`, `stdout`, `stderr` | Bool, Function | front-end options; the functions never reach the library | [`calls/check.rs`](../../../../../api/crates/layerfs-control/src/calls/check.rs) |
+| `branch` | Name | a side Branch; `main` is refused (fork a Branch from it) | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
+| `name` | Name | unique among the Sandbox's mounted Workspaces | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
+| `ws` | Text | parsed by `WorkspaceRef::parse`; a name is resolved to its path on the Sandbox's side | [`workspace/calls.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) |
+| `command` | Text | run as `bash -c` in the Workspace directory by the Sandbox runtime | [`exec.rs`](../../../../../control/crates/layerfs-sandbox/src/exec.rs) |
+| `message` | Text | the shared `MESSAGE` option | [`calls/table.rs`](../../../../../api/crates/layerfs-api/src/calls/table.rs) |
+| `force` (commit) | Bool | publish over a moved head instead of merging | [`workspace/calls.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) |
+| `discard`, `force` (unmount) | Bool | drop uncommitted changes; abort the connection | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
+| `stream`, `stdout`, `stderr` | Bool, Function | front-end options; the functions never reach the library | [`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs) |
 
 A Sandbox holds at most `WORKSPACES` = 16 Workspaces; inline exec output
 is at most `INLINE` = 1 MiB per stream
-([`sandbox/serve.rs`](../../../../../api/crates/layerfs-control/src/sandbox/serve.rs),
-[`sandbox/output.rs`](../../../../../api/crates/layerfs-control/src/sandbox/output.rs)).
+([`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs),
+[`output.rs`](../../../../../control/crates/layerfs-sandbox/src/output.rs)).
 Under a folder scope, `mount` takes only `main`, mounted as
 `<namespace>.main`, and `exec` runs `cd '<folder>' && <command>`
-([`calls/scope.rs`](../../../../../api/crates/layerfs-control/src/calls/scope.rs)).
+([`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs)).
 
 ## Errors
 
 | Code | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a bad `ws`, `main` as the Branch, out of scope | [`workspace/serve.rs`](../../../../../api/crates/layerfs-control/src/workspace/serve.rs) |
-| `NoSuchSandbox`, `NoSuchBranch` | a missing Sandbox or Branch | [`sandbox/family.rs`](../../../../../api/crates/layerfs-control/src/sandbox/family.rs), [`sandbox/direct.rs`](../../../../../api/crates/layerfs-control/src/sandbox/direct.rs) |
-| `Exists`, `Capacity` | `mount` with a name in use, or past 16 Workspaces | [`workspace/serve.rs`](../../../../../api/crates/layerfs-control/src/workspace/serve.rs) |
-| `NotMounted` | a `ws` whose path or name is not mounted | [`workspace/serve.rs`](../../../../../api/crates/layerfs-control/src/workspace/serve.rs) |
-| `Conflict` | `commit` conflicts: markers are written, nothing is committed (`detail.conflicts`, `written`) | [`daemon/values.rs`](../../../../../api/crates/layerfs-control/src/daemon/values.rs) |
-| `Dirty` | `unmount` without `discard` while changes are uncommitted (`detail.changed`) | [`daemon/values.rs`](../../../../../api/crates/layerfs-control/src/daemon/values.rs) |
-| `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox (not for `status`); a daemon connection not lent in time | [`common/op.rs`](../../../../../api/crates/layerfs-control/src/common/op.rs), [`daemon/pool.rs`](../../../../../api/crates/layerfs-control/src/daemon/pool.rs) |
-| `StaleSandbox` | a saved daemon that is not `ControlReady` | [`daemon/pool.rs`](../../../../../api/crates/layerfs-control/src/daemon/pool.rs) |
-| `TooLarge` | a request over one control record | [`daemon/call.rs`](../../../../../api/crates/layerfs-control/src/daemon/call.rs) |
-| `Unavailable` | the machine's worker is not recorded or does not answer | [`sandbox/route.rs`](../../../../../api/crates/layerfs-control/src/sandbox/route.rs) |
-| `Unknown` | **uncertain:** the worker's answer was lost after the request was sent | [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
-| `Failed` | a daemon exchange that failed; the message carries the original `OperationFailure`, whose `attempted` flag says the request may have had effects (**may be uncertain**) | [`sandbox/serve.rs`](../../../../../api/crates/layerfs-control/src/sandbox/serve.rs), [`daemon/failure.rs`](../../../../../api/crates/layerfs-control/src/daemon/failure.rs) |
+| `InvalidInput` | a bad `ws`, `main` as the Branch, out of scope | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
+| `NoSuchSandbox`, `NoSuchBranch` | a missing Sandbox or Branch | [`family.rs`](../../../../../control/crates/layerfs-sandbox/src/family.rs), [`direct.rs`](../../../../../control/crates/layerfs-sandbox/src/direct.rs) |
+| `Exists`, `Capacity` | `mount` with a name in use, or past 16 Workspaces | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
+| `NotMounted` | a `ws` whose path or name is not mounted | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
+| `Conflict` | `commit` conflicts: markers are written, nothing is committed (`detail.conflicts`, `written`) | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
+| `Dirty` | `unmount` without `discard` while changes are uncommitted (`detail.changed`) | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
+| `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox (not for `status`); a daemon connection not lent in time | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs), [`daemon/pool.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
+| `StaleSandbox` | a saved daemon that is not `ControlReady` | [`daemon/pool.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
+| `TooLarge` | a request over one control record | [`daemon/call.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/call.rs) |
+| `Unavailable` | the machine's worker is not recorded or does not answer | [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) |
+| `Unknown` | **uncertain:** the worker's answer was lost after the request was sent | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| `Failed` | a daemon exchange that failed; the message carries the original `OperationFailure`, whose `attempted` flag says the request may have had effects (**may be uncertain**) | [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs), [`daemon/failure.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/failure.rs) |
 
 A daemon control refusal keeps its own code (`values::refusal`); any other
 daemon exchange failure becomes `Failed`. A lost answer does not undo a
@@ -115,13 +115,13 @@ again. See
 
 Mount, commit, unmount and status reach the Sandbox's daemon; `exec` goes
 through the Sandbox's runtime on its machine and the daemon runs no
-command ([`sandbox/exec.rs`](../../../../../api/crates/layerfs-control/src/sandbox/exec.rs)).
+command ([`exec.rs`](../../../../../control/crates/layerfs-sandbox/src/exec.rs)).
 The daemon serves no Store calls. A mount's caller reads no Store: the
 daemon finds the Branch by name as it binds (#64). A status's head read
 takes the Store's own route
-([`sandbox/direct.rs`](../../../../../api/crates/layerfs-control/src/sandbox/direct.rs)).
-See the [routing table](../../routing/routing-table.md) and the
-[daemon channel](../../routing/daemon-channel.md).
+([`workspace/direct.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/direct.rs)).
+See the [routing table](../../../control/routing/routing-table.md) and the
+[daemon channel](../../../control/routing/daemon-channel.md).
 
 ## Example
 
@@ -148,7 +148,7 @@ $ layerfs workspace commit tests:build -m 'tests pass'
 ## Related
 
 - [sandbox family](../sandbox/README.md).
-- [Routing table](../../routing/routing-table.md) and [Daemon channel](../../routing/daemon-channel.md).
+- [Routing table](../../../control/routing/routing-table.md) and [Daemon channel](../../../control/routing/daemon-channel.md).
 - [Engine: Daemon](../../../engine/daemon/README.md), [Engine: Workspace](../../../engine/workspace/README.md), [Engine: Commit](../../../engine/commit/README.md).
 - [A Workspace session](../../../flows/workspace.md) and [A Commit](../../../flows/commit.md).
 

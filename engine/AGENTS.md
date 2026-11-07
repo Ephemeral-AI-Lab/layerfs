@@ -14,13 +14,14 @@ product mental model or campaign-specific benchmark procedures.
   (`layerfs-cli`, `layerfs-node`, `layerfs-python`) are API crates under
   `api/crates`; see the [API guide](../api/AGENTS.md). No engine crate may
   depend on them. Since #535 (owner, 2026-11-03, D1, D4) Sandbox and network
-  code leave the engine for the [connect layer](../connect/AGENTS.md):
-  `layerfs-sandbox`, the machine layer (`layerfs-machine`) and remote
-  storage (renamed `layerfs-store-backup`, with `layerfs-store-service`'s
-  `remote/`) moved to `connect/crates` in #535 phase 1. The engine keeps
+  code leave the engine for the connect layer, renamed the
+  [control layer](../control/AGENTS.md) by layerfs-project#101 (D-6):
+  the Sandbox runtime (now `layerfs-sandbox-backend`), the machine layer (now
+  `layerfs-platform`) and remote storage (now `layerfs-bucket`, with
+  `layerfs-store-service`'s `remote/`) moved out in #535 phase 1. The engine keeps
   persistence (SQLite and PostgreSQL, D2), the daemon, the overlay,
   Workspaces and the kernel routes (FUSE and NFS as peers over
-  `layerfs-mount-ports`, D3). No engine crate may depend on a connect crate.
+  `layerfs-mount-ports`, D3). No engine crate may depend on a control crate.
 - `layerfs-store-service` owns the SDK Store calls in `src/methods/` (#536
   H3): the method table (`methods::call`), its argument reader and one file
   per `file.*`/`branch.*` call. `read`, `write` and `history` know no SDK
@@ -606,3 +607,17 @@ No other Persistence module may contain unsafe Rust; the guard and its tests
 enforce the exact path. This does not authorize third-party patches, dependency
 changes, manual sidecar deletion or other FFI. See the
 [decision and diagnostic](../core/docs/issues/307/SEAL-PERSIST-WAL-DECISION-20261007.md).
+
+### Bridge process identity file
+
+The bridge holds the process facts the home and the Sandbox driver share
+(`layerfs_bridge::process`), moved below the drivers by layerfs-project#112
+under review finding R10, which the owner accepted on 2026-11-06 (#101 M-3;
+compute-plane-2.0 rule 5 and the §6.6 row: "move the process facts, with the
+one audited macOS unsafe file and its guard entry, below the drivers"). The
+bridge uses `deny(unsafe_code)` with one allowed module,
+`src/process/darwin.rs`, compiled on macOS only: `proc_pidinfo`,
+`proc_listallpids` and the `sysctl` boot id, each with its SAFETY comment, as
+they were in the driver. No other bridge module may contain unsafe Rust; the
+guard and its tests enforce the exact path. This authorizes no other FFI or
+dependency change.

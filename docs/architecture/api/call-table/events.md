@@ -12,7 +12,7 @@ no payload.
 | | |
 | --- | --- |
 | Component | [Call table](README.md) |
-| Source | [`common/context.rs`](../../../../api/crates/layerfs-control/src/common/context.rs), [`calls/table.rs`](../../../../api/crates/layerfs-control/src/calls/table.rs) `PROGRESS`, [`store/family.rs`](../../../../api/crates/layerfs-control/src/store/family.rs) `progress`, [`workspace/calls.rs`](../../../../api/crates/layerfs-control/src/workspace/calls.rs), [`sandbox/route.rs`](../../../../api/crates/layerfs-control/src/sandbox/route.rs) `drain`, [`sandbox/output.rs`](../../../../api/crates/layerfs-control/src/sandbox/output.rs) |
+| Source | [`common/context.rs`](../../../../api/crates/layerfs-api/src/calls/context.rs), [`calls/table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs) `PROGRESS`, [`store/family.rs`](../../../../control/crates/layerfs-store/src/sqlite/family.rs) `progress`, [`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs), [`sandbox/route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `drain`, [`sandbox/output.rs`](../../../../control/crates/layerfs-sandbox/src/output.rs) |
 | Front ends | [CLI](../front-ends/cli.md), [Node](../front-ends/node.md), [Python](../front-ends/python.md) |
 | Used by | [project.init](../sdk/project/init.md), [store.push](../sdk/store/push.md), [store.pull](../sdk/store/pull.md), [backup.create](../sdk/backup/create.md), [backup.restore](../sdk/backup/restore.md), [workspace.exec](../sdk/workspace/exec.md) |
 
@@ -25,7 +25,7 @@ quoted. A claim with neither mark is a definition, not a measurement.
 ## Which calls take `on_progress`
 
 Exactly five calls declare the shared `PROGRESS` option
-([`calls/table.rs:134`](../../../../api/crates/layerfs-control/src/calls/table.rs)):
+([`calls/table.rs:134`](../../../../api/crates/layerfs-api/src/calls/table.rs)):
 
 | Call | Declared in | Run |
 | --- | --- | --- |
@@ -38,17 +38,17 @@ Exactly five calls declare the shared `PROGRESS` option
 takes `--progress` only on the five (`store list --progress` and
 `machine create --progress` are `unknown option`, exit 2; run:
 `layerfs-cli/tests/progress.rs`). A function never crosses into the library:
-`check.rs` refuses it as a value ([`calls/check.rs:18`](../../../../api/crates/layerfs-control/src/calls/check.rs)).
+`check.rs` refuses it as a value ([`calls/check.rs:18`](../../../../api/crates/layerfs-api/src/calls/check.rs)).
 
 ## The event stream
 
-Every call gets one event sink, [`Context`](../../../../api/crates/layerfs-control/src/common/context.rs),
+Every call gets one event sink, [`Context`](../../../../api/crates/layerfs-api/src/calls/context.rs),
 with three senders (`context.rs:21-35`):
 
 | Sender | Event | Used by |
 | --- | --- | --- |
 | `progress(v)` | `{ progress: v }` | the five calls above, and `machine.create` (see [below](#machinecreate-emits-an-event-nobody-can-receive)) |
-| `event(e)` | a worker's event, as it came | calls routed to a worker ([workers](../routing/workers.md)) |
+| `event(e)` | a worker's event, as it came | calls routed to a worker ([workers](../../control/routing/workers.md)) |
 | `output(stream, bytes)` | `{ stream, bytes }` | `workspace.exec` |
 
 A front end hands each event to the caller's function:
@@ -74,9 +74,9 @@ unit field, "phase finished" event or terminal event.
 
 | Shape | Calls | Source | Run |
 | --- | --- | --- | --- |
-| `{ phase, done, total }` | `project.init`, `store.push`, `store.pull` | [`store/family.rs:178-188`](../../../../api/crates/layerfs-control/src/store/family.rs) `progress` | Init in process, Init through a worker, push, pull: `progress.mjs`; `progress.rs` |
-| `{ phase }` | `backup.create`, `backup.restore` | [`backup/family.rs:102-104`](../../../../api/crates/layerfs-control/src/backup/family.rs) `progress` | NOT RUN: needs a bucket. UNVERIFIED |
-| `{ phase, machine }` | `machine.create` | [`machine/create.rs:136-139`](../../../../api/crates/layerfs-control/src/machine/create.rs) | NOT RUN: needs `lima` on the host. UNVERIFIED |
+| `{ phase, done, total }` | `project.init`, `store.push`, `store.pull` | [`store/family.rs:178-188`](../../../../control/crates/layerfs-store/src/sqlite/family.rs) `progress` | Init in process, Init through a worker, push, pull: `progress.mjs`; `progress.rs` |
+| `{ phase }` | `backup.create`, `backup.restore` | [`backup/family.rs:102-104`](../../../../control/crates/layerfs-store/src/backup/family.rs) `progress` | NOT RUN: needs a bucket. UNVERIFIED |
+| `{ phase, machine }` | `machine.create` | [`machine/create.rs:136-139`](../../../../control/crates/layerfs-machine/src/create.rs) | NOT RUN: needs `lima` on the host. UNVERIFIED |
 
 In `{ phase, done, total }`, `done` and `total` are **bytes** in the `send`
 phase and `null` in every other phase; the unit is implicit in the phase.
@@ -89,12 +89,12 @@ Nothing announces that it ended.
 
 | Call and route | Phases, in order | Source | Run |
 | --- | --- | --- | --- |
-| `project.init`, SQLite Store in this process | `check`, `install`, `record`; counts `null`; three events for 20 files and for 2000 | [`project/family.rs:143,170,173`](../../../../api/crates/layerfs-control/src/project/family.rs) | yes: `progress.mjs`, `test_progress.py`, `progress.rs` |
-| `project.init`, SQLite Store behind a worker | `check`, `send` (first `done` 0, then one event per 8 MiB of tree records, last `done == total`), `install`, `record` | `project/family.rs:227-260`, [`project/send.rs:276,384`](../../../../api/crates/layerfs-control/src/project/send.rs) | yes, through a loopback stand-in worker: `progress.mjs` |
+| `project.init`, SQLite Store in this process | `check`, `install`, `record`; counts `null`; three events for 20 files and for 2000 | [`project/family.rs:143,170,173`](../../../../control/crates/layerfs-store/src/project/family.rs) | yes: `progress.mjs`, `test_progress.py`, `progress.rs` |
+| `project.init`, SQLite Store behind a worker | `check`, `send` (first `done` 0, then one event per 8 MiB of tree records, last `done == total`), `install`, `record` | `project/family.rs:227-260`, [`project/send.rs:276,384`](../../../../control/crates/layerfs-store/src/project/send.rs) | yes, through a loopback stand-in worker: `progress.mjs` |
 | `project.init`, PostgreSQL Store | `check`, `install`, `record` | `project/family.rs:306,309` | NOT RUN: no PostgreSQL server. UNVERIFIED |
-| `store.push`, `store.pull` | `check`, `snapshot`, `send` (as above, chunk 8 MiB), `verify`, `install`, `record`, `retire` | [`store/transfer/phases.rs:81,184,197,246,303`](../../../../api/crates/layerfs-control/src/store/transfer/phases.rs), [`steps.rs:19`](../../../../api/crates/layerfs-control/src/store/transfer/steps.rs) `CHUNK` | yes, through a loopback stand-in worker: `progress.mjs` |
-| `backup.create` | `snapshot`, `send` (worker Stores only), `upload` | [`backup/create.rs:67,95,120`](../../../../api/crates/layerfs-control/src/backup/create.rs) | NOT RUN. UNVERIFIED |
-| `backup.restore` | `download`, `install` | [`backup/restore.rs:64,85`](../../../../api/crates/layerfs-control/src/backup/restore.rs) | NOT RUN. UNVERIFIED |
+| `store.push`, `store.pull` | `check`, `snapshot`, `send` (as above, chunk 8 MiB), `verify`, `install`, `record`, `retire` | [`store/transfer/phases.rs:81,184,197,246,303`](../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs), [`steps.rs:19`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) `CHUNK` | yes, through a loopback stand-in worker: `progress.mjs` |
+| `backup.create` | `snapshot`, `send` (worker Stores only), `upload` | [`backup/create.rs:67,95,120`](../../../../control/crates/layerfs-store/src/backup/create.rs) | NOT RUN. UNVERIFIED |
+| `backup.restore` | `download`, `install` | [`backup/restore.rs:64,85`](../../../../control/crates/layerfs-store/src/backup/restore.rs) | NOT RUN. UNVERIFIED |
 
 The older per-call pages list fewer phases for push and pull; the run above
 is the list.
@@ -109,7 +109,7 @@ Two things the numbers show:
   There is no per-file event today.
 - **Only the worker route of `project.init` pre-walks the tree.** It sums
   the file bytes before the first `send` so `total` is known
-  ([`project/send.rs:181`](../../../../api/crates/layerfs-control/src/project/send.rs) `measure`,
+  ([`project/send.rs:181`](../../../../control/crates/layerfs-store/src/project/send.rs) `measure`,
   called at `project/family.rs:227`); the in-process route has no counts at
   all. A caller must not read `total` as available in every route.
 
@@ -154,7 +154,7 @@ the call's result.
   ends at its last `send`.
 - **Phase events are sent on entry.** `record` is sent before the project
   record is written
-  ([`project/family.rs:173`](../../../../api/crates/layerfs-control/src/project/family.rs));
+  ([`project/family.rs:173`](../../../../control/crates/layerfs-store/src/project/family.rs));
   `install` before the add runs. A `record` event does not mean recorded.
 - **Success is the resolved or returned value** (the CLI's exit 0 and its
   stdout JSON). A refusal after any number of events is still a refusal; its
@@ -190,7 +190,7 @@ Anything that adds per-file or per-chunk events (for example a
 
 `machine.create` sends `{ progress: { phase: "create", machine } }` after its
 record is claimed and before the VM is made
-([`machine/create.rs:136-139`](../../../../api/crates/layerfs-control/src/machine/create.rs)).
+([`machine/create.rs:136-139`](../../../../control/crates/layerfs-machine/src/create.rs)).
 Its table entry declares no `on_progress`
 ([`layerfs-api/src/machine/create.rs:9-23`](../../../../api/crates/layerfs-api/src/machine/create.rs)),
 so no front end can pass a function for it: Node and Python refuse the option
@@ -211,20 +211,20 @@ not be made on this host (see [What was run](#what-was-run-and-not-run)).
 
 | Statement | Source | Checked |
 | --- | --- | --- |
-| The command's two streams are read into two spools; nothing reaches the caller until it exits. | [`sandbox/exec.rs`](../../../../api/crates/layerfs-control/src/sandbox/exec.rs), [`workspace/calls.rs:103-114`](../../../../api/crates/layerfs-control/src/workspace/calls.rs) | UNVERIFIED |
-| Events are **all of stdout, then all of stderr**; there is no chronological interleaving, so `--stream` is not a faithful terminal view. | `workspace/calls.rs:105` (inline), [`sandbox/route.rs:458`](../../../../api/crates/layerfs-control/src/sandbox/route.rs) (spooled) | UNVERIFIED |
-| A stream of at most 1 MiB (`INLINE`) is kept in memory, answered in the result and sent as **one** event. | [`sandbox/output.rs:22`](../../../../api/crates/layerfs-control/src/sandbox/output.rs) | UNVERIFIED |
+| The command's two streams are read into two spools; nothing reaches the caller until it exits. | [`sandbox/exec.rs`](../../../../control/crates/layerfs-sandbox/src/exec.rs), [`workspace/calls.rs:103-114`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) | UNVERIFIED |
+| Events are **all of stdout, then all of stderr**; there is no chronological interleaving, so `--stream` is not a faithful terminal view. | `workspace/calls.rs:105` (inline), [`sandbox/route.rs:458`](../../../../control/crates/layerfs-sandbox/src/route.rs) (spooled) | UNVERIFIED |
+| A stream of at most 1 MiB (`INLINE`) is kept in memory, answered in the result and sent as **one** event. | [`sandbox/output.rs:22`](../../../../control/crates/layerfs-sandbox/src/output.rs) | UNVERIFIED |
 | A stream over 1 MiB goes to an unlinked temp file in the host's temp directory; the result has that stream `null` plus `stdout_bytes`, `stderr_bytes`, `streamed: true`; the bytes reach the caller **only** as 1 MiB event pages. | `output.rs:46-69`, `route.rs:452-494` `drain` | UNVERIFIED |
 | With no `stdout`/`stderr` function and no `stream`, those pages are drained and **dropped**; only the sizes are answered. The spool is released, so the output cannot be fetched again (the page reader is not a table call). | `route.rs:485`, [`index.js:57-61`](../../../../api/node/src/index.js) | UNVERIFIED |
 | `truncated` is always `false`; no total is capped (bounded by free space of the host temp directory); there is no timeout. | `output.rs:1-12`, [`exec.md`](../sdk/workspace/exec.md) | UNVERIFIED |
-| **Text or bytes, per event.** An event's `bytes` is printed as text when that event's bytes are valid UTF-8, else as `{"base64": ...}`, which Node reads as a `Buffer` and Python as `bytes`. | [`common/json.rs:44-48`](../../../../api/crates/layerfs-control/src/common/json.rs) | UNVERIFIED |
+| **Text or bytes, per event.** An event's `bytes` is printed as text when that event's bytes are valid UTF-8, else as `{"base64": ...}`, which Node reads as a `Buffer` and Python as `bytes`. | [`common/json.rs:44-48`](../../../../control/crates/layerfs-home/src/json.rs) | UNVERIFIED |
 | A spooled stream is cut into 1 MiB pages by byte count, not at character boundaries, so one stream can reach a handler as text in one page and bytes in the next. A caller that joins output must accept both. | `route.rs:456-475` | UNVERIFIED |
 | Consumer side: nothing bounds what is queued between the drain and a Node handler (see above). | `call.rs:33` | UNVERIFIED |
 | A failure of the spool (a full disk) or of the drain makes the call `Failed` **after the command ran**, with no exit code in the error. | `output.rs` `fields`, `route.rs` `drain` (`?`) | UNVERIFIED; see [Open decisions](#open-decisions) |
 
 Staying buffered was the owner's decision for 2.0. The runtime below the
 control layer does copy each stream as it arrives (8 KiB windows,
-[commands and streams](../../connect/sandboxes/commands-and-streams.md)); the
+[commands and streams](../../control/sandboxes/commands-and-streams.md)); the
 control layer's spools are what hide it.
 
 ## What was run and not run
@@ -254,7 +254,7 @@ control-plane change. Each has evidence and a proposal.
 | # | Finding | Evidence | Proposal |
 | --- | --- | --- | --- |
 | 1 | **`machine.create` emits an event no caller can receive.** | table lacks `on_progress`; refusals in all front ends (run); emit at `machine/create.rs:136` | delete the emit (one phase, nothing to report), unless a consumer wants the event: then declare `PROGRESS` on the call and document `{ phase, machine }` here |
-| 2 | **No throttle, unbounded Node queue.** Safe only because no call reports per file. | `context.rs:21`, `layerfs-node/src/call.rs:33,105` | one shared coalescing helper in `layerfs-control/src/common` used by every progress call (by bytes and time), so a per-file reporter cannot flood the queue; do it in Rust, not in the Node package |
+| 2 | **No throttle, unbounded Node queue.** Safe only because no call reports per file. | `context.rs:21`, `layerfs-node/src/call.rs:33,105` | one shared coalescing helper in `layerfs-api/src/calls` used by every progress call (by bytes and time), so a per-file reporter cannot flood the queue; do it in Rust, not in the Node package |
 | 3 | **One payload for new byte and file counters** (the `project.export` work, #53, needs files, directories and bytes, an unknown total, large-file updates and no 100% before the output is published). Today's `{ phase, done, total }` has bytes only and the unit is implicit; backup has `{ phase }`. | the table above | extend additively: keep `phase`, `done`, `total` for the existing calls; add `unit` and counters for files and directories, `null` meaning unknown; add a `finalize` phase that never reports `done == total` before the output is published. Do not copy the worker-route Init pre-walk. Type it as a union in `index.d.ts` and `_client.pyi` (`Progress` is `Mapping[str, Any]` because the shapes differ) |
 | 4 | **An `async` progress function that rejects ends the Node process** while a synchronous throw is a warning. | run: `progress.mjs` | in `bind` (`index.js:70`), catch the returned promise and emit the same `LayerFSHandlerWarning`; a one-line change that was not made here because it changes the handler contract |
 | 5 | **Phase events mark entry only.** There is no "phase finished", failure or terminal event, so a reader cannot tell the last phase's outcome from the stream. | `store/family.rs:178-188` | keep it: the result is the only completion. State it in every `on_progress` page (this page is the reference). Add terminal events only with decision 3 |

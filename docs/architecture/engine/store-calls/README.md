@@ -12,7 +12,7 @@ Typed reads, file changes and Branch history over the Store, and the SDK facade 
 | Crates | `layerfs-store-service` |
 | Source | [`engine/crates/layerfs-store-service/src/read`](../../../../engine/crates/layerfs-store-service/src/read), [`engine/crates/layerfs-store-service/src/write`](../../../../engine/crates/layerfs-store-service/src/write), [`engine/crates/layerfs-store-service/src/history`](../../../../engine/crates/layerfs-store-service/src/history), [`engine/crates/layerfs-store-service/src/methods`](../../../../engine/crates/layerfs-store-service/src/methods), [`engine/crates/layerfs-store-service/src/operator`](../../../../engine/crates/layerfs-store-service/src/operator) |
 | Uses | [Store](../store/README.md), [Overlay](../overlay/README.md), [Workspace](../workspace/README.md), [Core: Compare and merge](../../core/compare-and-merge/README.md) |
-| Used by | [Commit](../commit/README.md), [Daemon](../daemon/README.md), [Connect: Backups](../../connect/backups/README.md), [API: Control](../../api/control/README.md) |
+| Used by | [Commit](../commit/README.md), [Daemon](../daemon/README.md), [Control: Backups](../../control/backups/README.md), [Control: Management](../../control/management/README.md) |
 | Flows | [A call, end to end](../../flows/call.md), [A Commit](../../flows/commit.md) |
 
 The crate also holds the `store` and `overlay` ports that a daemon's Workspace
@@ -82,7 +82,7 @@ name. `read`, `write` and `history` take typed values (paths, `Snap`,
 ([`methods/mod.rs`](../../../../engine/crates/layerfs-store-service/src/methods/mod.rs)).
 This keeps one engine under every front end: `layerfs-control` re-exports
 `methods::call` and runs it in the caller's process
-([`layerfs-control/src/store/service.rs`](../../../../api/crates/layerfs-control/src/store/service.rs)).
+([`service.rs`](../../../../control/crates/layerfs-store/src/service.rs)).
 
 Every call runs once, in the process that opened the Store. A read resolves a
 snapshot and reads immutable objects. A file change binds one private

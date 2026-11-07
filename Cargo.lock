@@ -704,16 +704,20 @@ name = "layerfs-api"
 version = "2.0.0"
 dependencies = [
  "layerfs-bridge",
+ "layerfs-bucket",
  "layerfs-content",
  "layerfs-control",
  "layerfs-history",
+ "layerfs-home",
  "layerfs-machine",
  "layerfs-overlay",
  "layerfs-persistence",
+ "layerfs-platform",
  "layerfs-project",
  "layerfs-sandbox",
+ "layerfs-sandbox-backend",
  "layerfs-storage",
- "layerfs-store-backup",
+ "layerfs-store",
  "layerfs-store-service",
  "layerfs-telemetry",
  "layerfs-workspace",
@@ -726,7 +730,20 @@ version = "2.0.0"
 dependencies = [
  "layerfs-content",
  "layerfs-history",
+ "nix",
  "snow",
+]
+
+[[package]]
+name = "layerfs-bucket"
+version = "2.0.0"
+dependencies = [
+ "layerfs-persistence",
+ "layerfs-storage",
+ "layerfs-store-service",
+ "native-tls",
+ "nix",
+ "sha2 0.11.0",
 ]
 
 [[package]]
@@ -750,21 +767,23 @@ name = "layerfs-control"
 version = "2.0.0"
 dependencies = [
  "layerfs-bridge",
+ "layerfs-bucket",
  "layerfs-content",
  "layerfs-daemon",
  "layerfs-fuse",
  "layerfs-history",
+ "layerfs-home",
  "layerfs-machine",
  "layerfs-overlay",
  "layerfs-persistence",
  "layerfs-project",
  "layerfs-sandbox",
+ "layerfs-sandbox-backend",
  "layerfs-storage",
- "layerfs-store-backup",
+ "layerfs-store",
  "layerfs-store-service",
  "layerfs-telemetry",
  "layerfs-workspace",
- "libc",
  "nix",
 ]
 
@@ -811,12 +830,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-home"
+version = "2.0.0"
+dependencies = [
+ "layerfs-bridge",
+ "libc",
+ "nix",
+]
+
+[[package]]
 name = "layerfs-machine"
 version = "2.0.0"
 dependencies = [
  "layerfs-bridge",
- "layerfs-sandbox",
- "nix",
+ "layerfs-home",
+ "layerfs-platform",
 ]
 
 [[package]]
@@ -883,6 +911,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-platform"
+version = "2.0.0"
+dependencies = [
+ "layerfs-bridge",
+ "layerfs-sandbox-backend",
+ "nix",
+]
+
+[[package]]
 name = "layerfs-project"
 version = "2.0.0"
 dependencies = [
@@ -910,6 +947,22 @@ dependencies = [
 name = "layerfs-sandbox"
 version = "2.0.0"
 dependencies = [
+ "layerfs-bridge",
+ "layerfs-history",
+ "layerfs-home",
+ "layerfs-machine",
+ "layerfs-persistence",
+ "layerfs-project",
+ "layerfs-sandbox-backend",
+ "layerfs-store",
+ "libc",
+]
+
+[[package]]
+name = "layerfs-sandbox-backend"
+version = "2.0.0"
+dependencies = [
+ "layerfs-bridge",
  "nix",
 ]
 
@@ -925,15 +978,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "layerfs-store-backup"
+name = "layerfs-store"
 version = "2.0.0"
 dependencies = [
+ "layerfs-bridge",
+ "layerfs-bucket",
+ "layerfs-content",
+ "layerfs-history",
+ "layerfs-home",
+ "layerfs-machine",
  "layerfs-persistence",
+ "layerfs-project",
  "layerfs-storage",
  "layerfs-store-service",
- "native-tls",
+ "layerfs-telemetry",
+ "libc",
  "nix",
- "sha2 0.11.0",
 ]
 
 [[package]]

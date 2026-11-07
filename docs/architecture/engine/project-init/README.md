@@ -12,7 +12,7 @@ Turning a native directory into a project's first Commit: import, namespace cons
 | Crates | `layerfs-project` |
 | Source | [`engine/crates/layerfs-project/src/import`](../../../../engine/crates/layerfs-project/src/import), [`engine/crates/layerfs-project/src/store`](../../../../engine/crates/layerfs-project/src/store) |
 | Uses | [Store](../store/README.md), [Core: Filesystem trees](../../core/filesystem-trees/README.md), [Core: Files](../../core/files/README.md) |
-| Used by | [API: Control](../../api/control/README.md) |
+| Used by | [Control: Management](../../control/management/README.md) |
 | Flows | [Project Init](../../flows/init.md) |
 
 A *project* is a named LayerStack in a Store ([glossary](../../glossary.md)).
@@ -63,12 +63,12 @@ LayerStack and first Branch.
 
 | Entry (`ProjectApi`) | Reads | Writes | Product caller |
 | --- | --- | --- | --- |
-| `add_project` | the complete source directory | objects, binding hints, a new LayerStack and its first Branch, through the live Store's writer | `project.init` ([`store/identity.rs`](../../../../api/crates/layerfs-control/src/store/identity.rs), [`project/postgres_init.rs`](../../../../api/crates/layerfs-control/src/project/postgres_init.rs)) |
-| `create_store` | nothing | a new empty SQLite Store with acquisition tables, then sealed | `store.create` ([`store/identity.rs`](../../../../api/crates/layerfs-control/src/store/identity.rs)) |
-| `create_postgresql_store` | nothing | a new PostgreSQL schema with acquisition tables (feature `postgresql`) | [`project/postgres_init.rs`](../../../../api/crates/layerfs-control/src/project/postgres_init.rs) |
+| `add_project` | the complete source directory | objects, binding hints, a new LayerStack and its first Branch, through the live Store's writer | `project.init` ([`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs), [`project/postgres_init.rs`](../../../../control/crates/layerfs-store/src/project/postgres_init.rs)) |
+| `create_store` | nothing | a new empty SQLite Store with acquisition tables, then sealed | `store.create` ([`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs)) |
+| `create_postgresql_store` | nothing | a new PostgreSQL schema with acquisition tables (feature `postgresql`) | [`project/postgres_init.rs`](../../../../control/crates/layerfs-store/src/project/postgres_init.rs) |
 | `init`, `init_observed` | the complete source directory | a new SQLite Store holding one project, Init statistics, then sealed | tests and examples (for example [`host_install.rs`](../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs)) |
-| `install`, `install_file` | a sealed Store file | the file, streamed to a daemon over the bridge | [`daemon/channel.rs`](../../../../api/crates/layerfs-control/src/daemon/channel.rs) |
-| `projects` | the Store's catalog | nothing | project listing ([`store/identity.rs`](../../../../api/crates/layerfs-control/src/store/identity.rs)) |
+| `install`, `install_file` | a sealed Store file | the file, streamed to a daemon over the bridge | [`daemon/channel.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/channel.rs) |
+| `projects` | the Store's catalog | nothing | project listing ([`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs)) |
 
 Source: [`store/init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs),
 [`store/live.rs`](../../../../engine/crates/layerfs-project/src/store/live.rs),
@@ -115,7 +115,7 @@ Commit side is described in [Commit: Construction](../commit/construction.md).
 | Backing read window | 512 rows, 256 KiB (`Limits::MAXIMUM`) | [`contract.rs`](../../../../core/crates/layerfs-storage/src/port/acquisition/contract.rs) |
 | Backing write window | 4096 rows, 1 MiB (`WRITE_WINDOW_ROWS`, `WRITE_WINDOW_BYTES`) | [`contract.rs`](../../../../core/crates/layerfs-storage/src/port/acquisition/contract.rs) |
 | File constructor threads | 4 (`INIT_WORKERS`) | [`import/files.rs`](../../../../engine/crates/layerfs-project/src/import/files.rs) |
-| Deadline | `ProjectError::Deadline`; the caller supplies it (`timeoutMs` in the API) | [`import/namespace.rs`](../../../../engine/crates/layerfs-project/src/import/namespace.rs), [`project/init.rs`](../../../../api/crates/layerfs-control/src/project/init.rs) |
+| Deadline | `ProjectError::Deadline`; the caller supplies it (`timeoutMs` in the API) | [`import/namespace.rs`](../../../../engine/crates/layerfs-project/src/import/namespace.rs), [`project/init.rs`](../../../../control/crates/layerfs-store/src/project/init.rs) |
 | Device, FIFO or socket in the source | `ProjectError::Unsupported` | [`import/scan.rs`](../../../../engine/crates/layerfs-project/src/import/scan.rs) |
 | Set-user-ID, set-group-ID, sticky regular file; bad mtime | `InvalidInput { Mode \| Mtime }` | [`import/scan.rs`](../../../../engine/crates/layerfs-project/src/import/scan.rs) |
 | Source changed while read | `InvalidInput { Changed }` | [`import/files.rs`](../../../../engine/crates/layerfs-project/src/import/files.rs) |

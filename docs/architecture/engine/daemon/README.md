@@ -12,7 +12,7 @@ The Workspace daemon process: startup, control calls, install, Workspace lifetim
 | Crates | `layerfs-daemon`, `layerfs-bridge` |
 | Source | [`engine/crates/layerfs-daemon/src`](../../../../engine/crates/layerfs-daemon/src), [`engine/crates/layerfs-bridge/src`](../../../../engine/crates/layerfs-bridge/src) |
 | Uses | [Kernel routes](../kernel-routes/README.md), [Commit](../commit/README.md), [Store calls](../store-calls/README.md), [Workspace](../workspace/README.md), [Overlay](../overlay/README.md) |
-| Used by | [Connect: Sandboxes](../../connect/sandboxes/README.md), [API: Routing and workers](../../api/routing/README.md) |
+| Used by | [Control: Sandboxes](../../control/sandboxes/README.md), [Control: Routing and workers](../../control/routing/README.md) |
 | Flows | [A Workspace session](../../flows/workspace.md), [A Commit](../../flows/commit.md) |
 
 ## Topics

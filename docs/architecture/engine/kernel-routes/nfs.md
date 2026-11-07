@@ -227,7 +227,7 @@ Helper deadlines and teardown belong to the
 - [Coherence](coherence.md): client caches, refresh after install, writeback.
 - [Daemon: Control calls](../daemon/control-calls.md): Attach, Commit and
   Unmount on the NFS route.
-- [Support matrix](../../connect/support-matrix/README.md): which platform
+- [Support matrix](../../control/support-matrix/README.md): which platform
   uses this route.
 - [Glossary](../../glossary.md).
 

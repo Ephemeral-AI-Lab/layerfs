@@ -4,7 +4,7 @@
 
 Firecracker and SSH are permanently disabled for new work on every host.
 Their code, records and historical evidence remain. See
-[disabled platforms](../../architecture/connect/support-matrix/disabled-platforms.md)
+[disabled platforms](../../architecture/control/support-matrix/disabled-platforms.md)
 for inspection, explicit cleanup and the transfer verification selection.
 
 Part of the [2.0.0 manual](README.md). This page lists what is not built,
@@ -37,8 +37,7 @@ for this manual.
 
 | What | Refusal |
 | --- | --- |
-| A Sandbox on a platform and Store kind the support table refuses (`layerfs machine platforms`, `connect/SUPPORT.json`): docker on Windows | the table's reason, word for word, such as "docker through WSL2 is not designed yet" |
-| On Linux, a `docker` Sandbox of a sqlite Store by a caller that is not root | the daemon (root in its container) must own the bind-mounted Store folder; run as root, or keep the Store on `native` |
+| A Sandbox on a platform and Store kind the support table refuses (`layerfs machine platforms`, `control/SUPPORT.json`): docker on Windows | the table's reason, word for word, such as "docker through WSL2 is not designed yet" |
 | A Sandbox on a machine other than its sqlite Store's | names the Store's machine; `store pull` and `store push` move the Store |
 | `project remove` from a PostgreSQL Store | "removing a project from a PostgreSQL Store is not built" |
 | `backup restore` over a Store that is not on `native` | `store pull` it to `native` first |
@@ -93,6 +92,9 @@ step commits.
   were tested with provider tests only. On macOS the `docker` machine's
   worker did run (a private test bundle, `LAYERFS_BUNDLE`): `store move` (now `store push`) to
   `docker`, its Sandboxes and the twelve cells passed; see the terminal pass.
+  That run used the retired docker backend: the `docker` machine running
+  `namespaces` Sandboxes in its worker container (D-8) has not been run
+  live.
 - **Machine boot and worker start.** `machine start` and `machine stop`
   (#535 P1) and a worker call refused `Unavailable` on a stopped machine
   (D11, R1) were tested with stand-in tools and workers only; no VM, ssh
@@ -100,7 +102,7 @@ step commits.
   stop and no start on demand (D11).
 - **The docker default image** (#535 P5). Loading the bundle's
   `sandbox-image.tar` with `docker load` and running the worker container
-  and Sandboxes on the id it reports was tested with a stand-in `docker`
+  on the id it reports was tested with a stand-in `docker`
   only; a real Engine (Docker Desktop's classic or containerd image store)
   was not used.
 - **One worker serving several Stores** and the guest-to-host send speed.

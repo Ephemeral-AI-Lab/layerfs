@@ -1,8 +1,8 @@
 //! `store.list`: every Store, from the home's records.
+use crate::calls::table::{call, Call};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::{call, Call};
-use layerfs_control::calls::Context;
-use layerfs_control::common::outcome::Outcome;
+use layerfs_home::outcome::Outcome;
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -15,6 +15,6 @@ pub(crate) const CALL: Call = call(
 );
 
 /// Runs `store.list`.
-fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::store::family::run(context, "list", args)
+fn run(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
+    layerfs_store::sqlite::family::list(&context.home)
 }

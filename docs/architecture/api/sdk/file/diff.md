@@ -10,7 +10,7 @@ Compares two files line by line; each side is a path at a Branch, `main` or a Co
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/diff.rs`](../../../../../api/crates/layerfs-api/src/file/diff.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → `file`, Store method `fs.diff_files` ([`methods/file/diff_files.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/diff_files.rs)); each side becomes `{ commit, path }`, `*_commit` winning over `*_branch` |
+| Implemented in | `layerfs_store::calls::file_diff` → `file`, Store method `fs.diff_files` ([`methods/file/diff_files.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/diff_files.rs)); each side becomes `{ commit, path }`, `*_commit` winning over `*_branch` |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -37,8 +37,8 @@ layerfs file diff <store>/<project> <left_branch> <left_path> \
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>`; both records must exist | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs) |
-| `left_branch`, `right_branch` | Name | a Branch or `main` per side | [`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs) |
+| `project` | Project | `<store>/<project>`; both records must exist | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
+| `left_branch`, `right_branch` | Name | a Branch or `main` per side | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |
 | `left_path` | Text | absolute, at most 4096 bytes, no NUL, no trailing `/`, no empty, `.` or `..` component | [`files::path`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 | `right_path` | Text | absolute, at most 4096 bytes, no NUL, no trailing `/`, no empty, `.` or `..` component | [`files::path`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 
@@ -46,7 +46,7 @@ layerfs file diff <store>/<project> <left_branch> <left_path> \
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `left_commit` | Name | none | a Commit or Layer id; replaces `left_branch` | [`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs) |
+| `left_commit` | Name | none | a Commit or Layer id; replaces `left_branch` | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |
 | `right_commit` | Name | none | the same for the right side | same |
 
 ## Returns
@@ -82,19 +82,19 @@ A read on the Store's read-only session: it never takes the publication
 lane and never sees a live Workspace. PostgreSQL Stores and sqlite Stores
 on `native` run in this process; other sqlite Stores in their machine's
 worker (`store.call`), with nothing started. See the
-[routing table](../../routing/routing-table.md).
+[routing table](../../../control/routing/routing-table.md).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad project, path or option; a path outside a folder scope (`out of scope: path`) | no | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-control/src/calls/scope.rs) |
-| `NoSuchStore`, `NoSuchProject` | the Store or project is not recorded | no | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs) |
+| `InvalidInput` | a bad project, path or option; a path outside a folder scope (`out of scope: path`) | no | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
+| `NoSuchStore`, `NoSuchProject` | the Store or project is not recorded | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `NoSuchBranch`, `NoSuchCommit`, `NotFound` | the Branch, Commit or Layer is missing | no | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `Busy`, `Unresolved` | a push, pull or remove holds the Store | no | [`store/call.rs`](../../../../../api/crates/layerfs-control/src/store/call.rs) |
-| `Unavailable` | the Store's worker is not recorded or does not answer; an unreachable PostgreSQL server | no | [`common/place.rs`](../../../../../api/crates/layerfs-control/src/common/place.rs) |
+| `Busy`, `Unresolved` | a push, pull or remove holds the Store | no | [`call.rs`](../../../../../control/crates/layerfs-store/src/call.rs) |
+| `Unavailable` | the Store's worker is not recorded or does not answer; an unreachable PostgreSQL server | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
 | `NoSuchPath`, `IsDirectory` | a side's path is missing or is a folder (`detail.path`) | no | [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs) |
-| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | the worker's answer was lost | read-only; call again | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 ## Examples
 
