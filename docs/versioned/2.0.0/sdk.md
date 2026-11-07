@@ -132,7 +132,7 @@ asyncio.run(main())
 
 | Option | Calls | Called with |
 | --- | --- | --- |
-| `on_progress` | `project.init`, `store.push`, `store.pull`, `backup.create`, `backup.restore` | each progress update (an object or dict) |
+| `on_progress` | `project.init`, `workspace.exec`, `store.push`, `store.pull`, `backup.create`, `backup.restore` | each progress update (an object or dict); for `workspace.exec`, once, `{exec: {id}}` before the command starts |
 | `stdout`, `stderr` | `workspace.exec` | the command's output, piece by piece: a string when the piece is UTF-8, else a `Buffer` (Node) or `bytes` (Python) |
 
 There is one progress stream and no job registry (O22). Another process
@@ -142,6 +142,17 @@ is no live output stream yet. A stream over 1 MiB comes only through these
 functions (one 1 MiB piece at a time) or `stream: true`; the result then
 has that stream `null`, its byte count and `streamed: true`.
 
+- `on_progress` on `workspace.exec` gives the command's exec id while it
+  runs, so another call (in this process or another) can end it:
+
+  ```js
+  const id = new Promise((resolve) => {
+    lfs.workspace.exec(ws, "npm run dev", { on_progress: (p) => resolve(p.exec.id) });
+  });
+  await lfs.workspace.exec_cancel(ws, await id, { grace_ms: 2000 });
+  ```
+
+  Not run as written; the shell form was (`layerfs-cli/tests/exec_cancel.rs`).
 - `stream: true` on `workspace.exec` passes the output to the `stdout` and
   `stderr` functions, or, without them, to this process's own stdout and
   stderr (Python writes text to the text stream and bytes to its buffer).
