@@ -18,6 +18,14 @@
 //!   `backend: "namespaces"` with `platform: "docker"` (D-8). The test
 //!   removes its worker container and data volume.
 //!
+//! - a sqlite Store's Sandbox on each VM machine (`lima`,
+//!   `apple-container`, ...) named in LAYERFS_TEST_MACHINES (comma
+//!   separated), each created and started beforehand in the home
+//!   LAYERFS_TEST_MACHINE_HOME: a machine's boot is setup, never part of
+//!   this test. The Store is made here, pushed there and its project
+//!   initialised through the worker; the test closes its Sandbox and
+//!   removes its Store, and leaves the machines running.
+//!
 //! A test whose settings are missing says NOT_RUN and passes.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths};
@@ -470,6 +478,66 @@ fn a_sqlite_store_s_sandbox_on_the_docker_machine() {
     let _ = std::fs::remove_dir_all(&folder);
     if let Err(panic) = outcome {
         std::panic::resume_unwind(panic);
+    }
+}
+
+#[test]
+fn a_sqlite_store_s_sandbox_on_each_running_vm_machine() {
+    let (Some(home), Some(machines)) = (
+        env("LAYERFS_TEST_MACHINE_HOME"),
+        env("LAYERFS_TEST_MACHINES"),
+    ) else {
+        eprintln!("NOT_RUN: LAYERFS_TEST_MACHINE_HOME / LAYERFS_TEST_MACHINES unset");
+        return;
+    };
+    let home = PathBuf::from(home);
+    for machine in machines.split(',') {
+        let status = ok(&home, "machine.status", &[("name", t(machine))]);
+        assert_eq!(
+            status.get_text("state"),
+            Some("running"),
+            "start {machine} before this test: {status:?}"
+        );
+        let store = format!("vm{machine}{}", std::process::id());
+        let project = format!("{store}/app");
+        let folder = source(&format!("vm-{machine}"));
+        ok(&home, "store.create", &[("name", t(&store))]);
+        let moved = ok(
+            &home,
+            "store.push",
+            &[("name", t(&store)), ("machine", t(machine))],
+        );
+        assert_eq!(moved.get_text("to"), Some(machine), "{moved:?}");
+        // Init through the machine's worker, where the Store now is
+        let made = ok(
+            &home,
+            "project.init",
+            &[
+                ("project", t(&project)),
+                ("folder", t(&folder.display().to_string())),
+            ],
+        );
+        assert_eq!(made.get_text("machine"), Some(machine), "{made:?}");
+        let created = ok(
+            &home,
+            "sandbox.create",
+            &[
+                ("project", t(&project)),
+                ("name", t(&store)),
+                ("machine", t(machine)),
+            ],
+        );
+        assert_eq!(
+            created.get_text("backend"),
+            Some("namespaces"),
+            "{created:?}"
+        );
+        assert_eq!(created.get_text("machine"), Some(machine), "{created:?}");
+        work(&home, &project, &store, "on-vm", "vm.txt");
+        ok(&home, "sandbox.close", &[("name", t(&store))]);
+        ok(&home, "store.remove", &[("name", t(&store))]);
+        std::fs::remove_dir_all(&folder).unwrap();
+        eprintln!("RAN on {machine}: {created:?}");
     }
 }
 
