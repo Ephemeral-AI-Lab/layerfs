@@ -163,6 +163,9 @@ impl crate::stop::Stoppable for Led {
     fn signal(&self, signal: Signal) -> io::Result<()> {
         match nix::sys::signal::killpg(process::pid(self.0)?, signal) {
             Ok(()) | Err(nix::errno::Errno::ESRCH) => Ok(()),
+            // macOS refuses a group whose members all exited and wait to
+            // be reaped: nothing of it runs
+            Err(nix::errno::Errno::EPERM) if !crate::stop::Stoppable::running(self)? => Ok(()),
             Err(errno) => Err(errno.into()),
         }
     }

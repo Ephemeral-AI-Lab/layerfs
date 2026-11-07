@@ -237,7 +237,10 @@ pub fn commit(host: &Host, path: Option<&str>, force: bool) -> Outcome {
 }
 
 /// `workspace.unmount(ws, { discard?, force? })` of the Workspace at
-/// `path`: the daemon's answer.
+/// `path`: the daemon's answer. It is refused `Busy` while a command of the
+/// Workspace runs; `force` cancels them first (D-10). A stale command
+/// record is removed and logged. Its folder (`workspace/<id>/`) goes with
+/// it.
 pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> Outcome {
     let state = sandbox(host)?;
     let path = required(path, "path")?;
@@ -251,6 +254,10 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
         return crate::unmount_guard::repeat(&value);
     }
     let token = state.token(path)?;
+    // its running commands (D-10): `Busy`, or with `force` cancelled first
+    let wsid = layerfs_bridge::sdk_values::hex(&token.workspace.to_bytes());
+    let unreached = &mut crate::exec::cancel::unreached;
+    crate::exec::cancel::settle(&state.directory, &state.id, Some(&wsid), force, unreached)?;
     crate::files::refresh(&state)?;
     // the daemon's kernel probe answers Busy for a process still holding it
     let attempt = crate::unmount_guard::begin(&state, token, path)?;
@@ -300,6 +307,14 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
                 Ok(()) => {}
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return Err(failed(error)),
+            }
+            // its folder, with any command record left in it
+            let folder = crate::exec::record::workspace_dir(&state.directory, &wsid);
+            match std::fs::remove_dir_all(folder) {
+                Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                    return Err(failed(error))
+                }
+                _ => {}
             }
             lock(&state.mounts)?.remove(path);
             Ok(())

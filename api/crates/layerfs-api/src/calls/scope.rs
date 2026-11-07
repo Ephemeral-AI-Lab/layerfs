@@ -232,7 +232,7 @@ impl Scope {
                 let folder = format!(".{}", self.folder).replace('\'', "'\\''");
                 set(&mut args, "command", format!("cd '{folder}' && {command}"));
             }
-            ("workspace", "commit" | "unmount" | "status") => {}
+            ("workspace", "commit" | "unmount" | "status" | "exec_cancel") => {}
             // every call the scope does not cover: Stores, machines,
             // backups, projects, Sandboxes
             _ => return Err(out(name)),

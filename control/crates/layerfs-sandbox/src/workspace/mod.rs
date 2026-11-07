@@ -7,4 +7,6 @@ pub mod direct;
 #[doc(hidden)]
 pub mod dispatch;
 #[doc(hidden)]
+pub mod exec;
+#[doc(hidden)]
 pub mod serve;

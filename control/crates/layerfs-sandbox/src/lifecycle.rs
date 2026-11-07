@@ -264,6 +264,9 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
         Err(refusal) => return Err(refusal),
     };
     let _guard = layerfs_store::project::discovery::guard(&state.directory)?;
+    // its running commands (D-10): `Busy`, or with `force` cancelled first
+    let unreached = &mut crate::exec::cancel::unreached;
+    crate::exec::cancel::settle(&state.directory, &id, None, force, unreached)?;
     let recoverable = crate::unmount_guard::check_all(&state)?;
     crate::files::refresh_except(&state, &recoverable)?;
     // Explicit close can take over an orphaned/retained unmount, but must

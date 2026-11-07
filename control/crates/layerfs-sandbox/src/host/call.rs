@@ -23,6 +23,8 @@ pub enum Op {
     Mount,
     /// `workspace.exec`.
     Exec,
+    /// `workspace.exec_cancel` (D-11: it rides `sandbox.host` too).
+    ExecCancel,
     /// `workspace.commit`.
     Commit,
     /// `workspace.unmount`.
@@ -33,12 +35,13 @@ pub enum Op {
 
 /// Every host operation and the name a request carries (`op`). A
 /// machine's worker runs exactly these.
-pub const OPS: [(Op, &str); 8] = [
+pub const OPS: [(Op, &str); 9] = [
     (Op::SandboxCreate, "sandbox.create"),
     (Op::SandboxClose, "sandbox.close"),
     (Op::ListWorkspaces, "sandbox.list_workspaces"),
     (Op::Mount, "workspace.mount"),
     (Op::Exec, "workspace.exec"),
+    (Op::ExecCancel, "workspace.exec_cancel"),
     (Op::Commit, "workspace.commit"),
     (Op::Unmount, "workspace.unmount"),
     (Op::Status, "backend.daemon.workspace.status"),
@@ -102,14 +105,26 @@ pub enum Call {
         branch: Option<String>,
         name: Option<String>,
     },
-    /// `workspace.exec(path, command)`; `directory` from a caller that
-    /// keeps the Workspace's record (#535 G4); `spool` sends every
+    /// `workspace.exec(path, command, { exec_id })`; `directory` and the
+    /// Workspace's id (`workspace`) from a caller that keeps the
+    /// Workspace's record and the command's (#535 G4); `spool` sends every
     /// non-empty stream to its file.
     Exec {
         path: Option<String>,
         directory: Option<String>,
         command: Option<String>,
         spool: bool,
+        exec_id: Option<String>,
+        workspace: Option<String>,
+    },
+    /// `workspace.exec_cancel(path, exec_id, { grace_ms })`; the
+    /// Workspace's id (`workspace`) from a caller that keeps the command's
+    /// record (#535 G4), so this side keeps none.
+    ExecCancel {
+        path: Option<String>,
+        exec_id: Option<String>,
+        grace_ms: Option<i64>,
+        workspace: Option<String>,
     },
     /// `workspace.commit(path, { force })`; a flag a caller did not send
     /// is `None`.
@@ -136,6 +151,7 @@ impl Call {
             Self::ListWorkspaces { .. } => Op::ListWorkspaces,
             Self::Mount { .. } => Op::Mount,
             Self::Exec { .. } => Op::Exec,
+            Self::ExecCancel { .. } => Op::ExecCancel,
             Self::Commit { .. } => Op::Commit,
             Self::Unmount { .. } => Op::Unmount,
             Self::Status { .. } => Op::Status,
@@ -147,6 +163,7 @@ impl Call {
         match self {
             Self::ListWorkspaces { path }
             | Self::Exec { path, .. }
+            | Self::ExecCancel { path, .. }
             | Self::Commit { path, .. }
             | Self::Unmount { path, .. }
             | Self::Status { path } => path.as_deref(),
@@ -159,6 +176,7 @@ impl Call {
         match &mut self {
             Self::ListWorkspaces { path }
             | Self::Exec { path, .. }
+            | Self::ExecCancel { path, .. }
             | Self::Commit { path, .. }
             | Self::Unmount { path, .. }
             | Self::Status { path } => *path = resolved,

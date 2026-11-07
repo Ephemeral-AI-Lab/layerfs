@@ -90,6 +90,8 @@ fn fields(call: &Call, sent: &Message, sandbox: Option<&str>) -> Vec<(&'static s
             directory,
             command,
             spool,
+            exec_id,
+            workspace,
         } => {
             fields.push(("path", opt(path)));
             fields.extend(directory.as_deref().map(|d| ("directory", text(d))));
@@ -99,6 +101,19 @@ fn fields(call: &Call, sent: &Message, sandbox: Option<&str>) -> Vec<(&'static s
             if *spool {
                 fields.push(("spool", SdkValue::Bool(true)));
             }
+            fields.extend(exec_id.as_deref().map(|id| ("execId", text(id))));
+            fields.extend(workspace.as_deref().map(|w| ("workspace", text(w))));
+        }
+        Call::ExecCancel {
+            path,
+            exec_id,
+            grace_ms,
+            workspace,
+        } => {
+            fields.push(("path", opt(path)));
+            fields.push(("execId", opt(exec_id)));
+            fields.extend(grace_ms.map(|ms| ("graceMs", SdkValue::Int(ms))));
+            fields.extend(workspace.as_deref().map(|w| ("workspace", text(w))));
         }
         Call::Commit { path, force } => {
             fields.push(("path", opt(path)));
@@ -242,6 +257,14 @@ fn call(op: Op, more: &SdkValue) -> Call {
             directory: text("directory"),
             command: text("command"),
             spool: more.get_bool("spool"),
+            exec_id: text("execId"),
+            workspace: text("workspace"),
+        },
+        Op::ExecCancel => Call::ExecCancel {
+            path: text("path"),
+            exec_id: text("execId"),
+            grace_ms: more.get_int("graceMs"),
+            workspace: text("workspace"),
         },
         Op::Commit => Call::Commit {
             path: text("path"),

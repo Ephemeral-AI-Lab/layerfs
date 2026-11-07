@@ -9,7 +9,7 @@ fn shell(name: &str) -> String {
 
 /// One call's usage line.
 pub fn usage(call: &Call) -> String {
-    let mut line = format!("layerfs {} {}", call.family, call.call);
+    let mut line = format!("layerfs {} {}", call.family, shell(call.call));
     for arg in call.args {
         let word = match arg.kind {
             Kind::Content | Kind::Json => continue,
@@ -53,7 +53,7 @@ pub fn print(topic: &[&str]) -> ExitCode {
                 crate::banner::banner()
             );
             for family in layerfs_api::families() {
-                let calls: Vec<&str> = family.calls().iter().map(|c| c.call).collect();
+                let calls: Vec<String> = family.calls().iter().map(|c| shell(c.call)).collect();
                 text.push_str(&format!("  {:<10} {}\n", family.name, calls.join(", ")));
             }
             text.push_str(concat!(
@@ -77,7 +77,7 @@ pub fn print(topic: &[&str]) -> ExitCode {
         [family, name] => {
             match layerfs_api::calls()
                 .into_iter()
-                .find(|c| c.family == *family && c.call == *name)
+                .find(|c| c.family == *family && shell(c.call) == shell(name))
             {
                 Some(call) => output::print(&described(call)),
                 None => unknown(topic),

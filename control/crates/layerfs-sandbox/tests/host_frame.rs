@@ -38,6 +38,8 @@ fn a_frame_keeps_the_untyped_request_s_fields_and_order() {
         directory: None,
         command: Some("ls".to_owned()),
         spool: false,
+        exec_id: None,
+        workspace: None,
     };
     assert_eq!(
         print(&encode(&sent(exec, Message::Null)).unwrap()),
@@ -81,6 +83,14 @@ fn a_frame_reads_back_to_its_request() {
             directory: Some("/w".to_owned()),
             command: Some("true".to_owned()),
             spool: true,
+            exec_id: Some("e1".to_owned()),
+            workspace: Some("ab".repeat(32)),
+        },
+        Call::ExecCancel {
+            path: Some("w2".to_owned()),
+            exec_id: Some("e1".to_owned()),
+            grace_ms: Some(250),
+            workspace: None,
         },
         Call::Commit {
             path: Some("/w".to_owned()),

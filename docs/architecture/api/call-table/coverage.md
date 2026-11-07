@@ -32,7 +32,7 @@ reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-61 calls in 9 families, counted from the Node table. Calls present: Node 61, Python 61, Python `aio` 61, CLI 61.
+62 calls in 9 families, counted from the Node table. Calls present: Node 62, Python 62, Python `aio` 62, CLI 62.
 
 Argument names that are Python keywords: none.
 
@@ -72,7 +72,8 @@ Front-end problems: none.
 | `sandbox.get` | name | page_size, page_pos | yes | yes | yes | yes |
 | `sandbox.close` | name | force | yes | yes | yes | yes |
 | `workspace.mount` | sandbox, branch | name | yes | yes | yes | yes |
-| `workspace.exec` | ws, command | message, stream, stdout(), stderr() | yes | yes | yes | yes (--stream) |
+| `workspace.exec` | ws, command | message, stream, stdout(), stderr(), exec_id | yes | yes | yes | yes (--stream) |
+| `workspace.exec_cancel` | ws, exec_id | grace_ms | yes | yes | yes | yes |
 | `workspace.commit` | ws | message, force | yes | yes | yes | yes |
 | `workspace.unmount` | ws | discard, force | yes | yes | yes | yes |
 | `workspace.status` | ws | - | yes | yes | yes | yes |
