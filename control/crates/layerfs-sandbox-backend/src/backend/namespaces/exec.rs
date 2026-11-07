@@ -3,27 +3,44 @@
 //! capabilities and no-new-privs, and runs the command there. The streams are
 //! the helper's own pipes; nothing of this process's environment but the
 //! search path reaches it, and no stdin is offered.
-use super::sandbox::Sandbox;
+use super::{cgroup, sandbox::Sandbox};
 use crate::local::search::search_path;
 use crate::local::streams;
+use crate::stop::{self, ExecSlot, Stop};
 use crate::ExecExit;
 use crate::{ExecRequest, RuntimeError, WireFailure};
 use std::{
     io::{self, Write},
     os::unix::process::{CommandExt, ExitStatusExt},
-    path::Path,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 
 impl Sandbox {
+    /// [`Sandbox::run_in`] with no exec id: the command joins the Sandbox's
+    /// own group.
+    pub fn run(
+        &self,
+        request: &ExecRequest,
+        stdout: &mut (dyn Write + Send),
+        stderr: &mut (dyn Write + Send),
+    ) -> Result<ExecExit, Box<WireFailure>> {
+        self.run_in(request, None, stdout, stderr)
+    }
+
     /// Runs `request` once while this Sandbox's init stage runs, as its
     /// uid:gid, in its directory inside the Sandbox, its stdout and stderr
     /// streamed to the sinks as they arrive, then waits for its exit. A sink
     /// failure closes the command's pipes, still waits for its exit, and
-    /// returns the sink's error.
-    pub fn run(
+    /// returns the sink's error. With a `slot`, the command runs in a group
+    /// of its own (`ws-<workspace>/exec-<exec>`, its stop handle, told to
+    /// the slot before it starts); the helper itself goes back to the
+    /// Sandbox's group once the command started, so a cancel ends only the
+    /// command and the helper reports how it ended.
+    pub fn run_in(
         &self,
         request: &ExecRequest,
+        slot: Option<ExecSlot<'_>>,
         stdout: &mut (dyn Write + Send),
         stderr: &mut (dyn Write + Send),
     ) -> Result<ExecExit, Box<WireFailure>> {
@@ -32,13 +49,65 @@ impl Sandbox {
             .init
             .ok_or_else(|| self.invalid("running command admission"))?;
         self.endpoint()?;
+        let group = match slot {
+            Some(slot) => Some(self.exec_group(slot)?),
+            None => None,
+        };
+        let outcome = self.spawn_in(request, init.pid, group.as_deref(), stdout, stderr);
+        if let Some(group) = &group {
+            cgroup::remove_exec(group);
+        }
+        outcome
+    }
+
+    /// The stop handle of command `exec` of Workspace `workspace`: its
+    /// group follows from this Sandbox's and the two ids, so whoever holds
+    /// the command keeps no table of them.
+    pub fn exec_stop(&self, workspace: &str, exec: &str) -> Option<Stop> {
+        (stop::component(workspace) && stop::component(exec)).then(|| Stop::Cgroup {
+            path: cgroup::exec_path(&self.cgroup, workspace, exec),
+        })
+    }
+
+    /// The group of the command `slot` names, made new and told to the slot
+    /// before anything starts in it.
+    fn exec_group(&self, slot: ExecSlot<'_>) -> Result<PathBuf, Box<WireFailure>> {
+        if !stop::component(slot.workspace) || !stop::component(slot.exec) {
+            return Err(self.failure(RuntimeError::Protocol("exec group names")));
+        }
+        let group = cgroup::exec_path(&self.cgroup, slot.workspace, slot.exec);
+        cgroup::create_exec(&group).map_err(|error| self.io(error))?;
+        let told = (slot.spawned)(&Stop::Cgroup {
+            path: group.clone(),
+        });
+        if let Err(error) = told {
+            cgroup::remove_exec(&group);
+            return Err(self.io(error));
+        }
+        Ok(group)
+    }
+
+    /// Spawns the helper for `request` in group `group` (the Sandbox's own
+    /// when `None`) and waits for it.
+    fn spawn_in(
+        &self,
+        request: &ExecRequest,
+        init: u32,
+        group: Option<&Path>,
+        stdout: &mut (dyn Write + Send),
+        stderr: &mut (dyn Write + Send),
+    ) -> Result<ExecExit, Box<WireFailure>> {
         let mut command = Command::new(&self.helper);
         command
             .arg("exec")
             .arg("--init")
-            .arg(init.pid.to_string())
+            .arg(init.to_string())
             .arg("--cgroup")
-            .arg(&self.cgroup)
+            .arg(group.unwrap_or(&self.cgroup));
+        if group.is_some() {
+            command.arg("--leave").arg(&self.cgroup);
+        }
+        command
             .arg("--uid")
             .arg(request.identity.uid.to_string())
             .arg("--gid")

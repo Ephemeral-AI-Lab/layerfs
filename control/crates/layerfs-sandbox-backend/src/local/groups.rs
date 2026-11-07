@@ -146,3 +146,28 @@ fn parse(name: &str) -> Option<LocalProcess> {
     };
     parts.next().is_none().then_some(process)
 }
+
+/// One command's process group, `pgid`, led by `leader` (its stop handle on
+/// `host_process`, `crate::stop`): it runs while any member of it does, and
+/// is never signalled once its leader's id names another process.
+pub(crate) struct Led(pub(crate) u32, pub(crate) LocalProcess);
+
+impl crate::stop::Stoppable for Led {
+    fn running(&self) -> io::Result<bool> {
+        let Self(pgid, leader) = *self;
+        // a group of another boot ended with it
+        let this_boot = leader.boot == Some(process::boot()?);
+        Ok(pgid == leader.pid && this_boot && !members(&processes()?, leader).is_empty())
+    }
+
+    fn signal(&self, signal: Signal) -> io::Result<()> {
+        match nix::sys::signal::killpg(process::pid(self.0)?, signal) {
+            Ok(()) | Err(nix::errno::Errno::ESRCH) => Ok(()),
+            Err(errno) => Err(errno.into()),
+        }
+    }
+
+    fn kill(&self) -> io::Result<()> {
+        self.signal(Signal::SIGKILL)
+    }
+}

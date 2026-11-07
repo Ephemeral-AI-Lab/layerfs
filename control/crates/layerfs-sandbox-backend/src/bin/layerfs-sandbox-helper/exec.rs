@@ -6,9 +6,18 @@
 //! and setuid bits cannot raise it again. Just before exec it installs the
 //! filter that refuses it a user namespace (`local::deny_user_namespaces`,
 //! D-8); a command whose filter cannot be installed never starts.
+//!
+//! With `--leave <sandbox cgroup>` (a command with its own group,
+//! layerfs-project#113) the helper joins the command's group, starts the
+//! command there and moves itself back to the Sandbox's group, so a cancel's
+//! signals and `cgroup.kill` reach the command and what it started, not the
+//! helper, which then reports how the command ended. It blocks `SIGTERM`
+//! for that; the command starts with an empty signal mask, as every spawned
+//! child does.
 use nix::{
     sched::{setns, CloneFlags},
     sys::prctl::set_no_new_privs,
+    sys::signal::{SigSet, Signal},
 };
 use std::{
     ffi::OsString,
@@ -23,6 +32,7 @@ use std::{
 struct Run {
     init: u32,
     cgroup: PathBuf,
+    leave: Option<PathBuf>,
     uid: u32,
     gid: u32,
     directory: PathBuf,
@@ -34,6 +44,18 @@ struct Run {
 /// never reads it as a command's exit code.
 pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
     let run = parse(arguments)?;
+    if run.leave.is_some() {
+        let mut terminate = SigSet::empty();
+        terminate.add(Signal::SIGTERM);
+        terminate
+            .thread_block()
+            .map_err(|error| format!("blocking SIGTERM: {error}"))?;
+    }
+    // opened before the Sandbox's mount namespace hides this host path
+    let leave = match &run.leave {
+        Some(group) => Some(procs(group)?),
+        None => None,
+    };
     join(&run.cgroup)?;
     let namespaces = Namespaces::open(run.init)?;
     namespaces.enter()?;
@@ -53,6 +75,14 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
         // never look like the command's status
         Err(error) => fail(&format!("starting {}: {error}", program.to_string_lossy())),
     };
+    // `0` names the writer: the helper goes back to the Sandbox's group
+    if let Some(mut leave) = leave {
+        if let Err(error) = leave.write_all(b"0") {
+            let _ = child.kill();
+            let _ = child.wait();
+            fail(&format!("leaving the command's cgroup: {error}"));
+        }
+    }
     let status = child
         .wait()
         .map_err(|error| format!("waiting for the command: {error}"))?;
@@ -96,13 +126,20 @@ impl Namespaces {
     }
 }
 
-/// The Sandbox's own cgroup, so `cgroup.kill` ends this command too.
-fn join(cgroup: &Path) -> Result<(), String> {
-    let pid = nix::unistd::getpid().as_raw();
-    let mut file = fs::OpenOptions::new()
+/// Group `cgroup`'s process list, opened to move a process into it.
+fn procs(cgroup: &Path) -> Result<File, String> {
+    fs::OpenOptions::new()
         .write(true)
         .open(cgroup.join("cgroup.procs"))
-        .map_err(|error| format!("joining the Sandbox's cgroup: {error}"))?;
+        .map_err(|error| format!("opening {}: {error}", cgroup.display()))
+}
+
+/// The command's cgroup (the Sandbox's own, or one of its own below it), so
+/// `cgroup.kill` ends this command too.
+fn join(cgroup: &Path) -> Result<(), String> {
+    let pid = nix::unistd::getpid().as_raw();
+    let mut file =
+        procs(cgroup).map_err(|error| format!("joining the Sandbox's cgroup: {error}"))?;
     file.write_all(pid.to_string().as_bytes())
         .map_err(|error| format!("joining the Sandbox's cgroup: {error}"))
 }
@@ -118,6 +155,7 @@ fn fail(message: &str) -> ! {
 fn parse(arguments: &[OsString]) -> Result<Run, String> {
     let (mut init, mut uid, mut gid) = (0, 0, 0);
     let (mut cgroup, mut directory) = (PathBuf::new(), PathBuf::new());
+    let mut leave = None;
     let mut command = Vec::new();
     let mut index = 0;
     while index < arguments.len() {
@@ -134,6 +172,7 @@ fn parse(arguments: &[OsString]) -> Result<Run, String> {
             Some("--uid") => uid = number(value)?,
             Some("--gid") => gid = number(value)?,
             Some("--cgroup") => cgroup = PathBuf::from(value),
+            Some("--leave") => leave = Some(PathBuf::from(value)),
             Some("--cwd") => directory = PathBuf::from(value),
             _ => {
                 return Err(format!(
@@ -156,6 +195,7 @@ fn parse(arguments: &[OsString]) -> Result<Run, String> {
     Ok(Run {
         init,
         cgroup,
+        leave,
         uid,
         gid,
         directory,
