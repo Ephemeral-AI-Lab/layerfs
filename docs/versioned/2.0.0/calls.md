@@ -246,9 +246,9 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   a cancel that is not confirmed refuses the close `Unknown` and nothing
   more is done.
   With `force` (O31) it stops the Sandbox through its backend anyway and
-  answers `{kind: "Closed", sandbox, unknown}`: `unknown` lists the
-  Workspaces it could not drain, whose uncommitted changes and processes
-  end with the Sandbox. Closing a Sandbox that is already gone answers
+  answers `{kind: "Closed", sandbox, unknown}`: `unknown` lists every
+  Workspace still mounted, since a forced close drains none of them; their
+  uncommitted changes and processes end with the Sandbox. Closing a Sandbox that is already gone answers
   `{closed, was_gone: true}`; a gone native Sandbox's stopped runtime and
   local directory are deleted by that close.
 - A record with no id yet (a create in flight, one whose outcome was
