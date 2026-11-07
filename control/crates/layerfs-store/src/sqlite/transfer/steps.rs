@@ -6,6 +6,7 @@
 //! read, replace or delete the file close this process's open copy first
 //! (a worker keeps a Store open after its calls); a call running on it is
 //! `InUse`.
+use super::step::{StepFrame, StoreStep};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup::heads::heads;
 use layerfs_bucket::bucket::pieces;
@@ -22,16 +23,6 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     let mut name = path.as_os_str().to_owned();
     name.push(suffix);
     PathBuf::from(name)
-}
-
-fn int(args: &SdkValue, name: &str) -> Result<u64, SdkRefusal> {
-    match args.get(name) {
-        Some(SdkValue::Int(n)) if *n >= 0 => Ok(*n as u64),
-        _ => Err(refused(
-            "InvalidInput",
-            format!("`{name}` must be a whole number"),
-        )),
-    }
 }
 
 fn length(path: &Path) -> Result<u64, SdkRefusal> {
@@ -67,21 +58,23 @@ fn digest(file: &Path) -> Outcome {
     ]))
 }
 
-/// Runs step `op` on Store `store` under `root` (the home, or a worker's root).
-pub fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
-    let store = args
-        .get_text("store")
-        .ok_or_else(|| refused("InvalidInput", "a Store step names its Store"))?;
+/// Runs `frame`'s step on its Store under `root` (the home, or a worker's
+/// root).
+pub fn run(root: &Path, frame: &StepFrame) -> Outcome {
+    let store = frame.store.as_str();
     layerfs_home::names::StoreName::parse(store)?;
     let file = paths::store_file(root, store);
     let incoming = with_suffix(&file, ".incoming");
-    if matches!(op, "snapshot" | "install" | "retire" | "remove") {
+    if matches!(
+        frame.step,
+        StoreStep::Snapshot | StoreStep::Install | StoreStep::Retire | StoreStep::Remove
+    ) {
         crate::open::close(&file)?;
     }
-    match op {
+    match &frame.step {
         // whether the file is here, its size with its write-ahead log, and
         // the free bytes where it is (or would be)
-        "stat" => Ok(SdkValue::map([
+        StoreStep::Stat => Ok(SdkValue::map([
             ("exists", SdkValue::Bool(file.is_file())),
             (
                 "free",
@@ -95,7 +88,7 @@ pub fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
         ])),
         // snapshot: the idle Store's bytes, sha256 and history heads. A Store
         // nobody holds has no write-ahead log left unless a process crashed.
-        "snapshot" => {
+        StoreStep::Snapshot => {
             if !file.is_file() {
                 return Err(refused(
                     "NotFound",
@@ -115,22 +108,16 @@ pub fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
         }
         // a consistent snapshot of the live Store for a backup, staged
         // beside it; `{ bytes, sha256, heads, sqlite }`
-        "stage" => {
+        StoreStep::Stage => {
             let staged = with_suffix(&file, ".backup");
             let _ = std::fs::remove_file(&staged);
-            let mut fields = match args.clone() {
-                SdkValue::Map(fields) => fields,
-                _ => Vec::new(),
+            let open = crate::open_args::OpenArgs {
+                home: Some(root.to_path_buf()),
+                store: Some(store.to_owned()),
+                store_path: Some(file.display().to_string()),
+                store_record: frame.store_record.clone(),
+                ..Default::default()
             };
-            fields.push((
-                "home".to_owned(),
-                SdkValue::text(root.display().to_string()),
-            ));
-            fields.push((
-                "storePath".to_owned(),
-                SdkValue::text(file.display().to_string()),
-            ));
-            let open = crate::open_args::OpenArgs::read(&SdkValue::Map(fields));
             let sealed = crate::service::with_service(&open, |service| {
                 service
                     .opened
@@ -154,17 +141,20 @@ pub fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
                 SdkValue::text(sealed.sqlite_version),
             ))
         }
-        "unstage" => {
+        StoreStep::Unstage => {
             match std::fs::remove_file(with_suffix(&file, ".backup")) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(failed(e)),
                 _ => {}
             }
             Ok(SdkValue::map([("unstaged", SdkValue::Bool(true))]))
         }
-        "read" => {
-            let offset = int(args, "offset")?;
-            let len = int(args, "len")?.min(CHUNK);
-            let source = if matches!(args.get("staged"), Some(SdkValue::Bool(true))) {
+        StoreStep::Read {
+            offset,
+            len,
+            staged,
+        } => {
+            let (offset, len) = (*offset, (*len).min(CHUNK));
+            let source = if *staged {
                 with_suffix(&file, ".backup")
             } else {
                 file.clone()
@@ -177,11 +167,8 @@ pub fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
         }
         // send: the transfer's own staging file, written in order; offset 0
         // starts it again
-        "write" => {
-            let offset = int(args, "offset")?;
-            let Some(SdkValue::Bytes(bytes)) = args.get("bytes") else {
-                return Err(refused("InvalidInput", "`bytes` must be bytes"));
-            };
+        StoreStep::Write { offset, bytes } => {
+            let offset = *offset;
             if file.exists() {
                 return Err(refused(
                     "Exists",
@@ -210,10 +197,20 @@ pub fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
             )]))
         }
         // verify: the staged copy's sha256 and heads are the snapshot's
-        "verify" => {
+        StoreStep::Verify {
+            bytes,
+            sha256,
+            heads,
+        } => {
             let got = digest(&incoming)?;
-            for field in ["bytes", "sha256", "heads"] {
-                if got.get(field) != args.get(field) {
+            let text = |t: &Option<String>| t.as_deref().map(SdkValue::text);
+            let expected = [
+                ("bytes", bytes.map(SdkValue::Int)),
+                ("sha256", text(sha256)),
+                ("heads", text(heads)),
+            ];
+            for (field, want) in expected {
+                if got.get(field) != Some(&want.unwrap_or_default()) {
                     return Err(refused(
                         "Failed",
                         format!("the copied Store's {field} is not the snapshot's; the copy is kept at {}", incoming.display()),
@@ -223,7 +220,7 @@ pub fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
             Ok(got)
         }
         // install: rename the verified copy into place, never over a Store
-        "install" => {
+        StoreStep::Install => {
             if file.exists() {
                 return Err(refused(
                     "Exists",
@@ -241,7 +238,7 @@ pub fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
         // retire: a copy the record does not name (the source's, after the
         // record names the target, or what an ended transfer left), with
         // any partial copy; the Store's folder and records stay
-        "retire" => {
+        StoreStep::Retire => {
             for path in [
                 file.clone(),
                 with_suffix(&file, "-wal"),
@@ -259,7 +256,7 @@ pub fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
         // root: `store.remove`, and the retire of a push's or pull's
         // source there). A symlink in it, or the directory itself if it is
         // one, is removed, never followed.
-        "remove" => {
+        StoreStep::Remove => {
             let dir = paths::store_dir(root, store);
             let existed = std::fs::symlink_metadata(&dir).is_ok();
             if existed {
@@ -267,6 +264,5 @@ pub fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
             }
             Ok(SdkValue::map([("removed", SdkValue::Bool(existed))]))
         }
-        _ => Err(refused("InvalidInput", format!("no Store step {op}"))),
     }
 }

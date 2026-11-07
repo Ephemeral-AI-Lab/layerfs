@@ -2,7 +2,8 @@
 use crate::lease;
 use crate::place;
 use crate::record::StoreRef;
-use crate::sqlite::family::{fields_map, of_store, record_of, step};
+use crate::sqlite::family::{fields_map, record_of, step_on};
+use crate::sqlite::transfer::step::StoreStep;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use std::path::Path;
@@ -24,7 +25,7 @@ pub fn status(home: &Path, name: &str) -> Outcome {
         // the file's size where it lives, starting nothing (P4); a machine
         // that is down says why
         let file = place::plan(home, store_ref)
-            .and_then(|mut executor| step(home, &mut executor, "stat", of_store(name, vec![])));
+            .and_then(|mut executor| step_on(home, &mut executor, name, StoreStep::Stat));
         let file = file.unwrap_or_else(|why| {
             down = Some(why.message.clone());
             SdkValue::map([("unavailable", SdkValue::Text(why.message))])

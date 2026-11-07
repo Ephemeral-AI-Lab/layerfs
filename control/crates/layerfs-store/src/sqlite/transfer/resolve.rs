@@ -12,7 +12,8 @@
 //! and nothing is deleted while another operation holds the Store.
 use crate::place::{self, Executor};
 use crate::record::{self, StoreRecord, StoreRef};
-use crate::sqlite::family::{begin, ended, of_store, record_of, step};
+use crate::sqlite::family::{begin, ended, record_of, step_on};
+use crate::sqlite::transfer::step::StoreStep;
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::op::{Op, Standing};
@@ -111,10 +112,10 @@ pub fn resolve(home: &Path, name: &str, related: Related) -> Result<()> {
         Ok(())
     })?;
     let retire = match executor {
-        Executor::Local => "retire",
-        Executor::Worker(_) => "remove",
+        Executor::Local => StoreStep::Retire,
+        Executor::Worker(_) => StoreStep::Remove,
     };
-    if let Err(refusal) = step(home, &mut executor, retire, of_store(name, vec![])) {
+    if let Err(refusal) = step_on(home, &mut executor, name, retire) {
         ended(home, name, &op, "retire", &refusal, false, held.as_ref());
         return Err(refusal);
     }

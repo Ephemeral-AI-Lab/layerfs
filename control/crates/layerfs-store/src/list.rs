@@ -2,7 +2,8 @@
 use crate::lease;
 use crate::place;
 use crate::record::StoreRef;
-use crate::sqlite::family::{of_store, public, step};
+use crate::sqlite::family::{public, step_on};
+use crate::sqlite::transfer::step::StoreStep;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{Outcome, View};
 use std::path::Path;
@@ -31,9 +32,8 @@ pub fn list(home: &Path) -> Outcome {
                 Err(_) => true,
                 Ok(machine) if unanswered.contains(machine) => true,
                 Ok(machine) => {
-                    let stat = place::plan(home, store_ref).and_then(|mut on| {
-                        step(home, &mut on, "stat", of_store(record.name(), vec![]))
-                    });
+                    let stat = place::plan(home, store_ref)
+                        .and_then(|mut on| step_on(home, &mut on, record.name(), StoreStep::Stat));
                     if stat.is_err() {
                         unanswered.insert(machine.to_owned());
                     }

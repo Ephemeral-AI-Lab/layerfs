@@ -6,8 +6,9 @@
 //! caller pulls, then pushes; each half is its own operation.
 use crate::place::{self, Executor};
 use crate::record::{self, StoreRecord};
-use crate::sqlite::family::{advance, begin, ended, of_store, progress, record_of, settle, step};
+use crate::sqlite::family::{advance, begin, ended, progress, record_of, settle, step_on};
 use crate::sqlite::transfer::resolve::retired;
+use crate::sqlite::transfer::step::StoreStep;
 use crate::sqlite::transfer::steps::CHUNK;
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -150,8 +151,8 @@ fn reach(home: &Path, name: &str, from: &str, to: &str) -> Result<(Executor, Exe
             worker.ready()?;
         }
     }
-    let held = step(home, &mut source, "stat", of_store(name, vec![]))?;
-    let there = step(home, &mut target, "stat", of_store(name, vec![]))?;
+    let held = step_on(home, &mut source, name, StoreStep::Stat)?;
+    let there = step_on(home, &mut target, name, StoreStep::Stat)?;
     if matches!(there.get("exists"), Some(SdkValue::Bool(true))) {
         return Err(refused(
             "Exists",
@@ -214,7 +215,7 @@ fn phases(
     enter(&home, events, op, name, "snapshot", None)?;
     let snapshot = at(
         "snapshot",
-        step(&home, source, "snapshot", of_store(name, vec![])),
+        step_on(&home, source, name, StoreStep::Snapshot),
     )?;
     let total = snapshot.get_int("bytes").unwrap_or(0) as u64;
     // send, in pieces through this process
@@ -223,17 +224,15 @@ fn phases(
     loop {
         let piece = at(
             "send",
-            step(
+            step_on(
                 &home,
                 source,
-                "read",
-                of_store(
-                    name,
-                    vec![
-                        ("offset", SdkValue::Int(offset as i64)),
-                        ("len", SdkValue::Int(CHUNK as i64)),
-                    ],
-                ),
+                name,
+                StoreStep::Read {
+                    offset,
+                    len: CHUNK,
+                    staged: false,
+                },
             ),
         )?;
         let bytes = match piece.get("bytes") {
@@ -246,18 +245,7 @@ fn phases(
         let len = bytes.len() as u64;
         at(
             "send",
-            step(
-                &home,
-                target,
-                "write",
-                of_store(
-                    name,
-                    vec![
-                        ("offset", SdkValue::Int(offset as i64)),
-                        ("bytes", SdkValue::Bytes(bytes)),
-                    ],
-                ),
-            ),
+            step_on(&home, target, name, StoreStep::Write { offset, bytes }),
         )?;
         offset += len;
         progress(events, "send", Some((offset, total)));
@@ -267,24 +255,20 @@ fn phases(
     }
     // verify, install
     enter(&home, events, op, name, "verify", None)?;
-    let digest: Vec<(&str, SdkValue)> = ["bytes", "sha256", "heads"]
-        .into_iter()
-        .map(|field| (field, snapshot.get(field).cloned().unwrap_or_default()))
-        .collect();
-    at(
-        "verify",
-        step(&home, target, "verify", of_store(name, digest)),
-    )?;
+    let text = |field| snapshot.get_text(field).map(str::to_owned);
+    let digest = StoreStep::Verify {
+        bytes: snapshot.get_int("bytes"),
+        sha256: text("sha256"),
+        heads: text("heads"),
+    };
+    at("verify", step_on(&home, target, name, digest))?;
     // install puts the target's copy in place, which no step undoes with
     // certainty: from here until the record names the target a crash leaves
     // both copies, so the intent is written uncertain before it (H4–H6); the
     // next push or pull deletes the copy the record does not name
     *op = op.clone().as_uncertain();
     enter(&home, events, op, name, "install", None)?;
-    at(
-        "install",
-        step(&home, target, "install", of_store(name, vec![])),
-    )?;
+    at("install", step_on(&home, target, name, StoreStep::Install))?;
     // record: the Store is on `to` from here on. The same write records
     // that the source's copy is not yet retired and keeps `op`, certain, at
     // retire while it is: a retire that does not finish leaves a Store in
@@ -319,13 +303,10 @@ fn phases(
     // with the project entries a worker keeps there
     progress(events, "retire", None);
     let retire = match source {
-        Executor::Local => "retire",
-        Executor::Worker(_) => "remove",
+        Executor::Local => StoreStep::Retire,
+        Executor::Worker(_) => StoreStep::Remove,
     };
-    at(
-        "retire",
-        step(&home, source, retire, of_store(name, vec![])),
-    )?;
+    at("retire", step_on(&home, source, name, retire))?;
     at("retire", retired(&home, name, op.id()))?;
     Ok(SdkValue::map([
         ("store", SdkValue::text(name)),

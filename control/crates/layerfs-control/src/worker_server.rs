@@ -162,15 +162,8 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
         }
         // one step of a Store move or remove on this machine
         "store.file" => {
-            let name = args
-                .get_text("op")
-                .ok_or_else(|| refused("InvalidInput", "Store step name"))?
-                .to_owned();
-            layerfs_store::sqlite::transfer::steps::run(
-                root,
-                &name,
-                &args.get("args").cloned().unwrap_or_default(),
-            )
+            let frame = layerfs_store::sqlite::transfer::step::StepFrame::decode(&args)?;
+            layerfs_store::sqlite::transfer::steps::run(root, &frame)
         }
         // a Sandbox or Workspace operation on this machine's own native
         "sandbox.host" => layerfs_sandbox::route::in_worker(

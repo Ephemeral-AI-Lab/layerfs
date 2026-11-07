@@ -20,6 +20,7 @@
 use crate::lease;
 use crate::place::Executor;
 use crate::record::{self, StoreDerived, StoreRecord, StoreState};
+use crate::sqlite::transfer::step::{StepFrame, StoreStep};
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
@@ -96,25 +97,22 @@ pub fn pull(home: &Path, events: &mut Events<'_>, name: &str, related: Related) 
     crate::sqlite::transfer::phases::pull(home, events, name, related)
 }
 
-/// One step on the machine that holds a Store's file.
-pub fn step(home: &Path, executor: &mut Executor, op: &str, args: SdkValue) -> Outcome {
+/// One step on the machine that holds a Store's file: in this process, or
+/// its worker's `store.file` frame.
+pub fn step(home: &Path, executor: &mut Executor, frame: &StepFrame) -> Outcome {
     match executor {
-        Executor::Local => crate::sqlite::transfer::steps::run(home, op, &args),
-        Executor::Worker(worker) => {
-            let request = SdkValue::map([("op", SdkValue::text(op)), ("args", args)]);
-            worker.call("store.file", request, &mut |_| {})
-        }
+        Executor::Local => crate::sqlite::transfer::steps::run(home, frame),
+        Executor::Worker(worker) => worker.call("store.file", frame.encode(), &mut |_| {}),
     }
+}
+
+/// [`step`] `step` on Store `name`.
+pub fn step_on(home: &Path, executor: &mut Executor, name: &str, step: StoreStep) -> Outcome {
+    self::step(home, executor, &StepFrame::on(name, step))
 }
 
 pub fn fields_map(fields: Vec<(&str, SdkValue)>) -> SdkValue {
     SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect())
-}
-
-pub fn of_store(name: &str, more: Vec<(&str, SdkValue)>) -> SdkValue {
-    let mut fields = vec![("store", SdkValue::text(name))];
-    fields.extend(more);
-    fields_map(fields)
 }
 
 /// Starts a push, pull or remove: under the home lock (the Sandbox check) and

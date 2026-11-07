@@ -5,6 +5,7 @@ use super::record::{remote_error, BucketRecord, StoreLink};
 use crate::lease;
 use crate::place::{self, Executor};
 use crate::record::{StoreRecord, StoreRef};
+use crate::sqlite::transfer::step::{StepFrame, StoreStep};
 use crate::sqlite::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup as remote;
@@ -81,22 +82,15 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
     shown.phase(events, "check");
     check(driver.as_ref(), &object, expected, &home_id)?;
     shown.phase(events, "snapshot");
-    let step = |op: &str, more: Vec<(&str, SdkValue)>| {
-        let mut fields = vec![
-            ("store", SdkValue::text(store)),
-            ("store_record", record.to_record().clone()),
-        ];
-        fields.extend(more);
-        let args = SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect());
-        match &mut *executor.borrow_mut() {
-            Executor::Local => crate::sqlite::transfer::steps::run(&home, op, &args),
-            Executor::Worker(worker) => {
-                let request = SdkValue::map([("op", SdkValue::text(op)), ("args", args)]);
-                worker.call("store.file", request, &mut |_| {})
-            }
-        }
+    let step = |step: StoreStep| {
+        let frame = StepFrame {
+            store: store.to_owned(),
+            store_record: Some(record.to_record().clone()),
+            step,
+        };
+        crate::sqlite::family::step(&home, &mut executor.borrow_mut(), &frame)
     };
-    let staged = step("stage", vec![])?;
+    let staged = step(StoreStep::Stage)?;
     // `native` stages beside the Store; a worker's copy comes here
     let local = match local_steps {
         true => {
@@ -149,7 +143,7 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
     if !local_steps {
         let _ = std::fs::remove_file(&local);
     }
-    let _ = step("unstage", vec![]);
+    let _ = step(StoreStep::Unstage);
     let (moved, heads) = result?;
     let saved = StoreLink::new(&file, "create", moved.bytes, &moved.sha256, heads.as_ref());
     save_link(&home, store, bucket, saved)?;
@@ -197,8 +191,8 @@ impl Drop for Creating {
     }
 }
 
-/// One `store.file` step on the Store's machine: its name and arguments.
-type Step<'a> = dyn Fn(&str, Vec<(&str, SdkValue)>) -> Outcome + 'a;
+/// One `store.file` step on the Store's machine.
+type Step<'a> = dyn Fn(StoreStep) -> Outcome + 'a;
 
 /// Copies the snapshot a worker staged to `local`, in pieces of [`CHUNK`],
 /// telling `sent` the bytes copied after each.
@@ -206,14 +200,11 @@ fn fetch_staged(step: &Step<'_>, local: &Path, sent: &mut dyn FnMut(u64)) -> Res
     let mut out = std::fs::File::create(local).map_err(failed)?;
     let mut offset = 0u64;
     loop {
-        let piece = step(
-            "read",
-            vec![
-                ("offset", SdkValue::Int(offset as i64)),
-                ("len", SdkValue::Int(CHUNK as i64)),
-                ("staged", SdkValue::Bool(true)),
-            ],
-        )?;
+        let piece = step(StoreStep::Read {
+            offset,
+            len: CHUNK,
+            staged: true,
+        })?;
         let Some(SdkValue::Bytes(bytes)) = piece.get("bytes") else {
             return Ok(());
         };
