@@ -244,6 +244,7 @@ class AsyncWorkspaceFamily:
         stdout: Callable[[Output], object] = ...,
         stderr: Callable[[Output], object] = ...,
         exec_id: str | None = None,
+        on_progress: Callable[[Progress], object] = ...,
     ) -> Result:
         """run one bash command in a Workspace"""
     async def exec_cancel(self, ws: str, exec_id: str, *, grace_ms: int | None = None) -> Result:

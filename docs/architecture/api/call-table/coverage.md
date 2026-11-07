@@ -72,7 +72,7 @@ Front-end problems: none.
 | `sandbox.get` | name | page_size, page_pos | yes | yes | yes | yes |
 | `sandbox.close` | name | force | yes | yes | yes | yes |
 | `workspace.mount` | sandbox, branch | name | yes | yes | yes | yes |
-| `workspace.exec` | ws, command | message, stream, stdout(), stderr(), exec_id | yes | yes | yes | yes (--stream) |
+| `workspace.exec` | ws, command | message, stream, stdout(), stderr(), exec_id, on_progress() | yes | yes | yes | yes (--progress, --stream) |
 | `workspace.exec_cancel` | ws, exec_id | grace_ms | yes | yes | yes | yes |
 | `workspace.commit` | ws | message, force | yes | yes | yes | yes |
 | `workspace.unmount` | ws | discard, force | yes | yes | yes | yes |

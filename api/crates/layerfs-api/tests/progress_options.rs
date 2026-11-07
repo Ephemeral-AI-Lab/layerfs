@@ -1,6 +1,7 @@
-//! Which calls take `on_progress` (#37): the table declares it on exactly five
-//! calls, and a call that does not declare it refuses it before any effect.
-//! `machine.create` is not one of the five, so a caller cannot ask for the
+//! Which calls take `on_progress` (#37): the table declares it on exactly six
+//! calls (`workspace.exec` for its exec id, layerfs-project#113), and a call
+//! that does not declare it refuses it before any effect.
+//! `machine.create` is not one of the six, so a caller cannot ask for the
 //! `{ phase: "create", machine }` event the library emits for it.
 //! The page that states this: docs/architecture/api/call-table/events.md.
 use layerfs_api::Kind;
@@ -19,11 +20,12 @@ fn declaring(option: &str) -> Vec<String> {
 }
 
 #[test]
-fn five_calls_declare_on_progress_and_one_declares_the_exec_sinks() {
+fn six_calls_declare_on_progress_and_one_declares_the_exec_sinks() {
     assert_eq!(
         declaring("on_progress"),
         [
             "project.init",
+            "workspace.exec",
             "store.push",
             "store.pull",
             "backup.create",
@@ -42,7 +44,7 @@ fn five_calls_declare_on_progress_and_one_declares_the_exec_sinks() {
                 .count()
         })
         .sum();
-    assert_eq!(functions, 5 + 2);
+    assert_eq!(functions, 6 + 2);
 }
 
 #[test]

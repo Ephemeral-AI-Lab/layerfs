@@ -1,6 +1,6 @@
 //! `workspace.exec`: run one bash command in a Workspace.
 use crate::calls::table::Kind::{Bool, Function, Text};
-use crate::calls::table::{a, call, opt, Call, MESSAGE};
+use crate::calls::table::{a, call, opt, Call, MESSAGE, PROGRESS};
 use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
@@ -18,6 +18,7 @@ pub(crate) const CALL: Call = call(
         opt("stdout", Function),
         opt("stderr", Function),
         opt("exec_id", Text),
+        PROGRESS,
     ],
     "run one bash command in a Workspace",
     run,

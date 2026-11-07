@@ -10,6 +10,7 @@
 //! LAYERFS_DAEMON; without it, it says NOT_RUN.
 use layerfs_api::home;
 use layerfs_bridge::control::SdkValue;
+use std::io::{BufRead, BufReader};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -235,6 +236,39 @@ fn exec_ids_records_and_cancel_on_native() {
     // cancelling it again: it ended
     let again = ok(&home, "workspace.exec_cancel", &cancel);
     assert_eq!(again.get_text("outcome"), Some("ended"));
+
+    // a command started with no exec id: `--progress` prints the id control
+    // made as its first line on stderr, and another process cancels by it
+    let mut child = Command::new(LAYERFS)
+        .args(["workspace", "exec", "s1:w", "sleep 600", "--progress"])
+        .env("LAYERFS_HOME", &home)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .process_group(0)
+        .spawn()
+        .unwrap();
+    let mut first = String::new();
+    BufReader::new(child.stderr.take().unwrap())
+        .read_line(&mut first)
+        .unwrap();
+    let event = layerfs_api::json::parse(first.trim()).unwrap_or_else(|e| panic!("{first}: {e:?}"));
+    let made = event
+        .get("progress")
+        .and_then(|p| p.get("exec"))
+        .and_then(|e| e.get_text("id"))
+        .unwrap_or_else(|| panic!("{first}"))
+        .to_owned();
+    assert!(made.starts_with("exec-"), "{made}");
+    recorded(&execs.join(format!("{made}.json")));
+    let cancel_made = [ws(), ("exec_id", t(&made))];
+    let cancelled = ok(&home, "workspace.exec_cancel", &cancel_made);
+    assert_eq!(cancelled.get_text("outcome"), Some("cancelled"));
+    let answer = answered(child);
+    assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
+    assert!(
+        answer.contains(&format!("\"exec_id\":\"{made}\"")),
+        "{answer}"
+    );
 
     // a stale record (its owner gone) whose command still runs: ended,
     // removed and logged by the unmount that finds it

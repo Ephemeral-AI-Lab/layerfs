@@ -208,6 +208,7 @@ export interface WorkspaceExecOptions {
   stdout?: OutputHandler;
   stderr?: OutputHandler;
   exec_id?: string;
+  on_progress?: ProgressHandler;
 }
 
 /** Options of `workspace.exec_cancel`; an unknown option is refused. */
