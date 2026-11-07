@@ -136,21 +136,41 @@ fn program() -> Vec<sock_filter> {
 
 /// Makes `command` run under the filter: in its process, after everything
 /// `Command` sets up there (identity, directory, process group) and just
-/// before exec, it sets no-new-privs (the kernel's condition for an
-/// unprivileged filter) and installs the filter. A failure of either fails
-/// the spawn, so the command never runs without it.
+/// before exec, it empties the signal mask (a forked child inherits its
+/// parent's: the helper blocks `SIGTERM` while it sits in a command's own
+/// cgroup, layerfs-project#113, and the command must not), sets
+/// no-new-privs (the kernel's condition for an unprivileged filter) and
+/// installs the filter. A failure of any fails the spawn, so the command
+/// never runs without it.
 pub fn deny_user_namespaces(command: &mut Command) {
     let filter = program();
     let known = cfg!(any(target_arch = "x86_64", target_arch = "aarch64"));
     // SAFETY: the hook runs in the forked child before exec. It allocates
     // nothing and takes no lock: it reads the filter built here and makes
-    // two `prctl` system calls, which are async-signal-safe.
+    // one `sigprocmask` and two `prctl` system calls, which are
+    // async-signal-safe.
     #[allow(unsafe_code)]
     unsafe {
         command.pre_exec(move || match known {
-            true => install(&filter),
+            true => unblocked().and_then(|()| install(&filter)),
             false => Err(io::ErrorKind::Unsupported.into()),
         });
+    }
+}
+
+/// Empties this thread's signal mask.
+#[allow(unsafe_code)]
+fn unblocked() -> io::Result<()> {
+    let mut set = std::mem::MaybeUninit::<libc::sigset_t>::uninit();
+    // SAFETY: `sigemptyset` initializes `set` before it is read, and
+    // `pthread_sigmask` only reads it.
+    let masked = unsafe {
+        libc::sigemptyset(set.as_mut_ptr());
+        libc::pthread_sigmask(libc::SIG_SETMASK, set.as_ptr(), std::ptr::null_mut())
+    };
+    match masked {
+        0 => Ok(()),
+        error => Err(io::Error::from_raw_os_error(error)),
     }
 }
 

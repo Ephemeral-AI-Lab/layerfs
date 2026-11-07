@@ -12,8 +12,8 @@
 //! command there and moves itself back to the Sandbox's group, so a cancel's
 //! signals and `cgroup.kill` reach the command and what it started, not the
 //! helper, which then reports how the command ended. It blocks `SIGTERM`
-//! for that; the command starts with an empty signal mask, as every spawned
-//! child does.
+//! for that; the command's filter hook empties the child's signal mask just
+//! before exec (a forked child inherits its parent's), so it can be.
 use nix::{
     sched::{setns, CloneFlags},
     sys::prctl::set_no_new_privs,
