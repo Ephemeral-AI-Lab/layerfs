@@ -6,7 +6,7 @@ use crate::inventory;
 use layerfs_home::events::Events;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
-use layerfs_machine::{MachineConnect, MachineCreate, MachineUpdate, Related};
+use layerfs_machine::{MachineCreate, MachineUpdate, Related};
 use std::path::Path;
 
 /// What a machine holds, read from the Store and Sandbox records.
@@ -48,19 +48,9 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &MachineCreate) -> 
     layerfs_machine::create(home, events, request, RELATED)
 }
 
-/// `machine.connect`.
-pub fn connect(home: &Path, request: &MachineConnect) -> Outcome {
-    layerfs_machine::connect(home, request, RELATED)
-}
-
 /// `machine.remove`.
 pub fn remove(home: &Path, name: &MachineName) -> Outcome {
     layerfs_machine::remove(home, name, RELATED)
-}
-
-/// `machine.disconnect`.
-pub fn disconnect(home: &Path, name: &MachineName) -> Outcome {
-    layerfs_machine::disconnect(home, name, RELATED)
 }
 
 /// `machine.update`.

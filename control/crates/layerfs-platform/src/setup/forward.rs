@@ -1,6 +1,6 @@
 //! The detached `ssh -N -L 127.0.0.1:<port>:<target>` that carries a worker's
-//! port to the host (`ssh`, and `firecracker` through its Lima host), or a
-//! Sandbox daemon's (`ssh`, `lima`; #535 G4). It is started detached so it
+//! port to the host (`firecracker`, through its Lima host), or a Sandbox
+//! daemon's (`lima`; #535 G4). It is started detached so it
 //! outlives one CLI call; its pid goes into the endpoint or the [`Forward`].
 //! `ExitOnForwardFailure` makes a busy port fail at once.
 use crate::error::{Code, MachineError};

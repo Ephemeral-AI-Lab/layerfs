@@ -238,15 +238,6 @@ export interface MachineCreateOptions {
   host?: string;
 }
 
-/** Options of `machine.connect`; an unknown option is refused. */
-export interface MachineConnectOptions {
-  user?: string;
-  port?: WholeNumber;
-  identity?: string;
-  known_hosts?: string;
-  root?: string;
-}
-
 /** Options of `machine.update`; an unknown option is refused. */
 export interface MachineUpdateOptions {
   cpus?: WholeNumber;
@@ -403,14 +394,10 @@ export interface MachineFamily {
   start(name: string): Promise<Result>;
   /** stop a machine's worker and VM; its disks stay */
   stop(name: string): Promise<Result>;
-  /** create an enabled VM machine (apple-container, microsandbox, lima) */
+  /** create an enabled VM machine (apple-container, lima) */
   create(name: string, platform: string, options?: MachineCreateOptions): Promise<Result>;
-  /** SSH connections are permanently disabled; existing machines can be inspected or disconnected */
-  connect(name: string, host: string, options?: MachineConnectOptions): Promise<Result>;
-  /** delete a VM machine and its disk */
+  /** delete a VM machine and its disk; one of a removed platform is only forgotten */
   remove(name: string): Promise<Result>;
-  /** forget an ssh machine; its data root stays */
-  disconnect(name: string): Promise<Result>;
   /** resize a VM, or set a built-in machine's image, Docker socket and daemon */
   update(name: string, options?: MachineUpdateOptions): Promise<Result>;
 }

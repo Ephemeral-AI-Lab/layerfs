@@ -1,7 +1,7 @@
 //! `apple-container`'s adapter.
 use super::observe::gateway;
 use super::{create, guest, remove, start, status, stop};
-use crate::adapter::{refused, Adapter};
+use crate::adapter::Adapter;
 use crate::error::{Code, MachineError};
 use crate::platform::HostOs;
 use crate::probe::{macos_missing, tool_version};
@@ -44,9 +44,6 @@ impl Adapter for AppleContainer {
     }
     fn status(&self, spec: &Spec) -> Result<Status, MachineError> {
         status(spec)
-    }
-    fn host_identity(&self, spec: &Spec) -> Result<String, MachineError> {
-        Err(refused(spec, "has no ssh host"))
     }
     /// A loopback URL becomes the container network's gateway (G7 receipt):
     /// the one its last start recorded (#66), else read from the machine

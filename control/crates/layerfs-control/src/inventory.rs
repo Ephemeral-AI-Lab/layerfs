@@ -81,7 +81,7 @@ pub fn sandboxes_of_project(home: &Path, project: &str) -> Result<Vec<String>> {
     Ok(of.map(|sandbox| sandbox.name().to_owned()).collect())
 }
 
-/// `machine.remove` and `machine.disconnect`: refused `InUse` while the
+/// `machine.remove`: refused `InUse` while the
 /// machine holds Stores, Sandboxes or Firecracker machines; `detail.related`
 /// lists them (#536 §10b).
 pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {

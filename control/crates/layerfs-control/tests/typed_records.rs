@@ -212,20 +212,18 @@ mod machines {
         assert_eq!(shown.get("cpus"), Some(&SdkValue::Null));
         let vm = MachineRecord::from_record("vm", value(r#"{"platform":"lima"}"#));
         assert_eq!(vm.state(None).unwrap(), "stopped");
-        // a connect in flight: its live `op` (this process) says `creating`
-        let me = std::process::id();
+        // a platform removed in 2.0 is shown with why, whatever its record says
         let ssh = MachineRecord::from_record(
             "box",
-            value(&format!(
-                r#"{{"name":"box","platform":"ssh","ssh":{{"host":"h","host_id":"k"}},
-                   "op":{{"name":"machine.connect","owner":{{"pid":{me}}},"uncertain":false}}}}"#
-            )),
+            value(r#"{"name":"box","platform":"ssh","state":"running","ssh":{"host":"h"}}"#),
         );
         let shown = ssh.to_sdk(View::Full, &MachineDerived::default()).unwrap();
         assert_eq!(keys(&shown).last(), Some(&"ssh"));
-        assert_eq!(shown.get_text("state"), Some("creating"));
-        assert!(shown.get("op").is_none(), "{shown:?}");
-        assert!(ssh.in_flight());
+        assert_eq!(shown.get_text("platform"), Some("ssh"));
+        assert_eq!(shown.get_text("state"), Some("unsupported"));
+        let removed = "platform `ssh` was removed in LayerFS 2.0";
+        assert_eq!(shown.get_text("error"), Some(removed));
+        assert_eq!(ssh.platform().unwrap_err().message, removed);
         let unknown = MachineRecord::from_record("x", value(r#"{"platform":"vmware"}"#));
         let refusal = unknown
             .to_sdk(View::List, &MachineDerived::default())
@@ -252,10 +250,6 @@ mod machines {
         // a live owner: its call, whatever the probe says
         let removing = held("machine.remove", me, false);
         assert_eq!(removing.state(Some("running")).unwrap(), "removing");
-        assert_eq!(
-            held("machine.disconnect", me, true).state(None).unwrap(),
-            "removing"
-        );
         assert_eq!(
             held("machine.create", me, false).state(None).unwrap(),
             "creating"

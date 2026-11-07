@@ -1,6 +1,6 @@
 [package]
 name = "layerfs-machine"
-description = "Machine records, their lifecycle and the worker client (layerfs-project#104): machine/<name>/ records, the built-in native and docker, VMs created by name, ssh hosts connected, and the worker protocol"
+description = "Machine records, their lifecycle and the worker client (layerfs-project#104): machine/<name>/ records, the built-in native and docker, VMs created by name, and the worker protocol"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

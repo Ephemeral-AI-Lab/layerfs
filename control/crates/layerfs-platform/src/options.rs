@@ -1,5 +1,5 @@
-//! The options `machine create` and `machine connect` take, as each
-//! platform's profile declares them (#535 §9a).
+//! The options `machine create` takes, as each platform's profile declares
+//! them (#535 §9a).
 
 /// What an option's value is, as the call table reads it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

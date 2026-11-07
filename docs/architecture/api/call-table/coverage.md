@@ -32,7 +32,7 @@ reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-62 calls in 9 families, counted from the Node table. Calls present: Node 62, Python 62, Python `aio` 62, CLI 62.
+60 calls in 9 families, counted from the Node table. Calls present: Node 60, Python 60, Python `aio` 60, CLI 60.
 
 Argument names that are Python keywords: none.
 
@@ -84,9 +84,7 @@ Front-end problems: none.
 | `machine.start` | name | - | yes | yes | yes | yes |
 | `machine.stop` | name | - | yes | yes | yes | yes |
 | `machine.create` | name, platform | cpus, memory, disk, image, nested, host | yes | yes | yes | yes |
-| `machine.connect` | name, host | user, port, identity, known_hosts, root | yes | yes | yes | yes |
 | `machine.remove` | name | - | yes | yes | yes | yes |
-| `machine.disconnect` | name | - | yes | yes | yes | yes |
 | `machine.update` | name | cpus, memory, image, docker, wsl, daemon | yes | yes | yes | yes |
 | `store.list` | - | - | yes | yes | yes | yes |
 | `store.get` | name | - | yes | yes | yes | yes |

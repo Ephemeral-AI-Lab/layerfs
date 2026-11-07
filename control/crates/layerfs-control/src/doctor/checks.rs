@@ -107,7 +107,7 @@ fn machines(scanned: &Scanned, findings: &mut Findings) {
             );
         }
         if let Some(op) = machine.op() {
-            let clear = format!("{} {name}", machine.clearing_call());
+            let clear = format!("machine remove {name}");
             intent(
                 entity,
                 &op,

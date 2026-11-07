@@ -248,23 +248,9 @@ class MachineFamily:
         nested: bool | None = None,
         host: str | None = None,
     ) -> Result:
-        """create an enabled VM machine (apple-container, microsandbox, lima)"""
-    def connect(
-        self,
-        name: str,
-        host: str,
-        *,
-        user: str | None = None,
-        port: int | None = None,
-        identity: str | None = None,
-        known_hosts: str | None = None,
-        root: str | None = None,
-    ) -> Result:
-        """SSH connections are permanently disabled; existing machines can be inspected or disconnected"""
+        """create an enabled VM machine (apple-container, lima)"""
     def remove(self, name: str) -> Result:
-        """delete a VM machine and its disk"""
-    def disconnect(self, name: str) -> Result:
-        """forget an ssh machine; its data root stays"""
+        """delete a VM machine and its disk; one of a removed platform is only forgotten"""
     def update(
         self,
         name: str,

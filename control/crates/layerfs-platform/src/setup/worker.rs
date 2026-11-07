@@ -1,4 +1,4 @@
-//! Setup steps 2 to 4 inside any VM or ssh guest (H §7.1.1): the guest's
+//! Setup steps 2 to 4 inside any VM guest (H §7.1.1): the guest's
 //! folders and user-namespace block, the bundle and Sandbox image copied in
 //! once, the worker started as root behind a 0600 secret file, and the
 //! readiness wait. The adapters make the kernel and its data disk first.

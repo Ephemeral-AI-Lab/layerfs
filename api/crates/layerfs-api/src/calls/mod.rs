@@ -1,7 +1,7 @@
 //! The call machinery under the call table (#533 step 2, H §7.10): the
 //! table's shape, argument checks, folder scope, result keys and the one
 //! dispatcher (moved back from `layerfs-control` by layerfs-project#107).
-//! The 61 entries in nine families live beside it, one folder per family and
+//! The 60 entries in nine families live beside it, one folder per family and
 //! one file per call; each function here that needs them takes that list.
 mod check;
 mod context;

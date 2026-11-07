@@ -55,7 +55,6 @@ fn the_first_broken_rule_is_the_refusal() {
         "machine.start",
         "machine.stop",
         "machine.remove",
-        "machine.disconnect",
         "machine.update",
     ] {
         let got = refusal(home, call, &[("name", t("-x"))]);
@@ -68,7 +67,7 @@ fn the_first_broken_rule_is_the_refusal() {
             "machine.create",
             &[
                 ("name", t("-x")),
-                ("platform", t("microsandbox")),
+                ("platform", t("apple-container")),
                 ("nested", SdkValue::Bool(value)),
             ],
         )

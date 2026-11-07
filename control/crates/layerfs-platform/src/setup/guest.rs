@@ -21,10 +21,6 @@ pub(crate) enum Guest {
     Lima { dir: PathBuf, vm: String },
     /// `container exec`.
     AppleContainer { vm: String },
-    /// `msb exec`.
-    Microsandbox { vm: String },
-    /// ssh as the machine's user (root), with these options and destination.
-    Ssh { options: Vec<String>, dest: String },
     /// Through its Lima host, then ssh from there to the microVM.
     Firecracker {
         host: Box<Guest>,
@@ -65,18 +61,6 @@ impl Guest {
                     c.arg("-i");
                 }
                 c.arg(vm).args(argv);
-                c
-            }
-            Self::Microsandbox { vm } => {
-                let mut c = tool::command(&tool::find(tools, "msb")?, ["exec"]);
-                c.arg(vm).args(["--no-tty", "--"]).args(argv);
-                c
-            }
-            Self::Ssh { options, dest } => {
-                let mut c = tool::command(&tool::find(tools, "ssh")?, options);
-                c.arg(dest)
-                    .arg("--")
-                    .args(argv.iter().map(|a| shell_escape(a)));
                 c
             }
             Self::Firecracker { host, root, vm } => {

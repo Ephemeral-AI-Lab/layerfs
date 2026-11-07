@@ -1,7 +1,7 @@
 //! The one support table (#535 §7.3, G1, G7): for each platform, host and
 //! Store kind, whether a Sandbox is supported or the fixed reason it is
 //! refused. It encodes what is allowed; phase 5a enabled PostgreSQL
-//! Sandboxes on native (macOS and Linux), docker and ssh, and the G7 live
+//! Sandboxes on native (macOS and Linux) and docker, and the G7 live
 //! receipts (`core/docs/issues/535/receipts/g7-live/`) enabled them on the
 //! VM platforms; `control/SUPPORT.json` (rendered by [`support_json`], compared by a
 //! test) and `machine.platforms` follow.
@@ -80,15 +80,14 @@ fn host_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
         Platform::AppleContainer => "apple-container runs on macOS hosts only",
         Platform::Lima => "lima runs on macOS hosts only",
         Platform::Firecracker => "firecracker runs on macOS hosts only, in a nested lima machine",
-        Platform::Native | Platform::Microsandbox | Platform::Ssh => OTHER_HOST,
+        Platform::Native => OTHER_HOST,
     })
 }
 
 /// Why a PostgreSQL Sandbox does not run on `platform` (on a host it is
 /// on, with a backend), or `None` where it does. Every platform with a
 /// backend runs them: native (Linux namespaces with no bind; #535 phase
-/// 5a), docker and ssh (whose `reach` refuses a loopback URL), and lima,
-/// apple-container, microsandbox and firecracker through their `reach`
+/// 5a), docker, and lima, apple-container and firecracker through their `reach`
 /// routes (`platforms/*/adapter.rs`; G7 live receipts).
 fn postgresql_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
     match (platform, host) {

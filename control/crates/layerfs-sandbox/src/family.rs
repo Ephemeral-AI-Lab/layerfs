@@ -8,7 +8,7 @@
 //! same call runs in that machine's worker, which keeps the Sandbox's thin
 //! record, keys and Workspaces in `sandbox/<name>/` under its own root
 //! (§6); this home keeps the name, the project and the machine. Where the
-//! home reaches that Sandbox's daemon (`ssh` and `lima`, #535 G4,
+//! home reaches that Sandbox's daemon (`lima`, #535 G4,
 //! `direct.rs`) it keeps its keys and Workspace records too, and its
 //! Workspace calls but exec run here. A Sandbox on `docker` runs in
 //! namespaces in the docker machine's worker container, reached through

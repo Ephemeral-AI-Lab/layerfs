@@ -7,12 +7,12 @@
 //! - its profile against the one support table (`support`,
 //!   `sandbox_allowed`) on every host, and against the committed
 //!   `control/SUPPORT.json`, row by row;
-//! - that each lifecycle call (create or connect, start, stop, status,
-//!   remove or disconnect, host identity) either runs through the
+//! - that each lifecycle call (create, start, stop, status, remove) either
+//!   runs through the
 //!   platform's provider tool (here, its stand-in) or is refused before any
 //!   effect with the fixed refusal its `How` declares;
-//! - `reach` against the §7.3 rules: a loopback host is shared, rewritten to
-//!   the platform's alias or refused; a rewrite is refused for
+//! - `reach` against the §7.3 rules: a loopback host is shared or rewritten
+//!   to the platform's alias; a rewrite is refused for
 //!   `sslmode=verify-full`; every other host is dialled as given; no error
 //!   text or `Debug` holds the password;
 //! - `forward` (#535 G4): a daemon's port is used as it is, carried by a
@@ -33,8 +33,7 @@ mod standin;
 mod support_json;
 use layerfs_platform::{
     self as machine, platforms, sandbox_allowed, support, Backend, CallSite, Code, ExecutorKind,
-    Forward, HostOs, How, KernelRoute, MachineError, OptKind, Platform, Route, Spec, SshSpec,
-    StoreKind,
+    Forward, HostOs, How, KernelRoute, MachineError, OptKind, Platform, Route, Spec, StoreKind,
 };
 use layerfs_sandbox_backend::platform_policy::disabled_reason;
 use layerfs_sandbox_backend::MountDriver;
@@ -219,22 +218,18 @@ fn each_platform_row_in_support_json_is_its_table_row() {
 #[derive(Clone, Copy, Debug)]
 enum Call {
     Create,
-    Connect,
     Start,
     Stop,
     Status,
     Remove,
-    HostIdentity,
 }
 
-const CALLS: [Call; 7] = [
+const CALLS: [Call; 5] = [
     Call::Create,
-    Call::Connect,
     Call::Start,
     Call::Stop,
     Call::Status,
     Call::Remove,
-    Call::HostIdentity,
 ];
 
 /// The fixed refusal a platform's `How` declares for `call`, or `None`
@@ -242,26 +237,20 @@ const CALLS: [Call; 7] = [
 fn refusal(how: How, call: Call) -> Option<&'static str> {
     match (call, how) {
         (Call::Create, How::BuiltIn) => Some("is built in and never created"),
-        (Call::Create, How::Connected) => Some("is connected, not created"),
-        (Call::Connect, How::BuiltIn | How::Created) => Some("is created, not connected"),
         (Call::Remove, How::BuiltIn) => Some("is built in and never removed"),
-        (Call::HostIdentity, How::BuiltIn | How::Created) => Some("has no ssh host"),
         _ => None,
     }
 }
 
 /// Every refusal text above, so a call a platform does is never answered
 /// with one.
-const REFUSALS: [&str; 5] = [
+const REFUSALS: [&str; 2] = [
     "is built in and never created",
-    "is connected, not created",
-    "is created, not connected",
     "is built in and never removed",
-    "has no ssh host",
 ];
 
 /// The guest transports any platform may drive beside its own tool.
-const TRANSPORTS: [&str; 3] = ["ssh", "ssh-keygen", "tar"];
+const TRANSPORTS: [&str; 2] = ["ssh", "tar"];
 
 /// Stand-ins for every platform's tool and the transports: each logs its
 /// call (its name alone in `tools.log`, as arguments span lines) and
@@ -292,13 +281,10 @@ fn nested_host_kind() -> Platform {
 }
 
 /// A valid spec of `platform`, built only from what its profile declares:
-/// an ssh host where it takes ssh options, a nested host machine where it
-/// takes `host`. The docker worker container's image comes from the bundle
+/// a nested host machine where it takes `host`. The docker worker container's image comes from the bundle
 /// (#535 E7) and is passed as `os_image`.
 fn valid_spec(scratch: &Scratch, platform: Platform) -> Spec {
     let mut spec = scratch.spec(platform);
-    spec.ssh = declares(platform, "user")
-        .then(|| SshSpec::new("example.test", scratch.path("known_hosts")));
     if declares(platform, "host") {
         let mut host = scratch.spec(nested_host_kind());
         host.name = "host".into();
@@ -318,12 +304,10 @@ fn run(call: Call, scratch: &Scratch, spec: &Spec) -> Result<(), MachineError> {
     let bundle = scratch.bundle();
     match call {
         Call::Create => machine::create(spec, &bundle).map(drop),
-        Call::Connect => machine::connect(spec, &bundle).map(drop),
         Call::Start => machine::start(spec, &bundle).map(drop),
         Call::Stop => machine::stop(spec),
         Call::Status => machine::status(spec).map(drop),
         Call::Remove => machine::remove(spec),
-        Call::HostIdentity => machine::host_identity(spec).map(drop),
     }
 }
 
@@ -342,7 +326,7 @@ fn each_lifecycle_call_runs_through_the_tool_or_gives_the_fixed_refusal() {
             let log = scratch.log();
             let tools = standin::read(&scratch.path("tools.log"));
             let at = format!("{platform:?} {call:?}: {outcome:?}\n{log}");
-            if matches!(call, Call::Create | Call::Connect | Call::Start) {
+            if matches!(call, Call::Create | Call::Start) {
                 if let Some(reason) = disabled_reason(platform.name()) {
                     let error = outcome.unwrap_err();
                     assert_eq!(error.code, Code::Unsupported, "{at}");
@@ -410,8 +394,6 @@ enum Loopback {
     Shared,
     /// A loopback host becomes this host name or address.
     Alias(String),
-    /// A loopback host is refused, `Unsupported`, with this reason.
-    Refused(&'static str),
 }
 
 fn loopback(spec: &Spec) -> Loopback {
@@ -426,8 +408,6 @@ fn loopback(spec: &Spec) -> Loopback {
         Platform::Firecracker => Loopback::Alias("192.168.5.2".into()),
         // the gateway the stand-in `container inspect` reports (`reach_specs`)
         Platform::AppleContainer => Loopback::Alias("192.168.64.1".into()),
-        Platform::Microsandbox => Loopback::Alias("host.microsandbox.internal".into()),
-        Platform::Ssh => Loopback::Refused("an ssh machine cannot reach the caller's loopback"),
     }
 }
 
@@ -504,11 +484,6 @@ fn each_platform_reaches_a_loopback_server_as_it_declares() {
                             Ok(with_host(&alias, query)[i].clone()),
                             "{platform:?}"
                         ),
-                        Loopback::Refused(why) => {
-                            let (code, message) = refused(platform, outcome);
-                            assert_eq!(code, Code::Unsupported, "{message}");
-                            assert_eq!(message, format!("{prefix}{why}"));
-                        }
                     }
                 }
             }
@@ -522,10 +497,6 @@ fn each_platform_reaches_a_loopback_server_as_it_declares() {
                         assert_eq!(code, Code::Unsupported, "{message}");
                         assert!(message.starts_with(&prefix), "{message}");
                         assert!(message.contains("sslmode=verify-full"), "{message}");
-                    }
-                    Loopback::Refused(why) => {
-                        let (_, message) = refused(platform, outcome);
-                        assert_eq!(message, format!("{prefix}{why}"));
                     }
                 }
             }
@@ -607,8 +578,6 @@ enum Field {
     Nested,
     /// `host`: the nested machine it runs in.
     Host,
-    /// `user`, `port`, `identity`, `known_hosts`, `root`: `ssh`.
-    Ssh,
 }
 
 /// An option's kind and field. A new option fails here until the kit maps it.
@@ -619,8 +588,6 @@ fn field(name: &str) -> (OptKind, Field) {
         "image" => (OptKind::Text, Field::OsImage),
         "nested" => (OptKind::Bool, Field::Nested),
         "host" => (OptKind::Name, Field::Host),
-        "user" | "identity" | "known_hosts" | "root" => (OptKind::Text, Field::Ssh),
-        "port" => (OptKind::Int, Field::Ssh),
         other => panic!("option {other} has no Spec field in the conformance kit; map it"),
     }
 }
@@ -650,13 +617,7 @@ fn each_declared_option_is_a_spec_field_of_its_kind() {
             assert_eq!(option.kind, field(option.name).0, "{platform:?} {option:?}");
         }
         // a field is declared whole or not at all
-        for (wanted, all) in [
-            (Field::Size, &["cpus", "memory", "disk"][..]),
-            (
-                Field::Ssh,
-                &["user", "port", "identity", "known_hosts", "root"][..],
-            ),
-        ] {
+        for (wanted, all) in [(Field::Size, &["cpus", "memory", "disk"][..])] {
             let count = all.iter().filter(|n| names.contains(*n)).count();
             assert!(count == 0 || count == all.len(), "{platform:?} {wanted:?}");
         }
@@ -694,13 +655,6 @@ fn spec_accepts_exactly_the_fields_the_profile_declares() {
         assert_eq!(refused_spec(&with), !takes(platform, Field::Host), "{at}");
         assert_eq!(refused_spec(&without), takes(platform, Field::Host), "{at}");
 
-        let mut with = base.clone();
-        with.ssh = Some(SshSpec::new("example.test", scratch.path("known_hosts")));
-        let mut without = base.clone();
-        without.ssh = None;
-        assert_eq!(refused_spec(&with), !takes(platform, Field::Ssh), "{at}");
-        assert_eq!(refused_spec(&without), takes(platform, Field::Ssh), "{at}");
-
         // sizes are checked where they are declared and ignored elsewhere
         let sized = takes(platform, Field::Size);
         let mut spec = base.clone();
@@ -733,10 +687,9 @@ enum DaemonPort {
 fn daemon_port(spec: &Spec) -> DaemonPort {
     match spec.kind {
         Platform::Native => DaemonPort::Shared,
-        Platform::Ssh | Platform::Lima => DaemonPort::Tunnel,
+        Platform::Lima => DaemonPort::Tunnel,
         Platform::Docker => DaemonPort::Refused(Code::Unsupported, "Docker publishes a container's ports only when it starts, so a Sandbox daemon's port in the worker container cannot be published later; its Workspace calls go through the worker"),
         Platform::AppleContainer => DaemonPort::Refused(Code::Unsupported, "the container CLI publishes a port only when the machine's container is created, so a Sandbox daemon's port cannot be published later; its Workspace calls go through the worker"),
-        Platform::Microsandbox => DaemonPort::Refused(Code::Unsupported, "msb publishes a port only when the machine's sandbox is created, so a Sandbox daemon's port cannot be published later; its Workspace calls go through the worker"),
         Platform::Firecracker => DaemonPort::Refused(Code::Unsupported, "its Sandbox daemons listen on the microVM's loopback, which a forward through the Lima host cannot reach (it reaches only the microVM's tap address); its Workspace calls go through the worker"),
     }
 }

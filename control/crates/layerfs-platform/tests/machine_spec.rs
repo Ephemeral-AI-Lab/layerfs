@@ -100,28 +100,4 @@ fn kind_specific_fields_belong_to_their_kind() {
     let mut spec = scratch.spec(Platform::Lima);
     spec.host = Some(Box::new(host));
     assert!(refused(&spec).contains("only a firecracker"));
-
-    let mut spec = scratch.spec(Platform::Ssh);
-    spec.ssh = None;
-    assert!(refused(&spec).contains("needs its host"));
-
-    let mut spec = scratch.spec(Platform::Lima);
-    spec.ssh = scratch.spec(Platform::Ssh).ssh;
-    assert!(refused(&spec).contains("only an ssh"));
-
-    let mut spec = scratch.spec(Platform::Ssh);
-    spec.ssh.as_mut().unwrap().host = "-oProxyCommand=x".into();
-    assert!(refused(&spec).contains("host"));
-    let mut spec = scratch.spec(Platform::Ssh);
-    spec.ssh.as_mut().unwrap().data_root = "data".into();
-    assert!(refused(&spec).contains("data root"));
-}
-
-#[test]
-fn ssh_defaults_are_root_port_22_and_the_data_folder() {
-    let ssh = layerfs_platform::SshSpec::new("h.example", "/k".into());
-    assert_eq!(ssh.user, "root");
-    assert_eq!(ssh.port, 22);
-    assert_eq!(ssh.data_root, "/layerfs/data");
-    assert!(ssh.identity.is_none());
 }

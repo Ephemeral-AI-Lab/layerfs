@@ -1,4 +1,6 @@
-//! Disabled platform policy through the shared public call dispatcher.
+//! Disabled platform policy through the shared public call dispatcher: the
+//! disabled Firecracker and the platforms removed in 2.0 (`ssh`,
+//! `microsandbox`), whose records may remain in a home.
 use layerfs_api::{call, json};
 use layerfs_bridge::control::SdkValue;
 use layerfs_sandbox_backend::platform_policy::disabled_reason;
@@ -29,7 +31,7 @@ fn snapshot(root: &Path) -> BTreeMap<String, Vec<u8>> {
 
 #[test]
 fn every_new_work_route_refuses_before_writes_or_worker_and_daemon_connections() {
-    for platform in ["firecracker", "ssh"] {
+    for platform in ["firecracker", "ssh", "microsandbox"] {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let home =
@@ -53,12 +55,7 @@ fn every_new_work_route_refuses_before_writes_or_worker_and_daemon_connections()
         };
         for case in cases {
             let name = case.get_text("call").unwrap();
-            let reason = disabled_reason(if name == "machine.connect" {
-                "ssh"
-            } else {
-                platform
-            })
-            .unwrap();
+            let reason = disabled_reason(platform).unwrap();
             let refusal = call(
                 Some(&home),
                 name,
@@ -98,7 +95,7 @@ fn every_new_work_route_refuses_before_writes_or_worker_and_daemon_connections()
 fn disabled_selection_does_not_create_a_home() {
     let home = std::env::temp_dir().join(format!("lfs-disabled-new-{}", std::process::id()));
     assert!(!home.exists());
-    for platform in ["firecracker", "ssh"] {
+    for platform in ["firecracker", "ssh", "microsandbox"] {
         let args = SdkValue::map([
             ("name", SdkValue::text("new")),
             ("platform", SdkValue::text(platform)),
@@ -115,7 +112,7 @@ fn existing_machines_can_be_inspected_without_probing_or_changing_their_records(
     use layerfs_api::home::{paths, write_record};
     let home = std::env::temp_dir().join(format!("lfs-disabled-inspect-{}", std::process::id()));
     layerfs_api::home::open(&home).unwrap();
-    for (platform, state) in [("firecracker", "running"), ("ssh", "stopped")] {
+    for (platform, state) in [("firecracker", "running"), ("firecracker", "stopped")] {
         let record = SdkValue::map([
             ("name", SdkValue::text(platform)),
             ("platform", SdkValue::text(platform)),
@@ -124,7 +121,7 @@ fn existing_machines_can_be_inspected_without_probing_or_changing_their_records(
         let path = paths::machine_record(&home, platform);
         write_record(&path, &record).unwrap();
         let before = std::fs::read(&path).unwrap();
-        // No host spec, ssh credentials or live tool is needed to inspect disabled records.
+        // No host spec or live tool is needed to inspect disabled records.
         for name in ["machine.get", "machine.status"] {
             let value = call(
                 Some(&home),

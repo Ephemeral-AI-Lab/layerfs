@@ -1,9 +1,9 @@
-//! The seven machine platforms and the one table that describes each: its
+//! The five machine platforms and the one table that describes each: its
 //! [`Profile`], one `PROFILE` per platform folder (H §7.10.1, #535 §6.2).
 //! [`Platform::profile`] is the one match; every other per-platform value is
 //! read from the profile.
 use crate::options::OptSpec;
-use crate::platforms::{apple_container, docker, firecracker, lima, microsandbox, native, ssh};
+use crate::platforms::{apple_container, docker, firecracker, lima, native};
 pub use layerfs_bridge::KernelRoute;
 use layerfs_sandbox_backend::Backend;
 use std::net::Ipv4Addr;
@@ -14,10 +14,8 @@ pub enum Platform {
     Native,
     Docker,
     AppleContainer,
-    Microsandbox,
     Lima,
     Firecracker,
-    Ssh,
 }
 
 /// Where a machine's Store calls run.
@@ -45,8 +43,6 @@ pub enum How {
     BuiltIn,
     /// Made and removed by `machine create` / `machine remove`.
     Created,
-    /// Connected and disconnected (`ssh`).
-    Connected,
 }
 
 /// The operating system of the host the caller runs on.
@@ -76,7 +72,7 @@ pub struct Profile {
     pub executor: fn(HostOs) -> ExecutorKind,
     /// The guest address the worker binds.
     pub worker_bind: Ipv4Addr,
-    /// The options `machine create` or `machine connect` takes.
+    /// The options `machine create` takes.
     pub options: &'static [OptSpec],
     /// One line: what a machine of this platform is.
     pub description: &'static str,
@@ -88,7 +84,6 @@ impl How {
         match self {
             Self::BuiltIn => "built_in",
             Self::Created => "created",
-            Self::Connected => "connected",
         }
     }
 }
@@ -126,7 +121,7 @@ pub(crate) const ANY_HOST: &[HostOs] = &HostOs::NAMED;
 /// macOS only.
 pub(crate) const MACOS: &[HostOs] = &[HostOs::Macos];
 
-/// A VM or ssh machine's backend: Linux namespaces in its guest.
+/// A VM machine's backend: Linux namespaces in its guest.
 pub(crate) fn namespaces(_: HostOs) -> Option<Backend> {
     Some(Backend::Namespaces)
 }
@@ -142,14 +137,12 @@ pub(crate) fn worker(_: HostOs) -> ExecutorKind {
 }
 
 impl Platform {
-    pub const ALL: [Platform; 7] = [
+    pub const ALL: [Platform; 5] = [
         Platform::Native,
         Platform::Docker,
         Platform::AppleContainer,
-        Platform::Microsandbox,
         Platform::Lima,
         Platform::Firecracker,
-        Platform::Ssh,
     ];
 
     /// The platform's profile: the one match over platforms for its facts.
@@ -158,10 +151,8 @@ impl Platform {
             Self::Native => &native::PROFILE,
             Self::Docker => &docker::PROFILE,
             Self::AppleContainer => &apple_container::PROFILE,
-            Self::Microsandbox => &microsandbox::PROFILE,
             Self::Lima => &lima::PROFILE,
             Self::Firecracker => &firecracker::PROFILE,
-            Self::Ssh => &ssh::PROFILE,
         }
     }
 
@@ -216,9 +207,9 @@ impl Platform {
     }
 
     /// The guest address the worker binds. Loopback wherever the provider's
-    /// forward reaches the guest's loopback (Lima's port forwarding and
-    /// `ssh -L`); every interface where the forward arrives on the guest's
-    /// network (`apple-container` and `microsandbox` publish a port,
+    /// forward reaches the guest's loopback (Lima's port forwarding); every
+    /// interface where the forward arrives on the guest's network
+    /// (`apple-container` publishes a port,
     /// `firecracker`'s forward ends at its tap address, `docker` publishes a
     /// container port). The worker's secret guards it either way.
     pub fn worker_bind(self) -> Ipv4Addr {

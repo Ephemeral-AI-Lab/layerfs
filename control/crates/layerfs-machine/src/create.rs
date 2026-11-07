@@ -1,5 +1,5 @@
 //! The machine calls (S §3.7, O11, O34). Record writes take the home lock;
-//! a create or connect holds it only to claim and to record, never while
+//! a create holds it only to claim and to record, never while
 //! the VM boots. The record it claims holds its `op` (#536 §7.1), which
 //! keeps every other call off the machine meanwhile; the write that records
 //! it running drops the `op`. One attempt: a create that fails before its
@@ -23,7 +23,7 @@ use std::path::Path;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// A new machine's name: valid, not built in, not taken.
-pub(super) fn new_name(home: &Path, name: &str) -> Result<()> {
+fn new_name(home: &Path, name: &str) -> Result<()> {
     layerfs_home::names::MachineName::parse(name)?;
     if layerfs_home::names::BUILT_IN.contains(&name) {
         return Err(refused(
@@ -73,14 +73,7 @@ pub fn create(
     if !kind.created() {
         return Err(refused(
             "InvalidInput",
-            format!(
-                "a {platform} machine is {}",
-                if kind == Platform::Ssh {
-                    "connected, not created"
-                } else {
-                    "built in"
-                }
-            ),
+            format!("a {platform} machine is built in"),
         ));
     }
     if request.nested.is_some() && kind != Platform::Lima {
@@ -169,10 +162,9 @@ pub fn create(
     finish(&home, name, op, adapters::create(&spec, &bundle), related)
 }
 
-/// Records the outcome of a create or connect (H §7.1.1 step 5) that `op`
-/// names: running drops it; a failure that kept the VM drops it with state
+/// Records the outcome of a create (H §7.1.1 step 5) that `op` names: running drops it; a failure that kept the VM drops it with state
 /// `failed`; an `Unknown` one keeps it, uncertain, with the `error`.
-pub(super) fn finish(
+fn finish(
     home: &Path,
     name: &str,
     op: Op,

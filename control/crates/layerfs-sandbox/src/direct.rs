@@ -2,7 +2,7 @@
 //! `sandbox.create` that ran in a machine's worker answers the daemon's
 //! endpoint in the machine and its control keys (`control`). Where the
 //! machine's adapter carries that port to this host (`layerfs_machine::platform::
-//! forward`: an `ssh -L` on `ssh` and `lima`), the caller
+//! forward`: an `ssh -L` on `lima`), the caller
 //! keeps the keys in the home's `sandbox/<name>/control.json` (0600) and the
 //! forward in its record's `daemon.forward`. The home's folder then serves
 //! the Sandbox like `native`'s: `workspace.mount`, `commit`, `unmount`,

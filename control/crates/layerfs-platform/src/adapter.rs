@@ -5,7 +5,7 @@
 //! cannot do an operation answers with that operation's refusal.
 use crate::error::{Code, MachineError};
 use crate::platform::{HostOs, Platform};
-use crate::platforms::{apple_container, docker, firecracker, lima, microsandbox, native, ssh};
+use crate::platforms::{apple_container, docker, firecracker, lima, native};
 use crate::setup::guest::Guest;
 use crate::setup::Status;
 use crate::spec::{Bundle, Forward, Running, Spec, Tools};
@@ -17,9 +17,9 @@ pub(crate) trait Adapter: Sync {
     fn probe(&self, tools: &Tools, host: HostOs, missing: &mut Vec<String>) -> Option<String>;
     /// How the host reaches a running machine's guest.
     fn guest(&self, spec: &Spec) -> Result<Guest, MachineError>;
-    /// Makes the machine and starts its worker (`ssh`: connects it).
+    /// Makes the machine and starts its worker.
     fn create(&self, spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError>;
-    /// Deletes the machine (`ssh`: disconnects it).
+    /// Deletes the machine.
     fn remove(&self, spec: &Spec) -> Result<(), MachineError>;
     /// Starts a stopped machine or its worker; `None`: nothing to start.
     fn start(&self, spec: &Spec, bundle: &Bundle) -> Result<Option<Running>, MachineError>;
@@ -27,8 +27,6 @@ pub(crate) trait Adapter: Sync {
     fn stop(&self, spec: &Spec) -> Result<(), MachineError>;
     /// The machine's state now; starts nothing.
     fn status(&self, spec: &Spec) -> Result<Status, MachineError>;
-    /// The identity of the machine's host (`ssh`).
-    fn host_identity(&self, spec: &Spec) -> Result<String, MachineError>;
     /// The PostgreSQL Store URL the machine's Sandbox daemons dial for
     /// `url`: a loopback host becomes the machine's host alias, or is
     /// refused naming what is missing (`crate::reach`). Starts nothing.
@@ -46,10 +44,8 @@ pub(crate) fn adapter(platform: Platform) -> &'static dyn Adapter {
         Platform::Native => &native::ADAPTER,
         Platform::Docker => &docker::ADAPTER,
         Platform::AppleContainer => &apple_container::ADAPTER,
-        Platform::Microsandbox => &microsandbox::ADAPTER,
         Platform::Lima => &lima::ADAPTER,
         Platform::Firecracker => &firecracker::ADAPTER,
-        Platform::Ssh => &ssh::ADAPTER,
     }
 }
 
