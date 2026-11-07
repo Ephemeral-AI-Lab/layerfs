@@ -473,12 +473,22 @@ pub fn remove(path: &Path) -> Result<bool, String> {
 pub fn save(path: &Path, transfer: &Transfer) -> Result<(), String> {
     let text = |error: io::Error| format!("{}: {error}", path.display());
     if let Some(directory) = path.parent() {
-        use std::os::unix::fs::DirBuilderExt;
-        fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(directory)
-            .map_err(text)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(directory)
+                .map_err(text)?;
+        }
+        #[cfg(not(unix))]
+        {
+            fs::DirBuilder::new()
+                .recursive(true)
+                .create(directory)
+                .map_err(text)?;
+        }
     }
     let mut staging = path.as_os_str().to_owned();
     staging.push(".saving");
@@ -486,8 +496,11 @@ pub fn save(path: &Path, transfer: &Transfer) -> Result<(), String> {
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
     {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
     }
     let mut file = options.open(&staging).map_err(text)?;
     file.write_all(transfer.encode().as_bytes()).map_err(text)?;

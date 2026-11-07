@@ -183,11 +183,20 @@ fn fetch(
         kernel_guard::check(directory).map_err(|reason| reason.0)?;
         installer_user()?;
         if !directory.exists() {
-            use std::os::unix::fs::DirBuilderExt;
-            fs::DirBuilder::new()
-                .mode(0o700)
-                .create(directory)
-                .map_err(text)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::DirBuilderExt;
+                fs::DirBuilder::new()
+                    .mode(0o700)
+                    .create(directory)
+                    .map_err(text)?;
+            }
+            #[cfg(not(unix))]
+            {
+                fs::DirBuilder::new()
+                    .create(directory)
+                    .map_err(text)?;
+            }
         }
         let (target, _) = paths(destination).map_err(text)?;
         let cloning = binding.is_none();
@@ -226,8 +235,11 @@ fn fetch(
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
         {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
         }
         let mut file = options.open(&temporary).map_err(text)?;
         left = Some(temporary.clone());

@@ -163,11 +163,20 @@ pub fn install_local(
         installer_user()?;
         let text = |error: io::Error| error.to_string();
         if !directory.exists() {
-            use std::os::unix::fs::DirBuilderExt;
-            fs::DirBuilder::new()
-                .mode(0o700)
-                .create(directory)
-                .map_err(text)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::DirBuilderExt;
+                fs::DirBuilder::new()
+                    .mode(0o700)
+                    .create(directory)
+                    .map_err(text)?;
+            }
+            #[cfg(not(unix))]
+            {
+                fs::DirBuilder::new()
+                    .create(directory)
+                    .map_err(text)?;
+            }
         }
         let (target, temporary) = paths(destination).map_err(text)?;
         let mut file = claim(&target, &temporary).map_err(text)?;
@@ -203,6 +212,16 @@ pub fn install_local(
     result.map_err(|cause: String| LocalInstallFailure { cause, ..left })
 }
 
+/// Windows reaches the Store in-process (no root daemon); the daemon
+/// install route is not offered there yet (#454).
+#[cfg(windows)]
+pub fn installer_user() -> Result<(), String> {
+    Err(
+        "the daemon Store install is not available on Windows; the Store runs in-process (#454)"
+            .to_owned(),
+    )
+}
+
 /// macOS has only the native route, whose daemon runs as the user who
 /// installs its Store (there is no root daemon to match); the daemon's own
 /// check that it owns the Store file still holds.
@@ -211,7 +230,7 @@ pub fn installer_user() -> Result<(), String> {
     Ok(())
 }
 /// Refuses an installer that is not the daemons' user.
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(unix, not(target_os = "macos")))]
 pub fn installer_user() -> Result<(), String> {
     use std::os::unix::fs::MetadataExt;
     // the owner of /proc/self is this process's effective user
