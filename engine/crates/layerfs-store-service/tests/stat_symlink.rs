@@ -15,8 +15,17 @@ use support::Fixture;
 fn a_symlink_size_is_its_target_length() {
     let fixture = Fixture::new("stat-symlink", |source| {
         fs::write(source.join("a.txt"), b"a\n").unwrap();
-        std::os::unix::fs::symlink("a.txt", source.join("link")).unwrap();
-        std::os::unix::fs::symlink("/does/not/exist", source.join("dangling")).unwrap();
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink("a.txt", source.join("link")).unwrap();
+            std::os::unix::fs::symlink("/does/not/exist", source.join("dangling")).unwrap();
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_file("a.txt", source.join("link")).unwrap();
+            // A dangling absolute target: the same shape unix names.
+            std::os::windows::fs::symlink_file("C:\\does\\not\\exist", source.join("dangling")).unwrap();
+        }
         3
     });
     for (path, target) in [("/link", "a.txt"), ("/dangling", "/does/not/exist")] {

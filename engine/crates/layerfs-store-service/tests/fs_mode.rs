@@ -4,6 +4,9 @@
 //! is 0o644, a new folder 0o755 and an existing entry keeps its mode. A mode
 //! LayerFS cannot store is refused as `project.init` refuses it, and a
 //! refused change commits nothing.
+// Unix mode-bit semantics test: Windows ACLs are a different story.
+#![cfg(unix)]
+
 #[path = "support/installed_store.rs"]
 #[allow(dead_code)]
 mod installed;

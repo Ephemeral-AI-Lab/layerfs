@@ -31,7 +31,10 @@ fn a_write_refusal_names_its_cause() {
     let fixture = Fixture::new("write-refusals", |source| {
         fs::create_dir(source.join("dir")).unwrap();
         fs::write(source.join("a.txt"), b"a\n").unwrap();
+        #[cfg(unix)]
         std::os::unix::fs::symlink("a.txt", source.join("link")).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_file("a.txt", source.join("link")).unwrap();
         3
     });
     fixture.fork("feat");
@@ -85,7 +88,10 @@ fn a_write_through_a_non_directory_is_not_directory() {
         fs::create_dir(source.join("dir")).unwrap();
         fs::write(source.join("dir/inner.txt"), b"inner\n").unwrap();
         fs::write(source.join("a.txt"), b"a\n").unwrap();
+        #[cfg(unix)]
         std::os::unix::fs::symlink("dir", source.join("dlink")).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir("dir", source.join("dlink")).unwrap();
         4
     });
     fixture.fork("feat");
