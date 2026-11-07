@@ -44,7 +44,7 @@ layerfs workspace exec-cancel <ws> <exec-id> [--grace-ms N]
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `grace_ms` | Int | 5000 | how long the command has to end after SIGTERM before SIGKILL; not negative; 0 sends SIGKILL at once | [`exec/cancel.rs`](../../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) `grace` |
+| `grace_ms` | Int | 5000 | how long the command has to end after SIGTERM before SIGKILL; not negative; with 0, SIGKILL follows SIGTERM at once | [`exec/cancel.rs`](../../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) `grace` |
 
 ## Returns
 
@@ -58,7 +58,7 @@ layerfs workspace exec-cancel <ws> <exec-id> [--grace-ms N]
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
 | `outcome` | text | `cancelled`, `ended` or `unknown` | [`exec/cancel.rs`](../../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) `Outcome` |
-| `signal` | text | with `cancelled`: the signal that ended it, SIGTERM within the grace, else SIGKILL | same |
+| `signal` | text | with `cancelled`: the last signal sent: `SIGTERM` when the command was gone within the grace, else `SIGKILL` (with `grace_ms: 0` it is `SIGKILL` even when SIGTERM already ended the command, whose exec then reports exit code 143) | same, [`stop.rs`](../../../../../control/crates/layerfs-sandbox-backend/src/stop.rs) `ended` |
 
 The cancelled command's own `workspace.exec` answers `kind: "cancelled"`
 with exit code 128 + the signal.
@@ -128,9 +128,10 @@ layerfs workspace exec-cancel s1:build long
 # {"outcome":"cancelled","signal":"SIGTERM"}
 ```
 
-The CLI form was run by `layerfs-cli/tests/exec_cancel.rs` (native) and
-`exec_cancel_worker.rs` (stand-in worker); the JS and Python lines are
-written from the call table.
+The CLI form was run by `layerfs-cli/tests/exec_cancel.rs` (native),
+`exec_cancel_worker.rs` (stand-in worker) and the release CLI on `native`
+and the `docker` machine (Docker Desktop worker, namespaces cgroups) on
+the layerfs-project#113 branch; the JS and Python lines are written from the call table.
 
 ## Related
 
