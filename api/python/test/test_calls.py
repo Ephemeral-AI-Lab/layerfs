@@ -5,9 +5,12 @@ and `layerfs.aio` makes the same calls as coroutines.
 
 Build first: cargo build -p layerfs-python -p layerfs-cli, then copy
 target/debug/lib_native.(dylib|so) to src/layerfs/_native.abi3.so.
+Callback unit tests also run without native artifacts; integration tests then skip.
 """
 
 import asyncio
+import importlib.machinery
+import importlib.util
 import json
 import os
 import shutil
@@ -15,15 +18,42 @@ import subprocess
 import sys
 import tempfile
 import threading
+import types
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "src"))
 
-import layerfs  # noqa: E402
-from layerfs import aio  # noqa: E402
-from layerfs._values import decode  # noqa: E402
+HAS_NATIVE = importlib.machinery.PathFinder.find_spec("layerfs._native", [str(HERE.parent / "src/layerfs")]) is not None
+if HAS_NATIVE:
+    import layerfs
+    from layerfs import aio
+    from layerfs._values import decode
+else:
+    # Load the real aio module with private import stubs, without pretending a
+    # native binding is available or exercising native calls against a mock.
+    layerfs = None
+    families = ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup"]
+    package = types.ModuleType("_layerfs_aio_unit")
+    package.__path__ = []
+    dependencies = {
+        package.__name__: package,
+        f"{package.__name__}._client": types.SimpleNamespace(
+            _FUNCTION="function",
+            FAMILIES=families,
+            TABLE=[],
+            Client=lambda home, scope: None,
+            Family=lambda name: None,
+            _streamed=lambda handlers: None,
+        ),
+        f"{package.__name__}._errors": types.SimpleNamespace(LayerFSError=Exception),
+    }
+    spec = importlib.util.spec_from_file_location(f"{package.__name__}.aio", HERE.parent / "src/layerfs/aio.py")
+    aio = importlib.util.module_from_spec(spec)
+    with patch.dict(sys.modules, dependencies):
+        spec.loader.exec_module(aio)
 
 ROOT = HERE.parent.parent.parent
 TARGET = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target"))
@@ -60,6 +90,223 @@ def python(lfs, family, call, positionals):
         return {"refused": {"code": error.code, "message": error.message, "detail": error.detail}}
 
 
+class AsyncCallbacks(unittest.IsolatedAsyncioTestCase):
+    async def fast_completion(self, fail=False, callback_error=False):
+        loop = asyncio.get_running_loop()
+        loop_thread = threading.get_ident()
+        original_schedule = loop.call_soon_threadsafe
+        original_to_thread = asyncio.to_thread
+        held, seen, errors = [], [], []
+        held_lock = threading.Lock()
+        returned = asyncio.Event()
+
+        def schedule(callback, *args, context=None):
+            if getattr(callback, "__name__", None) == "deliver":
+                with held_lock:
+                    held.append((callback, args))
+                return None
+            return original_schedule(callback, *args, context=context)
+
+        async def to_thread(*args, **kwargs):
+            try:
+                return await original_to_thread(*args, **kwargs)
+            finally:
+                returned.set()
+
+        def sync(on_progress):
+            for i in range(100):
+                on_progress(i)
+            if fail:
+                raise ValueError("worker failed")
+            return "done"
+
+        def on_progress(value):
+            seen.append((threading.get_ident(), value))
+            if callback_error and value == 50:
+                raise ValueError("callback failed")
+
+        previous_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda loop, context: errors.append(context["exception"]))
+        try:
+            with patch.object(loop, "call_soon_threadsafe", schedule), patch.object(asyncio, "to_thread", to_thread):
+                task = asyncio.create_task(aio._coroutine(sync, ["on_progress"])(on_progress=on_progress))
+                try:
+                    await asyncio.wait_for(returned.wait(), 5)
+                    # The worker's result is already available, but its progress
+                    # deliveries are deliberately held until after that result.
+                    self.assertFalse(task.done(), "the call must wait for queued progress")
+                    with held_lock:
+                        callbacks = list(held)
+                    self.assertEqual(len(callbacks), 100)
+                    for callback, args in callbacks:
+                        original_schedule(callback, *args)
+                    if fail:
+                        with self.assertRaisesRegex(ValueError, "worker failed"):
+                            await asyncio.wait_for(task, 5)
+                    else:
+                        self.assertEqual(await asyncio.wait_for(task, 5), "done")
+                    self.assertEqual(seen, [(loop_thread, i) for i in range(100)])
+                    self.assertEqual(
+                        [str(error) for error in errors], ["callback failed"] if callback_error else []
+                    )
+                finally:
+                    if not task.done():
+                        task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+        finally:
+            loop.set_exception_handler(previous_handler)
+
+    async def test_fast_completion_drains_progress_in_order_on_the_loop(self):
+        await self.fast_completion()
+
+    async def test_worker_error_also_drains_progress(self):
+        await self.fast_completion(fail=True)
+
+    async def test_callback_error_does_not_block_drain(self):
+        await self.fast_completion(callback_error=True)
+
+    async def test_concurrent_producers_preserve_each_threads_order(self):
+        loop_thread = threading.get_ident()
+        seen = []
+
+        def sync(on_progress):
+            def produce(producer):
+                for i in range(100):
+                    on_progress((producer, i))
+
+            threads = [threading.Thread(target=produce, args=(i,)) for i in range(4)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(5)
+                if thread.is_alive():
+                    raise TimeoutError("progress producer did not stop")
+            return "done"
+
+        result = await asyncio.wait_for(
+            aio._coroutine(sync, ["on_progress"])(on_progress=lambda value: seen.append((threading.get_ident(), value))),
+            10,
+        )
+        self.assertEqual(result, "done")
+        self.assertEqual(len(seen), 400)
+        self.assertEqual({thread for thread, _ in seen}, {loop_thread})
+        for producer in range(4):
+            self.assertEqual([i for _, (source, i) in seen if source == producer], list(range(100)))
+
+    async def test_cancel_while_worker_runs_drops_queued_and_later_progress(self):
+        loop = asyncio.get_running_loop()
+        started, finished = asyncio.Event(), asyncio.Event()
+        release = threading.Event()
+        seen, held = [], []
+        held_lock = threading.Lock()
+        original_schedule = loop.call_soon_threadsafe
+
+        def schedule(callback, *args, context=None):
+            if getattr(callback, "__name__", None) == "deliver":
+                with held_lock:
+                    held.append((callback, args))
+                return None
+            return original_schedule(callback, *args, context=context)
+
+        def sync(on_progress):
+            try:
+                on_progress("queued")
+                loop.call_soon_threadsafe(started.set)
+                if not release.wait(5):
+                    raise TimeoutError("worker was not released")
+                on_progress("after cancellation")
+            finally:
+                loop.call_soon_threadsafe(finished.set)
+
+        with patch.object(loop, "call_soon_threadsafe", schedule):
+            task = asyncio.create_task(aio._coroutine(sync, ["on_progress"])(on_progress=seen.append))
+            try:
+                await asyncio.wait_for(started.wait(), 5)
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await asyncio.wait_for(task, 1)
+            finally:
+                release.set()
+                if not task.done():
+                    task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+                await asyncio.wait_for(finished.wait(), 5)
+            with held_lock:
+                callbacks = list(held)
+            self.assertEqual(len(callbacks), 1, "later progress was not enqueued")
+            for callback, args in callbacks:
+                original_schedule(callback, *args)
+            barrier = asyncio.Event()
+            original_schedule(barrier.set)
+            await asyncio.wait_for(barrier.wait(), 5)
+            self.assertEqual(seen, [])
+
+    async def test_cancel_during_drain_drops_progress(self):
+        loop = asyncio.get_running_loop()
+        returned = asyncio.Event()
+        held, seen = [], []
+        held_lock = threading.Lock()
+        original_schedule = loop.call_soon_threadsafe
+        original_to_thread = asyncio.to_thread
+
+        def schedule(callback, *args, context=None):
+            if getattr(callback, "__name__", None) == "deliver":
+                with held_lock:
+                    held.append((callback, args))
+                return None
+            return original_schedule(callback, *args, context=context)
+
+        async def to_thread(*args, **kwargs):
+            result = await original_to_thread(*args, **kwargs)
+            returned.set()
+            return result
+
+        def sync(on_progress):
+            on_progress("queued")
+
+        with patch.object(loop, "call_soon_threadsafe", schedule), patch.object(asyncio, "to_thread", to_thread):
+            task = asyncio.create_task(aio._coroutine(sync, ["on_progress"])(on_progress=seen.append))
+            try:
+                await asyncio.wait_for(returned.wait(), 5)
+                self.assertFalse(task.done())
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await asyncio.wait_for(task, 1)
+                with held_lock:
+                    callbacks = list(held)
+                for callback, args in callbacks:
+                    callback(*args)
+                self.assertEqual(seen, [])
+            finally:
+                if not task.done():
+                    task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+    async def test_closed_loop_rejects_progress_without_hanging(self):
+        loop = asyncio.get_running_loop()
+        original_schedule = loop.call_soon_threadsafe
+        attempts = []
+
+        def schedule(callback, *args, context=None):
+            if getattr(callback, "__name__", None) == "deliver":
+                attempts.append(args)
+                raise RuntimeError("Event loop is closed")
+            return original_schedule(callback, *args, context=context)
+
+        def sync(on_progress):
+            on_progress(1)
+            on_progress(2)
+            return "done"
+
+        seen = []
+        with patch.object(loop, "call_soon_threadsafe", schedule):
+            result = await asyncio.wait_for(aio._coroutine(sync, ["on_progress"])(on_progress=seen.append), 5)
+        self.assertEqual(result, "done")
+        self.assertEqual(attempts, [(1,)])
+        self.assertEqual(seen, [])
+
+
+@unittest.skipUnless(HAS_NATIVE, "NOT_RUN: layerfs._native is not built; Rust compilation is out of scope")
 class Calls(unittest.TestCase):
     def same(self, name, from_shell, from_python):
         if "refused" in from_python:
