@@ -8,7 +8,7 @@
 
 The API layer is the public surface: the management library, the call table and its one dispatcher, and the front ends (the `layerfs` command, Node and Python).
 
-What a program sees of this layer is the **SDK**: 62 calls in nine
+What a program sees of this layer is the **SDK**: 63 calls in nine
 families, the same names and arguments in JavaScript, Python and the
 `layerfs` command. The [SDK reference](sdk/README.md) has one page per
 call; the other components below explain how those calls are checked,
@@ -28,7 +28,7 @@ routed and run.
 
 | Family | Calls (help order) | What it is for |
 | --- | --- | --- |
-| [`project`](sdk/project/README.md) | [init](sdk/project/init.md), [list](sdk/project/list.md), [get](sdk/project/get.md), [remove](sdk/project/remove.md) | a folder imported into a Store as `<store>/<project>` |
+| [`project`](sdk/project/README.md) | [init](sdk/project/init.md), [list](sdk/project/list.md), [get](sdk/project/get.md), [export](sdk/project/export.md), [remove](sdk/project/remove.md) | a folder imported into a Store as `<store>/<project>` |
 | [`branch`](sdk/branch/README.md) | [list](sdk/branch/list.md), [get](sdk/branch/get.md), [fork](sdk/branch/fork.md), [merge](sdk/branch/merge.md), [publish](sdk/branch/publish.md), [diff](sdk/branch/diff.md) | lines of work; `publish` makes `main`'s next Layer |
 | [`commit`](sdk/commit/README.md) | [list](sdk/commit/list.md), [get](sdk/commit/get.md), [diff](sdk/commit/diff.md) | reading a Branch's history |
 | [`file`](sdk/file/README.md) | [read](sdk/file/read.md), [stat](sdk/file/stat.md), [list](sdk/file/list.md), [glob](sdk/file/glob.md), [grep](sdk/file/grep.md), [blame](sdk/file/blame.md), [diff](sdk/file/diff.md), [write](sdk/file/write.md), [edit](sdk/file/edit.md), [rm](sdk/file/rm.md), [mkdir](sdk/file/mkdir.md), [mv](sdk/file/mv.md), [cp](sdk/file/cp.md), [apply](sdk/file/apply.md) | files at a Branch or Commit, without a mount; each write is one Commit |
@@ -58,7 +58,7 @@ routed and run.
 
 ```text
  program (JS / Python / shell)
-      |  the SDK: 62 calls
+      |  the SDK: 63 calls
       v
  Front ends (CLI, Node, Python)
       |
@@ -79,7 +79,7 @@ Dotted edges cross a process boundary.
 | Component | What it covers | Topics |
 | --- | --- | --- |
 | [Call table](call-table/README.md) | The nine call families and the one dispatcher every front end goes through. | [Table](call-table/table.md), [Errors](call-table/errors.md) |
-| [SDK](sdk/README.md) | Every call a program can make: 62 calls in nine families, one page per call, with JavaScript, Python and CLI forms. | [project](sdk/project/README.md), [branch](sdk/branch/README.md), [commit](sdk/commit/README.md), [file](sdk/file/README.md), [sandbox](sdk/sandbox/README.md), [workspace](sdk/workspace/README.md), [machine](sdk/machine/README.md), [store](sdk/store/README.md), [backup](sdk/backup/README.md) |
+| [SDK](sdk/README.md) | Every call a program can make: 63 calls in nine families, one page per call, with JavaScript, Python and CLI forms. | [project](sdk/project/README.md), [branch](sdk/branch/README.md), [commit](sdk/commit/README.md), [file](sdk/file/README.md), [sandbox](sdk/sandbox/README.md), [workspace](sdk/workspace/README.md), [machine](sdk/machine/README.md), [store](sdk/store/README.md), [backup](sdk/backup/README.md) |
 | [Front ends](front-ends/README.md) | The `layerfs` command, the Node addon and the Python module: one call each, over the call table. | [CLI](front-ends/cli.md), [Node](front-ends/node.md), [Python](front-ends/python.md) |
 
 ## Rules for this layer

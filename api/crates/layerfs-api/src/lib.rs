@@ -62,7 +62,7 @@ pub use layerfs_sandbox::{
     BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
 };
 
-/// The nine families, in the order help lists them: 61 calls, the same
+/// The nine families, in the order help lists them: 63 calls, the same
 /// from the `layerfs` binary, Node and Python.
 pub fn families() -> Families {
     &[

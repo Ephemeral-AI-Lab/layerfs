@@ -32,7 +32,7 @@ reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-62 calls in 9 families, counted from the Node table. Calls present: Node 62, Python 62, Python `aio` 62, CLI 62.
+63 calls in 9 families, counted from the Node table. Calls present: Node 63, Python 63, Python `aio` 63, CLI 63.
 
 Argument names that are Python keywords: none.
 

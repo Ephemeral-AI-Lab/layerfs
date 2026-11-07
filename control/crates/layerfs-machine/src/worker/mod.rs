@@ -20,7 +20,9 @@ mod client;
 mod frame;
 mod hello;
 
-pub use client::{call, hello, ping, request, send, Endpoint, Unreached, HELLO_WAIT, PING_WAIT};
+pub use client::{
+    call, hello, ping, request, send, Endpoint, EventSink, Unreached, HELLO_WAIT, PING_WAIT,
+};
 pub use frame::{
     frame_bytes, read_frame, read_frame_within, write_frame, ATTACHED, MAX_FRAME, MAX_HELLO,
 };

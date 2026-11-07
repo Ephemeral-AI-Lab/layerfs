@@ -11,7 +11,7 @@ as nine families of functions:
 
 | Family | Calls |
 | --- | --- |
-| `project` | `init`, `list`, `get`, `remove` |
+| `project` | `init`, `list`, `get`, `export`, `remove` |
 | `branch` | `list`, `get`, `fork`, `merge`, `publish`, `diff` |
 | `commit` | `list`, `get`, `diff` |
 | `file` | `read`, `stat`, `list`, `glob`, `grep`, `blame`, `diff`, `write`, `edit`, `rm`, `mkdir`, `mv`, `cp`, `apply` |

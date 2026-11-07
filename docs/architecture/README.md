@@ -73,7 +73,7 @@ enforces it.
 |  | [Sandboxes](control/sandboxes/README.md) | How a Sandbox runs on a machine's kernel: the native and namespaces backends, commands and streams. |
 |  | [Backups](control/backups/README.md) | Whole-Store backup to a bucket and restore, over bucket drivers that know nothing about Stores. |
 | [API](api/README.md) | [Call table](api/call-table/README.md) | The nine call families and the one dispatcher every front end goes through. |
-|  | [SDK](api/sdk/README.md) | Every call a program can make: 62 calls in nine families, one page per call. |
+|  | [SDK](api/sdk/README.md) | Every call a program can make: 63 calls in nine families, one page per call. |
 |  | [Front ends](api/front-ends/README.md) | The `layerfs` command, the Node addon and the Python module: one call each, over the call table. |
 
 ## Flows across layers

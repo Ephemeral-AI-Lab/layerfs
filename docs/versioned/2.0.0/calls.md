@@ -9,7 +9,7 @@ one file per call under its family in
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 62 calls in nine families. `layerfs help` lists them, and
+There are 63 calls in nine families. `layerfs help` lists them, and
 `layerfs help <family> [<call>]` prints one family or one call.
 
 ## How a call is written
@@ -73,17 +73,18 @@ Sandbox names (H §7.6).
 | size | bytes as a number, or text with `K`, `M` or `G` (`512M`, `8G`) | a word |
 | function | a callback (Node, Python only) | — |
 
-## The 61 calls
+## The 63 calls
 
 `[x]` is an optional positional. Every family's results are snake_case.
 
-### `project` (4)
+### `project` (5)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `init` | `project`, `folder` | `timeout` (ms, default 1 hour), `on_progress` | imports a folder on the caller's host as a new project into an existing Store |
 | `list` | `[store]` | `page_size`, `page_pos` | every project in the home, or one Store's |
 | `get` | `project` | — | a project's record: its Store, kind and machine |
+| `export` | `project`, `destination` | `branch` (default `main`), `on_progress` | exports a pinned committed Branch snapshot to a local directory |
 | `remove` | `project` | — | removes one project from its Store |
 
 - `init` never creates a Store; a missing one is `NotFound`. `folder` is
@@ -100,6 +101,34 @@ Sandbox names (H §7.6).
 - `remove` is refused `InUse` while a Sandbox of the project is recorded
   (`detail.related` lists each as `{kind: "sandbox", name}`), and is
   `Unsupported` for a PostgreSQL Store.
+
+`project export` ([reference](../../architecture/api/sdk/project/export.md)) exports a committed Branch snapshot. `destination` is an absolute path
+on the caller’s host, even for a worker Store. It must be absent or an empty
+real directory, outside the home, with an existing parent. A nonempty destination
+is `NotEmpty`; files and symlinks are refused. Same-parent staging is published
+by atomic rename only after all bytes and metadata are written; failures clean
+up this call’s staging without deleting unrelated files.
+
+Export takes a Branch name, with no `commit` option or `--commit` flag. It pins
+the node/root once, excludes uncommitted Workspace changes and is unaffected by
+later publications. SQLite reads locally or streams bounded frames from its
+worker; PostgreSQL reads in the caller’s process, for local or remote servers.
+A required stopped worker is `Unavailable` and is never started automatically.
+The fidelity contract includes binary files, empty directories, `.git`, ignored
+files, symlinks, permission bits and nanosecond `mtime` where the host supports
+them. Host name/case collisions are `Conflict`, rather than silent overwrites.
+
+```bash
+# Example, not run: /exports exists and /exports/api is absent or empty.
+layerfs project export shop/api /exports/api --branch agent --progress
+```
+
+The final JSON result contains `project`, `store`, `name`, `kind`, `machine`,
+`branch`, `snapshot`, `node`, `root`, `destination`, `files`, `directories`,
+`symlinks` and `bytes`. Progress on stderr is JSON Lines with `prepare`, `export`,
+`finalize`, local `files`/`directories`/`symlinks`/`bytes`, `done = bytes` during
+writing and `total: null`; `finalize` is the last event and comes only once the
+folder is in place. Events arrive at most every 200 ms.
 
 ### `branch` (6)
 
@@ -546,7 +575,7 @@ Every call is one attempt. After `Unknown`, read the state with `list`,
 | Switch | Calls | Does |
 | --- | --- | --- |
 | `--text` | all | a readable result instead of JSON |
-| `--progress` | `project init`, `workspace exec`, `store push`, `store pull`, `backup create`, `backup restore` | progress as one JSON line per update on stderr, `{"progress": {…}}`; for `workspace exec`, the exec id first |
+| `--progress` | `project init`, `project export`, `workspace exec`, `store push`, `store pull`, `backup create`, `backup restore` | progress as one JSON line per update on stderr, `{"progress": {…}}`; for `workspace exec`, the exec id first |
 | `--stream` | `workspace exec` | passes the command's stdout and stderr through (output over 1 MiB too) and exits with its code |
 | `--from <file>` | `file write`, `file apply` | reads the content or JSON from a file instead of stdin |
 | `--<option>-from <file>` | any optional text option (`--old-from`, `--new-from`, `--message-from`) | reads the option's value from a file |

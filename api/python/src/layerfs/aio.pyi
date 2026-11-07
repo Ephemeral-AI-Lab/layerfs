@@ -26,6 +26,15 @@ class AsyncProjectFamily:
         """every project in the home, or one Store's"""
     async def get(self, project: str) -> Result:
         """a project's record: its Store, kind and machine"""
+    async def export(
+        self,
+        project: str,
+        destination: str,
+        *,
+        branch: str | None = None,
+        on_progress: Callable[[Progress], object] = ...,
+    ) -> Result:
+        """export a project's snapshot from its Store to a local folder"""
     async def remove(self, project: str) -> Result:
         """remove one project from its Store"""
 

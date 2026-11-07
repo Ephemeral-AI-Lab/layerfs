@@ -66,6 +66,12 @@ export interface ProjectListOptions {
   page_pos?: WholeNumber;
 }
 
+/** Options of `project.export`; an unknown option is refused. */
+export interface ProjectExportOptions {
+  branch?: string;
+  on_progress?: ProgressHandler;
+}
+
 /** Options of `branch.list`; an unknown option is refused. */
 export interface BranchListOptions {
   page_size?: WholeNumber;
@@ -298,6 +304,8 @@ export interface ProjectFamily {
   list(store?: string | null, options?: ProjectListOptions): Promise<Result>;
   /** a project's record: its Store, kind and machine */
   get(project: string): Promise<Result>;
+  /** export a project's snapshot from its Store to a local folder */
+  export(project: string, destination: string, options?: ProjectExportOptions): Promise<Result>;
   /** remove one project from its Store */
   remove(project: string): Promise<Result>;
 }

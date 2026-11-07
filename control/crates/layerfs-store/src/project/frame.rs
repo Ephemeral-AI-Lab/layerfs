@@ -1,5 +1,5 @@
 //! The `project` worker frames (layerfs-project#109): `project.init`,
-//! `project.remove` and `project.stage`, each encoded by the caller and
+//! `project.remove`, `project.stage` and `project.export`, each encoded by the caller and
 //! decoded once in the worker, in the order the worker always refused them.
 //! The worker sets the home to its own root; a frame names none.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -34,6 +34,20 @@ pub struct RemoveFrame {
     pub store: StoreName,
     /// The project's name in it.
     pub project: String,
+    /// The Store's record.
+    pub store_record: Option<SdkValue>,
+}
+
+/// `project.export` in a worker: stream Branch `branch` of project
+/// `project` of Store `store` back to the caller.
+#[derive(Clone, Debug)]
+pub struct ExportFrame {
+    /// The Store.
+    pub store: StoreName,
+    /// The project's name in it.
+    pub project: String,
+    /// The Branch; `main` when absent.
+    pub branch: Option<String>,
     /// The Store's record.
     pub store_record: Option<SdkValue>,
 }
@@ -178,6 +192,33 @@ impl StageFrame {
             name: text("name"),
             id,
             step,
+        })
+    }
+}
+
+impl ExportFrame {
+    /// The `project.export` frame: `{ store, project, branch?,
+    /// store_record? }`.
+    pub fn encode(&self) -> SdkValue {
+        let mut fields = vec![
+            ("store", SdkValue::text(self.store.as_str())),
+            ("project", SdkValue::text(&self.project)),
+        ];
+        fields.extend(self.branch.as_deref().map(|b| ("branch", SdkValue::text(b))));
+        fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
+        map(fields)
+    }
+
+    /// A `project.export` frame: no Store, no project, then a bad Store
+    /// name are refused.
+    pub fn decode(frame: &SdkValue) -> Result<Self> {
+        let store = required(frame.get_text("store"), "store")?;
+        let project = required(frame.get_text("project"), "project")?.to_owned();
+        Ok(Self {
+            store: StoreName::parse(store)?,
+            project,
+            branch: frame.get_text("branch").map(str::to_owned),
+            store_record: frame.get("store_record").cloned(),
         })
     }
 }
