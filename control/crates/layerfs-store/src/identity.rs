@@ -106,25 +106,15 @@ pub fn identity(open: &OpenArgs) -> Result<Identity> {
         }
     }
     // a Store made by its project's own Init: that project's entry
-    let mut named: Vec<(String, SdkValue)> = Vec::new();
-    named.extend(open.home.as_ref().map(|home| {
-        (
-            "home".to_owned(),
-            SdkValue::text(home.display().to_string()),
-        )
-    }));
-    named.extend(
-        store
-            .or(open.project.as_deref())
-            .map(|project| ("project".to_owned(), SdkValue::text(project))),
-    );
-    let project = discovery::project(&SdkValue::Map(named)).map_err(|refusal| match store {
-        Some(store) if refusal.code == "Failed" || refusal.code == "Unauthorized" => refused(
-            "NoSuchStore",
-            format!("no LayerFS Store named {store} in this home"),
-        ),
-        _ => refusal,
-    })?;
+    let name = store.or(open.project.as_deref());
+    let project =
+        discovery::project(open.home.as_deref(), None, name).map_err(|refusal| match store {
+            Some(store) if refusal.code == "Failed" || refusal.code == "Unauthorized" => refused(
+                "NoSuchStore",
+                format!("no LayerFS Store named {store} in this home"),
+            ),
+            _ => refusal,
+        })?;
     Ok(Identity {
         kind: Kind::Sqlite,
         binding: project.manifest.binding,

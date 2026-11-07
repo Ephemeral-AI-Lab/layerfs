@@ -159,7 +159,7 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
             let open = layerfs_store::open_args::OpenArgs {
                 home: Some(root.to_path_buf()),
                 store_path: Some(file.display().to_string()),
-                ..layerfs_store::open_args::OpenArgs::read(&call.fields)
+                ..call.open()
             };
             layerfs_store::open::run(&call.method, &open, call.fields, Some(lease))
         }

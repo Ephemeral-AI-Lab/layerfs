@@ -85,6 +85,21 @@ pub struct CallFrame {
 }
 
 impl CallFrame {
+    /// What opens the Store: the frame's open fields, each what the field
+    /// of the same name held as text (`None` when absent or not text).
+    pub fn open(&self) -> OpenArgs {
+        let fields = &self.fields;
+        let text = |name: &str| fields.get_text(name).map(str::to_owned);
+        OpenArgs {
+            home: text("home").map(std::path::PathBuf::from),
+            store: text("store"),
+            project: text("project"),
+            store_path: text("storePath"),
+            store_record: fields.get("store_record").cloned(),
+            postgresql: fields.get("postgresql").map(PgSelection::read),
+        }
+    }
+
     /// Reads `frame`: no method or no Store is `InvalidInput`.
     pub fn decode(frame: &SdkValue) -> Result<Self, SdkRefusal> {
         let method = frame

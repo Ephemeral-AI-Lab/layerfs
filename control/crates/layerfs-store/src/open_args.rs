@@ -1,6 +1,7 @@
 //! What a Store call opens its Store with (layerfs-project#109 R8): the
 //! Store file or key, the Store's identity sources and a PostgreSQL Store's
-//! server. Read from an args map only at a map's edge ([`OpenArgs::read`]);
+//! server. Read from an args map only at a map's edge, a worker's
+//! `store.call` frame ([`CallFrame::open`](crate::call::CallFrame::open));
 //! the engine call gets the call's own arguments without these keys
 //! ([`ROUTING`]).
 use crate::postgresql::open::{schema_of, setting_of, url_of};
@@ -22,8 +23,8 @@ pub const ROUTING: [&str; 8] = [
     "project_record",
 ];
 
-/// The Store a call opens and how. A field is what the args map's field of
-/// the same name held as text (`None` when absent or not text).
+/// The Store a call opens and how. Each field is named for the frame field
+/// it travels as.
 #[derive(Clone, Default)]
 pub struct OpenArgs {
     /// `home`; `None` takes `LAYERFS_HOME`.
@@ -53,19 +54,6 @@ pub struct PgSelection {
 }
 
 impl OpenArgs {
-    /// The open fields of args map `args`.
-    pub fn read(args: &SdkValue) -> Self {
-        let text = |name: &str| args.get_text(name).map(str::to_owned);
-        Self {
-            home: text("home").map(PathBuf::from),
-            store: text("store"),
-            project: text("project"),
-            store_path: text("storePath"),
-            store_record: args.get("store_record").cloned(),
-            postgresql: args.get("postgresql").map(PgSelection::read),
-        }
-    }
-
     /// The Store file a call names (`storePath`).
     pub fn store_path(&self) -> Result<PathBuf> {
         match self.store_path.as_deref() {

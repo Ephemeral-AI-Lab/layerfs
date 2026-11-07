@@ -80,7 +80,7 @@ fn daemon_backend(host: &Host, call: &Call) -> Outcome {
     let op = call.op().name();
     // the daemon's own request (its protocol, `Request::Sdk`) is the host
     // request's one args map
-    let args = match host.to_args(Some(call)) {
+    let args = match host.to_args(call) {
         SdkValue::Map(fields) => SdkValue::Map(
             fields
                 .into_iter()

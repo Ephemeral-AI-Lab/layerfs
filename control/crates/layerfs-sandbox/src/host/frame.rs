@@ -1,8 +1,8 @@
 //! The host operation's values (layerfs-project#108), the one place its
 //! typed request meets them: the `sandbox.host` frame a caller sends a
 //! machine's worker ([`Sent`], [`encode`], [`decode`]), and the one args
-//! map ([`Host::to_args`]) for what still takes a map: the project read of
-//! a Sandbox's Store file and the daemon's `sandbox.list_workspaces`. Both
+//! map ([`Host::to_args`]) for what still takes a map: the daemon's
+//! `sandbox.list_workspaces`. Both
 //! are built by the same field encoder ([`fields`]), in the order the
 //! untyped request had. What opens its Store is [`Host::open_args`].
 use super::call::{Call, Deploy, Host, Message, Op, Started};
@@ -299,13 +299,10 @@ impl Host {
         }
     }
 
-    /// The host operation as one args map, for what still takes one: the
-    /// project read of a Sandbox's Store file and the daemon's
-    /// `sandbox.list_workspaces`. Its fields are the ones the untyped
-    /// request had.
-    /// `call`'s own fields are left out where `call` is `None`: the
-    /// project read takes none of them.
-    pub fn to_args(&self, call: Option<&Call>) -> SdkValue {
+    /// The host operation `call` as one args map, for what still takes
+    /// one: the daemon's `sandbox.list_workspaces`. Its fields are the ones
+    /// the untyped request had.
+    pub fn to_args(&self, call: &Call) -> SdkValue {
         let mut fields = vec![
             ("home", text(&self.home.display().to_string())),
             ("store", text(&self.store)),
@@ -320,13 +317,7 @@ impl Host {
         if let Some(postgresql) = &self.postgresql {
             fields.push(("postgresql", postgresql.clone()));
         }
-        match call {
-            Some(call) => fields.extend(self::fields(call, &self.message, self.sandbox.as_deref())),
-            None => {
-                fields.extend(message(&self.message).map(|m| ("message", m)));
-                fields.extend(self.sandbox.as_deref().map(|s| ("sandbox", text(s))));
-            }
-        }
+        fields.extend(self::fields(call, &self.message, self.sandbox.as_deref()));
         map(fields)
     }
 }

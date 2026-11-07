@@ -75,21 +75,16 @@ pub fn directory(path: &Path) -> Result<()> {
 /// an Init of its own (the Store has its project's name and no Store
 /// record); `<home>/.stores/<store>/projects/<project>/` for every other
 /// project of a Store.
-pub fn project_dir(args: &SdkValue) -> Result<PathBuf> {
-    let path = project_entry(args)?;
+fn project_dir(home: Option<&Path>, store: Option<&str>, name: Option<&str>) -> Result<PathBuf> {
+    let name = helpers::required(name, "project")?;
+    layerfs_history::HistoryName::new(name).map_err(failed)?;
+    let home = home_of(home)?;
+    // 2.0 (#533 step 4): every project is named with its Store
+    let store = store.unwrap_or(name);
+    crate::identity::store_dir(&home, store)?;
+    let path = layerfs_home::home::paths::project_dir(&home, store, name);
     private(&path, true)?;
     Ok(path)
-}
-
-/// [`project_dir`]'s path, not checked to exist.
-pub fn project_entry(args: &SdkValue) -> Result<PathBuf> {
-    let name = helpers::text(args, "project")?;
-    layerfs_history::HistoryName::new(name).map_err(failed)?;
-    let home = home_of(args.get_text("home").map(Path::new))?;
-    // 2.0 (#533 step 4): every project is named with its Store
-    let store = args.get_text("store").unwrap_or(name);
-    crate::identity::store_dir(&home, store)?;
-    Ok(layerfs_home::home::paths::project_dir(&home, store, name))
 }
 /// Calls take turns on one directory: in this process before its OS lock,
 /// and between processes on the lock itself. The wait is readiness, bounded,
@@ -272,8 +267,10 @@ pub fn save_project(path: &Path, project: &Project) -> Result<()> {
     }
     layerfs_home::home::write_entity(&path.join("record.json"), &record)
 }
-pub fn project(args: &SdkValue) -> Result<Project> {
-    let path = project_dir(args)?;
+/// Project `name` of Store `store` (by default, the Store of its own name)
+/// in `home` (by default, `LAYERFS_HOME`), read from its entry.
+pub fn project(home: Option<&Path>, store: Option<&str>, name: Option<&str>) -> Result<Project> {
+    let path = project_dir(home, store, name)?;
     let value = layerfs_home::home::read_record(&path.join("record.json"))?
         .ok_or_else(|| refused("NoSuchProject", "no project record"))?;
     let decode = |name| match value.get(name) {

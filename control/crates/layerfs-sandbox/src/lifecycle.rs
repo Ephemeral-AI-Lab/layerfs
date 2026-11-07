@@ -116,7 +116,11 @@ fn installed(host: &Host) -> Result<OpenedStore, SdkRefusal> {
     let name = &host.project;
     let identity = layerfs_store::identity::identity(&host.open_args())?;
     layerfs_store::identity::sqlite_only(&identity, "a Sandbox of a Store file")?;
-    let project = layerfs_store::project::discovery::project(&host.to_args(None))?;
+    let project = layerfs_store::project::discovery::project(
+        Some(&host.home),
+        Some(&host.store),
+        Some(&host.project),
+    )?;
     let Some(installed) = project.installed.clone() else {
         return Err(refused(
             "NoStore",
