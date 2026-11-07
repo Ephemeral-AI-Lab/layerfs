@@ -23,8 +23,9 @@ fn a_symlink_size_is_its_target_length() {
         #[cfg(windows)]
         {
             std::os::windows::fs::symlink_file("a.txt", source.join("link")).unwrap();
-            // A dangling absolute target: the same shape unix names.
-            std::os::windows::fs::symlink_file("C:\\does\\not\\exist", source.join("dangling")).unwrap();
+            // The same dangling target string the unix side names; a
+            // symlink target is a literal, never resolved at creation.
+            std::os::windows::fs::symlink_file("/does/not/exist", source.join("dangling")).unwrap();
         }
         3
     });

@@ -91,12 +91,25 @@ impl Backing {
                 ));
             }
         }
+        // Windows cannot unlink an open file: the identity check is the
+        // sole-handle shape the open handle already proves; the unlink
+        // itself runs in Drop after the handle closes.
         #[cfg(not(unix))]
-        return Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "overlay deletion platform",
-        ));
-        #[cfg(unix)]
+        {
+            let named = std::fs::symlink_metadata(&self.path)?;
+            if !named.is_file() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "overlay deletion identity",
+                ));
+            }
+            Ok(())
+        }
+    }
+
+    /// Windows: the unlink half of deletion, after the handle closes.
+    #[cfg(not(unix))]
+    fn unlink(&self) -> io::Result<()> {
         std::fs::remove_file(&self.path)
     }
 }
@@ -106,14 +119,38 @@ impl Drop for Backing {
         if !self.terminal.load(Ordering::Acquire) || !self.closed.load(Ordering::Acquire) {
             return;
         }
-        let deleted = self.delete();
-        let file = self.file.take().expect("retained identity file");
-        let result = match deleted {
-            Ok(()) => {
-                drop(file);
-                Ok(())
+        #[cfg(unix)]
+        let result = {
+            let deleted = self.delete();
+            let file = self.file.take().expect("retained identity file");
+            match deleted {
+                Ok(()) => {
+                    drop(file);
+                    Ok(())
+                }
+                Err(cause) => Err((cause, file)),
             }
-            Err(cause) => Err((cause, file)),
+        };
+        // Windows: check first, then close the handle (an open file cannot
+        // be unlinked), then unlink. A failed unlink leaves the path named;
+        // the slot stays Failed with the reason, the same custody as unix.
+        #[cfg(not(unix))]
+        let result = {
+            let checked = self.delete();
+            let file = self.file.take().expect("retained identity file");
+            match checked.and_then(|()| {
+                drop(file);
+                self.unlink()
+            }) {
+                Ok(()) => Ok(()),
+                Err(cause) => Err((
+                    cause,
+                    std::fs::OpenOptions::new()
+                        .read(true)
+                        .open(&self.path)
+                        .unwrap_or_else(|_| unreachable!("identity path vanished")),
+                )),
+            }
         };
         if let Some(pool) = self.pool.upgrade() {
             pool.deleted(self.namespace, self.incarnation, result);

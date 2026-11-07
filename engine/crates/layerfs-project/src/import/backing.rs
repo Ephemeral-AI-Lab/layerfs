@@ -63,10 +63,19 @@ pub(super) fn face(metadata: &Metadata, host: (u64, u64)) -> StampFace {
     StampFace {
         dev: host.0,
         ino: host.1,
-        mode: if metadata.permissions().readonly() {
+        // The face reads as unix default modes: a file 0644 (0444 when
+        // readonly), a directory 0755 (0555) - the shapes the portable
+        // masks and the recorded goldens name.
+        mode: if metadata.is_dir() {
+            if metadata.permissions().readonly() {
+                0o555
+            } else {
+                0o755
+            }
+        } else if metadata.permissions().readonly() {
             0o444
         } else {
-            0o666
+            0o644
         },
         mtime,
         mtime_nsec,

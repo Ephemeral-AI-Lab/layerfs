@@ -362,11 +362,14 @@ impl Sender<'_, '_, '_> {
                 .map(|d| (d.as_secs() as i64, d.subsec_nanos()))
                 .unwrap_or((0, 0));
             let readonly = meta.permissions().readonly();
-            (
-                if readonly { 0o444 } else { 0o666 },
-                secs,
-                nanos,
-            )
+            let mode = if meta.is_dir() {
+                if readonly { 0o555 } else { 0o755 }
+            } else if readonly {
+                0o444
+            } else {
+                0o644
+            };
+            (mode, secs, nanos)
         };
         self.push(Record::Meta {
             path: rel,
