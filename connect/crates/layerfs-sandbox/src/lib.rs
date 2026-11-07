@@ -26,7 +26,6 @@ pub use backend::docker::{self, Docker, DockerProvider};
 pub use backend::host_process;
 #[cfg(target_os = "linux")]
 pub use backend::namespaces::{self, NamespaceProvider};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod local;
 #[cfg(target_os = "macos")]
 pub use backend::host_process::HostProcessProvider;
