@@ -17,15 +17,17 @@ UNSAFE = re.compile(r"\bunsafe\b")
 
 # Crates whose `unsafe` surface is bounded. layerfs-storage keeps one audited
 # FFI module (encoding/codec.rs); Persistence has the owner-authorized macOS
-# seal file-control module; the Sandbox backend reads macOS process facts
-# through proc_pidinfo in local/os/macos/darwin.rs and installs the namespaces
-# command filter (two prctl calls, D-8) in local/os/linux/seccomp.rs. Their
-# siblings stay unsafe-free. The comment in a lint name (`unsafe_code`) is not
+# seal file-control module; the bridge reads macOS process facts through
+# proc_pidinfo in process/darwin.rs (moved with LocalProcess from the Sandbox
+# backend, layerfs-project#112, so the home and the drivers share it); the
+# Sandbox backend installs the namespaces command filter (two prctl calls,
+# D-8) in local/os/linux/seccomp.rs. Their siblings stay unsafe-free. The comment in a lint name (`unsafe_code`) is not
 # the bare word, so attr lines never trip the scan once comments are stripped.
 UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": ("src/encoding/codec.rs",),
     "layerfs-persistence": ("src/backend/sqlite/lifecycle/file_control.rs",),
-    "layerfs-sandbox-backend": ("src/local/os/macos/darwin.rs", "src/local/os/linux/seccomp.rs"),
+    "layerfs-bridge": ("src/process/darwin.rs",),
+    "layerfs-sandbox-backend": ("src/local/os/linux/seccomp.rs",),
 }
 UNSAFE_FREE_CRATES = (
     "layerfs-content",
@@ -41,7 +43,6 @@ UNSAFE_FREE_CRATES = (
     "layerfs-daemon",
     "layerfs-api",
     "layerfs-control",
-    "layerfs-bridge",
     "layerfs-cli",
     "layerfs-platform",
     "layerfs-home",
@@ -65,7 +66,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-daemon": "#![forbid(unsafe_code)]",
     "layerfs-api": "#![forbid(unsafe_code)]",
     "layerfs-control": "#![forbid(unsafe_code)]",
-    "layerfs-bridge": "#![forbid(unsafe_code)]",
+    "layerfs-bridge": "#![deny(unsafe_code)]",
     "layerfs-sandbox-backend": "#![deny(unsafe_code)]",
     "layerfs-cli": "#![forbid(unsafe_code)]",
     "layerfs-platform": "#![forbid(unsafe_code)]",
@@ -184,9 +185,10 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-sandbox-backend",
         "layerfs-bucket",
     },
-    # The home and its records (#103): knows no entity. The Sandbox driver
-    # names this process (pid, kernel start time, boot) for an op's owner.
-    "layerfs-home": {"layerfs-bridge", "layerfs-sandbox-backend"},
+    # The home and its records (#103): knows no entity and no driver (#112);
+    # the bridge's process names this process (pid, kernel start time, boot)
+    # for an op's owner.
+    "layerfs-home": {"layerfs-bridge"},
     # Machine records, lifecycle and the worker client (#104), over the
     # platform driver (host builds only, through its `machine` feature).
     "layerfs-machine": {"layerfs-bridge", "layerfs-home", "layerfs-platform"},
@@ -219,8 +221,9 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-bridge": {"layerfs-content", "layerfs-history"},
     # The drivers (#101 D-5, D-9): sandbox-backend (was layerfs-isolation,
     # before that layerfs-sandbox), platform (was layerfs-machine) and
-    # bucket (was layerfs-store-backup).
-    "layerfs-sandbox-backend": set(),
+    # bucket (was layerfs-store-backup). The Sandbox driver reads process
+    # identity from the bridge's process, below it and the home (#112).
+    "layerfs-sandbox-backend": {"layerfs-bridge"},
     # The platform driver (#535 1.2): uses the Backend enum, shared types and
     # json; the bridge's KernelRoute and StoreKind name its support table (B).
     "layerfs-platform": {"layerfs-sandbox-backend", "layerfs-bridge"},

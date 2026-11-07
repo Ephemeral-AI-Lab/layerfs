@@ -3,9 +3,10 @@
 //! reaps a daemon this process started that has already exited. A stop
 //! returns only once a daemon this process started is reaped, so it never
 //! stays a zombie of this process.
-use crate::local::{groups, os, process::LocalProcess};
+use crate::local::{groups, os};
 use crate::LocalRecord;
 use crate::{ContainerId, RuntimeError, WireFailure};
+use layerfs_bridge::process::LocalProcess;
 use nix::sys::signal::Signal;
 use std::{
     fs::{self, OpenOptions},

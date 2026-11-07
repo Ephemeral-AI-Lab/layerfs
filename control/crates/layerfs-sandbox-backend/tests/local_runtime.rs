@@ -4,9 +4,10 @@
 //! small shell script stands in for the daemon; nothing here needs root.
 //! The runtime is Linux only, and so are these tests.
 #![cfg(target_os = "linux")]
+use layerfs_bridge::process::LocalProcess;
 use layerfs_sandbox_backend::{
     host_process::Sandbox,
-    local::{Local, LocalPhase, LocalProcess},
+    local::{Local, LocalPhase},
     CommandIdentity, ExecRequest, RuntimeError,
 };
 use std::{

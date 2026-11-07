@@ -730,6 +730,7 @@ version = "2.0.0"
 dependencies = [
  "layerfs-content",
  "layerfs-history",
+ "nix",
  "snow",
 ]
 
@@ -833,7 +834,6 @@ name = "layerfs-home"
 version = "2.0.0"
 dependencies = [
  "layerfs-bridge",
- "layerfs-sandbox-backend",
  "libc",
  "nix",
 ]
@@ -962,6 +962,7 @@ dependencies = [
 name = "layerfs-sandbox-backend"
 version = "2.0.0"
 dependencies = [
+ "layerfs-bridge",
  "nix",
 ]
 

@@ -1,9 +1,10 @@
 //! One local daemon start: the Sandbox's private directory, its 0600 setup,
 //! one spawn and its listener line. Nothing is retried.
 use super::listener;
-use super::{process::LocalProcess, search::search_path};
+use super::search::search_path;
 use crate::backend::host_process::sandbox::{Sandbox, LOG};
 use crate::RuntimeError;
+use layerfs_bridge::process::LocalProcess;
 use nix::fcntl::OFlag;
 use std::{
     fs::{self, File, OpenOptions, Permissions},

@@ -156,7 +156,7 @@ pub fn open(home: &Path, record: &SandboxRecord, started: &Started) -> Opened {
     };
     // the forward's identity, so a reused id is never taken for it
     let process = forward.1.map(|pid| {
-        let observed = layerfs_sandbox_backend::local::LocalProcess::observe(pid).ok();
+        let observed = layerfs_bridge::process::LocalProcess::observe(pid).ok();
         (pid, observed.map(|process| (process.start, process.boot)))
     });
     let forward = Forward::new(forward.0, record.machine(), process);

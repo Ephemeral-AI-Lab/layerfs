@@ -86,18 +86,22 @@ the layer.
 `Runtime::MacosNative(NativeMacosProvider::new(root))` runs the daemon as this
 user and serves loopback NFS. It is compiled on macOS only. Linux has no native
 provider (#533 O27): a Linux host runs local Sandboxes with `namespaces`, which
-builds on `native`'s shared lifecycle (`Local`, `LocalProcess`, `listener`,
-`search`, `streams`) and its Linux facts. On Linux, `native::Sandbox` remains
+builds on `native`'s shared lifecycle (`Local`, `listener`, `search`,
+`streams`, and `LocalProcess` from `layerfs_bridge::process` since
+layerfs-project#112) and its Linux facts. On Linux, `native::Sandbox` remains
 only to reopen, stop and delete a Sandbox recorded by the Linux native runtime
 before 2.0. Only the platform facts differ:
 
-- `native/macos/`: `darwin.rs` (`proc_pidinfo`, `sysctl`, the `mount` table and
-  `umount -f`) and `mounts.rs` (force detach, deepest first).
-- `native/linux/`: `process.rs` (`/proc/<pid>/stat`, the boot id and the
-  process table) and `mounts.rs` (`/proc/self/mountinfo`, lazy `MNT_DETACH`,
+- `native/macos/`: `darwin.rs` (the `mount` table and `umount -f`) and
+  `mounts.rs` (force detach, deepest first).
+- `native/linux/`: `mounts.rs` (`/proc/self/mountinfo`, lazy `MNT_DETACH`,
   and the filesystem under a path for the namespaces overlay). Namespaces
-  reads the boot id, `stat` and `filesystem`; the process table and detach
-  serve the stop and delete of a recorded pre-2.0 Linux native Sandbox.
+  reads `filesystem` here; detach serves the stop and delete of a recorded
+  pre-2.0 Linux native Sandbox.
+- The process facts (`/proc/<pid>/stat`, `proc_pidinfo`, the boot id and the
+  process table) moved to `layerfs_bridge::process` (layerfs-project#112).
+  Namespaces reads the boot id and `stat` there; the process table serves the
+  stop and delete of a recorded pre-2.0 Linux native Sandbox.
 
 The provider validates the command identity, the environment it is given and
 the daemon executable, then starts one daemon in a private directory. The

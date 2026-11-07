@@ -173,12 +173,23 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertTrue(
             unsafe_violations(Path("control/crates/layerfs-sandbox-backend/src/lib.rs"), "#![forbid(unsafe_code)]")
         )
-        darwin = Path("control/crates/layerfs-sandbox-backend/src/local/os/macos/darwin.rs")
+        # #112: the macOS process facts moved with LocalProcess to the bridge;
+        # the driver's remaining darwin.rs (mount facts) is no allowance.
+        darwin = Path("engine/crates/layerfs-bridge/src/process/darwin.rs")
         self.assertFalse(unsafe_violations(darwin, "fn f() { unsafe { libc::proc_listallpids(); } }"))
+        left = Path("control/crates/layerfs-sandbox-backend/src/local/os/macos/darwin.rs")
+        self.assertTrue(unsafe_violations(left, "fn f() { unsafe { libc::proc_listallpids(); } }"))
+        for sibling in ("process/identity.rs", "process/linux.rs", "process/mod.rs", "control.rs"):
+            with self.subTest(sibling=sibling):
+                path = Path("engine/crates/layerfs-bridge/src") / sibling
+                self.assertTrue(unsafe_violations(path, "fn f() { unsafe { call(); } }"))
+        bridge_root = Path("engine/crates/layerfs-bridge/src/lib.rs")
+        self.assertFalse(unsafe_violations(bridge_root, "#![deny(unsafe_code)]"))
+        self.assertTrue(unsafe_violations(bridge_root, "mod process;"))
         # the second audited file: the namespaces command filter (D-8)
         seccomp = Path("control/crates/layerfs-sandbox-backend/src/local/os/linux/seccomp.rs")
         self.assertFalse(unsafe_violations(seccomp, "fn f() { unsafe { libc::prctl(22, 2, p); } }"))
-        for sibling in ("local/os/linux/mounts.rs", "local/os/linux/process.rs", "bin/layerfs-sandbox-helper/exec.rs"):
+        for sibling in ("local/os/linux/mounts.rs", "local/groups.rs", "bin/layerfs-sandbox-helper/exec.rs"):
             with self.subTest(sibling=sibling):
                 path = Path("control/crates/layerfs-sandbox-backend/src") / sibling
                 self.assertTrue(unsafe_violations(path, "fn f() { unsafe { libc::prctl(22, 2, p); } }"))
@@ -287,6 +298,11 @@ class ProductBoundaryTests(unittest.TestCase):
         # rule 5 and the chain: the home knows no entity, an entity never points up
         home = '[package]\nname="layerfs-home"\n[dependencies]\n'
         self.assertTrue(dependency_violations(home + 'layerfs-machine={path="../layerfs-machine"}'))
+        # #112: nor any driver; process identity comes from the bridge
+        for driver in ("layerfs-sandbox-backend", "layerfs-platform", "layerfs-bucket"):
+            with self.subTest(driver=driver):
+                self.assertTrue(dependency_violations(home + f'{driver}={{path="../{driver}"}}'))
+        self.assertFalse(dependency_violations(home + 'layerfs-bridge={path="../../../engine/crates/layerfs-bridge"}'))
         machine = '[package]\nname="layerfs-machine"\n[dependencies]\n'
         self.assertTrue(dependency_violations(machine + 'layerfs-store={path="../layerfs-store"}'))
         sandbox = '[package]\nname="layerfs-sandbox"\n[dependencies]\n'

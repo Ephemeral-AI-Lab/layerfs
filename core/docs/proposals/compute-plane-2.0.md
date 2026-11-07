@@ -282,8 +282,8 @@ Rules:
    Sandbox modules; the Sandbox modules do not import `workspace/`. A module
    test checks it.
 5. **Management is `layerfs-home` only:** it knows no entity, and depends
-   on no driver (its process facts move below the drivers; today it reaches
-   `LocalProcess` in the Sandbox driver, §6.6).
+   on no driver (its process facts moved below the drivers, into
+   `layerfs_bridge::process`, by layerfs-project#112; §6.6).
 6. **Drivers take every input as arguments**, know nothing of the home and
    write no records.
 
@@ -396,7 +396,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 | `store` → `inventory` (remove, push, pull "in use" checks) | the check reads Sandbox records | the check moves up to the `layerfs-control` op (§6.5) |
 | `sandbox` → `workspace` (`direct.rs`, `dispatch.rs`, `registry.rs`, `serve.rs`) | Workspace routing sits in Sandbox code | `direct.rs` moves to `workspace/`; the rest is resolved when the crate is cut (rule 4), or moves up |
 | `machine` → `inventory` (`list` shows Stores and Sandboxes) | a machine's summary includes derived counts | composed in `layerfs-control` (§6.5) |
-| `layerfs-home` → `layerfs-isolation` (found after phase A; `home/process.rs`) | process identity (`LocalProcess`) lives in the Sandbox driver | move the process facts, with the one audited macOS unsafe file and its guard entry, below the drivers; own commit after D-9 |
+| `layerfs-home` → `layerfs-isolation` (found after phase A; `home/process.rs`) | process identity (`LocalProcess`) lives in the Sandbox driver | move the process facts, with the one audited macOS unsafe file and its guard entry, below the drivers; own commit after D-9 (done by layerfs-project#112: `layerfs_bridge::process`, audited `process/darwin.rs`) |
 
 The table covers every backward edge the import scan found at `8b701f42f0`.
 Some may need a small body change rather than a move; each one is listed in

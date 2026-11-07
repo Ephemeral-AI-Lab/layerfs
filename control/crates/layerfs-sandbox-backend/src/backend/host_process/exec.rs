@@ -6,8 +6,9 @@
 //! Sandbox.
 use super::sandbox::Sandbox;
 use crate::local::streams;
-use crate::local::{groups, process, process::LocalProcess, search::search_path};
+use crate::local::{groups, search::search_path};
 use crate::{ExecExit, ExecRequest, RuntimeError, WireFailure};
+use layerfs_bridge::process::{self, LocalProcess};
 use nix::sys::signal::{killpg, Signal};
 use std::{
     io::{self, Write},

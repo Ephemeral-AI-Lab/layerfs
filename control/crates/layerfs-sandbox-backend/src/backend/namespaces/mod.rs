@@ -6,12 +6,13 @@
 //!
 //! The lifecycle is the local one, imported from `crate::local`
 //! (namespaces is the local process with namespaces added: its
-//! `Local`, `LocalPaths`, `LocalPhase`, `LocalProcess`, `search`, `listener`,
-//! `streams` and Linux `mounts`): a private directory per Sandbox, one daemon
-//! start and one listener wait, a record of the daemon's exact process and
-//! its port. What this backend adds is outside that daemon: the helper that
-//! builds the private root, the namespaces and the cgroup. Nothing here is
-//! retried and no effect is undone implicitly.
+//! `Local`, `LocalPaths`, `LocalPhase`, `search`, `listener`, `streams` and
+//! Linux `mounts`, with `LocalProcess` from `layerfs_bridge::process`): a
+//! private directory per Sandbox, one daemon start and one listener wait, a
+//! record of the daemon's exact process and its port. What this backend
+//! adds is outside that daemon: the helper that builds the private root, the
+//! namespaces and the cgroup. Nothing here is retried and no effect is
+//! undone implicitly.
 //!
 //! Its adapter (stored name, capabilities) builds on every Unix host; the
 //! backend itself on Linux only.

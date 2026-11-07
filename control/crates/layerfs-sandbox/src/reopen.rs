@@ -9,11 +9,11 @@ use crate::record::DaemonRecord;
 use crate::runtime::NAMESPACES;
 use crate::runtime::NATIVE;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::process::LocalProcess;
 use layerfs_home::helpers;
 use layerfs_home::outcome::{failed, refused};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_sandbox_backend::host_process;
-use layerfs_sandbox_backend::local::LocalProcess;
 use layerfs_sandbox_backend::LocalRecord;
 #[cfg(target_os = "linux")]
 use layerfs_sandbox_backend::SandboxRecord;

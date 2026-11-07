@@ -2,7 +2,8 @@
 //! Supply LAYERFS_TEST_STOP_DIRECTORY, _PID and _PORT. The fixture must be
 //! disposable: this test stops its daemon and force-detaches its mounts.
 #![cfg(target_os = "macos")]
-use layerfs_sandbox_backend::{host_process::Sandbox, local::LocalProcess, ContainerId};
+use layerfs_bridge::process::LocalProcess;
+use layerfs_sandbox_backend::{host_process::Sandbox, ContainerId};
 use std::{path::PathBuf, process::Command};
 
 #[test]

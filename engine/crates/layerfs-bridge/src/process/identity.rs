@@ -2,8 +2,8 @@
 //! id, or the same id and start time after a reboot or snapshot restore, is
 //! never taken for the process that was started. The three facts come from
 //! `/proc` on Linux and from `proc_pidinfo`/`sysctl` on macOS (see
-//! [`super::macos`]).
-pub(crate) use super::os::{boot, stat};
+//! `darwin.rs`).
+use super::{boot, stat};
 use nix::{sys::signal::Signal, unistd::Pid};
 use std::io;
 
@@ -13,7 +13,10 @@ use std::io;
 /// alive.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LocalProcess {
+    /// The process id.
     pub pid: u32,
+    /// The start time: clock ticks since boot on Linux, microseconds since
+    /// the epoch on macOS.
     pub start: u64,
     /// The boot id as a number. `None` only for a record written before boot
     /// ids were kept: it is matched by id and start time alone, as it was
@@ -45,7 +48,7 @@ impl LocalProcess {
         }
     }
     /// Sends `signal` once, only after this exact process was observed alive.
-    pub(crate) fn signal(self, signal: Signal) -> io::Result<()> {
+    pub fn signal(self, signal: Signal) -> io::Result<()> {
         if self.boot.is_none() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -64,21 +67,24 @@ impl LocalProcess {
 
 /// What this kernel says of one process.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Stat {
-    pub(crate) state: u8,
-    pub(crate) group: u32,
-    pub(crate) start: u64,
+pub struct Stat {
+    /// Its state letter (`Z` a zombie, `X`/`x` dead).
+    pub state: u8,
+    /// Its process group.
+    pub group: u32,
+    /// Its start time, as [`LocalProcess::start`].
+    pub start: u64,
 }
 
 impl Stat {
     /// A zombie or a dead entry: it runs nothing any more.
-    pub(crate) fn ended(self) -> bool {
+    pub fn ended(self) -> bool {
         matches!(self.state, b'Z' | b'X' | b'x')
     }
 }
 
 /// A process id as the kernel's signed type.
-pub(crate) fn pid(id: u32) -> io::Result<Pid> {
+pub fn pid(id: u32) -> io::Result<Pid> {
     i32::try_from(id)
         .map(Pid::from_raw)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "process id width"))

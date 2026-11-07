@@ -1,5 +1,8 @@
-//! Authenticated bounded duplex channels and Store provisioning metadata.
-#![forbid(unsafe_code)]
+//! Authenticated bounded duplex channels and Store provisioning metadata,
+//! and the local process identity the home and the drivers share (`process`).
+// unsafe only in process/darwin.rs (macOS process facts come from
+// proc_pidinfo, a system call: `ps` is setuid, which Seatbelt refuses)
+#![deny(unsafe_code)]
 #![deny(missing_docs)]
 pub mod control;
 #[cfg(feature = "duplex")]
@@ -27,5 +30,7 @@ pub use support::{KernelRoute, StoreKind};
 mod daemon_types;
 mod daemon_wire;
 pub mod initial_record;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub mod process;
 pub mod store;
 pub mod support;

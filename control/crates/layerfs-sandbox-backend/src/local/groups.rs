@@ -10,8 +10,7 @@
 //! reused and the group is not this Sandbox's. A process that leaves its
 //! group (`setsid`) is not followed unless it is named here too
 //! ([`super::Sandbox::track`]).
-use super::os;
-use super::process::{self, LocalProcess};
+use layerfs_bridge::process::{self, LocalProcess};
 use nix::{fcntl::OFlag, sys::signal::Signal};
 use std::{
     fs::{self, OpenOptions},
@@ -126,7 +125,7 @@ fn members(table: &[(u32, process::Stat)], leader: LocalProcess) -> Vec<u32> {
 /// Every process of this kernel now, with its stat. One that ends while
 /// being read is left out.
 pub(crate) fn processes() -> io::Result<Vec<(u32, process::Stat)>> {
-    os::processes()
+    process::processes()
 }
 
 /// A group's file name: `<boot as 32 hex>-<leader id>-<leader start>`.

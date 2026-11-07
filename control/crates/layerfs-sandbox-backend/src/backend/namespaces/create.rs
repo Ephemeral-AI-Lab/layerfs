@@ -9,9 +9,10 @@ use super::{
     sandbox::Sandbox,
 };
 use crate::local::listener;
-use crate::local::{search::search_path, Local, LocalPhase, LocalProcess};
+use crate::local::{search::search_path, Local, LocalPhase};
 use crate::HelperSpec;
 use crate::{Bind, CommandIdentity, Image, RuntimeError};
+use layerfs_bridge::process::LocalProcess;
 use nix::fcntl::OFlag;
 use std::{
     fs::{self, File, OpenOptions, Permissions},

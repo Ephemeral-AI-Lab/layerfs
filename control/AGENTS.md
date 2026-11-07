@@ -7,9 +7,10 @@ Read [repository instructions](../AGENTS.md) first. The control layer holds
 the management code and everything that reaches a machine or the network on
 behalf of the engine:
 
-- `crates/layerfs-home`: the home and its records, knowing no entity
-  (#103): layout, paths, record files, locks, the `op` intent, typed names,
-  outcomes, secrets, the call trace and the process identity.
+- `crates/layerfs-home`: the home and its records, knowing no entity and
+  no driver (#103, #112): layout, paths, record files, locks, the `op`
+  intent, typed names, outcomes, secrets, the call trace and the process
+  identity records name (over `layerfs_bridge::process`).
 - `crates/layerfs-machine`: machine records, their lifecycle, the sealed
   bundle and the worker protocol and client (#104). What a machine holds
   comes from its caller (`Related`).
@@ -63,10 +64,12 @@ design and the [compute plane 2.0 spec](../core/docs/proposals/compute-plane-2.0
   reads the old backup layout through `layerfs-bucket` in `migrate`);
   nothing points up. `layerfs-machine
   ──► layerfs-platform` only through its optional `machine` feature, which
-  `layerfs-control` and `layerfs-api` pass through; `layerfs-home ──►
-  layerfs-sandbox-backend` (the process identity records name); `layerfs-platform ──►
+  `layerfs-control` and `layerfs-api` pass through; `layerfs-platform ──►
   layerfs-sandbox-backend ──► layerfs-bridge`; `layerfs-bucket ──►
   layerfs-store-service, layerfs-persistence, layerfs-storage`.
+  `layerfs-home` reaches no driver (#112): the process identity it and the
+  Sandbox driver share (`LocalProcess` and its `/proc` and `proc_pidinfo`
+  probe) is `layerfs_bridge::process`, in the engine crate below both.
 - Drivers take every input as arguments, know nothing of the home and write
   no records (#101 rule 6).
 
@@ -105,6 +108,7 @@ and [checks and completion rules](../engine/AGENTS.md#checks-and-completion):
 production files at most 999 lines, `lib.rs`/`mod.rs` at most 200 lines of
 declarations and re-exports, no tests or fixtures in `src/`, bounded test
 commands, locked dependencies, per-commit production LOC and the
-Disposable-only profile. The unsafe allowance stays the two files the
-guard names: the macOS `local/os/macos/darwin.rs` and the Linux
-`local/os/linux/seccomp.rs` of `layerfs-sandbox-backend`.
+Disposable-only profile. The unsafe allowance in control stays the one file
+the guard names: the Linux `local/os/linux/seccomp.rs` of
+`layerfs-sandbox-backend`. The macOS process facts (`proc_pidinfo`) moved
+with `LocalProcess` to the bridge's audited `process/darwin.rs` (#112).

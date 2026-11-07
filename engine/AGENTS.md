@@ -607,3 +607,17 @@ No other Persistence module may contain unsafe Rust; the guard and its tests
 enforce the exact path. This does not authorize third-party patches, dependency
 changes, manual sidecar deletion or other FFI. See the
 [decision and diagnostic](../core/docs/issues/307/SEAL-PERSIST-WAL-DECISION-20261007.md).
+
+### Bridge process identity file
+
+The bridge holds the process facts the home and the Sandbox driver share
+(`layerfs_bridge::process`), moved below the drivers by layerfs-project#112
+under review finding R10, which the owner accepted on 2026-11-06 (#101 M-3;
+compute-plane-2.0 rule 5 and the §6.6 row: "move the process facts, with the
+one audited macOS unsafe file and its guard entry, below the drivers"). The
+bridge uses `deny(unsafe_code)` with one allowed module,
+`src/process/darwin.rs`, compiled on macOS only: `proc_pidinfo`,
+`proc_listallpids` and the `sysctl` boot id, each with its SAFETY comment, as
+they were in the driver. No other bridge module may contain unsafe Rust; the
+guard and its tests enforce the exact path. This authorizes no other FFI or
+dependency change.

@@ -3,9 +3,9 @@
 //! Drop cleans up; a Drop only reaps an init process this process started
 //! that has already exited, so it never stays a zombie of this process.
 use super::{cgroup, host, paths::Paths, rootfs::ImageRoot};
-use crate::local::LocalProcess;
 use crate::{ContainerId, RuntimeError, WireFailure};
 use crate::{LocalRecord, NamespaceRecord, SandboxRecord};
+use layerfs_bridge::process::LocalProcess;
 use std::{
     fs::{self, OpenOptions},
     io::{self, Read, Seek, SeekFrom},

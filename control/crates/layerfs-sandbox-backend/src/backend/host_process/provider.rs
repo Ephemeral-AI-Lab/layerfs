@@ -2,11 +2,12 @@
 //! Linux has no native provider (#533 O27): its local Sandboxes run in
 //! namespaces.
 use super::sandbox::Sandbox;
-use crate::local::{Local, LocalPhase, LocalProcess};
+use crate::local::{Local, LocalPhase};
 use crate::{ContainerId, RuntimeError, WireFailure};
 use crate::{
     LaunchFailure, LaunchPhase, LaunchRequest, LocalRecord, ProviderLaunchOptions, SandboxRecord,
 };
+use layerfs_bridge::process::LocalProcess;
 use std::path::Path;
 
 /// Native macOS processes with loopback NFS and the caller's identity.
