@@ -456,6 +456,10 @@ fn apple_double_files_stay_out_of_the_workspace() {
     let data = c.touch(&root, b"copied.rs", 0o644).unwrap();
     c.write(&data.handle, 0, b"fn main() {}").unwrap();
     let made = c.touch(&root, b"._copied.rs", 0o644).unwrap();
+    // The companion is the export's alone: the directory it names is answered
+    // whole in both halves of wcc_data, so the client keeps its cached
+    // attributes of the directory (see the job-count test for the facts).
+    assert!(made.directory.before.is_some() && made.directory.after.is_some());
     c.write(&made.handle, 0, b"AppleDouble header").unwrap();
     // It reads back under its name for the export's life ...
     let (handle, attr) = c.lookup(&root, b"._copied.rs").unwrap();
@@ -1012,12 +1016,35 @@ fn create_write_remove_and_apple_double_avoid_redundant_owner_jobs_and_orphans()
     //    (only the 1 parent getattr in nfs.rs proc 3).
     let before = counts.snapshot();
     let ad = c.touch(&root, b"._single.txt", 0o644).unwrap();
+    // The directory's wcc_data is not a hole: a companion changes nothing in
+    // the directory it names, so both halves answer from the facts the export
+    // already had. A missing post-operation half makes the macOS client drop
+    // the directory's cached attributes and GETATTR it again for a later
+    // entry, which is the regression this cache removes.
+    let pre = ad
+        .directory
+        .before
+        .as_ref()
+        .expect("a companion CREATE answers the directory's pre-op attributes");
+    let post = ad
+        .directory
+        .after
+        .as_ref()
+        .expect("a companion CREATE answers the directory's post-op attributes");
+    assert_eq!(
+        pre.0, post.size,
+        "a companion changes nothing in its directory"
+    );
     let (ad_written, _, _, ad_wcc) = c.write(&ad.handle, 0, b"xattr").unwrap();
     assert_eq!(ad_written, 5);
     assert!(ad_wcc.before.is_some() && ad_wcc.after.is_some());
     let ad_set = c.setattr(&ad.handle, chmod, None).unwrap();
     assert!(ad_set.before.is_some() && ad_set.after.is_some());
-    c.remove(&root, b"._single.txt").unwrap();
+    let ad_rm = c.remove(&root, b"._single.txt").unwrap();
+    assert!(
+        ad_rm.before.is_some() && ad_rm.after.is_some(),
+        "a companion REMOVE answers the directory's pre- and post-op attributes"
+    );
     assert_eq!(
         counts.snapshot(),
         before,
