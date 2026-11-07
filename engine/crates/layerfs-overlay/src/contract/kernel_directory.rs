@@ -1,6 +1,6 @@
 //! Indexed directory owners, one visit's local name page and the cookies of
 //! one published reply.
-use crate::{BaseSource, DirectoryEntryWindow, InodeKind, KernelMount};
+use crate::{BaseSource, DirectoryEntryWindow, Inode, KernelMount};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct KernelDirectory {
@@ -56,8 +56,10 @@ pub struct KernelDirectoryPage {
     /// The name this window continues after: the cursor's, or a later one.
     pub after: Option<Vec<u8>>,
     pub local: DirectoryEntryWindow,
-    /// (serial, kind) of every listed inode that has a local row, ascending.
-    pub local_kinds: Vec<(u64, InodeKind)>,
+    /// The latest local inode row of every listed serial that has one,
+    /// ascending by serial: the listing reads an entry's kind and attributes
+    /// from here, with no further SQL.
+    pub local_inodes: Vec<(u64, Inode)>,
 }
 impl KernelDirectoryPage {
     pub const fn directory(&self) -> KernelDirectory {
@@ -88,6 +90,8 @@ pub struct KernelCookieOffer {
     pub(crate) after: Vec<u8>,
     pub(crate) first: u64,
     pub(crate) published: Published,
+    /// The entries this reply hands handles out for; empty for a READDIR.
+    pub(crate) handled: Vec<KernelCookieEntry>,
 }
 /// What an offer found among the handle's published replies.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -120,4 +124,21 @@ impl KernelCookieOffer {
             _ => None,
         }
     }
+    /// The entries whose handles this publication hands out, in reply order:
+    /// the publishing visit takes one kernel lookup reference for each of
+    /// them and records a directory's parent, so a handle the client later
+    /// presents resolves without a LOOKUP of its own.
+    pub fn adopt(&mut self, entries: impl IntoIterator<Item = (u64, bool)>) {
+        self.handled = entries
+            .into_iter()
+            .map(|(serial, directory)| KernelCookieEntry { serial, directory })
+            .collect();
+    }
+}
+/// One entry whose handle a READDIRPLUS reply hands out.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct KernelCookieEntry {
+    pub serial: u64,
+    /// A directory's parent is recorded with its reference.
+    pub directory: bool,
 }

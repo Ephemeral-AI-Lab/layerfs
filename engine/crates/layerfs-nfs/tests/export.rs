@@ -105,6 +105,186 @@ fn a_committed_branch_reads_completely_over_nfs() {
 }
 
 #[test]
+fn readdirplus_lists_a_directory_with_attributes_and_handles() {
+    use std::os::unix::ffi::OsStrExt;
+    let base = temp("plus");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, true);
+    let mut client = Client::connect(server.local_addr(), UID, GID);
+    let root = client.mnt("/");
+    let (src, src_attr) = client.lookup(&root, b"src").unwrap();
+    let held = server.held().lookups;
+
+    // One reply lists the whole directory: the window that lists its last
+    // name is its end, so no further request is spent on an empty one.
+    let calls = client.calls;
+    let (entries, _, eof, directory) = client
+        .readdir_with_directory(&src, 0, 0, 4096, true)
+        .unwrap();
+    assert_eq!(client.calls - calls, 1, "one READDIRPLUS for the directory");
+    assert!(eof, "the reply that lists the last name is the end");
+    assert_eq!(
+        directory,
+        Some(src_attr),
+        "dir_attributes of the listed directory"
+    );
+    let names: BTreeSet<Vec<u8>> = entries.iter().map(|entry| entry.name.clone()).collect();
+    assert_eq!(
+        names,
+        [
+            b".".to_vec(),
+            b"..".to_vec(),
+            b"lib.rs".to_vec(),
+            b"lib-alias.rs".to_vec(),
+            b"nested".to_vec()
+        ]
+        .into_iter()
+        .collect::<BTreeSet<_>>()
+    );
+    let mut read = 0;
+    for entry in &entries {
+        // The dots name objects the client already holds; a real name says
+        // what it is and hands out the handle to read it without a LOOKUP.
+        if entry.name == b"." || entry.name == b".." {
+            assert_eq!((&entry.attr, &entry.handle), (&None, &None), "dots");
+            continue;
+        }
+        let attr = entry.attr.clone().expect("READDIRPLUS attributes");
+        let handle = entry.handle.clone().expect("READDIRPLUS handle");
+        assert_eq!(handle.len(), 25, "a full NFSv3 handle");
+        assert_eq!(attr.fileid, entry.fileid, "the same identity");
+        // The same facts a LOOKUP reports, and the handle answers alone.
+        let (found, looked_up) = client.lookup(&src, &entry.name).unwrap();
+        assert_eq!(found, handle, "LOOKUP hands out the same handle");
+        assert_eq!(looked_up, attr, "LOOKUP reports the same attributes");
+        assert_eq!(client.getattr(&handle).unwrap(), attr, "the handle answers");
+        if attr.kind == 1 {
+            let bytes = client.read_all(&handle, 128 * 1024);
+            let expected = fs::read(
+                tree.join("src")
+                    .join(std::ffi::OsStr::from_bytes(&entry.name)),
+            )
+            .unwrap();
+            assert_eq!(bytes, expected, "bytes from the listed handle");
+            read += bytes.len();
+        }
+    }
+    assert!(read > 0, "the listing's handles read the files");
+    // READDIR still answers the same directory in one reply.
+    let calls = client.calls;
+    let (entries, _, eof) = client.readdir(&src, 0, 0, 4096, false).unwrap();
+    assert_eq!(client.calls - calls, 1, "one READDIR for the directory");
+    assert!(eof);
+    assert_eq!(entries.len(), names.len(), "READDIR lists the same names");
+    // Every serial that came with a handle holds exactly one reference, and
+    // two names of one inode share it.
+    let named: BTreeSet<u64> = entries
+        .iter()
+        .filter(|entry| entry.name != b"." && entry.name != b"..")
+        .map(|entry| entry.fileid)
+        .collect();
+    assert_eq!(
+        server.held().lookups,
+        held + named.len(),
+        "one reference per listed inode"
+    );
+    let serials = server.held().lookups;
+    let released = server.stop();
+    assert_eq!(released.lookups, serials, "every reference given back");
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0, "every Store reader was given back");
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn readdirplus_reports_a_local_directorys_own_rows() {
+    let base = temp("local");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut client = Client::connect(server.local_addr(), UID, GID);
+    let root = client.mnt("/");
+    // Names this export created live in the Workspace, not in its base: their
+    // attributes come from the local inode row the listing already read.
+    client.mkdir(&root, b"made", 0o755).unwrap();
+    let (made, _) = client.lookup(&root, b"made").unwrap();
+    let file = client.touch(&made, b"entry", 0o644).unwrap();
+    client.write(&file.handle, 0, b"local row\n").unwrap();
+    let (file_dot, file_attr) = client.lookup(&made, b"entry").unwrap();
+
+    let (entries, _, eof, directory) = client
+        .readdir_with_directory(&made, 0, 0, 4096, true)
+        .unwrap();
+    assert!(eof);
+    let entry = entries
+        .iter()
+        .find(|entry| entry.name == b"entry")
+        .expect("the created name");
+    assert_eq!(entry.handle.clone(), Some(file_dot), "the same handle");
+    assert_eq!(entry.attr.clone(), Some(file_attr), "the same attributes");
+    let made_attr = client.getattr(&made).unwrap();
+    assert_eq!(
+        directory,
+        Some(made_attr),
+        "the created directory's own row"
+    );
+    // The reference the listing hands out is the one the name's removal
+    // gives back, so it is a real engine reference and not a second one.
+    let held = server.held().lookups;
+    client.remove(&made, b"entry").unwrap();
+    assert_eq!(
+        server.held().lookups,
+        held - 1,
+        "the listed reference is given back"
+    );
+    let released = server.stop();
+    assert_eq!(released.lookups, held - 1, "every reference given back");
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_large_directory_keeps_its_names_and_its_references() {
+    let base = temp("large");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, true);
+    let mut client = Client::connect(server.local_addr(), UID, GID);
+    let root = client.mnt("/");
+    let (many, _) = client.lookup(&root, b"many").unwrap();
+    let (entries, calls) = client.list(&many, 64 * 1024, true);
+    assert!(calls > 1, "a budget spreads one directory over replies");
+    let names: BTreeSet<Vec<u8>> = entries.iter().map(|entry| entry.name.clone()).collect();
+    assert_eq!(names.len(), entries.len(), "no name twice");
+    assert_eq!(names.len(), MANY + 2, "every name, once");
+    let cookies: Vec<u64> = entries.iter().map(|entry| entry.cookie).collect();
+    assert!(
+        cookies.windows(2).all(|pair| pair[0] < pair[1]),
+        "cookies advance"
+    );
+    // One reference per handed-out handle, none for a repeated reply.
+    let held = server.held().lookups;
+    assert_eq!(held, 1 + MANY, "the directory and one reference per entry");
+    let (again, _) = client.list(&many, 64 * 1024, true);
+    assert_eq!(again.len(), entries.len(), "the same names again");
+    assert_eq!(
+        server.held().lookups,
+        held,
+        "no second reference for a listed name"
+    );
+    let released = server.stop();
+    assert_eq!(released.lookups, held, "every reference given back");
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn cookies_refusals_and_stale_handles() {
     let base = temp("protocol");
     let tree = base.join("tree");

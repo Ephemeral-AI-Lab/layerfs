@@ -6,7 +6,7 @@
 //! over one Store reader, at the base root the visit named. The request then
 //! fills its reply and a publishing visit records exactly the accepted
 //! names. Nothing is held between the two visits or after the reply.
-use crate::{BaseView, SourceView, Workspace, WorkspaceResult};
+use crate::{BaseView, SourceView, ViewStat, Workspace, WorkspaceResult};
 use layerfs_content::{object::inode_leaf::InodeKind, ContentError};
 use layerfs_overlay::{
     KernelCookieOffer, KernelDirectoryCursor, KernelDirectoryPage, KernelMount, Overlay,
@@ -19,6 +19,10 @@ pub struct KernelDirectoryEntry {
     pub name: Vec<u8>,
     pub serial: u64,
     pub kind: InodeKind,
+    /// What a reply that shows this entry's facts says about it: a local
+    /// entry's current row, an inherited one's immutable base inode. None
+    /// until a reply that carries facts reads them outside the owner.
+    pub stat: Option<ViewStat>,
 }
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct KernelDirectoryListing {
@@ -46,6 +50,10 @@ pub struct KernelDirectoryWindow {
     /// The offsets the reply may hand out. Absent when the job decided that
     /// the window lists no name.
     pub offer: Option<KernelCookieOffer>,
+    /// The facts of the directory being listed, when the visit read its own
+    /// local row and the reply shows them: a READDIRPLUS reply's
+    /// `dir_attributes` then costs no further read.
+    pub directory: Option<ViewStat>,
 }
 /// The entries one reply may offer, in order, with their offsets.
 #[derive(Clone, Debug)]
@@ -55,6 +63,12 @@ pub struct KernelDirectoryBatch {
     pub continuation: Option<Vec<u8>>,
     /// The offset of the first entry; each next entry's is one more.
     pub first: u64,
+    /// The facts of the directory being listed, for a reply's own
+    /// `post_op_attr`; absent when this window read none.
+    pub directory: Option<ViewStat>,
+    /// True when this window listed the directory's last name: accepting
+    /// every entry of the window reaches its end, and no later reply follows.
+    pub exhausted: bool,
     /// The offer whose fresh range the offsets are, to publish the accepted
     /// names with. None: the offsets are those of an already published
     /// reply with these names, and nothing is published. An offer that
@@ -126,6 +140,7 @@ impl KernelDirectoryVisit {
                     visited: 0,
                 }),
                 offer: None,
+                directory: None,
             });
         }
         let listing = (self.resident.identity().0.to_bytes() == page.source().root())
@@ -135,10 +150,16 @@ impl KernelDirectoryVisit {
             Some(listing) if listing.entries.is_empty() => None,
             _ => Some(db.offer_kernel_cookies(&page)?),
         };
+        let directory = page
+            .local
+            .parent_inode
+            .as_ref()
+            .map(|inode| ViewStat::from(inode.clone()));
         Ok(KernelDirectoryWindow {
             page,
             listing,
             offer,
+            directory,
         })
     }
 }
@@ -157,18 +178,45 @@ impl KernelDirectoryWindow {
     /// same name and whose names these entries begin with is reused: the
     /// batch is exactly its names at its offsets. Otherwise the offsets are
     /// the offer's fresh range.
+    ///
+    /// A plain READDIR reply shows no entry's facts, so this reads no
+    /// portable metadata and no file length.
     pub fn finish(self, base: Option<&BaseView>) -> WorkspaceResult<KernelDirectoryBatch> {
-        let listing = match self.listing {
-            Some(listing) => listing,
-            None => {
-                let base = base.ok_or(ContentError::InvalidRecord(
-                    "kernel directory window without its base",
-                ))?;
-                listing(&*base.at(self.page.source().root())?, &self.page)?
+        self.finish_with(base, false)
+    }
+    /// The same for a reply that also shows what each accepted entry is, as
+    /// READDIRPLUS does: every entry's facts and the directory's own are read
+    /// here, outside the owner, from the authoritative base — a local entry's
+    /// facts are its current row, an inherited one's its immutable inode.
+    pub fn finish_with(
+        self,
+        base: Option<&BaseView>,
+        attributes: bool,
+    ) -> WorkspaceResult<KernelDirectoryBatch> {
+        let Self {
+            page,
+            listing: merged,
+            offer,
+            directory,
+        } = self;
+        // A reply that shows an entry's facts reads the authoritative base,
+        // not the resident one the reading visit merged with.
+        let base = match base {
+            Some(base) if attributes || merged.is_none() => Some(base.at(page.source().root())?),
+            _ => None,
+        };
+        let listing = match (merged, base.as_deref()) {
+            (Some(listing), _) if !attributes => listing,
+            (_, Some(base)) => listing(base, &page)?,
+            (_, None) => {
+                return Err(
+                    ContentError::InvalidRecord("kernel directory window without its base").into(),
+                )
             }
         };
         let mut entries = listing.entries;
-        let (first, publish) = match self.offer {
+        let mut truncated = false;
+        let (first, publish) = match offer {
             None if entries.is_empty() => (0, None),
             None => {
                 return Err(
@@ -183,19 +231,55 @@ impl KernelDirectoryWindow {
                             .zip(&entries)
                             .all(|(name, entry)| *name == entry.name) =>
                 {
+                    truncated = names.len() < entries.len();
                     entries.truncate(names.len());
                     (first, None)
                 }
                 _ => (offer.first(), Some(offer)),
             },
         };
+        // Only the names this reply actually offers are read, and only a
+        // reply that shows facts reads anything at all.
+        let (directory, entries) = match base.as_deref() {
+            Some(base) if attributes => (
+                directory.or_else(|| base_stat(base, page.directory().serial()).ok()),
+                facts(base, &page, entries)?,
+            ),
+            _ => (None, entries),
+        };
+        let exhausted = !truncated && listing.continuation.is_none();
         Ok(KernelDirectoryBatch {
             entries,
             continuation: listing.continuation,
             first,
+            directory,
+            exhausted,
             publish,
         })
     }
+}
+/// One listing's entries with the facts a reply shows for each: a local
+/// serial's current row, or an inherited one's immutable base inode.
+fn facts(
+    base: &BaseView,
+    page: &KernelDirectoryPage,
+    entries: Vec<KernelDirectoryEntry>,
+) -> WorkspaceResult<Vec<KernelDirectoryEntry>> {
+    entries
+        .into_iter()
+        .map(|mut entry| {
+            entry.stat = Some(
+                match page
+                    .local_inodes
+                    .binary_search_by_key(&entry.serial, |row| row.0)
+                {
+                    Ok(index) => ViewStat::from(page.local_inodes[index].1.clone()),
+                    Err(_) => base_stat(base, entry.serial)?,
+                },
+            );
+            Ok(entry)
+        })
+        .collect()
 }
 /// One window's merged names over `base`, which must be the page's own base
 /// root. This issues no SQL and acquires no kernel lookup reference. An
@@ -206,9 +290,9 @@ fn listing(base: &BaseView, page: &KernelDirectoryPage) -> WorkspaceResult<Kerne
         source: page.source(),
     };
     if page.local.parent != page.directory().serial()
-        || page.local_kinds.len() > 2 * PAGE_ROWS
+        || page.local_inodes.len() > 2 * PAGE_ROWS
         || page
-            .local_kinds
+            .local_inodes
             .windows(2)
             .any(|pair| pair[0].0 >= pair[1].0)
     {
@@ -234,21 +318,37 @@ fn listing(base: &BaseView, page: &KernelDirectoryPage) -> WorkspaceResult<Kerne
     let mut entries = Vec::with_capacity(listing.entries.len());
     for (name, serial) in listing.entries {
         let kind = match page
-            .local_kinds
+            .local_inodes
             .binary_search_by_key(&serial, |entry| entry.0)
         {
-            Ok(index) => match page.local_kinds[index].1 {
+            Ok(index) => match page.local_inodes[index].1.kind {
                 layerfs_overlay::InodeKind::File => InodeKind::RegularFile,
                 layerfs_overlay::InodeKind::Directory => InodeKind::Directory,
                 layerfs_overlay::InodeKind::Symlink => InodeKind::Symlink,
             },
             Err(_) => view.base().inode(serial)?.value.kind,
         };
-        entries.push(KernelDirectoryEntry { name, serial, kind });
+        entries.push(KernelDirectoryEntry {
+            name,
+            serial,
+            kind,
+            stat: None,
+        });
     }
     Ok(KernelDirectoryListing {
         entries,
         continuation: listing.continuation,
         visited: listing.visited,
     })
+}
+/// The effective facts of one inherited name: its base inode, the metadata
+/// every attribute carries, its content length and, for a directory, the
+/// child-directory count its POSIX link count is derived from.
+fn base_stat(base: &BaseView, serial: u64) -> WorkspaceResult<ViewStat> {
+    let stat = base.stat(serial)?;
+    let subdirs = match stat.value.kind {
+        InodeKind::Directory => base.subdirs(stat.value)?,
+        _ => 0,
+    };
+    Ok(ViewStat::of_base(stat, subdirs))
 }
