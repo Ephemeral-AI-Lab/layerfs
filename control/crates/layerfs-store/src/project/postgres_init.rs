@@ -65,7 +65,7 @@ pub fn create_schema(args: &SdkValue, identity: &Identity) -> Result<bool, SdkRe
 pub fn add_project(args: &SdkValue) -> Outcome {
     let store = text(args, "store")?;
     let name = text(args, "name")?;
-    let identity = stores::identity(args)?;
+    let identity = stores::identity(&crate::open_args::OpenArgs::read(args))?;
     if !matches!(identity.kind, stores::Kind::Postgresql { .. }) {
         return Err(refused("InvalidInput", "the Store is not PostgreSQL"));
     }

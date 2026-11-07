@@ -231,16 +231,14 @@ fn connect_named(home: &Path, name: &str, args: &SdkValue) -> Outcome {
     let directory = paths::store_dir(home, name);
     // the projects the schema holds become this home's project records; a
     // schema that does not open is not connected
-    let listed = crate::identity::list_projects(&SdkValue::map([
-        ("home", SdkValue::text(home.display().to_string())),
-        ("store", SdkValue::text(name)),
-        ("store_record", record.to_record().clone()),
-        ("postgresql", selection),
-        (
-            "storePath",
-            SdkValue::text(record.postgresql_key(home, name).display().to_string()),
-        ),
-    ]))?;
+    let listed = crate::identity::list_projects(&crate::open_args::OpenArgs {
+        home: Some(home.to_path_buf()),
+        store: Some(name.to_owned()),
+        store_record: Some(record.to_record().clone()),
+        postgresql: Some(crate::open_args::PgSelection::read(&selection)),
+        store_path: Some(record.postgresql_key(home, name).display().to_string()),
+        ..Default::default()
+    })?;
     let _lock = home::lock::take(home)?;
     unclaimed(home, name, &target_of, Some(&binding))?;
     home::private_dir(&directory)?;

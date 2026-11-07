@@ -194,9 +194,9 @@ fn platform_of(record: &DaemonRecord) -> SdkValue {
 /// daemon's Status, which reads no Store, and the Branch head from one
 /// newest-first History read in this process.
 pub fn status(host: &Host, path: Option<&str>) -> Outcome {
-    let args = host.to_args(None);
+    let open = host.open_args();
     status_with(host, path, &mut |branch, _| {
-        layerfs_store::service::head(&args, branch).ok()
+        layerfs_store::service::head(&open, branch).ok()
     })
 }
 

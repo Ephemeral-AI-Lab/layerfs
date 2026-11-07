@@ -16,6 +16,9 @@
 //! [`crate::open::IDLE`] unused, and [`forget`] when the Store closes. A held session is checked with one empty query before a call
 //! uses it; one that does not answer is dropped and a new one opens, so no
 //! call runs on a broken connection and none is retried.
+use crate::open_args::OpenArgs;
+#[cfg(feature = "postgresql")]
+use crate::open_args::PgSelection;
 use crate::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 #[cfg(feature = "postgresql")]
@@ -45,21 +48,16 @@ mod held {
     type Key = (PathBuf, String);
     static HELD: Mutex<BTreeMap<Key, Held>> = Mutex::new(BTreeMap::new());
 
-    fn key(key: &Path, postgresql: &SdkValue) -> Result<Key> {
-        let probe = SdkValue::map([("postgresql", postgresql.clone())]);
-        Ok((
-            key.to_path_buf(),
-            crate::postgresql::open::url(&probe)?.to_owned(),
-        ))
+    fn key(key: &Path, postgresql: &PgSelection) -> Result<Key> {
+        Ok((key.to_path_buf(), postgresql.url()?.to_owned()))
     }
 
     /// A new session dialled with `postgresql`; `Ok(None)` when the schema
     /// there records another binding than `record`'s.
-    fn open(record: &StoreRecord, postgresql: &SdkValue) -> Result<Option<PostgresHandles>> {
-        let probe = SdkValue::map([("postgresql", postgresql.clone())]);
-        let url = crate::postgresql::open::url(&probe)?;
-        let schema = crate::postgresql::open::schema(&probe)?;
-        let sync = crate::postgresql::open::setting(&probe)?;
+    fn open(record: &StoreRecord, postgresql: &PgSelection) -> Result<Option<PostgresHandles>> {
+        let url = postgresql.url()?;
+        let schema = postgresql.schema()?;
+        let sync = postgresql.setting()?;
         // the server is reached first, as the reach check always did; a
         // record without a full identity is refused after, unless its
         // binding already differs (the cursor key pages nothing here)
@@ -98,7 +96,7 @@ mod held {
     pub fn session(
         key_path: &Path,
         record: &StoreRecord,
-        postgresql: &SdkValue,
+        postgresql: &PgSelection,
     ) -> Result<Option<Arc<PostgresHandles>>> {
         let id = key(key_path, postgresql)?;
         let kept = HELD
@@ -168,6 +166,7 @@ pub fn reach(
 ) -> Result<std::result::Result<bool, OtherStore>> {
     #[cfg(feature = "postgresql")]
     {
+        let postgresql = &PgSelection::read(postgresql);
         let Some(handles) = held::session(key, record, postgresql)? else {
             return Ok(Err(OtherStore));
         };
@@ -204,6 +203,7 @@ pub(crate) fn branch(
 ) -> Result<(layerfs_history::BranchId, Option<layerfs_history::CommitId>)> {
     #[cfg(feature = "postgresql")]
     {
+        let postgresql = &PgSelection::read(postgresql);
         let handles =
             held::session(key, record, postgresql)?.ok_or_else(|| another(record.name()))?;
         use layerfs_store_service::history::lookup;
@@ -225,7 +225,7 @@ pub(crate) fn branch(
 /// The newest Commit of `branch`, read on the held session; `None` when it
 /// has none.
 pub fn head(
-    args: &SdkValue,
+    args: &OpenArgs,
     branch: layerfs_history::BranchId,
 ) -> Result<Option<layerfs_history::CommitId>> {
     #[cfg(feature = "postgresql")]
@@ -250,12 +250,11 @@ pub fn head(
 
 /// The held session of the call's Store, opened if this process holds none.
 #[cfg(feature = "postgresql")]
-fn held_of(args: &SdkValue) -> Result<std::sync::Arc<layerfs_persistence::PostgresHandles>> {
-    let key = PathBuf::from(args.get_text("storePath").unwrap_or(""));
-    let store = args.get_text("store").unwrap_or("");
-    let record =
-        StoreRecord::from_record(store, args.get("store_record").cloned().unwrap_or_default());
-    let postgresql = args.get("postgresql").ok_or_else(|| {
+fn held_of(args: &OpenArgs) -> Result<std::sync::Arc<layerfs_persistence::PostgresHandles>> {
+    let key = PathBuf::from(args.store_path.as_deref().unwrap_or(""));
+    let store = args.store.as_deref().unwrap_or("");
+    let record = StoreRecord::from_record(store, args.store_record.clone().unwrap_or_default());
+    let postgresql = args.postgresql.as_ref().ok_or_else(|| {
         refused(
             "InvalidInput",
             "a PostgreSQL Sandbox call carries its server's resolved postgresql value",

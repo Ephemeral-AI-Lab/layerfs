@@ -1,14 +1,15 @@
 //! The host operation's values (layerfs-project#108), the one place its
 //! typed request meets them: the `sandbox.host` frame a caller sends a
 //! machine's worker ([`Sent`], [`encode`], [`decode`]), and the one args
-//! map ([`Host::to_args`]) for what still takes a map: the layerfs-store
-//! calls a host operation makes (until layerfs-project#109 types them) and
-//! the daemon's `sandbox.list_workspaces`. Both are built by the same field
-//! encoder ([`fields`]), in the order the untyped request had.
+//! map ([`Host::to_args`]) for what still takes a map: the project read of
+//! a Sandbox's Store file and the daemon's `sandbox.list_workspaces`. Both
+//! are built by the same field encoder ([`fields`]), in the order the
+//! untyped request had. What opens its Store is [`Host::open_args`].
 use super::call::{Call, Deploy, Host, Message, Op, Started};
 use crate::deploy::Choice;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::refused;
+use layerfs_store::open_args::{OpenArgs, PgSelection};
 use layerfs_store::project::record::ProjectRecord;
 use layerfs_store::record::StoreRecord;
 
@@ -285,12 +286,25 @@ impl Message {
 }
 
 impl Host {
+    /// What opens its Store in this process (layerfs-project#109): the
+    /// fields [`Host::to_args`] gives them.
+    pub fn open_args(&self) -> OpenArgs {
+        OpenArgs {
+            home: Some(self.home.clone()),
+            store: Some(self.store.clone()),
+            project: Some(self.project.clone()),
+            store_path: self.store_path.clone(),
+            store_record: self.store_record.as_ref().map(|r| r.to_record().clone()),
+            postgresql: self.postgresql.as_ref().map(PgSelection::read),
+        }
+    }
+
     /// The host operation as one args map, for what still takes one: the
-    /// layerfs-store calls it makes (until layerfs-project#109) and the
-    /// daemon's `sandbox.list_workspaces`. Its fields are the ones the
-    /// untyped request had.
+    /// project read of a Sandbox's Store file and the daemon's
+    /// `sandbox.list_workspaces`. Its fields are the ones the untyped
+    /// request had.
     /// `call`'s own fields are left out where `call` is `None`: the
-    /// layerfs-store calls read none of them.
+    /// project read takes none of them.
     pub fn to_args(&self, call: Option<&Call>) -> SdkValue {
         let mut fields = vec![
             ("home", text(&self.home.display().to_string())),

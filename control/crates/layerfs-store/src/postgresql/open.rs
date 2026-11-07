@@ -8,6 +8,7 @@
 //! feature, every call here is `Unsupported`.
 use crate::identity as stores;
 use crate::identity::{Identity, Kind};
+use crate::open_args::{OpenArgs, PgSelection};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::helpers::text;
 use layerfs_home::outcome::{refused, Outcome};
@@ -21,10 +22,12 @@ const UNBUILT: &str =
 /// `synchronous_commit` as the call or record names it: off (default),
 /// local, remote_write, on or remote_apply.
 pub fn setting(args: &SdkValue) -> Result<String, SdkRefusal> {
-    let given = args
-        .get("postgresql")
-        .and_then(|p| p.get_text("synchronousCommit"))
-        .unwrap_or("off");
+    setting_of(given(args, "synchronousCommit"))
+}
+
+/// [`setting`] of the given value.
+pub fn setting_of(given: Option<&str>) -> Result<String, SdkRefusal> {
+    let given = given.unwrap_or("off");
     match given {
         "off" | "local" | "remote_write" | "on" | "remote_apply" => Ok(given.to_owned()),
         other => Err(refused(
@@ -38,10 +41,12 @@ pub fn setting(args: &SdkValue) -> Result<String, SdkRefusal> {
 
 /// The schema a call names: `[a-z_][a-z0-9_]*`, at most 63 bytes.
 pub fn schema(args: &SdkValue) -> Result<String, SdkRefusal> {
-    let schema = args
-        .get("postgresql")
-        .and_then(|p| p.get_text("schema"))
-        .ok_or_else(|| refused("InvalidInput", "postgresql.schema is required"))?;
+    schema_of(given(args, "schema"))
+}
+
+/// [`schema`] of the given value.
+pub fn schema_of(schema: Option<&str>) -> Result<String, SdkRefusal> {
+    let schema = schema.ok_or_else(|| refused("InvalidInput", "postgresql.schema is required"))?;
     let valid = !schema.is_empty()
         && schema.len() <= 63
         && schema
@@ -61,14 +66,22 @@ pub fn schema(args: &SdkValue) -> Result<String, SdkRefusal> {
 }
 
 pub fn url(args: &SdkValue) -> Result<&str, SdkRefusal> {
-    args.get("postgresql")
-        .and_then(|p| p.get_text("url"))
-        .ok_or_else(|| {
-            refused(
-                "InvalidInput",
-                "postgresql.url is required (passed per call, never stored)",
-            )
-        })
+    url_of(given(args, "url"))
+}
+
+/// [`url`] of the given value.
+pub fn url_of(url: Option<&str>) -> Result<&str, SdkRefusal> {
+    url.ok_or_else(|| {
+        refused(
+            "InvalidInput",
+            "postgresql.url is required (passed per call, never stored)",
+        )
+    })
+}
+
+/// The call's `postgresql.<name>` text.
+fn given<'a>(args: &'a SdkValue, name: &str) -> Option<&'a str> {
+    args.get("postgresql").and_then(|p| p.get_text(name))
 }
 
 #[cfg(feature = "postgresql")]
@@ -155,11 +168,11 @@ fn binding(url: &str, schema: &str, sync: &str) -> Result<Vec<u8>, SdkRefusal> {
 /// (`postgresql.url`) and goes only into the daemon's private config. The
 /// caller's reach check found the project in the schema on its one session
 /// (#65; every route to `sandbox.create` runs it), so nothing is read here.
-pub fn sandbox_store(args: &SdkValue) -> Result<Option<layerfs_bridge::DaemonStore>, SdkRefusal> {
-    if !stores::postgresql(args)? {
+pub fn sandbox_store(open: &OpenArgs) -> Result<Option<layerfs_bridge::DaemonStore>, SdkRefusal> {
+    if !stores::postgresql(open)? {
         return Ok(None);
     }
-    let identity = stores::identity(args)?;
+    let identity = stores::identity(open)?;
     let Kind::Postgresql {
         schema,
         synchronous_commit,
@@ -169,7 +182,7 @@ pub fn sandbox_store(args: &SdkValue) -> Result<Option<layerfs_bridge::DaemonSto
     };
     // the caller resolved the URL and rewrote it for the Sandbox's machine
     // (#535 §7.4); the daemon dials the same server as this side
-    let url = url(args)?.to_owned();
+    let url = url_of(open.postgresql.as_ref().and_then(|p| p.url.as_deref()))?.to_owned();
     Ok(Some(layerfs_bridge::DaemonStore::Postgres {
         url,
         schema,
@@ -259,7 +272,7 @@ pub fn status(args: &SdkValue) -> Outcome {
 /// `postgresql: { url }` and the Store's record (#506). Built without the
 /// `postgresql` feature, it is `Unsupported`.
 pub fn open_postgres(
-    args: &SdkValue,
+    postgresql: Option<&PgSelection>,
     identity: &Identity,
     template: &Path,
 ) -> Result<StoreService, SdkRefusal> {
@@ -270,9 +283,8 @@ pub fn open_postgres(
     else {
         return Err(refused("InvalidInput", "not a PostgreSQL Store"));
     };
-    let url = args
-        .get("postgresql")
-        .and_then(|given| given.get_text("url"))
+    let url = postgresql
+        .and_then(|given| given.url.as_deref())
         .ok_or_else(|| {
             refused(
                 "InvalidInput",

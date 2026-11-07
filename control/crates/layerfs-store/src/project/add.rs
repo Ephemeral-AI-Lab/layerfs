@@ -1,6 +1,7 @@
 //! A project added to a live SQLite Store (`project.init` into a shared
 //! Store): its entry in the home and the add through the Store's writer lane.
-use crate::identity::{identity, legacy, sqlite_only, store_dir, store_path, Identity};
+use crate::identity::{identity, legacy, sqlite_only, store_dir, Identity};
+use crate::open_args::OpenArgs;
 use crate::project::discovery;
 use crate::project::discovery::Project;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -97,11 +98,12 @@ pub fn add_project(args: &SdkValue) -> Outcome {
         ));
     }
     let deadline = crate::project::init::deadline(args)?;
-    let store_file = store_path(args)?;
+    let open = OpenArgs::read(args);
+    let store_file = open.store_path()?;
     let global = store_file.parent().unwrap_or(&store_file);
     layerfs_store_service::kernel_guard::check(global)
         .map_err(|reason| refused("Unsupported", reason.0))?;
-    let identity = identity(args)?;
+    let identity = identity(&open)?;
     sqlite_only(&identity, "adding a project")?;
     if !store_file.is_file() {
         return Err(refused(

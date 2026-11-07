@@ -142,7 +142,7 @@ fn start_named(
         DaemonStore::Sqlite { locator, .. } => locator.clone(),
         _ => String::new(),
     };
-    let store = layerfs_store::identity::shared_store(&host.to_args(None))?;
+    let store = layerfs_store::identity::shared_store(&host.open_args())?;
     let labels = crate::lifecycle::labels(name, store.as_deref(), id);
     let api = SandboxApi::with_runtime(Arc::new(runtime));
     let options = launch_options(backend, identity, host)?;

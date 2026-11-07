@@ -130,7 +130,8 @@ pub fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
                 "storePath".to_owned(),
                 SdkValue::text(file.display().to_string()),
             ));
-            let sealed = crate::service::with_service(&SdkValue::Map(fields), |service| {
+            let open = crate::open_args::OpenArgs::read(&SdkValue::Map(fields));
+            let sealed = crate::service::with_service(&open, |service| {
                 service
                     .opened
                     .file()

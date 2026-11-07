@@ -114,10 +114,9 @@ pub enum OpenedStore {
 /// The installed Store file of the project a call names.
 fn installed(host: &Host) -> Result<OpenedStore, SdkRefusal> {
     let name = &host.project;
-    let args = host.to_args(None);
-    let identity = layerfs_store::identity::identity(&args)?;
+    let identity = layerfs_store::identity::identity(&host.open_args())?;
     layerfs_store::identity::sqlite_only(&identity, "a Sandbox of a Store file")?;
-    let project = layerfs_store::project::discovery::project(&args)?;
+    let project = layerfs_store::project::discovery::project(&host.to_args(None))?;
     let Some(installed) = project.installed.clone() else {
         return Err(refused(
             "NoStore",
@@ -172,7 +171,7 @@ pub fn create(host: &Host, named: Option<&str>) -> Outcome {
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     let platform = crate::runtime::platform(named, deploy)?;
     // a PostgreSQL Store's URL is the call's
-    let store = match layerfs_store::postgresql::open::sandbox_store(&host.to_args(None))? {
+    let store = match layerfs_store::postgresql::open::sandbox_store(&host.open_args())? {
         Some(selected) => OpenedStore::Postgres(Box::new(selected)),
         None => installed(host)?,
     };

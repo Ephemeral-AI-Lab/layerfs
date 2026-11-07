@@ -9,6 +9,7 @@
 //! no record: it is named after its one project, whose entry
 //! `<home>/<project>/` carries the Store's binding. Every Store-level call
 //! is one attempt; nothing is retried.
+use crate::open_args::OpenArgs;
 use crate::project::discovery;
 use crate::record::{required, StoreKind, StoreRecord, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -69,12 +70,12 @@ pub fn legacy(home: &Path, store: &str) -> Result<bool> {
 /// The Store a call's project shares with others, when it names one: the
 /// `store` argument, except for the one project of a Store made by its own
 /// Init, which keeps its unshared name.
-pub fn shared_store(args: &SdkValue) -> Result<Option<String>> {
-    let Some(store) = args.get_text("store") else {
+pub fn shared_store(open: &OpenArgs) -> Result<Option<String>> {
+    let Some(store) = open.store.as_deref() else {
         return Ok(None);
     };
-    let home = discovery::home(args)?;
-    let own = args.get_text("project") == Some(store) && legacy(&home, store)?;
+    let home = discovery::home_of(open.home.as_deref())?;
+    let own = open.project.as_deref() == Some(store) && legacy(&home, store)?;
     Ok((!own).then(|| store.to_owned()))
 }
 
@@ -91,13 +92,13 @@ fn bytes32(value: &SdkValue, key: &str) -> Result<[u8; 32]> {
 /// The identity of the Store a call names: its `store`'s record, the
 /// project entry of a Store made by its own Init, or, with no `store`, the
 /// project's entry.
-pub fn identity(args: &SdkValue) -> Result<Identity> {
+pub fn identity(open: &OpenArgs) -> Result<Identity> {
     // a worker is sent its Store's record with each call (2.0, #533 step 7)
-    if let Some(record @ SdkValue::Map(_)) = args.get("store_record") {
+    if let Some(record @ SdkValue::Map(_)) = &open.store_record {
         return identity_of(record);
     }
-    let home = discovery::home(args)?;
-    let store = args.get_text("store");
+    let home = discovery::home_of(open.home.as_deref())?;
+    let store = open.store.as_deref();
     if let Some(store) = store {
         let path = record_path(&home, store)?;
         if path.exists() {
@@ -105,12 +106,19 @@ pub fn identity(args: &SdkValue) -> Result<Identity> {
         }
     }
     // a Store made by its project's own Init: that project's entry
-    let mut named = args.clone();
-    if let (Some(store), SdkValue::Map(fields)) = (store, &mut named) {
-        fields.retain(|(name, _)| name != "project" && name != "store");
-        fields.push(("project".to_owned(), SdkValue::text(store)));
-    }
-    let project = discovery::project(&named).map_err(|refusal| match store {
+    let mut named: Vec<(String, SdkValue)> = Vec::new();
+    named.extend(open.home.as_ref().map(|home| {
+        (
+            "home".to_owned(),
+            SdkValue::text(home.display().to_string()),
+        )
+    }));
+    named.extend(
+        store
+            .or(open.project.as_deref())
+            .map(|project| ("project".to_owned(), SdkValue::text(project))),
+    );
+    let project = discovery::project(&SdkValue::Map(named)).map_err(|refusal| match store {
         Some(store) if refusal.code == "Failed" || refusal.code == "Unauthorized" => refused(
             "NoSuchStore",
             format!("no LayerFS Store named {store} in this home"),
@@ -181,23 +189,12 @@ pub fn save_record(home: &Path, store: &str, identity: &Identity) -> Result<()> 
     record.write(home)
 }
 
-/// The Store file a call names (`storePath`).
-pub fn store_path(args: &SdkValue) -> Result<PathBuf> {
-    match args.get_text("storePath") {
-        Some(path) if !path.is_empty() => Ok(PathBuf::from(path)),
-        _ => Err(refused(
-            "InvalidInput",
-            "a Store call needs storePath, the Store volume's Store file",
-        )),
-    }
-}
-
 /// Whether the Store a call names is a PostgreSQL Store (#506): its record says so.
-pub fn postgresql(args: &SdkValue) -> Result<bool> {
-    let Some(store) = args.get_text("store") else {
+pub fn postgresql(open: &OpenArgs) -> Result<bool> {
+    let Some(store) = open.store.as_deref() else {
         return Ok(false);
     };
-    let home = discovery::home(args)?;
+    let home = discovery::home_of(open.home.as_deref())?;
     let path = record_path(&home, store)?;
     Ok(path.exists() && load_record(&home, store)?.kind()? == StoreKind::Postgresql)
 }
@@ -263,8 +260,8 @@ pub fn make_empty(
 
 /// The projects of `{ home, store, storePath, postgresql? }`:
 /// `[{ name, stack, headLayer }]` by name, read from the Store itself.
-pub fn list_projects(args: &SdkValue) -> Outcome {
-    crate::service::with_service(args, |service| {
+pub fn list_projects(open: &OpenArgs) -> Outcome {
+    crate::service::with_service(open, |service| {
         let stacks = service
             .store
             .published(layerfs_project::store::projects)

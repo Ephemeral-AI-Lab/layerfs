@@ -15,6 +15,7 @@
 //! service; a process that ends without closing leaves its own. Each call
 //! runs once: a refused or failed call returns its own error, nothing is sent
 //! again.
+use crate::open_args::{OpenArgs, ROUTING};
 use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_home::helpers::lock;
 use layerfs_home::outcome::{failed, refused, Outcome};
@@ -33,19 +34,8 @@ struct Opened {
 
 static STORES: LazyLock<Mutex<BTreeMap<PathBuf, Opened>>> = LazyLock::new(Default::default);
 
-/// The Store path a call names.
-fn path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
-    match args.get_text("storePath") {
-        Some(path) if !path.is_empty() => Ok(PathBuf::from(path)),
-        _ => Err(refused(
-            "InvalidInput",
-            "Store calls need the client's storePath (the installed Store file)",
-        )),
-    }
-}
-
 /// Opens the Store at `store` for this process, or refuses.
-fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
+fn open(store: &Path, args: &OpenArgs) -> Result<Opened, SdkRefusal> {
     let identity = crate::identity::identity(args)?;
     let directory = std::env::temp_dir().join(format!(
         "layerfs-store-{}-{}",
@@ -64,7 +54,7 @@ fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
                 })
         }
         crate::identity::Kind::Postgresql { .. } => {
-            crate::postgresql::open::open_postgres(args, &identity, &template)
+            crate::postgresql::open::open_postgres(args.postgresql.as_ref(), &identity, &template)
         }
     };
     match opened {
@@ -81,8 +71,8 @@ fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
 }
 
 /// `storeOpen`: one more client of the Store a call names, opening it first.
-pub fn acquire(args: &SdkValue) -> Outcome {
-    let store = path(args)?;
+pub fn acquire(args: &OpenArgs) -> Outcome {
+    let store = args.store_path()?;
     let mut stores = lock(&STORES)?;
     if !stores.contains_key(&store) {
         let opened = open(&store, args)?;
@@ -99,8 +89,8 @@ pub fn acquire(args: &SdkValue) -> Outcome {
 /// `storeClose`: one client less; the last one closes the Store and removes
 /// its overlay directory. A call still running keeps the service alive until
 /// it returns, and the service closes when it is dropped then.
-pub fn release(args: &SdkValue) -> Outcome {
-    let store = path(args)?;
+pub fn release(args: &OpenArgs) -> Outcome {
+    let store = args.store_path()?;
     let mut stores = lock(&STORES)?;
     let Some(opened) = stores.get_mut(&store) else {
         return Err(refused("InvalidInput", "this process holds no such Store"));
@@ -124,8 +114,8 @@ pub fn release(args: &SdkValue) -> Outcome {
 }
 
 /// The open service of the Store a call names.
-fn service(args: &SdkValue) -> Result<Arc<StoreService>, SdkRefusal> {
-    let store = path(args)?;
+fn service(args: &OpenArgs) -> Result<Arc<StoreService>, SdkRefusal> {
+    let store = args.store_path()?;
     lock(&STORES)?
         .get(&store)
         .map(|opened| opened.service.clone())
@@ -136,7 +126,7 @@ fn service(args: &SdkValue) -> Result<Arc<StoreService>, SdkRefusal> {
 /// holds it not yet and closed after when no other client holds it (#506
 /// Store-level calls: nothing stays open for a pull to find).
 pub fn with_service<T>(
-    args: &SdkValue,
+    args: &OpenArgs,
     work: impl FnOnce(&Arc<StoreService>) -> Result<T, SdkRefusal>,
 ) -> Result<T, SdkRefusal> {
     acquire(args)?;
@@ -147,26 +137,15 @@ pub fn with_service<T>(
     Ok(value)
 }
 
-/// Runs one Store call in this process.
-pub fn call(method: &str, args: SdkValue) -> Outcome {
-    let service = service(&args)?;
+/// Runs one Store call in this process on the Store `open` names, with
+/// the call's own arguments `args` (any routing key in them is dropped).
+pub fn call(method: &str, open: &OpenArgs, args: SdkValue) -> Outcome {
+    let service = service(open)?;
     let args = match args {
         SdkValue::Map(fields) => SdkValue::Map(
             fields
                 .into_iter()
-                .filter(|(name, _)| {
-                    !matches!(
-                        name.as_str(),
-                        "storePath"
-                            | "sandbox"
-                            | "deploy"
-                            | "home"
-                            | "store"
-                            | "postgresql"
-                            | "store_record"
-                            | "project_record"
-                    )
-                })
+                .filter(|(name, _)| !ROUTING.contains(&name.as_str()))
                 .collect(),
         ),
         other => other,
@@ -198,10 +177,10 @@ pub fn call(method: &str, args: SdkValue) -> Outcome {
 
 /// The newest Commit of `branch`, read in this process; `None` when it has none.
 pub fn head(
-    args: &SdkValue,
+    args: &OpenArgs,
     branch: layerfs_history::BranchId,
 ) -> Result<Option<layerfs_history::CommitId>, SdkRefusal> {
-    if args.get("postgresql").is_some() {
+    if args.postgresql.is_some() {
         return crate::postgresql::reader::head(args, branch);
     }
     let service = service(args)?;

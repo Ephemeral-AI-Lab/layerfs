@@ -7,6 +7,7 @@
 //! under its own root.
 use crate::lease;
 use crate::open;
+use crate::open_args::{OpenArgs, PgSelection};
 use crate::place::{plan, Executor};
 use crate::record::{StoreRecord, StoreRef};
 use crate::resolve::Target;
@@ -31,23 +32,28 @@ pub fn store_call(
     // a move or remove that started since `target` was read refuses it
     let (lease, record) = lease::claim(&home, &target.store)?;
     if let StoreRef::Postgres { .. } = target.store_ref {
-        let fields = with_target(args, target, &record);
-        return postgresql(&home, target, op, fields, lease);
+        return postgresql(&home, target, op, (args, &record), lease);
     }
-    let mut fields = with_target(args, target, &record);
     // the record read under the lock, parsed once (R4)
     match plan(&home, record.store_ref()?)? {
         Executor::Local => {
             let file = paths::store_file(&home, &target.store);
-            fields.push((
-                "storePath".to_owned(),
-                SdkValue::text(file.display().to_string()),
-            ));
-            open::run(op, SdkValue::Map(fields), Some(lease))
+            let open = opened(target, &record, file.display().to_string(), None);
+            open::run(
+                op,
+                &open,
+                SdkValue::Map(with_project(args, target)),
+                Some(lease),
+            )
         }
         Executor::Worker(mut worker) => {
             // the host process holds the lease while it sends the call
             let _lease = lease;
+            let mut fields = with_project(args, target);
+            fields.extend([
+                ("store".to_owned(), SdkValue::text(&target.store)),
+                ("store_record".to_owned(), record.to_record().clone()),
+            ]);
             let request =
                 SdkValue::map([("op", SdkValue::text(op)), ("args", SdkValue::Map(fields))]);
             worker.call("store.call", request, &mut |event| events.event(event))
@@ -84,19 +90,29 @@ pub fn held_branch(
     crate::postgresql::reader::branch(&key, &record, &postgresql, read).map(Some)
 }
 
-/// A call's arguments with its project, Store and Store record.
-fn with_target(
-    args: Vec<(String, SdkValue)>,
+/// A call's arguments with its project: what the engine call gets.
+fn with_project(args: Vec<(String, SdkValue)>, target: &Target) -> Vec<(String, SdkValue)> {
+    let mut fields = args;
+    fields.push(("project".to_owned(), SdkValue::text(&target.project)));
+    fields
+}
+
+/// What opens `target`'s Store at `store_path`: its project, Store and
+/// Store record, and a PostgreSQL Store's server.
+fn opened(
     target: &Target,
     record: &StoreRecord,
-) -> Vec<(String, SdkValue)> {
-    let mut fields = args;
-    fields.extend([
-        ("project".to_owned(), SdkValue::text(&target.project)),
-        ("store".to_owned(), SdkValue::text(&target.store)),
-        ("store_record".to_owned(), record.to_record().clone()),
-    ]);
-    fields
+    store_path: String,
+    postgresql: Option<PgSelection>,
+) -> OpenArgs {
+    OpenArgs {
+        home: None,
+        store: Some(target.store.clone()),
+        project: Some(target.project.clone()),
+        store_path: Some(store_path),
+        store_record: Some(record.to_record().clone()),
+        postgresql,
+    }
 }
 
 /// A PostgreSQL Store's call in this process: its URL from the record, the
@@ -107,20 +123,22 @@ fn postgresql(
     home: &Path,
     target: &Target,
     op: &str,
-    mut fields: Vec<(String, SdkValue)>,
+    (args, record): (Vec<(String, SdkValue)>, &StoreRecord),
     lease: lease::Lease,
 ) -> Outcome {
     let url = crate::record::url(&target.record)?;
-    fields.push((
-        "postgresql".to_owned(),
-        SdkValue::map([("url", SdkValue::text(url))]),
-    ));
+    let postgresql = PgSelection {
+        url: Some(url),
+        ..PgSelection::default()
+    };
     // one open service per PostgreSQL Store and binding, keyed by a path no
     // file has
     let key = target.record.postgresql_key(home, &target.store);
-    fields.push((
-        "storePath".to_owned(),
-        SdkValue::text(key.display().to_string()),
-    ));
-    open::run(op, SdkValue::Map(fields), Some(lease))
+    let open = opened(target, record, key.display().to_string(), Some(postgresql));
+    open::run(
+        op,
+        &open,
+        SdkValue::Map(with_project(args, target)),
+        Some(lease),
+    )
 }

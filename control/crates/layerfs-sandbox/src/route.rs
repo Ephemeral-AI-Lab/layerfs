@@ -310,10 +310,7 @@ fn host_op(
                 true => (Some(lease), None),
                 false => (
                     None,
-                    Some(layerfs_store::open::hold(
-                        &host.to_args(Some(&call)),
-                        Some(lease),
-                    )?),
+                    Some(layerfs_store::open::hold(&host.open_args(), Some(lease))?),
                 ),
             };
             if op == Op::Status {
@@ -445,7 +442,7 @@ pub fn in_worker(
     // on the held read session
     let opened = match held {
         true => None,
-        false => Some(layerfs_store::open::hold(&host.to_args(Some(&call)), None)?),
+        false => Some(layerfs_store::open::hold(&host.open_args(), None)?),
     };
     if op == Op::Status {
         return runner(host, call);

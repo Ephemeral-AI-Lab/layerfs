@@ -270,13 +270,14 @@ fn projects_in(
     record: &StoreRecord,
     file: &Path,
 ) -> Result<Vec<(String, SdkValue)>> {
-    let args = SdkValue::map([
-        ("home", SdkValue::text(home.display().to_string())),
-        ("store", SdkValue::text(store)),
-        ("store_record", record.to_record().clone()),
-        ("storePath", SdkValue::text(file.display().to_string())),
-    ]);
-    let SdkValue::List(items) = crate::identity::list_projects(&args)? else {
+    let open = crate::open_args::OpenArgs {
+        home: Some(home.to_path_buf()),
+        store: Some(store.to_owned()),
+        store_record: Some(record.to_record().clone()),
+        store_path: Some(file.display().to_string()),
+        ..Default::default()
+    };
+    let SdkValue::List(items) = crate::identity::list_projects(&open)? else {
         return Err(refused("Failed", "the Store's project list is not a list"));
     };
     Ok(items

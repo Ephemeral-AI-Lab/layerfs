@@ -1,6 +1,7 @@
 //! A project removed from its Store (`project.remove`, here or in the
 //! Store's worker).
 use crate::identity::{identity, legacy, save_record, store_dir};
+use crate::open_args::OpenArgs;
 use crate::project::discovery;
 use layerfs_bridge::control::SdkValue;
 use layerfs_bridge::sdk_values::hex;
@@ -19,10 +20,11 @@ pub fn remove_project(args: &SdkValue) -> Outcome {
     let home = discovery::home(args)?;
     let store = text(args, "store")?;
     let name = text(args, "project")?;
-    let identity = identity(args)?;
+    let open = OpenArgs::read(args);
+    let identity = identity(&open)?;
     let own = name == store && legacy(&home, store)?;
     let entry = layerfs_home::home::paths::project_dir(&home, store, name);
-    let stack = crate::service::with_service(args, |service| {
+    let stack = crate::service::with_service(&open, |service| {
         let stacks = service
             .store
             .published(layerfs_project::store::projects)

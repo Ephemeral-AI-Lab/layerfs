@@ -21,6 +21,7 @@ pub mod lease;
 mod list;
 #[doc(hidden)]
 pub mod open;
+pub mod open_args;
 #[doc(hidden)]
 pub mod place;
 pub mod postgresql;

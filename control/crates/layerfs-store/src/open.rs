@@ -14,6 +14,7 @@
 //! cannot complete now (another process writing, a reader still in the log)
 //! is left for the idle close and never retried.
 use crate::lease::Lease;
+use crate::open_args::OpenArgs;
 use crate::service as direct;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
@@ -26,8 +27,8 @@ use std::time::{Duration, Instant};
 pub const IDLE: Duration = Duration::from_secs(60);
 
 struct Entry {
-    /// The arguments it was opened with: what `direct::release` needs.
-    args: SdkValue,
+    /// What it was opened with: what `direct::release` needs.
+    args: OpenArgs,
     last: Instant,
     /// Calls running on it now.
     calls: usize,
@@ -41,16 +42,13 @@ static REAPER: Once = Once::new();
 /// Signalled when an idle checkpoint ends: `close` waits for it.
 static SETTLED: Condvar = Condvar::new();
 
-fn store_path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
-    crate::identity::store_path(args)
-}
-
-/// Runs Store method `op` once on the Store `args` name (`storePath`),
-/// opening it first if this process holds it not yet. `lease` is held for
-/// as long as the Store stays open. The Store stays open while it runs.
-pub fn run(op: &str, args: SdkValue, lease: Option<Lease>) -> Outcome {
-    let running = Running(enter(&args, lease, 1)?);
-    let outcome = direct::call(op, args);
+/// Runs Store method `op` once, with the call's own arguments `args`, on
+/// the Store `open` names (`storePath`), opening it first if this process
+/// holds it not yet. `lease` is held for as long as the Store stays open.
+/// The Store stays open while it runs.
+pub fn run(op: &str, open: &OpenArgs, args: SdkValue, lease: Option<Lease>) -> Outcome {
+    let running = Running(enter(open, lease, 1)?);
+    let outcome = direct::call(op, open, args);
     drop(running);
     outcome
 }
@@ -97,7 +95,7 @@ pub(crate) fn holds(path: &Path) -> bool {
 
 /// Starts an idle checkpoint on `entry` when it is the last user here: no
 /// call and no other checkpoint running. Its open arguments.
-fn settle(entry: &mut Entry) -> Option<SdkValue> {
+fn settle(entry: &mut Entry) -> Option<OpenArgs> {
     if entry.calls > 0 || entry.settling > 0 {
         return None;
     }
@@ -125,7 +123,7 @@ fn has_log(path: &Path) -> bool {
 /// One `wal_checkpoint(TRUNCATE)` on the open Store `args` name, through
 /// its open service. `Some(true)`: its log is empty; `Some(false)`: left for
 /// the idle close; `None`: no Store file (PostgreSQL) or it failed.
-fn checkpoint(args: &SdkValue) -> Option<bool> {
+fn checkpoint(args: &OpenArgs) -> Option<bool> {
     direct::with_service(args, |service| {
         Ok(service.opened.file().map(|file| file.checkpoint()))
     })
@@ -154,13 +152,13 @@ pub fn released(path: &Path) -> Option<bool> {
 /// Opens the Store `args` name (`storePath`) in this process if it is not
 /// open yet, `lease` held while it stays open: Store methods and the host
 /// Sandbox code that reads a Branch through it both find it. Its path.
-pub fn hold(args: &SdkValue, lease: Option<Lease>) -> Result<PathBuf, SdkRefusal> {
+pub fn hold(args: &OpenArgs, lease: Option<Lease>) -> Result<PathBuf, SdkRefusal> {
     enter(args, lease, 0)
 }
 
 /// [`hold`], counting `calls` more calls running on it.
-fn enter(args: &SdkValue, lease: Option<Lease>, calls: usize) -> Result<PathBuf, SdkRefusal> {
-    let path = store_path(args)?;
+fn enter(args: &OpenArgs, lease: Option<Lease>, calls: usize) -> Result<PathBuf, SdkRefusal> {
+    let path = args.store_path()?;
     let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
     match open.get_mut(&path) {
         Some(entry) => {

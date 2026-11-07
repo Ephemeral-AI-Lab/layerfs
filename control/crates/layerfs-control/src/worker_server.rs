@@ -150,7 +150,7 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
                 .get_text("op")
                 .ok_or_else(|| refused("InvalidInput", "Store operation name"))?
                 .to_owned();
-            let inner = with_home(args.get("args").cloned().unwrap_or_default(), root);
+            let inner = args.get("args").cloned().unwrap_or_default();
             let store = inner
                 .get_text("store")
                 .ok_or_else(|| refused("InvalidInput", "a Store call names its Store"))?;
@@ -159,12 +159,12 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
             // the worker holds the Store's lease under its root while it
             // keeps the Store open
             let lease = layerfs_store::lease::hold_locked(root, store)?;
-            let inner = layerfs_home::home::with_field(
-                inner,
-                "storePath",
-                SdkValue::text(file.display().to_string()),
-            );
-            layerfs_store::open::run(&name, inner, Some(lease))
+            let open = layerfs_store::open_args::OpenArgs {
+                home: Some(root.to_path_buf()),
+                store_path: Some(file.display().to_string()),
+                ..layerfs_store::open_args::OpenArgs::read(&inner)
+            };
+            layerfs_store::open::run(&name, &open, inner, Some(lease))
         }
         // one step of a Store move or remove on this machine
         "store.file" => {
