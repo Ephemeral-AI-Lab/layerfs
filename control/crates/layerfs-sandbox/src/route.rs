@@ -10,6 +10,7 @@ use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_machine::worker::Unreached;
+use layerfs_store::open_args::PgSelection;
 use layerfs_store::place::{self, Executor};
 use layerfs_store::project::record::ProjectRecord;
 use layerfs_store::record::{StoreKind, StoreRecord};
@@ -25,7 +26,7 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 fn host_args(
     home: &Path,
     (store, project, record): (&str, &str, &StoreRecord),
-    (kind, postgresql): (StoreKind, Option<SdkValue>),
+    (kind, postgresql): (StoreKind, Option<PgSelection>),
     settings: Deploy,
     (sandbox, message): (Option<String>, Message),
 ) -> Result<Host> {
@@ -84,7 +85,7 @@ fn reached(
     home: &Path,
     machine: &str,
     record: &StoreRecord,
-) -> Result<(SdkValue, Option<&'static str>)> {
+) -> Result<(PgSelection, Option<&'static str>)> {
     let url = layerfs_store::record::url(record)?;
     // a build without machines (the guest's) runs its own Sandboxes on the
     // machine it is, which shares its loopback
@@ -122,10 +123,10 @@ fn reached(
 fn reach_check(
     who: &str,
     (store, key, project): (&StoreRecord, &Path, &str),
-    postgresql: &SdkValue,
+    postgresql: &PgSelection,
     hint: Option<&str>,
 ) -> Result<()> {
-    let url = postgresql.get_text("url").unwrap_or("");
+    let url = postgresql.url.as_deref().unwrap_or("");
     let host = layerfs_sandbox_backend::PostgresUrl::parse(url)
         .map(|url| url.host().to_owned())
         .unwrap_or_default();
@@ -156,7 +157,7 @@ fn reach_check(
             "NoSuchProject",
             format!(
                 "no project {project} in the PostgreSQL Store's schema {}",
-                postgresql.get_text("schema").unwrap_or("")
+                postgresql.schema.as_deref().unwrap_or("")
             ),
         )),
         Err(layerfs_store::postgresql::reader::OtherStore) => Err(refused(

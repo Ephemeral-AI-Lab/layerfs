@@ -7,6 +7,7 @@
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{paths, read_record, write_record};
 use layerfs_sandbox::host::{Deploy, Host, Message};
+use layerfs_store::open_args::PgSelection;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -142,7 +143,10 @@ fn a_create_of_the_same_name_forgets_a_retired_docker_record() {
     let host = Host {
         store: "pg".to_owned(),
         project: "api".to_owned(),
-        postgresql: Some(SdkValue::map([("url", t("postgresql://127.0.0.1:1/none"))])),
+        postgresql: Some(PgSelection {
+            url: Some("postgresql://127.0.0.1:1/none".to_owned()),
+            ..PgSelection::default()
+        }),
         deploy: Some(Deploy {
             sandbox: Some(backend.to_owned()),
             ..Deploy::default()

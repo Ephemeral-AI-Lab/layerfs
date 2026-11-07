@@ -77,6 +77,24 @@ impl PgSelection {
         }
     }
 
+    /// The `postgresql` value [`read`](Self::read) reads: `{ url, schema,
+    /// synchronousCommit }` in that order, a field it lacks left out. The
+    /// one encoder, used only where a frame or args map carries it.
+    pub fn encode(&self) -> SdkValue {
+        let fields = [
+            ("url", &self.url),
+            ("schema", &self.schema),
+            ("synchronousCommit", &self.synchronous_commit),
+        ];
+        SdkValue::Map(
+            (fields.into_iter())
+                .filter_map(|(name, value)| {
+                    Some((name.to_owned(), SdkValue::text(value.as_deref()?)))
+                })
+                .collect(),
+        )
+    }
+
     /// Its URL, required.
     pub fn url(&self) -> Result<&str> {
         url_of(self.url.as_deref())

@@ -32,7 +32,7 @@ pub struct Sent {
     /// What the machine's record chooses for its Sandboxes.
     pub choice: Choice,
     /// A PostgreSQL Store's server, resolved by the caller (#535 §7.4).
-    pub postgresql: Option<SdkValue>,
+    pub postgresql: Option<PgSelection>,
     /// The machine a PostgreSQL reach check names.
     pub machine: Option<String>,
     /// What a failed reach check suggests.
@@ -140,7 +140,7 @@ pub fn encode(sent: &Sent) -> Result<SdkValue, SdkRefusal> {
         ("deploy", choice(&sent.choice)),
     ];
     if let Some(postgresql) = &sent.postgresql {
-        frame.push(("postgresql", postgresql.clone()));
+        frame.push(("postgresql", postgresql.encode()));
         // what the worker's reach check names and suggests
         frame.extend(sent.machine.as_deref().map(|m| ("machine", text(m))));
         frame.extend(sent.reach_hint.as_deref().map(|h| ("reach_hint", text(h))));
@@ -203,7 +203,7 @@ pub fn decode(frame: &SdkValue) -> Result<Sent, SdkRefusal> {
             platform: deploy.get_text("platform").map(str::to_owned),
             archive: deploy.get_text("archive").map(str::to_owned),
         },
-        postgresql: frame.get("postgresql").cloned(),
+        postgresql: frame.get("postgresql").map(PgSelection::read),
         machine: frame.get_text("machine").map(str::to_owned),
         reach_hint: frame.get_text("reach_hint").map(str::to_owned),
     })
@@ -295,7 +295,7 @@ impl Host {
             project: Some(self.project.clone()),
             store_path: self.store_path.clone(),
             store_record: self.store_record.as_ref().map(|r| r.to_record().clone()),
-            postgresql: self.postgresql.as_ref().map(PgSelection::read),
+            postgresql: self.postgresql.clone(),
         }
     }
 
@@ -315,7 +315,7 @@ impl Host {
         fields.extend(self.deploy.as_ref().map(|d| ("deploy", deploy(d))));
         // a PostgreSQL Store's URL with its password, never written (H §7.4)
         if let Some(postgresql) = &self.postgresql {
-            fields.push(("postgresql", postgresql.clone()));
+            fields.push(("postgresql", postgresql.encode()));
         }
         fields.extend(self::fields(call, &self.message, self.sandbox.as_deref()));
         map(fields)

@@ -3,6 +3,7 @@
 //! forgets it (its data stays). The record keeps the URL without a password
 //! and the password as a reference (`env:NAME` or `file:/path`), resolved on
 //! each call; the full URL is never written down.
+use crate::open_args::PgSelection;
 use crate::project::record::ProjectRecord;
 use crate::record::url;
 use crate::record::{StoreKind, StoreRecord};
@@ -19,22 +20,24 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// The one schema a 2.0 PostgreSQL Store lives in.
 pub const SCHEMA: &str = "layerfs";
 
-/// The host operations' `postgresql` argument for a Store record.
-pub fn selection(record: &StoreRecord) -> Result<SdkValue> {
+/// What a call on Store `record` dials: its URL with the password.
+pub fn selection(record: &StoreRecord) -> Result<PgSelection> {
     Ok(selection_at(record, url(record)?))
 }
 
 /// [`selection`] dialling `url`: the record's URL with its password, as a
 /// machine reaches it (#535 §7.4).
-pub fn selection_at(record: &StoreRecord, url: String) -> SdkValue {
-    SdkValue::map([
-        ("url", SdkValue::Text(url)),
-        ("schema", SdkValue::text(SCHEMA)),
-        (
-            "synchronousCommit",
-            SdkValue::text(record.text("synchronous_commit").unwrap_or("off")),
+pub fn selection_at(record: &StoreRecord, url: String) -> PgSelection {
+    PgSelection {
+        url: Some(url),
+        schema: Some(SCHEMA.to_owned()),
+        synchronous_commit: Some(
+            record
+                .text("synchronous_commit")
+                .unwrap_or("off")
+                .to_owned(),
         ),
-    ])
+    }
 }
 
 /// `store.connect(name, url, { password, synchronous_commit })`. No
@@ -209,13 +212,12 @@ pub fn connect(home: &Path, request: &StoreConnect) -> Outcome {
         resolve(password)?;
     }
     let record = StoreRecord::connected(name, given, SCHEMA, sync, password);
-    let selection = selection(&record)?;
+    let probe = selection(&record)?;
     let target_of = target(given)?;
     unclaimed(home, name, &target_of, None)?;
     // an empty database gets the schema, with a new binding (#533 step
     // 10b); an existing LayerFS schema keeps its binding, read once. The
     // cursor key is this home's own either way.
-    let probe = crate::open_args::PgSelection::read(&selection);
     let fresh = crate::identity::Identity {
         kind: crate::identity::Kind::Postgresql {
             schema: SCHEMA.to_owned(),

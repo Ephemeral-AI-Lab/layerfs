@@ -142,3 +142,25 @@ fn a_message_that_is_not_text_is_refused_before_it_is_sent() {
         ("InvalidInput", "message must be text")
     );
 }
+
+/// A PostgreSQL Store's selection travels after the deployment, with the
+/// machine and hint its reach check names, and reads back as sent.
+#[test]
+fn a_frame_carries_the_postgresql_selection() {
+    let mut with = sent(Call::Status { path: None }, Message::Absent);
+    with.postgresql = Some(layerfs_store::open_args::PgSelection {
+        url: Some("postgresql://u:pw@h/d".to_owned()),
+        schema: Some("layerfs".to_owned()),
+        synchronous_commit: Some("off".to_owned()),
+    });
+    with.machine = Some("m1".to_owned());
+    let frame = encode(&with).unwrap();
+    assert!(print(&frame).contains(
+        r#""deploy":{"backend":"local","platform":"docker"},"postgresql":{"url":"postgresql://u:pw@h/d","schema":"layerfs","synchronousCommit":"off"},"machine":"m1","more":{"sandbox":"t1"}}"#
+    ));
+    let back = decode(&frame).unwrap().postgresql.unwrap();
+    assert_eq!(
+        print(&back.encode()),
+        print(&frame.get("postgresql").cloned().unwrap())
+    );
+}

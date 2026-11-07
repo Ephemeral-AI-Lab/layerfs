@@ -6,6 +6,7 @@
 //! where each is used, with the text the untyped request was refused with.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::helpers::required;
+use layerfs_store::open_args::PgSelection;
 use layerfs_store::record::StoreRecord;
 use std::path::PathBuf;
 
@@ -211,7 +212,7 @@ pub struct Host {
     pub deploy: Option<Deploy>,
     /// A PostgreSQL Store's resolved server, never written (layerfs-store's
     /// `postgresql` selection, H §7.4).
-    pub postgresql: Option<SdkValue>,
+    pub postgresql: Option<PgSelection>,
     /// The request's Commit message.
     pub message: Message,
 }

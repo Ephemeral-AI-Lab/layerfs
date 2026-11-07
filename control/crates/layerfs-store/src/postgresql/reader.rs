@@ -16,11 +16,9 @@
 //! [`crate::open::IDLE`] unused, and [`forget`] when the Store closes. A held session is checked with one empty query before a call
 //! uses it; one that does not answer is dropped and a new one opens, so no
 //! call runs on a broken connection and none is retried.
-use crate::open_args::OpenArgs;
-#[cfg(feature = "postgresql")]
-use crate::open_args::PgSelection;
+use crate::open_args::{OpenArgs, PgSelection};
 use crate::record::StoreRecord;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::control::SdkRefusal;
 #[cfg(feature = "postgresql")]
 use layerfs_history::HistoryCatalog as _;
 #[cfg(feature = "postgresql")]
@@ -161,12 +159,11 @@ pub struct OtherStore;
 pub fn reach(
     key: &Path,
     record: &StoreRecord,
-    postgresql: &SdkValue,
+    postgresql: &PgSelection,
     project: &str,
 ) -> Result<std::result::Result<bool, OtherStore>> {
     #[cfg(feature = "postgresql")]
     {
-        let postgresql = &PgSelection::read(postgresql);
         let Some(handles) = held::session(key, record, postgresql)? else {
             return Ok(Err(OtherStore));
         };
@@ -198,12 +195,11 @@ pub fn reach(
 pub(crate) fn branch(
     key: &Path,
     record: &StoreRecord,
-    postgresql: &SdkValue,
+    postgresql: &PgSelection,
     (project, name): (&str, &str),
 ) -> Result<(layerfs_history::BranchId, Option<layerfs_history::CommitId>)> {
     #[cfg(feature = "postgresql")]
     {
-        let postgresql = &PgSelection::read(postgresql);
         let handles =
             held::session(key, record, postgresql)?.ok_or_else(|| another(record.name()))?;
         use layerfs_store_service::history::lookup;

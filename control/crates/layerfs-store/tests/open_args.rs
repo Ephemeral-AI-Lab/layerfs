@@ -38,3 +38,30 @@ fn reads_the_routing_fields_and_refuses_a_missing_store_path() {
     );
     assert!(ROUTING.contains(&"store_record") && !ROUTING.contains(&"project"));
 }
+
+/// A Store record's selection encodes to the `postgresql` value the untyped
+/// map was, field for field and in order, and reads back to itself; a
+/// field it lacks is left out.
+#[test]
+fn a_selection_encodes_to_the_untyped_postgresql_value() {
+    use layerfs_home::json::{parse, print};
+    use layerfs_store::open_args::PgSelection;
+    use layerfs_store::postgresql::connect::selection_at;
+    use layerfs_store::record::StoreRecord;
+    let record = StoreRecord::from_record(
+        "pg",
+        parse(r#"{"name":"pg","kind":"postgresql","synchronous_commit":"on"}"#).unwrap(),
+    );
+    let selection = selection_at(&record, "postgresql://u:pw@x/db".to_owned());
+    let value = selection.encode();
+    assert_eq!(
+        print(&value),
+        r#"{"url":"postgresql://u:pw@x/db","schema":"layerfs","synchronousCommit":"on"}"#
+    );
+    assert_eq!(print(&PgSelection::read(&value).encode()), print(&value));
+    let partial = PgSelection {
+        url: Some("postgresql://x/db".to_owned()),
+        ..PgSelection::default()
+    };
+    assert_eq!(print(&partial.encode()), r#"{"url":"postgresql://x/db"}"#);
+}

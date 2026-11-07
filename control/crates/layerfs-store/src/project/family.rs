@@ -9,7 +9,6 @@
 //! project's history from its Store.
 use crate::calls::Page;
 use crate::lease;
-use crate::open_args::PgSelection;
 use crate::place::{self, Executor};
 use crate::project::add::{add_project, ProjectAdd};
 use crate::project::discovery::home_of;
@@ -290,13 +289,12 @@ fn init_postgresql(
             format!("Store {store} already has a project named {name}"),
         ));
     }
-    let selection = crate::postgresql::connect::selection(record)?;
     let add = PgProjectAdd {
         add: ProjectAdd {
             store_record: Some(record.to_record().clone()),
             ..project_add(&home, store, name, folder, timeout)
         },
-        postgresql: PgSelection::read(&selection),
+        postgresql: crate::postgresql::connect::selection(record)?,
     };
     // this process uses the Store meanwhile, as a sqlite Init does
     let _lease = lease::hold(&home, store)?;
