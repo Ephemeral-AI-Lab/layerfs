@@ -2,18 +2,24 @@
 #![allow(dead_code)]
 use layerfs_content::ObjectId;
 use layerfs_storage::{
-    location::{InodeValueRow, LocatedObject, ObjectLocation, SignatureRow},
+    location::{InodeValueRow, LocatedObject, ObjectLocation, PackInfo, SignatureRow},
     policy::{StoragePolicy, DEPENDENCY_PACK_CACHE_BYTES, READ_OBJECT_LIMIT},
     port::*,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
+/// One pack as this engine stores it; a test may corrupt its stored rows.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StoredPack {
+    pub info: PackInfo,
+    pub body: Arc<Vec<u8>>,
+}
 #[derive(Clone)]
 pub struct MetadataState {
     pub policy: StoragePolicy,
-    pub packs: BTreeMap<i64, PublishedPack>,
+    pub packs: BTreeMap<i64, StoredPack>,
     pub objects: BTreeMap<ObjectId, ObjectLocation>,
     pub values: BTreeMap<u32, [u8; 73]>,
     pub signatures: BTreeMap<usize, SignatureRow>,
@@ -191,11 +197,13 @@ impl PackPersistence for MemoryMetadata {
         let mut next = state.clone();
         let mut lost = Vec::new();
         for pack in &batch.packs {
-            if next.packs.contains_key(&pack.info.pack_id) {
+            let info = pack.info();
+            if next.packs.contains_key(&info.pack_id) {
                 return Err(PersistenceError::Malformed);
             }
-            next.next_pack = next.next_pack.max(pack.info.pack_id + 1);
-            next.packs.insert(pack.info.pack_id, pack.clone());
+            next.next_pack = next.next_pack.max(info.pack_id + 1);
+            let body = pack.body().clone();
+            next.packs.insert(info.pack_id, StoredPack { info, body });
         }
         for row in &batch.objects {
             if !next.packs.contains_key(&row.pack_id) {

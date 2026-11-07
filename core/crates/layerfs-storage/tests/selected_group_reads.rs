@@ -3,7 +3,7 @@
 mod metadata;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_storage::{
-    location::{ObjectLocation, PackDomain, PackInfo},
+    location::{ObjectLocation, PackDomain},
     pack::{
         assemble, build_group,
         layout::{self, PackLane},
@@ -45,15 +45,7 @@ fn fixture() -> (Arc<metadata::MemoryMetadata>, Vec<FinalizedObject>, usize) {
     let length = body.len();
     metadata
         .publish(&Publication {
-            packs: vec![PublishedPack {
-                info: PackInfo {
-                    pack_id: 1,
-                    domain: PackDomain::Metadata,
-                    length,
-                    key: ObjectKey::for_bytes(&body),
-                },
-                body: Arc::new(body),
-            }],
+            packs: vec![PublishedPack::seal(1, PackDomain::Metadata, Arc::new(body))],
             objects: objects
                 .iter()
                 .enumerate()
@@ -245,15 +237,7 @@ fn a_sparse_prefix_target_reconstructs_its_required_base_exactly() {
     let body = assemble(PackLane::WholeFile, &groups).unwrap();
     metadata
         .publish(&Publication {
-            packs: vec![PublishedPack {
-                info: PackInfo {
-                    pack_id: 1,
-                    domain: PackDomain::Payload,
-                    length: body.len(),
-                    key: ObjectKey::for_bytes(&body),
-                },
-                body: Arc::new(body),
-            }],
+            packs: vec![PublishedPack::seal(1, PackDomain::Payload, Arc::new(body))],
             objects: objects
                 .iter()
                 .enumerate()
@@ -327,15 +311,11 @@ fn chunk_fixture(packs: usize) -> (Arc<metadata::MemoryMetadata>, Vec<FinalizedO
             })
             .collect::<Vec<_>>();
         let body = assemble(PackLane::Chunk, &groups).unwrap();
-        published.push(PublishedPack {
-            info: PackInfo {
-                pack_id: number as i64 + 1,
-                domain: PackDomain::Payload,
-                length: body.len(),
-                key: ObjectKey::for_bytes(&body),
-            },
-            body: Arc::new(body),
-        });
+        published.push(PublishedPack::seal(
+            number as i64 + 1,
+            PackDomain::Payload,
+            Arc::new(body),
+        ));
     }
     metadata
         .publish(&Publication {

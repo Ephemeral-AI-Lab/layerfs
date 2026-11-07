@@ -52,7 +52,7 @@ Every call is one attempt with no recovery loop.
 
 | `Publication` field | Meaning |
 | --- | --- |
-| `packs` | `PublishedPack { info: PackInfo, body }` for each sealed pack, both domains |
+| `packs` | `PublishedPack` (`info()`, `body()`) for each sealed pack, both domains; built only by `PublishedPack::seal`, which hashes the body once |
 | `objects` | `ObjectLocation` rows; the first writer wins |
 | `inode_values` | `InodeValueRow { ordinal, value[73] }` from this Save's window |
 | `signatures` | `SignatureRow` ring changes |
@@ -92,6 +92,7 @@ Read carriers ([`read_pack.rs`](../../../../core/crates/layerfs-storage/src/port
 
 | Carrier | Guarantee |
 | --- | --- |
+| `PublishedPack` | Write side. `seal(pack_id, domain, body)` computes the length and SHA-256 once; fields are private, so Persistence trusts `info().key` and does not hash the body again (owner approval, 2026-11-07). |
 | `PersistedPack` | Length and SHA-256 equal the `PackInfo`; fields are private, so the bytes cannot change after the check. |
 | `PersistedPackRead::Ranges` | Every byte was read once and hashed; only the chosen ranges are returned. |
 | `AcquiredPackRead::Units` | Framing is checked; no whole-pack claim. Each object used is authenticated by its id. |

@@ -73,10 +73,11 @@ derives each version's own body offset.
  flush_lane: pack groups while append_fits (<= 16 groups, <= pack limit)
        |
        v
- place: take next reserved pack id, assemble_consuming, SHA-256 key
+ place: take next reserved pack id, assemble_consuming,
+        PublishedPack::seal (the pack's one SHA-256)
        |
        v
- Sealed { PackInfo, body, member locators }  --> publication
+ Sealed { PublishedPack, member locators }  --> publication
 ```
 
 | Step | Rule | Source |

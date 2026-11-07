@@ -6,7 +6,7 @@ use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, ReserveRequest};
 use layerfs_persistence::{Handles, PostgresSelection, StoreSelection, SynchronousCommit};
 use layerfs_persistence::{PersistenceConfig, SqliteHandles};
 use layerfs_storage::{
-    location::{ObjectLocation, PackDomain, PackInfo, SignatureRow},
+    location::{ObjectLocation, PackDomain, SignatureRow},
     pack::{assemble, build_group, PackLane},
     port::*,
     Storage, StoragePolicy,
@@ -35,15 +35,11 @@ fn unit(pack_id: i64, objects: usize) -> Publication {
     )
     .unwrap();
     Publication {
-        packs: vec![PublishedPack {
-            info: PackInfo {
-                pack_id,
-                domain: PackDomain::Payload,
-                key: ObjectKey::for_bytes(&body),
-                length: body.len(),
-            },
-            body: Arc::new(body),
-        }],
+        packs: vec![PublishedPack::seal(
+            pack_id,
+            PackDomain::Payload,
+            Arc::new(body),
+        )],
         objects: (0..objects)
             .map(|n| ObjectLocation {
                 object_id: ObjectId::for_bytes(&n.to_be_bytes()),
@@ -147,7 +143,7 @@ fn final_body_multirow_locators_and_first_wins_have_one_atomic_ack() {
     assert!(after.vm_steps > before.vm_steps);
     assert_eq!(
         after.sealed_body_bytes - before.sealed_body_bytes,
-        batch.packs[0].body.len() as u64
+        batch.packs[0].body().len() as u64
     );
     let mut second = unit(block.first_pack_id + 1, 512);
     second.objects.reverse();
@@ -164,7 +160,7 @@ fn final_body_multirow_locators_and_first_wins_have_one_atomic_ack() {
     h.storage
         .read_packs(&[block.first_pack_id], &mut packs)
         .unwrap();
-    assert_eq!(packs[0].body(), batch.packs[0].body.as_slice());
+    assert_eq!(packs[0].body(), batch.packs[0].body().as_slice());
 }
 #[test]
 fn failure_after_body_insert_rolls_back_the_entire_unit_and_published_body_is_immutable() {
@@ -202,8 +198,11 @@ fn failure_after_body_insert_rolls_back_the_entire_unit_and_published_body_is_im
     assert!(sql
         .execute("DELETE FROM pack WHERE pack_id=?1", [id])
         .is_err());
+    // A sealed pack's key cannot disagree with its body (`PublishedPack::seal`
+    // is its only constructor); a batch naming one pack id twice is refused
+    // before any transaction.
     let mut malformed = unit(id + 1, 1);
-    malformed.packs[0].info.key = ObjectKey::for_bytes(b"wrong");
+    malformed.packs.push(malformed.packs[0].clone());
     let before = h.diagnostics().unwrap();
     assert_eq!(
         h.storage.publish(&malformed),
@@ -482,7 +481,7 @@ fn pack_insert_pages_preserve_bodies_and_atomic_conflict_refusal() {
         assert_eq!(
             pack.body(),
             batch.packs[pack.info().pack_id as usize - 1]
-                .body
+                .body()
                 .as_slice()
         );
     }
@@ -501,7 +500,7 @@ fn pack_insert_pages_preserve_bodies_and_atomic_conflict_refusal() {
     assert!(absent.is_empty());
     let mut existing = Vec::new();
     h.storage.read_packs(&[1], &mut existing).unwrap();
-    assert_eq!(existing[0].body(), batch.packs[0].body.as_slice());
+    assert_eq!(existing[0].body(), batch.packs[0].body().as_slice());
 }
 
 #[test]
@@ -513,11 +512,10 @@ fn pack_insert_pages_keep_large_blob_binding_ownership_separate() {
     assert!(body.len() > layerfs_storage::policy::PACK_LIMIT / 2);
     let mut batch = Publication::default();
     for id in 1..=3 {
-        let mut p = unit(id, 0).packs.remove(0);
-        p.info.key = ObjectKey::for_bytes(&body);
-        p.info.length = body.len();
-        p.body = Arc::new(body.clone());
-        batch.packs.push(p);
+        let body = Arc::new(body.clone());
+        batch
+            .packs
+            .push(PublishedPack::seal(id, PackDomain::Payload, body));
     }
     let before = h.diagnostics().unwrap();
     h.storage.publish(&batch).unwrap();

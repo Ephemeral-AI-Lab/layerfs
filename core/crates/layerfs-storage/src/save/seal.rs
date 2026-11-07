@@ -2,13 +2,13 @@
 use crate::{
     encoding::CompressionWorkspace,
     error::{StorageError, StorageResult},
-    location::{ObjectLocation, PackDomain, PackInfo},
+    location::{ObjectLocation, PackDomain},
     pack::{
         assemble_consuming, build_group,
         layout::{self, EncodedGroup, PackLane},
     },
     policy::{BATCH_OBJECT_LIMIT, PACK_LIMIT},
-    port::ObjectKey,
+    port::PublishedPack,
 };
 use layerfs_content::{ObjectId, ObjectRole};
 
@@ -38,8 +38,7 @@ struct Queue {
     rows: usize,
 }
 pub(super) struct Sealed {
-    pub(super) info: PackInfo,
-    pub(super) body: std::sync::Arc<Vec<u8>>,
+    pub(super) pack: PublishedPack,
     pub(super) members: Vec<(ObjectLocation, Member)>,
 }
 pub(super) struct Packer {
@@ -244,12 +243,12 @@ impl Packer {
             .checked_add(1)
             .ok_or(StorageError::Integrity("pack id overflow"))?;
         let body = assemble_consuming(lane, groups)?;
-        let info = PackInfo {
+        // The one SHA-256 of these bytes; Persistence trusts it.
+        let pack = PublishedPack::seal(
             pack_id,
-            domain: PackDomain::for_lane(lane),
-            key: ObjectKey::for_bytes(&body),
-            length: body.len(),
-        };
+            PackDomain::for_lane(lane),
+            std::sync::Arc::new(body),
+        );
         let mut members = Vec::new();
         for (group_number, group) in member_groups.into_iter().enumerate() {
             for (record_number, member) in group.into_iter().enumerate() {
@@ -266,11 +265,7 @@ impl Packer {
                 ));
             }
         }
-        self.ready.push(Sealed {
-            info,
-            body: std::sync::Arc::new(body),
-            members,
-        });
+        self.ready.push(Sealed { pack, members });
         Ok(())
     }
 }
