@@ -47,6 +47,10 @@ pub struct Published {
     pub stat: Option<ViewStat>,
     pub file: Option<OpenFile>,
     pub changed: bool,
+    pub wcc: [(Option<ViewStat>, Option<ViewStat>); 2],
+    pub detached: Option<ViewStat>,
+    /// The inode a RENAME moved.
+    pub moved: Option<ViewStat>,
 }
 pub(super) struct Custody {
     services: Arc<dyn RequestServices>,
@@ -211,7 +215,18 @@ impl Custody {
             now,
             ..
         } = self.request;
-        let by_handle = !matches!(self.request.input, MutationInput::Named(_));
+        let keep_handle = !matches!(self.request.input, MutationInput::Named(_))
+            || matches!(
+                (&self.request.input, open),
+                (
+                    MutationInput::Named(
+                        layerfs_workspace::Operation::Unlink { .. }
+                            | layerfs_workspace::Operation::Rmdir { .. }
+                            | layerfs_workspace::Operation::Rename { .. }
+                    ),
+                    Some(false)
+                )
+            );
         let fresh = match &self.request.input {
             MutationInput::Named(operation) if operation.creates() => {
                 match self.services.reserve_serial()? {
@@ -240,7 +255,7 @@ impl Custody {
                 mount,
                 request,
                 serial: protected,
-                handle: handle.filter(|_| by_handle),
+                handle: handle.filter(|_| keep_handle),
                 input: self.request.input.clone(),
                 open,
                 now,
@@ -259,6 +274,9 @@ impl Custody {
                         stat: inode.clone().map(Into::into),
                         file: original.file,
                         changed: true,
+                        wcc: original.wcc.clone(),
+                        detached: original.detached.clone(),
+                        moved: original.moved.clone(),
                     }));
                 }
                 Ok(JobOutcome::Unchanged { inode }) => {
@@ -266,6 +284,9 @@ impl Custody {
                         stat: inode.clone().map(Into::into),
                         file: None,
                         changed: false,
+                        wcc: original.wcc.clone(),
+                        detached: original.detached.clone(),
+                        moved: original.moved.clone(),
                     }))
                 }
                 Ok(JobOutcome::Refused(refusal)) => return Ok(Err(Declined::Refused(*refusal))),
