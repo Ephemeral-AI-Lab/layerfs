@@ -45,9 +45,9 @@ pub mod worker;
 pub use bundle::bundle;
 pub use bundle::{bundle_dir, IMAGE_ARCHIVE};
 #[cfg(feature = "machine")]
-pub use connect::connect;
+pub use connect::{connect, MachineConnect};
 #[cfg(feature = "machine")]
-pub use create::create;
+pub use create::{create, MachineCreate};
 #[cfg(feature = "machine")]
 pub use endpoint::running;
 #[cfg(feature = "machine")]
@@ -75,4 +75,4 @@ pub use spec::{refusal as machine_refusal, spec as machine_spec};
 #[cfg(feature = "machine")]
 pub use status::status;
 #[cfg(feature = "machine")]
-pub use update::update;
+pub use update::{update, MachineUpdate};

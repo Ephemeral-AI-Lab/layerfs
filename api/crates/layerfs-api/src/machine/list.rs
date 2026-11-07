@@ -16,8 +16,8 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `machine.list`.
 #[cfg(feature = "machine")]
-fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::machine::list(&context.home, args)
+fn run(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
+    layerfs_control::machine::list(&context.home)
 }
 
 /// Without the `machine` feature (the guest worker's build) it is

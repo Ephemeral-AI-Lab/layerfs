@@ -37,11 +37,37 @@ pub(super) fn new_name(home: &Path, name: &str) -> Result<()> {
     Ok(())
 }
 
+/// A `machine.create` request. The name stays text: it is checked under the
+/// home lock, after the platform and the host's tools.
+pub struct MachineCreate {
+    /// The new machine's name.
+    pub name: String,
+    /// Its platform's name.
+    pub platform: String,
+    /// Its CPUs; absent, the default.
+    pub cpus: Option<i64>,
+    /// Its memory in bytes; absent, the default.
+    pub memory: Option<i64>,
+    /// Its disk in bytes; absent, the default.
+    pub disk: Option<i64>,
+    /// Its image.
+    pub image: Option<String>,
+    /// Whether it hosts nested machines; given at all, only a lima machine is.
+    pub nested: Option<bool>,
+    /// A firecracker machine's lima `--nested` host.
+    pub host: Option<String>,
+}
+
 /// `machine.create(name, platform, { cpus, memory, disk, image, nested, host })`.
-pub fn create(home: &Path, events: &mut Events<'_>, args: &SdkValue, related: Related) -> Outcome {
+pub fn create(
+    home: &Path,
+    events: &mut Events<'_>,
+    request: &MachineCreate,
+    related: Related,
+) -> Outcome {
     let home = home.to_path_buf();
-    let name = args.get_text("name").unwrap_or("").to_owned();
-    let platform = args.get_text("platform").unwrap_or("");
+    let name = request.name.as_str();
+    let platform = request.platform.as_str();
     let kind = Platform::parse(platform)
         .ok_or_else(|| refused("InvalidInput", format!("no platform named {platform}")))?;
     if !kind.created() {
@@ -57,10 +83,10 @@ pub fn create(home: &Path, events: &mut Events<'_>, args: &SdkValue, related: Re
             ),
         ));
     }
-    if args.get("nested").is_some() && kind != Platform::Lima {
+    if request.nested.is_some() && kind != Platform::Lima {
         return Err(refused("InvalidInput", "only a lima machine is nested"));
     }
-    if kind == Platform::Firecracker && args.get_text("host").is_none() {
+    if kind == Platform::Firecracker && request.host.is_none() {
         return Err(refused(
             "InvalidInput",
             "a firecracker machine names its lima --nested host",
@@ -82,40 +108,40 @@ pub fn create(home: &Path, events: &mut Events<'_>, args: &SdkValue, related: Re
     let bundle = bundle()?;
     let id = home_id(&home)?;
     let mut fields = vec![
-        ("name", SdkValue::text(&name)),
+        ("name", SdkValue::text(name)),
         ("platform", SdkValue::text(kind.name())),
         (
             "cpus",
-            SdkValue::Int(args.get_int("cpus").unwrap_or(record::DEFAULT_CPUS)),
+            SdkValue::Int(request.cpus.unwrap_or(record::DEFAULT_CPUS)),
         ),
         (
             "memory",
-            SdkValue::Int(args.get_int("memory").unwrap_or(record::DEFAULT_MEMORY)),
+            SdkValue::Int(request.memory.unwrap_or(record::DEFAULT_MEMORY)),
         ),
         (
             "disk",
-            SdkValue::Int(args.get_int("disk").unwrap_or(record::DEFAULT_DISK)),
+            SdkValue::Int(request.disk.unwrap_or(record::DEFAULT_DISK)),
         ),
-        ("vm_name", SdkValue::text(record::vm_name(&id, &name))),
+        ("vm_name", SdkValue::text(record::vm_name(&id, name))),
         ("created", SdkValue::Int(home::now_ms())),
     ];
-    if let Some(image) = args.get_text("image") {
+    if let Some(image) = &request.image {
         fields.push(("image", SdkValue::text(image)));
     }
-    if matches!(args.get("nested"), Some(SdkValue::Bool(true))) {
+    if request.nested == Some(true) {
         fields.push(("nested", SdkValue::Bool(true)));
     }
-    if let Some(host) = args.get_text("host") {
+    if let Some(host) = &request.host {
         fields.push(("host", SdkValue::text(host)));
     }
     let fields = fields.into_iter().map(|(n, v)| (n.to_owned(), v));
     let op = Op::begin(CREATE, "create", SdkValue::Null)?;
-    let record = MachineRecord::from_record(&name, SdkValue::Map(fields.collect())).with_op(&op);
+    let record = MachineRecord::from_record(name, SdkValue::Map(fields.collect())).with_op(&op);
     // claim the name under the lock; the VM is made outside it
     let spec = {
         let _lock = lock::take(&home)?;
-        new_name(&home, &name)?;
-        if let Some(host) = args.get_text("host") {
+        new_name(&home, name)?;
+        if let Some(host) = &request.host {
             let host_record = machine_of(&home, host)?;
             if host_record.platform()? != Platform::Lima || !host_record.nested() {
                 return Err(refused(
@@ -130,17 +156,17 @@ pub fn create(home: &Path, events: &mut Events<'_>, args: &SdkValue, related: Re
     let spec = match spec {
         Ok(spec) => spec,
         Err(refusal) => {
-            let _ = std::fs::remove_dir_all(paths::machine_dir(&home, &name));
+            let _ = std::fs::remove_dir_all(paths::machine_dir(&home, name));
             return Err(refusal);
         }
     };
     events.progress(SdkValue::map([
         ("phase", SdkValue::text("create")),
-        ("machine", SdkValue::text(&name)),
+        ("machine", SdkValue::text(name)),
     ]));
     // a `machine start` waits for its create
-    let _start = super::endpoint::start_lock(&home, &name)?;
-    finish(&home, &name, op, adapters::create(&spec, &bundle), related)
+    let _start = super::endpoint::start_lock(&home, name)?;
+    finish(&home, name, op, adapters::create(&spec, &bundle), related)
 }
 
 /// Records the outcome of a create or connect (H §7.1.1 step 5) that `op`

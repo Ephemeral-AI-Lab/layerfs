@@ -92,7 +92,7 @@ pub(super) fn summary(
 
 /// `machine.list()`: every machine with its live state and what it
 /// supports; `machine.platforms` answers what could be created here.
-pub fn list(home: &Path, _args: &SdkValue, related: Related) -> Outcome {
+pub fn list(home: &Path, related: Related) -> Outcome {
     let mut records = Vec::new();
     for name in paths::names(&home.join("machine")).map_err(failed)? {
         if let Some(record) = MachineRecord::read(home, &name)? {

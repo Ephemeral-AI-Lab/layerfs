@@ -9,7 +9,7 @@ use layerfs_platform::{self as adapters, HostOs, Platform, Probe, SupportRow, Su
 use std::path::Path;
 
 /// `machine.platforms()`: `{ host, platforms: [row] }`.
-pub fn platforms(home: &Path, _args: &SdkValue) -> Outcome {
+pub fn platforms(home: &Path) -> Outcome {
     let host = HostOs::current();
     let tools = record::tools(home)?;
     let rows = adapters::platforms(host)

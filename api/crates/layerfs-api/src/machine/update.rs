@@ -25,7 +25,17 @@ pub(crate) const CALL: Call = call(
 /// Runs `machine.update`.
 #[cfg(feature = "machine")]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::machine::update(&context.home, args)
+    let text = |name: &str| args.get_text(name).map(str::to_owned);
+    let request = layerfs_machine::MachineUpdate {
+        name: text("name").unwrap_or_default(),
+        cpus: args.get_int("cpus"),
+        memory: args.get_int("memory"),
+        image: text("image"),
+        docker: text("docker"),
+        wsl: text("wsl"),
+        daemon: text("daemon"),
+    };
+    layerfs_control::machine::update(&context.home, &request)
 }
 
 /// Without the `machine` feature (the guest worker's build) it is

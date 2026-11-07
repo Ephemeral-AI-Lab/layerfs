@@ -10,6 +10,7 @@ use super::status::home_id;
 use crate::Related;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{lock, paths};
+use layerfs_home::names::MachineName;
 use layerfs_home::outcome::{failed, Outcome};
 use layerfs_platform::{self as adapters, Platform};
 use std::path::Path;
@@ -17,24 +18,22 @@ use std::path::Path;
 /// `machine.start(name)`: the machine's worker answers its secret, or the
 /// machine and its worker are started (under its `start.lock`) and waited
 /// for. A readiness wait, not a retry.
-pub fn start(home: &Path, args: &SdkValue, related: Related) -> Outcome {
-    let name = args.get_text("name").unwrap_or("");
+pub fn start(home: &Path, name: &MachineName, related: Related) -> Outcome {
     if machine_of(home, name)?.platform()? != Platform::Native {
         running(home, name)?;
     }
-    super::get::get(home, args, related)
+    super::get::get(home, name, related)
 }
 
 /// `machine.stop(name)`: refused `InUse` while Sandboxes run on it (or on a
 /// Firecracker machine it hosts), `detail.related` naming each; else its
 /// worker and VM stop under its `start.lock`, so no `machine.start` runs
 /// meanwhile, and `worker.json` goes. Its disks and Stores stay.
-pub fn stop(home: &Path, args: &SdkValue, related: Related) -> Outcome {
+pub fn stop(home: &Path, name: &MachineName, related: Related) -> Outcome {
     let home = home.to_path_buf();
-    let name = args.get_text("name").unwrap_or("");
     let record = machine_of(&home, name)?;
     if record.platform()? == Platform::Native {
-        return super::get::get(&home, args, related);
+        return super::get::get(&home, name, related);
     }
     let _start = start_lock(&home, name)?;
     let spec = {
@@ -55,5 +54,5 @@ pub fn stop(home: &Path, args: &SdkValue, related: Related) -> Outcome {
             record.with("state", SdkValue::text("stopped"))
         })?;
     }
-    super::get::get(&home, args, related)
+    super::get::get(&home, name, related)
 }

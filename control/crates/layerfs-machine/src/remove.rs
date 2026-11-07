@@ -5,6 +5,7 @@ use super::status::home_id;
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{lock, paths};
+use layerfs_home::names::MachineName;
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_platform::{self as adapters, Code, Platform};
@@ -19,9 +20,8 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// one's unresolved intent. A refused delete puts the record back as it
 /// was; one whose outcome is unknown keeps its `op`, uncertain, with the
 /// `error`, and is logged.
-fn take_down(home: &Path, args: &SdkValue, ssh: bool, related: Related) -> Outcome {
+fn take_down(home: &Path, name: &MachineName, ssh: bool, related: Related) -> Outcome {
     let home = home.to_path_buf();
-    let name = args.get_text("name").unwrap_or("");
     MachineRecord::of(&home, name)?.not_running()?;
     let _start = super::endpoint::start_lock(&home, name)?;
     let (record, spec, op) = {
@@ -51,7 +51,7 @@ fn take_down(home: &Path, args: &SdkValue, ssh: bool, related: Related) -> Outco
     let _lock = lock::take(&home)?;
     std::fs::remove_dir_all(paths::machine_dir(&home, name)).map_err(failed)?;
     Ok(SdkValue::map([
-        ("name", SdkValue::text(name)),
+        ("name", SdkValue::text(name.as_str())),
         ("removed", SdkValue::Bool(true)),
     ]))
 }
@@ -90,11 +90,11 @@ fn removable(
 }
 
 /// `machine.remove(name)`: deletes a VM and its disk.
-pub fn remove(home: &Path, args: &SdkValue, related: Related) -> Outcome {
-    take_down(home, args, false, related)
+pub fn remove(home: &Path, name: &MachineName, related: Related) -> Outcome {
+    take_down(home, name, false, related)
 }
 
 /// `machine.disconnect(name)`: forgets an ssh host; its data root stays.
-pub fn disconnect(home: &Path, args: &SdkValue, related: Related) -> Outcome {
-    take_down(home, args, true, related)
+pub fn disconnect(home: &Path, name: &MachineName, related: Related) -> Outcome {
+    take_down(home, name, true, related)
 }

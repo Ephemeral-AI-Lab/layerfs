@@ -3,10 +3,10 @@
 //! those reads from [`crate::inventory`]. The other machine calls are
 //! `layerfs-machine`'s own.
 use crate::inventory;
-use layerfs_bridge::control::SdkValue;
 use layerfs_home::events::Events;
+use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
-use layerfs_machine::Related;
+use layerfs_machine::{MachineConnect, MachineCreate, MachineUpdate, Related};
 use std::path::Path;
 
 /// What a machine holds, read from the Store and Sandbox records.
@@ -19,51 +19,51 @@ pub const RELATED: Related = Related {
 };
 
 /// `machine.list`.
-pub fn list(home: &Path, args: &SdkValue) -> Outcome {
-    layerfs_machine::list(home, args, RELATED)
+pub fn list(home: &Path) -> Outcome {
+    layerfs_machine::list(home, RELATED)
 }
 
 /// `machine.get`.
-pub fn get(home: &Path, args: &SdkValue) -> Outcome {
-    layerfs_machine::get(home, args, RELATED)
+pub fn get(home: &Path, name: &MachineName) -> Outcome {
+    layerfs_machine::get(home, name, RELATED)
 }
 
 /// `machine.status`.
-pub fn status(home: &Path, args: &SdkValue) -> Outcome {
-    layerfs_machine::status(home, args, RELATED)
+pub fn status(home: &Path, name: &MachineName) -> Outcome {
+    layerfs_machine::status(home, name, RELATED)
 }
 
 /// `machine.start`.
-pub fn start(home: &Path, args: &SdkValue) -> Outcome {
-    layerfs_machine::start(home, args, RELATED)
+pub fn start(home: &Path, name: &MachineName) -> Outcome {
+    layerfs_machine::start(home, name, RELATED)
 }
 
 /// `machine.stop`.
-pub fn stop(home: &Path, args: &SdkValue) -> Outcome {
-    layerfs_machine::stop(home, args, RELATED)
+pub fn stop(home: &Path, name: &MachineName) -> Outcome {
+    layerfs_machine::stop(home, name, RELATED)
 }
 
 /// `machine.create`.
-pub fn create(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
-    layerfs_machine::create(home, events, args, RELATED)
+pub fn create(home: &Path, events: &mut Events<'_>, request: &MachineCreate) -> Outcome {
+    layerfs_machine::create(home, events, request, RELATED)
 }
 
 /// `machine.connect`.
-pub fn connect(home: &Path, args: &SdkValue) -> Outcome {
-    layerfs_machine::connect(home, args, RELATED)
+pub fn connect(home: &Path, request: &MachineConnect) -> Outcome {
+    layerfs_machine::connect(home, request, RELATED)
 }
 
 /// `machine.remove`.
-pub fn remove(home: &Path, args: &SdkValue) -> Outcome {
-    layerfs_machine::remove(home, args, RELATED)
+pub fn remove(home: &Path, name: &MachineName) -> Outcome {
+    layerfs_machine::remove(home, name, RELATED)
 }
 
 /// `machine.disconnect`.
-pub fn disconnect(home: &Path, args: &SdkValue) -> Outcome {
-    layerfs_machine::disconnect(home, args, RELATED)
+pub fn disconnect(home: &Path, name: &MachineName) -> Outcome {
+    layerfs_machine::disconnect(home, name, RELATED)
 }
 
 /// `machine.update`.
-pub fn update(home: &Path, args: &SdkValue) -> Outcome {
-    layerfs_machine::update(home, args, RELATED)
+pub fn update(home: &Path, request: &MachineUpdate) -> Outcome {
+    layerfs_machine::update(home, request, RELATED)
 }

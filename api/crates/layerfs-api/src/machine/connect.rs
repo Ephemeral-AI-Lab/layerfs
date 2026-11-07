@@ -24,7 +24,17 @@ pub(crate) const CALL: Call = call(
 /// Runs `machine.connect`.
 #[cfg(feature = "machine")]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::machine::connect(&context.home, args)
+    let text = |name: &str| args.get_text(name).map(str::to_owned);
+    let request = layerfs_machine::MachineConnect {
+        name: text("name").unwrap_or_default(),
+        host: text("host").unwrap_or_default(),
+        user: text("user"),
+        port: args.get_int("port"),
+        identity: text("identity"),
+        known_hosts: args.get_text("known_hosts").map(std::path::PathBuf::from),
+        root: text("root"),
+    };
+    layerfs_control::machine::connect(&context.home, &request)
 }
 
 /// Without the `machine` feature (the guest worker's build) it is

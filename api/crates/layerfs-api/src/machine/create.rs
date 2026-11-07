@@ -25,8 +25,22 @@ pub(crate) const CALL: Call = call(
 /// Runs `machine.create`.
 #[cfg(feature = "machine")]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    let text = |name: &str| args.get_text(name).map(str::to_owned);
+    let request = layerfs_machine::MachineCreate {
+        name: text("name").unwrap_or_default(),
+        platform: text("platform").unwrap_or_default(),
+        cpus: args.get_int("cpus"),
+        memory: args.get_int("memory"),
+        disk: args.get_int("disk"),
+        image: text("image"),
+        nested: match args.get("nested") {
+            Some(SdkValue::Bool(nested)) => Some(*nested),
+            _ => None,
+        },
+        host: text("host"),
+    };
     let (home, events) = context.parts();
-    layerfs_control::machine::create(home, events, args)
+    layerfs_control::machine::create(home, events, &request)
 }
 
 /// Without the `machine` feature (the guest worker's build) it is

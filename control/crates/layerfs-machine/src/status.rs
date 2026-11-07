@@ -3,6 +3,7 @@ use super::record::MachineRecord;
 use super::spec::{self as record, refusal};
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
 use layerfs_platform as adapters;
 use std::path::Path;
@@ -18,8 +19,7 @@ pub(super) fn home_id(home: &Path) -> Result<String> {
 /// read: while an `op` holds the machine it probes nothing, answers the
 /// state the record derives (`creating`, `removing`, `unresolved`) and
 /// shows the `op` (#536 H6), which it never clears.
-pub fn status(home: &Path, args: &SdkValue, related: Related) -> Outcome {
-    let name = args.get_text("name").unwrap_or("");
+pub fn status(home: &Path, name: &MachineName, related: Related) -> Outcome {
     let record = MachineRecord::of(home, name)?;
     let kind = record.platform()?;
     let disabled = layerfs_platform::platform_policy::disabled_reason(kind.name());
@@ -45,7 +45,7 @@ pub fn status(home: &Path, args: &SdkValue, related: Related) -> Outcome {
     };
     let text = |value: Option<String>| value.map(SdkValue::Text).unwrap_or_default();
     let mut fields = vec![
-        ("name", SdkValue::text(name)),
+        ("name", SdkValue::text(name.as_str())),
         ("platform", SdkValue::text(kind.name())),
         ("state", SdkValue::Text(state)),
         (
