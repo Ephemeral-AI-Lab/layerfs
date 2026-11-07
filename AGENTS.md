@@ -309,7 +309,11 @@ remain binding; moving them out of this file does not weaken them.
 8. Commit/capture/snapshot have one construction producer in normal wiring and
    each measured operation; export `LAYERFS_CONSTRUCTION_WORKERS=1`.
    Namespace Init alone retains its supported parallel construction profile.
-   No extra helper/lane to pass a gate; FUSE dispatch is a separate concern.
+   A Commit's one producer runs on its own thread and hands objects through
+   one bounded queue to the calling thread, which keeps the one Save and
+   publishes (owner approval, 2026-11-07); see
+   [Commit construction](docs/architecture/engine/commit/construction.md#one-producer).
+   No other helper/lane to pass a gate; FUSE dispatch is a separate concern.
 9. Measure both speed and storage. Reject about 50% speed loss for about 5%
    storage benefit; report raw deltas and preserve frozen-gate failures.
 

@@ -8,6 +8,7 @@ pub mod digests;
 pub mod hints;
 pub mod open;
 pub mod operation;
+mod pipeline;
 pub mod ports;
 pub mod producer;
 pub mod read_handle;
