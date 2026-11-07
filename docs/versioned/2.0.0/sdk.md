@@ -132,7 +132,7 @@ asyncio.run(main())
 
 See [`project.export`](../../architecture/api/sdk/project/export.md)
 for destination validation, fidelity, routing, refusal codes and result fields.
-The table has 63 calls, five in the `project` family.
+The table has 61 calls, five in the `project` family.
 
 ```js
 // /exports exists; the destination is absent or empty on this host.

@@ -5,14 +5,15 @@
 //! (`native`'s daemon and image archive, `docker`'s socket and image), a
 //! bucket `remote` from `LAYERFS_REMOTE_*`, and the machine of each Store a
 //! 1.1.0 home left unknown (from `LAYERFS_SANDBOX`/`LAYERFS_PLACEMENT`). It
-//! never makes a VM or connects an ssh host (those have effects of their
-//! own) and never writes a secret: for those it answers the command to run.
+//! never makes a VM (that has effects of its own) and never writes a
+//! secret: for those it answers the command to run. `LAYERFS_SSH_HOST` is
+//! ignored: the ssh platform was removed in 2.0.
 //! Every name it read and what became of it is in the answer and in
 //! `log/import-env.jsonl`.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{lock, log_line, now_ms, paths, read_record, with_field, write_entity};
 use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_sandbox_backend::platform_policy::disabled_reason;
+use layerfs_sandbox_backend::platform_policy::{disabled_reason, SSH_REMOVED};
 use layerfs_store::record::{kind_of, StoreKind};
 use std::path::Path;
 
@@ -129,26 +130,12 @@ fn machines(home: &Path, env: &[(String, String)], report: &mut Report) -> Resul
             report,
         )?;
     }
-    if let Some(host) = get(env, "LAYERFS_SSH_HOST") {
-        let mut command = format!("layerfs machine connect ssh {host}");
-        for (setting, option) in [
-            ("LAYERFS_SSH_USER", "--user"),
-            ("LAYERFS_SSH_PORT", "--port"),
-            ("LAYERFS_SSH_IDENTITY", "--identity"),
-            ("LAYERFS_SSH_KEY", "--identity"),
-            ("LAYERFS_SSH_KNOWN_HOSTS", "--known-hosts"),
-            ("LAYERFS_SSH_STORE", "--root"),
-        ] {
-            if let Some(value) = get(env, setting) {
-                command.push_str(&format!(" {option} {value}"));
-            }
-        }
-        match disabled_reason("ssh") {
-            Some(reason) => {
-                Report::line(&mut report.ignored, "LAYERFS_SSH_HOST", reason.to_owned())
-            }
-            None => Report::line(&mut report.commands, "LAYERFS_SSH_HOST", command),
-        }
+    if get(env, "LAYERFS_SSH_HOST").is_some() {
+        Report::line(
+            &mut report.ignored,
+            "LAYERFS_SSH_HOST",
+            SSH_REMOVED.to_owned(),
+        );
     }
     for setting in ["LAYERFS_SANDBOX", "LAYERFS_PLACEMENT"] {
         if let Some(kind) = get(env, setting).and_then(|v| v.strip_prefix("vm:")) {

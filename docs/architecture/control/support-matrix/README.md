@@ -43,7 +43,7 @@ for what a diagram or table cannot say.
         |                   |                                    |
         v                   v                                    v
  control/SUPPORT.json  machine.platforms,             machine.create and
- (3 hosts x 7 rows;    machine.list/get `supports`    sandbox.create refuse
+ (3 hosts x 5 rows;    machine.list/get `supports`    sandbox.create refuse
   tests compare it)    (layerfs-control)              in the row's words
 ```
 
@@ -112,7 +112,7 @@ cargo +1.85.1 test --locked -p layerfs-platform --test conformance
 ```
 
 Both files are `#![cfg(unix)]`: they run on macOS and Linux, with no Docker,
-VM, ssh host or root. The commands were not run while writing this page.
+VM, remote host or root. The commands were not run while writing this page.
 
 ## Earlier material
 

@@ -1,4 +1,5 @@
-//! `machine.remove`: delete a VM machine and its disk.
+//! `machine.remove`: delete a VM machine and its disk; a machine of a
+//! platform removed in 2.0 is only forgotten.
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call};
 use crate::calls::Context;
@@ -13,7 +14,7 @@ pub(crate) const CALL: Call = call(
     "remove",
     &[a("name", Name)],
     &[],
-    "delete a VM machine and its disk",
+    "delete a VM machine and its disk; one of a removed platform is only forgotten",
     run,
 );
 

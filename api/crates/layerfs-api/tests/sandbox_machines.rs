@@ -1,6 +1,6 @@
 //! Sandboxes on the docker machine and Sandboxes of PostgreSQL Stores (#533
 //! step 12 deferral closed by the owner, 2026-11-02). Without settings the
-//! refusals run: a PostgreSQL Store's Sandbox on a VM or an ssh host comes
+//! refusals run: a PostgreSQL Store's Sandbox on a VM comes
 //! later (O3), and a sqlite Store's Sandbox runs on its Store's machine.
 //! With settings the live paths run, each through the call table:
 //!
@@ -195,11 +195,12 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
             assert!(message.ends_with(reason), "{message}");
         }
     }
-    // SSH is disabled by product policy before any reach or startup.
+    // an ssh machine left by an older home: its platform was removed in
+    // 2.0, refused before any reach or startup
     let (code, message) = create("box");
     assert_eq!(code, "Unsupported", "{message}");
     assert!(
-        message == layerfs_sandbox_backend::platform_policy::SSH_DISABLED,
+        message == layerfs_sandbox_backend::platform_policy::SSH_REMOVED,
         "{message}"
     );
     let (code, message) = call(
@@ -542,7 +543,7 @@ fn a_sqlite_store_s_sandbox_on_each_running_vm_machine() {
 }
 
 /// With no machine named, `sandbox.create` runs where the Store's calls
-/// run (#536 §10): a sqlite Store's machine (here a stopped microsandbox machine,
+/// run (#536 §10): a sqlite Store's machine (here a docker machine with no worker,
 /// so the create is refused naming its start), and `native` for a
 /// PostgreSQL Store (refused here by the reach check, which runs there).
 #[test]
@@ -551,9 +552,9 @@ fn a_sandbox_with_no_machine_runs_on_its_store_s() {
     home::open(&home).unwrap();
     home::write_record(
         &paths::machine_record(&home, "box"),
-        // microsandbox runs on macOS and Linux hosts, so the support table
-        // passes this machine on either
-        &SdkValue::map([("name", t("box")), ("platform", t("microsandbox"))]),
+        // docker runs on macOS and Linux hosts, so the support table passes
+        // this machine on either
+        &SdkValue::map([("name", t("box")), ("platform", t("docker"))]),
     )
     .unwrap();
     home::write_record(

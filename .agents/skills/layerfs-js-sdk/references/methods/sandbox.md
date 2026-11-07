@@ -63,10 +63,10 @@ ready.
 | --- | --- |
 | `native` on macOS | host processes, Workspaces over loopback NFS. Needs the daemon: the native machine record's `daemon`, else `~/.cache/layerfs/bundle/<version>/<os>-<arch>/layerfs-daemon` (`Unavailable` when missing) |
 | `native` on Linux | Linux namespaces |
-| a VM or ssh machine | sent to that machine's worker, which runs it on its own `native`. On `ssh` and `lima` this process then forwards the daemon's port to its loopback and keeps its keys in the home (#535 G4): the Workspace calls but `exec` go to the daemon directly. A forward that fails leaves the Sandbox on the worker route and the answer says `forward_failed` |
+| a VM machine | sent to that machine's worker, which runs it on its own `native`. On `lima` this process then forwards the daemon's port to its loopback and keeps its keys in the home (#535 G4): the Workspace calls but `exec` go to the daemon directly. A forward that fails leaves the Sandbox on the worker route and the answer says `forward_failed` |
 | `docker`, sqlite Store on `docker` | a container on `image`, else the docker machine's image (`machine update docker --image`), else the bundle's Sandbox image, loaded into Docker once (#535 P5); on macOS and Linux the docker worker starts it beside itself, mounting only the Store's folder (G8). Its daemon's port is published on this host's loopback: the Workspace calls but `exec` go to it directly (#535 G4) |
-| PostgreSQL Store, a platform the support table allows (`native`, `docker`, ssh) | where that machine runs Sandboxes (rows above). This process resolves the password and rewrites a loopback host for the machine (`docker`: `host.docker.internal`; ssh refuses a loopback URL); the create first checks, from that machine, that the server answers with the Store's schema binding. The daemon needs the `postgresql` build |
-| PostgreSQL Store, a platform the table refuses (`lima`, `apple-container`, `microsandbox`, `firecracker`) | `Unsupported` with the support table's reason (`machine.platforms`) |
+| PostgreSQL Store, a platform the support table allows (`native`, `docker`, `lima`, `apple-container` on macOS) | where that machine runs Sandboxes (rows above). This process resolves the password and rewrites a loopback host for the machine (`docker`: `host.docker.internal`); the create first checks, from that machine, that the server answers with the Store's schema binding. The daemon needs the `postgresql` build |
+| PostgreSQL Store, a platform the table refuses (`firecracker`, disabled; `apple-container` off macOS) | `Unsupported` with the support table's reason (`machine.platforms`) |
 
 **Returns:** the Sandbox's record: `{ name, project, machine, created, id,
 platform, runtime, image, backend, route, state: "running" }`. `name` is what
@@ -96,7 +96,8 @@ the `op`) and `layerfs sandbox close <name>`, the call that clears it.
 | --- | --- | --- |
 | `Exists` | A Sandbox with that name is recorded in the home (even one that closed itself) | Pick another name, or `sandbox.close(name)` first to drop the old record |
 | `NotFound` | No machine of that name, or no such Store | Check `machine.list`, `project.get` |
-| `Unsupported` | The machine is not the sqlite Store's (message names the Store's machine), the support table refuses the platform for the Store's kind, or the PostgreSQL URL cannot be rewritten for the machine (a loopback URL on ssh; `sslmode=verify-full` with a rewrite) | Use the Store's machine, `store.pull` / `store.push` the Store, or give the Store a URL the machine can dial |
+| `Unsupported` | The machine's platform was removed in 2.0 (`ssh`, `microsandbox`): ``platform `<name>` was removed in LayerFS 2.0`` | Use another machine; `machine.remove(name)` forgets the old record |
+| `Unsupported` | The machine is not the sqlite Store's (message names the Store's machine), the support table refuses the platform for the Store's kind, or the PostgreSQL URL cannot be rewritten for the machine (`sslmode=verify-full` with a rewrite) | Use the Store's machine, `store.pull` / `store.push` the Store, or give the Store a URL the machine can dial |
 | `Unavailable` | The machine cannot reach the PostgreSQL server, or reaches a server holding another Store (message names the host tried) | Make the server reachable from that machine |
 | `Unavailable` | The daemon bundle is missing | Report it; the home's owner installs the bundle |
 | `InvalidInput` | A bad name or project, or the name `native` or `docker` (they name the built-in machines) | Fix the call |

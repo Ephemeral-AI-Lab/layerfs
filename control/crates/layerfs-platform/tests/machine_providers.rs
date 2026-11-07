@@ -1,4 +1,4 @@
-//! Command construction for apple-container, microsandbox, Firecracker,
+//! Command construction for apple-container, Firecracker,
 //! docker and native through stand-in tools. No VM or container is made.
 #![cfg(unix)]
 #[path = "support/standin.rs"]
@@ -75,72 +75,6 @@ esac"#,
     assert!(scratch
         .log()
         .contains("container exec lfs-dev df -kP /layerfs/data"));
-}
-
-#[test]
-fn microsandbox_creates_a_disk_volume_and_runs_setup_through_msb_exec() {
-    let scratch = Scratch::new("msb-create");
-    scratch.tool(
-        "msb",
-        r#"case "$1" in
-  inspect) [ -e "$SCRATCH/made" ] && { echo '{"status":"Stopped"}'; exit 0; }; echo "sandbox not found" >&2; exit 1 ;;
-  volume) [ "$2" = list ] && echo "NAME SIZE"; exit 0 ;;
-  create) touch "$SCRATCH/made" ;;
-  exec) echo "no guest agent" >&2; exit 1 ;;
-esac"#,
-    );
-    let error =
-        machine::create(&scratch.spec(Platform::Microsandbox), &scratch.bundle()).unwrap_err();
-    assert_eq!(error.code, Code::Failed, "{error}");
-    assert!(error.vm_exists, "the VM exists once msb create succeeded");
-    let log = scratch.log();
-    assert_eq!(
-        line(&log, "msb create"),
-        "msb create --name lfs-dev --cpus 2 --memory 2048M --mount-named \
-         lfs-dev-data:/layerfs/data:kind=disk,size=10240M -p 127.0.0.1:45678:7070 --net public,private,host \
-         --label layerfs.role=machine debian:trixie-slim"
-    );
-    assert!(log.contains("msb start lfs-dev"));
-    assert!(line(&log, "msb exec").starts_with("msb exec lfs-dev --no-tty -- sh -c"));
-    assert!(!log.contains("/layerfs/home") && !log.contains(" -v "));
-}
-
-#[test]
-fn microsandbox_leaves_a_volume_that_was_there_before() {
-    // #533 review P1-23: a create must neither reuse nor remove it
-    let scratch = Scratch::new("msb-volume");
-    scratch.tool(
-        "msb",
-        r#"case "$1" in
-  inspect) echo "sandbox not found" >&2; exit 1 ;;
-  volume) [ "$2" = list ] && printf 'NAME SIZE\nlfs-dev-data 10G\n'; exit 0 ;;
-esac"#,
-    );
-    let error =
-        machine::create(&scratch.spec(Platform::Microsandbox), &scratch.bundle()).unwrap_err();
-    assert_eq!(error.code, Code::Exists, "{error}");
-    let log = scratch.log();
-    assert!(!log.contains("msb create"), "{log}");
-    assert!(!log.contains("volume remove"), "{log}");
-}
-
-#[test]
-fn microsandbox_remove_takes_the_record_then_the_volume() {
-    let scratch = Scratch::new("msb-remove");
-    scratch.tool(
-        "msb",
-        r#"[ "$1" = inspect ] && { echo '{"status":"Running"}'; exit 0; }; exit 0"#,
-    );
-    machine::remove(&scratch.spec(Platform::Microsandbox)).unwrap();
-    let log = scratch.log();
-    let calls: Vec<&str> = log.lines().collect();
-    assert_eq!(
-        calls[1..],
-        [
-            "msb remove --force lfs-dev",
-            "msb volume remove lfs-dev-data"
-        ]
-    );
 }
 
 #[test]
@@ -259,10 +193,6 @@ fn built_in_machines_are_never_created_or_removed() {
             Code::InvalidInput
         );
         assert_eq!(machine::remove(&spec).unwrap_err().code, Code::InvalidInput);
-        assert_eq!(
-            machine::connect(&spec, &scratch.bundle()).unwrap_err().code,
-            Code::InvalidInput
-        );
     }
     let native = scratch.spec(Platform::Native);
     assert!(machine::start(&native, &scratch.bundle())
@@ -278,12 +208,12 @@ fn a_bundle_without_its_binaries_is_refused_before_any_effect() {
     let scratch = Scratch::new("bundle");
     let mut bundle = scratch.bundle();
     std::fs::remove_file(bundle.dir.join("layerfs")).unwrap();
-    let error = machine::create(&scratch.spec(Platform::Microsandbox), &bundle).unwrap_err();
+    let error = machine::create(&scratch.spec(Platform::AppleContainer), &bundle).unwrap_err();
     assert_eq!(error.code, Code::InvalidInput);
     assert_eq!(error.missing, ["bundle:layerfs"]);
     bundle.hash = "not hex".into();
     assert_eq!(
-        machine::create(&scratch.spec(Platform::Microsandbox), &bundle)
+        machine::create(&scratch.spec(Platform::AppleContainer), &bundle)
             .unwrap_err()
             .code,
         Code::InvalidInput

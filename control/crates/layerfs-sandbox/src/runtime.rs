@@ -88,15 +88,13 @@ pub fn backend(deploy: &Deploy) -> Result<Backend, SdkRefusal> {
 
 /// The platforms a Sandbox names (#529 P4): what a caller chooses and
 /// reads. The record keeps the lower-level `runtime` beside it.
-pub const PLATFORMS: [&str; 8] = [
+pub const PLATFORMS: [&str; 6] = [
     "docker",
     "mac",
     "linux",
     "apple-container",
-    "microsandbox",
     "lima",
     "firecracker",
-    "ssh",
 ];
 
 /// The platform a `sandbox.create` call names (`platform`), checked against
@@ -120,6 +118,9 @@ pub fn platform(named: Option<&str>, deploy: &Deploy) -> Result<String, SdkRefus
     let Some(named) = named else {
         return Ok(implied.to_owned());
     };
+    if let Some(reason) = layerfs_sandbox_backend::platform_policy::removed_reason(named) {
+        return Err(refused("Unsupported", reason));
+    }
     if !PLATFORMS.contains(&named) {
         return Err(refused(
             "InvalidInput",

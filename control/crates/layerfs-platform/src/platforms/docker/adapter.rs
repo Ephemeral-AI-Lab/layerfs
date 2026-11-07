@@ -61,9 +61,6 @@ impl Adapter for Docker {
     fn status(&self, spec: &Spec) -> Result<Status, MachineError> {
         status(spec)
     }
-    fn host_identity(&self, spec: &Spec) -> Result<String, MachineError> {
-        Err(refused(spec, "has no ssh host"))
-    }
     /// On a Linux Engine the worker shares the host's network, and its
     /// `namespaces` Sandboxes share the worker's (D-8), so a loopback URL is
     /// dialled as given. Elsewhere (Docker Desktop) a loopback URL becomes

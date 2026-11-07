@@ -1,4 +1,4 @@
-//! `machine.list` and the live probes and summaries it shares with `get`, `update` and the create/connect outcome.
+//! `machine.list` and the live probes and summaries it shares with `get`, `update` and the create outcome.
 use super::record::{MachineDerived, MachineRecord};
 use super::spec::{self as record, refusal};
 use super::status::home_id;
@@ -20,12 +20,13 @@ const PROBE: Duration = Duration::from_secs(10);
 /// A machine's live state and, when it could not be read, why.
 type Live = Option<(String, Option<String>)>;
 
-/// The live state of each VM and ssh machine, read as `machine.status`
+/// The live state of each VM machine, read as `machine.status`
 /// reads it: in parallel, starting nothing, outside the home lock, all within
 /// [`PROBE`]. A probe that fails or does not answer in time is `unknown`, with
 /// the reason; a command it still runs then is killed with its process group
 /// and reaped by the probe's thread. Nothing is written back. `None` keeps
-/// the record's state: `native`, or a machine being created or removed.
+/// the record's state: `native`, or a machine being created or removed; a
+/// machine of a removed platform is never probed (its summary says why).
 /// The built-in `docker` is probed like a VM: its worker is started and
 /// stopped by hand (#535 D11), so a fixed `ready` would be wrong.
 pub(super) fn live(home: &Path, records: &[MachineRecord]) -> Result<Vec<Live>> {
@@ -39,6 +40,9 @@ pub(super) fn live(home: &Path, records: &[MachineRecord]) -> Result<Vec<Live>> 
     // so a late probe is reported as late, not as its stopped command
     let stop = until + Duration::from_millis(200);
     for (index, record) in records.iter().enumerate() {
+        if record.removed().is_some() {
+            continue;
+        }
         if let Some(reason) =
             layerfs_platform::platform_policy::disabled_reason(record.platform()?.name())
         {

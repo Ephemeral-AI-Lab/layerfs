@@ -67,38 +67,24 @@ fn rewritten(host: &str) -> [String; 3] {
 }
 
 #[test]
-fn each_platform_rewrites_or_refuses_a_loopback_host() {
+fn each_platform_rewrites_a_loopback_host() {
     let scratch = Scratch::new("reach-loopback");
     for kind in Platform::ALL {
         let spec = spec(&scratch, kind, Some(7));
         let alias = match kind {
-            Platform::Native => Some("unchanged"),
+            Platform::Native => "unchanged",
             // a Linux Engine's worker shares the host's network (D-8)
-            Platform::Docker if cfg!(target_os = "linux") => Some("unchanged"),
-            Platform::Docker => Some("192.168.65.254"),
-            Platform::Lima => Some("192.168.5.2"),
-            Platform::AppleContainer => Some("192.168.64.1"),
-            Platform::Microsandbox => Some("host.microsandbox.internal"),
-            Platform::Firecracker => Some("192.168.5.2"),
-            Platform::Ssh => None,
+            Platform::Docker if cfg!(target_os = "linux") => "unchanged",
+            Platform::Docker => "192.168.65.254",
+            Platform::Lima => "192.168.5.2",
+            Platform::AppleContainer => "192.168.64.1",
+            Platform::Firecracker => "192.168.5.2",
         };
         for (i, url) in loopback_urls().iter().enumerate() {
             let outcome = machine::reach(&spec, url);
             match alias {
-                Some("unchanged") => assert_eq!(outcome.as_deref(), Ok(url.as_str())),
-                Some(alias) => assert_eq!(outcome, Ok(rewritten(alias)[i].clone()), "{kind:?}"),
-                None => {
-                    let (code, message) = refused(outcome);
-                    assert_eq!(code, Code::Unsupported);
-                    let why = "an ssh machine cannot reach the caller's loopback";
-                    assert_eq!(
-                        message,
-                        format!(
-                            "the {} machine dev cannot reach the PostgreSQL Store's server: {why}",
-                            kind.name()
-                        )
-                    );
-                }
+                "unchanged" => assert_eq!(outcome.as_deref(), Ok(url.as_str())),
+                alias => assert_eq!(outcome, Ok(rewritten(alias)[i].clone()), "{kind:?}"),
             }
         }
     }

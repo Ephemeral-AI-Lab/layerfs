@@ -18,9 +18,11 @@ depends on `control/`.
 | `layerfs-sandbox-backend` | *How* does a Sandbox run on that machine's kernel? | backend: `src/backend/<backend>/` |
 | `layerfs-bucket` | *How* is a Store backed up to a bucket? | provider: `src/bucket/<provider>/` |
 
-Firecracker and SSH are **permanently disabled for new product work**. Their
-adapters remain compiled; inspection and explicit cleanup remain available.
-The [restriction contract](../docs/architecture/control/support-matrix/disabled-platforms.md)
+Firecracker is **permanently disabled for new product work**. Its adapter
+remains compiled; inspection and explicit cleanup remain available. The
+Microsandbox and SSH platforms were removed in LayerFS 2.0: a home's old
+record of one is still shown (unsupported) and can only be forgotten with
+`machine remove`. The [restriction contract](../docs/architecture/control/support-matrix/disabled-platforms.md)
 defines existing-resource handling and re-enablement. Platform profiles below
 describe retained mechanics; `SUPPORT.json` decides availability.
 
@@ -29,10 +31,10 @@ describe retained mechanics; `SUPPORT.json` decides availability.
 - `layerfs-platform/src/platform.rs` is the `Platform` enum and its `Profile`
   type: per platform, the hosts it runs on, the Sandbox backend and kernel
   route per host, whether its sqlite Store calls run in process or in its
-  worker, and the options `machine create` or `machine connect` accept
+  worker, and the options `machine create` accepts
   (`options.rs`). `Platform::profile()` is the one match.
 - `layerfs-platform/src/adapter.rs` is the sealed `Adapter` trait (probe,
-  guest, create/remove, start/stop, status, host identity, reach, forward)
+  guest, create/remove, start/stop, status, reach, forward)
   and the one `adapter()` match the machine calls dispatch through.
 - `layerfs-platform/src/reach.rs` is `reach` (the call `machine::reach`):
   the PostgreSQL Store URL a Sandbox daemon on the machine dials. Each
@@ -42,10 +44,9 @@ describe retained mechanics; `SUPPORT.json` decides availability.
   worker resolves `host.docker.internal` to, D-8) and `lima`
   (`192.168.5.2`, the address of `host.lima.internal`) rewrite a loopback
   host to that address, and so do
-  `apple-container` (its network's gateway from `container inspect`),
-  `microsandbox` (`host.microsandbox.internal`; machines get
-  `--net public,private,host`) and `firecracker` (`192.168.5.2`, through the Lima
-  host's masquerade); `ssh` refuses it. Facts: the G7 receipt in
+  `apple-container` (its network's gateway from `container inspect`) and
+  `firecracker` (`192.168.5.2`, through the Lima host's masquerade). Facts:
+  the G7 receipt in
   `core/docs/issues/535/receipts/g7-reach/`. A
   rewrite is refused for `sslmode=verify-full`; other hosts are used as
   given.
@@ -53,14 +54,14 @@ describe retained mechanics; `SUPPORT.json` decides availability.
   which the caller reaches a Sandbox daemon listening on
   `127.0.0.1:<guest port>` in the machine, so Workspace calls skip the
   worker; `machine::forward_close` ends what it started. `native` answers
-  the port as it is. `ssh` and `lima` start a detached
+  the port as it is. `lima` starts a detached
   `ssh -N -L 127.0.0.1:<free port>:127.0.0.1:<guest port>`
   (`setup/forward.rs`, the worker forward's code; lima through its own
   `ssh.config`, as its template forwards no guest port but the worker's)
   and answer its pid. `docker` (its worker container's ports are
   published only when it starts, so a Sandbox daemon's port in it cannot
-  be published later; D-8), `apple-container` and `microsandbox` (ports
-  are published only at create) and `firecracker` (its daemons listen on
+  be published later; D-8), `apple-container` (ports are published only
+  at create) and `firecracker` (its daemons listen on
   the microVM's loopback; the Lima host's forward reaches only its tap
   address) refuse `Unsupported`, and their Workspace calls stay on the
   worker.
@@ -71,8 +72,7 @@ describe retained mechanics; `SUPPORT.json` decides availability.
 - `layerfs-platform/src/platforms/<p>/`: `profile.rs` holds its `PROFILE`
   and `adapter.rs` its `ADAPTER` (the guard keeps both out of `mod.rs`);
   `observe.rs`, `create.rs` (create and remove), `power.rs` (start and
-  stop); ssh has `connect.rs` (connect and disconnect) instead of
-  `create.rs`. `network.rs` reads the docker worker's published port
+  stop). `network.rs` reads the docker worker's published port
   (macOS). The `docker` worker container is privileged and runs
   `namespaces` Sandboxes inside it, as a VM's worker does (D-8); it mounts
   its data volume and the bundle, never the Docker Engine socket.
@@ -102,7 +102,7 @@ It has one block per host (`macos`, `linux`, `windows`), each with one row
 per platform, the same rows `machine.platforms` returns for the running
 host without its live fields (`ready`, `missing`, `version`):
 
-- `platform`, `how` (`built_in`, `created`, `connected`);
+- `platform`, `how` (`built_in`, `created`);
 - `backend`: the Sandbox backend's stored name (`native` or
   `namespaces`; `docker` rows say `namespaces` since D-8), or `null` when there is none or the platform is not on
   that host;
@@ -112,15 +112,16 @@ host without its live fields (`ready`, `missing`, `version`):
 - `postgresql`: `store_calls` (always `in_process`), `sandbox` (whether a
   PostgreSQL Store's Sandbox runs there) and `reason`, the exact refusal
   text the product returns, or `null`;
-- `options`: the `machine create` or `machine connect` options, each with
+- `options`: the `machine create` options, each with
   its `kind` (`int`, `size`, `text`, `bool`, `name`);
 - `description`: the platform and how its Sandboxes run.
 
-The table encodes what is allowed; Firecracker and SSH now refuse new work.
+The table encodes what is allowed; Firecracker now refuses new work.
 Historical enablements remain evidence only: #535 phase 5a enabled PostgreSQL
 Sandboxes on `native` (macOS and Linux), `docker` and `ssh`; the G7 live
 receipts (`core/docs/issues/535/receipts/g7-live/`) enabled them on `lima`,
-`apple-container`, `microsandbox` and `firecracker`. `layerfs machine platforms` (the call `machine.platforms`)
+`apple-container`, `microsandbox` and `firecracker` (`ssh` and
+`microsandbox` have since been removed). `layerfs machine platforms` (the call `machine.platforms`)
 returns the same data for the running host.
 
 ## Adding things
@@ -136,8 +137,8 @@ A Store kind and a kernel route are engine changes; see #535 §9.
 ## Conformance kit
 
 Each crate has one `tests/conformance.rs` (#536 §11 step 9) that every
-platform or backend passes, with stand-in tools and no Docker Engine, VM,
-ssh host or root. The machine kit runs over `Platform::ALL`: the profile
+platform or backend passes, with stand-in tools and no Docker Engine, VM
+or root. The machine kit runs over `Platform::ALL`: the profile
 against `support.rs` and `SUPPORT.json`, each lifecycle call running
 through the platform's tool or refused with the fixed text its `How`
 declares, `reach` and `forward` against the rules above, and the declared

@@ -65,7 +65,7 @@ itself is the [Routing table](routing-table.md).
 | `workspace.exec` on such a Sandbox | still the machine's worker (the Sandbox runtime is there) | [`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) |
 
 `layerfs worker` is one long-lived process on a machine whose kernel the
-caller cannot open a SQLite Store on: every VM and ssh host, `docker` on
+caller cannot open a SQLite Store on: every VM, `docker` on
 every host, and `native` on Windows. Only `machine.start` starts it; it
 serves until `machine.stop` ends it
 ([`worker/mod.rs`](../../../../control/crates/layerfs-machine/src/worker/mod.rs),

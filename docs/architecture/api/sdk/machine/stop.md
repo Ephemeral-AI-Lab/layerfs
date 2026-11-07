@@ -65,8 +65,7 @@ caller's process                                   machine
 | --- | --- | --- |
 | `native` | nothing | [`power.rs`](../../../../../control/crates/layerfs-machine/src/power.rs) |
 | `docker` | its worker container only | [`setup/calls.rs`](../../../../../control/crates/layerfs-platform/src/setup/calls.rs) `stop` |
-| `lima`, `apple-container`, `microsandbox`, `firecracker` | the worker and the VM; disks stay | `setup/calls.rs` |
-| `ssh` | its worker and `ssh -L` forward | `setup/calls.rs` |
+| `lima`, `apple-container`, `firecracker` | the worker and the VM; disks stay | `setup/calls.rs` |
 
 Nothing stops a machine because it is unused. After a stop, Store,
 project, Sandbox and Workspace calls that need the machine are refused
@@ -82,9 +81,9 @@ All in the caller ([routing table](../../../control/routing/routing-table.md)).
 | `Busy`, `Unresolved` | an `op` holds the machine | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
 | `InUse` | Sandboxes are recorded on it, or on a firecracker machine it hosts; `detail.related` lists `{kind: "sandbox", name}` | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_stop_machine` |
 | `Unavailable` | `start.lock` held for 600 s; nothing changed | no | [`home/entity_lock.rs`](../../../../../control/crates/layerfs-home/src/home/entity_lock.rs) |
-| `Unavailable`, `Denied`, `Failed` | the provider or guest did not answer; ssh refused; the stop failed once. `worker.json` and the record stay as they were | no | [`error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
+| `Unavailable`, `Denied`, `Failed` | the provider or guest did not answer or refused; the stop failed once. `worker.json` and the record stay as they were | no | [`error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
 | `Unknown` | **a provider command timed out: the machine may be stopped while still recorded with its worker.** Read `machine status` first | **yes** | [`setup/tool.rs`](../../../../../control/crates/layerfs-platform/src/setup/tool.rs) |
-| `Unsupported` | a build without the `machine` feature | no | [`machine/stop.rs`](../../../../../api/crates/layerfs-api/src/machine/stop.rs) |
+| `Unsupported` | a record of a removed platform (`microsandbox`, `ssh`: ``platform `ssh` was removed in LayerFS 2.0``); a build without the `machine` feature | no | [`machine/stop.rs`](../../../../../api/crates/layerfs-api/src/machine/stop.rs) |
 
 ## Examples
 
@@ -107,7 +106,7 @@ $ layerfs machine stop vm1
 
 - Before: [`sandbox.close`](../sandbox/close.md) for each Sandbox on the
   machine. After: [`machine.start`](start.md), or
-  [`machine.remove`](remove.md) / [`machine.disconnect`](disconnect.md).
+  [`machine.remove`](remove.md).
 - [Workers](../../../control/routing/workers.md#lifecycle),
   [Control: Machines](../../../control/machines/README.md).
 

@@ -65,13 +65,6 @@
       }
     },
     {
-      "call": "machine.connect",
-      "args": {
-        "name": "new",
-        "host": "example.invalid"
-      }
-    },
-    {
       "call": "machine.start",
       "args": {
         "name": "legacy"

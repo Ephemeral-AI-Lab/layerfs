@@ -14,10 +14,10 @@ a copy of a sqlite Store in a bucket.
 
 ## Machines
 
-Firecracker and SSH are permanently disabled for new work. Their records and
-adapter code remain; see [disabled platforms](../../architecture/control/support-matrix/disabled-platforms.md).
-Create, connect, start, update, new Sandbox/Workspace work and transfers involving
-them return `Unsupported` before platform effects. Machine inspection shows
+Firecracker is permanently disabled for new work. Its records and adapter
+code remain; see [disabled platforms](../../architecture/control/support-matrix/disabled-platforms.md).
+Create, start, update, new Sandbox/Workspace work and transfers involving
+it return `Unsupported` before platform effects. Machine inspection shows
 recorded state and the disabled reason without probing or starting them. Explicit
 cleanup remains available with its existing ownership checks. No runtime override
 exists. The platform-specific mechanics below are retained reference only.
@@ -28,10 +28,8 @@ exists. The platform-specific mechanics below are retained reference only.
 | `native` | one, built in | — | macOS: host processes with a loopback NFS mount. Linux: namespaces (needs root). Windows: none; `native` holds only records (O5) | — |
 | `docker` | one, built in | — | namespaces inside its worker container (D-8), rooted in the bundle's Sandbox image. The image `machine update docker --image` records, else the bundle's Sandbox image loaded into Docker once (#535 P5), is the worker container's; see Routes | `docker` |
 | `apple-container` | many | `machine create` | namespaces inside the VM | `container` |
-| `microsandbox` | many | `machine create` | namespaces inside the VM | `msb` |
 | `lima` | many | `machine create` | namespaces inside the VM | `limactl` |
 | `firecracker` | existing records only | disabled | no new Sandboxes | retained `limactl` adapter |
-| `ssh` | existing records only | disabled | no new Sandboxes | retained `ssh` adapter |
 
 - "Platform" is only a machine's kind. A caller never chooses how a
   Sandbox runs; the kind decides.
@@ -41,9 +39,9 @@ exists. The platform-specific mechanics below are retained reference only.
   (`native` is always `ready`; the built-in `docker` shows `stopped` until
   `machine start docker`). `machine platforms` answers each platform on this host:
   backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox
-  runs here and why not, `ready`, `missing` (such as `tool:msb`), the tool's
+  runs here and why not, `ready`, `missing` (such as `tool:limactl`), the tool's
   `version` and the options `machine create` takes; the same rows as
-  `control/SUPPORT.json`. Neither starts a machine. A VM or ssh machine's `state` is read live, as
+  `control/SUPPORT.json`. Neither starts a machine. A VM machine's `state` is read live, as
   `machine status` reads it, for all of them at once within 10 s; it starts
   nothing and writes nothing. A machine whose probe fails or does not answer
   in time is `unknown`, with the reason in `error`. A machine that an
@@ -51,7 +49,26 @@ exists. The platform-specific mechanics below are retained reference only.
   `creating` or `removing` while that process lives, and `unresolved` once
   it is gone with the outcome unknown. `machine get` answers the same
   state.
-- `native` and `docker` are never created, removed or disconnected.
+- `native` and `docker` are never created or removed.
+
+### Removed platforms: Microsandbox and SSH
+
+Microsandbox and SSH machines were removed in 2.0. `machine create` and
+`sandbox.create`'s `platform` refuse them `Unsupported`; there is no
+`machine connect` or `machine disconnect`. A home may still hold a record of
+one:
+
+- `machine list` and `machine get` answer it: `platform` as recorded,
+  `backend: "-"`, `supports` false for both with the reason, `state:
+  "unsupported"` and `error` the reason (``platform `ssh` was removed in
+  LayerFS 2.0``, or the same for `microsandbox`), plus its recorded `ssh`
+  settings or `vm_name`.
+- Every other call on it, its Sandboxes or a sqlite Store on it is
+  `Unsupported` with that reason.
+- `machine remove <name>` only forgets the record (`InUse` while Stores or
+  Sandboxes are recorded on it, as for any remove). Its `note` says nothing
+  on the host was touched. For microsandbox, remove the VM and its volume
+  yourself: `msb remove --force <vm>` and `msb volume remove <vm>-data`.
 
 ### Creating a VM machine
 
@@ -88,7 +105,7 @@ layerfs machine create host1 lima --nested
   `Unsupported` with `detail.missing` = `bundle:<folder>`. Fetching the
   bundle is not built; a build places it.
 - From the claim until the outcome is recorded, the record holds the
-  create's `op` (`machine.create`; `machine.connect` for ssh): its id,
+  create's `op` (`machine.create`): its id,
   phase and process (process id, start time and boot). While that process
   lives, every other call on the machine is `Busy`.
 - A create that fails before the VM exists removes what it made. Once the
@@ -97,48 +114,29 @@ layerfs machine create host1 lima --nested
   `error`, and is logged to `log/uncertain.jsonl`. Once that process is
   gone, every call on the machine but `machine status`, `machine get`,
   `machine list` and the remove is `Unresolved`, naming
-  `layerfs machine status <name>` and `layerfs machine remove <name>`
-  (`machine disconnect` for ssh).
+  `layerfs machine status <name>` and `layerfs machine remove <name>`.
 - The home lock is held only to claim the name and to record the outcome,
   never while the VM boots. A create also holds the machine's `start.lock`
   (taken before the home lock), so an on-demand start cannot overwrite the
   new machine's secret.
-- A `microsandbox` create refuses `Exists` when a `<vm>-data` volume of its
-  name is already there (as `apple-container` does), so its cleanup after a
-  failure never deletes a volume it did not make.
-
-### SSH connections (disabled)
-
-```bash
-# not run
-# Permanently refused: layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
-```
-
-- `user` defaults to `root`, `port` to 22.
-- The host's key must already be known. `known_hosts` defaults to
-  `~/.ssh/known_hosts` and is copied to `machine/<name>/known_hosts`; it is
-  checked strictly.
-- `root` defaults to `/layerfs/data`. Its filesystem may be ext4, xfs or
-  btrfs (O18).
-- A second machine on the same host is `Exists`.
-- `disconnect` forgets the host. Its data root and the Stores in it stay.
+- An `apple-container` create refuses `Exists` when a `<vm>-data` volume of
+  its name is already there, so its cleanup after a failure never deletes a
+  volume it did not make.
 
 ### Removing and updating
 
-- `machine remove` (VMs) and `machine disconnect` (ssh) are `InUse` while
-  the machine holds Stores, Sandboxes or hosted Firecracker machines;
-  `detail.related` names each as `{kind: "store" | "sandbox" | "machine",
-  name}`. Each is `InvalidInput` on the other kind.
+- `machine remove` is `InUse` while the machine holds Stores, Sandboxes or
+  hosted Firecracker machines; `detail.related` names each as `{kind:
+  "store" | "sandbox" | "machine", name}`.
 - A remove takes the machine's `start.lock` first, then, under the home
-  lock, writes its `op` (`machine.remove`; `machine.disconnect` for ssh)
-  into the record. The VM is deleted outside the home lock. While that
+  lock, writes its `op` (`machine.remove`) into the record. The VM is deleted outside the home lock. While that
   process lives, every call that would start the machine, push a Store to
   it, create a Sandbox on it, update or remove it is `Busy`; `machine get`
   and `machine status` answer `removing`. A refused delete puts the record
   back as it was; one whose outcome is unknown keeps the `op` marked
   `uncertain` with the `error`, and is logged, as for a create. A remover
   that is gone after a known outcome holds nothing.
-- A remove or disconnect is refused only while another process's `op`
+- A remove is refused only while another process's `op`
   lives: it is the call that clears an `unresolved` machine.
 - `machine update native` and `machine update docker` set `image`,
   `docker` (the Docker socket) and `daemon` (the daemon their Sandboxes
@@ -180,7 +178,7 @@ layerfs machine create host1 lima --nested
 - `machine start <name>` starts a stopped machine and its worker, waits
   until it is ready and records `worker.json`; a running machine answers at
   once. `machine stop <name>` stops the worker and, where there is one, the
-  VM (`docker`: its worker container; `ssh`: the worker and its forward);
+  VM (`docker`: its worker container);
   disks and Stores stay. It is `InUse` while Sandboxes run on the machine
   (`detail.related` names them). `native` answers both at once (#535 P1).
 - No list, get or status call starts a machine (#535 P4): every `*.list`,
@@ -193,7 +191,7 @@ layerfs machine create host1 lima --nested
   also take. The second waits up to 600 s, then is refused `Unavailable`.
   The lock is always taken before the home lock, and the start re-reads the
   record once it holds it.
-- `machine start` on a Firecracker or SSH machine is refused even when its
+- `machine start` on a Firecracker machine is refused even when its
   saved worker answers. It does not start Firecracker's Lima host.
 - `machine status` answers `state`, `free_disk`, `tool_version` and
   `down_reason` (O34). A stopped VM answers without being started. While a
@@ -248,7 +246,7 @@ layerfs machine create host1 lima --nested
   on Linux included (its sqlite Stores live in a Docker volume). Checked in
   the terminal pass on a Linux VM.
 - Workspace calls skip the worker where the caller reaches the Sandbox's
-  daemon (#535 G4). On `ssh` and `lima`, `sandbox.create` (through the
+  daemon (#535 G4). On `lima`, `sandbox.create` (through the
   worker) answers the daemon's port and keys, and the caller forwards the
   port to its own loopback (`ssh -L`). The
   keys go to the home's `sandbox/<name>/control.json` (0600), the forward
@@ -261,7 +259,7 @@ layerfs machine create host1 lima --nested
   and the caller sends the directory its record names. `sandbox.create`
   and `sandbox.close` go through the worker; a close ends the forward.
   `docker` (its worker container's ports are published only when it
-  starts), `apple-container`, `microsandbox` and `firecracker` forward
+  starts), `apple-container` and `firecracker` forward
   nothing:
   every call goes through the worker. A forward that failed at create
   leaves the Sandbox on the worker route (`forward_failed` in the answer).
@@ -387,8 +385,7 @@ $ layerfs store pull shop --progress       # not run
   `max(1 GiB, 10%)` free first. The caller holds its lease meanwhile and
   records the project when the worker answers. A failure while copying
   deletes the copy; a lost answer is `Unknown`, names the copy that may
-  remain, and records nothing in the home. Not run on a real VM or ssh
-  host.
+  remain, and records nothing in the home. Not run on a real VM.
 - A Sandbox of a sqlite project runs only on the Store's machine.
 
 ### PostgreSQL Stores
@@ -434,11 +431,11 @@ layerfs project init pg-main/load ./load
 - PostgreSQL needs a build with the `postgresql` feature; without it these
   calls are `Unsupported`.
 - A PostgreSQL Store's Sandboxes run on every machine: `native` (macOS
-  and Linux), `docker`, `lima`, `apple-container` and `microsandbox` (the daemon and the worker are built with `postgresql`),
+  and Linux), `docker`, `lima` and `apple-container` (the daemon and the worker are built with `postgresql`),
   started where the machine starts Sandboxes. The caller
   resolves the password and rewrites a loopback host for the machine
   (`docker`: `host.docker.internal`, given to the worker container on a
-  Linux Engine as its `host-gateway`; ssh refuses a loopback URL); the URL
+  Linux Engine as its `host-gateway`); the URL
   travels only in that one request. `sandbox create` first checks, from
   the machine, that the server answers with the Store's schema binding.
   The server always runs off the machine (on this host or elsewhere);
@@ -451,10 +448,6 @@ layerfs project init pg-main/load ./load
     `container inspect` (192.168.64.1 by default). The server must listen
     on that bridge (`0.0.0.0`, as Docker Desktop publishes a port), not on
     127.0.0.1 alone, and admit connections from it.
-  - `microsandbox`: `host.microsandbox.internal`. Machines are created
-    with `--net public,private,host`, so the guest reaches every port on
-    this host and servers on private addresses, as lima and docker guests
-    do; a machine created before this needs re-creating.
   - `firecracker`: `192.168.5.2`, the Lima host's own host address; the
     Lima host forwards and masquerades its microVMs' traffic.
 - Not built: `project remove` from a PostgreSQL Store, and backups of

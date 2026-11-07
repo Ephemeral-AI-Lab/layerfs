@@ -45,23 +45,15 @@ fn every_refusal_is_the_rows_reason() {
 }
 
 /// #535 §7.3: PostgreSQL Sandboxes run on native (macOS, and Linux
-/// namespaces with no bind; phase 5a), docker, ssh, and since the G7 live
-/// receipts on lima, apple-container, microsandbox and firecracker, on every
-/// host each is on.
+/// namespaces with no bind; phase 5a), docker, and since the G7 live
+/// receipts on lima, apple-container and firecracker, on every host each is
+/// on.
 #[test]
 fn postgresql_sandboxes_run_on_every_platform_with_a_backend() {
     let allowed = |p, h| sandbox_allowed(p, h, StoreKind::Postgresql);
     for host in [HostOs::Macos, HostOs::Linux] {
         assert_eq!(allowed(Platform::Native, host), Ok(()));
         assert_eq!(allowed(Platform::Docker, host), Ok(()));
-        assert_eq!(allowed(Platform::Microsandbox, host), Ok(()), "{host:?}");
-    }
-    for host in HostOs::NAMED {
-        assert_eq!(
-            allowed(Platform::Ssh, host),
-            Err(disabled_reason("ssh").unwrap()),
-            "{host:?}"
-        );
     }
     for platform in [
         Platform::Lima,

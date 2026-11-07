@@ -1,6 +1,6 @@
 //! `firecracker`'s adapter.
 use super::{create, machine_guest, remove, start, status, stop};
-use crate::adapter::{refused, Adapter};
+use crate::adapter::Adapter;
 use crate::error::{Code, MachineError};
 use crate::platform::HostOs;
 use crate::probe::{macos_missing, nested_missing, tool_version};
@@ -49,9 +49,6 @@ impl Adapter for Firecracker {
     }
     fn status(&self, spec: &Spec) -> Result<Status, MachineError> {
         status(spec)
-    }
-    fn host_identity(&self, spec: &Spec) -> Result<String, MachineError> {
-        Err(refused(spec, "has no ssh host"))
     }
     /// The guest's tap address, `172.30.<n>.1` (`scripts.rs`), is the nested
     /// Lima host, not the caller's host. The Lima host masquerades the

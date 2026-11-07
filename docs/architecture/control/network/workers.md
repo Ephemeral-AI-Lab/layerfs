@@ -19,7 +19,7 @@ that must run on the machine's kernel: sqlite Store calls (`store.call`,
 ## Worker setup
 
 ```text
- machine::create / start / connect                 (setup/calls.rs)
+ machine::create / start                           (setup/calls.rs)
    |
    | 1  adapter makes or boots the kernel and data disk  (platforms/<p>/)
    v
@@ -44,7 +44,7 @@ that must run on the machine's kernel: sqlite Store calls (`store.call`,
 
 | Step | What | Source |
 | --- | --- | --- |
-| 1 | The platform adapter makes the VM, container or ssh setup and mounts the data disk at `/layerfs/data`. | [Machines: Adapter](../machines/adapter.md) |
+| 1 | The platform adapter makes the VM or container and mounts the data disk at `/layerfs/data`. | [Machines: Adapter](../machines/adapter.md) |
 | 2 | `prepare`: guest folders; user namespaces blocked machine-wide (`user.max_user_namespaces=0`), else `Unsupported`. `install`: bundle copied as one `tar` stream when its hash changed. | [`worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
 | 3 | `launch`: the worker gets `LAYERFS_WORKER_LISTEN=<bind>:7070` and `LAYERFS_WORKER_SECRET=/layerfs/state/secret`; output goes to `/layerfs/state/worker.log`. | [`worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs), [`layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
 | 4 | `ready`: reads `/proc/net/tcp` in the guest and connects from the host. A worker that ends meanwhile is `Failed` with its log's last 8 lines. | [`worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
@@ -70,17 +70,16 @@ How each platform carries the worker's guest port to the host's loopback:
 | Platform | Worker binds in the guest | Carried to host `127.0.0.1:<port>` by | Source |
 | --- | --- | --- | --- |
 | `lima` | `127.0.0.1:7070` | Lima template port forward, guest 7070 to host `<port>` | [`lima/template.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/template.rs) |
-| `ssh` | `127.0.0.1:7070` | detached `ssh -N -L 127.0.0.1:<port>:127.0.0.1:7070` | [`ssh/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/ssh/power.rs) |
 | `firecracker` | `0.0.0.0:7070` in the microVM | `ssh -L` through the Lima host to `<microVM ip>:7070` | [`firecracker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/firecracker/power.rs) |
 | `apple-container` | `0.0.0.0:7070` | `--publish 127.0.0.1:<port>:7070` at create | [`apple_container/create.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/create.rs) |
-| `microsandbox` | `0.0.0.0:7070` | `-p 127.0.0.1:<port>:7070` at create | [`microsandbox/create.rs`](../../../../control/crates/layerfs-platform/src/platforms/microsandbox/create.rs) |
 | `docker` (macOS) | `0.0.0.0:7070` in the worker container | `-p 127.0.0.1::7070`, port read back with `docker port` | [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
 | `docker` (Linux) | `127.0.0.1:<free port>`, host network | nothing: the container shares the host's network | [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
 | `native` | no worker on macOS or Linux: calls run in the caller's process | — | [`native/profile.rs`](../../../../control/crates/layerfs-platform/src/platforms/native/profile.rs) |
 
 The bind address is the profile's `worker_bind`
 ([`platform.rs`](../../../../control/crates/layerfs-platform/src/platform.rs)).
-On four platforms it is `0.0.0.0` inside the guest's own network; every
+On three platforms (`apple-container`, `firecracker`, `docker`) it is
+`0.0.0.0` inside the guest's own network; every
 host-side address is loopback.
 
 The secret is 32 bytes from `/dev/urandom` as 64 hex digits
@@ -129,8 +128,6 @@ Setup reaches each guest's shell as root through one `Guest` variant:
 | --- | --- |
 | `Lima` | `ssh -F <dir>/ssh.config lima-<vm> -- sudo -n -- …` |
 | `AppleContainer` | `container exec [-i] <vm> …` |
-| `Microsandbox` | `msb exec <vm> --no-tty -- …` |
-| `Ssh` | `ssh <options> <dest> -- …` |
 | `Firecracker` | its Lima host's command, then ssh to the microVM |
 | `Docker` | `docker -H unix://<socket> exec [-i] <container> …` |
 

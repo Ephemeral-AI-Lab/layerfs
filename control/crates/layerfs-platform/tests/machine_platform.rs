@@ -9,15 +9,7 @@ fn every_kind_parses_back_from_its_name() {
     let names: Vec<&str> = Platform::ALL.iter().map(|k| k.name()).collect();
     assert_eq!(
         names,
-        [
-            "native",
-            "docker",
-            "apple-container",
-            "microsandbox",
-            "lima",
-            "firecracker",
-            "ssh"
-        ]
+        ["native", "docker", "apple-container", "lima", "firecracker"]
     );
     for kind in Platform::ALL {
         assert_eq!(Platform::parse(kind.name()), Some(kind));
@@ -41,10 +33,8 @@ fn backends_follow_the_kind_and_host() {
         for kind in [
             Platform::Docker,
             Platform::AppleContainer,
-            Platform::Microsandbox,
             Platform::Lima,
             Platform::Firecracker,
-            Platform::Ssh,
         ] {
             assert_eq!(
                 kind.backend(host),
@@ -67,10 +57,8 @@ fn routes_are_in_process_only_for_native() {
     for host in [HostOs::Linux, HostOs::Macos, HostOs::Windows] {
         for kind in [
             Platform::AppleContainer,
-            Platform::Microsandbox,
             Platform::Lima,
             Platform::Firecracker,
-            Platform::Ssh,
         ] {
             assert_eq!(kind.route(host), Route::Worker, "{kind:?} on {host:?}");
         }
@@ -80,10 +68,8 @@ fn routes_are_in_process_only_for_native() {
 #[test]
 fn workers_bind_loopback_where_the_forward_reaches_it() {
     assert_eq!(Platform::Lima.worker_bind(), Ipv4Addr::LOCALHOST);
-    assert_eq!(Platform::Ssh.worker_bind(), Ipv4Addr::LOCALHOST);
     for kind in [
         Platform::AppleContainer,
-        Platform::Microsandbox,
         Platform::Firecracker,
         Platform::Docker,
     ] {
@@ -100,7 +86,6 @@ fn built_in_created_and_tools() {
         created,
         [
             Platform::AppleContainer,
-            Platform::Microsandbox,
             Platform::Lima,
             Platform::Firecracker
         ]
@@ -108,7 +93,6 @@ fn built_in_created_and_tools() {
     assert_eq!(Platform::Native.tool(), None);
     assert_eq!(Platform::Firecracker.tool(), Some("limactl"));
     assert_eq!(Platform::AppleContainer.tool(), Some("container"));
-    assert_eq!(Platform::Microsandbox.tool(), Some("msb"));
 }
 
 #[test]
@@ -132,14 +116,12 @@ fn each_profile_names_its_platform_and_how() {
         assert!(!profile.description.is_empty(), "{kind:?}");
         let how = match kind {
             Platform::Native | Platform::Docker => How::BuiltIn,
-            Platform::Ssh => How::Connected,
             _ => How::Created,
         };
         assert_eq!(profile.how, how, "{kind:?}");
     }
     assert_eq!(How::BuiltIn.as_str(), "built_in");
     assert_eq!(How::Created.as_str(), "created");
-    assert_eq!(How::Connected.as_str(), "connected");
 }
 
 #[test]
@@ -176,14 +158,12 @@ fn hosts_follow_todays_host_rules() {
     ] {
         assert_eq!(hosts(kind), [HostOs::Macos], "{kind:?}");
     }
-    assert_eq!(hosts(Platform::Microsandbox), any);
-    assert_eq!(hosts(Platform::Ssh), any);
     let names: Vec<&str> = HostOs::NAMED.iter().map(|h| h.as_str()).collect();
     assert_eq!(names, ["macos", "linux", "windows"]);
 }
 
 #[test]
-fn options_are_what_create_and_connect_take() {
+fn options_are_what_create_takes() {
     let options = |kind: Platform| -> Vec<(&str, &str)> {
         kind.profile()
             .options
@@ -200,21 +180,10 @@ fn options_are_what_create_and_connect_take() {
     assert_eq!(options(Platform::Native), []);
     assert_eq!(options(Platform::Docker), []);
     assert_eq!(options(Platform::AppleContainer), vm);
-    assert_eq!(options(Platform::Microsandbox), vm);
     let mut lima = vm.to_vec();
     lima.push(("nested", "bool"));
     assert_eq!(options(Platform::Lima), lima);
     let mut firecracker = vm.to_vec();
     firecracker.push(("host", "name"));
     assert_eq!(options(Platform::Firecracker), firecracker);
-    assert_eq!(
-        options(Platform::Ssh),
-        [
-            ("user", "text"),
-            ("port", "int"),
-            ("identity", "text"),
-            ("known_hosts", "text"),
-            ("root", "text")
-        ]
-    );
 }

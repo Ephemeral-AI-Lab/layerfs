@@ -76,10 +76,8 @@ unused (`IDLE`), never while a call runs on it.
 | `native` | in process | in process | worker | every interface |
 | `docker` | worker | worker | worker | every interface |
 | `apple-container` | worker | worker | worker | every interface |
-| `microsandbox` | worker | worker | worker | every interface |
 | `firecracker` | worker | worker | worker | every interface |
 | `lima` | worker | worker | worker | loopback |
-| `ssh` | worker | worker | worker | loopback |
 
 Whether a platform can exist on a host at all is the
 [support matrix](../support-matrix/README.md)'s answer, not this
@@ -121,7 +119,7 @@ secret guards it on every bind address.
 | `workspace.status` | direct when forwarded, else `reach`; an unreached worker is the refusal | yes | `workspace/calls.rs` (`reach`) |
 
 A Sandbox is forwarded when its record's `daemon.forward` holds an address:
-on `ssh` and `lima` an `ssh -L` carries the daemon's port to this host
+on `lima` an `ssh -L` carries the daemon's port to this host
 ([`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs)).
 A `docker` Sandbox is never forwarded: it runs in the docker machine's
 worker container, whose ports Docker publishes only when it starts, so its

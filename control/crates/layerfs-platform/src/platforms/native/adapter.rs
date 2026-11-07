@@ -36,9 +36,6 @@ impl Adapter for Native {
     fn status(&self, _spec: &Spec) -> Result<Status, MachineError> {
         Ok(status())
     }
-    fn host_identity(&self, spec: &Spec) -> Result<String, MachineError> {
-        Err(refused(spec, "has no ssh host"))
-    }
     fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
         dial(spec, url, Loopback::Shared)
     }

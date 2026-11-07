@@ -6,9 +6,7 @@ use super::record::MachineRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::outcome::refused;
-use layerfs_platform::{
-    Endpoint, HostOs, Lasting, MachineError, Platform, Running, Spec, SshSpec, Tools,
-};
+use layerfs_platform::{Endpoint, HostOs, Lasting, MachineError, Platform, Running, Spec, Tools};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -66,8 +64,8 @@ fn write_built_ins(home: &Path) -> Result<()> {
 }
 
 /// The machine `name`'s record, or `NotFound`, for an operation on it.
-/// Refused `Busy` while a live process creates, connects, removes or
-/// disconnects it (its record's `op`), so no call starts, moves to or runs
+/// Refused `Busy` while a live process creates or removes it (its record's
+/// `op`), so no call starts, moves to or runs
 /// on it meanwhile; `Unresolved` once a gone one left that outcome unknown.
 pub fn machine_of(home: &Path, name: &str) -> Result<MachineRecord> {
     let record = MachineRecord::of(home, name)?;
@@ -111,20 +109,6 @@ pub fn spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> 
         }
         _ => None,
     };
-    let ssh = match record.ssh() {
-        Some(ssh @ SdkValue::Map(_)) => Some(SshSpec {
-            host: ssh.get_text("host").unwrap_or("").to_owned(),
-            user: ssh.get_text("user").unwrap_or("root").to_owned(),
-            port: ssh.get_int("port").unwrap_or(22) as u16,
-            identity: ssh.get_text("identity").map(PathBuf::from),
-            known_hosts: paths::machine_dir(home, name).join("known_hosts"),
-            data_root: ssh
-                .get_text("root")
-                .unwrap_or(layerfs_platform::DATA)
-                .to_owned(),
-        }),
-        _ => None,
-    };
     let lasting = record.field("lasting");
     Ok(Spec {
         name: name.to_owned(),
@@ -151,7 +135,6 @@ pub fn spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> 
             .map(str::to_owned),
         nested: record.nested(),
         host,
-        ssh,
         state: Lasting {
             port: lasting.and_then(|l| l.get_int("port")).map(|p| p as u16),
             network: lasting.and_then(|l| l.get_int("network")).map(|n| n as u8),
@@ -176,7 +159,7 @@ pub fn worker(home: &Path, name: &str) -> Result<Option<Endpoint>> {
 }
 
 /// Writes `worker.json` and the lasting state of a started machine; the
-/// record write that says `running` drops a create's or connect's `op` (a
+/// record write that says `running` drops a create's `op` (a
 /// start runs under the machine's start lock, where no other one lives).
 pub fn save_running(home: &Path, name: &str, running: &Running) -> Result<()> {
     let endpoint = &running.endpoint;

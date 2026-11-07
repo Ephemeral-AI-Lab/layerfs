@@ -9,7 +9,7 @@ one file per call under its family in
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 63 calls in nine families. `layerfs help` lists them, and
+There are 61 calls in nine families. `layerfs help` lists them, and
 `layerfs help <family> [<call>]` prints one family or one call.
 
 ## How a call is written
@@ -73,7 +73,7 @@ Sandbox names (H §7.6).
 | size | bytes as a number, or text with `K`, `M` or `G` (`512M`, `8G`) | a word |
 | function | a callback (Node, Python only) | — |
 
-## The 63 calls
+## The 61 calls
 
 `[x]` is an optional positional. Every family's results are snake_case.
 
@@ -360,27 +360,25 @@ form.
   it is `Unavailable`, naming `machine start`. `mount`, `exec`, `commit`
   and `unmount` on a stopped machine are refused the same way, as Store
   calls are; nothing starts a machine but `machine start` (#535 D11).
-- On `ssh` and `lima`, `mount`, `commit`, `unmount` and
+- On `lima`, `mount`, `commit`, `unmount` and
   `status` go from the caller straight to the Sandbox's daemon (#535 G4);
   `exec` goes through the machine's worker. On `docker` every call goes
   through its worker (D-8). See machines-and-stores.md,
   Routes.
 - Not run for this manual.
 
-### `machine` (11)
+### `machine` (9)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `list` | — | — | every machine, with what it supports (`supports`) |
 | `platforms` | — | — | the platforms this host and build support: backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox runs and why not, readiness and options (#535; the rows of `control/SUPPORT.json`) |
 | `get` | `name` | — | a machine's record |
-| `status` | `name` | — | a machine's live state, free disk and tool version; `op` while a create, connect, remove or disconnect holds it (#536 H6) |
+| `status` | `name` | — | a machine's live state, free disk and tool version; `op` while a create or remove holds it (#536 H6) |
 | `start` | `name` | — | starts a stopped machine and its worker and waits until ready; a running one, and `native`, answer at once (#535 P1) |
 | `stop` | `name` | — | stops a machine's worker and, where it has one, its VM; disks stay; `InUse` while Sandboxes run on it (#535 P1) |
-| `create` | `name`, `platform` | `cpus`, `memory` (size), `disk` (size), `image`, `nested`, `host` | creates a VM machine |
-| `connect` | `name`, `host` | `user`, `port`, `identity`, `known_hosts`, `root` | connects an ssh host as a machine |
-| `remove` | `name` | — | deletes a VM machine and its disk |
-| `disconnect` | `name` | — | forgets an ssh machine; its data root stays |
+| `create` | `name`, `platform` | `cpus`, `memory` (size), `disk` (size), `image`, `nested`, `host` | creates an enabled VM machine (`apple-container`, `lima`) |
+| `remove` | `name` | — | deletes a VM machine and its disk; one of a removed platform (`ssh`, `microsandbox`) is only forgotten |
 | `update` | `name` | `cpus`, `memory`, `image`, `docker`, `wsl`, `daemon` | sets a built-in machine's image, Docker socket, WSL distribution and daemon (an absolute path to a file; it replaces what `import-env` recorded) (O11); `InUse` while Sandboxes run on the machine; resizing a VM is not built |
 
 Run:
@@ -404,6 +402,12 @@ $ layerfs machine status native
   runs under the machine's `start.lock`, so no `machine start` runs
   meanwhile, and removes `worker.json`; a later call that needs the machine
   is refused `Unavailable` until `machine start`.
+
+- A record of a removed platform (`ssh`, `microsandbox`) still shows in
+  `list` and `get` with `state: "unsupported"` and the reason; `remove`
+  forgets it and touches nothing outside the home. Every other call on it
+  is `Unsupported`. See
+  [removed platforms](machines-and-stores.md#removed-platforms-microsandbox-and-ssh).
 
 See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals.
@@ -555,10 +559,10 @@ Codes seen in the 2.0 library include:
 | `NoSuchStore`, `NoSuchProject` | a call that names `<store>/<project>` whose Store or project is missing (1.1.0's codes, S §2.9) |
 | `NoSuchBranch`, `NoSuchCommit` | no such Branch, or no such Commit on it (`branch.get`, `commit.get`, …) |
 | `NoSuchPath`, `NoSuchSandbox`, `NoSuchProcess`, … | 1.1.0's codes for paths, Sandboxes and processes |
-| `Exists` | the name is taken, the same host or database is already connected (under any name), or a bucket object was exported from another home |
+| `Exists` | the name is taken, the same database or bucket is already connected (under any name), or a bucket object was exported from another home |
 | `InUse` | held: running Sandboxes, processes with the Store open, Stores on a machine; a layout 2 home with any of these, or with a move, removal or create still running, which is not converted yet ([the home](home.md#a-layout-2-home)) |
-| `Busy` | an operation runs on the entity: a Store being pushed, pulled or removed, a machine being made, connected or removed, a Sandbox being created or closed; the message names it (`op` id and phase) and its process (#536 §7.1); `detail` is `{entity: {kind, name}, phase, op}`. Also: another project is being added to the same Store |
-| `Unresolved` | an earlier operation on the entity ended with its outcome not known; its process is gone and its `op` stays. The message names the call that shows it (`store status`, `machine status`, `sandbox get`) and the one that clears it (`store remove`, `machine remove` or `disconnect`, `sandbox close`); `detail` as for `Busy` |
+| `Busy` | an operation runs on the entity: a Store being pushed, pulled or removed, a machine being made or removed, a Sandbox being created or closed; the message names it (`op` id and phase) and its process (#536 §7.1); `detail` is `{entity: {kind, name}, phase, op}`. Also: another project is being added to the same Store |
+| `Unresolved` | an earlier operation on the entity ended with its outcome not known; its process is gone and its `op` stays. The message names the call that shows it (`store status`, `machine status`, `sandbox get`) and the one that clears it (`store remove`, `machine remove`, `sandbox close`); `detail` as for `Busy` |
 | `Unsupported` | not possible here, or not built (see [limitations](limitations.md)); a missing tool is listed in `detail.missing` |
 | `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret |
 | `Conflict` | a merge or Commit conflict; for `backup.restore`, the Store changed since its last backup or restore |

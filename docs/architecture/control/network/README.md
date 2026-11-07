@@ -27,7 +27,7 @@ How callers, workers and daemons reach each other: worker setup, PostgreSQL reac
 ## The picture
 
 ```text
- caller's host                          machine (VM, container or ssh host)
+ caller's host                          machine (VM or container)
 +--------------------------+           +-----------------------------------+
 | caller process           |           |  layerfs worker  (one per machine)|
 |  secrets::url  (password |  Workers  |   root /layerfs/data              |
@@ -55,10 +55,10 @@ URL a daemon dials for a PostgreSQL Store. See the
 
 | Question | Answer | Source |
 | --- | --- | --- |
-| Where does a worker listen? | The caller always dials a host loopback address (`Endpoint::address`). In the guest the worker binds port 7070 on the platform's `worker_bind`; the provider's port publish, Lima's port forward or an `ssh -L` carries it to the host's `127.0.0.1`. | [`spec.rs`](../../../../control/crates/layerfs-platform/src/spec.rs), [`worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
+| Where does a worker listen? | The caller always dials a host loopback address (`Endpoint::address`). In the guest the worker binds port 7070 on the platform's `worker_bind`; the provider's port publish, Lima's port forward or an `ssh -L` (`firecracker`, through its Lima host) carries it to the host's `127.0.0.1`. | [`spec.rs`](../../../../control/crates/layerfs-platform/src/spec.rs), [`worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
 | How does a call reach it? | One new TCP connection per request: the secret first, alone, then one request frame, then events and one answer. | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 | How does a Sandbox daemon dial the caller's PostgreSQL server? | `machine::reach` keeps any non-loopback host and rewrites a loopback host to the platform's alias, or refuses. | [`reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs) |
-| When do Workspace calls skip the worker? | When `machine::forward` answers an address: `native` (the daemon's own port), `ssh` and `lima` (a detached `ssh -L`). Elsewhere they go through the worker. | [`calls.rs`](../../../../control/crates/layerfs-platform/src/setup/calls.rs) |
+| When do Workspace calls skip the worker? | When `machine::forward` answers an address: `native` (the daemon's own port) and `lima` (a detached `ssh -L`). Elsewhere they go through the worker. | [`calls.rs`](../../../../control/crates/layerfs-platform/src/setup/calls.rs) |
 
 ## Invariants
 
@@ -80,19 +80,17 @@ URL a daemon dials for a PostgreSQL Store. See the
 | Worker readiness wait | 60 s (`READY`), looking every 200 ms. | [`worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
 | Worker not reached, wrong secret, other build | `Unavailable` / `Denied` / `Unavailable`; the request was not sent. | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 | Answer lost after the request was sent | `Unknown`: "it may have run, and was not resent". | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
-| `ssh` machine and a loopback PostgreSQL URL | `Unsupported`: "an ssh machine cannot reach the caller's loopback". | [`ssh/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/ssh/adapter.rs) |
-| Network facts verified live | The G7 live receipt covers `lima`, `apple-container`, `microsandbox` and `firecracker` reaching a PostgreSQL server, at an earlier commit with the support rows lifted locally. No G7 receipt covers `docker` or `ssh`. | [G7 live receipt](../../../../core/docs/issues/535/receipts/g7-live/RECEIPT.md) |
+| Network facts verified live | The G7 live receipt covers `lima`, `apple-container` and `firecracker` reaching a PostgreSQL server, at an earlier commit with the support rows lifted locally (it also covered `microsandbox`, removed in 2.0). No G7 receipt covers `docker`. | [G7 live receipt](../../../../core/docs/issues/535/receipts/g7-live/RECEIPT.md) |
 
 ## Demonstration
 
-These tests use stand-in tools (`support/standin.rs`): no VM, container or
-ssh host is reached. The commands were not run while writing this page.
+These tests use stand-in tools (`support/standin.rs`): no VM or container
+is reached. The commands were not run while writing this page.
 
 | Test or example | Crate | Shows |
 | --- | --- | --- |
-| [`machine_reach.rs`](../../../../control/crates/layerfs-platform/tests/machine_reach.rs) | `layerfs-platform` | Each platform rewrites or refuses a loopback host; other hosts pass unchanged; `sslmode=verify-full` and unreadable URLs are refused; no message holds the password. |
-| [`machine_forward.rs`](../../../../control/crates/layerfs-platform/tests/machine_forward.rs) | `layerfs-platform` | `native` answers the daemon's port; `ssh` and `lima` start a stand-in `ssh -L` that `forward_close` ends; a forward that dies at once fails once; the others and port 0 are refused before any tool runs. |
-| [`machine_ssh.rs`](../../../../control/crates/layerfs-platform/tests/machine_ssh.rs) | `layerfs-platform` | Strict host keys, checks before setup, host identity, disconnect that keeps the data root, and a stopped status without a running forward. |
+| [`machine_reach.rs`](../../../../control/crates/layerfs-platform/tests/machine_reach.rs) | `layerfs-platform` | Each platform rewrites a loopback host (`native`, and `docker` on a Linux Engine, keep it); other hosts pass unchanged; `sslmode=verify-full` and unreadable URLs are refused; no message holds the password. |
+| [`machine_forward.rs`](../../../../control/crates/layerfs-platform/tests/machine_forward.rs) | `layerfs-platform` | `native` answers the daemon's port; `lima` starts a stand-in `ssh -L` that `forward_close` ends; a forward that dies at once fails once; the others and port 0 are refused before any tool runs. |
 
 - `machine_reach`: builds a `Spec` per platform; apple-container gets a
   stand-in `container inspect` that prints a gateway. Needs a Unix host
@@ -102,9 +100,6 @@ ssh host is reached. The commands were not run while writing this page.
   run once first so a new script's first-run cost does not eat the 600 ms
   settle time. Unix only.
   `cargo +1.85.1 test --locked -p layerfs-platform --test machine_forward`
-- `machine_ssh`: stand-in `ssh` and `ssh-keygen` with a `known_hosts` file.
-  Unix only.
-  `cargo +1.85.1 test --locked -p layerfs-platform --test machine_ssh`
 
 ## Earlier material
 

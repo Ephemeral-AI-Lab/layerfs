@@ -41,7 +41,7 @@ at the Commit. For one small read or edit, [`file.*`](file.md) is cheaper.
   process ended (`state: "unresolved"` in `sandbox.get`), they are refused
   `Unresolved` until `sandbox.close(name)` clears it. `status` only reads
   and is not refused for that (see [sandbox](sandbox.md)).
-- On `ssh`, `lima` and `docker`, `mount`, `commit`, `unmount` and `status`
+- On `lima` and `docker`, `mount`, `commit`, `unmount` and `status`
   go from this process straight to the Sandbox's daemon (#535 G4); `exec`
   goes through the machine's worker, which runs the command in the machine.
 

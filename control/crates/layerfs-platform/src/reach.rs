@@ -1,7 +1,7 @@
 //! `reach` (#535 §7.3, §7.4, G3): the PostgreSQL Store URL a Sandbox's daemon
 //! on a machine dials. A URL whose host is the caller's loopback names a
-//! server the machine sees under another name (its host alias), or cannot
-//! see at all; every other host is dialled as given. Each platform's adapter
+//! server the machine sees under another name (its host alias); every
+//! other host is dialled as given. Each platform's adapter
 //! answers with [`dial`] and its own [`Loopback`].
 //!
 //! The URL may hold the Store's password: no message here holds any part
@@ -19,8 +19,6 @@ pub(crate) enum Loopback<'a> {
     /// The daemon reaches it under an address read from the machine, only
     /// when a URL names the caller's loopback.
     Lookup(&'a dyn Fn() -> Result<String, MachineError>),
-    /// It cannot; why.
-    Refused(&'a str),
 }
 
 /// The URL `spec`'s daemon dials for `url`, given how its machine reaches
@@ -55,9 +53,6 @@ pub(crate) fn dial(spec: &Spec, url: &str, loopback: Loopback<'_>) -> Result<Str
     if !parsed.loopback() {
         return Ok(url.to_owned());
     }
-    if let Loopback::Refused(why) = loopback {
-        return Err(refuse(spec, Code::Unsupported, why));
-    }
     if parsed.query("sslmode").any(|mode| mode == "verify-full") {
         return Err(refuse(
             spec,
@@ -68,7 +63,7 @@ pub(crate) fn dial(spec: &Spec, url: &str, loopback: Loopback<'_>) -> Result<Str
     let alias = match loopback {
         Loopback::Alias(alias) => alias.to_owned(),
         Loopback::Lookup(read) => read()?,
-        Loopback::Shared | Loopback::Refused(_) => unreachable!("answered above"),
+        Loopback::Shared => unreachable!("answered above"),
     };
     Ok(parsed.with_host(&alias))
 }

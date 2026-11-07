@@ -1,6 +1,6 @@
 //! The `machine` family (H §7.1, §7.2): records in `machine/<name>/`, the
-//! built-in `native` and `docker`, VMs created by name and ssh hosts
-//! connected, and the worker client (cut from `layerfs-control` by
+//! built-in `native` and `docker`, VMs created by name, and the worker
+//! client (cut from `layerfs-control` by
 //! layerfs-project#104). The adapters that make and start machines are the
 //! `layerfs-platform` driver; this crate writes the records and keeps
 //! `Exists`, `InUse` and each record's `op` (`Busy`, `Unresolved`). What a
@@ -11,8 +11,6 @@
 #![deny(missing_docs)]
 
 pub mod bundle;
-#[cfg(feature = "machine")]
-mod connect;
 #[cfg(feature = "machine")]
 mod create;
 #[cfg(feature = "machine")]
@@ -45,8 +43,6 @@ pub mod worker;
 pub use bundle::bundle;
 pub use bundle::{bundle_dir, IMAGE_ARCHIVE};
 #[cfg(feature = "machine")]
-pub use connect::{connect, MachineConnect};
-#[cfg(feature = "machine")]
 pub use create::{create, MachineCreate};
 #[cfg(feature = "machine")]
 pub use endpoint::running;
@@ -67,7 +63,7 @@ pub use platforms::platforms;
 pub use power::{start, stop};
 pub use related::Related;
 #[cfg(feature = "machine")]
-pub use remove::{disconnect, remove};
+pub use remove::remove;
 #[cfg(feature = "machine")]
 pub use spec::{ensure_built_ins, machine_of, vm_name};
 #[cfg(feature = "machine")]

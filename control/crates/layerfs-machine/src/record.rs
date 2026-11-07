@@ -1,7 +1,10 @@
 //! A machine's record, `machine/<name>/record.json` (#536 §9.2): its
-//! platform, size, images, ssh host, lasting guest state, the state a
-//! create, start or stop left, the `op` of a create, connect, remove or
-//! disconnect in flight (#536 §7.1), and the built-in machines' settings. Read
+//! platform, size, images, lasting guest state, the state a create, start
+//! or stop left, the `op` of a create or remove in flight (#536 §7.1), and
+//! the built-in machines' settings. A record may still name a platform
+//! removed in 2.0 (`microsandbox`, `ssh`): it is shown with that reason,
+//! every other call on it is refused `Unsupported`, and `machine remove`
+//! forgets it. Read
 //! once and kept whole, so `machine.get` and `machine.list` show what they
 //! showed before. Built without the `machine` feature too (the guest
 //! worker reads its own `native` and `docker` records); the platform and
@@ -16,12 +19,8 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// The intents a machine's record holds (#536 §7.1).
 pub const CREATE: &str = "machine.create";
-/// An ssh machine's connect.
-pub const CONNECT: &str = "machine.connect";
 /// A VM machine's remove.
 pub const REMOVE: &str = "machine.remove";
-/// An ssh machine's disconnect.
-pub const DISCONNECT: &str = "machine.disconnect";
 
 /// One machine's record as read (fields kept whole and in order).
 #[derive(Clone, Debug)]
@@ -104,14 +103,13 @@ impl MachineRecord {
         self.fields.get_text("platform")
     }
 
-    /// The state a create, connect, start or stop recorded (`running`,
+    /// The state a create, start or stop recorded (`running`,
     /// `stopped`, `failed`).
     pub fn recorded_state(&self) -> Option<&str> {
         self.fields.get_text("state")
     }
 
-    /// The intent of a create, connect, remove or disconnect, if the record
-    /// holds one.
+    /// The intent of a create or remove, if the record holds one.
     pub fn op(&self) -> Option<Op> {
         Op::of(&self.fields)
     }
@@ -130,7 +128,7 @@ impl MachineRecord {
         Self::from_record(&self.name, SdkValue::Map(fields.collect()))
     }
 
-    /// Whether a create, connect, remove or disconnect holds the machine:
+    /// Whether a create or remove holds the machine:
     /// its intent's owner lives, or is gone with the outcome unknown. A list
     /// shows its state and probes nothing.
     pub fn in_flight(&self) -> bool {
@@ -140,13 +138,13 @@ impl MachineRecord {
     /// Refuses a new operation on the machine while an intent holds it:
     /// `Busy` while its owner lives, `Unresolved` once a gone owner left
     /// it uncertain, naming `machine status <name>` and the call that
-    /// clears it (`machine remove`, or `machine disconnect` for ssh).
+    /// clears it (`machine remove`).
     pub fn not_held(&self) -> Result<()> {
         self.op().map_or(Ok(()), |op| self.blocked_by(&op))
     }
 
     /// Refuses only while a live process holds the machine (`Busy`): what
-    /// a remove or disconnect, which clears an unresolved intent, checks.
+    /// a remove, which clears an unresolved intent, checks.
     pub fn not_running(&self) -> Result<()> {
         match self.op() {
             Some(op) if op.standing() == Standing::Running => self.blocked_by(&op),
@@ -155,21 +153,7 @@ impl MachineRecord {
     }
 
     fn blocked_by(&self, op: &Op) -> Result<()> {
-        op.blocks(
-            "machine",
-            &self.name,
-            "machine status",
-            self.clearing_call(),
-        )
-    }
-
-    /// The call that clears an unresolved intent: `machine disconnect` for
-    /// an ssh machine, else `machine remove`.
-    pub fn clearing_call(&self) -> &'static str {
-        match self.platform_name() {
-            Some("ssh") => "machine disconnect",
-            _ => "machine remove",
-        }
+        op.blocks("machine", &self.name, "machine status", "machine remove")
     }
 
     /// The Sandbox image the record names (a digest, or a file).
@@ -195,23 +179,6 @@ impl MachineRecord {
     /// Whether a Lima machine was made `--nested`.
     pub fn nested(&self) -> bool {
         matches!(self.fields.get("nested"), Some(SdkValue::Bool(true)))
-    }
-
-    /// An ssh machine's host settings.
-    pub fn ssh(&self) -> Option<&SdkValue> {
-        self.fields.get("ssh")
-    }
-
-    /// The identity of the host an ssh machine reaches.
-    pub fn host_id(&self) -> Option<&str> {
-        self.ssh().and_then(|ssh| ssh.get_text("host_id"))
-    }
-
-    /// The record with its ssh settings' `host_id` set.
-    pub fn with_host_id(self, identity: &str) -> Self {
-        let ssh = self.ssh().cloned().unwrap_or_default();
-        let ssh = with_field(ssh, "host_id", SdkValue::text(identity));
-        self.with("ssh", ssh)
     }
 
     /// The record with `state` and the `error` that left it there.
@@ -251,17 +218,28 @@ pub struct MachineDerived {
 
 #[cfg(feature = "machine")]
 impl MachineRecord {
-    /// The machine's platform; a record naming none LayerFS knows is
-    /// refused `Failed`.
+    /// The machine's platform; a record naming one removed in 2.0 is
+    /// refused `Unsupported` with [`Self::removed`]'s reason, one naming
+    /// none LayerFS knows `Failed`.
     pub fn platform(&self) -> Result<layerfs_platform::Platform> {
+        if let Some(reason) = self.removed() {
+            return Err(refused("Unsupported", reason));
+        }
         self.platform_name()
             .and_then(layerfs_platform::Platform::parse)
             .ok_or_else(|| refused("Failed", "a machine record names no known platform"))
     }
 
+    /// Why the record's platform is gone, when it names one removed in 2.0
+    /// (`microsandbox`, `ssh`).
+    pub fn removed(&self) -> Option<&'static str> {
+        self.platform_name()
+            .and_then(layerfs_platform::platform_policy::removed_reason)
+    }
+
     /// The machine's state (#536 §7.2), from its record, `op`, `error` and
-    /// live probe: `creating` or `removing` while a live process creates
-    /// (connects) or removes (disconnects) it, `unresolved` once a gone one
+    /// live probe: `creating` or `removing` while a live process creates or
+    /// removes it, `unresolved` once a gone one
     /// left that outcome unknown; else its live probe's answer (`live`:
     /// `running`, `stopped`, `failed`, `missing`, or `unknown` when the
     /// probe could not answer), else the state its record holds (`failed`
@@ -276,9 +254,7 @@ impl MachineRecord {
         if let Some(op) = self.op() {
             match op.standing() {
                 Standing::Unresolved => return Ok("unresolved"),
-                Standing::Running if op.name() == REMOVE || op.name() == DISCONNECT => {
-                    return Ok("removing")
-                }
+                Standing::Running if op.name() == REMOVE => return Ok("removing"),
                 Standing::Running => return Ok("creating"),
                 Standing::Stale => {}
             }
@@ -287,25 +263,48 @@ impl MachineRecord {
     }
 
     /// The machine as `machine.get`, each `machine.list` item, `start`,
-    /// `stop`, `update`, `create` and `connect` show it: name, platform,
-    /// backend, `supports`, state, size, Stores and Sandboxes, then the
-    /// settings it has (`image`, `host`, `nested`, `docker`, `wsl`,
-    /// `error`, `ssh`).
+    /// `stop`, `update` and `create` show it: name, platform, backend,
+    /// `supports`, state, size, Stores and Sandboxes, then the settings it
+    /// has (`image`, `host`, `nested`, `docker`, `wsl`, `error`, and a
+    /// removed platform's `ssh` or `vm_name`). A machine of a removed
+    /// platform has backend `-`, supports nothing, state `unsupported` and
+    /// the removal as its `error`.
     pub fn to_sdk(
         &self,
         _view: layerfs_home::outcome::View,
         derived: &MachineDerived,
     ) -> Result<SdkValue> {
-        let kind = self.platform()?;
         let live = derived.live.as_ref();
-        let state = self.state(live.map(|(state, _)| state.as_str()))?;
-        let error = live.and_then(|(_, error)| error.clone());
+        let mut error = live.and_then(|(_, error)| error.clone());
+        let (platform, backend, supports, state) = match self.removed() {
+            Some(reason) => {
+                error = Some(reason.to_owned());
+                let supports = SdkValue::map([
+                    ("sqlite", SdkValue::Bool(false)),
+                    ("postgresql_sandbox", SdkValue::Bool(false)),
+                    ("reason", SdkValue::text(reason)),
+                ]);
+                let name = self.platform_name().unwrap_or_default();
+                (name, "-", supports, "unsupported")
+            }
+            None => {
+                let kind = self.platform()?;
+                let state = self.state(live.map(|(state, _)| state.as_str()))?;
+                let supports = super::platforms::supports(kind);
+                (
+                    kind.name(),
+                    super::spec::backend_name(kind),
+                    supports,
+                    state,
+                )
+            }
+        };
         let list = |items: &[String]| SdkValue::List(items.iter().map(SdkValue::text).collect());
         let mut fields = vec![
             ("name", SdkValue::text(&self.name)),
-            ("platform", SdkValue::text(kind.name())),
-            ("backend", SdkValue::text(super::spec::backend_name(kind))),
-            ("supports", super::platforms::supports(kind)),
+            ("platform", SdkValue::text(platform)),
+            ("backend", SdkValue::text(backend)),
+            ("supports", supports),
             ("state", SdkValue::text(state)),
             ("cpus", self.field("cpus").cloned().unwrap_or_default()),
             ("memory", self.field("memory").cloned().unwrap_or_default()),
@@ -326,8 +325,12 @@ impl MachineRecord {
         if let Some(error) = error {
             fields.push(("error", SdkValue::Text(error)));
         }
-        if let Some(ssh) = self.ssh() {
-            fields.push(("ssh", ssh.clone()));
+        if self.removed().is_some() {
+            for extra in ["ssh", "vm_name"] {
+                if let Some(value) = self.field(extra) {
+                    fields.push((extra, value.clone()));
+                }
+            }
         }
         Ok(SdkValue::Map(
             fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),

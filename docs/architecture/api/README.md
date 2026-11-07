@@ -8,7 +8,7 @@
 
 The API layer is the public surface: the management library, the call table and its one dispatcher, and the front ends (the `layerfs` command, Node and Python).
 
-What a program sees of this layer is the **SDK**: 63 calls in nine
+What a program sees of this layer is the **SDK**: 61 calls in nine
 families, the same names and arguments in JavaScript, Python and the
 `layerfs` command. The [SDK reference](sdk/README.md) has one page per
 call; the other components below explain how those calls are checked,
@@ -34,7 +34,7 @@ routed and run.
 | [`file`](sdk/file/README.md) | [read](sdk/file/read.md), [stat](sdk/file/stat.md), [list](sdk/file/list.md), [glob](sdk/file/glob.md), [grep](sdk/file/grep.md), [blame](sdk/file/blame.md), [diff](sdk/file/diff.md), [write](sdk/file/write.md), [edit](sdk/file/edit.md), [rm](sdk/file/rm.md), [mkdir](sdk/file/mkdir.md), [mv](sdk/file/mv.md), [cp](sdk/file/cp.md), [apply](sdk/file/apply.md) | files at a Branch or Commit, without a mount; each write is one Commit |
 | [`sandbox`](sdk/sandbox/README.md) | [create](sdk/sandbox/create.md), [list](sdk/sandbox/list.md), [get](sdk/sandbox/get.md), [close](sdk/sandbox/close.md) | a project's Workspace daemon on a machine |
 | [`workspace`](sdk/workspace/README.md) | [mount](sdk/workspace/mount.md), [exec](sdk/workspace/exec.md), [commit](sdk/workspace/commit.md), [unmount](sdk/workspace/unmount.md), [status](sdk/workspace/status.md) | a mounted, writable Branch: run commands, then commit |
-| [`machine`](sdk/machine/README.md) | [list](sdk/machine/list.md), [platforms](sdk/machine/platforms.md), [get](sdk/machine/get.md), [status](sdk/machine/status.md), [start](sdk/machine/start.md), [stop](sdk/machine/stop.md), [create](sdk/machine/create.md), [connect](sdk/machine/connect.md), [remove](sdk/machine/remove.md), [disconnect](sdk/machine/disconnect.md), [update](sdk/machine/update.md) | where Sandboxes and sqlite Stores live: `native`, `docker`, VMs, ssh hosts |
+| [`machine`](sdk/machine/README.md) | [list](sdk/machine/list.md), [platforms](sdk/machine/platforms.md), [get](sdk/machine/get.md), [status](sdk/machine/status.md), [start](sdk/machine/start.md), [stop](sdk/machine/stop.md), [create](sdk/machine/create.md), [remove](sdk/machine/remove.md), [update](sdk/machine/update.md) | where Sandboxes and sqlite Stores live: `native`, `docker`, VMs and containers |
 | [`store`](sdk/store/README.md) | [list](sdk/store/list.md), [get](sdk/store/get.md), [status](sdk/store/status.md), [create](sdk/store/create.md), [connect](sdk/store/connect.md), [push](sdk/store/push.md), [pull](sdk/store/pull.md), [remove](sdk/store/remove.md), [disconnect](sdk/store/disconnect.md) | the database that holds every project's history: sqlite or PostgreSQL |
 | [`backup`](sdk/backup/README.md) | [connect](sdk/backup/connect.md), [disconnect](sdk/backup/disconnect.md), [list](sdk/backup/list.md), [create](sdk/backup/create.md), [restore](sdk/backup/restore.md) | copies of sqlite Stores in r2 or MinIO buckets |
 
@@ -58,7 +58,7 @@ routed and run.
 
 ```text
  program (JS / Python / shell)
-      |  the SDK: 63 calls
+      |  the SDK: 61 calls
       v
  Front ends (CLI, Node, Python)
       |
@@ -79,7 +79,7 @@ Dotted edges cross a process boundary.
 | Component | What it covers | Topics |
 | --- | --- | --- |
 | [Call table](call-table/README.md) | The nine call families and the one dispatcher every front end goes through. | [Table](call-table/table.md), [Errors](call-table/errors.md) |
-| [SDK](sdk/README.md) | Every call a program can make: 63 calls in nine families, one page per call, with JavaScript, Python and CLI forms. | [project](sdk/project/README.md), [branch](sdk/branch/README.md), [commit](sdk/commit/README.md), [file](sdk/file/README.md), [sandbox](sdk/sandbox/README.md), [workspace](sdk/workspace/README.md), [machine](sdk/machine/README.md), [store](sdk/store/README.md), [backup](sdk/backup/README.md) |
+| [SDK](sdk/README.md) | Every call a program can make: 61 calls in nine families, one page per call, with JavaScript, Python and CLI forms. | [project](sdk/project/README.md), [branch](sdk/branch/README.md), [commit](sdk/commit/README.md), [file](sdk/file/README.md), [sandbox](sdk/sandbox/README.md), [workspace](sdk/workspace/README.md), [machine](sdk/machine/README.md), [store](sdk/store/README.md), [backup](sdk/backup/README.md) |
 | [Front ends](front-ends/README.md) | The `layerfs` command, the Node addon and the Python module: one call each, over the call table. | [CLI](front-ends/cli.md), [Node](front-ends/node.md), [Python](front-ends/python.md) |
 
 ## Rules for this layer

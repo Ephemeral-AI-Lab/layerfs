@@ -133,4 +133,4 @@ daemon runs in the Sandbox image's root, which has no such hosts entry.
 
 ---
 
-← [Machines: microsandbox](microsandbox.md) · [Up: Machines](../README.md) · [Machines: Firecracker](firecracker.md) →
+← [Machines: Apple container](apple-container.md) · [Up: Machines](../README.md) · [Machines: Firecracker](firecracker.md) →

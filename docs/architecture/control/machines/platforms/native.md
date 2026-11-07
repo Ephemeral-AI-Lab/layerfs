@@ -36,12 +36,10 @@ removed ([`native/adapter.rs`](../../../../../control/crates/layerfs-platform/sr
 | Call | Answer | Source |
 | --- | --- | --- |
 | `create`, `remove` | `InvalidInput`: "is built in and never created" / "… never removed" | `native/adapter.rs` |
-| `connect` | `InvalidInput`: "is created, not connected" | [`setup/calls.rs`](../../../../../control/crates/layerfs-platform/src/setup/calls.rs) |
-| `start` | `Ok(None)` on macOS and Linux (the route is in-process); the adapter's `start` is reached only on Windows and answers `Unsupported` | `setup/calls.rs`, [`native/power.rs`](../../../../../control/crates/layerfs-platform/src/platforms/native/power.rs) |
+| `start` | `Ok(None)` on macOS and Linux (the route is in-process); the adapter's `start` is reached only on Windows and answers `Unsupported` | [`setup/calls.rs`](../../../../../control/crates/layerfs-platform/src/setup/calls.rs), [`native/power.rs`](../../../../../control/crates/layerfs-platform/src/platforms/native/power.rs) |
 | `stop` | `Ok(())`, nothing to stop | `native/adapter.rs` |
 | `status` | `running`, no `free_disk`, `down_reason` "missing: …" when the host lacks something | [`native/observe.rs`](../../../../../control/crates/layerfs-platform/src/platforms/native/observe.rs) |
 | `guest`, `copy_in`, `copy_out` | `InvalidInput`: "runs in-process; its files are the host's" | `native/adapter.rs` |
-| `host_identity` | `InvalidInput`: "has no ssh host" | `native/adapter.rs` |
 | `forward` | `127.0.0.1:<guest port>`, no pid | `setup/forward.rs` `shared` |
 
 ## Backend and kernel route

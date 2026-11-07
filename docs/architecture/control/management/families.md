@@ -55,8 +55,7 @@ Records in `machine/<name>/`, adapters from `layerfs-platform`
 | `start` | the only call that starts a machine: dials `worker.json`'s worker, else starts the VM and worker, waits for readiness, rewrites `worker.json` | `start.lock` | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs), [`power.rs`](../../../../control/crates/layerfs-machine/src/power.rs) |
 | `stop` | stops worker and VM; disks and Stores stay; `InUse` while Sandboxes are recorded on it | `start.lock` | [`power.rs`](../../../../control/crates/layerfs-machine/src/power.rs) |
 | `create` | claims the name with `op` `machine.create`, makes the VM outside the home lock, records `running`, `failed` or an uncertain `op` | `op`, `start.lock` | [`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs) |
-| `connect` | an ssh host; host key checked strictly; `op` `machine.connect` | `op` | [`connect.rs`](../../../../control/crates/layerfs-machine/src/connect.rs) |
-| `remove`, `disconnect` | delete a VM and its disk, or forget an ssh host (its root stays); `InUse` while it holds Stores, Sandboxes or hosted machines | `op`, `start.lock` | [`remove.rs`](../../../../control/crates/layerfs-machine/src/remove.rs), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
+| `remove` | delete a VM and its disk; a machine whose platform was removed in 2.0 (`ssh`, `microsandbox`) is only forgotten, its record removed and nothing outside the home touched ([Disabled platforms](../support-matrix/disabled-platforms.md)); `InUse` while it holds Stores, Sandboxes or hosted machines | `op`, `start.lock` (forget: home lock only) | [`remove.rs`](../../../../control/crates/layerfs-machine/src/remove.rs), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
 | `update` | resize a VM, or set a built-in machine's image (on `docker`, its worker container's image), Docker socket, `wsl` setting or daemon; `InUse` while Sandboxes run | home lock | [`update.rs`](../../../../control/crates/layerfs-machine/src/update.rs) |
 
 `machine/worker/` holds the worker client and server; see
@@ -131,7 +130,7 @@ machine is local, else as a worker `sandbox.host` request carrying the
 Store and project records ([`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs)). For a
 PostgreSQL Store this process resolves the password and the create checks
 the server is reachable from the machine first. Where this host reaches a
-Sandbox's daemon (`ssh`, `lima`), the keys go to
+Sandbox's daemon (`lima`), the keys go to
 `sandbox/<name>/control.json` ([`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs)).
 
 ## workspace

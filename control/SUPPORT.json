@@ -35,16 +35,6 @@
           "description": "an Apple container VM (Apple silicon); Sandboxes run in Linux namespaces and a cgroup"
         },
         {
-          "platform": "microsandbox",
-          "how": "created",
-          "backend": "namespaces",
-          "kernel": "fuse",
-          "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
-          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
-          "description": "a microsandbox microVM (libkrun); Sandboxes run in Linux namespaces and a cgroup"
-        },
-        {
           "platform": "lima",
           "how": "created",
           "backend": "namespaces",
@@ -63,16 +53,6 @@
           "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "firecracker is permanently disabled by product policy (layerfs-project#7)" },
           "options": [],
           "description": "firecracker is permanently disabled by product policy (layerfs-project#7)"
-        },
-        {
-          "platform": "ssh",
-          "how": "connected",
-          "backend": null,
-          "kernel": null,
-          "sqlite": null,
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "ssh is permanently disabled by product policy (layerfs-project#7)" },
-          "options": [],
-          "description": "ssh is permanently disabled by product policy (layerfs-project#7)"
         }
       ]
     },
@@ -110,16 +90,6 @@
           "description": "an Apple container VM (Apple silicon)"
         },
         {
-          "platform": "microsandbox",
-          "how": "created",
-          "backend": "namespaces",
-          "kernel": "fuse",
-          "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
-          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
-          "description": "a microsandbox microVM (libkrun); Sandboxes run in Linux namespaces and a cgroup"
-        },
-        {
           "platform": "lima",
           "how": "created",
           "backend": null,
@@ -138,16 +108,6 @@
           "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "firecracker is permanently disabled by product policy (layerfs-project#7)" },
           "options": [],
           "description": "firecracker is permanently disabled by product policy (layerfs-project#7)"
-        },
-        {
-          "platform": "ssh",
-          "how": "connected",
-          "backend": null,
-          "kernel": null,
-          "sqlite": null,
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "ssh is permanently disabled by product policy (layerfs-project#7)" },
-          "options": [],
-          "description": "ssh is permanently disabled by product policy (layerfs-project#7)"
         }
       ]
     },
@@ -185,16 +145,6 @@
           "description": "an Apple container VM (Apple silicon)"
         },
         {
-          "platform": "microsandbox",
-          "how": "created",
-          "backend": "namespaces",
-          "kernel": "fuse",
-          "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
-          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
-          "description": "a microsandbox microVM (libkrun); Sandboxes run in Linux namespaces and a cgroup"
-        },
-        {
           "platform": "lima",
           "how": "created",
           "backend": null,
@@ -213,16 +163,6 @@
           "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "firecracker is permanently disabled by product policy (layerfs-project#7)" },
           "options": [],
           "description": "firecracker is permanently disabled by product policy (layerfs-project#7)"
-        },
-        {
-          "platform": "ssh",
-          "how": "connected",
-          "backend": null,
-          "kernel": null,
-          "sqlite": null,
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "ssh is permanently disabled by product policy (layerfs-project#7)" },
-          "options": [],
-          "description": "ssh is permanently disabled by product policy (layerfs-project#7)"
         }
       ]
     }

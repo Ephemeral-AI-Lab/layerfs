@@ -1,6 +1,6 @@
 //! `lima`'s adapter.
 use super::{create, daemon_forward, guest, remove, start, status, stop};
-use crate::adapter::{refused, Adapter};
+use crate::adapter::Adapter;
 use crate::error::MachineError;
 use crate::platform::HostOs;
 use crate::probe::{macos_missing, tool_version};
@@ -41,9 +41,6 @@ impl Adapter for Lima {
     }
     fn status(&self, spec: &Spec) -> Result<Status, MachineError> {
         status(spec)
-    }
-    fn host_identity(&self, spec: &Spec) -> Result<String, MachineError> {
-        Err(refused(spec, "has no ssh host"))
     }
     fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
         dial(spec, url, Loopback::Alias(HOST_ALIAS))

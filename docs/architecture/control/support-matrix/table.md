@@ -4,9 +4,10 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The support rows and what each field means. Firecracker and SSH are
+The support rows and what each field means. Firecracker is
 [permanently disabled](disabled-platforms.md), with empty selectable options
-and a fixed refusal reason on every host; their profile metadata remains.
+and a fixed refusal reason on every host; its profile metadata remains.
+Microsandbox and SSH were removed in 2.0 and have no rows.
 
 **How to present:** ASCII diagrams first, then tables, then prose. Put each
 diagram in a ```` ```text ```` block, keep it within 80 columns, and use prose only
@@ -20,7 +21,7 @@ for what a diagram or table cannot say.
 ## Rows
 
 ```text
- Platform::ALL (7)  x  HostOs::NAMED (macos, linux, windows)  = 21 rows
+ Platform::ALL (5)  x  HostOs::NAMED (macos, linux, windows)  = 15 rows
                        (+ HostOs::Other, answered but not written to JSON)
 
  support(platform, host):
@@ -33,7 +34,7 @@ for what a diagram or table cannot say.
    postgresql= sandbox_allowed(platform, host, Postgresql)
 ```
 
-The 21 rows as `SUPPORT.json` holds them. A cell reads
+The 15 rows as `SUPPORT.json` holds them. A cell reads
 backend · kernel · sqlite call site · PostgreSQL Sandbox; "—" is `null`.
 
 | Platform | How | macOS | Linux | Windows |
@@ -41,10 +42,8 @@ backend · kernel · sqlite call site · PostgreSQL Sandbox; "—" is `null`.
 | `native` | built_in | native · nfs · in_process · yes | namespaces · fuse · in_process · yes | — · — · worker · no |
 | `docker` | built_in | namespaces · fuse · worker · yes | namespaces · fuse · worker · yes | — · — · — · no |
 | `apple-container` | created | namespaces · fuse · worker · yes | — · — · — · no | — · — · — · no |
-| `microsandbox` | created | namespaces · fuse · worker · yes | namespaces · fuse · worker · yes | namespaces · fuse · worker · yes |
 | `lima` | created | namespaces · fuse · worker · yes | — · — · — · no | — · — · — · no |
 | `firecracker` | created (disabled) | — · — · — · no | — · — · — · no | — · — · — · no |
-| `ssh` | connected (disabled) | — · — · — · no | — · — · — · no | — · — · — · no |
 
 Every row has `postgresql.store_calls` = `in_process`. The Windows column is
 what the table allows, not a built host: the crate is `#![cfg(unix)]`
@@ -57,14 +56,14 @@ what the table allows, not a built host: the crate is `#![cfg(unix)]`
 | --- | --- | --- | --- | --- |
 | `platform` | `Platform` | `platform` | The platform's name as callers write it (`Profile::name`). | [`platform.rs`](../../../../control/crates/layerfs-platform/src/platform.rs) |
 | `host` | `HostOs` | the block's `host` | The host the row answers for. | same |
-| `how` | `How` | `how` | `built_in`, `created` or `connected`. | same |
+| `how` | `How` | `how` | `built_in` or `created`. | same |
 | `backend` | `Option<Backend>` | `backend` | The Sandbox backend's stored name (`Backend::stored_name`); `None` when there is none or the platform is not on the host. `HostProcess` is stored as `native` (#535 G6). | [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs) |
 | `kernel` | `Option<KernelRoute>` | `kernel` | The kernel route the backend's daemons serve. | same |
 | `sqlite` | `Option<CallSite>` | `sqlite` | Where a sqlite Store's calls run; `None` only when the platform is not on the host. | same |
 | `postgresql.store_calls` | `CallSite` | `postgresql.store_calls` | Always `InProcess`. | same |
 | `postgresql.sandbox` | `bool` | `postgresql.sandbox` | Whether a Sandbox of a PostgreSQL Store runs here. | same |
 | `postgresql.reason` | `Option<&'static str>` | `postgresql.reason` | The exact refusal text, or `None`. | same |
-| `options` | `&'static [OptSpec]` | `options` | The `machine create` or `machine connect` options, each with its `kind`. | [`options.rs`](../../../../control/crates/layerfs-platform/src/options.rs) |
+| `options` | `&'static [OptSpec]` | `options` | The `machine create` options, each with its `kind`. | [`options.rs`](../../../../control/crates/layerfs-platform/src/options.rs) |
 | `description` | `String` | `description` | `Profile::description`, plus `"; "` and the backend's description when there is a backend. | [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs) |
 
 `SupportRow::supports()` applies a row to one machine:
@@ -98,15 +97,15 @@ what the table allows, not a built host: the crate is `#![cfg(unix)]`
 | `apple-container runs on macOS hosts only` | `apple-container` on Linux or Windows | `host_refusal` |
 | `lima runs on macOS hosts only` | `lima` on Linux or Windows | `host_refusal` |
 | `firecracker is permanently disabled by product policy (layerfs-project#7)` | `firecracker` on every host | shared platform policy |
-| `ssh is permanently disabled by product policy (layerfs-project#7)` | `ssh` on every host | shared platform policy |
 
 `postgresql_refusal` today refuses only `native` on Windows and `Other`,
 which `NO_BACKEND` already refuses first, so a PostgreSQL Sandbox runs
 wherever a sqlite one does. #535 phase 5a enabled `native`, `docker` and
 `ssh` historically; the [G7 live receipt](../../../../core/docs/issues/535/receipts/g7-live/RECEIPT.md)
 historically enabled `lima`, `apple-container`, `microsandbox` and `firecracker`.
-The permanent product restriction supersedes those enablements for SSH and
-Firecracker without changing the receipts. A
+The permanent product restriction supersedes those enablements for
+Firecracker, and Microsandbox and SSH were removed in 2.0, without changing
+the receipts. A
 refusal reaches the caller as `Unsupported`; `sandbox create` wraps it as
 "a Sandbox of <kind> Store <s> cannot run on machine <m> (<platform>):
 <reason>" ([`create.rs`](../../../../control/crates/layerfs-sandbox/src/create.rs)).

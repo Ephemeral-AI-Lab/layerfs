@@ -4,11 +4,13 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Firecracker and SSH are **permanently disabled for new work**. Their code
-and records remain for inspection and explicit cleanup. See the
-[platform restriction](../../../control/support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
-the source change required for re-enabling. Descriptions of their adapter
-mechanics below are retained implementation details, not selectable features.
+Firecracker is **permanently disabled for new work**. Its code and records
+remain for inspection and explicit cleanup. Microsandbox and SSH machines
+were removed in 2.0; a record an older home still holds for one is shown,
+refused and only forgotten. See the [platform restriction](../../../control/support-matrix/disabled-platforms.md) for
+refusals, existing-resource handling and the source change required for
+re-enabling. Descriptions of Firecracker's adapter mechanics below are
+retained implementation details, not selectable features.
 
 Makes a new VM machine on this host, copies the sealed Linux bundle in and
 starts its worker, so Stores and Sandboxes can be placed on it.
@@ -45,7 +47,7 @@ layerfs machine create <name> <platform> [--cpus N] [--memory SIZE] \
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
 | `name` | Name | `MachineName::parse`; not `native` or `docker`; not taken | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) `new_name` |
-| `platform` | Name | an enabled created platform: `apple-container`, `microsandbox`, `lima` | [`platform.rs`](../../../../../control/crates/layerfs-platform/src/platform.rs) `created` |
+| `platform` | Name | an enabled created platform: `apple-container`, `lima` | [`platform.rs`](../../../../../control/crates/layerfs-platform/src/platform.rs) `created` |
 
 Which platform this host may create comes from the support table
 ([`support.rs`](../../../../../control/crates/layerfs-platform/src/support.rs),
@@ -54,12 +56,12 @@ Which platform this host may create comes from the support table
 | Platform | macOS | Linux | Windows | Options | Page |
 | --- | --- | --- | --- | --- | --- |
 | `apple-container` | yes | no | no | cpus, memory, disk, image | [apple-container](../../../control/machines/platforms/apple-container.md) |
-| `microsandbox` | yes | yes | yes | cpus, memory, disk, image | [microsandbox](../../../control/machines/platforms/microsandbox.md) |
 | `lima` | yes | no | no | cpus, memory, disk, image, nested | [lima](../../../control/machines/platforms/lima.md) |
 | `firecracker` | disabled | disabled | disabled | none selectable | [firecracker](../../../control/machines/platforms/firecracker.md) |
 
-`native` and `docker` are built in; `ssh` and
-[machine.connect](connect.md) are permanently disabled.
+`native` and `docker` are built in. `microsandbox` and `ssh` were removed
+in 2.0: naming one is refused `Unsupported` with
+``platform `<name>` was removed in LayerFS 2.0``.
 
 ## Options
 
@@ -74,8 +76,8 @@ Which platform this host may create comes from the support table
 
 `image` means two things. The platform profiles declare it as the VM's own
 system image ([`options.rs`](../../../../../control/crates/layerfs-platform/src/options.rs)
-`IMAGE`; `apple-container` and `microsandbox` boot `Spec::os_image`, default
-`debian:trixie-slim` for apple-container). Control does not pass it that
+`IMAGE`; `apple-container` boots `Spec::os_image`, default
+`debian:trixie-slim`). Control does not pass it that
 way: `machine::spec` turns an `image` that starts with `/` into
 `Spec::image`, the Sandbox image archive copied in at start, and fills
 `Spec::os_image` from `image` only for the `docker` machine. So on a
@@ -131,11 +133,11 @@ See the [routing table](../../../control/routing/routing-table.md).
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | bad name; a built-in name; unknown platform; a built-in or `ssh` platform; `nested` off lima; firecracker without `host` or with a host that is not a nested lima; a folder-scoped client | no | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) |
+| `InvalidInput` | bad name; a built-in name; unknown platform; a built-in platform; `nested` off lima; firecracker without `host` or with a host that is not a nested lima; a folder-scoped client | no | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) |
 | `Exists` | a machine of that name exists | no | same, `new_name` |
 | `NotFound` | `host` names no machine | no | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) |
 | `Busy` / `Unresolved` | `host` is held by another operation | no | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `machine_of` |
-| `Unsupported` | the platform is not supported on this host; its tool is missing (`detail.missing`); no sealed bundle; a build without the `machine` feature | no | same, [`bundle.rs`](../../../../../control/crates/layerfs-machine/src/bundle.rs) |
+| `Unsupported` | the platform is disabled (`firecracker`) or was removed (`microsandbox`, `ssh`); it is not supported on this host; its tool is missing (`detail.missing`); no sealed bundle; a build without the `machine` feature | no | same, [`bundle.rs`](../../../../../control/crates/layerfs-machine/src/bundle.rs) |
 | `Unavailable`, `Denied`, `Failed` | the provider refused or failed; `detail.vm_exists` says whether the VM is kept | no | [`error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
 | `Unknown` | **the provider timed out or its answer was lost** | **yes** | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) `finish` |
 
@@ -152,7 +154,7 @@ await layerfs.machine.create("vm1", "lima", { cpus: 4, memory: "8G", disk: "64G"
 ```
 
 ```python
-layerfs.machine.create("mvm", "microsandbox", memory="2G")
+layerfs.machine.create("box", "apple-container", memory="2G")
 ```
 
 ```bash
@@ -171,4 +173,4 @@ layerfs.machine.create("mvm", "microsandbox", memory="2G")
 
 ---
 
-← [machine.stop](stop.md) · [Up: machine](README.md) · [machine.connect](connect.md) →
+← [machine.stop](stop.md) · [Up: machine](README.md) · [machine.remove](remove.md) →

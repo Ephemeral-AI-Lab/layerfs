@@ -2,7 +2,7 @@
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
-use layerfs_platform::{native_missing, nested_missing, probe, HostOs, Platform, Tools};
+use layerfs_platform::{native_missing, nested_missing, probe, HostOs, Platform};
 use layerfs_sandbox_backend::platform_policy::disabled_reason;
 use standin::Scratch;
 
@@ -13,10 +13,8 @@ fn an_empty_search_path_names_every_missing_tool() {
     for (kind, tool) in [
         (Platform::Docker, "tool:docker"),
         (Platform::AppleContainer, "tool:container"),
-        (Platform::Microsandbox, "tool:msb"),
         (Platform::Lima, "tool:limactl"),
         (Platform::Firecracker, "tool:limactl"),
-        (Platform::Ssh, "tool:ssh"),
     ] {
         let found = probe(kind, &tools);
         assert_eq!(found.kind, kind);
@@ -70,38 +68,11 @@ fn macos_only_kinds_name_the_host_elsewhere() {
 fn a_stand_in_tool_reports_its_version() {
     let scratch = Scratch::new("probe-version");
     scratch.tool("limactl", "echo 'limactl version 9.9.9'");
-    scratch.tool("msb", "echo 'msb 0.7.8'");
-    scratch.tool("ssh", "echo 'OpenSSH_9.9p1' >&2");
     let tools = scratch.tools();
     let lima = probe(Platform::Lima, &tools);
     assert!(!lima.missing.contains(&"tool:limactl".to_owned()));
     assert_eq!(lima.version.as_deref(), Some("limactl version 9.9.9"));
     assert_eq!(lima.ready, HostOs::current() == HostOs::Macos);
-    let msb = probe(Platform::Microsandbox, &tools);
-    assert!(msb.ready);
-    assert_eq!(msb.version.as_deref(), Some("msb 0.7.8"));
-    let ssh = probe(Platform::Ssh, &tools);
-    assert!(!ssh.ready);
-    assert_eq!(ssh.version, None);
-    assert_eq!(ssh.missing, [disabled_reason("ssh").unwrap()]);
-}
-
-#[test]
-fn msb_is_found_where_its_installer_puts_it() {
-    let scratch = Scratch::new("probe-msb-home");
-    let home = scratch.dir.join("home");
-    let installed = home.join(".microsandbox/bin");
-    std::fs::create_dir_all(&installed).unwrap();
-    scratch.tool("msb", "echo 'msb 0.7.11'");
-    std::fs::rename(scratch.bin().join("msb"), installed.join("msb")).unwrap();
-    let mut tools = scratch.tools();
-    assert!(!probe(Platform::Microsandbox, &tools).ready);
-    tools.path = Tools::search_path(&tools.path, Some(&home));
-    let dirs: Vec<_> = std::env::split_paths(&tools.path).collect();
-    assert_eq!(dirs, [scratch.bin(), installed]);
-    let msb = probe(Platform::Microsandbox, &tools);
-    assert!(msb.ready, "{:?}", msb.missing);
-    assert_eq!(msb.version.as_deref(), Some("msb 0.7.11"));
 }
 
 #[test]
@@ -155,23 +126,20 @@ fn a_provider_call_ends_when_its_command_does() {
     let scratch = Scratch::new("probe-latency");
     let tools = scratch.tools();
     let median = |body: &str| {
-        scratch.tool("msb", body);
+        scratch.tool("limactl", body);
         let mut ms: Vec<f64> = (0..9)
             .map(|_| {
                 let started = std::time::Instant::now();
-                let found = probe(Platform::Microsandbox, &tools);
-                assert_eq!(found.version.as_deref(), Some("msb 0.7.8"));
+                let found = probe(Platform::Lima, &tools);
+                assert_eq!(found.version.as_deref(), Some("limactl version 9.9.9"));
                 started.elapsed().as_secs_f64() * 1e3
             })
             .collect();
         ms.sort_by(f64::total_cmp);
         ms[ms.len() / 2]
     };
-    if disabled_reason("microsandbox").is_some() {
-        return;
-    }
-    let quick = median("echo 'msb 0.7.8'");
-    let slow = median("sleep 0.026; echo 'msb 0.7.8'");
+    let quick = median("echo 'limactl version 9.9.9'");
+    let slow = median("sleep 0.026; echo 'limactl version 9.9.9'");
     let load = std::process::Command::new("uptime")
         .output()
         .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned())

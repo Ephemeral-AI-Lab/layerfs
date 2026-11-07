@@ -1,4 +1,4 @@
-//! The machine calls: create, connect, start, stop, remove, status, reach
+//! The machine calls: create, start, stop, remove, status, reach
 //! and forward, each dispatched to the platform's adapter (`crate::adapter`).
 //! Setup steps 1 to 4 (VM and disk, bundle, worker, forward and readiness)
 //! end in a [`Running`]; writing `worker.json` and `record.json` is the
@@ -7,7 +7,7 @@ use super::guest::Guest;
 use super::worker;
 use crate::adapter::{adapter, refused};
 use crate::error::{Code, MachineError};
-use crate::platform::{HostOs, How, Route};
+use crate::platform::{HostOs, Route};
 use crate::spec::{Bundle, Forward, Running, Spec};
 use std::path::Path;
 use std::time::Instant;
@@ -52,22 +52,6 @@ pub fn create(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
     new_work(spec)?;
     spec.validate()?;
     worker::check_bundle(bundle)?;
-    if spec.kind.profile().how == How::Connected {
-        return Err(refused(spec, "is connected, not created"));
-    }
-    adapter(spec.kind).create(spec, bundle)
-}
-
-/// Connects an ssh host: checks it, copies the bundle in, starts the worker
-/// and its forward. Nothing is created on the host but `/layerfs/bundle`,
-/// `/layerfs/state` and the data root's folders.
-pub fn connect(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
-    new_work(spec)?;
-    spec.validate()?;
-    worker::check_bundle(bundle)?;
-    if spec.kind.profile().how != How::Connected {
-        return Err(refused(spec, "is created, not connected"));
-    }
     adapter(spec.kind).create(spec, bundle)
 }
 
@@ -85,16 +69,14 @@ pub fn start(spec: &Spec, bundle: &Bundle) -> Result<Option<Running>, MachineErr
 }
 
 /// Stops the machine's worker and, where it has one, its VM; disks stay.
-/// `docker` stops only its worker, `ssh` its worker and forward; `native`
-/// has nothing to stop.
+/// `docker` stops only its worker; `native` has nothing to stop.
 pub fn stop(spec: &Spec) -> Result<(), MachineError> {
     spec.validate()?;
     adapter(spec.kind).stop(spec)
 }
 
-/// `machine remove` deletes a VM and its data disk; for `ssh` it is
-/// `disconnect`: the worker and forward stop and `/layerfs/bundle` and
-/// `/layerfs/state` go, never the data root. `InUse` is the caller's check.
+/// `machine remove` deletes a VM and its data disk. `InUse` is the
+/// caller's check.
 pub fn remove(spec: &Spec) -> Result<(), MachineError> {
     spec.validate()?;
     adapter(spec.kind).remove(spec)
@@ -127,22 +109,13 @@ pub fn load_image(spec: &Spec, archive: &Path) -> Result<String, MachineError> {
     crate::platforms::docker::load_image(spec, archive)
 }
 
-/// The identity of an ssh machine's host: its host key's fingerprint, else
-/// its `/etc/machine-id`. A second machine on the same host is the caller's
-/// `Exists`.
-pub fn host_identity(spec: &Spec) -> Result<String, MachineError> {
-    spec.validate()?;
-    adapter(spec.kind).host_identity(spec)
-}
-
 /// The PostgreSQL Store URL a Sandbox daemon on `spec`'s machine dials for
 /// `url` (#535 §7.3): `native` uses it as given; a loopback host becomes the
 /// machine's host alias (`docker`: on Docker Desktop the address its running
 /// worker container resolves `host.docker.internal` to, on a Linux Engine
 /// the URL as given; `lima` and
-/// `firecracker`: `192.168.5.2`, `microsandbox`: `host.microsandbox.internal`,
-/// `apple-container`: its network's gateway) or is refused (`ssh`); G7
-/// receipts; a rewrite is refused when the URL asks for
+/// `firecracker`: `192.168.5.2`, `apple-container`: its network's gateway;
+/// G7 receipts); a rewrite is refused when the URL asks for
 /// `sslmode=verify-full`. Every other host is used as given. Starts nothing;
 /// no message holds any part of the URL.
 pub fn reach(spec: &Spec, url: &str) -> Result<String, MachineError> {
@@ -153,13 +126,13 @@ pub fn reach(spec: &Spec, url: &str) -> Result<String, MachineError> {
 /// The host loopback address at which this process reaches a Sandbox
 /// daemon listening on `127.0.0.1:<guest_port>` in `spec`'s machine (#535
 /// G4, §7.2): Workspace calls dial it, not the worker. `native` answers
-/// `127.0.0.1:<guest_port>` with nothing to close; `ssh` and `lima` start a
+/// `127.0.0.1:<guest_port>` with nothing to close; `lima` starts a
 /// detached `ssh -N -L 127.0.0.1:<free port>:127.0.0.1:<guest_port>` (lima
 /// through its own `ssh.config`, as its template forwards no other guest
 /// port) and answer its pid, which [`forward_close`] ends. `docker` (its
 /// worker container's ports are published only at start, D-8),
-/// `apple-container`, `microsandbox` (ports are published only at create)
-/// and `firecracker`
+/// `apple-container` (ports are published only at create) and
+/// `firecracker`
 /// (its daemons listen on the microVM's loopback, which its Lima host's
 /// forward cannot reach) refuse `Unsupported`; their Workspace calls stay
 /// on the worker. One attempt: a forward that ends at once is `Failed`.

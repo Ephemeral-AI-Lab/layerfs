@@ -74,7 +74,6 @@ pub(super) fn check(home: &Path, name: &str, args: &SdkValue) -> Result {
     let text = |field| args.get_text(field).unwrap_or("");
     match name {
         "machine.create" => platform(text("platform")),
-        "machine.connect" => platform("ssh"),
         "machine.start" | "machine.update" => machine(home, text("name")),
         "sandbox.create" => {
             if let Some(name) = args.get_text("machine") {

@@ -38,8 +38,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
 #[test]
 fn machines_over_records() {
     // no provider tool and no bundle: every create is refused before a VM.
-    // Tools are found on PATH and in installers' folders under HOME
-    // (~/.microsandbox/bin), so both point at an empty folder.
+    // Tools are found on PATH, so it and HOME point at an empty folder.
     let empty = tempdir("path");
     std::env::set_var("PATH", &empty);
     std::env::set_var("HOME", &empty);
@@ -65,7 +64,7 @@ fn machines_over_records() {
     let SdkValue::List(rows) = platforms.get("platforms").unwrap() else {
         panic!()
     };
-    assert_eq!(rows.len(), 7);
+    assert_eq!(rows.len(), 5);
     for row in rows {
         if let Some(reason) = layerfs_sandbox_backend::platform_policy::disabled_reason(
             row.get_text("platform").unwrap(),
@@ -121,7 +120,7 @@ fn machines_over_records() {
         "machine.create",
         &[("name", t("dev")), ("platform", t("ssh"))],
     );
-    assert_eq!(made.unwrap_err().0, "Unsupported", "ssh is disabled");
+    assert_eq!(made.unwrap_err().0, "Unsupported", "ssh was removed");
 
     // a create that cannot start leaves nothing behind
     let made = call(

@@ -1,11 +1,11 @@
-//! What the caller passes for one machine: its size, images, ssh host and
-//! lasting guest state. It names no LayerFS home path; every path and setting
+//! What the caller passes for one machine: its size, images and lasting
+//! guest state. It names no LayerFS home path; every path and setting
 //! comes from the caller.
 use crate::error::{Code, MachineError};
 use crate::platform::Platform;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// The machine's guest worker port, inside the guest.
 pub const WORKER_PORT: u16 = 7070;
@@ -27,52 +27,21 @@ pub struct Spec {
     /// The machine's Sandbox image archive on the host (`<digest>.tar`),
     /// copied into the guest once.
     pub image: Option<PathBuf>,
-    /// The VM's own system: an OCI reference (`apple-container`,
-    /// `microsandbox`, and the `docker` worker container on macOS) or a Lima
+    /// The VM's own system: an OCI reference (`apple-container` and the
+    /// `docker` worker container on macOS) or a Lima
     /// image URL or absolute path. `None` takes the kind's default.
     pub os_image: Option<String>,
     /// `lima` only: a `vz` instance with nested virtualization (Firecracker hosts).
     pub nested: bool,
     /// `firecracker` only: the spec of the `nested` Lima machine it runs in.
     pub host: Option<Box<Spec>>,
-    /// `ssh` only.
-    pub ssh: Option<SshSpec>,
     /// Lasting guest state the caller stored from an earlier create.
     pub state: Lasting,
     /// The endpoint last returned for this machine (its `worker.json`), if any.
     pub worker: Option<Endpoint>,
-    /// A folder of the caller's for this machine: logs, the accepted ssh host key.
+    /// A folder of the caller's for this machine: its logs.
     pub work_dir: PathBuf,
     pub tools: Tools,
-}
-
-/// An ssh host, connected rather than created.
-#[derive(Clone, Debug)]
-pub struct SshSpec {
-    pub host: String,
-    /// Default `root`: the worker and the setup run as this user.
-    pub user: String,
-    /// Default 22.
-    pub port: u16,
-    /// A key file; without one ssh-agent and the default keys are used.
-    pub identity: Option<PathBuf>,
-    /// The known_hosts file holding the host's key (checked strictly).
-    pub known_hosts: PathBuf,
-    /// Default `/layerfs/data`; on ext4, xfs or btrfs (O18).
-    pub data_root: String,
-}
-
-impl SshSpec {
-    pub fn new(host: impl Into<String>, known_hosts: PathBuf) -> Self {
-        Self {
-            host: host.into(),
-            user: "root".into(),
-            port: 22,
-            identity: None,
-            known_hosts,
-            data_root: DATA.into(),
-        }
-    }
 }
 
 /// Guest state that outlives one call; the caller stores and passes it back.
@@ -106,30 +75,13 @@ pub struct Tools {
     pub docker_socket: PathBuf,
 }
 
-/// Folders under `HOME` where a provider's own installer puts its CLI
-/// without adding it to `PATH`: microsandbox's puts `msb` in
-/// `~/.microsandbox/bin`.
-const INSTALL_DIRS: [&str; 1] = [".microsandbox/bin"];
-
 impl Tools {
-    /// This process's `PATH`, then `INSTALL_DIRS` under `HOME`, and
-    /// Docker's usual socket.
+    /// This process's `PATH` and Docker's usual socket.
     pub fn from_env() -> Self {
-        let path = std::env::var_os("PATH").unwrap_or_default();
-        let home = std::env::var_os("HOME").map(PathBuf::from);
         Self {
-            path: Self::search_path(&path, home.as_deref()),
+            path: std::env::var_os("PATH").unwrap_or_default(),
             docker_socket: PathBuf::from("/var/run/docker.sock"),
         }
-    }
-
-    /// `path` first, then each of `INSTALL_DIRS` under `home`, if given.
-    pub fn search_path(path: &OsStr, home: Option<&Path>) -> OsString {
-        let installed = home
-            .into_iter()
-            .flat_map(|home| INSTALL_DIRS.iter().map(move |dir| home.join(dir)));
-        let dirs = std::env::split_paths(path).chain(installed);
-        std::env::join_paths(dirs).unwrap_or_else(|_| path.to_owned())
     }
 }
 
@@ -139,8 +91,8 @@ pub struct Endpoint {
     /// A host loopback address.
     pub address: SocketAddr,
     pub secret: String,
-    /// The detached `ssh -L` forward that carries it, if any (`ssh`,
-    /// `firecracker`): it outlives the call that started it.
+    /// The detached `ssh -L` forward that carries it, if any
+    /// (`firecracker`): it outlives the call that started it.
     pub forward_pid: Option<u32>,
 }
 
@@ -157,7 +109,7 @@ impl std::fmt::Debug for Endpoint {
 
 /// A Sandbox daemon's port as this host reaches it (`machine::forward`,
 /// #535 G4): Workspace calls dial `address`. `pid` is the detached
-/// `ssh -L` that carries it, if one does (`ssh`, `lima`); the caller
+/// `ssh -L` that carries it, if one does (`lima`); the caller
 /// records both and ends it with `machine::forward_close`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Forward {
@@ -173,7 +125,7 @@ pub struct Running {
     pub lasting: Lasting,
 }
 
-/// Guest paths every VM and ssh machine shares.
+/// Guest paths every VM machine shares.
 pub const DATA: &str = "/layerfs/data";
 pub const BUNDLE: &str = "/layerfs/bundle";
 pub const STATE: &str = "/layerfs/state";
@@ -269,42 +221,6 @@ impl Spec {
             if !(1..=250).contains(&n) {
                 return refuse(format!("network number {n} is outside 1 to 250"));
             }
-        }
-        match (&self.ssh, self.kind) {
-            (None, Platform::Ssh) => refuse("an ssh machine needs its host".into()),
-            (Some(ssh), Platform::Ssh) => ssh.validate(),
-            (Some(_), _) => refuse("only an ssh machine has an ssh host".into()),
-            (None, _) => Ok(()),
-        }
-    }
-}
-
-impl SshSpec {
-    fn validate(&self) -> Result<(), MachineError> {
-        let refuse = |message: String| Err(MachineError::new(Code::InvalidInput, message));
-        let host_ok = !self.host.is_empty()
-            && !self.host.starts_with('-')
-            && self
-                .host
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | ':' | '_'));
-        if !host_ok {
-            return refuse(format!(
-                "ssh host {:?} is not a host name or address",
-                self.host
-            ));
-        }
-        if self.user.is_empty() || !plain_name(&self.user) {
-            return refuse(format!("ssh user {:?} is not a plain name", self.user));
-        }
-        if self.port == 0 {
-            return refuse("ssh port 0".into());
-        }
-        if !self.data_root.starts_with('/') || self.data_root.contains(['\n', '\0']) {
-            return refuse(format!(
-                "data root {:?} is not an absolute path",
-                self.data_root
-            ));
         }
         Ok(())
     }

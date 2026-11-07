@@ -22,7 +22,7 @@ for what a diagram or table cannot say.
   "generated_from": "control/crates/layerfs-platform/src/support.rs",
   "hosts": [                         HostOs::NAMED order
     { "host": "macos",
-      "platforms": [                 Platform::ALL order, 7 rows
+      "platforms": [                 Platform::ALL order, 5 rows
         { "platform":    "native",
           "how":         "built_in",
           "backend":     "native" | null,
@@ -90,7 +90,7 @@ cargo +1.85.1 test --locked -p layerfs-platform --test conformance
 cargo +1.85.1 test --locked -p layerfs-sandbox-backend --test conformance
 ```
 
-All three are `#![cfg(unix)]` and need no Docker, VM, ssh host or root.
+All three are `#![cfg(unix)]` and need no Docker, VM, remote host or root.
 
 ## Related
 
