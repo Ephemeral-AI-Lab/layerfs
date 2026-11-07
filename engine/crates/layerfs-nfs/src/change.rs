@@ -16,7 +16,7 @@
 use crate::{
     attributes::{refusal, Status},
     block::wait,
-    kernel::Kernel,
+    kernel::{Kernel, Table},
     names,
 };
 use layerfs_content::{filesystem::PathName, object::inode_leaf::InodeKind};
@@ -113,6 +113,37 @@ pub fn declined(reason: Declined) -> Status {
     }
 }
 
+/// The descriptor the export holds on `serial`: its implicit file
+/// descriptor, or an enumeration of the directory.
+fn custody(table: &Table, serial: u64) -> Option<u64> {
+    table
+        .files
+        .get(&serial)
+        .map(|held| held.handle)
+        .or_else(|| {
+            table
+                .directories
+                .iter()
+                .find(|(_, (held, _))| *held == serial)
+                .map(|(handle, _)| *handle)
+        })
+}
+
+/// What an unlinking or replacing mutation may retire in its own publishing
+/// job: the serial `name` was last bound to by this export, and the descriptor
+/// that custody lives in. Both absent: the export gives it back afterwards.
+#[derive(Clone, Copy, Default)]
+struct Retire {
+    serial: Option<u64>,
+    handle: Option<u64>,
+}
+impl Retire {
+    /// The request selects a publishing job that retires the target.
+    fn open(self) -> Option<bool> {
+        self.serial.map(|_| false)
+    }
+}
+
 impl Kernel {
     /// One kernel mutation. Its decided [`KernelMutation`] goes to `tickets`
     /// whatever the answer; a failure is relinquished or retained.
@@ -160,6 +191,7 @@ impl Kernel {
                 changed: published.changed,
                 wcc: published.wcc.clone(),
                 detached: published.detached.clone(),
+                moved: published.moved.clone(),
             },
         };
         if let Expect::Stat(serial) = expect {
@@ -288,7 +320,7 @@ impl Kernel {
         };
         self.entry_taken(&stat, parent, name);
         if let Some(file) = file {
-            self.file_taken(stat.serial, file.owner_id(), stat.logical_len, true);
+            self.file_taken(stat.serial, file.owner_id(), &stat, true);
         }
         if let How::Exclusive(verifier) = how {
             let mut table = self.table();
@@ -381,47 +413,53 @@ impl Kernel {
     }
     /// Selects whether an unlinking mutation can retire synthetic kernel
     /// custody on a detached (`nlink == 0`) target in the publishing job.
-    fn prepare_unlink(&self, parent: u64, name: &[u8], rmdir: bool) -> (Option<bool>, Option<u64>) {
+    /// A name that a silly name may keep alive is retired afterwards instead.
+    fn prepare_unlink(&self, parent: u64, name: &[u8], rmdir: bool) -> Retire {
         let table = self.table();
         let known = table.by_name.get(&(parent, name.to_vec())).copied();
-        if !rmdir {
-            if known.is_some_and(|serial| table.pinned(serial))
-                || (known.is_none() && !table.silly.is_empty())
-            {
-                return (None, None);
-            }
-            let handle = known.and_then(|serial| table.files.get(&serial).map(|held| held.handle));
-            (Some(false), handle)
-        } else {
-            let handle = known.and_then(|serial| {
-                table
-                    .directories
-                    .iter()
-                    .find(|(_, (s, _))| *s == serial)
-                    .map(|(h, _)| *h)
-            });
-            (Some(false), handle)
+        if !rmdir
+            && (known.is_some_and(|serial| table.pinned(serial))
+                || (known.is_none() && !table.silly.is_empty()))
+        {
+            return Retire::default();
+        }
+        Retire {
+            serial: known,
+            handle: known.and_then(|serial| custody(&table, serial)),
         }
     }
-    fn finish_unlink(
-        &self,
-        parent: u64,
-        name: &[u8],
-        open: Option<bool>,
-        handle: Option<u64>,
-        detached: Option<ViewStat>,
-    ) {
+    /// A replacing RENAME detaches its destination when that was its last
+    /// name, and retires the export's custody of it in the publishing job as
+    /// an unlink does. The destination's kind is not known here, so the
+    /// descriptor is whichever one the export holds; a name the export never
+    /// bound holds no reference of ours to give back.
+    fn prepare_replace(&self, parent: u64, name: &[u8]) -> Retire {
+        let table = self.table();
+        let serial = table.by_name.get(&(parent, name.to_vec())).copied();
+        if serial.is_some_and(|serial| table.pinned(serial)) {
+            return Retire::default();
+        }
+        Retire {
+            serial,
+            handle: serial.and_then(|serial| custody(&table, serial)),
+        }
+    }
+    /// Drops the name an unlinking mutation removed, and gives back what the
+    /// export held for the inode it detached. Only the inode the publishing
+    /// job itself retired skips the release jobs.
+    fn finish_unlink(&self, parent: u64, name: &[u8], retire: Retire, detached: Option<ViewStat>) {
         self.table().by_name.remove(&(parent, name.to_vec()));
         let Some(target) = detached else {
             return;
         };
         let last = target.kind == InodeKind::Directory || target.namespace_refs == 0;
-        if last && !self.table().pinned(target.serial) {
-            if open == Some(false) {
-                self.unlinked_retired(target.serial, handle);
-            } else {
-                self.unlinked(target.serial);
-            }
+        if !last || self.table().pinned(target.serial) {
+            return;
+        }
+        if retire.serial == Some(target.serial) {
+            self.unlinked_retired(target.serial, retire.handle);
+        } else {
+            self.unlinked(target.serial);
         }
     }
     /// REMOVE of a non-directory name.
@@ -434,21 +472,31 @@ impl Kernel {
             return Ok((None, None));
         }
         let checked = self.checked(name, false)?;
-        let (open, handle) = self.prepare_unlink(parent, name, false);
-        let published = self.mutate(parent, handle, open, Expect::Nothing, tickets, |_| {
-            Ok(MutationInput::Named(remove::unlink(parent, checked)))
-        })?;
-        self.finish_unlink(parent, name, open, handle, published.detached);
+        let retire = self.prepare_unlink(parent, name, false);
+        let published = self.mutate(
+            parent,
+            retire.handle,
+            retire.open(),
+            Expect::Nothing,
+            tickets,
+            |_| Ok(MutationInput::Named(remove::unlink(parent, checked))),
+        )?;
+        self.finish_unlink(parent, name, retire, published.detached);
         Ok(published.wcc[0].clone())
     }
     /// RMDIR.
     pub fn rmdir(&self, parent: u64, name: &[u8], tickets: &mut Tickets) -> Result<Wcc, Status> {
         let checked = self.checked(name, false)?;
-        let (open, handle) = self.prepare_unlink(parent, name, true);
-        let published = self.mutate(parent, handle, open, Expect::Nothing, tickets, |_| {
-            Ok(MutationInput::Named(remove::rmdir(parent, checked)))
-        })?;
-        self.finish_unlink(parent, name, open, handle, published.detached);
+        let retire = self.prepare_unlink(parent, name, true);
+        let published = self.mutate(
+            parent,
+            retire.handle,
+            retire.open(),
+            Expect::Nothing,
+            tickets,
+            |_| Ok(MutationInput::Named(remove::rmdir(parent, checked))),
+        )?;
+        self.finish_unlink(parent, name, retire, published.detached);
         Ok(published.wcc[0].clone())
     }
     /// RENAME, replacing the destination. A rename onto a client silly name
@@ -460,9 +508,9 @@ impl Kernel {
         to: u64,
         new_name: &[u8],
         tickets: &mut Tickets,
-    ) -> Result<(), Status> {
+    ) -> Result<[Wcc; 2], Status> {
         if let Some(renamed) = self.companion_rename(from, name, to, new_name) {
-            return renamed;
+            return renamed.map(|()| [(None, None), (None, None)]);
         }
         if let Some(serial) = self.silly_entry(from, name) {
             // Moving a silly name to another silly name keeps it ours;
@@ -474,43 +522,74 @@ impl Kernel {
             let mut table = self.table();
             table.silly.remove(&(from, name.to_vec()));
             table.silly.insert((to, new_name.to_vec()), serial);
-            return Ok(());
+            return Ok([(None, None), (None, None)]);
         }
         let source_name = self.checked(name, false)?;
         let destination_name = self.checked(new_name, true)?;
-        let source = self.existing(from, name)?.ok_or(Status::NoEnt)?;
-        if names::silly(new_name) && source.kind == InodeKind::RegularFile {
-            // Keep a writable descriptor before the last name may go.
-            self.open_file(source.serial, true)?;
-            self.mutate(from, None, None, Expect::Nothing, tickets, |_| {
-                Ok(MutationInput::Named(remove::unlink(from, source_name)))
-            })?;
-            self.silly_renamed.fetch_add(1, Ordering::Relaxed);
-            let replaced = {
-                let mut table = self.table();
-                let replaced = table.silly.insert((to, new_name.to_vec()), source.serial);
-                replaced.filter(|serial| !table.pinned(*serial))
-            };
-            if let Some(serial) = replaced {
-                self.unlinked(serial);
-            }
-            return Ok(());
-        }
-        let destination = self.existing(to, new_name)?;
-        self.mutate(from, None, None, Expect::Nothing, tickets, |_| {
-            rename::rename(from, source_name, to, destination_name, 0).map(MutationInput::Named)
-        })?;
-        if source.kind == InodeKind::Directory {
-            self.saw_directory(source.serial, to);
-        }
-        self.renamed(source.serial, to, new_name);
-        if let Some(replaced) = destination.filter(|stat| stat.serial != source.serial) {
-            let last = replaced.kind == InodeKind::Directory || replaced.namespace_refs <= 1;
-            if last && !self.table().pinned(replaced.serial) {
-                self.unlinked(replaced.serial);
+        if names::silly(new_name) {
+            // The client renamed a file it still has open: only a regular
+            // file keeps such a name, so this case reads the entry once.
+            let source = self.existing(from, name)?.ok_or(Status::NoEnt)?;
+            if source.kind == InodeKind::RegularFile {
+                // Keep a writable descriptor before the last name may go.
+                self.open_file(source.serial, true)?;
+                let unpublished =
+                    self.mutate(from, None, None, Expect::Nothing, tickets, |_| {
+                        Ok(MutationInput::Named(remove::unlink(from, source_name)))
+                    })?;
+                self.silly_renamed.fetch_add(1, Ordering::Relaxed);
+                let replaced = {
+                    let mut table = self.table();
+                    let replaced = table.silly.insert((to, new_name.to_vec()), source.serial);
+                    replaced.filter(|serial| !table.pinned(*serial))
+                };
+                if let Some(serial) = replaced {
+                    self.unlinked(serial);
+                }
+                return Ok([unpublished.wcc[0].clone(), (None, None)]);
             }
         }
-        Ok(())
+        let retire = self.prepare_replace(to, new_name);
+        let published = self.mutate(
+            from,
+            retire.handle,
+            retire.open(),
+            Expect::Nothing,
+            tickets,
+            |_| {
+                rename::rename(from, source_name, to, destination_name, 0).map(MutationInput::Named)
+            },
+        )?;
+        self.finish_unlink(to, new_name, retire, published.detached.clone());
+        self.renamed_taken(from, name, to, new_name, published.moved.as_ref());
+        Ok(published.wcc.clone())
+    }
+    /// Records where a completed RENAME left the moved inode: the facts the
+    /// publishing job carried, or - for a rename between two names of one
+    /// inode, which publishes no binding - the export's index of the source.
+    fn renamed_taken(
+        &self,
+        from: u64,
+        name: &[u8],
+        to: u64,
+        new_name: &[u8],
+        moved: Option<&ViewStat>,
+    ) {
+        let known = match moved {
+            Some(moved) => Some((moved.serial, moved.kind == InodeKind::Directory)),
+            None => {
+                let table = self.table();
+                let serial = table.by_name.get(&(from, name.to_vec())).copied();
+                serial.map(|serial| (serial, table.parents.contains_key(&serial)))
+            }
+        };
+        let Some((serial, directory)) = known else {
+            return;
+        };
+        if directory {
+            self.saw_directory(serial, to);
+        }
+        self.renamed(serial, to, new_name);
     }
     /// LINK: one more name for `serial`.
     pub fn link(
@@ -579,7 +658,7 @@ impl Kernel {
             |now| write::set_attributes(serial, handle.is_some(), identity, change, now),
         )?;
         let stat = published.stat.ok_or(Status::ServerFault)?;
-        self.observed_size(&stat);
+        self.observed(&stat);
         Ok((stat, published.wcc[0].clone()))
     }
     /// WRITE through the implicit writable descriptor, in engine windows of
@@ -626,10 +705,24 @@ impl Kernel {
             }
         }
         let stat = last.ok_or(Status::ServerFault)?;
-        self.observed_size(&stat);
+        self.observed(&stat);
         Ok((
             u32::try_from(written).unwrap_or(u32::MAX),
             (before, Some(stat)),
         ))
+    }
+    /// COMMIT. Every WRITE was answered `FILE_SYNC`, so nothing is
+    /// uncommitted and no work is owed. The attributes are the ones this
+    /// export last published or observed for the file, so a client's `fsync`
+    /// costs no owner job; a file this export holds no descriptor for is read
+    /// as any other GETATTR.
+    pub fn commit(&self, serial: u64) -> Result<ViewStat, Status> {
+        if crate::apple_double::companion(serial) {
+            return self.companion_stat(serial);
+        }
+        match self.held_stat(serial) {
+            Some(stat) => Ok(stat),
+            None => self.getattr(serial),
+        }
     }
 }
