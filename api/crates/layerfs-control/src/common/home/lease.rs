@@ -17,6 +17,7 @@ use crate::common::home::{self, paths};
 use crate::common::outcome::{failed, refused};
 use crate::store::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+#[cfg(unix)]
 use layerfs_sandbox::local::LocalProcess;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -45,12 +46,20 @@ impl Drop for Lease {
 
 /// This process as leases name it, read once; `None` where the kernel does
 /// not say (its leases are then matched by id alone).
+#[cfg(unix)]
 fn me() -> Option<(u64, u128)> {
     static ME: OnceLock<Option<(u64, u128)>> = OnceLock::new();
     *ME.get_or_init(|| {
         let process = LocalProcess::observe(std::process::id()).ok()?;
         Some((process.start, process.boot?))
     })
+}
+
+/// Windows: kernel start/boot observation is not offered yet, so leases are
+/// matched by id alone - the state the module documents as valid.
+#[cfg(not(unix))]
+fn me() -> Option<(u64, u128)> {
+    None
 }
 
 /// The fields that name this process in a record (an `op`'s owner).
@@ -133,6 +142,7 @@ pub(crate) fn held_here(root: &Path, store: &str) -> bool {
 
 /// Whether process `pid` is alive on this host. Ids 0 and above `i32::MAX`
 /// name no single process (`kill` would read them as a group): never alive.
+#[cfg(unix)]
 pub fn alive(pid: u32) -> bool {
     use nix::errno::Errno;
     let id = match i32::try_from(pid) {
@@ -146,20 +156,60 @@ pub fn alive(pid: u32) -> bool {
     }
 }
 
+/// Windows: a process is alive when it can be queried and has not exited.
+/// A refusal to open it (access denied) still proves it exists, matching
+/// the unix EPERM branch; the query handle is closed at once.
+#[cfg(windows)]
+#[allow(unsafe_code)] // the crate's audited Win32 process-query surface
+pub fn alive(pid: u32) -> bool {
+    if pid == 0 {
+        return false;
+    }
+    extern "system" {
+        #[link_name = "OpenProcess"]
+        fn OpenProcess(access: u32, inherit: u32, id: u32) -> isize;
+        #[link_name = "GetExitCodeProcess"]
+        fn GetExitCodeProcess(process: isize, code: *mut u32) -> u32;
+        #[link_name = "CloseHandle"]
+        fn CloseHandle(process: isize) -> u32;
+    }
+    const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+    const STILL_ACTIVE: u32 = 259;
+    const ERROR_ACCESS_DENIED: i32 = 5;
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if process == 0 {
+        return std::io::Error::last_os_error().raw_os_error() == Some(ERROR_ACCESS_DENIED);
+    }
+    let mut code: u32 = 0;
+    let read = unsafe { GetExitCodeProcess(process, &mut code) };
+    unsafe { CloseHandle(process) };
+    read != 0 && code == STILL_ACTIVE
+}
+
 /// Whether `pid` is alive and, when its start time and boot were recorded,
 /// still the same process.
 fn alive_as(pid: u32, start: Option<u64>, boot: Option<u128>) -> bool {
     if !alive(pid) {
         return false;
     }
-    match (start, boot) {
-        (Some(start), Some(boot)) => LocalProcess {
-            pid,
-            start,
-            boot: Some(boot),
+    #[cfg(unix)]
+    {
+        match (start, boot) {
+            (Some(start), Some(boot)) => LocalProcess {
+                pid,
+                start,
+                boot: Some(boot),
+            }
+            .alive(),
+            _ => true,
         }
-        .alive(),
-        _ => true,
+    }
+    // Windows: me() records no start/boot, so no lease carries them and the
+    // id-alone match above is the whole check.
+    #[cfg(not(unix))]
+    {
+        let _ = (start, boot);
+        true
     }
 }
 

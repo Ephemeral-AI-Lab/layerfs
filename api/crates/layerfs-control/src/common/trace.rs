@@ -11,6 +11,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::cell::{Cell, RefCell};
 use std::io::Write;
 use std::ops::{Deref, DerefMut};
+#[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::time::{Duration, Instant};
 
@@ -131,10 +132,16 @@ pub(crate) fn connection(worker: &str, op: &str, sent: bool, started: Instant) {
     ]);
     let mut text = crate::common::json::print(&line);
     text.push('\n');
+    #[cfg(unix)]
     let file = std::fs::OpenOptions::new()
         .append(true)
         .create(true)
         .mode(0o600)
+        .open(path);
+    #[cfg(not(unix))]
+    let file = std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
         .open(path);
     if let Ok(mut file) = file {
         let _ = file.write_all(text.as_bytes());

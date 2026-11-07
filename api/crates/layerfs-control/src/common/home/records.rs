@@ -7,6 +7,7 @@ use crate::common::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::fs;
 use std::io::Write;
+#[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -15,17 +16,22 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 
 /// `path` as a private folder, with its parents.
 pub fn private_dir(path: &Path) -> Result<(), SdkRefusal> {
-    fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(path)
-        .map_err(|error| refused("Failed", format!("{}: {error}", path.display())))
+    #[cfg(unix)]
+    let made = {
+        use std::os::unix::fs::DirBuilderExt;
+        fs::DirBuilder::new().recursive(true).mode(0o700).create(path)
+    };
+    // Windows: privacy is the account's DACL, not mode bits.
+    #[cfg(not(unix))]
+    let made = fs::DirBuilder::new().recursive(true).create(path);
+    made.map_err(|error| refused("Failed", format!("{}: {error}", path.display())))
 }
 
 /// Lets others pass through (o+x, never read) `dir` and each folder from
 /// `home` down to it: a namespaces Sandbox's commands run as another
 /// identity and must reach their Workspace below `dir`. The folders stay
 /// unlistable by others; folders above `home` are not changed.
+#[cfg(unix)]
 pub fn traversable(home: &Path, dir: &Path) -> Result<(), SdkRefusal> {
     use std::os::unix::fs::PermissionsExt;
     for folder in dir.ancestors().take_while(|f| f.starts_with(home)) {
@@ -35,6 +41,13 @@ pub fn traversable(home: &Path, dir: &Path) -> Result<(), SdkRefusal> {
                 .map_err(failed)?;
         }
     }
+    Ok(())
+}
+
+/// Windows: folder traversal is governed by the account's ACLs; the
+/// namespaces identity traversal this mirrors is a unix concept.
+#[cfg(not(unix))]
+pub fn traversable(_home: &Path, _dir: &Path) -> Result<(), SdkRefusal> {
     Ok(())
 }
 
@@ -64,11 +77,19 @@ pub fn write_record(path: &Path, value: &SdkValue) -> Result<(), SdkRefusal> {
     // one name per write: threads of one process never share a temporary
     let unique = NEXT.fetch_add(1, Ordering::Relaxed);
     let temporary = parent.join(format!(".{name}.{}.{unique}.tmp", std::process::id()));
+    #[cfg(unix)]
     let mut file = fs::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
         .mode(0o600)
+        .open(&temporary)
+        .map_err(failed)?;
+    #[cfg(not(unix))]
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
         .open(&temporary)
         .map_err(failed)?;
     let mut text = json::print(&to_hex(value.clone()));
@@ -160,10 +181,17 @@ pub fn with_field(value: SdkValue, name: &str, field: SdkValue) -> SdkValue {
 pub fn log_line(home: &Path, name: &str, value: &SdkValue) -> Result<(), SdkRefusal> {
     let dir = super::paths::log_dir(home);
     private_dir(&dir)?;
+    #[cfg(unix)]
     let mut file = fs::OpenOptions::new()
         .append(true)
         .create(true)
         .mode(0o600)
+        .open(dir.join(name))
+        .map_err(failed)?;
+    #[cfg(not(unix))]
+    let mut file = fs::OpenOptions::new()
+        .append(true)
+        .create(true)
         .open(dir.join(name))
         .map_err(failed)?;
     let mut text = json::print(&to_hex(value.clone()));

@@ -3,7 +3,11 @@
 //! Sandboxes and their Workspaces, and backups (#536), and the call
 //! machinery (`calls`). `layerfs-api` holds the call table's entries, one
 //! file per call, and runs each call here.
-#![forbid(unsafe_code)]
+// Windows carries one audited unsafe FFI module (flock's LockFileEx surface);
+// forbid cannot be allowed back on, so it stays a hard deny there and the
+// audited module opts in explicitly. Unix keeps the absolute forbid.
+#![cfg_attr(not(windows), forbid(unsafe_code))]
+#![cfg_attr(windows, deny(unsafe_code))]
 #![deny(missing_docs)]
 
 #[doc(hidden)]
