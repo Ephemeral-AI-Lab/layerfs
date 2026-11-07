@@ -4,6 +4,7 @@ use crate::calls::table::{a, call, opt, Call, MESSAGE};
 use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_sandbox::workspace::calls::{exec, ExecRequest};
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -20,8 +21,13 @@ pub(crate) const CALL: Call = call(
     run,
 );
 
-/// Runs `workspace.exec`.
+/// Runs `workspace.exec`: its side's answer.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    let request = ExecRequest {
+        ws: super::ws(args),
+        command: args.get_text("command").map(str::to_owned),
+        message: super::message(args),
+    };
     let (home, events) = context.parts();
-    layerfs_sandbox::workspace::calls::exec(home, events, args)
+    exec(home, events, &request)
 }

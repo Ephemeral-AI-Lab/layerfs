@@ -15,19 +15,50 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home;
 use layerfs_home::op::{Op, Standing};
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::outcome::refused;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// `sandbox.close(name, { force })`.
-pub fn close(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
+#[derive(Clone, Debug, Default)]
+pub struct CloseRequest {
+    /// The Sandbox's name.
+    pub name: String,
+    /// Stop it even while Workspaces are mounted.
+    pub force: bool,
+}
+
+/// How a close ended.
+pub enum Closed {
+    /// Its runtime stopped: what its side answered.
+    Stopped(SdkValue),
+    /// Its runtime was gone already; its record went too.
+    WasGone,
+    /// A Sandbox recorded under the retired docker backend, forgotten (D-8).
+    Forgotten {
+        /// Its container, left for the user to remove.
+        container: String,
+        /// What its machine's worker kept, when it kept its record.
+        left: Option<String>,
+    },
+    /// A Sandbox with no id.
+    Unstarted {
+        /// The state it was in.
+        was: &'static str,
+        /// Each reason what it may have started is left unrecorded.
+        left: Vec<String>,
+    },
+}
+
+/// Stops the Sandbox and removes its record.
+pub fn close(home: &Path, events: &mut Events<'_>, request: &CloseRequest) -> Result<Closed> {
     let home = home.to_path_buf();
-    let name = args.get_text("name").unwrap_or("");
+    let name = request.name.as_str();
     if let Some(container) = named(&home, name)?.retired_container(&home)? {
         return forget(&home, events, name, &container);
     }
-    let force = matches!(args.get("force"), Some(SdkValue::Bool(true)));
+    let force = request.force;
     let op = Op::begin(
         "sandbox.close",
         "stop",
@@ -81,16 +112,13 @@ pub fn close(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
         Ok(value) => {
             direct::release(&home, &record);
             remove_folder(&dir)?;
-            Ok(home::with_field(value, "closed", SdkValue::text(name)))
+            Ok(Closed::Stopped(value))
         }
         // a Sandbox already gone loses its record too
         Err(refusal) if refusal.code == "NoSuchSandbox" => {
             direct::release(&home, &record);
             remove_folder(&dir)?;
-            Ok(SdkValue::map([
-                ("closed", SdkValue::text(name)),
-                ("was_gone", SdkValue::Bool(true)),
-            ]))
+            Ok(Closed::WasGone)
         }
         // its outcome is not known: the record stays with the intent,
         // uncertain, until another `sandbox.close` clears it
@@ -118,7 +146,7 @@ pub fn close(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
 /// cannot be reached or refuses leaves that record, and the answer says
 /// so), then the home's record goes. The container is left for the user
 /// to remove; the answer names the command.
-fn forget(home: &Path, events: &mut Events<'_>, name: &str, container: &str) -> Outcome {
+fn forget(home: &Path, events: &mut Events<'_>, name: &str, container: &str) -> Result<Closed> {
     let record = {
         let _lock = home::lock::take(home)?;
         let _sandbox = record::lock(home, name)?;
@@ -152,27 +180,15 @@ fn forget(home: &Path, events: &mut Events<'_>, name: &str, container: &str) -> 
         direct::release(home, &record);
     }
     remove_folder(&dir)?;
-    let mut fields = vec![
-        ("closed", SdkValue::text(name)),
-        ("forgotten", SdkValue::Bool(true)),
-        ("container", SdkValue::text(container)),
-        (
-            "remove",
-            SdkValue::text(format!("docker rm -f {container}")),
-        ),
-    ];
-    if let Some(left) = left {
-        fields.push((
-            "left",
-            SdkValue::text(format!(
+    Ok(Closed::Forgotten {
+        container: container.to_owned(),
+        left: left.map(|left| {
+            format!(
                 "its machine {}'s worker keeps its record: {left}",
                 record.machine()
-            )),
-        ));
-    }
-    Ok(SdkValue::Map(
-        fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
-    ))
+            )
+        }),
+    })
 }
 
 /// Refuses a close while another operation's intent holds Sandbox
@@ -189,24 +205,14 @@ fn clearable(record: &SandboxRecord) -> Result<()> {
 /// known, or its process ended before recording one. The folder goes and
 /// the name is free. The caller holds the home and Sandbox locks and has
 /// refused a live create.
-fn close_unstarted(home: &Path, record: &SandboxRecord) -> Outcome {
-    let state = record.state(false);
+fn close_unstarted(home: &Path, record: &SandboxRecord) -> Result<Closed> {
+    let was = record.state(false);
     remove_folder(&record.dir(home))?;
-    let mut fields = vec![
-        ("closed", SdkValue::text(record.name())),
-        ("was", SdkValue::text(state)),
-    ];
-    if state == "unresolved" {
-        fields.push((
-            "left",
-            SdkValue::text("its create's outcome was unknown: a Sandbox it may have started on its machine is not recorded here"),
-        ));
+    let mut left = Vec::new();
+    if was == "unresolved" {
+        left.push("its create's outcome was unknown: a Sandbox it may have started on its machine is not recorded here".to_owned());
     }
     // a layout 2 Sandbox whose runtime the conversion found ended
-    if let Some(left) = record.left() {
-        fields.push(("left", SdkValue::text(left)));
-    }
-    Ok(SdkValue::Map(
-        fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
-    ))
+    left.extend(record.left().map(str::to_owned));
+    Ok(Closed::Unstarted { was, left })
 }

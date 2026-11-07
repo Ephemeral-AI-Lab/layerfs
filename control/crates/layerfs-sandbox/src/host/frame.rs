@@ -182,12 +182,7 @@ pub fn decode(frame: &SdkValue) -> Result<Sent, SdkRefusal> {
     let deploy = frame.get("deploy").cloned().unwrap_or_default();
     Ok(Sent {
         call: call(op, &more),
-        message: match more.get("message") {
-            None => Message::Absent,
-            Some(SdkValue::Null) => Message::Null,
-            Some(SdkValue::Text(text)) => Message::Text(text.clone()),
-            Some(_) => Message::NotText,
-        },
+        message: Message::read(more.get("message")),
         sandbox: more.get_text("sandbox").map(str::to_owned),
         store_record: StoreRecord::from_record(&store, record),
         project_record: ProjectRecord::from_record(&store, &project, sent_project),
@@ -266,6 +261,18 @@ fn deploy(deploy: &Deploy) -> SdkValue {
         fields.extend(value.as_deref().map(|v| (name, text(v))));
     }
     map(fields)
+}
+
+impl Message {
+    /// A request's `message` field as sent (`None`: not sent).
+    pub fn read(value: Option<&SdkValue>) -> Self {
+        match value {
+            None => Self::Absent,
+            Some(SdkValue::Null) => Self::Null,
+            Some(SdkValue::Text(text)) => Self::Text(text.clone()),
+            Some(_) => Self::NotText,
+        }
+    }
 }
 
 impl Host {

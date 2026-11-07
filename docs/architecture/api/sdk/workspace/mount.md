@@ -12,7 +12,7 @@ calls take.
 | --- | --- |
 | Family | [workspace](README.md) |
 | Library entry | [`workspace/mount.rs`](../../../../../api/crates/layerfs-api/src/workspace/mount.rs) |
-| Implemented in | `layerfs_sandbox::workspace::calls::mount` → host operation `workspace.mount` → `workspace::serve::mount` ([`workspace/calls.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs), [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs)) |
+| Implemented in | the library entry parses a typed `MountRequest` → `layerfs_sandbox::workspace::calls::mount` (typed `Mounted`, whose `ws` the entry adds to the answer) → host operation `workspace.mount` → `workspace::serve::mount` ([`workspace/calls.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs), [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs)) |
 | Runs in | the caller's process, the Sandbox's machine (here or its worker) and the Sandbox's daemon |
 
 ## Signature

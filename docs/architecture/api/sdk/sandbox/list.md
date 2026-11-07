@@ -11,7 +11,7 @@ time, from the home's records alone.
 | --- | --- |
 | Family | [sandbox](README.md) |
 | Library entry | [`sandbox/list.rs`](../../../../../api/crates/layerfs-api/src/sandbox/list.rs) |
-| Implemented in | `layerfs_sandbox::family::list` → `list::list` ([`list.rs`](../../../../../control/crates/layerfs-sandbox/src/list.rs)) |
+| Implemented in | the library entry parses a typed `ListRequest` → `layerfs_sandbox::family::list` → `list::list`, whose typed `Listed` it shapes ([`list.rs`](../../../../../control/crates/layerfs-sandbox/src/list.rs)) |
 | Runs in | the caller's process; reads `sandbox/<name>/record.json` only |
 
 ## Signature

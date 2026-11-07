@@ -12,7 +12,7 @@ does not commit.
 | --- | --- |
 | Family | [workspace](README.md) |
 | Library entry | [`workspace/exec.rs`](../../../../../api/crates/layerfs-api/src/workspace/exec.rs) |
-| Implemented in | `layerfs_sandbox::workspace::calls::exec` → host operation `workspace.exec` → `sandbox::exec::exec` ([`exec.rs`](../../../../../control/crates/layerfs-sandbox/src/exec.rs)) |
+| Implemented in | the library entry parses a typed `ExecRequest` → `layerfs_sandbox::workspace::calls::exec` → host operation `workspace.exec` → `sandbox::exec::exec` ([`exec.rs`](../../../../../control/crates/layerfs-sandbox/src/exec.rs)) |
 | Runs in | the Sandbox's runtime on its machine (here, or through its worker); never the daemon |
 
 ## Signature

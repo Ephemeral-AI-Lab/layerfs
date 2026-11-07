@@ -5,22 +5,48 @@ use super::direct;
 use super::record::{self, SandboxRecord};
 use crate::host::{Call, Message};
 use crate::route::{on_machine, Asked};
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
 use layerfs_home::op::Op;
-use layerfs_home::outcome::{refused, Outcome, View};
+use layerfs_home::outcome::refused;
 use layerfs_store::record::StoreRef;
 use layerfs_store::resolve;
 use std::path::Path;
 
-/// `sandbox.create(project, name, machine?, { image })`: with no `machine`,
-/// a sqlite Store's machine, or `native` for a PostgreSQL Store (#536 §10).
-pub fn create(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
+/// `sandbox.create(project, name, machine?, { image })`.
+#[derive(Clone, Debug, Default)]
+pub struct CreateRequest {
+    /// The project, `<store>/<project>`.
+    pub project: String,
+    /// The Sandbox's name.
+    pub name: String,
+    /// The machine it names; none (or empty) chooses one.
+    pub machine: Option<String>,
+    /// The image a namespaces Sandbox runs.
+    pub image: Option<String>,
+}
+
+/// A Sandbox just started, as recorded.
+pub struct Created {
+    /// Its record.
+    pub record: SandboxRecord,
+    /// Why its daemon's forward did not open (#535 G4), when it did not:
+    /// its Workspace calls go through the worker.
+    pub forward_failed: Option<String>,
+}
+
+/// Starts the Sandbox: with no `machine`, on a sqlite Store's machine, or
+/// `native` for a PostgreSQL Store (#536 §10).
+pub fn create(
+    home: &Path,
+    events: &mut Events<'_>,
+    request: &CreateRequest,
+) -> Result<Created, SdkRefusal> {
     let home = home.to_path_buf();
-    let project = args.get_text("project").unwrap_or("");
-    let name = args.get_text("name").unwrap_or("");
-    let named = args.get_text("machine").filter(|m| !m.is_empty());
+    let project = request.project.as_str();
+    let name = request.name.as_str();
+    let named = request.machine.as_deref().filter(|m| !m.is_empty());
     layerfs_home::names::SandboxName::parse(name)?;
     if matches!(name, "native" | "docker") {
         return Err(refused(
@@ -100,7 +126,7 @@ pub fn create(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome 
     let asked = Asked {
         call: Call::Create { platform: None },
         message: Message::Absent,
-        image: args.get_text("image").map(str::to_owned),
+        image: request.image.clone(),
     };
     let started = on_machine(&home, events, &record, asked, crate::dispatch::call);
     // a worker's Sandbox whose daemon this host reaches directly (#535 G4):
@@ -117,11 +143,9 @@ pub fn create(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome 
                 record = direct::save(&home, record, opened)?;
             }
             record.write(&home)?;
-            let shown = record.to_sdk(View::Full);
-            // its Workspace calls go through the worker: say why
-            Ok(match opened.and_then(|opened| opened.failed) {
-                Some(why) => home::with_field(shown, "forward_failed", SdkValue::Text(why)),
-                None => shown,
+            Ok(Created {
+                record,
+                forward_failed: opened.and_then(|opened| opened.failed),
             })
         }
         // its outcome is not known: the intent stays, uncertain, until
@@ -141,7 +165,7 @@ pub fn create(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome 
 }
 
 /// Removes a Sandbox's folder; one its own side removed already is gone.
-pub fn remove_folder(dir: &std::path::Path) -> Result<(), layerfs_bridge::control::SdkRefusal> {
+pub fn remove_folder(dir: &Path) -> Result<(), SdkRefusal> {
     match std::fs::remove_dir_all(dir) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
             Err(layerfs_home::outcome::failed(error))

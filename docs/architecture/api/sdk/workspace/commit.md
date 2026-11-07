@@ -12,7 +12,7 @@ the changes are merged first. The Workspace stays mounted.
 | --- | --- |
 | Family | [workspace](README.md) |
 | Library entry | [`workspace/commit.rs`](../../../../../api/crates/layerfs-api/src/workspace/commit.rs) |
-| Implemented in | `layerfs_sandbox::workspace::calls::commit` → host operation `workspace.commit` → `workspace::serve::commit` ([`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs)) |
+| Implemented in | the library entry parses a typed `CommitRequest` → `layerfs_sandbox::workspace::calls::commit` → host operation `workspace.commit` → `workspace::serve::commit` ([`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs)) |
 | Runs in | the Sandbox's daemon, which opens the Store and saves and publishes in-process |
 
 ## Signature

@@ -17,12 +17,12 @@
 //! here and resolved where it runs (`deploy`). Each call is in its own file
 //! (`create`, `list`, `get`, `close`), the route of a host operation in
 //! `route.rs`, and the `workspace` calls in `workspace/calls.rs`.
-pub use super::close::close;
-pub use super::create::create;
-pub use super::get::get;
-pub use super::list::list;
+pub use super::close::{close, CloseRequest, Closed};
+pub use super::create::{create, CreateRequest, Created};
+pub use super::get::{get, GetRequest, Got, ListedWorkspace};
+pub use super::list::{list, ListRequest, Listed};
 use super::record::SandboxRecord;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::outcome::refused;
 use std::path::Path;
 
@@ -51,16 +51,23 @@ pub fn named(home: &Path, name: &str) -> Result<SandboxRecord> {
     })
 }
 
-/// One page of `items` (`page_size`, default 50, 1 to 1000; `page_pos`)
-/// and the next page's position, or null after the last.
-pub fn page(items: Vec<SdkValue>, args: &SdkValue) -> (Vec<SdkValue>, SdkValue) {
-    let size = args.get_int("page_size").unwrap_or(50).clamp(1, 1000) as usize;
-    let pos = args.get_int("page_pos").unwrap_or(0).max(0) as usize;
+/// Which page of a list a call asks for (`page_size`, default 50, 1 to
+/// 1000; `page_pos`, default 0), as sent.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Page {
+    /// `page_size`, if sent.
+    pub size: Option<i64>,
+    /// `page_pos`, if sent.
+    pub pos: Option<i64>,
+}
+
+/// One page of `items` and the next page's position, or `None` after the
+/// last.
+pub fn page<T>(items: Vec<T>, page: Page) -> (Vec<T>, Option<usize>) {
+    let size = page.size.unwrap_or(50).clamp(1, 1000) as usize;
+    let pos = page.pos.unwrap_or(0).max(0) as usize;
     let total = items.len();
-    let page: Vec<SdkValue> = items.into_iter().skip(pos).take(size).collect();
-    let next = match pos + page.len() < total {
-        true => SdkValue::Int((pos + page.len()) as i64),
-        false => SdkValue::Null,
-    };
+    let page: Vec<T> = items.into_iter().skip(pos).take(size).collect();
+    let next = (pos + page.len() < total).then_some(pos + page.len());
     (page, next)
 }

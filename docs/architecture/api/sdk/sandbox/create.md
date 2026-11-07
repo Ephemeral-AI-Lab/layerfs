@@ -12,7 +12,7 @@ Starts a named Sandbox for one project on a machine: a daemon process
 | --- | --- |
 | Family | [sandbox](README.md) |
 | Library entry | [`sandbox/create.rs`](../../../../../api/crates/layerfs-api/src/sandbox/create.rs) |
-| Implemented in | `layerfs_sandbox::family::create` → `create::create` ([`create.rs`](../../../../../control/crates/layerfs-sandbox/src/create.rs)), then `lifecycle::create` on the machine ([`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs)) |
+| Implemented in | the library entry parses a typed `CreateRequest` → `layerfs_sandbox::family::create` → `create::create`, whose typed `Created` it shapes ([`create.rs`](../../../../../control/crates/layerfs-sandbox/src/create.rs)), then `lifecycle::create` on the machine ([`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs)) |
 | Runs in | the caller's process (records, locks), then the caller's process for a local machine or the machine's worker (`sandbox.host`) |
 
 ## Signature

@@ -11,7 +11,7 @@ its daemon holds, without starting anything.
 | --- | --- |
 | Family | [sandbox](README.md) |
 | Library entry | [`sandbox/get.rs`](../../../../../api/crates/layerfs-api/src/sandbox/get.rs) |
-| Implemented in | `layerfs_sandbox::family::get` → `get::get` ([`get.rs`](../../../../../control/crates/layerfs-sandbox/src/get.rs)) |
+| Implemented in | the library entry parses a typed `GetRequest` → `layerfs_sandbox::family::get` → `get::get`, whose typed `Got` it shapes ([`get.rs`](../../../../../control/crates/layerfs-sandbox/src/get.rs)) |
 | Runs in | the caller's process; the Workspace list comes from the Sandbox daemon, dialed from here (forwarded or local) or from the machine's worker |
 
 ## Signature
@@ -65,7 +65,7 @@ layerfs sandbox get <name> [--page-size <n>] [--page-pos <n>]
 | --- | --- | --- |
 | record fields | | as [`sandbox.list`](list.md) shows them |
 | `state` | text | derived again with the machine's answer: `gone` when it says no such Sandbox runs ([`record/sandbox.rs`](../../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) `state`) |
-| `workspaces[].ws` | text | `<sandbox>:<name>` when the mount named it, else `<sandbox>:<path>` ([`get.rs`](../../../../../control/crates/layerfs-sandbox/src/get.rs) `with_ws`) |
+| `workspaces[].ws` | text | `<sandbox>:<name>` when the mount named it, else `<sandbox>:<path>` ([`get.rs`](../../../../../control/crates/layerfs-sandbox/src/get.rs) `listed_workspace`) |
 | `workspaces[].name`, `path` | text | the mount's name or null; the mount directory |
 | `workspaces[].*` | | the daemon's read model per Workspace: id, namespace, Branch, base Commit and Layer, root, `activity`, dirty counts ([`operator/inspect.rs`](../../../../../engine/crates/layerfs-store-service/src/operator/inspect.rs) `workspace_value`) |
 | `next_page_pos` | int or null | next page of `workspaces` |

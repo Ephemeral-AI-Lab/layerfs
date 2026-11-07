@@ -12,7 +12,7 @@ changes refuse the call unless they are discarded.
 | --- | --- |
 | Family | [workspace](README.md) |
 | Library entry | [`workspace/unmount.rs`](../../../../../api/crates/layerfs-api/src/workspace/unmount.rs) |
-| Implemented in | `layerfs_sandbox::workspace::calls::unmount` → host operation `workspace.unmount` → `workspace::serve::unmount` ([`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs), [`unmount_guard.rs`](../../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs)) |
+| Implemented in | the library entry parses a typed `UnmountRequest` → `layerfs_sandbox::workspace::calls::unmount` → host operation `workspace.unmount` → `workspace::serve::unmount` ([`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs), [`unmount_guard.rs`](../../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs)) |
 | Runs in | the Sandbox's machine (records, guard) and the Sandbox's daemon (teardown) |
 
 ## Signature

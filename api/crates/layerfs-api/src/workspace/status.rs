@@ -4,6 +4,7 @@ use crate::calls::table::{a, call, Call};
 use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_sandbox::workspace::calls::{status, StatusRequest};
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -15,8 +16,11 @@ pub(crate) const CALL: Call = call(
     run,
 );
 
-/// Runs `workspace.status`.
+/// Runs `workspace.status`: its side's answer.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    let request = StatusRequest {
+        ws: super::ws(args),
+    };
     let (home, events) = context.parts();
-    layerfs_sandbox::workspace::calls::status(home, events, args)
+    status(home, events, &request)
 }

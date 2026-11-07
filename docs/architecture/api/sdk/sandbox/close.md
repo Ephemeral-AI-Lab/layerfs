@@ -12,7 +12,7 @@ its record removed; it is also the call that clears an uncertain
 | --- | --- |
 | Family | [sandbox](README.md) |
 | Library entry | [`sandbox/close.rs`](../../../../../api/crates/layerfs-api/src/sandbox/close.rs) |
-| Implemented in | `layerfs_sandbox::family::close` → `close::close` ([`close.rs`](../../../../../control/crates/layerfs-sandbox/src/close.rs)), then `lifecycle::close` on the machine ([`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs)) |
+| Implemented in | the library entry parses a typed `CloseRequest` → `layerfs_sandbox::family::close` → `close::close`, whose typed `Closed` it shapes ([`close.rs`](../../../../../control/crates/layerfs-sandbox/src/close.rs)), then `lifecycle::close` on the machine ([`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs)) |
 | Runs in | the caller's process (records, locks), then the caller's process for a local machine or the machine's worker (`sandbox.host`) |
 
 ## Signature
