@@ -3,7 +3,9 @@
 //!
 //! Numbers are whole (`SdkValue::Int`); a fraction or exponent is refused.
 //! Bytes print as a string when they are UTF-8, else as
-//! `{"base64": "..."}`, which parses back to bytes.
+//! `{"base64": "..."}`, which parses back to bytes. A worker frame with
+//! attachments prints each byte value as `{"attachment": i}` instead
+//! ([`write_attached`]); the frame carries the bytes themselves.
 use layerfs_bridge::control::SdkValue;
 use std::fmt::Write as _;
 
@@ -29,8 +31,8 @@ pub fn parse(text: &str) -> Result<SdkValue, JsonError> {
 
 /// One JSON line for `value`, with no newline.
 pub fn print(value: &SdkValue) -> String {
-    let mut out = String::with_capacity(size(value));
-    write_value(&mut out, value, false);
+    let mut out = String::with_capacity(size(value, false));
+    write_value(&mut out, value, &mut Form::Print);
     out
 }
 
@@ -38,27 +40,49 @@ pub fn print(value: &SdkValue) -> String {
 /// value prints as `{"base64": ...}`, even UTF-8 bytes, so it keeps its
 /// type (the worker frame's form).
 pub fn write_typed(out: &mut String, value: &SdkValue) {
-    out.reserve(size(value));
-    write_value(out, value, true);
+    out.reserve(size(value, false));
+    write_value(out, value, &mut Form::Typed);
+}
+
+/// Appends `value` to `out` as [`write_typed`] would, except that every
+/// byte value prints as `{"attachment": i}` and is added to `attachments`,
+/// `i` its place there (a worker frame with attachments).
+pub fn write_attached<'v>(out: &mut String, value: &'v SdkValue, attachments: &mut Vec<&'v [u8]>) {
+    out.reserve(size(value, true));
+    write_value(out, value, &mut Form::Attached(attachments));
+}
+
+/// How byte values print.
+enum Form<'a, 'v> {
+    /// As text when they are UTF-8, else as base64.
+    Print,
+    /// Always as base64.
+    Typed,
+    /// As `{"attachment": i}`, the bytes added to the list.
+    Attached(&'a mut Vec<&'v [u8]>),
 }
 
 /// About how long `value` prints, to reserve once.
-fn size(value: &SdkValue) -> usize {
+fn size(value: &SdkValue, attached: bool) -> usize {
     match value {
         SdkValue::Null | SdkValue::Bool(_) | SdkValue::Int(_) => 20,
         SdkValue::Text(s) => s.len() + 2,
+        SdkValue::Bytes(_) if attached => 36,
         SdkValue::Bytes(b) => b.len().div_ceil(3) * 4 + 13,
-        SdkValue::List(items) => items.iter().map(|item| size(item) + 1).sum::<usize>() + 2,
+        SdkValue::List(items) => {
+            let each = items.iter().map(|item| size(item, attached) + 1);
+            each.sum::<usize>() + 2
+        }
         SdkValue::Map(fields) => {
             let each = fields
                 .iter()
-                .map(|(name, item)| name.len() + 4 + size(item));
+                .map(|(name, item)| name.len() + 4 + size(item, attached));
             each.sum::<usize>() + 2
         }
     }
 }
 
-fn write_value(out: &mut String, value: &SdkValue, typed: bool) {
+fn write_value<'v>(out: &mut String, value: &'v SdkValue, form: &mut Form<'_, 'v>) {
     match value {
         SdkValue::Null => out.push_str("null"),
         SdkValue::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
@@ -66,8 +90,12 @@ fn write_value(out: &mut String, value: &SdkValue, typed: bool) {
             let _ = write!(out, "{n}");
         }
         SdkValue::Text(s) => quote(out, s),
-        SdkValue::Bytes(b) => match std::str::from_utf8(b) {
-            Ok(s) if !typed => quote(out, s),
+        SdkValue::Bytes(b) => match (form, std::str::from_utf8(b)) {
+            (Form::Attached(attachments), _) => {
+                let _ = write!(out, "{{\"attachment\":{}}}", attachments.len());
+                attachments.push(b);
+            }
+            (Form::Print, Ok(s)) => quote(out, s),
             _ => {
                 // base64 text needs no escaping
                 out.push_str("{\"base64\":\"");
@@ -81,7 +109,7 @@ fn write_value(out: &mut String, value: &SdkValue, typed: bool) {
                 if i > 0 {
                     out.push(',');
                 }
-                write_value(out, item, typed);
+                write_value(out, item, form);
             }
             out.push(']');
         }
@@ -93,7 +121,7 @@ fn write_value(out: &mut String, value: &SdkValue, typed: bool) {
                 }
                 quote(out, name);
                 out.push(':');
-                write_value(out, item, typed);
+                write_value(out, item, form);
             }
             out.push('}');
         }

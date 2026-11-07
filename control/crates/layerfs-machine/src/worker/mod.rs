@@ -21,7 +21,9 @@ mod frame;
 mod hello;
 
 pub use client::{call, hello, ping, request, send, Endpoint, Unreached, HELLO_WAIT, PING_WAIT};
-pub use frame::{frame_bytes, read_frame, read_frame_within, write_frame, MAX_FRAME, MAX_HELLO};
+pub use frame::{
+    frame_bytes, read_frame, read_frame_within, write_frame, ATTACHED, MAX_FRAME, MAX_HELLO,
+};
 #[cfg(feature = "machine")]
 pub(crate) use hello::sealed_hash;
 pub use hello::{is_mismatch, replace_with, Hello, PROTOCOL};

@@ -104,8 +104,10 @@ that file and compares it in constant time (`same` in
    x  connection closes                            x
 ```
 
-A frame is a 4-byte big-endian length then JSON; bytes travel as
-`{"base64": ...}` ([`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs)).
+A frame is a 4-byte big-endian length then JSON; a frame holding byte
+values sets the length's top bit and carries them raw after its JSON
+([`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs);
+layout in [Routing: Workers](../routing/workers.md#worker-frames)).
 
 | Outcome | Error | Request sent? | Source |
 | --- | --- | --- | --- |

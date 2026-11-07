@@ -21,14 +21,29 @@ Where the worker sits on each platform and how its port is carried is in
 ## Worker frames
 
 ```text
- one frame
+ plain frame (no byte values: the secret, the hello, most others)
  +----------------+-------------------------------------------+
  | length: u32 BE | JSON text, `length` bytes                 |
- |   (4 bytes)    | bytes travel as {"base64": "..."}         |
+ |   top bit 0    |                                           |
  +----------------+-------------------------------------------+
+
+ attached frame (a frame holding byte values, protocol 3)
+ +----------------+--------------+------+-------+--------------------------+
+ | 1<<31 | length | json: u32 BE | JSON | count | count x (len: u64 BE,    |
+ |   (u32 BE)     |              |      | u32 BE|          len raw bytes)  |
+ +----------------+--------------+------+-------+--------------------------+
+   each byte value is {"attachment": i} in the JSON, i its attachment;
+   every attachment is named exactly once
    first frame of each side <= 4 KiB (MAX_HELLO)
-   any frame               <= 512 MiB (MAX_FRAME)
+   any frame body          <= 512 MiB (MAX_FRAME), attachments included
 ```
+
+Byte values (a `project.stage` part, a Store file piece) travel raw, with no
+base64 in either direction. Only this build's protocol sends or reads an
+attached frame: the caller sends nothing to a worker whose hello names
+another protocol, and the secret and hello frames hold no byte values, so
+they stay plain. A protocol 2 peer sent bytes as `{"base64": "..."}` in a
+plain frame; a plain frame with such a field still reads back as bytes.
 
 | Frame | Sender | Shape | Source |
 | --- | --- | --- | --- |
@@ -58,7 +73,10 @@ Where the worker sits on each platform and how its port is carried is in
 ```
 
 A frame larger than allowed is refused `TooLarge` from its length, before any
-of its body is read ([`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs)).
+of its body is read; an attached frame's JSON length, count and each
+attachment length are checked against what is left of its body before
+anything of that size is allocated or read, and a malformed one is refused
+`Failed` ([`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs)).
 The worker serves each connection on its own thread, so several callers can
 be served at once; each connection still carries one request.
 
@@ -87,7 +105,7 @@ is not a home: `home_id` in the request lends it the caller's home id.
 | Field | Meaning | Source |
 | --- | --- | --- |
 | `ready` | always `true` in a hello | [`worker/hello.rs`](../../../../control/crates/layerfs-machine/src/worker/hello.rs) |
-| `protocol` | the worker protocol it speaks; this build is `PROTOCOL = 2`; the first workers sent none | `hello.rs` |
+| `protocol` | the worker protocol it speaks; this build is `PROTOCOL = 3` (byte values as frame attachments; 2 sent them as base64); the first workers sent none | `hello.rs` |
 | `bundle` | the hash from `bundle.json` beside the worker's executable, or null when run from no sealed bundle | `Hello::own`, `sealed_hash` |
 
 The caller compares the hello with its own build before it sends the

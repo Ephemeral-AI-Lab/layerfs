@@ -8,8 +8,10 @@ use layerfs_home::outcome::refused;
 use std::path::Path;
 
 /// The worker protocol this build speaks. The first worker answered its
-/// secret with `{ ready: true }` alone, which names no protocol.
-pub const PROTOCOL: i64 = 2;
+/// secret with `{ ready: true }` alone, which names no protocol; protocol
+/// 2 sent byte values as base64 in the JSON, and 3 sends them as frame
+/// attachments ([`super::frame`]).
+pub const PROTOCOL: i64 = 3;
 
 /// What a worker says of itself when it answers its secret.
 #[derive(Clone, Debug, PartialEq, Eq)]
