@@ -49,6 +49,8 @@ pub struct Published {
     pub changed: bool,
     pub wcc: [(Option<ViewStat>, Option<ViewStat>); 2],
     pub detached: Option<ViewStat>,
+    /// The inode a RENAME moved.
+    pub moved: Option<ViewStat>,
 }
 pub(super) struct Custody {
     services: Arc<dyn RequestServices>,
@@ -274,6 +276,7 @@ impl Custody {
                         changed: true,
                         wcc: original.wcc.clone(),
                         detached: original.detached.clone(),
+                        moved: original.moved.clone(),
                     }));
                 }
                 Ok(JobOutcome::Unchanged { inode }) => {
@@ -283,6 +286,7 @@ impl Custody {
                         changed: false,
                         wcc: original.wcc.clone(),
                         detached: original.detached.clone(),
+                        moved: original.moved.clone(),
                     }))
                 }
                 Ok(JobOutcome::Refused(refusal)) => return Ok(Err(Declined::Refused(*refusal))),

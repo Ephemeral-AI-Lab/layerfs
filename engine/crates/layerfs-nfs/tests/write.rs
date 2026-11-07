@@ -1115,3 +1115,137 @@ fn create_write_remove_and_apple_double_avoid_redundant_owner_jobs_and_orphans()
     assert_eq!(outstanding, 0);
     fs::remove_dir_all(base).unwrap();
 }
+
+/// What `git commit` does to `.git/index`: write the new index to
+/// `.git/index.lock`, `fsync` it (COMMIT, proc 21), rename it over `.git/index`
+/// (RENAME, proc 14). Neither procedure reads an attribute of its own, and the
+/// replaced inode gives back the export's custody inside the renaming job
+/// instead of being detached as an orphan of the export's own references.
+#[test]
+fn rename_over_an_existing_target_and_commit_avoid_redundant_owner_jobs_and_orphans() {
+    let base = temp("rename-commit");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let counts = Arc::new(JobCounts::default());
+    let services = Arc::new(CountingMount {
+        inner: Arc::new(Mounted(rig.bound.clone())),
+        counts: counts.clone(),
+    });
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let server = rig.export_services(listener, services, UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    // Warm the root directory's base facts so each assertion below measures
+    // the resident steady state of one publishing job.
+    let warm = c.mkdir(&root, b"warm", 0o755).unwrap();
+    assert!(warm.directory.before.is_some() && warm.directory.after.is_some());
+    c.rmdir(&root, b"warm").unwrap();
+
+    // The index the next commit replaces, then the lock file it writes.
+    let index = c.touch(&root, b"index", 0o644).unwrap();
+    c.write(&index.handle, 0, b"old index").unwrap();
+    let before = counts.snapshot();
+    let lock = c.touch(&root, b"index.lock", 0o644).unwrap();
+    let (written, _, _, _) = c.write(&lock.handle, 0, b"new index contents").unwrap();
+    assert_eq!(written, 18);
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 2, before.2, before.3),
+        "CREATE + WRITE: 1 mutate_visit each, 0 observe_visit"
+    );
+
+    // COMMIT (proc 21) answers from the facts this export last published for
+    // the file through its own descriptor: no owner job at all.
+    let before = counts.snapshot();
+    assert_eq!(c.commit(&lock.handle), Ok(server.verifier()));
+    assert_eq!(counts.snapshot(), before, "COMMIT: 0 engine owner jobs");
+
+    // RENAME over the existing index: one publishing job, no source or
+    // destination lookup, and both halves of wcc_data come from it.
+    let root_id = c.getattr(&root).unwrap().fileid;
+    let before = counts.snapshot();
+    let (from_wcc, to_wcc) = c.rename(&root, b"index.lock", &root, b"index").unwrap();
+    assert!(from_wcc.before.is_some() && from_wcc.after.is_some());
+    assert_eq!(from_wcc.before, to_wcc.before, "one directory, one window");
+    assert_eq!(
+        (from_wcc.after.unwrap().fileid, to_wcc.after.unwrap().fileid),
+        (root_id, root_id)
+    );
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 1, before.2, before.3),
+        "RENAME: 1 mutate_visit, 0 observe_visit, 0 close_file, 0 forget"
+    );
+
+    // The moved inode keeps its identity and content; the replaced one is
+    // gone with its handle.
+    let (moved, moved_attr) = c.lookup(&root, b"index").unwrap();
+    assert_eq!(moved_attr.fileid, lock.attr.fileid);
+    assert_eq!(moved_attr.size, 18);
+    assert_eq!(c.read_all(&moved, 4096), b"new index contents");
+    assert_eq!(c.getattr(&index.handle), Err(STALE), "the replaced inode");
+    assert_eq!(c.lookup(&root, b"index.lock").map(|_| ()), Err(NOENT));
+
+    // The export gave back the replaced inode's descriptor and reference in
+    // the renaming job: only the moved file is still held, and no orphan
+    // domain row was ever created for the replaced one.
+    assert_eq!((server.held().files, server.held().lookups), (1, 1));
+    let resources = rig
+        .bound
+        .operation()
+        .unwrap()
+        .overlay()
+        .resources()
+        .unwrap();
+    assert_eq!(resources.open.orphan_files, 0, "no fake orphan created");
+
+    // A plain rename into another directory is one job too, and the moved
+    // inode's handle keeps working under its new parent.
+    let docs = c.lookup(&root, b"docs").unwrap().0;
+    let before = counts.snapshot();
+    c.rename(&root, b"index", &docs, b"index").unwrap();
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 1, before.2, before.3),
+        "cross-directory RENAME: 1 mutate_visit, 0 observe_visit"
+    );
+    assert_eq!(c.getattr(&moved).unwrap().fileid, lock.attr.fileid);
+    assert_eq!(
+        c.lookup(&docs, b"index").unwrap().1.fileid,
+        lock.attr.fileid
+    );
+    assert_eq!(c.lookup(&root, b"index").map(|_| ()), Err(NOENT));
+
+    // Renaming one name of an inode over another name of the same inode
+    // publishes no binding: the inode keeps what it had. The reply still
+    // answers both halves of the directory's wcc_data from the window the job
+    // read, so the client keeps its cached attributes of that directory.
+    // `src/lib.rs` and `src/alias.rs` are two names of one inode.
+    let src = c.lookup(&root, b"src").unwrap().0;
+    c.lookup(&src, b"lib.rs").unwrap();
+    c.lookup(&src, b"alias.rs").unwrap();
+    let before = counts.snapshot();
+    let (from_wcc, to_wcc) = c.rename(&src, b"alias.rs", &src, b"lib.rs").unwrap();
+    assert!(
+        from_wcc.before.is_some() && from_wcc.after.is_some(),
+        "a same-inode RENAME answers the directory's pre- and post-op attributes"
+    );
+    assert!(
+        to_wcc.before.is_some() && to_wcc.after.is_some(),
+        "and the destination half of a same-directory move"
+    );
+    assert_eq!(from_wcc.before, to_wcc.before, "one directory, one window");
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 1, before.2, before.3),
+        "a same-inode RENAME: 1 mutate_visit, 0 observe_visit"
+    );
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}

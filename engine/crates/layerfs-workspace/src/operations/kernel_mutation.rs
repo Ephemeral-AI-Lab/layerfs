@@ -11,6 +11,9 @@ pub struct KernelMutationOutcome {
     pub file: Option<OpenFile>,
     pub wcc: [(Option<ViewStat>, Option<ViewStat>); 2],
     pub detached: Option<ViewStat>,
+    /// The inode a RENAME moved. Its row is unchanged by the move, so these
+    /// are the facts the deciding visit read.
+    pub moved: Option<ViewStat>,
 }
 /// The kernel custody an applied reply creates. Every entry-bearing
 /// operation takes exactly one lookup reference on the bound inode.

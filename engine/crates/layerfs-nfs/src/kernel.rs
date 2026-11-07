@@ -78,11 +78,12 @@ pub(crate) type Named = (u64, Vec<u8>);
 pub(crate) type Verified = ([u8; 8], u64, u64);
 
 /// One implicit file descriptor.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct Held {
     pub handle: u64,
-    /// The size last published or observed through this export.
-    pub size: u64,
+    /// The facts last published or observed for the file through this
+    /// descriptor. A COMMIT is answered from them.
+    pub stat: ViewStat,
     pub tick: u64,
     pub writable: bool,
 }
@@ -361,7 +362,7 @@ impl Kernel {
                     status
                 }
             })?;
-        self.observed_size(&stat);
+        self.observed(&stat);
         Ok(stat)
     }
     /// LOOKUP of `name` in directory `parent`, including `.`, `..` and the
@@ -446,7 +447,7 @@ impl Kernel {
         for serial in collect {
             self.forget(serial, 1);
         }
-        self.observed_size(stat);
+        self.observed(stat);
     }
     /// Records that `serial` is now reached as `name` in `parent` (RENAME).
     pub(crate) fn renamed(&self, serial: u64, parent: u64, name: &[u8]) {
@@ -525,13 +526,13 @@ impl Kernel {
     pub fn saw_directory(&self, serial: u64, parent: u64) {
         self.table().parents.insert(serial, parent);
     }
-    /// Records the facts a published or observed stat reports: the size a
-    /// READ ends at, and a directory's attributes, which
+    /// Records the facts a published or observed stat reports: READ's EOF,
+    /// what a COMMIT answers, and a directory's attributes, which
     /// [`Kernel::directory_wcc`] answers from.
-    pub(crate) fn observed_size(&self, stat: &ViewStat) {
+    pub(crate) fn observed(&self, stat: &ViewStat) {
         let mut table = self.table();
         if let Some(held) = table.files.get_mut(&stat.serial) {
-            held.size = stat.logical_len;
+            held.stat = stat.clone();
         }
         if stat.kind == InodeKind::Directory {
             table.directory_stats.insert(stat.serial, stat.clone());
@@ -552,6 +553,28 @@ impl Kernel {
             Some(stat) => (Some(stat.clone()), Some(stat.clone())),
             None => (None, None),
         }
+    }
+    /// The facts this export last published or observed for `serial` through
+    /// its implicit descriptor, when it holds one and still binds a name for
+    /// it. A COMMIT answers from them instead of reading the inode again.
+    ///
+    /// A serial this export no longer binds a name for answers `None` and is
+    /// read again, which then answers what the read answers. That is the case
+    /// this export can see: a name another connection removed while this one
+    /// kept its own binding still looks live here, so a COMMIT for it answers
+    /// the facts last seen and succeeds. What is stale then is at most
+    /// `actimeo` old, the reply's post-operation attributes are optional, and
+    /// a client that reads, writes or looks the name up then gets the removal.
+    pub(crate) fn held_stat(&self, serial: u64) -> Option<ViewStat> {
+        let mut table = self.table();
+        let tick = table.tick();
+        let live = table.names.contains_key(&serial) || table.pinned(serial);
+        if !live {
+            return None;
+        }
+        let held = table.files.get_mut(&serial)?;
+        held.tick = tick;
+        Some(held.stat.clone())
     }
     /// READLINK: the raw target bytes.
     pub fn readlink(&self, serial: u64) -> Result<Vec<u8>, Status> {
@@ -582,7 +605,7 @@ impl Kernel {
                     held.tick = tick;
                     return Ok(OpenFile {
                         handle: held.handle,
-                        size: held.size,
+                        size: held.stat.logical_len,
                     });
                 }
             }
@@ -590,7 +613,7 @@ impl Kernel {
         let operation = KernelReadOperation::Open { serial, writable };
         let (stat, file, _) = self.observe(serial, None, operation)?;
         let handle = file.ok_or(Status::ServerFault)?;
-        Ok(self.file_taken(serial, handle, stat.logical_len, writable))
+        Ok(self.file_taken(serial, handle, &stat, writable))
     }
     /// Records an open file descriptor (from `OPEN` or `CREATE`), evicting
     /// the oldest unpinned descriptor when the bound is reached.
@@ -598,14 +621,14 @@ impl Kernel {
         &self,
         serial: u64,
         handle: u64,
-        size: u64,
+        stat: &ViewStat,
         writable: bool,
     ) -> OpenFile {
         let limit = FILES_HELD.min((self.lookups_held / 2).max(1));
         let (evicted, closed, chosen) = {
             let mut table = self.table();
             let tick = table.tick();
-            let current = table.files.get(&serial).copied();
+            let current = table.files.get(&serial).cloned();
             match current {
                 // Another connection opened a good enough one meanwhile.
                 Some(theirs) if theirs.writable || !writable => {
@@ -632,12 +655,13 @@ impl Kernel {
                     };
                     let held = Held {
                         handle,
-                        size,
+                        stat: stat.clone(),
                         tick,
                         writable,
                     };
+                    let chosen = held.clone();
                     table.files.insert(serial, held);
-                    (evicted, current.map(|old| (serial, old.handle)), held)
+                    (evicted, current.map(|old| (serial, old.handle)), chosen)
                 }
             }
         };
@@ -649,7 +673,7 @@ impl Kernel {
         }
         OpenFile {
             handle: chosen.handle,
-            size: chosen.size,
+            size: chosen.stat.logical_len,
         }
     }
     pub(crate) fn close_file(&self, serial: u64, handle: u64) {

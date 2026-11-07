@@ -20,7 +20,7 @@ use layerfs_content::{
     ContentError,
 };
 use layerfs_overlay::{
-    BaseSource, KernelDecision, KernelMount, OpenFile, Overlay, OverlayError, SourceRows,
+    BaseSource, Binding, KernelDecision, KernelMount, OpenFile, Overlay, OverlayError, SourceRows,
 };
 use std::{borrow::Cow, fmt, sync::Arc};
 
@@ -333,6 +333,7 @@ impl KernelMutationVisit {
         let mut published = None;
         let mut wcc: [(Option<ViewStat>, Option<ViewStat>); 2] = Default::default();
         let mut detached = None;
+        let mut moved = None;
         let before_stat = |rows: SourceRows<'_>, facts: &BaseFacts, target: u64| {
             rows.inode(target)
                 .ok()
@@ -404,7 +405,10 @@ impl KernelMutationVisit {
                     }
                     Ok(Decided::Publish { changes, inode }) => {
                         if let Operation::Rename {
-                            parent, new_parent, ..
+                            parent,
+                            new_parent,
+                            new_name,
+                            ..
                         } = &job.operation
                         {
                             wcc[0] = (
@@ -419,6 +423,21 @@ impl KernelMutationVisit {
                                     after_stat(&changes, *new_parent),
                                 )
                             };
+                            // The moved inode keeps its row and attributes: the
+                            // destination binding this job wrote names it.
+                            moved = changes
+                                .directory_entries
+                                .iter()
+                                .find(|change| {
+                                    change.parent == *new_parent
+                                        && change.name == new_name.as_bytes()
+                                })
+                                .and_then(|change| match &change.binding {
+                                    Binding::Bound { serial, .. } => {
+                                        before_stat(rows, &job.facts, *serial)
+                                    }
+                                    Binding::Removed { .. } => None,
+                                });
                             let dirs = if new_parent == parent { 1 } else { 2 };
                             if changes.inodes.len() > dirs {
                                 detached = changes.inodes.last().cloned().map(ViewStat::from);
@@ -473,6 +492,7 @@ impl KernelMutationVisit {
             file,
             wcc,
             detached,
+            moved,
         }
     }
 }
