@@ -13,10 +13,67 @@ use layerfs_storage::port::acquisition::{
     WRITE_ROW_BYTES, WRITE_WINDOW_BYTES, WRITE_WINDOW_ROWS,
 };
 use layerfs_storage::port::PersistenceError;
-use std::{
-    cell::Cell, collections::VecDeque, ffi::OsString, fs::Metadata, os::unix::ffi::OsStringExt,
-    os::unix::fs::MetadataExt, path::PathBuf,
-};
+use std::{cell::Cell, collections::VecDeque, ffi::OsString, fs::Metadata, path::PathBuf};
+
+/// The stable metadata face one host reads a Stamp from: unix keeps the
+/// dev/ino/mode/ctime contract; Windows reads its stable quadruple.
+pub(super) struct StampFace {
+    pub dev: u64,
+    pub ino: u64,
+    pub mode: u32,
+    pub mtime: i64,
+    pub mtime_nsec: i64,
+    pub ctime: i64,
+    pub ctime_nsec: i64,
+}
+
+#[cfg(unix)]
+pub(super) fn face(metadata: &Metadata, host: (u64, u64)) -> StampFace {
+    use std::os::unix::fs::MetadataExt;
+    let _ = host;
+    StampFace {
+        dev: metadata.dev(),
+        ino: metadata.ino(),
+        mode: metadata.mode(),
+        mtime: metadata.mtime(),
+        mtime_nsec: metadata.mtime_nsec(),
+        ctime: metadata.ctime(),
+        ctime_nsec: metadata.ctime_nsec(),
+    }
+}
+
+#[cfg(windows)]
+pub(super) fn face(metadata: &Metadata, host: (u64, u64)) -> StampFace {
+    // Windows stable face: no dev/ino (file_index is unstable); readonly is
+    // the mode bit; created() stands in for ctime. Same-file identity rides
+    // len + the two times, the discipline the send face proved.
+    let modified = metadata
+        .modified()
+        .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+    let created = metadata
+        .created()
+        .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+    let split = |time: std::time::SystemTime| {
+        time.duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .map(|d| (d.as_secs() as i64, d.subsec_nanos() as i64))
+            .unwrap_or((0, 0))
+    };
+    let (mtime, mtime_nsec) = split(modified);
+    let (ctime, ctime_nsec) = split(created);
+    StampFace {
+        dev: host.0,
+        ino: host.1,
+        mode: if metadata.permissions().readonly() {
+            0o444
+        } else {
+            0o666
+        },
+        mtime,
+        mtime_nsec,
+        ctime,
+        ctime_nsec,
+    }
+}
 
 /// Rows the job queue or one resident child buffer may hold.
 pub(crate) const WINDOW_ROWS: usize = 512;
@@ -34,21 +91,52 @@ pub(crate) struct Stamp {
     pub ctime_nsec: i64,
 }
 impl Stamp {
-    pub(crate) fn of(metadata: &Metadata) -> Self {
-        Self {
-            dev: metadata.dev(),
-            ino: metadata.ino(),
+    /// The Stamp of the file `path` names (host identity included).
+    pub(crate) fn of(path: &std::path::Path) -> Result<Self, std::io::Error> {
+        let metadata = std::fs::symlink_metadata(path)?;
+        let f = face(&metadata, super::host_id::of_path(path));
+        Ok(Self {
+            dev: f.dev,
+            ino: f.ino,
             len: metadata.len(),
-            mode: metadata.mode(),
-            mtime: metadata.mtime(),
-            mtime_nsec: metadata.mtime_nsec(),
-            ctime: metadata.ctime(),
-            ctime_nsec: metadata.ctime_nsec(),
+            mode: f.mode,
+            mtime: f.mtime,
+            mtime_nsec: f.mtime_nsec,
+            ctime: f.ctime,
+            ctime_nsec: f.ctime_nsec,
+        })
+    }
+    /// The Stamp of already-read metadata; host identity given apart.
+    pub(crate) fn of_metadata(metadata: &Metadata, host: (u64, u64)) -> Self {
+        let f = face(metadata, host);
+        Self {
+            dev: f.dev,
+            ino: f.ino,
+            len: metadata.len(),
+            mode: f.mode,
+            mtime: f.mtime,
+            mtime_nsec: f.mtime_nsec,
+            ctime: f.ctime,
+            ctime_nsec: f.ctime_nsec,
         }
     }
-    /// True while `metadata` is still the same unchanged regular file.
-    pub(crate) fn matches_file(&self, metadata: &Metadata) -> bool {
-        metadata.is_file() && !metadata.file_type().is_symlink() && *self == Self::of(metadata)
+    /// True while `path` still names the same unchanged regular file;
+    /// `metadata` is its just-read stat (no second query).
+    pub(crate) fn matches_file(&self, path: &std::path::Path, metadata: &Metadata) -> bool {
+        if !metadata.is_file() || metadata.file_type().is_symlink() {
+            return false;
+        }
+        let Ok(now) = Self::of(path) else {
+            return false;
+        };
+        now.len == self.len
+            && now.mode == self.mode
+            && now.mtime == self.mtime
+            && now.mtime_nsec == self.mtime_nsec
+            && now.ctime == self.ctime
+            && now.ctime_nsec == self.ctime_nsec
+            && now.dev == self.dev
+            && now.ino == self.ino
     }
     /// The identity and byte-exact evidence every path of this inode must share.
     pub(crate) fn identity(&self) -> HostIdentity {
@@ -377,7 +465,7 @@ pub(crate) fn window_full(rows: usize, held: usize, bytes: usize) -> bool {
 fn changed_source(error: AcquisitionError, path: impl Fn(u64) -> Option<Vec<u8>>) -> Failure {
     if let AcquisitionError::Changed { position } = error {
         if let Some(path) = path(position) {
-            let path = PathBuf::from(OsString::from_vec(path));
+            let path = PathBuf::from(super::bytes::os_string(&path));
             return Failure::refused(SourceRefusal::Changed, path);
         }
     }

@@ -20,7 +20,6 @@ use layerfs_storage::port::acquisition::{EntryKey, NewEntry, Placed};
 use std::{
     ffi::{OsStr, OsString},
     fs::{self, Metadata},
-    os::unix::ffi::{OsStrExt, OsStringExt},
     path::{Path, PathBuf},
 };
 
@@ -58,13 +57,19 @@ impl Child {
             InodeKind::Directory => (self.stamp.mode & 0o7777, 0o1777),
             InodeKind::RegularFile => (self.stamp.mode & 0o7777, 0o777),
         };
+        #[cfg(unix)]
         if mode & !mask != 0 {
             return Err(SourceRefusal::Mode(mode));
         }
+        #[cfg(unix)]
         if !(0..1_000_000_000).contains(&self.stamp.mtime_nsec) {
             return Err(SourceRefusal::Mtime);
         }
-        Ok(mode)
+        // Windows: readonly maps inside both masks; the mtime gate is a
+        // unix stat-range contract.
+        #[cfg(not(unix))]
+        let _ = (mode, mask);
+        Ok(mode & 0o7777)
     }
 }
 
@@ -84,10 +89,10 @@ impl Roots<'_, '_> {
     ) -> Result<NewEntry, Failure> {
         let path = || match parent {
             Some(_) => child_path(directory, &child.name),
-            None => directory.as_os_str().as_bytes().to_vec(),
+            None => super::bytes::as_bytes(directory.as_os_str()),
         };
         let mode = child.portable_mode().map_err(|reason| {
-            Failure::refused(reason, PathBuf::from(OsString::from_vec(path())))
+            Failure::refused(reason, PathBuf::from(super::bytes::os_string(&path())))
         })?;
         let nanos = child.stamp.mtime_nsec as u32;
         let key = (child.kind.code(), mode, child.stamp.mtime, nanos);
@@ -125,10 +130,7 @@ impl Roots<'_, '_> {
 }
 
 fn child_path(directory: &Path, name: &[u8]) -> Vec<u8> {
-    directory
-        .join(OsStr::from_bytes(name))
-        .into_os_string()
-        .into_vec()
+    super::bytes::as_bytes(directory.join(super::bytes::os_string(name)).as_os_str())
 }
 
 /// Positions being assigned while directories are read.
@@ -170,7 +172,10 @@ pub(crate) fn scan(
         name: Vec::new(),
         kind: InodeKind::Directory,
         target: None,
-        stamp: Stamp::of(root),
+        stamp: match Stamp::of(source) {
+            Ok(stamp) => stamp,
+            Err(error) => return Err(Failure::Io(error)),
+        },
     };
     let root = roots.entry(root, None, Some(0), source)?;
     placement
@@ -191,12 +196,12 @@ pub(crate) fn scan(
         placement.frontier -= 1;
         progress.tick()?;
         let parent = directory.position;
-        let path = PathBuf::from(OsString::from_vec(directory.host_path));
+        let path = PathBuf::from(super::bytes::os_string(&directory.host_path));
         let (mut count, mut wide) = (0usize, false);
         for child in fs::read_dir(&path)? {
             progress.tick()?;
             let child = child?;
-            buffer.push(observe(&child.path(), child.file_name().as_bytes())?);
+            buffer.push(observe(&child.path(), &super::bytes::as_bytes(&child.file_name()))?);
             count += 1;
             progress.counters.entry();
             if buffer.len() == WINDOW_ROWS {
@@ -291,6 +296,8 @@ fn place_wide(
 fn observe(path: &Path, name: &[u8]) -> Result<Child, Failure> {
     PathName::from_bytes(name).map_err(content)?;
     let metadata = fs::symlink_metadata(path)?;
+    let host = super::host_id::of_path(path);
+    let host = super::host_id::of_path(path);
     let (kind, target) = if metadata.file_type().is_symlink() {
         let target = super::source::read_link(path, &metadata)?;
         (InodeKind::Symlink, Some(target))
@@ -305,6 +312,6 @@ fn observe(path: &Path, name: &[u8]) -> Result<Child, Failure> {
         name: name.to_vec(),
         kind,
         target,
-        stamp: Stamp::of(&metadata),
+        stamp: Stamp::of_metadata(&metadata, host),
     })
 }

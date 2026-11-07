@@ -34,8 +34,9 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// Path bytes: unix reads OsStr as bytes; Windows converts the WTF-8 the
-/// OS names it by (same encoding discipline as helper_spec).
+/// Path bytes: unix reads OsStr as bytes; Windows goes through UTF-16 to
+/// UTF-8 (lossy on unpaired surrogates) - the persisted path grammar is
+/// valid UTF-8 and PathName enforces it.
 mod os_str_bytes {
     use std::ffi::{OsStr, OsString};
 
@@ -53,22 +54,12 @@ mod os_str_bytes {
     pub fn as_bytes(text: &OsStr) -> Vec<u8> {
         use std::os::windows::ffi::OsStrExt;
         let wide = text.encode_wide().collect::<Vec<u16>>();
-        let mut bytes = Vec::with_capacity(wide.len() * 2);
-        for unit in wide {
-            bytes.extend_from_slice(&unit.to_le_bytes());
-        }
-        bytes
+        String::from_utf16_lossy(&wide).into_bytes()
     }
     #[cfg(windows)]
     pub fn from_bytes(bytes: &[u8]) -> OsString {
-        use std::os::windows::ffi::OsStringExt;
-        let mut wide = Vec::with_capacity(bytes.len() / 2);
-        let mut raw = bytes.chunks_exact(2);
-        for chunk in &mut raw {
-            wide.push(u16::from_le_bytes([chunk[0], chunk[1]]));
-        }
-        let _ = raw.remainder();
-        OsString::from_wide(&wide)
+        let text = String::from_utf8_lossy(bytes);
+        OsString::from(text)
     }
 }
 use os_str_bytes::{as_bytes, from_bytes};
