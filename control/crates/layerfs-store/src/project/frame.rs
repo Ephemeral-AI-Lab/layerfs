@@ -149,15 +149,20 @@ impl StageFrame {
     }
 
     /// A `project.stage` frame: a bad copy id, then a `write` without
-    /// bytes or an unknown step are refused.
-    pub fn decode(frame: &SdkValue) -> Result<Self> {
-        let id = staged_id(frame)?;
+    /// bytes or an unknown step are refused. The frame is taken so that
+    /// its part is moved, not copied.
+    pub fn decode(mut frame: SdkValue) -> Result<Self> {
+        let id = staged_id(&frame)?;
         let step = match frame.get_text("step").unwrap_or("") {
             "write" => {
-                let Some(SdkValue::Bytes(part)) = frame.get("part") else {
+                let part = match &mut frame {
+                    SdkValue::Map(fields) => fields.iter_mut().find(|(name, _)| name == "part"),
+                    _ => None,
+                };
+                let Some((_, SdkValue::Bytes(part))) = part else {
                     return Err(refused("InvalidInput", "`part` must be bytes"));
                 };
-                StageStep::Write(part.clone())
+                StageStep::Write(std::mem::take(part))
             }
             "discard" => StageStep::Discard,
             step => {

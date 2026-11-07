@@ -76,7 +76,7 @@ fn each_frame_encodes_the_map_its_caller_built() {
     write.extend([("step", t("write")), ("part", SdkValue::Bytes(vec![1, 2]))]);
     let encoded = stage(StageStep::Write(vec![1, 2])).encode();
     assert_eq!(encoded, map(write));
-    let decoded = StageFrame::decode(&encoded).unwrap();
+    let decoded = StageFrame::decode(encoded).unwrap();
     assert_eq!(decoded.step, StageStep::Write(vec![1, 2]));
     assert_eq!(decoded.id, ID);
     let mut discard = head();
@@ -107,7 +107,7 @@ fn the_worker_refuses_a_frame_in_its_old_order() {
     );
     assert!(remove(vec![("store", t("../x")), ("project", t("web"))]).starts_with("store name"));
 
-    let stage = |fields| StageFrame::decode(&map(fields)).unwrap_err().message;
+    let stage = |fields| StageFrame::decode(map(fields)).unwrap_err().message;
     // a bad id before an unknown step
     assert_eq!(
         stage(vec![("step", t("nope"))]),

@@ -18,6 +18,10 @@
 //! A request may carry `home_id`, the caller's home id: the root is not a
 //! home and has no id of its own (O33), so host code that asks for one
 //! gets the caller's, and the root is never converted or written as a home.
+//!
+//! A request with `trace_step: true` (a caller with `LAYERFS_TRACE_STEP`
+//! set) has its steps timed from when it was read, and its answer carries
+//! them as `steps: [{ step, us }]` beside `value` or `refused`.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::{
@@ -113,20 +117,41 @@ fn answer(mut stream: TcpStream, secret: &str, ready: &SdkValue, root: &Path) ->
         _ => return false,
     };
     let _ = stream.set_read_timeout(None);
+    let stepped = request.get("trace_step") == Some(&SdkValue::Bool(true));
+    if stepped {
+        layerfs_home::trace::steps_begin();
+    }
     let _home = layerfs_home::home::guest::sent(request.get_text("home_id"));
-    let outcome = run(
-        request.get_text("op").unwrap_or(""),
-        request.get("args").cloned().unwrap_or_default(),
-        root,
-        &mut |event| {
-            let _ = write_frame(&mut stream, &SdkValue::map([("event", event)]));
-        },
-    );
-    let frame = match outcome {
+    let (op, args) = op_and_args(request);
+    let outcome = run(&op, args, root, &mut |event| {
+        let _ = write_frame(&mut stream, &SdkValue::map([("event", event)]));
+    });
+    let mut frame = match outcome {
         Ok(value) => SdkValue::map([("value", value)]),
         Err(refusal) => refusal_frame(refusal),
     };
+    if stepped {
+        layerfs_home::trace::step("result");
+        let steps = layerfs_home::trace::steps_value(layerfs_home::trace::steps_take());
+        frame = layerfs_home::home::with_field(frame, "steps", steps);
+    }
     write_frame(&mut stream, &frame).is_ok()
+}
+
+/// A request's `op` and its `args` (moved out, not copied: they may hold a
+/// large part of a file).
+fn op_and_args(request: SdkValue) -> (String, SdkValue) {
+    let (mut op, mut args) = (String::new(), SdkValue::Null);
+    if let SdkValue::Map(fields) = request {
+        for (name, value) in fields {
+            match (name.as_str(), value) {
+                ("op", SdkValue::Text(text)) => op = text,
+                ("args", value) => args = value,
+                _ => {}
+            }
+        }
+    }
+    (op, args)
 }
 
 fn refusal_frame(refusal: SdkRefusal) -> SdkValue {
@@ -183,7 +208,7 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
         }
         // writes or discards one part of a caller's folder copy under this
         // worker's root (#536 H11a)
-        "project.stage" => staged::run(root, &StageFrame::decode(&args)?),
+        "project.stage" => staged::run(root, &StageFrame::decode(args)?),
         // adds a folder copy the caller sent as a new project of a Store
         // under this worker's root (#536 H11, H11a)
         "project.init" => {

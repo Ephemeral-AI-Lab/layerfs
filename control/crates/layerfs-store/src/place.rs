@@ -27,7 +27,9 @@ pub enum Executor {
 /// calls of the same operation (a move's steps) use the worker it reached.
 /// Nothing here starts a machine (#535 D11): a call whose worker is not
 /// recorded or does not answer is refused `Unavailable`, naming
-/// `layerfs machine start`.
+/// `layerfs machine start`. A clone dials the same worker:
+/// `project.init` sends its parts on several connections at once.
+#[derive(Clone)]
 pub struct Worker {
     home: PathBuf,
     machine: String,
@@ -95,12 +97,24 @@ impl Worker {
             Ok(request) => request,
             Err(refusal) => return Ok(Err(refusal)),
         };
+        self.attempt_framed(op, &request, events)
+    }
+
+    /// [`Worker::attempt`] with `request` already framed
+    /// ([`worker::request`], on the thread whose home id and step timing it
+    /// carries).
+    pub fn attempt_framed(
+        &mut self,
+        op: &str,
+        request: &[u8],
+        events: &mut dyn FnMut(SdkValue),
+    ) -> std::result::Result<Outcome, Unreached> {
         if let Some(endpoint) = &self.endpoint {
-            return worker::send(endpoint, op, &request, events, None)
+            return worker::send(endpoint, op, request, events, None)
                 .map_err(|Unreached(why)| Unreached(stopped(&self.machine, why)));
         }
         let endpoint = recorded(&self.home, &self.machine).map_err(Unreached)?;
-        match worker::send(&endpoint, op, &request, events, None) {
+        match worker::send(&endpoint, op, request, events, None) {
             Ok(outcome) => {
                 self.endpoint = Some(endpoint);
                 Ok(outcome)

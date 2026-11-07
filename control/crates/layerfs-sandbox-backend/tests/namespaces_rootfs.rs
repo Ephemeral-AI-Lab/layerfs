@@ -19,7 +19,9 @@ use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
-use support::image::{archive, hex, legacy_archive, Scratch, Tar, DIGEST, OTHER};
+use support::image::{
+    archive, hex, legacy_archive, pax_record, unpacked_at, Scratch, Tar, DIGEST, OTHER,
+};
 
 /// Two layers: the first holds the image, the second hides part of it and adds
 /// to it, which is what a whiteout and an opaque directory mean.
@@ -63,7 +65,10 @@ fn the_layers_unpack_in_order_and_their_whiteouts_apply() {
     let path = archive(&scratch.base, "image", DIGEST, two_layers());
     let root = unpacked(&scratch, &path, DIGEST);
     assert_eq!(root.image().as_str(), DIGEST);
-    assert_eq!(root.directory(), scratch.cache.join(hex(DIGEST)).as_path());
+    assert_eq!(
+        root.directory(),
+        unpacked_at(&scratch.cache, DIGEST).as_path()
+    );
     let directory = root.directory();
     // the first layer's files, and the second layer's
     assert_eq!(read(&directory.join("etc/marker")), "layer one\n");
@@ -111,7 +116,7 @@ fn a_digest_the_archive_is_not_refuses_the_start_and_unpacks_nothing() {
     assert!(message.contains(hex(OTHER)), "{message}");
     assert!(message.contains("config digest"), "{message}");
     // nothing was published, and no half unpack was left behind
-    assert!(!scratch.cache.join(hex(OTHER)).exists());
+    assert!(!unpacked_at(&scratch.cache, OTHER).exists());
     assert_eq!(temporaries(&scratch.cache).len(), 0);
 }
 
@@ -198,12 +203,12 @@ fn a_second_sandbox_waits_for_the_unpack_that_is_running() {
             .write(true)
             .create(true)
             .truncate(false)
-            .open(cache.join(format!("{}.lock", hex(DIGEST))))
+            .open(cache.join(format!("{}.2.lock", hex(DIGEST))))
             .unwrap(),
         nix::fcntl::FlockArg::LockExclusive,
     )
     .unwrap();
-    let directory = cache.join(hex(DIGEST));
+    let directory = unpacked_at(&cache, DIGEST);
     let waiting = {
         let (archive, cache) = (path.clone(), scratch.cache.clone());
         std::thread::spawn(move || {
@@ -250,7 +255,7 @@ fn a_path_that_is_not_plain_and_relative_is_refused() {
             format!("{error}").contains("absolute or holds a `..` component"),
             "{name}: {error}"
         );
-        assert!(!scratch.cache.join(hex(DIGEST)).exists(), "{name}");
+        assert!(!unpacked_at(&scratch.cache, DIGEST).exists(), "{name}");
         assert!(
             !scratch.base.join("outside").exists(),
             "{name} wrote outside"
@@ -258,17 +263,6 @@ fn a_path_that_is_not_plain_and_relative_is_refused() {
         assert!(!Path::new("/etc/outside").exists(), "{name} wrote outside");
     }
     assert_eq!(temporaries(&scratch.cache).len(), 0);
-}
-
-/// One pax extended-header record, `<length> <key>=<value>\n`, whose length
-/// counts itself.
-fn pax_record(key: &str, value: &str) -> Vec<u8> {
-    let body = format!(" {key}={value}\n");
-    let mut length = body.len() + 1;
-    while format!("{length}").len() + body.len() != length {
-        length += 1;
-    }
-    format!("{length}{body}").into_bytes()
 }
 
 #[test]
@@ -339,7 +333,7 @@ fn a_symlink_cannot_redirect_a_later_layers_write() {
         "{error}"
     );
     assert!(!Path::new("/tmp/outside").exists(), "the link was followed");
-    assert!(!scratch.cache.join(hex(DIGEST)).exists());
+    assert!(!unpacked_at(&scratch.cache, DIGEST).exists());
 }
 
 #[test]
@@ -355,7 +349,7 @@ fn a_device_node_is_refused() {
         format!("{error}").contains("device node"),
         "a device node was extracted: {error}"
     );
-    assert!(!scratch.cache.join(hex(DIGEST)).exists());
+    assert!(!unpacked_at(&scratch.cache, DIGEST).exists());
 }
 
 #[test]
@@ -414,14 +408,15 @@ fn two_digests_share_one_cache_directory() {
     assert_eq!(read(&two.directory().join("other")), "other\n");
     // a record's image is found without unpacking anything again
     assert_eq!(
-        rootfs::lookup(&image(OTHER), &scratch.cache)
+        rootfs::lookup(&image(OTHER), &scratch.cache, two.directory())
             .unwrap()
             .directory(),
         two.directory()
     );
     // and one that is not there is refused rather than invented
     let missing = Image::parse(&format!("sha256:{}", "d".repeat(64))).unwrap();
-    let error = rootfs::lookup(&missing, &scratch.cache).unwrap_err();
+    let lower = unpacked_at(&scratch.cache, &format!("sha256:{}", "d".repeat(64)));
+    let error = rootfs::lookup(&missing, &scratch.cache, &lower).unwrap_err();
     assert!(format!("{error}").contains("cannot be found"), "{error}");
 }
 

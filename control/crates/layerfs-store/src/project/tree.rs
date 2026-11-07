@@ -4,13 +4,19 @@
 //! tag's fields. Integers are big-endian; a path, target or piece is a
 //! `u32` length and that many bytes (names are bytes, never text).
 //!
-//! - `D path`: a directory, made empty; its `M` follows its contents.
-//! - `W path offset:u64 bytes`: a piece of a regular file; offset 0 makes
-//!   the file, a later piece continues it at its length.
+//! - `D path`: a directory, made empty (kept when a record inside it made
+//!   it first); its `M` follows its contents.
+//! - `W path offset:u64 bytes`: a piece of a regular file, written at its
+//!   offset; the first piece to arrive makes the file. A file's pieces do
+//!   not overlap and may arrive in any order.
 //! - `L path target`: a symbolic link.
 //! - `M path mode:u32 seconds:i64 nanoseconds:u32`: the entry's permission
 //!   bits (not a link's) and modification time, after its content; the
-//!   empty path is the folder itself.
+//!   empty path is the folder itself. `M` records travel in parts of their
+//!   own, after every part before them was written.
+//!
+//! A record's folders on the way are made when not there yet, so the `D`,
+//! `W` and `L` records of parts sent at once apply in any order.
 //!
 //! This is what Init records of an entry (its kind, permission bits,
 //! modification time, a link's target and a file's bytes); owners,

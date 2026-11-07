@@ -60,13 +60,17 @@ pub fn call(
 #[derive(Debug)]
 pub struct Unreached(pub SdkRefusal);
 
-/// Request `{ op, args }` framed once, with the caller's home id; `TooLarge`
-/// past [`super::MAX_FRAME`].
+/// Request `{ op, args }` framed once, with the caller's home id, and
+/// `trace_step: true` while this thread's steps are timed (the worker then
+/// answers its own, `steps`); `TooLarge` past [`super::MAX_FRAME`].
 pub fn request(op: &str, args: SdkValue) -> Result<Vec<u8>, SdkRefusal> {
     let mut request = SdkValue::map([("op", SdkValue::text(op)), ("args", args)]);
     // the caller's home id: the worker's root has none of its own (O33)
     if let Some(id) = layerfs_home::home::guest::current_id() {
         request = layerfs_home::home::with_field(request, "home_id", SdkValue::Text(id));
+    }
+    if layerfs_home::trace::stepping() {
+        request = layerfs_home::home::with_field(request, "trace_step", SdkValue::Bool(true));
     }
     frame_bytes(&request)
 }
@@ -84,6 +88,7 @@ pub fn send(
     answer_within: Option<Duration>,
 ) -> Result<Outcome, Unreached> {
     let started = Instant::now();
+    layerfs_home::trace::step("route");
     let sent = send_once(endpoint, op, request, events, answer_within);
     let worker = endpoint.address.to_string();
     layerfs_home::trace::connection(&worker, op, sent.is_ok(), started);
@@ -135,6 +140,7 @@ fn greet(endpoint: &Endpoint) -> Result<(TcpStream, Hello), Greeting> {
     let unanswered = |why: &dyn std::fmt::Display| Greeting::Unanswered(why.to_string());
     let mut stream = TcpStream::connect_timeout(&endpoint.address, CONNECT)
         .map_err(|error| unanswered(&error))?;
+    layerfs_home::trace::step("connect");
     let _ = stream.set_nodelay(true);
     // the secret first, alone: the worker answers it before the request
     stream
@@ -144,6 +150,7 @@ fn greet(endpoint: &Endpoint) -> Result<(TcpStream, Hello), Greeting> {
     write_frame(&mut stream, &secret).map_err(|error| unanswered(&error))?;
     match read_frame_within(&mut stream, MAX_HELLO) {
         Ok(Some(frame)) if frame.get("ready").is_some() => {
+            layerfs_home::trace::step("ready");
             let hello = Hello::of(&frame);
             Ok((stream, hello))
         }
@@ -193,6 +200,7 @@ fn answer(
                 format!("sending {op} to the worker failed part way ({error}); it was not resent"),
             )
         })?;
+    layerfs_home::trace::step("request");
     loop {
         let frame = match read_frame(&mut stream) {
             Ok(Some(frame)) => frame,
@@ -201,7 +209,14 @@ fn answer(
         };
         if let Some(event) = frame.get("event") {
             events(event.clone());
-        } else if let Some(value) = frame.get("value") {
+            continue;
+        }
+        // a worker's steps, when this call asked for them (`trace_step`)
+        layerfs_home::trace::step("answer");
+        if let Some(steps) = frame.get("steps") {
+            layerfs_home::trace::steps_from(steps);
+        }
+        if let Some(value) = frame.get("value") {
             return Ok(value.clone());
         } else if let Some(refusal) = frame.get("refused") {
             return Err(refusal_of(refusal));

@@ -1,6 +1,7 @@
 //! Where unpacked images live and how one digest is unpacked exactly once:
-//! `<root>/images/<64 hex>`, published by a rename, guarded by a per-digest
-//! `flock`.
+//! `<root>/images/<64 hex>.2`, published by a rename, guarded by a per-digest
+//! `flock`. A Sandbox made before file times were restored keeps the
+//! `<64 hex>` it was built on.
 use super::{archive::unpack, refuse, ImageRoot};
 use crate::{Image, RuntimeError};
 use nix::fcntl::{Flock, FlockArg};
@@ -13,6 +14,9 @@ use std::{
 
 /// The cache's own name under a runtime root: `<root>/images`.
 const CACHE: &str = "images";
+/// The layout an unpack is published under, after the digest: `.2` restores
+/// file times; a plain `<64 hex>` is an older unpack that did not.
+const LAYOUT: &str = ".2";
 
 /// The cache directory below a runtime root, `<root>/images`, where unpacked
 /// images and their locks live.
@@ -26,7 +30,7 @@ pub fn cache(root: &Path) -> PathBuf {
 pub fn ensure(archive: &Path, image: &Image, cache: &Path) -> Result<ImageRoot, RuntimeError> {
     let cache = beneath(cache)?;
     let lock = lock(&cache, image)?;
-    let directory = cache.join(image.hex());
+    let directory = cache.join(name(image));
     match fs::symlink_metadata(&directory) {
         Ok(metadata) if metadata.is_dir() => {
             drop(lock);
@@ -46,7 +50,7 @@ pub fn ensure(archive: &Path, image: &Image, cache: &Path) -> Result<ImageRoot, 
     remove_temporaries(&cache, image)?;
     let staging = cache.join(format!(
         ".tmp-{}-{}",
-        image.hex(),
+        name(image),
         crate::ContainerId::random()?.as_str()
     ));
     DirBuilder::new().mode(0o700).create(&staging)?;
@@ -71,19 +75,32 @@ pub fn ensure(archive: &Path, image: &Image, cache: &Path) -> Result<ImageRoot, 
     Ok(ImageRoot::new(image.clone(), directory))
 }
 
-/// The image's root under `cache` when this host already holds it, unpacking
-/// nothing. A record whose image is gone cannot be reopened as the same root.
-pub fn lookup(image: &Image, cache: &Path) -> Result<ImageRoot, RuntimeError> {
-    let directory = cache.join(image.hex());
-    match fs::symlink_metadata(&directory) {
-        Ok(metadata) if metadata.is_dir() => Ok(ImageRoot::new(image.clone(), directory)),
+/// The root a Sandbox of `image` was built on, `lower` as its spec records
+/// it, when this host still holds it, unpacking nothing. `lower` must be one
+/// of `cache`'s directories for that digest (`<64 hex>.2`, or an older
+/// unpack's `<64 hex>`): a reopen never moves a Sandbox to another root, and
+/// a record whose image is gone is refused.
+pub fn lookup(image: &Image, cache: &Path, lower: &Path) -> Result<ImageRoot, RuntimeError> {
+    let known = [image.hex().to_owned(), name(image)]
+        .iter()
+        .any(|name| cache.join(name) == lower);
+    match fs::symlink_metadata(lower) {
+        Ok(metadata) if known && metadata.is_dir() => {
+            Ok(ImageRoot::new(image.clone(), lower.to_owned()))
+        }
         _ => Err(refuse(format!(
-            "the unpacked image {} is not at {}: this Sandbox's root cannot be found, so it is \
-             neither reopened nor deleted",
+            "the unpacked image {} is not at {} in {}: this Sandbox's root cannot be found, so \
+             it is neither reopened nor deleted",
             image.as_str(),
-            directory.display()
+            lower.display(),
+            cache.display()
         ))),
     }
+}
+
+/// An unpack's name in the cache: the digest's hex and the layout.
+fn name(image: &Image) -> String {
+    format!("{}{LAYOUT}", image.hex())
 }
 
 /// The cache directory, made 0700 and owned by this (root) process when it is
@@ -115,7 +132,7 @@ fn beneath(cache: &Path) -> Result<PathBuf, RuntimeError> {
 /// The per-digest lock, held by the caller until the returned lock is dropped.
 /// The file stays on disk: another process may be waiting on it.
 fn lock(cache: &Path, image: &Image) -> Result<Flock<File>, RuntimeError> {
-    let path = cache.join(format!("{}.lock", image.hex()));
+    let path = cache.join(format!("{}.lock", name(image)));
     let file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -128,9 +145,9 @@ fn lock(cache: &Path, image: &Image) -> Result<Flock<File>, RuntimeError> {
 }
 
 /// Removes the temporary directories a crashed unpack of `image` left; only
-/// this digest's, and only while holding its lock.
+/// this digest's and layout's, and only while holding its lock.
 fn remove_temporaries(cache: &Path, image: &Image) -> Result<(), RuntimeError> {
-    let prefix = format!(".tmp-{}-", image.hex());
+    let prefix = format!(".tmp-{}-", name(image));
     for entry in fs::read_dir(cache)? {
         let entry = entry?;
         let name = entry.file_name();

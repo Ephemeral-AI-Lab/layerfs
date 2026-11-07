@@ -232,7 +232,7 @@ fn init_on_worker(
     send::room(&mut worker, &copy, total)?;
     // the lease is taken under the Store's lock with the record read there
     let (lease, record) = lease::claim(&home, store)?;
-    send::send(events, &mut worker, &copy, total)?;
+    send::send(events, &worker, &copy, total)?;
     let request = InitFrame {
         store: store.clone(),
         name: Some(name.to_owned()),

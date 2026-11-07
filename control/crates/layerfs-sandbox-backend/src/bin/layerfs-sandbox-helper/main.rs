@@ -64,4 +64,5 @@ fn spec(arguments: &[std::ffi::OsString]) -> Result<&std::path::Path, String> {
 
 #[cfg(target_os = "linux")]
 const USAGE: &str = "usage: layerfs-sandbox-helper init|init-inner --spec <file> | exec --init \
-                     <pid> --cgroup <dir> --uid <uid> --gid <gid> --cwd <dir> -- <command> …";
+                     <pid> --cgroup <dir> [--leave <dir>] [--trace <file>] --uid <uid> --gid <gid> \
+                     --cwd <dir> -- <command> …";

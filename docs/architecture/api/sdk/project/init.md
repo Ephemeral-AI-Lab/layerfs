@@ -92,6 +92,8 @@ The summary is built in [`project/record.rs`](../../../../../control/crates/laye
          Exists check, send::measure, send::room
          lease::claim
          project.stage x N  ---------------->  write staged parts
+           (up to 4 at once)                   (any order; modes and
+                                                times after the rest)
          progress "install"
          project.init  --------------------->  in_worker: own lease,
                                                identity::add_project

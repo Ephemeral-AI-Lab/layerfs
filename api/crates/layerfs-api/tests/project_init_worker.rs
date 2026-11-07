@@ -9,6 +9,7 @@ use layerfs_bridge::control::SdkValue;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 fn tempdir(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("lfs-iw-{tag}-{}", std::process::id()));
@@ -93,9 +94,10 @@ fn store_call(home: &Path, name: &str, project: &str, path: &str) -> SdkValue {
     call(home, name, args, &mut |_| {}).unwrap_or_else(|e| panic!("{name} {path}: {e:?}"))
 }
 
-/// Bytes past one 8 MiB part, in a pattern that is not one repeated byte.
+/// Bytes for more 8 MiB parts than are sent at once, in a pattern that is
+/// not one repeated byte.
 fn big() -> Vec<u8> {
-    (0..(9u32 << 20) + 123)
+    (0..(36u32 << 20) + 123)
         .map(|i| (i * 31 % 251) as u8)
         .collect()
 }
@@ -251,44 +253,153 @@ fn open_up(folder: &Path) {
     let _ = std::fs::set_permissions(folder.join("shut/in"), open);
 }
 
+/// What a stand-in does with one request.
+#[derive(Clone, Copy, PartialEq)]
+enum Pass {
+    /// Passes it to the real worker (a stage write after the delay).
+    Forward,
+    /// Refuses it `Failed` ("kept") at once.
+    Refuse,
+    /// Closes the connection at once, unanswered.
+    Drop,
+}
+
+/// What a stand-in saw: `write` (passed), `refused` or `dropped` as each
+/// stage write ended, `discard` as a discard arrived; and the most stage
+/// writes it held at once.
+#[derive(Default)]
+struct Seen {
+    log: Vec<&'static str>,
+    held: usize,
+    most: usize,
+}
+
+type Shared = std::sync::Arc<std::sync::Mutex<Seen>>;
+
 /// A stand-in for box's worker that passes each request to the worker at
-/// `real`, except those `refuse` picks, which it refuses `Failed`.
+/// `real`, each connection on its own thread, except as `pick` says. It is
+/// given each request and, for a stage write, its place among them (from
+/// 0). Each stage write it passes is held `delay(place)` first, so the
+/// caller has several in flight at once.
 fn stand_in(
     listener: TcpListener,
     real: SocketAddr,
-    refuse: impl Fn(&SdkValue) -> bool + Send + 'static,
-) {
+    delay: fn(usize) -> Duration,
+    pick: impl Fn(&SdkValue, Option<usize>) -> Pass + Send + Sync + 'static,
+) -> Shared {
+    let seen = Shared::default();
+    let pick = std::sync::Arc::new(pick);
+    let writes = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let shared = seen.clone();
     std::thread::spawn(move || {
         for client in listener.incoming() {
-            let mut client = client.unwrap();
-            let hello = worker::read_frame_within(&mut client, worker::MAX_HELLO);
-            let mut upstream = TcpStream::connect(real).unwrap();
-            worker::write_frame(&mut upstream, &hello.unwrap().unwrap()).unwrap();
-            let ready = worker::read_frame(&mut upstream).unwrap().unwrap();
-            worker::write_frame(&mut client, &ready).unwrap();
-            let Some(request) = worker::read_frame(&mut client).unwrap() else {
-                continue;
-            };
-            if refuse(&request) {
-                let refusal = SdkValue::map([
-                    ("code", t("Failed")),
-                    ("message", t("kept")),
-                    ("detail", SdkValue::Null),
-                ]);
-                let frame = SdkValue::map([("refused", refusal)]);
-                worker::write_frame(&mut client, &frame).unwrap();
-                continue;
-            }
-            worker::write_frame(&mut upstream, &request).unwrap();
-            while let Some(frame) = worker::read_frame(&mut upstream).unwrap() {
-                let answer = frame.get("event").is_none();
-                worker::write_frame(&mut client, &frame).unwrap();
-                if answer {
-                    break;
-                }
-            }
+            let (seen, pick, writes) = (shared.clone(), pick.clone(), writes.clone());
+            let client = client.unwrap();
+            std::thread::spawn(move || pass(client, real, delay, &seen, &*pick, &writes));
         }
     });
+    seen
+}
+
+/// One connection through the stand-in.
+fn pass(
+    mut client: TcpStream,
+    real: SocketAddr,
+    delay: fn(usize) -> Duration,
+    seen: &Shared,
+    pick: &dyn Fn(&SdkValue, Option<usize>) -> Pass,
+    writes: &std::sync::atomic::AtomicUsize,
+) {
+    let hello = worker::read_frame_within(&mut client, worker::MAX_HELLO);
+    let mut upstream = TcpStream::connect(real).unwrap();
+    worker::write_frame(&mut upstream, &hello.unwrap().unwrap()).unwrap();
+    let ready = worker::read_frame(&mut upstream).unwrap().unwrap();
+    worker::write_frame(&mut client, &ready).unwrap();
+    let Some(request) = worker::read_frame(&mut client).unwrap() else {
+        return;
+    };
+    let args = request.get("args").cloned().unwrap_or_default();
+    let stage = request.get_text("op") == Some("project.stage");
+    let write = stage && args.get_text("step") == Some("write");
+    if stage && args.get_text("step") == Some("discard") {
+        seen.lock().unwrap().log.push("discard");
+    }
+    let index = write.then(|| writes.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
+    if write {
+        let mut seen = seen.lock().unwrap();
+        seen.held += 1;
+        seen.most = seen.most.max(seen.held);
+    }
+    let chosen = pick(&request, index);
+    let ended = |what| {
+        if write {
+            let mut seen = seen.lock().unwrap();
+            seen.held -= 1;
+            seen.log.push(what);
+        }
+    };
+    match chosen {
+        Pass::Refuse => {
+            let refusal = SdkValue::map([
+                ("code", t("Failed")),
+                ("message", t("kept")),
+                ("detail", SdkValue::Null),
+            ]);
+            let frame = SdkValue::map([("refused", refusal)]);
+            worker::write_frame(&mut client, &frame).unwrap();
+            ended("refused");
+            return;
+        }
+        Pass::Drop => {
+            drop(client);
+            ended("dropped");
+            return;
+        }
+        Pass::Forward => std::thread::sleep(index.map_or(Duration::ZERO, delay)),
+    }
+    worker::write_frame(&mut upstream, &request).unwrap();
+    while let Some(frame) = worker::read_frame(&mut upstream).unwrap() {
+        let answer = frame.get("event").is_none();
+        if answer {
+            ended("write");
+        }
+        worker::write_frame(&mut client, &frame).unwrap();
+        if answer {
+            break;
+        }
+    }
+}
+
+/// A Store `shop` on box, whose worker root is `root`.
+fn shop_on_box(home: &Path, root: &Path) {
+    let made = call(
+        home,
+        "store.create",
+        SdkValue::map([("name", t("shop"))]),
+        &mut |_| {},
+    );
+    made.unwrap_or_else(|e| panic!("store.create: {e:?}"));
+    move_store_file(home, root, "shop");
+    place_store(home, "shop", "box");
+}
+
+/// The copies under `root`'s staging folder.
+fn copies(root: &Path) -> Vec<PathBuf> {
+    match std::fs::read_dir(root.join("incoming")) {
+        Ok(entries) => entries.map(|e| e.unwrap().path()).collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Each stage write the stand-in held: passed, refused or dropped.
+fn writes(seen: &Seen) -> usize {
+    let ends = ["write", "refused", "dropped"];
+    seen.log.iter().filter(|e| ends.contains(e)).count()
+}
+
+/// Every stage write held the same time.
+fn hold(_: usize) -> Duration {
+    Duration::from_millis(300)
 }
 
 /// `copy` holds what Init reads of `source`: kinds, permission bits (not a
@@ -340,23 +451,24 @@ fn the_copy_holds_what_init_reads_of_the_folder() {
     let real = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = real.local_addr().unwrap();
     serve(real, &root);
-    // the Init is refused: the copy stays
-    stand_in(listener, address, |request| {
-        request.get_text("op") == Some("project.init")
+    // the Init is refused: the copy stays; the first part to arrive is
+    // written last, so the parts after it make its folders and write their
+    // pieces past the end of its files
+    let last_first = |place| match place {
+        0 => Duration::from_millis(600),
+        _ => Duration::from_millis(100),
+    };
+    let seen = stand_in(listener, address, last_first, |request, _| {
+        match request.get_text("op") == Some("project.init") {
+            true => Pass::Refuse,
+            false => Pass::Forward,
+        }
     });
-    let made = call(
-        &home,
-        "store.create",
-        SdkValue::map([("name", t("shop"))]),
-        &mut |_| {},
-    );
-    made.unwrap_or_else(|e| panic!("store.create: {e:?}"));
-    move_store_file(&home, &root, "shop");
-    place_store(&home, "shop", "box");
+    shop_on_box(&home, &root);
     let folder = tempdir("source");
     sample(&folder);
     // a time with nanoseconds on the folder itself, set last
-    let time = std::time::UNIX_EPOCH + std::time::Duration::new(1_700_000_000, 123_456_789);
+    let time = std::time::UNIX_EPOCH + Duration::new(1_700_000_000, 123_456_789);
     let handle = std::fs::File::open(&folder).unwrap();
     handle.set_modified(time).unwrap();
 
@@ -368,13 +480,16 @@ fn the_copy_holds_what_init_reads_of_the_folder() {
     )
     .unwrap_err();
     assert_eq!(refusal, ("Failed".to_owned(), "kept".to_owned()));
-    let copies: Vec<_> = std::fs::read_dir(root.join("incoming"))
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .collect();
+    let copies = copies(&root);
     assert_eq!(copies.len(), 1, "{copies:?}");
+    // parts written several at once, in any order, make the same tree
     same_tree(&folder, &copies[0]);
     assert!(!paths::project_record(&home, "shop", "web").exists());
+    let seen = seen.lock().unwrap();
+    let at_once = layerfs_store::project::parts::AT_ONCE;
+    assert!((2..=at_once).contains(&seen.most), "{} at once", seen.most);
+    // five data parts and the modes and times after them, each sent once
+    assert_eq!(writes(&seen), 6, "{:?}", seen.log);
 
     open_up(&folder);
     open_up(&copies[0]);
@@ -445,31 +560,75 @@ fn a_folder_copy_stays_inside_its_staging_folder() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// A `W` record of `bytes` at `offset`.
+fn piece(path: &str, offset: u64, bytes: &[u8]) -> Vec<u8> {
+    let mut out = record(b'W', path, &[]);
+    out.extend_from_slice(&offset.to_be_bytes());
+    out.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
+    out.extend_from_slice(bytes);
+    out
+}
+
 #[test]
-fn a_copy_that_fails_midway_is_discarded() {
+fn parts_apply_in_any_order_and_at_once() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = Endpoint {
+        address: listener.local_addr().unwrap(),
+        secret: "k".to_owned(),
+    };
+    let root = tempdir("order");
+    serve(listener, &root);
+    let staged = root.join("incoming/init-00112233445566ff");
+
+    // a later piece first: its folders are made, the file written past
+    // its end; the first piece and the folders' own records after it
+    stage(&endpoint, piece("a/b/f", 3, b"def")).unwrap();
+    stage(&endpoint, piece("a/b/f", 0, b"abc")).unwrap();
+    stage(&endpoint, record(b'D', "a", &[])).unwrap();
+    stage(&endpoint, record(b'D', "a/b", &[])).unwrap();
+    assert_eq!(std::fs::read(staged.join("a/b/f")).unwrap(), b"abcdef");
+    // something else where a directory goes is still refused
+    let refusal = stage(&endpoint, record(b'D', "a/b/f", &[])).unwrap_err();
+    assert!(refusal.1.contains("not a directory"), "{}", refusal.1);
+    let refusal = stage(&endpoint, piece("a/b/f/g", 0, b"x")).unwrap_err();
+    assert!(refusal.1.contains("not a directory"), "{}", refusal.1);
+    // parts at once making the same new folders
+    let threads: Vec<_> = (0..8)
+        .map(|i| {
+            let endpoint = endpoint.clone();
+            std::thread::spawn(move || {
+                let path = format!("c/d/e/f{i}");
+                let mut records = piece(&path, 1, b"y");
+                records.extend(piece(&path, 0, b"x"));
+                stage(&endpoint, records)
+            })
+        })
+        .collect();
+    for thread in threads {
+        thread.join().unwrap().unwrap();
+    }
+    for i in 0..8 {
+        let bytes = std::fs::read(staged.join(format!("c/d/e/f{i}"))).unwrap();
+        assert_eq!(bytes, b"xy");
+    }
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_copy_that_fails_midway_is_discarded_after_its_parts_in_flight() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let home = home_with_box("home3", &listener);
     let root = tempdir("midway");
     let real = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = real.local_addr().unwrap();
     serve(real, &root);
-    // the second part is refused
-    let writes = std::sync::atomic::AtomicUsize::new(0);
-    stand_in(listener, address, move |request| {
-        let args = request.get("args").cloned().unwrap_or_default();
-        request.get_text("op") == Some("project.stage")
-            && args.get_text("step") == Some("write")
-            && writes.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 1
+    // the second part to arrive is refused at once; the others are held
+    let seen = stand_in(listener, address, hold, |_, index| match index {
+        Some(1) => Pass::Refuse,
+        _ => Pass::Forward,
     });
-    let made = call(
-        &home,
-        "store.create",
-        SdkValue::map([("name", t("shop"))]),
-        &mut |_| {},
-    );
-    made.unwrap_or_else(|e| panic!("store.create: {e:?}"));
-    move_store_file(&home, &root, "shop");
-    place_store(&home, "shop", "box");
+    shop_on_box(&home, &root);
     let folder = tempdir("half");
     sample(&folder);
 
@@ -480,10 +639,103 @@ fn a_copy_that_fails_midway_is_discarded() {
         &mut |_| {},
     )
     .unwrap_err();
+    // the first failure, as a serial copy would answer it
     assert_eq!(refusal, ("Failed".to_owned(), "kept".to_owned()));
-    // the first part was written, then discarded
-    let copies = std::fs::read_dir(root.join("incoming")).unwrap().count();
-    assert_eq!(copies, 0);
+    // no part was sent after it, and the parts in flight were written,
+    // then the copy discarded
+    let seen = seen.lock().unwrap();
+    let at_once = layerfs_store::project::parts::AT_ONCE;
+    assert!(writes(&seen) <= at_once, "{:?}", seen.log);
+    assert_eq!(seen.log.last(), Some(&"discard"), "{:?}", seen.log);
+    assert_eq!(copies(&root).len(), 0);
+    assert!(!paths::project_record(&home, "shop", "web").exists());
+
+    open_up(&folder);
+    for dir in [home, root, folder] {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+#[test]
+fn a_part_whose_answer_is_lost_leaves_the_copy_unknown() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let home = home_with_box("home4", &listener);
+    let root = tempdir("lost");
+    let real = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = real.local_addr().unwrap();
+    serve(real, &root);
+    // the second part's connection closes unanswered
+    let seen = stand_in(listener, address, hold, |_, index| match index {
+        Some(1) => Pass::Drop,
+        _ => Pass::Forward,
+    });
+    shop_on_box(&home, &root);
+    let folder = tempdir("lostsrc");
+    sample(&folder);
+
+    let refusal = call(
+        &home,
+        "project.init",
+        init_args("shop/web", &folder),
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert_eq!(refusal.0, "Unknown", "{}", refusal.1);
+    assert!(
+        refusal.1.contains("may remain at incoming/init-"),
+        "{}",
+        refusal.1
+    );
+    // nothing resent or sent after it, nothing discarded: the copy stays
+    let seen = seen.lock().unwrap();
+    let at_once = layerfs_store::project::parts::AT_ONCE;
+    assert!(writes(&seen) <= at_once, "{:?}", seen.log);
+    assert!(!seen.log.contains(&"discard"), "{:?}", seen.log);
+    assert_eq!(copies(&root).len(), 1);
+    assert!(!paths::project_record(&home, "shop", "web").exists());
+
+    open_up(&folder);
+    for dir in [home, root, folder] {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+#[test]
+fn a_file_that_changes_while_parts_are_in_flight_is_refused_and_discarded() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let home = home_with_box("home5", &listener);
+    let root = tempdir("changed");
+    let real = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = real.local_addr().unwrap();
+    serve(real, &root);
+    let folder = tempdir("changing");
+    sample(&folder);
+    // the large file grows when the first part arrives, while this process
+    // still reads it: parts are held, and more are needed than go at once
+    let grown = folder.join("src/big.bin");
+    let seen = stand_in(listener, address, hold, move |_, index| {
+        if index == Some(0) {
+            use std::io::Write;
+            let mut file = std::fs::OpenOptions::new().append(true).open(&grown);
+            file.as_mut().unwrap().write_all(b"more").unwrap();
+        }
+        Pass::Forward
+    });
+    shop_on_box(&home, &root);
+
+    let refusal = call(
+        &home,
+        "project.init",
+        init_args("shop/web", &folder),
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert_eq!(refusal.0, "InvalidInput", "{}", refusal.1);
+    assert!(refusal.1.contains("changed"), "{}", refusal.1);
+    // the parts in flight were answered, then the copy discarded
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.log.last(), Some(&"discard"), "{:?}", seen.log);
+    assert_eq!(copies(&root).len(), 0);
     assert!(!paths::project_record(&home, "shop", "web").exists());
 
     open_up(&folder);

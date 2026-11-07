@@ -409,6 +409,7 @@ pub fn in_worker(
         Some(local) if local.created().is_none() => local.with_fields_of(&sent).write(root)?,
         Some(_) => sent.write(root)?,
     }
+    layerfs_home::trace::step("records");
     let how = deploy::resolve(&Side::Worker(root), &choice)?;
     let postgresql = match kind {
         StoreKind::Postgresql => Some(postgresql.ok_or_else(|| {
@@ -440,12 +441,14 @@ pub fn in_worker(
         how,
         (sandbox, message),
     )?;
+    layerfs_home::trace::step("host_args");
     // a PostgreSQL Store opens no Store service here (#65); its reads run
     // on the held read session
     let opened = match held {
         true => None,
         false => Some(layerfs_store::open::hold(&host.open_args(), None)?),
     };
+    layerfs_home::trace::step("store_open");
     if op == Op::Status {
         return runner(host, call);
     }

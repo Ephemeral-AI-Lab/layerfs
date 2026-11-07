@@ -3,7 +3,9 @@
 //!
 //! Numbers are whole (`SdkValue::Int`); a fraction or exponent is refused.
 //! Bytes print as a string when they are UTF-8, else as
-//! `{"base64": "..."}`, which parses back to bytes.
+//! `{"base64": "..."}`, which parses back to bytes. A worker frame with
+//! attachments prints each byte value as `{"attachment": i}` instead
+//! ([`write_attached`]); the frame carries the bytes themselves.
 use layerfs_bridge::control::SdkValue;
 use std::fmt::Write as _;
 
@@ -14,6 +16,7 @@ pub struct JsonError(pub String);
 /// Reads one JSON value; anything after it but whitespace is refused.
 pub fn parse(text: &str) -> Result<SdkValue, JsonError> {
     let mut reader = Reader {
+        text,
         bytes: text.as_bytes(),
         at: 0,
         depth: 0,
@@ -28,12 +31,58 @@ pub fn parse(text: &str) -> Result<SdkValue, JsonError> {
 
 /// One JSON line for `value`, with no newline.
 pub fn print(value: &SdkValue) -> String {
-    let mut out = String::new();
-    write_value(&mut out, value);
+    let mut out = String::with_capacity(size(value, false));
+    write_value(&mut out, value, &mut Form::Print);
     out
 }
 
-fn write_value(out: &mut String, value: &SdkValue) {
+/// Appends `value` to `out` as [`print`] would, except that every byte
+/// value prints as `{"base64": ...}`, even UTF-8 bytes, so it keeps its
+/// type (the worker frame's form).
+pub fn write_typed(out: &mut String, value: &SdkValue) {
+    out.reserve(size(value, false));
+    write_value(out, value, &mut Form::Typed);
+}
+
+/// Appends `value` to `out` as [`write_typed`] would, except that every
+/// byte value prints as `{"attachment": i}` and is added to `attachments`,
+/// `i` its place there (a worker frame with attachments).
+pub fn write_attached<'v>(out: &mut String, value: &'v SdkValue, attachments: &mut Vec<&'v [u8]>) {
+    out.reserve(size(value, true));
+    write_value(out, value, &mut Form::Attached(attachments));
+}
+
+/// How byte values print.
+enum Form<'a, 'v> {
+    /// As text when they are UTF-8, else as base64.
+    Print,
+    /// Always as base64.
+    Typed,
+    /// As `{"attachment": i}`, the bytes added to the list.
+    Attached(&'a mut Vec<&'v [u8]>),
+}
+
+/// About how long `value` prints, to reserve once.
+fn size(value: &SdkValue, attached: bool) -> usize {
+    match value {
+        SdkValue::Null | SdkValue::Bool(_) | SdkValue::Int(_) => 20,
+        SdkValue::Text(s) => s.len() + 2,
+        SdkValue::Bytes(_) if attached => 36,
+        SdkValue::Bytes(b) => b.len().div_ceil(3) * 4 + 13,
+        SdkValue::List(items) => {
+            let each = items.iter().map(|item| size(item, attached) + 1);
+            each.sum::<usize>() + 2
+        }
+        SdkValue::Map(fields) => {
+            let each = fields
+                .iter()
+                .map(|(name, item)| name.len() + 4 + size(item, attached));
+            each.sum::<usize>() + 2
+        }
+    }
+}
+
+fn write_value<'v>(out: &mut String, value: &'v SdkValue, form: &mut Form<'_, 'v>) {
     match value {
         SdkValue::Null => out.push_str("null"),
         SdkValue::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
@@ -41,12 +90,17 @@ fn write_value(out: &mut String, value: &SdkValue) {
             let _ = write!(out, "{n}");
         }
         SdkValue::Text(s) => quote(out, s),
-        SdkValue::Bytes(b) => match std::str::from_utf8(b) {
-            Ok(s) => quote(out, s),
-            Err(_) => {
-                out.push_str("{\"base64\":");
-                quote(out, &base64(b));
-                out.push('}');
+        SdkValue::Bytes(b) => match (form, std::str::from_utf8(b)) {
+            (Form::Attached(attachments), _) => {
+                let _ = write!(out, "{{\"attachment\":{}}}", attachments.len());
+                attachments.push(b);
+            }
+            (Form::Print, Ok(s)) => quote(out, s),
+            _ => {
+                // base64 text needs no escaping
+                out.push_str("{\"base64\":\"");
+                push_base64(out, b);
+                out.push_str("\"}");
             }
         },
         SdkValue::List(items) => {
@@ -55,7 +109,7 @@ fn write_value(out: &mut String, value: &SdkValue) {
                 if i > 0 {
                     out.push(',');
                 }
-                write_value(out, item);
+                write_value(out, item, form);
             }
             out.push(']');
         }
@@ -67,67 +121,127 @@ fn write_value(out: &mut String, value: &SdkValue) {
                 }
                 quote(out, name);
                 out.push(':');
-                write_value(out, item);
+                write_value(out, item, form);
             }
             out.push('}');
         }
     }
 }
 
+/// `s` quoted: `"`, `\`, `\n`, `\r` and `\t` escaped as such, any other
+/// control character as `\u00xx`, everything else as is. The runs between
+/// escapes are copied whole; every escaped byte is ASCII, so each run ends
+/// on a character boundary.
 fn quote(out: &mut String, s: &str) {
+    out.reserve(s.len() + 2);
     out.push('"');
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => {
-                let _ = write!(out, "\\u{:04x}", c as u32);
-            }
-            c => out.push(c),
+    let mut run = 0;
+    for (at, b) in s.bytes().enumerate() {
+        let escape = match b {
+            b'"' => "\\\"",
+            b'\\' => "\\\\",
+            b'\n' => "\\n",
+            b'\r' => "\\r",
+            b'\t' => "\\t",
+            0..=0x1f => "",
+            _ => continue,
+        };
+        out.push_str(&s[run..at]);
+        if escape.is_empty() {
+            let _ = write!(out, "\\u{b:04x}");
+        } else {
+            out.push_str(escape);
         }
+        run = at + 1;
     }
+    out.push_str(&s[run..]);
     out.push('"');
 }
 
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
+/// Each byte's place in [`ALPHABET`]; `INVALID` for a byte not in it.
+const SEXTET: [u8; 256] = {
+    let mut table = [INVALID; 256];
+    let mut i = 0;
+    while i < 64 {
+        table[ALPHABET[i] as usize] = i as u8;
+        i += 1;
+    }
+    table
+};
+const INVALID: u8 = 0xff;
+
 /// Standard base64 with padding.
 pub fn base64(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    for chunk in bytes.chunks(3) {
-        let n = chunk
-            .iter()
-            .enumerate()
-            .fold(0u32, |n, (i, b)| n | (u32::from(*b) << (16 - 8 * i)));
-        for i in 0..4 {
-            if i <= chunk.len() {
-                out.push(ALPHABET[((n >> (18 - 6 * i)) & 63) as usize] as char);
-            } else {
-                out.push('=');
-            }
-        }
-    }
+    let mut out = String::new();
+    push_base64(&mut out, bytes);
     out
 }
 
-/// Bytes from standard base64; `None` when the text is not base64.
-pub fn unbase64(text: &str) -> Option<Vec<u8>> {
-    let text = text.trim_end_matches('=');
-    let mut out = Vec::with_capacity(text.len() * 3 / 4);
-    let (mut n, mut bits) = (0u32, 0u32);
-    for c in text.bytes() {
-        let v = ALPHABET.iter().position(|a| *a == c)? as u32;
-        n = (n << 6) | v;
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            out.push((n >> bits) as u8);
-            n &= (1 << bits) - 1;
+/// Appends `bytes` to `out` as standard base64 with padding, a block of
+/// 3072 bytes (4096 characters) at a time.
+fn push_base64(out: &mut String, bytes: &[u8]) {
+    out.reserve(bytes.len().div_ceil(3) * 4);
+    let mut block = [0u8; 4096];
+    let char_of = |n: u32, shift: u32| ALPHABET[((n >> shift) & 63) as usize];
+    for chunk in bytes.chunks(3072) {
+        let mut triples = chunk.chunks_exact(3);
+        let mut len = 0;
+        for (three, four) in (&mut triples).zip(block.chunks_exact_mut(4)) {
+            let n = u32::from_be_bytes([0, three[0], three[1], three[2]]);
+            four.copy_from_slice(&[char_of(n, 18), char_of(n, 12), char_of(n, 6), char_of(n, 0)]);
+            len += 4;
         }
+        // only the last chunk has a remainder: 3072 is a multiple of 3
+        let rest = triples.remainder();
+        if !rest.is_empty() {
+            let n = rest
+                .iter()
+                .enumerate()
+                .fold(0u32, |n, (i, b)| n | (u32::from(*b) << (16 - 8 * i)));
+            for (i, c) in block[len..len + 4].iter_mut().enumerate() {
+                *c = if i <= rest.len() {
+                    char_of(n, 18 - 6 * i as u32)
+                } else {
+                    b'='
+                };
+            }
+            len += 4;
+        }
+        // the block is all ASCII
+        out.push_str(std::str::from_utf8(&block[..len]).unwrap_or_default());
     }
+}
+
+/// Bytes from standard base64; `None` when the text is not base64.
+/// Trailing `=` are ignored, as are the bits left over after the last
+/// whole byte.
+pub fn unbase64(text: &str) -> Option<Vec<u8>> {
+    let text = text.trim_end_matches('=').as_bytes();
+    let (quads, rest) = text.split_at(text.len() / 4 * 4);
+    // a last 2 or 3 characters hold 1 or 2 bytes; a lone one holds none
+    let tail = rest.len().saturating_sub(1);
+    let mut out = vec![0u8; quads.len() / 4 * 3 + tail];
+    let mut bad = 0u8;
+    for (four, three) in quads.chunks_exact(4).zip(out.chunks_exact_mut(3)) {
+        let [a, b, c, d] = [four[0], four[1], four[2], four[3]].map(|x| SEXTET[usize::from(x)]);
+        bad |= a | b | c | d;
+        let n = (u32::from(a) << 18) | (u32::from(b) << 12) | (u32::from(c) << 6) | u32::from(d);
+        three.copy_from_slice(&n.to_be_bytes()[1..]);
+    }
+    let mut n = 0u32;
+    for (i, x) in rest.iter().enumerate() {
+        let v = SEXTET[usize::from(*x)];
+        bad |= v;
+        n |= u32::from(v & 63) << (18 - 6 * i);
+    }
+    // every place is below 64; only INVALID has the top bit
+    if bad & 0x80 != 0 {
+        return None;
+    }
+    let start = out.len() - tail;
+    out[start..].copy_from_slice(&n.to_be_bytes()[1..=tail]);
     Some(out)
 }
 
@@ -135,6 +249,7 @@ pub fn unbase64(text: &str) -> Option<Vec<u8>> {
 const MAX_DEPTH: usize = 128;
 
 struct Reader<'a> {
+    text: &'a str,
     bytes: &'a [u8],
     at: usize,
     depth: usize,
@@ -274,15 +389,24 @@ impl Reader<'_> {
         Ok(n)
     }
 
+    /// A string's runs between escapes are copied whole: each ends at an
+    /// ASCII byte, so on a character boundary of the UTF-8 text.
     fn string(&mut self) -> Result<String, JsonError> {
         self.at += 1;
-        let mut out = Vec::new();
+        let mut out = String::new();
         loop {
+            let run = self.at;
+            let special = |b: &u8| matches!(b, b'"' | b'\\' | 0..=0x1f);
+            self.at = match self.bytes[run..].iter().position(special) {
+                Some(len) => run + len,
+                None => self.bytes.len(),
+            };
+            out.push_str(&self.text[run..self.at]);
             match self.bytes.get(self.at) {
                 None => return Err(self.error("unterminated string")),
                 Some(b'"') => {
                     self.at += 1;
-                    return String::from_utf8(out).map_err(|_| self.error("string is not UTF-8"));
+                    return Ok(out);
                 }
                 Some(b'\\') => {
                     self.at += 1;
@@ -303,14 +427,9 @@ impl Reader<'_> {
                         b'u' => self.unicode()?,
                         _ => return Err(self.error("bad escape")),
                     };
-                    let mut buf = [0u8; 4];
-                    out.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+                    out.push(c);
                 }
-                Some(b) if *b < 0x20 => return Err(self.error("control character in string")),
-                Some(b) => {
-                    out.push(*b);
-                    self.at += 1;
-                }
+                Some(_) => return Err(self.error("control character in string")),
             }
         }
     }

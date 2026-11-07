@@ -1,11 +1,12 @@
 # Call trace
 
 > **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
-> `layerfs-sdk-observe` skill. **In this 2.0 build the only trace is the
+> `layerfs-sdk-observe` skill. **In this 2.0 build the traces are the
 > worker-connection line** (#535 phase 8 item 6): with `LAYERFS_TRACE=<file>`,
-> each connection the caller opens to a machine's worker appends one line.
-> Calls that run in the caller's process (`native`, any PostgreSQL Store call)
-> write nothing. The call-line format further down is 1.1.0's (#333), kept for
+> each connection the caller opens to a machine's worker appends one line,
+> **and the step lines**: with `LAYERFS_TRACE_STEP` set too, each call
+> appends one line per step it timed. Calls that run in the caller's process
+> (`native`, any PostgreSQL Store call) write no connection line. The call-line format further down is 1.1.0's (#333), kept for
 > reading old traces and as the target the settings are reserved for.
 
 ## The worker-connection line
@@ -26,18 +27,71 @@ One worker-routed call is one line (R1). Written by
 `control/crates/layerfs-home/src/trace.rs` `connection`; a line that
 cannot be written changes no outcome.
 
+## The step lines
+
+With `LAYERFS_TRACE=<file>` and `LAYERFS_TRACE_STEP` set (any non-empty
+value), each call appends, when it ends, one line per step it timed:
+
+```json
+{"at":1793000000000,"event":"step","op":"workspace.exec","step":"worker.exec.helper_spawn","us":1830,"ms":1}
+```
+
+`us` is the step's time in microseconds, `ms` the same in whole
+milliseconds. Steps without a prefix ran in the caller, each the time since
+the one before: `dispatch` (call start to the call's own work: argument
+checks, platform policy, home and built-in machine records), `route` (to
+the worker connection's start: the call's records and route), `connect`
+(TCP connect), `ready` (secret sent, `ready` read), `request` (request
+written) and `answer` (to the answer frame: the worker's whole run). A
+worker-routed call asks the worker for its own steps (`trace_step: true`
+in the request); the worker times them from reading the request and sends
+them back beside its answer (`steps: [{step, us}]`); the caller writes them
+as `worker.<step>`. A worker without the field sends none, and a request
+without it gets none back. `project.init` into a worker's Store sends its
+`project.stage` parts several at once: each part's `route` ... `answer` and
+`worker.*` steps are written as its part is answered, so they overlap,
+and one `send` step then holds the whole copy's wall time.
+
+Worker steps of `workspace.exec`, each the time since the one before:
+`records` (Store and project records), `host_args` (deploy settings, run
+root), `store_open`, `by_name` (message check, Workspace by name),
+`registry` (the Sandbox), `exec_record` (directory, token, Workspace list,
+exec record), `command` (the whole command run), `exec_record_end`,
+`result` (the answer's value, spooled output drained). A namespaces
+Sandbox breaks `command` down as `exec.endpoint`, `exec.cgroup_create`
+(the command's cgroup made),
+`exec.helper_spawn`, `exec.helper_wait` (helper started to helper ended,
+with output copied) and `exec.cgroup_remove`. Its helper, given
+`--trace <file>`, writes when each of its stages ended (wall clock, written
+once the command ended) and the worker adds them, each since the one
+before: `helper.start` (spawn call to the helper's own start),
+`helper.cgroup_join` (the helper joins the Sandbox's group),
+`helper.setns` (three `setns`, no-new-privs), `helper.bash_spawn` (the
+command started; with its own cgroup it moved itself there just before
+exec), `helper.ready` (the backend told it runs, so its stop handle can be
+recorded; a command with its own cgroup only), `helper.bash` (the command
+ran) and `helper.exit`
+(to the worker's wait returning). These overlap `exec.helper_spawn` and
+`exec.helper_wait`; they are a breakdown, not further time.
+
+Untraced, a step mark is one thread-local check: nothing is timed or sent,
+and the helper gets no file. A step line that cannot be written changes no
+outcome. Written by `layerfs-home/src/trace.rs` (`stepped`, `step`),
+`layerfs-sandbox-backend/src/steps.rs` and the helper's `exec.rs`.
+
 ## Where it stands
 
 | Piece | 1.1.0 | 2.0 build |
 | --- | --- | --- |
-| Settings `LAYERFS_TRACE`, `LAYERFS_TRACE_STEP`, `LAYERFS_TRACE_START` | read by `@layerfs/agent` (`api/agent/sdk/src/trace.js` at tag `v1.1.0`) | kept as the only settings besides `LAYERFS_HOME` (S §2.5); only `LAYERFS_TRACE` is read, for the worker-connection line |
+| Settings `LAYERFS_TRACE`, `LAYERFS_TRACE_STEP`, `LAYERFS_TRACE_START` | read by `@layerfs/agent` (`api/agent/sdk/src/trace.js` at tag `v1.1.0`) | kept as the only settings besides `LAYERFS_HOME` (S §2.5); `LAYERFS_TRACE` is read for the worker-connection line, and with `LAYERFS_TRACE_STEP` for the step lines; `LAYERFS_TRACE_START` is not read |
 | The trace line writer | in that JavaScript file | deleted with `@layerfs/agent` (#533 step 14); no per-call Rust replacement yet |
 | In-process collector | `host/trace.rs` in the Node binding | `api/crates/layerfs-api/src/host/trace.rs`: takes a 64-hex scope from an `observe` argument, traces the call's daemon control exchanges under it and collects up to 64 telemetry values. **No front end calls it** (`take_scope` and `run` have no callers) |
 | The home's `trace/` folder | `traces/` | reserved (`paths::trace_dir`; a 1.1.0 `traces/` folder is renamed to it); O26 makes trace files there the event feed. Nothing writes it yet |
 
-So, today: turning tracing on records worker connections only. Use Commit
-records and messages instead ([storage metrics](storage-metrics.md#one-row-per-step)),
-and report timing as not collected.
+So, today: turning tracing on records worker connections and, with
+`LAYERFS_TRACE_STEP`, each call's step times. For storage work use Commit
+records and messages ([storage metrics](storage-metrics.md#one-row-per-step)),
+and report daemon-side timing (1.1.0's `daemon` entries) as not collected.
 
 ## The 1.1.0 settings
 

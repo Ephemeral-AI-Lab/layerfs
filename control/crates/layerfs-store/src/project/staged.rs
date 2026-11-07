@@ -4,6 +4,15 @@
 //! source, and removed on every outcome the worker knows. Paths come from
 //! the root and the copy's id only; an entry's path stays inside its
 //! staging folder and goes through no link.
+//!
+//! The caller sends several parts at once, each on its own connection and
+//! thread here, so their data records apply in any order: a record makes
+//! the folders on its way that are not there yet (a concurrent maker is
+//! fine), a directory already made is kept, and a file piece is written at
+//! its offset whatever the file's length. Pieces of one file never
+//! overlap. `M` records come in parts of their own, sent only after every
+//! part before them was answered ([`super::send`]). No lease is taken: the
+//! staging folder is the copy's alone, and the Store is not opened.
 use super::frame::{StageFrame, StageStep};
 use super::tree::{Reader, Record};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -12,9 +21,8 @@ use nix::sys::stat::{utimensat, UtimensatFlags};
 use nix::sys::time::TimeSpec;
 use std::ffi::OsStr;
 use std::fs::{self, OpenOptions};
-use std::io::{Seek, SeekFrom, Write};
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, FileExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -57,10 +65,7 @@ fn one(dir: &Path, record: Record<'_>) -> std::result::Result<(), String> {
     match record {
         Record::Directory { path } => {
             let at = place(dir, path, false)?;
-            fs::DirBuilder::new()
-                .mode(0o700)
-                .create(&at)
-                .map_err(|e| format!("{}: {e}", at.display()))
+            folder_at(&at)
         }
         Record::Write {
             path,
@@ -69,20 +74,14 @@ fn one(dir: &Path, record: Record<'_>) -> std::result::Result<(), String> {
         } => {
             let at = place(dir, path, false)?;
             let shown = |e: std::io::Error| format!("{}: {e}", at.display());
-            let mut options = OpenOptions::new();
-            options.write(true).custom_flags(libc::O_NOFOLLOW);
-            if offset == 0 {
-                options.create_new(true).mode(0o600);
-            }
-            let mut file = options.open(&at).map_err(shown)?;
-            if file.metadata().map_err(shown)?.len() != offset {
-                return Err(format!(
-                    "{}: a piece at {offset} does not follow the file's length",
-                    at.display()
-                ));
-            }
-            file.seek(SeekFrom::Start(offset)).map_err(shown)?;
-            file.write_all(bytes).map_err(shown)
+            let file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .mode(0o600)
+                .custom_flags(libc::O_NOFOLLOW)
+                .open(&at)
+                .map_err(shown)?;
+            file.write_all_at(bytes, offset).map_err(shown)
         }
         Record::Link { path, target } => {
             let at = place(dir, path, false)?;
@@ -115,9 +114,27 @@ fn one(dir: &Path, record: Record<'_>) -> std::result::Result<(), String> {
     }
 }
 
+/// A directory at `at` (mode 0700), made unless it is there: another
+/// part's record may make it first. Anything else there, a link to a
+/// directory included, is refused.
+fn folder_at(at: &Path) -> std::result::Result<(), String> {
+    let made = fs::DirBuilder::new().mode(0o700).create(at);
+    if let Err(e) = made {
+        if e.kind() != std::io::ErrorKind::AlreadyExists {
+            return Err(format!("{}: {e}", at.display()));
+        }
+    }
+    let meta = fs::symlink_metadata(at).map_err(|e| format!("{}: {e}", at.display()))?;
+    if !meta.is_dir() || meta.file_type().is_symlink() {
+        return Err(format!("{} is not a directory", at.display()));
+    }
+    Ok(())
+}
+
 /// `path` under `dir`: plain names only (no `.`, `..` or empty one), each
-/// folder on the way a real directory, not a link. The empty path is `dir`
-/// itself, only where `root` allows it.
+/// folder on the way a real directory, not a link, made when it is not
+/// there yet ([`folder_at`]). The empty path is `dir` itself, only where
+/// `root` allows it.
 fn place(dir: &Path, path: &[u8], root: bool) -> std::result::Result<PathBuf, String> {
     if path.is_empty() {
         return match root {
@@ -136,10 +153,7 @@ fn place(dir: &Path, path: &[u8], root: bool) -> std::result::Result<PathBuf, St
         }
         at.push(OsStr::from_bytes(name));
         if names.peek().is_some() {
-            let meta = fs::symlink_metadata(&at).map_err(|e| format!("{}: {e}", at.display()))?;
-            if !meta.is_dir() || meta.file_type().is_symlink() {
-                return Err(format!("{} is not a directory", at.display()));
-            }
+            folder_at(&at)?;
         }
     }
     Ok(at)

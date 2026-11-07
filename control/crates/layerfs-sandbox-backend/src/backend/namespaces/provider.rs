@@ -160,14 +160,23 @@ impl NamespaceProvider {
         Paths::of(self.paths(name)?)
     }
 
-    /// The record's image, as the root this runtime already holds: a reopen
+    /// The record's image, as the root this runtime already holds: the lower
+    /// layer the Sandbox's spec names, which its create unpacked. A reopen
     /// starts and unpacks nothing, so a record whose image is gone is refused
     /// rather than given a different root.
     fn image(&self, record: &crate::NamespaceRecord) -> Result<rootfs::ImageRoot, RuntimeError> {
         let paths = self.record_paths(&record.local().name)?;
         let root = (paths.local.directory.parent())
             .ok_or(RuntimeError::Protocol("namespaces Sandbox root"))?;
-        rootfs::lookup(record.image(), &rootfs::cache(root))
+        let spec = std::fs::read(&paths.spec).map_err(|error| {
+            rootfs::refuse(format!(
+                "the Sandbox's spec {} cannot be read ({error}): its root cannot be found, so it \
+                 is neither reopened nor deleted",
+                paths.spec.display()
+            ))
+        })?;
+        let lower = crate::HelperSpec::parse(&spec)?.lower;
+        rootfs::lookup(record.image(), &rootfs::cache(root), &lower)
     }
 }
 

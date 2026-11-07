@@ -21,22 +21,37 @@ Where the worker sits on each platform and how its port is carried is in
 ## Worker frames
 
 ```text
- one frame
+ plain frame (no byte values: the secret, the hello, most others)
  +----------------+-------------------------------------------+
  | length: u32 BE | JSON text, `length` bytes                 |
- |   (4 bytes)    | bytes travel as {"base64": "..."}         |
+ |   top bit 0    |                                           |
  +----------------+-------------------------------------------+
+
+ attached frame (a frame holding byte values, protocol 3)
+ +----------------+--------------+------+-------+--------------------------+
+ | 1<<31 | length | json: u32 BE | JSON | count | count x (len: u64 BE,    |
+ |   (u32 BE)     |              |      | u32 BE|          len raw bytes)  |
+ +----------------+--------------+------+-------+--------------------------+
+   each byte value is {"attachment": i} in the JSON, i its attachment;
+   every attachment is named exactly once
    first frame of each side <= 4 KiB (MAX_HELLO)
-   any frame               <= 512 MiB (MAX_FRAME)
+   any frame body          <= 512 MiB (MAX_FRAME), attachments included
 ```
+
+Byte values (a `project.stage` part, a Store file piece) travel raw, with no
+base64 in either direction. Only this build's protocol sends or reads an
+attached frame: the caller sends nothing to a worker whose hello names
+another protocol, and the secret and hello frames hold no byte values, so
+they stay plain. A protocol 2 peer sent bytes as `{"base64": "..."}` in a
+plain frame; a plain frame with such a field still reads back as bytes.
 
 | Frame | Sender | Shape | Source |
 | --- | --- | --- | --- |
 | secret | caller | `{secret}` | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `greet` |
 | hello | worker | `{ready: true, protocol, bundle}`, or `{refused}` for a wrong secret | [`worker/hello.rs`](../../../../control/crates/layerfs-machine/src/worker/hello.rs) `to_frame`, [`server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) `answer` |
-| request | caller | `{op, args, home_id?}` | `client.rs` `request` |
+| request | caller | `{op, args, home_id?, trace_step?}`; `trace_step: true` only while the caller times its steps (`LAYERFS_TRACE_STEP`) | `client.rs` `request` |
 | event | worker | `{event}`, zero or more: progress, command output, and `{exec_started: {stop}}` once an exec whose record the caller keeps runs (the caller's exec takes it; it is not passed on) | `server.rs` `answer` |
-| answer | worker | `{value}` or `{refused: {code, message, detail}}` | `server.rs` `refusal_frame` |
+| answer | worker | `{value}` or `{refused: {code, message, detail}}`, with `steps: [{step, us}]` beside it when the request had `trace_step` | `server.rs` `answer`, `refusal_frame` |
 
 ```text
  caller (host)                                worker (machine)
@@ -58,7 +73,10 @@ Where the worker sits on each platform and how its port is carried is in
 ```
 
 A frame larger than allowed is refused `TooLarge` from its length, before any
-of its body is read ([`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs)).
+of its body is read; an attached frame's JSON length, count and each
+attachment length are checked against what is left of its body before
+anything of that size is allocated or read, and a malformed one is refused
+`Failed` ([`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs)).
 The worker serves each connection on its own thread, so several callers can
 be served at once; each connection still carries one request.
 
@@ -68,7 +86,7 @@ be served at once; each connection still carries one request.
 | `store.call` | one Store method on `store/<name>/store.sqlite` under the worker's root, holding the Store's lease there | `server.rs`, [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs) |
 | `store.file` | one step of a Store push, pull, remove, stat or backup | [`sqlite/transfer/steps.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) |
 | `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`: one of the nine in the host operation table (`OPS`, `workspace.exec_cancel` among them), decoded into the typed request by `decode`, else refused before any effect | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `in_worker`, [`host/call.rs`](../../../../control/crates/layerfs-sandbox/src/host/call.rs) `OPS`, [`host/frame.rs`](../../../../control/crates/layerfs-sandbox/src/host/frame.rs) `decode` |
-| `project.stage` | writes or discards one part of a caller's folder copy (`StageFrame`) | [`project/staged.rs`](../../../../control/crates/layerfs-store/src/project/staged.rs) |
+| `project.stage` | writes or discards one part of a caller's folder copy (`StageFrame`); a caller sends up to four parts at once, whose data records apply in any order | [`project/staged.rs`](../../../../control/crates/layerfs-store/src/project/staged.rs) |
 | `project.init` | adds the staged copy as a new project (`InitFrame`) | [`project/init.rs`](../../../../control/crates/layerfs-store/src/project/init.rs) |
 | `project.remove` | drops one project from a Store under the root (`RemoveFrame`) | [`project/remove.rs`](../../../../control/crates/layerfs-store/src/project/remove.rs) |
 | anything else | `InvalidInput` "the worker has no operation" | `server.rs` |
@@ -87,7 +105,7 @@ is not a home: `home_id` in the request lends it the caller's home id.
 | Field | Meaning | Source |
 | --- | --- | --- |
 | `ready` | always `true` in a hello | [`worker/hello.rs`](../../../../control/crates/layerfs-machine/src/worker/hello.rs) |
-| `protocol` | the worker protocol it speaks; this build is `PROTOCOL = 2`; the first workers sent none | `hello.rs` |
+| `protocol` | the worker protocol it speaks; this build is `PROTOCOL = 3` (byte values as frame attachments; 2 sent them as base64); the first workers sent none | `hello.rs` |
 | `bundle` | the hash from `bundle.json` beside the worker's executable, or null when run from no sealed bundle | `Hello::own`, `sealed_hash` |
 
 The caller compares the hello with its own build before it sends the
