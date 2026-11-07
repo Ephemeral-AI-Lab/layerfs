@@ -54,6 +54,7 @@ Under a folder scope the call is refused `InvalidInput`
  started Sandbox, stopped here      { kind: "Closed", sandbox, unknown: [path],
                                       closed }
  machine says it is already gone    { closed, was_gone: true }
+ (`sandbox.get` read it `lost`)
  record with no id (never started,  { closed, was: "gone" | "unresolved",
  or create's outcome unknown)         left?: text }
 ```

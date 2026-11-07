@@ -387,14 +387,18 @@ impl SandboxRecord {
     /// answered that no such Sandbox runs): `creating` or `closing` while
     /// that intent's owner lives, `unresolved` once a gone owner left it
     /// uncertain, `gone` with no id (its create never recorded one, or a
-    /// conversion found it ended) or when answered so, else `running`.
+    /// conversion found it ended), `lost` when it has an id and no close
+    /// intent and its machine answered that its runtime is not there
+    /// (compute-plane 2.0 P-1: it ended behind control's back; its
+    /// `sandbox.close` clears it), else `running`.
     pub fn state(&self, gone: bool) -> &'static str {
         let op = self.op();
         match op.as_ref().map(|op| (op.standing(), op.name())) {
             Some((Standing::Running, "sandbox.close")) => "closing",
             Some((Standing::Running, _)) => "creating",
             Some((Standing::Unresolved, _)) => "unresolved",
-            _ if gone || self.id().is_none() => "gone",
+            _ if self.id().is_none() => "gone",
+            _ if gone => "lost",
             _ => "running",
         }
     }
