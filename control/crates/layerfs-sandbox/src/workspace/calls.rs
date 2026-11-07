@@ -4,7 +4,7 @@
 use crate::direct;
 use crate::family::sandbox_of;
 use crate::host::{Call, Message};
-use crate::record::SandboxRecord;
+use crate::record::{SandboxRecord, WorkspaceRecord};
 use crate::route::{on_machine, reach, Asked};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
@@ -33,17 +33,6 @@ pub struct Mounted {
     pub ws: String,
     /// Its side's answer.
     pub answer: SdkValue,
-}
-
-/// `workspace.exec(ws, command, { message })`.
-#[derive(Clone, Debug, Default)]
-pub struct ExecRequest {
-    /// The Workspace.
-    pub ws: String,
-    /// The bash command.
-    pub command: Option<String>,
-    /// Its Commit message.
-    pub message: Message,
 }
 
 /// `workspace.commit(ws, { message, force })`.
@@ -119,18 +108,21 @@ pub fn mount(home: &Path, events: &mut Events<'_>, request: &MountRequest) -> Re
 /// Sandbox's record, the Workspace's path (or name), the directory an exec
 /// on a Sandbox this host reaches runs in, and whether it reaches the
 /// Sandbox's daemon.
-struct At {
-    home: PathBuf,
-    record: SandboxRecord,
-    path: String,
-    directory: Option<String>,
-    forwarded: bool,
+pub(crate) struct At {
+    pub(crate) home: PathBuf,
+    pub(crate) record: SandboxRecord,
+    pub(crate) path: String,
+    pub(crate) directory: Option<String>,
+    pub(crate) forwarded: bool,
+    /// The Workspace's record in the home, for an exec or a cancel on a
+    /// Sandbox this host reaches: this home keeps the command's record too.
+    pub(crate) workspace: Option<WorkspaceRecord>,
 }
 
 /// Starts a call on `ws`: a status (`reads`) is not refused while an
 /// intent holds the Sandbox; an exec (`exec`) on a Sandbox whose daemon
 /// this host reaches has its directory checked here.
-fn at(home: &Path, ws: &str, reads: bool, exec: bool) -> Result<At> {
+pub(crate) fn at(home: &Path, ws: &str, reads: bool, exec: bool) -> Result<At> {
     let home = home.to_path_buf();
     let ws = WorkspaceRef::parse(ws)?;
     let record = sandbox_of(&home, &ws.sandbox)?;
@@ -141,14 +133,17 @@ fn at(home: &Path, ws: &str, reads: bool, exec: bool) -> Result<At> {
     }
     // a path, or a name the Sandbox's side resolves to its path
     let mut path = ws.at.as_str().to_owned();
-    let mut directory = None;
+    let (mut directory, mut workspace) = (None, None);
     let forwarded = direct::forwarded(&record);
     // an exec runs through the Sandbox's runtime, in its machine, even when
     // this host reaches its daemon: its directory is checked here, where
     // its Workspace records are (#535 G4)
     if forwarded && exec {
-        path = crate::workspace::direct::exec_directory(&home, &record, ws.at.as_str())?;
+        let (found, kept) =
+            crate::workspace::direct::exec_directory(&home, &record, ws.at.as_str())?;
+        path = found;
         directory = Some(path.clone());
+        workspace = Some(kept);
     }
     Ok(At {
         home,
@@ -156,6 +151,7 @@ fn at(home: &Path, ws: &str, reads: bool, exec: bool) -> Result<At> {
         path,
         directory,
         forwarded,
+        workspace,
     })
 }
 
@@ -178,41 +174,6 @@ fn changing(events: &mut Events<'_>, at: At, call: Call, message: Message) -> Ou
     }
 }
 
-/// `workspace.exec`: a command in the Workspace, always through the
-/// Sandbox's runtime in its machine; its output comes as events too.
-pub fn exec(home: &Path, events: &mut Events<'_>, request: &ExecRequest) -> Outcome {
-    let at = at(home, &request.ws, false, true)?;
-    let call = Call::Exec {
-        path: Some(at.path),
-        directory: at.directory,
-        command: request.command.clone(),
-        spool: false,
-    };
-    let asked = Asked {
-        call,
-        message: request.message.clone(),
-        image: None,
-    };
-    let out = on_machine(
-        &at.home,
-        events,
-        &at.record,
-        asked,
-        crate::workspace::dispatch::call,
-    )?;
-    // the command's output as events too, for front ends that stream
-    for stream in ["stdout", "stderr"] {
-        match out.get(stream) {
-            Some(SdkValue::Text(text)) if !text.is_empty() => {
-                events.output(stream, text.as_bytes())
-            }
-            Some(SdkValue::Bytes(bytes)) if !bytes.is_empty() => events.output(stream, bytes),
-            _ => {}
-        }
-    }
-    Ok(out)
-}
-
 /// `workspace.commit`: the Workspace's changes as one Commit.
 pub fn commit(home: &Path, events: &mut Events<'_>, request: &CommitRequest) -> Outcome {
     let at = at(home, &request.ws, false, false)?;
@@ -223,9 +184,24 @@ pub fn commit(home: &Path, events: &mut Events<'_>, request: &CommitRequest) -> 
     changing(events, at, call, request.message.clone())
 }
 
-/// `workspace.unmount`: the Workspace's terminal unmount.
+/// `workspace.unmount`: the Workspace's terminal unmount. On a Sandbox
+/// this host reaches directly, this home keeps the Workspace's command
+/// records: they are settled here first (refused `Busy`, or cancelled with
+/// `force`); every other side settles its own.
 pub fn unmount(home: &Path, events: &mut Events<'_>, request: &UnmountRequest) -> Outcome {
     let at = at(home, &request.ws, false, false)?;
+    if at.forwarded {
+        let dir = at.record.dir(&at.home);
+        let by_path = at.path.starts_with('/');
+        let kept = (crate::files::workspaces(&dir)?.into_iter()).find(|(_, w)| match by_path {
+            true => w.path() == Some(at.path.as_str()),
+            false => w.name() == Some(at.path.as_str()),
+        });
+        if let Some(id) = kept.as_ref().and_then(|(_, w)| w.id()) {
+            let force = request.force == Some(true);
+            crate::exec::remote::settle(events, (&at.home, &at.record), Some(id), force)?;
+        }
+    }
     let call = Call::Unmount {
         path: Some(at.path.clone()),
         discard: request.discard,

@@ -83,7 +83,7 @@ opening a connection sends only Hello, so it attempts no operation.
 | `workspace.unmount` | `Unmount{token, discard}`, or `ForceUnmount` with `force` | `values::unmounted` (`Dirty` refusal) or `force_unmounted` | [`daemon/workspace/unmount.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/workspace/unmount.rs) |
 | `workspace.status` | `Status(token)`; the Branch head is read separately on the Store's route | `values::status` | [`daemon/workspace/status.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/workspace/status.rs) |
 | `sandbox.get` Workspace list | SDK method `sandbox.list_workspaces`, the one daemon backend method sent | `sandbox/dispatch.rs` | [`daemon/operator.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/operator.rs) |
-| `workspace.exec` | none on this channel: `bash -c` runs through the Sandbox's runtime | — | [`exec.rs`](../../../../control/crates/layerfs-sandbox/src/exec.rs) |
+| `workspace.exec` | none on this channel: `bash -c` runs through the Sandbox's runtime | — | [`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs) |
 
 `Locate` and `Cleanup` are read-only observations for a caller whose
 acknowledgement was lost; they bind, attach and remove nothing

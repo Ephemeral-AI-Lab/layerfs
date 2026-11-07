@@ -63,10 +63,10 @@ class Progress(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.home, True)
         self.addCleanup(shutil.rmtree, self.folder, True)
 
-    def test_the_table_five_calls_take_on_progress_and_machine_create_does_not(self):
+    def test_the_table_six_calls_take_on_progress_and_machine_create_does_not(self):
         self.assertEqual(
             declaring("on_progress"),
-            ["project.init", "store.push", "store.pull", "backup.create", "backup.restore"],
+            ["project.init", "workspace.exec", "store.push", "store.pull", "backup.create", "backup.restore"],
         )
         self.assertEqual(declaring("stdout"), ["workspace.exec"])
         self.assertEqual(declaring("stderr"), ["workspace.exec"])

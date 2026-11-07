@@ -5,7 +5,7 @@
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
 Every call a program can make, one family per folder and one page per call:
-61 calls in 9 families. The same call has the same name and
+62 calls in 9 families. The same call has the same name and
 arguments in JavaScript, Python and the `layerfs` command.
 
 | | |
@@ -25,7 +25,7 @@ arguments in JavaScript, Python and the `layerfs` command.
 | [`commit`](commit/README.md) | 3 | [`list`](commit/list.md), [`get`](commit/get.md), [`diff`](commit/diff.md) |
 | [`file`](file/README.md) | 14 | [`read`](file/read.md), [`stat`](file/stat.md), [`list`](file/list.md), [`glob`](file/glob.md), [`grep`](file/grep.md), [`blame`](file/blame.md), [`diff`](file/diff.md), [`write`](file/write.md), [`edit`](file/edit.md), [`rm`](file/rm.md), [`mkdir`](file/mkdir.md), [`mv`](file/mv.md), [`cp`](file/cp.md), [`apply`](file/apply.md) |
 | [`sandbox`](sandbox/README.md) | 4 | [`create`](sandbox/create.md), [`list`](sandbox/list.md), [`get`](sandbox/get.md), [`close`](sandbox/close.md) |
-| [`workspace`](workspace/README.md) | 5 | [`mount`](workspace/mount.md), [`exec`](workspace/exec.md), [`commit`](workspace/commit.md), [`unmount`](workspace/unmount.md), [`status`](workspace/status.md) |
+| [`workspace`](workspace/README.md) | 6 | [`mount`](workspace/mount.md), [`exec`](workspace/exec.md), [`exec_cancel`](workspace/exec_cancel.md), [`commit`](workspace/commit.md), [`unmount`](workspace/unmount.md), [`status`](workspace/status.md) |
 | [`machine`](machine/README.md) | 11 | [`list`](machine/list.md), [`platforms`](machine/platforms.md), [`get`](machine/get.md), [`status`](machine/status.md), [`start`](machine/start.md), [`stop`](machine/stop.md), [`create`](machine/create.md), [`connect`](machine/connect.md), [`remove`](machine/remove.md), [`disconnect`](machine/disconnect.md), [`update`](machine/update.md) |
 | [`store`](store/README.md) | 9 | [`list`](store/list.md), [`get`](store/get.md), [`status`](store/status.md), [`create`](store/create.md), [`connect`](store/connect.md), [`push`](store/push.md), [`pull`](store/pull.md), [`remove`](store/remove.md), [`disconnect`](store/disconnect.md) |
 | [`backup`](backup/README.md) | 5 | [`connect`](backup/connect.md), [`disconnect`](backup/disconnect.md), [`list`](backup/list.md), [`create`](backup/create.md), [`restore`](backup/restore.md) |

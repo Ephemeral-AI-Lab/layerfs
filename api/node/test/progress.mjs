@@ -39,11 +39,11 @@ function folderOf(files) {
 
 const calling = (name) => table.filter((c) => c.options.some((o) => o.name === name && o.kind === "function")).map((c) => `${c.family}.${c.call}`);
 
-test("the table: five calls take on_progress, one takes the exec sinks, machine.create takes neither", async () => {
-  assert.deepEqual(calling("on_progress"), ["project.init", "store.push", "store.pull", "backup.create", "backup.restore"]);
+test("the table: six calls take on_progress, one takes the exec sinks, machine.create takes neither", async () => {
+  assert.deepEqual(calling("on_progress"), ["project.init", "workspace.exec", "store.push", "store.pull", "backup.create", "backup.restore"]);
   assert.deepEqual(calling("stdout"), ["workspace.exec"]);
   assert.deepEqual(calling("stderr"), ["workspace.exec"]);
-  assert.equal(table.flatMap((c) => c.options).filter((o) => o.kind === "function").length, 5 + 2);
+  assert.equal(table.flatMap((c) => c.options).filter((o) => o.kind === "function").length, 6 + 2);
   const home = temp("machine");
   try {
     // the library emits { phase: "create" } for this call, but no handler can be given

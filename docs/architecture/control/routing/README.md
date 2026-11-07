@@ -60,7 +60,7 @@ itself is the [Routing table](routing-table.md).
 | Store call on a PostgreSQL Store | the caller's process | [`place::plan`](../../../../control/crates/layerfs-store/src/place.rs) |
 | Store call on a SQLite Store whose machine runs calls locally | the caller's process | `place::plan` → `local` |
 | Store call on a SQLite Store on any other machine | that machine's worker, op `store.call` | `place::plan` → `Executor::Worker` |
-| Sandbox create, get, close; Workspace mount, exec, commit, unmount, status | the Sandbox's machine: here, or its worker as `sandbox.host` | [`sandbox::route::on_machine`](../../../../control/crates/layerfs-sandbox/src/route.rs) |
+| Sandbox create, get, close; Workspace mount, exec, exec_cancel, commit, unmount, status | the Sandbox's machine: here, or its worker as `sandbox.host` | [`sandbox::route::on_machine`](../../../../control/crates/layerfs-sandbox/src/route.rs) |
 | Workspace mount, commit, unmount, status on a Sandbox whose daemon port reaches this host | this process, straight to the daemon | [`sandbox::direct`](../../../../control/crates/layerfs-sandbox/src/direct.rs) |
 | `workspace.exec` on such a Sandbox | still the machine's worker (the Sandbox runtime is there) | [`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) |
 

@@ -13,7 +13,7 @@ use crate::{
     Bind, ExecExit, LaunchPhase, LaunchRequest, LocalRecord, ProviderCapabilities,
     SandboxInspection, SandboxRecord,
 };
-use crate::{ContainerId, ExecRequest, RuntimeError, WireFailure};
+use crate::{ContainerId, ExecRequest, ExecSlot, RuntimeError, Stop, WireFailure};
 use std::{fmt, io::Write, net::SocketAddr, path::PathBuf};
 
 /// One deployment's runtime choice, kept for every Sandbox it starts.
@@ -187,6 +187,38 @@ impl Sandbox {
             Self::HostProcess(sandbox) => sandbox.run(request, stdout, stderr),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.run(request, stdout, stderr),
+        }
+    }
+
+    /// [`Sandbox::run`] with an exec `slot`: the command's stop handle is
+    /// told to it before its output is read (layerfs-project#113).
+    pub fn run_in(
+        &self,
+        request: &ExecRequest,
+        slot: ExecSlot<'_>,
+        stdout: &mut (dyn Write + Send),
+        stderr: &mut (dyn Write + Send),
+    ) -> Result<ExecExit, Box<WireFailure>> {
+        match self {
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            Self::HostProcess(sandbox) => sandbox.run_in(request, Some(slot), stdout, stderr),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(sandbox) => sandbox.run_in(request, Some(slot), stdout, stderr),
+        }
+    }
+
+    /// The stop handle of command `exec` of Workspace `workspace` when it
+    /// follows from the Sandbox and the ids alone (a namespaces Sandbox's
+    /// command group); a host-process group is known only at its spawn.
+    pub fn exec_stop(&self, workspace: &str, exec: &str) -> Option<Stop> {
+        match self {
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            Self::HostProcess(_) => {
+                let _ = (workspace, exec);
+                None
+            }
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(sandbox) => sandbox.exec_stop(workspace, exec),
         }
     }
 

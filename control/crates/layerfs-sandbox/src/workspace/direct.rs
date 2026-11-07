@@ -4,7 +4,7 @@
 //! layerfs-project#106).
 use crate::direct::host;
 use crate::host::{Call, Message};
-use crate::record::SandboxRecord;
+use crate::record::{SandboxRecord, WorkspaceRecord};
 use crate::workspace::serve;
 use crate::{dispatch, files, unmount_guard};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -104,9 +104,13 @@ fn branch_of(
 
 /// The directory of Workspace `at` (its path, or its name) of forwarded
 /// Sandbox `record`, as its record in the home folder names it, for an
-/// exec its worker runs: refused `NotMounted` when no record names it,
-/// and while an unmount holds it.
-pub fn exec_directory(home: &Path, record: &SandboxRecord, at: &str) -> Result<String> {
+/// exec or a cancel its worker runs, with that record: refused
+/// `NotMounted` when no record names it, and while an unmount holds it.
+pub fn exec_directory(
+    home: &Path,
+    record: &SandboxRecord,
+    at: &str,
+) -> Result<(String, WorkspaceRecord)> {
     let dir = record.dir(home);
     let by_path = at.starts_with('/');
     let found = (files::workspaces(&dir)?.into_iter()).find(|(_, workspace)| match by_path {
@@ -121,5 +125,5 @@ pub fn exec_directory(home: &Path, record: &SandboxRecord, at: &str) -> Result<S
     };
     let path = helpers::required(workspace.path(), "path")?.to_owned();
     unmount_guard::check_in(&dir, &path)?;
-    Ok(path)
+    Ok((path, workspace))
 }

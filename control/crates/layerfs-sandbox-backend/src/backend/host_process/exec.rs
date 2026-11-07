@@ -7,6 +7,7 @@
 use super::sandbox::Sandbox;
 use crate::local::streams;
 use crate::local::{groups, search::search_path};
+use crate::stop::{ExecSlot, Stop};
 use crate::{ExecExit, ExecRequest, RuntimeError, WireFailure};
 use layerfs_bridge::process::{self, LocalProcess};
 use nix::sys::signal::{killpg, Signal};
@@ -18,16 +19,29 @@ use std::{
 };
 
 impl Sandbox {
+    /// [`Sandbox::run_in`] with no slot to tell its stop handle to.
+    pub fn run(
+        &self,
+        request: &ExecRequest,
+        stdout: &mut (dyn Write + Send),
+        stderr: &mut (dyn Write + Send),
+    ) -> Result<ExecExit, Box<WireFailure>> {
+        self.run_in(request, None, stdout, stderr)
+    }
+
     /// Runs `request` once while this Sandbox's daemon runs: as its uid/gid
     /// with no supplementary groups, in its directory, its stdout and stderr
     /// streamed to the sinks as they arrive, then waits for its exit. A sink
     /// failure closes the command's pipes, still waits for its exit, and
     /// returns the sink's error. Standard input is not offered. The exit
     /// code is 128 + the signal for a command a signal ended, as the Engine
-    /// reports it; the process id is diagnostic only.
-    pub fn run(
+    /// reports it; the process id is diagnostic only. A `slot` is told the
+    /// command's stop handle, its process group and leader, before its
+    /// output is read; a slot that fails ends the group at once.
+    pub fn run_in(
         &self,
         request: &ExecRequest,
+        mut slot: Option<ExecSlot<'_>>,
         stdout: &mut (dyn Write + Send),
         stderr: &mut (dyn Write + Send),
     ) -> Result<ExecExit, Box<WireFailure>> {
@@ -60,7 +74,11 @@ impl Sandbox {
         // named before anything is waited for: the leader is not reaped
         // before the wait below, so it is observable even once it exited
         let named = LocalProcess::observe(pid)
-            .and_then(|leader| groups::name(self.directory(), leader).map(|()| leader));
+            .and_then(|leader| groups::name(self.directory(), leader).map(|()| leader))
+            .and_then(|leader| match slot.as_mut() {
+                Some(slot) => (slot.spawned)(&Stop::Group { pgid: pid, leader }).map(|()| leader),
+                None => Ok(leader),
+            });
         let leader = match named {
             Ok(leader) => leader,
             Err(error) => {

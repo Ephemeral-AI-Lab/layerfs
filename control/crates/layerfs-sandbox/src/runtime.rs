@@ -16,7 +16,7 @@ use layerfs_home::outcome::{failed, refused};
 use layerfs_sandbox_backend::Image;
 #[cfg(target_os = "linux")]
 use layerfs_sandbox_backend::SandboxRecord;
-use layerfs_sandbox_backend::{CommandIdentity, Sandbox};
+use layerfs_sandbox_backend::{CommandIdentity, ExecSlot, Sandbox};
 #[cfg(target_os = "linux")]
 use std::path::PathBuf;
 
@@ -226,14 +226,15 @@ pub fn scratch(runtime: &Sandbox) -> String {
 }
 
 /// One command to its end: exit code, stdout, stderr. `spool` sends every
-/// non-empty stream to its file instead of keeping it inline.
+/// non-empty stream to its file instead of keeping it inline. `slot` names
+/// the command for its stop handle and is told it at spawn.
 pub fn run(
     runtime: &Sandbox,
     identity: CommandIdentity,
     arguments: Vec<String>,
     environment: Vec<String>,
-    directory: &str,
-    spool: bool,
+    (directory, spool): (&str, bool),
+    slot: ExecSlot<'_>,
 ) -> Result<(i32, Spool, Spool), SdkRefusal> {
     let (mut stdout, mut stderr) = (Spool::new(spool), Spool::new(spool));
     let request = layerfs_sandbox_backend::ExecRequest {
@@ -244,7 +245,7 @@ pub fn run(
         stdin: false,
     };
     let exit = runtime
-        .run(&request, &mut stdout, &mut stderr)
+        .run_in(&request, slot, &mut stdout, &mut stderr)
         .map_err(failed)?;
     Ok((exit.code, stdout, stderr))
 }

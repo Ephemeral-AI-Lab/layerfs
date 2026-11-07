@@ -24,7 +24,7 @@ quoted. A claim with neither mark is a definition, not a measurement.
 
 ## Which calls take `on_progress`
 
-Exactly five calls declare the shared `PROGRESS` option
+Exactly six calls declare the shared `PROGRESS` option
 ([`calls/table.rs:134`](../../../../api/crates/layerfs-api/src/calls/table.rs)):
 
 | Call | Declared in | Run |
@@ -32,10 +32,11 @@ Exactly five calls declare the shared `PROGRESS` option
 | `project.init` | [`project/init.rs:13`](../../../../api/crates/layerfs-api/src/project/init.rs) | table check: `progress_options.rs`, `progress.mjs`, `test_progress.py` |
 | `store.push`, `store.pull` | [`store/push.rs:13`](../../../../api/crates/layerfs-api/src/store/push.rs), [`store/pull.rs:13`](../../../../api/crates/layerfs-api/src/store/pull.rs) | same |
 | `backup.create`, `backup.restore` | [`backup/create.rs:13`](../../../../api/crates/layerfs-api/src/backup/create.rs), [`backup/restore.rs:13`](../../../../api/crates/layerfs-api/src/backup/restore.rs) | same |
+| `workspace.exec` (its exec id, layerfs-project#113) | [`workspace/exec.rs`](../../../../api/crates/layerfs-api/src/workspace/exec.rs) | same; the event itself: `layerfs-cli/tests/exec_cancel.rs` (live, native), `exec_cancel_worker.rs` (stand-in worker) |
 
 `workspace.exec` is the only call that declares `stdout` and `stderr`
 (Function options). No other option of any call is a function. The CLI
-takes `--progress` only on the five (`store list --progress` and
+takes `--progress` only on the six (`store list --progress` and
 `machine create --progress` are `unknown option`, exit 2; run:
 `layerfs-cli/tests/progress.rs`). A function never crosses into the library:
 `check.rs` refuses it as a value ([`calls/check.rs:18`](../../../../api/crates/layerfs-api/src/calls/check.rs)).
@@ -47,7 +48,7 @@ with three senders (`context.rs:21-35`):
 
 | Sender | Event | Used by |
 | --- | --- | --- |
-| `progress(v)` | `{ progress: v }` | the five calls above, and `machine.create` (see [below](#machinecreate-emits-an-event-nobody-can-receive)) |
+| `progress(v)` | `{ progress: v }` | the six calls above, and `machine.create` (see [below](#machinecreate-emits-an-event-nobody-can-receive)) |
 | `event(e)` | a worker's event, as it came | calls routed to a worker ([workers](../../control/routing/workers.md)) |
 | `output(stream, bytes)` | `{ stream, bytes }` | `workspace.exec` |
 
@@ -69,13 +70,14 @@ the phases below).
 
 ## Payload shapes
 
-Three shapes exist today. None has a sequence number, timestamp, call id,
+Four shapes exist today. None has a sequence number, timestamp, call id,
 unit field, "phase finished" event or terminal event.
 
 | Shape | Calls | Source | Run |
 | --- | --- | --- | --- |
 | `{ phase, done, total }` | `project.init`, `store.push`, `store.pull` | [`store/family.rs:178-188`](../../../../control/crates/layerfs-store/src/sqlite/family.rs) `progress` | Init in process, Init through a worker, push, pull: `progress.mjs`; `progress.rs` |
 | `{ phase }` | `backup.create`, `backup.restore` | [`backup/family.rs:102-104`](../../../../control/crates/layerfs-store/src/backup/family.rs) `progress` | NOT RUN: needs a bucket. UNVERIFIED |
+| `{ exec: { id } }`, once, before the command starts | `workspace.exec` | [`workspace/exec.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/exec.rs) `exec` | `exec_cancel.rs` (CLI `--progress`, library), `exec_cancel_worker.rs` |
 | `{ phase, machine }` | `machine.create` | [`machine/create.rs:136-139`](../../../../control/crates/layerfs-machine/src/create.rs) | NOT RUN: needs `lima` on the host. UNVERIFIED |
 
 In `{ phase, done, total }`, `done` and `total` are **bytes** in the `send`
@@ -211,7 +213,7 @@ not be made on this host (see [What was run](#what-was-run-and-not-run)).
 
 | Statement | Source | Checked |
 | --- | --- | --- |
-| The command's two streams are read into two spools; nothing reaches the caller until it exits. | [`sandbox/exec.rs`](../../../../control/crates/layerfs-sandbox/src/exec.rs), [`workspace/calls.rs:103-114`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) | UNVERIFIED |
+| The command's two streams are read into two spools; nothing reaches the caller until it exits. | [`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs), [`workspace/exec.rs:96-105`](../../../../control/crates/layerfs-sandbox/src/workspace/exec.rs) | UNVERIFIED |
 | Events are **all of stdout, then all of stderr**; there is no chronological interleaving, so `--stream` is not a faithful terminal view. | `workspace/calls.rs:105` (inline), [`sandbox/route.rs:458`](../../../../control/crates/layerfs-sandbox/src/route.rs) (spooled) | UNVERIFIED |
 | A stream of at most 1 MiB (`INLINE`) is kept in memory, answered in the result and sent as **one** event. | [`sandbox/output.rs:22`](../../../../control/crates/layerfs-sandbox/src/output.rs) | UNVERIFIED |
 | A stream over 1 MiB goes to an unlinked temp file in the host's temp directory; the result has that stream `null` plus `stdout_bytes`, `stderr_bytes`, `streamed: true`; the bytes reach the caller **only** as 1 MiB event pages. | `output.rs:46-69`, `route.rs:452-494` `drain` | UNVERIFIED |

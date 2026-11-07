@@ -50,7 +50,7 @@ layerfs sandbox get <name> [--page-size <n>] [--page-pos <n>]
 ```text
  { name, project, machine, created, id?, platform?, runtime?, image?,
    backend?, route?,
-   state,                       creating|closing|unresolved|gone|running
+   state,                       creating|closing|unresolved|gone|lost|running
    op?: { id, name, phase, started, uncertain },
    workspaces: [ { ws, name, path,
                    workspace, namespace, branch, base, base_layer,
@@ -64,7 +64,7 @@ layerfs sandbox get <name> [--page-size <n>] [--page-pos <n>]
 | Field | Kind | Meaning |
 | --- | --- | --- |
 | record fields | | as [`sandbox.list`](list.md) shows them |
-| `state` | text | derived again with the machine's answer: `gone` when it says no such Sandbox runs ([`record/sandbox.rs`](../../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) `state`) |
+| `state` | text | derived again with the machine's answer: `lost` when the record has an id and no close intent and the machine says no such Sandbox runs (it ended behind control's back; `sandbox.close` clears it, compute-plane 2.0 P-1), `gone` when the record has no id ([`record/sandbox.rs`](../../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) `state`) |
 | `workspaces[].ws` | text | `<sandbox>:<name>` when the mount named it, else `<sandbox>:<path>` ([`get.rs`](../../../../../control/crates/layerfs-sandbox/src/get.rs) `listed_workspace`) |
 | `workspaces[].name`, `path` | text | the mount's name or null; the mount directory |
 | `workspaces[].*` | | the daemon's read model per Workspace: id, namespace, Branch, base Commit and Layer, root, `activity`, dirty counts ([`operator/inspect.rs`](../../../../../engine/crates/layerfs-store-service/src/operator/inspect.rs) `workspace_value`) |
@@ -85,7 +85,7 @@ layerfs sandbox get <name> [--page-size <n>] [--page-pos <n>]
    |
    v
  Unreached / Unavailable --> record + workspaces [] + down_reason
- NoSuchSandbox           --> state "gone", workspaces []
+ NoSuchSandbox           --> state "lost", workspaces []
 ```
 
 `get` starts no machine and loads no image (#535 P4); reading never clears

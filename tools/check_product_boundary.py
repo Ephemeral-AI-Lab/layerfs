@@ -21,7 +21,8 @@ UNSAFE = re.compile(r"\bunsafe\b")
 # proc_pidinfo in process/darwin.rs (moved with LocalProcess from the Sandbox
 # backend, layerfs-project#112, so the home and the drivers share it); the
 # Sandbox backend installs the namespaces command filter (two prctl calls,
-# D-8) in local/os/linux/seccomp.rs. Their siblings stay unsafe-free. The comment in a lint name (`unsafe_code`) is not
+# D-8, after emptying the command's signal mask, #113) in
+# local/os/linux/seccomp.rs. Their siblings stay unsafe-free. The comment in a lint name (`unsafe_code`) is not
 # the bare word, so attr lines never trip the scan once comments are stripped.
 UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": ("src/encoding/codec.rs",),

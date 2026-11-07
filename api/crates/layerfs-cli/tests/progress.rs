@@ -162,7 +162,7 @@ fn a_refusal_before_the_first_phase_prints_no_progress() {
 }
 
 #[test]
-fn only_the_five_calls_that_declare_on_progress_take_progress() {
+fn only_the_six_calls_that_declare_on_progress_take_progress() {
     let home = tempdir("flag-home");
     for words in [
         ["store", "list", "--progress"].as_slice(),
@@ -179,6 +179,7 @@ fn only_the_five_calls_that_declare_on_progress_take_progress() {
         ["store", "pull", "--help"],
         ["backup", "create", "--help"],
         ["backup", "restore", "--help"],
+        ["workspace", "exec", "--help"],
     ] {
         let help = layerfs(&home, &words);
         let text = String::from_utf8_lossy(&help.stdout).into_owned()

@@ -151,7 +151,8 @@ Sandbox's daemon (`ssh`, `lima`), the keys go to
 | Call | Daemon or runtime | Source |
 | --- | --- | --- |
 | `mount`, `commit`, `unmount`, `status` | the Sandbox's daemon | [`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs), [`workspace/serve.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
-| `exec` | the Sandbox runtime runs `bash -c` in the Workspace; no daemon | [`exec.rs`](../../../../control/crates/layerfs-sandbox/src/exec.rs) |
+| `exec` | the Sandbox runtime runs `bash -c` in the Workspace; no daemon | [`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs) |
+| `exec_cancel` | the command's stop handle (its cgroup or process group) on the side that keeps its record; no daemon | [`exec/cancel.rs`](../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) |
 
 The daemon serves no Store calls. See
 [Daemon channel](../routing/daemon-channel.md).

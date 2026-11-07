@@ -49,6 +49,9 @@ From [`checks.rs`](../../../../control/crates/layerfs-control/src/doctor/checks.
 | sandbox | record names no project, or its Store, project or machine is gone | error | `layerfs sandbox close <n>` |
 | machine, store, sandbox | gone owner's uncertain `op` | error | show: `machine status`, `store status`, `sandbox get`; clear: the entity's clearing call |
 | machine, store, sandbox | gone owner's certain `op` | warning | nothing: the next operation replaces it |
+| exec | a command record (`workspace/<id>/exec/<exec id>.json`) whose owner process is gone: stale (layerfs-project#113, R12) | warning | `layerfs workspace exec-cancel <sb>:<ws> <exec id>`, or the Workspace's unmount or the Sandbox's close, ends what it still runs and removes it |
+| exec | a file under `exec/` that is not a command record | error | repair or remove it by hand |
+| workspace | a `workspace/<id>/` folder with no Workspace record `<id>.json` beside it | warning | nothing to run: the next cancel, unmount or close of that Workspace settles its records |
 | home (layout 2) | each conversion blocker (live lease, Sandbox, create intent, move or removal) | error | end what blocks it |
 | home (layout 2) | conversion still to come | warning | the next call converts |
 
@@ -65,6 +68,7 @@ A live owner's `op` is not a finding: the operation is still running.
 | folder mode | others may list or change it, or its group may use it; 0701 is allowed | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `folder` |
 | Store folder | it has projects and no Store record | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `store` |
 | Sandbox folder | its record, `control.json` and Workspace records | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `sandbox` |
+| Workspace folder | each `workspace/<id>/` folder's mode, and each command record under its `exec/`; the doctor ends no command and removes no record | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `execs` |
 
 The scan returns `Scanned` (the parsed machines, Stores, projects and
 Sandboxes, and the names with a record file) for the later checks.

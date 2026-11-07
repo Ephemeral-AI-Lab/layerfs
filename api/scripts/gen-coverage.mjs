@@ -69,7 +69,8 @@ export async function collect({ python, cli }) {
     if (help.error || help.status !== 0) throw new Error(`layerfs help ${family} failed: ${help.error ?? help.stderr}`);
     for (const line of help.stdout.split("\n")) {
       const found = line.match(/^layerfs (\S+) (\S+)(.*)$/);
-      if (found) view.cli[`${found[1]}.${found[2]}`] = usage(found[3]);
+      // a call's shell name has `-` for its `_` (`workspace exec-cancel`)
+      if (found) view.cli[`${found[1]}.${found[2].replaceAll("-", "_")}`] = usage(found[3]);
     }
   }
   return view;

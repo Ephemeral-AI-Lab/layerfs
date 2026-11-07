@@ -1,5 +1,6 @@
 //! The host Workspace operations, here or in a machine's worker
-//! (`sandbox.host`): mount, Commit, unmount, exec and the status read; every
+//! (`sandbox.host`): mount, Commit, unmount, exec, its cancel and the status
+//! read; every
 //! other operation is a Sandbox operation (`sandbox::dispatch`). Moved from
 //! `sandbox/dispatch.rs` so Sandbox code never imports Workspace code
 //! (layerfs-project#106). It matches on the one table of host operations
@@ -16,7 +17,7 @@ pub fn call(host: Host, call: Call) -> Outcome {
         Call::Mount { .. } | Call::Commit { .. } | Call::Unmount { .. } | Call::Exec { .. } => {
             crate::dispatch::checked(&host.message)?;
         }
-        Call::Status { .. } => {}
+        Call::Status { .. } | Call::ExecCancel { .. } => {}
         _ => return crate::dispatch::call(host, call),
     }
     let path = match call.path() {
@@ -39,12 +40,30 @@ pub fn call(host: Host, call: Call) -> Outcome {
             directory,
             command,
             spool,
+            exec_id,
+            workspace,
             ..
         } => exec::exec(
             &host,
+            &exec::Exec {
+                path: path.as_deref(),
+                directory: directory.as_deref(),
+                command: command.as_deref(),
+                spool,
+                exec_id: exec_id.as_deref(),
+                workspace: workspace.as_deref(),
+            },
+        ),
+        Call::ExecCancel {
+            exec_id,
+            grace_ms,
+            workspace,
+            ..
+        } => exec::cancel::call(
+            &host,
             path.as_deref(),
-            (directory.as_deref(), command.as_deref()),
-            spool,
+            (exec_id.as_deref(), grace_ms),
+            workspace.as_deref(),
         ),
         _ => crate::dispatch::call(host, call),
     }

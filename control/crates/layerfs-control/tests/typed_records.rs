@@ -331,8 +331,8 @@ fn sandbox_with(id: bool, op: Option<(&str, i64, bool)>) -> layerfs_sandbox::rec
 fn a_sandbox_state_is_derived_from_its_record_and_intent() {
     let me = i64::from(std::process::id());
     assert_eq!(sandbox_with(true, None).state(false), "running");
-    // the daemon answered that it does not run
-    assert_eq!(sandbox_with(true, None).state(true), "gone");
+    // the daemon answered that it does not run: it was lost (P-1)
+    assert_eq!(sandbox_with(true, None).state(true), "lost");
     // no id: its create never recorded one
     assert_eq!(sandbox_with(false, None).state(false), "gone");
     assert_eq!(

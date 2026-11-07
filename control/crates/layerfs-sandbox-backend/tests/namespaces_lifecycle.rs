@@ -18,9 +18,11 @@ mod support {
 }
 use layerfs_sandbox_backend::{
     namespaces::{NamespaceProvider, Sandbox},
+    stop::{cancel, Cancelled, ExecSlot, Stop},
     Bind, CommandIdentity, ExecRequest, Image, LaunchRequest, ProviderLaunchOptions, RuntimeError,
     SandboxRecord,
 };
+use nix::sys::signal::Signal;
 use std::{
     collections::BTreeSet,
     fs,
@@ -774,4 +776,133 @@ fn a_running_command_ends_with_its_sandbox() {
         .join(hex(DIGEST))
         .join("etc/layerfs-image")
         .is_file());
+}
+
+/// Runs `script` in `sandbox` as exec `exec` of Workspace `ws1`, in a
+/// thread, and answers its stop handle and the thread.
+fn started(
+    sandbox: &Arc<Sandbox>,
+    exec: &'static str,
+    script: &'static str,
+) -> (Stop, std::thread::JoinHandle<Result<i32, String>>) {
+    let (sent, told) = std::sync::mpsc::channel();
+    let sandbox = sandbox.clone();
+    let thread = std::thread::spawn(move || {
+        let request = ExecRequest {
+            identity: CommandIdentity { uid: 501, gid: 20 },
+            arguments: vec!["/bin/sh".into(), "-c".into(), script.into()],
+            environment: Vec::new(),
+            directory: sandbox.tmp().display().to_string(),
+            stdin: false,
+        };
+        let mut spawned = |stop: &Stop| {
+            let _ = sent.send(stop.clone());
+            Ok(())
+        };
+        let slot = ExecSlot {
+            workspace: "ws1",
+            exec,
+            spawned: &mut spawned,
+        };
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        sandbox
+            .run_in(&request, Some(slot), &mut out, &mut err)
+            .map(|exit| exit.code)
+            .map_err(|failure| format!("{:?}", failure.cause))
+    });
+    let stop = told.recv_timeout(Duration::from_secs(10)).unwrap();
+    (stop, thread)
+}
+
+#[test]
+fn a_cancelled_command_and_what_it_started_leave_its_own_group_empty() {
+    if let Some(reason) = unavailable() {
+        eprintln!("SKIPPED namespaces exec cancel: {reason}");
+        return;
+    }
+    let fixture = Fixture::new("cancel");
+    let provider = fixture.provider().unwrap();
+    let sandbox = Arc::new(fixture.launch(&provider, "sandbox-1").unwrap());
+    let sandbox_group = Path::new("/sys/fs/cgroup/layerfs").join(sandbox.identity().as_str());
+    // a background child that left its process group, and a foreground one
+    let script = "setsid /bin/sleep 600 >/dev/null 2>&1 & /bin/sleep 600";
+    let (stop, thread) = started(&sandbox, "e1", script);
+    let group = sandbox_group.join("ws-ws1").join("exec-e1");
+    assert_eq!(
+        stop,
+        Stop::Cgroup {
+            path: group.clone()
+        }
+    );
+    assert_eq!(sandbox.exec_stop("ws1", "e1"), Some(stop.clone()));
+    std::thread::sleep(Duration::from_millis(300));
+    // the same exec id is refused while it runs
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let mut never = |_: &Stop| -> std::io::Result<()> { panic!("a duplicate never spawns") };
+    let duplicate = ExecRequest {
+        identity: CommandIdentity { uid: 501, gid: 20 },
+        arguments: vec!["/bin/true".into()],
+        environment: Vec::new(),
+        directory: sandbox.tmp().display().to_string(),
+        stdin: false,
+    };
+    let slot = ExecSlot {
+        workspace: "ws1",
+        exec: "e1",
+        spawned: &mut never,
+    };
+    assert!(sandbox
+        .run_in(&duplicate, Some(slot), &mut out, &mut err)
+        .is_err());
+    // the helper went back to the Sandbox's group: only the command's
+    // processes are in its own
+    let procs = fs::read_to_string(group.join("cgroup.procs")).unwrap();
+    assert!(procs.lines().count() >= 2, "{procs}");
+    let helper = fs::read_to_string(sandbox_group.join("cgroup.procs")).unwrap();
+    assert!(
+        !helper.is_empty(),
+        "the helper is back in the Sandbox's group"
+    );
+    let outcome = cancel(&stop, Duration::from_secs(5)).unwrap();
+    assert_eq!(outcome, Cancelled::Signalled(Signal::SIGTERM));
+    // the command ended by that signal, reported by the helper
+    assert_eq!(thread.join().unwrap(), Ok(143));
+    // its group is empty and gone, and so is its Workspace's
+    assert!(!group.exists());
+    assert!(!sandbox_group.join("ws-ws1").exists());
+    assert_eq!(
+        cancel(&stop, Duration::from_secs(1)).unwrap(),
+        Cancelled::Ended
+    );
+    let mut sandbox = Arc::try_unwrap(sandbox).unwrap();
+    sandbox.stop(5).unwrap();
+    sandbox.delete().unwrap();
+    assert!(!sandbox_group.exists());
+}
+
+#[test]
+fn a_command_group_left_running_is_removed_with_its_sandbox() {
+    if let Some(reason) = unavailable() {
+        eprintln!("SKIPPED namespaces exec group teardown: {reason}");
+        return;
+    }
+    let fixture = Fixture::new("leftgroup");
+    let provider = fixture.provider().unwrap();
+    let sandbox = Arc::new(fixture.launch(&provider, "sandbox-1").unwrap());
+    let sandbox_group = Path::new("/sys/fs/cgroup/layerfs").join(sandbox.identity().as_str());
+    let (stop, thread) = started(
+        &sandbox,
+        "e2",
+        "setsid /bin/sleep 600 >/dev/null 2>&1 & echo started",
+    );
+    assert_eq!(thread.join().unwrap(), Ok(0));
+    // what it left still runs in its group, which stays until it ends
+    let Stop::Cgroup { path } = &stop else {
+        unreachable!()
+    };
+    assert!(path.is_dir());
+    let mut sandbox = Arc::try_unwrap(sandbox).unwrap();
+    sandbox.stop(5).unwrap();
+    sandbox.delete().unwrap();
+    assert!(!sandbox_group.exists());
 }

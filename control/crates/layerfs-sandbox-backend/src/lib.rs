@@ -26,6 +26,8 @@ pub mod platform_policy;
 mod postgres_url;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod runtime;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub mod stop;
 mod types;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use backend::host_process;
@@ -41,6 +43,8 @@ pub use helper_spec::HelperSpec;
 pub use postgres_url::PostgresUrl;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use runtime::{LaunchFailure, Runtime, Sandbox};
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub use stop::{Cancelled, ExecSlot, Stop};
 pub use types::{
     Bind, CommandIdentity, ContainerId, ExecExit, ExecRequest, Image, IsolationModel, LaunchPhase,
     LaunchRequest, LocalRecord, MountDriver, NamespaceRecord, PendingRequest, ProviderCapabilities,

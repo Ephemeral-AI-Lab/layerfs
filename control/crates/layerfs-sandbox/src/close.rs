@@ -80,8 +80,18 @@ pub fn close(home: &Path, events: &mut Events<'_>, request: &CloseRequest) -> Re
     };
     let mut held = None;
     // a Sandbox reached directly keeps its Workspace records here: its
-    // worker is told which it holds (#535 G4)
+    // worker is told which it holds (#535 G4), and its commands' records
+    // are settled here (D-10: `Busy`, or cancelled first with `force`)
     if direct::forwarded(&record) {
+        let settled = crate::exec::remote::settle(events, (&home, &record), None, force);
+        if let Err(refusal) = settled {
+            let _lock = home::lock::take(&home)?;
+            let _sandbox = record::lock(&home, name)?;
+            if let Some(now) = SandboxRecord::read(&home, name)? {
+                now.without_op().write(&home)?;
+            }
+            return Err(refusal);
+        }
         match direct::held(&home, &record) {
             Ok(paths) => held = Some(paths),
             Err(refusal) => {
