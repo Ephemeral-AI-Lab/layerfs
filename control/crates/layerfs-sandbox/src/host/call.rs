@@ -191,8 +191,9 @@ pub struct Deploy {
 /// What every host operation runs on: the home (or a worker's root), the
 /// project and its Store, the Sandbox it names and how it is deployed. A
 /// call on a Sandbox the home reaches directly (#535 G4) has no Store
-/// record, path or deployment.
-#[derive(Clone, Debug)]
+/// record, path or deployment. No `Debug`: it carries the PostgreSQL
+/// selection, password included.
+#[derive(Clone)]
 pub struct Host {
     /// The home, or a worker's root.
     pub home: PathBuf,
@@ -225,4 +226,30 @@ impl Host {
     pub fn deploy(&self) -> Option<&Deploy> {
         self.deploy.as_ref()
     }
+}
+
+/// What `sandbox.create` answers once its Sandbox started (`started`): its
+/// id on its machine (`sandbox`), name, image, platform, runtime, kernel
+/// route and runtime id, and, from a machine's worker, its daemon's
+/// endpoint and control keys (`control`), which only the caller reads. A
+/// field it did not give is `None`, recorded as null. No `Debug`: `control`
+/// holds the daemon's secret.
+#[derive(Clone, Default)]
+pub struct Started {
+    /// Its id on its machine.
+    pub sandbox: Option<String>,
+    /// Its name.
+    pub name: Option<String>,
+    /// The image it runs.
+    pub image: Option<String>,
+    /// Its platform (#529).
+    pub platform: Option<String>,
+    /// Its runtime, `native` or `namespaces`.
+    pub runtime: Option<String>,
+    /// Its kernel route.
+    pub route: Option<String>,
+    /// Its runtime's identity.
+    pub runtime_id: Option<String>,
+    /// Its daemon's endpoint in the machine and control keys (a worker's).
+    pub control: Option<SdkValue>,
 }

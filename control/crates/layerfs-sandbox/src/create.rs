@@ -3,7 +3,7 @@
 //! result recorded with the intent dropped in one write.
 use super::direct;
 use super::record::{self, SandboxRecord};
-use crate::host::{Call, Message};
+use crate::host::{Call, Message, Started};
 use crate::route::{on_machine, Asked};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
@@ -128,17 +128,18 @@ pub fn create(
         message: Message::Absent,
         image: request.image.clone(),
     };
-    let started = on_machine(&home, events, &record, asked, crate::dispatch::call);
+    let started = on_machine(&home, events, &record, asked, crate::dispatch::call)
+        .map(|value| Started::read(&value));
     // a worker's Sandbox whose daemon this host reaches directly (#535 G4):
     // its forward opens before the locks are taken
-    let opened = (started.as_ref().ok()).map(|value| direct::open(&home, &record, value));
+    let opened = (started.as_ref().ok()).map(|started| direct::open(&home, &record, started));
     let _lock = home::lock::take(&home)?;
     let sandbox = record::lock(&home, name)?;
     // read again: on `native` the Sandbox's own side added to the record
     let record = SandboxRecord::read(&home, name)?.unwrap_or(record);
     match started {
-        Ok(value) => {
-            let mut record = record.started(&value);
+        Ok(started) => {
+            let mut record = record.started(&started);
             if let Some(opened) = &opened {
                 record = direct::save(&home, record, opened)?;
             }

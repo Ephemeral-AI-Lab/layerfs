@@ -102,7 +102,7 @@ impl WorkspaceRecord {
     }
 
     fn text(&self, pick: fn(&Field) -> Option<&String>) -> Option<&str> {
-        self.fields.find(pick).map(String::as_str)
+        self.fields.get(pick).map(String::as_str)
     }
 
     /// Its id, 64 hex digits.

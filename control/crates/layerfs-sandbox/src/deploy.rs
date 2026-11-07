@@ -8,6 +8,7 @@
 //! This process resolves from the home's records and the sealed bundle in
 //! the user cache (O16); a machine's worker from its own bundle folder (a
 //! guest never reads the home, H §7.7).
+use crate::host::Deploy;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{failed, refused};
 use layerfs_machine::record::MachineRecord;
@@ -69,27 +70,14 @@ pub struct Choice {
     pub archive: Option<String>,
 }
 
-/// What [`resolve`] resolves where the call runs.
-pub struct Settings {
-    /// The daemon executable.
-    pub daemon: String,
-    /// A namespaces Sandbox's image archive (Linux).
-    pub image_archive: Option<String>,
-    /// A namespaces Sandbox's image digest (Linux).
-    pub image: Option<String>,
-    /// The platform the machine implies (`docker`, D-8).
-    pub platform: Option<String>,
-}
-
 /// The deploy settings for `choice` ([`choose`]) on `side`: a daemon
 /// process (`native` on macOS, namespaces on Linux), and for namespaces
-/// its image archive and digest.
-pub fn resolve(side: &Side<'_>, choice: &Choice) -> Result<Settings> {
-    let mut settings = Settings {
-        daemon: daemon(side)?,
-        image_archive: None,
-        image: None,
-        platform: None,
+/// its image archive and digest. The backend, local root and name prefix
+/// are the caller's to set.
+pub fn resolve(side: &Side<'_>, choice: &Choice) -> Result<Deploy> {
+    let mut settings = Deploy {
+        daemon: Some(daemon(side)?),
+        ..Deploy::default()
     };
     // a namespaces Sandbox (Linux): its image archive and digest
     if cfg!(target_os = "linux") {

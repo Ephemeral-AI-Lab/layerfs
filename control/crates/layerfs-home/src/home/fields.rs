@@ -81,16 +81,8 @@ impl<F: Field> Fields<F> {
         )
     }
 
-    /// The first known field `pick` takes.
-    pub fn find<'a, T: ?Sized>(&'a self, pick: impl Fn(&'a F) -> Option<&'a T>) -> Option<&'a T> {
-        self.slots.iter().find_map(|slot| match slot {
-            Slot::Known(field) => pick(field),
-            Slot::Kept(..) => None,
-        })
-    }
-
-    /// The first known field `pick` takes, by value.
-    pub fn get<T>(&self, pick: impl Fn(&F) -> Option<T>) -> Option<T> {
+    /// The first known field `pick` takes: a reference into it, or a value.
+    pub fn get<'a, T>(&'a self, pick: impl Fn(&'a F) -> Option<T>) -> Option<T> {
         self.slots.iter().find_map(|slot| match slot {
             Slot::Known(field) => pick(field),
             Slot::Kept(..) => None,
@@ -104,11 +96,6 @@ impl<F: Field> Fields<F> {
             Slot::Kept(kept, value) if kept == name => Some(value),
             _ => None,
         })
-    }
-
-    /// Whether the record has a field `name`, of any value.
-    pub fn has(&self, name: &str) -> bool {
-        self.slots.iter().any(|slot| slot.name() == name)
     }
 
     /// `field` set: in its place when the record has its name, else last.
@@ -149,15 +136,6 @@ impl<F: Field> Fields<F> {
                 .collect(),
             _ => Vec::new(),
         }
-    }
-}
-
-/// A text field's value, stored as text or null.
-pub fn opt_text(value: &SdkValue) -> Option<Option<String>> {
-    match value {
-        SdkValue::Text(text) => Some(Some(text.clone())),
-        SdkValue::Null => Some(None),
-        _ => None,
     }
 }
 

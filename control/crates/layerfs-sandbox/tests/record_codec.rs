@@ -4,6 +4,7 @@
 //! last, as the untyped records did.
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::json::{parse, print};
+use layerfs_sandbox::host::Started;
 use layerfs_sandbox::record::{DaemonRecord, SandboxRecord, WorkspaceRecord};
 
 fn value(text: &str) -> SdkValue {
@@ -50,9 +51,9 @@ fn typed_fields_read_as_the_untyped_record_read_them() {
 #[test]
 fn a_started_record_keeps_its_fields_in_place_and_adds_the_rest_last() {
     let native = r#"{"v":1,"name":"t1","project":"p","machine":"native","created":3,"op":{"id":"op-1"},"backend":"native","route":"nfs","runtime_id":"c0","daemon":{"pid":7}}"#;
-    let started = value(
+    let started = Started::read(&value(
         r#"{"sandbox":"t1","name":"lfs-0-t1","platform":"mac","runtime":"native","route":"nfs","runtime_id":"c0"}"#,
-    );
+    ));
     let record = SandboxRecord::from_record("t1", value(native)).started(&started);
     // the intent is dropped; `image` was not answered and is null
     assert_eq!(

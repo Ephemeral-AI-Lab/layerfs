@@ -169,7 +169,7 @@ pub fn reopen(host: &Host) -> Result<Arc<SandboxState>> {
     let project = &host.project;
     // a Sandbox in a machine whose daemon's port is forwarded here (#535
     // G4): only its forward is checked; its runtime is the machine's
-    let (runtime, endpoint) = match value.forward().and_then(|f| f.address()) {
+    let (runtime, endpoint) = match crate::direct::forward_of(&value) {
         Some(address) => {
             crate::direct::check(&home_of(Some(&host.home))?, id, &value)?;
             (None, address)

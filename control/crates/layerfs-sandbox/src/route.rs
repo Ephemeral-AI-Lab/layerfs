@@ -2,7 +2,7 @@
 //! sent to its machine's worker with the records it needs, and run there
 //! (`in_worker`); the typed host request both sides build ([`Host`],
 //! layerfs-project#108), and spooled output streamed back as events.
-use super::deploy::{self, Settings, Side};
+use super::deploy::{self, Side};
 use super::record::SandboxRecord;
 use crate::host::{Call, Deploy, Host, Message, Op, Sent};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -26,7 +26,7 @@ fn host_args(
     home: &Path,
     (store, project, record): (&str, &str, &StoreRecord),
     (kind, postgresql): (StoreKind, Option<SdkValue>),
-    settings: Settings,
+    settings: Deploy,
     (sandbox, message): (Option<String>, Message),
 ) -> Result<Host> {
     let prefix = format!("lfs-{}-", &layerfs_home::home::opened(home)?.id[..8]);
@@ -57,10 +57,7 @@ fn host_args(
         sandbox: Some(backend.to_owned()),
         local_dir: Some(local.display().to_string()),
         container_prefix: Some(prefix),
-        daemon: Some(settings.daemon),
-        image_archive: settings.image_archive,
-        image: settings.image,
-        platform: settings.platform,
+        ..settings
     };
     Ok(Host {
         home: home.to_path_buf(),
@@ -347,7 +344,7 @@ fn host_op(
                 reach_hint: postgresql.as_ref().and(hint).map(str::to_owned),
                 postgresql,
             };
-            let request = crate::host::encode(&sent);
+            let request = crate::host::encode(&sent)?;
             match worker.attempt("sandbox.host", request, &mut |event| events.event(event)) {
                 Ok(outcome) => outcome,
                 Err(Unreached(refusal)) => {

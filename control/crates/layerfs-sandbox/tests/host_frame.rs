@@ -40,14 +40,14 @@ fn a_frame_keeps_the_untyped_request_s_fields_and_order() {
         spool: false,
     };
     assert_eq!(
-        print(&encode(&sent(exec, Message::Null))),
+        print(&encode(&sent(exec, Message::Null)).unwrap()),
         r#"{"op":"workspace.exec","store":"shop","project":"api","store_record":{"name":"shop","url":"postgresql://u@h/d","password":"env:P"},"project_record":null,"deploy":{"backend":"local","platform":"docker"},"more":{"path":"/w/1","command":"ls","message":null,"sandbox":"t1"}}"#
     );
     let close = Call::Close {
         force: false,
         held: Some(vec!["/w/2".to_owned()]),
     };
-    let frame = print(&encode(&sent(close, Message::Absent)));
+    let frame = print(&encode(&sent(close, Message::Absent)).unwrap());
     assert!(
         frame.ends_with(r#""more":{"force":false,"held":["/w/2"],"sandbox":"t1"}}"#),
         "{frame}"
@@ -56,7 +56,7 @@ fn a_frame_keeps_the_untyped_request_s_fields_and_order() {
         path: Some("w".to_owned()),
         force: Some(true),
     };
-    let frame = print(&encode(&sent(commit, Message::Text("m".to_owned()))));
+    let frame = print(&encode(&sent(commit, Message::Text("m".to_owned()))).unwrap());
     assert!(
         frame.ends_with(r#""more":{"path":"w","message":"m","force":true,"sandbox":"t1"}}"#),
         "{frame}"
@@ -97,7 +97,7 @@ fn a_frame_reads_back_to_its_request() {
     ];
     assert_eq!(calls.len(), OPS.len());
     for call in calls {
-        let read = decode(&encode(&sent(call.clone(), Message::Absent))).unwrap();
+        let read = decode(&encode(&sent(call.clone(), Message::Absent)).unwrap()).unwrap();
         assert_eq!(read.call, call);
         assert_eq!(Op::parse(call.op().name()), Some(call.op()));
         assert_eq!(read.sandbox.as_deref(), Some("t1"));
@@ -128,4 +128,17 @@ fn a_frame_naming_no_host_operation_is_refused() {
     // a message that is not text is kept, to be refused where it was
     let frame = parse(r#"{"op":"workspace.mount","more":{"message":3}}"#).unwrap();
     assert_eq!(decode(&frame).unwrap().message, Message::NotText);
+}
+
+#[test]
+fn a_message_that_is_not_text_is_refused_before_it_is_sent() {
+    let commit = Call::Commit {
+        path: Some("w".to_owned()),
+        force: None,
+    };
+    let refusal = encode(&sent(commit, Message::NotText)).err().unwrap();
+    assert_eq!(
+        (refusal.code.as_str(), refusal.message.as_str()),
+        ("InvalidInput", "message must be text")
+    );
 }

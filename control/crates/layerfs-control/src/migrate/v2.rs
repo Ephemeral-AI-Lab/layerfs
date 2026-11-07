@@ -36,7 +36,7 @@ use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::{failed, refused};
 use layerfs_machine::record::MachineRecord;
 use layerfs_sandbox::record::{DaemonRecord, SandboxRecord};
-use layerfs_sandbox::reopen::{retired_record, unchecked, Recorded};
+use layerfs_sandbox::reopen::{unchecked, Recorded};
 use layerfs_store::lease;
 use layerfs_store::record::StoreRecord;
 use std::path::{Path, PathBuf};
@@ -192,7 +192,7 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
                 .position(|n| n.project == project && n.id == id);
             // the retired docker backend's Sandbox is forgotten, as a close
             // forgets it (D-8): this build never reopens or deletes it
-            let kept = at.filter(|at| retired_record(&numbered[*at].record));
+            let kept = at.filter(|at| numbered[*at].record.retired());
             let home_retired = record.retired_container(home)?;
             if kept.is_some() || home_retired.is_some() {
                 let entry = kept.map(|at| numbered.remove(at));
@@ -222,7 +222,7 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
     // numbered Sandboxes no Sandbox record names (an earlier bundle's)
     for entry in numbered {
         let name = format!("{}#{}", entry.project, entry.id);
-        if retired_record(&entry.record) {
+        if entry.record.retired() {
             let container = entry.record.name().unwrap_or("");
             plan.notes.push(forgotten(&name, container));
             continue;

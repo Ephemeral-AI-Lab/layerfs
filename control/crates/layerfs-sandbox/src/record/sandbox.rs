@@ -15,6 +15,7 @@
 //! is kept as read, and the file's order is kept, so a record read and
 //! written back is the same JSON.
 use super::daemon::DaemonRecord;
+use crate::host::Started;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::entity_lock::{self, EntityLock};
 use layerfs_home::home::fields::{self, Fields};
@@ -172,19 +173,18 @@ impl SandboxRecord {
 
     /// The record of a started Sandbox: what its create answered
     /// (`started`), with its intent dropped.
-    pub fn started(mut self, started: &SdkValue) -> Self {
+    pub fn started(mut self, started: &Started) -> Self {
         self.fields.remove(op::FIELD);
-        let copied = |name: &str| started.get(name).cloned().unwrap_or_default();
         for (field, value) in [
-            ("id", copied("sandbox")),
-            ("platform", copied("platform")),
-            ("runtime", copied("runtime")),
-            ("image", copied("image")),
-            ("backend", copied("runtime")),
-            ("route", copied("route")),
-            ("runtime_id", copied("runtime_id")),
+            ("id", &started.sandbox),
+            ("platform", &started.platform),
+            ("runtime", &started.runtime),
+            ("image", &started.image),
+            ("backend", &started.runtime),
+            ("route", &started.route),
+            ("runtime_id", &started.runtime_id),
         ] {
-            self.fields.put(field, value);
+            self.fields.put(field, SdkValue::opt_text(value.clone()));
         }
         self
     }
@@ -211,7 +211,7 @@ impl SandboxRecord {
     /// The intent the record holds, if any.
     pub fn op(&self) -> Option<Op> {
         self.fields
-            .find(|field| match field {
+            .get(|field| match field {
                 Field::Op(op) => Some(op),
                 _ => None,
             })
@@ -275,7 +275,7 @@ impl SandboxRecord {
 
     /// One text field, as recorded.
     fn text(&self, pick: fn(&Field) -> Option<&String>) -> Option<&str> {
-        self.fields.find(pick).map(String::as_str)
+        self.fields.get(pick).map(String::as_str)
     }
 
     /// The machine it runs on, as recorded.
@@ -346,7 +346,7 @@ impl SandboxRecord {
 
     /// What reopens it, when its record keeps that (`daemon`).
     pub fn daemon(&self) -> Option<&DaemonRecord> {
-        self.fields.find(|f| match f {
+        self.fields.get(|f| match f {
             Field::Daemon(daemon) => Some(daemon),
             _ => None,
         })

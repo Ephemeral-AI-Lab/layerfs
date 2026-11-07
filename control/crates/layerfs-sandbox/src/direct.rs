@@ -14,7 +14,7 @@
 //! checked here. Create, close and a machine with no forward use the
 //! worker as before.
 use super::record::{DaemonRecord, Forward, SandboxRecord};
-use crate::host::{Call, Host, Message};
+use crate::host::{Call, Host, Message, Started};
 use crate::registry::{self, SandboxState, SANDBOXES};
 use crate::unmount_guard;
 use crate::{dispatch, files};
@@ -131,13 +131,13 @@ pub struct Opened {
 /// a forward of its port where its machine's adapter makes one, else
 /// nothing (the worker route; `docker` among them, D-8). Run before the
 /// home and Sandbox locks are taken; [`save`] records it under them.
-pub fn open(home: &Path, record: &SandboxRecord, started: &SdkValue) -> Opened {
+pub fn open(home: &Path, record: &SandboxRecord, started: &Started) -> Opened {
     let mut opened = Opened {
         keys: None,
         daemon: None,
         failed: None,
     };
-    let Some(keys) = started.get("control") else {
+    let Some(keys) = &started.control else {
         return opened;
     };
     let Some(endpoint) = keys

@@ -7,6 +7,7 @@
 //! record of the retired docker backend has no `runtime` (D-8). As the
 //! Sandbox record does, it keeps unknown, null and mistyped fields as read,
 //! in file order.
+use crate::host::Started;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::helpers;
 use layerfs_home::home::fields::{self, Fields};
@@ -196,16 +197,21 @@ impl DaemonRecord {
     /// A worker's Sandbox reached through `forward`, with what its create
     /// answered (`started`): its `name`, `runtime`, `platform` and `image`,
     /// each null when it gave none.
-    pub fn forwarded(forward: Forward, started: &SdkValue) -> Self {
+    pub fn forwarded(forward: Forward, started: &Started) -> Self {
         let mut fields = Fields::of([Field::Forward(forward)]);
-        for name in ["name", "runtime", "platform", "image"] {
-            fields.put(name, started.get(name).cloned().unwrap_or_default());
+        for (name, value) in [
+            ("name", &started.name),
+            ("runtime", &started.runtime),
+            ("platform", &started.platform),
+            ("image", &started.image),
+        ] {
+            fields.put(name, SdkValue::opt_text(value.clone()));
         }
         Self { fields }
     }
 
     fn text(&self, pick: fn(&Field) -> Option<&String>) -> Option<&str> {
-        self.fields.find(pick).map(String::as_str)
+        self.fields.get(pick).map(String::as_str)
     }
 
     fn int(&self, pick: fn(&Field) -> Option<i64>) -> Option<i64> {
@@ -311,7 +317,7 @@ impl DaemonRecord {
 
     /// Its labels; a record written before #373 has none.
     pub fn labels(&self) -> Result<Vec<(String, String)>> {
-        let known = self.fields.find(|f| match f {
+        let known = self.fields.get(|f| match f {
             Field::Labels(labels) => Some(labels),
             _ => None,
         });
@@ -334,7 +340,7 @@ impl DaemonRecord {
 
     /// The forward of its daemon's port to this host (#535 G4), if any.
     pub fn forward(&self) -> Option<&Forward> {
-        self.fields.find(|f| match f {
+        self.fields.get(|f| match f {
             Field::Forward(forward) => Some(forward),
             _ => None,
         })
@@ -433,7 +439,7 @@ impl Forward {
 
     /// The host address it reaches the daemon at.
     pub fn address(&self) -> Option<SocketAddr> {
-        let text = self.fields.find(|f| match f {
+        let text = self.fields.get(|f| match f {
             ForwardField::Address(text) => Some(text),
             _ => None,
         })?;
@@ -443,7 +449,7 @@ impl Forward {
     /// The machine that carries it.
     pub fn machine(&self) -> Option<&str> {
         self.fields
-            .find(|f| match f {
+            .get(|f| match f {
                 ForwardField::Machine(text) => Some(text),
                 _ => None,
             })
@@ -464,11 +470,11 @@ impl Forward {
         let Some(pid) = self.pid().and_then(|p| u32::try_from(p).ok()) else {
             return false;
         };
-        let start = self.fields.find(|f| match f {
+        let start = self.fields.get(|f| match f {
             ForwardField::PidStart(text) => Some(text),
             _ => None,
         });
-        let boot = self.fields.find(|f| match f {
+        let boot = self.fields.get(|f| match f {
             ForwardField::PidBoot(text) => Some(text),
             _ => None,
         });

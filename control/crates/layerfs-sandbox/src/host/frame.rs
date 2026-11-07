@@ -5,7 +5,7 @@
 //! calls a host operation makes (until layerfs-project#109 types them) and
 //! the daemon's `sandbox.list_workspaces`. Both are built by the same field
 //! encoder ([`fields`]), in the order the untyped request had.
-use super::call::{Call, Deploy, Host, Message, Op};
+use super::call::{Call, Deploy, Host, Message, Op, Started};
 use crate::deploy::Choice;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::refused;
@@ -54,7 +54,10 @@ fn message(message: &Message) -> Option<SdkValue> {
     match message {
         Message::Absent => None,
         Message::Text(text) => Some(SdkValue::text(text)),
-        Message::Null | Message::NotText => Some(SdkValue::Null),
+        Message::Null => Some(SdkValue::Null),
+        // never in a frame ([`encode`] refuses it); the args map's
+        // layerfs-store calls read no message
+        Message::NotText => Some(SdkValue::Null),
     }
 }
 
@@ -119,8 +122,14 @@ fn fields(call: &Call, sent: &Message, sandbox: Option<&str>) -> Vec<(&'static s
     fields
 }
 
-/// The `sandbox.host` frame's arguments for `sent`.
-pub fn encode(sent: &Sent) -> SdkValue {
+/// The `sandbox.host` frame's arguments for `sent`, its message checked
+/// first as the worker checks it (`dispatch::checked`, every operation but
+/// a status): a message that is not text, or not a valid Commit message, is
+/// refused before it is sent.
+pub fn encode(sent: &Sent) -> Result<SdkValue, SdkRefusal> {
+    if sent.call.op() != Op::Status {
+        crate::dispatch::checked(&sent.message)?;
+    }
     let mut frame = vec![
         ("op", text(sent.call.op().name())),
         ("store", text(&sent.store)),
@@ -137,7 +146,7 @@ pub fn encode(sent: &Sent) -> SdkValue {
     }
     let more = fields(&sent.call, &sent.message, sent.sandbox.as_deref());
     frame.push(("more", map(more)));
-    map(frame)
+    Ok(map(frame))
 }
 
 /// What machine `choice` encodes to: `{ backend: "local", image?,
@@ -304,6 +313,39 @@ impl Host {
                 fields.extend(self.sandbox.as_deref().map(|s| ("sandbox", text(s))));
             }
         }
+        map(fields)
+    }
+}
+
+impl Started {
+    /// A `sandbox.create` answer `value`; a field that is not text is
+    /// `None`.
+    pub fn read(value: &SdkValue) -> Self {
+        let text = |name: &str| value.get_text(name).map(str::to_owned);
+        Self {
+            sandbox: text("sandbox"),
+            name: text("name"),
+            image: text("image"),
+            platform: text("platform"),
+            runtime: text("runtime"),
+            route: text("route"),
+            runtime_id: text("runtime_id"),
+            control: value.get("control").cloned(),
+        }
+    }
+
+    /// The answer, in the order the untyped answer had, `control` last.
+    pub fn encode(&self) -> SdkValue {
+        let mut fields = vec![
+            ("sandbox", opt(&self.sandbox)),
+            ("name", opt(&self.name)),
+            ("image", opt(&self.image)),
+            ("platform", opt(&self.platform)),
+            ("runtime", opt(&self.runtime)),
+            ("route", opt(&self.route)),
+            ("runtime_id", opt(&self.runtime_id)),
+        ];
+        fields.extend(self.control.clone().map(|keys| ("control", keys)));
         map(fields)
     }
 }

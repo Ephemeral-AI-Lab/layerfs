@@ -4,5 +4,5 @@
 mod call;
 mod frame;
 
-pub use call::{Call, Deploy, Host, Message, Op, OPS};
+pub use call::{Call, Deploy, Host, Message, Op, Started, OPS};
 pub use frame::{decode, encode, Sent};

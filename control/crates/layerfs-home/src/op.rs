@@ -57,12 +57,7 @@ impl Op {
 
     /// The intent a record holds, if any.
     pub fn of(record: &SdkValue) -> Option<Self> {
-        match record.get(FIELD) {
-            Some(fields @ SdkValue::Map(_)) => Some(Self {
-                fields: fields.clone(),
-            }),
-            _ => None,
-        }
+        record.get(FIELD).and_then(Self::decode)
     }
 
     /// The intent a record's `op` field holds (`value`), when it is a map.

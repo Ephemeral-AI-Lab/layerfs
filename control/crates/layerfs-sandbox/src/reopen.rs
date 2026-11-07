@@ -60,12 +60,6 @@ pub fn retired(id: &str, container: &str) -> SdkRefusal {
     )
 }
 
-/// Whether a side's daemon record (`record.json`'s `daemon` on `native`, a
-/// worker's own record) names the retired docker backend: `runtime`
-/// `docker`, or none at all, which only a docker record lacked.
-pub fn retired_record(value: &DaemonRecord) -> bool {
-    value.retired()
-}
 /// What a Sandbox record names: a local daemon process (`runtime`
 /// `native`) with its directory and port, or a namespace Sandbox (`runtime`
 /// `namespaces`) with its own runtime, record and directory.

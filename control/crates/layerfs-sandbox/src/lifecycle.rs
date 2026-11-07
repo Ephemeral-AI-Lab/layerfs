@@ -8,7 +8,7 @@
 //! when it ended by itself. A record of the retired docker backend is
 //! forgotten by its close. Nothing is retried on the caller's behalf.
 use crate::daemon::values;
-use crate::host::{Deploy, Host};
+use crate::host::{Deploy, Host, Started};
 use crate::record::DaemonRecord;
 use crate::registry::{SandboxState, SANDBOXES};
 use crate::OperationFailure;
@@ -184,7 +184,7 @@ pub fn create(host: &Host, named: Option<&str>) -> Outcome {
         // a record of the retired docker backend is forgotten, as a close
         // forgets it, so its name is free again (D-8): nothing it named runs
         match recorded {
-            Some(retired) if crate::reopen::retired_record(&retired) => {
+            Some(retired) if retired.retired() => {
                 discard(&directory, &retired)?;
             }
             Some(_) => {
@@ -214,15 +214,17 @@ pub fn create(host: &Host, named: Option<&str>) -> Outcome {
         }
     };
     let runtime = state.runtime()?;
-    Ok(SdkValue::map([
-        ("sandbox", SdkValue::text(&state.id)),
-        ("name", SdkValue::text(&state.name)),
-        ("image", SdkValue::text(crate::runtime::image(runtime))),
-        ("platform", SdkValue::text(platform)),
-        ("runtime", SdkValue::text(crate::runtime::kind(runtime))),
-        ("route", SdkValue::text(crate::files::route(runtime))),
-        ("runtime_id", SdkValue::text(runtime.identity().to_string())),
-    ]))
+    let started = Started {
+        sandbox: Some(state.id.clone()),
+        name: Some(state.name.clone()),
+        image: Some(crate::runtime::image(runtime).to_owned()),
+        platform: Some(platform.to_owned()),
+        runtime: Some(crate::runtime::kind(runtime).to_owned()),
+        route: Some(crate::files::route(runtime).to_owned()),
+        runtime_id: Some(runtime.identity().to_string()),
+        control: None,
+    };
+    Ok(started.encode())
 }
 
 /// `sandbox.close(sandbox, { force })`: stops Sandbox `sandbox` now, under
@@ -246,7 +248,7 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
             format!("no Sandbox {id} runs on this machine"),
         ));
     };
-    if crate::reopen::retired_record(&recorded) {
+    if recorded.retired() {
         return forget(&id, &directory, &recorded);
     }
     let state = match crate::registry::sandbox_live(host) {
