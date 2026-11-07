@@ -75,6 +75,9 @@ with exit code 128 + the signal.
    { outcome: "unknown" }                none        -> ended
                                          owner gone  -> stale: ended,
                                                         removed, logged
+                                         (a forwarded one: ended in its
+                                          worker, zero grace; kept as it
+                                          was when that is unknown)
                                          else mark cancel, unlock
                                        stop handle (one attempt):
                                          Cgroup  SIGTERM each process,
@@ -93,7 +96,11 @@ command runs in its own cgroup,
 its process group end too. On `host_process` (macOS `native`) it is the
 command's own process group; a child that calls `setsid` itself escapes
 it. A cancel that comes before the command's stop handle is known marks
-the record, and the exec's owner ends the command at spawn. See
+the record, and the exec's owner ends the command at spawn. For a
+Sandbox this home reaches directly, a worker that answers `NoSuchSandbox`
+confirms the command `ended`. A worker that takes the cancel and never
+answers leaves the call waiting until its connection closes: there is no
+operation timeout (§5.4). See
 [Control: commands and streams](../../../control/sandboxes/commands-and-streams.md#exec-records-and-cancel)
 and the [routing table](../../../control/routing/routing-table.md).
 

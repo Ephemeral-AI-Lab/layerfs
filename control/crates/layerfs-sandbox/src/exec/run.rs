@@ -99,7 +99,13 @@ pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
             let mut record = ExecRecord::new(&id, &workspace, (&directory, named.as_deref()));
             // a namespaces command's group follows from the ids: known now
             record.stop = runtime.exec_stop(&workspace, id.as_str());
-            Some(Running::start(&state.directory, &state.id, &record)?)
+            let unreached = &mut crate::exec::cancel::unreached;
+            Some(Running::start(
+                &state.directory,
+                &state.id,
+                &record,
+                unreached,
+            )?)
         }
     };
     let mut form = None;

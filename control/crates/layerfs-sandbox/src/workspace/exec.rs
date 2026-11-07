@@ -63,11 +63,11 @@ pub fn exec(home: &Path, events: &mut Events<'_>, request: &ExecRequest) -> Answ
             let wsid = workspace.id().unwrap_or_default();
             let mut kept = ExecRecord::new(&id, wsid, (&at.path, workspace.name()));
             kept.route = Route::Machine(at.record.machine().to_owned());
-            Some(Running::start(
-                &at.record.dir(&at.home),
-                at.record.name(),
-                &kept,
-            )?)
+            let mut remote = |found: &ExecRecord, grace| {
+                crate::exec::remote::remote(events, (&at.home, &at.record), found, grace)
+            };
+            let dir = at.record.dir(&at.home);
+            Some(Running::start(&dir, at.record.name(), &kept, &mut remote)?)
         }
         None => None,
     };
