@@ -130,17 +130,29 @@ fn custody(table: &Table, serial: u64) -> Option<u64> {
 }
 
 /// What an unlinking or replacing mutation may retire in its own publishing
-/// job: the serial `name` was last bound to by this export, and the descriptor
-/// that custody lives in. Both absent: the export gives it back afterwards.
+/// job: the descriptor the export's custody of the target lives in, and
+/// whether that custody is held at all. Absent or not held: the export gives
+/// it back after the reply.
 #[derive(Clone, Copy, Default)]
 struct Retire {
-    serial: Option<u64>,
     handle: Option<u64>,
+    /// The publishing job retires this inode's engine custody itself.
+    in_job: bool,
 }
 impl Retire {
     /// The request selects a publishing job that retires the target.
     fn open(self) -> Option<bool> {
-        self.serial.map(|_| false)
+        self.in_job.then_some(false)
+    }
+    /// A retire selected from the export's own name index, claimed in the job
+    /// only when the export holds custody for that serial: a descriptor, or
+    /// the lookup reference the job would give back. A name it merely
+    /// remembers from before its reference was collected has nothing to retire
+    /// there, and the engine's own detached inode answers the reply either way.
+    fn held(serial: Option<u64>, handle: Option<u64>, table: &Table) -> Self {
+        let in_job =
+            serial.is_some_and(|serial| handle.is_some() || table.lookups.contains(&serial));
+        Self { handle, in_job }
     }
 }
 
@@ -430,10 +442,8 @@ impl Kernel {
         {
             return Retire::default();
         }
-        Retire {
-            serial: known,
-            handle: known.and_then(|serial| custody(&table, serial)),
-        }
+        let handle = known.and_then(|serial| custody(&table, serial));
+        Retire::held(known, handle, &table)
     }
     /// A replacing RENAME detaches its destination when that was its last
     /// name, and retires the export's custody of it in the publishing job as
@@ -446,10 +456,8 @@ impl Kernel {
         if serial.is_some_and(|serial| table.pinned(serial)) {
             return Retire::default();
         }
-        Retire {
-            serial,
-            handle: serial.and_then(|serial| custody(&table, serial)),
-        }
+        let handle = serial.and_then(|serial| custody(&table, serial));
+        Retire::held(serial, handle, &table)
     }
     /// Drops the name an unlinking mutation removed, and gives back what the
     /// export held for the inode it detached. Only the inode the publishing
@@ -463,7 +471,10 @@ impl Kernel {
         if !last || self.table().pinned(target.serial) {
             return;
         }
-        if retire.serial == Some(target.serial) {
+        if retire.open().is_some() {
+            // The job retires whatever inode it detached, which is this one:
+            // its engine reference is already given back, and only a
+            // descriptor the job did not pair is closed here.
             self.unlinked_retired(target.serial, retire.handle);
         } else {
             self.unlinked(target.serial);
@@ -517,7 +528,16 @@ impl Kernel {
         tickets: &mut Tickets,
     ) -> Result<[Wcc; 2], Status> {
         if let Some(renamed) = self.companion_rename(from, name, to, new_name) {
-            return renamed.map(|()| [(None, None), (None, None)]);
+            // The companion lives in the export alone: neither directory's own
+            // facts change, so both halves of each answer from the last ones
+            // this export saw (see `Kernel::directory_wcc`).
+            let source = self.directory_wcc(from);
+            let destination = if to == from {
+                source.clone()
+            } else {
+                self.directory_wcc(to)
+            };
+            return renamed.map(|()| [source, destination]);
         }
         if let Some(serial) = self.silly_entry(from, name) {
             // Moving a silly name to another silly name keeps it ours;
@@ -529,7 +549,15 @@ impl Kernel {
             let mut table = self.table();
             table.silly.remove(&(from, name.to_vec()));
             table.silly.insert((to, new_name.to_vec()), serial);
-            return Ok([(None, None), (None, None)]);
+            drop(table);
+            // No engine change either: the directories answer what they did.
+            let wcc = self.directory_wcc(from);
+            let destination = if to == from {
+                wcc.clone()
+            } else {
+                self.directory_wcc(to)
+            };
+            return Ok([wcc, destination]);
         }
         let source_name = self.checked(name, false)?;
         let destination_name = self.checked(new_name, true)?;
@@ -553,7 +581,10 @@ impl Kernel {
                 if let Some(serial) = replaced {
                     self.unlinked(serial);
                 }
-                return Ok([unpublished.wcc[0].clone(), (None, None)]);
+                // The source directory's half comes from the unlink job; the
+                // destination, whose name now denotes an inode the export
+                // keeps alive, is untouched by the engine.
+                return Ok([unpublished.wcc[0].clone(), self.directory_wcc(to)]);
             }
         }
         let retire = self.prepare_replace(to, new_name);

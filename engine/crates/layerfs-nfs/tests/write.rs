@@ -1218,6 +1218,31 @@ fn rename_over_an_existing_target_and_commit_avoid_redundant_owner_jobs_and_orph
     );
     assert_eq!(c.lookup(&root, b"index").map(|_| ()), Err(NOENT));
 
+    // Renaming one name of an inode over another name of the same inode
+    // publishes no binding: the inode keeps what it had. The reply still
+    // answers both halves of the directory's wcc_data from the window the job
+    // read, so the client keeps its cached attributes of that directory.
+    // `src/lib.rs` and `src/alias.rs` are two names of one inode.
+    let src = c.lookup(&root, b"src").unwrap().0;
+    c.lookup(&src, b"lib.rs").unwrap();
+    c.lookup(&src, b"alias.rs").unwrap();
+    let before = counts.snapshot();
+    let (from_wcc, to_wcc) = c.rename(&src, b"alias.rs", &src, b"lib.rs").unwrap();
+    assert!(
+        from_wcc.before.is_some() && from_wcc.after.is_some(),
+        "a same-inode RENAME answers the directory's pre- and post-op attributes"
+    );
+    assert!(
+        to_wcc.before.is_some() && to_wcc.after.is_some(),
+        "and the destination half of a same-directory move"
+    );
+    assert_eq!(from_wcc.before, to_wcc.before, "one directory, one window");
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 1, before.2, before.3),
+        "a same-inode RENAME: 1 mutate_visit, 0 observe_visit"
+    );
+
     drop(c);
     let released = server.stop();
     let (_, outstanding) = rig.stop(released);

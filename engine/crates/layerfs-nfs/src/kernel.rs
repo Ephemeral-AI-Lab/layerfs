@@ -555,10 +555,16 @@ impl Kernel {
         }
     }
     /// The facts this export last published or observed for `serial` through
-    /// its implicit descriptor, when it holds one. A COMMIT answers from them
-    /// instead of reading the inode again. A serial whose last name this
-    /// export no longer binds belongs to an inode another connection removed:
-    /// it is read, and answers stale.
+    /// its implicit descriptor, when it holds one and still binds a name for
+    /// it. A COMMIT answers from them instead of reading the inode again.
+    ///
+    /// A serial this export no longer binds a name for answers `None` and is
+    /// read again, which then answers what the read answers. That is the case
+    /// this export can see: a name another connection removed while this one
+    /// kept its own binding still looks live here, so a COMMIT for it answers
+    /// the facts last seen and succeeds. What is stale then is at most
+    /// `actimeo` old, the reply's post-operation attributes are optional, and
+    /// a client that reads, writes or looks the name up then gets the removal.
     pub(crate) fn held_stat(&self, serial: u64) -> Option<ViewStat> {
         let mut table = self.table();
         let tick = table.tick();
