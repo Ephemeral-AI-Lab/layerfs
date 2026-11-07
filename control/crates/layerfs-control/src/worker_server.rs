@@ -122,14 +122,10 @@ fn answer(mut stream: TcpStream, secret: &str, ready: &SdkValue, root: &Path) ->
         layerfs_home::trace::steps_begin();
     }
     let _home = layerfs_home::home::guest::sent(request.get_text("home_id"));
-    let outcome = run(
-        request.get_text("op").unwrap_or(""),
-        request.get("args").cloned().unwrap_or_default(),
-        root,
-        &mut |event| {
-            let _ = write_frame(&mut stream, &SdkValue::map([("event", event)]));
-        },
-    );
+    let (op, args) = op_and_args(request);
+    let outcome = run(&op, args, root, &mut |event| {
+        let _ = write_frame(&mut stream, &SdkValue::map([("event", event)]));
+    });
     let mut frame = match outcome {
         Ok(value) => SdkValue::map([("value", value)]),
         Err(refusal) => refusal_frame(refusal),
@@ -140,6 +136,22 @@ fn answer(mut stream: TcpStream, secret: &str, ready: &SdkValue, root: &Path) ->
         frame = layerfs_home::home::with_field(frame, "steps", steps);
     }
     write_frame(&mut stream, &frame).is_ok()
+}
+
+/// A request's `op` and its `args` (moved out, not copied: they may hold a
+/// large part of a file).
+fn op_and_args(request: SdkValue) -> (String, SdkValue) {
+    let (mut op, mut args) = (String::new(), SdkValue::Null);
+    if let SdkValue::Map(fields) = request {
+        for (name, value) in fields {
+            match (name.as_str(), value) {
+                ("op", SdkValue::Text(text)) => op = text,
+                ("args", value) => args = value,
+                _ => {}
+            }
+        }
+    }
+    (op, args)
 }
 
 fn refusal_frame(refusal: SdkRefusal) -> SdkValue {
@@ -196,7 +208,7 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
         }
         // writes or discards one part of a caller's folder copy under this
         // worker's root (#536 H11a)
-        "project.stage" => staged::run(root, &StageFrame::decode(&args)?),
+        "project.stage" => staged::run(root, &StageFrame::decode(args)?),
         // adds a folder copy the caller sent as a new project of a Store
         // under this worker's root (#536 H11, H11a)
         "project.init" => {

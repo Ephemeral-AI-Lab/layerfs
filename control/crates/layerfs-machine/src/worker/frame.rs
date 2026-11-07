@@ -15,16 +15,18 @@ pub const MAX_HELLO: usize = 4 << 10;
 /// `value` as the bytes of one frame; a value larger than [`MAX_FRAME`] is
 /// refused `TooLarge`, before anything is sent.
 pub fn frame_bytes(value: &SdkValue) -> Result<Vec<u8>, SdkRefusal> {
-    let text = json::print(&typed(value.clone()));
-    if text.len() > MAX_FRAME {
+    // the JSON is printed after 4 bytes kept for its length
+    let mut text = String::from("\0\0\0\0");
+    json::write_typed(&mut text, value);
+    let length = text.len() - 4;
+    if length > MAX_FRAME {
         return Err(refused(
             "TooLarge",
             "a frame larger than the worker accepts; nothing was sent",
         ));
     }
-    let mut bytes = Vec::with_capacity(4 + text.len());
-    bytes.extend_from_slice(&(text.len() as u32).to_be_bytes());
-    bytes.extend_from_slice(text.as_bytes());
+    let mut bytes = text.into_bytes();
+    bytes[..4].copy_from_slice(&(length as u32).to_be_bytes());
     Ok(bytes)
 }
 
@@ -74,16 +76,4 @@ pub fn read_frame_within(
     json::parse(&text)
         .map(Some)
         .map_err(|error| refused("Failed", format!("a worker frame: {}", error.0)))
-}
-
-/// Every byte value as `{"base64": ...}`, even UTF-8 bytes.
-fn typed(value: SdkValue) -> SdkValue {
-    match value {
-        SdkValue::Bytes(bytes) => SdkValue::map([("base64", SdkValue::Text(json::base64(&bytes)))]),
-        SdkValue::List(items) => SdkValue::List(items.into_iter().map(typed).collect()),
-        SdkValue::Map(fields) => {
-            SdkValue::Map(fields.into_iter().map(|(n, v)| (n, typed(v))).collect())
-        }
-        other => other,
-    }
 }
