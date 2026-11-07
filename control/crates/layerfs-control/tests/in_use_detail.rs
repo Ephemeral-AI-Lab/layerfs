@@ -54,8 +54,8 @@ fn project_remove_names_the_project_s_sandboxes() {
         ]);
         write_record(&paths::sandbox_record(&home, name), &sandbox).unwrap();
     }
-    let args = SdkValue::map([("project", t("shop/api"))]);
-    let refusal = refused(|events| layerfs_control::project::remove(&home, events, &args));
+    let project = layerfs_home::names::ProjectRef::parse("shop/api").unwrap();
+    let refusal = refused(|events| layerfs_control::project::remove(&home, events, &project));
     assert_eq!(refusal.code, "InUse", "{refusal:?}");
     let sandbox = |n: &str| ("sandbox".to_owned(), n.to_owned());
     assert_eq!(related(&refusal), [sandbox("sa"), sandbox("sb")]);

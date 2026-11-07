@@ -7,6 +7,7 @@
 //! caller's host: for a worker this process copies it to the machine
 //! first (H11a). Records in the home list projects; `remove` drops one
 //! project's history from its Store.
+use crate::calls::Page;
 use crate::lease;
 use crate::place::{self, Executor};
 use crate::project::record::ProjectRecord;
@@ -14,24 +15,34 @@ use crate::record::{StoreRecord, StoreRef};
 use crate::resolve;
 use crate::sqlite::family::progress;
 use crate::Related;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::control::SdkValue;
 use layerfs_home::events::Events;
 use layerfs_home::home::paths;
+use layerfs_home::names::{ProjectRef, StoreName};
 use layerfs_home::outcome::{failed, refused, Outcome, View};
 use std::path::Path;
-
-type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// Default Init time limit: one hour.
 const INIT_TIMEOUT_MS: i64 = 3_600_000;
 
-fn split(project: &str) -> Result<(&str, &str)> {
-    project.split_once('/').ok_or_else(|| {
-        refused(
-            "InvalidInput",
-            format!("project `{project}` must be written with its Store"),
-        )
-    })
+/// `project.list(store?, { page_size, page_pos })`.
+#[derive(Clone, Debug, Default)]
+pub struct ProjectList {
+    /// The one Store it lists.
+    pub store: Option<StoreName>,
+    /// The page.
+    pub page: Page,
+}
+
+/// `project.init(project, folder, { timeout })`.
+#[derive(Clone, Debug)]
+pub struct ProjectInit {
+    /// The new project.
+    pub project: ProjectRef,
+    /// The folder on this host.
+    pub folder: String,
+    /// The time limit in milliseconds, [`INIT_TIMEOUT_MS`] when absent.
+    pub timeout: Option<i64>,
 }
 
 /// One project as callers see it; a record that does not read shows no
@@ -44,9 +55,8 @@ fn summary(home: &Path, store: &str, name: &str, record: &StoreRecord, view: Vie
 }
 
 /// `project.get(project)`: one project's record.
-pub fn get(home: &Path, args: &SdkValue) -> Outcome {
-    let project = args.get_text("project").unwrap_or("");
-    let target = resolve::target(home, project)?;
+pub fn get(home: &Path, project: &ProjectRef) -> Outcome {
+    let target = resolve::target(home, &project.to_string())?;
     Ok(summary(
         home,
         &target.store,
@@ -57,14 +67,13 @@ pub fn get(home: &Path, args: &SdkValue) -> Outcome {
 }
 
 /// `project.list(store?, { page_size, page_pos })`, by Store then name.
-pub fn list(home: &Path, args: &SdkValue) -> Outcome {
-    let stores = match args.get_text("store") {
+pub fn list(home: &Path, request: &ProjectList) -> Outcome {
+    let stores = match &request.store {
         Some(store) => {
-            layerfs_home::names::StoreName::parse(store)?;
             if !paths::store_record(home, store).exists() {
                 return Err(refused("NotFound", format!("no Store named {store}")));
             }
-            vec![store.to_owned()]
+            vec![store.to_string()]
         }
         None => paths::names(&home.join("store")).map_err(failed)?,
     };
@@ -77,8 +86,8 @@ pub fn list(home: &Path, args: &SdkValue) -> Outcome {
             items.push(summary(home, &store, &name, &record, View::List));
         }
     }
-    let size = args.get_int("page_size").unwrap_or(50).clamp(1, 1000) as usize;
-    let pos = args.get_int("page_pos").unwrap_or(0).max(0) as usize;
+    let size = request.page.size.unwrap_or(50).clamp(1, 1000) as usize;
+    let pos = request.page.pos.unwrap_or(0).max(0) as usize;
     let total = items.len();
     let page: Vec<SdkValue> = items.into_iter().skip(pos).take(size).collect();
     let next = if pos + page.len() < total {
@@ -113,12 +122,13 @@ fn host_args(home: &Path, store: &str, more: Vec<(&str, SdkValue)>) -> SdkValue 
 /// is a push's (#536 §10b), `{ phase, done, total }`: `check`, `send`
 /// (bytes, to a worker only), `install` (Init adds the folder to the
 /// Store) and `record` (the home's project record), whatever the route.
-pub fn init(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
+pub fn init(home: &Path, events: &mut Events<'_>, request: &ProjectInit) -> Outcome {
     let home = home.to_path_buf();
-    let project = args.get_text("project").unwrap_or("");
-    let (store, name) = split(project)?;
-    layerfs_home::names::ProjectName::parse(name)?;
-    let folder = args.get_text("folder").unwrap_or("");
+    let (store, name) = (
+        request.project.store.as_str(),
+        request.project.project.as_str(),
+    );
+    let folder = request.folder.as_str();
     if !Path::new(folder).is_absolute() {
         return Err(refused(
             "InvalidInput",
@@ -133,7 +143,7 @@ pub fn init(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
     })?;
     record.unblocked()?;
     progress(events, "check", None);
-    let timeout = args.get_int("timeout").unwrap_or(INIT_TIMEOUT_MS);
+    let timeout = request.timeout.unwrap_or(INIT_TIMEOUT_MS);
     let store_ref = record.store_ref()?;
     if let StoreRef::Postgres { .. } = store_ref {
         return init_postgresql(&home, events, store, name, folder, timeout, &record);
@@ -314,12 +324,17 @@ fn init_postgresql(
 /// `project.remove(project)`: drops the project's Layers, Branches and
 /// Commits from its Store in one write, then its record. Its Sandboxes must
 /// be closed first; the other projects stay.
-pub fn remove(home: &Path, events: &mut Events<'_>, args: &SdkValue, related: Related) -> Outcome {
-    let project = args.get_text("project").unwrap_or("");
+pub fn remove(
+    home: &Path,
+    events: &mut Events<'_>,
+    project: &ProjectRef,
+    related: Related,
+) -> Outcome {
+    let project = project.to_string();
     let home = home.to_path_buf();
-    let target = resolve::target(&home, project)?;
+    let target = resolve::target(&home, &project)?;
     target.record.unblocked()?;
-    (related.can_remove_project)(&home, project)?;
+    (related.can_remove_project)(&home, &project)?;
     let args = vec![
         ("project", SdkValue::text(&target.project)),
         ("store_record", target.record.to_record().clone()),
@@ -351,6 +366,6 @@ pub fn remove(home: &Path, events: &mut Events<'_>, args: &SdkValue, related: Re
     Ok(layerfs_home::home::with_field(
         removed,
         "project",
-        SdkValue::text(project),
+        SdkValue::text(&project),
     ))
 }

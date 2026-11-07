@@ -3,7 +3,9 @@ use crate::calls::table::Kind::{Int, Project, Text};
 use crate::calls::table::{a, call, opt, Call, PROGRESS};
 use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::names::ProjectRef;
 use layerfs_home::outcome::Outcome;
+use layerfs_store::project::family::{init, ProjectInit};
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -17,6 +19,11 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `project.init`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    let request = ProjectInit {
+        project: ProjectRef::parse(args.get_text("project").unwrap_or(""))?,
+        folder: args.get_text("folder").unwrap_or("").to_owned(),
+        timeout: args.get_int("timeout"),
+    };
     let (home, events) = context.parts();
-    layerfs_store::project::family::init(home, events, args)
+    init(home, events, &request)
 }
