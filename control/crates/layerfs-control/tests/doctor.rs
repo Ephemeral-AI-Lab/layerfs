@@ -351,3 +351,85 @@ fn a_layout_2_home_reports_what_refuses_its_conversion_and_converts_nothing() {
     assert!(stale.exists());
     std::fs::remove_dir_all(home).unwrap();
 }
+
+/// Exec record `id` of Workspace `wsid` in Sandbox `sb`, owned by `pid`.
+fn exec_record(home: &Path, wsid: &str, id: &str, pid: i64) -> PathBuf {
+    let file = paths::workspace_dir(home, "sb")
+        .join(wsid)
+        .join("exec")
+        .join(format!("{id}.json"));
+    let record = SdkValue::map([
+        ("id", t(id)),
+        ("workspace", t(wsid)),
+        ("path", t("/w/1")),
+        ("name", t("w")),
+        ("owner", SdkValue::map([("pid", SdkValue::Int(pid))])),
+        ("route", t("local")),
+        ("stop", SdkValue::Null),
+        ("started", SdkValue::Int(1)),
+    ]);
+    write_entity(&file, &record).unwrap();
+    file
+}
+
+#[test]
+fn exec_records_are_checked_and_left_as_they_are() {
+    let home = new_home("execs");
+    layerfs_control::migrate::open(&home).unwrap();
+    store(&home, "shop", sqlite("shop", "native"));
+    let project = SdkValue::map([("name", t("api"))]);
+    write_entity(&paths::project_record(&home, "shop", "api"), &project).unwrap();
+    let sandbox = SdkValue::map([
+        ("name", t("sb")),
+        ("project", t("shop/api")),
+        ("machine", t("native")),
+        ("id", t("sb")),
+    ]);
+    write_entity(&paths::sandbox_record(&home, "sb"), &sandbox).unwrap();
+    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
+    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
+    let (live, left) = ("a".repeat(64), "b".repeat(64));
+    let workspace = SdkValue::map([("id", t(&live)), ("path", t("/w/1")), ("name", t("w"))]);
+    let file = paths::workspace_dir(&home, "sb").join(format!("{live}.json"));
+    write_entity(&file, &workspace).unwrap();
+    // a live command's record: no finding
+    exec_record(&home, &live, "e1", i64::from(std::process::id()));
+    let report = doctor(&home).unwrap();
+    assert!(findings(&report).is_empty(), "{report:?}");
+    // a stale one (its owner gone), and a folder its Workspace record left
+    exec_record(&home, &live, "e2", 99_999_999);
+    exec_record(&home, &left, "e3", i64::from(std::process::id()));
+    let before = tree(&home);
+    let report = doctor(&home).unwrap();
+    assert_eq!(before, tree(&home), "the doctor wrote in the home");
+    let found = findings(&report);
+    assert_eq!(found.len(), 2, "{found:?}");
+    let stale = found.iter().find(|f| f.1 == "exec").unwrap();
+    assert_eq!(
+        (stale.0.as_str(), stale.2.as_str()),
+        ("warning", &*format!("sb:{live}/e2"))
+    );
+    assert!(
+        stale.3.contains("stale") && stale.4.contains("exec-cancel sb:w e2"),
+        "{stale:?}"
+    );
+    let leftover = found.iter().find(|f| f.1 == "workspace").unwrap();
+    assert_eq!(leftover.2, format!("sb:{left}"));
+    assert!(leftover.3.contains("no Workspace record"), "{leftover:?}");
+    // one that is not a record is an error
+    std::fs::write(
+        paths::workspace_dir(&home, "sb")
+            .join(&live)
+            .join("exec/e4.json"),
+        "{}\n",
+    )
+    .unwrap();
+    let before = tree(&home);
+    let report = doctor(&home).unwrap();
+    assert_eq!(before, tree(&home), "the doctor wrote in the home");
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)), "{report:?}");
+    assert!(findings(&report)
+        .iter()
+        .any(|f| f.0 == "error" && f.3.contains("not an exec record")));
+    std::fs::remove_dir_all(home).unwrap();
+}

@@ -143,6 +143,69 @@ fn sandbox(home: &Path, name: &str, scanned: &mut Scanned, findings: &mut Findin
         let workspace = format!("{name}:{id}");
         record(&file, ("workspace", &workspace), true, findings);
     }
+    execs(&workspaces, name, findings)
+}
+
+/// The command records of Sandbox `name`'s Workspaces (R12,
+/// `workspace/<id>/exec/<exec id>.json`, layerfs-project#113): each must
+/// parse as one; one whose owner process is gone is stale, which a cancel,
+/// unmount or close removes; a Workspace folder with no Workspace record
+/// beside it is left over.
+fn execs(workspaces: &Path, name: &str, findings: &mut Findings) -> Result<()> {
+    let folders = match std::fs::read_dir(workspaces) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        other => other.map_err(failed)?,
+    };
+    let mut folders: Vec<_> = (folders.filter_map(|e| e.ok()))
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .collect();
+    folders.sort();
+    for folder in folders {
+        let id = folder.file_name().unwrap_or_default().to_string_lossy();
+        let workspace = format!("{name}:{id}");
+        self::folder(&folder, ("workspace", &workspace), findings);
+        if !workspaces.join(format!("{id}.json")).exists() {
+            findings.warning(
+                ("workspace", &workspace),
+                format!("{} has no Workspace record beside it", folder.display()),
+                format!(
+                    "its Workspace was unmounted: remove {} by hand",
+                    folder.display()
+                ),
+            );
+        }
+        let records = match layerfs_sandbox::exec::record::listed(
+            workspaces.parent().unwrap_or(workspaces),
+            Some(&id),
+        ) {
+            Ok(records) => records,
+            Err(refusal) => {
+                findings.error(
+                    ("workspace", &workspace),
+                    format!("a command record does not read: {}", refusal.message),
+                    format!("repair or remove it under {} by hand", folder.display()),
+                );
+                continue;
+            }
+        };
+        for (file, found) in records {
+            let entity = format!("{workspace}/{}", found.id);
+            record(&file, ("exec", &entity), true, findings);
+            if !found.owned() {
+                findings.warning(
+                    ("exec", &entity),
+                    format!("{} is stale: its owner process is gone", file.display()),
+                    format!(
+                        "`layerfs workspace exec-cancel {name}:{} {}`, or the Workspace's unmount \
+                         or the Sandbox's close, ends what it still runs and removes it",
+                        found.name.as_deref().unwrap_or(&found.path),
+                        found.id
+                    ),
+                );
+            }
+        }
+    }
     Ok(())
 }
 
