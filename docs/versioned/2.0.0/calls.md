@@ -309,7 +309,11 @@ form.
   record), or `{outcome: "unknown"}` when the machine's worker was not
   reached or did not answer: nothing is known to have changed. The
   cancelled command's `exec` answers `kind: "cancelled"` with exit code
-  128 + the signal. On Linux each command runs in its own cgroup, so
+  128 + the signal. A cancel that comes before the command starts answers
+  `cancelled` with `SIGKILL`, and the command is ended as it starts (exit
+  code 137). After `unknown` the record keeps the cancel's mark: cancel
+  again once the worker answers; if the command then ends by a signal,
+  its `exec` answers `kind: "cancelled"`. On Linux each command runs in its own cgroup, so
   children that left its process group end too; on macOS a child that
   calls `setsid` itself escapes the group.
 - A command record whose owning process is gone is stale. The next exec of

@@ -69,6 +69,11 @@ Also not built:
   `workspace exec-cancel` (and an unmount or close that cancels first)
   waits for the worker's answer until its connection closes, then answers
   `unknown` and keeps the command's record; there is no operation timeout.
+- **A cancel before a command starts, on a Sandbox this host reaches
+  directly.** It answers `cancelled` (`SIGKILL`) at once; the exec's own
+  process ends the command in the worker as it starts, in one attempt.
+  If the worker cannot be reached for that one attempt, the command runs
+  on although the cancel answered `cancelled`; cancel it again by its id.
 - **A command's children on macOS `native`.** `workspace exec-cancel` ends
   the command's process group; a child that starts its own session
   (`setsid`) is not in it and keeps running. On Linux every command has its
