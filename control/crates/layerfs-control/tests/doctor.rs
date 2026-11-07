@@ -352,6 +352,149 @@ fn a_layout_2_home_reports_what_refuses_its_conversion_and_converts_nothing() {
     std::fs::remove_dir_all(home).unwrap();
 }
 
+/// A partial copy on the machine a push names is reported without writing
+/// anywhere: the doctor reads it through that worker's `stat`.
+#[test]
+fn a_remote_partial_copy_is_reported_without_modifying_home_or_worker() {
+    let home = new_home("remote-incoming");
+    layerfs_control::migrate::open(&home).unwrap();
+    let root = new_home("remote-root");
+    private_dir(&root).unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let guest = root.clone();
+    std::thread::spawn(move || {
+        layerfs_control::worker_server::serve(listener, "k".to_owned(), guest)
+    });
+    let m1 = SdkValue::map([("name", t("box")), ("platform", t("lima"))]);
+    write_entity(&paths::machine_record(&home, "box"), &m1).unwrap();
+    let worker = SdkValue::map([("address", t(&address)), ("secret", t("k"))]);
+    write_record(&paths::worker_record(&home, "box"), &worker).unwrap();
+
+    // Store `shop` on native with a certain `store.push` intent to `box`, and
+    // a partial `store.sqlite.incoming` under `box`'s worker root.
+    let stale_push = SdkValue::map([
+        ("id", t("op-00000000000000bb")),
+        ("name", t("store.push")),
+        ("phase", t("send")),
+        (
+            "args",
+            SdkValue::map([("from", t("native")), ("to", t("box"))]),
+        ),
+        ("owner", SdkValue::map([("pid", SdkValue::Int(0))])),
+        ("started", SdkValue::Int(1)),
+        ("updated", SdkValue::Int(1)),
+        ("uncertain", SdkValue::Bool(false)),
+    ]);
+    let mut shop = sqlite("shop", "native");
+    shop.push(("op", stale_push));
+    store(&home, "shop", shop);
+    let remote_dir = paths::store_dir(&root, "shop");
+    private_dir(&remote_dir).unwrap();
+    std::fs::write(remote_dir.join("store.sqlite.incoming"), b"partial-bytes").unwrap();
+
+    // the worker is up and answering before the trees are read
+    let mut executor = layerfs_store::place::on_machine(&home, "box").unwrap();
+    layerfs_store::sqlite::family::step_on(
+        &home,
+        &mut executor,
+        "shop",
+        layerfs_store::sqlite::transfer::step::StoreStep::Stat,
+    )
+    .unwrap();
+
+    let before_home = tree(&home);
+    let before_root = tree(&root);
+    let report = doctor(&home).unwrap();
+    assert_eq!(before_home, tree(&home), "the doctor wrote in the home");
+    assert_eq!(
+        before_root,
+        tree(&root),
+        "the doctor wrote in the worker root"
+    );
+
+    let found = findings(&report);
+    assert!(
+        found.iter().any(|(sev, kind, name, msg, fix)| {
+            sev == "warning"
+                && kind == "store"
+                && name == "shop"
+                && msg.contains("machine box holds a 13-byte partial copy (store.sqlite.incoming)")
+                && fix.contains("`layerfs store push shop box`")
+        }),
+        "{found:#?}"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// A partial copy a certain failure left (#13 F1): the push's intent is
+/// gone, so the record keeps the machine (`incoming_on`) and the doctor
+/// reports the bytes once, naming the calls that clear it.
+#[test]
+fn a_partial_copy_a_certain_failure_left_is_reported_from_the_record() {
+    let home = new_home("certain-incoming");
+    layerfs_control::migrate::open(&home).unwrap();
+    let root = new_home("certain-root");
+    private_dir(&root).unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let guest = root.clone();
+    std::thread::spawn(move || {
+        layerfs_control::worker_server::serve(listener, "k".to_owned(), guest)
+    });
+    let m1 = SdkValue::map([("name", t("box")), ("platform", t("lima"))]);
+    write_entity(&paths::machine_record(&home, "box"), &m1).unwrap();
+    let worker = SdkValue::map([("address", t(&address)), ("secret", t("k"))]);
+    write_record(&paths::worker_record(&home, "box"), &worker).unwrap();
+
+    // Store `shop` on native with no intent at all, and the machine a
+    // certain `store.push` failure kept in place of that intent
+    let mut shop = sqlite("shop", "native");
+    shop.push(("incoming_on", t("box")));
+    store(&home, "shop", shop);
+    let remote_dir = paths::store_dir(&root, "shop");
+    private_dir(&remote_dir).unwrap();
+    std::fs::write(remote_dir.join("store.sqlite.incoming"), b"partial-bytes").unwrap();
+
+    let mut executor = layerfs_store::place::on_machine(&home, "box").unwrap();
+    layerfs_store::sqlite::family::step_on(
+        &home,
+        &mut executor,
+        "shop",
+        layerfs_store::sqlite::transfer::step::StoreStep::Stat,
+    )
+    .unwrap();
+
+    let before_home = tree(&home);
+    let before_root = tree(&root);
+    let report = doctor(&home).unwrap();
+    assert_eq!(before_home, tree(&home), "the doctor wrote in the home");
+    assert_eq!(
+        before_root,
+        tree(&root),
+        "the doctor wrote in the worker root"
+    );
+
+    let found = findings(&report);
+    assert_eq!(found.len(), 1, "one finding for one copy: {found:#?}");
+    let (severity, kind, name, message, fix) = &found[0];
+    assert_eq!(
+        (severity.as_str(), kind.as_str(), name.as_str()),
+        ("warning", "store", "shop")
+    );
+    assert!(
+        message.contains("machine box holds a 13-byte partial copy (store.sqlite.incoming)"),
+        "{message}"
+    );
+    assert!(
+        fix.contains("`layerfs store push shop box` replaces it, or `layerfs store remove shop`"),
+        "{fix}"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(root);
+}
+
 /// Exec record `id` of Workspace `wsid` in Sandbox `sb`, owned by `pid`.
 fn exec_record(home: &Path, wsid: &str, id: &str, pid: i64) -> PathBuf {
     let file = paths::workspace_dir(home, "sb")

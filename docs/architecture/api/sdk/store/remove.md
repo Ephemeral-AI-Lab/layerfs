@@ -55,8 +55,12 @@ None.
 
 What goes: the Store's file, its `-wal`/`-shm`, its folder under the home
 (`store/<name>/`, with the record and project entries) and, on a worker
-machine, its folder under the worker's root. What stays: its backups in
-their buckets.
+machine, its folder under the worker's root. That includes the partial
+copy (`store.sqlite.incoming`) an interrupted or certain-failed `store
+push` left on the other machine, named by the push's intent or, after a
+certain failure dropped it, by the record's `incoming_on`
+([`sqlite/transfer/resolve.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/resolve.rs) `leftover`).
+What stays: its backups in their buckets.
 
 ## Where it runs
 

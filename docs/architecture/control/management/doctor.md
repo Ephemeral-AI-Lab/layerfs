@@ -44,7 +44,7 @@ From [`checks.rs`](../../../../control/crates/layerfs-control/src/doctor/checks.
 | store | sqlite Store on a machine with no record | error | make the machine again, or delete the folder by hand |
 | store | 1.1.0 Store whose machine is unknown | warning | `layerfs import-env` |
 | store | stale lease of an ended process (read, never removed) | warning | the next call on the Store removes it |
-| store | `store.sqlite.incoming` left by an interrupted pull on `native` | warning | `layerfs store pull` when the Store is off `native`; delete by hand when it is on `native` |
+| store | `store.sqlite.incoming` left by an interrupted or certain-failed transfer, on `native` or on a push's target machine: from the push's intent, or, once a certain failure dropped it, from the record's `incoming_on` (a machine's is read through its worker's `stat`) | warning | a push's target: `layerfs store push <n> <machine>` replaces it, or `layerfs store remove <n>` deletes it; on `native`: `layerfs store pull <n>` when the Store is off `native`, else delete by hand |
 | store | a copy a push or pull did not retire (from `last_transfer`) | warning | the next `store push` or `store pull` deletes it |
 | sandbox | record names no project, or its Store, project or machine is gone | error | `layerfs sandbox close <n>` |
 | machine, store, sandbox | gone owner's uncertain `op` | error | show: `machine status`, `store status`, `sandbox get`; clear: the entity's clearing call |
