@@ -15,7 +15,12 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufWriter, Write};
+#[cfg(unix)]
 use std::os::unix::fs::{FileExt, OpenOptionsExt};
+#[cfg(windows)]
+use std::os::windows::fs::FileExt as WinFileExt;
+#[cfg(windows)]
+use std::os::windows::fs::OpenOptionsExt as WinOpenOptionsExt;
 use std::sync::{Arc, Mutex, OnceLock};
 
 /// Bytes per stream a result carries inline.
@@ -51,11 +56,21 @@ impl Spool {
                     .map_err(|refusal| io::Error::other(refusal.message))?[..12]
             )
         ));
+        #[cfg(unix)]
+        let file = {
+            use std::os::unix::fs::OpenOptionsExt;
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&name)?
+        };
+        #[cfg(not(unix))]
         let file = OpenOptions::new()
             .read(true)
             .write(true)
             .create_new(true)
-            .mode(0o600)
             .open(&name)?;
         // Unlinked at once: the open file is the only name, and closing it
         // (or the process ending) frees its space.
@@ -181,8 +196,29 @@ pub fn page(args: &SdkValue, page: &mut [u8]) -> Outcome {
     let length = page
         .len()
         .min(usize::try_from(size - offset).unwrap_or(usize::MAX));
-    file.read_exact_at(&mut page[..length], offset)
-        .map_err(failed)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileExt;
+        file.read_exact_at(&mut page[..length], offset).map_err(failed)?;
+    }
+    // Windows: seek_read is the positioned read; the shared Arc keeps its
+    // cursor untouched.
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::FileExt;
+        let mut done = 0;
+        while done < length {
+            let at = offset + done as u64;
+            let read = file.seek_read(&mut page[done..length], at).map_err(failed)?;
+            if read == 0 {
+                return Err(failed(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "spool ended early",
+                )));
+            }
+            done += read;
+        }
+    }
     let end = offset + length as u64 == size;
     Ok(SdkValue::map([
         ("kind", SdkValue::text("ok")),

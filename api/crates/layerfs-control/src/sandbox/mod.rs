@@ -21,9 +21,6 @@ pub(crate) mod registry;
 pub(crate) mod route;
 pub(crate) mod runtime;
 pub(crate) mod serve;
-#[cfg(unix)]
 pub use launch::SandboxApi;
-#[cfg(unix)]
 pub use launch::{connect_address, SandboxCause, SandboxPhase};
-#[cfg(unix)]
 pub use launch::{ProviderCreate, ProviderFailure, ProviderSandbox};

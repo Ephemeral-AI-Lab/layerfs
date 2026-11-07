@@ -191,11 +191,18 @@ fn docker(side: &Side<'_>, store: &str, choice: &SdkValue) -> Result<SdkValue> {
 /// container root user's alone (0700, 0600), as a docker Sandbox's daemon
 /// requires of them.
 fn private_store(root: &Path, store: &str) -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    let folder = paths::store_dir(root, store);
-    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o700)).map_err(failed)?;
-    let file = paths::store_file(root, store);
-    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).map_err(failed)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let folder = paths::store_dir(root, store);
+        std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o700)).map_err(failed)?;
+        let file = paths::store_file(root, store);
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).map_err(failed)?;
+    }
+    // Windows: the worker root's DACL carries the privacy.
+    #[cfg(not(unix))]
+    let _ = (root, store);
+    Ok(())
 }
 
 /// Why built-in machine `machine`'s recorded daemon `path` cannot run (it

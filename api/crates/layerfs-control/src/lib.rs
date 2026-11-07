@@ -36,7 +36,6 @@ pub use layerfs_project::store::{
 };
 pub use layerfs_project::{InitCounters, InitCounts, InitStep, ProjectError, SourceRefusal};
 pub use layerfs_store_service::methods::call;
-#[cfg(unix)]
 pub use sandbox::{
     connect_address, ProviderCreate, ProviderFailure, ProviderSandbox, SandboxApi, SandboxCause,
     SandboxPhase,

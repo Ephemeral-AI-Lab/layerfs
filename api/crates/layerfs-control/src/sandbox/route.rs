@@ -45,6 +45,7 @@ fn host_args(
             // the runtime requires; one directory per Sandbox beside the
             // image cache it shares
             let local = paths::run_root(home);
+            #[cfg(unix)]
             {
                 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
                 std::fs::DirBuilder::new()
@@ -53,6 +54,13 @@ fn host_args(
                     .create(&local)
                     .map_err(failed)?;
                 std::fs::set_permissions(&local, std::fs::Permissions::from_mode(0o755))
+                    .map_err(failed)?;
+            }
+            #[cfg(not(unix))]
+            {
+                std::fs::DirBuilder::new()
+                    .recursive(true)
+                    .create(&local)
                     .map_err(failed)?;
             }
             // namespaces commands run as another identity: the home's folders

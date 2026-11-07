@@ -20,10 +20,11 @@ use layerfs_sandbox::LocalRecord;
 #[cfg(target_os = "linux")]
 use layerfs_sandbox::SandboxRecord;
 use layerfs_sandbox::{CommandIdentity, Sandbox};
+#[cfg(unix)]
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
-    os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::Duration,
@@ -47,22 +48,43 @@ pub(crate) fn home(args: &SdkValue) -> Result<PathBuf> {
 /// namespaces Sandbox's local root must ([`crate::common::home::traversable`]).
 pub(crate) fn private(path: &Path, dir: bool) -> Result<()> {
     let meta = fs::symlink_metadata(path).map_err(failed)?;
-    let others = if dir { 0o076 } else { 0o077 };
-    if meta.file_type().is_symlink()
-        || meta.is_dir() != dir
-        || (!dir && !meta.is_file())
-        || meta.uid() != crate::common::home::flock::euid()
-        || meta.mode() & others != 0
+    #[cfg(unix)]
     {
-        return Err(refused(
-            "Unauthorized",
-            format!("{} must be owned by this user and private", path.display()),
-        ));
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let others = if dir { 0o076 } else { 0o077 };
+        if meta.file_type().is_symlink()
+            || meta.is_dir() != dir
+            || (!dir && !meta.is_file())
+            || meta.uid() != crate::common::home::flock::euid()
+            || meta.mode() & others != 0
+        {
+            return Err(refused(
+                "Unauthorized",
+                format!("{} must be owned by this user and private", path.display()),
+            ));
+        }
+    }
+    // Windows: privacy is the home directory's DACL; the type checks stay.
+    #[cfg(not(unix))]
+    {
+        if meta.file_type().is_symlink() || meta.is_dir() != dir || (!dir && !meta.is_file()) {
+            return Err(refused(
+                "Unauthorized",
+                format!("{} must be owned by this user and private", path.display()),
+            ));
+        }
     }
     Ok(())
 }
 pub(crate) fn directory(path: &Path) -> Result<()> {
-    match fs::DirBuilder::new().mode(0o700).create(path) {
+    #[cfg(unix)]
+    let made = {
+        use std::os::unix::fs::DirBuilderExt;
+        fs::DirBuilder::new().mode(0o700).create(path)
+    };
+    #[cfg(not(unix))]
+    let made = fs::DirBuilder::new().create(path);
+    match made {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
         Err(e) => return Err(failed(e)),
@@ -70,7 +92,9 @@ pub(crate) fn directory(path: &Path) -> Result<()> {
     private(path, true)
 }
 /// This process's effective uid and gid: a native Sandbox's command
-/// identity (its commands run as this user).
+/// identity (its commands run as this user). Unix only - a Windows native
+/// Sandbox names its command identity from the account, not uid/gid.
+#[cfg(unix)]
 pub(crate) fn user() -> (u32, u32) {
     (
         crate::common::home::flock::euid(),
@@ -189,14 +213,29 @@ pub(crate) const TURN: &str = "serve.lock";
 /// process exits.
 fn os_lock(directory: &Path, deadline: std::time::Instant) -> Result<File> {
     let path = directory.join(TURN);
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .mode(0o600)
-        .custom_flags(no_follow())
-        .open(&path)
-        .map_err(failed)?;
+    #[cfg(unix)]
+    let file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .mode(0o600)
+            .custom_flags(no_follow())
+            .open(&path)
+            .map_err(failed)?
+    };
+    #[cfg(not(unix))]
+    let file = {
+        use std::os::windows::fs::OpenOptionsExt;
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .custom_flags(no_follow())
+            .open(&path)
+            .map_err(failed)?
+    };
     private(&path, false)?;
     while !crate::common::home::flock::try_lock(&file, true).map_err(failed)? {
         if std::time::Instant::now() >= deadline {
@@ -217,6 +256,13 @@ fn no_follow() -> i32 {
 fn no_follow() -> i32 {
     0x20000
 }
+/// Windows: FILE_FLAG_OPEN_REPARSE_POINT - a reparse point (symlink,
+/// junction) is not followed to its target, the same refusal O_NOFOLLOW
+/// makes on unix.
+#[cfg(windows)]
+fn no_follow() -> u32 {
+    0x0020_0000
+}
 
 pub(crate) fn save(path: &Path, value: SdkValue) -> Result<()> {
     let bytes = layerfs_bridge::control::Answer {
@@ -230,24 +276,51 @@ pub(crate) fn save(path: &Path, value: SdkValue) -> Result<()> {
         std::process::id(),
         layerfs_bridge::sdk_values::hex(&registry::random()?[..8])
     ));
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .custom_flags(no_follow())
-        .open(&temp)
-        .map_err(failed)?;
+    #[cfg(unix)]
+    let mut file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .custom_flags(no_follow())
+            .open(&temp)
+            .map_err(failed)?
+    };
+    #[cfg(not(unix))]
+    let mut file = {
+        use std::os::windows::fs::OpenOptionsExt;
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .custom_flags(no_follow())
+            .open(&temp)
+            .map_err(failed)?
+    };
     file.write_all(&bytes).map_err(failed)?;
     drop(file);
     fs::rename(temp, path).map_err(failed)
 }
 pub(crate) fn load(path: &Path) -> Result<SdkValue> {
     private(path, false)?;
-    let file = OpenOptions::new()
-        .read(true)
-        .custom_flags(no_follow())
-        .open(path)
-        .map_err(failed)?;
+    #[cfg(unix)]
+    let file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        OpenOptions::new()
+            .read(true)
+            .custom_flags(no_follow())
+            .open(path)
+            .map_err(failed)?
+    };
+    #[cfg(not(unix))]
+    let file = {
+        use std::os::windows::fs::OpenOptionsExt;
+        OpenOptions::new()
+            .read(true)
+            .custom_flags(no_follow())
+            .open(path)
+            .map_err(failed)?
+    };
     if file.metadata().map_err(failed)?.len() > 65535 {
         return Err(refused("InvalidInput", "discovery record too large"));
     }
