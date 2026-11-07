@@ -161,13 +161,25 @@ struct Creating(std::fs::File);
 
 impl Creating {
     fn take(home: &Path, store: &str) -> Result<Self> {
-        use std::os::unix::fs::OpenOptionsExt;
+        #[cfg(unix)]
+        let file = {
+            use std::os::unix::fs::OpenOptionsExt;
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .mode(0o600)
+                .custom_flags(libc::O_NOFOLLOW)
+                .open(paths::store_dir(home, store).join("backup.lock"))
+                .map_err(failed)?
+        };
+        // Windows: mode and O_NOFOLLOW are unix open guards; the lock file is
+        // a plain zero-byte file under the home's DACL.
+        #[cfg(not(unix))]
         let file = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(false)
-            .mode(0o600)
-            .custom_flags(libc::O_NOFOLLOW)
             .open(paths::store_dir(home, store).join("backup.lock"))
             .map_err(failed)?;
         if !try_lock(&file, true).map_err(failed)? {

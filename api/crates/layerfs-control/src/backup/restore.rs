@@ -13,6 +13,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_store_backup::backup as remote;
 use layerfs_store_backup::bucket::pieces;
 use std::fs::{File, OpenOptions};
+#[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
@@ -174,10 +175,17 @@ impl Staging {
         let _lock = home::lock::take(home)?;
         sweep(&parent);
         home::private_dir(&dir)?;
+        #[cfg(unix)]
         let lock = OpenOptions::new()
             .write(true)
             .create_new(true)
             .mode(0o600)
+            .open(dir.join("lock"))
+            .map_err(failed)?;
+        #[cfg(not(unix))]
+        let lock = OpenOptions::new()
+            .write(true)
+            .create_new(true)
             .open(dir.join("lock"))
             .map_err(failed)?;
         if !try_lock(&lock, true).map_err(failed)? {
@@ -205,11 +213,17 @@ fn sweep(parent: &Path) {
             continue;
         }
         let dir = entry.path();
-        let Ok(lock) = OpenOptions::new()
-            .write(true)
-            .custom_flags(libc::O_NOFOLLOW)
-            .open(dir.join("lock"))
-        else {
+        #[cfg(unix)]
+        let lock = {
+            use std::os::unix::fs::OpenOptionsExt;
+            OpenOptions::new()
+                .write(true)
+                .custom_flags(libc::O_NOFOLLOW)
+                .open(dir.join("lock"))
+        };
+        #[cfg(not(unix))]
+        let lock = OpenOptions::new().write(true).open(dir.join("lock"));
+        let Ok(lock) = lock else {
             continue;
         };
         if try_lock(&lock, true).unwrap_or(false) {

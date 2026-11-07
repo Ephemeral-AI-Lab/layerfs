@@ -227,10 +227,18 @@ pub(crate) fn make_empty(
     identity: &Identity,
     policy: layerfs_storage::StoragePolicy,
 ) -> Result<SealedStore> {
-    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+    #[cfg(unix)]
     if !global.exists() {
+        use std::os::unix::fs::DirBuilderExt;
         std::fs::DirBuilder::new()
             .mode(0o700)
+            .create(global)
+            .map_err(failed)?;
+    }
+    // Windows: privacy is the home's DACL.
+    #[cfg(not(unix))]
+    if !global.exists() {
+        std::fs::DirBuilder::new()
             .create(global)
             .map_err(failed)?;
     }
@@ -255,8 +263,12 @@ pub(crate) fn make_empty(
             })
             .map_err(|error| refused("Failed", format!("Store create: {error:?}")))?;
         // a daemon opens only a Store file only its user can read
-        std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600))
-            .map_err(failed)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600))
+                .map_err(failed)?;
+        }
         layerfs_store_service::install::absent(&target).map_err(failed)?;
         std::fs::rename(&temporary, &target).map_err(failed)?;
         Ok(sealed)
@@ -353,8 +365,12 @@ pub(crate) fn make_entry(home: &Path, store: &str, name: &str) -> Result<PathBuf
             failed(error)
         }
     })?;
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o700)).map_err(failed)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o700))
+            .map_err(failed)?;
+    }
     Ok(entry)
 }
 
