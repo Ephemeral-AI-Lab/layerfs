@@ -25,7 +25,7 @@ use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::outcome::refused;
 
 /// One entry's record.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Record<'a> {
     Directory {
         path: &'a [u8],

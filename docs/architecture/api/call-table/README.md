@@ -74,7 +74,7 @@ control side of each family in [Control: Families](../../control/management/fami
 
 | Part | What a caller can rely on | Source |
 | --- | --- | --- |
-| Families | `project`, `branch`, `commit`, `file`, `sandbox`, `workspace`, `machine`, `store`, `backup`: 60 calls, listed in help order | [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families` |
+| Families | `project`, `branch`, `commit`, `file`, `sandbox`, `workspace`, `machine`, `store`, `backup`: 61 calls, listed in help order | [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families` |
 | Arguments | positionals in table order, then options; each has a snake_case name and a `Kind` | [`calls/table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs) |
 | Checks | every argument checked against the entry before any effect | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs) |
 | Scope | an optional folder scope guards and rewrites arguments before any effect | [`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs) |
@@ -115,7 +115,7 @@ this page. They need a Unix host and no Docker or root.
 
 | Test or example | Crate | Shows |
 | --- | --- | --- |
-| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `layerfs-api` | 60 calls in nine families; unknown calls and arguments refused before any effect; one test per family that a valid call reaches its family function and a wrong one is refused; JSON round trips; sizes and keys; a relative home refused; one source file per call. |
+| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `layerfs-api` | 61 calls in nine families; unknown calls and arguments refused before any effect; one test per family that a valid call reaches its family function and a wrong one is refused; JSON round trips; sizes and keys; a relative home refused; one source file per call. |
 | [`calls_scope.rs`](../../../../api/crates/layerfs-api/tests/calls_scope.rs) | `layerfs-api` | A folder scope names its project, refuses every call it does not cover, needs a Sandbox of its project for `workspace` calls, and a scoped `branch.list` reads every page. |
 | [`scope_references.rs`](../../../../api/crates/layerfs-api/tests/scope_references.rs) | `layerfs-api` | `branch.fork` (`from_commit`, `from_branch`, `name`) and `branch.publish` (`commit`) outside the namespace are refused before any effect; inside it they work; the JSON form refuses the same. |
 | [`list_pages.rs`](../../../../api/crates/layerfs-api/tests/list_pages.rs) | `layerfs-api` | `branch.list`, plain and scoped, pages past 64 and the default 50 across sizes; the last page ends the list; bad `page_size` or `page_pos` refused; a page past the end is empty. |

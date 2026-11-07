@@ -2,6 +2,7 @@
 //! and discovery records (`discovery`).
 pub mod add;
 pub mod discovery;
+pub mod export;
 #[doc(hidden)]
 pub mod family;
 pub mod frame;

@@ -9,7 +9,7 @@
 use crate::record::StoreRef;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
-use layerfs_machine::worker::{self, Endpoint, Unreached};
+use layerfs_machine::worker::{self, Endpoint, EventSink, Unreached};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -82,6 +82,15 @@ impl Worker {
             .unwrap_or_else(|Unreached(refusal)| Err(refusal))
     }
 
+    /// [`Worker::call`] whose `events` may refuse one: the connection then
+    /// closes, the worker stops at its next event, and the call's outcome
+    /// is that refusal (`project.export`'s local writer failed).
+    pub fn call_until(&mut self, op: &str, request: SdkValue, events: &mut EventSink<'_>) -> Outcome {
+        let request = worker::request(op, request)?;
+        self.attempt_framed(op, &request, events)
+            .unwrap_or_else(|Unreached(refusal)| Err(refusal))
+    }
+
     /// [`Worker::call`], answering [`Unreached`] when the request was not
     /// sent (no worker recorded, or it did not answer its secret): the
     /// machine is stopped or its worker gone, which a list, get or status
@@ -97,7 +106,11 @@ impl Worker {
             Ok(request) => request,
             Err(refusal) => return Ok(Err(refusal)),
         };
-        self.attempt_framed(op, &request, events)
+        let mut events = |event| {
+            events(event);
+            Ok(())
+        };
+        self.attempt_framed(op, &request, &mut events)
     }
 
     /// [`Worker::attempt`] with `request` already framed
@@ -107,7 +120,7 @@ impl Worker {
         &mut self,
         op: &str,
         request: &[u8],
-        events: &mut dyn FnMut(SdkValue),
+        events: &mut EventSink<'_>,
     ) -> std::result::Result<Outcome, Unreached> {
         if let Some(endpoint) = &self.endpoint {
             return worker::send(endpoint, op, request, events, None)

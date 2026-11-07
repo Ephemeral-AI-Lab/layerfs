@@ -99,6 +99,7 @@ Store's size is its file.
 | --- | --- | --- |
 | `list`, `get` | project records, by Store then name | [`project/family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs) |
 | `init` | adds a host folder as a new project to an existing Store, a live add through the Store's writer | [`project/family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs) |
+| `export` | exports a project's committed Branch snapshot from its Store to a local folder on the caller's host | [`project/export/`](../../../../control/crates/layerfs-store/src/project/export/route.rs) |
 | `remove` | drops the project's Layers, Branches and Commits in one write, then its record; its Sandboxes must be closed first | [`project/family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs) |
 
 ```text

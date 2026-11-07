@@ -142,7 +142,7 @@ tmpfs): point `TMPDIR` at one.
 
 | Test | Checks | Needs |
 | --- | --- | --- |
-| [`test_calls.py`](../../../../api/python/test/test_calls.py) `test_the_table` | nine families and 60 calls as functions; an unknown keyword is `InvalidInput` | the module |
+| [`test_calls.py`](../../../../api/python/test/test_calls.py) `test_the_table` | nine families and 61 calls as functions; an unknown keyword is `InvalidInput` | the module |
 | `test_every_call_is_refused_as_the_command_refuses_it` | every call gives the same refusal as the `layerfs` command | the command, else skipped |
 | `test_a_live_store_reads_the_same_both_ways` | a Store read through the package and the command gives the same JSON | the command, else skipped |
 | `test_aio_makes_the_same_calls_as_coroutines`, `test_aio_functions_run_on_the_loop_before_the_call_returns`, `test_a_cancelled_aio_call_stops_its_functions_and_the_call_runs_to_its_end` | the `aio` rules above | the module |

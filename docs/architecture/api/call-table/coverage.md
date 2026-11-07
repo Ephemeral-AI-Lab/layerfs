@@ -32,7 +32,7 @@ reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-60 calls in 9 families, counted from the Node table. Calls present: Node 60, Python 60, Python `aio` 60, CLI 60.
+61 calls in 9 families, counted from the Node table. Calls present: Node 61, Python 61, Python `aio` 61, CLI 61.
 
 Argument names that are Python keywords: none.
 
@@ -43,6 +43,7 @@ Front-end problems: none.
 | `project.init` | project, folder | timeout, on_progress() | yes | yes | yes | yes (--progress) |
 | `project.list` | ?store | page_size, page_pos | yes | yes | yes | yes |
 | `project.get` | project | - | yes | yes | yes | yes |
+| `project.export` | project, destination | branch, on_progress() | yes | yes | yes | yes (--progress) |
 | `project.remove` | project | - | yes | yes | yes | yes |
 | `branch.list` | project | page_size, page_pos | yes | yes | yes | yes |
 | `branch.get` | project, branch | - | yes | yes | yes | yes |
@@ -182,7 +183,6 @@ skip with the reason when a front end is absent, and a skipped front end is not 
 | binary or non-UTF-8 `workspace.exec` output, `bytes` events | needs a Workspace; events are [#37](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/37)'s |
 | folder scope across the front ends | [#33](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/33) |
 | PostgreSQL, TLS (`postgresql`, `tls` features are off by default in all three), other platforms | not built here; Linux x86_64 only |
-| `project.export` | not in the table ([#53](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/53)); the generator adds its row when it is |
 
 ## Known gaps
 

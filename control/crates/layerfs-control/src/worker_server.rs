@@ -10,7 +10,8 @@
 //! build sends nothing more and closes. Then a request `{ op, args }`, read with at most
 //! [`REQUEST_WAIT`] between bytes. `worker.ping` answers who it is;
 //! `store.call`, `store.file`, `sandbox.host`, `project.stage`,
-//! `project.init` and `project.remove` run one operation on this machine,
+//! `project.init`, `project.export` and `project.remove` run one operation on
+//! this machine,
 //! with `home` set to the worker's own root (the machine's data disk),
 //! never a path the caller sends. Answers are
 //! `{ value }` or `{ refused }`, after any `{ event }` frames.
@@ -28,7 +29,8 @@ use layerfs_machine::worker::{
     read_frame, read_frame_within, write_frame, Hello, HELLO_WAIT, MAX_HELLO,
 };
 use layerfs_store::project::discovery::home_of;
-use layerfs_store::project::frame::{InitFrame, RemoveFrame, StageFrame};
+use layerfs_store::project::export::in_worker as export_in_worker;
+use layerfs_store::project::frame::{ExportFrame, InitFrame, RemoveFrame, StageFrame};
 use layerfs_store::project::{init::in_worker, remove::remove_project, staged};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -124,7 +126,8 @@ fn answer(mut stream: TcpStream, secret: &str, ready: &SdkValue, root: &Path) ->
     let _home = layerfs_home::home::guest::sent(request.get_text("home_id"));
     let (op, args) = op_and_args(request);
     let outcome = run(&op, args, root, &mut |event| {
-        let _ = write_frame(&mut stream, &SdkValue::map([("event", event)]));
+        write_frame(&mut stream, &SdkValue::map([("event", event)]))
+            .map_err(|e| refused("Failed", format!("worker event stream closed: {e}")))
     });
     let mut frame = match outcome {
         Ok(value) => SdkValue::map([("value", value)]),
@@ -135,7 +138,25 @@ fn answer(mut stream: TcpStream, secret: &str, ready: &SdkValue, root: &Path) ->
         let steps = layerfs_home::trace::steps_value(layerfs_home::trace::steps_take());
         frame = layerfs_home::home::with_field(frame, "steps", steps);
     }
-    write_frame(&mut stream, &frame).is_ok()
+    let sent = write_frame(&mut stream, &frame).is_ok();
+    if sent {
+        await_close(&mut stream);
+    }
+    sent
+}
+
+/// Waits for the client to close first, once the answer is written. The
+/// client sends nothing after its request and closes when it has read the
+/// answer. Apple Container's published port drops what it still holds for
+/// the host when the guest side closes first, which cut the tail off large
+/// answers (an export's last parts). Reads only that close, at most one
+/// [`REQUEST_WAIT`]; a client that never closes then loses nothing worse
+/// than before.
+fn await_close(stream: &mut TcpStream) {
+    use std::io::Read;
+    if stream.set_read_timeout(Some(REQUEST_WAIT)).is_ok() {
+        let _ = stream.read(&mut [0u8; 1]);
+    }
 }
 
 /// A request's `op` and its `args` (moved out, not copied: they may hold a
@@ -165,7 +186,12 @@ fn refusal_frame(refusal: SdkRefusal) -> SdkValue {
     )])
 }
 
-fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) -> Outcome {
+fn run(
+    op: &str,
+    args: SdkValue,
+    root: &Path,
+    events: &mut dyn FnMut(SdkValue) -> std::result::Result<(), SdkRefusal>,
+) -> Outcome {
     match op {
         "worker.ping" => Ok(SdkValue::map([
             ("kind", SdkValue::text("worker")),
@@ -197,7 +223,9 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
         "sandbox.host" => layerfs_sandbox::route::in_worker(
             root,
             layerfs_sandbox::host::decode(&args)?,
-            events,
+            &mut |event| {
+                let _ = events(event);
+            },
             layerfs_sandbox::workspace::dispatch::call,
         ),
         // drops one project from the Store under this worker's root (2.0):
@@ -215,6 +243,9 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
             let root = home_of(Some(root))?;
             in_worker(&root, &InitFrame::decode(&args)?)
         }
+        // streams one project's snapshot from a Store under this worker's
+        // root as folder-copy parts (#53)
+        "project.export" => export_in_worker(root, &ExportFrame::decode(&args)?, events),
         _ => Err(refused(
             "InvalidInput",
             format!("the worker has no operation {op}"),

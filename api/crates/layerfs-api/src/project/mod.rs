@@ -1,4 +1,5 @@
-//! The `project` family: 4 calls, one file each.
+//! The `project` family: 5 calls, one file each.
+mod export;
 mod get;
 mod init;
 mod list;
@@ -8,5 +9,11 @@ use crate::calls::Calls;
 
 /// Its calls, in the order help lists them.
 pub(crate) fn calls() -> Calls {
-    &[init::CALL, list::CALL, get::CALL, remove::CALL]
+    &[
+        init::CALL,
+        list::CALL,
+        get::CALL,
+        export::CALL,
+        remove::CALL,
+    ]
 }

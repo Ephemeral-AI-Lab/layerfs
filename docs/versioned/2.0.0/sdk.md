@@ -128,11 +128,46 @@ async def main():
 asyncio.run(main())
 ```
 
+## Export a project snapshot
+
+See [`project.export`](../../architecture/api/sdk/project/export.md)
+for destination validation, fidelity, routing, refusal codes and result fields.
+The table has 61 calls, five in the `project` family.
+
+```js
+// /exports exists; the destination is absent or empty on this host.
+const exported = await layerfs.project.export("shop/api", "/exports/api", {
+  branch: "main",
+  on_progress: ({ phase, bytes }) => console.error(phase, bytes),
+});
+```
+
+```python
+result = layerfs.project.export("shop/api", "/exports/api", branch="main", on_progress=print)
+# Inside an async function, using a separate destination:
+# result = await layerfs.aio.project.export("shop/api", "/exports/api-agent", branch="agent", on_progress=print)
+```
+
+Omitting `branch` selects `main`. There is no `commit` option. The immutable
+node/root is pinned once; later publications and uncommitted Workspace changes
+do not enter the output. SQLite worker routes stream to the caller’s local
+writer; local/remote PostgreSQL connections read through the caller’s process.
+A required stopped machine is `Unavailable`.
+
+Callbacks receive `prepare`, `export`, `finalize` with monotonic local-output
+`files`, `directories`, `symlinks`, `bytes` and `done = bytes` during export; `total` is
+`None`/`null`. `finalize` comes only once the folder is in place, and `export`
+updates at most every 200 ms; only a successful return means success.
+Omit `on_progress` when unused: the current Python shell rejects explicit
+`on_progress=None`. Handler exceptions do not cancel export. Cancelling `aio`
+stops callbacks while the native operation continues, so inspect the destination
+before deciding on another attempt.
+
 ## Functions as options
 
 | Option | Calls | Called with |
 | --- | --- | --- |
-| `on_progress` | `project.init`, `workspace.exec`, `store.push`, `store.pull`, `backup.create`, `backup.restore` | each progress update (an object or dict); for `workspace.exec`, once, `{exec: {id}}` before the command starts |
+| `on_progress` | `project.init`, `project.export`, `workspace.exec`, `store.push`, `store.pull`, `backup.create`, `backup.restore` | each progress update (an object or dict); for `workspace.exec`, once, `{exec: {id}}` before the command starts |
 | `stdout`, `stderr` | `workspace.exec` | the command's output, piece by piece: a string when the piece is UTF-8, else a `Buffer` (Node) or `bytes` (Python) |
 
 There is one progress stream and no job registry (O22). Another process

@@ -51,8 +51,16 @@ pub fn call(
     events: &mut dyn FnMut(SdkValue),
 ) -> Outcome {
     let request = request(op, args)?;
-    send(endpoint, op, &request, events, None).unwrap_or_else(|Unreached(refusal)| Err(refusal))
+    let mut events = |event| {
+        events(event);
+        Ok(())
+    };
+    send(endpoint, op, &request, &mut events, None)
+        .unwrap_or_else(|Unreached(refusal)| Err(refusal))
 }
+
+/// Where a call's events go; refusing one ends the call ([`send`]).
+pub type EventSink<'a> = dyn FnMut(SdkValue) -> Result<(), SdkRefusal> + 'a;
 
 /// A worker that was not reached: the connection, the secret or the
 /// worker's answer to it failed, and the request was not sent. Only this
@@ -79,12 +87,15 @@ pub fn request(op: &str, args: SdkValue) -> Result<Vec<u8>, SdkRefusal> {
 /// the secret first, alone, then the request once. [`Unreached`] when
 /// nothing was sent; otherwise the operation's outcome, `Unknown` when the
 /// answer was lost after the request was sent. The answer is waited for at
-/// most `answer_within`, or as long as the operation runs.
+/// most `answer_within`, or as long as the operation runs. An event that
+/// `events` refuses (a caller that cannot keep up with the stream, such as
+/// `project.export` whose local write failed) closes the connection, so the
+/// worker stops at its next event; the outcome is that refusal.
 pub fn send(
     endpoint: &Endpoint,
     op: &str,
     request: &[u8],
-    events: &mut dyn FnMut(SdkValue),
+    events: &mut EventSink<'_>,
     answer_within: Option<Duration>,
 ) -> Result<Outcome, Unreached> {
     let started = Instant::now();
@@ -99,7 +110,7 @@ fn send_once(
     endpoint: &Endpoint,
     op: &str,
     request: &[u8],
-    events: &mut dyn FnMut(SdkValue),
+    events: &mut EventSink<'_>,
     answer_within: Option<Duration>,
 ) -> Result<Outcome, Unreached> {
     let unavailable = |why: &dyn std::fmt::Display| {
@@ -189,7 +200,7 @@ fn answer(
     mut stream: TcpStream,
     op: &str,
     request: &[u8],
-    events: &mut dyn FnMut(SdkValue),
+    events: &mut EventSink<'_>,
 ) -> Outcome {
     stream
         .write_all(request)
@@ -208,7 +219,10 @@ fn answer(
             Err(refusal) => return Err(lost(op, &refusal.message)),
         };
         if let Some(event) = frame.get("event") {
-            events(event.clone());
+            if let Err(refusal) = events(event.clone()) {
+                let _ = stream.shutdown(std::net::Shutdown::Both);
+                return Err(refusal);
+            }
             continue;
         }
         // a worker's steps, when this call asked for them (`trace_step`)
@@ -252,7 +266,7 @@ pub fn ping(endpoint: &Endpoint) -> Outcome {
         endpoint,
         "worker.ping",
         &request,
-        &mut |_| {},
+        &mut |_| Ok(()),
         Some(PING_WAIT),
     )
     .unwrap_or_else(|Unreached(refusal)| Err(refusal))
