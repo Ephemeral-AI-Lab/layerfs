@@ -110,6 +110,7 @@ daemon runs in the Sandbox image's root, which has no such hosts entry.
 | [K3](../../../../../core/docs/issues/535/receipts/fe6f85013b/K3/RESULTS.md) | first terminal pass |
 | [L3](../../../../../core/docs/issues/535/receipts/35ed671b6c/L3/RESULTS.md) | final pass: sqlite, PostgreSQL loopback and remote cells, power |
 | [TERMINAL-PASS](../../../../../core/docs/issues/535/TERMINAL-PASS.md) | the merged verdict |
+| [machines-live](../../../../../core/docs/issues/project-113/receipts/fb02aa0666/machines-live/RESULTS.md) | release CLI on Lima 2.2.1 (2026-11-07): create, start, sqlite smoke, `workspace exec-cancel` and Busy/force, stale forwarded records ended in the worker, an unreachable worker keeping them (`unknown`/`Unknown`), stop and start |
 
 ## Troubleshooting
 
