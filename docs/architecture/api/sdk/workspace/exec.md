@@ -84,6 +84,10 @@ With no `stdout`/`stderr` function and no `stream`, a spooled stream's
 events are dropped by the front end and only its size is answered; pass a
 function or `stream: true` to receive output over 1 MiB
 ([`node/src/index.js`](../../../../../api/node/src/index.js)).
+The two streams are delivered one after the other (all of stdout, then all
+of stderr), not interleaved, and each event is text or bytes by its own
+content. [Events](../../call-table/events.md#workspaceexec-output) states
+the contract and marks what was not run.
 
 ## Where it runs
 

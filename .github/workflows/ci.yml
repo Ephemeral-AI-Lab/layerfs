@@ -26,6 +26,8 @@ on:
       - "!**/*.md"
       - "!core/docs/**"
   pull_request:
+    # off for pull requests into layerfs_v2_0_0 (owner, 2026-11-07)
+    branches-ignore: [layerfs_v2_0_0]
     paths:
       - "core/**"
       - "engine/**"

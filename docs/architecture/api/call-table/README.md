@@ -27,6 +27,8 @@ for the front ends ([`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs)).
 | [Table](table.md) | `layerfs.table`, keys, scopes and checks. |
 | [SDK](../sdk/README.md) | Every family and every call, one page per call (moved out of this component). |
 | [Errors](errors.md) | The error catalog and uncertain outcomes. |
+| [Coverage](coverage.md) | Which front end has which call (generated), what is outside the table, intentional differences, the cross-front-end checks and known gaps. |
+| [Events](events.md) | Progress events and `workspace.exec` output: which calls take `on_progress`, payloads, ordering, what completion means, what is not run, open decisions. |
 
 ## The picture
 
@@ -76,7 +78,7 @@ control side of each family in [Control: Families](../../control/management/fami
 | Arguments | positionals in table order, then options; each has a snake_case name and a `Kind` | [`calls/table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs) |
 | Checks | every argument checked against the entry before any effect | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs) |
 | Scope | an optional folder scope guards and rewrites arguments before any effect | [`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs) |
-| Events | one stream per call: `{progress}`, worker events, `{stream, bytes}` of `workspace.exec` | [`events.rs`](../../../../control/crates/layerfs-home/src/events.rs) |
+| Events | one stream per call: `{progress}`, worker events, `{stream, bytes}` of `workspace.exec` | [Events](events.md), [`events.rs`](../../../../control/crates/layerfs-home/src/events.rs) |
 | Results | a value with snake_case keys, or a refusal `{code, message, detail}` | [`calls/keys.rs`](../../../../api/crates/layerfs-api/src/calls/keys.rs), [`outcome.rs`](../../../../control/crates/layerfs-home/src/outcome.rs) |
 | Home | explicit, else `LAYERFS_HOME`, else `~/.layerfs`; must be absolute | [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home` |
 
@@ -98,7 +100,7 @@ Details: [Table](table.md) for kinds, keys, scopes and checks;
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| Page size of a list | `page_size` 1 to 1000, default 50, for `sandbox` lists and a scoped `branch.list`; other lists take the Store engine's page rules | [`family.rs`](../../../../control/crates/layerfs-sandbox/src/family.rs) `page`, [`calls.rs`](../../../../control/crates/layerfs-store/src/calls.rs) `branches_in` |
+| Page size of a list | `page_size` 1 to 1000, default 50, for `sandbox` lists and a scoped `branch.list`; other lists take the Store engine's page rules | [`family.rs`](../../../../control/crates/layerfs-sandbox/src/family.rs) `page`, [`calls.rs`](../../../../control/crates/layerfs-store/src/calls/branch.rs) `branches_in` |
 | `commit.get` | pages the Branch's Commits 1000 at a time to the end; an id prefix of 8 or more characters matches | `store/calls.rs` `commit_get` |
 | A list page that does not move on | `Failed` "a list made no progress"; not asked again | `store/calls.rs` `page_of` |
 | Worker frame | 512 MiB; larger is `TooLarge`, nothing sent | [`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs) |
@@ -118,6 +120,10 @@ this page. They need a Unix host and no Docker or root.
 | [`scope_references.rs`](../../../../api/crates/layerfs-api/tests/scope_references.rs) | `layerfs-api` | `branch.fork` (`from_commit`, `from_branch`, `name`) and `branch.publish` (`commit`) outside the namespace are refused before any effect; inside it they work; the JSON form refuses the same. |
 | [`list_pages.rs`](../../../../api/crates/layerfs-api/tests/list_pages.rs) | `layerfs-api` | `branch.list`, plain and scoped, pages past 64 and the default 50 across sizes; the last page ends the list; bad `page_size` or `page_pos` refused; a page past the end is empty. |
 | [`project_family.rs`](../../../../api/crates/layerfs-api/tests/project_family.rs) | `layerfs-api` | End to end on this host: `project.init` refused without a Store (`NotFound`), `store.create`, Init in process with `check`, `install`, `record` progress, file and Branch calls, a push to a stand-in worker on a `lima` machine and reads there, then `project.remove`. |
+
+The Node package's [`contract.mjs`](../../../../api/node/test/contract.mjs) and
+[`coverage.mjs`](../../../../api/node/test/coverage.mjs) run one case list through Node, Python and the
+command and check the matrix; see [Coverage](coverage.md).
 
 ```text
  project_family:

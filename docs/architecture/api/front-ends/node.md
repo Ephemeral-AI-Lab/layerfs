@@ -124,7 +124,7 @@ api/crates/layerfs-node (cdylib, napi 2.16, napi4)
 
 | Step | What happens | Source |
 | --- | --- | --- |
-| Build | `npm --prefix api run build:native` runs `cargo +1.85.1 build --manifest-path Cargo.toml --offline --locked [--release] -p layerfs-node`; `-- --debug` builds a dev profile | [`build-native.mjs`](../../../../api/scripts/build-native.mjs) |
+| Build | `npm --prefix api run build:native` runs `cargo +1.85.1 build --manifest-path Cargo.toml --offline --locked [--release] -p layerfs-node`; `-- --debug` builds a dev profile; `-- --features postgresql,tls` (either name or both, nothing else) passes the opt-in features on, default none | [`build-native.mjs`](../../../../api/scripts/build-native.mjs) |
 | Host | `darwin` (`.dylib`) or `linux` (`.so`); any other platform, a set `CARGO_BUILD_TARGET`, or a `CARGO_TARGET_DIR` outside the worktree is refused | `build-native.mjs` |
 | Output | copied to `api/node/layerfs.node` (git-ignored; the package's own addon), or to `LAYERFS_NATIVE_OUTPUT`, through a staged file and a rename | `build-native.mjs` |
 | Loading | the file `LAYERFS_NATIVE` names, else `layerfs.node` beside the package's `src`; nothing else is looked at. A missing file, or one that does not load, throws one error naming the path, `platform/arch`, the Node version and how to build | [`native.js`](../../../../api/node/src/native.js) |
