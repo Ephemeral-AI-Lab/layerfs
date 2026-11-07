@@ -31,7 +31,7 @@ behalf of the engine:
   take the home and, when they emit, `layerfs-home`'s `Events`.
 - `crates/layerfs-platform` (was `layerfs-machine`): *where* Sandboxes can
   run. One folder per platform under `src/platforms/` (`native`, `docker`,
-  `apple_container`, `microsandbox`, `lima`, `firecracker`, `ssh`). Host
+  `apple_container`, `lima`, `firecracker`). Host
   builds only.
 - `crates/layerfs-sandbox-backend` (was `layerfs-isolation`, D-9; before
   #101 `layerfs-sandbox`): *how* a Sandbox runs on that machine's kernel.

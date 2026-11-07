@@ -184,8 +184,8 @@ session's own thread checkpoints the WAL off the commit path (owner approval,
   machine. Machines are created, removed and started by the `machine` calls,
   and the routes come from the home's records (`machine/<name>/record.json`,
   `store/<name>/record.json`). `native` and `docker` are built in; VM kinds
-  (`apple-container`, `microsandbox`, `lima`, `firecracker`) are created by
-  name; ssh hosts are connected. Each VM machine's data disk is mounted at
+  (`apple-container`, `lima`, `firecracker`) are created by name. Each VM
+  machine's data disk is mounted at
   `/layerfs/data` and holds `store/<name>/store.sqlite` per Store. Its
   worker runs as root behind its own secret, reached through one loopback
   port on the host, with one attempt per call and no replay, the same rules
@@ -203,13 +203,16 @@ session's own thread checkpoints the WAL off the commit path (owner approval,
   See [#533](core/docs/issues/533/README.md), [#535](core/docs/issues/535/README.md)
   and the [proposal](core/docs/proposals/host-platform-connections.md).
 - **Platform restriction (owner 2026-11-06, layerfs-project#7): Firecracker
-  and SSH are permanently disabled for new product work on every host.**
-  Keep their adapters and records; do not delete or migrate resources.
+  is permanently disabled for new product work on every host.**
+  Keep its adapter and records; do not delete or migrate resources.
   Inspection and safe explicit cleanup remain available. No runtime setting
-  or feature flag may re-enable them; that requires a later explicit owner
+  or feature flag may re-enable it; that requires a later explicit owner
   decision and source change. This supersedes earlier platform enablements
-  without changing historical evidence. Native, Docker, Lima, Apple Container
-  and microsandbox retain their existing support rules. See the
+  without changing historical evidence. Native, Docker, Lima and Apple
+  Container retain their existing support rules.
+  **Microsandbox and SSH machines were removed (owner, 2026-11-08):** their
+  code is gone; an old record of either is shown as unsupported with the
+  reason, and `machine remove` only forgets it. See the
   [restriction contract](docs/architecture/control/support-matrix/disabled-platforms.md).
 - **One global database, one writer, short holds (owner decision 2026-10-18).**
   All committed state lives in one SQLite Store file; no sharding, second
