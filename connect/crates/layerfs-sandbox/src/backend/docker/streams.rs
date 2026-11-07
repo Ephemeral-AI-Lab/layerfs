@@ -151,7 +151,7 @@ impl RuntimeInput {
             }));
         }
         self.close_attempted = true;
-        match self.stream.stream.shutdown(Shutdown::Write) {
+        match self.stream.shutdown(Shutdown::Write) {
             Ok(()) => Ok(InputEnd {
                 sent: self.sent,
                 saturated: self.saturated,
@@ -318,7 +318,7 @@ impl RuntimeOutput {
                     None
                 } else {
                     self.fenced = true;
-                    self.writer.stream.shutdown(Shutdown::Both).err()
+                    self.writer.shutdown(Shutdown::Both).err()
                 };
                 Err(Box::new(OutputFailure {
                     output: self,

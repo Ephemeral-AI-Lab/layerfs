@@ -18,7 +18,6 @@
 //! tab (refused in every path) separates.
 use crate::{Bind, RuntimeError};
 use std::{
-    os::unix::ffi::OsStrExt,
     path::{Component, Path, PathBuf},
 };
 
@@ -200,7 +199,23 @@ const LAYERS: usize = 5;
 /// The three overlay paths travel in one mount option string, where `,`
 /// separates options and `:` would separate layers, so neither may appear.
 fn check_overlay(path: &Path) -> Result<(), RuntimeError> {
-    let bytes = path.as_os_str().as_bytes();
+    #[cfg(unix)]
+    let bytes = {
+        use std::os::unix::ffi::OsStrExt;
+        path.as_os_str().as_bytes()
+    };
+    // Windows: the WTF-8 encoding of the path, the same bytes the OS names
+    // it by; the format is line based and rejects control characters.
+    #[cfg(not(unix))]
+    let bytes = {
+        use std::os::windows::ffi::OsStrExt;
+        let wide = path.as_os_str().encode_wide().collect::<Vec<u16>>();
+        let mut bytes = Vec::with_capacity(wide.len() * 2);
+        for unit in wide {
+            bytes.extend_from_slice(&unit.to_le_bytes());
+        }
+        bytes
+    };
     if bytes.iter().any(|byte| matches!(byte, b',' | b':')) {
         return Err(RuntimeError::Protocol("an overlay path holds a `,` or `:`"));
     }

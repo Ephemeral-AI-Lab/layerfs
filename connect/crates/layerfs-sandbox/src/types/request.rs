@@ -1,6 +1,5 @@
 //! Provider-independent ordinary command metadata and validation.
 use crate::CommandIdentity;
-#[cfg(unix)]
 use crate::RuntimeError;
 use std::fmt;
 /// Caller-owned ordinary command metadata. No hidden shell/classifier/preparation.
@@ -24,7 +23,6 @@ impl fmt::Debug for ExecRequest {
     }
 }
 impl ExecRequest {
-    #[cfg(unix)]
     pub(crate) fn check(&self) -> Result<(), RuntimeError> {
         self.identity.check()?;
         if self.arguments.is_empty()

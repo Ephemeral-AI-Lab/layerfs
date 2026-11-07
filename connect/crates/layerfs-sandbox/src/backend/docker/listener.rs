@@ -118,7 +118,6 @@ impl Sandbox {
             parsed.map_err(|e| self.selected(r.fail(e, None)))?;
             // This is the original logs fence, once. A failed fence keeps marker evidence separate.
             r.writer
-                .stream
                 .shutdown(Shutdown::Both)
                 .map_err(|error| self.selected(r.failed_fence(error)))?;
             Ok(())

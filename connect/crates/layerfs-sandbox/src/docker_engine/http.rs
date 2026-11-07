@@ -238,7 +238,7 @@ impl Docker {
                 kept: (matches!(mode, Mode::Keep) && !closes).then(|| self.kept.clone()),
             }),
             Err(cause) => {
-                let fence_error = stream.stream.shutdown(Shutdown::Both).err();
+                let fence_error = stream.shutdown(Shutdown::Both).err();
                 let mut original = failure(attempted, sent, observed_status, cause, fence_error);
                 original.request_header_bytes = header_bytes;
                 original.sent_body_bytes = sent.saturating_sub(header_bytes);
@@ -311,7 +311,7 @@ impl Response {
             self.sent,
             Some(self.status),
             cause,
-            self.writer.stream.shutdown(Shutdown::Both).err(),
+            self.writer.shutdown(Shutdown::Both).err(),
         );
         result.request_header_bytes = self.header_bytes;
         result.sent_body_bytes = self.sent.saturating_sub(self.header_bytes);
