@@ -65,6 +65,22 @@ Also not built:
 - **Cancelling a call.** `layerfs.aio` stops calling a cancelled call's
   functions, but the native call runs to its end on its thread; read the
   state again after a cancel.
+- **A cancel that a worker takes and never answers has no time limit.**
+  `workspace exec-cancel` (and an unmount or close that cancels first)
+  waits for the worker's answer until its connection closes, then answers
+  `unknown` and keeps the command's record; there is no operation timeout.
+- **A cancel before a command starts, on a Sandbox this host reaches
+  directly.** It answers `cancelled` (`SIGKILL`) at once; the exec's own
+  process ends the command in the worker as it starts, in one attempt.
+  If the worker cannot be reached for that one attempt, the command runs
+  on although the cancel answered `cancelled`; cancel it again by its id.
+- **A command's children on macOS `native`.** `workspace exec-cancel` ends
+  the command's process group; a child that starts its own session
+  (`setsid`) is not in it and keeps running. On Linux every command has its
+  own cgroup and nothing it starts escapes.
+- **`workspace exec-cancel` on a Linux Docker Engine** was not run for this
+  manual (no such host; layerfs-project#114). The docker machine on Docker
+  Desktop (macOS) and `native` were.
 - **`backup list` of a Store not on `native`.** Its heads are read on
   `native` only, so its state is `unknown` with a `reason`; reading heads
   through the machine's worker is not built.

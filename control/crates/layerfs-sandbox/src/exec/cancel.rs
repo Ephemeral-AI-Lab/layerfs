@@ -3,10 +3,12 @@
 //! and `workspace.unmount` do with the records of theirs ([`settle`]): refuse
 //! `Busy` while one is live, or with `force` cancel each first. A record
 //! whose owner is gone is stale: it is ended through its stop handle if its
-//! command still runs, removed and logged ([`stale`]). Cancel is explicit
-//! only: one attempt, no timeout, retry or replay. An outcome that cannot be
-//! confirmed (a worker that does not answer) is `unknown`, and the record
-//! stays until its owner ends or a close clears it.
+//! command still runs here ([`stale`]), or in its machine's worker when its
+//! route is a machine ([`claim`], [`stale_remote`]), then removed and
+//! logged. Cancel is explicit only: one attempt, no timeout, retry or
+//! replay. An outcome that cannot be confirmed (a worker that does not
+//! answer) is `unknown`, and the record stays until its owner ends or a
+//! close clears it; a stale one whose end is not confirmed stays as it was.
 use super::record::{self, ExecRecord, Route};
 use crate::record::lock_in;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -95,32 +97,90 @@ pub fn cancel(
         let Some(mut record) = record::read(file)? else {
             return Ok(Outcome::Ended);
         };
-        if !record.owned() {
-            return stale(dir, file, &record);
+        match (record.owned(), &record.route) {
+            (true, _) => {}
+            (false, Route::Local) => return stale(dir, file, &record),
+            (false, Route::Machine(_)) => {
+                let claimed = claim(file, &record)?;
+                drop(_sandbox);
+                return stale_remote(dir, sandbox, file, (&record, &claimed), remote);
+            }
         }
         record.cancel = Some(now_ms());
         write_entity(file, &record.encode())?;
         record
     };
     match (&record.route, &record.stop) {
-        (Route::Machine(_), _) => Ok(remote(&record, grace)),
+        // not started yet: its owner ends it when the worker says it did
+        (Route::Machine(_), None) => Ok(Outcome::Cancelled("SIGKILL")),
+        (Route::Machine(_), Some(_)) => Ok(remote(&record, grace)),
         (Route::Local, Some(handle)) => stop(handle, grace),
         (Route::Local, None) => Ok(Outcome::Cancelled("SIGKILL")),
     }
 }
 
-/// Ends stale record `found` at `file` (its owner is gone) through its stop
-/// handle if its command still runs here, removes it and logs it in the
-/// side's `log/exec.jsonl`. The caller holds the Sandbox lock. A command on
-/// a machine is not reached from here: its record goes, and the log says
-/// so.
+/// Ends stale record `found` at `file` (its owner is gone, its route this
+/// side) through its stop handle if its command still runs, removes it and
+/// logs it in the side's `log/exec.jsonl`. The caller holds the Sandbox
+/// lock. A record whose route is a machine goes through [`claim`] and
+/// [`stale_remote`] instead.
 pub fn stale(dir: &Path, file: &Path, found: &ExecRecord) -> Result<Outcome> {
     let outcome = match (&found.route, &found.stop) {
         (Route::Local, Some(handle)) => stop(handle, Duration::ZERO)?,
         (Route::Local, None) => Outcome::Ended,
-        (Route::Machine(_), _) => Outcome::Unknown,
+        (Route::Machine(_), _) => {
+            return Err(failed(std::io::Error::other(
+                "a stale record whose route is a machine is ended in its worker",
+            )))
+        }
     };
     record::remove(file)?;
+    logged(dir, found, outcome, false);
+    Ok(outcome)
+}
+
+/// Takes stale record `found` at `file` (route a machine) over for this
+/// process, under the Sandbox lock the caller holds: it names this process
+/// its owner and is marked cancelled, so no other caller ends it or starts
+/// a command of its id while its worker is asked, without the lock held
+/// across that exchange. The record as written.
+pub fn claim(file: &Path, found: &ExecRecord) -> Result<ExecRecord> {
+    let mut claimed = found.clone();
+    claimed.owner = ExecRecord::new_owner();
+    claimed.cancel = Some(now_ms());
+    write_entity(file, &claimed.encode())?;
+    Ok(claimed)
+}
+
+/// Ends the command of stale record `found` (route a machine), which this
+/// process [`claim`]ed as `claimed` at `file`, in its machine's worker
+/// with zero grace (D-11), then, under Sandbox `sandbox`'s lock, removes
+/// the record if it is still the claimed one. An end that is not confirmed
+/// (`unknown`) puts `found` back as it was: it stays stale, for a later
+/// cancel, unmount or close. Either way the side's `log/exec.jsonl` says
+/// what was done.
+pub fn stale_remote(
+    dir: &Path,
+    sandbox: &str,
+    file: &Path,
+    (found, claimed): (&ExecRecord, &ExecRecord),
+    remote: &mut Remote<'_>,
+) -> Result<Outcome> {
+    let outcome = remote(claimed, Duration::ZERO);
+    let _sandbox = lock_in(dir, sandbox)?;
+    let kept = outcome == Outcome::Unknown;
+    if record::read(file)?.as_ref() == Some(claimed) {
+        match kept {
+            true => write_entity(file, &found.encode())?,
+            false => record::remove(file)?,
+        }
+    }
+    logged(dir, found, outcome, kept);
+    Ok(outcome)
+}
+
+/// Logs the end of stale record `found` in the side's `log/exec.jsonl`.
+fn logged(dir: &Path, found: &ExecRecord, outcome: Outcome, kept: bool) {
     if let Some(root) = dir.parent().and_then(Path::parent) {
         let sandbox = dir.file_name().and_then(|n| n.to_str()).unwrap_or("");
         let _ = log_line(
@@ -134,17 +194,18 @@ pub fn stale(dir: &Path, file: &Path, found: &ExecRecord) -> Result<Outcome> {
                 ("exec", SdkValue::text(&found.id)),
                 ("owner", found.owner.clone()),
                 ("ended", outcome.answer()),
+                ("kept", SdkValue::Bool(kept)),
             ]),
         );
     }
-    Ok(outcome)
 }
 
 /// What a `sandbox.close` (`workspace` `None`) or a `workspace.unmount` of
 /// Workspace `workspace` does with the command records in Sandbox
-/// `sandbox`'s folder `dir`: stale ones are removed ([`stale`]); live ones
-/// refuse it `Busy`, or with `force` are each cancelled first, with the
-/// default grace. A cancel that is not confirmed refuses it `Unknown`.
+/// `sandbox`'s folder `dir`: stale ones are ended and removed ([`stale`],
+/// [`stale_remote`]); live ones refuse it `Busy`, or with `force` are each
+/// cancelled first, with the default grace. A cancel, or a stale record's
+/// end, that is not confirmed refuses it `Unknown`.
 pub fn settle(
     dir: &Path,
     sandbox: &str,
@@ -152,7 +213,7 @@ pub fn settle(
     force: bool,
     remote: &mut Remote<'_>,
 ) -> Result<()> {
-    let mut live = Vec::new();
+    let (mut live, mut claimed) = (Vec::new(), Vec::new());
     for (file, found) in record::listed(dir, workspace)? {
         if found.owned() {
             live.push((file, found));
@@ -160,21 +221,34 @@ pub fn settle(
         }
         let _sandbox = lock_in(dir, sandbox)?;
         match record::read(&file)? {
-            Some(now) if !now.owned() => {
+            Some(now) if !now.owned() && now.route == Route::Local => {
                 stale(dir, &file, &now)?;
+            }
+            Some(now) if !now.owned() => {
+                let taken = claim(&file, &now)?;
+                claimed.push((file, now, taken));
             }
             Some(now) => live.push((file, now)),
             None => {}
         }
     }
+    // stale commands on a machine: ended in its worker, without the lock
+    let mut unconfirmed = Vec::new();
+    for (file, found, taken) in &claimed {
+        let outcome = stale_remote(dir, sandbox, file, (found, taken), remote)?;
+        if outcome == Outcome::Unknown {
+            unconfirmed.push(SdkValue::text(&found.id));
+        }
+    }
+    let path = (live.first().map(|(_, r)| r)).or(claimed.first().map(|(_, r, _)| r));
+    let whose = match (workspace, path) {
+        (Some(_), Some(record)) => format!("Workspace {sandbox}:{}", record.path),
+        _ => format!("Sandbox {sandbox}"),
+    };
     if live.is_empty() {
-        return Ok(());
+        return unconfirmed_refusal(&whose, unconfirmed);
     }
     let ids = || SdkValue::List(live.iter().map(|(_, r)| SdkValue::text(&r.id)).collect());
-    let whose = match workspace {
-        Some(_) => format!("Workspace {sandbox}:{}", live[0].1.path),
-        None => format!("Sandbox {sandbox}"),
-    };
     if !force {
         return Err(SdkRefusal {
             code: "Busy".to_owned(),
@@ -187,12 +261,16 @@ pub fn settle(
         });
     }
     let grace = Duration::from_millis(GRACE_MS as u64);
-    let mut unconfirmed = Vec::new();
     for (file, found) in &live {
         if cancel(dir, sandbox, file, grace, remote)? == Outcome::Unknown {
             unconfirmed.push(SdkValue::text(&found.id));
         }
     }
+    unconfirmed_refusal(&whose, unconfirmed)
+}
+
+/// `Unknown` naming the commands whose end was not confirmed, if any.
+fn unconfirmed_refusal(whose: &str, unconfirmed: Vec<SdkValue>) -> Result<()> {
     if unconfirmed.is_empty() {
         return Ok(());
     }

@@ -37,7 +37,9 @@ impl Sandbox {
     /// code is 128 + the signal for a command a signal ended, as the Engine
     /// reports it; the process id is diagnostic only. A `slot` is told the
     /// command's stop handle, its process group and leader, before its
-    /// output is read; a slot that fails ends the group at once.
+    /// output is read; a slot that fails ends the group at once. One that
+    /// refuses it as interrupted (a cancel came first) lets the command run
+    /// on to that end, which its exit code then reports.
     pub fn run_in(
         &self,
         request: &ExecRequest,
@@ -74,14 +76,25 @@ impl Sandbox {
         // named before anything is waited for: the leader is not reaped
         // before the wait below, so it is observable even once it exited
         let named = LocalProcess::observe(pid)
-            .and_then(|leader| groups::name(self.directory(), leader).map(|()| leader))
-            .and_then(|leader| match slot.as_mut() {
-                Some(slot) => (slot.spawned)(&Stop::Group { pgid: pid, leader }).map(|()| leader),
-                None => Ok(leader),
-            });
-        let leader = match named {
-            Ok(leader) => leader,
-            Err(error) => {
+            .and_then(|leader| groups::name(self.directory(), leader).map(|()| leader));
+        let told = match (&named, slot.as_mut()) {
+            (Ok(leader), Some(slot)) => (slot.spawned)(&Stop::Group {
+                pgid: pid,
+                leader: *leader,
+            }),
+            _ => Ok(()),
+        };
+        let leader = match (named, told) {
+            (Ok(leader), Ok(())) => leader,
+            // a cancel came before the handle was told: the command ends
+            // here and runs on to that end, which its exit reports
+            (Ok(leader), Err(error)) if error.kind() == io::ErrorKind::Interrupted => {
+                if let Ok(group) = process::pid(pid) {
+                    let _ = killpg(group, Signal::SIGKILL);
+                }
+                leader
+            }
+            (Err(error), _) | (_, Err(error)) => {
                 // an unnamed group would outlive the Sandbox: it ends here, once
                 if let Ok(group) = process::pid(pid) {
                     let _ = killpg(group, Signal::SIGKILL);

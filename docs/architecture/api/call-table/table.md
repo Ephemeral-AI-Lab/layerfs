@@ -83,7 +83,7 @@ inputs, an optional Commit last (D7).
 | A shell option is the name with `-` for `_` | `--start-line` | `table.rs`, [`layerfs-cli/src/parse.rs`](../../../../api/crates/layerfs-cli/src/parse.rs) |
 | Result keys become snake_case before they leave the library | `exitCode` → `exit_code` | [`keys.rs`](../../../../api/crates/layerfs-api/src/calls/keys.rs) `snake`, applied in `dispatch.rs` |
 | Only identifier-like keys starting with a lowercase letter change; a key holding a path or name never does | `/src/main.rs` stays | `keys.rs` `snake_name` |
-| The Store methods still take 1.1.0 camelCase names; the `branch`, `commit`, `file` families rename on the way in | `start_line` → `startLine`, `old` → `oldText`, `from_path` → `from` | [`calls.rs`](../../../../control/crates/layerfs-store/src/calls.rs) `take`, `renamed` |
+| The Store methods still take 1.1.0 camelCase names; the `branch`, `commit`, `file` families rename on the way in | `start_line` → `startLine`, `old` → `oldText`, `from_path` → `from` | [`calls/op.rs`](../../../../control/crates/layerfs-store/src/calls/op.rs) `engine_args`, `renamed` |
 
 ## Scopes
 

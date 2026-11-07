@@ -83,7 +83,7 @@ Records in `machine/<name>/`, adapters from `layerfs-platform`
 ```
 
 The `branch`, `commit` and `file` families are Store calls too
-([`calls.rs`](../../../../control/crates/layerfs-store/src/calls.rs)): each translates to one Store
+([`calls/`](../../../../control/crates/layerfs-store/src/calls/mod.rs), one translation each in [`calls/op.rs`](../../../../control/crates/layerfs-store/src/calls/op.rs)): each translates to one Store
 method (`fs.read`, `branch.fork`, …) and runs through `store_call`
 ([`call.rs`](../../../../control/crates/layerfs-store/src/call.rs)) under the Store's lease, in this
 process or in the machine's worker

@@ -44,6 +44,7 @@ hold a password or a bucket key. They are not settings; see
     lock                       the Sandbox lock: its record and Workspace record changes
     serve.lock                 held by the call that runs the Sandbox (native, and machines reached directly)
     workspace/<id>.json        one per mounted Workspace: v, id, name?, branch, path, created
+    workspace/<id>/exec/<x>.json  one per running command (exec id <x>): owner, route, stop handle
   store/<name>/
     record.json                kind, machine, profile, backup links
     store.sqlite               a sqlite Store's file while it is on native
@@ -53,7 +54,7 @@ hold a password or a bucket key. They are not settings; see
   backup/<bucket>/record.json  provider, bucket, prefix, region, key reference
   trace/                       trace files
   log/                         migration.json, migration-2.json, import-env.jsonl,
-                               uncertain.jsonl, init-failures.jsonl, ...
+                               uncertain.jsonl, init-failures.jsonl, exec.jsonl, ...
 ```
 
 - **Records** are one JSON value each, written to a private temporary file
@@ -119,6 +120,15 @@ hold a password or a bucket key. They are not settings; see
   (`<prefix><name>`) and the image cache the namespaces backend unpacks
   once (`images/`). A Sandbox's directory is created by its create and
   deleted by its close.
+- **Command records** (`sandbox/<name>/workspace/<id>/exec/<x>.json`)
+  are written new when a command starts and removed when it ends, on the
+  side that keeps the Workspace's record: here on `native` and for a
+  Sandbox reached directly; in the machine's worker otherwise. Each names
+  its owning process, its route (`local` or `machine:<name>`) and how it
+  is stopped. A record whose owner is gone is stale: the next exec of its
+  id, cancel, unmount or close ends its command, removes it and appends it
+  to **`log/exec.jsonl`**. The Workspace's folder goes with its terminal
+  unmount.
 - **`log/uncertain.jsonl`** lists every outcome that is not known
   (`Unknown`), with what was kept.
 

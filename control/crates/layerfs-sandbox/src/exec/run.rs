@@ -88,7 +88,8 @@ pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
             layerfs_bridge::sdk_values::hex(&state.token(path)?.workspace.to_bytes()),
         ),
     };
-    let runtime = state.runtime()?;
+    // a Sandbox with no runtime is refused before any record is made
+    state.runtime()?;
     let running = match exec.workspace {
         Some(_) => None,
         None => {
@@ -96,15 +97,29 @@ pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
                 .into_iter()
                 .find(|(_, record)| record.path() == Some(directory.as_str()))
                 .and_then(|(_, record)| record.name().map(str::to_owned));
-            let mut record = ExecRecord::new(&id, &workspace, (&directory, named.as_deref()));
-            // a namespaces command's group follows from the ids: known now
-            record.stop = runtime.exec_stop(&workspace, id.as_str());
-            Some(Running::start(&state.directory, &state.id, &record)?)
+            // its stop handle is recorded once the command runs in it
+            let record = ExecRecord::new(&id, &workspace, (&directory, named.as_deref()));
+            let unreached = &mut crate::exec::cancel::unreached;
+            Some(Running::start(
+                &state.directory,
+                &state.id,
+                &record,
+                unreached,
+            )?)
         }
     };
     let mut form = None;
+    let started = host.started.clone();
     let mut spawned = |stop: &Stop| {
         form = Some(stop.form());
+        // a caller that keeps the record records the handle now
+        if let Some(started) = &started {
+            let stop = super::record::stop_value(stop);
+            let _ = started.send(SdkValue::map([(
+                "exec_started",
+                SdkValue::map([("stop", stop)]),
+            )]));
+        }
         running
             .as_ref()
             .map_or(Ok(()), |running| running.spawned(stop))

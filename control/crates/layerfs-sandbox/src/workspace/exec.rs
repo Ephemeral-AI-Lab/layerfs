@@ -21,7 +21,10 @@ use layerfs_home::events::Events;
 use layerfs_home::home::with_field;
 use layerfs_home::outcome::Outcome as Answer;
 use layerfs_machine::worker::Unreached;
+use layerfs_sandbox_backend::Stop;
+use std::io::ErrorKind;
 use std::path::Path;
+use std::time::Duration;
 
 /// `workspace.exec(ws, command, { message, exec_id })`.
 #[derive(Clone, Debug, Default)]
@@ -63,11 +66,12 @@ pub fn exec(home: &Path, events: &mut Events<'_>, request: &ExecRequest) -> Answ
             let wsid = workspace.id().unwrap_or_default();
             let mut kept = ExecRecord::new(&id, wsid, (&at.path, workspace.name()));
             kept.route = Route::Machine(at.record.machine().to_owned());
-            Some(Running::start(
-                &at.record.dir(&at.home),
-                at.record.name(),
-                &kept,
-            )?)
+            let mut remote = |found: &ExecRecord, grace| {
+                crate::exec::remote::remote(events, (&at.home, &at.record), found, grace)
+            };
+            let dir = at.record.dir(&at.home);
+            let running = Running::start(&dir, at.record.name(), &kept, &mut remote)?;
+            Some((running, kept))
         }
         None => None,
     };
@@ -84,9 +88,29 @@ pub fn exec(home: &Path, events: &mut Events<'_>, request: &ExecRequest) -> Answ
         message: request.message.clone(),
         image: None,
     };
-    let out = on_machine(&at.home, events, &at.record, asked, dispatch);
+    let out = match &running {
+        // the worker tells when the command started: its stop handle is
+        // recorded then, and a cancel that came first ends it there
+        Some((running, kept)) => {
+            let mut passed = |event: SdkValue| match started(&event) {
+                Some(stop) => {
+                    let refused = running.spawned(&stop).err();
+                    if refused.is_some_and(|error| error.kind() == ErrorKind::Interrupted) {
+                        let mut none = |_| {};
+                        let mut quiet = Events::new(&mut none);
+                        let place = (at.home.as_path(), &at.record);
+                        crate::exec::remote::remote(&mut quiet, place, kept, Duration::ZERO);
+                    }
+                }
+                None => events.event(event),
+            };
+            let mut relayed = Events::new(&mut passed);
+            on_machine(&at.home, &mut relayed, &at.record, asked, dispatch)
+        }
+        None => on_machine(&at.home, events, &at.record, asked, dispatch),
+    };
     let cancelled = match running {
-        Some(running) => running.end()?,
+        Some((running, _)) => running.end()?,
         None => false,
     };
     let mut out = out?;
@@ -104,6 +128,11 @@ pub fn exec(home: &Path, events: &mut Events<'_>, request: &ExecRequest) -> Answ
         }
     }
     Ok(out)
+}
+
+/// The stop handle a worker's `{ exec_started: { stop } }` event names.
+fn started(event: &SdkValue) -> Option<Stop> {
+    record::stop_of(event.get("exec_started")?.get("stop")?)
 }
 
 /// `workspace.exec_cancel`: `{ outcome, signal? }`, `outcome` being

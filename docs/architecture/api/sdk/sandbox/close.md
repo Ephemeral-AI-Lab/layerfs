@@ -63,7 +63,7 @@ Under a folder scope the call is refused `InvalidInput`
 | --- | --- | --- |
 | `kind` | text | `Closed` |
 | `sandbox` | text | the Sandbox's id (its name) |
-| `unknown` | list of text | with `force`: the Workspace paths it could not drain; empty otherwise |
+| `unknown` | list of text | with `force`: the paths of the Workspaces still mounted when it stopped the Sandbox. A forced close drains none of them (it does not unmount them through the daemon; their uncommitted changes and processes end with the Sandbox), so their state is not confirmed and every one is listed (O31, DECISIONS row "Forced close"). Empty otherwise |
 | `closed` | text | the name now free |
 | `was_gone` | bool | the runtime had already ended; its record was removed |
 | `was` | text | the derived state of a record with no id |

@@ -10,10 +10,13 @@ use crate::stop::{self, ExecSlot, Stop};
 use crate::ExecExit;
 use crate::{ExecRequest, RuntimeError, WireFailure};
 use std::{
-    io::{self, Write},
+    io::{self, Read, Write},
+    os::fd::OwnedFd,
+    os::unix::net::UnixStream,
     os::unix::process::{CommandExt, ExitStatusExt},
     path::{Path, PathBuf},
     process::{Command, Stdio},
+    time::Duration,
 };
 
 impl Sandbox {
@@ -33,10 +36,11 @@ impl Sandbox {
     /// streamed to the sinks as they arrive, then waits for its exit. A sink
     /// failure closes the command's pipes, still waits for its exit, and
     /// returns the sink's error. With a `slot`, the command runs in a group
-    /// of its own (`ws-<workspace>/exec-<exec>`, its stop handle, told to
-    /// the slot before it starts); the helper itself goes back to the
-    /// Sandbox's group once the command started, so a cancel ends only the
-    /// command and the helper reports how it ended.
+    /// of its own (`ws-<workspace>/exec-<exec>`, its stop handle), which the
+    /// helper never joins: a cancel ends only the command, and the helper
+    /// reports how it ended. The slot is told the stop handle only once the
+    /// command is in its group (the helper says so on a socket); a slot
+    /// that refuses it (a cancel came first) has the command ended at once.
     pub fn run_in(
         &self,
         request: &ExecRequest,
@@ -49,11 +53,12 @@ impl Sandbox {
             .init
             .ok_or_else(|| self.invalid("running command admission"))?;
         self.endpoint()?;
-        let group = match slot {
+        let group = match &slot {
             Some(slot) => Some(self.exec_group(slot)?),
             None => None,
         };
-        let outcome = self.spawn_in(request, init.pid, group.as_deref(), stdout, stderr);
+        let told = group.as_deref().zip(slot);
+        let outcome = self.spawn_in(request, init.pid, told, stdout, stderr);
         if let Some(group) = &group {
             cgroup::remove_exec(group);
         }
@@ -69,31 +74,24 @@ impl Sandbox {
         })
     }
 
-    /// The group of the command `slot` names, made new and told to the slot
-    /// before anything starts in it.
-    fn exec_group(&self, slot: ExecSlot<'_>) -> Result<PathBuf, Box<WireFailure>> {
+    /// The group of the command `slot` names, made new. The slot is told
+    /// it only once the command is in it ([`Sandbox::spawn_in`]).
+    fn exec_group(&self, slot: &ExecSlot<'_>) -> Result<PathBuf, Box<WireFailure>> {
         if !stop::component(slot.workspace) || !stop::component(slot.exec) {
             return Err(self.failure(RuntimeError::Protocol("exec group names")));
         }
         let group = cgroup::exec_path(&self.cgroup, slot.workspace, slot.exec);
         cgroup::create_exec(&group).map_err(|error| self.io(error))?;
-        let told = (slot.spawned)(&Stop::Cgroup {
-            path: group.clone(),
-        });
-        if let Err(error) = told {
-            cgroup::remove_exec(&group);
-            return Err(self.io(error));
-        }
         Ok(group)
     }
 
-    /// Spawns the helper for `request` in group `group` (the Sandbox's own
-    /// when `None`) and waits for it.
+    /// Spawns the helper for `request` and waits for it; with `group`, the
+    /// command's own group and the slot to tell once the command is in it.
     fn spawn_in(
         &self,
         request: &ExecRequest,
         init: u32,
-        group: Option<&Path>,
+        group: Option<(&Path, ExecSlot<'_>)>,
         stdout: &mut (dyn Write + Send),
         stderr: &mut (dyn Write + Send),
     ) -> Result<ExecExit, Box<WireFailure>> {
@@ -103,9 +101,19 @@ impl Sandbox {
             .arg("--init")
             .arg(init.to_string())
             .arg("--cgroup")
-            .arg(group.unwrap_or(&self.cgroup));
-        if group.is_some() {
-            command.arg("--leave").arg(&self.cgroup);
+            .arg(&self.cgroup);
+        // the helper's stdin is one end of a socket: it writes one byte
+        // there once the command is in its group, and its exit closes it
+        let mut ready = None;
+        if let Some((path, _)) = &group {
+            let (ours, theirs) = UnixStream::pair().map_err(|error| self.io(error))?;
+            command
+                .arg("--command-cgroup")
+                .arg(path)
+                .stdin(Stdio::from(OwnedFd::from(theirs)));
+            ready = Some(ours);
+        } else {
+            command.stdin(Stdio::null());
         }
         command
             .arg("--uid")
@@ -119,7 +127,6 @@ impl Sandbox {
             .env_clear()
             .env("PATH", search_path())
             .current_dir(self.directory())
-            .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .process_group(0);
@@ -134,6 +141,13 @@ impl Sandbox {
             failure
         })?;
         let pid = child.id();
+        // this process's copy of the helper's end goes, so the helper's
+        // exit is an end of file here
+        drop(command);
+        let refused = match (ready, group) {
+            (Some(ready), Some((path, slot))) => told(ready, path, slot),
+            _ => None,
+        };
         let out = child.stdout.take();
         let err = child.stderr.take();
         let copied = std::thread::scope(|scope| {
@@ -148,6 +162,11 @@ impl Sandbox {
         let status = child.wait();
         let (out_bytes, err_bytes) = copied.map_err(|error| self.io(error))?;
         let status = status.map_err(|error| self.io(error))?;
+        if let Some(error) = refused {
+            let mut failure = self.io(error);
+            failure.attempted = true;
+            return Err(failure);
+        }
         let code = (status.code())
             .or_else(|| status.signal().map(|signal| 128 + signal))
             .ok_or_else(|| self.invalid("namespaces command exit status"))?;
@@ -164,6 +183,25 @@ impl Sandbox {
             stderr_bytes: err_bytes,
         })
     }
+}
+
+/// Waits for the helper to say the command is in its group `path` (one
+/// byte on `ready`), then tells `slot` its stop handle. Bounded by the
+/// helper: its exit ends the wait, with nothing told (the command did not
+/// start). A slot that refuses it as interrupted (a cancel came first) has
+/// the command ended at once and runs on to its exit, which then reports
+/// the signal; any other refusal ends it too and is the error returned.
+fn told(mut ready: UnixStream, path: &Path, slot: ExecSlot<'_>) -> Option<io::Error> {
+    let mut byte = [0u8; 1];
+    if !matches!(ready.read(&mut byte), Ok(1)) {
+        return None;
+    }
+    let handle = Stop::Cgroup {
+        path: path.to_path_buf(),
+    };
+    let error = (slot.spawned)(&handle).err()?;
+    let _ = stop::cancel(&handle, Duration::ZERO);
+    (error.kind() != io::ErrorKind::Interrupted).then_some(error)
 }
 
 /// The Engine's own checks of an ordinary command, and no stdin.
