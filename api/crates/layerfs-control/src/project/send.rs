@@ -58,8 +58,7 @@ mod os_str_bytes {
     }
     #[cfg(windows)]
     pub fn from_bytes(bytes: &[u8]) -> OsString {
-        let text = String::from_utf8_lossy(bytes);
-        OsString::from(text)
+        OsString::from(String::from_utf8_lossy(bytes).into_owned())
     }
 }
 use os_str_bytes::{as_bytes, from_bytes};

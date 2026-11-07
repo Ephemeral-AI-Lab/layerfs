@@ -11,8 +11,11 @@
 //! the worker as before. What it does not prove: a real daemon answering
 //! (`sandbox_direct_live.rs` dials a host daemon). One test, because it
 //! sets the process's environment.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 #![cfg(all(unix, feature = "machine"))]
 use layerfs_api::home::{self, paths, read_record, write_record};
+
 use layerfs_api::worker::{read_frame, write_frame};
 use layerfs_bridge::control::SdkValue;
 use std::net::{SocketAddr, TcpListener};

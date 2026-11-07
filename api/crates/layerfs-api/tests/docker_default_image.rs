@@ -6,8 +6,11 @@
 //! the archive is refused naming it. A stand-in `docker` (it loads, but runs no
 //! container) and a bundle folder of empty stand-ins; no Docker is used.
 //! One test, because it sets the process's environment.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths, read_record, write_record};
+
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

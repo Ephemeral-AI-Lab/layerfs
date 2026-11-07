@@ -4,8 +4,11 @@
 //! naming `layerfs machine start`; a call whose answer is lost after it
 //! was sent is `Unknown`. Stand-in workers here; no `start.lock` is ever
 //! taken. One test, because it sets the process's environment.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths, write_record};
+
 use layerfs_bridge::control::SdkValue;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};

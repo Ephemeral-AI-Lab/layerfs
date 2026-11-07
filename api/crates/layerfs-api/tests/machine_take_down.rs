@@ -4,9 +4,12 @@
 //! the machine meanwhile (`Busy`; `Unresolved` once a gone owner left its
 //! outcome unknown), and puts the record back when the delete is refused;
 //! `machine update` is refused while Sandboxes run.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 #![cfg(feature = "machine")]
 #![allow(deprecated)] // nix's flock, as the product uses it
 use layerfs_api::home::{self, paths, read_record, write_record};
+
 use layerfs_bridge::control::SdkValue;
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::PermissionsExt;

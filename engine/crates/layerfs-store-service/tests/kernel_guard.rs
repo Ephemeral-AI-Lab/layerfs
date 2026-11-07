@@ -41,7 +41,7 @@ fn direct_access_is_allowed_on_a_local_macos_filesystem() {
     std::fs::remove_dir_all(directory).unwrap();
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 #[test]
 fn direct_access_is_unsupported_off_linux() {
     let directory = scratch(&std::env::temp_dir(), "host");

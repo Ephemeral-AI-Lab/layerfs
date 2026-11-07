@@ -2,7 +2,10 @@
 //! log is checkpointed and truncated while the Store stays open, so the
 //! quiesced file is the Store's closed bytes. The checkpoint runs after the
 //! call is answered; the wait below is bounded.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home::{self};
+
 use layerfs_bridge::control::SdkValue;
 use layerfs_control::common::home::{lease, paths};
 use std::os::unix::fs::PermissionsExt;

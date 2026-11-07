@@ -182,17 +182,36 @@ fn a_lease_names_its_process_so_a_reused_or_group_pid_never_holds() {
 
     // a live process holds with its start time; the same id with another
     // start time is a reused id: stale
+    #[cfg(unix)]
     let mut child = std::process::Command::new("sleep")
         .arg("30")
         .spawn()
         .unwrap();
+    #[cfg(windows)]
+    let mut child = std::process::Command::new("cmd")
+        .args(["/C", "pause"])
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
     let pid = child.id();
     let seen = layerfs_sandbox::local::LocalProcess::observe(pid).unwrap();
-    let boot = seen.boot.unwrap();
+    // unix leases record boot; Windows observes the absolute creation time
+    // alone (its boot field is None, the documented id+start mode).
+    #[cfg(unix)]
+    let lease_line = |start: u64| {
+        let boot = seen.boot.unwrap();
+        format!("1 {start} {boot:032x}\n")
+    };
+    #[cfg(windows)]
+    let lease_line = |start: u64| format!("1 {start}\n");
     let lease = dir.join(pid.to_string());
-    std::fs::write(&lease, format!("1 {} {boot:032x}\n", seen.start)).unwrap();
+    std::fs::write(&lease, lease_line(seen.start)).unwrap();
     assert_eq!(lease::holders(&home, "shop").unwrap(), vec![pid]);
-    std::fs::write(&lease, format!("1 {} {boot:032x}\n", seen.start + 1)).unwrap();
+    #[cfg(unix)]
+    let moved_start = seen.start + 1;
+    #[cfg(windows)]
+    let moved_start = seen.start + 10_000_000;
+    std::fs::write(&lease, lease_line(moved_start)).unwrap();
     assert_eq!(lease::holders(&home, "shop").unwrap(), Vec::<u32>::new());
     assert!(!lease.exists(), "the reused id's lease is removed");
 

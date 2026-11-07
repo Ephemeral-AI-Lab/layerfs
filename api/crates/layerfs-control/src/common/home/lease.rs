@@ -17,7 +17,6 @@ use crate::common::home::{self, paths};
 use crate::common::outcome::{failed, refused};
 use crate::store::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-#[cfg(unix)]
 use layerfs_sandbox::local::LocalProcess;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -55,11 +54,16 @@ fn me() -> Option<(u64, u128)> {
     })
 }
 
-/// Windows: kernel start/boot observation is not offered yet, so leases are
-/// matched by id alone - the state the module documents as valid.
-#[cfg(not(unix))]
+/// Windows: observe names this process by its absolute creation time; the
+/// boot half of the pair stays 0 (no boot id on Windows - the id+start
+/// match the module documents), and identity omits the boot field.
+#[cfg(windows)]
 fn me() -> Option<(u64, u128)> {
-    None
+    static ME: OnceLock<Option<(u64, u128)>> = OnceLock::new();
+    *ME.get_or_init(|| {
+        let process = LocalProcess::observe(std::process::id()).ok()?;
+        Some((process.start, 0))
+    })
 }
 
 /// The fields that name this process in a record (an `op`'s owner).
@@ -67,7 +71,10 @@ pub(crate) fn identity() -> Vec<(&'static str, SdkValue)> {
     let mut fields = vec![("pid", SdkValue::Int(i64::from(std::process::id())))];
     if let Some((start, boot)) = me() {
         fields.push(("pid_start", SdkValue::text(start.to_string())));
+        #[cfg(unix)]
         fields.push(("pid_boot", SdkValue::text(format!("{boot:032x}"))));
+        #[cfg(windows)]
+        let _ = boot;
     }
     fields
 }
@@ -204,12 +211,18 @@ fn alive_as(pid: u32, start: Option<u64>, boot: Option<u128>) -> bool {
             _ => true,
         }
     }
-    // Windows: me() records no start/boot, so no lease carries them and the
-    // id-alone match above is the whole check.
-    #[cfg(not(unix))]
+    // Windows: leases and ops record the id and the absolute creation
+    // time; a recorded start that differs names a process that is gone
+    // (or was replaced), exactly the unix judgement in its own units.
+    #[cfg(windows)]
     {
-        let _ = (start, boot);
-        true
+        let _ = boot;
+        match start {
+            Some(recorded) => LocalProcess::observe(pid)
+                .map(|now| now.start == recorded)
+                .unwrap_or(false),
+            None => LocalProcess::observe(pid).map(|_| true).unwrap_or(false),
+        }
     }
 }
 

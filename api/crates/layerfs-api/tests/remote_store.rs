@@ -9,10 +9,13 @@
 //! daemons' user). `minio_round_trip` is ignored by default: start a MinIO
 //! with `engine/crates/layerfs-store-backup/tests/minio_service.sh`, set
 //! its `LAYERFS_REMOTE_*`, then run it with `--ignored`.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 #![cfg(target_os = "linux")]
 #[path = "../../../../engine/crates/layerfs-store-service/tests/support/installed_store.rs"]
 #[allow(dead_code)]
 mod installed;
+
 #[path = "../../../../engine/crates/layerfs-store-service/tests/support/sdk.rs"]
 #[allow(dead_code)]
 mod support;

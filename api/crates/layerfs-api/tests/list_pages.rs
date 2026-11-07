@@ -2,7 +2,10 @@
 //! 50, plain and under a folder scope: every page boundary is crossed, the
 //! last page says so, and a bad page is refused (#30, #33). The Store's
 //! paging is real: one Disposable home, Branches made by `branch.fork`.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home;
+
 use layerfs_api::Scope;
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;

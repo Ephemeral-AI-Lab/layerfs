@@ -4,7 +4,10 @@
 //! counts that end on the bytes they moved. Needs the LAYERFS_REMOTE_*
 //! variables tests/minio_service.sh of layerfs-store-backup prints; without
 //! them the test says NOT_RUN and passes.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home;
+
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
