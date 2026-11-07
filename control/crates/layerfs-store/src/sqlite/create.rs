@@ -3,12 +3,12 @@ use crate::record::StoreRecord;
 use crate::sqlite::family::public;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{self, paths};
+use layerfs_home::names::StoreName;
 use layerfs_home::outcome::{refused, Outcome, View};
 use std::path::Path;
 
 /// `store.create`: an empty sqlite Store on `native`.
-pub fn create(home: &Path, name: &str) -> Outcome {
-    layerfs_home::names::StoreName::parse(name)?;
+pub fn create(home: &Path, name: &StoreName) -> Outcome {
     let _lock = home::lock::take(home)?;
     if paths::store_record(home, name).exists() {
         return Err(refused("Exists", format!("a Store named {name} exists")));

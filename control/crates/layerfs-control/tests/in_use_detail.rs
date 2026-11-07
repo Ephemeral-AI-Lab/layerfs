@@ -80,8 +80,8 @@ fn store_disconnect_names_another_process_s_lease() {
         "1\n",
     )
     .unwrap();
-    let args = SdkValue::map([("name", t("g"))]);
-    let refusal = refused(|_| layerfs_control::store::disconnect(&home, &args));
+    let name = layerfs_home::names::StoreName::parse("g").unwrap();
+    let refusal = refused(|_| layerfs_control::store::disconnect(&home, &name));
     let _ = holder.kill();
     let _ = holder.wait();
     assert_eq!(refusal.code, "InUse", "{refusal:?}");

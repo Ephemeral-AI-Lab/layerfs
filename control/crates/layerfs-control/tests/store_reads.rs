@@ -41,7 +41,7 @@ fn a_stale_lease_survives_every_store_read_and_is_ignored() {
     private_dir(&paths::lease_dir(&home, "s")).unwrap();
     let stale = paths::lease_dir(&home, "s").join("99999999");
     std::fs::write(&stale, "1\n").unwrap();
-    let named = SdkValue::map([("name", SdkValue::text("s"))]);
+    let named = layerfs_home::names::StoreName::parse("s").unwrap();
 
     let before = tree(&home);
     let status = status(&home, &named).unwrap();

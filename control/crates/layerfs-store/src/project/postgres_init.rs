@@ -5,6 +5,7 @@
 //! synchronousCommit }`) and is never stored.
 use crate::identity as stores;
 use crate::identity::Identity;
+use crate::open_args::{OpenArgs, PgSelection};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_home::helpers::{random, text};
@@ -15,17 +16,21 @@ use std::sync::Arc;
 const UNBUILT: &str =
     "this LayerFS build has no PostgreSQL engine; build it with --features postgresql";
 
-/// Makes the schema `args.postgresql` names as an empty Store with
+/// Makes the schema `postgresql` names as an empty Store with
 /// `identity`'s binding and cursor key. `Ok(false)` when the schema
 /// exists already (nothing written).
-pub fn create_schema(args: &SdkValue, identity: &Identity) -> Result<bool, SdkRefusal> {
+pub fn create_schema(postgresql: &PgSelection, identity: &Identity) -> Result<bool, SdkRefusal> {
     #[cfg(feature = "postgresql")]
     {
-        use crate::postgresql::open::{schema, selection, setting, url};
+        use crate::postgresql::open::selection;
         use layerfs_history::HistoryCatalogConfig;
         use layerfs_project::store::{CreateRequest, InitError, ProjectApi};
         use layerfs_storage::port::PersistenceError;
-        let selection = selection(url(args)?, &schema(args)?, &setting(args)?);
+        let selection = selection(
+            postgresql.url()?,
+            &postgresql.schema()?,
+            &postgresql.setting()?,
+        );
         let made = ProjectApi::new().create_postgresql_store(CreateRequest {
             store: layerfs_persistence::StoreSelection::Postgres(selection),
             policy: layerfs_storage::StoragePolicy::frozen_default(),
@@ -54,7 +59,7 @@ pub fn create_schema(args: &SdkValue, identity: &Identity) -> Result<bool, SdkRe
     }
     #[cfg(not(feature = "postgresql"))]
     {
-        let _ = (args, identity);
+        let _ = (postgresql, identity);
         Err(refused("Unsupported", UNBUILT))
     }
 }
@@ -65,13 +70,15 @@ pub fn create_schema(args: &SdkValue, identity: &Identity) -> Result<bool, SdkRe
 pub fn add_project(args: &SdkValue) -> Outcome {
     let store = text(args, "store")?;
     let name = text(args, "name")?;
-    let identity = stores::identity(&crate::open_args::OpenArgs::read(args))?;
+    let open = OpenArgs::read(args);
+    let identity = stores::identity(&open)?;
     if !matches!(identity.kind, stores::Kind::Postgresql { .. }) {
         return Err(refused("InvalidInput", "the Store is not PostgreSQL"));
     }
     let deadline = crate::project::init::deadline(args)?;
     let counters = Arc::new(layerfs_project::InitCounters::new());
-    let (added, stack) = run(args, &identity, name, deadline, counters)?;
+    let postgresql = open.postgresql.unwrap_or_default();
+    let (added, stack) = run(args, &postgresql, &identity, name, deadline, counters)?;
     let added = added
         .map_err(|failure| crate::project::add::add_failure(failure.error, None, name, store))?;
     Ok(SdkValue::map([
@@ -91,6 +98,7 @@ type Added = Result<layerfs_project::store::AddedProject, Box<layerfs_project::s
 
 fn run(
     args: &SdkValue,
+    postgresql: &PgSelection,
     identity: &Identity,
     name: &str,
     deadline: std::time::Instant,
@@ -98,7 +106,7 @@ fn run(
 ) -> Result<(Added, Vec<u8>), SdkRefusal> {
     #[cfg(feature = "postgresql")]
     {
-        use crate::postgresql::open::{schema, selection, setting, url};
+        use crate::postgresql::open::selection;
         use layerfs_history::{BranchId, HistoryName, LayerStackId};
         use layerfs_project::store::{AddRequest, ProjectApi};
         let history = |text: &str| HistoryName::new(text).map_err(layerfs_home::outcome::failed);
@@ -107,9 +115,9 @@ fn run(
         let request = AddRequest {
             source: std::path::PathBuf::from(text(args, "path")?),
             store: layerfs_persistence::StoreSelection::Postgres(selection(
-                url(args)?,
-                &schema(args)?,
-                &setting(args)?,
+                postgresql.url()?,
+                &postgresql.schema()?,
+                &postgresql.setting()?,
             )),
             binding: identity.binding.clone(),
             cursor_key: identity.cursor_key,
@@ -127,7 +135,7 @@ fn run(
     }
     #[cfg(not(feature = "postgresql"))]
     {
-        let _ = (args, identity, name, deadline, counters, random);
+        let _ = (args, postgresql, identity, name, deadline, counters, random);
         Err(refused("Unsupported", UNBUILT))
     }
 }

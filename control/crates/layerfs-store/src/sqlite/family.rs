@@ -24,6 +24,7 @@ use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
+use layerfs_home::names::StoreName;
 use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::{failed, refused, Outcome, View};
 use std::path::Path;
@@ -51,45 +52,48 @@ pub fn list(home: &Path) -> Outcome {
 }
 
 /// `store.get`: a Store's record.
-pub fn get(home: &Path, args: &SdkValue) -> Outcome {
-    let name = args.get_text("name").unwrap_or("");
+pub fn get(home: &Path, name: &StoreName) -> Outcome {
     public(home, &record_of(home, name)?, View::Full, None)
 }
 
 /// `store.status`: a Store's state.
-pub fn status(home: &Path, args: &SdkValue) -> Outcome {
-    crate::status::status(home, args.get_text("name").unwrap_or(""))
+pub fn status(home: &Path, name: &StoreName) -> Outcome {
+    crate::status::status(home, name)
 }
 
 /// `store.create`: an empty sqlite Store on native.
-pub fn create(home: &Path, args: &SdkValue) -> Outcome {
-    crate::sqlite::create::create(home, args.get_text("name").unwrap_or(""))
+pub fn create(home: &Path, name: &StoreName) -> Outcome {
+    crate::sqlite::create::create(home, name)
 }
 
 /// `store.remove`: a Store no Sandbox uses, with its file.
-pub fn remove(home: &Path, args: &SdkValue, related: Related) -> Outcome {
-    crate::sqlite::remove::remove(home, args.get_text("name").unwrap_or(""), related)
+pub fn remove(home: &Path, name: &StoreName, related: Related) -> Outcome {
+    crate::sqlite::remove::remove(home, name, related)
+}
+
+/// `store.push(name, machine)`. The names are checked in its check phase.
+#[derive(Clone, Debug, Default)]
+pub struct StorePush {
+    /// The Store.
+    pub name: String,
+    /// The machine it goes to.
+    pub machine: String,
 }
 
 /// `store.push`: a sqlite Store from native to a machine.
-pub fn push(home: &Path, events: &mut Events<'_>, args: &SdkValue, related: Related) -> Outcome {
-    crate::sqlite::transfer::phases::push(
-        home,
-        events,
-        args.get_text("name").unwrap_or(""),
-        args.get_text("machine").unwrap_or(""),
-        related,
-    )
+pub fn push(
+    home: &Path,
+    events: &mut Events<'_>,
+    request: &StorePush,
+    related: Related,
+) -> Outcome {
+    crate::sqlite::transfer::phases::push(home, events, &request.name, &request.machine, related)
 }
 
-/// `store.pull`: a sqlite Store from its machine to native.
-pub fn pull(home: &Path, events: &mut Events<'_>, args: &SdkValue, related: Related) -> Outcome {
-    crate::sqlite::transfer::phases::pull(
-        home,
-        events,
-        args.get_text("name").unwrap_or(""),
-        related,
-    )
+/// `store.pull`: a sqlite Store from its machine to native. The name is
+/// checked in its check phase.
+pub fn pull(home: &Path, events: &mut Events<'_>, name: &str, related: Related) -> Outcome {
+    crate::sqlite::transfer::phases::pull(home, events, name, related)
 }
 
 /// One step on the machine that holds a Store's file.

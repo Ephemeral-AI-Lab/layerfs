@@ -9,8 +9,7 @@
 use crate::identity as stores;
 use crate::identity::{Identity, Kind};
 use crate::open_args::{OpenArgs, PgSelection};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::helpers::text;
+use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store_service::StoreService;
 use std::path::Path;
@@ -21,11 +20,6 @@ const UNBUILT: &str =
 
 /// `synchronous_commit` as the call or record names it: off (default),
 /// local, remote_write, on or remote_apply.
-pub fn setting(args: &SdkValue) -> Result<String, SdkRefusal> {
-    setting_of(given(args, "synchronousCommit"))
-}
-
-/// [`setting`] of the given value.
 pub fn setting_of(given: Option<&str>) -> Result<String, SdkRefusal> {
     let given = given.unwrap_or("off");
     match given {
@@ -40,11 +34,6 @@ pub fn setting_of(given: Option<&str>) -> Result<String, SdkRefusal> {
 }
 
 /// The schema a call names: `[a-z_][a-z0-9_]*`, at most 63 bytes.
-pub fn schema(args: &SdkValue) -> Result<String, SdkRefusal> {
-    schema_of(given(args, "schema"))
-}
-
-/// [`schema`] of the given value.
 pub fn schema_of(schema: Option<&str>) -> Result<String, SdkRefusal> {
     let schema = schema.ok_or_else(|| refused("InvalidInput", "postgresql.schema is required"))?;
     let valid = !schema.is_empty()
@@ -65,11 +54,7 @@ pub fn schema_of(schema: Option<&str>) -> Result<String, SdkRefusal> {
     Ok(schema.to_owned())
 }
 
-pub fn url(args: &SdkValue) -> Result<&str, SdkRefusal> {
-    url_of(given(args, "url"))
-}
-
-/// [`url`] of the given value.
+/// The URL a call names, required.
 pub fn url_of(url: Option<&str>) -> Result<&str, SdkRefusal> {
     url.ok_or_else(|| {
         refused(
@@ -77,11 +62,6 @@ pub fn url_of(url: Option<&str>) -> Result<&str, SdkRefusal> {
             "postgresql.url is required (passed per call, never stored)",
         )
     })
-}
-
-/// The call's `postgresql.<name>` text.
-fn given<'a>(args: &'a SdkValue, name: &str) -> Option<&'a str> {
-    args.get("postgresql").and_then(|p| p.get_text(name))
 }
 
 #[cfg(feature = "postgresql")]
@@ -124,8 +104,12 @@ pub fn open(
 
 /// The binding key the schema of a call's `postgresql { url, schema,
 /// synchronousCommit }` records, read once.
-pub fn read_binding(args: &SdkValue) -> Result<Vec<u8>, SdkRefusal> {
-    binding(url(args)?, &schema(args)?, &setting(args)?)
+pub fn read_binding(postgresql: &PgSelection) -> Result<Vec<u8>, SdkRefusal> {
+    binding(
+        postgresql.url()?,
+        &postgresql.schema()?,
+        &postgresql.setting()?,
+    )
 }
 
 /// The refusal for a PostgreSQL call that got no session, `None` for any
@@ -194,27 +178,16 @@ pub fn sandbox_store(open: &OpenArgs) -> Result<Option<layerfs_bridge::DaemonSto
     }))
 }
 
-/// A PostgreSQL server's status, `{ home, url, schemas }`: one connection, made
+/// A PostgreSQL server's status at `url`, for `schemas`: one connection, made
 /// once: `{ reachable: true, serverVersion, latencyMs, latencyUs, schemas: {
 /// name: bytes | null } }` (null for a schema the server lacks), or, when
 /// the server is not reached or refuses the login, `{ reachable: false,
 /// error: { code: Unavailable | Denied, message } }`. A failed query after
 /// connecting is refused `Failed`.
-pub fn status(args: &SdkValue) -> Outcome {
-    let url = text(args, "url")?;
-    let schemas = match args.get("schemas") {
-        None | Some(SdkValue::Null) => Vec::new(),
-        Some(SdkValue::List(items)) => items
-            .iter()
-            .map(|item| match item {
-                SdkValue::Text(name) => Ok(name.clone()),
-                _ => Err(refused("InvalidInput", "schemas is a list of schema names")),
-            })
-            .collect::<Result<_, _>>()?,
-        Some(_) => return Err(refused("InvalidInput", "schemas is a list of schema names")),
-    };
+pub fn status(url: &str, schemas: &[String]) -> Outcome {
     #[cfg(feature = "postgresql")]
     {
+        use layerfs_bridge::control::SdkValue;
         use layerfs_persistence::PostgresStatusError as E;
         let unreached = |code: &str, message: String| {
             SdkValue::map([
@@ -228,7 +201,7 @@ pub fn status(args: &SdkValue) -> Outcome {
                 ),
             ])
         };
-        match layerfs_persistence::postgresql_status(url, &schemas) {
+        match layerfs_persistence::postgresql_status(url, schemas) {
             Ok(status) => Ok(SdkValue::map([
                 ("reachable", SdkValue::Bool(true)),
                 ("serverVersion", SdkValue::text(status.server_version)),

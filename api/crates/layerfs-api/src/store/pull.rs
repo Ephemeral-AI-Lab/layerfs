@@ -17,6 +17,7 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `store.pull`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    let name = args.get_text("name").unwrap_or("");
     let (home, events) = context.parts();
-    layerfs_control::store::pull(home, events, args)
+    layerfs_control::store::pull(home, events, name)
 }

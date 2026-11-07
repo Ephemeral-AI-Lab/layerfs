@@ -9,6 +9,7 @@ use crate::record::{StoreKind, StoreRecord};
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths};
+use layerfs_home::names::StoreName;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_home::secrets::{parts, resolve};
 use std::path::Path;
@@ -36,18 +37,19 @@ pub fn selection_at(record: &StoreRecord, url: String) -> SdkValue {
     ])
 }
 
-/// `store.connect`: attach a PostgreSQL database as a Store.
-pub fn connect(home: &Path, args: &SdkValue) -> Outcome {
-    let name = args.get_text("name").unwrap_or("");
-    layerfs_home::names::StoreName::parse(name)?;
-    connect_named(home, name, args)
-}
-
-/// `store.disconnect`: forget a PostgreSQL Store; its data stays.
-pub fn disconnect(home: &Path, args: &SdkValue, related: Related) -> Outcome {
-    let name = args.get_text("name").unwrap_or("");
-    layerfs_home::names::StoreName::parse(name)?;
-    disconnect_named(home, name, related)
+/// `store.connect(name, url, { password, synchronous_commit })`. No
+/// `Debug`, as with every request that names a password, though this one
+/// is a reference (`env:NAME` or `file:/path`).
+#[derive(Clone)]
+pub struct StoreConnect {
+    /// The Store's name.
+    pub name: StoreName,
+    /// The database's URL, without a password.
+    pub url: String,
+    /// The password's reference.
+    pub password: Option<String>,
+    /// `synchronous_commit`, `off` by default.
+    pub synchronous_commit: Option<String>,
 }
 
 /// `text` with its `%XX` escapes decoded; a malformed escape stays as is.
@@ -182,14 +184,15 @@ fn unclaimed(
     Ok(())
 }
 
-/// `store.connect(name, url, { password, synchronous_commit })`. Every
+/// `store.connect`: attach a PostgreSQL database as a Store. Every
 /// refusal of its input comes before any effect. The server's schema and
 /// projects are read before the home lock; the lock covers the re-checks
 /// and the record writes only.
-fn connect_named(home: &Path, name: &str, args: &SdkValue) -> Outcome {
-    let given = args.get_text("url").unwrap_or("");
+pub fn connect(home: &Path, request: &StoreConnect) -> Outcome {
+    let name = request.name.as_str();
+    let given = request.url.as_str();
     refuse_password(given)?;
-    let sync = args.get_text("synchronous_commit").unwrap_or("off");
+    let sync = request.synchronous_commit.as_deref().unwrap_or("off");
     if !matches!(
         sync,
         "off" | "local" | "remote_write" | "on" | "remote_apply"
@@ -201,7 +204,7 @@ fn connect_named(home: &Path, name: &str, args: &SdkValue) -> Outcome {
             ),
         ));
     }
-    let password = args.get_text("password");
+    let password = request.password.as_deref();
     if let Some(password) = password {
         resolve(password)?;
     }
@@ -212,7 +215,7 @@ fn connect_named(home: &Path, name: &str, args: &SdkValue) -> Outcome {
     // an empty database gets the schema, with a new binding (#533 step
     // 10b); an existing LayerFS schema keeps its binding, read once. The
     // cursor key is this home's own either way.
-    let probe = SdkValue::map([("postgresql", selection.clone())]);
+    let probe = crate::open_args::PgSelection::read(&selection);
     let fresh = crate::identity::Identity {
         kind: crate::identity::Kind::Postgresql {
             schema: SCHEMA.to_owned(),
@@ -235,7 +238,7 @@ fn connect_named(home: &Path, name: &str, args: &SdkValue) -> Outcome {
         home: Some(home.to_path_buf()),
         store: Some(name.to_owned()),
         store_record: Some(record.to_record().clone()),
-        postgresql: Some(crate::open_args::PgSelection::read(&selection)),
+        postgresql: Some(probe),
         store_path: Some(record.postgresql_key(home, name).display().to_string()),
         ..Default::default()
     })?;
@@ -262,9 +265,8 @@ fn connect_named(home: &Path, name: &str, args: &SdkValue) -> Outcome {
     ]))
 }
 
-/// `store.disconnect(name)`: forgets a PostgreSQL Store; its data stays.
-fn disconnect_named(home: &Path, name: &str, related: Related) -> Outcome {
-    layerfs_home::names::StoreName::parse(name)?;
+/// `store.disconnect`: forgets a PostgreSQL Store; its data stays.
+pub fn disconnect(home: &Path, name: &StoreName, related: Related) -> Outcome {
     let _lock = home::lock::take(home)?;
     let _store = crate::record::lock(home, name)?;
     let record = StoreRecord::read(home, name)?
@@ -280,7 +282,10 @@ fn disconnect_named(home: &Path, name: &str, related: Related) -> Outcome {
     (related.store_idle)(home, name)?;
     crate::open::close(&record.postgresql_key(home, name))?;
     std::fs::remove_dir_all(paths::store_dir(home, name)).map_err(failed)?;
-    Ok(SdkValue::map([("disconnected", SdkValue::text(name))]))
+    Ok(SdkValue::map([(
+        "disconnected",
+        SdkValue::text(name.as_str()),
+    )]))
 }
 
 /// `store.status` of a PostgreSQL Store: whether its server answers, its
@@ -290,10 +295,6 @@ pub fn status(record: &StoreRecord) -> SdkValue {
         Ok(url) => url,
         Err(refusal) => return SdkValue::map([("unavailable", SdkValue::Text(refusal.message))]),
     };
-    let args = SdkValue::map([
-        ("url", SdkValue::text(url)),
-        ("schemas", SdkValue::List(vec![SdkValue::text(SCHEMA)])),
-    ]);
-    crate::postgresql::open::status(&args)
+    crate::postgresql::open::status(&url, &[SCHEMA.to_owned()])
         .unwrap_or_else(|refusal| SdkValue::map([("unavailable", SdkValue::Text(refusal.message))]))
 }
