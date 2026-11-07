@@ -68,14 +68,19 @@ be served at once; each connection still carries one request.
 | `store.call` | one Store method on `store/<name>/store.sqlite` under the worker's root, holding the Store's lease there | `server.rs`, [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs) |
 | `store.file` | one step of a Store push, pull, remove, stat or backup | [`sqlite/transfer/steps.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) |
 | `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`: one of the eight in the host operation table (`OPS`), decoded into the typed request by `decode`, else refused before any effect | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `in_worker`, [`host/call.rs`](../../../../control/crates/layerfs-sandbox/src/host/call.rs) `OPS`, [`host/frame.rs`](../../../../control/crates/layerfs-sandbox/src/host/frame.rs) `decode` |
-| `project.stage` | writes or discards one part of a caller's folder copy | [`project/staged.rs`](../../../../control/crates/layerfs-store/src/project/staged.rs) |
-| `project.init` | adds the staged copy as a new project | [`project/init.rs`](../../../../control/crates/layerfs-store/src/project/init.rs) |
-| `project.remove` | drops one project from a Store under the root | [`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs) |
+| `project.stage` | writes or discards one part of a caller's folder copy (`StageFrame`) | [`project/staged.rs`](../../../../control/crates/layerfs-store/src/project/staged.rs) |
+| `project.init` | adds the staged copy as a new project (`InitFrame`) | [`project/init.rs`](../../../../control/crates/layerfs-store/src/project/init.rs) |
+| `project.remove` | drops one project from a Store under the root (`RemoveFrame`) | [`project/remove.rs`](../../../../control/crates/layerfs-store/src/project/remove.rs) |
 | anything else | `InvalidInput` "the worker has no operation" | `server.rs` |
 
-The worker sets `home` (and `storePath`, for a named Store) to its own root on
-every request, whatever the caller sent (`with_home`). The root is not a home:
-`home_id` in the request lends it the caller's home id.
+Each project frame is decoded once into its typed request
+([`project/frame.rs`](../../../../control/crates/layerfs-store/src/project/frame.rs)),
+and a `store.call` frame into `CallFrame`
+([`call.rs`](../../../../control/crates/layerfs-store/src/call.rs)). The worker
+then uses its own root as the home, and the Store file under that root as the
+Store's path, whatever home or Store path the caller sent (`home_of` and the arms in
+`worker_server.rs`). The root
+is not a home: `home_id` in the request lends it the caller's home id.
 
 ## Hello
 

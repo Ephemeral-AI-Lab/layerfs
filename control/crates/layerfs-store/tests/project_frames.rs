@@ -126,7 +126,15 @@ fn the_worker_refuses_a_frame_in_its_old_order() {
 
 #[test]
 fn a_worker_init_checks_name_and_timeout_after_the_copy_is_found() {
-    let root = std::env::temp_dir().join(format!("layerfs-frames-{}", std::process::id()));
+    /// The test's root, removed when the test ends, failing or not.
+    struct Root(std::path::PathBuf);
+    impl Drop for Root {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let temp = Root(std::env::temp_dir().join(format!("layerfs-frames-{}", std::process::id())));
+    let root = temp.0.clone();
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
     let frame = InitFrame::decode(&map(vec![("store", t("shop")), ("staged", t(ID))])).unwrap();
@@ -152,5 +160,4 @@ fn a_worker_init_checks_name_and_timeout_after_the_copy_is_found() {
         "timeoutMs is required: a positive whole number of milliseconds"
     );
     assert!(!staged.exists());
-    let _ = std::fs::remove_dir_all(&root);
 }
