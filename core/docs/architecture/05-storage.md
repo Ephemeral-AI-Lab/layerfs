@@ -622,7 +622,7 @@ is the one to probe in qualification:
 | candidate absent from storage | FULL | **policy decision** |
 | candidate present but ineligible (depth/role) | FULL | **policy decision** |
 | chain would exceed its budget | FULL | **policy decision** |
-| chunk base lost its last trials in this Save | FULL, no trial | **policy decision** |
+| chunk base lost its last trials in this Save, or won each by less than 1/8 | FULL, no trial | **policy decision** |
 | codec, allocation or read failure | **error returned** | **failure** |
 
 `DeltaCounters` distinguishes all of them: `prepared_full`, `trials`,

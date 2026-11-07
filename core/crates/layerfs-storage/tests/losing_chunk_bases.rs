@@ -1,12 +1,15 @@
-//! A Save stops trying a chunk delta base its trials keep losing against, and
-//! keeps trying one that wins: chunks appended past the old end of a file are
-//! all offered the old last chunk, which incompressible bytes never beat and
-//! text resembling it does.
+//! A Save stops trying a chunk delta base its trials keep losing against, or
+//! winning by less than 1/8 of the FULL record, and keeps trying one that wins
+//! by more: chunks appended past the old end of a file are all offered the old
+//! last chunk, which incompressible bytes never beat and text resembling it
+//! does.
 #[path = "support/memory_metadata.rs"]
 mod metadata;
 
 use layerfs_content::{AdvisoryPredecessors, FinalizedObject, ObjectId, ObjectRole};
-use layerfs_storage::encoding::delta::select::{LosingBases, LOSING_BASE_TRIALS};
+use layerfs_storage::encoding::delta::select::{
+    LosingBases, LOSING_BASE_MIN_SAVING, LOSING_BASE_TRIALS,
+};
 use layerfs_storage::{Storage, StoragePolicy, WriteOutcome};
 use std::sync::Arc;
 
@@ -126,6 +129,33 @@ fn text_resembling_its_base_keeps_every_delta() {
     assert_eq!(delta.prefix_selected, 200, "{delta:?}");
     assert_eq!(delta.losing_skipped, 0, "{delta:?}");
     assert_eq!(delta.chunk_depths[1], 200, "{delta:?}");
+}
+
+/// Incompressible chunks that each repeat `shared` bytes of the base: their
+/// deltas win, saving about `shared` bytes of 16 KiB.
+fn sharing(base: &[u8], shared: usize) -> Vec<Vec<u8>> {
+    (1..=200)
+        .map(|seed| [&base[..shared], &noise(seed, 16 * 1024 - shared)[..]].concat())
+        .collect()
+}
+
+#[test]
+fn deltas_that_save_little_back_off_like_losses() {
+    // About 1 KiB of 16 KiB saved: under 1/8, so the memo backs off as for
+    // losses, while every trial made still stores its smaller PREFIX record.
+    assert_eq!(LOSING_BASE_MIN_SAVING, 8);
+    let base = noise(0, 16 * 1024);
+    let delta = append(&base, &sharing(&base, 1024)).delta;
+    let trials = u64::from(LOSING_BASE_TRIALS) + 7;
+    assert_eq!(delta.trials, trials, "{delta:?}");
+    assert_eq!(delta.prefix_selected, trials, "{delta:?}");
+    assert_eq!(delta.full_losses, 0, "{delta:?}");
+    assert_eq!(delta.losing_skipped, 200 - trials, "{delta:?}");
+    // About 4 KiB saved: every chunk keeps its trial and its delta.
+    let delta = append(&base, &sharing(&base, 4096)).delta;
+    assert_eq!(delta.trials, 200, "{delta:?}");
+    assert_eq!(delta.prefix_selected, 200, "{delta:?}");
+    assert_eq!(delta.losing_skipped, 0, "{delta:?}");
 }
 
 #[test]

@@ -82,7 +82,7 @@ Selection for one payload object (`select` in
 | 1. Prepare FULL | Always encoded first (`encode_full` in [`full.rs`](../../../../core/crates/layerfs-storage/src/encoding/full.rs)). |
 | 2. Depth cap 0 | The role's delta depth is 0: store FULL. |
 | 3. Candidate | Chunk: the caller's first advisory predecessor only. Whole file: the advisory list first; if none is acquired, the content-signature ring (`Candidates::find`). |
-| 3a. Losing base | Chunk: a base whose last 8 trials in this Save (`LOSING_BASE_TRIALS`) all lost is skipped, FULL with no trial (`losing_skipped`), then tried again after 1, 2, 4, … offers (at most 2^16); a win forgets it (`LosingBases`). |
+| 3a. Losing base | Chunk: a base whose last 8 trials in this Save (`LOSING_BASE_TRIALS`) all lost is skipped, FULL with no trial (`losing_skipped`), then tried again after 1, 2, 4, … offers (at most 2^16); a win forgets it (`LosingBases`). A win whose PREFIX record saves less than 1/8 of the FULL record (`LOSING_BASE_MIN_SAVING`) still stores the PREFIX record but counts as a loss here: a 100 MiB log append's deltas each saved about 1% (at most 5%), for about 0.55 s of trials. |
 | 4. Eligibility | Candidate must be stored, same role and below the role's depth cap; otherwise FULL by policy (`absent_candidates`, `ineligible_candidates`, `depth_capped`). |
 | 5. Base chain budget | Chain cost from stored record sizes; over budget means FULL (`work_exceeded`). |
 | 6. One trial | The base is read, authenticated, then one PREFIX frame is built. The chain plus the new object must still fit the budgets. |

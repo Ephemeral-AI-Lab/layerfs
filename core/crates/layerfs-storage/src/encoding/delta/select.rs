@@ -17,9 +17,10 @@
 //! acquired and authenticated. A codec, allocation or read failure is returned as
 //! a failure and never becomes an alternative representation.
 //!
-//! A chunk offered a base that its last trials in this Save all lost against is
-//! stored FULL without a trial, with retries at doubling gaps ([`LosingBases`]):
-//! an incompressible append pays a few trials, not one per chunk.
+//! A chunk offered a base that its last trials in this Save all lost against,
+//! or won by less than 1/8 of the FULL record, is stored FULL without a trial,
+//! with retries at doubling gaps ([`LosingBases`]): an incompressible append
+//! pays a few trials, not one per chunk.
 
 use std::collections::BTreeMap;
 
@@ -306,6 +307,13 @@ impl DepthCache {
 /// Consecutive lost trials against one chunk base after which a Save starts
 /// skipping that base.
 pub const LOSING_BASE_TRIALS: u32 = 8;
+/// A trial against a chunk base counts as won for [`LosingBases`] only when
+/// its PREFIX record is at least 1/8 smaller than the FULL record. Every chunk
+/// of a log append is offered the old last chunk; on a 100 MiB log append
+/// those deltas saved about 1% each (at most 5%), not worth a base read and a
+/// second compression per chunk. An edited chunk's delta against the chunk it
+/// replaces, or text repeating its base's phrases, saves far more.
+pub const LOSING_BASE_MIN_SAVING: usize = 8;
 /// Largest gap, as a power of two, between two trials of a losing base.
 const LOSING_BASE_MAX_GAP_LOG2: u32 = 16;
 /// Live entries of the per-save losing-base memo.
@@ -315,9 +323,11 @@ const LOSING_BASE_ENTRIES: usize = 4_096;
 ///
 /// A content hint names the same base for many chunks when nothing in the
 /// base overlaps them: every chunk appended past the old end of a file is
-/// offered the old file's last chunk. Text resembling that tail wins its
-/// trials; incompressible bytes lose every one, each after a base read and a
-/// compression. After [`LOSING_BASE_TRIALS`] consecutive losses against one
+/// offered the old file's last chunk. Text repeating that tail's phrases wins
+/// its trials; incompressible bytes lose every one, each after a base read and
+/// a compression. A win saving less than 1/[`LOSING_BASE_MIN_SAVING`] of the
+/// FULL record counts as a loss here, though the smaller record is still
+/// stored. After [`LOSING_BASE_TRIALS`] consecutive losses against one
 /// base, a chunk offered it is stored FULL without a trial, and the base is
 /// tried again after a gap that doubles with every further loss, up to
 /// 2^16 offers. A win forgets the base, so trials resume at once. The memo
@@ -628,7 +638,13 @@ pub fn select(
     let prefix = prefix?;
     let won = prefix.record.len() < full.record.len();
     if let Some(offered) = offered {
-        input.losing.note(offered, won);
+        // A win that saves less than 1/LOSING_BASE_MIN_SAVING of the FULL
+        // record is still stored, but counts as a loss for the memo.
+        let saving = full.record.len().saturating_sub(prefix.record.len());
+        input.losing.note(
+            offered,
+            saving * LOSING_BASE_MIN_SAVING >= full.record.len(),
+        );
     }
     if won {
         let depth = base_cost.depth.saturating_add(1);
