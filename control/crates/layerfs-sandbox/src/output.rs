@@ -10,8 +10,8 @@
 //! this sink takes it (an 8 KiB window), so a slow disk holds the command
 //! back. No total is capped: a spooled stream is bounded by free space.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::helpers::{lock, text};
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::helpers::lock;
+use layerfs_home::outcome::{failed, refused};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufWriter, Write};
@@ -148,18 +148,18 @@ pub fn fields(stdout: Spool, stderr: Spool) -> Result<Vec<(&'static str, SdkValu
     Ok(shown)
 }
 
-/// `execOutput({ output, stream, offset }, page)`: fills `page` (1..=1 MiB,
-/// the caller's reused window) with the spooled stream's bytes from `offset`
-/// and answers how many it wrote and whether they end the stream. Reading
-/// into the caller's buffer leaves no per-page allocation behind on either
-/// side, so a stream of any size passes through one page of memory.
-pub fn page(args: &SdkValue, page: &mut [u8]) -> Outcome {
-    let id = text(args, "output")?;
-    let stream = text(args, "stream")?;
-    let offset = args
-        .get_int("offset")
-        .and_then(|n| u64::try_from(n).ok())
-        .ok_or_else(|| refused("InvalidInput", "offset must be a nonnegative integer"))?;
+/// `execOutput(output, stream, offset, page)`: fills `page` (1..=1 MiB,
+/// the caller's reused window) with spooled output `id`'s `stream` bytes
+/// from `offset` and answers how many it wrote and whether they end the
+/// stream. Reading into the caller's buffer leaves no per-page allocation
+/// behind on either side, so a stream of any size passes through one page
+/// of memory.
+pub fn page(
+    id: &str,
+    stream: &str,
+    offset: u64,
+    page: &mut [u8],
+) -> Result<(usize, bool), SdkRefusal> {
     if !(1..=PAGE).contains(&page.len()) {
         return Err(refused(
             "InvalidInput",
@@ -181,19 +181,11 @@ pub fn page(args: &SdkValue, page: &mut [u8]) -> Outcome {
     file.read_exact_at(&mut page[..length], offset)
         .map_err(failed)?;
     let end = offset + length as u64 == size;
-    Ok(SdkValue::map([
-        ("kind", SdkValue::text("ok")),
-        ("length", SdkValue::Int(length as i64)),
-        ("end", SdkValue::Bool(end)),
-    ]))
+    Ok((length, end))
 }
 
-/// `workspace.exec_release({ output })`: closes a spooled output's files.
-pub fn release(args: &SdkValue) -> Outcome {
-    let id = text(args, "output")?;
-    let released = lock(outputs())?.remove(id).is_some();
-    Ok(SdkValue::map([
-        ("kind", SdkValue::text("ok")),
-        ("released", SdkValue::Bool(released)),
-    ]))
+/// `workspace.exec_release(output)`: closes spooled output `id`'s files;
+/// whether it was open.
+pub fn release(id: &str) -> Result<bool, SdkRefusal> {
+    Ok(lock(outputs())?.remove(id).is_some())
 }

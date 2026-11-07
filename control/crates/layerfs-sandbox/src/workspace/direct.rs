@@ -2,7 +2,8 @@
 //! Commit, unmount and status straight to its daemon, and the directory of
 //! a Workspace an exec runs in (moved from `sandbox/direct.rs`,
 //! layerfs-project#106).
-use crate::direct::args;
+use crate::direct::host;
+use crate::host::{Call, Message};
 use crate::record::SandboxRecord;
 use crate::workspace::serve;
 use crate::{dispatch, files, unmount_guard};
@@ -18,35 +19,49 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// Runs Workspace operation `op` (`workspace.mount`, `workspace.commit`,
-/// `workspace.unmount`, `backend.daemon.workspace.status`,
-/// `sandbox.list_workspaces`) on forwarded Sandbox `record` in this
-/// process, under the Store's lease.
+/// Runs Workspace operation `call` (mount, Commit, unmount, the status
+/// read, `sandbox.list_workspaces`) with `message` on forwarded Sandbox
+/// `record` in this process, under the Store's lease.
 pub fn call(
     home: &Path,
     events: &mut Events<'_>,
     record: &SandboxRecord,
-    op: &str,
-    more: Vec<(&str, SdkValue)>,
+    call: Call,
+    message: Message,
 ) -> Outcome {
     let home = home.to_path_buf();
     let target = resolve::target(&home, record.project().unwrap_or(""))?;
     let _lease = lease::hold(&home, &target.store)?;
-    let args = args(&home, record, &target, more);
-    match op {
-        "workspace.mount" => serve::mount(&args),
-        "workspace.commit" => serve::commit(&serve::by_name(args)?),
-        "workspace.unmount" => serve::unmount(&serve::by_name(args)?),
-        "backend.daemon.workspace.status" => {
-            serve::status_with(&serve::by_name(args)?, &mut |id, name| {
+    let host = host(&home, record, &target, message);
+    match call {
+        Call::Mount { branch, name } => serve::mount(&host, branch.as_deref(), name.as_deref()),
+        Call::Commit { ref path, force } => {
+            let path = serve::by_name(&host, path.as_deref())?;
+            serve::commit(&host, path.as_deref(), force.unwrap_or(false))
+        }
+        Call::Unmount {
+            ref path,
+            discard,
+            force,
+        } => {
+            let path = serve::by_name(&host, path.as_deref())?;
+            let (discard, force) = (discard.unwrap_or(false), force.unwrap_or(false));
+            serve::unmount(&host, path.as_deref(), discard, force)
+        }
+        Call::Status { ref path } => {
+            let path = serve::by_name(&host, path.as_deref())?;
+            serve::status_with(&host, path.as_deref(), &mut |id, name| {
                 let (found, head) = branch_of(&home, events, &target, name?).ok()?;
                 (found == id).then_some(head)
             })
         }
-        "sandbox.list_workspaces" => dispatch::call(op, args),
+        Call::ListWorkspaces { .. } => dispatch::call(host, call),
         _ => Err(refused(
             "InvalidInput",
-            format!("{op} is not sent to a Sandbox's daemon directly"),
+            format!(
+                "{} is not sent to a Sandbox's daemon directly",
+                call.op().name()
+            ),
         )),
     }
 }

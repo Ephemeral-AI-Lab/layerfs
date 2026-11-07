@@ -1,6 +1,7 @@
 //! `sandbox.get`: a Sandbox's record with one page of its Workspaces.
 use super::direct;
 use super::family::{page, sandbox_of};
+use crate::host::Call;
 use crate::route::reach;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::events::Events;
@@ -26,8 +27,7 @@ pub fn get(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
             &home,
             events,
             &record,
-            "sandbox.list_workspaces",
-            vec![],
+            Call::ListWorkspaces { path: None },
             crate::dispatch::call,
         ),
         None => Ok(Ok(SdkValue::Null)),

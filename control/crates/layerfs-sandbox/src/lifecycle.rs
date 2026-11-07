@@ -8,6 +8,7 @@
 //! when it ended by itself. A record of the retired docker backend is
 //! forgotten by its close. Nothing is retried on the caller's behalf.
 use crate::daemon::values;
+use crate::host::{Deploy, Host};
 use crate::record::DaemonRecord;
 use crate::registry::{SandboxState, SANDBOXES};
 use crate::OperationFailure;
@@ -15,7 +16,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::daemon_setup::{DaemonLimits, DaemonSetup};
 use layerfs_bridge::provision::StoreManifest;
 use layerfs_bridge::{DaemonStore, KernelRoute};
-use layerfs_home::helpers::{lock, text};
+use layerfs_home::helpers::lock;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use std::path::Path;
 use std::sync::Arc;
@@ -79,10 +80,9 @@ pub const PREFIX: &str = "layerfs-";
 /// backend: `<prefix><id>`. The prefix is the deployment's (`lfs-<home id>-`
 /// from the home; `layerfs-` by default), so a Sandbox's directory says
 /// whose it is.
-pub fn sandbox_name(args: &SdkValue, id: &str) -> Result<String, SdkRefusal> {
-    let prefix = args
-        .get("deploy")
-        .and_then(|d| d.get_text("containerPrefix"))
+pub fn sandbox_name(deploy: Option<&Deploy>, id: &str) -> Result<String, SdkRefusal> {
+    let prefix = deploy
+        .and_then(|d| d.container_prefix.as_deref())
         .filter(|prefix| !prefix.is_empty())
         .unwrap_or(PREFIX);
     layerfs_home::names::SandboxName::parse(id)?;
@@ -112,13 +112,12 @@ pub enum OpenedStore {
 }
 
 /// The installed Store file of the project a call names.
-fn installed(args: &SdkValue) -> Result<OpenedStore, SdkRefusal> {
-    let name = text(args, "project")?;
-    if args.get_text("store").is_some() {
-        let identity = layerfs_store::identity::identity(args)?;
-        layerfs_store::identity::sqlite_only(&identity, "a Sandbox of a Store file")?;
-    }
-    let project = layerfs_store::project::discovery::project(args)?;
+fn installed(host: &Host) -> Result<OpenedStore, SdkRefusal> {
+    let name = &host.project;
+    let args = host.to_args(None);
+    let identity = layerfs_store::identity::identity(&args)?;
+    layerfs_store::identity::sqlite_only(&identity, "a Sandbox of a Store file")?;
+    let project = layerfs_store::project::discovery::project(&args)?;
     let Some(installed) = project.installed.clone() else {
         return Err(refused(
             "NoStore",
@@ -133,22 +132,22 @@ fn installed(args: &SdkValue) -> Result<OpenedStore, SdkRefusal> {
 /// under the guard of its folder `directory`, so no other call on it runs
 /// meanwhile.
 pub fn start(
-    args: &SdkValue,
+    (host, platform): (&Host, &str),
     directory: &Path,
     store: OpenedStore,
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
-    let deploy = args
-        .get("deploy")
+    let deploy = host
+        .deploy()
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     // Inputs are read first, so a refused request leaves no creation intent.
     let backend = crate::runtime::backend(deploy)?;
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
-        crate::launch::local::start(args, directory, store, backend)
+        crate::launch::local::start((host, platform), directory, store, backend)
     }
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
-        drop((directory, store, backend));
+        drop((directory, store, backend, platform));
         Err(refused(
             "Unsupported",
             "a Sandbox runs on Linux (namespaces) or macOS (native)",
@@ -166,18 +165,18 @@ pub fn start(
 /// checked against that backend and recorded.
 /// The only call that starts a Sandbox. Failures are `Failed` or
 /// `Unknown`, never retried.
-pub fn create(args: &SdkValue) -> Outcome {
+pub fn create(host: &Host, named: Option<&str>) -> Outcome {
     // the platform is checked against the deployment before any effect (#529)
-    let deploy = args
-        .get("deploy")
+    let deploy = host
+        .deploy()
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
-    let platform = crate::runtime::platform(args, deploy)?;
+    let platform = crate::runtime::platform(named, deploy)?;
     // a PostgreSQL Store's URL is the call's
-    let store = match layerfs_store::postgresql::open::sandbox_store(args)? {
+    let store = match layerfs_store::postgresql::open::sandbox_store(&host.to_args(None))? {
         Some(selected) => OpenedStore::Postgres(Box::new(selected)),
-        None => installed(args)?,
+        None => installed(host)?,
     };
-    let directory = crate::files::sandbox_dir(args)?;
+    let directory = crate::files::sandbox_dir(host)?;
     layerfs_home::home::private_dir(&directory)?;
     let made = (|| {
         let _guard = layerfs_store::project::discovery::guard(&directory)?;
@@ -199,7 +198,7 @@ pub fn create(args: &SdkValue) -> Outcome {
             }
             None => {}
         }
-        start(args, &directory, store)
+        start((host, &platform), &directory, store)
     })();
     let state = match made {
         Ok(state) => state,
@@ -238,9 +237,9 @@ pub fn create(args: &SdkValue) -> Outcome {
 /// a delete and keeps its cause; the folder goes after the delete. A
 /// Sandbox whose runtime ended by itself is reclaimed ([`reclaim`]) and
 /// answered `NoSuchSandbox`, as gone.
-pub fn close(args: &SdkValue) -> Outcome {
-    let id = text(args, "sandbox")?.to_owned();
-    let directory = crate::files::sandbox_dir(args)?;
+pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
+    let id = host.sandbox()?.to_owned();
+    let directory = crate::files::sandbox_dir(host)?;
     let Some(recorded) = crate::files::started(&directory)? else {
         return Err(refused(
             "NoSuchSandbox",
@@ -250,11 +249,11 @@ pub fn close(args: &SdkValue) -> Outcome {
     if crate::recorded::retired_record(&recorded) {
         return forget(&id, &directory, &recorded);
     }
-    let state = match crate::registry::sandbox_live(args) {
+    let state = match crate::registry::sandbox_live(host) {
         Ok(state) => state,
         Err(gone) if gone.detail.get_bool("containerGone") => {
             let container = gone.detail.get_text("container").unwrap_or("").to_owned();
-            reclaim(args, &container, gone.detail.get_bool("containerStopped"))?;
+            reclaim(host, &container, gone.detail.get_bool("containerStopped"))?;
             return Err(gone);
         }
         Err(refusal) => return Err(refusal),
@@ -272,17 +271,11 @@ pub fn close(args: &SdkValue) -> Outcome {
         .collect::<Vec<_>>();
     // a caller that reaches the daemon directly keeps the Workspace records
     // and sends the paths it holds (#535 G4)
-    if let Some(SdkValue::List(held)) = args.get("held") {
-        for path in held.iter().filter_map(|path| match path {
-            SdkValue::Text(path) => Some(path),
-            _ => None,
-        }) {
-            if !mounted.iter().any(|known| known == path) {
-                mounted.push(path.to_owned());
-            }
+    for path in held {
+        if !mounted.iter().any(|known| known == path) {
+            mounted.push(path.to_owned());
         }
     }
-    let force = args.get_bool("force");
     if !mounted.is_empty() && !force {
         return Err(SdkRefusal {
             code: "MountsActive".to_owned(),
@@ -298,7 +291,7 @@ pub fn close(args: &SdkValue) -> Outcome {
     }
     let value = crate::files::started(&directory)?
         .ok_or_else(|| refused("NoSuchSandbox", format!("Sandbox {id} was closed")))?;
-    let mut owner = crate::recorded::recorded(args, &id, &value)?
+    let mut owner = crate::recorded::recorded(host, &id, &value)?
         .reopen()
         .map_err(failed)?;
     owner.stop(STOP_S).map_err(failed)?;
@@ -362,9 +355,9 @@ const STOP_S: u16 = 5;
 /// stopped runtime, then its folder. Under its folder's guard the record is
 /// read again: a Sandbox started again meanwhile has another runtime id
 /// and is left alone (`Busy`).
-pub fn reclaim(args: &SdkValue, container: &str, stopped: bool) -> Outcome {
-    let id = text(args, "sandbox")?;
-    let directory = crate::files::sandbox_dir(args)?;
+pub fn reclaim(host: &Host, container: &str, stopped: bool) -> Outcome {
+    let id = host.sandbox()?;
+    let directory = crate::files::sandbox_dir(host)?;
     let _guard = layerfs_store::project::discovery::guard(&directory)?;
     let Some(value) = crate::files::started(&directory)? else {
         return Err(refused(
@@ -379,7 +372,7 @@ pub fn reclaim(args: &SdkValue, container: &str, stopped: bool) -> Outcome {
         ));
     }
     if stopped {
-        crate::recorded::recorded(args, id, &value)?
+        crate::recorded::recorded(host, id, &value)?
             .stopped()
             .delete()
             .map_err(failed)?;

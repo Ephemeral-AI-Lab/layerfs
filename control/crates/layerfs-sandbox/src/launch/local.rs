@@ -16,12 +16,13 @@
 //! #402. Start, failure and reclaim: one attempt,
 //! `Unknown` while the outcome is open, and a failed start's daemon stopped
 //! and its directory deleted, each once.
+use crate::host::{Deploy, Host};
 use crate::lifecycle::OpenedStore;
 use crate::registry::{SandboxState, SANDBOXES};
 use crate::{ProviderCreate, SandboxApi};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::{DaemonStore, KernelRoute};
-use layerfs_home::helpers::{lock, text};
+use layerfs_home::helpers::{lock, required};
 use layerfs_home::outcome::{failed, refused};
 use layerfs_sandbox_backend::{CommandIdentity, Runtime, Sandbox};
 use layerfs_sandbox_backend::{LaunchRequest, ProviderLaunchOptions};
@@ -34,15 +35,16 @@ use std::sync::Arc;
 /// [`crate::lifecycle::start`] under its folder's guard, with the
 /// project's installed Store file or its PostgreSQL Store already read. A
 /// namespaces root binds a sqlite Store's file and nothing for a PostgreSQL
-/// Store, whose daemon dials the server (#535 §7.4).
+/// Store, whose daemon dials the server (#535 §7.4). `platform` is the
+/// one `create` checked, recorded with it.
 pub fn start(
-    args: &SdkValue,
+    (host, platform): (&Host, &str),
     directory: &Path,
     project: OpenedStore,
     backend: crate::runtime::Backend,
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
-    let deploy = args
-        .get("deploy")
+    let deploy = host
+        .deploy()
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     // Inputs are read first, so a refused request leaves no creation intent.
     #[cfg(target_os = "linux")]
@@ -55,7 +57,7 @@ pub fn start(
             "LAYERFS_SANDBOX=namespaces on Linux needs root for FUSE and commands as uid 501, gid 20; run inside the VM or CI box that isolates it",
         ));
     }
-    let root = deploy.get_text("localDir").ok_or_else(|| {
+    let root = deploy.local_dir.as_deref().ok_or_else(|| {
         refused(
             "InvalidInput",
             "deploy.localDir is not configured; a native Sandbox needs it (the machine's machine/native/run)",
@@ -63,8 +65,8 @@ pub fn start(
     })?;
     let runtime = native_runtime(root, backend)
         .map_err(|error| refused("InvalidInput", format!("deploy.localDir {root}: {error}")))?;
-    let executable = PathBuf::from(text(deploy, "daemon")?);
-    let store = match args.get_text("storePath") {
+    let executable = PathBuf::from(required(deploy.daemon.as_deref(), "daemon")?);
+    let store = match host.store_path.as_deref() {
         Some(path) if Path::new(path).is_absolute() => path.to_owned(),
         _ => {
             return Err(refused(
@@ -73,9 +75,9 @@ pub fn start(
             ))
         }
     };
-    let id = text(args, "sandbox")?;
+    let id = host.sandbox()?;
     start_named(
-        args,
+        (host, platform),
         directory,
         id,
         project,
@@ -86,14 +88,14 @@ pub fn start(
 /// Starts Sandbox `id`: directory and daemon on the installed Store, its
 /// first control connection, then its records in its folder `directory`.
 fn start_named(
-    args: &SdkValue,
+    (host, platform): (&Host, &str),
     directory: &Path,
     id: &str,
     project: OpenedStore,
     (runtime, backend, executable, store): (Runtime, crate::runtime::Backend, PathBuf, String),
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
-    let name = text(args, "project")?;
-    let sandbox_name = crate::lifecycle::sandbox_name(args, id)?;
+    let name = host.project.as_str();
+    let sandbox_name = crate::lifecycle::sandbox_name(host.deploy(), id)?;
     let paths = runtime.native_paths(&sandbox_name).map_err(failed)?;
     let path_text = |path: &Path| {
         path.to_str()
@@ -140,10 +142,10 @@ fn start_named(
         DaemonStore::Sqlite { locator, .. } => locator.clone(),
         _ => String::new(),
     };
-    let store = layerfs_store::identity::shared_store(args)?;
+    let store = layerfs_store::identity::shared_store(&host.to_args(None))?;
     let labels = crate::lifecycle::labels(name, store.as_deref(), id);
     let api = SandboxApi::with_runtime(Arc::new(runtime));
-    let options = launch_options(backend, identity, args)?;
+    let options = launch_options(backend, identity, host)?;
     let request = ProviderCreate {
         launch: LaunchRequest {
             name: sandbox_name.clone(),
@@ -206,11 +208,11 @@ fn start_named(
         mounts: Default::default(),
     };
     let recorded = (|| {
-        mark_owner(&self::directory(args, id, None)?, directory)?;
+        mark_owner(&self::directory(host.deploy(), id, None)?, directory)?;
         crate::files::save_sandbox(
             &state.directory,
             &state,
-            args,
+            (host, platform),
             controller.private,
             daemon.public,
             instance,
@@ -267,15 +269,15 @@ fn native_runtime(
 fn launch_options(
     backend: crate::runtime::Backend,
     identity: CommandIdentity,
-    args: &SdkValue,
+    host: &Host,
 ) -> Result<ProviderLaunchOptions, SdkRefusal> {
     Ok(match backend {
         crate::runtime::Backend::HostProcess => {
             return Err(refused("Unsupported", crate::runtime::NATIVE_ON_LINUX))
         }
         crate::runtime::Backend::Namespaces => {
-            let deploy = args
-                .get("deploy")
+            let deploy = host
+                .deploy()
                 .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
             let (image, archive) = crate::runtime::namespaces_image(deploy)?;
             ProviderLaunchOptions::Namespaces {
@@ -294,7 +296,7 @@ fn launch_options(
 fn launch_options(
     _: crate::runtime::Backend,
     identity: CommandIdentity,
-    _: &SdkValue,
+    _: &Host,
 ) -> Result<ProviderLaunchOptions, SdkRefusal> {
     Ok(ProviderLaunchOptions::Local {
         command_identity: identity,
@@ -308,12 +310,12 @@ fn launch_options(
 /// configured, `recorded` (a record's own parent directory) stands in for
 /// it: a call on a Sandbox follows its record (#529).
 pub fn directory(
-    args: &SdkValue,
+    deploy: Option<&Deploy>,
     id: &str,
     recorded: Option<&Path>,
 ) -> Result<PathBuf, SdkRefusal> {
-    let root = (args.get("deploy"))
-        .and_then(|deploy| deploy.get_text("localDir"))
+    let root = deploy
+        .and_then(|deploy| deploy.local_dir.as_deref())
         .map(Path::new)
         .or(recorded)
         .ok_or_else(|| {
@@ -325,7 +327,7 @@ pub fn directory(
                 ),
             )
         })?;
-    let name = crate::lifecycle::sandbox_name(args, id)?;
+    let name = crate::lifecycle::sandbox_name(deploy, id)?;
     let plain = |path: &Path| {
         !path
             .components()
@@ -370,7 +372,7 @@ fn mark_owner(own: &Path, record: &Path) -> Result<(), SdkRefusal> {
 /// names the real path of this record's folder `<root>/sandbox/<name>`.
 /// Anything else, including a record made before the marker, is refused
 /// before any effect.
-pub fn owned(args: &SdkValue, id: &str, own: &Path) -> Result<(), SdkRefusal> {
+pub fn owned(host: &Host, id: &str, own: &Path) -> Result<(), SdkRefusal> {
     use std::io::Read;
     use std::os::unix::fs::OpenOptionsExt;
     let refuse = |why: String| {
@@ -396,7 +398,7 @@ pub fn owned(args: &SdkValue, id: &str, own: &Path) -> Result<(), SdkRefusal> {
         .open(own.join(OWNER))
         .and_then(|file| file.take(4096).read_to_end(&mut marker))
         .map_err(|error| refuse(format!("whose owner marker cannot be read ({error})")))?;
-    let record = std::fs::canonicalize(crate::files::sandbox_dir(args)?).map_err(failed)?;
+    let record = std::fs::canonicalize(crate::files::sandbox_dir(host)?).map_err(failed)?;
     if marker != record.as_os_str().as_encoded_bytes() {
         let named = String::from_utf8_lossy(&marker);
         return Err(refuse(format!(

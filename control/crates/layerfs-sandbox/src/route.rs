@@ -1,9 +1,10 @@
 //! The route of a Sandbox host operation (#535 §6.4): run in this process, or
 //! sent to its machine's worker with the records it needs, and run there
-//! (`in_worker`); the host arguments both sides build, and spooled output
-//! streamed back as events.
-use super::deploy::{self, Side};
+//! (`in_worker`); the typed host request both sides build ([`Host`],
+//! layerfs-project#108), and spooled output streamed back as events.
+use super::deploy::{self, Settings, Side};
 use super::record::SandboxRecord;
+use crate::host::{Call, Deploy, Host, Message, Op, Sent};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
@@ -17,21 +18,18 @@ use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// The host Sandbox operations' arguments for project `<store>/<project>`,
-/// plus `more`, run with the deploy `settings` [`deploy::resolve`] gave; a
-/// PostgreSQL Store's `postgresql` is the one the caller resolved and
-/// reached ([`reached`]).
+/// The host Sandbox operations' request for project `<store>/<project>`,
+/// naming Sandbox `sandbox` with `message`, run with the deploy `settings`
+/// [`deploy::resolve`] gave; a PostgreSQL Store's `postgresql` is the one
+/// the caller resolved and reached ([`reached`]).
 fn host_args(
     home: &Path,
     (store, project, record): (&str, &str, &StoreRecord),
     (kind, postgresql): (StoreKind, Option<SdkValue>),
-    settings: Vec<(String, SdkValue)>,
-    more: Vec<(&str, SdkValue)>,
-) -> Result<SdkValue> {
-    let prefix = SdkValue::text(format!(
-        "lfs-{}-",
-        &layerfs_home::home::opened(home)?.id[..8]
-    ));
+    settings: Settings,
+    (sandbox, message): (Option<String>, Message),
+) -> Result<Host> {
+    let prefix = format!("lfs-{}-", &layerfs_home::home::opened(home)?.id[..8]);
     let backend = if cfg!(target_os = "macos") {
         "native"
     } else {
@@ -55,35 +53,27 @@ fn host_args(
     if backend == "namespaces" {
         home::traversable(home, &local)?;
     }
-    let mut deploy = vec![
-        ("sandbox".to_owned(), SdkValue::text(backend)),
-        (
-            "localDir".to_owned(),
-            SdkValue::text(local.display().to_string()),
-        ),
-        ("containerPrefix".to_owned(), prefix),
-    ];
-    deploy.extend(settings);
-    let deploy = SdkValue::Map(deploy);
-    let mut fields = vec![
-        ("home", SdkValue::text(home.display().to_string())),
-        ("store", SdkValue::text(store)),
-        ("project", SdkValue::text(project)),
-        ("store_record", record.to_record().clone()),
-        (
-            "storePath",
-            SdkValue::text(store_path(home, store, record, kind).display().to_string()),
-        ),
-        ("deploy", deploy),
-    ];
-    // a PostgreSQL Store's URL with its password, never written (H §7.4)
-    if let Some(postgresql) = postgresql {
-        fields.push(("postgresql", postgresql));
-    }
-    fields.extend(more);
-    Ok(SdkValue::Map(
-        fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
-    ))
+    let deploy = Deploy {
+        sandbox: Some(backend.to_owned()),
+        local_dir: Some(local.display().to_string()),
+        container_prefix: Some(prefix),
+        daemon: Some(settings.daemon),
+        image_archive: settings.image_archive,
+        image: settings.image,
+        platform: settings.platform,
+    };
+    Ok(Host {
+        home: home.to_path_buf(),
+        store: store.to_owned(),
+        project: project.to_owned(),
+        sandbox,
+        store_record: Some(record.clone()),
+        store_path: Some(store_path(home, store, record, kind).display().to_string()),
+        deploy: Some(deploy),
+        // a PostgreSQL Store's URL with its password, never written (H §7.4)
+        postgresql,
+        message,
+    })
 }
 
 /// A PostgreSQL Store's `postgresql` argument for a Sandbox on `machine`
@@ -194,19 +184,40 @@ fn store_path(home: &Path, store: &str, record: &StoreRecord, kind: StoreKind) -
 /// How the side that runs a host operation runs it in its own process:
 /// `sandbox::dispatch::call` for the Sandbox calls, `workspace::dispatch::call`
 /// for the Workspace calls and a worker's requests (layerfs-project#106).
-pub type Local = fn(&str, SdkValue) -> Outcome;
+pub type Local = fn(Host, Call) -> Outcome;
 
-/// Runs host Sandbox operation `op` for Sandbox `record` on its machine,
+/// One host operation as its caller asks it: the operation with its
+/// fields, its Commit message, and the image a `sandbox.create` names.
+pub struct Asked {
+    /// The operation and its fields.
+    pub call: Call,
+    /// Its Commit message (exec and Commit send one).
+    pub message: Message,
+    /// The image `sandbox.create` names; every other call runs the
+    /// Sandbox's own.
+    pub image: Option<String>,
+}
+
+impl From<Call> for Asked {
+    fn from(call: Call) -> Self {
+        Self {
+            call,
+            message: Message::Absent,
+            image: None,
+        }
+    }
+}
+
+/// Runs host Sandbox operation `asked` for Sandbox `record` on its machine,
 /// refused `Unavailable` naming `layerfs machine start` when it is down.
 pub fn on_machine(
     home: &Path,
     events: &mut Events<'_>,
     record: &SandboxRecord,
-    op: &str,
-    more: Vec<(&str, SdkValue)>,
+    asked: impl Into<Asked>,
     local: Local,
 ) -> Outcome {
-    reach(home, events, record, op, more, local).unwrap_or_else(|Unreached(refusal)| Err(refusal))
+    reach(home, events, record, asked, local).unwrap_or_else(|Unreached(refusal)| Err(refusal))
 }
 
 /// [`on_machine`], answering [`Unreached`] when the machine's worker was
@@ -215,12 +226,11 @@ pub fn reach(
     home: &Path,
     events: &mut Events<'_>,
     record: &SandboxRecord,
-    op: &str,
-    more: Vec<(&str, SdkValue)>,
+    asked: impl Into<Asked>,
     local: Local,
 ) -> std::result::Result<Outcome, Unreached> {
     let mut unreached = None;
-    let outcome = host_op(home, events, (record, op), more, local, &mut unreached);
+    let outcome = host_op(home, events, record, asked.into(), local, &mut unreached);
     match unreached {
         Some(unreached) => Err(unreached),
         None => Ok(outcome),
@@ -232,8 +242,8 @@ pub fn reach(
 fn host_op(
     home: &Path,
     events: &mut Events<'_>,
-    (record, op): (&SandboxRecord, &str),
-    more: Vec<(&str, SdkValue)>,
+    record: &SandboxRecord,
+    asked: Asked,
     local: Local,
     unreached: &mut Option<Unreached>,
 ) -> Outcome {
@@ -241,20 +251,21 @@ fn host_op(
     let machine = record.machine();
     let project = record.project().unwrap_or("");
     let target = resolve::target(&home, project)?;
-    let mut more = more;
+    let Asked {
+        call,
+        message,
+        image,
+    } = asked;
+    let op = call.op();
     // the Sandbox's name is its identity on every machine
-    more.push(("sandbox", SdkValue::text(record.name())));
+    let sandbox = Some(record.name().to_owned());
     // the call's image (sandbox.create) else the Sandbox's own travels in
     // the deploy settings, never as a top-level argument
-    let called = more
-        .iter()
-        .position(|(n, _)| *n == "image")
-        .map(|i| more.remove(i).1);
-    let image = match called {
-        Some(SdkValue::Text(text)) => Some(text),
+    let image = match image {
+        Some(text) => Some(text),
         _ => record
             .image()
-            .filter(|_| op != "sandbox.create")
+            .filter(|_| op != Op::SandboxCreate)
             .map(str::to_owned),
     };
     let kind = target.store_ref.kind();
@@ -274,7 +285,7 @@ fn host_op(
     match executor {
         Executor::Local => {
             let key = store_path(&home, &target.store, &target.record, kind);
-            if let (Some(postgresql), "sandbox.create") = (&postgresql, op) {
+            if let (Some(postgresql), Op::SandboxCreate) = (&postgresql, op) {
                 reach_check(
                     &format!("machine {machine}"),
                     (&target.record, &key, &target.project),
@@ -284,12 +295,12 @@ fn host_op(
             }
             let held = postgresql.is_some();
             let how = deploy::resolve(&Side::Home(&home), &choice)?;
-            let args = host_args(
+            let host = host_args(
                 &home,
                 (&target.store, &target.project, &target.record),
                 (kind, postgresql),
                 how,
-                more,
+                (sandbox, message),
             )?;
             // the host code reads the project's Branches through its open
             // Store, which this process leases. A PostgreSQL Store opens no
@@ -300,12 +311,18 @@ fn host_op(
             let lease = layerfs_store::lease::hold(&home, &target.store)?;
             let (_lease, opened) = match held {
                 true => (Some(lease), None),
-                false => (None, Some(layerfs_store::open::hold(&args, Some(lease))?)),
+                false => (
+                    None,
+                    Some(layerfs_store::open::hold(
+                        &host.to_args(Some(&call)),
+                        Some(lease),
+                    )?),
+                ),
             };
-            if op == "backend.daemon.workspace.status" {
-                return local(op, args);
+            if op == Op::Status {
+                return local(host, call);
             }
-            let out = local(op, args)?;
+            let out = local(host, call)?;
             let out = drain(out, &mut |event| events.event(event));
             closed(op, opened.as_deref(), &out);
             out
@@ -314,30 +331,23 @@ fn host_op(
             // the guest runs the same call on its own native machine, with
             // the records it needs sent along
             let project_record = ProjectRecord::read(&home, &target.store, &target.project)?
-                .map(|record| record.to_record().clone())
-                .unwrap_or_default();
-            let mut fields = vec![
-                ("op", SdkValue::text(op)),
-                ("store", SdkValue::text(&target.store)),
-                ("project", SdkValue::text(&target.project)),
-                ("store_record", target.record.to_record().clone()),
-                ("project_record", project_record),
-            ];
-            fields.push(("deploy", choice));
-            if let Some(postgresql) = postgresql {
-                fields.push(("postgresql", postgresql));
-                // what the worker's reach check names and suggests
-                fields.push(("machine", SdkValue::text(machine)));
-                if let Some(hint) = hint {
-                    fields.push(("reach_hint", SdkValue::text(hint)));
-                }
-            }
-            fields.push((
-                "more",
-                SdkValue::Map(more.into_iter().map(|(n, v)| (n.to_owned(), v)).collect()),
-            ));
-            let request =
-                SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect());
+                .unwrap_or_else(|| {
+                    ProjectRecord::from_record(&target.store, &target.project, SdkValue::Null)
+                });
+            let sent = Sent {
+                call,
+                message,
+                sandbox,
+                store: target.store.clone(),
+                project: target.project.clone(),
+                store_record: target.record.clone(),
+                project_record,
+                choice,
+                machine: postgresql.as_ref().map(|_| machine.to_owned()),
+                reach_hint: postgresql.as_ref().and(hint).map(str::to_owned),
+                postgresql,
+            };
+            let request = crate::host::encode(&sent);
             match worker.attempt("sandbox.host", request, &mut |event| events.event(event)) {
                 Ok(outcome) => outcome,
                 Err(Unreached(refusal)) => {
@@ -349,51 +359,35 @@ fn host_op(
     }
 }
 
-/// Runs a Sandbox host operation in a worker for its caller (`sandbox.host`):
-/// the caller sends the Store's and project's records; the worker keeps a
-/// thin record of the Store (#536 §6) and the project's record under its
-/// root, with the Store on this machine's own `native`.
+/// Runs a Sandbox host operation in a worker for its caller (`sandbox.host`,
+/// decoded by [`crate::host::decode`]): the caller sends the Store's and
+/// project's records; the worker keeps a thin record of the Store (#536 §6)
+/// and the project's record under its root, with the Store on this
+/// machine's own `native`.
 pub fn in_worker(
     root: &Path,
-    args: &SdkValue,
+    sent: Sent,
     events: &mut dyn FnMut(SdkValue),
     runner: Local,
 ) -> Outcome {
-    let op = args
-        .get_text("op")
-        .ok_or_else(|| refused("InvalidInput", "operation name"))?;
-    if !matches!(
-        op,
-        "sandbox.create"
-            | "sandbox.close"
-            | "sandbox.list_workspaces"
-            | "workspace.mount"
-            | "workspace.exec"
-            | "workspace.commit"
-            | "workspace.unmount"
-            | "backend.daemon.workspace.status"
-    ) {
-        return Err(refused(
-            "InvalidInput",
-            format!("the worker runs no Sandbox operation {op}"),
-        ));
-    }
-    let store = args.get_text("store").unwrap_or("");
-    let project = args.get_text("project").unwrap_or("");
+    let Sent {
+        call,
+        message,
+        sandbox,
+        store,
+        project,
+        store_record,
+        project_record,
+        choice,
+        postgresql,
+        machine,
+        reach_hint,
+    } = sent;
+    let op = call.op();
+    let (store, project) = (store.as_str(), project.as_str());
     layerfs_home::names::StoreName::parse(store)?;
     layerfs_home::names::ProjectName::parse(project)?;
-    // a PostgreSQL Store's URL and password reference stay with the caller:
-    // the request's `postgresql` carries what this side dials (#535 §7.4)
-    let sent = match args.get("store_record").cloned().unwrap_or_default() {
-        SdkValue::Map(fields) => SdkValue::Map(
-            fields
-                .into_iter()
-                .filter(|(n, _)| !matches!(n.as_str(), "url" | "password"))
-                .collect(),
-        ),
-        other => other,
-    };
-    let record = StoreRecord::from_record(store, sent).with("machine", SdkValue::text("native"));
+    let record = store_record.with("machine", SdkValue::text("native"));
     let kind = record.kind()?;
     // written only when it changed (#535 R5): most calls find it as it is
     let thin = StoreRecord::from_record(
@@ -412,25 +406,16 @@ pub fn in_worker(
     // that was removed and made again (its `created` differs); one this
     // side's own Init wrote (its manifest, no `created`: Init through the
     // worker, H11a) takes the caller's fields and keeps its manifest
-    let sent = args.get("project_record").cloned().unwrap_or_default();
-    let sent = ProjectRecord::from_record(store, project, sent);
+    let sent = project_record;
     match ProjectRecord::read(root, store, project)? {
         None => sent.write(root)?,
         Some(local) if sent.created().is_none() || local.created() == sent.created() => {}
         Some(local) if local.created().is_none() => local.with_fields_of(&sent).write(root)?,
         Some(_) => sent.write(root)?,
     }
-    let more: Vec<(&str, SdkValue)> = match args.get("more") {
-        Some(SdkValue::Map(fields)) => fields
-            .iter()
-            .map(|(n, v)| (n.as_str(), v.clone()))
-            .collect(),
-        _ => Vec::new(),
-    };
-    let choice = args.get("deploy").cloned().unwrap_or_default();
     let how = deploy::resolve(&Side::Worker(root), &choice)?;
     let postgresql = match kind {
-        StoreKind::Postgresql => Some(args.get("postgresql").cloned().ok_or_else(|| {
+        StoreKind::Postgresql => Some(postgresql.ok_or_else(|| {
             refused(
                 "InvalidInput",
                 "a PostgreSQL Sandbox call carries its server's resolved postgresql value",
@@ -439,8 +424,8 @@ pub fn in_worker(
         StoreKind::Sqlite => None,
     };
     let key = store_path(root, store, &record, kind);
-    if let (Some(postgresql), "sandbox.create") = (&postgresql, op) {
-        let who = match args.get_text("machine") {
+    if let (Some(postgresql), Op::SandboxCreate) = (&postgresql, op) {
+        let who = match &machine {
             Some(machine) => format!("machine {machine}"),
             None => "the worker's machine".to_owned(),
         };
@@ -448,7 +433,7 @@ pub fn in_worker(
             &who,
             (&record, &key, project),
             postgresql,
-            args.get_text("reach_hint"),
+            reach_hint.as_deref(),
         )?;
     }
     let held = postgresql.is_some();
@@ -457,33 +442,33 @@ pub fn in_worker(
         (store, project, &record),
         (kind, postgresql),
         how,
-        more,
+        (sandbox, message),
     )?;
     // a PostgreSQL Store opens no Store service here (#65); its reads run
     // on the held read session
     let opened = match held {
         true => None,
-        false => Some(layerfs_store::open::hold(&host, None)?),
+        false => Some(layerfs_store::open::hold(&host.to_args(Some(&call)), None)?),
     };
-    if op == "backend.daemon.workspace.status" {
-        return runner(op, host);
+    if op == Op::Status {
+        return runner(host, call);
     }
-    let name = host.get_text("sandbox").unwrap_or("").to_owned();
-    let out = drain(runner(op, host)?, events);
+    let name = host.sandbox.clone().unwrap_or_default();
+    let out = drain(runner(host, call)?, events);
     closed(op, opened.as_deref(), &out);
     let out = out?;
     // the caller reaches the new Sandbox's daemon directly where its
     // machine forwards the port (#535 G4): the answer carries its keys
     match op {
-        "sandbox.create" => crate::direct::with_keys(root, &name, out),
+        Op::SandboxCreate => crate::direct::with_keys(root, &name, out),
         _ => Ok(out),
     }
 }
 
 /// A closed Sandbox's sqlite Store, held open here at `opened`: its log is
 /// checkpointed and truncated before the close is answered (#86).
-fn closed(op: &str, opened: Option<&Path>, out: &Outcome) {
-    if let (Some(path), "sandbox.close", true) = (opened, op, out.is_ok()) {
+fn closed(op: Op, opened: Option<&Path>, out: &Outcome) {
+    if let (Some(path), Op::SandboxClose, true) = (opened, op, out.is_ok()) {
         let _ = layerfs_store::open::released(path);
     }
 }
@@ -504,30 +489,24 @@ fn drain(out: SdkValue, emit: &mut dyn FnMut(SdkValue)) -> Outcome {
             if !matches!(out.get(stream), Some(SdkValue::Null)) || out.get_int(size) == Some(0) {
                 continue;
             }
-            let mut offset = 0i64;
+            let mut offset = 0u64;
             loop {
-                let args = SdkValue::map([
-                    ("output", SdkValue::text(&id)),
-                    ("stream", SdkValue::text(stream)),
-                    ("offset", SdkValue::Int(offset)),
-                ]);
-                let read = crate::output::page(&args, &mut buffer)?;
-                let length = read.get_int("length").unwrap_or(0);
+                let (length, end) = crate::output::page(&id, stream, offset, &mut buffer)?;
                 if length > 0 {
                     emit(SdkValue::map([
                         ("stream", SdkValue::text(stream)),
-                        ("bytes", SdkValue::Bytes(buffer[..length as usize].to_vec())),
+                        ("bytes", SdkValue::Bytes(buffer[..length].to_vec())),
                     ]));
                 }
-                offset += length;
-                if read.get_bool("end") || length == 0 {
+                offset += length as u64;
+                if end || length == 0 {
                     break;
                 }
             }
         }
         Ok::<(), SdkRefusal>(())
     })();
-    crate::output::release(&SdkValue::map([("output", SdkValue::text(&id))]))?;
+    crate::output::release(&id)?;
     sent?;
     let out = match out {
         SdkValue::Map(fields) => {

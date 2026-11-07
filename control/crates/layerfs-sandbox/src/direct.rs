@@ -14,6 +14,7 @@
 //! checked here. Create, close and a machine with no forward use the
 //! worker as before.
 use super::record::{DaemonRecord, Forward, SandboxRecord};
+use crate::host::{Call, Host, Message};
 use crate::registry::{self, SandboxState, SANDBOXES};
 use crate::unmount_guard;
 use crate::{dispatch, files};
@@ -263,26 +264,21 @@ pub fn release(home: &Path, record: &SandboxRecord) {
     }
 }
 
-/// The host operation arguments of a direct call on Sandbox `record` of
-/// `target`, plus `more`: the home is its serving side.
-pub fn args(
-    home: &Path,
-    record: &SandboxRecord,
-    target: &Target,
-    more: Vec<(&str, SdkValue)>,
-) -> SdkValue {
-    let mut fields = vec![
-        ("home", SdkValue::text(home.display().to_string())),
-        ("sandbox", SdkValue::text(record.name())),
-        ("store", SdkValue::text(&target.store)),
-        ("project", SdkValue::text(&target.project)),
-    ];
-    fields.extend(more);
-    SdkValue::Map(
-        (fields.into_iter())
-            .map(|(n, v)| (n.to_owned(), v))
-            .collect(),
-    )
+/// The host request of a direct call on Sandbox `record` of `target`, with
+/// `message`: the home is its serving side, with no Store record, path or
+/// deployment.
+pub fn host(home: &Path, record: &SandboxRecord, target: &Target, message: Message) -> Host {
+    Host {
+        home: home.to_path_buf(),
+        store: target.store.clone(),
+        project: target.project.clone(),
+        sandbox: Some(record.name().to_owned()),
+        store_record: None,
+        store_path: None,
+        deploy: None,
+        postgresql: None,
+        message,
+    }
 }
 
 /// `sandbox.get`'s Workspace list of forwarded Sandbox `record`: a daemon
@@ -301,8 +297,8 @@ fn list_workspaces(home: &Path, record: &SandboxRecord) -> Outcome {
     let target = resolve::target(&home, record.project().unwrap_or(""))?;
     let _lease = lease::hold(&home, &target.store)?;
     dispatch::call(
-        "sandbox.list_workspaces",
-        args(&home, record, &target, vec![]),
+        host(&home, record, &target, Message::Absent),
+        Call::ListWorkspaces { path: None },
     )
 }
 
@@ -312,8 +308,8 @@ fn list_workspaces(home: &Path, record: &SandboxRecord) -> Outcome {
 /// reached, every Workspace recorded in the home folder.
 pub fn held(home: &Path, record: &SandboxRecord) -> Result<Vec<String>> {
     let target = resolve::target(home, record.project().unwrap_or(""))?;
-    let args = args(home, record, &target, vec![]);
-    let Ok(state) = registry::sandbox_live(&args) else {
+    let host = host(home, record, &target, Message::Absent);
+    let Ok(state) = registry::sandbox_live(&host) else {
         return (files::workspaces(&record.dir(home))?.iter())
             .map(|(_, workspace)| Ok(helpers::required(workspace.path(), "path")?.to_owned()))
             .collect();

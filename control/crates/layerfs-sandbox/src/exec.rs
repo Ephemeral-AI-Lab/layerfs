@@ -5,10 +5,11 @@
 //! daemon is not involved. A local Sandbox
 //! (`layerfs_sandbox_backend::Sandbox::HostProcess`) runs the same commands as
 //! processes of this kernel.
+use crate::host::Host;
 use crate::output::Spool;
 use crate::registry::{sandbox, SandboxState};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::helpers::text;
+use layerfs_home::helpers::required;
 use layerfs_home::outcome::Outcome;
 
 /// One command to its end: exit code, stdout, stderr. `spool` sends every
@@ -32,7 +33,8 @@ fn run(
     )
 }
 
-/// `workspace.exec(ws, command, { spool? })`.
+/// `workspace.exec(ws, command, { spool? })` on the Workspace at `path`
+/// (a `directory` a caller checked, and the `command`).
 ///
 /// A foreground result is `kind`, `exitCode`, `stdout`, `stderr`, `message`
 /// and `truncated` (always false: no output is cut). A stream over the
@@ -41,13 +43,18 @@ fn run(
 /// `workspace.exec_output` and closed with `sandbox.exec_release`, and the
 /// `stdoutBytes` and `stderrBytes` sizes. A `directory` from a caller that
 /// keeps the Workspace's record (#535 G4) is the one the command runs in.
-pub fn exec(args: &SdkValue) -> Outcome {
-    let state = sandbox(args)?;
-    let path = text(args, "path")?;
-    let command = text(args, "command")?;
+pub fn exec(
+    host: &Host,
+    path: Option<&str>,
+    (directory, command): (Option<&str>, Option<&str>),
+    spool: bool,
+) -> Outcome {
+    let state = sandbox(host)?;
+    let path = required(path, "path")?;
+    let command = required(command, "command")?;
     // a caller that reaches the Sandbox's daemon directly keeps its
     // Workspace records and sends the directory it checked there (#535 G4)
-    let directory = match args.get_text("directory") {
+    let directory = match directory {
         Some(directory) => directory.to_owned(),
         None => state.directory(path)?,
     };
@@ -55,7 +62,7 @@ pub fn exec(args: &SdkValue) -> Outcome {
         &state,
         &directory,
         vec!["bash".into(), "-c".into(), command.into()],
-        args.get_bool("spool"),
+        spool,
     )?;
     let mut streams = crate::output::fields(stdout, stderr)?.into_iter();
     let mut result = vec![
@@ -63,7 +70,10 @@ pub fn exec(args: &SdkValue) -> Outcome {
         ("exitCode", SdkValue::Int(i64::from(code))),
     ];
     result.extend(streams.by_ref().take(2));
-    result.push(("message", SdkValue::opt_text(args.get_text("message"))));
+    result.push((
+        "message",
+        SdkValue::opt_text(host.message.text().map(str::to_owned)),
+    ));
     result.push(("truncated", SdkValue::Bool(false)));
     result.extend(streams);
     Ok(SdkValue::Map(

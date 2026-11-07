@@ -2,37 +2,50 @@
 //! (`sandbox.host`): mount, Commit, unmount, exec and the status read; every
 //! other operation is a Sandbox operation (`sandbox::dispatch`). Moved from
 //! `sandbox/dispatch.rs` so Sandbox code never imports Workspace code
-//! (layerfs-project#106).
+//! (layerfs-project#106). It matches on the one table of host operations
+//! (`host::Call`, R1).
 use crate::exec;
+use crate::host::{Call, Host};
 use crate::workspace::serve as workspace;
-use layerfs_bridge::control::SdkValue;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::outcome::Outcome;
 
 /// Runs one host operation once: a Workspace operation here, any other in
 /// `sandbox::dispatch`, which checks a Commit `message` first.
-pub fn call(op: &str, args: SdkValue) -> Outcome {
-    match op {
-        "workspace.mount" | "workspace.commit" | "workspace.unmount" | "workspace.exec" => {
-            crate::dispatch::checked(&args)?;
+pub fn call(host: Host, call: Call) -> Outcome {
+    match call {
+        Call::Mount { .. } | Call::Commit { .. } | Call::Unmount { .. } | Call::Exec { .. } => {
+            crate::dispatch::checked(&host.message)?;
         }
-        "backend.daemon.workspace.status" => return backend(op.to_owned(), args),
-        _ => return crate::dispatch::call(op, args),
+        Call::Status { .. } => {}
+        _ => return crate::dispatch::call(host, call),
     }
-    match op {
-        "workspace.mount" => workspace::mount(&args),
-        "workspace.commit" => workspace::commit(&workspace::by_name(args)?),
-        "workspace.unmount" => workspace::unmount(&workspace::by_name(args)?),
-        _ => exec::exec(&workspace::by_name(args)?),
-    }
-}
-
-/// Runs the Workspace status read once.
-pub fn backend(op: String, args: SdkValue) -> Outcome {
-    match op.as_str() {
-        "backend.daemon.workspace.status" => workspace::status(&workspace::by_name(args)?),
-        _ => Err(refused(
-            "UnknownMethod",
-            format!("no backend operation {op}"),
-        )),
+    let path = match call.path() {
+        Some(_) => workspace::by_name(&host, call.path())?,
+        None => None,
+    };
+    match call {
+        Call::Mount { branch, name } => workspace::mount(&host, branch.as_deref(), name.as_deref()),
+        Call::Commit { force, .. } => {
+            workspace::commit(&host, path.as_deref(), force.unwrap_or(false))
+        }
+        Call::Unmount { discard, force, .. } => workspace::unmount(
+            &host,
+            path.as_deref(),
+            discard.unwrap_or(false),
+            force.unwrap_or(false),
+        ),
+        Call::Status { .. } => workspace::status(&host, path.as_deref()),
+        Call::Exec {
+            directory,
+            command,
+            spool,
+            ..
+        } => exec::exec(
+            &host,
+            path.as_deref(),
+            (directory.as_deref(), command.as_deref()),
+            spool,
+        ),
+        _ => crate::dispatch::call(host, call),
     }
 }

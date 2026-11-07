@@ -10,6 +10,7 @@
 //! its mount gave it, if any (unique in the Sandbox; the other calls take
 //! it in place of the path, [`by_name`]).
 use crate::daemon::values;
+use crate::host::Host;
 use crate::internal::workspace;
 use crate::lifecycle::{operation, WORKSPACES};
 use crate::record::{DaemonRecord, WorkspaceRecord};
@@ -18,7 +19,7 @@ use crate::OperationCause;
 use crate::Unmounted;
 use layerfs_bridge::control::{CommitControl, Reply, SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, CommitId, WorkspaceId};
-use layerfs_home::helpers::{lock, random, text};
+use layerfs_home::helpers::{lock, random, required};
 use layerfs_home::names::WorkspaceName;
 use layerfs_home::outcome::{failed, Outcome};
 
@@ -42,9 +43,9 @@ fn no_sandbox(mut refusal: SdkRefusal) -> SdkRefusal {
 /// Store reader (#64): this process reads no Store, on every route, and a
 /// missing project or Branch is the daemon's `NoSuchProject` or
 /// `NoSuchBranch`, as the Store service's lookup refuses it.
-pub fn mount(args: &SdkValue) -> Outcome {
-    let branch = text(args, "branch")?;
-    let sandbox = match args.get_text("sandbox") {
+pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
+    let branch = required(branch, "branch")?;
+    let sandbox = match host.sandbox.as_deref() {
         Some(id) if !id.is_empty() => id,
         _ => {
             return Err(layerfs_home::outcome::refused(
@@ -60,7 +61,7 @@ pub fn mount(args: &SdkValue) -> Outcome {
             "main is the project's published line, not a Branch, and is not mounted: fork a Branch from it with `branch.fork(project, name, \"main\")` and mount that",
         ));
     }
-    let directory = crate::files::sandbox_dir(args)?;
+    let directory = crate::files::sandbox_dir(host)?;
     let missing = || {
         no_sandbox(layerfs_home::outcome::refused(
             "NoSuchSandbox",
@@ -70,14 +71,14 @@ pub fn mount(args: &SdkValue) -> Outcome {
     if crate::files::started(&directory)?.is_none() {
         return Err(missing());
     }
-    let name = match args.get_text("name") {
+    let name = match name {
         Some(text) => Some(WorkspaceName::parse(text)?),
         None => None,
     };
     // a name in use is refused before the daemon is reached
     let recorded = crate::files::workspaces(&directory)?;
     free(sandbox, &recorded, name.as_ref())?;
-    let state = sandbox_live(args).map_err(|refusal| match refusal.code.as_str() {
+    let state = sandbox_live(host).map_err(|refusal| match refusal.code.as_str() {
         "NoSuchSandbox" => no_sandbox(refusal),
         _ => refusal,
     })?;
@@ -97,7 +98,7 @@ pub fn mount(args: &SdkValue) -> Outcome {
             ),
         ));
     }
-    let project = text(args, "project")?;
+    let project = host.project.as_str();
     let id = WorkspaceId::from_authority(random()?).map_err(failed)?;
     let mounted = {
         let mut control = crate::daemon::trace::control(&state.controls)?;
@@ -160,31 +161,27 @@ fn free(
     Ok(())
 }
 
-/// `args` with a Workspace named by its name (`path` not absolute: the
-/// `<sandbox>:<name>` form, #536 C3) given its path instead: the path of
-/// the Workspace record in the Sandbox's folder that carries the name.
-/// Refused `NotMounted` when none does.
-pub fn by_name(args: SdkValue) -> Result<SdkValue, SdkRefusal> {
-    let Some(name) = args.get_text("path").filter(|path| !path.starts_with('/')) else {
-        return Ok(args);
+/// The Workspace `path` names, by its name when it is not absolute (the
+/// `<sandbox>:<name>` form, #536 C3): the path of the Workspace record in
+/// the Sandbox's folder that carries the name. Refused `NotMounted` when
+/// none does.
+pub fn by_name(host: &Host, path: Option<&str>) -> Result<Option<String>, SdkRefusal> {
+    let Some(name) = path.filter(|path| !path.starts_with('/')) else {
+        return Ok(path.map(str::to_owned));
     };
     let name = WorkspaceName::parse(name)?;
-    let directory = crate::files::sandbox_dir(&args)?;
+    let directory = crate::files::sandbox_dir(host)?;
     let found = (crate::files::workspaces(&directory)?.into_iter())
         .find(|(_, record)| record.name() == Some(name.as_str()));
     let Some((_, record)) = found else {
-        let sandbox = args.get_text("sandbox").unwrap_or("");
+        let sandbox = host.sandbox.as_deref().unwrap_or("");
         return Err(layerfs_home::outcome::refused(
             "NotMounted",
             format!("{sandbox}:{name} is not mounted"),
         ));
     };
-    let path = layerfs_home::helpers::required(record.path(), "path")?.to_owned();
-    Ok(layerfs_home::home::with_field(
-        args,
-        "path",
-        SdkValue::Text(path),
-    ))
+    let path = required(record.path(), "path")?.to_owned();
+    Ok(Some(path))
 }
 
 /// A record's `platform` (#529), or null for a record from before it, which
@@ -193,12 +190,13 @@ fn platform_of(record: &DaemonRecord) -> SdkValue {
     SdkValue::opt_text(record.platform().map(str::to_owned))
 }
 
-/// `backend.daemon.workspace.status(ws)`: the daemon's Status, which reads no
-/// Store, and the Branch head from one newest-first History read in this
-/// process.
-pub fn status(args: &SdkValue) -> Outcome {
-    status_with(args, &mut |branch, _| {
-        layerfs_store::service::head(args, branch).ok()
+/// `backend.daemon.workspace.status(ws)` of the Workspace at `path`: the
+/// daemon's Status, which reads no Store, and the Branch head from one
+/// newest-first History read in this process.
+pub fn status(host: &Host, path: Option<&str>) -> Outcome {
+    let args = host.to_args(None);
+    status_with(host, path, &mut |branch, _| {
+        layerfs_store::service::head(&args, branch).ok()
     })
 }
 
@@ -207,14 +205,14 @@ pub type HeadOf<'a> = dyn FnMut(BranchId, Option<&str>) -> Option<Option<CommitI
 
 /// [`status`], the Branch's head read by `head_of` (given the Branch's id
 /// and name), or `None` when it could not be read.
-pub fn status_with(args: &SdkValue, head_of: &mut HeadOf<'_>) -> Outcome {
-    let state = sandbox(args)?;
-    let token = state.token(text(args, "path")?)?;
+pub fn status_with(host: &Host, path: Option<&str>, head_of: &mut HeadOf<'_>) -> Outcome {
+    let state = sandbox(host)?;
+    let token = state.token(required(path, "path")?)?;
     let mut control = crate::daemon::trace::control(&state.controls)?;
     let status = workspace(&mut control).status(token).map_err(operation)?;
     drop(control);
     let branch = lock(&state.mounts)?
-        .get(text(args, "path")?)
+        .get(required(path, "path")?)
         .map(|mount| mount.branch.clone());
     let head = head_of(status.binding.branch.id, branch.as_deref());
     let mut value = values::status(&status, head);
@@ -224,24 +222,25 @@ pub fn status_with(args: &SdkValue, head_of: &mut HeadOf<'_>) -> Outcome {
     Ok(value)
 }
 
-/// `workspace.commit(ws, { message?, force? })`.
-pub fn commit(args: &SdkValue) -> Outcome {
-    let state = sandbox(args)?;
-    let token = state.token(text(args, "path")?)?;
+/// `workspace.commit(ws, { message?, force? })` of the Workspace at `path`.
+pub fn commit(host: &Host, path: Option<&str>, force: bool) -> Outcome {
+    let state = sandbox(host)?;
+    let token = state.token(required(path, "path")?)?;
     let reply = workspace(&mut *crate::daemon::trace::control(&state.controls)?)
         .commit_with(CommitControl {
             token,
-            force: args.get_bool("force"),
-            message: args.get_text("message").map(str::to_owned),
+            force,
+            message: host.message.text().map(str::to_owned),
         })
         .map_err(operation)?;
     values::commit(&reply)
 }
 
-/// `workspace.unmount(ws, { discard?, force? })`: the daemon's answer.
-pub fn unmount(args: &SdkValue) -> Outcome {
-    let state = sandbox(args)?;
-    let path = text(args, "path")?;
+/// `workspace.unmount(ws, { discard?, force? })` of the Workspace at
+/// `path`: the daemon's answer.
+pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> Outcome {
+    let state = sandbox(host)?;
+    let path = required(path, "path")?;
     if let Some(value) = crate::unmount_guard::find(&state, path)? {
         return crate::unmount_guard::repeat(&value);
     }
@@ -265,13 +264,13 @@ pub fn unmount(args: &SdkValue) -> Outcome {
         let mut api = workspace(&mut control);
         // Forced: one abort write ends the connection, also after a normal
         // unmount stalled at Join; uncommitted changes are dropped.
-        if args.get_bool("force") {
+        if force {
             match api.unmount(token, true).map_err(operation)? {
                 Some(outcome) => Ok(values::force_unmounted(&outcome)),
                 None => values::unmounted(&Unmounted::Closed),
             }
         } else {
-            match api.unmount_checked(token, args.get_bool("discard")) {
+            match api.unmount_checked(token, discard) {
                 Ok(answer) => values::unmounted(&answer),
                 Err(error) => Err(operation(error)),
             }

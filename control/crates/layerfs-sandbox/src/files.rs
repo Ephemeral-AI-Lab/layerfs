@@ -4,6 +4,7 @@
 //! `<root>/sandbox/<name>/` holds its record (`record.json`, with what
 //! reopens it under `daemon`), its daemon keys (`control.json`) and one
 //! record per Workspace (`workspace/<id>.json`). No mutation replay.
+use crate::host::Host;
 use crate::record::{DaemonRecord, Local, SandboxRecord, WorkspaceRecord};
 use crate::recorded::{gone, recorded};
 use crate::registry::{Mount, SandboxState};
@@ -19,7 +20,7 @@ use layerfs_sandbox_backend::LocalRecord;
 #[cfg(target_os = "linux")]
 use layerfs_sandbox_backend::SandboxRecord as BackendRecord;
 use layerfs_sandbox_backend::{CommandIdentity, Sandbox};
-use layerfs_store::project::discovery::{home, private};
+use layerfs_store::project::discovery::{home_of, private};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -39,9 +40,9 @@ pub fn user() -> (u32, u32) {
 /// `<root>/sandbox/<name>/`, in the home on `native` and for a Sandbox
 /// whose daemon the home reaches directly (#535 G4), and under a worker's
 /// root on every other machine.
-pub fn sandbox_dir(args: &SdkValue) -> Result<PathBuf> {
-    let name = layerfs_home::names::SandboxName::parse(helpers::text(args, "sandbox")?)?;
-    Ok(paths::sandbox_dir(&home(args)?, &name))
+pub fn sandbox_dir(host: &Host) -> Result<PathBuf> {
+    let name = layerfs_home::names::SandboxName::parse(host.sandbox()?)?;
+    Ok(paths::sandbox_dir(&home_of(Some(&host.home))?, &name))
 }
 /// What reopens the Sandbox recorded in `directory` (its record's
 /// `daemon`), or `None` before its start recorded one.
@@ -52,20 +53,17 @@ pub fn started(directory: &Path) -> Result<Option<DaemonRecord>> {
 
 /// Records started Sandbox `state` in its folder `directory`: its daemon
 /// keys in `control.json`, then what reopens it in its record (`daemon`,
-/// with its backend, route and runtime id), the record's other fields kept.
+/// with its backend, route and runtime id, and `platform`, which `create`
+/// checked before any effect, #529), the record's other fields kept.
 pub fn save_sandbox(
     directory: &Path,
     state: &SandboxState,
-    args: &SdkValue,
+    (host, platform): (&Host, &str),
     secret: [u8; 32],
     peer: [u8; 32],
     instance: [u8; 32],
 ) -> Result<()> {
-    let deploy = args
-        .get("deploy")
-        .ok_or_else(|| refused("InvalidInput", "deploy"))?;
-    // the platform the call named, checked by `create` before any effect (#529)
-    let platform = crate::runtime::platform(args, deploy)?;
+    let platform = platform.to_owned();
     let runtime = state.runtime()?;
     let daemon = match runtime {
         #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -73,7 +71,7 @@ pub fn save_sandbox(
             let record = runtime
                 .local_record()
                 .ok_or_else(|| refused("Failed", "local Sandbox has no daemon process"))?;
-            local_fields(args, state, platform, &record, NATIVE, LOCAL)?
+            local_fields(host, state, platform, &record, NATIVE, LOCAL)?
         }
         #[cfg(target_os = "linux")]
         Sandbox::Namespaces(runtime) => {
@@ -81,7 +79,7 @@ pub fn save_sandbox(
                 return Err(refused("Failed", "namespace Sandbox has no init process"));
             };
             let image = record.image().as_str().to_owned();
-            local_fields(args, state, platform, record.local(), NAMESPACES, &image)?
+            local_fields(host, state, platform, record.local(), NAMESPACES, &image)?
         }
     };
     // the keys first: a record with `daemon` is a started Sandbox
@@ -102,7 +100,7 @@ pub fn save_sandbox(
     let _sandbox = crate::record::lock_in(directory, &state.id)?;
     let record = SandboxRecord::read_in(directory, &state.id)?
         .unwrap_or_else(|| SandboxRecord::from_record(&state.id, SdkValue::Null));
-    let store = args.get_text("store").unwrap_or(&state.project);
+    let store = &host.store;
     let facts = [
         crate::runtime::kind(runtime).to_owned(),
         route(runtime).to_owned(),
@@ -127,7 +125,7 @@ pub fn route(runtime: &Sandbox) -> &'static str {
 /// digest its root is an overlay of).
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_fields(
-    args: &SdkValue,
+    host: &Host,
     state: &SandboxState,
     platform: String,
     record: &LocalRecord,
@@ -137,7 +135,7 @@ fn local_fields(
     let boot = record
         .boot
         .ok_or_else(|| refused("Failed", "local Sandbox daemon has no boot id"))?;
-    let directory = crate::launch::local::directory(args, &state.id, None)?;
+    let directory = crate::launch::local::directory(host.deploy(), &state.id, None)?;
     Ok(DaemonRecord::local(Local {
         platform,
         name: state.name.clone(),
@@ -156,9 +154,9 @@ fn local_fields(
 /// Reopens the Sandbox a call names from its folder: its record's `daemon`
 /// and its keys, its runtime observed running once, then a control
 /// connection and its Workspace records.
-pub fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
-    let id = helpers::text(args, "sandbox")?;
-    let directory = sandbox_dir(args)?;
+pub fn reopen(host: &Host) -> Result<Arc<SandboxState>> {
+    let id = host.sandbox()?;
+    let directory = sandbox_dir(host)?;
     let Some(value) = started(&directory)? else {
         return Err(refused(
             "NoSuchSandbox",
@@ -168,16 +166,16 @@ pub fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
     private(&directory, true)?;
     let keys = layerfs_home::secrets::daemon_keys(&directory)?
         .ok_or_else(|| refused("NoSuchSandbox", format!("Sandbox {id} has no daemon keys")))?;
-    let project = helpers::text(args, "project")?;
+    let project = &host.project;
     // a Sandbox in a machine whose daemon's port is forwarded here (#535
     // G4): only its forward is checked; its runtime is the machine's
     let (runtime, endpoint) = match value.forward().and_then(|f| f.address()) {
         Some(address) => {
-            crate::direct::check(&home(args)?, id, &value)?;
+            crate::direct::check(&home_of(Some(&host.home))?, id, &value)?;
             (None, address)
         }
         None => {
-            let runtime = observed(args, id, &value)?;
+            let runtime = observed(host, id, &value)?;
             let endpoint = runtime.endpoint().map_err(failed)?;
             (Some(runtime), endpoint)
         }
@@ -208,9 +206,9 @@ pub fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
 }
 /// The runtime a Sandbox record's `daemon` names, observed running once;
 /// its daemon listens on this kernel's loopback.
-fn observed(args: &SdkValue, id: &str, value: &DaemonRecord) -> Result<Box<Sandbox>> {
+fn observed(host: &Host, id: &str, value: &DaemonRecord) -> Result<Box<Sandbox>> {
     let container = helpers::required(value.container(), "container")?;
-    recorded(args, id, value)?.reopen().map_err(|failure| {
+    recorded(host, id, value)?.reopen().map_err(|failure| {
         if failure.container_stopped() {
             gone(id, container, true)
         } else {

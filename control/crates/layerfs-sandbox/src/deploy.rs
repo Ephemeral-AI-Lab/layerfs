@@ -38,7 +38,7 @@ pub enum Side<'a> {
 /// image, which names no image of the bundle's archive, so only the call's
 /// is taken; the bundle's archive is the only one, and the choice names
 /// the `docker` platform its Sandboxes keep showing.
-pub fn choose(home: &Path, machine: &str, image: Option<&str>) -> Result<SdkValue> {
+pub fn choose(home: &Path, machine: &str, image: Option<&str>) -> Result<Choice> {
     let record = MachineRecord::read(home, machine)?
         .unwrap_or_else(|| MachineRecord::from_record(machine, SdkValue::Null));
     let docker = machine == "docker";
@@ -47,46 +47,59 @@ pub fn choose(home: &Path, machine: &str, image: Option<&str>) -> Result<SdkValu
     } else {
         image.or(record.image())
     };
-    let mut fields = vec![("backend", SdkValue::text("local"))];
-    if let Some(digest) = named.filter(|i| is_digest(i)) {
-        fields.push(("image", SdkValue::text(digest)));
-    }
-    if docker {
-        fields.push(("platform", SdkValue::text("docker")));
-    } else {
-        let archive = record
-            .text("image_archive")
-            .or(record.image().filter(|i| i.starts_with('/')));
-        if let Some(archive) = archive {
-            fields.push(("archive", SdkValue::text(archive)));
-        }
-    }
-    Ok(SdkValue::Map(
-        fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
-    ))
+    let archive = record
+        .text("image_archive")
+        .or(record.image().filter(|i| i.starts_with('/')));
+    Ok(Choice {
+        image: named.filter(|i| is_digest(i)).map(str::to_owned),
+        platform: docker.then(|| "docker".to_owned()),
+        archive: archive.filter(|_| !docker).map(str::to_owned),
+    })
+}
+
+/// What a machine's record chooses for its Sandboxes ([`choose`]), sent to
+/// the side that runs the call (`deploy` in the `sandbox.host` frame).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Choice {
+    /// The image digest: the call's, else the record's (not on `docker`).
+    pub image: Option<String>,
+    /// `docker` on the docker machine (D-8).
+    pub platform: Option<String>,
+    /// The machine's own image archive (not on `docker`).
+    pub archive: Option<String>,
+}
+
+/// What [`resolve`] resolves where the call runs.
+pub struct Settings {
+    /// The daemon executable.
+    pub daemon: String,
+    /// A namespaces Sandbox's image archive (Linux).
+    pub image_archive: Option<String>,
+    /// A namespaces Sandbox's image digest (Linux).
+    pub image: Option<String>,
+    /// The platform the machine implies (`docker`, D-8).
+    pub platform: Option<String>,
 }
 
 /// The deploy settings for `choice` ([`choose`]) on `side`: a daemon
 /// process (`native` on macOS, namespaces on Linux), and for namespaces
 /// its image archive and digest.
-pub fn resolve(side: &Side<'_>, choice: &SdkValue) -> Result<Vec<(String, SdkValue)>> {
-    let mut fields = vec![("daemon".to_owned(), SdkValue::Text(daemon(side)?))];
+pub fn resolve(side: &Side<'_>, choice: &Choice) -> Result<Settings> {
+    let mut settings = Settings {
+        daemon: daemon(side)?,
+        image_archive: None,
+        image: None,
+        platform: None,
+    };
     // a namespaces Sandbox (Linux): its image archive and digest
     if cfg!(target_os = "linux") {
-        let archive = archive(side, choice.get_text("archive"))?;
-        fields.push((
-            "imageArchive".to_owned(),
-            SdkValue::text(archive.display().to_string()),
-        ));
-        if let Some(digest) = choice.get_text("image").filter(|i| is_digest(i)) {
-            fields.push(("image".to_owned(), SdkValue::text(digest)));
-        }
+        let archive = archive(side, choice.archive.as_deref())?;
+        settings.image_archive = Some(archive.display().to_string());
+        settings.image = choice.image.clone().filter(|i| is_digest(i));
     }
     // the platform the machine implies for its Sandboxes (`docker`, D-8)
-    if let Some(platform) = choice.get_text("platform") {
-        fields.push(("platform".to_owned(), SdkValue::text(platform)));
-    }
-    Ok(fields)
+    settings.platform = choice.platform.clone();
+    Ok(settings)
 }
 
 /// Why built-in machine `machine`'s recorded daemon `path` cannot run (it

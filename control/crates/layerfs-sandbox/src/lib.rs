@@ -34,6 +34,8 @@ pub mod family;
 pub mod files;
 mod get;
 #[doc(hidden)]
+pub mod host;
+#[doc(hidden)]
 pub mod launch;
 #[doc(hidden)]
 pub mod lifecycle;

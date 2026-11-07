@@ -3,6 +3,7 @@
 //! reopened or deleted through its backend. A record of the retired docker
 //! backend (D-8, layerfs-project#111) is refused: nothing it names is
 //! reopened or deleted here.
+use crate::host::Host;
 use crate::record::DaemonRecord;
 #[cfg(target_os = "linux")]
 use crate::runtime::NAMESPACES;
@@ -83,13 +84,13 @@ pub enum Recorded {
 /// Reads Sandbox `id`'s record's runtime.
 /// The record alone decides (#529): a caller's deployment backend is not
 /// consulted, so every call on a Sandbox reopens it by its own runtime.
-pub fn recorded(args: &SdkValue, id: &str, value: &DaemonRecord) -> Result<Recorded> {
+pub fn recorded(host: &Host, id: &str, value: &DaemonRecord) -> Result<Recorded> {
     #[cfg(target_os = "linux")]
     if value.runtime() == Some(NAMESPACES) {
-        return namespaces_record(args, id, value);
+        return namespaces_record(host, id, value);
     }
     if value.runtime() == Some(NATIVE) {
-        return local_record(args, id, value);
+        return local_record(host, id, value);
     }
     match value.runtime() {
         None | Some("docker") => Err(retired(id, value.name().unwrap_or(""))),
@@ -101,7 +102,7 @@ pub fn recorded(args: &SdkValue, id: &str, value: &DaemonRecord) -> Result<Recor
                 "Sandbox {id} is a {other} Sandbox, which this host never reopens, so the record \
                  is neither used nor deleted. Remove what it left by hand, then delete \
                  the folder {}",
-                crate::files::sandbox_dir(args)?.display()
+                crate::files::sandbox_dir(host)?.display()
             ),
         )),
     }
@@ -113,8 +114,8 @@ pub fn recorded(args: &SdkValue, id: &str, value: &DaemonRecord) -> Result<Recor
 /// without `boot` was written before boot ids were kept: its daemon is
 /// matched by id and start time as then, and never signalled.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-fn local_record(args: &SdkValue, id: &str, value: &DaemonRecord) -> Result<Recorded> {
-    let (directory, record) = local_record_of(args, id, value)?;
+fn local_record(host: &Host, id: &str, value: &DaemonRecord) -> Result<Recorded> {
+    let (directory, record) = local_record_of(host, id, value)?;
     local(directory, record, value)
 }
 /// The local Sandbox in `directory` that `record` names.
@@ -139,13 +140,9 @@ fn local(directory: PathBuf, record: LocalRecord, value: &DaemonRecord) -> Resul
 /// name this deployment gives Sandbox `id` and be owned by this record
 /// ([`crate::launch::local::owned`]).
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-fn local_record_of(
-    args: &SdkValue,
-    id: &str,
-    value: &DaemonRecord,
-) -> Result<(PathBuf, LocalRecord)> {
+fn local_record_of(host: &Host, id: &str, value: &DaemonRecord) -> Result<(PathBuf, LocalRecord)> {
     let directory = PathBuf::from(helpers::required(value.directory(), "directory")?);
-    let expected = crate::launch::local::directory(args, id, directory.parent())?;
+    let expected = crate::launch::local::directory(host.deploy(), id, directory.parent())?;
     // the Sandbox's own directory name, exactly as this deployment names it
     let name = helpers::required(value.name(), "name")?;
     if directory != expected || expected.file_name().and_then(|n| n.to_str()) != Some(name) {
@@ -158,16 +155,15 @@ fn local_record_of(
                  the folder {}",
                 directory.display(),
                 expected.display(),
-                crate::files::sandbox_dir(args)?.display()
+                crate::files::sandbox_dir(host)?.display()
             ),
         ));
     }
-    if (args
-        .get("deploy")
-        .and_then(|deploy| deploy.get_text("localDir")))
-    .is_none()
+    if (host.deploy())
+        .and_then(|deploy| deploy.local_dir.as_deref())
+        .is_none()
     {
-        crate::launch::local::owned(args, id, &directory)?;
+        crate::launch::local::owned(host, id, &directory)?;
     }
     local_parts(value)
 }
@@ -218,8 +214,8 @@ fn recorded_process(value: &DaemonRecord) -> Result<LocalProcess> {
 /// Sandbox ([`local_record_of`]), by any deployment (#529: the record
 /// decides).
 #[cfg(target_os = "linux")]
-fn namespaces_record(args: &SdkValue, id: &str, value: &DaemonRecord) -> Result<Recorded> {
-    let (directory, local) = local_record_of(args, id, value)?;
+fn namespaces_record(host: &Host, id: &str, value: &DaemonRecord) -> Result<Recorded> {
+    let (directory, local) = local_record_of(host, id, value)?;
     namespaces(id, directory, local, value)
 }
 /// The namespaces Sandbox in `directory` that `local` and its record name.
@@ -284,7 +280,7 @@ pub fn unchecked(id: &str, value: &DaemonRecord) -> Result<Recorded> {
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-fn local_record(_: &SdkValue, id: &str, _: &DaemonRecord) -> Result<Recorded> {
+fn local_record(_: &Host, id: &str, _: &DaemonRecord) -> Result<Recorded> {
     Err(refused(
         "Unsupported",
         format!(

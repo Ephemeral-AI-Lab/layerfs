@@ -31,9 +31,13 @@ pub struct Project {
 }
 
 pub fn home(args: &SdkValue) -> Result<PathBuf> {
-    let home = args
-        .get_text("home")
-        .map(PathBuf::from)
+    home_of(args.get_text("home").map(Path::new))
+}
+
+/// [`home`] of a typed request's `home` (layerfs-project#108).
+pub fn home_of(home: Option<&Path>) -> Result<PathBuf> {
+    let home = home
+        .map(Path::to_path_buf)
         .or_else(|| std::env::var_os("LAYERFS_HOME").map(PathBuf::from))
         .ok_or_else(|| refused("InvalidInput", "LAYERFS_HOME is required"))?;
     if !home.is_absolute() {

@@ -6,6 +6,7 @@
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{paths, read_record, write_record};
+use layerfs_sandbox::host::{Deploy, Host, Message};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -45,12 +46,18 @@ fn docker_record(root: &Path, runtime: Option<&str>) -> SdkValue {
     daemon
 }
 
-fn args(root: &Path) -> SdkValue {
-    SdkValue::map([
-        ("home", t(&root.display().to_string())),
-        ("sandbox", t("old")),
-        ("project", t("shop/api")),
-    ])
+fn host(root: &Path) -> Host {
+    Host {
+        home: root.to_path_buf(),
+        store: "shop".to_owned(),
+        project: "shop/api".to_owned(),
+        sandbox: Some("old".to_owned()),
+        store_record: None,
+        store_path: None,
+        deploy: None,
+        postgresql: None,
+        message: Message::Absent,
+    }
 }
 
 #[test]
@@ -59,7 +66,7 @@ fn a_retired_docker_record_is_refused_with_how_to_recreate_it() {
         let root = root(&format!("refused-{}", runtime.unwrap_or("none")));
         let daemon = docker_record(&root, runtime);
         let refusal = match layerfs_sandbox::recorded::recorded(
-            &args(&root),
+            &host(&root),
             "old",
             &layerfs_sandbox::record::DaemonRecord::from_record(&daemon),
         ) {
@@ -89,7 +96,7 @@ fn a_retired_docker_record_is_refused_with_how_to_recreate_it() {
 fn close_forgets_a_retired_docker_sandbox_and_names_its_container() {
     let root = root("close");
     docker_record(&root, None);
-    let answer = layerfs_sandbox::lifecycle::close(&args(&root)).unwrap();
+    let answer = layerfs_sandbox::lifecycle::close(&host(&root), false, &[]).unwrap();
     assert_eq!(answer.get_text("kind"), Some("Forgotten"), "{answer:?}");
     assert_eq!(answer.get_text("container"), Some("lfs-0123abcd-old"));
     assert_eq!(
@@ -98,7 +105,7 @@ fn close_forgets_a_retired_docker_sandbox_and_names_its_container() {
     );
     assert!(!paths::sandbox_dir(&root, "old").exists());
     // closed again: nothing is recorded any more
-    let refusal = layerfs_sandbox::lifecycle::close(&args(&root)).unwrap_err();
+    let refusal = layerfs_sandbox::lifecycle::close(&host(&root), false, &[]).unwrap_err();
     assert_eq!(refusal.code, "NoSuchSandbox", "{}", refusal.message);
     assert!(read_record(&paths::sandbox_record(&root, "old"))
         .unwrap()
@@ -132,18 +139,17 @@ fn a_create_of_the_same_name_forgets_a_retired_docker_record() {
     } else {
         "namespaces"
     };
-    let args = SdkValue::map([
-        ("home", t(&root.display().to_string())),
-        ("sandbox", t("old")),
-        ("project", t("api")),
-        ("store", t("pg")),
-        (
-            "postgresql",
-            SdkValue::map([("url", t("postgresql://127.0.0.1:1/none"))]),
-        ),
-        ("deploy", SdkValue::map([("sandbox", t(backend))])),
-    ]);
-    let refusal = layerfs_sandbox::lifecycle::create(&args).unwrap_err();
+    let host = Host {
+        store: "pg".to_owned(),
+        project: "api".to_owned(),
+        postgresql: Some(SdkValue::map([("url", t("postgresql://127.0.0.1:1/none"))])),
+        deploy: Some(Deploy {
+            sandbox: Some(backend.to_owned()),
+            ..Deploy::default()
+        }),
+        ..host(&root)
+    };
+    let refusal = layerfs_sandbox::lifecycle::create(&host, None).unwrap_err();
     assert_ne!(refusal.code, "Exists", "{}", refusal.message);
     assert!(
         matches!(refusal.code.as_str(), "InvalidInput" | "Unsupported"),

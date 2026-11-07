@@ -3,8 +3,9 @@
 //! daemon; an exec always runs through the Sandbox's runtime, in its machine.
 use crate::direct;
 use crate::family::sandbox_of;
+use crate::host::{Call, Message};
 use crate::record::SandboxRecord;
-use crate::route::{on_machine, reach};
+use crate::route::{on_machine, reach, Asked};
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::events::Events;
@@ -22,26 +23,24 @@ pub fn mount(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
     // refused while a create or close holds the Sandbox, or left it
     // unresolved (#536 §7.1)
     record.free()?;
-    let branch = args.get("branch").cloned().unwrap_or_default();
-    let mut more = vec![("branch", branch)];
     // a name, unique in the Sandbox, which `ws` then uses (#536 C3)
     let named = match args.get_text("name") {
         Some(text) => Some(WorkspaceName::parse(text)?),
         None => None,
     };
-    if let Some(named) = &named {
-        more.push(("name", SdkValue::text(named.as_str())));
-    }
+    let call = Call::Mount {
+        branch: args.get_text("branch").map(str::to_owned),
+        name: named.as_ref().map(|named| named.as_str().to_owned()),
+    };
     // a Sandbox whose daemon this host reaches is mounted from here
     // (#535 G4); every other through its machine
     let mounted = match direct::forwarded(&record) {
-        true => crate::workspace::direct::call(&home, events, &record, "workspace.mount", more)?,
+        true => crate::workspace::direct::call(&home, events, &record, call, Message::Absent)?,
         false => on_machine(
             &home,
             events,
             &record,
-            "workspace.mount",
-            more,
+            call,
             crate::workspace::dispatch::call,
         )?,
     };
@@ -58,12 +57,14 @@ pub fn mount(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
 }
 
 /// The Workspace `ws` names, as every call but mount starts: the home, the
-/// Sandbox's record, the request's fields so far and whether this host
-/// reaches the Sandbox's daemon.
+/// Sandbox's record, the Workspace's path (or name), the directory an exec
+/// on a Sandbox this host reaches runs in, and whether it reaches the
+/// Sandbox's daemon.
 struct At {
     home: PathBuf,
     record: SandboxRecord,
-    more: Vec<(&'static str, SdkValue)>,
+    path: String,
+    directory: Option<String>,
     forwarded: bool,
 }
 
@@ -80,56 +81,73 @@ fn at(home: &Path, args: &SdkValue, reads: bool, exec: bool) -> Result<At, SdkRe
         record.free()?;
     }
     // a path, or a name the Sandbox's side resolves to its path
-    let mut more = vec![("path", SdkValue::text(ws.at.as_str()))];
+    let mut path = ws.at.as_str().to_owned();
+    let mut directory = None;
     let forwarded = direct::forwarded(&record);
     // an exec runs through the Sandbox's runtime, in its machine, even when
     // this host reaches its daemon: its directory is checked here, where
     // its Workspace records are (#535 G4)
     if forwarded && exec {
-        let directory = crate::workspace::direct::exec_directory(&home, &record, ws.at.as_str())?;
-        more = vec![
-            ("path", SdkValue::text(&directory)),
-            ("directory", SdkValue::Text(directory)),
-        ];
+        path = crate::workspace::direct::exec_directory(&home, &record, ws.at.as_str())?;
+        directory = Some(path.clone());
     }
     Ok(At {
         home,
         record,
-        more,
+        path,
+        directory,
         forwarded,
     })
 }
 
-/// Runs `op` on the Workspace: straight to its daemon when this host
-/// reaches it, else through its machine.
-fn changing(events: &mut Events<'_>, at: At, op: &str) -> Outcome {
+/// Runs `call` with `message` on the Workspace: straight to its daemon
+/// when this host reaches it, else through its machine.
+fn changing(events: &mut Events<'_>, at: At, call: Call, message: Message) -> Outcome {
     match at.forwarded {
-        true => crate::workspace::direct::call(&at.home, events, &at.record, op, at.more),
+        true => crate::workspace::direct::call(&at.home, events, &at.record, call, message),
         false => on_machine(
             &at.home,
             events,
             &at.record,
-            op,
-            at.more,
+            Asked {
+                call,
+                message,
+                image: None,
+            },
             crate::workspace::dispatch::call,
         ),
+    }
+}
+
+/// The Commit message an SDK call carries: null when it has none.
+fn message_of(args: &SdkValue) -> Message {
+    match args.get("message") {
+        None | Some(SdkValue::Null) => Message::Null,
+        Some(SdkValue::Text(text)) => Message::Text(text.clone()),
+        Some(_) => Message::NotText,
     }
 }
 
 /// `workspace.exec`: a command in the Workspace, always through the
 /// Sandbox's runtime in its machine; its output comes as events too.
 pub fn exec(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
-    let mut at = at(home, args, false, true)?;
-    at.more
-        .push(("command", args.get("command").cloned().unwrap_or_default()));
-    at.more
-        .push(("message", args.get("message").cloned().unwrap_or_default()));
+    let at = at(home, args, false, true)?;
+    let call = Call::Exec {
+        path: Some(at.path),
+        directory: at.directory,
+        command: args.get_text("command").map(str::to_owned),
+        spool: false,
+    };
+    let asked = Asked {
+        call,
+        message: message_of(args),
+        image: None,
+    };
     let out = on_machine(
         &at.home,
         events,
         &at.record,
-        "workspace.exec",
-        at.more,
+        asked,
         crate::workspace::dispatch::call,
     )?;
     // the command's output as events too, for front ends that stream
@@ -147,40 +165,41 @@ pub fn exec(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
 
 /// `workspace.commit`: the Workspace's changes as one Commit.
 pub fn commit(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
-    let mut at = at(home, args, false, false)?;
-    at.more
-        .push(("message", args.get("message").cloned().unwrap_or_default()));
-    // publish over a moved head instead of merging
-    if let Some(force) = args.get("force") {
-        at.more.push(("force", force.clone()));
-    }
-    changing(events, at, "workspace.commit")
+    let at = at(home, args, false, false)?;
+    let call = Call::Commit {
+        path: Some(at.path.clone()),
+        // publish over a moved head instead of merging
+        force: args.get("force").map(|_| args.get_bool("force")),
+    };
+    changing(events, at, call, message_of(args))
 }
 
 /// `workspace.unmount`: the Workspace's terminal unmount.
 pub fn unmount(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
-    let mut at = at(home, args, false, false)?;
-    for flag in ["discard", "force"] {
-        if let Some(value) = args.get(flag) {
-            at.more.push((flag, value.clone()));
-        }
-    }
-    changing(events, at, "workspace.unmount")
+    let at = at(home, args, false, false)?;
+    let flag = |name: &str| args.get(name).map(|_| args.get_bool(name));
+    let call = Call::Unmount {
+        path: Some(at.path.clone()),
+        discard: flag("discard"),
+        force: flag("force"),
+    };
+    changing(events, at, call, Message::Absent)
 }
 
 /// `workspace.status`: the Workspace's state; it starts no machine (P4).
 pub fn status(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
     let at = at(home, args, true, false)?;
-    let op = "backend.daemon.workspace.status";
+    let call = Call::Status {
+        path: Some(at.path.clone()),
+    };
     if at.forwarded {
-        return crate::workspace::direct::call(&at.home, events, &at.record, op, at.more);
+        return crate::workspace::direct::call(&at.home, events, &at.record, call, Message::Absent);
     }
     reach(
         &at.home,
         events,
         &at.record,
-        op,
-        at.more,
+        call,
         crate::workspace::dispatch::call,
     )
     .unwrap_or_else(|Unreached(why)| Err(why))

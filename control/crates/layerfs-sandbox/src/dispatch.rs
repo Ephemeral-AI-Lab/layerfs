@@ -2,24 +2,31 @@
 //! machine, here or in its worker (`sandbox.host`): the Sandbox operations
 //! (`call`). The Workspace operations and the Workspace status read are
 //! `workspace::dispatch`, which passes every other operation here
-//! (layerfs-project#106).
+//! (layerfs-project#106). Both match on the one table of host operations
+//! (`host::Call`, R1).
 //! The 1.1 `runtime.*` and `backend.*` tables are gone (#536 step 2).
+use crate::host::{Call, Host, Message};
 use crate::registry;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::{self, refused, Outcome};
 
 /// Runs one Sandbox operation once; a Commit `message` is checked for every
 /// operation.
-pub fn call(op: &str, args: SdkValue) -> Outcome {
-    checked(&args)?;
-    match op {
-        "sandbox.list_workspaces" => {
-            let directory = crate::files::sandbox_dir(&args)?;
-            listed(daemon_backend(op, args)?, &directory)
+pub fn call(host: Host, call: Call) -> Outcome {
+    checked(&host.message)?;
+    match call {
+        Call::ListWorkspaces { .. } => {
+            let directory = crate::files::sandbox_dir(&host)?;
+            listed(daemon_backend(&host, &call)?, &directory)
         }
-        "sandbox.create" => crate::lifecycle::create(&args),
-        "sandbox.close" => crate::lifecycle::close(&args),
-        _ => Err(refused("UnknownMethod", format!("no operation {op}"))),
+        Call::Create { platform } => crate::lifecycle::create(&host, platform.as_deref()),
+        Call::Close { force, held } => {
+            crate::lifecycle::close(&host, force, held.as_deref().unwrap_or_default())
+        }
+        _ => Err(refused(
+            "UnknownMethod",
+            format!("no operation {}", call.op().name()),
+        )),
     }
 }
 
@@ -65,12 +72,15 @@ fn listed(answer: SdkValue, directory: &std::path::Path) -> Outcome {
 /// A daemon backend call through the named Sandbox of the project: its
 /// Workspaces and the read model that lists them. `deploy` only selects how this process dials
 /// the daemon, so it is not sent on.
-fn daemon_backend(op: &str, args: SdkValue) -> Outcome {
-    let state = registry::sandbox_live(&args)?;
-    if let Some(path) = args.get_text("path") {
+fn daemon_backend(host: &Host, call: &Call) -> Outcome {
+    let state = registry::sandbox_live(host)?;
+    if let Some(path) = call.path() {
         crate::unmount_guard::check(&state, path)?;
     }
-    let args = match args {
+    let op = call.op().name();
+    // the daemon's own request (its protocol, `Request::Sdk`) is the host
+    // request's one args map
+    let args = match host.to_args(Some(call)) {
         SdkValue::Map(fields) => SdkValue::Map(
             fields
                 .into_iter()
@@ -93,18 +103,16 @@ fn daemon_backend(op: &str, args: SdkValue) -> Outcome {
     })
 }
 
-/// Refuses an invalid Commit `message` argument before any effect.
-pub fn checked(args: &SdkValue) -> Result<(), layerfs_bridge::control::SdkRefusal> {
-    if let Some(value) = args.get("message") {
-        if !matches!(value, SdkValue::Null) {
-            let SdkValue::Text(message) = value else {
-                return Err(refused("InvalidInput", "message must be text"));
-            };
+/// Refuses an invalid Commit `message` before any effect.
+pub fn checked(message: &Message) -> Result<(), layerfs_bridge::control::SdkRefusal> {
+    match message {
+        Message::Absent | Message::Null => Ok(()),
+        Message::NotText => Err(refused("InvalidInput", "message must be text")),
+        Message::Text(message) => {
             let mut meta = layerfs_history::CommitMeta::new(layerfs_history::CommitVia::Files);
             meta.message = Some(message.clone());
             meta.check()
-                .map_err(|error| refused("InvalidInput", error.to_string()))?;
+                .map_err(|error| refused("InvalidInput", error.to_string()))
         }
     }
-    Ok(())
 }

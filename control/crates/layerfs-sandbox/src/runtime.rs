@@ -8,8 +8,9 @@
 //! `layerfs_sandbox_backend::Sandbox` handle. A Sandbox also names its
 //! platform (#529), recorded beside the runtime; every later call follows
 //! the record, not the caller's deployment.
+use crate::host::Deploy;
 use crate::output::Spool;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::outcome::{failed, refused};
 #[cfg(target_os = "linux")]
 use layerfs_sandbox_backend::Image;
@@ -49,16 +50,12 @@ pub enum Backend {
 /// (LAYERFS_SANDBOX) `native` or `namespaces`. Unset or `docker` named the
 /// docker backend, retired by D-8 (layerfs-project#111), and is refused.
 /// This is the one place the setting is validated; the agent only checks
-/// that each value's fields are present.
-///
-/// The former pair keeps working for one release: `native` with
-/// `deploy.sandboxBackend` (LAYERFS_SANDBOX_BACKEND) `namespaces` is
-/// namespaces, and with it unset or `native` is native. Any other
-/// combination with that setting set (`namespaces` with `native`) is
-/// refused, naming both settings. The namespace backend is Linux only.
-/// Every refusal comes before any effect.
-pub fn backend(deploy: &SdkValue) -> Result<Backend, SdkRefusal> {
-    let sandbox = deploy.get_text("sandbox");
+/// that each value's fields are present. The former refinement
+/// `deploy.sandboxBackend` (LAYERFS_SANDBOX_BACKEND) is gone: no deployment
+/// carries it since both sides build `deploy` (layerfs-project#108). The
+/// namespace backend is Linux only. Every refusal comes before any effect.
+pub fn backend(deploy: &Deploy) -> Result<Backend, SdkRefusal> {
+    let sandbox = deploy.sandbox.as_deref();
     let selected = match sandbox {
         Some(NATIVE) => Backend::HostProcess,
         Some(NAMESPACES) => Backend::Namespaces,
@@ -76,32 +73,6 @@ pub fn backend(deploy: &SdkValue) -> Result<Backend, SdkRefusal> {
                 format!(
                     "deploy.sandbox (LAYERFS_SANDBOX) is native (macOS) or namespaces (Linux), \
                      not {other}"
-                ),
-            ))
-        }
-    };
-    let selected = match (selected, deploy.get_text("sandboxBackend")) {
-        (selected, None) => selected,
-        (Backend::HostProcess, Some(NATIVE)) => Backend::HostProcess,
-        (_, Some(NAMESPACES)) => Backend::Namespaces,
-        (_, Some(old)) if old != NATIVE => {
-            return Err(refused(
-                "InvalidInput",
-                format!(
-                    "deploy.sandboxBackend (LAYERFS_SANDBOX_BACKEND) is native or namespaces, \
-                     not {old}; it is replaced by LAYERFS_SANDBOX=native or namespaces"
-                ),
-            ))
-        }
-        (_, Some(old)) => {
-            return Err(refused(
-                "InvalidInput",
-                format!(
-                    "deploy.sandbox (LAYERFS_SANDBOX) {} conflicts with deploy.sandboxBackend \
-                     (LAYERFS_SANDBOX_BACKEND) {old}: LAYERFS_SANDBOX_BACKEND, kept for one \
-                     release, only refines LAYERFS_SANDBOX=native. Set LAYERFS_SANDBOX to native \
-                     or namespaces and leave LAYERFS_SANDBOX_BACKEND unset",
-                    sandbox.unwrap_or("")
                 ),
             ))
         }
@@ -138,15 +109,15 @@ pub const PLATFORMS: [&str; 8] = [
 /// allows and maps each to its deployment; this refuses a call whose two
 /// facts disagree. A call that names none (an older caller) records the
 /// one its deployment implies.
-pub fn platform(args: &SdkValue, deploy: &SdkValue) -> Result<String, SdkRefusal> {
+pub fn platform(named: Option<&str>, deploy: &Deploy) -> Result<String, SdkRefusal> {
     let backend = backend(deploy)?;
-    let docker_machine = deploy.get_text("platform") == Some("docker");
+    let docker_machine = deploy.platform.as_deref() == Some("docker");
     let implied = match backend {
         Backend::Namespaces if docker_machine => "docker",
         _ if cfg!(target_os = "macos") => "mac",
         _ => "linux",
     };
-    let Some(named) = args.get_text("platform") else {
+    let Some(named) = named else {
         return Ok(implied.to_owned());
     };
     if !PLATFORMS.contains(&named) {
@@ -211,8 +182,8 @@ pub fn image(runtime: &Sandbox) -> String {
 /// image, or a given image the archive does not hold, refuses the start
 /// `InvalidInput`.
 #[cfg(target_os = "linux")]
-pub fn namespaces_image(deploy: &SdkValue) -> Result<(Image, PathBuf), SdkRefusal> {
-    let archive = deploy.get_text("imageArchive").ok_or_else(|| {
+pub fn namespaces_image(deploy: &Deploy) -> Result<(Image, PathBuf), SdkRefusal> {
+    let archive = deploy.image_archive.as_deref().ok_or_else(|| {
         refused(
             "InvalidInput",
             "deploy.imageArchive is not configured (LAYERFS_IMAGE_ARCHIVE); a namespaces Sandbox \
@@ -232,7 +203,7 @@ pub fn namespaces_image(deploy: &SdkValue) -> Result<(Image, PathBuf), SdkRefusa
             format!("deploy.imageArchive {}: {error}", archive.display()),
         )
     };
-    let image = match deploy.get_text("image") {
+    let image = match deploy.image.as_deref() {
         Some(digest) => {
             let image = Image::parse(digest)
                 .map_err(|error| refused("InvalidInput", format!("deploy.image: {error}")))?;

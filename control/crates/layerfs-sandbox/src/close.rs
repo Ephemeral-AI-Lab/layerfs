@@ -9,6 +9,7 @@ use super::create::remove_folder;
 use super::direct;
 use super::family::named;
 use super::record::{self, SandboxRecord};
+use crate::host::Call;
 use crate::route::on_machine;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
@@ -46,15 +47,12 @@ pub fn close(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
         record.write(&home)?;
         record
     };
-    let mut more = vec![("force", SdkValue::Bool(force))];
+    let mut held = None;
     // a Sandbox reached directly keeps its Workspace records here: its
     // worker is told which it holds (#535 G4)
     if direct::forwarded(&record) {
         match direct::held(&home, &record) {
-            Ok(held) => more.push((
-                "held",
-                SdkValue::List(held.into_iter().map(SdkValue::Text).collect()),
-            )),
+            Ok(paths) => held = Some(paths),
             Err(refusal) => {
                 let _lock = home::lock::take(&home)?;
                 let _sandbox = record::lock(&home, name)?;
@@ -69,8 +67,7 @@ pub fn close(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
         &home,
         events,
         &record,
-        "sandbox.close",
-        more,
+        Call::Close { force, held },
         crate::dispatch::call,
     );
     let _lock = home::lock::take(&home)?;
@@ -138,8 +135,10 @@ fn forget(home: &Path, events: &mut Events<'_>, name: &str, container: &str) -> 
             home,
             events,
             &record,
-            "sandbox.close",
-            vec![("force", SdkValue::Bool(true))],
+            Call::Close {
+                force: true,
+                held: None,
+            },
             crate::dispatch::call,
         )
         .err()

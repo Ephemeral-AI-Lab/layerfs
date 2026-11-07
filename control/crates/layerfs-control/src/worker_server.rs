@@ -181,7 +181,7 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
         // a Sandbox or Workspace operation on this machine's own native
         "sandbox.host" => layerfs_sandbox::route::in_worker(
             root,
-            &args,
+            layerfs_sandbox::host::decode(&args)?,
             events,
             layerfs_sandbox::workspace::dispatch::call,
         ),

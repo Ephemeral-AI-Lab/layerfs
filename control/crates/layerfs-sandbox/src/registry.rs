@@ -6,8 +6,9 @@
 //! its init stage), known by its name. Its runtime runs
 //! commands directly; its control connections (`pool`) each carry one
 //! exchange at a time, and concurrent calls take separate connections.
+use crate::host::Host;
 use crate::MountedWorkspace;
-use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
+use layerfs_bridge::control::{SdkRefusal, WorkspaceToken};
 use layerfs_home::helpers::lock;
 use layerfs_home::outcome::refused;
 use layerfs_sandbox_backend::CommandIdentity;
@@ -46,28 +47,28 @@ pub static SANDBOXES: LazyLock<Mutex<BTreeMap<std::path::PathBuf, Arc<SandboxSta
 /// mount checks just that mount (`SandboxState::token`, `directory`); one
 /// that needs every mount or process another process may have changed takes
 /// `discovery::refresh`.
-pub fn sandbox(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
-    let directory = crate::files::sandbox_dir(args)?;
+pub fn sandbox(host: &Host) -> Result<Arc<SandboxState>, SdkRefusal> {
+    let directory = crate::files::sandbox_dir(host)?;
     let existing = lock(&SANDBOXES)?.get(&directory).cloned();
     match existing {
         Some(state) => Ok(state),
         None => {
-            let state = crate::files::reopen(args)?;
+            let state = crate::files::reopen(host)?;
             lock(&SANDBOXES)?.insert(directory, state.clone());
             Ok(state)
         }
     }
 }
 
-/// The Sandbox `args` name when its daemon still runs: this process's
+/// The Sandbox `host` names when its daemon still runs: this process's
 /// state, checked with one inspection, or reopened from its records (which
 /// inspects too). A daemon found gone or stopped (an idle Sandbox's daemon
 /// ends itself, #373) is the refusal of
 /// `discovery::gone`, and this process forgets the state.
-pub fn sandbox_live(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
-    let directory = crate::files::sandbox_dir(args)?;
+pub fn sandbox_live(host: &Host) -> Result<Arc<SandboxState>, SdkRefusal> {
+    let directory = crate::files::sandbox_dir(host)?;
     let Some(state) = lock(&SANDBOXES)?.get(&directory).cloned() else {
-        return sandbox(args);
+        return sandbox(host);
     };
     let Some(runtime) = &state.runtime else {
         // a forwarded Sandbox: its forward must still run (#535 G4)

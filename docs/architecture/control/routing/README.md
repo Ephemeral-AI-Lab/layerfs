@@ -81,6 +81,7 @@ serves until `machine.stop` ends it
 | A worker gets one attempt per call; nothing is resent. A lost answer after the request was sent is `Unknown`. | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `send_once`, `answer`, `lost` |
 | No call starts a machine except `machine.start`; an unreached worker is `Unavailable` naming it. | `place.rs` `recorded`, `stopped` (#535 D11) |
 | A guest worker never reads the caller's home: each request carries the records it needs. | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) `with_home`; `sandbox/route.rs` `host_op` |
+| A Sandbox host operation is one typed request (`host::Call` with `host::Host`, layerfs-project#108) on both routes; the `sandbox.host` frame and the one args map for layerfs-store and the daemon are built from it by one encoder, in the untyped request's field order. | [`host/call.rs`](../../../../control/crates/layerfs-sandbox/src/host/call.rs), [`host/frame.rs`](../../../../control/crates/layerfs-sandbox/src/host/frame.rs) |
 | LayerFS reads `LAYERFS_*` settings only (`LAYERFS_HOME`, `LAYERFS_WORKER_LISTEN`, `LAYERFS_WORKER_SECRET`, …) and names no plugin. | [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home`, [`layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
 
 ## Limits and failures
