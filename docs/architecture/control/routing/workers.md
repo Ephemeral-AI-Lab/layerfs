@@ -88,7 +88,7 @@ be served at once; each connection still carries one request.
 | `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`: one of the nine in the host operation table (`OPS`, `workspace.exec_cancel` among them), decoded into the typed request by `decode`, else refused before any effect | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `in_worker`, [`host/call.rs`](../../../../control/crates/layerfs-sandbox/src/host/call.rs) `OPS`, [`host/frame.rs`](../../../../control/crates/layerfs-sandbox/src/host/frame.rs) `decode` |
 | `project.stage` | writes or discards one part of a caller's folder copy (`StageFrame`); a caller sends up to four parts at once, whose data records apply in any order | [`project/staged.rs`](../../../../control/crates/layerfs-store/src/project/staged.rs) |
 | `project.init` | adds the staged copy as a new project (`InitFrame`) | [`project/init.rs`](../../../../control/crates/layerfs-store/src/project/init.rs) |
-| `project.export` | pins one Branch snapshot and streams bounded tree records to the caller (`ExportFrame`) | [`project/export.rs`](../../../../control/crates/layerfs-store/src/project/export.rs) |
+| `project.export` | pins one Branch snapshot and streams bounded tree records to the caller (`ExportFrame`) | [`project/export/`](../../../../control/crates/layerfs-store/src/project/export/route.rs) |
 | `project.remove` | drops one project from a Store under the root (`RemoveFrame`) | [`project/remove.rs`](../../../../control/crates/layerfs-store/src/project/remove.rs) |
 | anything else | `InvalidInput` "the worker has no operation" | `server.rs` |
 

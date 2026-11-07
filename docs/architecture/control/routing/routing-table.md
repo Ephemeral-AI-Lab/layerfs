@@ -57,7 +57,7 @@ unused (`IDLE`), never while a call runs on it.
 | Call | Caller's process does | A worker does (when the Store's machine is not local) | Source |
 | --- | --- | --- | --- |
 | `project.init` | checks, copies the folder to the machine | `project.stage` (each part), then `project.init` | [`project/family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs), [`project/send.rs`](../../../../control/crates/layerfs-store/src/project/send.rs) |
-| `project.export` | destination checks, local staging and atomic rename (`LocalWriter`) | `project.export` (streams pinned tree records back) | [`project/export.rs`](../../../../control/crates/layerfs-store/src/project/export.rs) |
+| `project.export` | destination checks, local staging and atomic rename (`LocalWriter`) | `project.export` (streams pinned tree records back) | [`project/export/`](../../../../control/crates/layerfs-store/src/project/export/route.rs) |
 | `project.remove` | record and lock work | `project.remove` | `project/family.rs` |
 | `store.push`, `store.pull` | phases, records, locks | `store.file` steps on the source and target machine | [`sqlite/transfer/phases.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
 | `store.remove` | records and locks | `store.file` step `remove` | [`sqlite/remove.rs`](../../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
