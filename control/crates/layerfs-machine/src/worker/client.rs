@@ -8,12 +8,22 @@ use std::net::{SocketAddr, TcpStream};
 use std::time::{Duration, Instant};
 
 /// How the caller reaches a machine's worker (from `machine/<name>/worker.json`).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Endpoint {
     /// The loopback address on the caller's host.
     pub address: SocketAddr,
     /// The worker's secret.
     pub secret: String,
+}
+
+/// The secret is never shown.
+impl std::fmt::Debug for Endpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Endpoint")
+            .field("address", &self.address)
+            .field("secret", &"<redacted>")
+            .finish()
+    }
 }
 
 const CONNECT: Duration = Duration::from_secs(10);

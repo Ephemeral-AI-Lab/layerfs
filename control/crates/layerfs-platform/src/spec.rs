@@ -134,7 +134,7 @@ impl Tools {
 }
 
 /// A machine's worker as the host reaches it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Endpoint {
     /// A host loopback address.
     pub address: SocketAddr,
@@ -142,6 +142,17 @@ pub struct Endpoint {
     /// The detached `ssh -L` forward that carries it, if any (`ssh`,
     /// `firecracker`): it outlives the call that started it.
     pub forward_pid: Option<u32>,
+}
+
+/// The secret is never shown.
+impl std::fmt::Debug for Endpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Endpoint")
+            .field("address", &self.address)
+            .field("secret", &"<redacted>")
+            .field("forward_pid", &self.forward_pid)
+            .finish()
+    }
 }
 
 /// A Sandbox daemon's port as this host reaches it (`machine::forward`,
