@@ -158,7 +158,7 @@ itself ([`attributes.rs`](../../../../engine/crates/layerfs-nfs/src/attributes.r
 | Rule | Source |
 | --- | --- |
 | A publication ticket is released only after the reply's one send attempt, whether or not it reached the client. | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs), [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |
-| WRITE splits into `WRITE_WINDOW` (128 KiB) publications; a failure after the first window is a short write of the windows already published. One call carries at most 1 MiB. | [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs), [`changing.rs`](../../../../engine/crates/layerfs-nfs/src/changing.rs) |
+| One WRITE call carries at most one `WRITE_WINDOW` (256 KiB, the transfer window FSINFO declares), so its one window is one publication; a call that still carries more arrives as several windows, and a failure after the first is a short write of the windows already published. | [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs), [`changing.rs`](../../../../engine/crates/layerfs-nfs/src/changing.rs) |
 | WRITE answers `FILE_SYNC`: every window was published before the reply. That is publication, not durability. | [`changing.rs`](../../../../engine/crates/layerfs-nfs/src/changing.rs) |
 | `wcc_data` pre- and post-op reads are separate visits, not atomic with the change. | [`changing.rs`](../../../../engine/crates/layerfs-nfs/src/changing.rs) |
 | A client silly rename (`.nfs` + 24 hex digits on Linux, `.nfs.` + 8 hex + `.` + 4 hex on macOS) is served as an UNLINK of the source; the export keeps the inode by its own reference and descriptor until the final REMOVE. | [`names.rs`](../../../../engine/crates/layerfs-nfs/src/names.rs) |

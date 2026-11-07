@@ -123,7 +123,7 @@ the tree, which keeps the per-tool-call pattern cheap.
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| One write operation | `WRITE_WINDOW` = 128 KiB; larger writes arrive as several operations | [`operations/types.rs`](../../../../engine/crates/layerfs-workspace/src/operations/types.rs), [`file/write.rs`](../../../../engine/crates/layerfs-workspace/src/operations/file/write.rs) |
+| One write operation | `WRITE_WINDOW` = 256 KiB; larger writes arrive as several operations | [`operations/types.rs`](../../../../engine/crates/layerfs-workspace/src/operations/types.rs), [`file/write.rs`](../../../../engine/crates/layerfs-workspace/src/operations/file/write.rs) |
 | One read request | `READ_WINDOW` = 128 KiB | [`file/read.rs`](../../../../engine/crates/layerfs-workspace/src/operations/file/read.rs) |
 | One listing window | `PAGE_ROWS` = 1,024 names, whiteouts included; a continuation resumes | [`namespace/list.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/list.rs) |
 | Total files, names, edits or Workspace size | No cap: windows bound one request, not the file or the flow | [`operations/types.rs`](../../../../engine/crates/layerfs-workspace/src/operations/types.rs) |

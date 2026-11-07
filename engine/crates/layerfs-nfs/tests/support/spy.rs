@@ -39,6 +39,9 @@ pub struct Watch {
     /// Each publication and the call count when it was made: the client was
     /// then waiting for exactly that call's reply.
     pub owed: Mutex<Vec<(Publication, u64)>>,
+    /// Each engine read window the export asked for: offset and length. One
+    /// call may fill its whole transfer from several of them.
+    pub reads: Mutex<Vec<(u64, u32)>>,
 }
 pub struct Spy {
     pub inner: Arc<dyn MountServices>,
@@ -94,6 +97,7 @@ impl RequestServices for Request {
         offset: u64,
         length: u32,
     ) -> ServiceFuture<'_, ServiceReply<Arc<KernelWindow>>> {
+        self.watch.reads.lock().unwrap().push((offset, length));
         self.inner.read_visit(mount, serial, handle, offset, length)
     }
     fn close_file(

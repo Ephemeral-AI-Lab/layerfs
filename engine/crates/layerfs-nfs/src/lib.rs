@@ -33,4 +33,5 @@ mod server;
 pub mod xdr;
 
 pub use kernel::Released;
+pub use nfs::TRANSFER_WINDOW;
 pub use server::{Count, ExportConfig, Server};

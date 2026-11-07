@@ -12,10 +12,26 @@ use crate::{
     rpc::{Accept, Credentials},
     xdr::{Garbage, Reader, Writer},
 };
-use layerfs_overlay::{READ_WINDOW, WRITE_WINDOW};
+use layerfs_overlay::READ_WINDOW;
 
 pub const PROGRAM: u32 = 100_003;
 pub const VERSION: u32 = 3;
+/// Largest READ or WRITE payload one call transfers, and what FSINFO declares
+/// as `rtmax/rtpref/wtmax/wtpref`. It is exactly one engine write window
+/// (`layerfs_overlay::WRITE_WINDOW`, asserted below): a WRITE of this size is
+/// one owner job — one SQLite transaction and one publication — instead of a
+/// loop of window jobs. A READ of it is filled from consecutive
+/// `READ_WINDOW` windows inside this one call, so the engine never holds or
+/// reads more than one read window for it.
+///
+/// 256 KiB, not larger: a macOS NFSv3 client sets its `nfsbuf` I/O block from
+/// `max(rsize, wsize)`, and a wider one makes every small write of an
+/// unshrunk page pool cost proportionally more in its own kernel (measured:
+/// 4-byte writes 12 µs at 128 KiB, 18 µs at 256 KiB, 57 µs at 1 MiB — #77).
+pub const TRANSFER_WINDOW: u32 = 256 * 1024;
+// One transfer, one write job: the arithmetic that makes a 256 KiB WRITE one
+// transaction cannot drift from the engine's window.
+const _: () = assert!(TRANSFER_WINDOW as usize == layerfs_overlay::WRITE_WINDOW);
 /// Procedure names by number, for diagnostics.
 pub const PROCEDURES: [&str; 22] = [
     "NULL",
@@ -154,7 +170,7 @@ pub fn call(
             let serial = handle(kernel, arguments).map_err(garbage)?;
             let offset = arguments.u64().map_err(garbage)?;
             let count = arguments.u32().map_err(garbage)?;
-            match serial.and_then(|serial| kernel.read(serial, offset, count)) {
+            match serial.and_then(|serial| read(kernel, serial, offset, count)) {
                 Ok((data, eof)) => {
                     out.u32(Status::Ok.code()).bool(false);
                     out.u32(data.len() as u32).bool(eof).opaque(&data);
@@ -236,6 +252,35 @@ fn handle(kernel: &Kernel, arguments: &mut Reader<'_>) -> Result<Result<u64, Sta
     let bytes = arguments.opaque(FHSIZE)?;
     Ok(kernel.decode(bytes))
 }
+/// READ of up to one transfer window: consecutive engine windows fill it, so
+/// one call carries `TRANSFER_WINDOW` (256 KiB) while the engine reads and holds one `READ_WINDOW`
+/// at a time. The last window may be short (its file ended, or its engine call
+/// failed after earlier windows were read), which is the short read RFC 1813
+/// allows.
+fn read(kernel: &Kernel, serial: u64, offset: u64, count: u32) -> Result<(Vec<u8>, bool), Status> {
+    let target = count.min(TRANSFER_WINDOW) as usize;
+    let mut data = Vec::with_capacity(target);
+    loop {
+        let want = (target - data.len()).min(READ_WINDOW) as u32;
+        let at = offset.checked_add(data.len() as u64).ok_or(Status::FBig)?;
+        let (window, eof) = match kernel.read(serial, at, want) {
+            Ok(read) => read,
+            Err(status) => {
+                // A window the file did serve is answered as a short read.
+                if !data.is_empty() {
+                    return Ok((data, false));
+                }
+                return Err(status);
+            }
+        };
+        let filled = window.len();
+        data.extend_from_slice(&window);
+        // A window short of what was asked ends the file or the fill.
+        if eof || filled < want as usize || data.len() >= target {
+            return Ok((data, eof));
+        }
+    }
+}
 /// FSSTAT, FSINFO and PATHCONF results after the object's attributes.
 fn filesystem(procedure: u32, out: &mut Writer) {
     match procedure {
@@ -249,9 +294,12 @@ fn filesystem(procedure: u32, out: &mut Writer) {
             out.u32(0); // invarsec
         }
         19 => {
-            let (read, write) = (READ_WINDOW as u32, WRITE_WINDOW as u32);
-            out.u32(read).u32(read).u32(BLOCK_BYTES as u32);
-            out.u32(write).u32(write).u32(BLOCK_BYTES as u32);
+            out.u32(TRANSFER_WINDOW)
+                .u32(TRANSFER_WINDOW)
+                .u32(BLOCK_BYTES as u32);
+            out.u32(TRANSFER_WINDOW)
+                .u32(TRANSFER_WINDOW)
+                .u32(BLOCK_BYTES as u32);
             out.u32(DIRECTORY_PREFERENCE);
             out.u64(i64::MAX as u64);
             out.u32(0).u32(1); // time_delta: 1 ns

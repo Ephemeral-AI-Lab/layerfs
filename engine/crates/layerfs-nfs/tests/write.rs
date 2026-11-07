@@ -545,8 +545,10 @@ fn tickets_are_released_only_after_the_reply() {
     let root = c.mnt("/");
 
     let made = c.touch(&root, b"f", 0o644).unwrap();
-    // 300 000 bytes are three engine windows: three publications, three
-    // tickets, all released after the one reply.
+    // 300 000 bytes are whole engine windows: one publication and one ticket
+    // per window, all released after the one reply. The count follows the
+    // engine's window, which #77 widened to the export's transfer size.
+    let windows = 300_000_usize.div_ceil(layerfs_overlay::WRITE_WINDOW) as u64;
     c.write(&made.handle, 0, &pattern(2, 300_000)).unwrap();
     let truncate = Set {
         size: Some(10),
@@ -557,7 +559,7 @@ fn tickets_are_released_only_after_the_reply() {
     c.rename(&root, b"f", &root, b"g").unwrap();
     c.remove(&root, b"g").unwrap();
     let published = watch.published.load(Ordering::Acquire);
-    assert_eq!(published, 1 + 3 + 1 + 1 + 1 + 1);
+    assert_eq!(published, 1 + windows + 1 + 1 + 1 + 1);
     // The last call's tickets are released just after its reply arrived.
     let settled = std::time::Instant::now() + Duration::from_secs(5);
     while watch.released_after.load(Ordering::Acquire) < published
