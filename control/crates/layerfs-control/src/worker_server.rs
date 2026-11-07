@@ -22,6 +22,11 @@
 //! A request with `trace_step: true` (a caller with `LAYERFS_TRACE_STEP`
 //! set) has its steps timed from when it was read, and its answer carries
 //! them as `steps: [{ step, us }]` beside `value` or `refused`.
+//!
+//! A connection carries one request and ends: the answer is flushed and this
+//! side's write half closed before the socket is released, so the stream ends
+//! with a FIN rather than a reset, which a forwarder would take for a cut
+//! answer (`store pull` reads 8 MiB per request, #9).
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::{
@@ -30,6 +35,7 @@ use layerfs_machine::worker::{
 use layerfs_store::project::discovery::home_of;
 use layerfs_store::project::frame::{InitFrame, RemoveFrame, StageFrame};
 use layerfs_store::project::{init::in_worker, remove::remove_project, staged};
+use std::io::Write;
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -135,7 +141,15 @@ fn answer(mut stream: TcpStream, secret: &str, ready: &SdkValue, root: &Path) ->
         let steps = layerfs_home::trace::steps_value(layerfs_home::trace::steps_take());
         frame = layerfs_home::home::with_field(frame, "steps", steps);
     }
-    write_frame(&mut stream, &frame).is_ok()
+    if write_frame(&mut stream, &frame).is_err() {
+        return false;
+    }
+    // the frame is out and nothing more is read on this connection: flush it
+    // and close this side first, so the stream ends with a FIN instead of a
+    // reset over bytes this process never read
+    let _ = stream.flush();
+    let _ = stream.shutdown(std::net::Shutdown::Write);
+    true
 }
 
 /// A request's `op` and its `args` (moved out, not copied: they may hold a
@@ -191,7 +205,22 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
         // one step of a Store move or remove on this machine
         "store.file" => {
             let frame = layerfs_store::sqlite::transfer::step::StepFrame::decode(&args)?;
-            layerfs_store::sqlite::transfer::steps::run(root, &frame)
+            // a hashing step (snapshot, verify) reports its bytes as events
+            // the caller passes on (#536 §10b)
+            layerfs_store::sqlite::transfer::steps::run_observed(
+                root,
+                &frame,
+                &mut |done, total| {
+                    events(SdkValue::map([(
+                        "progress",
+                        SdkValue::map([
+                            ("phase", SdkValue::text(frame.step.name())),
+                            ("done", SdkValue::Int(done as i64)),
+                            ("total", SdkValue::Int(total as i64)),
+                        ]),
+                    )]));
+                },
+            )
         }
         // a Sandbox or Workspace operation on this machine's own native
         "sandbox.host" => layerfs_sandbox::route::in_worker(

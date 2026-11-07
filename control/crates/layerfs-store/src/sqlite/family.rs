@@ -111,6 +111,45 @@ pub fn step_on(home: &Path, executor: &mut Executor, name: &str, step: StoreStep
     self::step(home, executor, &StepFrame::on(name, step))
 }
 
+/// [`step`], passing on the events a worker sends and reporting a local
+/// step's own byte progress (the hashing of a `snapshot` or `verify`) as
+/// phase `phase` (#536 §10b). A worker's answer that sent no final count
+/// still ends at its whole `bytes`.
+pub fn step_observed(
+    home: &Path,
+    events: &mut Events<'_>,
+    phase: &str,
+    executor: &mut Executor,
+    frame: &StepFrame,
+) -> Outcome {
+    match executor {
+        Executor::Local => {
+            crate::sqlite::transfer::steps::run_observed(home, frame, &mut |done, total| {
+                progress(events, phase, Some((done, total)))
+            })
+        }
+        Executor::Worker(worker) => {
+            let mut saw_final = false;
+            let result = worker.call("store.file", frame.encode(), &mut |event| {
+                if let Some(p) = event.get("progress") {
+                    let (done, total) = (p.get_int("done"), p.get_int("total"));
+                    if done.is_some() && done == total {
+                        saw_final = true;
+                    }
+                }
+                events.event(event);
+            })?;
+            if matches!(frame.step.name(), "snapshot" | "verify") && !saw_final {
+                if let Some(bytes) = result.get_int("bytes").filter(|&b| b >= 0) {
+                    let total = bytes as u64;
+                    progress(events, phase, Some((total, total)));
+                }
+            }
+            Ok(result)
+        }
+    }
+}
+
 pub fn fields_map(fields: Vec<(&str, SdkValue)>) -> SdkValue {
     SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect())
 }
