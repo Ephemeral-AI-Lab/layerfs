@@ -298,7 +298,9 @@ impl Overlay {
                 ..(to.clamp(start, end) - start) as usize];
             let free = range.iter().filter(|slot| **slot == 0).count();
             *open -= free;
-            if free == range.len() {
+            if free == 0 {
+                // Already decided: no byte-at-a-time pass over the range.
+            } else if free == range.len() {
                 range.fill(1);
             } else {
                 // A byte a reference range supplies stays that range's.
@@ -340,7 +342,13 @@ impl Overlay {
                 }
                 let slots = (from - start) as usize..(to - start) as usize;
                 // A dense row over bytes no higher layer decided is one copy.
-                if stored.validity.is_none() && decided[slots.clone()].iter().all(|slot| *slot == 0)
+                // The check folds the whole range; it never stops byte by byte.
+                if stored.validity.is_none()
+                    && (open == decided.len()
+                        || decided[slots.clone()]
+                            .iter()
+                            .fold(0, |any, slot| any | slot)
+                            == 0)
                 {
                     let source = &stored.data[(from - cell) as usize..(to - cell) as usize];
                     read.data[slots.clone()].copy_from_slice(source);

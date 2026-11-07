@@ -86,7 +86,9 @@ A wait is readiness, not a retry: the capture job runs once when ready.
 
 Every captured read is checked against the reader (`checked_capture`,
 `check_captured_reader`); a page is at most `PAGE_ROWS` = 1,024 rows in key
-order, and the next page resumes after the last key. Later active writes cannot
+order, and the next page resumes after the last key. A run step's `Window`
+is at most `READ_WINDOW` (128 KiB) of bytes
+([Overlay: Payload](../overlay/payload.md#streams)). Later active writes cannot
 change a captured page. Each port call is one short job under the Workspace
 lock, run on the Commit thread, never on a kernel request worker.
 
