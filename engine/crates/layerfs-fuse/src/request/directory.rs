@@ -47,7 +47,7 @@ impl KernelFilesystem {
                     let services = services.request(&fence)?;
                     Ok::<_, ServiceError>(
                         DirectoryStream::prepare(
-                            services, mount, request, serial, handle.0, offset,
+                            services, mount, request, serial, handle.0, offset, false,
                         )
                         .await,
                     )

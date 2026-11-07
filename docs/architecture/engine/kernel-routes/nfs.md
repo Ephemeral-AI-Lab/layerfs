@@ -129,14 +129,17 @@ itself ([`attributes.rs`](../../../../engine/crates/layerfs-nfs/src/attributes.r
    cookies:  1 = ".", 2 = "..", then engine-published offsets
    one reply = at most one engine window:
      entries that fit the byte budget -> publish_cookies(those names)
-     names left -> eof = false;  no names left -> eof = true
+     window listed the last name and all of it fit -> eof = true
+     otherwise -> eof = false; the next call resumes after its last cookie
 ```
 
 | Rule | Source |
 | --- | --- |
 | The NFS cookie is the engine's kernel offset on one implicit directory descriptor named by `cookieverf`. | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs) |
 | An offset a rewind retired is `NFS3ERR_BAD_COOKIE`. | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs) |
-| READDIRPLUS entries carry no attributes and no handle; the client looks each name up. | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs) |
+| A READDIRPLUS entry carries the facts its listing already read (a local inode's current row, or an inherited inode's immutable base stat) and the handle of its serial, so the client needs no LOOKUP per name. | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs), [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs) |
+| Every handle a READDIRPLUS reply hands out takes its one kernel lookup reference in the publishing visit that makes its offset valid; a reply reusing an already published offset range hands out none. | [`kernel_cookie.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/kernel_cookie.rs) |
+| `.` and `..` carry no attributes: both name an object whose handle the client already holds. | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs) |
 | `..` comes from the parent recorded when a directory was looked up, created, moved or listed; the engine resolves names only downward. | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
 | Silly names and AppleDouble companions are never listed. | [`names.rs`](../../../../engine/crates/layerfs-nfs/src/names.rs), [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 

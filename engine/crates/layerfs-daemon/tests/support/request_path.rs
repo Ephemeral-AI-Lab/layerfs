@@ -524,7 +524,7 @@ impl Rig {
         self.observed(Kind::Readdir, || {
             let (services, request) = self.services();
             let mut stream = wait(DirectoryStream::prepare(
-                services, self.mount, request, serial, handle, offset,
+                services, self.mount, request, serial, handle, offset, false,
             ))
             .unwrap_or_else(|failure| panic!("readdir {serial} at {offset}: {failure:?}"));
             let mut listed: Vec<(Vec<u8>, u64)> = stream

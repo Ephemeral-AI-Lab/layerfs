@@ -2,8 +2,11 @@
 //! prefix, one publishing visit. Nothing is held in the engine between them
 //! or after the reply.
 use crate::ports::{BaseDemandFailed, Fenced, RequestServices, ServiceError};
+use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_overlay::{KernelMount, OverlayError};
-use layerfs_workspace::{KernelDirectoryBatch, KernelDirectoryEntry, KernelDirectoryWindow};
+use layerfs_workspace::{
+    KernelDirectoryBatch, KernelDirectoryEntry, KernelDirectoryWindow, ViewStat,
+};
 use std::{fmt, sync::Arc};
 
 /// One kernel READDIR on an open directory handle. It owns plain values
@@ -17,15 +20,20 @@ pub struct DirectoryStream {
     offset: u64,
     parent: Option<u64>,
     window: Option<KernelDirectoryWindow>,
+    /// The reply shows every entry's facts, as READDIRPLUS does: the listing
+    /// then reads them from the authoritative base, outside the owner.
+    attributes: bool,
     ended: bool,
 }
 pub struct DirectoryBatch {
     stream: DirectoryStream,
     batch: KernelDirectoryBatch,
 }
+/// One reply's entries, or the end of the enumeration: each owns a window
+/// whose size dwarfs the state beside it, so both are boxed.
 pub enum DirectoryStep {
-    Batch(DirectoryBatch),
-    End(DirectoryStream),
+    Batch(Box<DirectoryBatch>),
+    End(Box<DirectoryStream>),
 }
 /// The request's offset was handed out before its handle was last listed
 /// from offset 0 over published replies. The visit recorded nothing.
@@ -144,6 +152,7 @@ impl DirectoryStream {
         serial: u64,
         handle: u64,
         offset: u64,
+        attributes: bool,
     ) -> Result<Self, DirectoryFailure> {
         let mut stream = Self {
             services,
@@ -154,6 +163,7 @@ impl DirectoryStream {
             offset,
             parent: None,
             window: None,
+            attributes,
             ended: false,
         };
         match stream.visit(None).await {
@@ -200,11 +210,11 @@ impl DirectoryStream {
     /// keep advancing, yielding between windows, until an entry or real EOF.
     pub async fn next(mut self) -> Result<DirectoryStep, DirectoryFailure> {
         match self.advance().await {
-            Ok(Some(batch)) => Ok(DirectoryStep::Batch(DirectoryBatch {
+            Ok(Some(batch)) => Ok(DirectoryStep::Batch(Box::new(DirectoryBatch {
                 stream: self,
                 batch,
-            })),
-            Ok(None) => Ok(DirectoryStep::End(self)),
+            }))),
+            Ok(None) => Ok(DirectoryStep::End(Box::new(self))),
             Err(reason) => Err(DirectoryFailure::new(reason, self, None)),
         }
     }
@@ -214,15 +224,16 @@ impl DirectoryStream {
                 return Ok(None);
             };
             // Only a window whose inherited names or kinds memory did not
-            // hold leaves the receive loop and takes one Store reader.
+            // hold leaves the receive loop and takes one Store reader; a
+            // reply that shows facts needs that reader even when it does.
             let started = std::time::Instant::now();
-            let base = if window.listing.is_none() {
+            let base = if self.attributes || window.listing.is_none() {
                 // Provider reads never run on the loop that received the request.
                 Some(self.services.base().await?)
             } else {
                 None
             };
-            let batch = window.finish(base.as_ref());
+            let batch = window.finish_with(base.as_ref(), self.attributes);
             drop(base); // Return the actual reader before another SQL job.
             crate::phase::charge(crate::phase::Phase::DirectoryFinish, started);
             let batch = match batch {
@@ -250,6 +261,38 @@ impl DirectoryStream {
 impl DirectoryBatch {
     pub fn entries(&self) -> impl Iterator<Item = (&KernelDirectoryEntry, u64)> {
         self.batch.entries.iter().zip(self.batch.first..)
+    }
+    /// True when accepting `accepted` entries reaches the directory's end:
+    /// the whole window was accepted and no name follows it. The reply then
+    /// carries it as its own EOF, instead of spending a further request on an
+    /// empty one.
+    pub fn at_end(&self, accepted: usize) -> bool {
+        accepted == self.batch.entries.len() && self.batch.exhausted
+    }
+    /// Whether this reply's offsets are published by this request. A reply
+    /// that hands out handles takes their kernel references in that same
+    /// publishing visit; a reused published reply takes none.
+    pub fn publishes(&self) -> bool {
+        self.batch.publish.is_some()
+    }
+    /// Records the entries whose handles this reply hands out, so the
+    /// publishing visit takes their kernel references with the offsets.
+    /// `accepted` is the prefix the reply buffer took; only published
+    /// offsets can make a handle's fence answer, so a reused reply adopts
+    /// nothing.
+    pub fn adopt(&mut self, accepted: usize) {
+        let entries: Vec<(u64, bool)> = self.batch.entries[..accepted]
+            .iter()
+            .filter(|entry| entry.stat.is_some())
+            .map(|entry| (entry.serial, entry.kind == InodeKind::Directory))
+            .collect();
+        if let Some(offer) = self.batch.publish.as_mut() {
+            offer.adopt(entries);
+        }
+    }
+    /// The facts of the directory this reply lists, for its `dir_attributes`.
+    pub fn directory(&self) -> Option<&ViewStat> {
+        self.batch.directory.as_ref()
     }
     /// Publish exactly the prefix that actually fit the kernel reply buffer,
     /// before the reply is sent. Offsets of an already published reply and

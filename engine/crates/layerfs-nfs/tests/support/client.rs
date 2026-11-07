@@ -69,12 +69,16 @@ fn post_op(reader: &mut Reader<'_>) -> Option<Attr> {
 /// A LOOKUP answer: its status, the object's handle and attributes when
 /// found, and the directory's attributes.
 pub type Lookup = (u32, Option<(Vec<u8>, Attr)>, Option<Attr>);
-/// One READDIR/READDIRPLUS entry.
+/// One READDIR/READDIRPLUS entry. A READDIRPLUS entry carries the object's
+/// attributes and handle when the export hands them out; both are absent in
+/// a READDIR reply and in a reply whose offsets it did not publish itself.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Entry {
     pub name: Vec<u8>,
     pub fileid: u64,
     pub cookie: u64,
+    pub attr: Option<Attr>,
+    pub handle: Option<Vec<u8>>,
 }
 
 pub struct Client {
@@ -254,6 +258,19 @@ impl Client {
         budget: u32,
         plus: bool,
     ) -> Result<(Vec<Entry>, u64, bool), u32> {
+        self.readdir_with_directory(handle, cookie, verifier, budget, plus)
+            .map(|(entries, verifier, eof, _)| (entries, verifier, eof))
+    }
+    /// One READDIR (or READDIRPLUS) with both halves of its answer: the
+    /// entries, the verifier, EOF and the listed directory's attributes.
+    pub fn readdir_with_directory(
+        &mut self,
+        handle: &[u8],
+        cookie: u64,
+        verifier: u64,
+        budget: u32,
+        plus: bool,
+    ) -> Result<(Vec<Entry>, u64, bool, Option<Attr>), u32> {
         let mut arguments = Writer::new();
         arguments
             .opaque(handle)
@@ -268,25 +285,33 @@ impl Client {
             return Err(status);
         }
         let mut reader = Reader::new(&rest);
-        post_op(&mut reader);
+        let directory = post_op(&mut reader);
         let verifier = reader.u64().unwrap();
         let mut entries = Vec::new();
         while reader.bool().unwrap() {
             let fileid = reader.u64().unwrap();
             let name = reader.opaque(4096).unwrap().to_vec();
             let cookie = reader.u64().unwrap();
-            if plus {
-                assert!(post_op(&mut reader).is_none());
-                assert!(!reader.bool().unwrap(), "no handle in READDIRPLUS");
-            }
+            let (attr, handle) = if plus {
+                let attr = post_op(&mut reader);
+                let handle = reader
+                    .bool()
+                    .unwrap()
+                    .then(|| reader.opaque(64).unwrap().to_vec());
+                (attr, handle)
+            } else {
+                (None, None)
+            };
             entries.push(Entry {
                 name,
                 fileid,
                 cookie,
+                attr,
+                handle,
             });
         }
         let eof = reader.bool().unwrap();
-        Ok((entries, verifier, eof))
+        Ok((entries, verifier, eof, directory))
     }
     /// A whole enumeration as a kernel client runs it, and the calls it took.
     pub fn list(&mut self, handle: &[u8], budget: u32, plus: bool) -> (Vec<Entry>, u64) {
