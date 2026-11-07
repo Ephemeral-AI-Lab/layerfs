@@ -66,7 +66,10 @@ pub fn setup(
             // 64 MiB by owner decision (#359 warm daemon, record 031).
             cache_bytes: 64 * 1024 * 1024,
             namespaces: WORKSPACES,
-            pager_kib: 1024,
+            // 4 MiB (1,024 pages), not 1 MiB: one 256 KiB write window's
+            // transaction dirties a few hundred pages, and a 1 MiB pager
+            // spilled it while it was still writing.
+            pager_kib: 4096,
             serial_low_water: 256,
         },
         store,

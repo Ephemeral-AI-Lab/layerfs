@@ -2,6 +2,11 @@ mod payload_support;
 use layerfs_overlay::*;
 use payload_support::*;
 
+// One write job of the size these shapes were calibrated at. The engine's
+// window is wider since #77 (a router's 256 KiB transfer is one job), so a
+// 128 KiB job is still exactly one window's work here.
+const WINDOW: usize = 128 * 1024;
+
 fn collect(db: &Overlay, mut cursor: CapturedRunCursor, base: &[u8]) -> (Vec<u8>, CapturedRunWork) {
     let mut bytes = Vec::new();
     let mut work = CapturedRunWork::default();
@@ -260,11 +265,11 @@ fn a_row_of_several_cells_is_one_metadata_row_and_one_window() {
     let source = db.acquire_base_source(1).unwrap();
     let mut file = File::new(&db, source, 23, Vec::new());
     // Four rows of 32 KiB in the sealed generation.
-    file.write(0, &pattern(WRITE_WINDOW, 7));
+    file.write(0, &pattern(WINDOW, 7));
     db.release_base_source(source).unwrap();
     let capture = db.capture().unwrap();
     let reader = db.acquire_captured_reader(capture, 1).unwrap();
-    let size = WRITE_WINDOW as u64;
+    let size = WINDOW as u64;
     let windows = |from: u64| {
         let mut cursor = CapturedRunCursor::new(reader, 23, from, size).unwrap();
         let (mut seen, mut rows) = (Vec::new(), 0);
@@ -373,12 +378,9 @@ fn a_shapes_only_pass_names_the_same_local_bytes_and_reads_no_dense_payload() {
     let db = temp.db();
     db.open_workspace([155; 32]).unwrap();
     let source = db.acquire_base_source(1).unwrap();
-    let mut file = File::new(&db, source, 41, pattern(3 * WRITE_WINDOW + 500, 3));
-    file.write(RUN_BYTES as u64, &pattern(WRITE_WINDOW, 9));
-    file.write(
-        (RUN_BYTES + WRITE_WINDOW) as u64,
-        &pattern(WRITE_WINDOW, 11),
-    );
+    let mut file = File::new(&db, source, 41, pattern(3 * WINDOW + 500, 3));
+    file.write(RUN_BYTES as u64, &pattern(WINDOW, 9));
+    file.write((RUN_BYTES + WINDOW) as u64, &pattern(WINDOW, 11));
     db.release_base_source(source).unwrap();
     let capture = db.capture().unwrap();
     let reader = db.acquire_captured_reader(capture, 2).unwrap();

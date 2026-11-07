@@ -10,7 +10,10 @@ use payload_support::*;
 use std::sync::Arc;
 
 const CELL: u64 = CELL_BYTES as u64;
-const WINDOW: u64 = WRITE_WINDOW as u64;
+// One write job of the size these shapes were calibrated at. The engine's
+// window is wider since #77 (a router's 256 KiB transfer is one job), so a
+// 128 KiB job is still exactly one window's work here.
+const WINDOW: u64 = 128 * 1024;
 
 #[test]
 fn claimed_ranges_become_pieces_and_read_like_the_plain_write() {

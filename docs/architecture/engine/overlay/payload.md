@@ -105,7 +105,7 @@ cell stamped e is stale  <=>  e < epoch of the newest step whose
 
 | Call | Job | Source |
 | --- | --- | --- |
-| `write_cells` (inside `apply`) | One `PayloadWrite` of at most `WRITE_WINDOW` (128 KiB): whole cells one slot at a time, row shapes read once per read window of slots ahead; a partial cell is one point read and one upsert | [`stream.rs`](../../../../engine/crates/layerfs-overlay/src/payload/stream.rs) |
+| `write_cells` (inside `apply`) | One `PayloadWrite` of at most `WRITE_WINDOW` (256 KiB): whole cells one slot at a time, row shapes read once per read window of slots ahead; a partial cell is one point read and one upsert | [`stream.rs`](../../../../engine/crates/layerfs-overlay/src/payload/stream.rs) |
 | `source_read` | Current view over an owned `BaseSource`; orphans read their own composition | [`stream.rs`](../../../../engine/crates/layerfs-overlay/src/payload/stream.rs) |
 | `read_file` | A descriptor read window (`FileRead`), independent of descriptor close | [`orphan.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/orphan.rs) |
 | `captured_read` | Sealed view of a capture | [`stream.rs`](../../../../engine/crates/layerfs-overlay/src/payload/stream.rs) |
