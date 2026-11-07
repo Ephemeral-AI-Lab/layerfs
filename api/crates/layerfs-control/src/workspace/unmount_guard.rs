@@ -7,9 +7,10 @@ use crate::common::outcome::{failed, refused, Outcome};
 use crate::sandbox::files as discovery;
 use crate::sandbox::registry::SandboxState;
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 use std::{
     fs::{File, OpenOptions},
-    os::unix::fs::OpenOptionsExt,
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -31,14 +32,29 @@ impl Drop for Lease {
     }
 }
 fn lease(path: &std::path::Path, exclusive: bool) -> Result<Option<Lease>, SdkRefusal> {
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .mode(0o600)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(path)
-        .map_err(failed)?;
+    #[cfg(unix)]
+    let file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(path)
+            .map_err(failed)?
+    };
+    #[cfg(not(unix))]
+    let file = {
+        use std::os::windows::fs::OpenOptionsExt;
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .custom_flags(0x0020_0000)
+            .open(path)
+            .map_err(failed)?
+    };
     discovery::private(path, false)?;
     if crate::common::home::flock::try_lock(&file, exclusive).map_err(failed)? {
         Ok(Some(Lease(file)))

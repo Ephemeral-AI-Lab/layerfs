@@ -16,6 +16,7 @@ use crate::common::home::records::{private_dir, with_field, write_record};
 use layerfs_bridge::control::SdkValue;
 use layerfs_store_backup::bucket::pieces;
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -104,8 +105,12 @@ fn copy_checked(source: &Path, target: &Path) -> Result<(), String> {
     let incoming = PathBuf::from(format!("{}.incoming", target.display()));
     let copied = (|| {
         fs::copy(source, &incoming).map_err(|e| format!("copy: {e}"))?;
-        fs::set_permissions(&incoming, fs::Permissions::from_mode(0o600))
-            .map_err(|e| format!("copy: {e}"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&incoming, fs::Permissions::from_mode(0o600))
+                .map_err(|e| format!("copy: {e}"))?;
+        }
         let digest = |path: &Path| pieces::sha256_file(path, None).map_err(|e| e.to_string());
         if digest(source)? != digest(&incoming)? {
             return Err("the copy's sha256 differs from the file's".to_owned());
