@@ -45,9 +45,9 @@ pub mod output;
 #[doc(hidden)]
 pub mod record;
 #[doc(hidden)]
-pub mod recorded;
-#[doc(hidden)]
 pub mod registry;
+#[doc(hidden)]
+pub mod reopen;
 #[doc(hidden)]
 pub mod route;
 #[doc(hidden)]

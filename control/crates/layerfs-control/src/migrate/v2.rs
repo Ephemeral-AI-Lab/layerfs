@@ -36,7 +36,7 @@ use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::{failed, refused};
 use layerfs_machine::record::MachineRecord;
 use layerfs_sandbox::record::{DaemonRecord, SandboxRecord};
-use layerfs_sandbox::recorded::{retired_record, unchecked, Recorded};
+use layerfs_sandbox::reopen::{retired_record, unchecked, Recorded};
 use layerfs_store::lease;
 use layerfs_store::record::StoreRecord;
 use std::path::{Path, PathBuf};

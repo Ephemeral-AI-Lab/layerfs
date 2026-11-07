@@ -6,8 +6,8 @@
 //! record per Workspace (`workspace/<id>.json`). No mutation replay.
 use crate::host::Host;
 use crate::record::{DaemonRecord, Local, SandboxRecord, WorkspaceRecord};
-use crate::recorded::{gone, recorded};
 use crate::registry::{Mount, SandboxState};
+use crate::reopen::{gone, recorded};
 #[cfg(target_os = "linux")]
 use crate::runtime::NAMESPACES;
 use crate::runtime::{LOCAL, NATIVE};

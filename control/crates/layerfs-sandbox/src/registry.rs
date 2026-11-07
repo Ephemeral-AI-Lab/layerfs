@@ -81,7 +81,7 @@ pub fn sandbox_live(host: &Host) -> Result<Arc<SandboxState>, SdkRefusal> {
     if let Err(failure) = runtime.endpoint() {
         lock(&SANDBOXES)?.remove(&directory);
         return Err(if failure.container_stopped() {
-            crate::recorded::gone(&state.id, &runtime.identity().to_string(), true)
+            crate::reopen::gone(&state.id, &runtime.identity().to_string(), true)
         } else {
             layerfs_home::outcome::failed(failure)
         });

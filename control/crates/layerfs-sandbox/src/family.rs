@@ -35,7 +35,7 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 pub fn sandbox_of(home: &Path, name: &str) -> Result<SandboxRecord> {
     let record = named(home, name)?;
     match record.retired_container(home)? {
-        Some(container) => Err(super::recorded::retired(name, &container)),
+        Some(container) => Err(super::reopen::retired(name, &container)),
         None => Ok(record),
     }
 }

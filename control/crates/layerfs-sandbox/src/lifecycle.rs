@@ -184,7 +184,7 @@ pub fn create(host: &Host, named: Option<&str>) -> Outcome {
         // a record of the retired docker backend is forgotten, as a close
         // forgets it, so its name is free again (D-8): nothing it named runs
         match recorded {
-            Some(retired) if crate::recorded::retired_record(&retired) => {
+            Some(retired) if crate::reopen::retired_record(&retired) => {
                 discard(&directory, &retired)?;
             }
             Some(_) => {
@@ -246,7 +246,7 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
             format!("no Sandbox {id} runs on this machine"),
         ));
     };
-    if crate::recorded::retired_record(&recorded) {
+    if crate::reopen::retired_record(&recorded) {
         return forget(&id, &directory, &recorded);
     }
     let state = match crate::registry::sandbox_live(host) {
@@ -291,7 +291,7 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     }
     let value = crate::files::started(&directory)?
         .ok_or_else(|| refused("NoSuchSandbox", format!("Sandbox {id} was closed")))?;
-    let mut owner = crate::recorded::recorded(host, &id, &value)?
+    let mut owner = crate::reopen::recorded(host, &id, &value)?
         .reopen()
         .map_err(failed)?;
     owner.stop(STOP_S).map_err(failed)?;
@@ -372,7 +372,7 @@ pub fn reclaim(host: &Host, container: &str, stopped: bool) -> Outcome {
         ));
     }
     if stopped {
-        crate::recorded::recorded(host, id, &value)?
+        crate::reopen::recorded(host, id, &value)?
             .stopped()
             .delete()
             .map_err(failed)?;
