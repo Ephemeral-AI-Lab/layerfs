@@ -1,14 +1,24 @@
 //! What one layer does to the unpacked tree: a whiteout hides what the layers
 //! below placed, and a regular file, directory, symbol link or hard link is
 //! written inside the root — never through a symbolic link, and never outside
-//! the root it belongs to.
+//! the root it belongs to. A file's or symbolic link's modification time is
+//! the archive's (and its access time the same); a directory's is set by
+//! [`directory_times`] once every layer is applied, because each later entry
+//! inside it changes it again.
 use super::{
     refuse,
-    tar::{Entry, Kind},
+    tar::{Entry, Kind, Time},
 };
 use crate::RuntimeError;
-use nix::fcntl::OFlag;
+use nix::{
+    fcntl::{OFlag, AT_FDCWD},
+    sys::{
+        stat::{futimens, utimensat, UtimensatFlags},
+        time::TimeSpec,
+    },
+};
 use std::{
+    collections::BTreeMap,
     ffi::OsStr,
     fs::{self, DirBuilder, OpenOptions},
     io,
@@ -38,12 +48,12 @@ pub(super) fn apply(
         Kind::Directory => make_directory(&target, entry.mode),
         Kind::Regular => {
             remove_any(&target)?;
-            write_file(&target, entry.mode, data)
+            write_file(&target, entry.mode, entry.mtime, data)
         }
         Kind::Symlink(link) => {
             remove_any(&target)?;
             std::os::unix::fs::symlink(link, &target)?;
-            Ok(())
+            set_time(&target, entry.mtime)
         }
         Kind::HardLink(link) => {
             let source = beneath_root(root, link)?;
@@ -54,6 +64,7 @@ pub(super) fn apply(
                     link.display()
                 )));
             }
+            // the link shares its file's inode, and so that file's time
             remove_any(&target)?;
             fs::hard_link(&source, &target)?;
             Ok(())
@@ -148,6 +159,26 @@ fn beneath_root(root: &Path, relative: &Path) -> Result<PathBuf, RuntimeError> {
 /// `relative`'s place inside `root` when every component of it is already
 /// there: `None` when one is not, and nothing is made.
 fn beneath_existing(root: &Path, relative: &Path) -> Result<Option<PathBuf>, RuntimeError> {
+    match walk(root, relative)? {
+        Walked::Directory(path) => Ok(Some(path)),
+        Walked::Absent => Ok(None),
+        Walked::Link => Err(refuse(
+            "the image archive's entry passes through a symbolic link",
+        )),
+    }
+}
+
+/// What walking `relative` inside `root` without following a link found.
+enum Walked {
+    /// Every component, the last included, is a directory.
+    Directory(PathBuf),
+    /// A component is missing or is not a directory.
+    Absent,
+    /// A component is a symbolic link.
+    Link,
+}
+
+fn walk(root: &Path, relative: &Path) -> Result<Walked, RuntimeError> {
     let mut path = root.to_owned();
     for component in relative.components() {
         let Component::Normal(name) = component else {
@@ -158,17 +189,42 @@ fn beneath_existing(root: &Path, relative: &Path) -> Result<Option<PathBuf>, Run
         path.push(name);
         match fs::symlink_metadata(&path) {
             Ok(metadata) if metadata.is_dir() => {}
-            Ok(metadata) if metadata.file_type().is_symlink() => {
-                return Err(refuse(
-                    "the image archive's entry passes through a symbolic link",
-                ))
-            }
-            Ok(_) => return Ok(None),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Ok(metadata) if metadata.file_type().is_symlink() => return Ok(Walked::Link),
+            Ok(_) => return Ok(Walked::Absent),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Walked::Absent),
             Err(error) => return Err(error.into()),
         }
     }
-    Ok(Some(path))
+    Ok(Walked::Directory(path))
+}
+
+/// Sets each directory's time from the last entry the layers gave it, once
+/// every layer is applied (setting one changes no other's). A directory a
+/// later layer replaced (a file or link at its path, or a path through one
+/// that is gone) is skipped: nothing of it is left to carry the time.
+pub(super) fn directory_times(
+    root: &Path,
+    times: &BTreeMap<PathBuf, Time>,
+) -> Result<(), RuntimeError> {
+    for (relative, time) in times {
+        let Walked::Directory(path) = walk(root, relative)? else {
+            continue;
+        };
+        set_time(&path, *time)?;
+    }
+    Ok(())
+}
+
+/// Sets `path`'s own times (a link's, never its target's) to `time`.
+fn set_time(path: &Path, time: Time) -> Result<(), RuntimeError> {
+    let time = spec(time);
+    let flag = UtimensatFlags::NoFollowSymlink;
+    Ok(utimensat(AT_FDCWD, path, &time, &time, flag).map_err(io::Error::from)?)
+}
+
+/// The kernel's form of an archive time.
+fn spec(time: Time) -> TimeSpec {
+    TimeSpec::new(time.seconds, i64::from(time.nanos))
 }
 
 /// A directory at `target`, with `mode` (0755 for a mode of zero).
@@ -193,8 +249,14 @@ fn make_directory(target: &Path, mode: u32) -> Result<(), RuntimeError> {
     Ok(())
 }
 
-/// A regular file at `target`, whose bytes are all of `data`.
-fn write_file(target: &Path, mode: u32, data: &mut dyn io::Read) -> Result<(), RuntimeError> {
+/// A regular file at `target`, whose bytes are all of `data` and whose time is
+/// `mtime`, set on the open file so no later path lookup is involved.
+fn write_file(
+    target: &Path,
+    mode: u32,
+    mtime: Time,
+    data: &mut dyn io::Read,
+) -> Result<(), RuntimeError> {
     let mode = mode & 0o777;
     let mut file = OpenOptions::new()
         .write(true)
@@ -205,6 +267,8 @@ fn write_file(target: &Path, mode: u32, data: &mut dyn io::Read) -> Result<(), R
         .open(target)?;
     io::copy(data, &mut file)?;
     fs::set_permissions(target, fs::Permissions::from_mode(mode))?;
+    let time = spec(mtime);
+    futimens(&file, &time, &time).map_err(io::Error::from)?;
     Ok(())
 }
 

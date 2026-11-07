@@ -17,14 +17,40 @@ pub fn hex(digest: &str) -> &str {
     digest.strip_prefix("sha256:").expect("a sha256 digest")
 }
 
+/// Where a digest's unpack is published in `cache`: `<64 hex>.2`, the layout
+/// that restores file times.
+pub fn unpacked_at(cache: &Path, digest: &str) -> PathBuf {
+    cache.join(format!("{}.2", hex(digest)))
+}
+
 /// One tar archive, built entry by entry.
 pub struct Tar {
     bytes: Vec<u8>,
+    /// The header `mtime` field of the entries that follow.
+    mtime: [u8; 12],
 }
 
 impl Tar {
     pub fn new() -> Self {
-        Self { bytes: Vec::new() }
+        let mut mtime = [0u8; 12];
+        octal(&mut mtime, 0);
+        Self {
+            bytes: Vec::new(),
+            mtime,
+        }
+    }
+
+    /// The entries that follow carry `seconds` as their header's octal time.
+    pub fn at(mut self, seconds: u64) -> Self {
+        octal(&mut self.mtime, seconds);
+        self
+    }
+
+    /// The entries that follow carry `field` as their header's time field,
+    /// byte for byte (GNU base-256, or something that is not a number).
+    pub fn at_field(mut self, field: [u8; 12]) -> Self {
+        self.mtime = field;
+        self
     }
 
     /// A regular file with `mode` and `body`.
@@ -62,7 +88,7 @@ impl Tar {
         octal(&mut header[108..116], 0);
         octal(&mut header[116..124], 0);
         octal(&mut header[124..136], body.len() as u64);
-        octal(&mut header[136..148], 0);
+        header[136..148].copy_from_slice(&self.mtime);
         header[156] = kind;
         header[157..157 + link.len()].copy_from_slice(link.as_bytes());
         header[257..263].copy_from_slice(b"ustar\0");
@@ -82,6 +108,26 @@ impl Tar {
         self.bytes.resize(self.bytes.len() + 1024, 0);
         self.bytes
     }
+}
+
+/// `value` as a GNU base-256 header field: the lead bit marks it, and the
+/// rest is the two's complement of the number, so a negative one starts 0xff.
+pub fn base256(value: i64) -> [u8; 12] {
+    let mut field = [if value < 0 { 0xff } else { 0 }; 12];
+    field[4..].copy_from_slice(&value.to_be_bytes());
+    field[0] |= 0x80;
+    field
+}
+
+/// One pax extended-header record, `<length> <key>=<value>\n`, whose length
+/// counts itself.
+pub fn pax_record(key: &str, value: &str) -> Vec<u8> {
+    let body = format!(" {key}={value}\n");
+    let mut length = body.len() + 1;
+    while format!("{length}").len() + body.len() != length {
+        length += 1;
+    }
+    format!("{length}{body}").into_bytes()
 }
 
 fn octal(field: &mut [u8], value: u64) {

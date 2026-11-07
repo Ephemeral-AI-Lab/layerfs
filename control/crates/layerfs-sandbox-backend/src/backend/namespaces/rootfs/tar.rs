@@ -24,6 +24,16 @@ pub(super) struct Entry {
     pub(super) kind: Kind,
     pub(super) mode: u32,
     pub(super) size: u64,
+    /// The modification time: the header's, or a pax `mtime` record's.
+    pub(super) mtime: Time,
+}
+
+/// A modification time as the archive gives it: seconds since 1970 (before
+/// it when negative) and the nanoseconds after them.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(super) struct Time {
+    pub(super) seconds: i64,
+    pub(super) nanos: u32,
 }
 
 /// What an entry places in the root. Every other tar entry type (device
@@ -52,6 +62,8 @@ pub(super) struct Tape<R> {
     path: Option<PathBuf>,
     /// A pax or GNU link target waiting for the same entry.
     link: Option<PathBuf>,
+    /// A pax modification time waiting for the same entry.
+    mtime: Option<Time>,
 }
 
 impl<R: Read + Seek> Tape<R> {
@@ -64,6 +76,7 @@ impl<R: Read + Seek> Tape<R> {
             data_offset: 0,
             path: None,
             link: None,
+            mtime: None,
         }
     }
 
@@ -88,13 +101,10 @@ impl<R: Read + Seek> Tape<R> {
             self.data_offset = self.position;
             match kind {
                 b'x' => {
-                    let (path, link) = pax(&self.data(EXTENDED_MAX)?)?;
-                    if path.is_some() {
-                        self.path = path;
-                    }
-                    if link.is_some() {
-                        self.link = link;
-                    }
+                    let pax = pax(&self.data(EXTENDED_MAX)?)?;
+                    self.path = pax.path.or(self.path.take());
+                    self.link = pax.link.or(self.link.take());
+                    self.mtime = pax.mtime.or(self.mtime.take());
                     continue;
                 }
                 b'g' => continue,
@@ -115,7 +125,7 @@ impl<R: Read + Seek> Tape<R> {
                     // `./`, the archive's entry for the root itself: the root
                     // already exists, so there is nothing to place
                     if kind == b'5' && is_root(&name) {
-                        self.link = None;
+                        (self.link, self.mtime) = (None, None);
                         continue;
                     }
                     checked(&name)?
@@ -125,12 +135,19 @@ impl<R: Read + Seek> Tape<R> {
                 Some(link) => link,
                 None => link_name(&header)?,
             };
+            // a time that cannot be read is 0, not a refusal: it was never
+            // read before, and an image that unpacked then still unpacks
+            let mtime = self.mtime.take().unwrap_or(Time {
+                seconds: signed_number(&header[136..148]).unwrap_or(0),
+                nanos: 0,
+            });
             let kind = kind_of(kind, link)?;
             return Ok(Some(Entry {
                 path,
                 kind,
                 mode: u32::try_from(number(&header[100..108])?).unwrap_or(0o644),
                 size,
+                mtime,
             }));
         }
     }
@@ -305,9 +322,19 @@ pub(super) fn path_of(bytes: &[u8]) -> Result<PathBuf, RuntimeError> {
         .and_then(|text| checked(text.as_bytes()))
 }
 
-/// A pax extended header's `path` and `linkpath` records, if it has them.
-fn pax(data: &[u8]) -> Result<(Option<PathBuf>, Option<PathBuf>), RuntimeError> {
-    let (mut path, mut link) = (None, None);
+/// What a pax extended header gives the entry that follows it.
+#[derive(Default)]
+struct Pax {
+    path: Option<PathBuf>,
+    link: Option<PathBuf>,
+    mtime: Option<Time>,
+}
+
+/// A pax extended header's `path`, `linkpath` and `mtime` records, if it has
+/// them. An `mtime` that cannot be read is left out (the header's time
+/// stands); a record whose framing is wrong is refused.
+fn pax(data: &[u8]) -> Result<Pax, RuntimeError> {
+    let mut pax = Pax::default();
     let mut rest = data;
     while !rest.is_empty() {
         let space = rest
@@ -323,14 +350,47 @@ fn pax(data: &[u8]) -> Result<(Option<PathBuf>, Option<PathBuf>), RuntimeError> 
         if let Some(equals) = record.iter().position(|byte| *byte == b'=') {
             let (key, value) = (&record[..equals], &record[equals + 1..]);
             match key {
-                b"path" => path = Some(checked(value)?),
-                b"linkpath" => link = Some(link_text(value)?),
+                b"path" => pax.path = Some(checked(value)?),
+                b"linkpath" => pax.link = Some(link_text(value)?),
+                b"mtime" => pax.mtime = pax_time(value).or(pax.mtime),
                 _ => {}
             }
         }
         rest = &rest[length..];
     }
-    Ok((path, link))
+    Ok(pax)
+}
+
+/// A pax time, `[-]<seconds>[.<fraction>]`; digits past nanoseconds are
+/// dropped. `None` when it is not one.
+fn pax_time(value: &[u8]) -> Option<Time> {
+    let text = std::str::from_utf8(value).ok()?;
+    let (negative, digits) = match text.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, text),
+    };
+    let (whole, fraction) = digits.split_once('.').unwrap_or((digits, ""));
+    let decimal = |part: &str| part.bytes().all(|byte| byte.is_ascii_digit());
+    if whole.is_empty() || !decimal(whole) || !decimal(fraction) {
+        return None;
+    }
+    let seconds: i64 = whole.parse().ok()?;
+    let nanos = (fraction.bytes().chain(std::iter::repeat(b'0')).take(9))
+        .fold(0u32, |nanos, digit| nanos * 10 + u32::from(digit - b'0'));
+    if !negative {
+        return Some(Time { seconds, nanos });
+    }
+    // `-1.25` is 1.25 s before 1970: 2 s before it, plus 0.75 s
+    match nanos {
+        0 => Some(Time {
+            seconds: seconds.checked_neg()?,
+            nanos,
+        }),
+        _ => Some(Time {
+            seconds: seconds.checked_neg()?.checked_sub(1)?,
+            nanos: 1_000_000_000 - nanos,
+        }),
+    }
 }
 
 /// A GNU long name's data: the name, up to its first NUL.
@@ -374,6 +434,34 @@ fn number(field: &[u8]) -> Result<u64, RuntimeError> {
         }
     }
     Ok(value)
+}
+
+/// A header's signed number: octal, or GNU base-256 with its sign (a lead
+/// byte of `0xff` is a negative number, such as a time before 1970). `None`
+/// when it cannot be read.
+fn signed_number(field: &[u8]) -> Option<i64> {
+    let first = *field.first()?;
+    if first & 0x80 == 0 {
+        return number(field)
+            .ok()
+            .and_then(|value| i64::try_from(value).ok());
+    }
+    // two's complement: a negative number's bytes are read inverted, as `!x`
+    let invert = if first & 0x40 != 0 { 0xff } else { 0 };
+    let mut value = 0u64;
+    for (index, byte) in field.iter().enumerate() {
+        let byte = if index == 0 {
+            (byte ^ invert) & 0x7f
+        } else {
+            byte ^ invert
+        };
+        if value >> 56 != 0 {
+            return None;
+        }
+        value = (value << 8) | u64::from(byte);
+    }
+    let value = i64::try_from(value).ok()?;
+    Some(if invert == 0 { value } else { !value })
 }
 
 /// A header's checksum: the sum of its bytes with the checksum field itself

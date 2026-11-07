@@ -40,14 +40,23 @@
 //!
 //! # One unpack per digest
 //!
-//! The unpacked image lives under `<LAYERFS_LOCAL_DIR>/images/<64 hex>`, named
-//! by its digest only, so two Sandboxes that name one image share one copy.
-//! The first Sandbox to need it takes a per-digest lock
-//! (`images/<64 hex>.lock`, `flock`), unpacks into `images/.tmp-<64 hex>-…`
-//! and renames that directory into place once it is complete, so a second
-//! Sandbox either waits for that rename or finds the finished directory, and a
-//! crashed unpack never leaves a half image under the real name. The lock file
-//! stays: another process may still hold it.
+//! The unpacked image lives under `<LAYERFS_LOCAL_DIR>/images/<64 hex>.2`,
+//! named by its digest and the unpack's layout only, so two Sandboxes that
+//! name one image share one copy. The first Sandbox to need it takes a
+//! per-digest lock (`images/<64 hex>.2.lock`, `flock`), unpacks into
+//! `images/.tmp-<64 hex>.2-…` and renames that directory into place once it
+//! is complete, so a second Sandbox either waits for that rename or finds the
+//! finished directory, and a crashed unpack never leaves a half image under
+//! the real name. The lock file stays: another process may still hold it.
+//!
+//! The `.2` is the layout: an unpack named `images/<64 hex>` alone was made
+//! before modification times were restored, and every file in it carries its
+//! unpack time (so, for one, Python rejects every cached `.pyc` in it). A new
+//! Sandbox never uses that directory. A reopened one gets exactly the
+//! directory its create recorded as the overlay's lower layer (its
+//! `config/helper.spec`), old or new, so no Sandbox changes its root; and the
+//! old directory is not deleted, since a Sandbox made before may still run on
+//! it or need it found for its delete.
 //!
 //! A command never gets write access to the image. The unpacked directory is
 //! outside the Sandbox's mount tree — only the image's *contents* are composed
@@ -70,6 +79,13 @@
 //! and a rootfs layer is root's), permission bits are applied as `0o777` —
 //! setuid, setgid, sticky and xattrs (and so file capabilities) are not
 //! restored — and a command runs with no-new-privs anyway.
+//!
+//! File, directory and symbolic link modification times are restored from
+//! the archive (the header's, or a pax `mtime` with its fraction), and the
+//! access time is set to the same value; a directory's once every layer is
+//! applied, since each entry made or removed in it changes it. A time the
+//! archive gives in a form this reader cannot read becomes 0 (the header's)
+//! or the header's (a pax record's) rather than refusing the image.
 //!
 //! The pieces are the cache ([`cache`]), one archive's own reading
 //! ([`archive`]), the tar format ([`tar`]), what one layer does to the tree

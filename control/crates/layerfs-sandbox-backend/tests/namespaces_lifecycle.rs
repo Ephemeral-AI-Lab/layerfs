@@ -31,7 +31,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use support::image::{archive, hex, Tar, DIGEST};
+use support::image::{archive, hex, unpacked_at, Tar, DIGEST};
 
 /// The port the stub daemon claims; nothing listens on it.
 const PORT: u16 = 40404;
@@ -285,7 +285,7 @@ fn a_sandbox_is_its_own_namespaces_and_nothing_of_it_is_left_behind() {
             fixture
                 .root
                 .join("images")
-                .join(hex(DIGEST))
+                .join(format!("{}.2", hex(DIGEST)))
                 .join("etc/layerfs-image")
         )
         .unwrap(),
@@ -398,7 +398,7 @@ fn a_sandbox_is_its_own_namespaces_and_nothing_of_it_is_left_behind() {
     assert!(fixture
         .root
         .join("images")
-        .join(hex(DIGEST))
+        .join(format!("{}.2", hex(DIGEST)))
         .join("etc/layerfs-image")
         .is_file());
 }
@@ -474,7 +474,7 @@ fn two_sandboxes_on_one_store_cannot_see_each_other() {
     assert_eq!((code, out.as_str()), (0, "layerfs image\n"));
     // and the writes live in each Sandbox's own upper layer, never in the
     // shared image
-    let image_root = fixture.root.join("images").join(hex(DIGEST));
+    let image_root = unpacked_at(&fixture.root.join("images"), DIGEST);
     assert!(
         fs::read_to_string(image_root.join("var/tmp/mine")).is_err(),
         "a Sandbox's write reached the shared image"
@@ -575,6 +575,11 @@ fn a_record_reopens_the_exact_sandbox_and_nothing_else() {
     assert_eq!(reopened.port(), PORT);
     assert_eq!(reopened.record().unwrap(), record);
     assert_eq!(reopened.image().image().as_str(), DIGEST);
+    // on the root its create unpacked and its spec names: the `.2` layout
+    assert_eq!(
+        reopened.image().directory(),
+        unpacked_at(&fixture.root.join("images"), DIGEST).as_path()
+    );
     let (code, out, _) = run(&reopened, &["/bin/echo", "again"], &[]);
     assert_eq!((code, out.as_str()), (0, "again\n"));
     assert!(!reopened.log_tail(10, 4096).unwrap().is_empty());
@@ -773,7 +778,7 @@ fn a_running_command_ends_with_its_sandbox() {
     assert!(fixture
         .root
         .join("images")
-        .join(hex(DIGEST))
+        .join(format!("{}.2", hex(DIGEST)))
         .join("etc/layerfs-image")
         .is_file());
 }

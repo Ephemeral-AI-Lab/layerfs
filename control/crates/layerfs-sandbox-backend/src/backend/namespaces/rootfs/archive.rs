@@ -1,13 +1,14 @@
 //! One docker-archive: its `manifest.json`, the digest it names its config by,
 //! and its layers, unpacked into the tree bottom first.
 use super::{
-    layers::apply,
+    layers::{apply, directory_times},
     refuse,
-    tar::{path_of, Kind, Tape},
+    tar::{path_of, Kind, Tape, Time},
     PATH_MAX,
 };
 use crate::{json::Json, Image, RuntimeError};
 use std::{
+    collections::BTreeMap,
     fs::{self, File, OpenOptions},
     io::{self, BufReader, Read, Seek, SeekFrom},
     os::unix::fs::OpenOptionsExt,
@@ -43,7 +44,8 @@ enum Magic {
     Zstd,
 }
 
-/// Unpacks `archive`'s layers, bottom first, into `root`.
+/// Unpacks `archive`'s layers, bottom first, into `root`, then gives each
+/// directory the time its last entry carries.
 pub(super) fn unpack(archive: &Path, image: &Image, root: &Path) -> Result<(), RuntimeError> {
     let manifest = manifest(archive, Some(image))?;
     let mut wanted = Vec::with_capacity(manifest.layers.len() + 1);
@@ -58,6 +60,7 @@ pub(super) fn unpack(archive: &Path, image: &Image, root: &Path) -> Result<(), R
             manifest.config.display()
         )));
     }
+    let mut times = BTreeMap::new();
     for (index, layer) in manifest.layers.iter().enumerate() {
         let blob = blobs.get(index + 1).copied().flatten().ok_or_else(|| {
             refuse(format!(
@@ -65,9 +68,15 @@ pub(super) fn unpack(archive: &Path, image: &Image, root: &Path) -> Result<(), R
                 layer.display()
             ))
         })?;
-        extract_layer(archive, blob, &layer.display().to_string(), root)?;
+        extract_layer(
+            archive,
+            blob,
+            &layer.display().to_string(),
+            root,
+            &mut times,
+        )?;
     }
-    Ok(())
+    directory_times(root, &times)
 }
 
 /// The image `archive` holds, by its config digest (#529): the one image its
@@ -253,8 +262,15 @@ fn read_blob(archive: &Path, blob: Blob, max: usize) -> Result<Vec<u8>, RuntimeE
     Ok(bytes)
 }
 
-/// Applies one layer, whose bytes are the `size` at `blob`.
-fn extract_layer(archive: &Path, blob: Blob, name: &str, root: &Path) -> Result<(), RuntimeError> {
+/// Applies one layer, whose bytes are the `size` at `blob`, keeping each
+/// directory entry's time in `times` (a later entry's replaces an earlier's).
+fn extract_layer(
+    archive: &Path,
+    blob: Blob,
+    name: &str,
+    root: &Path,
+    times: &mut BTreeMap<PathBuf, Time>,
+) -> Result<(), RuntimeError> {
     let mut file = open(archive)?;
     file.seek(SeekFrom::Start(blob.offset))?;
     match magic(&mut file)? {
@@ -280,6 +296,9 @@ fn extract_layer(archive: &Path, blob: Blob, name: &str, root: &Path) -> Result<
     while let Some(entry) = tape.next()? {
         let mut data = (&mut tape).take(entry.size);
         apply(root, &entry, &mut data)?;
+        if entry.kind == Kind::Directory {
+            times.insert(entry.path, entry.mtime);
+        }
     }
     Ok(())
 }
