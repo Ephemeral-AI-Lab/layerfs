@@ -136,7 +136,9 @@ Give each a wall limit of at most 120 s.
   `{"ok":true,"findings":[]}` and does not create it; a Store record that
   is not JSON gives `1 error(s), 0 warning(s)` and its fix with `--text`;
   `doctor --all` is exit 2. Command:
-  `cargo +1.85.1 test --locked -p layerfs-cli --test doctor`. Needs Unix.
+  `cargo +1.85.1 test --locked -p layerfs-cli --test doctor`, built first
+  with `--no-run` (the cold build takes over a minute and would hit the
+  100 s limit). Needs Unix.
 - **Node tests**: `calls.mjs`, `shell.mjs`, `events.mjs`, `close.mjs`,
   `doctor.mjs`; see [Node](node.md#native-addon-build). Command:
   `perl -e 'alarm 100; exec @ARGV' npm --prefix api/node test`
