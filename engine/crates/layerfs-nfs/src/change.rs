@@ -23,8 +23,11 @@ use layerfs_content::{filesystem::PathName, object::inode_leaf::InodeKind};
 use layerfs_mount_ports::operations::{
     create, link, remove, rename,
     write::{self, AttributeChange, Stamp},
-    Declined, KernelMutation, MutationFailure, MutationInput, MutationRequest,
+    Declined, KernelMutation, MutationFailure, MutationInput, MutationRequest, Published,
 };
+
+/// Pre- and post-operation attributes of one inode or directory.
+pub type Wcc = (Option<ViewStat>, Option<ViewStat>);
 use layerfs_overlay::WRITE_WINDOW;
 use layerfs_workspace::{Time, ViewStat};
 use std::{io, sync::atomic::Ordering, time::SystemTime};
@@ -117,10 +120,11 @@ impl Kernel {
         &self,
         protected: u64,
         handle: Option<u64>,
+        open: Option<bool>,
         expect: Expect,
         tickets: &mut Tickets,
         build: impl FnOnce(Time) -> Result<MutationInput, Declined>,
-    ) -> Result<Option<ViewStat>, Status> {
+    ) -> Result<Published, Status> {
         let now = write::time(SystemTime::now()).ok_or(Status::Io)?;
         let input = build(now).map_err(declined)?;
         let (services, request) = self.request()?;
@@ -130,7 +134,7 @@ impl Kernel {
             protected,
             handle,
             input,
-            open: None,
+            open,
             now,
         };
         let mutation = match wait(KernelMutation::perform(services, request)) {
@@ -145,15 +149,22 @@ impl Kernel {
                 return Err(status);
             }
         };
-        let stat = match mutation.value() {
+        let published = match mutation.value() {
             Err(reason) => {
                 tickets.0.push(mutation);
                 return Err(declined(reason));
             }
-            Ok(published) => published.stat.clone(),
+            Ok(published) => Published {
+                stat: published.stat.clone(),
+                file: published.file,
+                changed: published.changed,
+                wcc: published.wcc.clone(),
+                detached: published.detached.clone(),
+            },
         };
         if let Expect::Stat(serial) = expect {
-            let composable = stat
+            let composable = published
+                .stat
                 .as_ref()
                 .is_some_and(|stat| serial.is_none_or(|serial| serial == stat.serial));
             if !composable {
@@ -165,7 +176,14 @@ impl Kernel {
             }
         }
         tickets.0.push(mutation);
-        Ok(stat)
+        // The publishing visit is where a directory's own facts come from:
+        // remember them, so a companion change that names the directory
+        // without touching it can answer its `wcc_data` (see
+        // [`Kernel::directory_wcc`]).
+        for after in published.wcc.iter().filter_map(|wcc| wcc.1.as_ref()) {
+            self.observed_size(after);
+        }
+        Ok(published)
     }
     fn failed(&self, failure: MutationFailure) {
         if failure.fenced() || failure.base_demand().is_some() {
@@ -211,7 +229,7 @@ impl Kernel {
         name: &[u8],
         how: How,
         tickets: &mut Tickets,
-    ) -> Result<ViewStat, Status> {
+    ) -> Result<(ViewStat, Wcc), Status> {
         if self.refuses_apple_double() && names::apple_double(name) && name.len() <= 255 {
             return self.companion_create(parent, name, how, tickets);
         }
@@ -224,7 +242,7 @@ impl Kernel {
                 if stored == verifier {
                     if let Some(stat) = self.existing(parent, name)? {
                         if stat.serial == serial {
-                            return Ok(stat);
+                            return Ok((stat, (None, None)));
                         }
                     }
                 }
@@ -240,11 +258,20 @@ impl Kernel {
             ),
             How::Exclusive(_) => (EXCLUSIVE_MODE, Sattr::default()),
         };
-        let created = self.mutate(parent, None, Expect::Stat(None), tickets, |_| {
-            Ok(MutationInput::Named(create::create(parent, checked, mode)))
-        });
-        let stat = match (created, how) {
-            (Ok(stat), _) => stat.ok_or(Status::ServerFault)?,
+        let created = self.mutate(
+            parent,
+            None,
+            Some(true),
+            Expect::Stat(None),
+            tickets,
+            |_| Ok(MutationInput::Named(create::create(parent, checked, mode))),
+        );
+        let (stat, file, directory) = match (created, how) {
+            (Ok(published), _) => (
+                published.stat.ok_or(Status::ServerFault)?,
+                published.file,
+                published.wcc[0].clone(),
+            ),
             (Err(Status::Exist), How::Unchecked(sattr)) => {
                 // UNCHECKED over an existing regular file: only its size is
                 // applied, as an open with truncation would.
@@ -258,14 +285,18 @@ impl Kernel {
                             size: Some(size),
                             ..Sattr::default()
                         };
-                        self.setattr(stat.serial, sized, None, tickets)
+                        let (stat, _) = self.setattr(stat.serial, sized, None, tickets)?;
+                        Ok((stat, (None, None)))
                     }
-                    _ => Ok(stat),
+                    _ => Ok((stat, (None, None))),
                 };
             }
             (Err(status), _) => return Err(status),
         };
         self.entry_taken(&stat, parent, name);
+        if let Some(file) = file {
+            self.file_taken(stat.serial, file.owner_id(), stat.logical_len, true);
+        }
         if let How::Exclusive(verifier) = how {
             let mut table = self.table();
             let tick = table.tick();
@@ -281,7 +312,8 @@ impl Kernel {
             }
             table.verifiers.insert(key, (verifier, stat.serial, tick));
         }
-        self.settle(stat, rest, tickets)
+        let stat = self.settle(stat, rest, tickets)?;
+        Ok((stat, directory))
     }
     /// Applies what a creating call's attributes ask beyond the mode.
     fn settle(
@@ -298,6 +330,7 @@ impl Kernel {
             return Ok(stat);
         }
         self.setattr(stat.serial, rest, None, tickets)
+            .map(|(stat, _)| stat)
     }
     /// MKDIR.
     pub fn mkdir(
@@ -306,21 +339,21 @@ impl Kernel {
         name: &[u8],
         sattr: Sattr,
         tickets: &mut Tickets,
-    ) -> Result<ViewStat, Status> {
+    ) -> Result<(ViewStat, Wcc), Status> {
         let checked = self.checked(name, true)?;
         let mode = sattr.mode.unwrap_or(DIRECTORY_MODE);
-        let stat = self
-            .mutate(parent, None, Expect::Stat(None), tickets, |_| {
-                Ok(MutationInput::Named(create::mkdir(parent, checked, mode)))
-            })?
-            .ok_or(Status::ServerFault)?;
+        let published = self.mutate(parent, None, None, Expect::Stat(None), tickets, |_| {
+            Ok(MutationInput::Named(create::mkdir(parent, checked, mode)))
+        })?;
+        let stat = published.stat.ok_or(Status::ServerFault)?;
         self.entry_taken(&stat, parent, name);
         let rest = Sattr {
             mode: None,
             size: None,
             ..sattr
         };
-        self.settle(stat, rest, tickets)
+        let stat = self.settle(stat, rest, tickets)?;
+        Ok((stat, published.wcc[0].clone()))
     }
     /// SYMLINK. A symlink's mode is fixed; its attributes are not applied.
     pub fn symlink(
@@ -329,15 +362,14 @@ impl Kernel {
         name: &[u8],
         target: &[u8],
         tickets: &mut Tickets,
-    ) -> Result<ViewStat, Status> {
+    ) -> Result<(ViewStat, Wcc), Status> {
         let checked = self.checked(name, true)?;
-        let stat = self
-            .mutate(parent, None, Expect::Stat(None), tickets, |_| {
-                create::symlink(parent, checked, target, LINK_PAGE).map(MutationInput::Named)
-            })?
-            .ok_or(Status::ServerFault)?;
+        let published = self.mutate(parent, None, None, Expect::Stat(None), tickets, |_| {
+            create::symlink(parent, checked, target, LINK_PAGE).map(MutationInput::Named)
+        })?;
+        let stat = published.stat.ok_or(Status::ServerFault)?;
         self.entry_taken(&stat, parent, name);
-        Ok(stat)
+        Ok((stat, published.wcc[0].clone()))
     }
     /// The silly-named serial `name` denotes in `parent`, if any.
     fn silly_entry(&self, parent: u64, name: &[u8]) -> Option<u64> {
@@ -354,34 +386,77 @@ impl Kernel {
             self.unlinked(serial);
         }
     }
+    /// Selects whether an unlinking mutation can retire synthetic kernel
+    /// custody on a detached (`nlink == 0`) target in the publishing job.
+    fn prepare_unlink(&self, parent: u64, name: &[u8], rmdir: bool) -> (Option<bool>, Option<u64>) {
+        let table = self.table();
+        let known = table.by_name.get(&(parent, name.to_vec())).copied();
+        if !rmdir {
+            if known.is_some_and(|serial| table.pinned(serial))
+                || (known.is_none() && !table.silly.is_empty())
+            {
+                return (None, None);
+            }
+            let handle = known.and_then(|serial| table.files.get(&serial).map(|held| held.handle));
+            (Some(false), handle)
+        } else {
+            let handle = known.and_then(|serial| {
+                table
+                    .directories
+                    .iter()
+                    .find(|(_, (s, _))| *s == serial)
+                    .map(|(h, _)| *h)
+            });
+            (Some(false), handle)
+        }
+    }
+    fn finish_unlink(
+        &self,
+        parent: u64,
+        name: &[u8],
+        open: Option<bool>,
+        handle: Option<u64>,
+        detached: Option<ViewStat>,
+    ) {
+        self.table().by_name.remove(&(parent, name.to_vec()));
+        let Some(target) = detached else {
+            return;
+        };
+        let last = target.kind == InodeKind::Directory || target.namespace_refs == 0;
+        if last && !self.table().pinned(target.serial) {
+            if open == Some(false) {
+                self.unlinked_retired(target.serial, handle);
+            } else {
+                self.unlinked(target.serial);
+            }
+        }
+    }
     /// REMOVE of a non-directory name.
-    pub fn remove(&self, parent: u64, name: &[u8], tickets: &mut Tickets) -> Result<(), Status> {
-        if self.companion_remove(parent, name) {
-            return Ok(());
+    pub fn remove(&self, parent: u64, name: &[u8], tickets: &mut Tickets) -> Result<Wcc, Status> {
+        if let Some(wcc) = self.companion_remove(parent, name) {
+            return Ok(wcc);
         }
         if self.silly_entry(parent, name).is_some() {
             self.drop_silly(parent, name);
-            return Ok(());
+            return Ok((None, None));
         }
         let checked = self.checked(name, false)?;
-        let target = self.existing(parent, name)?.ok_or(Status::NoEnt)?;
-        self.mutate(parent, None, Expect::Nothing, tickets, |_| {
+        let (open, handle) = self.prepare_unlink(parent, name, false);
+        let published = self.mutate(parent, handle, open, Expect::Nothing, tickets, |_| {
             Ok(MutationInput::Named(remove::unlink(parent, checked)))
         })?;
-        if target.namespace_refs <= 1 && !self.table().pinned(target.serial) {
-            self.unlinked(target.serial);
-        }
-        Ok(())
+        self.finish_unlink(parent, name, open, handle, published.detached);
+        Ok(published.wcc[0].clone())
     }
     /// RMDIR.
-    pub fn rmdir(&self, parent: u64, name: &[u8], tickets: &mut Tickets) -> Result<(), Status> {
+    pub fn rmdir(&self, parent: u64, name: &[u8], tickets: &mut Tickets) -> Result<Wcc, Status> {
         let checked = self.checked(name, false)?;
-        let target = self.existing(parent, name)?.ok_or(Status::NoEnt)?;
-        self.mutate(parent, None, Expect::Nothing, tickets, |_| {
+        let (open, handle) = self.prepare_unlink(parent, name, true);
+        let published = self.mutate(parent, handle, open, Expect::Nothing, tickets, |_| {
             Ok(MutationInput::Named(remove::rmdir(parent, checked)))
         })?;
-        self.unlinked(target.serial);
-        Ok(())
+        self.finish_unlink(parent, name, open, handle, published.detached);
+        Ok(published.wcc[0].clone())
     }
     /// RENAME, replacing the destination. A rename onto a client silly name
     /// is the source's unlink with the inode kept alive by the export.
@@ -414,7 +489,7 @@ impl Kernel {
         if names::silly(new_name) && source.kind == InodeKind::RegularFile {
             // Keep a writable descriptor before the last name may go.
             self.open_file(source.serial, true)?;
-            self.mutate(from, None, Expect::Nothing, tickets, |_| {
+            self.mutate(from, None, None, Expect::Nothing, tickets, |_| {
                 Ok(MutationInput::Named(remove::unlink(from, source_name)))
             })?;
             self.silly_renamed.fetch_add(1, Ordering::Relaxed);
@@ -429,7 +504,7 @@ impl Kernel {
             return Ok(());
         }
         let destination = self.existing(to, new_name)?;
-        self.mutate(from, None, Expect::Nothing, tickets, |_| {
+        self.mutate(from, None, None, Expect::Nothing, tickets, |_| {
             rename::rename(from, source_name, to, destination_name, 0).map(MutationInput::Named)
         })?;
         if source.kind == InodeKind::Directory {
@@ -451,19 +526,23 @@ impl Kernel {
         parent: u64,
         name: &[u8],
         tickets: &mut Tickets,
-    ) -> Result<ViewStat, Status> {
+    ) -> Result<(ViewStat, Wcc), Status> {
         if crate::apple_double::companion(serial) {
             return Err(Status::Access);
         }
         let checked = self.checked(name, true)?;
-        let stat = self
-            .mutate(parent, None, Expect::Stat(Some(serial)), tickets, |_| {
-                Ok(MutationInput::Named(link::link(serial, parent, checked)))
-            })?
-            .ok_or(Status::ServerFault)?;
+        let published = self.mutate(
+            parent,
+            None,
+            None,
+            Expect::Stat(Some(serial)),
+            tickets,
+            |_| Ok(MutationInput::Named(link::link(serial, parent, checked))),
+        )?;
+        let stat = published.stat.ok_or(Status::ServerFault)?;
         // The engine took one more lookup reference; the export holds one.
         self.entry_taken(&stat, parent, name);
-        Ok(stat)
+        Ok((stat, published.wcc[0].clone()))
     }
     /// SETATTR. `guard` is the client's expected ctime (seconds,
     /// nanoseconds), compared with a fresh GETATTR first: the check is not
@@ -474,7 +553,7 @@ impl Kernel {
         sattr: Sattr,
         guard: Option<(u32, u32)>,
         tickets: &mut Tickets,
-    ) -> Result<ViewStat, Status> {
+    ) -> Result<(ViewStat, Wcc), Status> {
         if crate::apple_double::companion(serial) {
             return self.companion_setattr(serial, sattr, guard, tickets);
         }
@@ -485,7 +564,8 @@ impl Kernel {
             }
         }
         if sattr.is_empty() || self.refreshed(serial, &sattr) {
-            return self.getattr(serial);
+            let stat = self.getattr(serial)?;
+            return Ok((stat.clone(), (Some(stat.clone()), Some(stat))));
         }
         let identity = (self.identity().uid, self.identity().gid);
         let change = sattr.change();
@@ -497,13 +577,17 @@ impl Kernel {
         } else {
             None
         };
-        let stat = self
-            .mutate(serial, handle, Expect::Stat(Some(serial)), tickets, |now| {
-                write::set_attributes(serial, handle.is_some(), identity, change, now)
-            })?
-            .ok_or(Status::ServerFault)?;
+        let published = self.mutate(
+            serial,
+            handle,
+            None,
+            Expect::Stat(Some(serial)),
+            tickets,
+            |now| write::set_attributes(serial, handle.is_some(), identity, change, now),
+        )?;
+        let stat = published.stat.ok_or(Status::ServerFault)?;
         self.observed_size(&stat);
-        Ok(stat)
+        Ok((stat, published.wcc[0].clone()))
     }
     /// WRITE through the implicit writable descriptor, in engine windows of
     /// at most `WRITE_WINDOW` bytes, each its own publication. A failure after
@@ -514,29 +598,35 @@ impl Kernel {
         offset: u64,
         data: &[u8],
         tickets: &mut Tickets,
-    ) -> Result<(u32, ViewStat), Status> {
+    ) -> Result<(u32, Wcc), Status> {
         if crate::apple_double::companion(serial) {
             return self.companion_write(serial, offset, data);
         }
         let open = self.open_file(serial, true)?;
         if data.is_empty() {
-            return Ok((0, self.getattr(serial)?));
+            let stat = self.getattr(serial)?;
+            return Ok((0, (Some(stat.clone()), Some(stat))));
         }
         let mut written = 0usize;
+        let mut before = None;
         let mut last = None;
         for window in data.chunks(WRITE_WINDOW) {
             let at = offset.checked_add(written as u64).ok_or(Status::FBig)?;
             let published = self.mutate(
                 serial,
                 Some(open.handle),
+                None,
                 Expect::Stat(Some(serial)),
                 tickets,
                 |_| write::write(at, window, false),
             );
             match published {
-                Ok(stat) => {
+                Ok(published) => {
+                    if written == 0 {
+                        before = published.wcc[0].0.clone();
+                    }
                     written += window.len();
-                    last = stat;
+                    last = published.stat;
                 }
                 Err(status) if written == 0 => return Err(status),
                 Err(_) => break,
@@ -544,6 +634,9 @@ impl Kernel {
         }
         let stat = last.ok_or(Status::ServerFault)?;
         self.observed_size(&stat);
-        Ok((u32::try_from(written).unwrap_or(u32::MAX), stat))
+        Ok((
+            u32::try_from(written).unwrap_or(u32::MAX),
+            (before, Some(stat)),
+        ))
     }
 }
