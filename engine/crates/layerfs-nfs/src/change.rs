@@ -176,6 +176,13 @@ impl Kernel {
             }
         }
         tickets.0.push(mutation);
+        // The publishing visit is where a directory's own facts come from:
+        // remember them, so a companion change that names the directory
+        // without touching it can answer its `wcc_data` (see
+        // [`Kernel::directory_wcc`]).
+        for after in published.wcc.iter().filter_map(|wcc| wcc.1.as_ref()) {
+            self.observed_size(after);
+        }
         Ok(published)
     }
     fn failed(&self, failure: MutationFailure) {
@@ -426,8 +433,8 @@ impl Kernel {
     }
     /// REMOVE of a non-directory name.
     pub fn remove(&self, parent: u64, name: &[u8], tickets: &mut Tickets) -> Result<Wcc, Status> {
-        if self.companion_remove(parent, name) {
-            return Ok((None, None));
+        if let Some(wcc) = self.companion_remove(parent, name) {
+            return Ok(wcc);
         }
         if self.silly_entry(parent, name).is_some() {
             self.drop_silly(parent, name);

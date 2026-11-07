@@ -38,6 +38,7 @@
 use crate::{
     attributes::{refusal, Identity, Status},
     block::wait,
+    change::Wcc,
     handle::{HandleError, SqliteHandles},
 };
 use layerfs_content::{filesystem::PathName, object::inode_leaf::InodeKind};
@@ -110,6 +111,11 @@ pub(crate) struct Table {
     pub used: HashMap<u64, u64>,
     /// Serials marked for a cache refresh, and when (see [`crate::refresh`]).
     pub refreshing: HashMap<u64, std::time::Instant>,
+    /// Directory serial -> the facts last published or observed for it. A
+    /// change of an AppleDouble companion names a directory but changes
+    /// nothing in it, so its `wcc_data` answers from here (see
+    /// [`Kernel::directory_wcc`]).
+    pub directory_stats: HashMap<u64, ViewStat>,
     pub tick: u64,
 }
 impl Table {
@@ -478,6 +484,7 @@ impl Kernel {
         let (file, directories, held) = {
             let mut table = self.table();
             table.parents.remove(&serial);
+            table.directory_stats.remove(&serial);
             if let Some(old) = table.names.remove(&serial) {
                 if table.by_name.get(&old) == Some(&serial) {
                     table.by_name.remove(&old);
@@ -518,10 +525,32 @@ impl Kernel {
     pub fn saw_directory(&self, serial: u64, parent: u64) {
         self.table().parents.insert(serial, parent);
     }
-    /// The size a published or observed stat reports, for READ's EOF.
+    /// Records the facts a published or observed stat reports: the size a
+    /// READ ends at, and a directory's attributes, which
+    /// [`Kernel::directory_wcc`] answers from.
     pub(crate) fn observed_size(&self, stat: &ViewStat) {
-        if let Some(held) = self.table().files.get_mut(&stat.serial) {
+        let mut table = self.table();
+        if let Some(held) = table.files.get_mut(&stat.serial) {
             held.size = stat.logical_len;
+        }
+        if stat.kind == InodeKind::Directory {
+            table.directory_stats.insert(stat.serial, stat.clone());
+        }
+    }
+    /// `wcc_data` of a directory a change named but could not have touched:
+    /// an AppleDouble companion lives in the export alone, so creating,
+    /// removing or moving one never changes the directory's own facts, and
+    /// the pre- and post-operation halves are the same last known stat.
+    /// Answering both keeps the client from invalidating its cached
+    /// attributes of the directory, which a missing post-operation half makes
+    /// it do, at the cost of one GETATTR per later entry of that directory.
+    /// `(None, None)` when this export has never seen the directory: the
+    /// client answers that itself.
+    pub(crate) fn directory_wcc(&self, parent: u64) -> Wcc {
+        let table = self.table();
+        match table.directory_stats.get(&parent) {
+            Some(stat) => (Some(stat.clone()), Some(stat.clone())),
+            None => (None, None),
         }
     }
     /// READLINK: the raw target bytes.
@@ -631,13 +660,29 @@ impl Kernel {
     /// READ of at most one engine window. `eof` is set when the reply reaches
     /// the size last seen for the file, or comes back short.
     pub fn read(&self, serial: u64, offset: u64, count: u32) -> Result<(Vec<u8>, bool), Status> {
+        let mut data = Vec::new();
+        let eof = self.read_into(serial, offset, count, &mut data)?;
+        Ok((data, eof))
+    }
+    /// One engine window appended to `out`, which is what a reply larger than
+    /// one window collects: the window's bytes are copied straight into the
+    /// reply buffer, and a call serving several windows takes one descriptor
+    /// and one owner visit per window. `eof` means the same as in
+    /// [`Kernel::read`].
+    pub(crate) fn read_into(
+        &self,
+        serial: u64,
+        offset: u64,
+        count: u32,
+        out: &mut Vec<u8>,
+    ) -> Result<bool, Status> {
         let length = count.min(READ_WINDOW as u32);
         if crate::apple_double::companion(serial) {
-            return self.companion_read(serial, offset, length);
+            return self.companion_read(serial, offset, length, out);
         }
         let open = self.open_file(serial, false)?;
         if offset >= open.size {
-            return Ok((Vec::new(), true));
+            return Ok(true);
         }
         let (services, request) = self.request()?;
         let data = wait(KernelData::read(
@@ -650,10 +695,11 @@ impl Kernel {
         ))
         .map_err(read_failure)?
         .map_err(refusal)?;
-        let bytes = data.bytes().to_vec();
+        let bytes = data.bytes();
         let end = offset.saturating_add(bytes.len() as u64);
         let eof = bytes.len() < length as usize || end >= open.size;
-        Ok((bytes, eof))
+        out.extend_from_slice(bytes);
+        Ok(eof)
     }
     /// A fresh implicit directory descriptor for an enumeration from cookie 0.
     pub fn open_directory(&self, serial: u64) -> Result<u64, Status> {

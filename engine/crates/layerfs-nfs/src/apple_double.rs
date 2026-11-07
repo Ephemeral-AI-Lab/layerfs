@@ -9,6 +9,13 @@
 //! it ever reaches the engine, so the Workspace stays clean and no Commit can
 //! capture it. Everything is dropped when the export is released.
 //!
+//! The tree is not consulted for such a name: while this mode is on, a
+//! LOOKUP of a `._` name answers `NFS3ERR_NOENT` unless the export holds that
+//! companion, which is what a READDIR of that directory already shows by not
+//! listing them, so the two agree. Such a change also never touches the
+//! directory it names, so its `wcc_data` answers both halves from the last
+//! facts the export saw for it (see [`Kernel::directory_wcc`]).
+//!
 //! The memory is bounded: [`HELD`] companions of at most [`FILE_BYTES`]
 //! each and [`TOTAL_BYTES`] in all. Beyond the count a creation is refused
 //! (`NFS3ERR_ACCES`, as before this module), beyond the bytes a write
@@ -137,6 +144,7 @@ impl Kernel {
         how: How,
         tickets: &mut Tickets,
     ) -> Result<(ViewStat, Wcc), Status> {
+        let directory = self.directory_wcc(parent);
         if let Some(stat) = self.companion_named(parent, name) {
             // Opened again: UNCHECKED applies its size, as an open with
             // truncation would; GUARDED and EXCLUSIVE find it taken.
@@ -150,9 +158,9 @@ impl Kernel {
                         ..Sattr::default()
                     };
                     let (stat, _) = self.companion_setattr(stat.serial, sized, None, tickets)?;
-                    Ok((stat, (None, None)))
+                    Ok((stat, directory))
                 }
-                None => Ok((stat, (None, None))),
+                None => Ok((stat, directory)),
             };
         }
         if parent != self.root() && !self.table().parents.contains_key(&parent) {
@@ -186,18 +194,17 @@ impl Kernel {
         let stat = Companions::stat(serial, file);
         drop(companions);
         self.names_detached.fetch_add(1, Ordering::Relaxed);
-        Ok((stat, (None, None)))
+        Ok((stat, directory))
     }
-    /// REMOVE of a companion name; `false` when none is held.
-    pub(crate) fn companion_remove(&self, parent: u64, name: &[u8]) -> bool {
-        let mut companions = self.companions();
-        match companions.names.get(&(parent, name.to_vec())).copied() {
-            Some(serial) => {
-                companions.drop_serial(serial);
-                true
-            }
-            None => false,
+    /// REMOVE of a companion name, with the directory's `wcc_data`; `None`
+    /// when no companion has that name.
+    pub(crate) fn companion_remove(&self, parent: u64, name: &[u8]) -> Option<Wcc> {
+        {
+            let mut companions = self.companions();
+            let serial = companions.names.get(&(parent, name.to_vec())).copied()?;
+            companions.drop_serial(serial);
         }
+        Some(self.directory_wcc(parent))
     }
     /// RENAME of a companion name: only to another AppleDouble name, which
     /// it replaces when held. `None` when no companion has that name.
@@ -226,19 +233,22 @@ impl Kernel {
         }
         Some(Ok(()))
     }
-    /// READ of a companion.
+    /// READ of a companion, at most `count` bytes from `offset`, appended to
+    /// `out`; `eof` when the reply reaches the companion's end.
     pub(crate) fn companion_read(
         &self,
         serial: u64,
         offset: u64,
         count: u32,
-    ) -> Result<(Vec<u8>, bool), Status> {
+        out: &mut Vec<u8>,
+    ) -> Result<bool, Status> {
         let companions = self.companions();
         let file = companions.files.get(&serial).ok_or(Status::Stale)?;
         let length = file.data.len() as u64;
         let start = offset.min(length) as usize;
         let end = offset.saturating_add(u64::from(count)).min(length) as usize;
-        Ok((file.data[start..end].to_vec(), end as u64 >= length))
+        out.extend_from_slice(&file.data[start..end]);
+        Ok(end as u64 >= length)
     }
     /// WRITE to a companion: all of it or nothing.
     pub(crate) fn companion_write(
