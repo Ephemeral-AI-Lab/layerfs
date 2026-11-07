@@ -57,6 +57,7 @@ impl Overlay {
             after,
             first,
             published,
+            handled: Vec::new(),
         })
     }
     /// READDIR's publishing visit, before the reply is sent: the names the
@@ -130,6 +131,19 @@ impl Overlay {
                     names: blob,
                 },
             )?;
+            // The handles this reply hands out hold one kernel lookup
+            // reference each, taken here in the same job that made their
+            // offsets valid: the client may present one at any time, so the
+            // entry's fence answers without a LOOKUP of its own. A name that
+            // is no longer current still holds its reference, and a later
+            // LOOKUP of it gives the extra one back, as one answered by
+            // `entry_taken`.
+            for entry in &offer.handled {
+                self.add_kernel_lookup(directory.mount, entry.serial)?;
+                if entry.directory {
+                    self.set_kernel_parent(directory.mount, entry.serial, directory.serial)?;
+                }
+            }
             Ok(())
         })
     }
