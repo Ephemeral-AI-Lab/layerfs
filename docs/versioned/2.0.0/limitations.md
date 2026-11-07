@@ -103,9 +103,14 @@ None of these was run on this branch, except where a line says what ran.
 They are taken from the work order's "Not verified at writing" list and the
 step commits.
 
-- **VM kinds and ssh.** No real `apple-container`, `microsandbox`, `lima`,
-  `firecracker` or ssh machine was created or connected; their adapters
-  were tested with provider tests only. On macOS the `docker` machine's
+- **VM kinds and ssh.** No real `microsandbox`, `firecracker` or ssh
+  machine was created or connected; their adapters were tested with
+  provider tests only. A `lima` (Lima 2.2.1, vz) and an `apple-container`
+  (container 1.6.1) machine were created, started, stopped and started
+  again on macOS with the release CLI, and ran the sqlite smoke and
+  `workspace exec-cancel` (on Lima also stale and unreachable forwarded
+  records); PostgreSQL Sandboxes on them were not run in that pass
+  ([receipt](../../../core/docs/issues/project-113/receipts/fb02aa0666/machines-live/RESULTS.md)). On macOS the `docker` machine's
   worker did run (a private test bundle, `LAYERFS_BUNDLE`): `store move` (now `store push`) to
   `docker`, its Sandboxes and the twelve cells passed; see the terminal pass.
   That run used the retired docker backend: the `docker` machine running
@@ -113,8 +118,9 @@ step commits.
   live.
 - **Machine boot and worker start.** `machine start` and `machine stop`
   (#535 P1) and a worker call refused `Unavailable` on a stopped machine
-  (D11, R1) were tested with stand-in tools and workers only; no VM, ssh
-  host or Docker worker was started or stopped by them. There is no idle
+  (D11, R1) were tested with stand-in tools and workers, and live on the
+  `lima` and `apple-container` machines above; no ssh host or Docker
+  worker was started or stopped by them. There is no idle
   stop and no start on demand (D11).
 - **The docker default image** (#535 P5). Loading the bundle's
   `sandbox-image.tar` with `docker load` and running the worker container
