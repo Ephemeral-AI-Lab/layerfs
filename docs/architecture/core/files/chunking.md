@@ -139,7 +139,11 @@ changes a chunk's bytes, its ID or the mapping partition.
 For each new chunk the `Aligner` shifts the chunk's range back into base
 coordinates and offers the old payload that shares the most bytes with it. A
 chunk equal to an old payload gets no hint and resets the shift there. With no
-overlap it offers the successor of the nearest unchanged neighbour. A base that
+overlap it offers the successor of the nearest unchanged neighbour. Every chunk
+appended past the old end of the file therefore gets the same hint, the old
+last chunk; Storage keeps trying it while it wins, as text resembling the tail
+does, and skips it after a run of losses, as incompressible bytes produce
+([Encoding](../physical-storage/encoding.md), step 3a). A base that
 is a whole-file object offers chunks nothing: matching across the
 representation change is not implemented. A base costs one root read and then
 mapping pages, never a payload read. One object carries at most

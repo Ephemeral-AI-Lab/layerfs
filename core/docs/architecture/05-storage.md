@@ -617,11 +617,12 @@ is the one to probe in qualification:
 | candidate absent from storage | FULL | **policy decision** |
 | candidate present but ineligible (depth/role) | FULL | **policy decision** |
 | chain would exceed its budget | FULL | **policy decision** |
+| chunk base lost its last trials in this Save | FULL, no trial | **policy decision** |
 | codec, allocation or read failure | **error returned** | **failure** |
 
 `DeltaCounters` distinguishes all of them: `prepared_full`, `trials`,
 `prefix_selected`, `full_losses`, `no_candidate`, `absent_candidates`,
-`ineligible_candidates`, `work_exceeded`. A receipt can therefore show *why* FULL
+`ineligible_candidates`, `work_exceeded`, `losing_skipped`. A receipt can therefore show *why* FULL
 was chosen rather than only that it was.
 
 **Chain bounds are separate from depths**, and the source says so explicitly: "a

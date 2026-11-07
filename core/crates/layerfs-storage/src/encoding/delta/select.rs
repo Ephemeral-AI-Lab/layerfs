@@ -16,6 +16,10 @@
 //! before reconstruction, or with the new object on it, judged once it is
 //! acquired and authenticated. A codec, allocation or read failure is returned as
 //! a failure and never becomes an alternative representation.
+//!
+//! A chunk offered a base that its last trials in this Save all lost against is
+//! stored FULL without a trial, with retries at doubling gaps ([`LosingBases`]):
+//! an incompressible append pays a few trials, not one per chunk.
 
 use std::collections::BTreeMap;
 
@@ -64,6 +68,9 @@ pub struct DeltaCounters {
     /// reached the depth cap or would exceed a work budget with the new object on
     /// it (#89). The one trial runs against the root.
     pub rebased: u64,
+    /// Chunk candidates not tried because this Save's trials against the same
+    /// base kept losing ([`LosingBases`]); each stored FULL without a trial.
+    pub losing_skipped: u64,
     /// Whole-file objects stored, by chain depth (FULL is 0).
     pub whole_file_depths: DepthHistogram,
     /// Chunk objects stored, by chain depth (FULL is 0).
@@ -96,6 +103,7 @@ impl DeltaCounters {
             (&mut self.work_exceeded, other.work_exceeded),
             (&mut self.depth_capped, other.depth_capped),
             (&mut self.rebased, other.rebased),
+            (&mut self.losing_skipped, other.losing_skipped),
         ] {
             *total = total.saturating_add(value);
         }
@@ -295,6 +303,67 @@ impl DepthCache {
     }
 }
 
+/// Consecutive lost trials against one chunk base after which a Save starts
+/// skipping that base.
+pub const LOSING_BASE_TRIALS: u32 = 8;
+/// Largest gap, as a power of two, between two trials of a losing base.
+const LOSING_BASE_MAX_GAP_LOG2: u32 = 16;
+/// Live entries of the per-save losing-base memo.
+const LOSING_BASE_ENTRIES: usize = 4_096;
+
+/// Per-save memo of chunk delta bases whose trials keep losing.
+///
+/// A content hint names the same base for many chunks when nothing in the
+/// base overlaps them: every chunk appended past the old end of a file is
+/// offered the old file's last chunk. Text resembling that tail wins its
+/// trials; incompressible bytes lose every one, each after a base read and a
+/// compression. After [`LOSING_BASE_TRIALS`] consecutive losses against one
+/// base, a chunk offered it is stored FULL without a trial, and the base is
+/// tried again after a gap that doubles with every further loss, up to
+/// 2^16 offers. A win forgets the base, so trials resume at once. The memo
+/// changes which records a Save stores, never what an object is: a hint is
+/// advisory.
+#[derive(Debug, Default)]
+pub struct LosingBases {
+    /// Per base: consecutive lost trials, and offers still to skip.
+    streaks: BTreeMap<ObjectId, (u32, u32)>,
+}
+
+impl LosingBases {
+    /// Empty memo.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Whether a chunk offered `base` is tried; false counts one skipped offer.
+    pub fn admits(&mut self, base: ObjectId) -> bool {
+        match self.streaks.get_mut(&base) {
+            Some((_, skip)) if *skip > 0 => {
+                *skip -= 1;
+                false
+            }
+            _ => true,
+        }
+    }
+
+    /// Records the outcome of one trial against `base`.
+    pub fn note(&mut self, base: ObjectId, won: bool) {
+        if won {
+            self.streaks.remove(&base);
+            return;
+        }
+        if self.streaks.len() >= LOSING_BASE_ENTRIES && !self.streaks.contains_key(&base) {
+            // Bounded live capacity: the memo is dropped whole rather than grown.
+            self.streaks.clear();
+        }
+        let (losses, skip) = self.streaks.entry(base).or_default();
+        *losses = losses.saturating_add(1);
+        if *losses >= LOSING_BASE_TRIALS {
+            *skip = 1 << (*losses - LOSING_BASE_TRIALS).min(LOSING_BASE_MAX_GAP_LOG2);
+        }
+    }
+}
+
 /// Everything one selection needs besides the object itself.
 pub struct SelectInput<'a> {
     /// Bounded physical source for candidate lookup and base reconstruction.
@@ -305,6 +374,8 @@ pub struct SelectInput<'a> {
     pub candidates: &'a mut Candidates,
     /// Bounded chain-depth cache.
     pub depths: &'a mut DepthCache,
+    /// Chunk bases whose trials keep losing in this Save.
+    pub losing: &'a mut LosingBases,
     /// Pack bodies this operation already read, bounded by
     /// [`crate::policy::DEPENDENCY_PACK_CACHE_BYTES`] and released wholesale when
     /// the next body would cross it.
@@ -454,6 +525,13 @@ pub fn select(
         // decision the whole-file lane applies. An absent or ineligible one
         // selects FULL by policy; it is never acquired and never fails the save.
         ObjectRole::Chunk => match advisory.first().copied() {
+            // A base this Save's trials keep losing against is skipped before
+            // anything of it is located or read (`LosingBases`).
+            Some(id) if !input.losing.admits(id) => {
+                input.counters.losing_skipped = input.counters.losing_skipped.saturating_add(1);
+                input.counters.note_depth(role, 0);
+                return Ok(full);
+            }
             Some(id) => match probe(input, id, role)? {
                 true => Some(id),
                 false => None,
@@ -498,6 +576,9 @@ pub fn select(
     // chain root, judged from the stored sizes of its records before any of it is
     // reconstructed (#89). A FULL base that cannot fit them alone is refused from
     // its stored size, before reconstruction/authentication, and stores FULL.
+    // A chunk's trial outcome is noted against the base it was offered, which
+    // re-basing may replace (`LosingBases`).
+    let offered = (role == ObjectRole::Chunk).then_some(base_id);
     let base_cost = chain_cost(input, base_id)?;
     let Some((base_id, base_cost)) =
         trial_base(input, base_id, base_cost, canonical.len() as u64, depth_cap)?
@@ -545,7 +626,11 @@ pub fn select(
     );
     SaveProfile::charge(&mut input.profile.delta_ns, started);
     let prefix = prefix?;
-    if prefix.record.len() < full.record.len() {
+    let won = prefix.record.len() < full.record.len();
+    if let Some(offered) = offered {
+        input.losing.note(offered, won);
+    }
+    if won {
         let depth = base_cost.depth.saturating_add(1);
         input.depths.record(
             id,
