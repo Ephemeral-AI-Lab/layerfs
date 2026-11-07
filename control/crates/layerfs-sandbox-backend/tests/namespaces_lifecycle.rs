@@ -886,6 +886,66 @@ fn a_cancelled_command_and_what_it_started_leave_its_own_group_empty() {
 }
 
 #[test]
+fn a_command_cancelled_before_its_handle_was_told_ends_as_it_starts() {
+    if let Some(reason) = unavailable() {
+        eprintln!("SKIPPED namespaces early cancel: {reason}");
+        return;
+    }
+    let fixture = Fixture::new("early");
+    let provider = fixture.provider().unwrap();
+    let mut sandbox = fixture.launch(&provider, "sandbox-1").unwrap();
+    let sandbox_group = Path::new("/sys/fs/cgroup/layerfs").join(sandbox.identity().as_str());
+    let group = sandbox_group.join("ws-ws1").join("exec-e3");
+    let request = ExecRequest {
+        identity: CommandIdentity { uid: 501, gid: 20 },
+        arguments: vec![
+            "/bin/sh".into(),
+            "-c".into(),
+            "setsid /bin/sleep 600 >/dev/null 2>&1 & /bin/sleep 600".into(),
+        ],
+        environment: Vec::new(),
+        directory: sandbox.tmp().display().to_string(),
+        stdin: false,
+    };
+    let (sent, ran) = std::sync::mpsc::channel();
+    let mut procs = String::new();
+    std::thread::scope(|scope| {
+        let (sandbox, procs) = (&sandbox, &mut procs);
+        scope.spawn(move || {
+            // the handle is told once the command is in its group; a
+            // cancel came first
+            let mut told = |stop: &Stop| {
+                let Stop::Cgroup { path } = stop else {
+                    panic!("{stop:?}")
+                };
+                *procs = fs::read_to_string(path.join("cgroup.procs")).unwrap_or_default();
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::Interrupted,
+                    "cancelled as it started",
+                ))
+            };
+            let slot = ExecSlot {
+                workspace: "ws1",
+                exec: "e3",
+                spawned: &mut told,
+            };
+            let (mut out, mut err) = (Vec::new(), Vec::new());
+            let exit = sandbox.run_in(&request, Some(slot), &mut out, &mut err);
+            let _ = sent.send(exit.map(|exit| exit.code).map_err(|f| f.cause));
+        });
+        // it ends at once, as SIGKILL ended it, not after its 600 s
+        let exit = ran.recv_timeout(Duration::from_secs(20));
+        assert_eq!(format!("{exit:?}"), "Ok(Ok(137))");
+    });
+    assert!(!procs.trim().is_empty(), "nothing ran in its group yet");
+    // what it started ended with it: its group is empty and gone
+    assert!(!group.exists());
+    sandbox.stop(5).unwrap();
+    sandbox.delete().unwrap();
+    assert!(!sandbox_group.exists());
+}
+
+#[test]
 fn a_command_group_left_running_is_removed_with_its_sandbox() {
     if let Some(reason) = unavailable() {
         eprintln!("SKIPPED namespaces exec group teardown: {reason}");

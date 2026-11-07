@@ -79,16 +79,21 @@ impl ExecRecord {
             workspace: workspace.to_owned(),
             path: path.to_owned(),
             name: name.map(str::to_owned),
-            owner: SdkValue::Map(
-                (layerfs_home::process::identity().into_iter())
-                    .map(|(name, value)| (name.to_owned(), value))
-                    .collect(),
-            ),
+            owner: Self::new_owner(),
             route: Route::Local,
             stop: None,
             started: now_ms(),
             cancel: None,
         }
+    }
+
+    /// This process's identity fields, as a record names its owner.
+    pub fn new_owner() -> SdkValue {
+        SdkValue::Map(
+            (layerfs_home::process::identity().into_iter())
+                .map(|(name, value)| (name.to_owned(), value))
+                .collect(),
+        )
     }
 
     /// Whether its owner process is the one it names and still runs.
@@ -110,7 +115,10 @@ impl ExecRecord {
             ("name", SdkValue::opt_text(self.name.clone())),
             ("owner", self.owner.clone()),
             ("route", SdkValue::Text(route)),
-            ("stop", self.stop.as_ref().map_or(SdkValue::Null, stop)),
+            (
+                "stop",
+                self.stop.as_ref().map_or(SdkValue::Null, stop_value),
+            ),
             ("started", SdkValue::Int(self.started)),
         ];
         fields.extend(self.cancel.map(|at| ("cancel", SdkValue::Int(at))));
@@ -138,7 +146,8 @@ impl ExecRecord {
     }
 }
 
-fn stop(stop: &Stop) -> SdkValue {
+/// A stop handle as a record (and a worker's `exec_started` event) writes it.
+pub fn stop_value(stop: &Stop) -> SdkValue {
     match stop {
         Stop::Cgroup { path } => SdkValue::map([(
             "cgroup",
@@ -159,7 +168,8 @@ fn stop(stop: &Stop) -> SdkValue {
     }
 }
 
-fn stop_of(value: &SdkValue) -> Option<Stop> {
+/// The stop handle [`stop_value`] wrote, if `value` is one.
+pub fn stop_of(value: &SdkValue) -> Option<Stop> {
     if let Some(cgroup) = value.get("cgroup") {
         return Some(Stop::Cgroup {
             path: PathBuf::from(cgroup.get_text("path")?),
@@ -256,25 +266,52 @@ pub struct Running {
 impl Running {
     /// Records `record` new. A live record of the same id is the same
     /// command id running: refused `Exists`. A stale one (its owner gone)
-    /// is ended first and replaced ([`super::cancel::stale`]).
-    pub fn start(dir: &Path, sandbox: &str, record: &ExecRecord) -> Result<Self> {
+    /// is ended first and replaced ([`super::cancel::stale`]); one whose
+    /// command runs on a machine is ended in its worker through `remote`
+    /// ([`super::cancel::stale_remote`]), and while that end is not
+    /// confirmed its id stays taken: refused `Exists`.
+    pub fn start(
+        dir: &Path,
+        sandbox: &str,
+        record: &ExecRecord,
+        remote: &mut super::cancel::Remote<'_>,
+    ) -> Result<Self> {
         let path = file(dir, &record.workspace, &record.id);
-        let _sandbox = lock_in(dir, sandbox)?;
+        let exists = |why: &str| {
+            refused(
+                "Exists",
+                format!(
+                    "Workspace {sandbox}:{} {why} exec_id {}: pick another exec_id, or cancel \
+                     it with workspace.exec_cancel",
+                    record.name.as_deref().unwrap_or(&record.path),
+                    record.id
+                ),
+            )
+        };
+        let mut lock = lock_in(dir, sandbox)?;
         if let Some(found) = read(&path)? {
-            if found.owned() {
-                return Err(refused(
-                    "Exists",
-                    format!(
-                        "Workspace {sandbox}:{} already runs a command with exec_id {}: \
-                         pick another exec_id, or cancel it with workspace.exec_cancel",
-                        record.name.as_deref().unwrap_or(&record.path),
-                        record.id
-                    ),
-                ));
+            match (found.owned(), &found.route) {
+                (true, _) => return Err(exists("already runs a command with")),
+                (false, Route::Local) => {
+                    super::cancel::stale(dir, &path, &found)?;
+                }
+                (false, Route::Machine(_)) => {
+                    let claimed = super::cancel::claim(&path, &found)?;
+                    drop(lock);
+                    let pair = (&found, &claimed);
+                    let ended = super::cancel::stale_remote(dir, sandbox, &path, pair, remote)?;
+                    if ended == super::cancel::Outcome::Unknown {
+                        return Err(exists("has a stale command, not confirmed ended, with"));
+                    }
+                    lock = lock_in(dir, sandbox)?;
+                    if read(&path)?.is_some() {
+                        return Err(exists("already runs a command with"));
+                    }
+                }
             }
-            super::cancel::stale(dir, &path, &found)?;
         }
         write_entity(&path, &record.encode())?;
+        drop(lock);
         Ok(Self {
             dir: dir.to_owned(),
             sandbox: sandbox.to_owned(),
@@ -283,8 +320,11 @@ impl Running {
         })
     }
 
-    /// Records the command's stop handle once it is known. A cancel that
-    /// came first ends the command at once: refused.
+    /// Records the command's stop handle once it is known: once the
+    /// command runs in it, so a cancel before that finds no handle and is
+    /// answered as one this owner carries out. Such a cancel, marked
+    /// first, is refused here as interrupted: the runtime then ends the
+    /// command at once.
     pub fn spawned(&self, stop: &Stop) -> std::io::Result<()> {
         let io = |refusal: SdkRefusal| std::io::Error::other(refusal.message);
         let _sandbox = lock_in(&self.dir, &self.sandbox).map_err(io)?;
@@ -292,7 +332,8 @@ impl Running {
             .map_err(io)?
             .ok_or_else(|| std::io::Error::other("the command's record was removed"))?;
         if record.cancel.is_some() {
-            return Err(std::io::Error::other(
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
                 "the command was cancelled as it started",
             ));
         }

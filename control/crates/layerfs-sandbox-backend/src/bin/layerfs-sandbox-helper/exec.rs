@@ -7,13 +7,18 @@
 //! filter that refuses it a user namespace (`local::deny_user_namespaces`,
 //! D-8); a command whose filter cannot be installed never starts.
 //!
-//! With `--leave <sandbox cgroup>` (a command with its own group,
-//! layerfs-project#113) the helper joins the command's group, starts the
-//! command there and moves itself back to the Sandbox's group, so a cancel's
-//! signals and `cgroup.kill` reach the command and what it started, not the
-//! helper, which then reports how the command ended. It blocks `SIGTERM`
-//! for that; the command's filter hook empties the child's signal mask just
-//! before exec (a forked child inherits its parent's), so it can be.
+//! With `--command-cgroup <group>` (a command with its own group,
+//! layerfs-project#113) the helper opens that group's `cgroup.procs` before
+//! entering the namespaces, and the command's child process moves itself
+//! into it just before exec (`local::start_in_cgroup`). The helper itself
+//! is never in the command's group, so a cancel's signals and `cgroup.kill`
+//! reach the command and what it started, never the helper, which then
+//! reports how the command ended; a child that cannot join never runs.
+//! Once the command runs (its exec succeeded, so it is in its group), the
+//! helper writes one byte to its standard input, which the backend gives
+//! it as one end of a socket: only then is the command's stop handle
+//! recorded, so a cancel never finds the group empty while the command is
+//! still to start. The command itself gets no standard input.
 //!
 //! With `--trace <file>` (a traced call, `LAYERFS_TRACE_STEP`) it writes
 //! when each stage ended to that file, which the worker made, once the
@@ -21,15 +26,15 @@
 use nix::{
     sched::{setns, CloneFlags},
     sys::prctl::set_no_new_privs,
-    sys::signal::{SigSet, Signal},
 };
 use std::{
     ffi::OsString,
     fs::{self, File},
     io::Write,
+    os::fd::AsFd,
     os::unix::process::{CommandExt, ExitStatusExt},
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -37,7 +42,7 @@ use std::{
 struct Run {
     init: u32,
     cgroup: PathBuf,
-    leave: Option<PathBuf>,
+    command_cgroup: Option<PathBuf>,
     trace: Option<PathBuf>,
     uid: u32,
     gid: u32,
@@ -53,15 +58,8 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
     // opened before the Sandbox's mount namespace hides this host path
     let mut stamps = Stamps::open(run.trace.as_deref());
     stamps.mark("helper.start");
-    if run.leave.is_some() {
-        let mut terminate = SigSet::empty();
-        terminate.add(Signal::SIGTERM);
-        terminate
-            .thread_block()
-            .map_err(|error| format!("blocking SIGTERM: {error}"))?;
-    }
     // opened before the Sandbox's mount namespace hides this host path
-    let leave = match &run.leave {
+    let command_procs = match &run.command_cgroup {
         Some(group) => Some(procs(group)?),
         None => None,
     };
@@ -78,7 +76,11 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
         .uid(run.uid)
         .gid(run.gid)
         .current_dir(&run.directory)
+        .stdin(Stdio::null())
         .process_group(0);
+    if let Some(procs) = command_procs {
+        layerfs_sandbox_backend::local::start_in_cgroup(&mut command, procs);
+    }
     layerfs_sandbox_backend::local::deny_user_namespaces(&mut command);
     let mut child = match command.spawn() {
         Ok(child) => child,
@@ -87,14 +89,15 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
         Err(error) => fail(&format!("starting {}: {error}", program.to_string_lossy())),
     };
     stamps.mark("helper.bash_spawn");
-    // `0` names the writer: the helper goes back to the Sandbox's group
-    if let Some(mut leave) = leave {
-        if let Err(error) = leave.write_all(b"0") {
+    // the command is in its group: the backend may record its stop handle
+    if run.command_cgroup.is_some() {
+        let ready = std::io::stdin().as_fd().try_clone_to_owned();
+        if let Err(error) = ready.and_then(|fd| File::from(fd).write_all(b"r")) {
             let _ = child.kill();
             let _ = child.wait();
-            fail(&format!("leaving the command's cgroup: {error}"));
+            fail(&format!("telling the command started: {error}"));
         }
-        stamps.mark("helper.leave");
+        stamps.mark("helper.ready");
     }
     let status = child
         .wait()
@@ -175,8 +178,8 @@ fn procs(cgroup: &Path) -> Result<File, String> {
         .map_err(|error| format!("opening {}: {error}", cgroup.display()))
 }
 
-/// The command's cgroup (the Sandbox's own, or one of its own below it), so
-/// `cgroup.kill` ends this command too.
+/// The Sandbox's cgroup, joined by this helper (and so by a command with no
+/// group of its own), so the Sandbox's `cgroup.kill` ends them too.
 fn join(cgroup: &Path) -> Result<(), String> {
     let pid = nix::unistd::getpid().as_raw();
     let mut file =
@@ -196,7 +199,7 @@ fn fail(message: &str) -> ! {
 fn parse(arguments: &[OsString]) -> Result<Run, String> {
     let (mut init, mut uid, mut gid) = (0, 0, 0);
     let (mut cgroup, mut directory) = (PathBuf::new(), PathBuf::new());
-    let (mut leave, mut trace) = (None, None);
+    let (mut command_cgroup, mut trace) = (None, None);
     let mut command = Vec::new();
     let mut index = 0;
     while index < arguments.len() {
@@ -213,7 +216,7 @@ fn parse(arguments: &[OsString]) -> Result<Run, String> {
             Some("--uid") => uid = number(value)?,
             Some("--gid") => gid = number(value)?,
             Some("--cgroup") => cgroup = PathBuf::from(value),
-            Some("--leave") => leave = Some(PathBuf::from(value)),
+            Some("--command-cgroup") => command_cgroup = Some(PathBuf::from(value)),
             Some("--trace") => trace = Some(PathBuf::from(value)),
             Some("--cwd") => directory = PathBuf::from(value),
             _ => {
@@ -237,7 +240,7 @@ fn parse(arguments: &[OsString]) -> Result<Run, String> {
     Ok(Run {
         init,
         cgroup,
-        leave,
+        command_cgroup,
         trace,
         uid,
         gid,

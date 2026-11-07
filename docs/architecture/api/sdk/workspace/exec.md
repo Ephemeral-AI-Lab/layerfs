@@ -113,6 +113,8 @@ the contract and marks what was not run.
                                  command identity, in the directory,
                                  in its own cgroup | process group;
                                  the stop handle goes in the record
+                                 once the command runs (forwarded:
+                                 event { exec_started: { stop } })
                                  record removed when it ends
                                  drain spooled streams as events
                                <-- exit code + inline streams + events

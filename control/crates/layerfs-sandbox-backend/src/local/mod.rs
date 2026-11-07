@@ -16,6 +16,6 @@ pub use create::{Local, LocalCreateFailure, LocalPaths, LocalPhase};
 #[cfg(target_os = "linux")]
 pub(crate) use os_impl::linux as os;
 #[cfg(target_os = "linux")]
-pub use os_impl::linux::seccomp::deny_user_namespaces;
+pub use os_impl::linux::seccomp::{deny_user_namespaces, start_in_cgroup};
 #[cfg(target_os = "macos")]
 pub(crate) use os_impl::macos as os;

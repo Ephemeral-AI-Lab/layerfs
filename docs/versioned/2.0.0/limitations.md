@@ -65,6 +65,22 @@ Also not built:
 - **Cancelling a call.** `layerfs.aio` stops calling a cancelled call's
   functions, but the native call runs to its end on its thread; read the
   state again after a cancel.
+- **A cancel that a worker takes and never answers has no time limit.**
+  `workspace exec-cancel` (and an unmount or close that cancels first)
+  waits for the worker's answer until its connection closes, then answers
+  `unknown` and keeps the command's record; there is no operation timeout.
+- **A cancel before a command starts, on a Sandbox this host reaches
+  directly.** It answers `cancelled` (`SIGKILL`) at once; the exec's own
+  process ends the command in the worker as it starts, in one attempt.
+  If the worker cannot be reached for that one attempt, the command runs
+  on although the cancel answered `cancelled`; cancel it again by its id.
+- **A command's children on macOS `native`.** `workspace exec-cancel` ends
+  the command's process group; a child that starts its own session
+  (`setsid`) is not in it and keeps running. On Linux every command has its
+  own cgroup and nothing it starts escapes.
+- **`workspace exec-cancel` on a Linux Docker Engine** was not run for this
+  manual (no such host; layerfs-project#114). The docker machine on Docker
+  Desktop (macOS) and `native` were.
 - **`backup list` of a Store not on `native`.** Its heads are read on
   `native` only, so its state is `unknown` with a `reason`; reading heads
   through the machine's worker is not built.
@@ -87,9 +103,14 @@ None of these was run on this branch, except where a line says what ran.
 They are taken from the work order's "Not verified at writing" list and the
 step commits.
 
-- **VM kinds and ssh.** No real `apple-container`, `microsandbox`, `lima`,
-  `firecracker` or ssh machine was created or connected; their adapters
-  were tested with provider tests only. On macOS the `docker` machine's
+- **VM kinds and ssh.** No real `microsandbox`, `firecracker` or ssh
+  machine was created or connected; their adapters were tested with
+  provider tests only. A `lima` (Lima 2.2.1, vz) and an `apple-container`
+  (container 1.6.1) machine were created, started, stopped and started
+  again on macOS with the release CLI, and ran the sqlite smoke and
+  `workspace exec-cancel` (on Lima also stale and unreachable forwarded
+  records); PostgreSQL Sandboxes on them were not run in that pass
+  ([receipt](../../../core/docs/issues/project-113/receipts/fb02aa0666/machines-live/RESULTS.md)). On macOS the `docker` machine's
   worker did run (a private test bundle, `LAYERFS_BUNDLE`): `store move` (now `store push`) to
   `docker`, its Sandboxes and the twelve cells passed; see the terminal pass.
   That run used the retired docker backend: the `docker` machine running
@@ -97,8 +118,9 @@ step commits.
   live.
 - **Machine boot and worker start.** `machine start` and `machine stop`
   (#535 P1) and a worker call refused `Unavailable` on a stopped machine
-  (D11, R1) were tested with stand-in tools and workers only; no VM, ssh
-  host or Docker worker was started or stopped by them. There is no idle
+  (D11, R1) were tested with stand-in tools and workers, and live on the
+  `lima` and `apple-container` machines above; no ssh host or Docker
+  worker was started or stopped by them. There is no idle
   stop and no start on demand (D11).
 - **The docker default image** (#535 P5). Loading the bundle's
   `sandbox-image.tar` with `docker load` and running the worker container

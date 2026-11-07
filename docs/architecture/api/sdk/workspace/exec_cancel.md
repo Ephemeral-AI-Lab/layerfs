@@ -75,7 +75,13 @@ with exit code 128 + the signal.
    { outcome: "unknown" }                none        -> ended
                                          owner gone  -> stale: ended,
                                                         removed, logged
+                                         (a forwarded one: ended in its
+                                          worker, zero grace; kept as it
+                                          was when that is unknown)
                                          else mark cancel, unlock
+                                       no stop handle yet (not running):
+                                         cancelled, SIGKILL; its owner
+                                         ends it once it runs
                                        stop handle (one attempt):
                                          Cgroup  SIGTERM each process,
                                                  wait grace, cgroup.kill,
@@ -92,8 +98,15 @@ command runs in its own cgroup,
 `<sandbox cgroup>/ws-<workspace id>/exec-<exec id>`, so children that left
 its process group end too. On `host_process` (macOS `native`) it is the
 command's own process group; a child that calls `setsid` itself escapes
-it. A cancel that comes before the command's stop handle is known marks
-the record, and the exec's owner ends the command at spawn. See
+it. A cancel that comes before the command runs (its record has no stop
+handle yet) answers `cancelled` with `SIGKILL` and marks the record; the
+exec's owner, told the handle once the command runs, ends it at once, and
+the exec answers `kind: "cancelled"` with exit code 137. A cancel never
+answers `ended` for a command that then runs. For a
+Sandbox this home reaches directly, a worker that answers `NoSuchSandbox`
+confirms the command `ended`. A worker that takes the cancel and never
+answers leaves the call waiting until its connection closes: there is no
+operation timeout (§5.4). See
 [Control: commands and streams](../../../control/sandboxes/commands-and-streams.md#exec-records-and-cancel)
 and the [routing table](../../../control/routing/routing-table.md).
 
@@ -107,7 +120,9 @@ and the [routing table](../../../control/routing/routing-table.md).
 
 An unreached worker is not an error: it is `{ outcome: "unknown" }`.
 **After `unknown`**, call `workspace.exec_cancel` again once the worker
-answers; a command that ended meanwhile answers `ended`.
+answers; a command that ended meanwhile answers `ended`. The record keeps
+the cancel's mark after `unknown`: if the command then ends by a signal,
+its exec answers `kind: "cancelled"`.
 
 ## Examples
 

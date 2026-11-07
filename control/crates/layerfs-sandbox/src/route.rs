@@ -71,6 +71,7 @@ fn host_args(
         // a PostgreSQL Store's URL with its password, never written (H §7.4)
         postgresql,
         message,
+        started: None,
     })
 }
 
@@ -452,7 +453,15 @@ pub fn in_worker(
         return runner(host, call);
     }
     let name = host.sandbox.clone().unwrap_or_default();
-    let out = drain(runner(host, call)?, events);
+    let out = match &call {
+        // a command whose record its caller keeps: its start goes back to
+        // that caller as an event while it runs
+        Call::Exec {
+            workspace: Some(_), ..
+        } => reporting(host, call, runner, events),
+        _ => runner(host, call),
+    };
+    let out = drain(out?, events);
     closed(op, opened.as_deref(), &out);
     let out = out?;
     // the caller reaches the new Sandbox's daemon directly where its
@@ -460,6 +469,44 @@ pub fn in_worker(
     match op {
         Op::SandboxCreate => crate::direct::with_keys(root, &name, out),
         _ => Ok(out),
+    }
+}
+
+/// Runs `call` (an exec whose record its caller keeps) with `runner` on a
+/// thread of its own, passing each event its exec sends through `started`
+/// to `events` as it comes, until it returns. The wait for events ends when
+/// the runner does: nothing here times it.
+fn reporting(
+    mut host: Host,
+    call: Call,
+    runner: Local,
+    events: &mut dyn FnMut(SdkValue),
+) -> Outcome {
+    let (sender, received) = std::sync::mpsc::channel();
+    host.started = Some(sender.clone());
+    std::thread::scope(|scope| {
+        let ran = scope.spawn(move || {
+            // its end is told even when the runner panics
+            let _ended = Ended(sender);
+            runner(host, call)
+        });
+        while let Ok(event) = received.recv() {
+            if event == SdkValue::Null {
+                break;
+            }
+            events(event);
+        }
+        ran.join()
+            .unwrap_or_else(|_| Err(refused("Failed", "the exec stopped before it answered")))
+    })
+}
+
+/// Tells [`reporting`] that its runner ended, when dropped.
+struct Ended(std::sync::mpsc::Sender<SdkValue>);
+
+impl Drop for Ended {
+    fn drop(&mut self) {
+        let _ = self.0.send(SdkValue::Null);
     }
 }
 

@@ -107,6 +107,7 @@ reached there only when it listens on that bridge (`0.0.0.0`), not on
 | [L2](../../../../../core/docs/issues/535/receipts/35ed671b6c/L2/RESULTS.md) | final pass: sqlite, PostgreSQL loopback and remote cells, power, worker trace |
 | [R2](../../../../../core/docs/issues/535/receipts/3e257b91c3/R2/RESULTS.md) | rerun after the L2-D1 fix |
 | [TERMINAL-PASS](../../../../../core/docs/issues/535/TERMINAL-PASS.md) | the merged verdict |
+| [machines-live](../../../../../core/docs/issues/project-113/receipts/fb02aa0666/machines-live/RESULTS.md) | release CLI on container 1.6.1 (2026-11-07): create, start, sqlite smoke through the worker, `workspace exec-cancel` and Busy/force, stop and start |
 
 ## Troubleshooting
 

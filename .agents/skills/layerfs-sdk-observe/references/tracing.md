@@ -59,15 +59,18 @@ root), `store_open`, `by_name` (message check, Workspace by name),
 exec record), `command` (the whole command run), `exec_record_end`,
 `result` (the answer's value, spooled output drained). A namespaces
 Sandbox breaks `command` down as `exec.endpoint`, `exec.cgroup_create`
-(the command's cgroup made and its stop handle recorded),
+(the command's cgroup made),
 `exec.helper_spawn`, `exec.helper_wait` (helper started to helper ended,
 with output copied) and `exec.cgroup_remove`. Its helper, given
 `--trace <file>`, writes when each of its stages ended (wall clock, written
 once the command ended) and the worker adds them, each since the one
 before: `helper.start` (spawn call to the helper's own start),
-`helper.cgroup_join` (move 1), `helper.setns` (three `setns`,
-no-new-privs), `helper.bash_spawn`, `helper.leave` (move 2, a command with
-its own cgroup only), `helper.bash` (the command ran) and `helper.exit`
+`helper.cgroup_join` (the helper joins the Sandbox's group),
+`helper.setns` (three `setns`, no-new-privs), `helper.bash_spawn` (the
+command started; with its own cgroup it moved itself there just before
+exec), `helper.ready` (the backend told it runs, so its stop handle can be
+recorded; a command with its own cgroup only), `helper.bash` (the command
+ran) and `helper.exit`
 (to the worker's wait returning). These overlap `exec.helper_spawn` and
 `exec.helper_wait`; they are a breakdown, not further time.
 
