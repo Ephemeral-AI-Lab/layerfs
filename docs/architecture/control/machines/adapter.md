@@ -4,11 +4,13 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Firecracker and SSH are **permanently disabled for new work**. Their code
-and records remain for inspection and explicit cleanup. See the
-[platform restriction](../support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
-the source change required for re-enabling. Descriptions of their adapter
-mechanics below are retained implementation details, not selectable features.
+Firecracker is **permanently disabled for new work**. Its code and records
+remain for inspection and explicit cleanup. Microsandbox and SSH machines
+were removed in 2.0; a record an older home still holds for one is shown,
+refused and only forgotten. See the [platform restriction](../support-matrix/disabled-platforms.md) for
+refusals, existing-resource handling and the source change required for
+re-enabling. Descriptions of Firecracker's adapter mechanics below are
+retained implementation details, not selectable features.
 
 The sealed Adapter every platform implements.
 
@@ -27,12 +29,11 @@ for what a diagram or table cannot say.
  pub(crate) trait Adapter: Sync          no default methods (#535 G2)
    probe(tools, host, &mut missing) -> Option<version>
    guest(spec)                      -> Guest
-   create(spec, bundle)             -> Running     ssh: connect
-   remove(spec)                     -> ()          ssh: disconnect
+   create(spec, bundle)             -> Running
+   remove(spec)                     -> ()
    start(spec, bundle)              -> Option<Running>
    stop(spec)                       -> ()
    status(spec)                     -> Status
-   host_identity(spec)              -> String
    reach(spec, url)                 -> String      PostgreSQL URL to dial
    forward(spec, guest_port)        -> Forward
 
@@ -41,10 +42,8 @@ for what a diagram or table cannot say.
          Native         => &native::ADAPTER,
          Docker         => &docker::ADAPTER,
          AppleContainer => &apple_container::ADAPTER,
-         Microsandbox   => &microsandbox::ADAPTER,
          Lima           => &lima::ADAPTER,
          Firecracker    => &firecracker::ADAPTER,
-         Ssh            => &ssh::ADAPTER,
      }
  }
 ```
@@ -60,26 +59,25 @@ A machine's lifecycle, and which calls each platform takes:
             probe (starts nothing)
               |
               v
-     create / connect --------> running <-------+
+     create ------------------> running <-------+
               |                   |   ^         |
               |                 stop  start     | status, reach, forward,
               |                   v   |         | copy_in/out (running)
               |                 stopped --------+
               v                   |
-     remove / disconnect <--------+   (from running or stopped)
+     remove <---------------------+   (from running or stopped)
 ```
 
-| Call | `native` | `docker` | `apple-container` | `microsandbox` | `lima` | `firecracker` | `ssh` |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `create` | refused | refused | yes | yes | yes | yes | as `connect` |
-| `remove` | refused | refused | yes | yes | yes | yes | as `disconnect` |
-| `start` | `None` (macOS, Linux) | yes | yes | yes | yes | yes | yes |
-| `stop` | `Ok`, nothing | worker only | yes | yes | yes | yes | worker, forward |
-| `status` | `Running` | yes | yes | yes | yes | yes | yes |
-| `guest` | refused | yes (macOS, Linux) | `container exec` | `msb exec` | Lima ssh | via Lima host | ssh |
-| `host_identity` | refused | refused | refused | refused | refused | refused | yes |
-| `reach` | as given | Desktop: worker's `host.docker.internal` address; Linux: as given | gateway lookup | `host.microsandbox.internal` | `192.168.5.2` | `192.168.5.2` | loopback refused |
-| `forward` | port as it is | `Unsupported` | `Unsupported` | `Unsupported` | `ssh -L` | `Unsupported` | `ssh -L` |
+| Call | `native` | `docker` | `apple-container` | `lima` | `firecracker` |
+| --- | --- | --- | --- | --- | --- |
+| `create` | refused | refused | yes | yes | yes |
+| `remove` | refused | refused | yes | yes | yes |
+| `start` | `None` (macOS, Linux) | yes | yes | yes | yes |
+| `stop` | `Ok`, nothing | worker only | yes | yes | yes |
+| `status` | `Running` | yes | yes | yes | yes |
+| `guest` | refused | yes (macOS, Linux) | `container exec` | Lima ssh | via Lima host |
+| `reach` | as given | Desktop: worker's `host.docker.internal` address; Linux: as given | gateway lookup | `192.168.5.2` | `192.168.5.2` |
+| `forward` | port as it is | `Unsupported` | `Unsupported` | `ssh -L` | `Unsupported` |
 
 A refusal from `adapter::refused` is `InvalidInput`, "the <platform>
 machine <name> <why>", raised before any tool runs:
@@ -88,9 +86,6 @@ machine <name> <why>", raised before any tool runs:
 | --- | --- | --- |
 | `is built in and never created` | `create` | `native`, `docker` |
 | `is built in and never removed` | `remove` | `native`, `docker` |
-| `is connected, not created` | `setup::create` | `ssh` |
-| `is created, not connected` | `setup::connect` | all but `ssh` |
-| `has no ssh host` | `host_identity` | all but `ssh` |
 | `runs in-process; its files are the host's` | `guest` (so `copy_in`, `copy_out`) | `native` |
 | `loads no Docker image` | `setup::load_image` | all but `docker` |
 
@@ -111,10 +106,8 @@ machine <name> <why>", raised before any tool runs:
 | `native` | Linux: `host:root`, `host:/dev/fuse`, `host:cgroup2`; Windows: `host:macos-or-linux`; macOS: nothing | none |
 | `docker` | Windows: `host:wsl2`; `tool:docker`; `host:<socket>` when the Engine does not answer | `docker -H unix://<socket> version` (server) |
 | `apple-container` | `host:macos`; `host:apple-silicon` on a non-`aarch64` Mac; `tool:container` | `container --version` |
-| `microsandbox` | `tool:msb` | `msb --version` |
 | `lima` | `host:macos`; `tool:limactl` | `limactl --version` |
 | `firecracker` | `host:macos`; `host:macos15`, `host:apple-m3` (`nested_missing`); `tool:limactl` | `limactl --version` |
-| `ssh` | `tool:ssh` | `ssh -V` (stderr) |
 
 A probe starts nothing. Each version query is one command with a 10 s
 deadline (`ANSWER`); its first non-empty line is the version.
@@ -130,7 +123,7 @@ Facts read from provider and guest output, in
 
 | Function | Reads | Answers | Used by |
 | --- | --- | --- | --- |
-| `json_string(text, path)` | one string at a key path in a JSON answer; an array on the way stands for its first element | `None` when absent, not a string, or longer than 128 bytes; an error past depth 32 | apple-container `status.state` and `status.networks.ipv4Gateway`; msb `status`; Lima `disk list --json` names |
+| `json_string(text, path)` | one string at a key path in a JSON answer; an array on the way stands for its first element | `None` when absent, not a string, or longer than 128 bytes; an error past depth 32 | apple-container `status.state` and `status.networks.ipv4Gateway`; Lima `disk list --json` names |
 | `df_free(stdout)` | the last line of `df -kP <path>` | free bytes | `worker::free_disk` (`Status::free_disk`) |
 | `listening(proc_net_tcp, port)` | `/proc/net/tcp` or `tcp6` text | whether a socket in state `0A` (listen) holds the port | `worker::ready` |
 
@@ -145,21 +138,19 @@ re-exported from the crate root:
 
 | Call | Checks first | Then |
 | --- | --- | --- |
-| `create(spec, bundle)` | `validate`, `check_bundle`, not `Connected` | `adapter.create` |
-| `connect(spec, bundle)` | `validate`, `check_bundle`, is `Connected` | `adapter.create` (ssh connects) |
+| `create(spec, bundle)` | `validate`, `check_bundle` | `adapter.create` |
 | `start(spec, bundle)` | `validate`; `Ok(None)` when the route is `InProcess`; `check_bundle` | `adapter.start` |
 | `stop(spec)` | `validate` | `adapter.stop` |
 | `remove(spec)` | `validate` (`InUse` is the caller's check) | `adapter.remove` |
 | `status(spec)` | `validate` | `adapter.status`; starts nothing |
 | `status_within(spec, deadline)` | as `status` | every command killed with its process group at `deadline` and answered `Unknown` |
-| `host_identity(spec)` | `validate` | `adapter.host_identity` |
 | `reach(spec, url)` | `validate` | `adapter.reach`; no message holds the URL |
 | `forward(spec, guest_port)` | `validate`; port 0 is `InvalidInput` | `adapter.forward` |
 | `forward_close(spec, forward)` | none | ends the `ssh -L` pid only if its command line still names that port |
 | `load_image(spec, archive)` | `validate`; `docker` only | `docker load -i`, answers `sha256:<64 hex>` |
 | `copy_in`, `copy_out` | `validate`; the platform's `guest` | one `tar` stream in, `cat` out to a new 0600 file |
 
-`Status` is `{ state, free_disk, tool_version, down_reason }`. A VM or ssh
+`Status` is `{ state, free_disk, tool_version, down_reason }`. A VM
 machine's kernel state goes through `with_worker`:
 
 | Kernel state | Worker answers its hello | `state` | `down_reason` |

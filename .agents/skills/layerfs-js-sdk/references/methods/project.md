@@ -67,8 +67,8 @@ the current one reports `check`, `install`, `record`).
 Where Init runs depends on the Store: into a sqlite Store on `native` or a
 PostgreSQL Store it runs in your process and reads the folder on this host.
 Into a sqlite Store on another machine it runs in that machine's worker
-(#536 H11), which reads `folder` **on that machine** (a path in the VM or
-on the ssh host, not on this host); the machine must be running
+(#536 H11), which reads `folder` **on that machine** (a path in the VM,
+not on this host); the machine must be running
 (`machine.start(name)` first).
 
 **Refusals**

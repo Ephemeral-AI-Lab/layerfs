@@ -129,4 +129,4 @@ reached there only when it listens on that bridge (`0.0.0.0`), not on
 
 ---
 
-← [Machines: Docker](docker.md) · [Up: Machines](../README.md) · [Machines: microsandbox](microsandbox.md) →
+← [Machines: Docker](docker.md) · [Up: Machines](../README.md) · [Machines: Lima](lima.md) →

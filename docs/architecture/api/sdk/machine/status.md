@@ -60,7 +60,7 @@ None.
 | `tool_version` | text or null | the provider tool's version | `Status` |
 | `down_reason` | text or null | why the machine is down; on `native`, `missing: host:root, ...` when a Linux host lacks something | [`platforms/native/observe.rs`](../../../../../control/crates/layerfs-platform/src/platforms/native/observe.rs) |
 | `stores` | list | sqlite Stores on the machine | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `stores_on` |
-| `op` | map | present while the record holds a create, connect, remove or disconnect: its id, call name, phase, start time and `uncertain` | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) `to_sdk` |
+| `op` | map | present while the record holds a create or remove: its id, call name, phase, start time and `uncertain` | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) `to_sdk` |
 
 `native` always answers `running` (unlike `list` and `get`, which show
 `ready`), with nulls for disk and version.
@@ -73,7 +73,7 @@ caller's process
   op held (live or uncertain)?
      yes --> state from the record, no probe; op shown, never cleared
      no  --> spec(record) --> layerfs-platform status(spec)
-             (provider CLI / ssh / docker; no 10 s list deadline,
+             (provider CLI / docker; no 10 s list deadline,
               each command bounded by its own tool timeout)
 ```
 
@@ -85,14 +85,13 @@ stopped VM answers `stopped` without being started.
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
 | `InvalidInput`, `NotFound` | bad name; no such machine | no | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) `of` |
-| `Unavailable`, `Denied`, `Failed` | the provider or guest does not answer; ssh refuses the login or host key; the probe failed | no: a read changes nothing | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `refusal` |
+| `Unavailable`, `Denied`, `Failed` | the provider or guest does not answer or refuses; the probe failed | no: a read changes nothing | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `refusal` |
 | `Unknown` | a provider command did not end in time and was stopped | no: a read changes nothing | [`setup/tool.rs`](../../../../../control/crates/layerfs-platform/src/setup/tool.rs) |
 | `Busy`, `Unresolved` | a firecracker machine whose Lima host is held by an `op` | no | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `machine_of` |
-| `Unsupported` | a build without the `machine` feature | no | [`machine/status.rs`](../../../../../api/crates/layerfs-api/src/machine/status.rs) |
+| `Unsupported` | a record of a removed platform (`microsandbox`, `ssh`: ``platform `ssh` was removed in LayerFS 2.0``; `list` and `get` still show it); a build without the `machine` feature | no | [`machine/status.rs`](../../../../../api/crates/layerfs-api/src/machine/status.rs) |
 
 Unlike `list` and `get`, a failed probe is the call's error. An
-`unresolved` state is cleared by [`machine.remove`](remove.md) (VM) or
-[`machine.disconnect`](disconnect.md) (ssh); see
+`unresolved` state is cleared by [`machine.remove`](remove.md); see
 [uncertain outcomes](../../call-table/errors.md#uncertain-outcomes).
 
 ## Examples
@@ -115,8 +114,7 @@ $ layerfs machine status vm1
 ## Related
 
 - Before: [`machine.get`](get.md). After: [`machine.start`](start.md) when
-  `stopped`; [`machine.remove`](remove.md) or
-  [`machine.disconnect`](disconnect.md) when `unresolved`.
+  `stopped`; [`machine.remove`](remove.md) when `unresolved`.
 - [Control: Machines](../../../control/machines/README.md),
   [Control: Families](../../../control/management/families.md#machine).
 

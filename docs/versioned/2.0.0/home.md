@@ -7,7 +7,7 @@ Part of the [2.0.0 manual](README.md). Source:
 
 The home is LayerFS's control center. Every record a host process needs is
 in it: machines, Stores, projects, Sandboxes and buckets. Only host
-processes read or write it. No guest (a VM, an ssh host, a container)
+processes read or write it. No guest (a VM or a container)
 mounts or reads it; the caller sends a worker what each call needs and
 writes every record itself.
 
@@ -33,9 +33,8 @@ hold a password or a bucket key. They are not settings; see
   layerfs.json                 layout version and home id
   layerfs.lock                 the home lock (host only)
   machine/<name>/
-    record.json                kind, size, lasting state, op (while a create, connect or remove runs)
+    record.json                kind, size, lasting state, op (while a create or remove runs)
     worker.json                endpoint, secret, live forward (0600)
-    known_hosts                ssh machines only
     start.lock                 taken while a process starts, makes or removes the machine
   machine/native/run/          native Sandboxes' local directories, and their image cache
   sandbox/<name>/
@@ -107,12 +106,12 @@ hold a password or a bucket key. They are not settings; see
   held across a machine or daemon call; the call that runs a native
   Sandbox takes turns on `serve.lock`, a different file. On `native` the side
   that runs the Sandbox adds what reopens its runtime (`daemon`) to the
-  same file, and its daemon keys to `control.json`. A Sandbox on `ssh`
-  or `lima` whose daemon the caller reaches directly (#535 G4)
+  same file, and its daemon keys to `control.json`. A Sandbox on
+  `lima` whose daemon the caller reaches directly (#535 G4)
   has its keys in `control.json` too, and a `daemon` of `{ forward:
   { address, machine, pid?, pid_start?, pid_boot? }, name, runtime,
   platform, image }`: the host loopback address the caller dials and, on
-  `ssh` and `lima`, the `ssh -L` that carries it, named by id, start time
+  `lima`, the `ssh -L` that carries it, named by id, start time
   and boot. Its Workspace records are then in the home's `workspace/`,
   not the machine's. `runtime_id` and `daemon` are never shown. The
   Sandbox's `id` is its name.
@@ -132,7 +131,7 @@ hold a password or a bucket key. They are not settings; see
 - **`log/uncertain.jsonl`** lists every outcome that is not known
   (`Unknown`), with what was kept.
 
-A machine's own disk (a VM's data disk, or an ssh host's root) is mounted at
+A machine's own disk (a VM's data disk) is mounted at
 `/layerfs/data` inside the machine. It holds `store/<name>/store.sqlite`
 with a thin `store/<name>/record.json` (`{"v":1,"name","kind"}`, written
 only when it changed), and `sandbox/<name>/` for the Sandboxes on that
@@ -273,9 +272,10 @@ shell command, not a call of the table.
 
 - It fills only fields that are not recorded yet, and keeps the rest.
 - It never writes a secret.
-- It never makes a VM or connects an ssh host. For those settings it
-  answers the enabled `machine create` command to run. Firecracker and SSH
-  settings are reported as ignored with their permanent policy reason.
+- It never makes a VM. For those settings it answers the enabled `machine
+  create` command to run. Firecracker settings are reported as ignored with
+  their permanent policy reason; SSH and Microsandbox settings with their
+  removal reason (both platforms were removed in 2.0).
 - Its answer lists `written`, `kept`, `commands` and `ignored`, by setting
   name. Each run is also appended to `log/import-env.jsonl`.
 
@@ -288,8 +288,8 @@ shell command, not a call of the table.
 | `LAYERFS_REMOTE_ENDPOINT` and `LAYERFS_REMOTE_BUCKET` (with `_PREFIX`, `_REGION`, `_PART_SIZE`, `_CREDENTIALS`) | a MinIO bucket named `remote`; its key is a reference, default `env:LAYERFS_REMOTE` |
 | `LAYERFS_SANDBOX` or `LAYERFS_PLACEMENT` = `docker`, `local` | the machine `docker` for each Store with no machine recorded (and `LAYERFS_VOLUME` as its volume) |
 | `LAYERFS_SANDBOX` or `LAYERFS_PLACEMENT` = `native`, `mac`, `linux`, `namespaces` | the machine `native` for each Store with no machine recorded |
-| `LAYERFS_SANDBOX` = `vm:<kind>` (with `LAYERFS_VM_CPUS`, `_MEMORY`, `_STORE_SIZE`, `_IMAGE`) | answered: `layerfs machine create <kind> <kind> …` |
-| `LAYERFS_SSH_HOST` (with `_USER`, `_PORT`, `_IDENTITY` or `_KEY`, `_KNOWN_HOSTS`, `_STORE`) | ignored: SSH is permanently disabled; no connection command is suggested |
+| `LAYERFS_SANDBOX` = `vm:<kind>` (with `LAYERFS_VM_CPUS`, `_MEMORY`, `_STORE_SIZE`, `_IMAGE`) | answered: `layerfs machine create <kind> <kind> …`; `vm:firecracker` and `vm:microsandbox` are ignored with their reason |
+| `LAYERFS_SSH_HOST` (with `_USER`, `_PORT`, `_IDENTITY` or `_KEY`, `_KNOWN_HOSTS`, `_STORE`) | ignored: ``platform `ssh` was removed in LayerFS 2.0``; no command is suggested |
 | `LAYERFS_STORE_POSTGRESQL` | ignored: a secret; run `store connect <name> <url> --password env:NAME` |
 | `LAYERFS_STORE_POLICY` | ignored: Init uses the default policy |
 | `LAYERFS_LOCAL_DIR` | ignored: native Sandboxes live under `machine/native/run/` |

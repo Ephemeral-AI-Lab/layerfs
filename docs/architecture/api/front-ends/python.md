@@ -142,14 +142,14 @@ tmpfs): point `TMPDIR` at one.
 
 | Test | Checks | Needs |
 | --- | --- | --- |
-| [`test_calls.py`](../../../../api/python/test/test_calls.py) `test_the_table` | nine families and 62 calls as functions; an unknown keyword is `InvalidInput` | the module |
+| [`test_calls.py`](../../../../api/python/test/test_calls.py) `test_the_table` | nine families and 60 calls as functions; an unknown keyword is `InvalidInput` | the module |
 | `test_every_call_is_refused_as_the_command_refuses_it` | every call gives the same refusal as the `layerfs` command | the command, else skipped |
 | `test_a_live_store_reads_the_same_both_ways` | a Store read through the package and the command gives the same JSON | the command, else skipped |
 | `test_aio_makes_the_same_calls_as_coroutines`, `test_aio_functions_run_on_the_loop_before_the_call_returns`, `test_a_cancelled_aio_call_stops_its_functions_and_the_call_runs_to_its_end` | the `aio` rules above | the module |
 | `test_exec_output_through_functions_and_stream_without_them` | exec output through `stdout`/`stderr` and `stream=True` | `LAYERFS_DAEMON` and the command, else skipped `NOT_RUN` |
 | [`test_values.py`](../../../../api/python/test/test_values.py) | a lone surrogate (in an argument, an option, a home, a scope), NaN, Infinity and non-JSON values are `InvalidInput` and never reach the library (`_native.call` replaced by a function that fails); integers past 64 bits, `i64` min and max, a bool; bytes (empty, binary, Unicode, `bytearray`, `memoryview`) and the one-key `{"base64"}` map; ten malformed scopes | the module |
 | [`test_flow.py`](../../../../api/python/test/test_flow.py) | a mountless file and history flow (init, fork, mkdir, write, edit, cp, mv, rm, then reads, a page, three scoped refusals) written through `aio` and read through both packages gives equal answers and equal refusals | the module |
-| [`test_stubs.py`](../../../../api/python/test/test_stubs.py) | `py.typed` exists; the committed stubs equal what `gen_stubs.py` renders from the table (62 sync methods, 62 `async` methods); `api/python/LICENSE` equals the repository's; `mypy --strict` accepts `typed_samples/ok.py` (sync and async) and reports exactly the lines of `typed_samples/bad.py` marked `# E:` | the module; mypy, else the last two are skipped |
+| [`test_stubs.py`](../../../../api/python/test/test_stubs.py) | `py.typed` exists; the committed stubs equal what `gen_stubs.py` renders from the table (60 sync methods, 60 `async` methods); `api/python/LICENSE` equals the repository's; `mypy --strict` accepts `typed_samples/ok.py` (sync and async) and reports exactly the lines of `typed_samples/bad.py` marked `# E:` | the module; mypy, else the last two are skipped |
 | [`test_doctor.py`](../../../../api/python/test/test_doctor.py) | `close()` is outside the table; `doctor` on a missing home is ok and makes none; a record that does not parse is an error with its fix | the module |
 
 ## Related

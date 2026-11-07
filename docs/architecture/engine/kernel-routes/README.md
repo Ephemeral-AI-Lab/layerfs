@@ -77,11 +77,10 @@ The route for each platform comes from the `kernel` field of
 | --- | --- | --- | --- |
 | macos | native | `native` | `"nfs"` |
 | macos | docker | `namespaces` | `"fuse"` |
-| macos | apple-container, microsandbox, lima, firecracker, ssh | `namespaces` | `"fuse"` |
-| linux | native, microsandbox, ssh | `namespaces` | `"fuse"` |
-| linux | docker | `namespaces` | `"fuse"` |
+| macos | apple-container, lima | `namespaces` | `"fuse"` |
+| macos | firecracker | `null` | `null` (permanently disabled, layerfs-project#7) |
+| linux | native, docker | `namespaces` | `"fuse"` |
 | linux | apple-container, lima, firecracker | `null` | `null` (unsupported on this host) |
-| windows | microsandbox, ssh | `namespaces` | `"fuse"` |
 | windows | native, docker, apple-container, lima, firecracker | `null` | `null` (unsupported on this host) |
 
 So NFS serves exactly one row, the macOS native platform; every other

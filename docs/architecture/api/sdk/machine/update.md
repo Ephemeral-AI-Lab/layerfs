@@ -112,4 +112,4 @@ layerfs machine update docker --image layerfs/sandbox:2.0.0
 
 ---
 
-← [machine.disconnect](disconnect.md) · [Up: machine](README.md) · [SDK: store](../store/README.md) →
+← [machine.remove](remove.md) · [Up: machine](README.md) · [SDK: store](../store/README.md) →

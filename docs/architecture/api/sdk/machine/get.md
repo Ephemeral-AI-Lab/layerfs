@@ -46,12 +46,14 @@ None.
 ```text
 { name, platform, backend, supports: { sqlite, postgresql_sandbox, reason },
   state, cpus, memory, disk, stores: [name], sandboxes: [name],
-  image?, host?, nested?, docker?, wsl?, daemon?, error?, ssh? }
+  image?, host?, nested?, docker?, wsl?, daemon?, error?, ssh?, vm_name? }
 ```
 
 The same summary as one item of [`machine.list`](list.md#returns); the
-field and `state` tables are there. `start`, `stop`, `create`, `connect`
-and `update` answer the same shape
+field and `state` tables are there. A machine of a removed platform
+(`microsandbox`, `ssh`) is answered too, with state `unsupported` and the
+removal as its `error`. `start`, `stop`, `create` and `update` answer the
+same shape
 ([`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) `to_sdk`).
 
 ## Where it runs

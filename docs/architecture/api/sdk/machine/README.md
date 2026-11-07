@@ -4,11 +4,13 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Firecracker and SSH are **permanently disabled for new work**. Their code
-and records remain for inspection and explicit cleanup. See the
-[platform restriction](../../../control/support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
-the source change required for re-enabling. Descriptions of their adapter
-mechanics below are retained implementation details, not selectable features.
+Firecracker is **permanently disabled for new work**. Its code and records
+remain for inspection and explicit cleanup. Microsandbox and SSH machines
+were removed in 2.0: a record a home still holds for one is shown by `list`
+and `get`, every other call on it is refused, and `remove` only forgets it.
+See the [platform restriction](../../../control/support-matrix/disabled-platforms.md)
+for refusals, existing-resource handling and the source change required for
+re-enabling.
 
 The `machine` calls.
 
@@ -24,20 +26,19 @@ The `machine` calls.
 
  built in: native, docker ---------------------- update (image, docker,
                                                   wsl, daemon)
- platforms --> create <name> <vm platform> --+
-               connect <name> <ssh host> ----+--> running
+ platforms --> create <name> <vm platform> -----> running
                                              |     |      ^
                                              |   stop     |
                                              |     v      |
                                              |  stopped --+ start
                                              v
-               remove (VM + disk)   |   disconnect (ssh; data root stays)
+               remove (VM + disk; a removed platform's record: forgotten)
 ```
 
-Eleven calls, in help order
+Nine calls, in help order
 ([`machine/mod.rs`](../../../../../api/crates/layerfs-api/src/machine/mod.rs)).
 A machine is where Sandboxes and sqlite Stores live: the built-ins `native`
-and `docker`, a VM made by `create`, or an ssh host added by `connect`.
+and `docker`, or a VM made by `create`.
 Each entry runs `layerfs_control::machine::<call>`. "Summary" is the
 machine as `machine.get` shows it: `{ name, platform, backend, supports,
 state, cpus, memory, disk, stores, sandboxes, … }`
@@ -52,9 +53,7 @@ state, cpus, memory, disk, stores, sandboxes, … }`
 | [`start`](start.md) | `name` | — | summary, once the worker answers its secret |
 | [`stop`](stop.md) | `name` | — | summary with `state: "stopped"` |
 | [`create`](create.md) | `name`, `platform` (Name) | `cpus` (Int), `memory`, `disk` (Size), `image` (Text), `nested` (Bool), `host` (Name) | summary |
-| [`connect`](connect.md) | `name` (Name), `host` (Text) | `user` (Text), `port` (Int), `identity`, `known_hosts`, `root` (Text) | summary |
-| [`remove`](remove.md) | `name` | — | `{ name, removed: true }` |
-| [`disconnect`](disconnect.md) | `name` | — | `{ name, removed: true }`; the host's data root stays |
+| [`remove`](remove.md) | `name` | — | `{ name, removed: true }`; a removed platform's record adds `note` |
 | [`update`](update.md) | `name` | `cpus` (Int), `memory` (Size), `image`, `docker`, `wsl`, `daemon` (Text) | summary |
 
 Sources of the answers:
@@ -85,16 +84,16 @@ show a probe that did not answer as `unknown`.
 | --- | --- | --- |
 | `InvalidInput` | a bad name or option for this platform | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs), [`update.rs`](../../../../../control/crates/layerfs-machine/src/update.rs) |
 | `NotFound` | no machine of that name | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) |
-| `Exists` | the name, VM, disk or host is taken | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs), [`connect.rs`](../../../../../control/crates/layerfs-machine/src/connect.rs) |
+| `Exists` | the name, VM or disk is taken | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) |
 | `InUse` | `stop`, `remove` or a resize while Sandboxes run (`detail.related`) | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) |
-| `Unsupported` | a platform this host or build lacks (`detail.missing`); every machine call in a build without the `machine` feature | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs), [`api/…/machine/create.rs`](../../../../../api/crates/layerfs-api/src/machine/create.rs) |
-| `Unavailable`, `Denied` | a provider or guest that does not answer; an ssh host that refuses the login or host key | [`layerfs-platform` `error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
+| `Unsupported` | a platform this host or build lacks (`detail.missing`); a disabled platform; any call but `list`, `get` and `remove` on a machine of a removed platform (``platform `ssh` was removed in LayerFS 2.0``); every machine call in a build without the `machine` feature | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs), [`api/…/machine/create.rs`](../../../../../api/crates/layerfs-api/src/machine/create.rs) |
+| `Unavailable`, `Denied` | a provider or guest that does not answer, or refuses | [`layerfs-platform` `error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
 | `Busy`, `Unresolved` | another operation's `op` on the machine | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
 | `Failed` | it ran once and failed; a create that failed after its VM existed keeps it as `failed` | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) |
 | `Unknown` | **uncertain:** the adapter timed out or lost its answer; everything made is kept, the `op` stays `uncertain` and is logged | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs), [`remove.rs`](../../../../../control/crates/layerfs-machine/src/remove.rs) |
 
 An unresolved machine is shown by `machine status` and cleared by
-`machine remove` or `disconnect`. See
+`machine remove`. See
 [error kinds](../../call-table/errors.md#error-kinds) and
 [uncertain outcomes](../../call-table/errors.md#uncertain-outcomes).
 
@@ -104,7 +103,7 @@ An unresolved machine is shown by `machine status` and cleared by
  machine.<call>  caller's process (host build, `machine` feature)
    |  home records under the home lock (claim, record only)
    v
- layerfs-platform adapter: probe, create, start, stop, remove a VM or host
+ layerfs-platform adapter: probe, create, start, stop, remove a VM
    |
    +-- start: under start.lock, start the VM and its `layerfs worker`
    |          from the sealed Linux bundle, record it in worker.json,

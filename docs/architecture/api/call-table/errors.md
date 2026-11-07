@@ -44,7 +44,7 @@ Store engine's refusals that pass through Store calls.
 | `NoSuchBranch`, `NoSuchCommit` | no such Branch, or no such Commit on it | [`calls.rs`](../../../../control/crates/layerfs-store/src/calls.rs), `history/lookup.rs` |
 | `NoSuchSandbox`, `NotMounted` | no Sandbox of that name; no Workspace of that name or path | [`family.rs`](../../../../control/crates/layerfs-sandbox/src/family.rs), [`workspace/serve.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `NoSuchPath`, `IsDirectory`, `NotDirectory`, `NotFile`, `NotEmpty`, `Binary` | path refusals of the `file` calls | `write/mutation.rs`, [`store-service read/`](../../../../engine/crates/layerfs-store-service/src/read) |
-| `Exists`, `NameTaken`, `ReservedName` | a name is taken or reserved; a host or database already connected | [`connect.rs`](../../../../control/crates/layerfs-machine/src/connect.rs), [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
+| `Exists`, `NameTaken`, `ReservedName` | a name is taken or reserved; a database already connected | [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `InUse` | held: running Sandboxes, processes with the Store open, Stores on a machine | [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs), `inventory.rs` |
 | `Busy` | another operation runs on the entity (`detail {entity, phase, op}`), or no daemon connection came free | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs), [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
 | `Unresolved` | an earlier operation on the entity ended with its outcome unknown and its process is gone | `layerfs-home` `op.rs` |
@@ -84,7 +84,7 @@ The 2.0.0 manual keeps a reader's version of this table in
      |
      v  its process gone, later calls on the entity:
  "Unresolved"  --> show: store status | machine status | sandbox get
-                   clear: store remove | machine remove or disconnect
+                   clear: store remove | machine remove
                           | sandbox close
 ```
 

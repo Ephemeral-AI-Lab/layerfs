@@ -4,11 +4,13 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Firecracker and SSH are **permanently disabled for new work**. Their code
-and records remain for inspection and explicit cleanup. See the
-[platform restriction](../support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
-the source change required for re-enabling. Descriptions of their adapter
-mechanics below are retained implementation details, not selectable features.
+Firecracker is **permanently disabled for new work**. Its code and records
+remain for inspection and explicit cleanup. Microsandbox and SSH machines
+were removed in 2.0; a record an older home still holds for one is shown,
+refused and only forgotten. See the [platform restriction](../support-matrix/disabled-platforms.md) for
+refusals, existing-resource handling and the source change required for
+re-enabling. Descriptions of Firecracker's adapter mechanics below are
+retained implementation details, not selectable features.
 
 Where Sandboxes run: one adapter per platform that probes, creates, starts, stops and removes a machine.
 
@@ -34,10 +36,8 @@ for what a diagram or table cannot say.
 | [Native](platforms/native.md) | The Native platform. |
 | [Docker](platforms/docker.md) | The Docker platform. |
 | [Apple container](platforms/apple-container.md) | The Apple container platform. |
-| [microsandbox](platforms/microsandbox.md) | The microsandbox platform. |
 | [Lima](platforms/lima.md) | The Lima platform. |
 | [Firecracker](platforms/firecracker.md) | The Firecracker platform. |
-| [SSH](platforms/ssh.md) | The SSH platform. |
 | [Adding a platform](adding-a-platform.md) | The recipe for a new platform. |
 
 ## The picture
@@ -46,8 +46,8 @@ for what a diagram or table cannot say.
  layerfs-control machine calls (records, locks, the home)
       |  Spec + Bundle + Tools: every path and setting from the caller
       v
- setup/calls.rs   create connect start stop remove status
-                  host_identity reach forward copy_in copy_out
+ setup/calls.rs   create start stop remove status
+                  reach forward copy_in copy_out load_image
       |  spec.validate(), worker::check_bundle()   (before any effect)
       v
  adapter(spec.kind)  one match        Platform::profile()  one match
@@ -55,13 +55,13 @@ for what a diagram or table cannot say.
       v                                     v
  platforms/<p>/adapter.rs  ADAPTER     platforms/<p>/profile.rs  PROFILE
    observe.rs create.rs power.rs            |
-   (ssh: connect.rs host_key.rs)            v
+                                            v
       |                                support.rs rows (Support matrix)
       v
  setup/vm.rs      one provider CLI call, sizes, ports
  setup/guest.rs   a root shell in the guest (the Guest enum)
  setup/worker.rs  steps 2-4: prepare, install, launch, ready
- setup/forward.rs detached `ssh -N -L` (ssh, lima, firecracker)
+ setup/forward.rs detached `ssh -N -L` (lima, firecracker)
       |
       v
  Running { endpoint: host loopback address + secret (+ forward pid),
@@ -76,23 +76,28 @@ for what a diagram or table cannot say.
 | `native` | built in | nothing: the host itself | this host | [`native/`](../../../../control/crates/layerfs-platform/src/platforms/native) |
 | `docker` | built in | nothing: one privileged worker container on Docker's kernel, which runs namespaces Sandboxes (D-8) | Docker Desktop's VM or the Linux host | [`docker/`](../../../../control/crates/layerfs-platform/src/platforms/docker) |
 | `apple-container` | created | `container run` | an Apple container VM | [`apple_container/`](../../../../control/crates/layerfs-platform/src/platforms/apple_container) |
-| `microsandbox` | created | `msb create` | a libkrun microVM | [`microsandbox/`](../../../../control/crates/layerfs-platform/src/platforms/microsandbox) |
 | `lima` | created | `limactl create` from a template | a Lima `vz` VM | [`lima/`](../../../../control/crates/layerfs-platform/src/platforms/lima) |
 | `firecracker` | created | scripts in a nested `lima` machine | a Firecracker microVM | [`firecracker/`](../../../../control/crates/layerfs-platform/src/platforms/firecracker) |
-| `ssh` | connected | `machine connect` | an existing Linux host | [`ssh/`](../../../../control/crates/layerfs-platform/src/platforms/ssh) |
+
+Microsandbox (`msb`) and SSH machines were removed in 2.0 (owner,
+2026-11-08): no `Platform` variant, adapter or profile is left. A home's
+record that still names one is handled above this crate, in
+`layerfs-machine` ([`record.rs`](../../../../control/crates/layerfs-machine/src/record.rs),
+[`remove.rs`](../../../../control/crates/layerfs-machine/src/remove.rs)):
+shown by `machine list` and `get`, refused `Unsupported` elsewhere, and only
+forgotten by `machine remove`. See
+[disabled platforms](../support-matrix/disabled-platforms.md).
 
 What each lifecycle call does, per platform ("refused" is `InvalidInput`
 with the fixed text of [Adapter](adapter.md#the-sealed-adapter)):
 
-| Platform | create / connect | start | stop | remove / disconnect |
+| Platform | create | start | stop | remove |
 | --- | --- | --- | --- | --- |
 | `native` | refused | nothing (`None`) on macOS and Linux | nothing | refused |
 | `docker` | refused | replace and run the worker container | `docker stop` the worker | refused |
 | `apple-container` | volume, `container run`, worker | `container start`, worker | `container stop` | container, then volume |
-| `microsandbox` | `msb create`, `msb start`, worker | `msb start`, worker | `msb stop` | sandbox, then volume |
 | `lima` | disk, instance, boot, worker | `limactl start`, worker | `limactl stop` | instance, then disk |
 | `firecracker` | disk, VM folder, boot, `ssh -L`, worker | boot, new `ssh -L`, worker | forward, then VM | forward, VM, folder, disk |
-| `ssh` | connect: key, kernel, data root, `ssh -L`, worker | new `ssh -L`, worker | forward and worker | disconnect: worker, forward, `/layerfs/{bundle,state}` |
 
 ## Invariants
 
@@ -104,8 +109,8 @@ with the fixed text of [Adapter](adapter.md#the-sealed-adapter)):
 | A spec is checked before any effect. | every call in [`setup/calls.rs`](../../../../control/crates/layerfs-platform/src/setup/calls.rs) starts with `spec.validate()` |
 | A failure after the VM exists keeps it. | `MachineError::kept` / `vm_exists` in [`error.rs`](../../../../control/crates/layerfs-platform/src/error.rs); each `create.rs` removes only what it made when nothing exists under the name |
 | One attempt; a readiness wait is not a retry. | `worker::ready`, `forward::open` (`ExitOnForwardFailure`, one `ssh`) |
-| No guest mounts the host home. | Lima `mounts: []`; docker mounts its data volume and the bundle only (never the Engine socket); apple-container and microsandbox mount only their data volume |
-| No Sandbox command can create a user namespace. | Every VM and ssh guest: `PREPARE` in [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) writes `user.max_user_namespaces=0` and reads it back. Every namespaces command, in any guest: the seccomp filter in [`seccomp.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/os/linux/seccomp.rs). The `docker` worker never writes the sysctl (it would change the whole Docker host) and relies on the filter |
+| No guest mounts the host home. | Lima `mounts: []`; docker mounts its data volume and the bundle only (never the Engine socket); apple-container mounts only its data volume |
+| No Sandbox command can create a user namespace. | Every VM guest: `PREPARE` in [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) writes `user.max_user_namespaces=0` and reads it back. Every namespaces command, in any guest: the seccomp filter in [`seccomp.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/os/linux/seccomp.rs). The `docker` worker never writes the sysctl (it would change the whole Docker host) and relies on the filter |
 
 ## Limits and failures
 
@@ -127,13 +132,13 @@ with the fixed text of [Adapter](adapter.md#the-sealed-adapter)):
 | Test or example | Crate | Shows |
 | --- | --- | --- |
 | [`machine_platform.rs`](../../../../control/crates/layerfs-platform/tests/machine_platform.rs) | `layerfs-platform` | Names parse back; backend, route, worker bind, hosts and options per platform and host. |
-| [`machine_adapter.rs`](../../../../control/crates/layerfs-platform/tests/machine_adapter.rs) | `layerfs-platform` | Built-in machines refuse create and remove; only `ssh` connects and has a host identity; every refusal before any tool runs. |
+| [`machine_adapter.rs`](../../../../control/crates/layerfs-platform/tests/machine_adapter.rs) | `layerfs-platform` | Built-in machines refuse create and remove; every refusal before any tool runs. |
 | [`conformance.rs`](../../../../control/crates/layerfs-platform/tests/conformance.rs) | `layerfs-platform` | Over `Platform::ALL`: profile vs support table and `SUPPORT.json`; each lifecycle call through the platform's own tool or its fixed refusal; `reach`; `forward`; options vs `Spec::validate`. |
 
 ```text
  Scratch dir:  bin/  stand-in tools (shell scripts that log and refuse)
                work/ the machine's work_dir
- Spec.tools.path = bin/   -->  no real VM, Engine, ssh host or root
+ Spec.tools.path = bin/   -->  no real VM, Engine, host or root
 ```
 
 ```text

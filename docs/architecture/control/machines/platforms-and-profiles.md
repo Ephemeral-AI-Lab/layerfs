@@ -4,11 +4,13 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Firecracker and SSH are **permanently disabled for new work**. Their code
-and records remain for inspection and explicit cleanup. See the
-[platform restriction](../support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
-the source change required for re-enabling. Descriptions of their adapter
-mechanics below are retained implementation details, not selectable features.
+Firecracker is **permanently disabled for new work**. Its code and records
+remain for inspection and explicit cleanup. Microsandbox and SSH machines
+were removed in 2.0; a record an older home still holds for one is shown,
+refused and only forgotten. See the [platform restriction](../support-matrix/disabled-platforms.md) for
+refusals, existing-resource handling and the source change required for
+re-enabling. Descriptions of Firecracker's adapter mechanics below are
+retained implementation details, not selectable features.
 
 The Platform enum, its Profile and options.
 
@@ -24,7 +26,7 @@ for what a diagram or table cannot say.
 ## Platform
 
 ```text
- Platform (7 variants, Platform::ALL order)
+ Platform (5 variants, Platform::ALL order)
    |
    +-- profile() ---> &'static Profile      one match, platform.rs
    |                    platforms/<p>/profile.rs: PROFILE
@@ -46,20 +48,22 @@ for what a diagram or table cannot say.
 | `Native` | `native` | `BuiltIn` | `platforms/native/` |
 | `Docker` | `docker` | `BuiltIn` | `platforms/docker/` |
 | `AppleContainer` | `apple-container` | `Created` | `platforms/apple_container/` |
-| `Microsandbox` | `microsandbox` | `Created` | `platforms/microsandbox/` |
 | `Lima` | `lima` | `Created` | `platforms/lima/` |
 | `Firecracker` | `firecracker` | `Created` | `platforms/firecracker/` |
-| `Ssh` | `ssh` | `Connected` | `platforms/ssh/` |
 
 Every other per-platform value is read from the profile:
 `name`, `parse` (exact name only), `built_in`, `created`, `tool`,
 `backend(host)`, `kernel(host)`, `executor(host)`, `route(host)` and
 `worker_bind` ([`platform.rs`](../../../../control/crates/layerfs-platform/src/platform.rs)).
+`Microsandbox` and `Ssh` were removed in 2.0; `parse` does not know their
+names, and a record naming one is handled by `layerfs-machine`
+(`MachineRecord::removed`; see
+[disabled platforms](../support-matrix/disabled-platforms.md)).
 
 | Enum | Variants | Meaning |
 | --- | --- | --- |
 | `HostOs` | `Linux`, `Macos`, `Windows`, `Other` | The caller's host; `current()` reads `cfg!(target_os)`; `NAMED` is the first three. |
-| `How` | `BuiltIn`, `Created`, `Connected` | How a machine comes to exist; `as_str` gives `built_in`, `created`, `connected`. |
+| `How` | `BuiltIn`, `Created` | How a machine comes to exist; `as_str` gives `built_in`, `created`. |
 | `ExecutorKind` | `Local`, `Worker` | Who runs a sqlite Store's calls (G8). |
 | `Route` | `InProcess`, `Worker` | The same answer as a route; `route(host)` maps `Local` to `InProcess`. |
 | `KernelRoute` | `Fuse`, `Nfs` | Re-exported from `layerfs-bridge`; see [Kernel routes](../../engine/kernel-routes/README.md). |
@@ -70,13 +74,13 @@ Every other per-platform value is read from the profile:
 | --- | --- | --- |
 | `name` | `&'static str` | The name callers write (`layerfs machine create dev lima`). |
 | `tool` | `Option<&'static str>` | The provider CLI the platform runs. |
-| `how` | `How` | Built in, created or connected. |
+| `how` | `How` | Built in or created. |
 | `hosts` | `&'static [HostOs]` | The hosts a machine of this platform can be on. |
 | `backend` | `fn(HostOs) -> Option<Backend>` | The Sandbox backend per host. |
 | `kernel` | `fn(HostOs) -> Option<KernelRoute>` | The kernel route its daemons serve per host. |
 | `executor` | `fn(HostOs) -> ExecutorKind` | Who runs a sqlite Store's calls per host. |
 | `worker_bind` | `Ipv4Addr` | The guest address the worker binds. |
-| `options` | `&'static [OptSpec]` | What `machine create` or `machine connect` takes. |
+| `options` | `&'static [OptSpec]` | What `machine create` takes. |
 | `description` | `&'static str` | One line: what a machine of this platform is. |
 
 Each platform's values, from its `profile.rs`:
@@ -86,13 +90,11 @@ Each platform's values, from its `profile.rs`:
 | `native` | none | all three | macOS `HostProcess`, Linux `Namespaces`, else none | macOS `Nfs`, Linux `Fuse`, else none | `Worker` on Windows, else `Local` | `0.0.0.0` (unused) |
 | `docker` | `docker` | macOS, Linux | `Namespaces` (in the worker container, D-8) | `Fuse` | `Worker` | `0.0.0.0` |
 | `apple-container` | `container` | macOS | `Namespaces` | `Fuse` | `Worker` | `0.0.0.0` |
-| `microsandbox` | `msb` | all three | `Namespaces` | `Fuse` | `Worker` | `0.0.0.0` |
 | `lima` | `limactl` | macOS | `Namespaces` | `Fuse` | `Worker` | `127.0.0.1` |
 | `firecracker` | `limactl` | macOS | `Namespaces` | `Fuse` | `Worker` | `0.0.0.0` |
-| `ssh` | `ssh` | all three | `Namespaces` | `Fuse` | `Worker` | `127.0.0.1` |
 
 `worker_bind` is loopback where the provider's forward reaches the guest's
-loopback (Lima's port forward, `ssh -L`) and every interface where the
+loopback (Lima's port forward) and every interface where the
 forward arrives on the guest's network (a published port, firecracker's tap
 address). The worker's secret guards it either way. The `backend` function
 answers even on a host the platform is not on (`docker` on Windows answers
@@ -104,22 +106,20 @@ answers even on a host the platform is not on (`docker` on Windows answers
 | --- | --- | --- |
 | `Int` | `int` | A whole number. |
 | `Size` | `size` | Bytes, or a number with a binary unit (`8G`). |
-| `Text` | `text` | Free text: a path, an image reference, a user. |
+| `Text` | `text` | Free text: a path or an image reference. |
 | `Bool` | `bool` | |
 | `Name` | `name` | Another machine's name (firecracker's `host`). |
 
 | Platform | Options (`name`: kind) |
 | --- | --- |
 | `native`, `docker` | none |
-| `apple-container`, `microsandbox` | `cpus`: int, `memory`: size, `disk`: size, `image`: text |
+| `apple-container` | `cpus`: int, `memory`: size, `disk`: size, `image`: text |
 | `lima` | the four above, `nested`: bool |
 | `firecracker` | the four above, `host`: name |
-| `ssh` | `user`: text, `port`: int, `identity`: text, `known_hosts`: text, `root`: text |
 
 `CPUS`, `MEMORY`, `DISK` and `IMAGE` are shared constants in
 [`options.rs`](../../../../control/crates/layerfs-platform/src/options.rs);
-`nested`, `host` and the ssh options are declared with `opt()` in their
-profile. The crate declares options; it does not parse them. The call table
+`nested` and `host` are declared with `opt()` in their profile. The crate declares options; it does not parse them. The call table
 reads them by `kind`, and `layerfs-control`'s
 [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs)
 turns a record into a `Spec`. There an absolute-path `image` becomes
@@ -136,10 +136,9 @@ the record's `os_image` or, on `docker` only, from `image`.
   os_image: Option<String>            the VM's own system, else default
   nested: bool                        lima only
   host: Option<Box<Spec>>             firecracker only: its nested lima
-  ssh: Option<SshSpec>                ssh only
   state: Lasting { port, network }    stored by the caller, passed back
   worker: Option<Endpoint>            the last worker.json, if any
-  work_dir: PathBuf                   logs, accepted ssh host key
+  work_dir: PathBuf                   the machine's logs
   tools: Tools { path, docker_socket }
 ```
 
@@ -152,14 +151,12 @@ the record's `os_image` or, on `docker` only, from `image`.
 | `firecracker` names a nested `lima` host, which is validated too | "a firecracker machine names its lima host" |
 | `host` only on `firecracker` | "only a firecracker machine has a host" |
 | `state.network` in 1 to 250 | "network number … is outside 1 to 250" |
-| `ssh` exactly on `ssh`; host, user, port ≠ 0, absolute data root | "an ssh machine needs its host" and the like |
 
 | Value | Meaning | Source |
 | --- | --- | --- |
 | `WORKER_PORT` | 7070, the worker's port inside the guest | [`spec.rs`](../../../../control/crates/layerfs-platform/src/spec.rs) |
 | `DATA`, `BUNDLE`, `STATE`, `IMAGE` | `/layerfs/data`, `/layerfs/bundle`, `/layerfs/state`, `/layerfs/image` in every guest | same |
-| `SshSpec::new` defaults | user `root`, port 22, no identity, data root `/layerfs/data` | same |
-| `Tools::from_env` | `PATH`, then `~/.microsandbox/bin`; socket `/var/run/docker.sock` | same |
+| `Tools::from_env` | `PATH`; socket `/var/run/docker.sock` | same |
 | `parse_size` | bytes or `K`/`M`/`G`/`T` (powers of 1024), optional `iB`/`B`; 0 refused | same |
 | `Bundle` | `dir` and hex `hash` of the sealed Linux bundle | same |
 | `Endpoint` | host loopback `address`, `secret`, optional `forward_pid` | same |

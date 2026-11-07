@@ -28,7 +28,7 @@ for what a diagram or table cannot say.
      profile.rs         PROFILE: Profile
      adapter.rs         ADAPTER, impl Adapter (every method, no defaults)
      observe.rs         state from the provider, guest, status
-     create.rs          create and remove   (connected: connect.rs)
+     create.rs          create and remove
      power.rs           start and stop
    setup/guest.rs     + Guest variant only for a new shell transport
  control/SUPPORT.json   blessed from support.rs, never edited
@@ -44,7 +44,7 @@ for what a diagram or table cannot say.
 | 4 | `Profile`: `name`, `tool`, `how`, `hosts`, `backend`, `kernel`, `executor`, `worker_bind`, `options`, `description`. Reuse `namespaces`, `fuse`, `worker`, `ANY_HOST`, `MACOS` and the shared `CPUS`, `MEMORY`, `DISK`, `IMAGE`. | The support rows and `SUPPORT.json` are built from it. | [`platform.rs`](../../../../control/crates/layerfs-platform/src/platform.rs), [`options.rs`](../../../../control/crates/layerfs-platform/src/options.rs) |
 | 5 | Every `Adapter` method. Refuse what the platform does not do with `refused(spec, why)` or `forward::refuse`, before any effect. | The trait has no default methods. | [Adapter](adapter.md) |
 | 6 | The platform's arm in `host_refusal`, and any `postgresql_refusal` arm. | `host_refusal` matches every platform; it is the only place refusal text lives. | [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs) |
-| 7 | A `Guest` variant only if the guest is reached by a new transport (not ssh, `docker exec`, `container exec`, `msb exec`). | `setup/worker.rs` runs steps 2–4 over any `Guest`. | [`setup/guest.rs`](../../../../control/crates/layerfs-platform/src/setup/guest.rs) |
+| 7 | A `Guest` variant only if the guest is reached by a new transport (not ssh, `docker exec`, `container exec`). | `setup/worker.rs` runs steps 2–4 over any `Guest`. | [`setup/guest.rs`](../../../../control/crates/layerfs-platform/src/setup/guest.rs) |
 | 8 | Bless `SUPPORT.json` and review its diff. | The comparing test fails until the file matches. | [Generated JSON](../support-matrix/generated-json.md#regenerating-it) |
 | 9 | Its arms in the conformance kit's `loopback` and `daemon_port`, and `field` for any new option name. | The kit does not compile (or panics) until the platform declares how it reaches the caller's loopback and how its daemons are reached. | [`tests/conformance.rs`](../../../../control/crates/layerfs-platform/tests/conformance.rs) |
 | 10 | Its page under `docs/architecture/control/machines/platforms/`, and the manual's support tables. | Pages change with the source. | [Architecture](../../README.md) |
@@ -67,10 +67,9 @@ VM platforms use:
 
 Outside this crate, `layerfs-control` holds a few per-platform cases (for
 example `machine/endpoint.rs` for `firecracker` and `docker`,
-`machine/remove.rs` for `ssh`, `sandbox/route.rs` for `apple-container`).
+`sandbox/route.rs` for `apple-container`).
 A new option also needs its entry in the call table
-([`layerfs-api/src/machine/create.rs`](../../../../api/crates/layerfs-api/src/machine/create.rs)
-or [`connect.rs`](../../../../api/crates/layerfs-api/src/machine/connect.rs))
+([`layerfs-api/src/machine/create.rs`](../../../../api/crates/layerfs-api/src/machine/create.rs))
 and its `Spec` mapping in
 [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs).
 A new Store kind or kernel route is an engine change, not a platform
@@ -86,7 +85,7 @@ A new Store kind or kernel route is an engine change, not a platform
 | a new `machine_<p>.rs` | The provider argv and failure paths against stand-in tools, as [`machine_lima.rs`](../../../../control/crates/layerfs-platform/tests/machine_lima.rs) and [`machine_providers.rs`](../../../../control/crates/layerfs-platform/tests/machine_providers.rs) do. | `cargo +1.85.1 test --locked -p layerfs-platform --test machine_<p>` |
 
 The kit's stand-in tools log each call and refuse, so a lifecycle call
-reaches the provider and stops there; it needs no VM, Engine, ssh host or
+reaches the provider and stops there; it needs no VM, Engine, host or
 root. A real platform is then run live, as the #535 terminal pass did, and
 its receipts are linked from its page. Every test file is `#![cfg(unix)]`.
 The commands were not run while writing this page.
@@ -101,4 +100,4 @@ The commands were not run while writing this page.
 
 ---
 
-← [Machines: SSH](platforms/ssh.md) · [Up: Machines](README.md) · [Control: Network](../network/README.md) →
+← [Machines: Firecracker](platforms/firecracker.md) · [Up: Machines](README.md) · [Control: Network](../network/README.md) →

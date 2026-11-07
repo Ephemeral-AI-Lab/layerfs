@@ -27,7 +27,6 @@ starts nothing.
    ?host= or ?hostaddr= present ----------------------yes--> Unsupported
    host empty (a Unix socket) ------------------------yes--> Unsupported
    host not localhost / 127.0.0.1 / ::1 -------------yes--> url as given
-   Refused(why) -------------------------------------yes--> Unsupported(why)
    sslmode=verify-full ------------------------------yes--> Unsupported
    Alias(a) | Lookup(read) --> with_host(a) : every other byte kept
 ```
@@ -38,9 +37,7 @@ starts nothing.
 | `docker` | `Lookup` (Docker Desktop), `Shared` (Linux Engine) | the address the running worker resolves `host.docker.internal` to; on a Linux Engine the URL as given | A Sandbox daemon runs in the Sandbox image's root, which cannot resolve Docker Desktop's name, so it gets the address (`getent ahostsv4` in the worker, D-8). A Linux Engine's worker runs with `--network host`, so its Sandboxes share the host's loopback. | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs), [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
 | `lima` | `Alias` | `192.168.5.2` | The gateway of Lima's user-mode network. The address, not `host.lima.internal`: the Sandbox root has no such hosts entry. | [`lima/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/adapter.rs) |
 | `firecracker` | `Alias` | `192.168.5.2` | The Lima host's own host address; the Lima host masquerades the microVM's traffic. | [`firecracker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/firecracker/adapter.rs) |
-| `microsandbox` | `Alias` | `host.microsandbox.internal` | The guest's per-sandbox gateway; the machine is created with `--net public,private,host` so host egress is allowed. | [`microsandbox/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/microsandbox/adapter.rs), [`microsandbox/create.rs`](../../../../control/crates/layerfs-platform/src/platforms/microsandbox/create.rs) |
 | `apple-container` | `Alias`, else `Lookup` | the gateway its last start recorded (`Lasting::gateway`, #66), else `status.networks[0].ipv4Gateway` from `container inspect` | No host alias. Each start reads the gateway once and the machine record keeps it, so a reach runs no subprocess; a record without one (from before #66) reads it while the machine runs, only for a loopback URL. A stale recorded gateway is dialled as recorded and fails there; it is not looked up again. | [`apple_container/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/power.rs), [`apple_container/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/adapter.rs) |
-| `ssh` | `Refused` | — `Unsupported` | "an ssh machine cannot reach the caller's loopback". | [`ssh/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/ssh/adapter.rs) |
 
 Notes from the receipts:
 
@@ -85,8 +82,6 @@ platform, machine and reason.
 | Other `sslmode` values | Not checked; a rewrite goes ahead. |
 
 Source: `dial` in [`reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs).
-The check order puts `Refused` first, so an `ssh` machine reports its own
-reason, not the verify-full one.
 
 ## Related
 

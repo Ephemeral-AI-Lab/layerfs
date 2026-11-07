@@ -24,7 +24,6 @@ Layout 3, from [`home/paths.rs`](../../../../control/crates/layerfs-home/src/hom
   machine/<name>/
     record.json             platform, size, state, op
     worker.json             worker address, secret, forward pid (0600)
-    known_hosts             ssh machines only
     start.lock              held across a start, stop, create, remove
   machine/native/run/       native Sandbox folders, images/ cache
   store/<name>/

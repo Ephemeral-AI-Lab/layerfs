@@ -35,7 +35,6 @@ daemon directly instead of going through the worker.
 | Platform | `forward` answers | `pid` | Source |
 | --- | --- | --- | --- |
 | `native` | `127.0.0.1:<guest_port>`: the daemon is on this host's loopback | `None` | `shared` in [`forward.rs`](../../../../control/crates/layerfs-platform/src/setup/forward.rs) |
-| `ssh` | a free host port through `ssh <options> <dest>` | the `ssh -L` | `daemon_forward` in [`ssh/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/ssh/observe.rs) |
 | `lima` | a free host port through Lima's own `ssh.config` (its template forwards no other guest port) | the `ssh -L` | `daemon_forward` in [`lima/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/observe.rs) |
 
 Steps of `forward::daemon` and `forward::open`:
@@ -53,8 +52,8 @@ forward that carries nothing. The forward is detached so it outlives one
 CLI call; the caller records its address and pid
 ([`spec.rs`](../../../../control/crates/layerfs-platform/src/spec.rs)).
 
-The same `forward::open` also carries a worker's port on `ssh` and
-`firecracker` ([Workers](workers.md#loopback-and-secret)); that pid is the
+The same `forward::open` also carries a worker's port on `firecracker`,
+through its Lima host ([Workers](workers.md#loopback-and-secret)); that pid is the
 endpoint's `forward_pid`, ended by `forward::close` at machine stop.
 
 ## forward_close
@@ -83,7 +82,6 @@ daemon port: <why>".
 | --- | --- | --- | --- |
 | `docker` | `Unsupported` | Docker publishes a container's ports only when it starts, so a Sandbox daemon's port in the worker container cannot be published later (D-8). | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
 | `apple-container` | `Unsupported` | The `container` CLI publishes a port only when the machine's container is created. | [`apple_container/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/adapter.rs) |
-| `microsandbox` | `Unsupported` | `msb` publishes a port only when the machine's sandbox is created. | [`microsandbox/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/microsandbox/adapter.rs) |
 | `firecracker` | `Unsupported` | Its daemons listen on the microVM's loopback, which a forward through the Lima host cannot reach (it reaches only the microVM's tap address). | [`firecracker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/firecracker/adapter.rs) |
 
 ## Related
