@@ -39,9 +39,11 @@ pub struct Listing {
     /// READDIRPLUS: each entry also carries its attributes and handle.
     pub plus: bool,
 }
-/// Bytes of the reply around the entries: status, absent post_op_attr,
-/// cookieverf, the list terminator and the EOF flag, plus the RPC reply header.
-const FIXED: usize = 4 + 4 + 8 + 4 + 4 + 24;
+/// Bytes of the reply around the entries: status, the directory's
+/// `post_op_attr` (reserved present, so a reply never exceeds the client's
+/// budget by it), `cookieverf`, the list terminator and the EOF flag, plus
+/// the RPC reply header.
+const FIXED: usize = 4 + 4 + ATTR_BYTES + 8 + 4 + 4 + 24;
 /// `fattr3` in one `post_op_attr`: 21 thirty-two-bit fields.
 const ATTR_BYTES: usize = 84;
 /// Bytes one READDIRPLUS entry adds besides its name: the attribute that
@@ -90,8 +92,9 @@ impl Entries {
         }
         true
     }
-    /// Appends one listed name with its attributes and, when `handles`, the
-    /// handle of its serial; false when it does not fit the budget.
+    /// Appends one listed name when it fits the budget, with the facts this
+    /// reply says about it and, when this request publishes its offset, the
+    /// handle of its serial; false when it does not fit.
     fn push_entry(
         &mut self,
         kernel: &Kernel,
