@@ -123,9 +123,10 @@ session's own thread checkpoints the WAL off the commit path (owner approval,
   The one resident exception is a Workspace's open state, which grows with open
   files and with the files the kernel currently references.
 - Automatic bounded local reclamation follows last-owner release, including
-  during live activity and idle periods. Terminal unmount drains requests,
-  closes the Workspace's overlay connection and deletes its file. Neither
-  deletes global history.
+  during live activity and idle periods. A Commit's own reclamation (its
+  captured generation's retired rows) follows its answer (owner approval,
+  2026-11-07). Terminal unmount drains requests, closes the Workspace's
+  overlay connection and deletes its file. Neither deletes global history.
 - Target (owner direction 2026-10-07, Store calls revised 2026-10-18): every
   daemon opens the global Store directly from a volume the daemons share and
   reads, saves and publishes in-process. Project Init adds a project to an

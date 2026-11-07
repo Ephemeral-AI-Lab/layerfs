@@ -564,7 +564,7 @@ fn walk(
             CapturedRunStep::Window { read, next } => {
                 assert_eq!(read.offset, at);
                 assert_eq!(next.offset(), at + read.data.len() as u64);
-                assert!(read.data.len() <= RUN_BYTES);
+                assert!(read.data.len() <= READ_WINDOW);
                 steps.windows += 1;
                 for index in 0..read.data.len() {
                     let inherited = read

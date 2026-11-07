@@ -367,6 +367,22 @@ impl Service {
             binding.epoch = binding.epoch.saturating_add(1);
         }
     }
+    /// After a Commit's answer, drains on this thread the overlay
+    /// reclamation its releases left queued: one bounded step per hold of
+    /// the Workspace lock, so requests interleave with it and unmount stops
+    /// it. A Workspace no longer bound has nothing to drain here. A failed
+    /// step is retained as the maintenance failure that refuses new mounts.
+    pub fn reclaim_after_commit(&self, token: WorkspaceToken) {
+        let workspace = match self.entries.lock() {
+            Ok(entries) => match super::registry::bound(&entries, token) {
+                Ok(binding) => binding.workspace.clone(),
+                Err(_) => return,
+            },
+            Err(_) => return,
+        };
+        // Only a route that no longer resolves fails here: nothing to drain.
+        let _ = workspace.reclaim();
+    }
     /// Returns an admitted entry to `activity` when its operation stopped
     /// before any effect.
     fn settle_activity(&self, token: WorkspaceToken, activity: Activity) {

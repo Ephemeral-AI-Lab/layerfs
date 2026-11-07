@@ -124,11 +124,22 @@ job ends: maintenance_pending()      unlock, then owner.maintain()
 | `maintenance_ready` hint | False is exact; true may be a false positive the next turn clears | [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/database/connection.rs) |
 | A step fails | Stored as `maintenance_error`; no more steps; new Mounts are refused | [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs), [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
 | Inline release | A job that drops an orphan's last reference may finish at most one step's page itself | [`maintenance/orphan.rs`](../../../../engine/crates/layerfs-overlay/src/maintenance/orphan.rs) |
+| Deferred jobs | `call_deferred` jobs leave what they ready queued: a Commit's two releases (`release_captured_reader`, `release_operation_deferred`) and terminal `close` | [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs), [`lifetime_operations.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/lifetime_operations.rs) |
+| After a Commit's answer | The daemon's connection thread runs `BoundWorkspace::reclaim`, the same loop, before it reads the next call; otherwise the next job of the Workspace drains it | [`connection.rs`](../../../../engine/crates/layerfs-daemon/src/application/connection.rs), [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs), [`captured.rs`](../../../../engine/crates/layerfs-store-service/src/store/captured.rs) |
+
+A Commit's own reclamation follows its answer (owner approval, 2026-11-07).
+Releasing the captured reader wakes the `RETIRE` of the generation it held,
+one step per retired row: about 16,000 steps (0.4 s) for a new 500 MiB
+file, which the Commit used to pay before it answered. The queued rows and
+their order are unchanged, so the overlay file holds the same state at any
+crash point as before; terminal close deletes whatever is still queued with
+the file.
 
 Terminal disposal is separate from live reclamation:
 
 ```text
-close()             closed = true; no new mutation or acquisition
+close()             closed = true; no new mutation or acquisition;
+                    queued maintenance is not drained
 cleanup_state()     Live | Held (kernel, files, readers, lookups, capture,
                     base readers, tickets, owners) | Queued | Gone
 retire(namespace)   Backing.terminal(); checked close_database()

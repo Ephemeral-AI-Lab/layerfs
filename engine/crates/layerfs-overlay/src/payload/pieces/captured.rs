@@ -48,11 +48,7 @@ impl Overlay {
                     if slot == 0 {
                         let local = self.local_shape(serial, &layers, cursor, &mut work)?;
                         if let Some(next) = local {
-                            let step = CapturedRunStep::Local {
-                                offset: at,
-                                length: next.at - at,
-                                next,
-                            };
+                            let step = self.dense_step(serial, &layers[0], cursor, next)?;
                             return Ok(reply(step, work));
                         }
                     }
