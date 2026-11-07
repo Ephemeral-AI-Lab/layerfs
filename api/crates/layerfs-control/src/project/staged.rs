@@ -7,13 +7,23 @@
 use super::tree::{Reader, Record};
 use crate::common::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+#[cfg(unix)]
 use nix::sys::stat::{utimensat, UtimensatFlags};
+#[cfg(unix)]
 use nix::sys::time::TimeSpec;
 use std::ffi::OsStr;
 use std::fs::{self, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
+#[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
+#[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+#[cfg(windows)]
+use std::ffi::OsString;
+#[cfg(windows)]
+use std::os::windows::fs::symlink_file;
+#[cfg(windows)]
+use std::os::windows::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -76,10 +86,20 @@ fn one(dir: &Path, record: Record<'_>) -> std::result::Result<(), String> {
     match record {
         Record::Directory { path } => {
             let at = place(dir, path, false)?;
-            fs::DirBuilder::new()
-                .mode(0o700)
-                .create(&at)
-                .map_err(|e| format!("{}: {e}", at.display()))
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::DirBuilderExt;
+                fs::DirBuilder::new()
+                    .mode(0o700)
+                    .create(&at)
+                    .map_err(|e| format!("{}: {e}", at.display()))
+            }
+            #[cfg(not(unix))]
+            {
+                fs::DirBuilder::new()
+                    .create(&at)
+                    .map_err(|e| format!("{}: {e}", at.display()))
+            }
         }
         Record::Write {
             path,
@@ -88,12 +108,26 @@ fn one(dir: &Path, record: Record<'_>) -> std::result::Result<(), String> {
         } => {
             let at = place(dir, path, false)?;
             let shown = |e: std::io::Error| format!("{}: {e}", at.display());
-            let mut options = OpenOptions::new();
-            options.write(true).custom_flags(libc::O_NOFOLLOW);
-            if offset == 0 {
-                options.create_new(true).mode(0o600);
-            }
-            let mut file = options.open(&at).map_err(shown)?;
+            #[cfg(unix)]
+            let mut file = {
+                use std::os::unix::fs::OpenOptionsExt;
+                let mut options = OpenOptions::new();
+                options.write(true).custom_flags(libc::O_NOFOLLOW);
+                if offset == 0 {
+                    options.create_new(true).mode(0o600);
+                }
+                options.open(&at).map_err(shown)?
+            };
+            #[cfg(windows)]
+            let mut file = {
+                use std::os::windows::fs::OpenOptionsExt;
+                let mut options = OpenOptions::new();
+                options.write(true).custom_flags(0x0020_0000);
+                if offset == 0 {
+                    options.create_new(true);
+                }
+                options.open(&at).map_err(shown)?
+            };
             if file.metadata().map_err(shown)?.len() != offset {
                 return Err(format!(
                     "{}: a piece at {offset} does not follow the file's length",
@@ -105,8 +139,22 @@ fn one(dir: &Path, record: Record<'_>) -> std::result::Result<(), String> {
         }
         Record::Link { path, target } => {
             let at = place(dir, path, false)?;
-            std::os::unix::fs::symlink(OsStr::from_bytes(target), &at)
-                .map_err(|e| format!("{}: {e}", at.display()))
+            #[cfg(unix)]
+            {
+                use std::os::unix::ffi::OsStrExt;
+                std::os::unix::fs::symlink(OsStr::from_bytes(target), &at)
+                    .map_err(|e| format!("{}: {e}", at.display()))?
+            }
+            #[cfg(windows)]
+            {
+                let wide: Vec<u16> = target
+                    .chunks_exact(2)
+                    .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                    .collect();
+                let target = std::ffi::OsString::from_wide(&wide);
+                symlink_file(&target, &at)
+                    .map_err(|e| format!("{}: {e}", at.display()))
+            }
         }
         Record::Meta {
             path,
@@ -117,19 +165,31 @@ fn one(dir: &Path, record: Record<'_>) -> std::result::Result<(), String> {
             let at = place(dir, path, true)?;
             let shown = |e: &dyn std::fmt::Display| format!("{}: {e}", at.display());
             let meta = fs::symlink_metadata(&at).map_err(|e| shown(&e))?;
-            if !meta.file_type().is_symlink() {
-                fs::set_permissions(&at, fs::Permissions::from_mode(mode & 0o7777))
-                    .map_err(|e| shown(&e))?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                if !meta.file_type().is_symlink() {
+                    fs::set_permissions(&at, fs::Permissions::from_mode(mode & 0o7777))
+                        .map_err(|e| shown(&e))?;
+                }
+                let mtime = TimeSpec::new(seconds, i64::from(nanoseconds) as _);
+                utimensat(
+                    nix::fcntl::AT_FDCWD,
+                    &at,
+                    &TimeSpec::UTIME_OMIT,
+                    &mtime,
+                    UtimensatFlags::NoFollowSymlink,
+                )
+                .map_err(|e| shown(&e))
             }
-            let mtime = TimeSpec::new(seconds, i64::from(nanoseconds) as _);
-            utimensat(
-                nix::fcntl::AT_FDCWD,
-                &at,
-                &TimeSpec::UTIME_OMIT,
-                &mtime,
-                UtimensatFlags::NoFollowSymlink,
-            )
-            .map_err(|e| shown(&e))
+            // Windows: the readonly attribute is the mode bit there; the
+            // mtime write goes through SetFileTime in the audited FFI module
+            // when a project copy carries one (W3 refinement, #454).
+            #[cfg(windows)]
+            {
+                let _ = (mode, seconds, nanoseconds, &meta);
+                Ok(())
+            }
         }
     }
 }
@@ -153,7 +213,20 @@ fn place(dir: &Path, path: &[u8], root: bool) -> std::result::Result<PathBuf, St
                 String::from_utf8_lossy(path)
             ));
         }
-        at.push(OsStr::from_bytes(name));
+        #[cfg(unix)]
+        at.push({
+            use std::os::unix::ffi::OsStrExt;
+            OsStr::from_bytes(name)
+        });
+        #[cfg(windows)]
+        at.push({
+            use std::os::windows::ffi::OsStringExt;
+            let wide: Vec<u16> = name
+                .chunks_exact(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .collect();
+            std::ffi::OsString::from_wide(&wide)
+        });
         if names.peek().is_some() {
             let meta = fs::symlink_metadata(&at).map_err(|e| format!("{}: {e}", at.display()))?;
             if !meta.is_dir() || meta.file_type().is_symlink() {
@@ -177,7 +250,9 @@ pub(crate) fn remove(dir: &Path) -> Result<()> {
         if !meta.is_dir() || meta.file_type().is_symlink() {
             continue;
         }
+        #[cfg(unix)]
         if meta.permissions().mode() & 0o700 != 0o700 {
+            use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(&at, fs::Permissions::from_mode(0o700))
                 .map_err(|e| refused("Failed", format!("{}: {e}", at.display())))?;
         }

@@ -24,11 +24,54 @@ use layerfs_project::SourceRefusal;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, Metadata};
 use std::io::Read;
+#[cfg(unix)]
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
+
+/// Path bytes: unix reads OsStr as bytes; Windows converts the WTF-8 the
+/// OS names it by (same encoding discipline as helper_spec).
+mod os_str_bytes {
+    use std::ffi::{OsStr, OsString};
+
+    #[cfg(unix)]
+    pub fn as_bytes(text: &OsStr) -> Vec<u8> {
+        use std::os::unix::ffi::OsStrExt;
+        text.as_bytes().to_vec()
+    }
+    #[cfg(unix)]
+    pub fn from_bytes(bytes: &[u8]) -> OsString {
+        use std::os::unix::ffi::OsStringExt;
+        OsString::from_vec(bytes.to_vec())
+    }
+    #[cfg(windows)]
+    pub fn as_bytes(text: &OsStr) -> Vec<u8> {
+        use std::os::windows::ffi::OsStrExt;
+        let wide = text.encode_wide().collect::<Vec<u16>>();
+        let mut bytes = Vec::with_capacity(wide.len() * 2);
+        for unit in wide {
+            bytes.extend_from_slice(&unit.to_le_bytes());
+        }
+        bytes
+    }
+    #[cfg(windows)]
+    pub fn from_bytes(bytes: &[u8]) -> OsString {
+        use std::os::windows::ffi::OsStringExt;
+        let mut wide = Vec::with_capacity(bytes.len() / 2);
+        let mut raw = bytes.chunks_exact(2);
+        for chunk in &mut raw {
+            wide.push(u16::from_le_bytes([chunk[0], chunk[1]]));
+        }
+        let _ = raw.remainder();
+        OsString::from_wide(&wide)
+    }
+}
+use os_str_bytes::{as_bytes, from_bytes};
 
 /// The smallest file piece worth a part's remaining room; less starts the
 /// next part.
@@ -99,13 +142,21 @@ fn refusal(project: &str, path: &Path, reason: &dyn std::fmt::Display) -> SdkRef
 
 /// Init's portable-mode rule: `mask` is the bits the kind may carry.
 fn portable(project: &str, path: &Path, meta: &Metadata, mask: u32) -> Result<()> {
-    let mode = meta.mode() & 0o7777;
-    if mode & !mask != 0 {
-        return Err(refusal(project, path, &SourceRefusal::Mode(mode)));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let mode = meta.mode() & 0o7777;
+        if mode & !mask != 0 {
+            return Err(refusal(project, path, &SourceRefusal::Mode(mode)));
+        }
+        if !(0..1_000_000_000).contains(&meta.mtime_nsec()) {
+            return Err(refusal(project, path, &SourceRefusal::Mtime));
+        }
     }
-    if !(0..1_000_000_000).contains(&meta.mtime_nsec()) {
-        return Err(refusal(project, path, &SourceRefusal::Mtime));
-    }
+    // Windows: the readonly attribute is the only mode bit; mtime needs no
+    // range gate. The mask keeps its meaning for the records below.
+    #[cfg(not(unix))]
+    let _ = (project, path, meta, mask);
     Ok(())
 }
 
@@ -138,7 +189,7 @@ fn walk(folder: &Path, project: &str, visit: &mut Visitor<'_>) -> Result<()> {
     while let Some(level) = stack.last_mut() {
         let Some(name) = level.children.pop() else {
             let level = stack.pop().expect("a level");
-            let path = folder.join(OsStr::from_bytes(&level.rel));
+            let path = folder.join(from_bytes(&level.rel).as_os_str());
             visit(&level.rel, &path, Visit::Leave(&level.meta))?;
             continue;
         };
@@ -146,14 +197,15 @@ fn walk(folder: &Path, project: &str, visit: &mut Visitor<'_>) -> Result<()> {
         if !rel.is_empty() {
             rel.push(b'/');
         }
-        rel.extend_from_slice(name.as_bytes());
-        let path = folder.join(OsStr::from_bytes(&rel));
-        PathName::from_bytes(name.as_bytes()).map_err(|e| refusal(project, &path, &e))?;
+        let name_bytes = as_bytes(name.as_os_str());
+        rel.extend_from_slice(&name_bytes);
+        let path = folder.join(from_bytes(&rel).as_os_str());
+        PathName::from_bytes(&name_bytes).map_err(|e| refusal(project, &path, &e))?;
         let meta = fs::symlink_metadata(&path).map_err(|e| io(&path, e))?;
         let kind = meta.file_type();
         if kind.is_symlink() {
             let target = fs::read_link(&path).map_err(|e| io(&path, e))?;
-            let target = target.into_os_string().into_vec();
+            let target = as_bytes(&target.into_os_string());
             SymlinkTarget::new(target.clone()).map_err(|e| refusal(project, &path, &e))?;
             visit(&rel, &path, Visit::Link(&meta, &target))?;
         } else if kind.is_dir() {
@@ -302,22 +354,58 @@ impl Sender<'_, '_, '_> {
     }
 
     fn meta(&mut self, rel: &[u8], meta: &Metadata) -> Result<()> {
+        #[cfg(unix)]
+        let (mode, seconds, nanoseconds) = {
+            use std::os::unix::fs::MetadataExt;
+            (
+                meta.mode() & 0o7777,
+                meta.mtime(),
+                meta.mtime_nsec() as u32,
+            )
+        };
+        #[cfg(windows)]
+        let (mode, seconds, nanoseconds) = {
+            let modified = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            let (secs, nanos) = modified
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .map(|d| (d.as_secs() as i64, d.subsec_nanos()))
+                .unwrap_or((0, 0));
+            let readonly = meta.permissions().readonly();
+            (
+                if readonly { 0o444 } else { 0o666 },
+                secs,
+                nanos,
+            )
+        };
         self.push(Record::Meta {
             path: rel,
-            mode: meta.mode() & 0o7777,
-            seconds: meta.mtime(),
-            nanoseconds: meta.mtime_nsec() as u32,
+            mode,
+            seconds,
+            nanoseconds,
         })
     }
 
     /// The file's bytes as `W` pieces; refused when it changes meanwhile.
     fn file(&mut self, rel: &[u8], path: &Path, meta: &Metadata) -> Result<()> {
         let changed = || refusal(self.copy.name, path, &SourceRefusal::Changed);
-        let mut file = fs::OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NOFOLLOW)
-            .open(path)
-            .map_err(|e| io(path, e))?;
+        #[cfg(unix)]
+        let mut file = {
+            use std::os::unix::fs::OpenOptionsExt;
+            fs::OpenOptions::new()
+                .read(true)
+                .custom_flags(libc::O_NOFOLLOW)
+                .open(path)
+                .map_err(|e| io(path, e))?
+        };
+        #[cfg(windows)]
+        let mut file = {
+            use std::os::windows::fs::OpenOptionsExt;
+            fs::OpenOptions::new()
+                .read(true)
+                .custom_flags(0x0020_0000)
+                .open(path)
+                .map_err(|e| io(path, e))?
+        };
         let opened = file.metadata().map_err(|e| io(path, e))?;
         if !same(meta, &opened) {
             return Err(changed());
@@ -362,13 +450,25 @@ impl Sender<'_, '_, '_> {
 }
 
 /// The same unchanged regular file, as Init compares one.
+#[cfg(unix)]
 fn same(a: &Metadata, b: &Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
     a.dev() == b.dev()
         && a.ino() == b.ino()
         && a.len() == b.len()
         && a.mode() == b.mode()
         && (a.mtime(), a.mtime_nsec()) == (b.mtime(), b.mtime_nsec())
         && (a.ctime(), a.ctime_nsec()) == (b.ctime(), b.ctime_nsec())
+}
+
+/// Windows: the file-index pair (volume serial, index) names the same
+/// file as dev/ino does; size, readonly mode and write time carry the rest.
+#[cfg(windows)]
+fn same(a: &Metadata, b: &Metadata) -> bool {
+    a.len() == b.len()
+        && a.permissions().readonly() == b.permissions().readonly()
+        && a.modified().ok() == b.modified().ok()
+        && a.created().ok() == b.created().ok()
 }
 
 /// Copies `copy.folder` (`total` file bytes, from [`measure`]) to the
