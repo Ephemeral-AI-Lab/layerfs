@@ -70,23 +70,23 @@ chooses the route, attaches it and tears it down.
 ## What it does
 
 The route for each platform comes from the `kernel` field of
-[`connect/SUPPORT.json`](../../../../connect/SUPPORT.json), generated from
-[`support.rs`](../../../../connect/crates/layerfs-machine/src/support.rs):
+[`control/SUPPORT.json`](../../../../control/SUPPORT.json), generated from
+[`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs):
 
 | Host | Platform | `backend` | `kernel` |
 | --- | --- | --- | --- |
 | macos | native | `native` | `"nfs"` |
-| macos | docker | `docker` | `"fuse"` |
+| macos | docker | `namespaces` | `"fuse"` |
 | macos | apple-container, microsandbox, lima, firecracker, ssh | `namespaces` | `"fuse"` |
 | linux | native, microsandbox, ssh | `namespaces` | `"fuse"` |
-| linux | docker | `docker` | `"fuse"` |
+| linux | docker | `namespaces` | `"fuse"` |
 | linux | apple-container, lima, firecracker | `null` | `null` (unsupported on this host) |
 | windows | microsandbox, ssh | `namespaces` | `"fuse"` |
 | windows | native, docker, apple-container, lima, firecracker | `null` | `null` (unsupported on this host) |
 
 So NFS serves exactly one row, the macOS native platform; every other
 supported row runs a Linux kernel and uses FUSE. The table is owned by the
-[support matrix](../../connect/support-matrix/README.md).
+[support matrix](../../control/support-matrix/README.md).
 
 | Given to both routes by the ports | FUSE adds | NFS adds |
 | --- | --- | --- |
@@ -115,8 +115,8 @@ supported row runs a Linux kernel and uses FUSE. The table is owned by the
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| READ and WRITE window | 128 KiB (`READ_WINDOW`, `WRITE_WINDOW`); larger is `EINVAL` | [`types.rs`](../../../../engine/crates/layerfs-overlay/src/contract/types.rs), [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs) |
-| FUSE input per request | `MAX_INPUT_BYTES` = `WRITE_WINDOW + 510`; more is `ENOTCONN` | [`types.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/types.rs) |
+| READ and WRITE window | `READ_WINDOW` 128 KiB, `WRITE_WINDOW` 256 KiB (FUSE negotiates `READ_WINDOW`); larger is `EINVAL` | [`types.rs`](../../../../engine/crates/layerfs-overlay/src/contract/types.rs), [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs) |
+| FUSE input per request | `MAX_INPUT_BYTES` = `READ_WINDOW + 510`; more is `ENOTCONN` | [`types.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/types.rs) |
 | FUSE receive buffer | `max_write + 4096` per receive loop, two loops per mount; the INIT buffer stays at fuser's 16 MiB + 4 KiB | [fuser patches](fuser-patches.md#receive-buffer) |
 | Name length | 255 bytes; longer is `ENAMETOOLONG` | [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs), [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |
 | Symlink target | Shorter than one page (FUSE: negotiated page size; NFS: `LINK_PAGE` 4096); else `ENAMETOOLONG` | [`create.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/create.rs), [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |

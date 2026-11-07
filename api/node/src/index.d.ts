@@ -213,6 +213,13 @@ export interface WorkspaceExecOptions {
   stream?: boolean;
   stdout?: OutputHandler;
   stderr?: OutputHandler;
+  exec_id?: string;
+  on_progress?: ProgressHandler;
+}
+
+/** Options of `workspace.exec_cancel`; an unknown option is refused. */
+export interface WorkspaceExecCancelOptions {
+  grace_ms?: WholeNumber;
 }
 
 /** Options of `workspace.commit`; an unknown option is refused. */
@@ -381,6 +388,8 @@ export interface WorkspaceFamily {
   mount(sandbox: string, branch: string, options?: WorkspaceMountOptions): Promise<Result>;
   /** run one bash command in a Workspace */
   exec(ws: string, command: string, options?: WorkspaceExecOptions): Promise<Result>;
+  /** end a running command: SIGTERM, then SIGKILL after grace_ms */
+  exec_cancel(ws: string, exec_id: string, options?: WorkspaceExecCancelOptions): Promise<Result>;
   /** commit a Workspace's changes to its Branch */
   commit(ws: string, options?: WorkspaceCommitOptions): Promise<Result>;
   /** end a Workspace */

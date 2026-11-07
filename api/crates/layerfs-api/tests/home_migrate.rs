@@ -4,8 +4,8 @@
 use layerfs_api::home::{self, paths, read_record, Layout};
 use layerfs_bridge::control::{Answer, Reply, SdkValue};
 use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
-use layerfs_store_backup::backup::{link as state, Direction, Provider, Remotes, Transfer};
-use layerfs_store_backup::bucket::{minio::MinioSettings, CredentialRef};
+use layerfs_bucket::backup::{link as state, Direction, Provider, Remotes, Transfer};
+use layerfs_bucket::bucket::{minio::MinioSettings, CredentialRef};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
@@ -511,7 +511,7 @@ fn a_1_1_0_environment_becomes_records_once() {
             .all(|(_, bytes)| !String::from_utf8_lossy(bytes).contains(secret)));
     }
     assert!(
-        printed.contains(layerfs_sandbox::platform_policy::SSH_DISABLED),
+        printed.contains(layerfs_sandbox_backend::platform_policy::SSH_DISABLED),
         "{printed}"
     );
     assert!(!paths::machine_record(&home, "ssh").exists());

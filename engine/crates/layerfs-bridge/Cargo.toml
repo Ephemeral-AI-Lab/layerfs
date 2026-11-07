@@ -1,6 +1,6 @@
 [package]
 name = "layerfs-bridge"
-description = "Authenticated bounded duplex channels for cluster-two runtime integration"
+description = "Authenticated bounded duplex channels for cluster-two runtime integration, and local process identity"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,6 +14,10 @@ duplex = ["dep:snow"]
 layerfs-content = { path = "../../../core/crates/layerfs-content" }
 layerfs-history = { path = "../../../core/crates/layerfs-history" }
 snow = { version = "=0.9.6", optional = true }
+
+[target.'cfg(unix)'.dependencies]
+# The local process identity (`process`): kill and, on macOS, proc_pidinfo.
+nix = { version = "=0.31.3", default-features = false, features = ["signal"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [

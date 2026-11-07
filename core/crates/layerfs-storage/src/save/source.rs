@@ -36,20 +36,20 @@ impl Source for WaveSource<'_> {
             .packer
             .ready
             .iter()
-            .find(|pack| pack.info.pack_id == id)
+            .find(|sealed| sealed.pack.info().pack_id == id)
         {
-            Some(pack) => Ok(pack.body.as_ref().clone()),
+            Some(sealed) => Ok(sealed.pack.body().as_ref().clone()),
             None => self.fetch.pack_bytes(id),
         }
     }
     fn validate_cached_pack(&self, info: crate::location::PackInfo) -> StorageResult<()> {
-        if let Some(pack) = self
+        if let Some(sealed) = self
             .packer
             .ready
             .iter()
-            .find(|pack| pack.info.pack_id == info.pack_id)
+            .find(|sealed| sealed.pack.info().pack_id == info.pack_id)
         {
-            if pack.info != info {
+            if sealed.pack.info() != info {
                 return Err(crate::StorageError::Integrity(
                     "private sealed descriptor changed",
                 ));
@@ -65,15 +65,15 @@ impl Source for WaveSource<'_> {
         groups: &[usize],
         whole_for_reuse: bool,
     ) -> StorageResult<crate::encoding::PackAcquisition> {
-        if let Some(pack) = self
+        if let Some(sealed) = self
             .packer
             .ready
             .iter()
-            .find(|pack| pack.info.pack_id == id)
+            .find(|sealed| sealed.pack.info().pack_id == id)
         {
             return Ok(crate::encoding::PackAcquisition::Whole {
-                info: Some(pack.info),
-                body: pack.body.as_ref().clone(),
+                info: Some(sealed.pack.info()),
+                body: sealed.pack.body().as_ref().clone(),
             });
         }
         self.fetch.acquire_groups(id, groups, whole_for_reuse)

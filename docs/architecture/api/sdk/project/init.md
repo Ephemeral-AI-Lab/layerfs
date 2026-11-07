@@ -10,8 +10,8 @@ existing Store: the project's first Layer and its hidden first Branch.
 | | |
 | --- | --- |
 | Family | [project](README.md) |
-| Library entry | [`api/crates/layerfs-api/src/project/init.rs`](../../../../../api/crates/layerfs-api/src/project/init.rs) |
-| Implemented in | `layerfs_control::project::family::run` → `init` ([`project/family.rs`](../../../../../api/crates/layerfs-control/src/project/family.rs)), then `store::identity::add_project` ([`store/identity.rs`](../../../../../api/crates/layerfs-control/src/store/identity.rs)) or `project::postgres_init::add_project` ([`project/postgres_init.rs`](../../../../../api/crates/layerfs-control/src/project/postgres_init.rs)) |
+| Library entry | [`project/init.rs`](../../../../../api/crates/layerfs-api/src/project/init.rs) |
+| Implemented in | `layerfs_store::project::family::init` → `init` ([`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs)), then `store::identity::add_project` ([`identity.rs`](../../../../../control/crates/layerfs-store/src/identity.rs)) or `project::postgres_init::add_project` ([`project/postgres_init.rs`](../../../../../control/crates/layerfs-store/src/project/postgres_init.rs)) |
 | Runs in | where the Store's calls run: the caller's process, or the Store's machine worker (sqlite on a non-local machine). No Sandbox daemon. |
 
 ## Signature
@@ -37,15 +37,15 @@ layerfs project init <project> <folder> [--timeout <timeout>] [--progress]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<name>`; both parts 1–63 of `a-z 0-9 _ . -`, starting and ending with a letter or digit, not a Windows device name. The Store must have a record in the home (`store.create` or `store.connect`). | [`calls/check.rs`](../../../../../api/crates/layerfs-control/src/calls/check.rs), [`common/names.rs`](../../../../../api/crates/layerfs-control/src/common/names.rs) |
-| `folder` | Text | an absolute path on the caller's host; read whole, with no Git-ignore filtering | [`project/family.rs`](../../../../../api/crates/layerfs-control/src/project/family.rs) `init` |
+| `project` | Project | `<store>/<name>`; both parts 1–63 of `a-z 0-9 _ . -`, starting and ending with a letter or digit, not a Windows device name. The Store must have a record in the home (`store.create` or `store.connect`). | [`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs), [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
+| `folder` | Text | an absolute path on the caller's host; read whole, with no Git-ignore filtering | [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs) `init` |
 
 ## Options
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `timeout` | Int | 3,600,000 (`INIT_TIMEOUT_MS`, one hour) | Init's deadline in ms, sent as `timeoutMs`; must be positive, else `InvalidInput`. Checked where the add runs (on the worker route, after the copy is sent). | [`project/family.rs`](../../../../../api/crates/layerfs-control/src/project/family.rs), [`project/init.rs`](../../../../../api/crates/layerfs-control/src/project/init.rs) `deadline` |
-| `on_progress` | Function | none | receives `{ phase, done, total }`; the CLI's `--progress` prints the same as JSON lines on stderr | [`calls/table.rs`](../../../../../api/crates/layerfs-control/src/calls/table.rs) `PROGRESS`, [`store/family.rs`](../../../../../api/crates/layerfs-control/src/store/family.rs) `progress` |
+| `timeout` | Int | 3,600,000 (`INIT_TIMEOUT_MS`, one hour) | Init's deadline in ms, sent as `timeoutMs`; must be positive, else `InvalidInput`. Checked where the add runs (on the worker route, after the copy is sent). | [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs), [`project/init.rs`](../../../../../control/crates/layerfs-store/src/project/init.rs) `deadline` |
+| `on_progress` | Function | none | receives `{ phase, done, total }`; the CLI's `--progress` prints the same as JSON lines on stderr | [`calls/table.rs`](../../../../../api/crates/layerfs-api/src/calls/table.rs) `PROGRESS`, [`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs) `progress` |
 
 Progress phases, in order: `check`, `send` (worker route only; `done` and
 `total` in bytes), `install`, `record`. The other phases carry `null` counts.
@@ -69,7 +69,7 @@ Progress phases, in order: `check`, `send` (worker route only; `done` and
 | `layer` | hex | the first Branch's base Layer: the Layer Init published |
 | `root` | hex | that Branch's effective root |
 
-The summary is built in [`project/record.rs`](../../../../../api/crates/layerfs-control/src/project/record.rs);
+The summary is built in [`project/record.rs`](../../../../../control/crates/layerfs-store/src/project/record.rs);
 `layer` and `root` come from the add's answer.
 
 ## Where it runs
@@ -92,6 +92,8 @@ The summary is built in [`project/record.rs`](../../../../../api/crates/layerfs-
          Exists check, send::measure, send::room
          lease::claim
          project.stage x N  ---------------->  write staged parts
+           (up to 4 at once)                   (any order; modes and
+                                                times after the rest)
          progress "install"
          project.init  --------------------->  in_worker: own lease,
                                                identity::add_project
@@ -112,23 +114,23 @@ LayerStack name, imports the folder, then forks the first Branch, named
 ([`store/live.rs`](../../../../../engine/crates/layerfs-project/src/store/live.rs)).
 Store calls hide that Branch: they treat `main` as the line of Layers (see
 [branch family](../branch/README.md)). See the
-[routing table](../../routing/routing-table.md) and the
+[routing table](../../../control/routing/routing-table.md) and the
 [Project Init flow](../../../flows/init.md).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | bad `project`, relative `folder`, non-positive `timeout`; a source entry Init refuses (device, FIFO, socket, set-user-ID or sticky bits); worker route: the folder is missing or not a directory | no | [`project/family.rs`](../../../../../api/crates/layerfs-control/src/project/family.rs), [`project/send.rs`](../../../../../api/crates/layerfs-control/src/project/send.rs), [`store/identity.rs`](../../../../../api/crates/layerfs-control/src/store/identity.rs) `add_failure` |
+| `InvalidInput` | bad `project`, relative `folder`, non-positive `timeout`; a source entry Init refuses (device, FIFO, socket, set-user-ID or sticky bits); worker route: the folder is missing or not a directory | no | [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs), [`project/send.rs`](../../../../../control/crates/layerfs-store/src/project/send.rs), [`identity.rs`](../../../../../control/crates/layerfs-store/src/identity.rs) `add_failure` |
 | `NotFound` | no Store record of that name | no | `project/family.rs` |
-| `Busy`, `Unresolved` | the Store's record holds another operation's intent; `Busy` also when another add's working rows remain in the Store | no | [`common/op.rs`](../../../../../api/crates/layerfs-control/src/common/op.rs), `add_failure` |
+| `Busy`, `Unresolved` | the Store's record holds another operation's intent; `Busy` also when another add's working rows remain in the Store | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs), `add_failure` |
 | `Exists` | the project's record, entry or LayerStack name exists | no | `project/family.rs`, `store/identity.rs` |
 | `Capacity` | worker route: the machine's free disk is below the copy plus headroom | no | `project/send.rs` `room` |
-| `Unavailable` | worker route: no worker recorded, or not reached; nothing sent | no | [`common/place.rs`](../../../../../api/crates/layerfs-control/src/common/place.rs) |
+| `Unavailable` | worker route: no worker recorded, or not reached; nothing sent | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
 | `Unsupported` | the kernel guard refuses the Store's filesystem; the Store has no acquisition tables; PostgreSQL in a build without `postgresql` | no | `store/identity.rs`, [`kernel_guard.rs`](../../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | `NoStore` | no Store file at the Store's path | no | `store/identity.rs` |
 | `Failed` | deadline passed, read error, or any engine failure, **including an Init whose outcome is unknown** | **may be** | `store/identity.rs` `add_failure` |
-| `Unknown` | **worker route: a stage or the `project.init` answer was lost** | **yes** | [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **worker route: a stage or the `project.init` answer was lost** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **An uncertain Init in the add reaches the caller as `Failed`, not
 `Unknown`:** `add_failure` maps only `Exists`, `NoAcquisition`, `Busy` and a
@@ -166,7 +168,7 @@ layerfs project init shop/api /src/api --timeout 600000 --progress
 - Before: `store.create` or `store.connect` ([store family](../store/README.md)).
 - After: [`project.get`](get.md), [`branch.fork`](../branch/fork.md) from `main`, then `sandbox.create` and `workspace.mount`.
 - [Project Init flow](../../../flows/init.md); [Engine: Project Init](../../../engine/project-init/README.md), [live open](../../../engine/project-init/seal-and-install.md#live-open).
-- [Control: families](../../control/families.md#project); [Routing: workers](../../routing/workers.md).
+- [Control: families](../../../control/management/families.md#project); [Routing: workers](../../../control/routing/workers.md).
 
 ---
 

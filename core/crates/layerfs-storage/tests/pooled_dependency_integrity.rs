@@ -4,7 +4,7 @@ mod metadata;
 use layerfs_content::{inode_leaf::*, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_storage::{
     encoding::pool::leaf,
-    location::{InodeValueRow, ObjectLocation, PackDomain, PackInfo},
+    location::{InodeValueRow, ObjectLocation, PackDomain},
     pack::{assemble, build_group, layout::PackLane},
     port::*,
     Storage,
@@ -72,14 +72,8 @@ fn literal_delta_cannot_hide_a_wrong_canonical_base() {
             packs: bodies
                 .into_iter()
                 .enumerate()
-                .map(|(i, body)| PublishedPack {
-                    info: PackInfo {
-                        pack_id: i as i64 + 1,
-                        domain: PackDomain::Metadata,
-                        length: body.len(),
-                        key: ObjectKey::for_bytes(&body),
-                    },
-                    body: Arc::new(body),
+                .map(|(i, body)| {
+                    PublishedPack::seal(i as i64 + 1, PackDomain::Metadata, Arc::new(body))
                 })
                 .collect(),
             objects: objects

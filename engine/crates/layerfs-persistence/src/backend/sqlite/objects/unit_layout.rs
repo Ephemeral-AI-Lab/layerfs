@@ -3,8 +3,8 @@ use layerfs_storage::{location::PackDomain, pack::layout, policy, port::*};
 pub(crate) fn views(
     pack: &PublishedPack,
 ) -> Result<(layout::PackHeader, Vec<layout::GroupView>), PersistenceError> {
-    let header = layout::parse_header(&pack.body).map_err(|_| PersistenceError::Malformed)?;
-    let views = layout::directory_group_views(&pack.body, header)
+    let header = layout::parse_header(pack.body()).map_err(|_| PersistenceError::Malformed)?;
+    let views = layout::directory_group_views(pack.body(), header)
         .map_err(|_| PersistenceError::Malformed)?;
     Ok((header, views))
 }
@@ -12,7 +12,7 @@ pub(crate) fn cost(pack: &PublishedPack) -> Result<(usize, u64), PersistenceErro
     let (_, views) = views(pack)?;
     Ok((
         1 + views.len(),
-        pack.body.len() as u64 + 56 + 32 * views.len() as u64,
+        pack.body().len() as u64 + 56 + 32 * views.len() as u64,
     ))
 }
 pub(crate) fn validate_batch(batch: &Publication) -> Result<(), PersistenceError> {
@@ -28,7 +28,7 @@ pub(crate) fn validate_batch(batch: &Publication) -> Result<(), PersistenceError
     }
     let singleton = batch.objects.len() == 1
         && batch.packs.len() == 1
-        && batch.packs[0].info.domain == PackDomain::Payload;
+        && batch.packs[0].info().domain == PackDomain::Payload;
     if rows > policy::TRANSACTION_ROW_LIMIT as usize
         || bytes > policy::TRANSACTION_PHYSICAL_BYTES_LIMIT && !singleton
     {

@@ -69,6 +69,7 @@ fs_data row:  [ one cell: 1..4096 bytes + optional validity mask ]
 | A wider row is dense, a whole number of cells, and never crosses a slot boundary; rows of one layer never share a cell. | [`runs.rs`](../../../../engine/crates/layerfs-overlay/src/payload/runs.rs) |
 | Every row that can hold a byte is found by one indexed range of its slot (`CELL_COVER`, `CELL_RANGE`). | [`statements.rs`](../../../../engine/crates/layerfs-overlay/src/database/statements.rs) |
 | Holes cost no rows. | [`tests/payload.rs`](../../../../engine/crates/layerfs-overlay/tests/payload.rs) |
+| The 32 768-byte row limit and the slot rule are schema `CHECK`s, so a wider row is a format change; a sequential write stores one dense row per slot. | [`schema.sql`](../../../../engine/crates/layerfs-overlay/sql/schema.sql) |
 
 ## Layers
 
@@ -105,7 +106,7 @@ cell stamped e is stale  <=>  e < epoch of the newest step whose
 
 | Call | Job | Source |
 | --- | --- | --- |
-| `write_cells` (inside `apply`) | One `PayloadWrite` of at most `WRITE_WINDOW` (128 KiB): whole cells one slot at a time, row shapes read once per read window of slots ahead; a partial cell is one point read and one upsert | [`stream.rs`](../../../../engine/crates/layerfs-overlay/src/payload/stream.rs) |
+| `write_cells` (inside `apply`) | One `PayloadWrite` of at most `WRITE_WINDOW` (256 KiB): whole cells one slot at a time, row shapes read once per read window of slots ahead; a partial cell is one point read and one upsert | [`stream.rs`](../../../../engine/crates/layerfs-overlay/src/payload/stream.rs) |
 | `source_read` | Current view over an owned `BaseSource`; orphans read their own composition | [`stream.rs`](../../../../engine/crates/layerfs-overlay/src/payload/stream.rs) |
 | `read_file` | A descriptor read window (`FileRead`), independent of descriptor close | [`orphan.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/orphan.rs) |
 | `captured_read` | Sealed view of a capture | [`stream.rs`](../../../../engine/crates/layerfs-overlay/src/payload/stream.rs) |
@@ -114,6 +115,19 @@ cell stamped e is stale  <=>  e < epoch of the newest step whose
 A larger write or read is several jobs; the windows bound one job, not a
 file. `PayloadWork` counts copies and zeroed bytes per engine
 ([`diagnostics/payload.rs`](../../../../engine/crates/layerfs-overlay/src/diagnostics/payload.rs)).
+
+A captured `Window` is at most `READ_WINDOW` (owner approval, 2026-11-07;
+it was one row). When the cursor's byte lies in a live dense row of the
+newest layer, the step follows that layer's next rows while they are live,
+dense, start where the last one ended and fit `READ_WINDOW`: one metadata
+row each, as before. Those bytes are the newest layer's whatever lower
+layers hold, so they are read by one `CELL_RANGE` statement and copied
+once from SQLite into the window, with no decision map and no zeroing
+(`dense_window`). Any other shape is composed by `compose_layers` over the
+widest row that holds the byte. A shapes-only cursor reports the same dense
+run as `Local`, up to 64 rows. In `compose_layers`, a range already decided
+is not walked again and the dense-row check folds its range instead of
+testing byte by byte.
 
 ## Related
 

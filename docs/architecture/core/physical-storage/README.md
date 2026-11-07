@@ -82,6 +82,7 @@ is the handle over that port. The SQLite and PostgreSQL providers live in
 | --- | --- |
 | Reads verify what they decode: every object in a chain is hashed and compared with the id its locator names. | `Resolver::resolve_charged` in [`encoding/delta/read.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/read.rs) |
 | A whole pack returned across the port matches its length and SHA-256 key. | `PersistedPack::authenticate` in [`port/read_pack.rs`](../../../../core/crates/layerfs-storage/src/port/read_pack.rs) |
+| A pack's SHA-256 key is computed once, when it is sealed; publication does not hash it again. | `PublishedPack::seal` in [`port/persistence.rs`](../../../../core/crates/layerfs-storage/src/port/persistence.rs) |
 | The header and directory are validated before any body is touched. No reader trial-decodes. | `parse_control_header`, `visit_directory` in [`pack/layout.rs`](../../../../core/crates/layerfs-storage/src/pack/layout.rs) |
 | A chain is at most the role's depth, repeats no id and keeps one role. | [`encoding/delta/read.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/read.rs) |
 | A dependency chain decodes at most 4 × cutoff canonical bytes and reads at most 2 × cutoff encoded bytes. Selection refuses a base that would break this. | `CHAIN_CANONICAL_CUTOFFS`, `CHAIN_ENCODED_CUTOFFS` in [`store/policy.rs`](../../../../core/crates/layerfs-storage/src/store/policy.rs); [`encoding/delta/select.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/select.rs) |

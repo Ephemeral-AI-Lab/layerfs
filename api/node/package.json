@@ -19,6 +19,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "prepack": "node -e \"require('node:fs').existsSync('layerfs.node') || (console.error('layerfs.node is missing: run npm --prefix api run build:native before packing'), process.exit(1))\"",
     "test": "node --test test/*.mjs"
   },
   "license": "MIT",

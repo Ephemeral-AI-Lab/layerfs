@@ -1,9 +1,10 @@
 //! The SDK's public surface: the call table, one file per call under its
 //! family (`<family>/<call>.rs`: the call's entry and the function that runs
-//! it), each family's calls listed in its `mod.rs`. Every call runs in the management
-//! library `layerfs-control`, which also holds the call machinery (argument
-//! checks, folder scope, the one dispatcher); its public paths are
-//! re-exported here for the front ends. The `branch`, `commit` and `file`
+//! it, one call of a control crate), each family's calls listed in its
+//! `mod.rs`, and the call machinery in `calls/` (argument checks, folder
+//! scope, the one dispatcher; layerfs-project#107). Only this crate speaks
+//! the SDK; the control crates' public paths the front ends use are
+//! re-exported here. The `branch`, `commit` and `file`
 //! calls reach the Store engine's SDK facade (layerfs-store-service
 //! `methods/`) in the caller's process, the only route for Store calls
 //! (#352 F-020).
@@ -12,6 +13,7 @@
 
 mod backup;
 mod branch;
+pub mod calls;
 mod commit;
 mod file;
 mod machine;
@@ -20,33 +22,47 @@ mod sandbox;
 mod store;
 mod workspace;
 
+use calls as machinery;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls as machinery;
-use layerfs_control::common::outcome::Outcome;
+use layerfs_home::outcome::Outcome;
 use std::path::Path;
 
-pub use layerfs_control::calls::{
+pub use calls::{
     home, json, keys, size, Arg, Call, CallRef, Calls, Context, Families, Family, Kind, Run, Scope,
 };
-pub use layerfs_control::common::{home, names};
+pub use layerfs_home::names;
+/// The home (`layerfs-home`), with opening and converting it
+/// (`layerfs-control` `migrate`) and the Store leases, as the front ends
+/// used them before the control split (layerfs-project#103).
+pub mod home {
+    pub use layerfs_control::migrate::{import_env, note_failure, open, open_from};
+    pub use layerfs_home::home::*;
+    pub use layerfs_home::process;
+    pub use layerfs_store::lease;
+}
 /// `layerfs doctor` (#536 H7): report-only, outside the call table.
 pub use layerfs_control::doctor::{doctor, doctor_json};
 #[cfg(feature = "machine")]
 #[doc(hidden)]
-pub use layerfs_control::machine::running;
-pub use layerfs_control::machine::worker;
+pub use layerfs_machine::running;
+/// The worker protocol (`layerfs-machine`) and its server (`layerfs-control`),
+/// as the front ends used them before the control split (layerfs-project#104).
+pub mod worker {
+    pub use layerfs_control::worker_server::{serve, Served, REQUEST_WAIT};
+    pub use layerfs_machine::worker::*;
+}
 pub use layerfs_control::store::close_idle;
 pub use layerfs_control::{
-    daemon, projects, AddFailure, AddRequest, AddedProject, CreateRequest, InitCounters,
-    InitCounts, InitError, InitFailure, InitRequest, InitStep, InstallError, InstallFailure,
-    InstallWork, Installed, OperationCause, OperationFailure, ProjectApi, ProjectError, SdkError,
-    SdkResult, SealedProject, SourceRefusal,
+    projects, AddFailure, AddRequest, AddedProject, CreateRequest, InitCounters, InitCounts,
+    InitError, InitFailure, InitRequest, InitStep, InstallError, InstallFailure, InstallWork,
+    Installed, ProjectApi, ProjectError, SealedProject, SourceRefusal,
 };
-pub use layerfs_control::{
+pub use layerfs_sandbox::{daemon, OperationCause, OperationFailure, SdkError, SdkResult};
+pub use layerfs_sandbox::{
     BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
 };
 
-/// The nine families, in the order help lists them: 62 calls, the same
+/// The nine families, in the order help lists them: 63 calls, the same
 /// from the `layerfs` binary, Node and Python.
 pub fn families() -> Families {
     &[
@@ -106,7 +122,7 @@ pub fn table_json() -> String {
 }
 
 /// Runs the call `name` (`family.call`) once with named `args`; see
-/// `layerfs_control::calls::call`.
+/// [`calls::call`].
 pub fn call(
     home: Option<&Path>,
     name: &str,

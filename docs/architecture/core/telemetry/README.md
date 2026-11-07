@@ -12,7 +12,7 @@ Environment-independent parent/child timing trees, and how they are printed or w
 | Crates | `layerfs-telemetry` |
 | Source | [`core/crates/layerfs-telemetry/src`](../../../../core/crates/layerfs-telemetry/src), [`Cargo.toml`](../../../../core/crates/layerfs-telemetry/Cargo.toml) |
 | Uses | — |
-| Used by | [Objects](../objects/README.md), [Files](../files/README.md), [Filesystem trees](../filesystem-trees/README.md), [Compare and merge](../compare-and-merge/README.md), [Engine: Store](../../engine/store/README.md), [Engine: Store calls](../../engine/store-calls/README.md), [Engine: Project Init](../../engine/project-init/README.md), [Engine: Workspace](../../engine/workspace/README.md), [Engine: Commit](../../engine/commit/README.md), [Engine: Daemon](../../engine/daemon/README.md), [API: Control](../../api/control/README.md) |
+| Used by | [Objects](../objects/README.md), [Files](../files/README.md), [Filesystem trees](../filesystem-trees/README.md), [Compare and merge](../compare-and-merge/README.md), [Engine: Store](../../engine/store/README.md), [Engine: Store calls](../../engine/store-calls/README.md), [Engine: Project Init](../../engine/project-init/README.md), [Engine: Workspace](../../engine/workspace/README.md), [Engine: Commit](../../engine/commit/README.md), [Engine: Daemon](../../engine/daemon/README.md), [Control: Management](../../control/management/README.md) |
 | Flows | [A call, end to end](../../flows/call.md) |
 
 The crate is `std`-only by default, depends on no product crate and opens no

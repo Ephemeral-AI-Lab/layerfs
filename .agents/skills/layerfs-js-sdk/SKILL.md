@@ -285,7 +285,7 @@ For Rust projects, follow the [Cargo workflow](references/rules/cargo.md).
 
 ## Calls
 
-62 calls in nine families. Each family's page has arguments, results, refusals
+63 calls in nine families. Each family's page has arguments, results, refusals
 and examples.
 
 | Family | Calls |

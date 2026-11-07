@@ -1,6 +1,6 @@
 [package]
 name = "layerfs-api"
-description = "The SDK's public surface: the call table and its one dispatcher over layerfs-control, whose public paths it re-exports for the front ends"
+description = "The SDK's public surface: the call table, its call machinery and its one dispatcher over the control crates, whose public paths it re-exports for the front ends"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,7 +9,14 @@ license.workspace = true
 [dependencies]
 layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
 # The management library every call runs in (#536).
-layerfs-control = { path = "../layerfs-control" }
+layerfs-control = { path = "../../../control/crates/layerfs-control" }
+layerfs-home = { path = "../../../control/crates/layerfs-home" }
+layerfs-machine = { path = "../../../control/crates/layerfs-machine" }
+layerfs-store = { path = "../../../control/crates/layerfs-store" }
+layerfs-sandbox = { path = "../../../control/crates/layerfs-sandbox" }
+# The permanent platform restrictions the call machinery checks before any
+# effect (`calls/platform_policy.rs`), in every build (layerfs-project#107).
+layerfs-sandbox-backend = { path = "../../../control/crates/layerfs-sandbox-backend" }
 
 [features]
 # PostgreSQL Stores (#506, #533): open, attach, create and Init.
@@ -20,7 +27,7 @@ postgresql = ["layerfs-control/postgresql"]
 tls = ["layerfs-control/tls"]
 # The machine calls (2.0, #533): host builds only. The guest worker is built
 # without it, so no machine adapter runs inside a machine.
-machine = ["layerfs-control/machine"]
+machine = ["layerfs-control/machine", "layerfs-machine/machine", "layerfs-sandbox/machine"]
 
 [dev-dependencies]
 nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
@@ -34,7 +41,6 @@ layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
 layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
 layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
 layerfs-project = { path = "../../../engine/crates/layerfs-project" }
-layerfs-sandbox = { path = "../../../connect/crates/layerfs-sandbox" }
-layerfs-machine = { path = "../../../connect/crates/layerfs-machine" }
+layerfs-platform = { path = "../../../control/crates/layerfs-platform" }
 layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
-layerfs-store-backup = { path = "../../../connect/crates/layerfs-store-backup" }
+layerfs-bucket = { path = "../../../control/crates/layerfs-bucket" }

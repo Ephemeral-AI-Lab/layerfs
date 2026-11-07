@@ -1,9 +1,10 @@
 //! `file.diff`: the difference between two files.
+use crate::calls::table::Kind::{Name, Project, Text};
+use crate::calls::table::{a, call, opt, Call};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::{Name, Project, Text};
-use layerfs_control::calls::table::{a, call, opt, Call};
-use layerfs_control::calls::Context;
-use layerfs_control::common::outcome::Outcome;
+use layerfs_home::outcome::Outcome;
+use layerfs_store::calls::file::{diff, FileDiff, Side};
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -23,5 +24,17 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `file.diff`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::store::calls::run(context, "file", "diff", args)
+    let text = |name: &str| args.get_text(name).map(str::to_owned);
+    let side = |at: &str| Side {
+        branch: text(&format!("{at}_branch")),
+        commit: text(&format!("{at}_commit")),
+        path: text(&format!("{at}_path")),
+    };
+    let request = FileDiff {
+        project: text("project").unwrap_or_default(),
+        left: side("left"),
+        right: side("right"),
+    };
+    let (home, events) = context.parts();
+    diff(home, events, &request)
 }

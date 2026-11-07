@@ -1,0 +1,230 @@
+{
+  "generated_from": "control/crates/layerfs-platform/src/support.rs",
+  "hosts": [
+    {
+      "host": "macos",
+      "platforms": [
+        {
+          "platform": "native",
+          "how": "built_in",
+          "backend": "native",
+          "kernel": "nfs",
+          "sqlite": "in_process",
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
+          "options": [],
+          "description": "this host; Sandboxes run as this user's processes, served over loopback NFS"
+        },
+        {
+          "platform": "docker",
+          "how": "built_in",
+          "backend": "namespaces",
+          "kernel": "fuse",
+          "sqlite": "worker",
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
+          "options": [],
+          "description": "Docker's kernel (Docker Desktop's VM, or the Linux host); Sandboxes run in Linux namespaces and a cgroup"
+        },
+        {
+          "platform": "apple-container",
+          "how": "created",
+          "backend": "namespaces",
+          "kernel": "fuse",
+          "sqlite": "worker",
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
+          "description": "an Apple container VM (Apple silicon); Sandboxes run in Linux namespaces and a cgroup"
+        },
+        {
+          "platform": "microsandbox",
+          "how": "created",
+          "backend": "namespaces",
+          "kernel": "fuse",
+          "sqlite": "worker",
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
+          "description": "a microsandbox microVM (libkrun); Sandboxes run in Linux namespaces and a cgroup"
+        },
+        {
+          "platform": "lima",
+          "how": "created",
+          "backend": "namespaces",
+          "kernel": "fuse",
+          "sqlite": "worker",
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "nested", "kind": "bool" } ],
+          "description": "a Lima VM (vz); Sandboxes run in Linux namespaces and a cgroup"
+        },
+        {
+          "platform": "firecracker",
+          "how": "created",
+          "backend": null,
+          "kernel": null,
+          "sqlite": null,
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "firecracker is permanently disabled by product policy (layerfs-project#7)" },
+          "options": [],
+          "description": "firecracker is permanently disabled by product policy (layerfs-project#7)"
+        },
+        {
+          "platform": "ssh",
+          "how": "connected",
+          "backend": null,
+          "kernel": null,
+          "sqlite": null,
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "ssh is permanently disabled by product policy (layerfs-project#7)" },
+          "options": [],
+          "description": "ssh is permanently disabled by product policy (layerfs-project#7)"
+        }
+      ]
+    },
+    {
+      "host": "linux",
+      "platforms": [
+        {
+          "platform": "native",
+          "how": "built_in",
+          "backend": "namespaces",
+          "kernel": "fuse",
+          "sqlite": "in_process",
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
+          "options": [],
+          "description": "this host; Sandboxes run in Linux namespaces and a cgroup"
+        },
+        {
+          "platform": "docker",
+          "how": "built_in",
+          "backend": "namespaces",
+          "kernel": "fuse",
+          "sqlite": "worker",
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
+          "options": [],
+          "description": "Docker's kernel (Docker Desktop's VM, or the Linux host); Sandboxes run in Linux namespaces and a cgroup"
+        },
+        {
+          "platform": "apple-container",
+          "how": "created",
+          "backend": null,
+          "kernel": null,
+          "sqlite": null,
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "apple-container runs on macOS hosts only" },
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
+          "description": "an Apple container VM (Apple silicon)"
+        },
+        {
+          "platform": "microsandbox",
+          "how": "created",
+          "backend": "namespaces",
+          "kernel": "fuse",
+          "sqlite": "worker",
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
+          "description": "a microsandbox microVM (libkrun); Sandboxes run in Linux namespaces and a cgroup"
+        },
+        {
+          "platform": "lima",
+          "how": "created",
+          "backend": null,
+          "kernel": null,
+          "sqlite": null,
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "lima runs on macOS hosts only" },
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "nested", "kind": "bool" } ],
+          "description": "a Lima VM (vz)"
+        },
+        {
+          "platform": "firecracker",
+          "how": "created",
+          "backend": null,
+          "kernel": null,
+          "sqlite": null,
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "firecracker is permanently disabled by product policy (layerfs-project#7)" },
+          "options": [],
+          "description": "firecracker is permanently disabled by product policy (layerfs-project#7)"
+        },
+        {
+          "platform": "ssh",
+          "how": "connected",
+          "backend": null,
+          "kernel": null,
+          "sqlite": null,
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "ssh is permanently disabled by product policy (layerfs-project#7)" },
+          "options": [],
+          "description": "ssh is permanently disabled by product policy (layerfs-project#7)"
+        }
+      ]
+    },
+    {
+      "host": "windows",
+      "platforms": [
+        {
+          "platform": "native",
+          "how": "built_in",
+          "backend": null,
+          "kernel": null,
+          "sqlite": "worker",
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "no Sandbox backend on Windows (O5)" },
+          "options": [],
+          "description": "this host"
+        },
+        {
+          "platform": "docker",
+          "how": "built_in",
+          "backend": null,
+          "kernel": null,
+          "sqlite": null,
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "docker through WSL2 is not designed yet" },
+          "options": [],
+          "description": "Docker's kernel (Docker Desktop's VM, or the Linux host)"
+        },
+        {
+          "platform": "apple-container",
+          "how": "created",
+          "backend": null,
+          "kernel": null,
+          "sqlite": null,
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "apple-container runs on macOS hosts only" },
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
+          "description": "an Apple container VM (Apple silicon)"
+        },
+        {
+          "platform": "microsandbox",
+          "how": "created",
+          "backend": "namespaces",
+          "kernel": "fuse",
+          "sqlite": "worker",
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
+          "description": "a microsandbox microVM (libkrun); Sandboxes run in Linux namespaces and a cgroup"
+        },
+        {
+          "platform": "lima",
+          "how": "created",
+          "backend": null,
+          "kernel": null,
+          "sqlite": null,
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "lima runs on macOS hosts only" },
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "nested", "kind": "bool" } ],
+          "description": "a Lima VM (vz)"
+        },
+        {
+          "platform": "firecracker",
+          "how": "created",
+          "backend": null,
+          "kernel": null,
+          "sqlite": null,
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "firecracker is permanently disabled by product policy (layerfs-project#7)" },
+          "options": [],
+          "description": "firecracker is permanently disabled by product policy (layerfs-project#7)"
+        },
+        {
+          "platform": "ssh",
+          "how": "connected",
+          "backend": null,
+          "kernel": null,
+          "sqlite": null,
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "ssh is permanently disabled by product policy (layerfs-project#7)" },
+          "options": [],
+          "description": "ssh is permanently disabled by product policy (layerfs-project#7)"
+        }
+      ]
+    }
+  ]
+}

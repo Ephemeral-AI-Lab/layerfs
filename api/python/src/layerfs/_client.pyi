@@ -219,8 +219,12 @@ class WorkspaceFamily:
         stream: bool | None = None,
         stdout: Callable[[Output], object] = ...,
         stderr: Callable[[Output], object] = ...,
+        exec_id: str | None = None,
+        on_progress: Callable[[Progress], object] = ...,
     ) -> Result:
         """run one bash command in a Workspace"""
+    def exec_cancel(self, ws: str, exec_id: str, *, grace_ms: int | None = None) -> Result:
+        """end a running command: SIGTERM, then SIGKILL after grace_ms"""
     def commit(self, ws: str, *, message: str | None = None, force: bool | None = None) -> Result:
         """commit a Workspace's changes to its Branch"""
     def unmount(self, ws: str, *, discard: bool | None = None, force: bool | None = None) -> Result:

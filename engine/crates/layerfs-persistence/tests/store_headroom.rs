@@ -7,7 +7,7 @@ use layerfs_persistence::{
     PersistenceConfig, SqliteHandles, SqlitePersistenceProfile, STORE_HEADROOM_BYTES,
 };
 use layerfs_storage::{
-    location::{ObjectLocation, PackDomain, PackInfo},
+    location::{ObjectLocation, PackDomain},
     pack::{assemble, build_group, PackLane},
     port::*,
     StoragePolicy,
@@ -35,15 +35,11 @@ fn singleton(pack_id: i64, n: u64) -> Publication {
     let group = build_group(PackLane::Singleton, &[record], None).unwrap();
     let body = assemble(PackLane::Singleton, &[group]).unwrap();
     Publication {
-        packs: vec![PublishedPack {
-            info: PackInfo {
-                pack_id,
-                domain: PackDomain::Payload,
-                key: ObjectKey::for_bytes(&body),
-                length: body.len(),
-            },
-            body: Arc::new(body),
-        }],
+        packs: vec![PublishedPack::seal(
+            pack_id,
+            PackDomain::Payload,
+            Arc::new(body),
+        )],
         objects: vec![ObjectLocation {
             object_id: ObjectId::for_bytes(&n.to_be_bytes()),
             role: ObjectRole::WholeFile,

@@ -10,7 +10,7 @@ static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0)
 
 fn tempdir(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
-        "layerfs-machine-{tag}-{}-{}-{}",
+        "layerfs-platform-{tag}-{}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -67,9 +67,9 @@ fn machines_over_records() {
     };
     assert_eq!(rows.len(), 7);
     for row in rows {
-        if let Some(reason) =
-            layerfs_sandbox::platform_policy::disabled_reason(row.get_text("platform").unwrap())
-        {
+        if let Some(reason) = layerfs_sandbox_backend::platform_policy::disabled_reason(
+            row.get_text("platform").unwrap(),
+        ) {
             assert_eq!(row.get("ready"), Some(&SdkValue::Bool(false)));
             assert_eq!(row.get("backend"), Some(&SdkValue::Null));
             assert_eq!(row.get("kernel"), Some(&SdkValue::Null));

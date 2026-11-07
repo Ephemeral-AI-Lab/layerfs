@@ -8,6 +8,10 @@ use payload_support::*;
 use std::sync::Arc;
 
 const CELL: usize = CELL_BYTES;
+// One write job of the size these shapes were calibrated at. The engine's
+// window is wider since #77 (a router's 256 KiB transfer is one job), so a
+// 128 KiB job is still exactly one window's work here.
+const WINDOW: usize = 128 * 1024;
 /// Incompressible bytes: a 64-bit xorshift stream, never a repeated pattern.
 fn noise(length: usize, seed: u64) -> Vec<u8> {
     let mut state = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
@@ -103,14 +107,14 @@ fn rows_of_several_cells_match_a_reference_model_through_every_writer_and_reader
     let base = noise(300_001, 1);
     let mut inherited = File::new(&db, source, 2, base.clone());
     let mut created = File::new(&db, source, 9, Vec::new());
-    let window = noise(WRITE_WINDOW, 2);
+    let window = noise(WINDOW, 2);
     let mut seed = 10;
     for file in [&mut inherited, &mut created] {
         let cutoff = file.base.len();
         // Windows larger than one row, aligned and straddling every boundary.
         file.write(0, &window);
-        file.write(WRITE_WINDOW as u64, &window[..100_000]);
-        file.write(100_000, &noise(WRITE_WINDOW, seed));
+        file.write(WINDOW as u64, &window[..100_000]);
+        file.write(100_000, &noise(WINDOW, seed));
         file.check();
         // Overwrites inside one row, at a cell boundary, across two rows and
         // across an unaligned boundary between rows.
@@ -152,7 +156,7 @@ fn rows_of_several_cells_match_a_reference_model_through_every_writer_and_reader
             file.check();
         }
         file.write(0, &window);
-        file.write(WRITE_WINDOW as u64, &window);
+        file.write(WINDOW as u64, &window);
         file.check();
         seed += 100;
     }
@@ -209,10 +213,7 @@ fn rows_of_several_cells_match_a_reference_model_through_every_writer_and_reader
         }
         for file in [&mut inherited, &mut created] {
             file.write(0, &window);
-            file.write(
-                WRITE_WINDOW as u64 - 5,
-                &noise(WRITE_WINDOW, seed + round + 3),
-            );
+            file.write(WINDOW as u64 - 5, &noise(WINDOW, seed + round + 3));
             file.check();
         }
         seed += 10;
@@ -261,12 +262,12 @@ fn an_orphan_keeps_every_byte_while_rows_of_several_cells_move_into_its_domain()
             Vec::new()
         };
         let mut file = File::new(&db, source, 7, base);
-        let window = noise(WRITE_WINDOW, 4);
+        let window = noise(WINDOW, 4);
         for at in [0, 1, 2] {
-            file.write(at * WRITE_WINDOW as u64, &window);
+            file.write(at * WINDOW as u64, &window);
         }
         // Rows of one cell and a masked row beside the wide ones.
-        file.write(3 * WRITE_WINDOW as u64 + 100, &noise(5_000, 5));
+        file.write(3 * WINDOW as u64 + 100, &noise(5_000, 5));
         file.write(40_000, &noise(100, 6));
         file.check();
         let size = file.expect.len() as u64;
@@ -370,7 +371,7 @@ fn shape(build: impl FnOnce(&mut File<'_>)) -> (u64, u64, u64) {
 
 #[test]
 fn worst_case_shapes_report_their_stored_rows_bytes_and_pages() {
-    let window = noise(WRITE_WINDOW, 11);
+    let window = noise(WINDOW, 11);
     let alternating = shape(|file| {
         for cell in (0..64).step_by(2) {
             file.write(cell * CELL as u64, &window[..CELL]);
@@ -397,12 +398,12 @@ fn worst_case_shapes_report_their_stored_rows_bytes_and_pages() {
     });
     let dense = shape(|file| {
         for at in 0..16 {
-            file.write(at * WRITE_WINDOW as u64, &window);
+            file.write(at * WINDOW as u64, &window);
         }
     });
     let large = shape(|file| {
         for at in 0..512 {
-            file.write(at * WRITE_WINDOW as u64, &window);
+            file.write(at * WINDOW as u64, &window);
         }
     });
     println!(
@@ -448,7 +449,7 @@ fn a_maintenance_page_is_fourteen_cells_of_bytes_whatever_the_rows() {
     db.open_workspace([48; 32]).unwrap();
     let source = db.acquire_base_source(1).unwrap();
     let mut file = File::new(&db, source, 7, Vec::new());
-    file.write(0, &noise(WRITE_WINDOW, 12));
+    file.write(0, &noise(WINDOW, 12));
     for cell in 32..52 {
         file.write(cell * CELL as u64, &noise(CELL, 13));
     }

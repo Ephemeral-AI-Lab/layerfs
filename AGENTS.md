@@ -3,7 +3,7 @@
 > **Status:** Current general guide.
 
 Repository-wide instructions for LayerFS. Also read the applicable [core](core/AGENTS.md), [engine](engine/AGENTS.md),
-[connect](connect/AGENTS.md) and [API](api/AGENTS.md) guides for implementation in those layers. Current owner instructions and documented
+[control](control/AGENTS.md) and [API](api/AGENTS.md) guides for implementation in those layers. Current owner instructions and documented
 supersessions govern; a closed handoff or historical receipt is not a new assignment.
 
 ## Product scope and current workstreams
@@ -55,6 +55,9 @@ Durable implementation may compile, but report its execution as
 Durable receipts and their original verdicts. This execution policy does not
 claim that the Durable API has been removed. Each Workspace's daemon overlay
 remains a separate MEMORY/OFF/EXCLUSIVE database file.
+Disposable's COMMIT does not checkpoint (`wal_autocheckpoint=0`); its writing
+session's own thread checkpoints the WAL off the commit path (owner approval,
+2026-11-07; [lifecycle](docs/architecture/engine/store/lifecycle.md#background-checkpoint)).
 
 ## LayerFS mental model
 
@@ -120,9 +123,10 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   The one resident exception is a Workspace's open state, which grows with open
   files and with the files the kernel currently references.
 - Automatic bounded local reclamation follows last-owner release, including
-  during live activity and idle periods. Terminal unmount drains requests,
-  closes the Workspace's overlay connection and deletes its file. Neither
-  deletes global history.
+  during live activity and idle periods. A Commit's own reclamation (its
+  captured generation's retired rows) follows its answer (owner approval,
+  2026-11-07). Terminal unmount drains requests, closes the Workspace's
+  overlay connection and deletes its file. Neither deletes global history.
 - Target (owner direction 2026-10-07, Store calls revised 2026-10-18): every
   daemon opens the global Store directly from a volume the daemons share and
   reads, saves and publishes in-process. Project Init adds a project to an
@@ -191,8 +195,8 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   G3):** a machine holds any number of sqlite Stores, and every PostgreSQL
   Store is usable from it. A sqlite Store is on exactly one machine; a
   PostgreSQL Store's calls still run in the caller's process, and it is
-  usable from every machine where the support table (`layerfs-machine`
-  `support.rs`, `connect/SUPPORT.json`) marks the platform supported;
+  usable from every machine where the support table (`layerfs-platform`
+  `support.rs`, `control/SUPPORT.json`) marks the platform supported;
   elsewhere it is refused with the table's reason. The password is resolved only in the
   caller and travels only in one worker request and the Sandbox's private
   daemon setup file. This supersedes #533 O3/G13 ("VMs and ssh later").
@@ -206,7 +210,7 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   decision and source change. This supersedes earlier platform enablements
   without changing historical evidence. Native, Docker, Lima, Apple Container
   and microsandbox retain their existing support rules. See the
-  [restriction contract](docs/architecture/connect/support-matrix/disabled-platforms.md).
+  [restriction contract](docs/architecture/control/support-matrix/disabled-platforms.md).
 - **One global database, one writer, short holds (owner decision 2026-10-18).**
   All committed state lives in one SQLite Store file; no sharding, second
   database, concurrent-writer engine or objects outside it. Writes go one at a
@@ -309,7 +313,11 @@ remain binding; moving them out of this file does not weaken them.
 8. Commit/capture/snapshot have one construction producer in normal wiring and
    each measured operation; export `LAYERFS_CONSTRUCTION_WORKERS=1`.
    Namespace Init alone retains its supported parallel construction profile.
-   No extra helper/lane to pass a gate; FUSE dispatch is a separate concern.
+   A Commit's one producer runs on its own thread and hands objects through
+   one bounded queue to the calling thread, which keeps the one Save and
+   publishes (owner approval, 2026-11-07); see
+   [Commit construction](docs/architecture/engine/commit/construction.md#one-producer).
+   No other helper/lane to pass a gate; FUSE dispatch is a separate concern.
 9. Measure both speed and storage. Reject about 50% speed loss for about 5%
    storage benefit; report raw deltas and preserve frozen-gate failures.
 
@@ -336,6 +344,8 @@ remain binding; moving them out of this file does not weaken them.
   fast lane after each push or pull request (`.github/workflows/ci.yml`: fmt,
   guards, Clippy and the fast tests) and a nightly lane (`nightly.yml`: slow and
   FUSE mount tests); `format.yml` checks the Ruff formatting below.
+  Neither `ci.yml` nor `format.yml` runs for a pull request into
+  `layerfs_v2_0_0` (owner, 2026-11-07).
   [tools/ci_tests.py](tools/ci_tests.py) decides which tests go in
   which lane. None is a required check, and nothing runs before a push. Do
   not wait for CI, and do not treat a green run as
@@ -479,16 +489,19 @@ Historical explanation is retained outside default implementation routing.
 All product layers follow the detailed
 [production source rules](engine/AGENTS.md#production-file-size-and-responsibility)
 and [checks and completion rules](engine/AGENTS.md#checks-and-completion).
-The root manifest builds four core crates, nine engine crates, three connect
-crates under `connect/crates` (`layerfs-sandbox`, `layerfs-machine` and
-`layerfs-store-backup`) and four API crates under
-`api/crates`: the library `layerfs-api`, the `layerfs` command
+The root manifest builds four core crates, ten engine crates, eight control
+crates under `control/crates` (the entity crates `layerfs-home`,
+`layerfs-machine`, `layerfs-store` and `layerfs-sandbox` with its
+`workspace/` module; the drivers `layerfs-platform`, `layerfs-bucket` and
+`layerfs-sandbox-backend`; and `layerfs-control`) and four API crates under
+`api/crates`: the call surface `layerfs-api`, the `layerfs` command
 `layerfs-cli`, the Node binding `layerfs-node` and the PyO3 module
 `layerfs-python`. `api/` also holds the published JavaScript and Python
-packages. The connect layer (`connect/crates`, owner 2026-11-03, #535 D4)
-holds the crates that reach a machine or the network; see the
-[connect guide](connect/AGENTS.md). The dependency
-direction is `core < engine < connect < api`, including dev dependencies and
-test includes; nothing in engine depends on connect. Workstream names do not change this layering.
+packages. The control layer (`control/crates`, renamed from `connect/` by the
+owner 2026-11-06, layerfs-project#101 D-6; #535 D4) holds the management code
+and the crates that reach a machine or the network; see the
+[control guide](control/AGENTS.md). The dependency
+direction is `core < engine < control < api`, including dev dependencies and
+test includes; nothing in engine depends on control. Workstream names do not change this layering.
 After rebasing across #463, update each selected worktree's own target registration and prepare again
 for the root `target/` path; never migrate another worktree's resource record.

@@ -146,14 +146,18 @@ pub(crate) const SOURCE_NAMES: &str = concat!(
     WHERE generation=?1 AND parent=?2 AND name>?3 ORDER BY name LIMIT ",
     page_limit!()
 );
-/// The same window with the kind of each bound name's latest local inode
-/// row at the current view, or NULL when the inode has none: one seek per
-/// returned name inside this one statement.
-pub(crate) const SOURCE_NAMES_KINDS: &str =
-    concat!(
-    "SELECT e.parent,e.name,e.inode,e.inherited,(SELECT i.kind FROM fs_inode i
-    WHERE i.inode=e.inode AND i.generation<=?4 AND i.generation>?5 ORDER BY i.generation DESC LIMIT 1)
+/// The same window with the eleven columns [`INODE_CAPTURE`] reads of each
+/// bound name's latest local inode row at the current view, or NULL columns
+/// when the inode has none. Each row costs one generation seek and the
+/// primary-key seek that fetches it, inside this one statement: the listing
+/// needs no further read for an entry's kind or attributes.
+pub(crate) const SOURCE_NAMES_KINDS: &str = concat!(
+    "SELECT e.parent,e.name,e.inode,e.inherited,
+    i.inode,i.kind,i.mode,i.mtime_seconds,i.mtime_nanoseconds,i.nlink,i.size,
+    i.inherited_cutoff,i.born,i.entries,i.subdirs
     FROM fs_entry e INDEXED BY fs_entry_capture
+    LEFT JOIN fs_inode i ON i.inode=e.inode AND i.generation=(SELECT max(j.generation)
+    FROM fs_inode j WHERE j.inode=e.inode AND j.generation<=?4 AND j.generation>?5)
     WHERE e.generation=?1 AND e.parent=?2 AND e.name>?3 ORDER BY e.name LIMIT ",
     page_limit!()
 );

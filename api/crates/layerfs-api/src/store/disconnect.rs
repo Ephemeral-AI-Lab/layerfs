@@ -1,9 +1,10 @@
 //! `store.disconnect`: forget a PostgreSQL Store; its data stays.
+use crate::calls::table::Kind::Name;
+use crate::calls::table::{a, call, Call};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::Name;
-use layerfs_control::calls::table::{a, call, Call};
-use layerfs_control::calls::Context;
-use layerfs_control::common::outcome::Outcome;
+use layerfs_home::names::StoreName;
+use layerfs_home::outcome::Outcome;
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -17,5 +18,6 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `store.disconnect`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::store::connect::run(context, "disconnect", args)
+    let name = StoreName::parse(args.get_text("name").unwrap_or(""))?;
+    layerfs_control::store::disconnect(&context.home, &name)
 }

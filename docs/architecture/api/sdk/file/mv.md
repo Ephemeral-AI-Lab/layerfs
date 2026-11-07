@@ -10,7 +10,7 @@ Moves (renames) a path on a Branch as one Commit; the target must not exist.
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/mv.rs`](../../../../../api/crates/layerfs-api/src/file/mv.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → `file`, Store method `fs.mv` ([`methods/file/mv.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/mv.rs)); `from_path`, `to_path` become `from`, `to` |
+| Implemented in | `layerfs_store::calls::file_mv` → `file`, Store method `fs.mv` ([`methods/file/mv.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/mv.rs)); `from_path`, `to_path` become `from`, `to` |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -34,7 +34,7 @@ layerfs file mv <store>/<project> <branch> <from_path> <to_path> [--message TEXT
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>`; both records must exist | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs) |
+| `project` | Project | `<store>/<project>`; both records must exist | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `branch` | Name | the Branch to commit to; `main` is `ReadOnly` | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 | `from_path` | Text | an existing entry; absolute, at most 4096 bytes, no NUL, no trailing `/`, no empty, `.` or `..` component | [`files::path`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 | `to_path` | Text | not existing; not equal to or under `from_path`; absolute, at most 4096 bytes, no NUL, no trailing `/`, no empty, `.` or `..` component | [`files::path`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
@@ -79,7 +79,7 @@ One rename with `replace: false`; the entry keeps its inode serial.
 
 The Commit is the same code a mounted Workspace's Commit runs; only the
 final publish holds the lane. The private Workspace is never listed,
-mounted or shared. See the [routing table](../../routing/routing-table.md),
+mounted or shared. See the [routing table](../../../control/routing/routing-table.md),
 [Engine: writes](../../../engine/store-calls/writes.md) and
 [Engine: Commit](../../../engine/commit/README.md).
 
@@ -87,14 +87,14 @@ mounted or shared. See the [routing table](../../routing/routing-table.md),
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | overlapping paths (`/` or `to_path` under `from_path`); a bad project, path, mode or option; a path outside a folder scope | no | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-control/src/calls/scope.rs) |
+| `InvalidInput` | overlapping paths (`/` or `to_path` under `from_path`); a bad project, path, mode or option; a path outside a folder scope | no | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `ReadOnly` | `branch` is `main`; `main` changes only through [branch.publish](../branch/publish.md) | no | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
-| `NoSuchStore`, `NoSuchProject`, `NoSuchBranch` | not recorded, or no such Branch | no | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
+| `NoSuchStore`, `NoSuchProject`, `NoSuchBranch` | not recorded, or no such Branch | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `Conflict` | the Branch's head moved since the call bound it and a changed path conflicts; nothing committed (`detail.branch`, `head`, `conflicts`) | no | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 | `HeadMoved`, `Busy`, `Capacity`, `Failed` | the Commit failed and was settled locally | no | same |
-| `Unresolved`, `Unavailable` | the Store's `op`, or its worker not reached | no | [`store/call.rs`](../../../../../api/crates/layerfs-control/src/store/call.rs) |
+| `Unresolved`, `Unavailable` | the Store's `op`, or its worker not reached | no | [`call.rs`](../../../../../control/crates/layerfs-store/src/call.rs) |
 | `NoSuchPath`, `Exists` | `from_path` is missing; `to_path` exists | no | [`write/recursive.rs`](../../../../../engine/crates/layerfs-store-service/src/write/recursive.rs) |
-| `Unknown` | **a change or the Commit ended with an unknown outcome (the private Workspace is kept), or the worker's answer was lost** | **yes** | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs), [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **a change or the Commit ended with an unknown outcome (the private Workspace is kept), or the worker's answer was lost** | **yes** | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs), [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After `Unknown`** the Commit may exist. Read [branch.get](../branch/get.md)
 or [commit.list](../commit/list.md) for the Branch's head before writing

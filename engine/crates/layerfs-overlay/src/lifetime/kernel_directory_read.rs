@@ -1,8 +1,9 @@
 //! READDIR's reading visit: one read-only owner job that records nothing.
 use crate::{
     db::{integer, unsigned},
-    sql, DirectoryEntry, DirectoryEntryWindow, InodeKind, KernelDirectory, KernelDirectoryCursor,
-    KernelDirectoryPage, KernelMount, Overlay, OverlayError, OverlayResult, StatementKind,
+    sql, DirectoryEntry, DirectoryEntryWindow, Inode, InodeKind, KernelDirectory,
+    KernelDirectoryCursor, KernelDirectoryPage, KernelMount, Overlay, OverlayError, OverlayResult,
+    StatementKind,
 };
 /// The names of one published reply: one length byte and the bytes of each.
 pub(crate) fn decode_names(blob: &[u8]) -> Option<Vec<Vec<u8>>> {
@@ -98,7 +99,7 @@ impl Overlay {
                     active: Vec::new(),
                     captured: Vec::new(),
                 },
-                local_kinds: Vec::new(),
+                local_inodes: Vec::new(),
             });
         }
         if let (Some(after), Some(minimum)) = (after, cursor.after_name()) {
@@ -113,8 +114,7 @@ impl Overlay {
         let parent_inode = self.inode_at(serial, state.active, state.installed)?;
         let after = after.or(cursor.after_name()).map(<[u8]>::to_vec);
         let start = after.as_deref().unwrap_or(&[]);
-        let mut local_kinds = Vec::new();
-        let mut window = |generation: i64| {
+        let window = |generation: i64| {
             self.query(
                 StatementKind::DirectoryEntry,
                 sql::SOURCE_NAMES_KINDS,
@@ -128,35 +128,35 @@ impl Overlay {
                 40 + start.len() as u64,
                 |row| {
                     let serial = crate::inode::optional_serial(row.get(2)?, 2)?;
-                    let kind = match row.get::<_, Option<i64>>(4)? {
-                        None => None,
-                        Some(1) => Some(InodeKind::File),
-                        Some(2) => Some(InodeKind::Directory),
-                        Some(3) => Some(InodeKind::Symlink),
-                        Some(_) => return Err(rusqlite::Error::InvalidQuery),
-                    };
+                    let inode = local_inode(row, 4)?;
                     let entry = DirectoryEntry {
                         inherited: row.get(3)?,
                         parent: unsigned(row, 0)?,
                         name: row.get(1)?,
                         serial,
                     };
-                    Ok((entry, serial.zip(kind)))
+                    Ok((entry, serial.zip(inode)))
                 },
             )
             .map(|rows| {
-                let (entries, kinds): (Vec<_>, Vec<_>) = rows.into_iter().unzip();
-                local_kinds.extend(kinds.into_iter().flatten());
-                entries
+                let (entries, inodes): (Vec<_>, Vec<_>) = rows.into_iter().unzip();
+                let inodes: Vec<(u64, Inode)> = inodes.into_iter().flatten().collect();
+                (entries, inodes)
             })
         };
-        let active = window(state.active.0)?;
-        let captured = match state.captured.or(state.consolidating) {
+        let (active, active_inodes) = window(state.active.0)?;
+        let (captured, captured_inodes) = match state.captured.or(state.consolidating) {
             Some(generation) => window(generation.0)?,
-            None => Vec::new(),
+            None => (Vec::new(), Vec::new()),
         };
-        local_kinds.sort_unstable_by_key(|(serial, _)| *serial);
-        local_kinds.dedup_by_key(|(serial, _)| *serial);
+        // One row per serial, ascending by serial: the active window's row is
+        // the view's latest, so a captured row answers only a serial the
+        // active window does not list.
+        let mut local_inodes: std::collections::BTreeMap<u64, Inode> =
+            active_inodes.into_iter().collect();
+        for (serial, inode) in captured_inodes {
+            local_inodes.entry(serial).or_insert(inode);
+        }
         Ok(KernelDirectoryPage {
             directory,
             cursor,
@@ -170,7 +170,35 @@ impl Overlay {
                 active,
                 captured,
             },
-            local_kinds,
+            local_inodes: local_inodes.into_iter().collect(),
         })
     }
+}
+/// The eleven columns [`crate::sql::SOURCE_NAMES_KINDS`] reads after the
+/// name's four, in the column order of [`crate::sql::INODE_CAPTURE`]: the
+/// latest local row of the name's serial at the view, or None when it has
+/// none and the name is inherited from the base alone.
+fn local_inode(row: &rusqlite::Row<'_>, at: usize) -> rusqlite::Result<Option<Inode>> {
+    if row.get::<_, Option<i64>>(at)?.is_none() {
+        return Ok(None);
+    }
+    let kind = match row.get::<_, i64>(at + 1)? {
+        1 => InodeKind::File,
+        2 => InodeKind::Directory,
+        3 => InodeKind::Symlink,
+        _ => return Err(rusqlite::Error::InvalidQuery),
+    };
+    Ok(Some(Inode {
+        serial: unsigned(row, at)?,
+        kind,
+        mode: row.get(at + 2)?,
+        mtime_seconds: row.get(at + 3)?,
+        mtime_nanoseconds: row.get(at + 4)?,
+        nlink: unsigned(row, at + 5)?,
+        size: unsigned(row, at + 6)?,
+        inherited_cutoff: unsigned(row, at + 7)?,
+        born: unsigned(row, at + 8)?,
+        entries: unsigned(row, at + 9)?,
+        subdirs: unsigned(row, at + 10)?,
+    }))
 }

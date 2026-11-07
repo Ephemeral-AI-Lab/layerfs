@@ -11,7 +11,7 @@ on the caller's host.
 | --- | --- |
 | Family | [project](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/project/export.rs`](../../../../../api/crates/layerfs-api/src/project/export.rs) |
-| Implemented in | `layerfs_control::project::family::run` → [`project/export.rs`](../../../../../api/crates/layerfs-control/src/project/export.rs), reusing the [tree protocol and destination writer](../../../../../api/crates/layerfs-control/src/project/staged.rs) |
+| Implemented in | [`project/export.rs`](../../../../../api/crates/layerfs-api/src/project/export.rs) → `layerfs_store::project::export::run` in [`project/export.rs`](../../../../../control/crates/layerfs-store/src/project/export.rs), reusing the [tree protocol and strict destination writer](../../../../../control/crates/layerfs-store/src/project/staged.rs) |
 | Runs in | the Store reader runs in the caller or the machine worker; the destination writer always runs on the caller's host; no Sandbox daemon |
 
 ## Signature
@@ -236,7 +236,7 @@ layerfs project export shop/api /exports/api-main --text
 - [`branch.get`](../branch/get.md): inspect a Branch before choosing it.
 - [`store.push`](../store/push.md): move a SQLite Store, rather than export files.
 - [SDK functions](../../../../versioned/2.0.0/sdk.md#functions-as-options),
-  [routing](../../routing/routing-table.md), [errors](../../call-table/errors.md).
+  [routing](../../../control/routing/routing-table.md), [errors](../../call-table/errors.md).
 
 ---
 

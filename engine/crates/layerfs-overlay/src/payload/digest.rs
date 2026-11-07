@@ -167,15 +167,15 @@ impl Overlay {
             }
             if let Some(write) = &changes.write {
                 let key = integer(write.serial)?;
-                match open.digests.rows.get(&key) {
-                    Some(followed) if followed.length == write.offset => {
-                        let mut next = followed.clone();
-                        next.hasher.update(&write.data);
-                        next.length += write.data.len() as u64;
-                        open.digests.put(key, next);
+                // The running hasher is followed in place: an append extends it
+                // where it is, so a window never clones its state to advance it.
+                if let Some(followed) = open.digests.rows.get_mut(&key) {
+                    if followed.length == write.offset {
+                        followed.hasher.update(&write.data);
+                        followed.length += write.data.len() as u64;
+                    } else {
+                        open.digests.remove(key);
                     }
-                    Some(_) => open.digests.remove(key),
-                    None => {}
                 }
             }
             for inode in &changes.inodes {

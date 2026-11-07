@@ -16,14 +16,14 @@ enforces it.
 
 ```text
 +----------------------------------------------------------------+
-| api       Control . Routing and workers . Call table . SDK .   |
-|           Front ends                                           |
+| api       Call table . SDK . Front ends                        |
+|                                                                |
 +----------------------------------------------------------------+
         | depends on
         v
 +----------------------------------------------------------------+
-| connect   Support matrix . Machines . Network . Sandboxes .    |
-|           Backups                                              |
+| control   Management . Routing and workers . Support matrix .  |
+|           Machines . Network . Sandboxes . Backups             |
 +----------------------------------------------------------------+
         |
         v
@@ -43,7 +43,7 @@ enforces it.
 | --- | --- |
 | [Core](core/README.md) | What is a file, a tree, a Commit and a stored object, independent of any process, database or kernel? |
 | [Engine](engine/README.md) | How does a Store persist history, and how does a mounted Workspace read, change and Commit it? |
-| [Connect](connect/README.md) | Where can a Sandbox run, how does it run there, how is it reached, and how is a Store backed up? |
+| [Control](control/README.md) | Which machines, Stores, projects and Sandboxes exist; where can a Sandbox run, how does it run there, how is it reached, and how is a Store backed up? |
 | [API](api/README.md) | What can a program call, and where does each call run? |
 
 ## Every component
@@ -65,15 +65,15 @@ enforces it.
 |  | [Commit](engine/commit/README.md) | Capturing a Workspace's published frontier, constructing it and publishing a Commit, then installing the new base. |
 |  | [Kernel routes](engine/kernel-routes/README.md) | How the kernel reaches a Workspace: route-neutral mount ports, FUSE and loopback NFSv3. |
 |  | [Daemon](engine/daemon/README.md) | The Workspace daemon process: startup, control calls, install, Workspace lifetime and forced teardown, over the bridge wire. |
-| [Connect](connect/README.md) | [Support matrix](connect/support-matrix/README.md) | One table decides every platform × host × Store-kind combination, and `SUPPORT.json` is generated from it. |
-|  | [Machines](connect/machines/README.md) | Where Sandboxes run: one adapter per platform that probes, creates, starts, stops and removes a machine. |
-|  | [Network](connect/network/README.md) | How callers, workers and daemons reach each other: worker setup, PostgreSQL reach and port forwards. |
-|  | [Sandboxes](connect/sandboxes/README.md) | How a Sandbox runs on a machine's kernel: the docker, native and namespaces backends, commands and streams. |
-|  | [Backups](connect/backups/README.md) | Whole-Store backup to a bucket and restore, over bucket drivers that know nothing about Stores. |
-| [API](api/README.md) | [Control](api/control/README.md) | The management library under the call table: the home and its records, machines and workers, Stores, projects, Sandboxes, Workspaces and backups. |
-|  | [Routing and workers](api/routing/README.md) | Where each call runs: in the caller's process, in a machine's worker, or in a Sandbox daemon. |
-|  | [Call table](api/call-table/README.md) | The nine call families and the one dispatcher every front end goes through. |
-|  | [SDK](api/sdk/README.md) | Every call a program can make: 62 calls in nine families, one page per call. |
+| [Control](control/README.md) | [Support matrix](control/support-matrix/README.md) | One table decides every platform × host × Store-kind combination, and `SUPPORT.json` is generated from it. |
+|  | [Management](control/management/README.md) | The management library under the call table: the home and its records, machines and workers, Stores, projects, Sandboxes, Workspaces and backups. |
+|  | [Routing and workers](control/routing/README.md) | Where each call runs: in the caller's process, in a machine's worker, or in a Sandbox daemon. |
+|  | [Machines](control/machines/README.md) | Where Sandboxes run: one adapter per platform that probes, creates, starts, stops and removes a machine. |
+|  | [Network](control/network/README.md) | How callers, workers and daemons reach each other: worker setup, PostgreSQL reach and port forwards. |
+|  | [Sandboxes](control/sandboxes/README.md) | How a Sandbox runs on a machine's kernel: the native and namespaces backends, commands and streams. |
+|  | [Backups](control/backups/README.md) | Whole-Store backup to a bucket and restore, over bucket drivers that know nothing about Stores. |
+| [API](api/README.md) | [Call table](api/call-table/README.md) | The nine call families and the one dispatcher every front end goes through. |
+|  | [SDK](api/sdk/README.md) | Every call a program can make: 63 calls in nine families, one page per call. |
 |  | [Front ends](api/front-ends/README.md) | The `layerfs` command, the Node addon and the Python module: one call each, over the call table. |
 
 ## Flows across layers
@@ -94,8 +94,8 @@ enforces it.
 | understand LayerFS as a whole | [A call, end to end](flows/call.md), [A Workspace session](flows/workspace.md), [A Commit](flows/commit.md) |
 | change how history is stored | [Objects](core/objects/README.md), [Physical storage](core/physical-storage/README.md), [Store](engine/store/README.md), [A Commit](flows/commit.md) |
 | work on mounts and file access | [Workspace](engine/workspace/README.md), [Overlay](engine/overlay/README.md), [Kernel routes](engine/kernel-routes/README.md), [Daemon](engine/daemon/README.md) |
-| add a platform or Sandbox backend | [Support matrix](connect/support-matrix/README.md), [Machines](connect/machines/README.md), [Network](connect/network/README.md), [Sandboxes](connect/sandboxes/README.md) |
-| use or change a call | [SDK](api/sdk/README.md), [Call table](api/call-table/README.md), [Control](api/control/README.md), [Routing and workers](api/routing/README.md) |
+| add a platform or Sandbox backend | [Support matrix](control/support-matrix/README.md), [Machines](control/machines/README.md), [Network](control/network/README.md), [Sandboxes](control/sandboxes/README.md) |
+| use or change a call | [SDK](api/sdk/README.md), [Call table](api/call-table/README.md), [Management](control/management/README.md), [Routing and workers](control/routing/README.md) |
 
 ## How these pages work
 

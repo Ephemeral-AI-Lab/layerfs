@@ -1,9 +1,11 @@
 //! `project.export`: export a project's snapshot from its Store to a local folder.
+use crate::calls::table::Kind::{Name, Project, Text};
+use crate::calls::table::{a, call, opt, Call, PROGRESS};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::{Name, Project, Text};
-use layerfs_control::calls::table::{a, call, opt, Call, PROGRESS};
-use layerfs_control::calls::Context;
-use layerfs_control::common::outcome::Outcome;
+use layerfs_home::names::ProjectRef;
+use layerfs_home::outcome::Outcome;
+use layerfs_store::project::export::{run as export, ProjectExport};
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -17,5 +19,11 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `project.export`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::project::family::run(context, "export", args)
+    let request = ProjectExport {
+        project: ProjectRef::parse(args.get_text("project").unwrap_or(""))?,
+        destination: args.get_text("destination").unwrap_or("").to_owned(),
+        branch: args.get_text("branch").map(str::to_owned),
+    };
+    let (home, events) = context.parts();
+    export(home, events, &request)
 }

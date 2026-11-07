@@ -42,7 +42,8 @@ Terms such as Capture, generation and Save are in the [glossary](../../glossary.
                         +--------------------+                    |
                                                                   v
                      Construction: CapturedNamespace    +------------------+
-                     (one producer, this thread) ------>| Save (objects)   |
+                     (one producer, its own thread) --->| Save (objects)   |
+                       bounded queue, 32 batches        | (Commit thread)  |
                                                         +--------+---------+
                      Publish and merge: head check,              |
                      merge, publish lane, commit_branch -------->| history row
@@ -76,14 +77,16 @@ A Commit captures the Workspace's shared published frontier: every change that
 a filesystem request has already published to the overlay. Commit has no
 notion of Exec, command or process; nothing is filtered by who made a change.
 A control Commit runs on the daemon's control thread
-([`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs)).
+([`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs)),
+which spawns the Commit's one construction thread
+([Construction: One producer](construction.md#one-producer)).
 
 ## Invariants
 
 | Rule | Enforced by |
 | --- | --- |
 | One Commit at a time per Workspace | `committing` flag in `admit_commit`, else `CommitError::InFlight` ([`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs)) |
-| One construction producer per Commit | One `Storage` handle from `Producer::take`; files constructed one at a time on the calling thread ([`producer.rs`](../../../../engine/crates/layerfs-store-service/src/store/producer.rs), [`normalize.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/normalize.rs)) |
+| One construction producer per Commit | One `Storage` handle from `Producer::take` and one Save, both on the Commit thread; files constructed one at a time, in order, on one producer thread that hands objects to the Save through one bounded queue (owner approval, 2026-11-07) ([`producer.rs`](../../../../engine/crates/layerfs-store-service/src/store/producer.rs), [`pipeline.rs`](../../../../engine/crates/layerfs-store-service/src/store/pipeline.rs), [`normalize.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/normalize.rs)) |
 | No Workspace lock across construction or Store I/O | Each overlay call is one short job ([`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs)); doc of `BoundWorkspace::commit` |
 | Content, Storage and Persistence are shared with Init | Objects go to `Save::sink`; no Commit-only encoder ([`captured.rs`](../../../../engine/crates/layerfs-store-service/src/store/captured.rs)) |
 | Construction reads only the capture, never later rows | `CapturedNamespace` binds the reader's root ([`driver.rs`](../../../../engine/crates/layerfs-workspace/src/construction/driver.rs)) |
@@ -123,6 +126,7 @@ Commands were written from source and were not run while writing this page.
 | [`concurrent_commits.rs`](../../../../engine/crates/layerfs-daemon/tests/concurrent_commits.rs) | `layerfs-daemon` | Stale Workspaces merge with the current head; one shared path gives one conflict |
 | [`captured_namespace.rs`](../../../../engine/crates/layerfs-workspace/tests/captured_namespace.rs) | `layerfs-workspace` | One captured reader becomes one complete root, compared with a model |
 | [`relink_commit.rs`](../../../../engine/crates/layerfs-store-service/tests/relink_commit.rs) | `layerfs-store-service` | Unlink and recreate with equal bytes reuses saved file roots |
+| [`commit_pipeline.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_pipeline.rs) | `layerfs-store-service` | The two-thread Commit gives the single-thread roots and stored bytes; a refused Save write stops the producer; a failed construction abandons the Save |
 
 ```text
 mounted_commit:  bash in mount --> write/rename/unlink --> control Commit
@@ -153,6 +157,13 @@ mounted_commit:  bash in mount --> write/rename/unlink --> control Commit
   `LAYERFS_364_RELINK_STORE`, `LAYERFS_364_RELINK_BINDING` and
   `LAYERFS_364_RELINK_FROM`. Command:
   `cargo +1.85.1 test --locked -p layerfs-store-service --test relink_commit -- --ignored`.
+- **`commit_pipeline.rs`** commits the same changes to two copies of one
+  installed Store, one through `commit_captured` and one with the same
+  constructor on the calling thread, and compares roots and Save outcomes for
+  a 12 MiB and a small Commit. Its failure cases hold the Store's write lock
+  from the start of the `construct` phase. Command:
+  `cargo +1.85.1 test --locked -p layerfs-store-service --test commit_pipeline`.
+  No `cfg` gate.
 
 ## Earlier material
 

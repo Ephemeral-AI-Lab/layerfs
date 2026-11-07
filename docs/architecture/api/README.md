@@ -8,7 +8,7 @@
 
 The API layer is the public surface: the management library, the call table and its one dispatcher, and the front ends (the `layerfs` command, Node and Python).
 
-What a program sees of this layer is the **SDK**: 62 calls in nine
+What a program sees of this layer is the **SDK**: 63 calls in nine
 families, the same names and arguments in JavaScript, Python and the
 `layerfs` command. The [SDK reference](sdk/README.md) has one page per
 call; the other components below explain how those calls are checked,
@@ -50,7 +50,7 @@ routed and run.
 | Names are snake_case in every front end; options are a trailing object (JS), keywords (Python) or `--options` (CLI) | [SDK: Calling the SDK](sdk/README.md#calling-the-sdk) |
 | Answers are maps, often with `kind`; lists page with `has_more` and `next_page_pos` | [SDK: Answers and errors](sdk/README.md#answers-and-errors) |
 | A refusal is `{ code, message, detail }`; `Unknown`, and `Failed` with `attempted`, mean the outcome is uncertain: read state before acting again | [Errors](call-table/errors.md), [uncertain outcomes](call-table/errors.md#uncertain-outcomes) |
-| Store calls (`branch`, `commit`, `file`) run in the caller or the Store's machine worker; Workspace calls reach the Sandbox daemon; nothing starts a stopped machine except `machine.start` | [SDK: Where calls run](sdk/README.md#where-calls-run), [Routing table](routing/routing-table.md) |
+| Store calls (`branch`, `commit`, `file`) run in the caller or the Store's machine worker; Workspace calls reach the Sandbox daemon; nothing starts a stopped machine except `machine.start` | [SDK: Where calls run](sdk/README.md#where-calls-run), [Routing table](../control/routing/routing-table.md) |
 | A folder scope binds a client to one project, folder and Branch namespace | [SDK: Calling the SDK](sdk/README.md#calling-the-sdk) |
 | Every function is generated from the call table; a call is changed in `layerfs-api/src/<family>/<call>.rs` | [Table](call-table/table.md), [Front ends](front-ends/README.md) |
 
@@ -58,12 +58,12 @@ routed and run.
 
 ```text
  program (JS / Python / shell)
-      |  the SDK: 62 calls
+      |  the SDK: 63 calls
       v
  Front ends (CLI, Node, Python)
       |
       v
- Call table ---> Control ---> connect: Machines, Sandboxes, Backups
+ Call table ---> control: Management ---> Machines, Sandboxes, Backups
                     |    \--> engine: Store calls, Project Init
                     v
              Routing and workers
@@ -78,10 +78,8 @@ Dotted edges cross a process boundary.
 
 | Component | What it covers | Topics |
 | --- | --- | --- |
-| [Control](control/README.md) | The management library under the call table: the home and its records, machines and workers, Stores, projects, Sandboxes, Workspaces and backups. | [Home and records](control/home-and-records.md), [Families](control/families.md), [Doctor](control/doctor.md) |
-| [Routing and workers](routing/README.md) | Where each call runs: in the caller's process, in a machine's worker, or in a Sandbox daemon. | [Routing table](routing/routing-table.md), [Workers](routing/workers.md), [Daemon channel](routing/daemon-channel.md) |
 | [Call table](call-table/README.md) | The nine call families and the one dispatcher every front end goes through. | [Table](call-table/table.md), [Errors](call-table/errors.md) |
-| [SDK](sdk/README.md) | Every call a program can make: 62 calls in nine families, one page per call, with JavaScript, Python and CLI forms. | [project](sdk/project/README.md), [branch](sdk/branch/README.md), [commit](sdk/commit/README.md), [file](sdk/file/README.md), [sandbox](sdk/sandbox/README.md), [workspace](sdk/workspace/README.md), [machine](sdk/machine/README.md), [store](sdk/store/README.md), [backup](sdk/backup/README.md) |
+| [SDK](sdk/README.md) | Every call a program can make: 63 calls in nine families, one page per call, with JavaScript, Python and CLI forms. | [project](sdk/project/README.md), [branch](sdk/branch/README.md), [commit](sdk/commit/README.md), [file](sdk/file/README.md), [sandbox](sdk/sandbox/README.md), [workspace](sdk/workspace/README.md), [machine](sdk/machine/README.md), [store](sdk/store/README.md), [backup](sdk/backup/README.md) |
 | [Front ends](front-ends/README.md) | The `layerfs` command, the Node addon and the Python module: one call each, over the call table. | [CLI](front-ends/cli.md), [Node](front-ends/node.md), [Python](front-ends/python.md) |
 
 ## Rules for this layer
@@ -92,4 +90,4 @@ replace those rules.
 
 ---
 
-← [Backups: Backup and restore](../connect/backups/backup-and-restore.md) · [Up: Architecture](../README.md) · [API: Control](control/README.md) →
+← [Routing and workers: Daemon channel](../control/routing/daemon-channel.md) · [Up: Architecture](../README.md) · [Call table](call-table/README.md) →

@@ -29,7 +29,8 @@ pub fn main(words: Vec<String>) -> ExitCode {
             if words[2..].iter().any(|w| w == "-h" || w == "--help") {
                 return help::print(&[family, name]);
             }
-            match layerfs_api::find(&format!("{family}.{name}")) {
+            // a call's shell name has `-` for its `_` (`workspace exec-cancel`)
+            match layerfs_api::find(&format!("{family}.{}", name.replace('-', "_"))) {
                 Some(call) => one(call, &words[2..]),
                 None if layerfs_api::families().iter().any(|f| f.name == family) => wrong(format!(
                     "no call `{family} {name}`; `layerfs help {family}` lists them"

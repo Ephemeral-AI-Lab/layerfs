@@ -6,7 +6,13 @@ use std::sync::mpsc;
 const BATCH_BYTES: usize = 256 * 1024;
 const BATCH_OBJECTS: usize = 512;
 const BATCH_COMPLETIONS: usize = 512;
-pub(crate) const QUEUE_SLOTS: usize = 4;
+/// Batches in flight to the owner. A batch holds at most 256 KiB, or one
+/// larger object alone: a whole small file up to the policy's small-file
+/// threshold (128 KiB by default, 1 MiB at most). So 8 MiB in flight at the
+/// default, 32 MiB at most. One Save wave is about 4 MiB, so a constructor
+/// fills the next wave while the owner publishes this one; at 4 slots the
+/// owner sat idle about a quarter of a 500 MiB Init.
+pub(crate) const QUEUE_SLOTS: usize = 32;
 
 pub(crate) enum Event {
     Object(FinalizedObject),

@@ -248,7 +248,7 @@ profile is unaffected.
 - [Lifecycle](lifecycle.md): `StoreSelection` and `Handles`.
 - [SQLite](sqlite.md): the tables these mirror.
 - [History publication](history-publication.md#the-publish-lane): what runs inside the lane.
-- [Connect: Network](../../connect/network/README.md): how a machine reaches the server.
+- [Control: Network](../../control/network/README.md): how a machine reaches the server.
 
 ---
 

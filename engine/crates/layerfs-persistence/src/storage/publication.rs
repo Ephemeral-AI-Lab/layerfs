@@ -22,7 +22,7 @@ pub(crate) fn validate(batch: &Publication, bytes: u64) -> Result<(), Persistenc
     let physical_bytes = batch
         .packs
         .iter()
-        .map(|row| row.body.len())
+        .map(|row| row.body().len())
         .try_fold(0usize, |total, n| total.checked_add(n))
         .ok_or(PersistenceError::Malformed)?;
     let canonical_bytes = batch
@@ -33,27 +33,29 @@ pub(crate) fn validate(batch: &Publication, bytes: u64) -> Result<(), Persistenc
         .ok_or(PersistenceError::Malformed)?;
     let singleton = batch.objects.len() == 1
         && batch.packs.len() == 1
-        && batch.packs[0].info.domain == PackDomain::Payload;
+        && batch.packs[0].info().domain == PackDomain::Payload;
     let bytes = usize::try_from(bytes).map_err(|_| PersistenceError::Malformed)?;
     if (canonical_bytes > bytes || physical_bytes > bytes) && !singleton {
         return Err(PersistenceError::Malformed);
     }
+    // `info.key` is the SHA-256 Storage computed when it sealed the pack:
+    // `PublishedPack::seal` is its only constructor and binds the key to
+    // these exact bytes, so the body is not hashed again here.
     let mut packs = BTreeSet::new();
     for row in &batch.packs {
-        let info = row.info;
+        let (info, body) = (row.info(), row.body());
         if info.pack_id <= 0
             || !packs.insert(info.pack_id)
             || !(32..=policy::SINGLETON_PACK_LIMIT).contains(&info.length)
-            || row.body.len() != info.length
-            || layerfs_storage::port::ObjectKey::for_bytes(&row.body) != info.key
+            || body.len() != info.length
             || (info.domain == PackDomain::Metadata && info.length > policy::PACK_LIMIT)
         {
             return Err(PersistenceError::Malformed);
         }
-        let header = layerfs_storage::pack::layout::parse_header(&row.body)
+        let header = layerfs_storage::pack::layout::parse_header(body)
             .map_err(|_| PersistenceError::Malformed)?;
         if PackDomain::for_lane(header.lane) != info.domain
-            || layerfs_storage::pack::layout::declared_length(&row.body)
+            || layerfs_storage::pack::layout::declared_length(body)
                 .map_err(|_| PersistenceError::Malformed)?
                 != info.length
         {

@@ -101,4 +101,4 @@ write calls, bytes written, sync calls and the largest record. Source:
 
 ---
 
-← [Daemon: Bridge](bridge.md) · [Up: Daemon](README.md) · [Connect](../../connect/README.md) →
+← [Daemon: Bridge](bridge.md) · [Up: Daemon](README.md) · [Control](../../control/README.md) →

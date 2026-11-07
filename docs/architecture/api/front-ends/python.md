@@ -29,7 +29,7 @@ api/crates/layerfs-python (cdylib "_native", PyO3 0.30, abi3-py310)
 | --- | --- | --- |
 | Interpreter | released (`py.detach`) for the whole library call, so other Python threads run | [`call.rs`](../../../../api/crates/layerfs-python/src/call.rs) |
 | Events | each event re-takes the interpreter to call `on_event` with JSON text; an exception it raises is written as unraisable and the call goes on | `call.rs` |
-| Answer | JSON text `{ value }` or `{ refused: { code, message, detail } }` | [`calls/text.rs`](../../../../api/crates/layerfs-control/src/calls/text.rs) |
+| Answer | JSON text `{ value }` or `{ refused: { code, message, detail } }` | [`calls/text.rs`](../../../../api/crates/layerfs-api/src/calls/text.rs) |
 | Features | `machine` by default; `postgresql` and `tls` only when built with them | [`Cargo.toml`](../../../../api/crates/layerfs-python/Cargo.toml) |
 | Linking | `pyo3-build-config` gives `-undefined dynamic_lookup` on macOS, so a plain Cargo build links like maturin | `Cargo.toml` |
 
@@ -71,8 +71,8 @@ decode(answer): refused -> raise LayerFSError ; else answer["value"]
 | `stream=True` | without `stdout` / `stderr` functions, output goes to `sys.stdout` / `sys.stderr` (text to the text stream, bytes to its buffer) | `_client.py` `_streamed` |
 | Values | `bytes`, `bytearray`, `memoryview` → `{ base64 }`; a one-key `{ base64 }` map with base64 text back → `bytes` (any other map stays a `dict`) | [`_values.py`](../../../../api/python/src/layerfs/_values.py) |
 | Refused before any call | `encode` raises `LayerFSError("InvalidInput")` for NaN and Infinity, a lone surrogate (also in a home or scope), a map key that is not text and a type JSON has no form for (a set, an object, a cycle); before this, a lone surrogate raised `UnicodeEncodeError` and a non-JSON value `TypeError` | `_values.py` `encode`, `path_text` |
-| Integers | Python `int` is exact both ways. The library reads a number as a signed 64-bit integer: past that (`2**63`, `-2**63 - 1`) it refuses with `InvalidInput` "number out of range"; a fraction is refused "only whole numbers are accepted"; `True` is not a whole number. A call may be stricter than the parser: the line and page options refuse anything above 2^53 - 1 ("safe integer"), though `2**63 - 1` and `-2**63` reach the call as written | [`common/json.rs`](../../../../api/crates/layerfs-control/src/common/json.rs) |
-| Bytes | an empty, binary, non-UTF-8 or UTF-8 `bytes` is stored as given (`file.write`); `file.read` returns text only and refuses NUL or invalid UTF-8 content. The reserved form is ambiguous with a map: `{"base64": "AP8B"}` passed as `content` is the bytes `00 ff 01`, not a map, and the text `"AP8B"` stays text; a one-key map whose text is not base64 stays a map (`file.write` refuses it as not text or bytes). Exec output (events `stdout`, `stderr`) arrives as `str` when it is UTF-8 and as `bytes` when it is not | `_values.py`, [`common/json.rs`](../../../../api/crates/layerfs-control/src/common/json.rs) |
+| Integers | Python `int` is exact both ways. The library reads a number as a signed 64-bit integer: past that (`2**63`, `-2**63 - 1`) it refuses with `InvalidInput` "number out of range"; a fraction is refused "only whole numbers are accepted"; `True` is not a whole number. A call may be stricter than the parser: the line and page options refuse anything above 2^53 - 1 ("safe integer"), though `2**63 - 1` and `-2**63` reach the call as written | [`json.rs`](../../../../control/crates/layerfs-home/src/json.rs) |
+| Bytes | an empty, binary, non-UTF-8 or UTF-8 `bytes` is stored as given (`file.write`); `file.read` returns text only and refuses NUL or invalid UTF-8 content. The reserved form is ambiguous with a map: `{"base64": "AP8B"}` passed as `content` is the bytes `00 ff 01`, not a map, and the text `"AP8B"` stays text; a one-key map whose text is not base64 stays a map (`file.write` refuses it as not text or bytes). Exec output (events `stdout`, `stderr`) arrives as `str` when it is UTF-8 and as `bytes` when it is not | `_values.py`, [`json.rs`](../../../../control/crates/layerfs-home/src/json.rs) |
 | Outside the table | `doctor(home=None)` and `close()` | `__init__.py` |
 
 `layerfs.aio` ([`aio.py`](../../../../api/python/src/layerfs/aio.py)):
@@ -142,7 +142,7 @@ tmpfs): point `TMPDIR` at one.
 
 | Test | Checks | Needs |
 | --- | --- | --- |
-| [`test_calls.py`](../../../../api/python/test/test_calls.py) `test_the_table` | nine families and 62 calls as functions; an unknown keyword is `InvalidInput` | the module |
+| [`test_calls.py`](../../../../api/python/test/test_calls.py) `test_the_table` | nine families and 63 calls as functions; an unknown keyword is `InvalidInput` | the module |
 | `test_every_call_is_refused_as_the_command_refuses_it` | every call gives the same refusal as the `layerfs` command | the command, else skipped |
 | `test_a_live_store_reads_the_same_both_ways` | a Store read through the package and the command gives the same JSON | the command, else skipped |
 | `test_aio_makes_the_same_calls_as_coroutines`, `test_aio_functions_run_on_the_loop_before_the_call_returns`, `test_a_cancelled_aio_call_stops_its_functions_and_the_call_runs_to_its_end` | the `aio` rules above | the module |

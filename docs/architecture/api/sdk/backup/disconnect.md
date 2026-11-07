@@ -11,7 +11,7 @@ bucket is deleted.
 | --- | --- |
 | Family | [backup](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/backup/disconnect.rs`](../../../../../api/crates/layerfs-api/src/backup/disconnect.rs) |
-| Implemented in | `layerfs_control::backup::family::run` → `disconnect` ([`backup/family.rs`](../../../../../api/crates/layerfs-control/src/backup/family.rs)) |
+| Implemented in | `layerfs_store::backup::family::disconnect` → `disconnect` ([`backup/family.rs`](../../../../../control/crates/layerfs-store/src/backup/family.rs)) |
 | Runs in | the caller's process; the bucket is not contacted |
 
 ## Signature
@@ -37,7 +37,7 @@ layerfs backup disconnect <name>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | a connected bucket (`BucketName::parse`) | [`backup/record.rs`](../../../../../api/crates/layerfs-control/src/backup/record.rs) `BucketRecord::of` |
+| `name` | Name | a connected bucket (`BucketName::parse`) | [`backup/record.rs`](../../../../../control/crates/layerfs-store/src/backup/record.rs) `BucketRecord::of` |
 
 ## Options
 
@@ -51,7 +51,7 @@ None.
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `disconnected` | text | the bucket whose record folder is gone | [`backup/family.rs`](../../../../../api/crates/layerfs-control/src/backup/family.rs) `disconnect` |
+| `disconnected` | text | the bucket whose record folder is gone | [`backup/family.rs`](../../../../../control/crates/layerfs-store/src/backup/family.rs) `disconnect` |
 | `unlinked` | list of text | the Stores whose `backups.<name>` link was removed | same |
 
 ## Where it runs
@@ -68,15 +68,15 @@ None.
 ```
 
 The record does not need a known provider to be disconnected. See the
-[routing table](../../routing/routing-table.md).
+[routing table](../../../control/routing/routing-table.md).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad name; a folder-scoped client | no | [`backup/record.rs`](../../../../../api/crates/layerfs-control/src/backup/record.rs) |
+| `InvalidInput` | a bad name; a folder-scoped client | no | [`backup/record.rs`](../../../../../control/crates/layerfs-store/src/backup/record.rs) |
 | `NotFound` | no bucket of that name | no | same |
-| `Failed` | a record cannot be read, written or removed | no | [`backup/family.rs`](../../../../../api/crates/layerfs-control/src/backup/family.rs) |
+| `Failed` | a record cannot be read, written or removed | no | [`backup/family.rs`](../../../../../control/crates/layerfs-store/src/backup/family.rs) |
 
 A failure part way leaves some links removed and the bucket record in
 place; calling again finishes it. No outcome is uncertain: only local
@@ -103,7 +103,7 @@ layerfs backup disconnect archive
 - Before: [backup.list](list.md) to see what the bucket holds.
   Again later: [backup.connect](connect.md); a link is made anew by the
   next [backup.create](create.md) or [backup.restore](restore.md).
-- [Connect: backups](../../../connect/backups/README.md).
+- [Control: backups](../../../control/backups/README.md).
 
 ---
 

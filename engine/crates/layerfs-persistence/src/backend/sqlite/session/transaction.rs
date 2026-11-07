@@ -330,6 +330,9 @@ impl Session {
             };
             s.finish_writer().map_err(E::from)?;
             s.work.borrow_mut().transaction_ns += start.elapsed().as_nanos() as u64;
+            if let (true, Ok(_), Some(background)) = (writable, &result, &self.background) {
+                background.committed(&self.path);
+            }
             result
         })
     }

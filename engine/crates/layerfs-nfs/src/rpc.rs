@@ -1,6 +1,6 @@
 //! ONC RPC v2 (RFC 5531) over TCP record marking: calls in, replies out.
 use crate::xdr::{Garbage, Reader, Writer};
-use std::io::{self, Read, Write};
+use std::io::{self, IoSlice, Read, Write};
 
 const CALL: u32 = 0;
 const REPLY: u32 = 1;
@@ -89,12 +89,34 @@ pub fn read_record(stream: &mut impl Read) -> io::Result<Option<Vec<u8>>> {
         }
     }
 }
-/// Writes one reply as a single last fragment.
+/// Writes one reply as a single last fragment. The four-byte fragment header
+/// and the reply go out as two writes of one vectored write, so a reply is
+/// never copied to be framed; a stream that writes less than it was offered
+/// (or a plain `Write` that writes only its first slice) continues where it
+/// stopped.
 pub fn write_record(stream: &mut impl Write, reply: &[u8]) -> io::Result<()> {
-    let mut framed = Vec::with_capacity(reply.len() + 4);
-    framed.extend_from_slice(&(reply.len() as u32 | LAST_FRAGMENT).to_be_bytes());
-    framed.extend_from_slice(reply);
-    stream.write_all(&framed)
+    let header = (reply.len() as u32 | LAST_FRAGMENT).to_be_bytes();
+    let mut head = &header[..];
+    let mut body = reply;
+    while !head.is_empty() || !body.is_empty() {
+        let written = match (head.is_empty(), body.is_empty()) {
+            (false, false) => stream.write_vectored(&[IoSlice::new(head), IoSlice::new(body)]),
+            (false, true) => stream.write(head),
+            (true, false) => stream.write(body),
+            (true, true) => break,
+        };
+        match written {
+            Ok(0) => return Err(io::Error::from(io::ErrorKind::WriteZero)),
+            Ok(count) => {
+                let from_head = count.min(head.len());
+                head = &head[from_head..];
+                body = &body[count - from_head..];
+            }
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(())
 }
 
 /// Decodes the call header; the returned reader is positioned at the arguments.

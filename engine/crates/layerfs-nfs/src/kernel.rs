@@ -38,6 +38,7 @@
 use crate::{
     attributes::{refusal, Identity, Status},
     block::wait,
+    change::Wcc,
     handle::{HandleError, SqliteHandles},
 };
 use layerfs_content::{filesystem::PathName, object::inode_leaf::InodeKind};
@@ -56,7 +57,7 @@ use std::{
 };
 
 /// Implicit file descriptors kept open at once.
-pub const FILES_HELD: usize = 256;
+pub const FILES_HELD: usize = 1024;
 /// Implicit directory descriptors (enumerations) kept open at once.
 pub const DIRECTORIES_HELD: usize = 256;
 /// EXCLUSIVE CREATE verifiers remembered for retransmissions.
@@ -77,11 +78,12 @@ pub(crate) type Named = (u64, Vec<u8>);
 pub(crate) type Verified = ([u8; 8], u64, u64);
 
 /// One implicit file descriptor.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct Held {
     pub handle: u64,
-    /// The size last published or observed through this export.
-    pub size: u64,
+    /// The facts last published or observed for the file through this
+    /// descriptor. A COMMIT is answered from them.
+    pub stat: ViewStat,
     pub tick: u64,
     pub writable: bool,
 }
@@ -104,10 +106,17 @@ pub(crate) struct Table {
     /// Serial -> the name it was last reached by, kept after its reference
     /// is collected so a later handle can be resolved again.
     pub names: HashMap<u64, Named>,
+    /// (directory, name) -> serial last seen under that name.
+    pub by_name: HashMap<Named, u64>,
     /// Serial -> last use, for the collection order.
     pub used: HashMap<u64, u64>,
     /// Serials marked for a cache refresh, and when (see [`crate::refresh`]).
     pub refreshing: HashMap<u64, std::time::Instant>,
+    /// Directory serial -> the facts last published or observed for it. A
+    /// change of an AppleDouble companion names a directory but changes
+    /// nothing in it, so its `wcc_data` answers from here (see
+    /// [`Kernel::directory_wcc`]).
+    pub directory_stats: HashMap<u64, ViewStat>,
     pub tick: u64,
 }
 impl Table {
@@ -294,7 +303,11 @@ impl Kernel {
             .get(&serial)
             .is_some_and(|(p, n)| *p == parent && *n == name)
         {
-            table.names.remove(&serial);
+            if let Some(old) = table.names.remove(&serial) {
+                if table.by_name.get(&old) == Some(&serial) {
+                    table.by_name.remove(&old);
+                }
+            }
         }
         self.unresolved.fetch_add(1, Ordering::Relaxed);
         Err(Status::Stale)
@@ -349,7 +362,7 @@ impl Kernel {
                     status
                 }
             })?;
-        self.observed_size(&stat);
+        self.observed(&stat);
         Ok(stat)
     }
     /// LOOKUP of `name` in directory `parent`, including `.`, `..` and the
@@ -373,6 +386,12 @@ impl Kernel {
         }
         if let Some(stat) = self.companion_named(parent, name) {
             return Ok(stat);
+        }
+        if self.refuses_apple_double() && crate::names::apple_double(name) {
+            if parent != self.root() && !self.table().parents.contains_key(&parent) {
+                return Err(Status::NotDir);
+            }
+            return Err(Status::NoEnt);
         }
         let silly = self.table().silly.get(&(parent, name.to_vec())).copied();
         if let Some(serial) = silly {
@@ -403,7 +422,13 @@ impl Kernel {
                 let tick = table.tick();
                 table.used.insert(stat.serial, tick);
                 if table.names.len() < NAMES_HELD || table.names.contains_key(&stat.serial) {
-                    table.names.insert(stat.serial, (parent, name.to_vec()));
+                    let named = (parent, name.to_vec());
+                    if let Some(old) = table.names.insert(stat.serial, named.clone()) {
+                        if table.by_name.get(&old) == Some(&stat.serial) {
+                            table.by_name.remove(&old);
+                        }
+                    }
+                    table.by_name.insert(named, stat.serial);
                 }
             }
             let extra = root || !table.lookups.insert(stat.serial);
@@ -422,13 +447,18 @@ impl Kernel {
         for serial in collect {
             self.forget(serial, 1);
         }
-        self.observed_size(stat);
+        self.observed(stat);
     }
     /// Records that `serial` is now reached as `name` in `parent` (RENAME).
     pub(crate) fn renamed(&self, serial: u64, parent: u64, name: &[u8]) {
         let mut table = self.table();
-        if table.names.contains_key(&serial) {
-            table.names.insert(serial, (parent, name.to_vec()));
+        let named = (parent, name.to_vec());
+        if let Some(slot) = table.names.get_mut(&serial) {
+            let old = std::mem::replace(slot, named.clone());
+            if table.by_name.get(&old) == Some(&serial) {
+                table.by_name.remove(&old);
+            }
+            table.by_name.insert(named, serial);
         }
     }
     pub(crate) fn forget(&self, serial: u64, count: u64) {
@@ -440,13 +470,27 @@ impl Kernel {
     /// is gone: its descriptor, its reference and its parent record. Later
     /// handles of it are stale.
     pub(crate) fn unlinked(&self, serial: u64) {
+        self.drop_unlinked(serial, false, None);
+    }
+    /// Drops table state for `serial` after a mutation that already retired
+    /// its kernel lookup reference (and `retired_handle`, if given) in the
+    /// publishing transaction.
+    pub(crate) fn unlinked_retired(&self, serial: u64, retired_handle: Option<u64>) {
+        self.drop_unlinked(serial, true, retired_handle);
+    }
+    fn drop_unlinked(&self, serial: u64, retired_in_job: bool, retired_handle: Option<u64>) {
         if serial == self.root() {
             return;
         }
         let (file, directories, held) = {
             let mut table = self.table();
             table.parents.remove(&serial);
-            table.names.remove(&serial);
+            table.directory_stats.remove(&serial);
+            if let Some(old) = table.names.remove(&serial) {
+                if table.by_name.get(&old) == Some(&serial) {
+                    table.by_name.remove(&old);
+                }
+            }
             table.used.remove(&serial);
             table.verifiers.retain(|_, entry| entry.1 != serial);
             let directories: Vec<u64> = table
@@ -465,12 +509,16 @@ impl Kernel {
             )
         };
         if let Some(file) = file {
-            self.close_file(serial, file.handle);
+            if !retired_in_job || retired_handle != Some(file.handle) {
+                self.close_file(serial, file.handle);
+            }
         }
         for handle in directories {
-            self.close_directory(serial, handle);
+            if !retired_in_job || retired_handle != Some(handle) {
+                self.close_directory(serial, handle);
+            }
         }
-        if held {
+        if held && !retired_in_job {
             self.forget(serial, 1);
         }
     }
@@ -478,11 +526,55 @@ impl Kernel {
     pub fn saw_directory(&self, serial: u64, parent: u64) {
         self.table().parents.insert(serial, parent);
     }
-    /// The size a published or observed stat reports, for READ's EOF.
-    pub(crate) fn observed_size(&self, stat: &ViewStat) {
-        if let Some(held) = self.table().files.get_mut(&stat.serial) {
-            held.size = stat.logical_len;
+    /// Records the facts a published or observed stat reports: READ's EOF,
+    /// what a COMMIT answers, and a directory's attributes, which
+    /// [`Kernel::directory_wcc`] answers from.
+    pub(crate) fn observed(&self, stat: &ViewStat) {
+        let mut table = self.table();
+        if let Some(held) = table.files.get_mut(&stat.serial) {
+            held.stat = stat.clone();
         }
+        if stat.kind == InodeKind::Directory {
+            table.directory_stats.insert(stat.serial, stat.clone());
+        }
+    }
+    /// `wcc_data` of a directory a change named but could not have touched:
+    /// an AppleDouble companion lives in the export alone, so creating,
+    /// removing or moving one never changes the directory's own facts, and
+    /// the pre- and post-operation halves are the same last known stat.
+    /// Answering both keeps the client from invalidating its cached
+    /// attributes of the directory, which a missing post-operation half makes
+    /// it do, at the cost of one GETATTR per later entry of that directory.
+    /// `(None, None)` when this export has never seen the directory: the
+    /// client answers that itself.
+    pub(crate) fn directory_wcc(&self, parent: u64) -> Wcc {
+        let table = self.table();
+        match table.directory_stats.get(&parent) {
+            Some(stat) => (Some(stat.clone()), Some(stat.clone())),
+            None => (None, None),
+        }
+    }
+    /// The facts this export last published or observed for `serial` through
+    /// its implicit descriptor, when it holds one and still binds a name for
+    /// it. A COMMIT answers from them instead of reading the inode again.
+    ///
+    /// A serial this export no longer binds a name for answers `None` and is
+    /// read again, which then answers what the read answers. That is the case
+    /// this export can see: a name another connection removed while this one
+    /// kept its own binding still looks live here, so a COMMIT for it answers
+    /// the facts last seen and succeeds. What is stale then is at most
+    /// `actimeo` old, the reply's post-operation attributes are optional, and
+    /// a client that reads, writes or looks the name up then gets the removal.
+    pub(crate) fn held_stat(&self, serial: u64) -> Option<ViewStat> {
+        let mut table = self.table();
+        let tick = table.tick();
+        let live = table.names.contains_key(&serial) || table.pinned(serial);
+        if !live {
+            return None;
+        }
+        let held = table.files.get_mut(&serial)?;
+        held.tick = tick;
+        Some(held.stat.clone())
     }
     /// READLINK: the raw target bytes.
     pub fn readlink(&self, serial: u64) -> Result<Vec<u8>, Status> {
@@ -513,7 +605,7 @@ impl Kernel {
                     held.tick = tick;
                     return Ok(OpenFile {
                         handle: held.handle,
-                        size: held.size,
+                        size: held.stat.logical_len,
                     });
                 }
             }
@@ -521,17 +613,29 @@ impl Kernel {
         let operation = KernelReadOperation::Open { serial, writable };
         let (stat, file, _) = self.observe(serial, None, operation)?;
         let handle = file.ok_or(Status::ServerFault)?;
+        Ok(self.file_taken(serial, handle, &stat, writable))
+    }
+    /// Records an open file descriptor (from `OPEN` or `CREATE`), evicting
+    /// the oldest unpinned descriptor when the bound is reached.
+    pub(crate) fn file_taken(
+        &self,
+        serial: u64,
+        handle: u64,
+        stat: &ViewStat,
+        writable: bool,
+    ) -> OpenFile {
+        let limit = FILES_HELD.min((self.lookups_held / 2).max(1));
         let (evicted, closed, chosen) = {
             let mut table = self.table();
             let tick = table.tick();
-            let current = table.files.get(&serial).copied();
+            let current = table.files.get(&serial).cloned();
             match current {
                 // Another connection opened a good enough one meanwhile.
                 Some(theirs) if theirs.writable || !writable => {
                     (None, Some((serial, handle)), theirs)
                 }
                 _ => {
-                    let evicted = if current.is_none() && table.files.len() >= FILES_HELD {
+                    let evicted = if current.is_none() && table.files.len() >= limit {
                         let pinned: HashSet<u64> = table.silly.values().copied().collect();
                         oldest(
                             table
@@ -551,12 +655,13 @@ impl Kernel {
                     };
                     let held = Held {
                         handle,
-                        size: stat.logical_len,
+                        stat: stat.clone(),
                         tick,
                         writable,
                     };
+                    let chosen = held.clone();
                     table.files.insert(serial, held);
-                    (evicted, current.map(|old| (serial, old.handle)), held)
+                    (evicted, current.map(|old| (serial, old.handle)), chosen)
                 }
             }
         };
@@ -566,10 +671,10 @@ impl Kernel {
         if let Some((old, descriptor)) = closed {
             self.close_file(old, descriptor);
         }
-        Ok(OpenFile {
+        OpenFile {
             handle: chosen.handle,
-            size: chosen.size,
-        })
+            size: chosen.stat.logical_len,
+        }
     }
     pub(crate) fn close_file(&self, serial: u64, handle: u64) {
         if let Ok((services, _)) = self.request() {
@@ -579,13 +684,29 @@ impl Kernel {
     /// READ of at most one engine window. `eof` is set when the reply reaches
     /// the size last seen for the file, or comes back short.
     pub fn read(&self, serial: u64, offset: u64, count: u32) -> Result<(Vec<u8>, bool), Status> {
+        let mut data = Vec::new();
+        let eof = self.read_into(serial, offset, count, &mut data)?;
+        Ok((data, eof))
+    }
+    /// One engine window appended to `out`, which is what a reply larger than
+    /// one window collects: the window's bytes are copied straight into the
+    /// reply buffer, and a call serving several windows takes one descriptor
+    /// and one owner visit per window. `eof` means the same as in
+    /// [`Kernel::read`].
+    pub(crate) fn read_into(
+        &self,
+        serial: u64,
+        offset: u64,
+        count: u32,
+        out: &mut Vec<u8>,
+    ) -> Result<bool, Status> {
         let length = count.min(READ_WINDOW as u32);
         if crate::apple_double::companion(serial) {
-            return self.companion_read(serial, offset, length);
+            return self.companion_read(serial, offset, length, out);
         }
         let open = self.open_file(serial, false)?;
         if offset >= open.size {
-            return Ok((Vec::new(), true));
+            return Ok(true);
         }
         let (services, request) = self.request()?;
         let data = wait(KernelData::read(
@@ -598,10 +719,11 @@ impl Kernel {
         ))
         .map_err(read_failure)?
         .map_err(refusal)?;
-        let bytes = data.bytes().to_vec();
+        let bytes = data.bytes();
         let end = offset.saturating_add(bytes.len() as u64);
         let eof = bytes.len() < length as usize || end >= open.size;
-        Ok((bytes, eof))
+        out.extend_from_slice(bytes);
+        Ok(eof)
     }
     /// A fresh implicit directory descriptor for an enumeration from cookie 0.
     pub fn open_directory(&self, serial: u64) -> Result<u64, Status> {

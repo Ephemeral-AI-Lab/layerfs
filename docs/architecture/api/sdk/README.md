@@ -5,15 +5,15 @@
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
 Every call a program can make, one family per folder and one page per call:
-62 calls in 9 families. The same call has the same name and arguments in
-JavaScript, Python and the `layerfs` command.
+63 calls in 9 families. The same call has the same name and
+arguments in JavaScript, Python and the `layerfs` command.
 
 | | |
 | --- | --- |
 | Layer | [API](../README.md) |
 | Crates | `layerfs-api`, `layerfs-control` |
 | Source | [`api/crates/layerfs-api/src`](../../../../api/crates/layerfs-api/src) |
-| Uses | [Call table](../call-table/README.md), [Control](../control/README.md), [Routing and workers](../routing/README.md) |
+| Uses | [Call table](../call-table/README.md), [Management](../../control/management/README.md), [Routing and workers](../../control/routing/README.md) |
 | Used by | [Front ends](../front-ends/README.md) |
 
 ## Families
@@ -25,7 +25,7 @@ JavaScript, Python and the `layerfs` command.
 | [`commit`](commit/README.md) | 3 | [`list`](commit/list.md), [`get`](commit/get.md), [`diff`](commit/diff.md) |
 | [`file`](file/README.md) | 14 | [`read`](file/read.md), [`stat`](file/stat.md), [`list`](file/list.md), [`glob`](file/glob.md), [`grep`](file/grep.md), [`blame`](file/blame.md), [`diff`](file/diff.md), [`write`](file/write.md), [`edit`](file/edit.md), [`rm`](file/rm.md), [`mkdir`](file/mkdir.md), [`mv`](file/mv.md), [`cp`](file/cp.md), [`apply`](file/apply.md) |
 | [`sandbox`](sandbox/README.md) | 4 | [`create`](sandbox/create.md), [`list`](sandbox/list.md), [`get`](sandbox/get.md), [`close`](sandbox/close.md) |
-| [`workspace`](workspace/README.md) | 5 | [`mount`](workspace/mount.md), [`exec`](workspace/exec.md), [`commit`](workspace/commit.md), [`unmount`](workspace/unmount.md), [`status`](workspace/status.md) |
+| [`workspace`](workspace/README.md) | 6 | [`mount`](workspace/mount.md), [`exec`](workspace/exec.md), [`exec_cancel`](workspace/exec_cancel.md), [`commit`](workspace/commit.md), [`unmount`](workspace/unmount.md), [`status`](workspace/status.md) |
 | [`machine`](machine/README.md) | 11 | [`list`](machine/list.md), [`platforms`](machine/platforms.md), [`get`](machine/get.md), [`status`](machine/status.md), [`start`](machine/start.md), [`stop`](machine/stop.md), [`create`](machine/create.md), [`connect`](machine/connect.md), [`remove`](machine/remove.md), [`disconnect`](machine/disconnect.md), [`update`](machine/update.md) |
 | [`store`](store/README.md) | 9 | [`list`](store/list.md), [`get`](store/get.md), [`status`](store/status.md), [`create`](store/create.md), [`connect`](store/connect.md), [`push`](store/push.md), [`pull`](store/pull.md), [`remove`](store/remove.md), [`disconnect`](store/disconnect.md) |
 | [`backup`](backup/README.md) | 5 | [`connect`](backup/connect.md), [`disconnect`](backup/disconnect.md), [`list`](backup/list.md), [`create`](backup/create.md), [`restore`](backup/restore.md) |
@@ -112,9 +112,9 @@ every `file` and `branch` call needs it (without it they are refused, see
 namespace; the Branch of a Workspace is not checked. These gaps wait for an
 owner decision and are listed under
 [Scopes](../call-table/table.md#scopes)
-([`calls/scope.rs`](../../../../api/crates/layerfs-control/src/calls/scope.rs)).
+([`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs)).
 Every function is generated from the call table
-([`calls/table.rs`](../../../../api/crates/layerfs-control/src/calls/table.rs));
+([`calls/table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs));
 see [Front ends](../front-ends/README.md).
 
 ## Answers and errors
@@ -166,9 +166,9 @@ A stopped machine is never started by a call other than
 [machine.start](machine/start.md): its calls are `Unavailable`. A
 PostgreSQL Store's calls always run in the caller's process, and its
 password reference is resolved only there. See the
-[routing table](../routing/routing-table.md),
-[workers](../routing/workers.md) and the
-[daemon channel](../routing/daemon-channel.md).
+[routing table](../../control/routing/routing-table.md),
+[workers](../../control/routing/workers.md) and the
+[daemon channel](../../control/routing/daemon-channel.md).
 
 ## How to read a call page
 

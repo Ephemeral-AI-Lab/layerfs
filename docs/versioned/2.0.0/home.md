@@ -16,7 +16,7 @@ writes every record itself.
 | Setting | Meaning |
 | --- | --- |
 | `LAYERFS_HOME` | the home folder. Unset, it is `~/.layerfs` (O28) |
-| `LAYERFS_TRACE`, `LAYERFS_TRACE_STEP`, `LAYERFS_TRACE_START` | tracing. Today only `LAYERFS_TRACE` is read: each connection to a machine's worker appends `{at, event: "worker.connection", op, worker, sent, ms}` to the file it names |
+| `LAYERFS_TRACE`, `LAYERFS_TRACE_STEP`, `LAYERFS_TRACE_START` | tracing. `LAYERFS_TRACE` names a file: each connection to a machine's worker appends `{at, event: "worker.connection", op, worker, sent, ms}` to it. With `LAYERFS_TRACE_STEP` also set (any non-empty value), each call appends one `{at, event: "step", op, step, us, ms}` line per step it timed: the caller's (`dispatch`, `route`, `connect`, `ready`, `request`, `answer`) and, for a worker-routed call, the worker's as `worker.<step>`, which the worker sends back in its answer (a namespaces `workspace.exec` adds `worker.exec.*` and its helper's `worker.helper.*` stages). `LAYERFS_TRACE_START` is still not read |
 | `LAYERFS_CONSTRUCTION_WORKERS` | measurement |
 
 LayerFS reads no other user setting. A Node or Python client can name
@@ -44,6 +44,7 @@ hold a password or a bucket key. They are not settings; see
     lock                       the Sandbox lock: its record and Workspace record changes
     serve.lock                 held by the call that runs the Sandbox (native, and machines reached directly)
     workspace/<id>.json        one per mounted Workspace: v, id, name?, branch, path, created
+    workspace/<id>/exec/<x>.json  one per running command (exec id <x>): owner, route, stop handle
   store/<name>/
     record.json                kind, machine, profile, backup links
     store.sqlite               a sqlite Store's file while it is on native
@@ -53,7 +54,7 @@ hold a password or a bucket key. They are not settings; see
   backup/<bucket>/record.json  provider, bucket, prefix, region, key reference
   trace/                       trace files
   log/                         migration.json, migration-2.json, import-env.jsonl,
-                               uncertain.jsonl, init-failures.jsonl, ...
+                               uncertain.jsonl, init-failures.jsonl, exec.jsonl, ...
 ```
 
 - **Records** are one JSON value each, written to a private temporary file
@@ -68,7 +69,7 @@ hold a password or a bucket key. They are not settings; see
   Every machine, Store, project, bucket, Sandbox and Workspace record
   carries `"v": 1` as its first field; call results never show it.
 - **`layerfs.json`** holds `{"layout": 3, "id": "<32 hex digits>"}`. The id
-  is written once. The `docker` machine names its containers with it (O33),
+  is written once. The `docker` machine names its worker container with it (O33),
   VM names carry its first 8 digits (`lfs-<id8>-<machine>`), and backups
   record it as where they were exported from. A home of a newer layout is
   refused `Unsupported`; a layout 2 home is converted once
@@ -106,8 +107,8 @@ hold a password or a bucket key. They are not settings; see
   held across a machine or daemon call; the call that runs a native
   Sandbox takes turns on `serve.lock`, a different file. On `native` the side
   that runs the Sandbox adds what reopens its runtime (`daemon`) to the
-  same file, and its daemon keys to `control.json`. A Sandbox on `ssh`,
-  `lima` or `docker` whose daemon the caller reaches directly (#535 G4)
+  same file, and its daemon keys to `control.json`. A Sandbox on `ssh`
+  or `lima` whose daemon the caller reaches directly (#535 G4)
   has its keys in `control.json` too, and a `daemon` of `{ forward:
   { address, machine, pid?, pid_start?, pid_boot? }, name, runtime,
   platform, image }`: the host loopback address the caller dials and, on
@@ -119,6 +120,15 @@ hold a password or a bucket key. They are not settings; see
   (`<prefix><name>`) and the image cache the namespaces backend unpacks
   once (`images/`). A Sandbox's directory is created by its create and
   deleted by its close.
+- **Command records** (`sandbox/<name>/workspace/<id>/exec/<x>.json`)
+  are written new when a command starts and removed when it ends, on the
+  side that keeps the Workspace's record: here on `native` and for a
+  Sandbox reached directly; in the machine's worker otherwise. Each names
+  its owning process, its route (`local` or `machine:<name>`) and how it
+  is stopped. A record whose owner is gone is stale: the next exec of its
+  id, cancel, unmount or close ends its command, removes it and appends it
+  to **`log/exec.jsonl`**. The Workspace's folder goes with its terminal
+  unmount.
 - **`log/uncertain.jsonl`** lists every outcome that is not known
   (`Unknown`), with what was kept.
 

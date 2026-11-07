@@ -11,8 +11,8 @@ its record removed; it is also the call that clears an uncertain
 | | |
 | --- | --- |
 | Family | [sandbox](README.md) |
-| Library entry | [`api/crates/layerfs-api/src/sandbox/close.rs`](../../../../../api/crates/layerfs-api/src/sandbox/close.rs) |
-| Implemented in | `layerfs_control::sandbox::family::sandbox` → `close::close` ([`sandbox/close.rs`](../../../../../api/crates/layerfs-control/src/sandbox/close.rs)), then `serve::close` on the machine ([`sandbox/serve.rs`](../../../../../api/crates/layerfs-control/src/sandbox/serve.rs)) |
+| Library entry | [`sandbox/close.rs`](../../../../../api/crates/layerfs-api/src/sandbox/close.rs) |
+| Implemented in | the library entry parses a typed `CloseRequest` → `layerfs_sandbox::family::close` → `close::close`, whose typed `Closed` it shapes ([`close.rs`](../../../../../control/crates/layerfs-sandbox/src/close.rs)), then `lifecycle::close` on the machine ([`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs)) |
 | Runs in | the caller's process (records, locks), then the caller's process for a local machine or the machine's worker (`sandbox.host`) |
 
 ## Signature
@@ -37,16 +37,16 @@ layerfs sandbox close <name> [--force]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | a recorded Sandbox, else `NoSuchSandbox` | [`sandbox/family.rs`](../../../../../api/crates/layerfs-control/src/sandbox/family.rs) `sandbox_of` |
+| `name` | Name | a recorded Sandbox, else `NoSuchSandbox` | [`family.rs`](../../../../../control/crates/layerfs-sandbox/src/family.rs) `sandbox_of` |
 
 ## Options
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `force` | Bool | false | stop even with Workspaces mounted; their uncommitted changes and processes end with the Sandbox | [`sandbox/serve.rs`](../../../../../api/crates/layerfs-control/src/sandbox/serve.rs) `close` |
+| `force` | Bool | false | stop even with Workspaces mounted or commands running: each running command is cancelled first ([workspace.exec_cancel](../workspace/exec_cancel.md), 5000 ms grace); uncommitted changes and processes end with the Sandbox | [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `close`, [`exec/cancel.rs`](../../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) `settle` |
 
 Under a folder scope the call is refused `InvalidInput`
-([`calls/scope.rs`](../../../../../api/crates/layerfs-control/src/calls/scope.rs)).
+([`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs)).
 
 ## Returns
 
@@ -54,6 +54,7 @@ Under a folder scope the call is refused `InvalidInput`
  started Sandbox, stopped here      { kind: "Closed", sandbox, unknown: [path],
                                       closed }
  machine says it is already gone    { closed, was_gone: true }
+ (`sandbox.get` read it `lost`)
  record with no id (never started,  { closed, was: "gone" | "unresolved",
  or create's outcome unknown)         left?: text }
 ```
@@ -62,7 +63,7 @@ Under a folder scope the call is refused `InvalidInput`
 | --- | --- | --- |
 | `kind` | text | `Closed` |
 | `sandbox` | text | the Sandbox's id (its name) |
-| `unknown` | list of text | with `force`: the Workspace paths it could not drain; empty otherwise |
+| `unknown` | list of text | with `force`: the paths of the Workspaces still mounted when it stopped the Sandbox. A forced close drains none of them (it does not unmount them through the daemon; their uncommitted changes and processes end with the Sandbox), so their state is not confirmed and every one is listed (O31, DECISIONS row "Forced close"). Empty otherwise |
 | `closed` | text | the name now free |
 | `was_gone` | bool | the runtime had already ended; its record was removed |
 | `was` | text | the derived state of a record with no id |
@@ -79,33 +80,35 @@ Under a folder scope the call is refused `InvalidInput`
     else  --> write op sandbox.close (phase stop)
   3 forwarded? direct::held: Workspaces its daemon still holds -> held
   4 route::on_machine(record, "sandbox.close", [force, held?])
-       Executor::Local --> serve::close here
-       Executor::Worker -> "sandbox.host" -> worker -> serve::close
-         guard; MountsActive unless force; stop (5 s), then delete,
+       Executor::Local --> lifecycle::close here
+       Executor::Worker -> "sandbox.host" -> worker -> lifecycle::close
+         guard; running commands' records: Busy unless force, which
+         cancels each first (stale ones are ended and removed);
+         MountsActive unless force; stop (5 s), then delete,
          each once; remove the machine-side folder
   5 home lock: release the forward; remove sandbox/<name>/
 ```
 
 | Outcome on the machine | Home record | Source |
 | --- | --- | --- |
-| `Closed` | removed; forward ended | [`close.rs`](../../../../../api/crates/layerfs-control/src/sandbox/close.rs) |
+| `Closed` | removed; forward ended | [`close.rs`](../../../../../control/crates/layerfs-sandbox/src/close.rs) |
 | `NoSuchSandbox` (already gone) | removed; answer `was_gone` | `close.rs` |
 | `Unknown` | kept, `op` marked uncertain, logged | `close.rs` |
 | any other refusal | kept, `op` dropped: the Sandbox is as it was | `close.rs` |
 
-See the [routing table](../../routing/routing-table.md).
+See the [routing table](../../../control/routing/routing-table.md).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | bad name; folder scope | no | [`common/names.rs`](../../../../../api/crates/layerfs-control/src/common/names.rs) |
-| `NoSuchSandbox` | no record of that name | no | [`family.rs`](../../../../../api/crates/layerfs-control/src/sandbox/family.rs) |
-| `Busy` | another live operation's `op` holds the Sandbox (`detail {entity, phase, op}`); an unmount is in progress | no | [`common/op.rs`](../../../../../api/crates/layerfs-control/src/common/op.rs), [`workspace/unmount_guard.rs`](../../../../../api/crates/layerfs-control/src/workspace/unmount_guard.rs) |
-| `MountsActive` | without `force`, Workspaces are mounted; `detail.workspaces` lists their paths | no | [`serve.rs`](../../../../../api/crates/layerfs-control/src/sandbox/serve.rs) |
-| `Unavailable` | the machine's worker is not recorded or does not answer (nothing sent); a lock held too long | no | [`common/place.rs`](../../../../../api/crates/layerfs-control/src/common/place.rs) |
-| `Failed` | the stop or delete failed (a failed stop is not followed by a delete); the Sandbox stays as it was | no | `serve.rs` |
-| `Unknown` | **the machine's answer was lost after the request was sent: the Sandbox may be stopped or not** | **yes** | [`worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs), `close.rs` |
+| `InvalidInput` | bad name; folder scope | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
+| `NoSuchSandbox` | no record of that name | no | [`family.rs`](../../../../../control/crates/layerfs-sandbox/src/family.rs) |
+| `Busy` | another live operation's `op` holds the Sandbox (`detail {entity, phase, op}`); an unmount is in progress; without `force`, commands still run (`detail.execs` lists their exec ids, [`exec/cancel.rs`](../../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) `settle`) | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs), [`unmount_guard.rs`](../../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs) |
+| `MountsActive` | without `force`, Workspaces are mounted; `detail.workspaces` lists their paths | no | [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
+| `Unavailable` | the machine's worker is not recorded or does not answer (nothing sent); a lock held too long | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
+| `Failed` | the stop or delete failed (a failed stop is not followed by a delete); the Sandbox stays as it was | no | `lifecycle.rs` |
+| `Unknown` | **the machine's answer was lost after the request was sent: the Sandbox may be stopped or not**; or, with `force`, a running command's cancel was not confirmed (`detail.execs`) and nothing more was done | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs), `close.rs` |
 
 After `Unknown`, read [`sandbox.get`](get.md) (its `state` is
 `unresolved`), then call `close` again: it clears the uncertain intent.
@@ -131,7 +134,7 @@ $ layerfs sandbox close tests --force
 
 - Before: [`workspace.commit`](../workspace/commit.md), [`workspace.unmount`](../workspace/unmount.md), [`sandbox.get`](get.md).
 - After: [`sandbox.create`](create.md) with the same name.
-- [Connect: Sandboxes](../../../connect/sandboxes/README.md), [Engine: Forced teardown](../../../engine/daemon/forced-teardown.md).
+- [Control: Sandboxes](../../../control/sandboxes/README.md), [Engine: Forced teardown](../../../engine/daemon/forced-teardown.md).
 - [A Workspace session](../../../flows/workspace.md).
 
 ---

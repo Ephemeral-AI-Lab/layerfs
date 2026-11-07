@@ -1,4 +1,4 @@
-//! The call table and its dispatcher (#533 step 2): 62 calls in nine
+//! The call table and its dispatcher (#533 step 2): 63 calls in nine
 //! families, arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::{families, json, keys, size, Call, Kind};
@@ -51,9 +51,9 @@ fn code(name: &str, args: SdkValue) -> String {
 }
 
 #[test]
-fn the_table_has_nine_families_and_62_calls() {
+fn the_table_has_nine_families_and_63_calls() {
     let all: Vec<&Call> = layerfs_api::calls();
-    assert_eq!(all.len(), 62);
+    assert_eq!(all.len(), 63);
     // each family holds only its own calls, and has at least one
     for family in families() {
         assert!(!family.calls().is_empty(), "{}", family.name);
@@ -66,7 +66,7 @@ fn the_table_has_nine_families_and_62_calls() {
     let mut names: Vec<_> = all.iter().map(|c| c.name()).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 62, "call names are unique");
+    assert_eq!(names.len(), 63, "call names are unique");
     // an optional positional is only ever followed by optional ones (D7)
     for c in &all {
         let first_optional = c.args.iter().position(|a| a.optional);
@@ -75,7 +75,7 @@ fn the_table_has_nine_families_and_62_calls() {
         }
     }
     let counts: Vec<usize> = families().iter().map(|f| f.calls().len()).collect();
-    assert_eq!(counts, [5, 6, 3, 14, 4, 5, 11, 9, 5]);
+    assert_eq!(counts, [5, 6, 3, 14, 4, 6, 11, 9, 5]);
 }
 
 #[test]
@@ -236,6 +236,19 @@ fn workspace_family() {
     let mount = layerfs_api::find("workspace.mount").unwrap();
     let options: Vec<_> = mount.options.iter().map(|o| (o.name, o.kind)).collect();
     assert_eq!(options, [("name", Kind::Name)]);
+    // exec_cancel (layerfs-project#113): the Workspace, the exec id and a grace
+    let cancel = layerfs_api::find("workspace.exec_cancel").unwrap();
+    let args: Vec<_> = cancel.args.iter().map(|a| (a.name, a.kind)).collect();
+    assert_eq!(args, [("ws", Kind::Text), ("exec_id", Kind::Text)]);
+    let options: Vec<_> = cancel.options.iter().map(|o| (o.name, o.kind)).collect();
+    assert_eq!(options, [("grace_ms", Kind::Int)]);
+    let exec = layerfs_api::find("workspace.exec").unwrap();
+    assert!(exec.options.iter().any(|o| o.name == "exec_id"));
+    assert!(code(
+        "workspace.exec_cancel",
+        map(&[("ws", t("tests:/workspaces/1"))])
+    )
+    .contains("`exec_id` is required"));
 }
 
 #[test]
@@ -353,8 +366,9 @@ fn an_explicit_home_must_be_absolute() {
 
 #[test]
 fn the_source_is_one_file_per_call_under_its_family() {
-    // src/ holds lib.rs and one folder per family; each folder holds its
-    // mod.rs and one <call>.rs per call, nothing else
+    // src/ holds lib.rs, the call machinery (calls/, layerfs-project#107)
+    // and one folder per family; each family folder holds its mod.rs and
+    // one <call>.rs per call, nothing else
     let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let names = |dir: &std::path::Path| -> Vec<String> {
         let mut names: Vec<String> = std::fs::read_dir(dir)
@@ -366,6 +380,7 @@ fn the_source_is_one_file_per_call_under_its_family() {
     };
     let mut expected: Vec<String> = families().iter().map(|f| f.name.to_owned()).collect();
     expected.push("lib.rs".to_owned());
+    expected.push("calls".to_owned());
     expected.sort();
     assert_eq!(names(&src), expected);
     for family in families() {

@@ -54,12 +54,16 @@ impl Overlay {
         let (kernel, key) = (Some(mount.owner), i64::from_be_bytes(request));
         let file = match (created, open) {
             (true, Some(writable)) => {
-                // One custody row write covers the lookup and the descriptor.
-                self.insert_kernel_lookup_row(mount, serial, false, 1)?;
-                let file = self.retain_file_row(kernel, key, serial, writable)?;
-                self.file_ref(integer(serial)?, crate::ReferenceKind::Lookup, true)?;
-                self.file_ref(integer(serial)?, crate::ReferenceKind::File, true)?;
-                Some(file)
+                if let Some(file) = self.open.borrow().files.retained((mount.owner, key)) {
+                    Some(file)
+                } else {
+                    // One custody row write covers the lookup and the descriptor.
+                    self.insert_kernel_lookup_row(mount, serial, false, 1)?;
+                    let file = self.retain_file_row(kernel, key, serial, writable)?;
+                    self.file_ref(integer(serial)?, crate::ReferenceKind::Lookup, true)?;
+                    self.file_ref(integer(serial)?, crate::ReferenceKind::File, true)?;
+                    Some(file)
+                }
             }
             (true, None) => {
                 self.insert_kernel_lookup(mount, serial, false, 1)?;
@@ -75,6 +79,66 @@ impl Overlay {
             self.set_kernel_parent(mount, serial, parent)?;
         }
         Ok(KernelApplied { publication, file })
+    }
+    /// Prepares kernel custody before `apply_checked` runs in the same
+    /// transaction: retires synthetic kernel references on a detached
+    /// (`nlink == 0`) inode ahead of `detach_orphan`, and opens a created
+    /// regular file's descriptor ahead of `follow_digests`.
+    pub fn prepare_kernel_mutation(
+        &self,
+        mount: KernelMount,
+        request: [u8; 8],
+        changes: &Changes,
+        effect: KernelEffect,
+        retire_unlinked: bool,
+        unlinked_handle: Option<u64>,
+    ) -> OverlayResult<()> {
+        if retire_unlinked {
+            if let Some(serial) = changes.detached {
+                let key = integer(serial)?;
+                self.open.borrow_mut().digests.remove(key);
+                if let Some(handle) = unlinked_handle {
+                    if let Ok(file) = self.kernel_file_row(mount, serial, handle) {
+                        self.close_held_file(file)?;
+                    } else {
+                        let directory = self
+                            .open
+                            .borrow()
+                            .directories
+                            .get(handle)
+                            .map(|(held, _)| held.directory)
+                            .filter(|dir| dir.mount == mount && dir.serial == serial);
+                        if let Some(directory) = directory {
+                            self.close_kernel_directory_inner(directory)?;
+                        }
+                    }
+                }
+                self.open.borrow_mut().parents.remove(serial);
+                if let Some((owner, _, false)) = self.kernel_lookup_row(mount, serial)? {
+                    self.drop_kernel_lookup(mount, serial, owner)?;
+                }
+            }
+        }
+        if let KernelEffect::Open {
+            serial, writable, ..
+        } = effect
+        {
+            if changes.created == Some(serial) {
+                if !changes.inodes.iter().any(|inode| {
+                    inode.serial == serial
+                        && inode.nlink != 0
+                        && inode.kind == crate::InodeKind::File
+                }) {
+                    return Err(OverlayError::Invalid("kernel entry final"));
+                }
+                let key = i64::from_be_bytes(request);
+                self.insert_kernel_lookup_row(mount, serial, false, 1)?;
+                self.retain_file_row(Some(mount.owner), key, serial, writable)?;
+                self.file_ref(integer(serial)?, crate::ReferenceKind::Lookup, true)?;
+                self.file_ref(integer(serial)?, crate::ReferenceKind::File, true)?;
+            }
+        }
+        Ok(())
     }
     /// The retained parent chain of one kernel-known directory, from itself to
     /// the root. Every step is an indexed point read of a row this connection

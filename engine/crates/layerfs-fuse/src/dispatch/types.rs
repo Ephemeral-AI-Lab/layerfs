@@ -5,7 +5,12 @@ use std::{any::Any, error::Error, fmt, future::Future, pin::Pin};
 /// another waits on a Store read; a second worker also contends for the one
 /// Workspace lock, so more workers slow writers of the same Workspace.
 pub const RECEIVE_SLOTS: usize = 2;
-pub const MAX_INPUT_BYTES: usize = layerfs_overlay::WRITE_WINDOW + 2 * 255;
+/// Largest input a FUSE request carries: this router's own write and read
+/// window plus room for its headers. It stays the 128 KiB window the mount
+/// negotiates as `max_write`, independent of the larger NFS transfer window:
+/// the kernel never sends a request above `max_write`, so one receive slot
+/// keeps a 128 KiB buffer per Workspace.
+pub const MAX_INPUT_BYTES: usize = layerfs_overlay::READ_WINDOW + 2 * 255;
 
 /// Completion means original reply/result/source consumers are disposed. A
 /// retained error must itself keep the operation's original inputs and custody.

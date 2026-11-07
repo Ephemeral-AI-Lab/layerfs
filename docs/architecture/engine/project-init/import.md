@@ -117,14 +117,14 @@ Equal bytes do not make an alias; host identity does
    done(index,result)  <= 256 KiB,                     --> complete_files
                        <= 512 objects,
                        <= 512 completions
-        flush ----- sync_channel, QUEUE_SLOTS = 4 ----->
+        flush ----- sync_channel, QUEUE_SLOTS = 32 ---->
 ```
 
 | Rule | Value | Source |
 | --- | --- | --- |
 | Batch bytes | 256 KiB; a larger object is sent alone | [`batch.rs`](../../../../engine/crates/layerfs-project/src/import/batch.rs) |
 | Objects, completions per batch | 512 each | [`batch.rs`](../../../../engine/crates/layerfs-project/src/import/batch.rs) |
-| Batches in flight | 4 (`QUEUE_SLOTS`) | [`batch.rs`](../../../../engine/crates/layerfs-project/src/import/batch.rs) |
+| Batches in flight | 32 (`QUEUE_SLOTS`): 8 MiB at the default policy, 32 MiB at the largest small-file threshold; more than one Save wave (~4 MiB), so the owner does not wait for the next wave while it publishes | [`batch.rs`](../../../../engine/crates/layerfs-project/src/import/batch.rs) |
 | One object | above `CANONICAL_LIMIT` refused `ObjectLimitExceeded` | [`batch.rs`](../../../../engine/crates/layerfs-project/src/import/batch.rs) |
 
 A worker flushes its pending batch before it waits for a job, so the owner

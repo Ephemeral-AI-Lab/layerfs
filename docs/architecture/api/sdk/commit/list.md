@@ -11,7 +11,7 @@ Commit's message, parents and storage statistics.
 | --- | --- |
 | Family | [commit](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/commit/list.rs`](../../../../../api/crates/layerfs-api/src/commit/list.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → Store method `branch.list_commits` ([`methods/branch/list_commits.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/list_commits.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs)) |
+| Implemented in | `layerfs_store::calls::commit_list` → Store method `branch.list_commits` ([`methods/branch/list_commits.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/list_commits.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs)) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -35,7 +35,7 @@ layerfs commit list <store>/<project> <branch> [--page-size N] [--page-pos N]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs) |
+| `project` | Project | `<store>/<project>` | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `branch` | Name | a Branch; `main` has no Commits and is `NoSuchBranch` | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) `branch` |
 
 ## Options
@@ -82,7 +82,7 @@ page ends early when it is spent.
 ```
 
 A read; no lane. Refused under a folder scope (`out of scope: history`).
-See the [routing table](../../routing/routing-table.md).
+See the [routing table](../../../control/routing/routing-table.md).
 
 ## Errors
 
@@ -90,8 +90,8 @@ See the [routing table](../../routing/routing-table.md).
 | --- | --- | --- | --- |
 | `InvalidInput` | a bad project or paging; a folder-scoped client | no | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
 | `NoSuchBranch` | no such Branch, or `main` | no | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../api/crates/layerfs-control/src/store/call.rs) |
-| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
+| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`call.rs`](../../../../../control/crates/layerfs-store/src/call.rs) |
+| `Unknown` | the worker's answer was lost | read-only; call again | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 `commit.list` is the read to make after an uncertain
 [workspace.commit](../workspace/commit.md) or `file.*` write.

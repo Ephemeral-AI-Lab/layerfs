@@ -109,6 +109,7 @@ caller thread      Shared.state (one Mutex)       Overlay::transaction
      |                     |            state and tickets restored
      |<--- unlock ---------|                               |
      |   drop OpenDisposals; maintain() steps while pending
+     |   (not after a call_deferred job: Commit releases, close)
 ```
 
 | Rule | Source |

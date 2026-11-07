@@ -12,7 +12,7 @@ use layerfs_content::{ObjectId, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{PostgresHandles, PostgresSelection};
 use layerfs_storage::{
-    location::{ObjectLocation, PackDomain, PackInfo, SignatureRow},
+    location::{ObjectLocation, PackDomain, SignatureRow},
     pack::{assemble, build_group, PackLane},
     port::*,
     StoragePolicy,
@@ -102,15 +102,11 @@ fn unit(handles: &PostgresHandles, objects: Vec<(ObjectId, usize)>) -> Publicati
     )
     .unwrap();
     Publication {
-        packs: vec![PublishedPack {
-            info: PackInfo {
-                pack_id,
-                domain: PackDomain::Payload,
-                key: ObjectKey::for_bytes(&body),
-                length: body.len(),
-            },
-            body: Arc::new(body),
-        }],
+        packs: vec![PublishedPack::seal(
+            pack_id,
+            PackDomain::Payload,
+            Arc::new(body),
+        )],
         objects: objects
             .into_iter()
             .map(|(object, record)| location(object, pack_id, record))
@@ -149,7 +145,7 @@ fn ids_that_share_a_prefix_are_distinct_and_a_repeat_is_lost_to_the_first() {
         PersistenceError::Malformed
     );
     let first = unit(&handles, vec![(a, 0), (b, 1), (d, 2)]);
-    let one = first.packs[0].info.pack_id;
+    let one = first.packs[0].info().pack_id;
     assert_eq!(handles.storage.publish(&first).unwrap().lost, vec![]);
     assert_eq!(
         located(&handles, &[a, b, c, d]),
@@ -158,7 +154,7 @@ fn ids_that_share_a_prefix_are_distinct_and_a_repeat_is_lost_to_the_first() {
     // A second writer publishes a stored id and a new one with the same
     // prefix: the stored one is lost and keeps its location.
     let second = unit(&handles, vec![(b, 4), (c, 5)]);
-    let two = second.packs[0].info.pack_id;
+    let two = second.packs[0].info().pack_id;
     assert_eq!(handles.storage.publish(&second).unwrap().lost, vec![b]);
     assert_eq!(
         located(&handles, &[a, b, c, d]),

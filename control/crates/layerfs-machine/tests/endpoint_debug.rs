@@ -1,0 +1,16 @@
+//! A worker endpoint's `Debug` never shows its secret.
+use layerfs_machine::worker::Endpoint;
+
+#[test]
+fn debug_redacts_the_secret() {
+    let endpoint = Endpoint {
+        address: "127.0.0.1:7070".parse().unwrap(),
+        secret: "s3cr3t-token".into(),
+    };
+    let shown = format!("{endpoint:?}");
+    assert!(!shown.contains("s3cr3t-token"), "{shown}");
+    assert!(
+        shown.contains("127.0.0.1:7070") && shown.contains("<redacted>"),
+        "{shown}"
+    );
+}

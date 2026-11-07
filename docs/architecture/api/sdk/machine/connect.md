@@ -6,7 +6,7 @@
 
 Firecracker and SSH are **permanently disabled for new work**. Their code
 and records remain for inspection and explicit cleanup. See the
-[platform restriction](../../../connect/support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
+[platform restriction](../../../control/support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
 the source change required for re-enabling. Descriptions of their adapter
 mechanics below are retained implementation details, not selectable features.
 
@@ -17,7 +17,7 @@ before home creation or platform effects. The adapter code below is disabled.
 | --- | --- |
 | Family | [machine](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/machine/connect.rs`](../../../../../api/crates/layerfs-api/src/machine/connect.rs) |
-| Implemented in | `layerfs_control::machine::connect` ([`machine/connect.rs`](../../../../../api/crates/layerfs-control/src/machine/connect.rs)), then `layerfs_machine::connect` ([`setup/calls.rs`](../../../../../connect/crates/layerfs-machine/src/setup/calls.rs)) |
+| Implemented in | `layerfs_control::machine::connect` ([`connect.rs`](../../../../../control/crates/layerfs-machine/src/connect.rs)), then `layerfs_platform::connect` ([`setup/calls.rs`](../../../../../control/crates/layerfs-platform/src/setup/calls.rs)) |
 | Runs in | the caller's process; `ssh` to the host |
 
 ## Signature
@@ -43,22 +43,22 @@ layerfs machine connect <name> <host> [--user U] [--port N] \
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | `MachineName::parse`; not built in; not taken | [`machine/create.rs`](../../../../../api/crates/layerfs-control/src/machine/create.rs) `new_name` |
-| `host` | Text | the ssh host name or address | [`machine/connect.rs`](../../../../../api/crates/layerfs-control/src/machine/connect.rs) |
+| `name` | Name | `MachineName::parse`; not built in; not taken | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) `new_name` |
+| `host` | Text | the ssh host name or address | [`connect.rs`](../../../../../control/crates/layerfs-machine/src/connect.rs) |
 
 `ssh` is disabled on macOS, Linux, Windows and every other host
-([`SUPPORT.json`](../../../../../connect/SUPPORT.json)); see the
-[ssh platform page](../../../connect/machines/platforms/ssh.md).
+([`SUPPORT.json`](../../../../../control/SUPPORT.json)); see the
+[ssh platform page](../../../control/machines/platforms/ssh.md).
 
 ## Options
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `user` | Text | `root` | the login user | [`machine/connect.rs`](../../../../../api/crates/layerfs-control/src/machine/connect.rs) |
+| `user` | Text | `root` | the login user | [`connect.rs`](../../../../../control/crates/layerfs-machine/src/connect.rs) |
 | `port` | Int | 22 | the ssh port | same |
-| `identity` | Text | none (ssh's own) | a private key path, passed as `-i` | same, [`ssh/observe.rs`](../../../../../connect/crates/layerfs-machine/src/platforms/ssh/observe.rs) |
-| `known_hosts` | Text | `$HOME/.ssh/known_hosts` | copied into `machine/<name>/known_hosts`; the host key is checked strictly against it | [`machine/connect.rs`](../../../../../api/crates/layerfs-control/src/machine/connect.rs) |
-| `root` | Text | `/layerfs/data` | the data root on the host for Stores | [`spec.rs`](../../../../../connect/crates/layerfs-machine/src/spec.rs) `DATA` |
+| `identity` | Text | none (ssh's own) | a private key path, passed as `-i` | same, [`ssh/observe.rs`](../../../../../control/crates/layerfs-platform/src/platforms/ssh/observe.rs) |
+| `known_hosts` | Text | `$HOME/.ssh/known_hosts` | copied into `machine/<name>/known_hosts`; the host key is checked strictly against it | [`connect.rs`](../../../../../control/crates/layerfs-machine/src/connect.rs) |
+| `root` | Text | `/layerfs/data` | the data root on the host for Stores | [`spec.rs`](../../../../../control/crates/layerfs-platform/src/spec.rs) `DATA` |
 
 ## Retained success result (unreachable while disabled)
 
@@ -78,7 +78,7 @@ The machine's summary with `platform: "ssh"`, `state: "running"` and its
  host_identity ----------------------------------->  host key / machine-id
  home lock: another machine with that identity? --> Exists ("same host")
             record host id, op phase "connect"
- layerfs_machine::connect ------------------------>  /layerfs/bundle,
+ layerfs_platform::connect ------------------------>  /layerfs/bundle,
                                                      /layerfs/state, data
                                                      root folders; worker
                                                      + forward; secret
@@ -87,18 +87,18 @@ The machine's summary with `platform: "ssh"`, `state: "running"` and its
 
 A second machine on the same host would be one kernel twice, so it is
 refused. Outcomes are recorded as for [machine.create](create.md#where-it-runs).
-See the [routing table](../../routing/routing-table.md).
+See the [routing table](../../../control/routing/routing-table.md).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | bad or built-in name; `known_hosts` unset with no `HOME`, or unreadable; a folder-scoped client | no | [`machine/connect.rs`](../../../../../api/crates/layerfs-control/src/machine/connect.rs) |
+| `InvalidInput` | bad or built-in name; `known_hosts` unset with no `HOME`, or unreadable; a folder-scoped client | no | [`connect.rs`](../../../../../control/crates/layerfs-machine/src/connect.rs) |
 | `Exists` | the name is taken; another machine is the same host | no | same |
-| `Unsupported` | `ssh` not usable here (`detail.missing`); no sealed bundle; no `machine` feature | no | same, [`machine/bundle.rs`](../../../../../api/crates/layerfs-control/src/machine/bundle.rs) |
-| `Denied` | the host refuses the login or its key is not the known one | no | [`error.rs`](../../../../../connect/crates/layerfs-machine/src/error.rs) |
+| `Unsupported` | `ssh` not usable here (`detail.missing`); no sealed bundle; no `machine` feature | no | same, [`bundle.rs`](../../../../../control/crates/layerfs-machine/src/bundle.rs) |
+| `Denied` | the host refuses the login or its key is not the known one | no | [`error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
 | `Unavailable`, `Failed` | the host does not answer; a setup step failed | no | same |
-| `Unknown` | **a setup step timed out or its answer was lost** | **yes** | [`machine/create.rs`](../../../../../api/crates/layerfs-control/src/machine/create.rs) `finish` |
+| `Unknown` | **a setup step timed out or its answer was lost** | **yes** | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) `finish` |
 
 **After `Unknown`**, read [machine.status](status.md), then clear it with
 [machine.disconnect](disconnect.md).
@@ -124,9 +124,9 @@ layerfs machine connect box build.example.org --user lfs --root /srv/layerfs
 - Before: [machine.platforms](platforms.md). After:
   [store.push](../store/push.md), [sandbox.create](../sandbox/create.md).
   Undo: [machine.disconnect](disconnect.md).
-- [Connect: ssh](../../../connect/machines/platforms/ssh.md),
-  [Connect: workers](../../../connect/network/workers.md),
-  [Connect: forwards](../../../connect/network/forwards.md).
+- [Control: ssh](../../../control/machines/platforms/ssh.md),
+  [Control: workers](../../../control/network/workers.md),
+  [Control: forwards](../../../control/network/forwards.md).
 
 ---
 

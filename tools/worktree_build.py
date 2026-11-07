@@ -191,7 +191,7 @@ def build(args):
             "layerfs-cli",
             # the namespaces Sandbox backend runs this beside the daemon (#515 §4.5)
             "-p",
-            "layerfs-sandbox",
+            "layerfs-sandbox-backend",
             "-j",
             str(args.jobs),
         ]
