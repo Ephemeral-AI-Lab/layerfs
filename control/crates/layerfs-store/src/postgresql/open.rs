@@ -254,3 +254,30 @@ pub fn status(args: &SdkValue) -> Outcome {
         Err(refused("Unsupported", UNBUILT))
     }
 }
+
+/// The open service of a PostgreSQL Store, from the call's
+/// `postgresql: { url }` and the Store's record (#506). Built without the
+/// `postgresql` feature, it is `Unsupported`.
+pub fn open_postgres(
+    args: &SdkValue,
+    identity: &Identity,
+    template: &Path,
+) -> Result<StoreService, SdkRefusal> {
+    let Kind::Postgresql {
+        schema,
+        synchronous_commit,
+    } = &identity.kind
+    else {
+        return Err(refused("InvalidInput", "not a PostgreSQL Store"));
+    };
+    let url = args
+        .get("postgresql")
+        .and_then(|given| given.get_text("url"))
+        .ok_or_else(|| {
+            refused(
+                "InvalidInput",
+                "a PostgreSQL Store call needs postgresql.url (passed per call, never stored)",
+            )
+        })?;
+    crate::postgresql::open::open(url, schema, synchronous_commit, identity, template)
+}

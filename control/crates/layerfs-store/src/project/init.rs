@@ -1,4 +1,4 @@
-//! What host Init shares with `project.init` (`store::identity::add_project`,
+//! What host Init shares with `project.init` (`store::project::add::add_project`,
 //! `project::postgres_init`): the installed Store's locator, Init's deadline
 //! and the worker's half of an Init on another machine. The 1.1 sealed
 //! `project.init` into a project volume is gone (#536 step 2).
@@ -53,7 +53,7 @@ pub fn in_worker(args: &SdkValue) -> Outcome {
     );
     let add = || {
         let _lease = crate::lease::hold_locked(&root, store)?;
-        crate::identity::add_project(&args)
+        crate::project::add::add_project(&args)
     };
     let added = add();
     if let Err(why) = super::staged::remove(&staged) {

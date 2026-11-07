@@ -64,7 +64,7 @@ fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
                 })
         }
         crate::identity::Kind::Postgresql { .. } => {
-            crate::identity::open_postgres(args, &identity, &template)
+            crate::postgresql::open::open_postgres(args, &identity, &template)
         }
     };
     match opened {

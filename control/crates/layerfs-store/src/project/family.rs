@@ -160,7 +160,7 @@ pub fn init(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
         ],
     );
     progress(events, "install", None);
-    let added = crate::identity::add_project(&call)?;
+    let added = crate::project::add::add_project(&call)?;
     // the project's record keeps when it was made
     progress(events, "record", None);
     {
@@ -333,7 +333,7 @@ pub fn remove(home: &Path, events: &mut Events<'_>, args: &SdkValue, related: Re
     let removed = match place::plan(&home, &target.store_ref)? {
         Executor::Local => {
             let _lease = lease::hold(&home, &target.store)?;
-            crate::identity::remove_project(&host_args(&home, &target.store, args))?
+            crate::project::remove::remove_project(&host_args(&home, &target.store, args))?
         }
         Executor::Worker(mut worker) => {
             let _lease = lease::hold(&home, &target.store)?;

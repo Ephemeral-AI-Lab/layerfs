@@ -72,7 +72,8 @@ pub fn add_project(args: &SdkValue) -> Outcome {
     let deadline = crate::project::init::deadline(args)?;
     let counters = Arc::new(layerfs_project::InitCounters::new());
     let (added, stack) = run(args, &identity, name, deadline, counters)?;
-    let added = added.map_err(|failure| stores::add_failure(failure.error, None, name, store))?;
+    let added = added
+        .map_err(|failure| crate::project::add::add_failure(failure.error, None, name, store))?;
     Ok(SdkValue::map([
         (
             "layer",

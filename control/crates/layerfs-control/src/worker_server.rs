@@ -187,7 +187,7 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
         ),
         // drops one project from the Store under this worker's root (2.0):
         // `{ store, project, store_record }`
-        "project.remove" => layerfs_store::identity::remove_project(&with_home(args, root)),
+        "project.remove" => layerfs_store::project::remove::remove_project(&with_home(args, root)),
         // writes or discards one part of a caller's folder copy under this
         // worker's root (#536 H11a)
         "project.stage" => layerfs_store::project::staged::run(root, &args),
