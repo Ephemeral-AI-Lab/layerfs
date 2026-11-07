@@ -1430,3 +1430,168 @@ fn shared_store_lease_and_concurrent_remove_admission() {
         let _ = std::fs::remove_dir_all(d);
     }
 }
+
+fn phase_of(ev: &SdkValue) -> Option<String> {
+    ev.get("progress")
+        .and_then(|p| p.get_text("phase"))
+        .map(str::to_owned)
+}
+
+fn export_args(dest: &Path) -> [(&'static str, SdkValue); 2] {
+    [
+        ("project", t("shop/app")),
+        ("destination", t(&dest.display().to_string())),
+    ]
+}
+
+/// The modes a snapshot can hold are what export writes: a Store holds no
+/// setuid or setgid bit (Init refuses one, as every writer does), and a
+/// directory's sticky bit, the one special bit it can hold, is kept.
+#[test]
+fn snapshots_hold_no_setuid_and_a_sticky_directory_is_kept() {
+    let home = private_home("mode-home");
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    let mode = |p: &Path, m: u32| {
+        std::fs::set_permissions(p, std::fs::Permissions::from_mode(m)).unwrap();
+    };
+    let refused = tempdir("mode-suid");
+    std::fs::write(refused.join("tool"), b"#!/bin/sh\n").unwrap();
+    mode(&refused.join("tool"), 0o4755);
+    let (code, _) = call(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/suid")),
+            ("folder", t(&refused.display().to_string())),
+        ],
+    )
+    .unwrap_err();
+    assert_eq!(code, "InvalidInput");
+
+    let source = tempdir("mode-src");
+    std::fs::create_dir(source.join("shared")).unwrap();
+    mode(&source.join("shared"), 0o1777);
+    std::fs::write(source.join("tool"), b"#!/bin/sh\n").unwrap();
+    mode(&source.join("tool"), 0o755);
+    ok(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/app")),
+            ("folder", t(&source.display().to_string())),
+        ],
+    );
+    let dest = tempdir("mode-out").join("exported");
+    ok(&home, "project.export", &export_args(&dest));
+    let got = |name: &str| std::fs::symlink_metadata(dest.join(name)).unwrap().mode() & 0o7777;
+    assert_eq!(got("shared"), 0o1777);
+    assert_eq!(got("tool"), 0o755);
+    for d in [home, refused, source] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+/// `finalize` is the last event and arrives only once the folder is in
+/// place; a publish that fails (the destination filled meanwhile) emits
+/// none, keeps the caller's file and leaves no staging folder.
+#[test]
+fn finalize_follows_publication_and_never_a_failed_publish() {
+    let home = private_home("fin-home");
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    let source = tempdir("fin-src");
+    std::fs::write(source.join("a.txt"), b"a\n").unwrap();
+    std::fs::write(source.join("b.txt"), b"b\n").unwrap();
+    ok(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/app")),
+            ("folder", t(&source.display().to_string())),
+        ],
+    );
+    let parent = tempdir("fin-out");
+
+    let dest = parent.join("done");
+    let mut placed_at_finalize = None;
+    let mut phases = Vec::new();
+    call_with_events(&home, "project.export", &export_args(&dest), &mut |ev| {
+        if let Some(phase) = phase_of(&ev) {
+            if phase == "finalize" {
+                placed_at_finalize = Some(dest.join("a.txt").is_file());
+            }
+            phases.push(phase);
+        }
+    })
+    .unwrap();
+    assert_eq!(placed_at_finalize, Some(true));
+    assert_eq!(phases.last().map(String::as_str), Some("finalize"));
+
+    let taken = parent.join("taken");
+    std::fs::create_dir(&taken).unwrap();
+    let mut planted = false;
+    let mut phases = Vec::new();
+    let (code, _) = call_with_events(&home, "project.export", &export_args(&taken), &mut |ev| {
+        if let Some(phase) = phase_of(&ev) {
+            if phase == "export" && !planted {
+                std::fs::write(taken.join("mine.txt"), b"mine\n").unwrap();
+                planted = true;
+            }
+            phases.push(phase);
+        }
+    })
+    .unwrap_err();
+    assert_eq!(code, "NotEmpty");
+    assert!(!phases.iter().any(|p| p == "finalize"), "{phases:?}");
+    assert_eq!(std::fs::read(taken.join("mine.txt")).unwrap(), b"mine\n");
+    let left: Vec<_> = std::fs::read_dir(&parent)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().starts_with(".layerfs-export-"))
+        .collect();
+    assert!(left.is_empty(), "staging left behind: {left:?}");
+    for d in [home, source, parent] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+/// Many small entries do not flood the callback: besides the first and
+/// last, `export` events come at most once per 200 ms.
+#[test]
+fn export_progress_events_follow_time_not_entry_count() {
+    let home = private_home("rate-home");
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    let source = tempdir("rate-src");
+    for d in 0..30 {
+        let dir = source.join(format!("d{d:02}"));
+        std::fs::create_dir(&dir).unwrap();
+        for f in 0..100 {
+            std::fs::write(dir.join(format!("f{f:03}")), b"x").unwrap();
+        }
+    }
+    ok(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/app")),
+            ("folder", t(&source.display().to_string())),
+        ],
+    );
+    let dest = tempdir("rate-out").join("exported");
+    let mut exports = 0u128;
+    let started = std::time::Instant::now();
+    let res = call_with_events(&home, "project.export", &export_args(&dest), &mut |ev| {
+        if phase_of(&ev).as_deref() == Some("export") {
+            exports += 1;
+        }
+    })
+    .unwrap();
+    let elapsed = started.elapsed().as_millis();
+    assert_eq!(res.get_int("files"), Some(3000));
+    assert!(
+        exports <= 2 + elapsed / 200,
+        "{exports} export events in {elapsed} ms"
+    );
+    for d in [home, source] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}

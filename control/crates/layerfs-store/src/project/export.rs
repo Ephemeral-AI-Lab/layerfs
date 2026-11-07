@@ -53,10 +53,10 @@ const MIN_ROOM: usize = 64 << 10;
 /// Directory entries read per B-tree page wave.
 const DIRECTORY_WINDOW: usize = 64;
 const DIRECTORY_BYTES: usize = 8192;
-/// Progress emission thresholds during the `export` phase.
+/// The least time between two `export` progress events: at most five a
+/// second however fast entries are written, so the event count follows
+/// time, not bytes or entries.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(200);
-const PROGRESS_BYTES: u64 = 4 << 20;
-const PROGRESS_ENTRIES: u64 = 512;
 
 /// One `project.export(project, destination, { branch, on_progress })`.
 pub struct ProjectExport {
@@ -350,8 +350,6 @@ struct LocalWriter {
     symlinks: u64,
     bytes: u64,
     last_emit: Instant,
-    bytes_since_emit: u64,
-    entries_since_emit: u64,
     emitted_final_counts: bool,
 }
 
@@ -365,8 +363,6 @@ impl LocalWriter {
             symlinks: 0,
             bytes: 0,
             last_emit: Instant::now(),
-            bytes_since_emit: 0,
-            entries_since_emit: 0,
             emitted_final_counts: false,
         };
         writer.emit_phase(context, "prepare", SdkValue::Null);
@@ -375,7 +371,11 @@ impl LocalWriter {
     }
 
     fn emit_phase(&self, context: &mut Events<'_>, phase: &str, done: SdkValue) {
-        context.progress(SdkValue::map([
+        context.progress(self.phase_event(phase, done));
+    }
+
+    fn phase_event(&self, phase: &str, done: SdkValue) -> SdkValue {
+        SdkValue::map([
             ("phase", SdkValue::text(phase)),
             ("files", SdkValue::Int(self.files as i64)),
             ("directories", SdkValue::Int(self.directories as i64)),
@@ -383,22 +383,18 @@ impl LocalWriter {
             ("bytes", SdkValue::Int(self.bytes as i64)),
             ("done", done),
             ("total", SdkValue::Null),
-        ]));
+        ])
     }
 
     fn emit_export(&mut self, context: &mut Events<'_>) {
         self.emit_phase(context, "export", SdkValue::Int(self.bytes as i64));
         self.last_emit = Instant::now();
-        self.bytes_since_emit = 0;
-        self.entries_since_emit = 0;
         self.emitted_final_counts = true;
     }
 
     fn maybe_emit_export(&mut self, context: &mut Events<'_>) {
-        if self.bytes_since_emit >= PROGRESS_BYTES
-            || self.entries_since_emit >= PROGRESS_ENTRIES
-            || self.last_emit.elapsed() >= PROGRESS_INTERVAL
-        {
+        self.emitted_final_counts = false;
+        if self.last_emit.elapsed() >= PROGRESS_INTERVAL {
             self.emit_export(context);
         }
     }
@@ -410,25 +406,17 @@ impl LocalWriter {
             match record {
                 Record::Directory { .. } => {
                     self.directories += 1;
-                    self.entries_since_emit += 1;
-                    self.emitted_final_counts = false;
                     self.maybe_emit_export(context);
                 }
                 Record::Write { offset, bytes, .. } => {
                     if offset == 0 {
                         self.files += 1;
-                        self.entries_since_emit += 1;
                     }
-                    let len = bytes.len() as u64;
-                    self.bytes += len;
-                    self.bytes_since_emit += len;
-                    self.emitted_final_counts = false;
+                    self.bytes += bytes.len() as u64;
                     self.maybe_emit_export(context);
                 }
                 Record::Link { .. } => {
                     self.symlinks += 1;
-                    self.entries_since_emit += 1;
-                    self.emitted_final_counts = false;
                     self.maybe_emit_export(context);
                 }
                 Record::Meta { .. } => {}
@@ -466,8 +454,11 @@ impl LocalWriter {
         if !self.emitted_final_counts {
             self.emit_export(context);
         }
-        self.emit_phase(context, "finalize", SdkValue::Int(self.bytes as i64));
+        // `finalize` is the last event and means the folder is in place: a
+        // publish that fails emits none
+        let finalize = self.phase_event("finalize", SdkValue::Int(self.bytes as i64));
         self.guard.publish(dest)?;
+        context.progress(finalize);
         Ok(expected)
     }
 }

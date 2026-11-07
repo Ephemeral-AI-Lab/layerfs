@@ -69,8 +69,9 @@ directory is `NotEmpty`. Export never merges into an existing tree.
 
 All entries are built in a private `0700` staging directory named
 `.layerfs-export-<random>` under the destination's parent, on the same filesystem.
-After content and metadata are complete, `finalize` rechecks the destination and
-atomically renames staging into place, replacing an allowed empty directory.
+After content and metadata are complete, export rechecks the destination and
+atomically renames staging into place, replacing an allowed empty directory;
+only then does it emit `finalize`.
 A destination populated by another process during export is refused and its
 files are preserved. Failure, capacity exhaustion or disconnect cleans up only
 this call's staging directory, including read-only subdirectories. A preexisting
@@ -140,23 +141,25 @@ the final result's presentation, leaving progress as JSON Lines.
 | --- | --- | --- |
 | `prepare` | validate and prepare the pinned export | `files`, `directories`, `symlinks`, `bytes` start at zero; `done` is `null`, `total` is `null` |
 | `export` | traverse and write into local staging | monotonically increasing `files`, `directories`, `symlinks`, `bytes`; `done = bytes`, `total = null` |
-| `finalize` | publish the completed staging directory | final `files`, `directories`, `symlinks`, `bytes`; `done = bytes`, `total = null`; this event alone is not success |
+| `finalize` | the folder is in place: staging was renamed onto the destination | final `files`, `directories`, `symlinks`, `bytes`; `done = bytes`, `total = null`; the last event, never emitted when publication fails |
 
 `bytes` counts regular-file logical bytes successfully written on the caller's
 filesystem, excluding transport overhead. Counter fields (`files`, `directories`,
 `symlinks`, `bytes`) describe local output, not merely received frames, and are
 verified against the snapshot counts before atomic publication. `total` stays
 `null`: export does no whole-tree prescan to manufacture a percentage. Large-file
-chunks and batches of small entries produce live, throttled updates (every 200 ms,
-4 MiB or 512 entries); event counts and timing are not fixed. `directories`
+chunks and batches of small entries produce live updates at most once per
+200 ms, besides the first and last `export` event, however many entries or
+bytes are written; event counts and timing are not fixed. `directories`
 counts exported subdirectories beneath the destination (excluding the destination
 root directory itself); `files` in both progress and the return value counts
 regular files only; `symlinks` in both progress and the return value counts
 symbolic links separately.
 
 Every queued event is delivered before a normal call settles. Success requires
-the final rename and a successful return; `finalize` can still be followed by a
-refusal. Node catches a throwing handler and emits `LayerFSHandlerWarning`,
+the final rename and a successful return. `finalize` comes only after the
+rename; the call is refused after it only if closing the Store fails, and the
+published folder then stays. Node catches a throwing handler and emits `LayerFSHandlerWarning`,
 continuing the call. Synchronous Python reports callback exceptions as unraisable;
 `aio` handlers run on the event loop and exceptions reach its exception handler.
 Cancelling a Python `aio` task stops further callback delivery, while the native

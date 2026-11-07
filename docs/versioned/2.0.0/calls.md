@@ -127,7 +127,8 @@ The final JSON result contains `project`, `store`, `name`, `kind`, `machine`,
 `branch`, `snapshot`, `node`, `root`, `destination`, `files`, `directories`,
 `symlinks` and `bytes`. Progress on stderr is JSON Lines with `prepare`, `export`,
 `finalize`, local `files`/`directories`/`symlinks`/`bytes`, `done = bytes` during
-writing and `total: null`; `finalize` alone does not mean publication succeeded.
+writing and `total: null`; `finalize` is the last event and comes only once the
+folder is in place. Events arrive at most every 200 ms.
 
 ### `branch` (6)
 

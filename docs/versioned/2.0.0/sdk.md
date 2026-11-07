@@ -156,7 +156,8 @@ A required stopped machine is `Unavailable`.
 
 Callbacks receive `prepare`, `export`, `finalize` with monotonic local-output
 `files`, `directories`, `symlinks`, `bytes` and `done = bytes` during export; `total` is
-`None`/`null`. Only a successful return after atomic publication means success.
+`None`/`null`. `finalize` comes only once the folder is in place, and `export`
+updates at most every 200 ms; only a successful return means success.
 Omit `on_progress` when unused: the current Python shell rejects explicit
 `on_progress=None`. Handler exceptions do not cancel export. Cancelling `aio`
 stops callbacks while the native operation continues, so inspect the destination
