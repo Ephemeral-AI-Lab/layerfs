@@ -194,6 +194,26 @@ impl Overlay {
         }
         self.resume_digest(changes)?;
         let carried = self.carried_digests(changes)?;
+        // Whether the job's write starts at or after the length its file had
+        // before the job; a window that does meets no payload row of a layer
+        // that was never shrunk, so it needs no shape read (`write_cells`).
+        let appended = match &changes.write {
+            None => false,
+            Some(write) => {
+                let serial = integer(write.serial)?;
+                let inherited = changes
+                    .inodes
+                    .iter()
+                    .find(|inode| inode.serial == write.serial)
+                    .map_or(0, |inode| inode.inherited_cutoff);
+                match seen.and_then(|seen| seen.seen(serial)) {
+                    Some(Some(inode)) => write.offset >= inode.size,
+                    Some(None) => write.offset >= inherited,
+                    // An inode this job creates starts from its inherited length.
+                    None => changes.created == Some(write.serial) && write.offset >= inherited,
+                }
+            }
+        };
         let mut inodes = 0_i64;
         let mut layers = Vec::with_capacity(changes.inodes.len());
         for inode in &changes.inodes {
@@ -260,8 +280,8 @@ impl Overlay {
         if let Some(write) = &changes.write {
             let (serial, layer) = (integer(write.serial)?, layer(write.serial)?);
             match &changes.claims {
-                None => self.write_cells(serial, layer, write.offset, &write.data)?,
-                Some(claims) => self.write_claimed(serial, layer, write, claims)?,
+                None => self.write_cells(serial, layer, write.offset, &write.data, appended)?,
+                Some(claims) => self.write_claimed(serial, layer, write, claims, appended)?,
             }
         }
         for inode in &changes.inodes {

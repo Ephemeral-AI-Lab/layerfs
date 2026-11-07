@@ -94,7 +94,7 @@ Source: [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/database
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
 | Open state | Grows with open files, readers, lookups and kernel references; no cap | [`open/kernel.rs`](../../../../engine/crates/layerfs-overlay/src/open/kernel.rs) |
-| Job windows (not totals) | `WRITE_WINDOW` and `READ_WINDOW` 128 KiB, `PAGE_ROWS` 1,024 (64 before layerfs-project #69), `RECORD_ROWS` 64 (operation-record windows), `OPERATION_RECORD_BYTES` 65 536, `COMPOUND_INODES` 4, `COMPOUND_DIRECTORY_ENTRIES` 2 | [`types.rs`](../../../../engine/crates/layerfs-overlay/src/contract/types.rs) |
+| Job windows (not totals) | `WRITE_WINDOW` 256 KiB, `READ_WINDOW` 128 KiB, `PAGE_ROWS` 1,024 (64 before layerfs-project #69), `RECORD_ROWS` 64 (operation-record windows), `OPERATION_RECORD_BYTES` 65 536, `COMPOUND_INODES` 4, `COMPOUND_DIRECTORY_ENTRIES` 2 | [`types.rs`](../../../../engine/crates/layerfs-overlay/src/contract/types.rs) |
 | Database size | `max_pages: None` uses SQLite's format ceiling; the daemon passes `None` | [`profile.rs`](../../../../engine/crates/layerfs-overlay/src/database/profile.rs), [`application/owner.rs`](../../../../engine/crates/layerfs-daemon/src/application/owner.rs) |
 | Admitted Workspaces | `DaemonLimits.namespaces`; one more is `AdmissionFull` | [`workspaces.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/workspaces.rs) |
 | Full device | Whole job rolled back, then `OverlayError::NoSpace` | [`connection.rs`](../../../../engine/crates/layerfs-overlay/src/database/connection.rs) |

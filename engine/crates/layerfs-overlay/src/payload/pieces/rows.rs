@@ -105,6 +105,7 @@ impl Overlay {
         layer: &Layer,
         write: &PayloadWrite,
         claims: &WriteClaims,
+        appended: bool,
     ) -> OverlayResult<()> {
         let end = write.offset + write.data.len() as u64;
         let bytes = |from: u64, to: u64| {
@@ -136,7 +137,7 @@ impl Overlay {
             }
             // Only the window's own bytes are written by this job.
             if at < first.min(end) {
-                self.write_cells(serial, layer, at, bytes(at, first.min(end)))?;
+                self.write_cells(serial, layer, at, bytes(at, first.min(end)), appended)?;
             }
             let named = (claims.source, integer(source + (first - from))?);
             let cells = (integer(first)?, integer(last)?);
@@ -144,7 +145,7 @@ impl Overlay {
             at = at.max(last.min(end));
         }
         if at < end {
-            self.write_cells(serial, layer, at, bytes(at, end))?;
+            self.write_cells(serial, layer, at, bytes(at, end), appended)?;
         }
         Ok(())
     }

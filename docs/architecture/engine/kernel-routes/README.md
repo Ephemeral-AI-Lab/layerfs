@@ -115,8 +115,8 @@ supported row runs a Linux kernel and uses FUSE. The table is owned by the
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| READ and WRITE window | 128 KiB (`READ_WINDOW`, `WRITE_WINDOW`); larger is `EINVAL` | [`types.rs`](../../../../engine/crates/layerfs-overlay/src/contract/types.rs), [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs) |
-| FUSE input per request | `MAX_INPUT_BYTES` = `WRITE_WINDOW + 510`; more is `ENOTCONN` | [`types.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/types.rs) |
+| READ and WRITE window | `READ_WINDOW` 128 KiB, `WRITE_WINDOW` 256 KiB (FUSE negotiates `READ_WINDOW`); larger is `EINVAL` | [`types.rs`](../../../../engine/crates/layerfs-overlay/src/contract/types.rs), [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs) |
+| FUSE input per request | `MAX_INPUT_BYTES` = `READ_WINDOW + 510`; more is `ENOTCONN` | [`types.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/types.rs) |
 | FUSE receive buffer | `max_write + 4096` per receive loop, two loops per mount; the INIT buffer stays at fuser's 16 MiB + 4 KiB | [fuser patches](fuser-patches.md#receive-buffer) |
 | Name length | 255 bytes; longer is `ENAMETOOLONG` | [`callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs), [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |
 | Symlink target | Shorter than one page (FUSE: negotiated page size; NFS: `LINK_PAGE` 4096); else `ENAMETOOLONG` | [`create.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/create.rs), [`change.rs`](../../../../engine/crates/layerfs-nfs/src/change.rs) |

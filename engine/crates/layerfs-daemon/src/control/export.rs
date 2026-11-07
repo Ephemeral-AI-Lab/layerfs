@@ -43,8 +43,11 @@ use std::{
     sync::Arc,
 };
 
-/// Largest write and read the export negotiates (FSINFO wtmax/rtmax).
-const WINDOW: u32 = 128 * 1024;
+/// Largest write and read the export negotiates: FSINFO's `wtmax`/`rtmax`
+/// (`layerfs_nfs::TRANSFER_WINDOW`, 256 KiB = one engine write window) and the
+/// `rsize`/`wsize` it asks the host client to mount with. One source: the
+/// receipt, the mount options and FSINFO cannot drift apart.
+const WINDOW: u32 = layerfs_nfs::TRANSFER_WINDOW;
 pub use super::export_helper::{Helper, HELPER_WAIT};
 
 /// Stale inodes one install refreshes through the mount point at most.
@@ -96,14 +99,13 @@ impl Mounter {
     pub fn host() -> Self {
         let helper = |words: &[&str]| Helper(words.iter().map(|w| (*w).to_owned()).collect());
         if cfg!(target_os = "macos") {
+            // `rsize`/`wsize` ask for the window FSINFO declares; the client
+            // clamps to the smaller of the two.
+            let options = format!(
+                "vers=3,tcp,port={{port}},mountport={{port}},locallocks,nfc,noatime,actimeo=60,rsize={WINDOW},wsize={WINDOW},soft,intr,dumbtimer,timeo=300,retrans=6,mutejukebox,nobrowse"
+            );
             Self {
-                mount: helper(&[
-                    "/sbin/mount_nfs",
-                    "-o",
-                    "vers=3,tcp,port={port},mountport={port},locallocks,nfc,noatime,actimeo=60,rsize=131072,wsize=131072,soft,intr,dumbtimer,timeo=300,retrans=6,mutejukebox,nobrowse",
-                    "127.0.0.1:/",
-                    "{dir}",
-                ]),
+                mount: helper(&["/sbin/mount_nfs", "-o", &options, "127.0.0.1:/", "{dir}"]),
                 unmount: helper(&["/sbin/umount", "{dir}"]),
                 force: helper(&["/sbin/umount", "-f", "{dir}"]),
                 flush: None,

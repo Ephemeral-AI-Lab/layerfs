@@ -78,7 +78,7 @@ fn writes_change_only_their_window_and_never_read_the_inherited_payload() {
         b.applied(write(LARGE, offset as u64, data), T2);
         put(&mut expect, offset, data);
     }
-    let big = vec![0xA5_u8; WRITE_WINDOW];
+    let big = vec![0xA5_u8; WINDOW];
     b.applied(write(LARGE, 262_000, &big), T2);
     put(&mut expect, 262_000, &big);
     let appended = b
@@ -169,7 +169,7 @@ fn fragmented_inherited_bytes_are_read_as_one_base_range() {
         "one covering base range, not one demand per gap"
     );
     // Fully overwritten windows need no base at all.
-    let window = vec![7_u8; WRITE_WINDOW];
+    let window = vec![7_u8; WINDOW];
     b.applied(write(LARGE, from, &window), T2);
     put(&mut expect, 131_072, &window);
     let before = demand();
@@ -297,6 +297,10 @@ fn truncate_and_regrow_never_resurrect_bytes_across_capture_and_known_install() 
     assert_eq!(b.lookup(1, "alias").unwrap().kind, InodeKind::RegularFile);
 }
 
+/// One write job of the size these shapes were calibrated at. The engine's
+/// window is wider since #77 (a router's 256 KiB transfer is one job), so a
+/// job of this size is still exactly one window's work here.
+const WINDOW: usize = 128 * 1024;
 /// Incompressible bytes: a 64-bit xorshift stream.
 fn noise(length: usize, seed: u64) -> Vec<u8> {
     let mut state = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
@@ -314,7 +318,7 @@ fn noise(length: usize, seed: u64) -> Vec<u8> {
 fn whole_windows_overwrites_and_cuts_inside_them_read_back_exactly() {
     let b = Bench::with_cache("payload-windows", 0);
     let mut expect = b.fixture.bytes.clone();
-    let window = noise(WRITE_WINDOW, 1);
+    let window = noise(WINDOW, 1);
     let put_at = |b: &Bench, expect: &mut Vec<u8>, offset: usize, data: &[u8]| {
         b.applied(write(LARGE, offset as u64, data), T1);
         put(expect, offset, data);
@@ -322,7 +326,7 @@ fn whole_windows_overwrites_and_cuts_inside_them_read_back_exactly() {
     // Windows over inherited bytes, aligned and straddling every boundary.
     put_at(&b, &mut expect, 0, &window);
     put_at(&b, &mut expect, 131_072, &window[..100_000]);
-    put_at(&b, &mut expect, 100_001, &noise(WRITE_WINDOW, 2));
+    put_at(&b, &mut expect, 100_001, &noise(WINDOW, 2));
     assert_eq!(b.content(LARGE), expect);
     // Overwrites inside one window: a cell, one byte at a cell boundary, a
     // span across 32 KiB and 64 KiB boundaries.

@@ -15,19 +15,22 @@ const RUN: u64 = RUN_BYTES as u64;
 impl Overlay {
     /// Writes `bytes` at `offset` into one layer inside the caller's
     /// transaction. Whole cells are written one aligned slot of `RUN_BYTES`
-    /// at a time: the row shapes of the slot, read once for every
-    /// `READ_WINDOW` of slots ahead, then the bytes
-    /// replace a live dense row in place or become one new row bound from
-    /// the caller's slice. A partly covered cell is one point read and
-    /// either an in-place write into a wide row or a merge of at most one
-    /// cell and one upsert. Prior fragmentation of the range does not
-    /// enlarge the work.
+    /// at a time: the row shapes of the slots, read once for every write
+    /// window of slots ahead, then the bytes replace a live dense row in place
+    /// or become one new row bound from the caller's slice. A partly covered
+    /// cell is one point read and either an in-place write into a wide row or a
+    /// merge of at most one cell and one upsert. Prior fragmentation of the
+    /// range does not enlarge the work. `appended` states that the window
+    /// starts at or after the length the file had before this job; a layer
+    /// that was never shrunk then cannot hold a row of it either, so no shape
+    /// is read at all.
     pub(crate) fn write_cells(
         &self,
         serial: i64,
         layer: &Layer,
         offset: u64,
         bytes: &[u8],
+        appended: bool,
     ) -> OverlayResult<()> {
         let end = offset
             .checked_add(bytes.len() as u64)
@@ -41,12 +44,17 @@ impl Overlay {
         // One handle serves every in-place write of this window. A commit
         // needs it closed, so it never outlives this call.
         let mut blob = None;
-        // Row shapes of the slots ahead, read once for at most one read
-        // window of them, and where that read ends. A slot's write changes
-        // rows of its own slot only, and a partly covered first cell is
-        // written before the first whole one is reached, so the shapes are
-        // the rows each slot's own read would return.
+        // Row shapes of the slots ahead, read once for at most one write
+        // window of them (a read window for a narrower write), and where that
+        // read ends. A slot's write changes rows of its own slot only, and a
+        // partly covered first cell is written before the first whole one is
+        // reached, so the shapes are the rows each slot's own read would
+        // return.
         let (mut ahead, mut ahead_to) = (Vec::new(), 0);
+        let read_ahead = bytes.len().max(READ_WINDOW) as u64;
+        // `height == 0` is a layer that was never shrunk, so it holds no row
+        // past its length and an appended window needs no shape at all.
+        let unshaped = appended && layer.height == 0;
         let mut at = offset;
         while at < end {
             let cell = at - at % CELL;
@@ -67,8 +75,8 @@ impl Overlay {
                 .saturating_add(u64::from(!whole));
             self.payload_work.set(observed);
             if whole {
-                if at >= ahead_to {
-                    let window = at - at % RUN + READ_WINDOW as u64;
+                if !unshaped && at >= ahead_to {
+                    let window = at - at % RUN + read_ahead;
                     ahead_to = (end - end % CELL).min(window);
                     ahead = self.shapes(serial, layer.gen, at as i64, ahead_to as i64)?;
                 }
@@ -283,6 +291,16 @@ impl Overlay {
         if first.kind == InodeKind::Directory || start == end {
             return Ok(Some(read));
         }
+        // One layer, no piece of it covering the window, and nothing of the
+        // window below its fall-through cutoff: then that layer's rows hold
+        // every stored byte of the window and each other byte is a local zero.
+        // No byte of the window is inherited, so the per-byte decision map the
+        // general path builds would only be filled as decided.
+        if layers.len() == 1 && !first.referenced && first.cutoff <= start {
+            return self
+                .stored_window(serial, first, start, end, read)
+                .map(Some);
+        }
         // 0: undecided, 1: decided locally (a written byte or a zero),
         // n + 2: supplied by reference range n.
         let mut decided = vec![0_u8; read.data.len()];
@@ -415,6 +433,138 @@ impl Overlay {
             .saturating_add((read.inherited.len() + read.referenced.len()) as u64);
         self.payload_work.set(observed);
         Ok(Some(read))
+    }
+    /// The window of a file that only its own layer decides, composed from
+    /// that layer's live rows: `compose_layers` without the decision map.
+    fn stored_window(
+        &self,
+        serial: i64,
+        layer: &Layer,
+        start: u64,
+        end: u64,
+        mut read: LocalRead,
+    ) -> OverlayResult<LocalRead> {
+        // A layer that never shrank (`height` 0) hides no row: every row its
+        // generation wrote is live, since only a shrink retires one and only a
+        // shrink raises the epoch. The window then needs no staleness lookup
+        // and no `Stored` per row: the bytes come straight out of the row.
+        if layer.height == 0 {
+            self.unshrunk_window(serial, layer, start, end, &mut read)?;
+            return Ok(read);
+        }
+        let rows = self.query(
+            StatementKind::Payload,
+            sql::CELL_RANGE,
+            &[
+                &serial,
+                &layer.gen,
+                &((start - start % RUN) as i64),
+                &(end as i64),
+                &(start as i64),
+            ],
+            48,
+            |row| Ok((row.get::<_, i64>(0)?, Stored::decode(row, 1)?)),
+        )?;
+        let mut copied = 0_u64;
+        for (cell, stored) in rows {
+            if self.stale(serial, layer, cell, stored.epoch)? {
+                continue;
+            }
+            let cell = cell as u64;
+            let from = start.max(cell);
+            let to = end.min(cell + stored.data.len() as u64);
+            if from >= to {
+                continue;
+            }
+            let slots = (from - start) as usize..(to - start) as usize;
+            let source = &stored.data[(from - cell) as usize..(to - cell) as usize];
+            if stored.validity.is_none() {
+                // A dense row over undecided bytes is one copy.
+                read.data[slots.clone()].copy_from_slice(source);
+                copied += slots.len() as u64;
+            } else {
+                // A masked row holds only the bytes its mask marks.
+                for (at, byte) in source.iter().enumerate() {
+                    if stored.valid((from - cell) as usize + at) {
+                        read.data[slots.start + at] = *byte;
+                        copied += 1;
+                    }
+                }
+            }
+        }
+        let mut observed = self.payload_work.get();
+        observed.read_local_copy_bytes = observed.read_local_copy_bytes.saturating_add(copied);
+        observed.read_window_zeroed_bytes = observed
+            .read_window_zeroed_bytes
+            .saturating_add(read.data.len() as u64);
+        self.payload_work.set(observed);
+        Ok(read)
+    }
+    /// `stored_window` for a layer that never shrank: the window is copied
+    /// into `read.data` in place, from the row values themselves, so a row
+    /// of 8 slots (32 KiB) costs one borrow and one copy, not a `Vec<u8>`
+    /// per row and a second copy.
+    fn unshrunk_window(
+        &self,
+        serial: i64,
+        layer: &Layer,
+        start: u64,
+        end: u64,
+        read: &mut LocalRead,
+    ) -> OverlayResult<()> {
+        let mut data = std::mem::take(&mut read.data);
+        let mut copied = 0_u64;
+        self.query(
+            StatementKind::Payload,
+            sql::CELL_RANGE,
+            &[
+                &serial,
+                &layer.gen,
+                &((start - start % RUN) as i64),
+                &(end as i64),
+                &(start as i64),
+            ],
+            48,
+            |row| {
+                let cell = row.get::<_, i64>(0)? as u64;
+                let bytes = row.get_ref(2)?.as_bytes()?;
+                let from = start.max(cell);
+                let to = end.min(cell + bytes.len() as u64);
+                if from >= to {
+                    return Ok(());
+                }
+                let slots = (from - start) as usize..(to - start) as usize;
+                let source = &bytes[(from - cell) as usize..(to - cell) as usize];
+                let mask = row.get_ref(3)?;
+                if matches!(mask, rusqlite::types::ValueRef::Null) {
+                    // A dense row is one copy of its bytes.
+                    data[slots.clone()].copy_from_slice(source);
+                    copied += slots.len() as u64;
+                } else {
+                    // A masked row holds only the bytes its mask marks.
+                    let mask = mask.as_bytes()?;
+                    for (at, byte) in source.iter().enumerate() {
+                        let index = (from - cell) as usize + at;
+                        if mask
+                            .get(index / 8)
+                            .is_some_and(|bits| bits & (1 << (index % 8)) != 0)
+                        {
+                            data[slots.start + at] = *byte;
+                            copied += 1;
+                        }
+                    }
+                }
+                Ok(())
+            },
+        )?;
+        read.data = data;
+        let mut observed = self.payload_work.get();
+        observed.read_local_copy_bytes = observed.read_local_copy_bytes.saturating_add(copied);
+        observed.read_window_zeroed_bytes = observed
+            .read_window_zeroed_bytes
+            .saturating_add(read.data.len() as u64);
+        self.payload_work.set(observed);
+        Ok(())
     }
 }
 impl Overlay {}
