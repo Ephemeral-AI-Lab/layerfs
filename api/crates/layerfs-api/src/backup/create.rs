@@ -4,6 +4,7 @@ use crate::calls::table::{a, call, opt, Call, PROGRESS};
 use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_store::backup::family::{create, BackupCreate};
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -17,6 +18,12 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `backup.create`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    let text = |name: &str| args.get_text(name).map(str::to_owned);
+    let request = BackupCreate {
+        store: text("store").unwrap_or_default(),
+        bucket: text("bucket").unwrap_or_default(),
+        file: text("file"),
+    };
     let (home, events) = context.parts();
-    layerfs_store::backup::family::create(home, events, args)
+    create(home, events, &request)
 }

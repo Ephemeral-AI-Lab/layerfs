@@ -19,6 +19,9 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
+/// `backup.restore(store, bucket, file?)`.
+pub type BackupRestore = super::create::BackupCreate;
+
 /// `backup.restore(store, bucket, file?)`: the backup as a sqlite Store on
 /// `native`: a new Store when `store` does not exist, else it replaces an
 /// idle Store on `native` unchanged since its last backup or restore
@@ -26,16 +29,21 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// its projects runs). The download, its checks and the read of its
 /// projects happen before the home lock; the lock covers the re-checks, the
 /// install and the record writes only.
-pub fn restore(home: &Path, events: &mut Events<'_>, args: &SdkValue, related: Related) -> Outcome {
+pub fn restore(
+    home: &Path,
+    events: &mut Events<'_>,
+    request: &BackupRestore,
+    related: Related,
+) -> Outcome {
     let home = home.to_path_buf();
-    let store = args.get_text("store").unwrap_or("");
+    let store = request.store.as_str();
     layerfs_home::names::StoreName::parse(store)?;
-    let bucket = args.get_text("bucket").unwrap_or("");
+    let bucket = request.bucket.as_str();
     let driver = BucketRecord::of(&home, bucket)?.driver()?;
     let existing = StoreRecord::read(&home, store)?;
-    let file = args
-        .get_text("file")
-        .map(str::to_owned)
+    let file = request
+        .file
+        .clone()
         .or_else(|| {
             let link = existing.as_ref()?.link(bucket)?;
             link.file().map(str::to_owned)

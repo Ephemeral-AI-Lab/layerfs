@@ -17,5 +17,5 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `backup.list`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_store::backup::family::list(&context.home, args)
+    layerfs_store::backup::family::list(&context.home, args.get_text("bucket"))
 }

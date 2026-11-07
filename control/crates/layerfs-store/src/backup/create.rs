@@ -33,16 +33,27 @@ fn expected(record: &StoreRecord, bucket: &str, file: &str) -> remote::Expected 
     }
 }
 
+/// `backup.create(store, bucket, file?)`, and `backup.restore`'s too. The
+/// names are checked where each call checked them.
+#[derive(Clone, Debug, Default)]
+pub struct BackupCreate {
+    /// The Store.
+    pub store: String,
+    /// The connected bucket.
+    pub bucket: String,
+    /// The bucket file, the Store's name (or its link's file) by default.
+    pub file: Option<String>,
+}
+
 /// `backup.create(store, bucket, file?)`: the Store's machine stages a
 /// consistent snapshot beside the Store (`store.file` `stage`, in this
 /// process for `native`); this process uploads it with its sha256, heads,
 /// binding and `layerfs-exported-from`. A worker's snapshot comes here in
 /// pieces first: the worker never sees the key.
-pub fn create(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
+pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> Outcome {
     let home = home.to_path_buf();
-    let store = args.get_text("store").unwrap_or("");
-    let bucket = args.get_text("bucket").unwrap_or("");
-    let file = args.get_text("file").unwrap_or(store).to_owned();
+    let (store, bucket) = (request.store.as_str(), request.bucket.as_str());
+    let file = request.file.as_deref().unwrap_or(store).to_owned();
     let bucket_record = BucketRecord::of(&home, bucket)?;
     let record = StoreRecord::read(&home, store)?
         .ok_or_else(|| refused("NotFound", format!("no Store named {store}")))?;

@@ -3,6 +3,7 @@ use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call};
 use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::names::BucketName;
 use layerfs_home::outcome::Outcome;
 
 /// Its table entry.
@@ -17,5 +18,6 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `backup.disconnect`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_store::backup::family::disconnect(&context.home, args)
+    let name = BucketName::parse(args.get_text("name").unwrap_or(""))?;
+    layerfs_store::backup::family::disconnect(&context.home, &name)
 }

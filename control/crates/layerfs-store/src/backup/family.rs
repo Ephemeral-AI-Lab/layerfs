@@ -7,30 +7,30 @@
 //! pieces. LayerFS never deletes a bucket object.
 //! This file lists backups, connects and disconnects buckets and keeps the
 //! links; `list`, `create` and `restore` are in their own files.
-pub use super::create::create;
-use super::record::{remote_error, BucketRecord, StoreLink};
-pub use super::restore::restore;
+pub use super::create::{create, BackupCreate};
+use super::record::{remote_error, BucketConnect, BucketRecord, StoreLink};
+pub use super::restore::{restore, BackupRestore};
 use crate::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup as remote;
 use layerfs_bucket::bucket::pieces;
 use layerfs_home::home::{self, paths};
+use layerfs_home::names::BucketName;
 use layerfs_home::outcome::{failed, refused, Outcome, View};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// `backup.list`: the backups in a bucket, or in every bucket.
-pub fn list(home: &Path, args: &SdkValue) -> Outcome {
-    super::list::list(home, args.get_text("bucket"))
+pub fn list(home: &Path, bucket: Option<&str>) -> Outcome {
+    super::list::list(home, bucket)
 }
 
 /// `backup.connect(name, url, { key, region, part_size })`: one listing
 /// proves the bucket answers with this key before it is recorded.
-pub fn connect(home: &Path, args: &SdkValue) -> Outcome {
-    let name = args.get_text("name").unwrap_or("");
-    layerfs_home::names::BucketName::parse(name)?;
-    let record = BucketRecord::from_url(name, args.get_text("url").unwrap_or(""), args)?;
+pub fn connect(home: &Path, request: &BucketConnect) -> Outcome {
+    let name = request.name.as_str();
+    let record = BucketRecord::from_url(request)?;
     // one listing proves the bucket answers with this key
     let driver = record.driver()?;
     remote::list_stores(driver.as_ref()).map_err(remote_error)?;
@@ -47,8 +47,8 @@ pub fn connect(home: &Path, args: &SdkValue) -> Outcome {
 
 /// `backup.disconnect(name)`: forgets a bucket and every Store's link to
 /// it; its objects stay.
-pub fn disconnect(home: &Path, args: &SdkValue) -> Outcome {
-    let name = args.get_text("name").unwrap_or("");
+pub fn disconnect(home: &Path, name: &BucketName) -> Outcome {
+    let name = name.as_str();
     BucketRecord::of(home, name)?;
     let _lock = home::lock::take(home)?;
     let mut unlinked = Vec::new();

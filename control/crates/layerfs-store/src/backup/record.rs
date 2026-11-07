@@ -8,6 +8,7 @@ use layerfs_bucket::bucket::minio::{MinioSettings, DEFAULT_PART_SIZE};
 use layerfs_bucket::bucket::r2::R2Settings;
 use layerfs_bucket::bucket::{pieces, CredentialRef, Driver, RemoteError};
 use layerfs_home::home::{self, paths, read_record, write_entity};
+use layerfs_home::names::BucketName;
 use layerfs_home::outcome::{refused, View};
 use std::path::Path;
 
@@ -72,12 +73,28 @@ impl BucketRecord {
         driver(&self.fields)
     }
 
-    /// A bucket record from `url`: `http(s)://host:port/<bucket>/<prefix>`
-    /// for MinIO, `r2://<account>/<bucket>/<prefix>[?jurisdiction=eu|fedramp]`
-    /// for r2.
-    pub fn from_url(name: &str, url: &str, args: &SdkValue) -> Result<Self> {
-        Ok(Self::from_record(name, bucket_record(name, url, args)?))
+    /// A bucket record from `request`'s URL:
+    /// `http(s)://host:port/<bucket>/<prefix>` for MinIO,
+    /// `r2://<account>/<bucket>/<prefix>[?jurisdiction=eu|fedramp]` for r2.
+    pub fn from_url(request: &BucketConnect) -> Result<Self> {
+        Ok(Self::from_record(&request.name, bucket_record(request)?))
     }
+}
+
+/// `backup.connect(name, url, { key, region, part_size })`. No `Debug`, as
+/// with every request that names a key, though this one is a reference.
+#[derive(Clone)]
+pub struct BucketConnect {
+    /// The bucket's name in this home.
+    pub name: BucketName,
+    /// Its URL.
+    pub url: String,
+    /// Its key's reference, `env:LAYERFS_BUCKET_<NAME>` by default.
+    pub key: Option<String>,
+    /// A MinIO bucket's region, `us-east-1` by default.
+    pub region: Option<String>,
+    /// The upload piece size in bytes.
+    pub part_size: Option<i64>,
 }
 
 /// The driver of a bucket record.
@@ -120,19 +137,17 @@ fn bucket_path(path: &str) -> Result<(String, String)> {
     Ok((bucket.to_owned(), prefix.trim_end_matches('/').to_owned()))
 }
 
-/// The fields of a bucket record from `url`.
-fn bucket_record(name: &str, url: &str, args: &SdkValue) -> Result<SdkValue> {
-    let key = args.get_text("key").map(str::to_owned).unwrap_or_else(|| {
+/// The fields of a bucket record from `request`.
+fn bucket_record(request: &BucketConnect) -> Result<SdkValue> {
+    let (name, url) = (request.name.as_str(), request.url.as_str());
+    let key = request.key.clone().unwrap_or_else(|| {
         format!(
             "env:LAYERFS_BUCKET_{}",
             name.to_uppercase().replace(['-', '.'], "_")
         )
     });
     CredentialRef::parse(&key).map_err(remote_error)?;
-    let part_size = SdkValue::Int(
-        args.get_int("part_size")
-            .unwrap_or(DEFAULT_PART_SIZE as i64),
-    );
+    let part_size = SdkValue::Int(request.part_size.unwrap_or(DEFAULT_PART_SIZE as i64));
     if let Some(rest) = url.strip_prefix("r2://") {
         let (rest, query) = rest.split_once('?').unwrap_or((rest, ""));
         let (account, path) = rest.split_once('/').unwrap_or((rest, ""));
@@ -168,7 +183,7 @@ fn bucket_record(name: &str, url: &str, args: &SdkValue) -> Result<SdkValue> {
         ("prefix", SdkValue::text(prefix)),
         (
             "region",
-            SdkValue::text(args.get_text("region").unwrap_or("us-east-1")),
+            SdkValue::text(request.region.as_deref().unwrap_or("us-east-1")),
         ),
         ("key", SdkValue::text(key)),
         ("part_size", part_size),
