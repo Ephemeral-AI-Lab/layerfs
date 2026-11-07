@@ -55,6 +55,9 @@ Durable implementation may compile, but report its execution as
 Durable receipts and their original verdicts. This execution policy does not
 claim that the Durable API has been removed. Each Workspace's daemon overlay
 remains a separate MEMORY/OFF/EXCLUSIVE database file.
+Disposable's COMMIT does not checkpoint (`wal_autocheckpoint=0`); its writing
+session's own thread checkpoints the WAL off the commit path (owner approval,
+2026-11-07; [lifecycle](docs/architecture/engine/store/lifecycle.md#background-checkpoint)).
 
 ## LayerFS mental model
 

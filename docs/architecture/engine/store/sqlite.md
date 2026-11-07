@@ -77,6 +77,7 @@ text ([`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sq
 | Guard | `busy_timeout=0`; `SQLITE_DBCONFIG_DEFENSIVE` on | same |
 | Settings | `profile::apply`, then read back and `profile::check` | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
 | Version | `user_version` 36–38 or 42–44 (schema version 2, #91); anything else, including the schema version 1 Stores 16–18 and 22–24, `Integrity` | [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
+| Checkpoint thread | Writable Disposable session only: a second `READ_WRITE` connection on its own thread; failure to start it refuses the open. See [Lifecycle: Background checkpoint](lifecycle.md#background-checkpoint) | [`background.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/background.rs) |
 
 | Call | Transaction | Takes the writer lock | Source |
 | --- | --- | --- | --- |

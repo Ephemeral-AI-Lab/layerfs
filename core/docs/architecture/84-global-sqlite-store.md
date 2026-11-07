@@ -56,7 +56,7 @@ connection applies and then checks this profile (`backend/sqlite/profile.rs`,
 | `page_size` | 4096 | fixed at creation; never changed |
 | `auto_vacuum` | INCREMENTAL (when created with table acquisition) | bounded reclamation of free pages; pointer-map pages are the "other" part of the file |
 | `foreign_keys` | ON | history rows reference each other |
-| `wal_autocheckpoint` | 1000 pages | WAL folds back regularly |
+| `wal_autocheckpoint` | 0 | COMMIT does not checkpoint; past 4 MiB of log the writing session's own thread runs `wal_checkpoint(PASSIVE)` beside the writer, so the log still folds back regularly (owner approval, 2026-11-07; Durable keeps 1000) |
 | `journal_size_limit` | 4 MiB | bounded WAL after a checkpoint |
 | `cache_size` | 2 MiB per connection | bounded memory |
 | `mmap_size` | 0 | no mapped I/O |
