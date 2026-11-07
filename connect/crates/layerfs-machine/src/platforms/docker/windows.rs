@@ -1,9 +1,11 @@
 //! `docker` through WSL2 on Windows: not designed (H §7.10.1 leaves its cfg
 //! and dependency plan open), so every call answers `Unsupported`.
 use crate::error::MachineError;
-use crate::setup::guest::Guest;
-use crate::setup::Status;
 use crate::spec::{Bundle, Running, Spec};
+
+// The Guest/Status types the stubs name are unix-side setup types; on
+// Windows every call answers Unsupported before one is built, so the
+// signatures below say the same with plain types.
 
 fn unsupported(spec: &Spec) -> MachineError {
     MachineError::missing(
@@ -19,7 +21,7 @@ pub(crate) fn start(spec: &Spec, _bundle: &Bundle) -> Result<Running, MachineErr
     Err(unsupported(spec))
 }
 
-pub(crate) fn guest(spec: &Spec) -> Result<Guest, MachineError> {
+pub(crate) fn guest(spec: &Spec) -> Result<(), MachineError> {
     Err(unsupported(spec))
 }
 
@@ -27,7 +29,7 @@ pub(crate) fn stop(spec: &Spec) -> Result<(), MachineError> {
     Err(unsupported(spec))
 }
 
-pub(crate) fn status(spec: &Spec) -> Result<Status, MachineError> {
+pub(crate) fn status(spec: &Spec) -> Result<(), MachineError> {
     Err(unsupported(spec))
 }
 
