@@ -47,7 +47,10 @@ worker-routed call asks the worker for its own steps (`trace_step: true`
 in the request); the worker times them from reading the request and sends
 them back beside its answer (`steps: [{step, us}]`); the caller writes them
 as `worker.<step>`. A worker without the field sends none, and a request
-without it gets none back.
+without it gets none back. `project.init` into a worker's Store sends its
+`project.stage` parts several at once: each part's `route` ... `answer` and
+`worker.*` steps are written as its part is answered, so they overlap,
+and one `send` step then holds the whole copy's wall time.
 
 Worker steps of `workspace.exec`, each the time since the one before:
 `records` (Store and project records), `host_args` (deploy settings, run

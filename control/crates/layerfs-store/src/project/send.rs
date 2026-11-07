@@ -11,7 +11,12 @@
 //! while it is read is refused, as Init refuses it. Each request is sent
 //! once: a certain failure discards the copy with one more request; a lost
 //! answer is `Unknown`, naming the copy it may leave on the machine.
-use super::frame::{StageFrame, StageStep};
+//!
+//! Parts go several at once ([`super::parts`]). The `D`, `W` and `L`
+//! records apply in any order on the worker; the `M` records (modes and
+//! times, which a later write or entry would undo) are gathered in parts of
+//! their own, each sent only after every part before it was answered.
+use super::parts::Parts;
 use super::tree::{header, Record};
 use crate::place::Worker;
 use crate::sqlite::transfer::steps::CHUNK;
@@ -20,7 +25,6 @@ use layerfs_content::filesystem::symlink::SymlinkTarget;
 use layerfs_content::PathName;
 use layerfs_home::events::Events;
 use layerfs_home::outcome::refused;
-use layerfs_machine::worker::Unreached;
 use layerfs_project::SourceRefusal;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, Metadata};
@@ -226,60 +230,58 @@ pub fn room(worker: &mut Worker, copy: &Copy<'_>, total: u64) -> Result<()> {
     Ok(())
 }
 
-struct Sender<'s, 'c, 'p> {
+struct Sender<'s, 'c> {
     events: &'s mut Events<'c>,
-    worker: &'s mut Worker,
-    copy: &'s Copy<'p>,
-    /// The part being filled.
-    part: Vec<u8>,
-    /// File bytes in `part`.
+    parts: Parts,
+    project: &'s str,
+    /// The data part being filled (`D`, `W` and `L` records).
+    data: Vec<u8>,
+    /// File bytes in `data`.
     pending: u64,
-    /// File bytes the worker has written.
-    sent: u64,
-    total: u64,
-    /// Whether a part reached the worker.
-    asked: bool,
+    /// The `M` records not sent yet.
+    meta: Vec<u8>,
     buffer: Vec<u8>,
 }
 
-impl Sender<'_, '_, '_> {
-    fn request(&self, step: StageStep) -> SdkValue {
-        StageFrame {
-            store: self.copy.store.to_owned(),
-            name: self.copy.name.to_owned(),
-            id: self.copy.id.clone(),
-            step,
-        }
-        .encode()
-    }
-
-    /// Sends the part being filled, if it holds anything.
+impl Sender<'_, '_> {
+    /// Sends the data part being filled, if it holds anything.
     fn flush(&mut self) -> Result<()> {
-        if self.part.is_empty() {
+        if self.data.is_empty() {
             return Ok(());
         }
-        let part = std::mem::take(&mut self.part);
-        let request = self.request(StageStep::Write(part));
-        // a worker not reached was sent nothing
-        match self.worker.attempt("project.stage", request, &mut |_| {}) {
-            Ok(outcome) => {
-                self.asked = true;
-                outcome?
-            }
-            Err(Unreached(refusal)) => return Err(refusal),
-        };
-        self.sent += std::mem::take(&mut self.pending);
-        let done = Some((self.sent, self.total));
-        crate::sqlite::family::progress(self.events, "send", done);
-        Ok(())
+        let part = std::mem::take(&mut self.data);
+        let bytes = std::mem::take(&mut self.pending);
+        self.parts.send(self.events, part, bytes)
     }
 
-    /// Adds `record`, sending the part first when it would not fit.
+    /// Sends the `M` records gathered, if any, once every part before them
+    /// was answered: the data they follow is written by then.
+    fn flush_meta(&mut self) -> Result<()> {
+        self.flush()?;
+        self.parts.settle(self.events);
+        self.parts.check()?;
+        if self.meta.is_empty() {
+            return Ok(());
+        }
+        let part = std::mem::take(&mut self.meta);
+        self.parts.send(self.events, part, 0)
+    }
+
+    /// Adds `record` to its part, sending that part first when it would
+    /// not fit.
     fn push(&mut self, record: Record<'_>) -> Result<()> {
-        if self.part.len() + record.size() > CHUNK as usize {
+        let size = record.size();
+        if let Record::Meta { .. } = record {
+            if self.meta.len() + size > CHUNK as usize {
+                self.flush_meta()?;
+            }
+            record.encode(&mut self.meta);
+            return Ok(());
+        }
+        if self.data.len() + size > CHUNK as usize {
             self.flush()?;
         }
-        record.encode(&mut self.part);
+        record.encode(&mut self.data);
         Ok(())
     }
 
@@ -309,7 +311,7 @@ impl Sender<'_, '_, '_> {
 
     /// The file's bytes as `W` pieces; refused when it changes meanwhile.
     fn file(&mut self, rel: &[u8], path: &Path, meta: &Metadata) -> Result<()> {
-        let changed = || refusal(self.copy.name, path, &SourceRefusal::Changed);
+        let changed = || refusal(self.project, path, &SourceRefusal::Changed);
         let mut file = fs::OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_NOFOLLOW)
@@ -323,7 +325,7 @@ impl Sender<'_, '_, '_> {
         let fixed = header(rel) + 8 + 4;
         let mut offset = 0u64;
         loop {
-            let mut room = (CHUNK as usize).saturating_sub(self.part.len() + fixed);
+            let mut room = (CHUNK as usize).saturating_sub(self.data.len() + fixed);
             let left = len - offset;
             if room < MIN_PIECE.min(left as usize) {
                 self.flush()?;
@@ -369,47 +371,25 @@ fn same(a: &Metadata, b: &Metadata) -> bool {
 }
 
 /// Copies `copy.folder` (`total` file bytes, from [`measure`]) to the
-/// machine's staging folder, reporting `send` progress. A certain failure
-/// discards the copy (one request) and answers the failure; a lost answer
-/// is `Unknown`, naming the copy it may leave.
-pub fn send(
-    events: &mut Events<'_>,
-    worker: &mut Worker,
-    copy: &Copy<'_>,
-    total: u64,
-) -> Result<()> {
+/// machine's staging folder, reporting `send` progress as parts are
+/// answered. A certain failure discards the copy (one request) and answers
+/// the first failure; a lost answer is `Unknown`, naming the copy it may
+/// leave.
+pub fn send(events: &mut Events<'_>, worker: &Worker, copy: &Copy<'_>, total: u64) -> Result<()> {
     crate::sqlite::family::progress(events, "send", Some((0, total)));
     let mut sender = Sender {
         events,
-        worker,
-        copy,
-        part: Vec::new(),
+        parts: Parts::new(worker, copy, total),
+        project: copy.name,
+        data: Vec::new(),
         pending: 0,
-        sent: 0,
-        total,
-        asked: false,
+        meta: Vec::new(),
         buffer: Vec::new(),
     };
     let walked = walk(copy.folder, copy.name, &mut |rel, path, visit| {
         sender.visit(rel, path, visit)
     });
-    let Err(mut refusal) = walked.and_then(|()| sender.flush()) else {
-        return Ok(());
-    };
-    let left = left(copy.machine, &copy.id);
-    if refusal.code == "Unknown" {
-        refusal.message = format!("{}; its copy may remain at {left}", refusal.message);
-        return Err(refusal);
-    }
-    if !sender.asked {
-        return Err(refusal);
-    }
-    let discard = sender.request(StageStep::Discard);
-    if let Err(why) = sender.worker.call("project.stage", discard, &mut |_| {}) {
-        refusal.message = format!(
-            "{}; its copy was not discarded ({}) and may remain at {left}",
-            refusal.message, why.message
-        );
-    }
-    Err(refusal)
+    let walked = walked.and_then(|()| sender.flush_meta());
+    let Sender { events, parts, .. } = sender;
+    parts.end(events, walked)
 }

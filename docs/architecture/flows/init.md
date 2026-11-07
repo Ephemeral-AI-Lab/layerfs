@@ -79,7 +79,7 @@ Init runs where the Store's calls run.
 | # | What happens | Component / topic | Source |
 | --- | --- | --- | --- |
 | 1 | The table checks `project` and `folder`; `timeout` defaults to 3,600,000 ms. The folder must be absolute; the Store must be recorded and hold no blocking intent. Progress `check`. | [SDK: project](../api/sdk/project/README.md) | [`project/init.rs` (api)](../../../api/crates/layerfs-api/src/project/init.rs), [`project/family.rs`](../../../control/crates/layerfs-store/src/project/family.rs) |
-| 2 | Worker route only: the caller walks the folder on its own host and refuses what Init would refuse, checks the machine has room, then sends the copy in `project.stage` requests (progress `send`). | [Routing: workers](../control/routing/workers.md) | [`project/send.rs`](../../../control/crates/layerfs-store/src/project/send.rs), [`project/staged.rs`](../../../control/crates/layerfs-store/src/project/staged.rs) |
+| 2 | Worker route only: the caller walks the folder on its own host and refuses what Init would refuse, checks the machine has room, then sends the copy in `project.stage` requests, up to four parts at once on their own connections (`parts::AT_ONCE`; progress `send` as each is answered). Modes and times travel in parts of their own, after every part before them was answered. | [Routing: workers](../control/routing/workers.md) | [`project/send.rs`](../../../control/crates/layerfs-store/src/project/send.rs), [`project/staged.rs`](../../../control/crates/layerfs-store/src/project/staged.rs) |
 | 3 | `add_project` (progress `install`): the deadline from `timeoutMs`; the kernel guard on the Store's directory; the Store file must exist; the project's entry in the home is created exclusively; fresh LayerStack and Branch ids are drawn. | [Management](../control/management/README.md) | [`identity.rs`](../../../control/crates/layerfs-store/src/identity.rs) `add_project` |
 | 4 | `ProjectApi::add_project` opens writable handles on the live Store (SQLite must be Disposable) and refuses a stack name already taken. | [Project Init: seal and install](../engine/project-init/seal-and-install.md#live-open) | [`store/live.rs`](../../../engine/crates/layerfs-project/src/store/live.rs) |
 | 5 | Import: `init_observed` scans the complete folder without following links, records working rows in the acquisition tables, and keeps input-sized state there, not in memory. | [Project Init: import](../engine/project-init/import.md) | [`import/init.rs`](../../../engine/crates/layerfs-project/src/import/init.rs), [`import/scan.rs`](../../../engine/crates/layerfs-project/src/import/scan.rs) |
@@ -127,7 +127,8 @@ Seal and the install stream are described in
 | 2 | Folder entry Init would refuse, or a read error | refused before anything is sent (`InvalidInput` or `Failed`) |
 | 2 | Not enough free disk on the machine | `Capacity`, with `needed` and `free` |
 | 2 | Worker not reached | `Unavailable`; nothing sent |
-| 2 | A stage or the `project.init` answer lost | `Unknown`, naming the copy the worker removes when its Init ends; no project record |
+| 2 | A stage refused or not reached | the first such failure, after the parts in flight are answered; no part is sent after it, and the copy is discarded |
+| 2 | A stage or the `project.init` answer lost | `Unknown`, naming the copy the worker removes when its Init ends (a lost stage answer leaves the copy, named, and so does another failure while a stage answer was lost); no project record |
 | 3 | A PostgreSQL Store in a build without the `postgresql` feature | `Unsupported` |
 | 3 | Bad `timeoutMs` | `InvalidInput` |
 | 3 | Kernel guard refuses the Store's filesystem | `Unsupported` |
