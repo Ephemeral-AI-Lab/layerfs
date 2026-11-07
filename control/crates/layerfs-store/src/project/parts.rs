@@ -150,7 +150,7 @@ impl Parts {
                 if stepping {
                     trace::steps_begin();
                 }
-                let outcome = worker.attempt_framed(op, &request, &mut |_| {});
+                let outcome = worker.attempt_framed(op, &request, &mut |_| Ok(()));
                 let steps = if stepping {
                     trace::steps_take()
                 } else {

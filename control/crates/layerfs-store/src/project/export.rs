@@ -18,7 +18,6 @@ use layerfs_home::events::Events;
 use layerfs_home::home::paths;
 use layerfs_home::names::ProjectRef;
 use layerfs_home::outcome::{failed, refused, Outcome, View};
-use layerfs_machine::worker::abort_stream;
 use layerfs_content::compare::{memo::Memo, tree::TreeTable, EntryFacts};
 use layerfs_content::file::FileView;
 use layerfs_content::filesystem::{
@@ -557,32 +556,23 @@ fn export_on_worker(
     }
     .encode();
     let mut writer: Option<LocalWriter> = None;
-    let response = worker.call("project.export", request, &mut |event| {
-        if event.get_text("phase") == Some("prepare") && writer.is_none() {
-            match LocalWriter::start(context, dest) {
-                Ok(w) => writer = Some(w),
-                Err(err) => abort_stream(err),
-            }
-            return;
+    // a local failure refuses the event: the connection closes and the
+    // worker stops streaming at its next part
+    let value = worker.call_until("project.export", request, &mut |event| {
+        let part = match event.get("part") {
+            Some(SdkValue::Bytes(part)) => Some(part),
+            _ if event.get_text("phase") == Some("prepare") => None,
+            _ => return Ok(()),
+        };
+        let w = match writer.as_mut() {
+            Some(w) => w,
+            None => writer.insert(LocalWriter::start(context, dest)?),
+        };
+        match part {
+            Some(part) => w.write_part(context, part),
+            None => Ok(()),
         }
-        if let Some(SdkValue::Bytes(part)) = event.get("part") {
-            if writer.is_none() {
-                match LocalWriter::start(context, dest) {
-                    Ok(w) => writer = Some(w),
-                    Err(err) => {
-                        abort_stream(err);
-                        return;
-                    }
-                }
-            }
-            if let Some(w) = writer.as_mut() {
-                if let Err(err) = w.write_part(context, part) {
-                    abort_stream(err);
-                }
-            }
-        }
-    });
-    let value = response?;
+    })?;
     let expected = worker_counts(&value)?;
     let w = match writer {
         Some(w) => w,
