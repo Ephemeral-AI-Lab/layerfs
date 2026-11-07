@@ -5,6 +5,7 @@
 //! is not running. The caller sends the worker the Store's record with the
 //! call, so a guest never reads the home; the worker finds the Store file
 //! under its own root.
+use crate::calls::StoreOp;
 use crate::lease;
 use crate::open;
 use crate::open_args::{OpenArgs, PgSelection};
@@ -15,24 +16,24 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, CommitId};
 use layerfs_home::events::Events;
 use layerfs_home::home::paths;
-use layerfs_home::outcome::Outcome;
+use layerfs_home::outcome::{refused, Outcome};
 use std::path::Path;
 
-/// Runs Store method `op` with `args` on the Store of `target`.
+/// Runs Store method `op` on the Store of `target`.
 pub fn store_call(
     home: &Path,
     events: &mut Events<'_>,
     target: &Target,
-    op: &str,
-    args: Vec<(String, SdkValue)>,
+    op: &StoreOp<'_>,
 ) -> Outcome {
+    let (method, args) = (op.method(), op.engine_args());
     let home = home.to_path_buf();
     target.record.unblocked()?;
     // the lease is taken under the Store's lock with the record read there:
     // a move or remove that started since `target` was read refuses it
     let (lease, record) = lease::claim(&home, &target.store)?;
     if let StoreRef::Postgres { .. } = target.store_ref {
-        return postgresql(&home, target, op, (args, &record), lease);
+        return postgresql(&home, target, method, (args, &record), lease);
     }
     // the record read under the lock, parsed once (R4)
     match plan(&home, record.store_ref()?)? {
@@ -40,7 +41,7 @@ pub fn store_call(
             let file = paths::store_file(&home, &target.store);
             let open = opened(target, &record, file.display().to_string(), None);
             open::run(
-                op,
+                method,
                 &open,
                 SdkValue::Map(with_project(args, target)),
                 Some(lease),
@@ -49,15 +50,57 @@ pub fn store_call(
         Executor::Worker(mut worker) => {
             // the host process holds the lease while it sends the call
             let _lease = lease;
-            let mut fields = with_project(args, target);
-            fields.extend([
-                ("store".to_owned(), SdkValue::text(&target.store)),
-                ("store_record".to_owned(), record.to_record().clone()),
-            ]);
-            let request =
-                SdkValue::map([("op", SdkValue::text(op)), ("args", SdkValue::Map(fields))]);
+            let request = frame(method, with_project(args, target), target, &record);
             worker.call("store.call", request, &mut |event| events.event(event))
         }
+    }
+}
+
+/// The `store.call` frame: `{ op, args }`, its args the call's, `project`,
+/// `store` and `store_record`.
+fn frame(
+    method: &str,
+    mut fields: Vec<(String, SdkValue)>,
+    target: &Target,
+    record: &StoreRecord,
+) -> SdkValue {
+    fields.extend([
+        ("store".to_owned(), SdkValue::text(&target.store)),
+        ("store_record".to_owned(), record.to_record().clone()),
+    ]);
+    SdkValue::map([
+        ("op", SdkValue::text(method)),
+        ("args", SdkValue::Map(fields)),
+    ])
+}
+
+/// A `store.call` frame as a worker reads it.
+pub struct CallFrame {
+    /// The Store method.
+    pub method: String,
+    /// The Store it names.
+    pub store: String,
+    /// The engine's arguments, with the routing keys the open reads.
+    pub fields: SdkValue,
+}
+
+impl CallFrame {
+    /// Reads `frame`: no method or no Store is `InvalidInput`.
+    pub fn decode(frame: &SdkValue) -> Result<Self, SdkRefusal> {
+        let method = frame
+            .get_text("op")
+            .ok_or_else(|| refused("InvalidInput", "Store operation name"))?
+            .to_owned();
+        let fields = frame.get("args").cloned().unwrap_or_default();
+        let store = fields
+            .get_text("store")
+            .ok_or_else(|| refused("InvalidInput", "a Store call names its Store"))?
+            .to_owned();
+        Ok(Self {
+            method,
+            store,
+            fields,
+        })
     }
 }
 
@@ -122,7 +165,7 @@ fn opened(
 fn postgresql(
     home: &Path,
     target: &Target,
-    op: &str,
+    method: &str,
     (args, record): (Vec<(String, SdkValue)>, &StoreRecord),
     lease: lease::Lease,
 ) -> Outcome {
@@ -136,7 +179,7 @@ fn postgresql(
     let key = target.record.postgresql_key(home, &target.store);
     let open = opened(target, record, key.display().to_string(), Some(postgresql));
     open::run(
-        op,
+        method,
         &open,
         SdkValue::Map(with_project(args, target)),
         Some(lease),

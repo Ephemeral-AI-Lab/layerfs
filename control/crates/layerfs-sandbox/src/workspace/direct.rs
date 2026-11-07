@@ -13,6 +13,7 @@ use layerfs_home::events::Events;
 use layerfs_home::helpers;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store::call::store_call;
+use layerfs_store::calls::{Page, StoreOp};
 use layerfs_store::lease;
 use layerfs_store::resolve::{self, Target};
 use std::path::Path;
@@ -78,13 +79,11 @@ fn branch_of(
     if let Some(found) = layerfs_store::call::held_branch(home, target, name)? {
         return Ok(found);
     }
-    let listed = store_call(
-        home,
-        events,
-        target,
-        "project.list_branches",
-        vec![("name".to_owned(), SdkValue::text(name))],
-    )?;
+    let op = StoreOp::ListBranches {
+        name: Some(name),
+        page: Page::default(),
+    };
+    let listed = store_call(home, events, target, &op)?;
     let found = match listed.get("items") {
         Some(SdkValue::List(items)) => items.first().cloned(),
         _ => None,

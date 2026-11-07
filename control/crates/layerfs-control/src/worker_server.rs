@@ -146,14 +146,8 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
         ])),
         // one Store call, on the Store file under this worker's root (2.0)
         "store.call" => {
-            let name = args
-                .get_text("op")
-                .ok_or_else(|| refused("InvalidInput", "Store operation name"))?
-                .to_owned();
-            let inner = args.get("args").cloned().unwrap_or_default();
-            let store = inner
-                .get_text("store")
-                .ok_or_else(|| refused("InvalidInput", "a Store call names its Store"))?;
+            let call = layerfs_store::call::CallFrame::decode(&args)?;
+            let store = call.store.as_str();
             layerfs_home::names::StoreName::parse(store)?;
             let file = layerfs_home::home::paths::store_file(root, store);
             // the worker holds the Store's lease under its root while it
@@ -162,9 +156,9 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
             let open = layerfs_store::open_args::OpenArgs {
                 home: Some(root.to_path_buf()),
                 store_path: Some(file.display().to_string()),
-                ..layerfs_store::open_args::OpenArgs::read(&inner)
+                ..layerfs_store::open_args::OpenArgs::read(&call.fields)
             };
-            layerfs_store::open::run(&name, &open, inner, Some(lease))
+            layerfs_store::open::run(&call.method, &open, call.fields, Some(lease))
         }
         // one step of a Store move or remove on this machine
         "store.file" => {
