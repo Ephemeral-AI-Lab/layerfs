@@ -81,7 +81,7 @@ Nothing converts a Store from one kind to the other.
 | --- | --- | --- |
 | Platform for SQLite | macOS or Linux; elsewhere `BackendUnavailable` | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs) |
 | Direct opening for Store calls | Linux local ext4/xfs/btrfs (macOS apfs/hfs); else `Unsupported`, no fallback | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
-| macOS cross-process writers | No directory lock; a second writer gets SQLite `Busy` | [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs) |
+| Cross-process writers (Linux and macOS) | Directory `flock` on the Store's parent directory; an uncoordinated raw SQLite writer still gets SQLite `Busy` | [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs) |
 | PostgreSQL without the feature | `BackendUnavailable` | [`selection.rs`](../../../../engine/crates/layerfs-persistence/src/store/selection.rs) |
 | PostgreSQL lane wait | `lock_timeout_ms`, default 30 s; then `Busy` | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs) |
 | Rows per transaction | `TRANSACTION_ROW_LIMIT` 8 191 | [`publication.rs`](../../../../engine/crates/layerfs-persistence/src/storage/publication.rs) |
@@ -110,9 +110,10 @@ Commands are written from source and were not run while writing this page.
   `cargo +1.85.1 test --locked -p layerfs-persistence --test heads`
 - **`writer_admission.rs`** checks first-come order, `Closed` for queued
   writers on close, writers queued behind `publish_lane`, refusal of a
-  thread re-entering its own turn, and (Linux only, with child processes) the
-  directory lock across processes, its hand-over when a holder exits and
-  `Cancelled` on a signal.
+  thread re-entering its own turn, and (with child processes on Linux and
+  macOS) the directory lock across processes, concurrent opens and
+  reservations, its hand-over when a holder exits and `Cancelled` on a
+  signal.
   `cargo +1.85.1 test --locked -p layerfs-persistence --test writer_admission`
 - **`diagnostics_during_lane.rs`** holds the lane for 3 s on one thread and
   requires `storage.diagnostics()` to return within 750 ms. Any platform the

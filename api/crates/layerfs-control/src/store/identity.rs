@@ -234,6 +234,8 @@ pub(crate) fn make_empty(
             .create(global)
             .map_err(failed)?;
     }
+    layerfs_store_service::kernel_guard::check(destination)
+        .map_err(|reason| refused("Unsupported", reason.0))?;
     let (target, _) = layerfs_store_service::install::paths(destination).map_err(failed)?;
     layerfs_store_service::install::absent(&target)
         .map_err(|error| refused("Exists", format!("{}: {error}", target.display())))?;
@@ -374,8 +376,7 @@ pub(crate) fn add_project(args: &SdkValue) -> Outcome {
     }
     let deadline = crate::project::init::deadline(args)?;
     let store_file = store_path(args)?;
-    let global = store_file.parent().unwrap_or(&store_file);
-    layerfs_store_service::kernel_guard::check(global)
+    layerfs_store_service::kernel_guard::check(&store_file)
         .map_err(|reason| refused("Unsupported", reason.0))?;
     let identity = identity(args)?;
     sqlite_only(&identity, "adding a project")?;

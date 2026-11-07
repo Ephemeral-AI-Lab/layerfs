@@ -97,8 +97,8 @@ it never queues behind a held lane.
  SQLite write: Session::run(true, body)           any process, one host
    1 admission.enter        in-process FIFO turn on this session
    2 state mutex            the connection
-   3 Writer::acquire        Linux: flock(LOCK_EX) on the Store's parent
-                            directory; macOS: none     (skipped if nested)
+   3 Writer::acquire        flock(LOCK_EX) on the Store's parent directory
+                            (Linux and macOS)          (skipped if nested)
    4 BEGIN IMMEDIATE        SQLite's write lock; busy_timeout 0 -> Busy
    5 body; COMMIT           or ROLLBACK; Unknown -> quarantine
    6 finish_writer          release the flock
@@ -116,16 +116,17 @@ it never queues behind a held lane.
 | Rule | Enforced by |
 | --- | --- |
 | One write transaction at a time per session | `Admission` turn: [`admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/admission.rs) |
-| One writer across processes on one Linux host | Directory `flock`: [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs) |
+| One writer across processes on one Linux or macOS host | Directory `flock`: [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs) |
 | One writer in the SQLite file | `BEGIN IMMEDIATE` with `busy_timeout=0`: [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/transaction.rs) |
 | One writer across PostgreSQL clients | `store_lane` row `FOR UPDATE`: [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/profile.rs) |
 | No busy handler, no retry | `busy_timeout` reads back 0; `Busy` is returned as is |
 
 The lock is taken on a separate descriptor of the Store's directory, never on
 the main, WAL or SHM file: closing a main-file descriptor would drop SQLite's
-own POSIX locks. Several Store files in one directory share this lock. On
-macOS `flock` conflicts with SQLite's locks, so there is no cross-process
-writer wait: a second writer gets SQLite's `Busy`. Reads (`BEGIN`, or one
+own POSIX locks, and on macOS `flock` on the main file would conflict with
+SQLite's `fcntl` locks. Several Store files in one directory share this lock.
+A writable `Session::connect` also takes it so concurrent first openers
+serialize initial WAL-index recovery. Reads (`BEGIN`, or one
 implicit snapshot) take the turn but never the directory lock or the lane.
 The publication lane holds steps 1 and 3 across several transactions; see
 [History publication](history-publication.md#the-publish-lane).

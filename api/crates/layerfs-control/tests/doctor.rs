@@ -141,6 +141,35 @@ fn a_clean_home_is_ok_with_no_findings() {
 }
 
 #[test]
+fn a_store_folder_others_may_pass_through_is_an_error_naming_chmod_700() {
+    // #534: the daemon refuses a Store folder with any group/other bit, so
+    // doctor must not call 0701 fine there; other home folders keep 0701.
+    let home = new_home("store-0701");
+    home::open(&home).unwrap();
+    store(&home, "shop", sqlite("shop", "native"));
+    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
+    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
+    let dir = paths::store_dir(&home, "shop");
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o701)).unwrap();
+    std::fs::set_permissions(home.join("store"), std::fs::Permissions::from_mode(0o701)).unwrap();
+    let report = doctor(&home).unwrap();
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)), "{report:?}");
+    let found = findings(&report);
+    assert_eq!(found.len(), 1, "{found:?}");
+    let (severity, kind, name, message, fix) = &found[0];
+    assert_eq!(
+        (severity.as_str(), kind.as_str(), name.as_str()),
+        ("error", "store", "shop")
+    );
+    assert!(message.contains("0701"), "{message}");
+    assert!(fix.contains("chmod 700"), "{fix}");
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let report = doctor(&home).unwrap();
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(true)), "{report:?}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
 fn a_home_that_does_not_exist_is_ok_and_stays_absent() {
     let home = new_home("absent");
     let report = doctor(&home).unwrap();

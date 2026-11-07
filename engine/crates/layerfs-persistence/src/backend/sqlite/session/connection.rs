@@ -171,6 +171,11 @@ impl Session {
         if !cfg!(any(target_os = "macos", target_os = "linux")) {
             return Err(BackendError::Integrity);
         }
+        let writer = if writable {
+            Some(crate::backend::sqlite::lane::writer_admission::Writer::acquire(path)?)
+        } else {
+            None
+        };
         let flags = if writable {
             OpenFlags::SQLITE_OPEN_READ_WRITE
         } else {
@@ -262,6 +267,9 @@ impl Session {
                 .map_err(rows::error)? as usize,
         };
         profile::check(&profile)?;
+        if let Some(writer) = writer {
+            writer.release().map_err(|_| BackendError::Unknown)?;
+        }
         super::thread_work::add(&work.borrow());
         Ok(Self {
             admission: crate::backend::admission::Admission::default(),

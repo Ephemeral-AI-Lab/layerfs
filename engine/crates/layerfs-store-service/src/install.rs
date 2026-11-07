@@ -159,15 +159,24 @@ pub fn install_local(
         let directory = destination
             .parent()
             .ok_or("the Store destination has no directory")?;
-        crate::kernel_guard::check(directory).map_err(|reason| reason.0)?;
-        installer_user()?;
         let text = |error: io::Error| error.to_string();
-        if !directory.exists() {
-            use std::os::unix::fs::DirBuilderExt;
-            fs::DirBuilder::new()
-                .mode(0o700)
-                .create(directory)
-                .map_err(text)?;
+        let existed = directory.exists();
+        let outcome = (|| {
+            installer_user()?;
+            if !existed {
+                use std::os::unix::fs::DirBuilderExt;
+                fs::DirBuilder::new()
+                    .mode(0o700)
+                    .create(directory)
+                    .map_err(text)?;
+            }
+            crate::kernel_guard::check(destination).map_err(|reason| reason.0)
+        })();
+        if let Err(error) = outcome {
+            if !existed {
+                let _ = fs::remove_dir_all(directory);
+            }
+            return Err(error);
         }
         let (target, temporary) = paths(destination).map_err(text)?;
         let mut file = claim(&target, &temporary).map_err(text)?;

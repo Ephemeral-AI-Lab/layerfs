@@ -73,6 +73,7 @@ text ([`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sq
 
 | Step in `Session::connect` | Detail | Source |
 | --- | --- | --- |
+| Writer lock | When `writable`, takes `Writer::acquire(path)` across connect and releases it after `profile::check` | [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
 | Open | `READ_WRITE` or `READ_ONLY`, `NO_MUTEX`; statement cache 64 | [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs) |
 | Guard | `busy_timeout=0`; `SQLITE_DBCONFIG_DEFENSIVE` on | same |
 | Settings | `profile::apply`, then read back and `profile::check` | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs) |
@@ -108,8 +109,8 @@ also adds its SQL work to the calling thread's counters
           v  inside: run(true, ..) enters nested: no flock, BEGIN IMMEDIATE
 ```
 
-The lane is one held admission turn plus, on Linux, the directory lock, kept
-by one thread across several short transactions. No publication of any
+The lane is one held admission turn plus the directory lock (Linux and
+macOS), kept by one thread across several short transactions. No publication of any
 process interleaves. `LaneHold` is `!Send`: it belongs to the thread that took
 it. Source: [`lane.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/lane.rs).
 

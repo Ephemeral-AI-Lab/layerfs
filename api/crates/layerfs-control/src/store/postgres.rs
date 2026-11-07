@@ -103,7 +103,10 @@ pub(crate) fn open(
             identity.cursor_key,
             template,
         )
-        .map_err(|refusal| refused("Failed", format!("{refusal:?}")))
+        .map_err(|refusal| match refusal {
+            layerfs_store_service::OpenRefusal::Busy(reason) => refused("Busy", reason),
+            other => refused("Failed", format!("{other:?}")),
+        })
     }
     #[cfg(not(feature = "postgresql"))]
     {
