@@ -52,6 +52,9 @@ impl LocatorCache {
         std::mem::size_of::<Self>() - std::mem::size_of::<BTreeMap<ObjectId, LocatedObject>>()
             + self.len() * (std::mem::size_of::<Entry>() - std::mem::size_of::<LocatedObject>())
     }
+    /// Evicts until `needed` more entries fit. `protected` is sorted: each
+    /// probe searches it, so a demand larger than the cache costs a probe a
+    /// logarithmic search, not a scan of the whole demand.
     pub(crate) fn make_room(&mut self, needed: usize, protected: &[ObjectId]) -> EvictionWork {
         let mut work = EvictionWork::default();
         while self.len().saturating_add(needed) > crate::policy::READ_OBJECT_LIMIT {
@@ -79,7 +82,7 @@ impl LocatorCache {
             };
             self.hand = Some(id);
             work.probes += 1;
-            if protected.contains(&id) {
+            if protected.binary_search(&id).is_ok() {
                 continue;
             }
             if self.entries[&id].referenced.replace(false) {

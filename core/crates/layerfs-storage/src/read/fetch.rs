@@ -212,6 +212,12 @@ impl Fetch {
             }
         }
         let missing: Vec<_> = missing.into_iter().collect();
+        // The whole demand is protected from eviction, searched sorted.
+        let mut protected = Vec::new();
+        if !missing.is_empty() {
+            protected = ids.to_vec();
+            protected.sort_unstable();
+        }
         for page in missing.chunks(READ_OBJECT_LIMIT) {
             let mut rows = Vec::new();
             self.note(|c| c.locate += 1);
@@ -222,7 +228,7 @@ impl Fetch {
             {
                 let mut cache = self.locators.borrow_mut();
                 if cache.len().saturating_add(rows.len()) > READ_OBJECT_LIMIT {
-                    let work = cache.make_room(rows.len(), ids);
+                    let work = cache.make_room(rows.len(), &protected);
                     self.note(|c| {
                         c.locator_evictions += work.removed;
                         c.locator_eviction_probes += work.probes;

@@ -63,21 +63,25 @@ impl State<'_> {
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect();
-        self.storage.source.locate(&external)?;
+        // Located and checked a cache's worth at a time, so each check finds
+        // its id still located rather than locating it alone again.
         let mut available = BTreeSet::new();
-        for id in external {
-            if self.storage.source.location(id, i64::MAX)?.is_none() {
-                let parent = members
-                    .iter()
-                    .find(|(_, (_, refs, _))| refs.contains(&id))
-                    .map(|(id, _)| *id)
-                    .ok_or(StorageError::Integrity("closure parent"))?;
-                return Err(StorageError::MissingDependency {
-                    object: parent,
-                    reference: id,
-                });
+        for slice in external.chunks(crate::policy::READ_OBJECT_LIMIT) {
+            self.storage.source.locate(slice)?;
+            for id in slice.iter().copied() {
+                if self.storage.source.location(id, i64::MAX)?.is_none() {
+                    let parent = members
+                        .iter()
+                        .find(|(_, (_, refs, _))| refs.contains(&id))
+                        .map(|(id, _)| *id)
+                        .ok_or(StorageError::Integrity("closure parent"))?;
+                    return Err(StorageError::MissingDependency {
+                        object: parent,
+                        reference: id,
+                    });
+                }
+                available.insert(id);
             }
-            available.insert(id);
         }
         let mut counts = BTreeMap::new();
         let mut dependents = BTreeMap::<ObjectId, Vec<ObjectId>>::new();

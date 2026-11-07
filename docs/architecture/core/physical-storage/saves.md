@@ -46,7 +46,7 @@ One wave ([`wave.rs`](../../../../core/crates/layerfs-storage/src/save/wave.rs))
 
 | Step | What happens |
 | --- | --- |
-| Membership | Collect every object id, direct reference and predecessor in the wave; locate them in one paged call. |
+| Membership | Collect every object id, direct reference and predecessor in the wave; locate them in one paged call per slice of objects whose ids fit the 4,096-entry locator cache together, admitting each slice before locating the next. A wave of mapping pages can name far more payloads than the cache holds (an append's pages, emitted at finish, name every chunk the Save published); one demand for all of them evicted most before admission, which then located each reference alone. |
 | Duplicate in wave | Same bytes and role: counted as reused. Different: `Collision`. |
 | Exact reuse | Already stored with the same role and length: counted as reused and not read back. A role or length mismatch is `Collision`. A corrupt stored copy fails at its first read. |
 | New object | Check every reference is stored, pending or sealed (else `MissingDependency`), select a representation ([Encoding](encoding.md#full-and-delta-encoding)) and add the record to its lane's open group. |
@@ -115,7 +115,7 @@ is released, at finish.
 | Step | Rule |
 | --- | --- |
 | Closure | Any ready member that references an object still in an open group forces that lane to seal; repeat until nothing changes. |
-| External references | Locate references outside the ready set; one that is not stored is `MissingDependency`. |
+| External references | Locate references outside the ready set, 4,096 at a time, each checked while still cached; one that is not stored is `MissingDependency`. |
 | Order | Topological: an object follows everything it references. A cycle is `Integrity("registration reference cycle")`. |
 | Batch contents | Inode values first, then packs with their locators, then signature changes; at finish the unused ordinal tail. |
 | Split | Start a new batch before one would pass 8,191 rows, `publication_bytes` canonical bytes or `publication_bytes` sealed pack bytes (4 MiB − 1 on SQLite, 16 MiB − 1 on PostgreSQL). An item larger than a bound goes alone. |
