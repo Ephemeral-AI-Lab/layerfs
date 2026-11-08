@@ -6,7 +6,8 @@
 
 `@layerfs/mcp`: a local stdio Model Context Protocol server over the Node package, one tool per call in the
 selected profile. It is a thin adapter, not a fourth call surface: the [table](../call-table/table.md) is the
-contract, and this server adds no retry, replay, Commit, unmount or scope check of its own.
+contract, and this server adds no retry, replay, Commit, unmount or scope check of its own. Its one check of its
+own is the [export allowlist](#export-allowlist) on `project.export`.
 
 | | |
 | --- | --- |
@@ -65,12 +66,26 @@ node api/mcp/src/server.js --help
 | `--scope-project <store>/<project>` | the folder scope's project; must be given with `--scope-folder` |
 | `--scope-folder <dir>` | the folder scope inside the project; the library checks every scoped call |
 | `--scope-branch <name>` | the scope's Branch namespace; needs both scope flags |
+| `--export-root <dir>` | a directory `project_export` may write under; repeat for more. With none, `project_export` is refused. An absolute path to an existing directory, not `/`; anything else is a usage error (exit 2) |
 | `--help`, `--version` | the usage line, or the package version, on stdout, then exit 0 |
 
 `--scope-project` and `--scope-folder` are the command's [`--scope-project` and `--scope`](cli.md#parsing),
 under this server's names. The scope is fixed for the process: a tool call cannot change it, and the adapter
 does not reimplement the check ([`scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs)). A scoped
 call the library refuses comes back as the library's own `InvalidInput` (`out of scope: …`).
+
+### Export allowlist
+
+`project_export` writes to a path on the machine running this server, and the client picks the path, so the
+operator names where it may write at launch with `--export-root`. This is a deny-by-default allowlist: with no
+root configured the call is refused (`InvalidInput`, naming `--export-root`), and so is any destination that is
+not the root itself or beneath one. The destination's parent is resolved through symlinks first, so a link
+inside a root that leads out does not pass, and a sibling that only shares a root's name as a prefix
+(`<root>-x`) does not either. A relative path, a `..` path and a missing parent are refused the same way.
+The refusal names the allowed roots, is returned as a tool result with `isError`, and happens before the
+library is called, so nothing was created and nothing is uncertain. The library's own destination rules and
+the folder scope still apply after it. The check is made once, before the call; it does not defend against a
+local process that can rewrite directories under a root while an export runs.
 
 ## Profiles
 
@@ -98,7 +113,7 @@ calls need an operator's explicit `--profile admin`.
 | `project.init` | admin | admin | import a host folder into a Store; administration |
 | `project.list` | work | work, admin | read a project's record or export one (work); importing and removing a project are administration |
 | `project.get` | work | work, admin | read a project's record or export one (work); importing and removing a project are administration |
-| `project.export` | work | work, admin | export a Branch snapshot to a local folder; a folder scope refuses it |
+| `project.export` | work | work, admin | export a Branch snapshot to a local folder under a launch-time --export-root; a folder scope refuses it |
 | `project.remove` | admin | admin | remove a project from its Store; administration |
 | `branch.list` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
 | `branch.get` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
@@ -197,7 +212,7 @@ refused earlier by the SDK's request schema as `-32603`; it is still a protocol 
 | Cancel notification | while the server is serving, acknowledged and logged; the native call is not cancellable and runs to its end; nothing is retried |
 | Progress | when the request has a progress token, the call's `on_progress` events become `notifications/progress`: the first event at once, then at most one every 100 ms carrying the latest, and the last event before the result. `progress` is a strictly increasing counter (1, 2, …), `total` only when the event has a positive total, `message` the coalesced event as JSON (cut at 512 characters). Without a token, no handler is passed and no notification is sent |
 | `workspace.exec` | the Node binding's current behaviour: output is buffered and arrives after the command ends; inline text up to 1 MiB per stream is in the result, a larger stream is not delivered and `stdout_bytes`, `stderr_bytes` and `streamed: true` report it. There is no live streaming |
-| `project.export` | `destination` is a path on the machine running this MCP server, not the client's; under a folder scope the library refuses the call |
+| `project.export` | `destination` is a path on the machine running this MCP server, not the client's, and must lie under a launch-time `--export-root` ([allowlist](#export-allowlist)); under a folder scope the library refuses the call |
 | Scope | the client's `scope` option, fixed at launch; restricted calls return the library's refusal |
 | stdout / stderr | stdout carries the protocol only; one log line per call, startup and shutdown notes go to stderr |
 
