@@ -48,7 +48,7 @@ impl SqliteHandles {
             let result=self.storage.session.run::<_,BackendError>(false, |tx| {
             options.check()?;
             // First data read pins the view before inventory and decoders run.
-            let identity = tx.query("SELECT catalog_incarnation FROM history_meta WHERE id=1", vec![])?;
+            let identity = tx.query("SELECT CASE WHEN typeof(catalog_incarnation)='integer' THEN catalog_incarnation END FROM history_meta WHERE id=1", vec![])?;
             let incarnation:i64 = identity.first().ok_or(BackendError::Integrity)?.get(0)?;
             emit(observer, "store.snapshot", Outcome::Pass, format!("SQLite read transaction pinned; catalog incarnation {incarnation}; committed WAL included; long scans retain WAL frames"));
             if let Err(error) = crate::backend::sqlite::schema_diagnostic::check(tx,self.storage.session.acquisition) {
@@ -69,6 +69,16 @@ impl SqliteHandles {
             let schema=schema.first().ok_or(BackendError::Integrity)?;
             if schema.get::<String>(0)?!=crate::backend::sqlite::schema::source((tx.layout(),self.storage.session.acquisition))||schema.get::<String>(1)?!=crate::backend::sqlite::schema::definition(tx.connection,tx.work)?{return Err(BackendError::Integrity);}
             emit(observer,"store.schema",Outcome::Pass,format!("SQLite application ID, schema version {}, table set and frozen schema definition checked in audit view",tx.schema_version()));
+            for (table, sql) in crate::backend::sqlite::schema_diagnostic::type_checks(tx.layout(),self.storage.session.acquisition)? {
+                options.check()?;
+                emit(observer,"store.database.types.progress",Outcome::Pass,format!("checking declared storage classes in {table}"));
+                let invalid = tx.query(&sql,vec![])?;
+                if invalid.first().ok_or(BackendError::Integrity)?.get::<i64>(0)? != 0 {
+                    emit(observer,"store.database.types",Outcome::Fail,format!("{table}: persisted column storage class violates the shipped declaration; dependent row decoding blocked"));
+                    return Err(BackendError::Integrity);
+                }
+            }
+            emit(observer,"store.database.types",Outcome::Pass,"persisted column storage classes checked against shipped declarations before inventory extraction");
             let pragma = if options.quick { "PRAGMA quick_check(100)" } else { "PRAGMA integrity_check(100)" };
             let rows = tx.query(pragma, vec![])?;
             let mut errors = 0;

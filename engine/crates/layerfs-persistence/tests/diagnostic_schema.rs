@@ -127,3 +127,94 @@ fn authority_changed_after_admission_cannot_be_a_clean_audit() {
     assert_eq!(after.write_commits, before.write_commits);
     assert_eq!(after.write_transactions, before.write_transactions);
 }
+
+#[test]
+fn huge_text_in_integer_cell_is_rejected_before_pack_inventory() {
+    use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectRole};
+    use layerfs_storage::Storage;
+    let temp = support::Temp::new("doctor-schema-storage-class");
+    let path = temp.join("store.sqlite");
+    let writer = create(&path);
+    let storage = Storage::new(writer.storage.clone()).unwrap();
+    let save = storage.begin_save().unwrap();
+    save.accept(
+        FinalizedObject::new(
+            ObjectRole::WholeFile,
+            encode_whole_file_payload(b"valid retained object").unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    save.finish().unwrap();
+    let reader = SqliteHandles::open_diagnostic(&path, b"doctor-schema", [71; 32]).unwrap();
+    let db = rusqlite::Connection::open(&path).unwrap();
+    let trigger: String = db
+        .query_row(
+            "SELECT sql FROM sqlite_schema WHERE name='pack_immutable_update'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let pack_sql: String = db
+        .query_row("SELECT sql FROM sqlite_schema WHERE name='pack'", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    let version: i64 = db
+        .query_row("PRAGMA schema_version", [], |r| r.get(0))
+        .unwrap();
+    db.execute_batch("DROP TRIGGER pack_immutable_update; PRAGMA writable_schema=ON;")
+        .unwrap();
+    db.execute(
+        "UPDATE sqlite_schema SET sql=?1 WHERE name='pack'",
+        [pack_sql.replace(") STRICT", ")")],
+    )
+    .unwrap();
+    db.execute_batch(&format!(
+        "PRAGMA schema_version={}; PRAGMA writable_schema=OFF;",
+        version + 10
+    ))
+    .unwrap();
+    drop(db);
+    // Deliberately construct persisted storage-class damage, then restore the
+    // exact shipped STRICT declaration before diagnosis. No user data is used.
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch("PRAGMA ignore_check_constraints=ON;")
+        .unwrap();
+    let text = format!("\0{}", "x".repeat(1024 * 1024));
+    db.execute("UPDATE pack SET domain=?1", [text]).unwrap();
+    db.execute_batch("PRAGMA writable_schema=ON;").unwrap();
+    db.execute(
+        "UPDATE sqlite_schema SET sql=?1 WHERE name='pack'",
+        [pack_sql],
+    )
+    .unwrap();
+    db.execute_batch(&format!(
+        "PRAGMA schema_version={}; PRAGMA writable_schema=OFF;",
+        version + 20
+    ))
+    .unwrap();
+    drop(db);
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch(&trigger).unwrap();
+    let actual: (String, i64, i64) = db
+        .query_row(
+            "SELECT typeof(domain),length(domain),length(CAST(domain AS BLOB)) FROM pack",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(actual, ("text".to_owned(), 0, 1024 * 1024 + 1));
+    let before = reader.diagnostics().unwrap();
+    let mut out = Vec::new();
+    assert!(reader
+        .diagnose(Options::default(), &mut |o| out.push(o))
+        .is_err());
+    assert!(out
+        .iter()
+        .any(|o| o.id == "store.database.types" && o.outcome == Outcome::Fail));
+    assert!(!out.iter().any(|o| o.id == "store.packs.progress"));
+    let after = reader.diagnostics().unwrap();
+    assert_eq!(before.write_commits, after.write_commits);
+    assert_eq!(before.write_transactions, after.write_transactions);
+}
