@@ -193,11 +193,25 @@ fn run(
     events: &mut dyn FnMut(SdkValue) -> std::result::Result<(), SdkRefusal>,
 ) -> Outcome {
     match op {
-        "worker.ping" => Ok(SdkValue::map([
-            ("kind", SdkValue::text("worker")),
-            ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
-            ("pid", SdkValue::Int(i64::from(std::process::id()))),
-        ])),
+        "worker.ping" => {
+            let mut fields = vec![
+                ("kind", SdkValue::text("worker")),
+                ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
+                ("pid", SdkValue::Int(i64::from(std::process::id()))),
+            ];
+            if args.get("capacity") == Some(&SdkValue::Bool(true)) {
+                let available = layerfs_home::home::filesystem_available(root)
+                    .ok()
+                    .and_then(|bytes| i64::try_from(bytes).ok());
+                fields.push(("free_disk", available.map_or(SdkValue::Null, SdkValue::Int)));
+            }
+            Ok(SdkValue::Map(
+                fields
+                    .into_iter()
+                    .map(|(name, value)| (name.to_owned(), value))
+                    .collect(),
+            ))
+        }
         // one Store call, on the Store file under this worker's root (2.0)
         "store.call" => {
             let call = layerfs_store::call::CallFrame::decode(&args)?;
