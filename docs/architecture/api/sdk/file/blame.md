@@ -10,7 +10,7 @@ Shows, for each line of a file, the Commit that last changed it, walking first p
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/blame.rs`](../../../../../api/crates/layerfs-api/src/file/blame.rs) |
-| Implemented in | `layerfs_store::calls::file_blame` → `file`, Store method `fs.blame` ([`methods/file/blame.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/blame.rs)); `from_line` becomes `fromLine` |
+| Implemented in | `layerfs_store::calls::file::blame`, Store method `fs.blame` ([`methods/file/blame.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/blame.rs)); `from_line` becomes `fromLine` |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature

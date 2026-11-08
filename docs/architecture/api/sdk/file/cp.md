@@ -10,7 +10,7 @@ Copies a path on a Branch, folders recursively and hard links kept, as one Commi
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/cp.rs`](../../../../../api/crates/layerfs-api/src/file/cp.rs) |
-| Implemented in | `layerfs_store::calls::file_cp` → `file`, Store method `fs.cp` ([`methods/file/cp.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/cp.rs)); `from_path`, `to_path` become `from`, `to` |
+| Implemented in | `layerfs_store::calls::file::cp`, Store method `fs.cp` ([`methods/file/cp.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/cp.rs)); `from_path`, `to_path` become `from`, `to` |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature

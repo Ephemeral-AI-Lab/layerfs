@@ -10,7 +10,7 @@ Shows one path's kind, inode serial, size and mode at a Branch, `main` or a Comm
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/stat.rs`](../../../../../api/crates/layerfs-api/src/file/stat.rs) |
-| Implemented in | `layerfs_store::calls::file_stat` → `file`, Store method `fs.stat` ([`methods/file/stat.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/stat.rs)) |
+| Implemented in | `layerfs_store::calls::file::stat`, Store method `fs.stat` ([`methods/file/stat.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/stat.rs)) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature

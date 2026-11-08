@@ -7,8 +7,7 @@
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_bridge::control::SdkValue;
-use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -74,21 +73,6 @@ fn started(home: &Path) -> bool {
     paths::machine_dir(home, "box").join("start.lock").exists()
 }
 
-fn frame(stream: &mut TcpStream) -> Option<Vec<u8>> {
-    let mut length = [0u8; 4];
-    stream.read_exact(&mut length).ok()?;
-    let mut body = vec![0; u32::from_be_bytes(length) as usize];
-    stream.read_exact(&mut body).ok()?;
-    Some(body)
-}
-
-fn send(stream: &mut TcpStream, body: &[u8]) {
-    stream
-        .write_all(&(body.len() as u32).to_be_bytes())
-        .unwrap();
-    stream.write_all(body).unwrap();
-}
-
 /// How a stand-in worker meets each connection.
 #[derive(Clone, Copy)]
 enum Meet {
@@ -113,26 +97,47 @@ fn worker(meet: Meet) -> (SocketAddr, Arc<Mutex<Vec<String>>>) {
             stream
                 .set_read_timeout(Some(Duration::from_secs(5)))
                 .unwrap();
-            let Some(hello) = frame(&mut stream) else {
+            let Some(hello) = layerfs_api::worker::read_frame(&mut stream).unwrap() else {
                 continue;
             };
-            assert_eq!(hello, br#"{"secret":"5e"}"#);
+            assert_eq!(hello, SdkValue::map([("secret", t("5e"))]));
             if let Meet::Deny = meet {
                 seen.lock().unwrap().push("hello".to_owned());
-                send(
+                layerfs_api::worker::write_frame(
                     &mut stream,
-                    br#"{"refused":{"code":"Denied","message":"the worker's secret does not match","detail":null}}"#,
-                );
+                    &SdkValue::map([(
+                        "refused",
+                        SdkValue::map([
+                            ("code", t("Denied")),
+                            ("message", t("the worker's secret does not match")),
+                            ("detail", SdkValue::Null),
+                        ]),
+                    )]),
+                )
+                .unwrap();
                 continue;
             }
             // this build's hello: its protocol, no sealed bundle
-            send(&mut stream, br#"{"ready":true,"protocol":2,"bundle":null}"#);
-            let request = frame(&mut stream).unwrap_or_default();
+            let hello = layerfs_api::worker::Hello {
+                protocol: Some(layerfs_api::worker::PROTOCOL),
+                bundle: None,
+            };
+            layerfs_api::worker::write_frame(&mut stream, &hello.to_frame()).unwrap();
+            let request = layerfs_api::worker::read_frame(&mut stream)
+                .unwrap()
+                .unwrap_or_default();
             seen.lock()
                 .unwrap()
-                .push(String::from_utf8_lossy(&request).into_owned());
+                .push(layerfs_api::json::print(&request));
             if let Meet::Answer = meet {
-                send(&mut stream, br#"{"value":{"answered":true}}"#);
+                layerfs_api::worker::write_frame(
+                    &mut stream,
+                    &SdkValue::map([(
+                        "value",
+                        SdkValue::map([("answered", SdkValue::Bool(true))]),
+                    )]),
+                )
+                .unwrap();
             }
         }
     });

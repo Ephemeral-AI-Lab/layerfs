@@ -10,7 +10,7 @@ Finds the lines under a folder that contain a literal text, at a Branch, `main` 
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/grep.rs`](../../../../../api/crates/layerfs-api/src/file/grep.rs) |
-| Implemented in | `layerfs_store::calls::file_grep` → `file`, Store method `fs.grep` ([`methods/file/grep.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/grep.rs)) |
+| Implemented in | `layerfs_store::calls::file::grep`, Store method `fs.grep` ([`methods/file/grep.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/grep.rs)) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature

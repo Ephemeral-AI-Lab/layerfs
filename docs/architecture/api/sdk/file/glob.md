@@ -10,7 +10,7 @@ Lists the file paths under a folder that match a glob, at a Branch, `main` or a 
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/glob.rs`](../../../../../api/crates/layerfs-api/src/file/glob.rs) |
-| Implemented in | `layerfs_store::calls::file_glob` → `file`, Store method `fs.glob` ([`methods/file/glob.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/glob.rs)) |
+| Implemented in | `layerfs_store::calls::file::glob`, Store method `fs.glob` ([`methods/file/glob.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/glob.rs)) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature

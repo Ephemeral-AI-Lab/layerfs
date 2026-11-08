@@ -44,7 +44,7 @@ layerfs branch diff <store>/<project> <from_branch> <to_branch> \
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `paths_only` | Bool | false | sent as `hunks = !paths_only` | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls/branch.rs) `StoreOp::DiffBranches` (options forwarded by `calls/op.rs`) |
+| `paths_only` | Bool | false | sent as `hunks = !paths_only` | [`calls/branch.rs`](../../../../../control/crates/layerfs-store/src/calls/branch.rs) `StoreOp::DiffBranches` (options forwarded by `calls/op.rs`) |
 | `page_size` | Int | 50 | 1..=1000 | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
 | `page_pos` | Int | 0 | offset from the last page's `next_page_pos` | same |
 | `cursor` | Text | none | the last page's `next_cursor` (a path); resumes after it | [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs) |

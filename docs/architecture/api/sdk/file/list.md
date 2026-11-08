@@ -10,7 +10,7 @@ Lists one folder's entries at a Branch, `main` or a Commit, one page at a time.
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/list.rs`](../../../../../api/crates/layerfs-api/src/file/list.rs) |
-| Implemented in | `layerfs_store::calls::file_list` → `file`, Store method `fs.list` ([`methods/file/list.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/list.rs)); `page_size`, `page_pos` become `pageSize`, `pagePos` |
+| Implemented in | `layerfs_store::calls::file::list`, Store method `fs.list` ([`methods/file/list.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/list.rs)); `page_size`, `page_pos` become `pageSize`, `pagePos` |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature

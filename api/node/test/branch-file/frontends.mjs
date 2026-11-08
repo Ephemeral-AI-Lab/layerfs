@@ -3,7 +3,7 @@
 // between cached persistent clients and fresh CLI processes. No ID/time rewrite.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, appendFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { client, table, LayerFSError } from "../../src/index.js";
@@ -77,6 +77,12 @@ export async function parity(home, cases, scope) {
     return { refused: decode(r.stderr.trim().split("\n").at(-1)) };
   });
   cases.forEach((step, i) => {
+    if (process.env.LAYERFS_BRANCH_FILE_REPORT) {
+      appendFileSync(process.env.LAYERFS_BRANCH_FILE_REPORT, `${encode({
+        name: step.name, call: step.call, args: step.args, opts: step.opts ?? {},
+        outcomes: Object.fromEntries(Object.entries(fronts).map(([front, answers]) => [front, answers[i]])),
+      })}\n`);
+    }
     for (const [front, answers] of Object.entries(fronts)) {
       assert.deepEqual(semantics(answers[i]), semantics(node[i]), `${step.name}: ${front} differs from Node on the same pinned Store`);
       if (step.error) assert.equal(answers[i].refused?.code, step.error, `${step.name}: ${front}`);

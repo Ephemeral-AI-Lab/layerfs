@@ -10,7 +10,7 @@ Compares two files line by line; each side is a path at a Branch, `main` or a Co
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/diff.rs`](../../../../../api/crates/layerfs-api/src/file/diff.rs) |
-| Implemented in | `layerfs_store::calls::file_diff` → `file`, Store method `fs.diff_files` ([`methods/file/diff_files.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/diff_files.rs)); each side becomes `{ commit, path }`, `*_commit` winning over `*_branch` |
+| Implemented in | `layerfs_store::calls::file::diff`, Store method `fs.diff_files` ([`methods/file/diff_files.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/diff_files.rs)); each side becomes `{ commit, path }`, `*_commit` winning over `*_branch` |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -38,7 +38,7 @@ layerfs file diff <store>/<project> <left_branch> <left_path> \
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
 | `project` | Project | `<store>/<project>`; both records must exist | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
-| `left_branch`, `right_branch` | Name | a Branch or `main` per side | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |
+| `left_branch`, `right_branch` | Name | a Branch or `main` per side | [`calls/file.rs`](../../../../../control/crates/layerfs-store/src/calls/file.rs) |
 | `left_path` | Text | absolute, at most 4096 bytes, no NUL, no trailing `/`, no empty, `.` or `..` component | [`files::path`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 | `right_path` | Text | absolute, at most 4096 bytes, no NUL, no trailing `/`, no empty, `.` or `..` component | [`files::path`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 
@@ -46,7 +46,7 @@ layerfs file diff <store>/<project> <left_branch> <left_path> \
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `left_commit` | Name | none | a Commit or Layer id; replaces `left_branch` | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |
+| `left_commit` | Name | none | a Commit or Layer id; replaces `left_branch` | [`calls/file.rs`](../../../../../control/crates/layerfs-store/src/calls/file.rs) |
 | `right_commit` | Name | none | the same for the right side | same |
 
 ## Returns

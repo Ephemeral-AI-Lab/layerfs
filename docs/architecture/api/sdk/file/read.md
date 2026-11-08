@@ -10,7 +10,7 @@ Reads lines of one text file at a Branch, `main` or a Commit, one bounded window
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/read.rs`](../../../../../api/crates/layerfs-api/src/file/read.rs) |
-| Implemented in | `layerfs_store::calls::file_read` → `file`, Store method `fs.read` ([`methods/file/read.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/read.rs)); `start_line`, `end_line` become `startLine`, `endLine` |
+| Implemented in | `layerfs_store::calls::file::read`, Store method `fs.read` ([`methods/file/read.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/read.rs)); `start_line`, `end_line` become `startLine`, `endLine` |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
