@@ -8,6 +8,7 @@ mod mechanics;
 pub(crate) mod metadata;
 pub(crate) mod objects;
 pub(crate) mod schema;
+pub(crate) mod schema_diagnostic;
 pub(crate) mod session;
 pub(crate) mod snapshot;
 pub(crate) mod storage;

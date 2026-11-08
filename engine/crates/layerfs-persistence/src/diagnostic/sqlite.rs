@@ -51,6 +51,19 @@ impl SqliteHandles {
             let identity = tx.query("SELECT catalog_incarnation FROM history_meta WHERE id=1", vec![])?;
             let incarnation:i64 = identity.first().ok_or(BackendError::Integrity)?.get(0)?;
             emit(observer, "store.snapshot", Outcome::Pass, format!("SQLite read transaction pinned; catalog incarnation {incarnation}; committed WAL included; long scans retain WAL frames"));
+            if let Err(error) = crate::backend::sqlite::schema_diagnostic::check(tx,self.storage.session.acquisition) {
+                emit(observer,"store.schema",if error==BackendError::Integrity {Outcome::Fail}else{Outcome::Unknown},"SQLite schema/authority claims could not be verified against shipped definitions; no untrusted schema payload extracted; this does not establish content corruption");
+                return Err(error);
+            }
+            let authority = tx.query("SELECT catalog_id,binding_key FROM history_meta WHERE id=1",vec![])?;
+            let authority = authority.first().ok_or(BackendError::Integrity)?;
+            let catalog:Vec<u8> = authority.get(0)?;
+            let binding:Vec<u8> = authority.get(1)?;
+            if catalog!=self.history.catalog_id.as_slice() || layerfs_history::CatalogId::derive(&binding).map_err(|_|BackendError::Integrity)?!=self.history.catalog_id || incarnation<=0 || incarnation as u64!=self.history.incarnation {
+                emit(observer,"store.identity",Outcome::Fail,"pinned catalog identity/incarnation differs from admitted Store authority; dependent logical checks blocked; this does not establish content corruption");
+                return Err(BackendError::Integrity);
+            }
+            emit(observer,"store.identity",Outcome::Pass,"pinned catalog identity, binding and incarnation match admitted Store authority");
             crate::backend::sqlite::schema::check(tx.connection,tx.work,(tx.layout(),self.storage.session.acquisition))?;
             let schema=tx.query("SELECT schema_source,schema_definition FROM history_meta WHERE id=1",vec![])?;
             let schema=schema.first().ok_or(BackendError::Integrity)?;

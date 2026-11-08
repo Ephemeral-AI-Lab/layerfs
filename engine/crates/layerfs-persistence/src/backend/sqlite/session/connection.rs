@@ -151,6 +151,7 @@ pub(crate) struct State {
     pub(crate) writer_hold: Option<crate::backend::sqlite::lane::writer_admission::Writer>,
 }
 pub(crate) struct Session {
+    pub(crate) diagnostic: bool,
     /// A writable Disposable session's checkpoint thread; dropped first, so
     /// it ends before the session's own connection closes.
     pub(crate) background: Option<super::background::Checkpointer>,
@@ -314,6 +315,7 @@ impl Session {
             .then(|| super::background::Checkpointer::start(path))
             .transpose()?;
         Ok(Self {
+            diagnostic,
             background,
             admission: crate::backend::admission::Admission::default(),
             path: path.to_path_buf(),
