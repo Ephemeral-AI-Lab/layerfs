@@ -6,7 +6,7 @@
 
 **The question this layer answers:** What can a program call, and where does each call run?
 
-The API layer is the public surface: the management library, the call table and its one dispatcher, and the front ends (the `layerfs` command, Node and Python).
+The API layer is the public surface: the management library, the call table and its one dispatcher, and the front ends (the `layerfs` command, Node, Python and a local MCP server).
 
 What a program sees of this layer is the **SDK**: 64 calls in nine
 families, the same names and arguments in JavaScript, Python and the
@@ -80,7 +80,7 @@ Dotted edges cross a process boundary.
 | --- | --- | --- |
 | [Call table](call-table/README.md) | The nine call families and the one dispatcher every front end goes through. | [Table](call-table/table.md), [Errors](call-table/errors.md) |
 | [SDK](sdk/README.md) | Every call a program can make: 64 calls in nine families, one page per call, with JavaScript, Python and CLI forms. | [project](sdk/project/README.md), [branch](sdk/branch/README.md), [commit](sdk/commit/README.md), [file](sdk/file/README.md), [sandbox](sdk/sandbox/README.md), [workspace](sdk/workspace/README.md), [machine](sdk/machine/README.md), [store](sdk/store/README.md), [backup](sdk/backup/README.md) |
-| [Front ends](front-ends/README.md) | The `layerfs` command, the Node addon and the Python module: one call each, over the call table. | [CLI](front-ends/cli.md), [Node](front-ends/node.md), [Python](front-ends/python.md) |
+| [Front ends](front-ends/README.md) | The \layerfs\ command, the Node addon, the Python module and the MCP server: one call each, over the call table. | [CLI](front-ends/cli.md), [Node](front-ends/node.md), [Python](front-ends/python.md), [MCP](front-ends/mcp.md) |
 
 ## Rules for this layer
 

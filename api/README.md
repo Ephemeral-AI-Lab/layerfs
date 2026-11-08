@@ -5,9 +5,10 @@
 > `@layerfs/cli`, `@layerfs/backend` and `@layerfs/runtime`), which were
 > removed in #533 step 14. Their last source is in the 1.1.0 release tag.
 
-`api/` holds one JavaScript package, `layerfs` (in [`node/`](node)), and the
-script that builds its native addon. The package is the library's call table
-as nine families of functions:
+`api/` holds the JavaScript package `layerfs` (in [`node/`](node)), the script
+that builds its native addon, and the private stdio MCP server [`mcp/`](mcp)
+(`@layerfs/mcp`: one generated tool per call, `work` and `admin` profiles). The
+`layerfs` package is the library's call table as nine families of functions:
 
 | Family | Calls |
 | --- | --- |
