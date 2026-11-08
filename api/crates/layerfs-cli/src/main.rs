@@ -9,12 +9,7 @@
 //! `layerfs --version` need no home.
 #![forbid(unsafe_code)]
 
-mod banner;
-mod help;
-mod output;
-mod parse;
-mod run;
-mod worker;
+use layerfs_cli::run;
 
 fn main() -> std::process::ExitCode {
     let mut words = Vec::new();
