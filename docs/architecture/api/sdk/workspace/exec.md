@@ -197,3 +197,13 @@ It includes progress and is exclusive with `--stream` and `--text`. A result
 exits 0 regardless of the command's exit code; refusal exits 125 and usage
 exits 2. Bytes use UTF-8 text or `{base64: ...}`. A failed stdout exits 125
 with effects kept and delivery incomplete; never replay the operation.
+
+### Cancellation before registration
+
+A cancel with no registered command retains a pending mark for 30 seconds
+while answering `ended`. `Running::start` consumes it under the Sandbox lock
+and ends the command at spawn (`kind: "cancelled"`, exit code 137). The mark
+is local to the Workspace and id, removed when consumed and ignored after
+expiration. Reuse after consumption is unaffected. An unconsumed mark may
+cancel reuse within that interval; use unique ids. Expired unconsumed files
+are removed on access or Workspace teardown. No call is retried or replayed.

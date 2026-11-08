@@ -101,8 +101,13 @@ command's own process group; a child that calls `setsid` itself escapes
 it. A cancel that comes before the command runs (its record has no stop
 handle yet) answers `cancelled` with `SIGKILL` and marks the record; the
 exec's owner, told the handle once the command runs, ends it at once, and
-the exec answers `kind: "cancelled"` with exit code 137. A cancel never
-answers `ended` for a command that then runs. For a
+the exec answers `kind: "cancelled"` with exit code 137. When no record exists, cancel answers `ended` and writes a pending mark
+keyed by Workspace and exec id. Registration consumes the mark once under
+the same Sandbox lock; its owner ends the command at spawn and reports
+`kind: "cancelled"` (137). The mark expires after 30 seconds and is ignored
+after expiration or clock rollback. This covers a preassigned id cancelled
+before the exec process starts. Reusing an id before its unconsumed mark
+expires is also cancelled; prefer a new id for every command. For a
 Sandbox this home reaches directly, a worker that answers `NoSuchSandbox`
 confirms the command `ended`. A worker that takes the cancel and never
 answers leaves the call waiting until its connection closes: there is no
@@ -159,3 +164,13 @@ the layerfs-project#113 branch; the JS and Python lines are written from the cal
 ---
 
 ← [workspace.exec](exec.md) · [Up: workspace](README.md) · [workspace.commit](commit.md) →
+
+### Cancellation before registration
+
+A cancel with no registered command retains a pending mark for 30 seconds
+while answering `ended`. `Running::start` consumes it under the Sandbox lock
+and ends the command at spawn (`kind: "cancelled"`, exit code 137). The mark
+is local to the Workspace and id, removed when consumed and ignored after
+expiration. Reuse after consumption is unaffected. An unconsumed mark may
+cancel reuse within that interval; use unique ids. Expired unconsumed files
+are removed on access or Workspace teardown. No call is retried or replayed.

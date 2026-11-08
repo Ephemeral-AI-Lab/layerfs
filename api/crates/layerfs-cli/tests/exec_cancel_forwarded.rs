@@ -512,3 +512,50 @@ fn a_cancel_before_the_command_starts_is_answered_cancelled_and_its_owner_ends_i
     assert!(!exec_file(&home, "e9").exists());
     std::fs::remove_dir_all(home).unwrap();
 }
+
+#[test]
+fn a_cancel_before_cli_registration_is_forwarded_at_spawn() {
+    let seen = Seen::default();
+    let (arrived, came) = channel();
+    let (go, held) = channel();
+    let home = home_with("unregistered", holding(seen.clone(), arrived, held));
+    let (code, out, err) = cli(&home, &["workspace", "exec-cancel", "b1:one", "e9"]);
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(out.trim(), r#"{"outcome":"ended"}"#);
+    assert!(exec_file(&home, "e9").with_extension("cancel").exists());
+    let child = layerfs(
+        &home,
+        &[
+            "workspace",
+            "exec",
+            "b1:one",
+            "sleep 600",
+            "--exec-id",
+            "e9",
+        ],
+    )
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .spawn()
+    .unwrap();
+    // the exec is in the worker and has not started: no stop handle yet
+    came.recv_timeout(Duration::from_secs(30)).unwrap();
+    let recorded = read_record(&exec_file(&home, "e9")).unwrap().unwrap();
+    assert_eq!(recorded.get("stop"), Some(&SdkValue::Null), "{recorded:?}");
+    assert!(cancels(&seen).is_empty());
+    assert!(!exec_file(&home, "e9").with_extension("cancel").exists());
+    let marked = read_record(&exec_file(&home, "e9")).unwrap().unwrap();
+    assert!(marked.get_int("cancel").is_some(), "{marked:?}");
+    // the command starts: its owner ends it there, with zero grace
+    go.send(()).unwrap();
+    let ran = common::finish(child);
+    let (out, err) = (text(&ran.stdout), text(&ran.stderr));
+    assert_eq!(cancels(&seen), [("e9".to_owned(), Some(0), WS.to_owned())]);
+    assert!(
+        out.contains("\"kind\":\"cancelled\"") && out.contains("\"exit_code\":137"),
+        "{:?}: {out} {err}",
+        ran.status.code()
+    );
+    assert!(!exec_file(&home, "e9").exists());
+    std::fs::remove_dir_all(home).unwrap();
+}
