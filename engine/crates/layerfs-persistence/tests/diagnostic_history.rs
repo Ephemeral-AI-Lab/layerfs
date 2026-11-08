@@ -145,6 +145,7 @@ fn layer_provenance_and_missing_or_cyclic_commit_parents_are_not_silent() {
  "UPDATE \"commit\" SET base_layer_id=(SELECT head_layer_id FROM layer_stack WHERE name='s2')",
  ]{let f=graph();let other=init(&f,2);let branch=fork(&f,other.id,3,ForkSource::Layer(other.head_layer));commit(&f,branch,40,None);clean(&f.audit(true));f.raw().execute_batch(&format!("PRAGMA foreign_keys=OFF; {sql}")).unwrap();let out=f.audit(true);assert!(out.iter().any(|o|o.id.starts_with("store.history.")&&o.outcome==layerfs_persistence::diagnostic::Outcome::Fail),"{sql}: {out:?}");if sql.contains("parent_commit_id=commit_id")||sql.contains("AS c SET parent_commit_id"){failure(&out,"store.history.cycles");}
 if sql.contains("parent_commit_id=CAST")||sql.contains("base_layer_id=(SELECT"){failure(&out,"store.history.references");}
+if sql.contains("parent_commit_id=CAST"){failure(&out,"store.database.foreign_keys");}
 if sql.contains("source_commit_id"){failure(&out,"store.history.provenance");}}
 }
 #[test]
