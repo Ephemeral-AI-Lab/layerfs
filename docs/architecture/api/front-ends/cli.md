@@ -104,6 +104,21 @@ is exit 2). The banner
 only when stdout is a terminal; `NO_COLOR` turns its colours off.
 `help` and `--version` need no home.
 
+## Machine-readable discovery
+
+`layerfs --version` keeps its `layerfs <version>` first line.
+`layerfs --version --json` prints `{version, commit, dirty, features}`: the
+full source commit and dirty state are embedded at build time, and features
+lists enabled `machine`, `postgresql` and `tls` features. A dirty build is
+not identified by the commit alone. Both forms need no home.
+
+`layerfs help --json` prints `{calls, commands, switches}` in one JSON line.
+`calls` is exactly `layerfs_api::table_json`; `commands` lists the outside-table
+commands by shell name with positional arguments and options, including every
+Doctor target, `import-env` and `worker`. `switches` lists each front-end switch
+and the API call names it applies to. Table option names use underscores;
+CLI spellings use hyphens. Discovery neither opens nor creates a home.
+
 ## Output
 
 | Outcome | Printed | Exit | Source |

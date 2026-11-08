@@ -18,7 +18,11 @@ pub fn main(words: Vec<String>) -> ExitCode {
             let topic: Vec<&str> = words.iter().skip(1).map(String::as_str).collect();
             help::print(&topic)
         }
-        Some("--version") => output::print(&format!("layerfs {}\n", env!("CARGO_PKG_VERSION"))),
+        Some("--version") => match &words[1..] {
+            [] => output::print(&format!("layerfs {}\n", env!("CARGO_PKG_VERSION"))),
+            [flag] if flag == "--json" => crate::capabilities::version(),
+            _ => wrong("use layerfs --version [--json]".to_owned()),
+        },
         Some("worker") if words.len() == 1 => worker::main(),
         Some("import-env") if words.len() == 1 => import_env(),
         Some("doctor") => crate::doctor::main(&words[1..]),

@@ -48,6 +48,7 @@ fn option(arg: &Arg) -> String {
 /// Prints help for `topic`: nothing, a family, or a family and a call.
 pub fn print(topic: &[&str]) -> ExitCode {
     match topic {
+        ["--json"] => crate::capabilities::help(),
         [] => {
             let mut text = format!(
                 "{}layerfs <family> <call> <arguments> [--options] [--text]\n\n",
