@@ -43,37 +43,10 @@ pub use postgres_url::PostgresUrl;
 pub use runtime::{LaunchFailure, Runtime, Sandbox};
 pub use stop::{Cancelled, ExecSlot, Stop};
 
-// Windows face of the launched Sandbox owner: the runtime itself is a
-// unix surface (namespaces/host_process; #454 carries the Windows
-// host_process port). Records and ids flow; nothing launches.
+#[cfg(windows)]
+mod windows_runtime;
 #[cfg(windows)]
 pub use windows_runtime::{LaunchFailure, Sandbox};
-
-#[cfg(windows)]
-pub mod windows_runtime {
-    use std::path::PathBuf;
-
-    /// The failure of a launch that never ran on this host.
-    #[derive(Debug)]
-    pub struct LaunchFailure(pub String);
-
-    /// A launched Sandbox as the records name it: its id and root flow;
-    /// every runtime method answers Unsupported until the port.
-    #[derive(Clone, Debug)]
-    pub struct Sandbox {
-        pub id: crate::types::SandboxId,
-        pub root: PathBuf,
-    }
-
-    impl Sandbox {
-        pub fn id(&self) -> crate::types::SandboxId {
-            self.id
-        }
-        pub fn root(&self) -> &std::path::Path {
-            &self.root
-        }
-    }
-}
 pub use types::{
     Bind, CommandIdentity, ContainerId, ExecExit, ExecRequest, Image, IsolationModel, LaunchPhase,
     LaunchRequest, LocalRecord, MountDriver, NamespaceRecord, PendingRequest, ProviderCapabilities,

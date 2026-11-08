@@ -15,6 +15,7 @@ use layerfs_home::outcome::{failed, refused};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufWriter, Write};
+#[cfg(unix)]
 use std::os::unix::fs::{FileExt, OpenOptionsExt};
 use std::sync::{Arc, Mutex, OnceLock};
 

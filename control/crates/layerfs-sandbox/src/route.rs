@@ -40,6 +40,7 @@ fn host_args(
     // the runtime requires; one directory per Sandbox beside the
     // image cache it shares
     let local = paths::run_root(home);
+    #[cfg(unix)]
     {
         use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
         std::fs::DirBuilder::new()
@@ -49,6 +50,9 @@ fn host_args(
             .map_err(failed)?;
         std::fs::set_permissions(&local, std::fs::Permissions::from_mode(0o755)).map_err(failed)?;
     }
+    // Windows: the run root's ACL carries its privacy face.
+    #[cfg(windows)]
+    std::fs::create_dir_all(&local).map_err(failed)?;
     // namespaces commands run as another identity: the home's folders
     // above the root must let them pass (a macOS native command does not)
     if backend == "namespaces" {

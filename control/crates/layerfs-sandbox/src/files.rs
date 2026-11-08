@@ -30,11 +30,18 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// This process's effective uid and gid: a native Sandbox's command
 /// identity (its commands run as this user).
+#[cfg(unix)]
 pub fn user() -> (u32, u32) {
     (
         layerfs_home::home::flock::euid(),
         layerfs_home::home::flock::egid(),
     )
+}
+
+/// Windows: no separate euid/egid face; the session user is the owner.
+#[cfg(windows)]
+pub fn user() -> (u32, u32) {
+    (0, 0)
 }
 /// The folder of the Sandbox a call names (`sandbox`, its name):
 /// `<root>/sandbox/<name>/`, in the home on `native` and for a Sandbox

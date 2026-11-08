@@ -9,6 +9,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
 use layerfs_home::outcome::{failed, refused, Outcome};
 use std::{
     fs::{File, OpenOptions},
+    #[cfg(unix)]
     os::unix::fs::OpenOptionsExt,
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
