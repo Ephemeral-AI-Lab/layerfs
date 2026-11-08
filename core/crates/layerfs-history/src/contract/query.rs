@@ -191,3 +191,22 @@ fn digest(key: &[u8; 32], bytes: &[u8]) -> [u8; 16] {
     out.copy_from_slice(&full.as_bytes()[..16]);
     out
 }
+
+/// Authenticate a saved-query payload independently of the history page format.
+/// This separate domain binds Store identity/incarnation and never exports a key.
+pub fn authenticate_query(
+    key: &[u8; 32],
+    catalog: CatalogId,
+    incarnation: u64,
+    payload: &[u8],
+) -> HistoryResult<[u8; 32]> {
+    if payload.len() > 16 * 1024 {
+        return Err(HistoryError::Capacity("saved-query continuation payload"));
+    }
+    let mut hasher = blake3::Hasher::new_keyed(key);
+    hasher.update(b"layerfs/saved-query/v1\0");
+    hasher.update(catalog.as_slice());
+    hasher.update(&incarnation.to_be_bytes());
+    hasher.update(payload);
+    Ok(*hasher.finalize().as_bytes())
+}

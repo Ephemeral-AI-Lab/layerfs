@@ -32,7 +32,7 @@ reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-64 calls in 9 families, counted from the Node table. Calls present: Node 64, Python 64, Python `aio` 64, CLI 64.
+66 calls in 9 families, counted from the Node table. Calls present: Node 66, Python 66, Python `aio` 66, CLI 66.
 
 Argument names that are Python keywords: none.
 
@@ -52,7 +52,7 @@ Front-end problems: none.
 | `branch.fork` | project, name, from_branch, ?from_commit | - | yes | yes | yes | yes |
 | `branch.merge` | project, name, a, b | message, units | yes | yes | yes | yes |
 | `branch.publish` | project, branch, ?commit | - | yes | yes | yes | yes |
-| `branch.diff` | project, from_branch, to_branch | paths_only, page_size, page_pos, cursor, page, from_commit, to_commit, path_prefix, include_attribution | yes | yes | yes | yes |
+| `branch.diff` | project, from_branch, to_branch | paths_only, page_size, page_pos, cursor, page, from_commit, to_commit, path_prefix, include_attribution, continuation | yes | yes | yes | yes |
 | `commit.list` | project, branch | page_size, page_pos | yes | yes | yes | yes |
 | `commit.get` | project, branch, commit | - | yes | yes | yes | yes |
 | `commit.diff` | project, from_commit, to_commit | paths_only, page_size, page_pos, cursor | yes | yes | yes | yes |
@@ -61,7 +61,7 @@ Front-end problems: none.
 | `file.list` | project, branch, path, ?commit | page_size, page, page_pos | yes | yes | yes | yes |
 | `file.glob` | project, branch, path, pattern, ?commit | page_size, page, page_pos | yes | yes | yes | yes |
 | `file.grep` | project, branch, path, pattern, ?commit | page_size, page, page_pos | yes | yes | yes | yes |
-| `file.revision` | project, branch, path | at_commit, traversal, page, page_size | yes | yes | yes | yes |
+| `file.revision` | project, branch, path | at_commit, traversal, page, page_size, continuation | yes | yes | yes | yes |
 | `file.blame` | project, branch, path, ?commit | from_line, line_count | yes | yes | yes | yes |
 | `file.diff` | project, left_branch, left_path, right_branch, right_path | left_commit, right_commit, include_attribution, allow_missing, page, page_size | yes | yes | yes | yes |
 | `file.write` | project, branch, path, content | message, mode | yes | yes | yes | yes (stdin/--from) |
@@ -93,6 +93,7 @@ Front-end problems: none.
 | `store.list` | - | - | yes | yes | yes | yes |
 | `store.get` | name | - | yes | yes | yes | yes |
 | `store.status` | name | - | yes | yes | yes | yes |
+| `store.stats` | name | - | yes | yes | yes | yes |
 | `store.create` | name | - | yes | yes | yes | yes |
 | `store.connect` | name, url | password, synchronous_commit | yes | yes | yes | yes |
 | `store.push` | name, machine | on_progress() | yes | yes | yes | yes (--progress) |
@@ -239,3 +240,7 @@ node api/scripts/gen-coverage.mjs --check          # fail when it is stale
 ---
 
 ← [Call table: Errors](errors.md) · [Up: Call table](README.md)
+
+`project.stats(project, branch?, commit?)` is supplied by every front end from the table; it reports pin and completeness.
+
+Pinned `branch.diff` and `file.revision` return authenticated stateless continuations; `commit.diff` accepts saved Layer endpoints.

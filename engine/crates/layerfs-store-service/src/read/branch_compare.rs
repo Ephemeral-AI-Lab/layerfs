@@ -53,10 +53,28 @@ pub fn diff(
     right: &Snap,
     options: &SdkValue,
 ) -> Result<SdkValue> {
-    let page = result_page(options)?;
+    let mut page = result_page(options)?;
     let prefix = crate::write::files::path(options.get_text("pathPrefix").unwrap_or("/"))?;
     let attribution = options.get_bool("includeAttribution");
     let hunks = !matches!(options.get("hunks"), Some(SdkValue::Bool(false)));
+    let query = SdkValue::map([
+        ("kind", SdkValue::text("comparison")),
+        ("left", SdkValue::text(args::node_text(left.node))),
+        ("right", SdkValue::text(args::node_text(right.node))),
+        ("from", options.get("from").cloned().unwrap_or_default()),
+        ("to", options.get("to").cloned().unwrap_or_default()),
+        ("prefix", SdkValue::text(&prefix)),
+        ("attribution", SdkValue::Bool(attribution)),
+        ("hunks", SdkValue::Bool(hunks)),
+        ("size", SdkValue::Int(page.limit as i64)),
+    ]);
+    let resumed = options
+        .get_text("continuation")
+        .map(|token| super::continuation::decode(store, token, &query))
+        .transpose()?;
+    if let Some(state) = &resumed {
+        page.number = super::continuation::page(state, page.number)?;
+    }
     let key = super::comparison_pages::Key {
         left: left.node,
         right: right.node,
@@ -66,7 +84,15 @@ pub fn diff(
         size: page.limit,
         page: page.number,
     };
-    let cached = super::comparison_pages::find(store, &key);
+    let cached = match &resumed {
+        Some(state) => Some(Some(
+            state
+                .get_text("after")
+                .ok_or_else(|| args::invalid("invalid continuation path"))?
+                .to_owned(),
+        )),
+        None => super::comparison_pages::find(store, &key),
+    };
     let exhausted = left.node == right.node || matches!(cached, Some(None));
     let after = cached.as_ref().and_then(|v| v.as_deref());
     let skip = if cached.is_some() { 0 } else { page.skip };
@@ -239,11 +265,30 @@ pub fn diff(
         last = Some(path);
         items.push(item);
     }
+    let continuation = if more {
+        super::continuation::encode(
+            store,
+            query,
+            SdkValue::map([
+                ("after", SdkValue::opt_text(last.clone())),
+                (
+                    "page",
+                    SdkValue::Int(
+                        i64::try_from(page.number + 1)
+                            .map_err(|_| super::query::capacity("continuation page overflow"))?,
+                    ),
+                ),
+            ]),
+        )?
+    } else {
+        SdkValue::Null
+    };
     let mut next_key = key;
     next_key.page += 1;
     super::comparison_pages::keep(store, next_key, if more { last } else { None });
     Ok(SdkValue::map([
         ("kind", SdkValue::text("ok")),
+        ("continuation", continuation),
         ("from", saved::reference(store, left.node)?),
         ("to", saved::reference(store, right.node)?),
         ("items", SdkValue::List(items)),

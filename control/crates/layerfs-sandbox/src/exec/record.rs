@@ -310,6 +310,8 @@ impl Running {
                 }
             }
         }
+        let mut record = record.clone();
+        record.cancel = super::pending::consume(&path)?.or(record.cancel);
         write_entity(&path, &record.encode())?;
         drop(lock);
         Ok(Self {

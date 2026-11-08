@@ -102,7 +102,7 @@ fn the_first_fault_met_is_the_refusal() {
             ("pageSize", SdkValue::Int(0)),
         ],
     );
-    assert_eq!(r.message, "diff_commits takes two saved Commits");
+    assert_eq!(r.message, "diff_commits takes saved Commit or Layer ids");
 
     // The left file is found before the right selector is read.
     let r = refused(

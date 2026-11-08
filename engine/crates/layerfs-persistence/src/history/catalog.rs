@@ -4,6 +4,14 @@ use super::{
 };
 use layerfs_history::*;
 impl HistoryCatalog for HistoryProvider {
+    fn query_authenticator(&self, payload: &[u8]) -> HistoryResult<[u8; 32]> {
+        layerfs_history::query::authenticate_query(
+            &self.cursor_key,
+            self.catalog_id,
+            self.incarnation,
+            payload,
+        )
+    }
     fn statistics(&self) -> HistoryResult<StoreStatistics> {
         HistoryProvider::statistics(self)
     }

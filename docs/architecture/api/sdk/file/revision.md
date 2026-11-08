@@ -80,3 +80,23 @@ Implementation: [`file/revision.rs`](../../../../../api/crates/layerfs-api/src/f
 [`read/revision.rs`](../../../../../engine/crates/layerfs-store-service/src/read/revision.rs),
 [`revision_pages.rs`](../../../../../engine/crates/layerfs-store-service/src/read/revision_pages.rs).
 See [saved query contract](../saved-queries.md) and [file.diff](diff.md).
+
+## Stateless continuation
+
+Optional `continuation` (CLI `--continuation TOKEN`) resumes the next matching
+page in a new process. A page with more results returns a non-null
+`continuation`; the last page returns null. Repeat the same immutable pin(s),
+Branch context(s), path/filter, traversal or attribution/hunk options, and
+`page_size`. Keep the saved IDs returned by the first page: a changed live
+head is a different query. Omit `page` on resume, or send the token's next page
+number; another page number is `InvalidInput`. Legacy cursor/page_pos options
+cannot be combined with numbered continuation.
+
+The opaque `lfq1` token is authenticated with the Store's existing cursor
+capability and binds catalog/incarnation, saved id(s), the query and next
+position. Mismatched or tampered tokens are `InvalidInput`. No server session
+or process cache is required. Resuming seeks from the saved path boundary
+(comparison) or next immutable history node (revision), without replaying
+previous result pages. Normal per-request work/content/reply bounds remain;
+a page that exceeds them is still `Capacity`. The bounded token payload
+(4 KiB before hex encoding) also participates in reply admission.

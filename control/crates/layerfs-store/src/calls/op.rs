@@ -58,6 +58,10 @@ pub struct Change {
 
 /// One Store method with its arguments.
 pub enum StoreOp<'a> {
+    /// Store-wide statistics (no project required).
+    Statistics,
+    /// Entry counts at one project pin.
+    ProjectStats(&'a super::project::ProjectStats),
     /// `project.list_branches`: the Branch `name`, or one page.
     ListBranches {
         /// The one Branch it lists.
@@ -230,6 +234,8 @@ impl StoreOp<'_> {
     /// The engine method.
     pub fn method(&self) -> &'static str {
         match self {
+            Self::Statistics => "store.stats",
+            Self::ProjectStats(_) => "project.stats",
             Self::ListBranches { .. } => "project.list_branches",
             Self::ListCommits { .. } => "branch.list_commits",
             Self::BranchCommits(_) => "branch.commits",
@@ -261,6 +267,8 @@ impl StoreOp<'_> {
     pub fn engine_args(&self) -> Vec<(String, SdkValue)> {
         let mut args = Args::default();
         match self {
+            Self::Statistics => &mut args,
+            Self::ProjectStats(r) => args.at(&r.branch, r.commit.as_deref()),
             Self::ListBranches { name, page } => args.opt("name", *name).page(*page),
             Self::ListCommits { branch, page } => args.text("branch", branch).page(*page),
             Self::BranchCommits(r) => args
@@ -273,6 +281,7 @@ impl StoreOp<'_> {
                 .at(&r.branch, r.at_commit.as_deref())
                 .text("path", &r.path)
                 .opt("traversal", r.traversal.as_deref())
+                .opt("continuation", r.continuation.as_deref())
                 .page(r.page),
             Self::Fork(r) => {
                 let from = r.from_commit.as_deref().unwrap_or(&r.from_branch);
@@ -293,6 +302,7 @@ impl StoreOp<'_> {
                 .opt("fromCommit", r.from_commit.as_deref())
                 .opt("toCommit", r.to_commit.as_deref())
                 .opt("pathPrefix", r.path_prefix.as_deref())
+                .opt("continuation", r.continuation.as_deref())
                 .boolean("includeAttribution", r.include_attribution)
                 .diff(&r.options),
             Self::DiffCommits(r) => args

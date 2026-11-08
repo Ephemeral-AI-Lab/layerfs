@@ -16,6 +16,7 @@ pub(crate) const CALL: Call = call(
         opt("traversal", Text),
         opt("page", Int),
         opt("page_size", Int),
+        opt("continuation", Text),
     ],
     "saved changes to a literal path",
     run,
@@ -29,6 +30,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         path: text("path").unwrap_or_default(),
         at_commit: text("at_commit"),
         traversal: text("traversal"),
+        continuation: text("continuation"),
         page: Page {
             size: args.get_int("page_size"),
             number: args.get_int("page"),

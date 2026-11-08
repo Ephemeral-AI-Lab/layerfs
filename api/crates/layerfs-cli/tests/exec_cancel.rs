@@ -152,6 +152,19 @@ fn exec_ids_records_and_cancel_on_native() {
     let execs = home.join("sandbox/s1/workspace").join(&wsid).join("exec");
     let ws = || ("ws", t("s1:w"));
 
+    // Cancel before even starting the CLI: the pending mark must survive
+    // process startup and be consumed at registration, without a resend.
+    let early = ok(
+        &home,
+        "workspace.exec_cancel",
+        &[ws(), ("exec_id", t("before-cli"))],
+    );
+    assert_eq!(early.get_text("outcome"), Some("ended"));
+    let early = started(&home, "s1:w", "sleep 600", "before-cli");
+    let answer = answered(early);
+    assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
+    assert!(answer.contains("\"exit_code\":137"), "{answer}");
+
     // a caller-named exec id is used, and is the first progress event
     let mut events = Vec::new();
     let named = call(

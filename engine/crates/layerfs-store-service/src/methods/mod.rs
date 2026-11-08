@@ -6,4 +6,5 @@ mod branch;
 mod dispatch;
 mod file;
 mod project;
+mod store;
 pub use dispatch::call;

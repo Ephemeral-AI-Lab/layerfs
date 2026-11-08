@@ -18,7 +18,11 @@ pub fn main(words: Vec<String>) -> ExitCode {
             let topic: Vec<&str> = words.iter().skip(1).map(String::as_str).collect();
             help::print(&topic)
         }
-        Some("--version") => output::print(&format!("layerfs {}\n", env!("CARGO_PKG_VERSION"))),
+        Some("--version") => match &words[1..] {
+            [] => output::print(&format!("layerfs {}\n", env!("CARGO_PKG_VERSION"))),
+            [flag] if flag == "--json" => crate::capabilities::version(),
+            _ => wrong("use layerfs --version [--json]".to_owned()),
+        },
         Some("worker") if words.len() == 1 => worker::main(),
         Some("import-env") if words.len() == 1 => import_env(),
         Some("doctor") => crate::doctor::main(&words[1..]),
@@ -122,14 +126,28 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
     let switches = parsed.switches;
     let scope = match switches.scope.as_ref().map(Scope::parse).transpose() {
         Ok(scope) => scope,
-        Err(refusal) => return output::refusal(&refusal),
+        Err(refusal) => {
+            return if switches.events {
+                crate::framed::finish(Err(refusal), false)
+            } else {
+                output::refusal(&refusal)
+            }
+        }
     };
     let (progress, stream) = (switches.progress, switches.stream);
     let is_term =
         std::io::stderr().is_terminal() && std::env::var_os("LAYERFS_PROGRESS_JSON").is_none();
     let mut last_progress_len = 0;
     let mut progress_start: Option<std::time::Instant> = None;
+    let mut framing_failed = false;
     let mut send = |event: SdkValue| {
+        if switches.events {
+            if !framing_failed && (event.get("progress").is_some() || event.get("stream").is_some())
+            {
+                framing_failed = crate::framed::event(&event).is_err();
+            }
+            return;
+        }
         if progress && event.get("progress").is_some() {
             let mut err = std::io::stderr().lock();
             if is_term {
@@ -190,6 +208,9 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
     // sqlite Store leaves no write-ahead log behind (lane K2: a later
     // `store push` refused it)
     layerfs_api::close_idle(std::time::Duration::ZERO);
+    if switches.events {
+        return crate::framed::finish(outcome, framing_failed);
+    }
     match outcome {
         Err(refusal) => output::refusal(&refusal),
         Ok(value) if stream => {
