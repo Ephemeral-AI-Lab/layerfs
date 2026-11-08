@@ -220,54 +220,6 @@ fn at<T>(phase: &'static str, result: Result<T>) -> Phased<T> {
     result.map_err(|refusal| (phase, refusal))
 }
 
-/// How many times one piece may be asked for again, and how long to wait
-/// before each: `send`'s read changes nothing (the source's Store is idle and
-/// frozen under this call's lease, and a read at an offset is the same bytes
-/// whenever it is taken), so a worker whose answer was lost is asked again
-/// (#13); a step that writes is never replayed.
-const READ_RETRIES: u32 = 3;
-/// The pause before asking a worker for the same piece again.
-const READ_PAUSE: std::time::Duration = std::time::Duration::from_millis(50);
-
-/// Piece at `offset` of the Store `source` sends, read from `native` or a
-/// machine's worker. A lost answer (`Unknown`) to a machine's read is asked
-/// again up to [`READ_RETRIES`] times: it is the one step of a transfer that
-/// no repeat can double-apply. Every other refusal is the call's.
-fn read_piece(home: &Path, source: &mut Executor, name: &str, offset: u64) -> Result<SdkValue> {
-    let mut retried = 0;
-    loop {
-        let step = StoreStep::Read {
-            offset,
-            len: CHUNK,
-            staged: false,
-        };
-        match step_on(home, source, name, step) {
-            Ok(piece) => return Ok(piece),
-            Err(refusal)
-                if retried < READ_RETRIES
-                    && refusal.code == "Unknown"
-                    && matches!(source, Executor::Worker(_)) =>
-            {
-                retried += 1;
-                std::thread::sleep(READ_PAUSE);
-            }
-            // the reads changed nothing, so a lost answer is still the
-            // call's refusal: say how many times the piece was asked
-            Err(mut refusal) => {
-                if retried > 0 {
-                    refusal.message = format!(
-                        "{} (the piece was asked {} more times, and every answer was lost)",
-                        refusal.message, retried
-                    );
-                    refusal.detail =
-                        with_field(refusal.detail, "retries", SdkValue::Int(retried as i64));
-                }
-                return Err(refusal);
-            }
-        }
-    }
-}
-
 /// Enters `phase`: shown as progress (with `bytes` done and total while
 /// sending) and written to the record's `op`.
 fn enter(
@@ -315,7 +267,19 @@ fn phases(
     let mut offset = 0u64;
     enter(&home, events, op, name, "send", Some((0, total)))?;
     loop {
-        let piece = at("send", read_piece(&home, source, name, offset))?;
+        let piece = at(
+            "send",
+            step_on(
+                &home,
+                source,
+                name,
+                StoreStep::Read {
+                    offset,
+                    len: CHUNK,
+                    staged: false,
+                },
+            ),
+        )?;
         let bytes = match piece.get("bytes") {
             Some(SdkValue::Bytes(bytes)) => bytes.clone(),
             _ => Vec::new(),

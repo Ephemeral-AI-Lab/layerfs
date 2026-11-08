@@ -355,9 +355,9 @@ $ layerfs store pull shop --progress       # run (2026-11-08: docker, lima, appl
     cleans it up.
   - During `snapshot`, an idle Store whose crashed opener left a non-empty
     `-wal` is automatically checkpointed (`seal`) under the transfer's
-    exclusive lease before hashing. During `send` of a `store pull`, the
-    read-only piece read (`StoreStep::Read`) retries a lost worker answer
-    (`Unknown`) up to 3 times (50 ms apart); write steps are never replayed.
+    exclusive lease before hashing. Every step runs once: a lost worker
+    answer (`Unknown`), a read's included, fails the transfer uncertain and
+    nothing is resent.
   - A failure names its phase in the message and in `detail.phase`, and
     keeps whatever exists.
   - While it runs, `store status` shows `state: "busy"` and `op`.

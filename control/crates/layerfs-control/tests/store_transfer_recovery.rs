@@ -329,64 +329,15 @@ fn flaky(root: &Path, drops: u32) -> (String, Arc<AtomicU32>) {
     (address, reads)
 }
 
-/// A pull whose two read answers are lost asks again for the same piece and
-/// finishes: the reads changed nothing, so asking once more is safe.
+/// A worker that loses a read answer fails the pull at `send` after one
+/// attempt, and the intent stays unresolved: nothing is asked again.
 #[test]
-fn a_pull_asks_again_for_a_piece_whose_answer_was_lost() {
-    let home = new_dir("retry");
-    layerfs_control::migrate::open(&home).unwrap();
-    let root = new_dir("retry-root");
-    private_dir(&root).unwrap();
-    let (address, reads) = flaky(&root, 2);
-    box_machine(&home, &address);
-    let bytes = store_on_box(&home, &root);
-
-    let mut sink = |_: SdkValue| {};
-    let mut events = Events::new(&mut sink);
-    let started = std::time::Instant::now();
-    let pulled = family::pull(&home, &mut events, "shop", related()).unwrap();
-    let took = started.elapsed();
-
-    assert_eq!(pulled.get_text("from"), Some("box"), "{pulled:?}");
-    assert_eq!(pulled.get_text("to"), Some("native"), "{pulled:?}");
-    assert_eq!(
-        pulled.get_int("bytes"),
-        Some(bytes.len() as i64),
-        "{pulled:?}"
-    );
-    // one read served, two answers lost and asked again
-    assert_eq!(reads.load(Ordering::Relaxed), 3, "the pieces read");
-    assert!(took >= Duration::from_millis(90), "two pauses: {took:?}");
-    assert_eq!(
-        std::fs::read(paths::store_file(&home, "shop")).unwrap(),
-        bytes,
-        "the Store pulled is not the one sent"
-    );
-    let record = StoreRecord::read(&home, "shop").unwrap().unwrap();
-    assert_eq!(record.machine().unwrap(), "native");
-    assert!(record.op().is_none(), "the intent is left");
-    assert!(record.field("incoming_on").is_none(), "the hint is left");
-    let last = record.field("last_transfer").unwrap();
-    assert_eq!(last.get_text("from"), Some("box"));
-    assert_eq!(last.get("retired"), Some(&SdkValue::Bool(true)));
-    assert!(
-        !paths::store_dir(&root, "shop").exists(),
-        "the source keeps its store"
-    );
-    std::fs::remove_dir_all(home).unwrap();
-    let _ = std::fs::remove_dir_all(root);
-}
-
-/// A worker that loses every read answer fails the pull after three more
-/// attempts, and the intent stays unresolved: a step that writes is never
-/// replayed.
-#[test]
-fn a_pull_stops_asking_after_three_more_attempts() {
+fn a_pull_reads_each_piece_once() {
     let home = new_dir("lost");
     layerfs_control::migrate::open(&home).unwrap();
     let root = new_dir("lost-root");
     private_dir(&root).unwrap();
-    let (address, reads) = flaky(&root, 9);
+    let (address, reads) = flaky(&root, 1);
     box_machine(&home, &address);
     store_on_box(&home, &root);
 
@@ -401,13 +352,12 @@ fn a_pull_stops_asking_after_three_more_attempts() {
         refused.message
     );
     assert_eq!(refused.detail.get_text("phase"), Some("send"));
+    assert_eq!(refused.detail.get_int("retries"), None, "{refused:?}");
     assert_eq!(
-        refused.detail.get_int("retries"),
-        Some(3),
+        reads.load(Ordering::Relaxed),
+        1,
         "the piece was asked again"
     );
-    // the first attempt and three more
-    assert_eq!(reads.load(Ordering::Relaxed), 4, "the pieces read");
     let record = StoreRecord::read(&home, "shop").unwrap().unwrap();
     assert_eq!(record.machine().unwrap(), "box", "the record moved on");
     let op = record.op().expect("the intent is kept");

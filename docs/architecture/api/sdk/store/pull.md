@@ -81,12 +81,9 @@ The phases, what each writes to `op` and which failures are uncertain are
 the same as a push; see [store.push](push.md#where-it-runs). The source
 is retired with the worker step `remove` (its whole Store folder under the
 worker's root), not `retire`. The `send` pieces are read from the source's
-worker, and a read is the one step that changes nothing: the Store is idle
-under the call's lease, so the same offset always answers the same bytes. A
-read whose answer was lost (`Unknown`, a dropped worker connection) is
-asked again, at most three times 50 ms apart, before the pull fails; a piece
-whose answers all ran out says how many more times it was asked in
-`detail.retries`, and nothing else is resent. See the
+worker, one attempt each: a read whose answer was lost (`Unknown`, a dropped
+worker connection) fails the pull at `send`, uncertain, and nothing is
+resent. See the
 [routing table](../../../control/routing/routing-table.md).
 
 ## Errors
@@ -105,7 +102,7 @@ Every refusal's message starts `store pull, <phase>:` and carries
 | `Unavailable` | the source machine is stopped or its worker gone; nothing is started | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
 | `Conflict` | the Store moved between check and `op` | no | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
 | `Failed` | a `-wal` left by a killed opener that no open-and-close could checkpoint; a digest mismatch; I/O | no, unless at `record` | [`sqlite/transfer/steps.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) |
-| `Unknown` | **the worker's answer was lost, or any failure of `record`** (a lost `send` read answer after three more attempts, `detail.retries`) | **yes** | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) `transfer`, `read_piece` |
+| `Unknown` | **the worker's answer was lost, or any failure of `record`** (a lost `send` read answer included) | **yes** | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) `transfer` |
 
 **After an uncertain pull**, read [store.status](status.md), then run
 `store pull` again: it deletes the copy the record does not name first
