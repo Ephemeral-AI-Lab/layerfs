@@ -35,11 +35,10 @@ use std::os::unix::ffi::OsStrExt;
 #[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, FileExt, OpenOptionsExt, PermissionsExt};
 
-// Windows face: the bytes grammar is UTF-8 (PathName enforces it).
+// Windows face: the bytes grammar is UTF-8 (PathName enforces it);
+// the conversions live in layerfs_home::os_bytes.
 #[cfg(windows)]
-fn from_bytes(bytes: &[u8]) -> std::ffi::OsString {
-    std::ffi::OsString::from(String::from_utf8_lossy(bytes).into_owned())
-}
+use layerfs_home::os_bytes::from_bytes;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

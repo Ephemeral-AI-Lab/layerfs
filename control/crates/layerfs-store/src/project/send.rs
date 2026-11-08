@@ -35,24 +35,9 @@ use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 
 // Windows: the grammar's paths are valid UTF-8 (PathName::from_utf8
-// enforces it); the bytes face is UTF-8 bytes, per the port's grammar.
+// enforces it); the bytes face is the shared layerfs_home::os_bytes.
 #[cfg(windows)]
-mod os_bytes {
-    use std::ffi::{OsStr, OsString};
-
-    pub fn from_bytes(bytes: &[u8]) -> std::borrow::Cow<'_, OsStr> {
-        let text = String::from_utf8_lossy(bytes).into_owned();
-        std::borrow::Cow::Owned(OsString::from(text))
-    }
-    pub fn as_bytes(text: &OsStr) -> &[u8] {
-        text.to_str().map(|s| s.as_bytes()).unwrap_or(&[])
-    }
-    pub fn into_vec(text: OsString) -> Vec<u8> {
-        text.into_string().map(|s| s.into_bytes()).unwrap_or_default()
-    }
-}
-#[cfg(windows)]
-use os_bytes::{as_bytes, from_bytes, into_vec};
+use layerfs_home::os_bytes::{as_bytes, from_bytes, into_vec};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

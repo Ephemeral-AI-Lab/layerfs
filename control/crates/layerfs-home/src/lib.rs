@@ -20,4 +20,5 @@ pub mod outcome;
 pub mod process;
 pub mod secrets;
 #[doc(hidden)]
+pub mod os_bytes;
 pub mod trace;
