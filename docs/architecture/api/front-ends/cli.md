@@ -216,3 +216,8 @@ Its protocol is on [Workers](../../control/routing/workers.md).
 the saved IDs and query options, omit `--page`, and read the returned next
 page in a fresh process. Mismatched tokens are `InvalidInput`. `commit diff`
 also accepts full saved Layer ids, retaining its path cursor and scalable plan.
+
+After argument and platform validation, table calls initialize a missing home,
+including reads such as `store list`. An empty/unset `LAYERFS_HOME` falls back
+to `~/.layerfs`. Help, version and Doctor observation commands do not initialize
+a missing home. A contract receipt records the final build's observed behavior.

@@ -119,5 +119,5 @@ Commit↔Commit. The existing changed-inode/binding plan prunes unchanged
 namespace state when its hints qualify; fallback and Capacity semantics are
 unchanged. Use it for main-publication comparisons and first Commit versus
 its base Layer. The legacy side field `commit` holds the supplied saved id
-(including an `l:` Layer id); `root` remains the immutable filesystem root.
+(including a typed Layer id); `root` remains the immutable filesystem root.
 The existing `next_cursor` path resumes this saved comparison.
