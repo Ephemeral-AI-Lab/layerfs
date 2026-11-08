@@ -126,3 +126,30 @@ layerfs file grep shop/api agent /src TODO
 ---
 
 ← [file.glob](glob.md) · [Up: file](README.md) · [file.blame](blame.md) →
+
+
+## Immutable saved references
+
+Responses include `at: { id, kind: "Commit" | "Layer", branch, root }` with full
+identities. Reuse `at.id` as the existing positional `commit` argument to pin later
+reads to the same saved tree. Historical IDs are validated against the selected
+project; an ID in another project cannot bypass that boundary. Reads do not inspect
+live Workspace overlays. See [saved queries](../saved-queries.md).
+
+## Numbered matching-result pages
+
+Add `page` alongside `page_size`; page 1 is first. Retain legacy `page_pos` when
+`page` is absent, and reject both together. For example:
+
+```js
+layerfs.file.grep(project, branch, path, pattern, pinned_id, { page: 2, page_size: 20 });
+```
+
+Numbered mode returns `page`, `page_size` and boolean `has_more`. Reuse the same
+pinned version, filters and page size. Ordering remains directory component/name
+order, with grep lines in ascending line order within each file. A successful
+page contains matching results; it does not silently skip results on reply-budget
+exhaustion. Work or mandatory-reply exhaustion returns `Capacity`; no total count
+or total pages is promised. Legacy offset response fields stay compatible.
+
+Numbered grep admits 10,000 candidate/matching-line visits and 16 MiB cumulative file payload per request; narrow the path when a query cannot finish. These are query admission bounds, not limits on file or project size. Binary files are counted as skipped.

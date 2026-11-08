@@ -120,3 +120,53 @@ layerfs file diff shop/api main /src/app.ts agent /src/app.ts
 ---
 
 ← [file.blame](blame.md) · [Up: file](README.md) · [file.write](write.md) →
+
+## Pinned content and attribution comparison
+
+The five existing positional arguments and each `left_commit`/`right_commit`
+override remain. Add options `include_attribution`, `allow_missing`, `page` and
+`page_size`. Both heads resolve once; all returned facts use those exact roots.
+`left_ref` and `right_ref` are `{ id, kind: "Commit" | "Layer", branch, root }`.
+Reuse their IDs in the existing commit overrides on later pages.
+
+`allow_missing` defaults false, preserving `NoSuchPath`. When true, exactly one
+missing side succeeds as Added/Removed with `before` or `after` null. Both missing
+sides still refuse. Invalid/inaccessible IDs and paths do not become missing-side
+successes. Before/after facts contain type, inode, size and mode.
+
+`changes` has independent `content`, `metadata`, `identity`, `attribution` fields.
+The first three compare two present sides; absent sides use null facts and item
+kind. Attribution is nullable: unrequested or unresolved is not false. Existing
+`Equal`/`Text`/`Binary`, equality and hunk fields remain compatibility fields.
+`omission_reason` separately distinguishes `binary`, `text_limit`, unsupported type
+and omitted payload; oversized text is not silently asserted to be binary.
+
+With explicit new options, `rows` returns stable line alignment, including equal
+lines, in one-based page/page_size windows:
+
+```text
+{ index, op: " " | "-" | "+", left_line, right_line, text,
+  text_clipped, before_owner, after_owner, owner_changed, attribution_coverage }
+```
+
+Row text retains its LF when present, matching blame's logical-line convention;
+empty files have no invented line. `owner` is null or `{ ref, message }`, with a
+typed full Commit/Layer reference. An unchanged exact aligned row with different
+known owners has `owner_changed: true`; content additions/removals have false.
+Unknown/coarse owner comparisons have null. This is persisted line provenance,
+not human authorship. Publication preserves source Commit ownership.
+
+`content_coverage` and `attribution_coverage` disclose complete/partial/unavailable/
+not_requested states, exact/coarse comparison and reasons. Content's bounded LCS
+fallback is explicitly coarse even when bytes are fully available. Binary or
+oversized line attribution is unavailable; equal bytes/roots alone do not prove
+same ownership. Identical saved identity and identical path do prove zero ownership
+changes, including binary files. `attribution_changes` is returned only when the
+complete exact comparison can establish a count.
+
+Opted comparisons admit 10,000 aligned rows/ancestry visits and a shared 64 MiB
+logical provenance-read budget, not a file-size limit. Mandatory row pages must fit
+48 KiB including owners and escaped text, otherwise `Capacity`; reduce page_size.
+No row is silently skipped. Partial ownership remains unknown. Legacy hunks can
+be omitted with `hunks_omitted` when detail rows consume the response budget.
+See [saved queries](../saved-queries.md).

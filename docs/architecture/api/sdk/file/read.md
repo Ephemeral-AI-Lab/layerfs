@@ -130,3 +130,12 @@ layerfs file read shop/api agent /src/index.ts --start-line 1 --end-line 80
 ---
 
 ← [SDK: file](README.md) · [Up: file](README.md) · [file.stat](stat.md) →
+
+
+## Immutable saved references
+
+Responses include `at: { id, kind: "Commit" | "Layer", branch, root }` with full
+identities. Reuse `at.id` as the existing positional `commit` argument to pin later
+reads to the same saved tree. Historical IDs are validated against the selected
+project; an ID in another project cannot bypass that boundary. Reads do not inspect
+live Workspace overlays. See [saved queries](../saved-queries.md).
