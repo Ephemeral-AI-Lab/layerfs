@@ -7,7 +7,7 @@
 // stdout carries the protocol only; every log line goes to stderr. Closing
 // stdin or SIGTERM closes this process's idle Stores and exits 0.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeSync } from "node:fs";
 import process from "node:process";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -93,11 +93,11 @@ function flagsOf(argv) {
         break;
       case "--help":
       case "-h":
-        process.stdout.write(USAGE);
+        writeSync(1, USAGE);
         process.exit(0);
         break;
       case "--version":
-        process.stdout.write(`${VERSION}\n`);
+        writeSync(1, `${VERSION}\n`);
         process.exit(0);
         break;
       default:

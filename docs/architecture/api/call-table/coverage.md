@@ -25,7 +25,9 @@ One row per call of the table, counted by the generator from the Node package's 
   the content and JSON positionals (read from stdin or `--from`), with `on_progress` as `--progress`,
   and without the output functions (`--stream` is a plain option of `workspace.exec`).
 
-A cell that is not `yes` is `NO`, and the reason is listed under "Front-end problems". The matrix is
+A cell is `yes` when that front end has the call and `NO` otherwise, with the reason listed under
+"Front-end problems". The MCP column can also be `admin` for a call only `--profile admin` lists; that is a
+cell the profile is expected to have, not a problem. The matrix is
 rewritten by `node api/scripts/gen-coverage.mjs` and `--check` fails when it is stale;
 `api/node/test/coverage.mjs` runs that check and also proves that a missing, renamed or extra call is
 reported.

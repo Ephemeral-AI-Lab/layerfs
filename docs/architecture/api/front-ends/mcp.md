@@ -81,10 +81,13 @@ create/remove, Sandbox create/close, and the `machine`, `store` and `backup` fam
 profile lists the union, so it can do the work calls too. A new call with no bucket fails generation and the
 test, rather than appearing silently.
 
-Why: `work` lets an agent read a project, work on Branches and files, run in a mounted Workspace and export a
-snapshot, without the calls that create or destroy authoritative state. `machine`, `store` and `backup` calls
-start workers, move whole Stores, hold credentials and delete records; `project.init/remove` and
-`sandbox.create/close` change the shape of the home. Those need an operator's explicit `--profile admin`.
+Why: `work` lets an agent read a project, work on Branches and files (each write is one explicit Commit), run
+in a mounted Workspace and export a snapshot. It stops short of the calls that create, move or delete the
+home's Stores, machines, projects and Sandboxes: `machine`, `store` and `backup` start workers, move whole
+Stores, hold credentials and delete records; `project.init/remove` and `sandbox.create/close` change the shape
+of the home. `file.write` and `branch.publish` stay in `work` because committing and publishing a Branch is
+the work itself; an owner who wants them out moves them to `admin` (open question below). The administrative
+calls need an operator's explicit `--profile admin`.
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
