@@ -20,12 +20,17 @@ pub fn sqlite(
         identity.cursor_key,
     )
     .map_err(|error| {
+        // Schema/authority validation may encounter raw corruption before the
+        // ordinary audit begins. Probe the original SQLite file independently;
+        // only exact engine evidence can produce a structural failure.
+        let _ = layerfs_persistence::diagnostic::sqlite_structure(path, options, observer);
         refused(
             "Unavailable",
             format!("diagnostic read-only Store open failed: {error}"),
         )
     })?;
     handles.diagnose(options, observer).map_err(|error| {
+        let _ = layerfs_persistence::diagnostic::sqlite_structure(path, options, observer);
         refused(
             "Unavailable",
             format!("Store audit did not complete: {error}"),

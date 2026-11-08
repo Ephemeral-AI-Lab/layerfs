@@ -80,3 +80,18 @@ A scoped, joined interruption watcher covers scratch SQL as well as source SQL;
 deadline or cancellation interrupts recursive queries and leaves coverage
 incomplete rather than declaring corruption. Graph closure and prior publication
 lookups use private disk-backed scratch; runtime can grow with history size.
+
+### Structural damage before LayerFS admission
+
+If read-only LayerFS handle admission or the logical audit fails, diagnosis may
+make one separate read-only physical observation of the original SQLite file.
+This supplemental view is **not** the logical inventory's pinned snapshot: it
+does not restart or replay the logical audit, validate its earlier inventory,
+or clear previous failures. Logical access/coverage remains Unknown. An expired
+deadline or cancellation skips supplemental work.
+
+Only SQLite `SQLITE_CORRUPT`/`SQLITE_NOTADB` or non-`ok` integrity/quick-check rows
+confirm a structural failure. Busy/locked, permission/I/O, missing file, unknown
+application schema or binding mismatch alone do not establish corruption. A
+clean supplemental structural check says nothing about supported application
+schema, authority, canonical objects or history integrity.

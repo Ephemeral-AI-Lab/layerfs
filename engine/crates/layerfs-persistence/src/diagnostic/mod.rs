@@ -8,6 +8,8 @@ mod reader;
 mod scan;
 mod scratch;
 mod sqlite;
+mod sqlite_structure;
+pub use sqlite_structure::sqlite_structure;
 mod transaction;
 #[cfg(feature = "postgresql")]
 pub use postgresql::connection as postgresql_connection;
