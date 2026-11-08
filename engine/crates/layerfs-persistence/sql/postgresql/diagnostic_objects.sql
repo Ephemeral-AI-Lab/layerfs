@@ -1,0 +1,5 @@
+SELECT 'C'::text AS kind,c.relname::text AS relation,k.conname::text AS name,pg_get_constraintdef(k.oid,true)::text AS definition,k.convalidated::int::bigint AS healthy FROM pg_catalog.pg_constraint k JOIN pg_catalog.pg_class c ON c.oid=k.conrelid WHERE c.relnamespace=current_schema()::regnamespace
+UNION ALL SELECT 'I',t.relname::text,c.relname::text,pg_get_indexdef(c.oid,0,true)::text,(i.indisvalid AND i.indisready)::int::bigint FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class c ON c.oid=i.indexrelid JOIN pg_catalog.pg_class t ON t.oid=i.indrelid WHERE t.relnamespace=current_schema()::regnamespace
+UNION ALL SELECT 'T',c.relname::text,t.tgname::text,pg_get_triggerdef(t.oid,true)::text,(t.tgenabled='O')::int::bigint FROM pg_catalog.pg_trigger t JOIN pg_catalog.pg_class c ON c.oid=t.tgrelid WHERE c.relnamespace=current_schema()::regnamespace AND NOT t.tgisinternal
+UNION ALL SELECT 'F','_'::text,p.proname::text,p.prosrc::text,(NOT p.prosecdef AND p.prorettype='trigger'::regtype)::int::bigint FROM pg_catalog.pg_proc p WHERE p.pronamespace=current_schema()::regnamespace AND p.proname IN ('pack_immutable','add_logical')
+ORDER BY kind,relation,name

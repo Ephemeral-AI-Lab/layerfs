@@ -69,11 +69,48 @@ pub fn postgresql(
                 )
             });
         }
-        let handles = layerfs_persistence::PostgresHandles::open_diagnostic(
+        let admission = options
+            .deadline
+            .unwrap_or_else(|| std::time::Instant::now() + std::time::Duration::from_secs(10));
+        let mut identity_confirmed = false;
+        let mut admitted = true;
+        observer(Observation{id:"store.admission.interval",outcome:Outcome::Pass,message:"independent read-only connection/authority preflight; logical audit uses a subsequent independently validated pinned snapshot".to_owned()});
+        layerfs_persistence::diagnostic::postgresql_connection(
+            &selection,
+            &identity.binding,
+            Options {
+                deadline: Some(admission),
+                ..options
+            },
+            &mut layerfs_bridge::network::resolve_all_within,
+            &mut |observation| {
+                if observation.id == "store.connection.identity"
+                    && observation.outcome == Outcome::Pass
+                {
+                    identity_confirmed = true;
+                }
+                if observation.id != "store.connection.tls" && observation.outcome != Outcome::Pass
+                {
+                    admitted = false;
+                }
+                observer(observation);
+            },
+        )
+        .map_err(|_| {
+            refused(
+                "Unavailable",
+                "PostgreSQL read-only admission did not complete",
+            )
+        })?;
+        if !admitted || !identity_confirmed {
+            return Err(refused("Unavailable","PostgreSQL authority/access admission did not pass; logical integrity checks were not started"));
+        }
+        let handles = layerfs_persistence::PostgresHandles::open_diagnostic_admitted(
             &selection,
             &identity.binding,
             identity.cursor_key,
             options.deadline,
+            admission,
             &mut layerfs_bridge::network::resolve_all_within,
         )
         .map_err(|_| {

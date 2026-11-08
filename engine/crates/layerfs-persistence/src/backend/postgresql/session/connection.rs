@@ -133,15 +133,17 @@ impl LaneWork {
 }
 
 impl Session {
-    pub(crate) fn connect_diagnostic(
+    pub(crate) fn connect_diagnostic_admitted(
         selection: &PostgresSelection,
         deadline: Option<Instant>,
+        admission: Instant,
         resolver: &mut crate::diagnostic::Resolver<'_>,
     ) -> Result<Self, BackendError> {
         let settings = Settings::new(selection)?;
         let connector = Connector::new(selection)?;
-        let client = super::driver::Driver::diagnostic(selection, deadline, resolver)
-            .map_err(|error| error.backend())?;
+        let client =
+            super::driver::Driver::diagnostic_admitted(selection, deadline, admission, resolver)
+                .map_err(|error| error.backend())?;
         Ok(Self {
             admission: Admission::default(),
             state: Mutex::new(State {

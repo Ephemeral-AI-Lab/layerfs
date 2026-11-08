@@ -64,9 +64,18 @@ impl Driver {
         deadline: Option<Instant>,
         resolver: &mut crate::diagnostic::Resolver<'_>,
     ) -> Result<Self, Error> {
+        let admission = deadline.unwrap_or_else(|| Instant::now() + Duration::from_secs(10));
+        Self::diagnostic_admitted(selection, deadline, admission, resolver)
+    }
+    pub(crate) fn diagnostic_admitted(
+        selection: &PostgresSelection,
+        deadline: Option<Instant>,
+        admission: Instant,
+        resolver: &mut crate::diagnostic::Resolver<'_>,
+    ) -> Result<Self, Error> {
         let config = tokio_postgres::Config::from_str(&selection.url)
             .map_err(|_| BackendError::Integrity)?;
-        let connect_deadline = deadline.unwrap_or_else(|| Instant::now() + Duration::from_secs(10));
+        let connect_deadline = deadline.map_or(admission, |total| total.min(admission));
         if !config.get_hostaddrs().is_empty() || config.get_hosts().is_empty() {
             return Self::diagnostic_config(config, deadline, connect_deadline);
         }
@@ -189,6 +198,11 @@ impl Driver {
             released: std::cell::Cell::new(None),
             cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }))
+    }
+    pub(crate) fn set_diagnostic_deadline(&mut self, deadline: Option<Instant>) {
+        if let Self::Diagnostic(client) = self {
+            client.deadline = deadline;
+        }
     }
     pub(crate) fn prepare(&mut self, sql: &str) -> Result<Statement, Error> {
         match self {

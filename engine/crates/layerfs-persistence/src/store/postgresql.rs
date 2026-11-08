@@ -93,9 +93,48 @@ impl PostgresHandles {
         deadline: Option<std::time::Instant>,
         resolver: &mut crate::diagnostic::Resolver<'_>,
     ) -> Result<Self, PersistenceError> {
-        let session = Arc::new(Session::connect_diagnostic(selection, deadline, resolver)?);
-        Self::validated(session, PostgresCheck::Full, Some(binding), cursor_key)
-            .map(|(_, handles)| handles)
+        let admission = deadline
+            .unwrap_or_else(|| std::time::Instant::now() + std::time::Duration::from_secs(10));
+        Self::open_diagnostic_admitted(
+            selection, binding, cursor_key, deadline, admission, resolver,
+        )
+    }
+
+    /// Shares a caller's absolute admission budget across independent read-only
+    /// preflight and pinned-open sessions. Logical audit stays unlimited when
+    /// `deadline` is None after bounded schema/identity admission finishes.
+    pub fn open_diagnostic_admitted(
+        selection: &PostgresSelection,
+        binding: &[u8],
+        cursor_key: [u8; 32],
+        deadline: Option<std::time::Instant>,
+        admission: std::time::Instant,
+        resolver: &mut crate::diagnostic::Resolver<'_>,
+    ) -> Result<Self, PersistenceError> {
+        let session = Arc::new(Session::connect_diagnostic_admitted(
+            selection, deadline, admission, resolver,
+        )?);
+        session
+            .state
+            .lock()
+            .map_err(|_| PersistenceError::Uncertain)?
+            .client
+            .set_diagnostic_deadline(Some(
+                deadline.map_or(admission, |total| total.min(admission)),
+            ));
+        let (_, handles) = Self::validated(
+            session.clone(),
+            PostgresCheck::Full,
+            Some(binding),
+            cursor_key,
+        )?;
+        session
+            .state
+            .lock()
+            .map_err(|_| PersistenceError::Uncertain)?
+            .client
+            .set_diagnostic_deadline(deadline);
+        Ok(handles)
     }
 
     /// Opens one read-only session under the binding the schema records,
