@@ -16,3 +16,7 @@ benchmark-results/fs-bench-pro/*
 /api/python/src/layerfs/_native*.so
 /api/python/src/layerfs/__pycache__/
 /api/python/test/__pycache__/
+agentgit/
+snapshot.sqlite
+layerfs-a2-bench/
+ephemeral-sandbox/

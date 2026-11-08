@@ -9,9 +9,9 @@
 //! `workspace.exec_release` closes it. The Sandbox backend reads the command's stream only as fast as
 //! this sink takes it (an 8 KiB window), so a slow disk holds the command
 //! back. No total is capped: a spooled stream is bounded by free space.
+use crate::common::outcome::{failed, refused, Outcome};
+use crate::sandbox::registry::{lock, text};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::helpers::lock;
-use layerfs_home::outcome::{failed, refused};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufWriter, Write};
@@ -24,14 +24,14 @@ use std::os::windows::fs::OpenOptionsExt as WinOpenOptionsExt;
 use std::sync::{Arc, Mutex, OnceLock};
 
 /// Bytes per stream a result carries inline.
-pub const INLINE: usize = 1 << 20;
+pub(crate) const INLINE: usize = 1 << 20;
 /// Largest page `execOutput` fills.
 const PAGE: usize = 1 << 20;
 /// Write buffer of a spooled stream.
 const BUFFER: usize = 64 * 1024;
 
 /// One stream: kept in memory up to its limit, then spooled to a file.
-pub struct Spool {
+pub(crate) struct Spool {
     kept: Vec<u8>,
     file: Option<BufWriter<File>>,
     total: u64,
@@ -40,7 +40,7 @@ pub struct Spool {
 
 impl Spool {
     /// Kept inline up to [`INLINE`] bytes, or spooled from the first byte.
-    pub fn new(spool: bool) -> Self {
+    pub(crate) fn new(spool: bool) -> Self {
         Self {
             kept: Vec::new(),
             file: None,
@@ -52,7 +52,7 @@ impl Spool {
         let name = std::env::temp_dir().join(format!(
             "layerfs-exec-{}",
             layerfs_bridge::sdk_values::hex(
-                &layerfs_home::helpers::random()
+                &crate::sandbox::registry::random()
                     .map_err(|refusal| io::Error::other(refusal.message))?[..12]
             )
         ));
@@ -126,7 +126,10 @@ fn outputs() -> &'static Mutex<HashMap<String, Spooled>> {
 
 /// A finished command's result fields: each stream inline as text, or null
 /// when spooled; with any spooled, the output's id and both sizes follow.
-pub fn fields(stdout: Spool, stderr: Spool) -> Result<Vec<(&'static str, SdkValue)>, SdkRefusal> {
+pub(crate) fn fields(
+    stdout: Spool,
+    stderr: Spool,
+) -> Result<Vec<(&'static str, SdkValue)>, SdkRefusal> {
     let sizes = [stdout.total, stderr.total];
     let mut spooled = Spooled::default();
     let mut shown = Vec::new();
@@ -153,7 +156,7 @@ pub fn fields(stdout: Spool, stderr: Spool) -> Result<Vec<(&'static str, SdkValu
     }
     let id = format!(
         "out_{}",
-        layerfs_bridge::sdk_values::hex(&layerfs_home::helpers::random()?[..12])
+        layerfs_bridge::sdk_values::hex(&crate::sandbox::registry::random()?[..12])
     );
     lock(outputs())?.insert(id.clone(), spooled);
     let size = |n: u64| SdkValue::Int(i64::try_from(n).unwrap_or(i64::MAX));
@@ -163,18 +166,18 @@ pub fn fields(stdout: Spool, stderr: Spool) -> Result<Vec<(&'static str, SdkValu
     Ok(shown)
 }
 
-/// `execOutput(output, stream, offset, page)`: fills `page` (1..=1 MiB,
-/// the caller's reused window) with spooled output `id`'s `stream` bytes
-/// from `offset` and answers how many it wrote and whether they end the
-/// stream. Reading into the caller's buffer leaves no per-page allocation
-/// behind on either side, so a stream of any size passes through one page
-/// of memory.
-pub fn page(
-    id: &str,
-    stream: &str,
-    offset: u64,
-    page: &mut [u8],
-) -> Result<(usize, bool), SdkRefusal> {
+/// `execOutput({ output, stream, offset }, page)`: fills `page` (1..=1 MiB,
+/// the caller's reused window) with the spooled stream's bytes from `offset`
+/// and answers how many it wrote and whether they end the stream. Reading
+/// into the caller's buffer leaves no per-page allocation behind on either
+/// side, so a stream of any size passes through one page of memory.
+pub fn page(args: &SdkValue, page: &mut [u8]) -> Outcome {
+    let id = text(args, "output")?;
+    let stream = text(args, "stream")?;
+    let offset = args
+        .get_int("offset")
+        .and_then(|n| u64::try_from(n).ok())
+        .ok_or_else(|| refused("InvalidInput", "offset must be a nonnegative integer"))?;
     if !(1..=PAGE).contains(&page.len()) {
         return Err(refused(
             "InvalidInput",
@@ -217,11 +220,19 @@ pub fn page(
         }
     }
     let end = offset + length as u64 == size;
-    Ok((length, end))
+    Ok(SdkValue::map([
+        ("kind", SdkValue::text("ok")),
+        ("length", SdkValue::Int(length as i64)),
+        ("end", SdkValue::Bool(end)),
+    ]))
 }
 
-/// `workspace.exec_release(output)`: closes spooled output `id`'s files;
-/// whether it was open.
-pub fn release(id: &str) -> Result<bool, SdkRefusal> {
-    Ok(lock(outputs())?.remove(id).is_some())
+/// `workspace.exec_release({ output })`: closes a spooled output's files.
+pub(crate) fn release(args: &SdkValue) -> Outcome {
+    let id = text(args, "output")?;
+    let released = lock(outputs())?.remove(id).is_some();
+    Ok(SdkValue::map([
+        ("kind", SdkValue::text("ok")),
+        ("released", SdkValue::Bool(released)),
+    ]))
 }

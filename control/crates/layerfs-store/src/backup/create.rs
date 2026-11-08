@@ -2,18 +2,17 @@
 use super::family::{hex, save_link};
 use super::progress::Shown;
 use super::record::{remote_error, BucketRecord, StoreLink};
-use crate::lease;
-use crate::place::{self, Executor};
-use crate::record::{StoreRecord, StoreRef};
-use crate::sqlite::transfer::step::{StepFrame, StoreStep};
-use crate::sqlite::transfer::steps::CHUNK;
+use crate::common::context::Context;
+use crate::common::home::flock::{try_lock, unlock};
+use crate::common::home::lease;
+use crate::common::home::{self, paths};
+use crate::common::outcome::{failed, refused, Outcome};
+use crate::common::place::{self, Executor};
+use crate::store::record::{StoreRecord, StoreRef};
+use crate::store::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bucket::backup as remote;
-use layerfs_bucket::bucket::{pieces, Driver, Metadata};
-use layerfs_home::events::Events;
-use layerfs_home::home::flock::{try_lock, unlock};
-use layerfs_home::home::{self, paths};
-use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_store_backup::backup as remote;
+use layerfs_store_backup::bucket::{pieces, Driver, Metadata};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -34,27 +33,16 @@ fn expected(record: &StoreRecord, bucket: &str, file: &str) -> remote::Expected 
     }
 }
 
-/// `backup.create(store, bucket, file?)`, and `backup.restore`'s too. The
-/// names are checked where each call checked them.
-#[derive(Clone, Debug, Default)]
-pub struct BackupCreate {
-    /// The Store.
-    pub store: String,
-    /// The connected bucket.
-    pub bucket: String,
-    /// The bucket file, the Store's name (or its link's file) by default.
-    pub file: Option<String>,
-}
-
 /// `backup.create(store, bucket, file?)`: the Store's machine stages a
 /// consistent snapshot beside the Store (`store.file` `stage`, in this
 /// process for `native`); this process uploads it with its sha256, heads,
 /// binding and `layerfs-exported-from`. A worker's snapshot comes here in
 /// pieces first: the worker never sees the key.
-pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> Outcome {
-    let home = home.to_path_buf();
-    let (store, bucket) = (request.store.as_str(), request.bucket.as_str());
-    let file = request.file.as_deref().unwrap_or(store).to_owned();
+pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    let home = context.home.clone();
+    let store = args.get_text("store").unwrap_or("");
+    let bucket = args.get_text("bucket").unwrap_or("");
+    let file = args.get_text("file").unwrap_or(store).to_owned();
     let bucket_record = BucketRecord::of(&home, bucket)?;
     let record = StoreRecord::read(&home, store)?
         .ok_or_else(|| refused("NotFound", format!("no Store named {store}")))?;
@@ -71,7 +59,7 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
     let expected = expected(&record, bucket, &file);
     let machine = store_ref.machine()?.to_owned();
     let executor = place::plan(&home, store_ref)?;
-    let identity = crate::identity::identity_in(&record)?;
+    let identity = crate::store::identity::identity_in(&record)?;
     let home_id = home::ensure(&home)?.id;
     let object = remote::store_object(&file).map_err(|why| refused("InvalidInput", why))?;
     let local_steps = matches!(executor, Executor::Local);
@@ -79,18 +67,25 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
     let _lease = lease::hold(&home, store)?;
     let _creating = Creating::take(&home, store)?;
     let mut shown = Shown::new();
-    shown.phase(events, "check");
+    shown.phase(context, "check");
     check(driver.as_ref(), &object, expected, &home_id)?;
-    shown.phase(events, "snapshot");
-    let step = |step: StoreStep| {
-        let frame = StepFrame {
-            store: store.to_owned(),
-            store_record: Some(record.to_record().clone()),
-            step,
-        };
-        crate::sqlite::family::step(&home, &mut executor.borrow_mut(), &frame)
+    shown.phase(context, "snapshot");
+    let step = |op: &str, more: Vec<(&str, SdkValue)>| {
+        let mut fields = vec![
+            ("store", SdkValue::text(store)),
+            ("store_record", record.to_record().clone()),
+        ];
+        fields.extend(more);
+        let args = SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect());
+        match &mut *executor.borrow_mut() {
+            Executor::Local => crate::store::transfer::steps::run(&home, op, &args),
+            Executor::Worker(worker) => {
+                let request = SdkValue::map([("op", SdkValue::text(op)), ("args", args)]);
+                worker.call("store.file", request, &mut |_| {})
+            }
+        }
     };
-    let staged = step(StoreStep::Stage)?;
+    let staged = step("stage", vec![])?;
     // `native` stages beside the Store; a worker's copy comes here
     let local = match local_steps {
         true => {
@@ -103,9 +98,9 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
     let result = (|| {
         if !local_steps {
             let total = staged.get_int("bytes").map(|n| n as u64);
-            shown.bytes(events, "send", 0, total);
+            shown.bytes(context, "send", 0, total);
             fetch_staged(&step, &local, &mut |done| {
-                shown.bytes(events, "send", done, total)
+                shown.bytes(context, "send", done, total)
             })?;
             let (_, sha256) = pieces::sha256_file(&local, None).map_err(remote_error)?;
             if Some(pieces::hex(&sha256).as_str()) != staged.get_text("sha256") {
@@ -130,11 +125,11 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
         if let Some(heads) = &heads {
             metadata.insert(remote::HEADS.to_owned(), pieces::hex(heads));
         }
-        shown.phase(events, "check");
+        shown.phase(context, "check");
         check(driver.as_ref(), &object, expected, &home_id)?;
         // `hash`, then `upload` with its bytes and pieces
         let moved = shown
-            .transfer(events, || {
+            .transfer(context, || {
                 pieces::upload(driver.as_ref(), &object, &local, &metadata)
             })
             .map_err(remote_error)?;
@@ -143,7 +138,7 @@ pub fn create(home: &Path, events: &mut Events<'_>, request: &BackupCreate) -> O
     if !local_steps {
         let _ = std::fs::remove_file(&local);
     }
-    let _ = step(StoreStep::Unstage);
+    let _ = step("unstage", vec![]);
     let (moved, heads) = result?;
     let saved = StoreLink::new(&file, "create", moved.bytes, &moved.sha256, heads.as_ref());
     save_link(&home, store, bucket, saved)?;
@@ -203,8 +198,8 @@ impl Drop for Creating {
     }
 }
 
-/// One `store.file` step on the Store's machine.
-type Step<'a> = dyn Fn(StoreStep) -> Outcome + 'a;
+/// One `store.file` step on the Store's machine: its name and arguments.
+type Step<'a> = dyn Fn(&str, Vec<(&str, SdkValue)>) -> Outcome + 'a;
 
 /// Copies the snapshot a worker staged to `local`, in pieces of [`CHUNK`],
 /// telling `sent` the bytes copied after each.
@@ -212,11 +207,14 @@ fn fetch_staged(step: &Step<'_>, local: &Path, sent: &mut dyn FnMut(u64)) -> Res
     let mut out = std::fs::File::create(local).map_err(failed)?;
     let mut offset = 0u64;
     loop {
-        let piece = step(StoreStep::Read {
-            offset,
-            len: CHUNK,
-            staged: true,
-        })?;
+        let piece = step(
+            "read",
+            vec![
+                ("offset", SdkValue::Int(offset as i64)),
+                ("len", SdkValue::Int(CHUNK as i64)),
+                ("staged", SdkValue::Bool(true)),
+            ],
+        )?;
         let Some(SdkValue::Bytes(bytes)) = piece.get("bytes") else {
             return Ok(());
         };
