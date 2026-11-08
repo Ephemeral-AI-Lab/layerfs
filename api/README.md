@@ -72,8 +72,8 @@ files you build, here into `$OUT`:
 
 ```bash
 npm --prefix api run build:native                           # node/layerfs.node
-(cd api/node && npm pack --pack-destination "$OUT")         # layerfs-2.0.0.tgz
-npm install "$OUT/layerfs-2.0.0.tgz"                        # in an empty project
+(cd api/node && npm pack --pack-destination "$OUT")         # layerfs-2.0.0-rc.1.tgz
+npm install "$OUT/layerfs-2.0.0-rc.1.tgz"                        # in an empty project
 
 (cd api/python && maturin build --release --locked -o "$OUT")   # layerfs-2.0.0-*.whl
 pip install "$OUT"/layerfs-2.0.0-*.whl                          # in a virtualenv

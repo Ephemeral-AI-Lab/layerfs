@@ -1,6 +1,6 @@
 {
   "name": "layerfs",
-  "version": "2.0.0",
+  "version": "2.0.0-rc.1",
   "description": "The LayerFS SDK for Node: one call table of nine families (project, branch, commit, file, sandbox, workspace, machine, store, backup) over one native library.",
   "keywords": [
     "layerfs",
