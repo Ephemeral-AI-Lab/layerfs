@@ -1,4 +1,7 @@
 //! The worker's side: `layerfs worker` serves one request per connection.
+//! It runs every entity's operations, so it sits above them in
+//! `layerfs-control` (layerfs-project#104); the protocol is
+//! `layerfs-machine` `worker`.
 //!
 //! A connection starts with a small frame `{ secret }`: the worker reads at
 //! most [`MAX_HELLO`] bytes, waiting at most [`HELLO_WAIT`], and answers
@@ -7,7 +10,8 @@
 //! build sends nothing more and closes. Then a request `{ op, args }`, read with at most
 //! [`REQUEST_WAIT`] between bytes. `worker.ping` answers who it is;
 //! `store.call`, `store.file`, `sandbox.host`, `project.stage`,
-//! `project.init` and `project.remove` run one operation on this machine,
+//! `project.init`, `project.export` and `project.remove` run one operation on
+//! this machine,
 //! with `home` set to the worker's own root (the machine's data disk),
 //! never a path the caller sends. Answers are
 //! `{ value }` or `{ refused }`, after any `{ event }` frames.
@@ -15,11 +19,19 @@
 //! A request may carry `home_id`, the caller's home id: the root is not a
 //! home and has no id of its own (O33), so host code that asks for one
 //! gets the caller's, and the root is never converted or written as a home.
-use super::client::HELLO_WAIT;
-use super::frame::{read_frame, read_frame_within, write_frame, MAX_HELLO};
-use super::hello::Hello;
-use crate::common::outcome::{refused, Outcome};
+//!
+//! A request with `trace_step: true` (a caller with `LAYERFS_TRACE_STEP`
+//! set) has its steps timed from when it was read, and its answer carries
+//! them as `steps: [{ step, us }]` beside `value` or `refused`.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::outcome::{refused, Outcome};
+use layerfs_machine::worker::{
+    read_frame, read_frame_within, write_frame, Hello, HELLO_WAIT, MAX_HELLO,
+};
+use layerfs_store::project::discovery::home_of;
+use layerfs_store::project::export::in_worker as export_in_worker;
+use layerfs_store::project::frame::{ExportFrame, InitFrame, RemoveFrame, StageFrame};
+use layerfs_store::project::{init::in_worker, remove::remove_project, staged};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -42,7 +54,6 @@ pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::R
     // the root holds Stores and records: private, as a home is (a machine's
     // data disk mounts 0755), but passable by others (0701), since a
     // namespaces Sandbox's commands run as another identity below it
-    #[cfg(unix)]
     {
         use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
         std::fs::DirBuilder::new()
@@ -51,12 +62,8 @@ pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::R
             .create(&root)?;
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o701))?;
     }
-    #[cfg(not(unix))]
-    {
-        std::fs::DirBuilder::new().recursive(true).create(&root)?;
-    }
-    crate::common::home::guest::serve_root(&root);
-    crate::common::home::guest::retire_layout_2(&root);
+    layerfs_home::home::guest::serve_root(&root);
+    layerfs_home::home::guest::retire_layout_2(&root);
     let secret = Arc::new(secret);
     let root = Arc::new(root);
     // what it answers every secret with, read once
@@ -112,20 +119,60 @@ fn answer(mut stream: TcpStream, secret: &str, ready: &SdkValue, root: &Path) ->
         _ => return false,
     };
     let _ = stream.set_read_timeout(None);
-    let _home = crate::common::home::guest::sent(request.get_text("home_id"));
-    let outcome = run(
-        request.get_text("op").unwrap_or(""),
-        request.get("args").cloned().unwrap_or_default(),
-        root,
-        &mut |event| {
-            let _ = write_frame(&mut stream, &SdkValue::map([("event", event)]));
-        },
-    );
-    let frame = match outcome {
+    let stepped = request.get("trace_step") == Some(&SdkValue::Bool(true));
+    if stepped {
+        layerfs_home::trace::steps_begin();
+    }
+    let _home = layerfs_home::home::guest::sent(request.get_text("home_id"));
+    let (op, args) = op_and_args(request);
+    let outcome = run(&op, args, root, &mut |event| {
+        write_frame(&mut stream, &SdkValue::map([("event", event)]))
+            .map_err(|e| refused("Failed", format!("worker event stream closed: {e}")))
+    });
+    let mut frame = match outcome {
         Ok(value) => SdkValue::map([("value", value)]),
         Err(refusal) => refusal_frame(refusal),
     };
-    write_frame(&mut stream, &frame).is_ok()
+    if stepped {
+        layerfs_home::trace::step("result");
+        let steps = layerfs_home::trace::steps_value(layerfs_home::trace::steps_take());
+        frame = layerfs_home::home::with_field(frame, "steps", steps);
+    }
+    let sent = write_frame(&mut stream, &frame).is_ok();
+    if sent {
+        await_close(&mut stream);
+    }
+    sent
+}
+
+/// Waits for the client to close first, once the answer is written. The
+/// client sends nothing after its request and closes when it has read the
+/// answer. Apple Container's published port drops what it still holds for
+/// the host when the guest side closes first, which cut the tail off large
+/// answers (an export's last parts). Reads only that close, at most one
+/// [`REQUEST_WAIT`]; a client that never closes then loses nothing worse
+/// than before.
+fn await_close(stream: &mut TcpStream) {
+    use std::io::Read;
+    if stream.set_read_timeout(Some(REQUEST_WAIT)).is_ok() {
+        let _ = stream.read(&mut [0u8; 1]);
+    }
+}
+
+/// A request's `op` and its `args` (moved out, not copied: they may hold a
+/// large part of a file).
+fn op_and_args(request: SdkValue) -> (String, SdkValue) {
+    let (mut op, mut args) = (String::new(), SdkValue::Null);
+    if let SdkValue::Map(fields) = request {
+        for (name, value) in fields {
+            match (name.as_str(), value) {
+                ("op", SdkValue::Text(text)) => op = text,
+                ("args", value) => args = value,
+                _ => {}
+            }
+        }
+    }
+    (op, args)
 }
 
 fn refusal_frame(refusal: SdkRefusal) -> SdkValue {
@@ -139,7 +186,12 @@ fn refusal_frame(refusal: SdkRefusal) -> SdkValue {
     )])
 }
 
-fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) -> Outcome {
+fn run(
+    op: &str,
+    args: SdkValue,
+    root: &Path,
+    events: &mut dyn FnMut(SdkValue) -> std::result::Result<(), SdkRefusal>,
+) -> Outcome {
     match op {
         "worker.ping" => Ok(SdkValue::map([
             ("kind", SdkValue::text("worker")),
@@ -148,72 +200,55 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
         ])),
         // one Store call, on the Store file under this worker's root (2.0)
         "store.call" => {
-            let name = args
-                .get_text("op")
-                .ok_or_else(|| refused("InvalidInput", "Store operation name"))?
-                .to_owned();
-            let inner = with_home(args.get("args").cloned().unwrap_or_default(), root);
-            let store = inner
-                .get_text("store")
-                .ok_or_else(|| refused("InvalidInput", "a Store call names its Store"))?;
-            crate::common::names::StoreName::parse(store)?;
-            let file = crate::common::home::paths::store_file(root, store);
+            let call = layerfs_store::call::CallFrame::decode(&args)?;
+            let store = call.store.as_str();
+            layerfs_home::names::StoreName::parse(store)?;
+            let file = layerfs_home::home::paths::store_file(root, store);
             // the worker holds the Store's lease under its root while it
             // keeps the Store open
-            let lease = crate::common::home::lease::hold_locked(root, store)?;
-            let inner = crate::common::home::with_field(
-                inner,
-                "storePath",
-                SdkValue::text(file.display().to_string()),
-            );
-            crate::store::open::run(&name, inner, Some(lease))
+            let lease = layerfs_store::lease::hold_locked(root, store)?;
+            let open = layerfs_store::open_args::OpenArgs {
+                home: Some(root.to_path_buf()),
+                store_path: Some(file.display().to_string()),
+                ..call.open()
+            };
+            layerfs_store::open::run(&call.method, &open, call.fields, Some(lease))
         }
         // one step of a Store move or remove on this machine
         "store.file" => {
-            let name = args
-                .get_text("op")
-                .ok_or_else(|| refused("InvalidInput", "Store step name"))?
-                .to_owned();
-            crate::store::transfer::steps::run(
-                root,
-                &name,
-                &args.get("args").cloned().unwrap_or_default(),
-            )
+            let frame = layerfs_store::sqlite::transfer::step::StepFrame::decode(&args)?;
+            layerfs_store::sqlite::transfer::steps::run(root, &frame)
         }
         // a Sandbox or Workspace operation on this machine's own native
-        "sandbox.host" => crate::sandbox::route::in_worker(root, &args, events),
+        "sandbox.host" => layerfs_sandbox::route::in_worker(
+            root,
+            layerfs_sandbox::host::decode(&args)?,
+            &mut |event| {
+                let _ = events(event);
+            },
+            layerfs_sandbox::workspace::dispatch::call,
+        ),
         // drops one project from the Store under this worker's root (2.0):
         // `{ store, project, store_record }`
-        "project.remove" => crate::store::identity::remove_project(&with_home(args, root)),
+        "project.remove" => {
+            let root = home_of(Some(root))?;
+            remove_project(&root, &RemoveFrame::decode(&args)?)
+        }
         // writes or discards one part of a caller's folder copy under this
         // worker's root (#536 H11a)
-        "project.stage" => crate::project::staged::run(root, &args),
+        "project.stage" => staged::run(root, &StageFrame::decode(args)?),
         // adds a folder copy the caller sent as a new project of a Store
         // under this worker's root (#536 H11, H11a)
-        "project.init" => crate::project::init::in_worker(&with_home(args, root)),
+        "project.init" => {
+            let root = home_of(Some(root))?;
+            in_worker(&root, &InitFrame::decode(&args)?)
+        }
+        // streams one project's snapshot from a Store under this worker's
+        // root as folder-copy parts (#53)
+        "project.export" => export_in_worker(root, &ExportFrame::decode(&args)?, events),
         _ => Err(refused(
             "InvalidInput",
             format!("the worker has no operation {op}"),
         )),
-    }
-}
-
-/// `args` with `home` set to the worker's root, whatever the caller sent.
-/// A call that names a valid `store` gets that Store's file under the root
-/// as its `storePath`, whatever the caller sent.
-fn with_home(args: SdkValue, root: &Path) -> SdkValue {
-    let file = args
-        .get_text("store")
-        .filter(|store| crate::common::names::StoreName::parse(store).is_ok())
-        .map(|store| crate::common::home::paths::store_file(root, store));
-    let text = SdkValue::text(root.display().to_string());
-    let args = crate::common::home::with_field(args, "home", text);
-    match file {
-        Some(file) => crate::common::home::with_field(
-            args,
-            "storePath",
-            SdkValue::text(file.display().to_string()),
-        ),
-        None => args,
     }
 }

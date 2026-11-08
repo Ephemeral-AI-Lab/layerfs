@@ -6,8 +6,10 @@
 //! (one on a machine behind a worker, whose old worker it does not ask); a
 //! Sandbox create in flight; an earlier create whose outcome is unknown
 //! (`create.intent`); a live Store lease; a live Store move or remove
-//! (`in_progress`); a live machine removal (`removing`). Otherwise, in one
-//! pass:
+//! (`in_progress`); a live machine removal (`removing`). A Sandbox of the
+//! retired docker backend (D-8) is neither: it is forgotten, as
+//! `sandbox close` forgets it, with a note naming its container to remove.
+//! Otherwise, in one pass:
 //!
 //! 1. write: each Sandbox record from `machine/<m>/sandbox/<name>/` to
 //!    `sandbox/<name>/record.json` in layout 3's form, with no `state` or
@@ -27,20 +29,17 @@
 //! A crash before the flip leaves a layout 2 home that converts again (each
 //! write is idempotent); after it, the next open finds the marker and
 //! finishes step 3 ([`finish`]).
-use crate::common::home::layout::{write, HomeFile, LAYOUT_VERSION};
-use crate::common::home::{lease, paths, read_record, with_field, write_entity, write_record};
-use crate::common::op::{self, Op};
-use crate::common::outcome::{failed, refused};
-use crate::machine::record::MachineRecord;
-use crate::sandbox::record::SandboxRecord;
-use crate::sandbox::recorded::Recorded;
-use crate::sandbox::recorded::unchecked;
-
-use crate::store::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::layout::{write, HomeFile, LAYOUT_VERSION};
+use layerfs_home::home::{paths, read_record, with_field, write_entity, write_record};
+use layerfs_home::op::{self, Op};
+use layerfs_home::outcome::{failed, refused};
+use layerfs_machine::record::MachineRecord;
+use layerfs_sandbox::record::{DaemonRecord, SandboxRecord};
+use layerfs_sandbox::reopen::{unchecked, Recorded};
+use layerfs_store::lease;
+use layerfs_store::record::StoreRecord;
 use std::path::{Path, PathBuf};
-
-
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -53,7 +52,7 @@ struct Numbered {
     project: String,
     id: String,
     dir: PathBuf,
-    record: SdkValue,
+    record: DaemonRecord,
 }
 
 /// What a numbered Sandbox's runtime was found to be.
@@ -137,7 +136,7 @@ pub(super) fn finish(home: &Path) -> Result<()> {
     if !marker.exists() {
         return Ok(());
     }
-    let _lock = crate::common::home::lock::take(home)?;
+    let _lock = layerfs_home::home::lock::take(home)?;
     if marker.exists() {
         clean(home)?;
         remove(&marker)?;
@@ -146,7 +145,7 @@ pub(super) fn finish(home: &Path) -> Result<()> {
 }
 
 fn now() -> i64 {
-    crate::common::home::now_ms()
+    layerfs_home::home::now_ms()
 }
 
 fn remove(path: &Path) -> Result<()> {
@@ -191,6 +190,18 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
             let at = numbered
                 .iter()
                 .position(|n| n.project == project && n.id == id);
+            // the retired docker backend's Sandbox is forgotten, as a close
+            // forgets it (D-8): this build never reopens or deletes it
+            let kept = at.filter(|at| numbered[*at].record.retired());
+            let home_retired = record.retired_container(home)?;
+            if kept.is_some() || home_retired.is_some() {
+                let entry = kept.map(|at| numbered.remove(at));
+                let daemon = entry.as_ref().and_then(|e| e.record.name());
+                let container = daemon.map(str::to_owned).or(home_retired);
+                plan.notes
+                    .push(forgotten(&name, &container.unwrap_or_default()));
+                continue;
+            }
             let Some(at) = at else {
                 plan.live("sandbox", &name, format!("runs on machine {machine}, whose worker this build does not ask; close it with the build that started it (`layerfs sandbox close {name}`)"));
                 continue;
@@ -201,8 +212,8 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
                 Found::Unknown(why) => plan.live("sandbox", &name, format!("cannot be checked ({why}); close it with the build that started it (`layerfs sandbox close {name}`)")),
                 // no id: layout 3 derives `gone`
                 Found::Ended => {
-                    let gone = SandboxRecord::from_record(&name, value).with("id", SdkValue::Null);
-                    plan.sandboxes.push((name, layout_3(gone.to_record().clone())?));
+                    let gone = SandboxRecord::from_record(&name, value).ended();
+                    plan.sandboxes.push((name, layout_3(gone.to_record())?));
                     plan.ended.push(entry);
                 }
             }
@@ -211,6 +222,11 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
     // numbered Sandboxes no Sandbox record names (an earlier bundle's)
     for entry in numbered {
         let name = format!("{}#{}", entry.project, entry.id);
+        if entry.record.retired() {
+            let container = entry.record.name().unwrap_or("");
+            plan.notes.push(forgotten(&name, container));
+            continue;
+        }
         match probe(home, &entry) {
             Found::Running => plan.live("sandbox", &name, "runs with no Sandbox record; stop it with the build that started it".to_owned()),
             Found::Unknown(why) => plan.live("sandbox", &name, format!("has no Sandbox record and cannot be checked ({why}); remove it by hand, then its folder {}", entry.dir.display())),
@@ -232,7 +248,9 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
         };
         match record.field("in_progress") {
             None => {}
-            Some(progress @ SdkValue::Map(_)) if lease::recorded_alive(progress) => {
+            Some(progress @ SdkValue::Map(_))
+                if layerfs_home::process::recorded_alive(progress) =>
+            {
                 let pid = progress.get_int("pid").unwrap_or(0);
                 plan.live(
                     "store",
@@ -255,7 +273,7 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
     for machine in names(&home.join("machine"))? {
         let record = MachineRecord::read(home, &machine)?;
         let removing = record.and_then(|r| r.field("removing").cloned());
-        if let Some(removing) = removing.filter(lease::recorded_alive) {
+        if let Some(removing) = removing.filter(layerfs_home::process::recorded_alive) {
             let pid = removing.get_int("pid").unwrap_or(0);
             plan.live(
                 "machine",
@@ -267,13 +285,25 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
     Ok(plan)
 }
 
+/// The note for Sandbox `name`, recorded under the retired docker backend,
+/// which the conversion forgets: its records go with the layout 2 paths
+/// and its container `container` is left for the user to remove.
+fn forgotten(name: &str, container: &str) -> String {
+    format!(
+        "Sandbox {name}: forgotten, as `sandbox close` forgets it: it ran on the docker Sandbox \
+         backend, which this build no longer runs (D-8); `docker rm -f {container}` removes its \
+         container and `layerfs sandbox create` makes it again"
+    )
+}
+
 /// The live process a layout 2 Sandbox record names as creating it: a 2.0
 /// record says `state: "creating"` and its creator's `pid`, and nothing
 /// more, so this is the one check that reads a process by id alone.
 fn creator(value: &SdkValue) -> Option<i64> {
     let pid = value.get_int("pid").filter(|pid| *pid > 0)?;
     let named = SdkValue::map([("pid", SdkValue::Int(pid))]);
-    (value.get_text("state") == Some("creating") && lease::recorded_alive(&named)).then_some(pid)
+    (value.get_text("state") == Some("creating") && layerfs_home::process::recorded_alive(&named))
+        .then_some(pid)
 }
 
 /// Layout 2 Sandbox record `value` in layout 3's form: no stored `state`
@@ -317,7 +347,8 @@ fn numbered(home: &Path, plan: &mut Plan) -> Result<Vec<Numbered>> {
                 if !file.exists() {
                     continue;
                 }
-                let record = crate::sandbox::files::load(&file)?;
+                let record =
+                    DaemonRecord::from_record(&layerfs_store::project::discovery::load(&file)?);
                 found.push(Numbered {
                     project: name.clone(),
                     id,
@@ -330,8 +361,8 @@ fn numbered(home: &Path, plan: &mut Plan) -> Result<Vec<Numbered>> {
     Ok(found)
 }
 
-/// Whether a numbered Sandbox's runtime runs: its container or daemon
-/// process observed once. A local one must be in the home's old local root.
+/// Whether a numbered Sandbox's runtime runs: its daemon process observed
+/// once. A local one must be in the home's old local root.
 fn probe(home: &Path, entry: &Numbered) -> Found {
     let recorded = match unchecked(&entry.id, &entry.record) {
         Ok(recorded) => recorded,
@@ -342,14 +373,16 @@ fn probe(home: &Path, entry: &Numbered) -> Found {
     }
     match recorded.reopen() {
         Ok(_) => Found::Running,
-        Err(failure) if failure.container_gone() || failure.container_stopped() => Found::Ended,
+        Err(failure) if failure.container_stopped() => Found::Ended,
         Err(failure) => Found::Unknown(format!("{failure:?}")),
     }
 }
 
 /// A local runtime's directory is in the home's old local root.
 fn inside(home: &Path, recorded: &Recorded) -> std::result::Result<(), String> {
+    // macOS reopens only local records, Linux namespaces ones too
     #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[allow(irrefutable_let_patterns)]
     if let Recorded::Local { directory, .. } = recorded {
         let root = paths::machine_dir(home, "native").join("sandbox-root");
         let plain = !(directory.components()).any(|c| {
@@ -373,25 +406,17 @@ fn inside(home: &Path, recorded: &Recorded) -> std::result::Result<(), String> {
 /// Deletes an ended numbered Sandbox's stopped runtime, once, and its folder.
 fn reclaim(entry: &Numbered) -> Result<()> {
     let recorded = unchecked(&entry.id, &entry.record)?;
-    let stopped = match recorded.reopen() {
+    match recorded.reopen() {
         Ok(_) => {
             return Err(refused(
                 "InUse",
                 format!("Sandbox {}#{} runs again", entry.project, entry.id),
             ))
         }
-        Err(failure) if failure.container_gone() || failure.container_stopped() => {
-            failure.container_stopped()
-        }
+        Err(failure) if failure.container_stopped() => {}
         Err(failure) => return Err(failed(failure)),
-    };
-    if stopped {
-        if let Err(failure) = unchecked(&entry.id, &entry.record)?.stopped().delete() {
-            if !failure.container_gone() {
-                return Err(failed(failure));
-            }
-        }
     }
+    (unchecked(&entry.id, &entry.record)?.stopped().delete()).map_err(failed)?;
     match std::fs::remove_dir_all(&entry.dir) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(failed(error)),
         _ => Ok(()),

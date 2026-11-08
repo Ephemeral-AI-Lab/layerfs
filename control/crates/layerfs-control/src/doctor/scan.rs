@@ -11,7 +11,6 @@ use layerfs_machine::record::MachineRecord;
 use layerfs_sandbox::record::SandboxRecord;
 use layerfs_store::record::StoreRecord;
 use std::collections::BTreeSet;
-#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
@@ -254,18 +253,9 @@ fn record(
 }
 
 /// The mode bits of `path` itself, if it is there.
-#[cfg(unix)]
 fn mode(path: &Path) -> Option<u32> {
     let metadata = std::fs::symlink_metadata(path).ok()?;
-    use std::os::unix::fs::PermissionsExt;
     Some(metadata.permissions().mode() & 0o7777)
-}
-
-/// Windows: there are no mode bits to audit; the DACL audit is the
-/// port's own check when it lands (#454).
-#[cfg(not(unix))]
-fn mode(_path: &Path) -> Option<u32> {
-    None
 }
 
 /// A folder others may list or change, or its group may use, is an error;
