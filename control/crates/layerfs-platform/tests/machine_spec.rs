@@ -43,9 +43,7 @@ fn refused(spec: &Spec) -> String {
 fn a_plain_vm_spec_is_valid() {
     let scratch = Scratch::new("spec-ok");
     for kind in Platform::ALL {
-        if kind != Platform::Firecracker {
-            scratch.spec(kind).validate().unwrap();
-        }
+        scratch.spec(kind).validate().unwrap();
     }
 }
 
@@ -73,31 +71,4 @@ fn names_sizes_and_paths_are_checked() {
     let mut spec = scratch.spec(Platform::Lima);
     spec.work_dir = "relative/work".into();
     assert!(refused(&spec).contains("absolute"));
-}
-
-#[test]
-fn kind_specific_fields_belong_to_their_kind() {
-    let scratch = Scratch::new("spec-kinds");
-    let mut spec = scratch.spec(Platform::AppleContainer);
-    spec.nested = true;
-    assert!(refused(&spec).contains("nested"));
-
-    let spec = scratch.spec(Platform::Firecracker);
-    assert!(refused(&spec).contains("lima host"));
-
-    let mut spec = scratch.spec(Platform::Firecracker);
-    spec.host = Some(Box::new(scratch.spec(Platform::Lima)));
-    assert!(refused(&spec).contains("not a nested lima"));
-
-    let mut host = scratch.spec(Platform::Lima);
-    host.nested = true;
-    let mut spec = scratch.spec(Platform::Firecracker);
-    spec.host = Some(Box::new(host.clone()));
-    spec.validate().unwrap();
-    spec.state.network = Some(251);
-    assert!(refused(&spec).contains("251"));
-
-    let mut spec = scratch.spec(Platform::Lima);
-    spec.host = Some(Box::new(host));
-    assert!(refused(&spec).contains("only a firecracker"));
 }

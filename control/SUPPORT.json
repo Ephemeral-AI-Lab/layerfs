@@ -41,18 +41,8 @@
           "kernel": "fuse",
           "sqlite": "worker",
           "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
-          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "nested", "kind": "bool" } ],
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
           "description": "a Lima VM (vz); Sandboxes run in Linux namespaces and a cgroup"
-        },
-        {
-          "platform": "firecracker",
-          "how": "created",
-          "backend": null,
-          "kernel": null,
-          "sqlite": null,
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "firecracker is permanently disabled by product policy (layerfs-project#7)" },
-          "options": [],
-          "description": "firecracker is permanently disabled by product policy (layerfs-project#7)"
         }
       ]
     },
@@ -96,18 +86,8 @@
           "kernel": null,
           "sqlite": null,
           "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "lima runs on macOS hosts only" },
-          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "nested", "kind": "bool" } ],
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
           "description": "a Lima VM (vz)"
-        },
-        {
-          "platform": "firecracker",
-          "how": "created",
-          "backend": null,
-          "kernel": null,
-          "sqlite": null,
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "firecracker is permanently disabled by product policy (layerfs-project#7)" },
-          "options": [],
-          "description": "firecracker is permanently disabled by product policy (layerfs-project#7)"
         }
       ]
     },
@@ -151,18 +131,8 @@
           "kernel": null,
           "sqlite": null,
           "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "lima runs on macOS hosts only" },
-          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "nested", "kind": "bool" } ],
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
           "description": "a Lima VM (vz)"
-        },
-        {
-          "platform": "firecracker",
-          "how": "created",
-          "backend": null,
-          "kernel": null,
-          "sqlite": null,
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "firecracker is permanently disabled by product policy (layerfs-project#7)" },
-          "options": [],
-          "description": "firecracker is permanently disabled by product policy (layerfs-project#7)"
         }
       ]
     }

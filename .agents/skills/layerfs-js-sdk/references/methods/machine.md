@@ -8,13 +8,9 @@
 > needs this family; it belongs to whoever sets up the home.
 
 
-Firecracker is permanently disabled for new work. Keep existing records
-and data; inspection and explicit cleanup remain available. There is no
-environment or feature override. `machine.start` cannot restart it.
-
-Microsandbox and SSH machines were removed in 2.0; there is no
-`machine.connect` or `machine.disconnect`. See
-[removed platforms](#removed-platforms-microsandbox-and-ssh).
+Firecracker, Microsandbox and SSH machines were removed in 2.0; there is
+no `machine.connect` or `machine.disconnect`. See
+[removed platforms](#removed-platforms-firecracker-microsandbox-and-ssh).
 
 ```js
 machine.list()
@@ -23,14 +19,14 @@ machine.get(name)
 machine.status(name)
 machine.start(name)
 machine.stop(name)
-machine.create(name, platform, { cpus, memory, disk, image, nested, host })
+machine.create(name, platform, { cpus, memory, disk, image })
 machine.remove(name)
 machine.update(name, { cpus, memory, image, docker, wsl })
 ```
 
 A machine is one kernel where Sandboxes run. Two are built in and always
 recorded: `native` (the host itself) and `docker`. VMs (`apple-container`,
-`lima`) are created; Firecracker is disabled.
+`lima`) are created.
 A machine runs only between `machine.start(name)` and `machine.stop(name)`
 (#535 D11): nothing starts it on demand and nothing stops it when unused. A
 call that needs a stopped machine is refused `Unavailable`, its message
@@ -85,10 +81,10 @@ or `machine.remove`).
 
 | Call | What it does | Notes |
 | --- | --- | --- |
-| `start(name)` | Starts a stopped machine and its worker and waits until ready | An enabled running machine and `native` answer at once; disabled machines always refuse. Returns the machine as `get` does. `Busy` while another call holds the machine (its `op`) |
+| `start(name)` | Starts a stopped machine and its worker and waits until ready | A running machine and `native` answer at once. Returns the machine as `get` does. `Busy` while another call holds the machine (its `op`) |
 | `stop(name)` | Stops the worker and, where there is one, the VM; disks stay | `InUse` while Sandboxes run on it; `detail.related` lists them as `{ kind: "sandbox", name }`. `native` answers at once. Later calls that need the machine are refused `Unavailable` until `start` |
-| `create(name, platform, …)` | Makes and starts an enabled VM (`apple-container`, `lima`) | `Unsupported` when the platform's tool is missing; `InvalidInput` for `native` or `docker`; `Unsupported` for permanently disabled `firecracker` and for the removed `ssh` and `microsandbox`. `memory`, `disk`: bytes or text with `K`, `M`, `G`. `nested` is for `lima` only; `host` (required for `firecracker`) names a nested `lima` machine |
-| `remove(name)` | Deletes a VM and its disk; a removed platform's record is only forgotten | `InUse` while it holds Stores, Sandboxes or Firecracker machines. While it runs, the record holds its `op` and every call that would start, update, remove or use the machine is `Busy` |
+| `create(name, platform, …)` | Makes and starts an enabled VM (`apple-container`, `lima`) | `Unsupported` when the platform's tool is missing; `InvalidInput` for `native` or `docker`; `Unsupported` for the removed `firecracker`, `ssh` and `microsandbox`. `memory`, `disk`: bytes or text with `K`, `M`, `G` |
+| `remove(name)` | Deletes a VM and its disk; a removed platform's record is only forgotten | `InUse` while it holds Stores or Sandboxes. While it runs, the record holds its `op` and every call that would start, update, remove or use the machine is `Busy` |
 | `update(name, …)` | Sets `native`/`docker`'s image, Docker socket (`docker`) and WSL distribution (`wsl`) | `InUse` while Sandboxes run on it; `wsl` only on a Windows host; resizing a VM (`cpus`, `memory`) is `Unsupported`, not built |
 
 An `Unknown` outcome of a create or remove keeps its
@@ -102,16 +98,17 @@ on the `docker` machine runs in a container on its image; with none named,
 the bundle's Sandbox image is loaded into Docker once and used (#535 P5; see
 [sandbox](sandbox.md)).
 
-## Removed platforms: Microsandbox and SSH
+## Removed platforms: Firecracker, Microsandbox and SSH
 
-A home may still hold a machine record whose platform is `ssh` or
-`microsandbox`:
+A home may still hold a machine record whose platform is `firecracker`,
+`ssh` or `microsandbox`:
 
 - `machine.list()` and `machine.get(name)` answer it: `platform` as
   recorded, `backend: "-"`, `supports: { sqlite: false,
   postgresql_sandbox: false, reason }`, `state: "unsupported"` and `error`
   the reason (``platform `ssh` was removed in LayerFS 2.0``, or the same for
-  `microsandbox`), plus its recorded `ssh` settings or `vm_name`.
+  `firecracker` or `microsandbox`), plus its recorded `ssh` settings, `host`
+  or `vm_name`.
 - Every other call on it (`status`, `start`, `stop`, `update`,
   `sandbox.create` on it, Workspace calls on its Sandboxes, Store and
   project calls on a sqlite Store on it) is refused `Unsupported` with
@@ -120,4 +117,6 @@ A home may still hold a machine record whose platform is `ssh` or
   remove) and answers `{ name, removed: true, note }`; the note says
   nothing on its host was touched. For microsandbox it names
   `msb remove --force <vm>` and `msb volume remove <vm>-data`, which you
-  run yourself to delete the VM and its volume.
+  run yourself to delete the VM and its volume. For firecracker it names
+  the microVM's folder and data disk left under `/layerfs/data/firecracker`
+  in its Lima host.

@@ -31,10 +31,6 @@ pub struct Spec {
     /// `docker` worker container on macOS) or a Lima
     /// image URL or absolute path. `None` takes the kind's default.
     pub os_image: Option<String>,
-    /// `lima` only: a `vz` instance with nested virtualization (Firecracker hosts).
-    pub nested: bool,
-    /// `firecracker` only: the spec of the `nested` Lima machine it runs in.
-    pub host: Option<Box<Spec>>,
     /// Lasting guest state the caller stored from an earlier create.
     pub state: Lasting,
     /// The endpoint last returned for this machine (its `worker.json`), if any.
@@ -49,8 +45,6 @@ pub struct Spec {
 pub struct Lasting {
     /// The host loopback port a VM's configuration forwards to its worker.
     pub port: Option<u16>,
-    /// `firecracker`: `n` of its `172.30.<n>.0/30` network (1 to 250).
-    pub network: Option<u8>,
     /// `apple-container`: its network's gateway, where the guest reaches
     /// this host, read once when the machine starts (#66) and replaced by
     /// every start; a Sandbox's PostgreSQL reach uses it with no lookup.
@@ -91,9 +85,6 @@ pub struct Endpoint {
     /// A host loopback address.
     pub address: SocketAddr,
     pub secret: String,
-    /// The detached `ssh -L` forward that carries it, if any
-    /// (`firecracker`): it outlives the call that started it.
-    pub forward_pid: Option<u32>,
 }
 
 /// The secret is never shown.
@@ -102,7 +93,6 @@ impl std::fmt::Debug for Endpoint {
         f.debug_struct("Endpoint")
             .field("address", &self.address)
             .field("secret", &"<redacted>")
-            .field("forward_pid", &self.forward_pid)
             .finish()
     }
 }
@@ -196,30 +186,6 @@ impl Spec {
             }
             if self.disk < GIB {
                 return refuse("a VM's data disk needs at least 1G".into());
-            }
-        }
-        if self.nested && self.kind != Platform::Lima {
-            return refuse("only a lima machine can be nested".into());
-        }
-        match (&self.host, self.kind) {
-            (None, Platform::Firecracker) => {
-                return refuse("a firecracker machine names its lima host".into())
-            }
-            (Some(host), Platform::Firecracker) => {
-                if host.kind != Platform::Lima || !host.nested {
-                    return refuse(format!(
-                        "the firecracker host {} is not a nested lima machine",
-                        host.name
-                    ));
-                }
-                host.validate()?;
-            }
-            (Some(_), _) => return refuse("only a firecracker machine has a host".into()),
-            (None, _) => {}
-        }
-        if let Some(n) = self.state.network {
-            if !(1..=250).contains(&n) {
-                return refuse(format!("network number {n} is outside 1 to 250"));
             }
         }
         Ok(())

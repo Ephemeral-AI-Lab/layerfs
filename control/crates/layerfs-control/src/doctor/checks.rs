@@ -1,10 +1,10 @@
 //! The checks on what the scan read: broken references (a Sandbox whose
 //! Store, project or machine is gone, a Store on a machine with no record,
-//! a Firecracker machine whose host is gone, a built-in machine's recorded
-//! daemon that is not there), dead and uncertain `op`
+//! a built-in machine's recorded daemon that is not there), dead and uncertain `op`
 //! intents, stale Store leases (read, never removed), a partial Store
-//! copy (`store.sqlite.incoming`) an interrupted transfer left on `native`
-//! and a copy a push or pull did not retire (from the record).
+//! copy (`store.sqlite.incoming`) an interrupted or certain-failed transfer
+//! left on `native` or on a push's target machine, and a copy a push or pull
+//! did not retire (from the record).
 use super::report::Findings;
 use super::scan::Scanned;
 use layerfs_bridge::control::SdkRefusal;
@@ -12,6 +12,8 @@ use layerfs_home::home::paths;
 use layerfs_home::op::{Op, Standing};
 use layerfs_store::lease;
 use layerfs_store::record::{Placement, StoreRecord, StoreRef};
+use layerfs_store::sqlite::family::step_on;
+use layerfs_store::sqlite::transfer::step::StoreStep;
 use std::path::Path;
 
 /// `native` and `docker` exist with or without a record.
@@ -60,7 +62,7 @@ pub(super) fn check(
                 // a transfer running now owns its partial copy
                 let standing = op.as_ref().map(Op::standing);
                 if standing != Some(Standing::Running) {
-                    incoming(home, name, machine == "native", findings);
+                    incoming(home, store, machine == "native", findings);
                 }
                 // an unresolved intent's own finding names its clearing call
                 if standing != Some(Standing::Unresolved) {
@@ -93,8 +95,8 @@ pub(super) fn check(
     Ok(())
 }
 
-/// Machines: their intents, a Firecracker machine's Lima host, and a
-/// built-in machine's recorded daemon that is not there.
+/// Machines: their intents, and a built-in machine's recorded daemon that
+/// is not there.
 fn machines(scanned: &Scanned, findings: &mut Findings) {
     for machine in &scanned.machines {
         let name = machine.name();
@@ -115,15 +117,6 @@ fn machines(scanned: &Scanned, findings: &mut Findings) {
                 &clear,
                 findings,
             );
-        }
-        if let Some(host) = machine.host() {
-            if !scanned.machine_names.contains(host) {
-                findings.error(
-                    entity,
-                    format!("machine {name}'s Lima host {host} has no record"),
-                    format!("`layerfs machine remove {name}`"),
-                );
-            }
         }
     }
 }
@@ -205,6 +198,11 @@ fn leftover(store: &StoreRecord, machine: &str, findings: &mut Findings) {
     let Some(left) = layerfs_store::sqlite::transfer::resolve::leftover(store) else {
         return;
     };
+    // the target side of a push holds a partial copy, not a whole one: it is
+    // reported with its bytes by `incoming`, below
+    if left.call == "store.push" && left.to == left.on {
+        return;
+    }
     let name = store.name();
     let next = match machine {
         "native" => format!("store push {name} <machine>"),
@@ -220,28 +218,59 @@ fn leftover(store: &StoreRecord, machine: &str, findings: &mut Findings) {
     );
 }
 
-/// A partial copy an interrupted pull to `native` left
-/// (`store.sqlite.incoming`). Other machines' copies are not read: no
-/// worker operation reports them.
-fn incoming(home: &Path, store: &str, on_native: bool, findings: &mut Findings) {
-    let file = paths::store_file(home, store);
-    let incoming = file.with_file_name("store.sqlite.incoming");
-    if !incoming.exists() {
-        return;
+/// A partial copy an interrupted transfer left (`store.sqlite.incoming`), on
+/// `native` or on the target machine of a `store.push`: while the push's
+/// intent is still there, or, after a certain failure dropped it, the machine
+/// its record kept. A machine's is read through its worker's `stat`, which
+/// changes nothing.
+fn incoming(home: &Path, store: &StoreRecord, on_native: bool, findings: &mut Findings) {
+    let name = store.name();
+    let file = paths::store_file(home, name);
+    let local_incoming = file.with_file_name("store.sqlite.incoming");
+    if local_incoming.exists() {
+        let fix = if on_native {
+            format!("delete {} by hand", local_incoming.display())
+        } else {
+            format!(
+                "`layerfs store pull {name}` replaces it, or delete {} by hand",
+                local_incoming.display()
+            )
+        };
+        findings.warning(
+            ("store", name),
+            format!(
+                "{} is a partial copy an interrupted transfer left; nothing reads it",
+                local_incoming.display()
+            ),
+            fix,
+        );
     }
+    let remote =
+        layerfs_store::sqlite::transfer::resolve::partial_on(store).filter(|to| to != "native");
+    let Some(to) = remote else {
+        return;
+    };
+    let Ok(mut executor) = layerfs_store::place::on_machine(home, &to) else {
+        return;
+    };
+    let Ok(stat) = step_on(home, &mut executor, name, StoreStep::Stat) else {
+        return;
+    };
+    let Some(bytes) = stat.get_int("incoming_bytes").filter(|&bytes| bytes > 0) else {
+        return;
+    };
     let fix = if on_native {
-        format!("delete {} by hand", incoming.display())
-    } else {
         format!(
-            "`layerfs store pull {store}` replaces it, or delete {} by hand",
-            incoming.display()
+            "`layerfs store push {name} {to}` replaces it, or `layerfs store remove {name}` deletes it"
         )
+    } else {
+        format!("`layerfs store pull {name}` or `layerfs store remove {name}` removes it")
     };
     findings.warning(
-        ("store", store),
+        ("store", name),
         format!(
-            "{} is a partial copy an interrupted transfer left; nothing reads it",
-            incoming.display()
+            "machine {to} holds a {bytes}-byte partial copy (store.sqlite.incoming) of Store {name} \
+             left by an interrupted transfer; nothing reads it"
         ),
         fix,
     );

@@ -1,7 +1,7 @@
 //! What exists in the home and how it relates (#536 §5 "Derived, never
 //! stored", §9.2): reads by name, the relationships no record stores
-//! (machine → its sqlite Stores, its Sandboxes and the Firecracker
-//! machines it hosts; Store → its projects' Sandboxes; project → its
+//! (machine → its sqlite Stores, its Sandboxes and the old Firecracker
+//! records it hosted; Store → its projects' Sandboxes; project → its
 //! Sandboxes), and the checks the calls that need them make. Layout 3
 //! keeps each Sandbox at `sandbox/<name>/`: a Sandbox by name is one read;
 //! only the relationships (by machine, Store or project) list `sandbox/*`.
@@ -58,10 +58,13 @@ pub fn sandboxes_on(home: &Path, machine: &str) -> Result<Vec<String>> {
     Ok(on.map(|sandbox| sandbox.name().to_owned()).collect())
 }
 
-/// The Firecracker machines Lima machine `machine` hosts.
+/// The old Firecracker machine records (a platform removed in 2.0) that
+/// name Lima machine `machine` as their host: their microVMs' folders and
+/// data disks are still on its data disk.
 pub fn hosted_on(home: &Path, machine: &str) -> Result<Vec<String>> {
-    let hosted = machines(home)?.into_iter();
-    let hosted = hosted.filter(|record| record.host() == Some(machine));
+    let hosted = machines(home)?.into_iter().filter(
+        |record| matches!(record.field("host"), Some(SdkValue::Text(host)) if host == machine),
+    );
     Ok(hosted.map(|record| record.name().to_owned()).collect())
 }
 
@@ -81,9 +84,10 @@ pub fn sandboxes_of_project(home: &Path, project: &str) -> Result<Vec<String>> {
     Ok(of.map(|sandbox| sandbox.name().to_owned()).collect())
 }
 
-/// `machine.remove`: refused `InUse` while the
-/// machine holds Stores, Sandboxes or Firecracker machines; `detail.related`
-/// lists them (#536 §10b).
+/// `machine.remove`: refused `InUse` while the machine holds Stores,
+/// Sandboxes or old Firecracker records it hosted (removing it would delete
+/// their microVMs' disks; forgetting those records first lets it go);
+/// `detail.related` lists them (#536 §10b).
 pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
     let stores = stores_on(home, name)?;
     let sandboxes = sandboxes_on(home, name)?;
@@ -104,13 +108,10 @@ pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
 }
 
 /// `machine.stop`: refused `InUse` while a Sandbox is recorded on machine
-/// `name` or on a Firecracker machine it hosts; `detail.related` lists
-/// them as `{kind: "sandbox", name}`. Under the home lock.
+/// `name`; `detail.related` lists them as `{kind: "sandbox", name}`. Under
+/// the home lock.
 pub fn can_stop_machine(home: &Path, name: &str) -> Result<()> {
-    let mut sandboxes = sandboxes_on(home, name)?;
-    for hosted in hosted_on(home, name)? {
-        sandboxes.extend(sandboxes_on(home, &hosted)?);
-    }
+    let sandboxes = sandboxes_on(home, name)?;
     if sandboxes.is_empty() {
         return Ok(());
     }

@@ -25,8 +25,8 @@ pub fn start(home: &Path, name: &MachineName, related: Related) -> Outcome {
     super::get::get(home, name, related)
 }
 
-/// `machine.stop(name)`: refused `InUse` while Sandboxes run on it (or on a
-/// Firecracker machine it hosts), `detail.related` naming each; else its
+/// `machine.stop(name)`: refused `InUse` while Sandboxes run on it,
+/// `detail.related` naming each; else its
 /// worker and VM stop under its `start.lock`, so no `machine.start` runs
 /// meanwhile, and `worker.json` goes. Its disks and Stores stay.
 pub fn stop(home: &Path, name: &MachineName, related: Related) -> Outcome {

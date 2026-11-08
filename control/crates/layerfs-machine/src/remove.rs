@@ -65,15 +65,30 @@ fn forget(home: &Path, name: &MachineName, reason: &str, related: Related) -> Ou
     let record = MachineRecord::of(home, name)?;
     record.not_running()?;
     (related.can_remove)(home, name)?;
+    let vm = || -> Result<String> {
+        match record.text("vm_name") {
+            Some(vm) => Ok(vm.to_owned()),
+            None => Ok(record::vm_name(&home_id(home)?, name)),
+        }
+    };
     let left = match record.platform_name() {
         Some("microsandbox") => {
-            let vm = match record.text("vm_name") {
-                Some(vm) => vm.to_owned(),
-                None => record::vm_name(&home_id(home)?, name),
-            };
+            let vm = vm()?;
             format!(
                 "its VM {vm} and data volume {vm}-data were not touched; \
                  `msb remove --force {vm}` and `msb volume remove {vm}-data` remove them"
+            )
+        }
+        Some("firecracker") => {
+            let vm = vm()?;
+            let host = match record.text("host") {
+                Some(host) => format!("Lima machine {host}"),
+                None => "its Lima host".to_owned(),
+            };
+            format!(
+                "its microVM {vm} was not touched: its folder \
+                 /layerfs/data/firecracker/vms/{vm} and data disk \
+                 /layerfs/data/firecracker/disks/{vm}.ext4 stay in {host}"
             )
         }
         _ => "nothing on its host was touched".to_owned(),

@@ -21,23 +21,15 @@ const RUNNING: &str = r#"echo '[{"status":{"state":"running","networks":[{"netwo
 /// container (D-8 live receipt): its DNS answers the name.
 const RESOLVED: &str = r#"printf '192.168.65.254  STREAM host.docker.internal\n192.168.65.254  DGRAM  \n192.168.65.254  RAW    \n'"#;
 
-/// `kind`'s spec as `standin` makes it; a firecracker one gets its nested
-/// lima host and, when given, its network number.
-fn spec(scratch: &Scratch, kind: Platform, network: Option<u8>) -> Spec {
+/// `kind`'s spec as `standin` makes it.
+fn spec(scratch: &Scratch, kind: Platform) -> Spec {
     if kind == Platform::AppleContainer {
         scratch.tool("container", RUNNING);
     }
     if kind == Platform::Docker {
         scratch.tool("docker", RESOLVED);
     }
-    let mut spec = scratch.spec(kind);
-    if kind == Platform::Firecracker {
-        let mut host = scratch.spec(Platform::Lima);
-        host.nested = true;
-        spec.host = Some(Box::new(host));
-    }
-    spec.state.network = network;
-    spec
+    scratch.spec(kind)
 }
 
 /// A refusal's code and message; the message never holds the password.
@@ -70,7 +62,7 @@ fn rewritten(host: &str) -> [String; 3] {
 fn each_platform_rewrites_a_loopback_host() {
     let scratch = Scratch::new("reach-loopback");
     for kind in Platform::ALL {
-        let spec = spec(&scratch, kind, Some(7));
+        let spec = spec(&scratch, kind);
         let alias = match kind {
             Platform::Native => "unchanged",
             // a Linux Engine's worker shares the host's network (D-8)
@@ -78,7 +70,6 @@ fn each_platform_rewrites_a_loopback_host() {
             Platform::Docker => "192.168.65.254",
             Platform::Lima => "192.168.5.2",
             Platform::AppleContainer => "192.168.64.1",
-            Platform::Firecracker => "192.168.5.2",
         };
         for (i, url) in loopback_urls().iter().enumerate() {
             let outcome = machine::reach(&spec, url);
@@ -91,22 +82,9 @@ fn each_platform_rewrites_a_loopback_host() {
 }
 
 #[test]
-fn firecracker_reaches_loopback_through_its_lima_host() {
-    let scratch = Scratch::new("reach-firecracker");
-    for network in [None, Some(7)] {
-        let spec = spec(&scratch, Platform::Firecracker, network);
-        let outcome = machine::reach(&spec, &loopback_urls()[0]);
-        assert_eq!(outcome, Ok(rewritten("192.168.5.2")[0].clone()));
-        // a server elsewhere is dialled as given
-        let remote = format!("postgres://lfs:{SECRET}@db.example.com:5432/layerfs");
-        assert_eq!(machine::reach(&spec, &remote), Ok(remote.clone()));
-    }
-}
-
-#[test]
 fn apple_container_reads_its_gateway_only_for_a_loopback_url() {
     let scratch = Scratch::new("reach-apple");
-    let spec = spec(&scratch, Platform::AppleContainer, None);
+    let spec = spec(&scratch, Platform::AppleContainer);
     let remote = format!("postgres://lfs:{SECRET}@db.example.com:5432/layerfs");
     assert_eq!(machine::reach(&spec, &remote), Ok(remote.clone()));
     assert_eq!(scratch.log(), "", "a remote URL reads nothing");
@@ -138,7 +116,7 @@ fn apple_container_reads_its_gateway_only_for_a_loopback_url() {
 #[test]
 fn apple_container_uses_the_gateway_its_start_recorded() {
     let scratch = Scratch::new("reach-apple-recorded");
-    let mut spec = spec(&scratch, Platform::AppleContainer, None);
+    let mut spec = spec(&scratch, Platform::AppleContainer);
     spec.state.gateway = Some("192.168.65.1".parse().unwrap());
     for (url, want) in loopback_urls().iter().zip(rewritten("192.168.65.1")) {
         assert_eq!(machine::reach(&spec, url), Ok(want));
@@ -165,7 +143,7 @@ fn every_other_host_is_dialled_as_given_everywhere() {
         "postgres://u@127.0.0.2/db".to_owned(),
     ];
     for kind in Platform::ALL {
-        let spec = spec(&scratch, kind, Some(3));
+        let spec = spec(&scratch, kind);
         for url in &urls {
             assert_eq!(machine::reach(&spec, url).as_ref(), Ok(url), "{kind:?}");
         }
@@ -181,19 +159,19 @@ fn a_rewrite_is_refused_for_verify_full() {
         false => &[Platform::Docker, Platform::Lima],
     };
     for &kind in rewriting {
-        let (code, message) = refused(machine::reach(&spec(&scratch, kind, Some(2)), &url));
+        let (code, message) = refused(machine::reach(&spec(&scratch, kind), &url));
         assert_eq!(code, Code::Unsupported);
         assert!(message.contains("sslmode=verify-full"), "{message}");
     }
     // native rewrites nothing, so its certificate check still holds
     assert_eq!(
-        machine::reach(&spec(&scratch, Platform::Native, None), &url),
+        machine::reach(&spec(&scratch, Platform::Native), &url),
         Ok(url.clone())
     );
     // verify-ca does not check the host name
     let ca = url.replace("verify-full", "verify-ca");
     assert_eq!(
-        machine::reach(&spec(&scratch, Platform::Lima, None), &ca),
+        machine::reach(&spec(&scratch, Platform::Lima), &ca),
         Ok(ca.replace("localhost", "192.168.5.2"))
     );
 }
@@ -202,8 +180,8 @@ fn a_rewrite_is_refused_for_verify_full() {
 fn a_url_reach_cannot_read_is_refused_off_native() {
     let scratch = Scratch::new("reach-unread");
     // lima rewrites a loopback host on every host OS
-    let lima = spec(&scratch, Platform::Lima, None);
-    let native = spec(&scratch, Platform::Native, None);
+    let lima = spec(&scratch, Platform::Lima);
+    let native = spec(&scratch, Platform::Native);
     for (url, code, why) in [
         (
             format!("host=localhost user=lfs password={SECRET}"),
@@ -247,7 +225,7 @@ fn a_url_reach_cannot_read_is_refused_off_native() {
 #[test]
 fn an_invalid_spec_is_refused_before_the_url_is_read() {
     let scratch = Scratch::new("reach-spec");
-    let mut spec = spec(&scratch, Platform::Docker, None);
+    let mut spec = spec(&scratch, Platform::Docker);
     spec.name = "not plain".into();
     let (code, message) = refused(machine::reach(&spec, &loopback_urls()[0]));
     assert_eq!(code, Code::InvalidInput);
@@ -263,7 +241,7 @@ fn an_invalid_spec_is_refused_before_the_url_is_read() {
 #[test]
 fn docker_reads_its_worker_s_host_address_only_for_a_loopback_url() {
     let scratch = Scratch::new("reach-docker");
-    let spec = spec(&scratch, Platform::Docker, None);
+    let spec = spec(&scratch, Platform::Docker);
     let remote = format!("postgres://lfs:{SECRET}@db.example.com:5432/layerfs");
     assert_eq!(machine::reach(&spec, &remote), Ok(remote.clone()));
     assert_eq!(scratch.log(), "", "a remote URL reads nothing");

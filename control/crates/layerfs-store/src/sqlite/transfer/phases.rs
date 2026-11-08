@@ -6,9 +6,11 @@
 //! caller pulls, then pushes; each half is its own operation.
 use crate::place::{self, Executor};
 use crate::record::{self, StoreRecord};
-use crate::sqlite::family::{advance, begin, ended, progress, record_of, settle, step_on};
-use crate::sqlite::transfer::resolve::retired;
-use crate::sqlite::transfer::step::StoreStep;
+use crate::sqlite::family::{
+    advance, begin, ended, progress, record_of, settle, step_observed, step_on,
+};
+use crate::sqlite::transfer::resolve::{note_incoming, retired};
+use crate::sqlite::transfer::step::{StepFrame, StoreStep};
 use crate::sqlite::transfer::steps::CHUNK;
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -69,10 +71,37 @@ fn transfer(
         // failure put nothing in place; past record the Store is on `to`,
         // and a retire that did not finish leaves `last_transfer` saying so
         let uncertain = *phase != "retire" && (refusal.code == "Unknown" || *phase == "record");
+        // a push that failed certain at `send`, `verify` or `install` keeps
+        // its target's partial copy and drops the intent that named that
+        // machine: the record keeps the machine instead, so the doctor reports
+        // the copy and `store.remove` deletes it there (§7.3, P6)
+        if !uncertain && call == "store.push" && matches!(*phase, "send" | "verify" | "install") {
+            if let Some(to) = op.args().get_text("to") {
+                let _ = note_incoming(&home, name, to);
+            }
+        }
         ended(&home, name, op, phase, refusal, uncertain, None);
     }
     let verb = call.replace('.', " ");
     result.map_err(|(phase, mut refusal)| {
+        // past record the Store is on `to`: a retire that did not finish
+        // says which machine now holds it and which copy stayed
+        if phase == "retire" {
+            if let Some(op) = &written {
+                let from = op.args().get_text("from").unwrap_or("");
+                let to = op.args().get_text("to").unwrap_or("");
+                refusal.message = format!(
+                    "{verb}, {phase}: Store {name} is now on {to} (authority switched to {to}; \
+                     source copy on {from} was not retired: {})",
+                    refusal.message
+                );
+                refusal.detail = with_field(refusal.detail, "authority", SdkValue::text(to));
+                refusal.detail = with_field(refusal.detail, "source", SdkValue::text(from));
+                refusal.detail = with_field(refusal.detail, "retired", SdkValue::Bool(false));
+                refusal.detail = with_field(refusal.detail, "phase", SdkValue::text(phase));
+                return refusal;
+            }
+        }
         refusal.message = format!("{verb}, {phase}: {}", refusal.message);
         refusal.detail = with_field(refusal.detail, "phase", SdkValue::text(phase));
         refusal
@@ -95,7 +124,10 @@ fn run(
     // the locks, where `op` is written
     progress(events, "check", None);
     // first the copy an ended push or pull left, which this call clears
-    at("check", super::resolve::resolve(&home, name, related))?;
+    at(
+        "check",
+        super::resolve::resolve(&home, name, call, target, related),
+    )?;
     let record = at("check", record_of(&home, name))?;
     at("check", record.unblocked())?;
     let (from, to) = at("check", sides(&home, &record, target))?;
@@ -212,10 +244,23 @@ fn phases(
     (to, target): (&str, &mut Executor),
 ) -> Phased<SdkValue> {
     let home = home.to_path_buf();
+    // the Store's record travels with the snapshot: a crashed opener's
+    // leftover write-ahead log is checkpointed through its binding
+    let store_record = at("snapshot", record_of(&home, name))?.to_record().clone();
     enter(&home, events, op, name, "snapshot", None)?;
     let snapshot = at(
         "snapshot",
-        step_on(&home, source, name, StoreStep::Snapshot),
+        step_observed(
+            &home,
+            events,
+            "snapshot",
+            source,
+            &StepFrame {
+                store: name.to_owned(),
+                store_record: Some(store_record),
+                step: StoreStep::Snapshot,
+            },
+        ),
     )?;
     let total = snapshot.get_int("bytes").unwrap_or(0) as u64;
     // send, in pieces through this process
@@ -261,14 +306,32 @@ fn phases(
         sha256: text("sha256"),
         heads: text("heads"),
     };
-    at("verify", step_on(&home, target, name, digest))?;
+    at(
+        "verify",
+        step_observed(
+            &home,
+            events,
+            "verify",
+            target,
+            &StepFrame::on(name, digest),
+        ),
+    )?;
     // install puts the target's copy in place, which no step undoes with
     // certainty: from here until the record names the target a crash leaves
     // both copies, so the intent is written uncertain before it (H4–H6); the
     // next push or pull deletes the copy the record does not name
     *op = op.clone().as_uncertain();
     enter(&home, events, op, name, "install", None)?;
-    at("install", step_on(&home, target, name, StoreStep::Install))?;
+    at(
+        "install",
+        step_observed(
+            &home,
+            events,
+            "install",
+            target,
+            &StepFrame::on(name, StoreStep::Install),
+        ),
+    )?;
     // record: the Store is on `to` from here on. The same write records
     // that the source's copy is not yet retired and keeps `op`, certain, at
     // retire while it is: a retire that does not finish leaves a Store in
@@ -306,7 +369,16 @@ fn phases(
         Executor::Local => StoreStep::Retire,
         Executor::Worker(_) => StoreStep::Remove,
     };
-    at("retire", step_on(&home, source, name, retire))?;
+    at(
+        "retire",
+        step_observed(
+            &home,
+            events,
+            "retire",
+            source,
+            &StepFrame::on(name, retire),
+        ),
+    )?;
     at("retire", retired(&home, name, op.id()))?;
     Ok(SdkValue::map([
         ("store", SdkValue::text(name)),

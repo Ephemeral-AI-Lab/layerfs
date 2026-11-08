@@ -117,11 +117,7 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
     let guest_port = if host_network { port } else { WORKER_PORT };
     worker::ready(spec, &guest, guest_port, address)?;
     Ok(Running {
-        endpoint: crate::spec::Endpoint {
-            address,
-            secret,
-            forward_pid: None,
-        },
+        endpoint: crate::spec::Endpoint { address, secret },
         lasting: spec.state,
     })
 }

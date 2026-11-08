@@ -84,7 +84,7 @@ Front-end problems: none.
 | `machine.status` | name | - | yes | yes | yes | yes |
 | `machine.start` | name | - | yes | yes | yes | yes |
 | `machine.stop` | name | - | yes | yes | yes | yes |
-| `machine.create` | name, platform | cpus, memory, disk, image, nested, host | yes | yes | yes | yes |
+| `machine.create` | name, platform | cpus, memory, disk, image | yes | yes | yes | yes |
 | `machine.remove` | name | - | yes | yes | yes | yes |
 | `machine.update` | name | cpus, memory, image, docker, wsl, daemon | yes | yes | yes | yes |
 | `store.list` | - | - | yes | yes | yes | yes |

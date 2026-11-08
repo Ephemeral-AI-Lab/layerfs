@@ -55,7 +55,7 @@ URL a daemon dials for a PostgreSQL Store. See the
 
 | Question | Answer | Source |
 | --- | --- | --- |
-| Where does a worker listen? | The caller always dials a host loopback address (`Endpoint::address`). In the guest the worker binds port 7070 on the platform's `worker_bind`; the provider's port publish, Lima's port forward or an `ssh -L` (`firecracker`, through its Lima host) carries it to the host's `127.0.0.1`. | [`spec.rs`](../../../../control/crates/layerfs-platform/src/spec.rs), [`worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
+| Where does a worker listen? | The caller always dials a host loopback address (`Endpoint::address`). In the guest the worker binds port 7070 on the platform's `worker_bind`; the provider's port publish or Lima's port forward carries it to the host's `127.0.0.1`. | [`spec.rs`](../../../../control/crates/layerfs-platform/src/spec.rs), [`worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
 | How does a call reach it? | One new TCP connection per request: the secret first, alone, then one request frame, then events and one answer. | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 | How does a Sandbox daemon dial the caller's PostgreSQL server? | `machine::reach` keeps any non-loopback host and rewrites a loopback host to the platform's alias, or refuses. | [`reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs) |
 | When do Workspace calls skip the worker? | When `machine::forward` answers an address: `native` (the daemon's own port) and `lima` (a detached `ssh -L`). Elsewhere they go through the worker. | [`calls.rs`](../../../../control/crates/layerfs-platform/src/setup/calls.rs) |
@@ -80,7 +80,7 @@ URL a daemon dials for a PostgreSQL Store. See the
 | Worker readiness wait | 60 s (`READY`), looking every 200 ms. | [`worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
 | Worker not reached, wrong secret, other build | `Unavailable` / `Denied` / `Unavailable`; the request was not sent. | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 | Answer lost after the request was sent | `Unknown`: "it may have run, and was not resent". | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
-| Network facts verified live | The G7 live receipt covers `lima`, `apple-container` and `firecracker` reaching a PostgreSQL server, at an earlier commit with the support rows lifted locally (it also covered `microsandbox`, removed in 2.0). No G7 receipt covers `docker`. | [G7 live receipt](../../../../core/docs/issues/535/receipts/g7-live/RECEIPT.md) |
+| Network facts verified live | The G7 live receipt covers `lima` and `apple-container` reaching a PostgreSQL server, at an earlier commit with the support rows lifted locally (it also covered `microsandbox` and `firecracker`, removed in 2.0). No G7 receipt covers `docker`. | [G7 live receipt](../../../../core/docs/issues/535/receipts/g7-live/RECEIPT.md) |
 
 ## Demonstration
 

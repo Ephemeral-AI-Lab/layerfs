@@ -32,7 +32,8 @@ fn record(path: &Path, text: &str) {
     write_record(path, &parse(text).unwrap()).unwrap();
 }
 
-/// Machines `native` and `dev` (a Lima host of `fc`); Stores `shop` (on
+/// Machines `native`, `dev` (Lima) and `fc` (an old Firecracker record
+/// hosted on `dev`); Stores `shop` (on
 /// `dev`), `docs` (no machine: `native`) and `pg` (PostgreSQL); Sandboxes
 /// `a` (shop/api, on dev), `b` (docs/web, on native) and `c` (shop/api, on
 /// dev); a folder `d` with no record and a layout 2 record `z` under
@@ -45,7 +46,7 @@ fn home() -> PathBuf {
     );
     record(
         &paths::machine_record(&home, "dev"),
-        r#"{"platform":"lima","nested":true}"#,
+        r#"{"platform":"lima"}"#,
     );
     record(
         &paths::machine_record(&home, "fc"),
@@ -163,7 +164,6 @@ fn the_checks_refuse_in_use_with_the_same_texts() {
                 .collect()
         )
     );
-    assert!(inventory::can_stop_machine(&home, "fc").is_ok());
     let refusal = inventory::can_change_machine(&home, "native").unwrap_err();
     assert_eq!(
         refusal.message,

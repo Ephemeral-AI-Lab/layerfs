@@ -86,11 +86,8 @@ impl Scratch {
             disk: 10 << 30,
             image: None,
             os_image: None,
-            nested: false,
-            host: None,
             state: Lasting {
                 port: Some(45678),
-                network: None,
                 gateway: None,
             },
             worker: None,

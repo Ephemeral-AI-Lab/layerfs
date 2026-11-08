@@ -49,24 +49,24 @@ None. The machine calls take no paging: every machine is in one answer.
       supports: { sqlite, postgresql_sandbox, reason },
       state, cpus, memory, disk,
       stores: [name], sandboxes: [name],
-      image?, host?, nested?, docker?, wsl?, daemon?, error?,
-      ssh?, vm_name? }
+      image?, docker?, wsl?, daemon?, error?,
+      ssh?, host?, vm_name? }
 ] }
 ```
 
 | Field | Kind | Meaning |
 | --- | --- | --- |
 | `name` | text | the machine's name (its folder) |
-| `platform` | text | `native`, `docker`, `apple-container`, `lima` or `firecracker`; a record an older home left may still name the removed `microsandbox` or `ssh` |
+| `platform` | text | `native`, `docker`, `apple-container` or `lima`; a record an older home left may still name the removed `firecracker`, `microsandbox` or `ssh` |
 | `backend` | text | the Sandbox backend on this host: `native`, `namespaces` (also on `docker`), or `-` for none (always for a removed platform) ([`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `backend_name`) |
 | `supports` | map | the platform's support row on this host: `sqlite` (bool), `postgresql_sandbox` (bool), `reason` (text or null) ([`platforms.rs`](../../../../../control/crates/layerfs-machine/src/platforms.rs) `supports`); a removed platform supports nothing, with the removal as `reason` |
 | `state` | text | see the state table below |
 | `cpus`, `memory`, `disk` | int or null | the recorded size; bytes for `memory` and `disk`; null on a built-in machine |
 | `stores` | list | the sqlite Stores on this machine ([`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `stores_on`) |
 | `sandboxes` | list | the Sandboxes recorded on it (`sandboxes_on`) |
-| `image`, `host`, `nested`, `docker`, `wsl`, `daemon` | various | present only when the record has them |
+| `image`, `docker`, `wsl`, `daemon` | various | present only when the record has them |
 | `error` | text | the probe's reason when the state is `unknown`; for a removed platform the removal (``platform `ssh` was removed in LayerFS 2.0``); else a failed create's error |
-| `ssh`, `vm_name` | map, text | a removed `ssh` or `microsandbox` machine's recorded settings, shown as recorded |
+| `ssh`, `host`, `vm_name` | map, text, text | a removed `ssh`, `firecracker` or `microsandbox` machine's recorded settings, shown as recorded |
 
 | `state` | When | Source |
 | --- | --- | --- |
@@ -74,7 +74,7 @@ None. The machine calls take no paging: every machine is in one answer.
 | `unresolved` | a gone process left an uncertain `op` | `record.rs` |
 | `running`, `stopped`, `failed`, `missing` | the provider's answer to the live probe | [`setup/calls.rs`](../../../../../control/crates/layerfs-platform/src/setup/calls.rs) `State` |
 | `unknown` | the probe failed or did not answer within 10 s (`error` says why) | [`list.rs`](../../../../../control/crates/layerfs-machine/src/list.rs) `PROBE` |
-| `unsupported` | the record names a platform removed in 2.0 (`microsandbox`, `ssh`); it is never probed | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) `to_sdk` |
+| `unsupported` | the record names a platform removed in 2.0 (`firecracker`, `microsandbox`, `ssh`); it is never probed | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) `to_sdk` |
 | `ready` | `native`, which is never probed | `record.rs` |
 
 ## Where it runs

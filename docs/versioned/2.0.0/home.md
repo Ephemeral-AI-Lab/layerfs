@@ -273,9 +273,9 @@ shell command, not a call of the table.
 - It fills only fields that are not recorded yet, and keeps the rest.
 - It never writes a secret.
 - It never makes a VM. For those settings it answers the enabled `machine
-  create` command to run. Firecracker settings are reported as ignored with
-  their permanent policy reason; SSH and Microsandbox settings with their
-  removal reason (both platforms were removed in 2.0).
+  create` command to run. Firecracker, SSH and Microsandbox settings are
+  reported as ignored with their removal reason (the platforms were removed
+  in 2.0).
 - Its answer lists `written`, `kept`, `commands` and `ignored`, by setting
   name. Each run is also appended to `log/import-env.jsonl`.
 

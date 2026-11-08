@@ -4,9 +4,10 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Deletes a VM machine with its data disk, once no Store, Sandbox or hosted
-machine is on it. It also clears an unresolved create or remove. A machine
-whose record names a platform removed in 2.0 (`microsandbox`, `ssh`) is only
+Deletes a VM machine with its data disk, once no Store, Sandbox or old
+Firecracker record it hosted is on it.
+It also clears an unresolved create or remove. A machine whose record names
+a platform removed in 2.0 (`firecracker`, `microsandbox`, `ssh`) is only
 forgotten: its record goes and nothing outside the home is touched.
 
 | | |
@@ -55,7 +56,7 @@ None.
 | --- | --- | --- | --- |
 | `name` | text | the machine | [`remove.rs`](../../../../../control/crates/layerfs-machine/src/remove.rs) |
 | `removed` | bool | always true on success; `machine/<name>/` is gone | same |
-| `note` | text | only for a removed platform: ``forgot the record only: platform `ssh` was removed in LayerFS 2.0; nothing on its host was touched``; for `microsandbox` it names the VM and its `<vm>-data` volume, which were not touched, and the `msb remove --force <vm>` and `msb volume remove <vm>-data` commands that remove them | same, `forget` |
+| `note` | text | only for a removed platform: ``forgot the record only: platform `ssh` was removed in LayerFS 2.0; nothing on its host was touched``; for `microsandbox` it names the VM and its `<vm>-data` volume, which were not touched, and the `msb remove --force <vm>` and `msb volume remove <vm>-data` commands that remove them; for `firecracker` it names the microVM's folder `/layerfs/data/firecracker/vms/<vm>` and data disk `/layerfs/data/firecracker/disks/<vm>.ext4`, which stay in its Lima host | same, `forget` |
 
 ## Where it runs
 
@@ -64,11 +65,11 @@ None.
  --------------                                   ------------
  record; a live op on it --> Busy
  start lock (no start meanwhile)
- removed platform (microsandbox, ssh) --> home lock: no Stores /
-            Sandboxes / hosted machines (else InUse); rm -r
+ removed platform (firecracker, microsandbox, ssh) --> home lock:
+            no Stores / Sandboxes / hosted records (else InUse); rm -r
             machine/<name>/; answer with `note` (no provider CLI)
  home lock: removable? (not built in,
-            no Stores / Sandboxes / hosted machines --> InUse)
+            no Stores / Sandboxes / hosted records --> InUse)
             write op "remove", phase delete
  layerfs_platform::remove ------------------------>  delete VM + data disk
  home lock: rm -r machine/<name>/
@@ -92,7 +93,7 @@ need not be stopped first. See the
 | `InvalidInput` | a bad name; a built-in machine; a folder-scoped client | no | [`remove.rs`](../../../../../control/crates/layerfs-machine/src/remove.rs) |
 | `NotFound` | no machine of that name | no | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) |
 | `Busy` | a live process's create or remove holds it | no | same, `not_running` |
-| `InUse` | sqlite Stores, Sandboxes or firecracker machines it hosts are on it (`detail.related`) | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_remove_machine` |
+| `InUse` | sqlite Stores, Sandboxes or old Firecracker records it hosted are on it (`detail.related`) | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_remove_machine` |
 | `Unsupported` | a build without the `machine` feature | no | [`machine/create.rs` (api)](../../../../../api/crates/layerfs-api/src/machine/create.rs) |
 | `Unavailable`, `Failed` | the provider refused or failed; the record is put back | no | [`error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
 | `Unknown` | **the provider timed out or lost its answer** | **yes** | [`remove.rs`](../../../../../control/crates/layerfs-machine/src/remove.rs) |

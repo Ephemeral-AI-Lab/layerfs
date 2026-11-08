@@ -49,7 +49,7 @@ None.
  { name, kind, state, holders: [pid], op, down_reason, ...by kind }
 
  sqlite:      machine: <name>
-              file: { exists, free, bytes, wal_bytes }
+              file: { exists, free, bytes, wal_bytes, incoming_bytes }
                   | { unavailable: <message> }
 
  PostgreSQL:  server: { reachable: true, server_version, latency_ms,
@@ -67,7 +67,7 @@ None.
 | `op` | map or null | the recorded intent `{ id, name, phase, started, uncertain }` | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) `to_sdk` |
 | `down_reason` | text or null | why the machine did not answer `stat` (sqlite only) | [`status.rs`](../../../../../control/crates/layerfs-store/src/status.rs) |
 | `machine` | text | sqlite: the machine that holds the file | same |
-| `file` | map | sqlite: whether the file exists, free bytes on its filesystem, its bytes and its `-wal` bytes | [`sqlite/transfer/steps.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) `stat` |
+| `file` | map | sqlite: whether the file exists, free bytes on its filesystem, its bytes, its `-wal` bytes and any partial `.incoming` copy's bytes | [`sqlite/transfer/steps.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) `stat` |
 | `server` | map | PostgreSQL: one connection's result; `schemas` maps `layerfs` to its size, null when the schema is missing | [`store/postgres.rs`](../../../../../control/crates/layerfs-store/src/postgresql/open.rs) `status`, [`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs) `status` |
 
 Result keys are snake_case in every front end, so `serverVersion` arrives

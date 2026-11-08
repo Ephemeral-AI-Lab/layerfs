@@ -22,16 +22,9 @@ pub(super) fn home_id(home: &Path) -> Result<String> {
 pub fn status(home: &Path, name: &MachineName, related: Related) -> Outcome {
     let record = MachineRecord::of(home, name)?;
     let kind = record.platform()?;
-    let disabled = layerfs_platform::platform_policy::disabled_reason(kind.name());
-    let (state, free_disk, tool_version, down_reason) = match (disabled, record.in_flight()) {
-        (Some(reason), _) => (
-            record.state(None)?.to_owned(),
-            None,
-            None,
-            Some(reason.to_owned()),
-        ),
-        (None, true) => (record.state(None)?.to_owned(), None, None, None),
-        (None, false) => {
+    let (state, free_disk, tool_version, down_reason) = match record.in_flight() {
+        true => (record.state(None)?.to_owned(), None, None, None),
+        false => {
             let spec = record::spec(home, &home_id(home)?, &record)?;
             let status = adapters::status(&spec).map_err(refusal)?;
             let state = status.state.as_str().to_owned();

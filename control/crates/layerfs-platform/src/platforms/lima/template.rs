@@ -16,14 +16,9 @@ pub(crate) fn template(spec: &Spec, port: u16) -> String {
              {{\"location\": \"{UBUNTU}-amd64.img\", \"arch\": \"x86_64\"}}]"
         ),
     };
-    let nested = if spec.nested {
-        "\n  \"nestedVirtualization\": true,"
-    } else {
-        ""
-    };
     format!(
         r#"{{
-  "vmType": "vz",{nested}
+  "vmType": "vz",
   "cpus": {cpus},
   "memory": "{memory}iB",
   "images": {images},

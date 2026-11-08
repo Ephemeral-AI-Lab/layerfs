@@ -184,7 +184,7 @@ session's own thread checkpoints the WAL off the commit path (owner approval,
   machine. Machines are created, removed and started by the `machine` calls,
   and the routes come from the home's records (`machine/<name>/record.json`,
   `store/<name>/record.json`). `native` and `docker` are built in; VM kinds
-  (`apple-container`, `lima`, `firecracker`) are created by name. Each VM
+  (`apple-container`, `lima`) are created by name. Each VM
   machine's data disk is mounted at
   `/layerfs/data` and holds `store/<name>/store.sqlite` per Store. Its
   worker runs as root behind its own secret, reached through one loopback
@@ -202,18 +202,16 @@ session's own thread checkpoints the WAL off the commit path (owner approval,
   daemon setup file. This supersedes #533 O3/G13 ("VMs and ssh later").
   See [#533](core/docs/issues/533/README.md), [#535](core/docs/issues/535/README.md)
   and the [proposal](core/docs/proposals/host-platform-connections.md).
-- **Platform restriction (owner 2026-11-06, layerfs-project#7): Firecracker
-  is permanently disabled for new product work on every host.**
-  Keep its adapter and records; do not delete or migrate resources.
-  Inspection and safe explicit cleanup remain available. No runtime setting
-  or feature flag may re-enable it; that requires a later explicit owner
-  decision and source change. This supersedes earlier platform enablements
-  without changing historical evidence. Native, Docker, Lima and Apple
-  Container retain their existing support rules.
-  **Microsandbox and SSH machines were removed (owner, 2026-11-08):** their
-  code is gone; an old record of either is shown as unsupported with the
-  reason, and `machine remove` only forgets it. See the
-  [restriction contract](docs/architecture/control/support-matrix/disabled-platforms.md).
+- **Removed platforms (owner, 2026-11-08; supersedes the layerfs-project#7
+  restriction of 2026-11-06): Firecracker, Microsandbox and SSH machines are
+  removed.** Their code is gone and no platform is disabled with its code
+  kept. An old record of one is shown as unsupported with the reason
+  (``platform `<name>` was removed in LayerFS 2.0``), every other call on it
+  is refused, and `machine remove` only forgets it. No runtime setting or
+  feature flag brings one back; that requires a later explicit owner
+  decision and source change. Historical evidence is unchanged. Native,
+  Docker, Lima and Apple Container retain their existing support rules. See
+  the [restriction contract](docs/architecture/control/support-matrix/disabled-platforms.md).
 - **One global database, one writer, short holds (owner decision 2026-10-18).**
   All committed state lives in one SQLite Store file; no sharding, second
   database, concurrent-writer engine or objects outside it. Writes go one at a

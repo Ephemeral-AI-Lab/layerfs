@@ -13,9 +13,7 @@ function snapshot(root, dir = root) {
     return e.isDirectory() ? snapshot(root, path) : [[path.slice(root.length), readFileSync(path).toString("base64")]];
   });
 }
-const reason = platform => platform === "firecracker"
-  ? `${platform} is permanently disabled by product policy (layerfs-project#7)`
-  : `platform \`${platform}\` was removed in LayerFS 2.0`;
+const reason = platform => `platform \`${platform}\` was removed in LayerFS 2.0`;
 for (const platform of ["firecracker", "ssh", "microsandbox"]) test(`${platform}: Node refuses new work without modifying records or contacting workers`, async () => {
   const home = mkdtempSync(join(tmpdir(), "layerfs-disabled-node-"));
   const server = createServer(socket => { contacts++; socket.destroy(); });

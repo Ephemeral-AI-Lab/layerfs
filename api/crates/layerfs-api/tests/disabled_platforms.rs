@@ -1,6 +1,6 @@
-//! Disabled platform policy through the shared public call dispatcher: the
-//! disabled Firecracker and the platforms removed in 2.0 (`ssh`,
-//! `microsandbox`), whose records may remain in a home.
+//! Removed-platform policy through the shared public call dispatcher: the
+//! platforms removed in 2.0 (`firecracker`, `ssh`, `microsandbox`), whose
+//! records may remain in a home.
 use layerfs_api::{call, json};
 use layerfs_bridge::control::SdkValue;
 use layerfs_sandbox_backend::platform_policy::disabled_reason;
@@ -104,45 +104,6 @@ fn disabled_selection_does_not_create_a_home() {
         assert_eq!(refusal.message, disabled_reason(platform).unwrap());
         assert!(!home.exists());
     }
-}
-
-#[cfg(feature = "machine")]
-#[test]
-fn existing_machines_can_be_inspected_without_probing_or_changing_their_records() {
-    use layerfs_api::home::{paths, write_record};
-    let home = std::env::temp_dir().join(format!("lfs-disabled-inspect-{}", std::process::id()));
-    layerfs_api::home::open(&home).unwrap();
-    for (platform, state) in [("firecracker", "running"), ("firecracker", "stopped")] {
-        let record = SdkValue::map([
-            ("name", SdkValue::text(platform)),
-            ("platform", SdkValue::text(platform)),
-            ("state", SdkValue::text(state)),
-        ]);
-        let path = paths::machine_record(&home, platform);
-        write_record(&path, &record).unwrap();
-        let before = std::fs::read(&path).unwrap();
-        // No host spec or live tool is needed to inspect disabled records.
-        for name in ["machine.get", "machine.status"] {
-            let value = call(
-                Some(&home),
-                name,
-                SdkValue::map([("name", SdkValue::text(platform))]),
-                &mut |_| {},
-            )
-            .unwrap();
-            assert_eq!(value.get_text("state"), Some(state));
-            if name == "machine.status" {
-                assert_eq!(value.get_text("down_reason"), disabled_reason(platform));
-            } else {
-                assert_eq!(
-                    value.get("supports").unwrap().get_text("reason"),
-                    disabled_reason(platform)
-                );
-            }
-            assert_eq!(std::fs::read(&path).unwrap(), before);
-        }
-    }
-    std::fs::remove_dir_all(home).unwrap();
 }
 
 #[test]

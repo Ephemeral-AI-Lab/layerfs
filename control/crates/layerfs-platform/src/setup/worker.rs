@@ -6,7 +6,6 @@ use super::guest::{Guest, EXEC};
 use super::tool;
 use crate::error::{Code, MachineError};
 use crate::facts;
-use crate::platforms::firecracker::FIRECRACKER_DIR;
 use crate::spec::{Bundle, Endpoint, Spec, BUNDLE, DATA, IMAGE, STATE, WORKER_PORT};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::path::Path;
@@ -73,8 +72,7 @@ pub(crate) fn install(spec: &Spec, guest: &Guest, bundle: &Bundle) -> Result<(),
     let marker = format!("{BUNDLE}/.sealed");
     if guest.read_file(tools, &marker)?.as_deref().map(str::trim) != Some(bundle.hash.as_str()) {
         guest.script(tools, "clearing the old bundle", "rm -rf \"$1\"", &[BUNDLE])?;
-        // a nested Lima host alone takes Firecracker's files ([`crate::platforms::lima`])
-        guest.copy_in(tools, &bundle.dir, None, Some(FIRECRACKER_DIR), BUNDLE)?;
+        guest.copy_in(tools, &bundle.dir, None, BUNDLE)?;
         guest.write_file(tools, &marker, &format!("{}\n", bundle.hash))?;
     }
     if let Some(image) = &spec.image {
@@ -90,7 +88,7 @@ pub(crate) fn install(spec: &Spec, guest: &Guest, bundle: &Bundle) -> Result<(),
             .read_file(tools, &format!("{target}.copied"))?
             .is_none()
         {
-            guest.copy_in(tools, dir, Some(file), None, IMAGE)?;
+            guest.copy_in(tools, dir, Some(file), IMAGE)?;
             guest.write_file(tools, &format!("{target}.copied"), "")?;
         }
     }
@@ -104,7 +102,6 @@ pub(crate) fn launch(
     guest: &Guest,
     bind: Ipv4Addr,
     address: SocketAddr,
-    forward_pid: Option<u32>,
 ) -> Result<Endpoint, MachineError> {
     let tools = &spec.tools;
     let secret = tool::secret()?;
@@ -112,11 +109,7 @@ pub(crate) fn launch(
     let listen = format!("{bind}:{WORKER_PORT}");
     guest.script(tools, "starting the worker", LAUNCH, &[&listen, BUNDLE])?;
     ready(spec, guest, WORKER_PORT, address)?;
-    Ok(Endpoint {
-        address,
-        secret,
-        forward_pid,
-    })
+    Ok(Endpoint { address, secret })
 }
 
 /// The readiness wait (not a retry): until the worker listens on
@@ -224,17 +217,10 @@ pub(crate) fn bring_up(
     guest: &Guest,
     bundle: &Bundle,
     port: u16,
-    forward_pid: Option<u32>,
 ) -> Result<Endpoint, MachineError> {
     prepare(spec, guest)?;
     install(spec, guest, bundle)?;
-    launch(
-        spec,
-        guest,
-        spec.kind.worker_bind(),
-        loopback(port),
-        forward_pid,
-    )
+    launch(spec, guest, spec.kind.worker_bind(), loopback(port))
 }
 
 pub(crate) fn loopback(port: u16) -> SocketAddr {

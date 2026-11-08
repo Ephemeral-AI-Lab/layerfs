@@ -5,7 +5,7 @@
 //! cannot do an operation answers with that operation's refusal.
 use crate::error::{Code, MachineError};
 use crate::platform::{HostOs, Platform};
-use crate::platforms::{apple_container, docker, firecracker, lima, native};
+use crate::platforms::{apple_container, docker, lima, native};
 use crate::setup::guest::Guest;
 use crate::setup::Status;
 use crate::spec::{Bundle, Forward, Running, Spec, Tools};
@@ -45,7 +45,6 @@ pub(crate) fn adapter(platform: Platform) -> &'static dyn Adapter {
         Platform::Docker => &docker::ADAPTER,
         Platform::AppleContainer => &apple_container::ADAPTER,
         Platform::Lima => &lima::ADAPTER,
-        Platform::Firecracker => &firecracker::ADAPTER,
     }
 }
 

@@ -240,8 +240,6 @@ export interface MachineCreateOptions {
   memory?: Size;
   disk?: Size;
   image?: string;
-  nested?: boolean;
-  host?: string;
 }
 
 /** Options of `machine.update`; an unknown option is refused. */

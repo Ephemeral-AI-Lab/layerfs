@@ -78,10 +78,9 @@ The route for each platform comes from the `kernel` field of
 | macos | native | `native` | `"nfs"` |
 | macos | docker | `namespaces` | `"fuse"` |
 | macos | apple-container, lima | `namespaces` | `"fuse"` |
-| macos | firecracker | `null` | `null` (permanently disabled, layerfs-project#7) |
 | linux | native, docker | `namespaces` | `"fuse"` |
-| linux | apple-container, lima, firecracker | `null` | `null` (unsupported on this host) |
-| windows | native, docker, apple-container, lima, firecracker | `null` | `null` (unsupported on this host) |
+| linux | apple-container, lima | `null` | `null` (unsupported on this host) |
+| windows | native, docker, apple-container, lima | `null` | `null` (unsupported on this host) |
 
 So NFS serves exactly one row, the macOS native platform; every other
 supported row runs a Linux kernel and uses FUSE. The table is owned by the

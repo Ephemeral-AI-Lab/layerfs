@@ -31,13 +31,12 @@ pub(crate) fn stop(spec: &Spec) -> Result<(), MachineError> {
 /// could not read is recorded as none; the reach then looks it up itself,
 /// and refuses as before when the machine reports none.
 pub(super) fn bring_up(spec: &Spec, bundle: &Bundle, port: u16) -> Result<Running, MachineError> {
-    let endpoint = worker::bring_up(spec, &guest(spec), bundle, port, None)?;
+    let endpoint = worker::bring_up(spec, &guest(spec), bundle, port)?;
     Ok(Running {
         endpoint,
         lasting: Lasting {
             port: Some(port),
             gateway: gateway(spec).ok().and_then(|g| g.parse().ok()),
-            ..spec.state
         },
     })
 }

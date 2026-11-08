@@ -377,8 +377,8 @@ form.
 | `status` | `name` | — | a machine's live state, free disk and tool version; `op` while a create or remove holds it (#536 H6) |
 | `start` | `name` | — | starts a stopped machine and its worker and waits until ready; a running one, and `native`, answer at once (#535 P1) |
 | `stop` | `name` | — | stops a machine's worker and, where it has one, its VM; disks stay; `InUse` while Sandboxes run on it (#535 P1) |
-| `create` | `name`, `platform` | `cpus`, `memory` (size), `disk` (size), `image`, `nested`, `host` | creates an enabled VM machine (`apple-container`, `lima`) |
-| `remove` | `name` | — | deletes a VM machine and its disk; one of a removed platform (`ssh`, `microsandbox`) is only forgotten |
+| `create` | `name`, `platform` | `cpus`, `memory` (size), `disk` (size), `image` | creates an enabled VM machine (`apple-container`, `lima`) |
+| `remove` | `name` | — | deletes a VM machine and its disk; one of a removed platform (`firecracker`, `ssh`, `microsandbox`) is only forgotten |
 | `update` | `name` | `cpus`, `memory`, `image`, `docker`, `wsl`, `daemon` | sets a built-in machine's image, Docker socket, WSL distribution and daemon (an absolute path to a file; it replaces what `import-env` recorded) (O11); `InUse` while Sandboxes run on the machine; resizing a VM is not built |
 
 Run:
@@ -397,17 +397,16 @@ $ layerfs machine status native
 - `start` and `stop` answer the machine's summary as `get` does. They are
   the only lifecycle calls (#535 D11): no other call starts a machine, and
   nothing stops one when it is unused. `stop` is refused `InUse` while
-  Sandboxes are recorded on the machine (or on a Firecracker machine it
-  hosts); `detail.related` lists them as `{kind: "sandbox", name}`. It
+  Sandboxes are recorded on the machine; `detail.related` lists them as `{kind: "sandbox", name}`. It
   runs under the machine's `start.lock`, so no `machine start` runs
   meanwhile, and removes `worker.json`; a later call that needs the machine
   is refused `Unavailable` until `machine start`.
 
-- A record of a removed platform (`ssh`, `microsandbox`) still shows in
+- A record of a removed platform (`firecracker`, `ssh`, `microsandbox`) still shows in
   `list` and `get` with `state: "unsupported"` and the reason; `remove`
   forgets it and touches nothing outside the home. Every other call on it
   is `Unsupported`. See
-  [removed platforms](machines-and-stores.md#removed-platforms-microsandbox-and-ssh).
+  [removed platforms](machines-and-stores.md#removed-platforms-firecracker-microsandbox-and-ssh).
 
 See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals.
@@ -489,8 +488,7 @@ layerfs doctor --text     # a count line, then each finding and its fix
   modes other than 0700 (0701 where a namespaces Sandbox passes through) and
   record modes other than 0600; broken references (a Sandbox whose Store,
   project or machine is gone, a Store on a machine with no record, a project
-  in a Store folder with no record, a Firecracker machine whose Lima host is
-  gone, a built-in machine whose recorded daemon is not there, an error
+  in a Store folder with no record, a built-in machine whose recorded daemon is not there, an error
   naming `machine update <name> --daemon <path>`); an `op` a gone process left uncertain (an error naming the call
   that clears it) or certain (a warning); stale Store leases (a warning: the
   Store's next call removes them); what refuses
@@ -589,8 +587,8 @@ Every call is one attempt. After `Unknown`, read the state with `list`,
 | `--scope-branch <name>` | all, with `--scope` | the scope's Branch namespace |
 | `--` | all | every later word is a positional |
 
-`--option=value` works for every option. `machine create … --nested` alone
-is true; `--nested=false` is false.
+`--option=value` works for every option. A bool option alone
+(`sandbox close … --force`) is true; `--force=false` is false.
 
 `store push` and `store pull` report their phases (`check`, `snapshot`,
 `send`, `verify`, `install`, `record`, `retire`) as `{"progress": {"phase",

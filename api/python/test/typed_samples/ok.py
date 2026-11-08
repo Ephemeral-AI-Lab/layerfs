@@ -29,7 +29,7 @@ def sync_flow() -> None:
     print(text)
     lfs.file.apply("shop/api", "agent", [{"op": "write", "path": "/x", "content": "y"}], message="apply")
     lfs.branch.merge("shop/api", "m", "a", "b", units=["*.py", {"name": "u", "patterns": ["*"]}])
-    lfs.machine.create("box", "docker", memory="2G", cpus=2, nested=False)
+    lfs.machine.create("box", "docker", memory="2G", cpus=2)
     lfs.workspace.exec("ws", "ls", stdout=on_output, stderr=on_output, stream=False)
     lfs.backup.create("shop", "bucket", on_progress=on_progress)
     try:

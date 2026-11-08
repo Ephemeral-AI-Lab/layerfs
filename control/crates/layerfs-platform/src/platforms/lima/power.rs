@@ -1,7 +1,6 @@
 //! `lima` power: see `mod.rs`.
 use super::observe::{disk_name, guest, observe, CLI};
 use crate::error::{Code, MachineError};
-use crate::platforms::firecracker::firecracker_files;
 use crate::setup::vm::{checked, not_found, recorded_port, BOOT};
 use crate::setup::worker;
 use crate::setup::State;
@@ -45,10 +44,7 @@ pub(super) fn boot_and_bring_up(
         ATTACH,
         &[&disk_name(&spec.vm_name)],
     )?;
-    if spec.nested {
-        firecracker_files(spec, &guest, bundle)?;
-    }
-    let endpoint = worker::bring_up(spec, &guest, bundle, port, None)?;
+    let endpoint = worker::bring_up(spec, &guest, bundle, port)?;
     Ok(Running {
         endpoint,
         lasting: Lasting {

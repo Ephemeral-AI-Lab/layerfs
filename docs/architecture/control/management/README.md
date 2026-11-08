@@ -4,13 +4,9 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Firecracker is **permanently disabled for new work**. Its code and records
-remain for inspection and explicit cleanup. Microsandbox and SSH machines
-were removed in 2.0; a record an older home still holds for one is shown,
-refused and only forgotten. See the [platform restriction](../support-matrix/disabled-platforms.md) for
-refusals, existing-resource handling and the source change required for
-re-enabling. Descriptions of Firecracker's adapter mechanics below are
-retained implementation details, not selectable features.
+Firecracker, Microsandbox and SSH machines were removed in 2.0; a record
+an older home still holds for one is shown, refused and only forgotten.
+See [removed platforms](../support-matrix/disabled-platforms.md).
 
 The management library under the call table: the home and its records, machines and workers, Stores, projects, Sandboxes, Workspaces and backups.
 

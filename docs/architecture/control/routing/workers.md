@@ -131,8 +131,7 @@ without a request; `machine.start` and doctor use it
            root /layerfs/data  (LAYERFS_WORKER_ROOT in tests)
         |
         v
- home:     machine/<name>/worker.json {address, secret, forward_pid,
-                                       started}
+ home:     machine/<name>/worker.json {address, secret, started}
 ```
 
 | Step | What happens | Source |
@@ -155,8 +154,7 @@ without a request; `machine.start` and doctor use it
 | idle | nothing: there is no idle stop (#535 D11) | `worker/mod.rs`, `layerfs-cli/src/worker.rs` |
 | `native` on macOS or Linux | no worker; `start` and `stop` answer at once | `endpoint.rs` `running`, `power.rs` |
 
-A Firecracker machine's Lima host is started first by the same
-`machine.start`. Within one operation of several steps (a push, pull or
+Within one operation of several steps (a push, pull or
 remove) the endpoint read first is reused for later steps (`Worker::ready`).
 
 ## Version mismatch
