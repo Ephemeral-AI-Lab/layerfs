@@ -20,11 +20,23 @@ const target = configured ? resolve(root, configured) : join(root, "target");
 const outside = relative(root, target);
 if (outside.startsWith("..") || isAbsolute(outside)) throw new Error("Cargo target must stay in this worktree");
 if (process.env.CARGO_BUILD_TARGET) throw new Error("build on the actual macOS/Linux host without CARGO_BUILD_TARGET");
+const existingRustflags = process.env.RUSTFLAGS ? [process.env.RUSTFLAGS] : [];
+if (process.arch === "arm64") {
+  // Preserve target flags from .cargo/config.toml if overridden by RUSTFLAGS
+  for (const flag of ["--cfg aes_armv8", "--cfg polyval_armv8", "--cfg chacha20_force_neon", "-C target-feature=+aes,+sha2"]) {
+    if (!existingRustflags.join(" ").includes(flag)) existingRustflags.push(flag);
+  }
+}
+const remapFlags = [`--remap-path-prefix ${root}=/`, `--remap-path-prefix ${process.env.HOME || "/root"}=/root-home`];
+for (const flag of remapFlags) {
+  if (!existingRustflags.join(" ").includes(flag)) existingRustflags.push(flag);
+}
+const rustflags = existingRustflags.join(" ");
 const result = spawnSync("cargo", [
   "+1.85.1", "build", "--manifest-path", "Cargo.toml", "--offline", "--locked",
   ...(profile === "release" ? ["--release"] : []), "-p", "layerfs-node",
   ...(features.length ? ["--features", features.join(",")] : []),
-], { cwd: root, stdio: "inherit", env: { ...process.env, CARGO_TARGET_DIR: target } });
+], { cwd: root, stdio: "inherit", env: { ...process.env, CARGO_TARGET_DIR: target, RUSTFLAGS: rustflags } });
 if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status ?? 1);
 const artifact = join(target, profile, `liblayerfs_node.${suffix}`);
