@@ -204,7 +204,11 @@ impl ExportFrame {
             ("store", SdkValue::text(self.store.as_str())),
             ("project", SdkValue::text(&self.project)),
         ];
-        fields.extend(self.branch.as_deref().map(|b| ("branch", SdkValue::text(b))));
+        fields.extend(
+            self.branch
+                .as_deref()
+                .map(|b| ("branch", SdkValue::text(b))),
+        );
         fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
         map(fields)
     }
