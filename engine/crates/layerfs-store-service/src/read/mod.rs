@@ -5,6 +5,7 @@ pub mod blame;
 pub mod cached;
 pub mod compare;
 pub mod plans;
+pub mod query;
 pub mod reads;
 pub mod search;
 pub mod snapshot;

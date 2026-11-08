@@ -23,6 +23,10 @@ pub fn project(store: &Arc<Store>, args: &SdkValue) -> Result<LayerStackRecord, 
 
 /// Safe numeric page arguments. Offset skipping is linear and uses bounded windows.
 pub fn paging(value: &SdkValue) -> Result<(usize, u64), SdkRefusal> {
+    if value.get("page").is_some() {
+        let page = crate::read::query::result_page(value)?;
+        return Ok((page.limit, page.skip));
+    }
     let integer = |name: &str, default: i64| -> Result<i64, SdkRefusal> {
         match value.get(name) {
             None => Ok(default),
