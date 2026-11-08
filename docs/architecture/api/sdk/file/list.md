@@ -146,3 +146,10 @@ exhaustion. Work or mandatory-reply exhaustion returns `Capacity`; no total coun
 or total pages is promised. Legacy offset response fields stay compatible.
 
 Numbered directory replay is admitted within 10,000 entries per request.
+
+Numbered pages retain at most 128 disposable namespace boundaries, qualified by
+Store lifetime, saved ID, path, query kind and page size. Sequential directory
+pages resume through indexed names. A cache miss uses bounded actual candidate
+visits; a large page number alone is not a refusal when exhaustion is cheap.
+Cache eviction affects cost only, never the immutable result sequence. Live
+`branch.list` inventory does not use this saved-file cache.

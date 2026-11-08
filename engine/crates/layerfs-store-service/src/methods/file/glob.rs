@@ -15,7 +15,14 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
         return paged_reads::pin(
             &service.store,
             &snap,
-            paged_reads::glob(&reader, &snap, pattern, &path, query::result_page(args)?),
+            paged_reads::glob(
+                &service.store,
+                &reader,
+                &snap,
+                pattern,
+                &path,
+                query::result_page(args)?,
+            ),
         );
     }
     let (limit, pos) = paging(args)?;

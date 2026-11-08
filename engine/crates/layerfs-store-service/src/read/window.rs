@@ -92,32 +92,14 @@ fn skip(bytes: &[u8], count: u64) -> Result<usize, u64> {
     Err(seen)
 }
 
-/// Calls `visit` with the file's text, in order, as whole valid UTF-8 parts.
-/// A NUL or invalid UTF-8 ends the text at the start of the window it is
-/// found in, as the window-at-a-time scan did, and the scan then fails
-/// `Binary` unless `visit` stopped it first. A part may end inside a line.
-///
-/// A chunked file is read in one pass, so each chunk is decoded once and
-/// the mapping walked once; its text is handed on in parts of about
-/// [`BLOCK`] bytes as the pass delivers it, and stopping ends the pass.
-///
-/// `view` is the file's root when the caller read it already, as a batch.
-pub(super) fn texts(
-    reader: &dyn AuthenticatedObjects,
-    entry: &EntryFacts,
-    view: Option<FileView>,
-    visit: impl FnMut(&str) -> Result<bool, SdkRefusal>,
-) -> Result<(), SdkRefusal> {
-    texts_bounded(reader, entry, view, u64::MAX, visit).map(|_| ())
-}
-
 /// Logical payload actually delivered, and whether the request byte budget ended the scan.
 pub struct Scan {
     pub bytes: u64,
     pub exhausted: bool,
 }
 
-fn texts_bounded(
+/// Streams admitted text using the existing window validation and early-stop semantics.
+pub(super) fn texts_bounded(
     reader: &dyn AuthenticatedObjects,
     entry: &EntryFacts,
     view: Option<FileView>,
@@ -159,7 +141,7 @@ fn texts_bounded(
                 exhausted: end < size && !stopped,
             })
         } else {
-            Err(binary())
+            Err(scan_error(binary(), end))
         };
     }
     let mut feed = Feed {
@@ -177,7 +159,7 @@ fn texts_bounded(
             .run(|scope| view.read_range(reader, 0..end, &mut feed, scope))
     });
     if let Some(result) = feed.end.take() {
-        result?;
+        result.map_err(|error| scan_error(error, feed.received))?;
         return Ok(Scan {
             bytes: feed.received,
             exhausted: false,
@@ -186,11 +168,23 @@ fn texts_bounded(
     read.map_err(args::content)?;
     feed.deliver(end == size);
     let exhausted = end < size && feed.end.is_none();
-    feed.end.unwrap_or(Ok(()))?;
+    feed.end
+        .unwrap_or(Ok(()))
+        .map_err(|error| scan_error(error, feed.received))?;
     Ok(Scan {
         bytes: feed.received,
         exhausted,
     })
+}
+
+fn scan_error(mut error: SdkRefusal, bytes: u64) -> SdkRefusal {
+    if error.code == "Binary" {
+        error.detail = layerfs_bridge::control::SdkValue::map([(
+            "bytesScanned",
+            layerfs_bridge::control::SdkValue::Int(bytes as i64),
+        )]);
+    }
+    error
 }
 
 /// The sink of a file's single read pass: bytes not yet handed on, from file

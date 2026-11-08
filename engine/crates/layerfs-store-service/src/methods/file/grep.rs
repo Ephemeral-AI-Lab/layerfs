@@ -18,7 +18,14 @@ pub fn grep(service: &StoreService, args: &SdkValue) -> Answer {
         return paged_reads::pin(
             &service.store,
             &snap,
-            paged_reads::grep(&reader, &snap, pattern, &path, query::result_page(args)?),
+            paged_reads::grep(
+                &service.store,
+                &reader,
+                &snap,
+                pattern,
+                &path,
+                query::result_page(args)?,
+            ),
         );
     }
     let (limit, pos) = paging(args)?;

@@ -11,7 +11,13 @@ pub fn list(service: &StoreService, args: &SdkValue) -> Answer {
     let (reader, snap) = snapshot(service, args)?;
     let path = optional_path(args)?;
     let answer = if args.get("page").is_some() {
-        paged_reads::list(&reader, &snap, &path, query::result_page(args)?)
+        paged_reads::list(
+            &service.store,
+            &reader,
+            &snap,
+            &path,
+            query::result_page(args)?,
+        )
     } else {
         reads::list(&reader, &snap, &path, paging(args))
     };

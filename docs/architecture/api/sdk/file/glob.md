@@ -150,3 +150,8 @@ exhaustion. Work or mandatory-reply exhaustion returns `Capacity`; no total coun
 or total pages is promised. Legacy offset response fields stay compatible.
 
 Numbered glob traversal admits 10,000 candidate entries per request and retains the existing literal-prefix pruning.
+
+Numbered pages reuse weak-Store-qualified immutable path boundaries, including
+pattern and page size. Resumption preserves literal leading-folder pruning and
+component ordering. Prefix replay after cache eviction is bounded by actual
+candidate visits; there is no ordinal-based maximum result page or caller cursor.

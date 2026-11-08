@@ -16,13 +16,26 @@ pub fn matches(
     view: Option<FileView>,
     prefix: usize,
     pattern: &str,
-    mut visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
+    visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
 ) -> Result<(), SdkRefusal> {
+    matches_bounded(reader, entry, view, prefix, pattern, u64::MAX, visit).map(|_| ())
+}
+
+/// Literal matching with an actual delivered-byte budget; the legacy wrapper is unchanged.
+pub fn matches_bounded(
+    reader: &dyn AuthenticatedObjects,
+    entry: &EntryFacts,
+    view: Option<FileView>,
+    prefix: usize,
+    pattern: &str,
+    budget: u64,
+    mut visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
+) -> Result<window::Scan, SdkRefusal> {
     let never = pattern.as_bytes()[..pattern.len() - 1].contains(&b'\n');
     // The open line's last bytes, for a match that crosses into the next part.
     let keep = pattern.len() - 1;
     let (mut open, mut matched, mut tail, mut stopped) = (Open::new(), false, String::new(), false);
-    window::texts(reader, entry, view, |text| {
+    let scan = window::texts_bounded(reader, entry, view, budget, |text| {
         let bytes = text.as_bytes();
         if never {
             open.number += newlines(bytes);
@@ -89,7 +102,7 @@ pub fn matches(
     if !stopped && matched {
         visit(open.number, open.finish(true))?;
     }
-    Ok(())
+    Ok(scan)
 }
 
 /// What one content's complete scan reported: its lines, then whether it

@@ -153,3 +153,21 @@ exhaustion. Work or mandatory-reply exhaustion returns `Capacity`; no total coun
 or total pages is promised. Legacy offset response fields stay compatible.
 
 Numbered grep admits 10,000 candidate/matching-line visits and 16 MiB cumulative file payload per request; narrow the path when a query cannot finish. These are query admission bounds, not limits on file or project size. Binary files are counted as skipped.
+
+Numbered pages cache the last matching path and line, plus the observed binary
+skip count before that match. This permits resuming within one file without
+replaying preceding namespace paths; cached and cold pages retain the same
+matching records and skipped counts. The query key includes the full saved ID,
+path, literal pattern and page size, and cache state is bounded and evictable.
+
+The 16 MiB per-request replay admission counts payload actually delivered,
+including failed binary-validation windows. A larger file can produce a page
+from its early matching lines without admitting the whole file. Exhausting this
+budget before proving the requested matching page refuses Capacity; it does not
+silently truncate matching results. Legacy offset query behavior is preserved.
+
+The cached line boundary does not constitute a byte-offset index: within the
+resumed file, validation and line counting still replay from byte zero. A deep
+page inside one file can therefore refuse Capacity at the payload replay budget,
+even with a namespace cache hit. Narrow the path or literal query where useful;
+this change does not promise arbitrary deep-file line seeking.

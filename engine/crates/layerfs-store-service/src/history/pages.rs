@@ -15,7 +15,8 @@ pub struct Key {
     pub size: usize,
     pub page: u64,
 }
-static PAGES: Mutex<VecDeque<(Key, Weak<Store>, Option<NodeId>)>> = Mutex::new(VecDeque::new());
+type Entry = (Key, Weak<Store>, Option<NodeId>);
+static PAGES: Mutex<VecDeque<Entry>> = Mutex::new(VecDeque::new());
 /// A saved page's first node, if an earlier page already established it.
 pub fn find(store: &Arc<Store>, key: &Key) -> Option<Option<NodeId>> {
     let pages = PAGES.lock().unwrap_or_else(|e| e.into_inner());

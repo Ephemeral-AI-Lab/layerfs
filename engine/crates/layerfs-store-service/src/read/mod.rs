@@ -11,6 +11,7 @@ pub mod file_compare;
 pub mod file_facts;
 pub(crate) mod line_alignment;
 pub mod paged_reads;
+mod paged_boundaries;
 pub mod plans;
 pub mod query;
 pub(crate) mod read_reply;
