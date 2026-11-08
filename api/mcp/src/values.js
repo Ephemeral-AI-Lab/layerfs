@@ -137,10 +137,11 @@ export function encodeResult(value) {
   return value;
 }
 
-/** True for the two outcomes whose effects are not known: `Unknown`, and a
- * daemon `Failed` whose message carries `attempted: true`. */
+/** True for the outcomes whose effects are not known: `Unknown`, `Unresolved`
+ * (an earlier `Unknown` on the entity stands), and a daemon `Failed` whose
+ * message carries `attempted: true`. */
 export function isUncertain(error) {
-  if (error?.code === "Unknown") return true;
+  if (error?.code === "Unknown" || error?.code === "Unresolved") return true;
   if (error?.code !== "Failed") return false;
   if (error?.detail?.attempted === true) return true;
   return typeof error?.message === "string" && /\battempted: true\b/.test(error.message);

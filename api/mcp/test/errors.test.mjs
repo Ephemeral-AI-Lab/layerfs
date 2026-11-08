@@ -23,6 +23,10 @@ test("an uncertain outcome says so; a known Failed does not", () => {
   assert.equal(unknown.content[1].text, UNCERTAIN);
   assert.match(unknown.content[1].text, /^outcome uncertain: read state before acting again/);
 
+  const unresolved = errorResult(new LayerFSError("Unresolved", "an earlier Unknown stands", null));
+  assert.equal(unresolved.content.length, 2);
+  assert.equal(isUncertain({ code: "Unresolved" }), true);
+
   const attempted = errorResult(new LayerFSError("Failed", "SDK operation: Exchange { attempted: true }", null));
   assert.equal(attempted.content.length, 2);
   assert.equal(isUncertain({ code: "Failed", message: "", detail: { attempted: true } }), true);

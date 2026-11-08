@@ -129,6 +129,7 @@ const byName = new Map(tools.map((tool) => [tool.name, tool]));
 const client = layerfs.client({ home: flags.home, scope: flags.scope });
 
 const inflight = new Set();
+let stopping = false;
 
 /** One layerfs call with its positionals and its options object. */
 function callTool(tool, { positionals, options }) {
@@ -146,6 +147,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+  if (stopping) throw new McpError(ErrorCode.InvalidRequest, "the server is stopping; no new call is accepted");
   const { name, arguments: given } = request.params;
   const tool = byName.get(name);
   if (!tool) throw new McpError(ErrorCode.InvalidParams, `unknown tool "${name}"`);
@@ -195,7 +197,6 @@ server.setNotificationHandler(CancelledNotificationSchema, (notification) => {
 const transport = new StdioServerTransport();
 transport.onerror = (error) => log(`transport error: ${error?.message ?? error}`);
 
-let stopping = false;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** No implicit Commit or unmount: only idle Stores are closed, then exit 0. */
@@ -206,7 +207,7 @@ async function stop(reason) {
   const deadline = Date.now() + GRACE_MS;
   while (inflight.size > 0 && Date.now() < deadline) await sleep(25);
   if (inflight.size > 0) {
-    log(`${inflight.size} call(s) still running: a native call cannot be cancelled; this process ends and the call ends with it; nothing was committed, unmounted or retried`);
+    log(`${inflight.size} call(s) still running: a native call cannot be cancelled; this process ends and cuts the call off; its outcome is unknown; read state before acting again; nothing was retried`);
   }
   try {
     const closed = layerfs.close();

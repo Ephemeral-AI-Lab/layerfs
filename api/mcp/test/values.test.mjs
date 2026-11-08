@@ -86,6 +86,11 @@ test("a whole number beyond ±(2^53-1) is a typed exact string, never a rounded 
   const text = JSON.stringify(encodeResult({ max }));
   assert.equal(JSON.parse(text).max.value, "9223372036854775807");
 
+  assert.deepEqual(encodeResult({ bytes: Buffer.from([0, 0xff]), list: [Buffer.from([1, 2])] }), {
+    bytes: { base64: "AP8=" },
+    list: [{ base64: "AQI=" }],
+  });
+
   const spec = table.find((entry) => entry.family === "file" && entry.call === "read");
   const read = readArguments(spec, { project: "shop/api", branch: "feat", path: "/x", start_line: "9223372036854775807" });
   assert.equal(read.options.start_line, 9223372036854775807n);

@@ -37,6 +37,9 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
 
     const fork = await run("branch_fork", { project: "shop/api", name: "feat", from_branch: "main" });
     assert.equal(fork.kind, "Forked");
+    // the namespace branch a folder scope composes: <scope branch>.<call branch>
+    const namespaced = await run("branch_fork", { project: "shop/api", name: "feat.main", from_branch: "main" });
+    assert.equal(namespaced.kind, "Forked");
 
     const write = await run("file_write", {
       project: "shop/api",
@@ -101,6 +104,11 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
       server.client.callTool({ name: "store_create", arguments: {} }),
       (error) => error.code === -32602 && /required argument "name"/.test(error.message),
     );
+    // the SDK's request schema refuses a non-object `arguments` before the handler
+    await assert.rejects(
+      server.client.callTool({ name: "project_list", arguments: [] }),
+      (error) => error.code === -32603,
+    );
     await server.close();
     server = null;
 
@@ -125,7 +133,7 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
     const scoped = await connect({
       home: box.home,
       profile: "admin",
-      scope: { project: "shop/api", folder: "/sub" },
+      scope: { project: "shop/api", folder: "/sub", branch: "feat" },
     });
     const storeRefusal = (await call(scoped.client, "store_list", {})).result;
     assert.equal(storeRefusal.isError, true);
@@ -137,6 +145,9 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
     })).result;
     assert.equal(exportRefusal.isError, true);
     assert.match(JSON.parse(exportRefusal.content[0].text).message, /out of scope/);
+
+    const inside = await call(scoped.client, "file_read", { project: "shop/api", branch: "main", path: "/sub/b.txt" });
+    assert.equal(value(inside.result).text, "bee\n", "a scope that refuses everything would still pass the refusals");
 
     const pathRefusal = (await call(scoped.client, "file_read", { project: "shop/api", branch: "feat", path: "/a.txt" })).result;
     assert.equal(pathRefusal.isError, true);

@@ -178,7 +178,8 @@ Results are the call's answer as one JSON text block: `Buffer`s become `{ "base6
 number outside ±(2^53−1) becomes an explicit wrapper, `{ "$layerfs": "int", "value": "9223372036854775807" }`.
 A rounded JSON number is never returned. An argument that does not fit its schema (unknown name, missing
 required name, wrong kind, a non-safe JSON number where a whole number is expected) and an unknown tool are
-JSON-RPC protocol errors (`-32602`), not tool results; the call does not run.
+JSON-RPC protocol errors (`-32602`), not tool results; the call does not run. A non-object `arguments` is
+refused earlier by the SDK's request schema as `-32603`; it is still a protocol error, never a tool result.
 
 ## Semantics
 
@@ -186,11 +187,11 @@ JSON-RPC protocol errors (`-32602`), not tool results; the call does not run.
 | --- | --- |
 | Result | the call's answer as JSON, exactly once |
 | Refusal | `isError: true` and a text block with `{ "code", "message", "detail" }`; `detail` is the library's |
-| Uncertain outcome | `Unknown`, or `Failed` carrying `attempted: true`, adds the text `outcome uncertain: read state before acting again; nothing was retried.` Read `store status`, `machine status`, `sandbox get` or the Workspace's state before acting again |
+| Uncertain outcome | `Unknown`, `Unresolved`, or `Failed` carrying `attempted: true`, adds the text `outcome uncertain: read state before acting again; nothing was retried.` Read `store status`, `machine status`, `sandbox get` or the Workspace's state before acting again |
 | Retry / replay | none: every tool call is one library call, made once |
 | Commit / unmount | only the explicit `workspace_commit` and `workspace_unmount` tools; neither is called on an error, a disconnect or shutdown |
-| Disconnect or SIGTERM | the client is closed, its idle Stores are released and the process exits 0; a mounted Workspace stays mounted and an in-flight native call runs to its end (it cannot be cancelled), then the process ends |
-| Cancel notification | acknowledged and logged; the native call is not cancellable and runs to its end; nothing is retried |
+| Disconnect or SIGTERM | the server stops accepting calls, waits up to 2 s for in-flight ones, releases its idle Stores and exits 0; a mounted Workspace stays mounted. A call still running is cut off when the process ends (it cannot be cancelled), so its outcome is unknown: read state before acting again. The server itself never commits or unmounts |
+| Cancel notification | while the server is serving, acknowledged and logged; the native call is not cancellable and runs to its end; nothing is retried |
 | Progress | when the request has a progress token, the call's `on_progress` events become `notifications/progress`: the first event at once, then at most one every 100 ms carrying the latest, and the last event before the result. `progress` is a strictly increasing counter (1, 2, …), `total` only when the event has a positive total, `message` the coalesced event as JSON (cut at 512 characters). Without a token, no handler is passed and no notification is sent |
 | `workspace.exec` | the Node binding's current behaviour: output is buffered and arrives after the command ends; inline text up to 1 MiB per stream is in the result, a larger stream is not delivered and `stdout_bytes`, `stderr_bytes` and `streamed: true` report it. There is no live streaming |
 | `project.export` | `destination` is a path on the machine running this MCP server, not the client's; under a folder scope the library refuses the call |
@@ -204,7 +205,8 @@ JSON-RPC protocol errors (`-32602`), not tool results; the call does not run.
 - Every log line is `layerfs-mcp: …` on stderr. Argument values are not logged (a `store.connect` password or a
   `backup.connect` key must not reach a log).
 - Closing stdin, `SIGTERM` or `SIGINT` stops accepting calls, waits up to 2 s for in-flight calls, runs
-  `layerfs.close()` (idle Stores only) and exits 0. A call still running then ends with the process.
+  `layerfs.close()` (idle Stores only) and exits 0. A call still running is cut off with the process; its
+  outcome is unknown, so read state before acting again. Nothing is retried.
 - An in-flight native call cannot be cancelled in any binding; a `notifications/cancelled` is acknowledged on
   stderr and the call runs to its end.
 
@@ -238,6 +240,10 @@ Commands from the repository root, each with an external wall limit of at most 1
 Tests run against a real `node src/server.js`, a real SDK `Client` and `StdioClientTransport`, a Disposable
 temp home, the built addon (`api/node/layerfs.node`) and `LAYERFS_CLI`.
 
+The Node package suite is not green on this base: `test/progress.mjs` still expects six `on_progress` calls
+(the table has seven, with `project.export`) and its worker case fails with the reference build. The same two
+cases fail on the untouched base, so this change adds no failure; they are outside this package.
+
 ## NOT RUN
 
 - macOS and Windows hosts; only Linux (WSL Ubuntu) was run.
@@ -255,8 +261,8 @@ temp home, the built addon (`api/node/layerfs.node`) and `LAYERFS_CLI`.
 
 - [O32 and the 2.0 decisions](../../../../core/docs/issues/533/DECISIONS.md) (historical; MCP is reinstated by
   the instruction above, not by an edit there).
-- [The #521 MCP review](../../../../api/mcp) is not retained: hand-written tools, a single-project session and
-  automatic close/unmount are gone.
+- [The #521 MCP review](https://github.com/Ephemeral-AI-Lab/layerfs/pull/521) is not retained: hand-written
+  tools, a single-project session and automatic close/unmount are gone.
 
 ---
 

@@ -25,10 +25,19 @@ test("ten concurrent calls, then stdin close exits 0 within 5 s with no orphan",
     const child = server.transport._process;
     assert.ok(child, "the transport has no child process");
     assert.equal(child.exitCode, null);
+    // end the client's stdin directly (not client.close(), which falls back to
+    // SIGTERM after 2 s), and time the server's own exit
     const started = Date.now();
-    await server.client.close();
+    child.stdin.end();
+    const exited = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("the server did not exit within 5 s")), 5000);
+      child.once("exit", (code, signal) => {
+        clearTimeout(timer);
+        resolve({ code, signal });
+      });
+    });
     const elapsed = Date.now() - started;
-    assert.equal(child.exitCode, 0, `exit code ${child.exitCode}`);
+    assert.deepEqual(exited, { code: 0, signal: null });
     assert.ok(elapsed < 5000, `exit took ${elapsed} ms`);
     const ps = spawnSync("ps", ["-p", String(child.pid), "-o", "pid="], { encoding: "utf8" });
     assert.equal(ps.stdout.trim(), "", `the server is still there: ${ps.stdout}`);
