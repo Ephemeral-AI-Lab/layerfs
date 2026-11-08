@@ -1,7 +1,9 @@
 # Observational Store diagnostics
 
 The [table coverage map](diagnostic-coverage.md) records authority, keys, validators
-and quick/full policy for every applicable Store category.
+and quick/full policy for every applicable Store category. The
+[PostgreSQL diagnostic contract](postgresql-diagnostics.md) describes authority,
+access, physical checks and cancellation.
 
 `layerfs-persistence::diagnostic` exposes streamed observations over a dedicated
 read-only session. Control resolves the saved Store and its authoritative

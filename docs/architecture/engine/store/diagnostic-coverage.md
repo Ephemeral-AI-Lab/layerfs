@@ -1,6 +1,6 @@
 # Store Doctor table coverage
 
-> Implemented inventory contracts; qualification receipts belong to the named
+> **Status:** Current implementation contracts; qualification receipts belong to the named
 > tests and parent issue116. This is not a new database format or repair API.
 
 Every logical check below uses the same SQLite read transaction or PostgreSQL
@@ -12,7 +12,11 @@ transaction. Rewriting the saved definition after dropping a required trigger
 does not establish schema authority. Bounded normative DDL scratch is private;
 no source migration or repair runs. Catalog incarnation is revalidated in that
 same audit view, so a prior successful admission cannot authenticate a replaced
-Store.
+Store. Before inventory decoding, trusted column declarations bound storage-class
+checks, including SQLite allocator state. Malformed authority scalars produce an
+explicit identity failure and block dependent decoding. PostgreSQL metadata
+extraction is gated on its actual trusted column signature; see the
+[PostgreSQL diagnostic contract](postgresql-diagnostics.md).
 
 Physical engine checks have
 separately stated observation intervals. Quick retains metadata checks and
