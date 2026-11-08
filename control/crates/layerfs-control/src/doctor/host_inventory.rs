@@ -1,9 +1,10 @@
 //! Metadata of the management paths Host actually observes, never runtime trees.
 use super::Budget;
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
-    os::unix::fs::MetadataExt,
     path::Path,
 };
 

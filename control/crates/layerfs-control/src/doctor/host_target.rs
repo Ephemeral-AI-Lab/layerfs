@@ -3,6 +3,7 @@ use super::report::Findings;
 use super::target::{Budget, Checks};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{detect, Layout};
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
