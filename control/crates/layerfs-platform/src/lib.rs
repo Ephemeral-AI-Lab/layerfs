@@ -71,7 +71,7 @@ pub use probe::{native_missing, nested_missing, probe as unix_probe};
 /// Non-unix root twins of the setup calls: same names and signatures,
 /// each answering the stub refusal.
 #[cfg(not(unix))]
-pub use stubs::{
+pub use windows_stubs::stubs::{
     connect as connect, copy_in as copy_in, copy_out as copy_out, create as create,
     forward as forward, forward_close as forward_close, host_identity as host_identity,
     load_image as load_image, reach as reach, remove as remove, start as start,
@@ -83,88 +83,3 @@ pub use setup::{
     connect, copy_in, copy_out, create, forward, forward_close, host_identity, load_image, reach,
     remove, start, status, status_within, stop, State, Status,
 };
-
-/// The Windows stubs: a Windows host runs no machine adapter today (H
-/// 7.10.1 leaves its cfg and dependency plan open; #454). Every machine
-/// call answers the crate's own missing-refusal, so callers refuse
-/// with the reason instead of failing to build.
-#[cfg(not(unix))]
-pub mod stubs {
-    use super::error::MachineError;
-    use super::spec::{Bundle, Forward, Running, Spec};
-    use std::path::Path;
-    use std::time::Instant;
-
-    fn unsupported(what: &str) -> MachineError {
-        MachineError::missing(
-            format!("the {what} machine adapter does not run on this host"),
-            vec!["host:machine-adapter".into()],
-        )
-    }
-
-    pub fn create(_spec: &Spec, _bundle: &Bundle) -> Result<Running, MachineError> {
-        Err(unsupported("create"))
-    }
-    pub fn connect(_spec: &Spec, _bundle: &Bundle) -> Result<Running, MachineError> {
-        Err(unsupported("connect"))
-    }
-    pub fn start(_spec: &Spec, _bundle: &Bundle) -> Result<Option<Running>, MachineError> {
-        Err(unsupported("start"))
-    }
-    pub fn stop(_spec: &Spec) -> Result<(), MachineError> {
-        Err(unsupported("stop"))
-    }
-    pub fn remove(_spec: &Spec) -> Result<(), MachineError> {
-        Err(unsupported("remove"))
-    }
-    pub fn load_image(_spec: &Spec, _archive: &Path) -> Result<String, MachineError> {
-        Err(unsupported("image load"))
-    }
-    pub fn host_identity(_spec: &Spec) -> Result<String, MachineError> {
-        Err(unsupported("host identity"))
-    }
-    pub fn reach(_spec: &Spec, _url: &str) -> Result<String, MachineError> {
-        Err(unsupported("reach"))
-    }
-    pub fn forward(_spec: &Spec, _guest_port: u16) -> Result<Forward, MachineError> {
-        Err(unsupported("forward"))
-    }
-    pub fn forward_close(_spec: &Spec, _forward: &Forward) {}
-    pub fn copy_in(
-        _spec: &Spec,
-        _source: &Path,
-        _target: &str,
-    ) -> Result<(), MachineError> {
-        Err(unsupported("copy in"))
-    }
-    pub fn copy_out(_spec: &Spec, _source: &str, _file: &Path) -> Result<(), MachineError> {
-        Err(unsupported("copy out"))
-    }
-    pub fn status(_spec: &Spec) -> Result<super::stubs::Status, MachineError> {
-        Err(unsupported("status"))
-    }
-    pub fn status_within(_spec: &Spec, _deadline: Instant) -> Result<super::stubs::Status, MachineError> {
-        Err(unsupported("status within"))
-    }
-
-
-/// The status answer shape: on Windows nothing ever answers, so the
-/// struct exists only to type the stub signatures; its state reads
-/// missing, the one honest answer.
-#[derive(Clone, Debug)]
-pub struct Status {
-    pub state: StubState,
-    pub free_disk: Option<u64>,
-    pub tool_version: Option<String>,
-    pub down_reason: Option<String>,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct StubState;
-
-impl StubState {
-    pub fn as_str(&self) -> &'static str {
-        "missing"
-    }
-}
-}
