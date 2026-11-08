@@ -210,3 +210,8 @@ Its protocol is on [Workers](../../control/routing/workers.md).
 `store stats <name>` exposes [Store-wide counters](../sdk/store/stats.md) through the call table.
 
 `project stats <store>/<project> [<branch>] [<commit>]` reports [pinned saved-tree counts](../sdk/project/stats.md).
+
+`file revision` and pinned `branch diff` accept `--continuation TOKEN`. Repeat
+the saved IDs and query options, omit `--page`, and read the returned next
+page in a fresh process. Mismatched tokens are `InvalidInput`. `commit diff`
+also accepts full saved Layer ids, retaining its path cursor and scalable plan.

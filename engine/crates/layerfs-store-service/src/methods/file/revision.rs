@@ -14,9 +14,12 @@ pub fn revision(service: &StoreService, args: &SdkValue) -> Answer {
         &service.store,
         &reader,
         node,
-        &path(args, "path")?,
-        args.get_text("traversal").unwrap_or("provenance"),
-        query::result_page(args)?,
-        branch,
+        revision::Request {
+            path: &path(args, "path")?,
+            traversal: args.get_text("traversal").unwrap_or("provenance"),
+            page: query::result_page(args)?,
+            branch,
+            continuation: args.get_text("continuation"),
+        },
     )
 }

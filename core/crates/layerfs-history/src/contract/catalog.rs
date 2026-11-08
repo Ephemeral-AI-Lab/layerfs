@@ -76,6 +76,15 @@ pub trait HistoryCatalog: Send + Sync {
     /// Incarnation recorded when this catalog was created.
     fn incarnation(&self) -> u64;
 
+    /// Authenticates an opaque saved-query continuation with this catalog's
+    /// authority capability. The key is never exported; the digest binds the
+    /// catalog identity and incarnation as well as the bounded payload.
+    fn query_authenticator(&self, _payload: &[u8]) -> HistoryResult<[u8; 32]> {
+        Err(crate::error::HistoryError::Unsupported(
+            "saved-query continuation authentication",
+        ))
+    }
+
     /// One stack by identity.
     fn layer_stack(&self, id: LayerStackId) -> HistoryResult<Option<LayerStackRecord>>;
 

@@ -281,6 +281,7 @@ impl StoreOp<'_> {
                 .at(&r.branch, r.at_commit.as_deref())
                 .text("path", &r.path)
                 .opt("traversal", r.traversal.as_deref())
+                .opt("continuation", r.continuation.as_deref())
                 .page(r.page),
             Self::Fork(r) => {
                 let from = r.from_commit.as_deref().unwrap_or(&r.from_branch);
@@ -301,6 +302,7 @@ impl StoreOp<'_> {
                 .opt("fromCommit", r.from_commit.as_deref())
                 .opt("toCommit", r.to_commit.as_deref())
                 .opt("pathPrefix", r.path_prefix.as_deref())
+                .opt("continuation", r.continuation.as_deref())
                 .boolean("includeAttribution", r.include_attribution)
                 .diff(&r.options),
             Self::DiffCommits(r) => args

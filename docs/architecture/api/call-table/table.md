@@ -202,3 +202,5 @@ writes help, so the table and help cannot disagree.
 ---
 
 ← [API: Call table](README.md) · [Up: Call table](README.md) · [Call table: Errors](errors.md) →
+
+`branch.diff` and `file.revision` add optional `continuation` for numbered saved queries; every package derives the option from its call entry. `commit.diff` accepts Commit and Layer ids.

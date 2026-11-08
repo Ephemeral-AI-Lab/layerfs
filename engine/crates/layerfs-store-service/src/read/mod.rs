@@ -7,6 +7,7 @@ pub mod branch_compare;
 pub mod cached;
 pub mod compare;
 pub mod comparison_pages;
+pub(crate) mod continuation;
 pub mod file_compare;
 pub mod file_facts;
 pub(crate) mod line_alignment;

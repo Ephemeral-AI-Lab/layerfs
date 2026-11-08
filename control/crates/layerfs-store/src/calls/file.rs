@@ -133,6 +133,8 @@ pub struct FileRevision {
     pub traversal: Option<String>,
     /// One-based matching-result page.
     pub page: Page,
+    /// Stateless continuation of the same immutable pin and query.
+    pub continuation: Option<String>,
 }
 
 /// `file.write(project, branch, path, content, { message, mode })`.

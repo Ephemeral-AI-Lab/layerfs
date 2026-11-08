@@ -442,8 +442,10 @@ pub fn diff_commits(
     to: &Snap,
     request: Arg<Request>,
 ) -> Answer {
-    if from.kind != Kind::Commit || to.kind != Kind::Commit {
-        return Err(invalid("diff_commits takes two saved Commits"));
+    if !matches!(from.kind, Kind::Commit | Kind::Layer)
+        || !matches!(to.kind, Kind::Commit | Kind::Layer)
+    {
+        return Err(invalid("diff_commits takes saved Commit or Layer ids"));
     }
     let side = |snap: &Snap| {
         SdkValue::map([
