@@ -4,8 +4,8 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; the tool and profile table is generated and checked.
 
-`@layerfs/mcp`: a local stdio Model Context Protocol server over the Node package, one tool per call of the
-call table. It is a thin adapter, not a fourth call surface: the [table](../call-table/table.md) is the
+`@layerfs/mcp`: a local stdio Model Context Protocol server over the Node package, one tool per call in the
+selected profile. It is a thin adapter, not a fourth call surface: the [table](../call-table/table.md) is the
 contract, and this server adds no retry, replay, Commit, unmount or scope check of its own.
 
 | | |
@@ -59,8 +59,8 @@ node api/mcp/src/server.js --help
 
 | Flag | Meaning |
 | --- | --- |
-| `--profile work` | the default; the 34 calls an agent works with, below |
-| `--profile admin` | all 61 calls: adds project create/remove, Sandbox create/close, machine, Store and backup |
+| `--profile work` | the default; the `work` calls, below |
+| `--profile admin` | the `work` calls plus every administrative call: project create/remove, Sandbox create/close, machine, Store and backup |
 | `--home <dir>` | the LayerFS home; default `LAYERFS_HOME`, else `~/.layerfs` |
 | `--scope-project <store>/<project>` | the folder scope's project; must be given with `--scope-folder` |
 | `--scope-folder <dir>` | the folder scope inside the project; the library checks every scoped call |
@@ -191,7 +191,7 @@ JSON-RPC protocol errors (`-32602`), not tool results; the call does not run.
 | Commit / unmount | only the explicit `workspace_commit` and `workspace_unmount` tools; neither is called on an error, a disconnect or shutdown |
 | Disconnect or SIGTERM | the client is closed, its idle Stores are released and the process exits 0; a mounted Workspace stays mounted and an in-flight native call runs to its end (it cannot be cancelled), then the process ends |
 | Cancel notification | acknowledged and logged; the native call is not cancellable and runs to its end; nothing is retried |
-| Progress | when the request has a progress token, the call's `on_progress` events become `notifications/progress`: at most one every 100 ms, carrying the latest event, plus one final notification before the result. `progress` is a strictly increasing counter (1, 2, …), `total` only when the event has a positive total, `message` the coalesced event as JSON (cut at 512 bytes). Without a token, no handler is passed and no notification is sent |
+| Progress | when the request has a progress token, the call's `on_progress` events become `notifications/progress`: the first event at once, then at most one every 100 ms carrying the latest, and the last event before the result. `progress` is a strictly increasing counter (1, 2, …), `total` only when the event has a positive total, `message` the coalesced event as JSON (cut at 512 characters). Without a token, no handler is passed and no notification is sent |
 | `workspace.exec` | the Node binding's current behaviour: output is buffered and arrives after the command ends; inline text up to 1 MiB per stream is in the result, a larger stream is not delivered and `stdout_bytes`, `stderr_bytes` and `streamed: true` report it. There is no live streaming |
 | `project.export` | `destination` is a path on the machine running this MCP server, not the client's; under a folder scope the library refuses the call |
 | Scope | the client's `scope` option, fixed at launch; restricted calls return the library's refusal |
@@ -199,7 +199,8 @@ JSON-RPC protocol errors (`-32602`), not tool results; the call does not run.
 
 ## Process hygiene
 
-- One line-delimited JSON-RPC message per line on stdout; nothing else, ever.
+- While serving, one line-delimited JSON-RPC message per line on stdout; nothing else, ever. `--help` and
+  `--version` are the only modes that write to stdout without serving, then exit 0.
 - Every log line is `layerfs-mcp: …` on stderr. Argument values are not logged (a `store.connect` password or a
   `backup.connect` key must not reach a log).
 - Closing stdin, `SIGTERM` or `SIGINT` stops accepting calls, waits up to 2 s for in-flight calls, runs
@@ -216,6 +217,7 @@ JSON-RPC protocol errors (`-32602`), not tool results; the call does not run.
 - The package is private and unpublished; it needs the built `layerfs.node` addon and Node 22 or later.
 - `UV_THREADPOOL_SIZE` is Node's default (4), and the Node package runs calls on that pool: many long,
   concurrent calls can starve each other. The server does not raise it.
+- A call that sends a progress notification yields 10 ms before its result: the SDK client dispatches notifications in a microtask but responses at once, so this keeps the notification ahead of the response.
 - A tool call is one call: no batching, no automatic paging. `page_size`, `page_pos` and `cursor` are passed
   through, and `next_page_pos` is returned as the call gives it.
 
