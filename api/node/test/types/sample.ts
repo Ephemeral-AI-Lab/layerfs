@@ -30,11 +30,16 @@ async function main(): Promise<void> {
   await lfs.workspace.exec("ws", "ls", { stream: true, stdout: (bytes) => process.stdout.write(bytes), stderr: (bytes) => void bytes });
   await lfs.machine.create("vm", "lima", { cpus: 2, memory: "8G", disk: 8589934592n });
   await lfs.backup.create("shop", "bucket", "file", { on_progress: () => {} });
+  const exported: Result = await lfs.project.export("shop/api", "/exports/api", {
+    branch: "main", on_progress: (p) => progress.push(p),
+  });
+  await lfs.project.export("shop/api", "/exports/api-default");
+  const cancelled: Result = await lfs.workspace.exec_cancel("ws", "exec-0123456789abcdef", { grace_ms: 1_000 });
   const report = await doctor({ home: "/tmp/home" });
   const worst: string | undefined = report.findings[0]?.severity;
   const closed: number = close();
   const first = table[0];
-  void [page, worst, closed, first.family, progress];
+  void [page, worst, closed, first.family, progress, exported, cancelled];
   try {
     await lfs.store.list();
   } catch (error) {
@@ -62,3 +67,7 @@ void lfs.nothing;
 void lfs.machine.create("vm", "lima", { memory: true });
 // @ts-expect-error a scope needs its project and folder
 void client({ scope: { folder: "/web" } });
+// @ts-expect-error export has no commit option
+void lfs.project.export("shop/api", "/exports/api", { commit: "main" });
+// @ts-expect-error a cancel grace is a whole number
+void lfs.workspace.exec_cancel("ws", "exec-1", { grace_ms: "5s" });
