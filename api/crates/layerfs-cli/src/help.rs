@@ -1,6 +1,7 @@
 //! `layerfs help [family [call]]`, from the call table.
 use crate::output;
 use layerfs_api::{Arg, Call, Kind};
+use std::io::IsTerminal;
 use std::process::ExitCode;
 
 fn shell(name: &str) -> String {
@@ -54,15 +55,28 @@ pub fn print(topic: &[&str]) -> ExitCode {
             );
             for family in layerfs_api::families() {
                 let calls: Vec<String> = family.calls().iter().map(|c| shell(c.call)).collect();
-                text.push_str(&format!("  {:<10} {}\n", family.name, calls.join(", ")));
+                let family_name = if std::io::stdout().is_terminal() {
+                    crate::banner::paint(family.name, "1")
+                } else {
+                    family.name.to_owned()
+                };
+                text.push_str(&format!("  {:<10} {}\n", family_name, calls.join(", ")));
             }
-            text.push_str(concat!(
-                "\n  doctor     report what is wrong in the home, changing nothing [--text]\n",
-                "  import-env write this environment's 1.1.0 settings as records, once\n",
-                "  worker     serve this machine's worker (inside a machine)\n",
-                "  help       this help; `layerfs help <family> [<call>]` for more\n\n",
-                "The home is LAYERFS_HOME, else ~/.layerfs. Exit 0: done; 2: wrong command line; 125: refused.\n",
+            let (doc_title, imp_title, wrk_title, hlp_title) = if std::io::stdout().is_terminal() {
+                (
+                    crate::banner::paint("doctor", "1"),
+                    crate::banner::paint("import-env", "1"),
+                    crate::banner::paint("worker", "1"),
+                    crate::banner::paint("help", "1"),
+                )
+            } else {
+                ("doctor".to_owned(), "import-env".to_owned(), "worker".to_owned(), "help".to_owned())
+            };
+            text.push_str(&format!(
+                "\n  {:<10} report what is wrong in the home, changing nothing [--text]\n  {:<10} write this environment's 1.1.0 settings as records, once\n  {:<10} serve this machine's worker (inside a machine)\n  {:<10} this help; `layerfs help <family> [<call>]` for more\n\n",
+                doc_title, imp_title, wrk_title, hlp_title
             ));
+            text.push_str("The home is LAYERFS_HOME, else ~/.layerfs. Exit 0: done; 2: wrong command line; 125: refused.\n");
             output::print(&text)
         }
         ["doctor"] => output::print(concat!(
