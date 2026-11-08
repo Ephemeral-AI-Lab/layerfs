@@ -54,12 +54,6 @@ export function bucketOf(spec) {
   return null;
 }
 
-/** The profile bucket of a call name, for the documentation and the tests. */
-export function bucketOfName(name) {
-  const [family, call] = name.split(".");
-  return bucketOf({ family, call });
-}
-
 /** Why this call is in its bucket: a line for the generated documentation table. */
 export function whyOf(spec) {
   if (spec.family === "project" && spec.call === "init") return "import a host folder into a Store; administration";
