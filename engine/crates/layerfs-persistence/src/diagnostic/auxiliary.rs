@@ -2,7 +2,7 @@
 use super::{emit, reader::Reader, transaction::View, Observation, Options, Outcome};
 use crate::backend::records::{BackendError, Param};
 use layerfs_content::ObjectId;
-use layerfs_storage::{port::PersistenceError, StorageError};
+use layerfs_storage::StorageError;
 use layerfs_telemetry::timer::Timing;
 
 pub(super) fn run(
@@ -14,7 +14,7 @@ pub(super) fn run(
     let (mut group, mut sequence, mut checked, mut failed) = (-1i64, -1i64, 0u64, 0u64);
     loop {
         options.check()?;
-        let rows=view.query("SELECT grp,seq,CASE WHEN length(body)<=4000 THEN body ELSE NULL END FROM binding_hint_block WHERE grp>?1 OR (grp=?1 AND seq>?2) ORDER BY grp,seq LIMIT 64",vec![Param::I64(group),Param::I64(sequence)])?;
+        let rows=view.query("SELECT grp,seq,CASE WHEN blob_length(body) BETWEEN 0 AND 4000 THEN body ELSE NULL END FROM binding_hint_block WHERE grp>?1 OR (grp=?1 AND seq>?2) ORDER BY grp,seq LIMIT 64",vec![Param::I64(group),Param::I64(sequence)])?;
         if rows.is_empty() {
             break;
         }
@@ -32,35 +32,14 @@ pub(super) fn run(
         }
     }
     emit(observer,"store.advisory.binding_hints.summary",if failed==0{Outcome::Pass}else{Outcome::Fail},format!("{checked} standalone binding hint blocks checked, including unused hints; {failed} failed"));
-    let mut signatures = Vec::new();
-    match view.signatures(&mut signatures) {
-        Ok(()) => emit(
-            observer,
-            "store.advisory.signatures",
-            Outcome::Pass,
-            format!("{} bounded signature-ring rows decoded", signatures.len()),
-        ),
-        Err(error) => emit(
-            observer,
-            "store.advisory.signatures",
-            if error == PersistenceError::Malformed {
-                Outcome::Fail
-            } else {
-                Outcome::Unknown
-            },
-            if error == PersistenceError::Malformed {
-                "signature accelerator is malformed; this is distinct from authenticated content corruption"
-            } else {
-                "signature accelerator could not be read; corruption is not established"
-            },
-        ),
-    }
+    signatures(view, options, observer)?;
     let (mut after, mut length, mut digests, mut stale, mut damaged) =
         (Vec::<u8>::new(), -1i64, 0u64, 0u64, 0u64);
     let mut incomplete = false;
+    super::catalog::check(view,options,observer,"store.advisory.file_digests.shape","SELECT count(*) FROM file_digest WHERE blob_length(digest)!=32 OR blob_length(root)!=32 OR length<0","malformed digest-hint key/root/length rows; invalid widths are counted before extraction")?;
     loop {
         options.check()?;
-        let rows=view.query("SELECT digest,length,root FROM file_digest WHERE digest>?1 OR (digest=?1 AND length>?2) ORDER BY digest,length LIMIT 64",vec![Param::Bytes(after.clone()),Param::I64(length)])?;
+        let rows=view.query("SELECT digest,length,root FROM file_digest WHERE blob_length(digest)=32 AND blob_length(root)=32 AND (digest>?1 OR (digest=?1 AND length>?2)) ORDER BY digest,length LIMIT 64",vec![Param::Bytes(after.clone()),Param::I64(length)])?;
         if rows.is_empty() {
             break;
         }
@@ -124,4 +103,42 @@ fn hex(bytes: &[u8]) -> String {
         out.push(DIGITS[(byte & 15) as usize] as char);
     }
     out
+}
+
+fn signatures(
+    view: &dyn View,
+    options: Options,
+    observer: &mut dyn FnMut(Observation),
+) -> Result<(), BackendError> {
+    options.check()?;
+    let rows=match view.query("SELECT slot,stamp,CASE WHEN blob_length(object_id)=32 THEN object_id END,CASE WHEN blob_length(signature)=32 THEN signature END FROM content_signature ORDER BY slot LIMIT 8193",vec![]){
+        Ok(rows)=>rows,Err(error)=>{emit(observer,"store.advisory.signatures",if error==BackendError::Integrity{Outcome::Fail}else{Outcome::Unknown},"signature accelerator could not be decoded/read; typed availability failures do not establish corruption");return Ok(());}
+    };
+    let mut failed = 0;
+    if rows.len() > 8192 {
+        failed += 1;
+    }
+    for row in &rows {
+        options.check()?;
+        let valid = (|| -> Result<(), BackendError> {
+            let slot: i64 = row.get(0)?;
+            let stamp: i64 = row.get(1)?;
+            let id: Vec<u8> = row.get(2)?;
+            let signature: Vec<u8> = row.get(3)?;
+            if !(0..8192).contains(&slot)
+                || stamp <= 0
+                || (stamp - 1) % 8192 != slot
+                || id.len() != 32
+                || signature.len() != 32
+            {
+                return Err(BackendError::Integrity);
+            }
+            Ok(())
+        })();
+        if valid.is_err() {
+            failed += 1;
+        }
+    }
+    emit(observer,"store.advisory.signatures",if failed==0{Outcome::Pass}else{Outcome::Fail},format!("{} bounded signature-ring rows decoded; {failed} invalid; fixed-width blobs bounded inside SQL",rows.len()));
+    Ok(())
 }

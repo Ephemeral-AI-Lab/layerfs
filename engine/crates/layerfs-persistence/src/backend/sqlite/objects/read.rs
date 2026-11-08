@@ -26,7 +26,7 @@ pub(crate) fn read(
     let mut total = 0usize;
     for page in ids.chunks(tx.input_limit(1, 128, 2)?) {
         let sql = format!(
-            "SELECT pack_id,domain,digest,length FROM pack WHERE pack_id IN({}) ORDER BY pack_id",
+            "SELECT pack_id,domain,CASE WHEN (CASE WHEN typeof(digest)='blob' THEN length(CAST(digest AS BLOB)) ELSE NULL END)=32 THEN digest END,length FROM pack WHERE pack_id IN({}) ORDER BY pack_id",
             std::iter::repeat_n("?", page.len())
                 .collect::<Vec<_>>()
                 .join(",")
@@ -53,7 +53,7 @@ pub(crate) fn read(
             continue;
         }
         let mut rows = tx.query(
-            "SELECT CASE WHEN length(body)=?2 THEN body END FROM pack WHERE pack_id=?1",
+            "SELECT CASE WHEN (CASE WHEN typeof(body)='blob' THEN length(CAST(body AS BLOB)) ELSE NULL END)=?2 THEN body END FROM pack WHERE pack_id=?1",
             vec![Param::I64(info.pack_id), Param::I64(info.length as i64)],
         )?;
         let body: Vec<u8> = rows

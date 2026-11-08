@@ -182,8 +182,21 @@ fn copy(view: &dyn View, db: &rusqlite::Connection, options: Options) -> Result<
         let mut after = Vec::new();
         loop {
             options.check()?;
+            let projection = columns
+                .split(',')
+                .map(|field| match field {
+                    "commit_id" | "layer_id" | "run" | "merged" => {
+                        format!("CASE WHEN blob_length({field})=33 THEN {field} END")
+                    }
+                    "layer_stack_id" => {
+                        format!("CASE WHEN blob_length({field})=17 THEN {field} END")
+                    }
+                    _ => field.to_owned(),
+                })
+                .collect::<Vec<_>>()
+                .join(",");
             let rows = view.query(
-                &format!("SELECT {columns} FROM {table} WHERE {key}>?1 ORDER BY {key} LIMIT 64"),
+                &format!("SELECT {projection} FROM {table} WHERE blob_length({key})=33 AND {key}>?1 ORDER BY {key} LIMIT 64"),
                 vec![Param::Bytes(after.clone())],
             )?;
             if rows.is_empty() {
@@ -231,7 +244,7 @@ fn copy(view: &dyn View, db: &rusqlite::Connection, options: Options) -> Result<
         let (mut after, mut ordinal) = (Vec::new(), -1i64);
         loop {
             options.check()?;
-            let rows=view.query(&format!("SELECT {columns} FROM {table} WHERE {key}>?1 OR ({key}=?1 AND {number}>?2) ORDER BY {key},{number} LIMIT 64"),vec![Param::Bytes(after.clone()),Param::I64(ordinal)])?;
+            let rows=view.query(&format!("SELECT {columns} FROM {table} WHERE blob_length({key}) IN (17,33) AND ({key}>?1 OR ({key}=?1 AND {number}>?2)) ORDER BY {key},{number} LIMIT 64"),vec![Param::Bytes(after.clone()),Param::I64(ordinal)])?;
             if rows.is_empty() {
                 break;
             }

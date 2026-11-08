@@ -10,8 +10,8 @@ use layerfs_storage::{
     port::PersistenceError,
 };
 use std::collections::BTreeSet;
-const LOCATE_PREFIX: &str = "SELECT o.object_id,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,p.digest,p.length FROM object_location o JOIN pack p ON p.pack_id=o.pack_id WHERE o.object_id IN";
-const LOCATE_ONE: &str = "SELECT o.object_id,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,p.digest,p.length FROM object_location o JOIN pack p ON p.pack_id=o.pack_id WHERE o.object_id IN(?)";
+const LOCATE_PREFIX: &str = "SELECT CASE WHEN (CASE WHEN typeof(o.object_id)='blob' THEN length(CAST(o.object_id AS BLOB)) ELSE NULL END)=32 THEN o.object_id END,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,CASE WHEN (CASE WHEN typeof(p.digest)='blob' THEN length(CAST(p.digest AS BLOB)) ELSE NULL END)=32 THEN p.digest END,p.length FROM object_location o JOIN pack p ON p.pack_id=o.pack_id WHERE o.object_id IN";
+const LOCATE_ONE: &str = "SELECT CASE WHEN (CASE WHEN typeof(o.object_id)='blob' THEN length(CAST(o.object_id AS BLOB)) ELSE NULL END)=32 THEN o.object_id END,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,CASE WHEN (CASE WHEN typeof(p.digest)='blob' THEN length(CAST(p.digest AS BLOB)) ELSE NULL END)=32 THEN p.digest END,p.length FROM object_location o JOIN pack p ON p.pack_id=o.pack_id WHERE o.object_id IN(?)";
 fn locate_sql(count: usize) -> String {
     format!(
         "{}({})",

@@ -10,7 +10,7 @@ use layerfs_content::{
     },
     ObjectId,
 };
-use layerfs_history::LayerId;
+use layerfs_history::{CommitId, LayerId};
 use rusqlite::params;
 
 pub(super) fn run(
@@ -33,6 +33,7 @@ fn inspect(
     observer: &mut dyn FnMut(Observation),
 ) -> Result<(), BackendError> {
     scratch.0.execute_batch("CREATE TABLE nodes(id BLOB PRIMARY KEY,kind INTEGER NOT NULL,stack BLOB NOT NULL,root BLOB NOT NULL,parent BLOB,base BLOB,second BLOB,source BLOB,source_branch BLOB,done INTEGER NOT NULL DEFAULT 0,height INTEGER,depth INTEGER,newest INTEGER,run BLOB,overwrote INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID; CREATE TABLE edges(child BLOB NOT NULL,parent BLOB NOT NULL,PRIMARY KEY(child,parent)) WITHOUT ROWID; CREATE INDEX parent_edges ON edges(parent,child); CREATE TABLE stacks(id BLOB PRIMARY KEY,scope BLOB NOT NULL,profile BLOB NOT NULL,head BLOB NOT NULL) WITHOUT ROWID; CREATE TABLE branches(id BLOB PRIMARY KEY,stack BLOB NOT NULL,base BLOB NOT NULL,head BLOB,fork BLOB) WITHOUT ROWID; CREATE TABLE contexts(root BLOB,scope BLOB,profile BLOB,PRIMARY KEY(root,scope,profile)) WITHOUT ROWID;").map_err(sql)?;
+    super::facts::run(view, options, observer)?;
     let mut failures = 0u64;
     inventory(view, scratch, options, observer, &mut failures)?;
     for (id,query,message) in [
@@ -111,12 +112,28 @@ fn inventory(
         ("layer_stack","layer_stack_id","layer_stack_id,name,scope_id,profile_id,head_layer_id",0),
         ("branch","branch_id","branch_id,layer_stack_id,name,base_layer_id,head_commit_id,forked_from_id",3),
         ("layer","layer_id","layer_id,layer_stack_id,parent_layer_id,root_id,source_branch_id,source_commit_id,logical,0",2),
-        ("\"commit\"","commit_id","commit_id,layer_stack_id,root_id,parent_commit_id,base_layer_id,second_parent_id,branch_id,via,message,merged_from_id,created_ms,logical,new_canonical,new_stored,new_metadata,lww,displaced_id",1),
+        ("\"commit\"","commit_id","commit_id,layer_stack_id,root_id,parent_commit_id,base_layer_id,second_parent_id,branch_id,via,message,merged_from_id,created_ms,logical,new_canonical,new_stored,new_metadata,substr(lww,1,0),displaced_id",1),
     ] {
+        let widths:&[(&str,usize)]=&[("layer_stack_id",17),("branch_id",17),("source_branch_id",17),("commit_id",33),("layer_id",33),("parent_layer_id",33),("source_commit_id",33),("parent_commit_id",33),("base_layer_id",33),("second_parent_id",33),("head_layer_id",33),("head_commit_id",33),("forked_from_id",33),("merged_from_id",33),("displaced_id",33),("root_id",32),("scope_id",32),("profile_id",32)];
+        let selected=columns.replace("substr(lww,1,0)","lww").split(',').map(|field|{
+            if let Some((_,width))=widths.iter().find(|(name,_)|*name==field){format!("CASE WHEN blob_length({field})={width} THEN {field} END")}
+            else if field=="name"{format!("CASE WHEN byte_length({field})<=63 THEN {field} END")}
+            else if field=="message"{format!("CASE WHEN byte_length({field})<=4096 THEN {field} END")}
+            else if field=="lww"{"substr(root_id,1,0)".to_owned()}else{field.to_owned()}
+        }).collect::<Vec<_>>().join(",");
+        let malformed=columns.replace("substr(lww,1,0)","lww").split(',').filter_map(|field|{
+            if let Some((_,width))=widths.iter().find(|(name,_)|*name==field){Some(format!("({field} IS NOT NULL AND blob_length({field})!={width})"))}
+            else if field=="name"{Some("byte_length(name)>63".to_owned())}else if field=="message"{Some("byte_length(message)>4096".to_owned())}else{None}
+        }).collect::<Vec<_>>().join(" OR ");
+        let malformed_count=super::catalog::count(view,&format!("SELECT count(*) FROM {table} WHERE {malformed}"))?;
+        if malformed_count!=0{*failures+=malformed_count as u64;emit(observer,"store.history.record",Outcome::Fail,format!("{table}: {malformed_count} malformed field widths; bounded projection retained"));}
+        let key_width=if kind==0||kind==3{17}else{33};
+        let count=super::catalog::count(view,&format!("SELECT count(*) FROM {table} WHERE blob_length({key})!={key_width}"))?;
+        if count!=0{*failures+=count as u64;emit(observer,"store.history.record",Outcome::Fail,format!("{table}: {count} malformed identity-key widths; rejected before extraction"));}
         let mut after=Vec::<u8>::new();
         loop {
             options.check()?;
-            let rows=view.query(&format!("SELECT {columns} FROM {table} WHERE {key}>?1 ORDER BY {key} LIMIT 64"),vec![Param::Bytes(after.clone())])?;
+            let rows=view.query(&format!("SELECT {selected} FROM {table} WHERE blob_length({key})={key_width} AND {key}>?1 ORDER BY {key} LIMIT 64"),vec![Param::Bytes(after.clone())])?;
             if rows.is_empty(){break;}
             for row in rows{
                 after=row.get(0)?;
@@ -124,9 +141,10 @@ fn inventory(
                     match kind{
                         0=>{let s=crate::history::diagnostic_stack(&row).map_err(|e|e.to_string())?;scratch.0.execute("INSERT INTO stacks(id,scope,profile,head) VALUES(?1,?2,?3,?4)",params![s.id.as_slice(),s.scope.as_bytes().as_slice(),s.profile.as_bytes().as_slice(),s.head_layer.as_slice()]).map_err(|_|"diagnostic scratch".to_owned())?;},
                         3=>{let b=crate::history::diagnostic_branch(&row).map_err(|e|e.to_string())?;scratch.0.execute("INSERT INTO branches(id,stack,base,head,fork) VALUES(?1,?2,?3,?4,?5)",params![b.id.as_slice(),b.stack.as_slice(),b.base_layer.as_slice(),b.head_commit.map(|v|v.as_slice().to_vec()),b.forked_from.map(|v|v.as_slice().to_vec())]).map_err(|_|"diagnostic scratch".to_owned())?;},
-                        2=>{let l=crate::history::diagnostic_layer(&row).map_err(|e|e.to_string())?;if LayerId::derive(l.stack,l.parent,l.root)!=l.id{return Err("Layer identity mismatch".to_owned());}scratch.0.execute("INSERT INTO nodes(id,kind,stack,root,parent,source,source_branch,overwrote) VALUES(?1,2,?2,?3,?4,?5,?6,?7)",params![l.id.as_slice(),l.stack.as_slice(),l.root.as_bytes().as_slice(),l.parent.map(|v|v.as_slice().to_vec()),l.source_commit.map(|v|v.as_slice().to_vec()),l.source_branch.map(|v|v.as_slice().to_vec()),i64::try_from(l.overwrote_count).map_err(|_|"Layer overwrite count".to_owned())?]).map_err(|_|"diagnostic scratch".to_owned())?;},
-                        _=>{let c=crate::history::diagnostic_commit(&row).map_err(|e|e.to_string())?;scratch.0.execute("INSERT INTO nodes(id,kind,stack,root,parent,base,second) VALUES(?1,1,?2,?3,?4,?5,?6)",params![c.id.as_slice(),c.stack.as_slice(),c.root.as_bytes().as_slice(),c.parent.map(|v|v.as_slice().to_vec()),c.base_layer.as_slice(),c.second_parent.map(|v|v.as_slice().to_vec())]).map_err(|_|"diagnostic scratch".to_owned())?;
+                        2=>{let l=crate::history::diagnostic_layer(&row).map_err(|e|e.to_string())?;scratch.0.execute("INSERT INTO nodes(id,kind,stack,root,parent,source,source_branch,overwrote) VALUES(?1,2,?2,?3,?4,?5,?6,?7)",params![l.id.as_slice(),l.stack.as_slice(),l.root.as_bytes().as_slice(),l.parent.map(|v|v.as_slice().to_vec()),l.source_commit.map(|v|v.as_slice().to_vec()),l.source_branch.map(|v|v.as_slice().to_vec()),i64::try_from(l.overwrote_count).map_err(|_|"Layer overwrite count".to_owned())?]).map_err(|_|"diagnostic scratch".to_owned())?;if LayerId::derive(l.stack,l.parent,l.root)!=l.id{return Err("Layer identity mismatch".to_owned());}},
+                        _=>{let c=crate::history::diagnostic_commit_graph(&row).map_err(|e|e.to_string())?;scratch.0.execute("INSERT INTO nodes(id,kind,stack,root,parent,base,second) VALUES(?1,1,?2,?3,?4,?5,?6)",params![c.id.as_slice(),c.stack.as_slice(),c.root.as_bytes().as_slice(),c.parent.map(|v|v.as_slice().to_vec()),c.base_layer.as_slice(),c.second_parent.map(|v|v.as_slice().to_vec())]).map_err(|_|"diagnostic scratch".to_owned())?;
                             for edge in [c.meta.merged_from,c.meta.displaced.map(layerfs_history::NodeId::Commit)].into_iter().flatten(){scratch.0.execute("INSERT OR IGNORE INTO edges VALUES(?1,?2)",params![c.id.as_slice(),edge.as_slice()]).map_err(|_|"diagnostic scratch".to_owned())?;}
+                            if CommitId::derive(c.root,c.parent,c.base_layer,c.second_parent,&c.meta)!=c.id{return Err("Commit v3 identity mismatch".to_owned());}
                         }
                     }Ok(())
                 })();

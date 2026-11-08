@@ -11,7 +11,7 @@ pub(crate) fn read(
     // the schema ties each stamp to its slot, and the reader still refuses a
     // stamp that does not rise.
     let rows = tx.mapped(
-        "SELECT slot,stamp,object_id,signature FROM content_signature ORDER BY slot LIMIT 8193",
+        "SELECT slot,stamp,CASE WHEN (CASE WHEN typeof(object_id)='blob' THEN length(CAST(object_id AS BLOB)) ELSE NULL END)=32 THEN object_id END,CASE WHEN (CASE WHEN typeof(signature)='blob' THEN length(CAST(signature AS BLOB)) ELSE NULL END)=32 THEN signature END FROM content_signature ORDER BY slot LIMIT 8193",
         &[],
         0,
         8193,

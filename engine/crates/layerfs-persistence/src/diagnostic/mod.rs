@@ -1,5 +1,8 @@
 //! Observational Store audits over one caller-owned database snapshot.
+mod acquisition;
 mod auxiliary;
+mod catalog;
+mod facts;
 mod history;
 mod lineage;
 #[cfg(feature = "postgresql")]

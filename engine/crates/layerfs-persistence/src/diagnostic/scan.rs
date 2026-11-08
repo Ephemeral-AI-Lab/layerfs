@@ -14,6 +14,8 @@ pub(super) fn run(
     options: Options,
     observer: &mut dyn FnMut(Observation),
 ) -> Result<(), BackendError> {
+    super::catalog::run(view, options, observer)?;
+    super::acquisition::run(view, options, observer)?;
     super::scan::blocks(view, options, observer)?;
     if options.quick {
         super::history::run(view, None, options, observer)?;
@@ -138,7 +140,7 @@ fn objects(
         .construction();
     loop {
         options.check()?;
-        let rows=view.query("SELECT object_id,role,canonical_length FROM object_location WHERE object_id>?1 ORDER BY object_id LIMIT 64",vec![Param::Bytes(after.clone())])?;
+        let rows=view.query("SELECT object_id,role,canonical_length FROM object_location WHERE blob_length(object_id)=32 AND object_id>?1 ORDER BY object_id LIMIT 64",vec![Param::Bytes(after.clone())])?;
         if rows.is_empty() {
             break;
         }
@@ -230,7 +232,7 @@ fn blocks(
     let (mut after, mut checked, mut failed) = (0i64, 0u64, 0u64);
     loop {
         options.check()?;
-        let rows=view.query("SELECT first_ordinal,last_ordinal,CASE WHEN length(body)<=4000 THEN body ELSE NULL END FROM inode_value_block WHERE first_ordinal>?1 ORDER BY first_ordinal LIMIT 64",vec![Param::I64(after)])?;
+        let rows=view.query("SELECT first_ordinal,last_ordinal,CASE WHEN blob_length(body) BETWEEN 0 AND 4000 THEN body ELSE NULL END FROM inode_value_block WHERE first_ordinal>?1 ORDER BY first_ordinal LIMIT 64",vec![Param::I64(after)])?;
         if rows.is_empty() {
             break;
         }

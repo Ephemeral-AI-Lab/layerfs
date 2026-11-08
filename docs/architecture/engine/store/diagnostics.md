@@ -1,5 +1,8 @@
 # Observational Store diagnostics
 
+The [table coverage map](diagnostic-coverage.md) records authority, keys, validators
+and quick/full policy for every applicable Store category.
+
 `layerfs-persistence::diagnostic` exposes streamed observations over a dedicated
 read-only session. Control resolves the saved Store and its authoritative
 placement. SQLite can run locally only in the file's kernel; remote execution
