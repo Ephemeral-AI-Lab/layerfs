@@ -71,12 +71,6 @@ impl ExportConfig {
             companions_held: crate::apple_double::HELD,
         }
     }
-    /// Sets the scratch directory where AppleDouble companion bodies spill
-    /// beyond [`Self::companion_resident_bytes`].
-    pub fn with_companion_spill_dir(mut self, dir: impl Into<std::path::PathBuf>) -> Self {
-        self.companion_spill_dir = Some(dir.into());
-        self
-    }
 }
 
 /// Calls served and time spent, per procedure.

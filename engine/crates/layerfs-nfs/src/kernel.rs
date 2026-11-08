@@ -781,23 +781,8 @@ impl Kernel {
     /// Retained mutation failures keep their custody and are only counted.
     pub fn release(&self) -> Released {
         let table = std::mem::take(&mut *self.table());
-        let (companions, companion_bytes, companions_spilled) = self.companions_release();
-        let released = Released {
-            companions,
-            companion_bytes,
-            companions_spilled,
-            files: table.files.len(),
-            directories: table.directories.len(),
-            lookups: table.lookups.len(),
-            silly: table.silly.len(),
-            retained: self.retained_count(),
-            silly_renamed: self.silly_renamed.load(Ordering::Relaxed),
-            names_refused: self.names_refused.load(Ordering::Relaxed),
-            names_detached: self.names_detached.load(Ordering::Relaxed),
-            collected: self.collected.load(Ordering::Relaxed),
-            resolved: self.resolved.load(Ordering::Relaxed),
-            unresolved: self.unresolved.load(Ordering::Relaxed),
-        };
+        let (companions, companion_bytes) = self.companions_release();
+        let released = self.holdings(&table, companions, companion_bytes);
         for (serial, held) in table.files {
             self.close_file(serial, held.handle);
         }
@@ -818,22 +803,26 @@ impl Kernel {
     /// Current holdings, for diagnostics.
     pub fn held(&self) -> Released {
         let table = self.table();
-        let (companions, companion_bytes, companions_spilled) = self.companions_held();
+        let (companions, companion_bytes) = self.companions_held();
+        self.holdings(&table, companions, companion_bytes)
+    }
+    /// What this export holds now, as [`Released`] reports it.
+    fn holdings(&self, table: &Table, companions: usize, companion_bytes: usize) -> Released {
+        let count = |counter: &AtomicU64| counter.load(Ordering::Relaxed);
         Released {
             companions,
             companion_bytes,
-            companions_spilled,
             files: table.files.len(),
             directories: table.directories.len(),
             lookups: table.lookups.len(),
             silly: table.silly.len(),
             retained: self.retained_count(),
-            silly_renamed: self.silly_renamed.load(Ordering::Relaxed),
-            names_refused: self.names_refused.load(Ordering::Relaxed),
-            names_detached: self.names_detached.load(Ordering::Relaxed),
-            collected: self.collected.load(Ordering::Relaxed),
-            resolved: self.resolved.load(Ordering::Relaxed),
-            unresolved: self.unresolved.load(Ordering::Relaxed),
+            silly_renamed: count(&self.silly_renamed),
+            names_refused: count(&self.names_refused),
+            names_detached: count(&self.names_detached),
+            collected: count(&self.collected),
+            resolved: count(&self.resolved),
+            unresolved: count(&self.unresolved),
         }
     }
     /// Closes every implicit file descriptor that no silly name needs, so
@@ -929,8 +918,6 @@ pub struct Released {
     pub companions: usize,
     /// AppleDouble companion payload bytes currently resident in memory.
     pub companion_bytes: usize,
-    /// AppleDouble companions whose payload is spilled to disk.
-    pub companions_spilled: usize,
     /// AppleDouble companions created, over the export's life.
     pub names_detached: u64,
     /// References collected beyond the bound, over the export's life.

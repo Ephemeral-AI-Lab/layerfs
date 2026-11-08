@@ -56,6 +56,14 @@ fn pattern(seed: u32, length: usize) -> Vec<u8> {
         .map(|n| (n as u32).wrapping_mul(31).wrapping_add(seed * 97) as u8)
         .collect()
 }
+/// The files an export spilled into `dir`, and their bytes.
+fn spilled(dir: &Path) -> (usize, u64) {
+    let files: Vec<u64> = (fs::read_dir(dir).into_iter().flatten().flatten())
+        .filter_map(|entry| entry.metadata().ok())
+        .map(|metadata| metadata.len())
+        .collect();
+    (files.len(), files.iter().sum())
+}
 
 #[test]
 fn every_changing_procedure_and_its_statuses() {
@@ -579,7 +587,17 @@ fn apple_double_companions_spill_preserve_all_bytes_reclaim_orphans_and_clean_up
         "oldest companion body spilled to disk"
     );
     assert!(server.held().companion_bytes <= budget);
-    assert_eq!(server.held().companions_spilled, 1);
+    assert_eq!(spilled(&spill_dir), (1, big_payload.len() as u64));
+    // The scratch directory and its files are this user's alone, whatever the
+    // process umask is.
+    for (path, mode) in [(&spill_dir, 0o700), (&rm_spill_file, 0o600)] {
+        assert_eq!(
+            fs::metadata(path).unwrap().permissions().mode() & 0o777,
+            mode,
+            "{}",
+            path.display()
+        );
+    }
 
     c.remove(&root, b"rm.txt").unwrap();
     assert!(
@@ -641,7 +659,10 @@ fn apple_double_companions_spill_preserve_all_bytes_reclaim_orphans_and_clean_up
     }
     assert_eq!(server.held().companions, TOTAL_COUNT);
     assert_eq!(server.held().names_refused, 0);
-    assert!(server.held().companions_spilled > 0);
+    assert!(
+        spilled(&spill_dir).0 > 0,
+        "companions beyond the resident budget are on disk"
+    );
     assert!(spill_dir.join(handles[0].1.to_string()).is_file());
 
     // Earliest, middle and latest companions all read back byte-for-byte.
@@ -763,6 +784,19 @@ fn apple_double_companions_spill_preserve_all_bytes_reclaim_orphans_and_clean_up
     let (_, outstanding) = rig.stop(released2);
     assert_eq!(outstanding, 0);
     fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_spill_replaces_a_companion_body_only_when_no_call_changed_it() {
+    use layerfs_nfs::apple_double::spill_applies;
+    // The companion the body was written from, still resident and untouched:
+    // the spilled file replaces it.
+    assert!(spill_applies(7, 7, true));
+    // Another call wrote to the companion while its body was being written out:
+    // that newer body stays and the file just written is dropped.
+    assert!(!spill_applies(7, 8, true));
+    // Another call spilled the body first: its file stays.
+    assert!(!spill_applies(7, 7, false));
 }
 
 #[test]

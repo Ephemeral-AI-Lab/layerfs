@@ -184,7 +184,7 @@ Refresh after an install is covered in
                     serial >= SERIALS = 1 << 62
                     resident body <= RESIDENT_BYTES (32 MiB) in all;
                     older bodies spill to <mounts>/.appledouble/<namespace>/<serial>
-                    (pread/pwrite outside the companion lock)
+                    (pread/pwrite outside the companion lock; dir 0700, file 0600)
                     LOOKUP GETATTR ACCESS READ WRITE SETATTR COMMIT
                     REMOVE, RENAME to another "._" name: served here
                     READDIR: not listed;  engine: never called
@@ -208,6 +208,18 @@ export removes the entire `<mounts>/.appledouble/<namespace>` directory
 (and a fresh Attach cleans any leftover directory from a crashed daemon), so
 remounts, daemon restarts and Commits do not retain them. A name is
 AppleDouble when it starts with `._` and has at least one more byte.
+
+A body is written out from a snapshot taken under the companion lock and is
+switched to that file only if the companion is still the one the snapshot saw
+(same `used` tick, still resident): a body another call wrote to while the file
+was being written wins, and the file just written is dropped. Disk I/O therefore
+never holds the lock, and no write of one call is overwritten by the older
+snapshot of another. The scratch directory is created `0700` and each spilled
+file `0600`, set explicitly rather than left to the process umask, so a caller
+embedding this crate without the daemon's `umask(0o077)` still keeps companion
+bytes to its own user. The daemon's startup `reclaim` removes whatever
+`<mounts>/.appledouble` a daemon that ended without unmounting left behind,
+before it serves any export, and touches nothing else under the mount home.
 
 ## Mount
 

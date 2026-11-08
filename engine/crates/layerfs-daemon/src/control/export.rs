@@ -178,32 +178,43 @@ impl ExportServing {
         self.config.mounts.join(token.namespace.to_string())
     }
     fn companion_spill_dir(&self, token: WorkspaceToken) -> PathBuf {
-        self.config
-            .mounts
-            .join(".appledouble")
-            .join(token.namespace.to_string())
+        self.spill_root().join(token.namespace.to_string())
+    }
+    /// Every companion's scratch directory lives below this one, outside the
+    /// mount home's mounts.
+    fn spill_root(&self) -> PathBuf {
+        self.config.mounts.join(".appledouble")
     }
     /// At startup, before any Attach: every mount the host still has at or
     /// under the mount home is one a daemon that ended without unmounting
     /// left (its export is gone, so the client would hang on it). Each is
     /// forced off once with the force helper; one line per mount says what
-    /// happened. Nothing is retried.
+    /// happened. Nothing is retried. The companions' scratch directories of
+    /// that daemon belong to exports that are gone too, so they go as well;
+    /// nothing else under the mount home is touched.
     pub fn reclaim(&self) -> Vec<String> {
+        let mut lines = Vec::new();
+        let spill = self.spill_root();
+        if std::fs::remove_dir_all(&spill).is_ok() {
+            lines.push(format!("removed leftovers under {}", spill.display()));
+        }
         let points = match mounted_under(&self.config.mounts) {
             Ok(points) => points,
-            Err(error) => return vec![format!("mount table unreadable: {error}")],
+            Err(error) => {
+                lines.push(format!("mount table unreadable: {error}"));
+                return lines;
+            }
         };
-        (points.into_iter())
-            .map(|point| {
-                let text = point.display().to_string();
-                match self.helpers.run(&self.config.mounter.force, 0, &text) {
-                    Ran::Done => format!("forced off {text}"),
-                    Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail) => {
-                        format!("left {text}: {detail}")
-                    }
+        lines.extend((points.into_iter()).map(|point| {
+            let text = point.display().to_string();
+            match self.helpers.run(&self.config.mounter.force, 0, &text) {
+                Ran::Done => format!("forced off {text}"),
+                Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail) => {
+                    format!("left {text}: {detail}")
                 }
-            })
-            .collect()
+            }
+        }));
+        lines
     }
 }
 /// Mount points at or under `home`, deepest first, from the host's table:
@@ -485,15 +496,10 @@ impl Service {
             }
         };
         let export = ExportConfig {
-            path: "/".into(),
-            uid: config.command_uid,
-            gid: config.command_gid,
-            read_only: false,
             refuse_apple_double: config.refuse_apple_double,
             lookups_held: config.lookups_held,
             companion_spill_dir: Some(serving.companion_spill_dir(token)),
-            companion_resident_bytes: layerfs_nfs::apple_double::RESIDENT_BYTES,
-            companions_held: layerfs_nfs::apple_double::HELD,
+            ..ExportConfig::writable(config.command_uid, config.command_gid)
         };
         let started = TcpListener::bind((config.listen, 0)).and_then(|listener| {
             Server::start(
@@ -538,9 +544,7 @@ impl Service {
             Ran::Busy(detail) | Ran::Failed(detail) => {
                 let released = server.stop();
                 drop(std::fs::remove_dir(&directory));
-                drop(std::fs::remove_dir(
-                    serving.config.mounts.join(".appledouble"),
-                ));
+                drop(std::fs::remove_dir(serving.spill_root()));
                 return Err(self.unwind_export(
                     workspace,
                     mount,
@@ -758,9 +762,7 @@ impl Service {
         }
         drop(std::fs::remove_dir(&ready.directory));
         if let Some(serving) = self.export.as_ref() {
-            drop(std::fs::remove_dir(
-                serving.config.mounts.join(".appledouble"),
-            ));
+            drop(std::fs::remove_dir(serving.spill_root()));
         }
         if let Ok(mut entries) = self.entries.lock() {
             if let Ok(binding) = bound_mut(&mut entries, token) {

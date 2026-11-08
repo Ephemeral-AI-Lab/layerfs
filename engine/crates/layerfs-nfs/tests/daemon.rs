@@ -301,3 +301,39 @@ fn workspace_control_over_the_nfs_route() {
     }
     fs::remove_file(&log).unwrap();
 }
+
+/// A daemon that ended without unmounting leaves the companions' scratch
+/// directories behind. Its successor clears them before serving anything, and
+/// touches nothing else under the mount home.
+#[test]
+fn startup_reclaim_clears_leftover_companion_spill_directories() {
+    let mounts = temp("reclaim-mounts");
+    let log = temp("reclaim-helpers.log");
+    drop(fs::remove_dir_all(&mounts));
+    drop(fs::remove_file(&log));
+    fs::create_dir_all(mounts.join(".appledouble/7")).unwrap();
+    fs::write(mounts.join(".appledouble/7/stale"), b"stale").unwrap();
+    fs::create_dir_all(mounts.join("kept")).unwrap();
+    fs::write(mounts.join("kept/note"), b"keep").unwrap();
+    let export = ExportServing::start(ExportServingConfig::new(
+        mounts.clone(),
+        UID,
+        GID,
+        Mounter {
+            mount: recording("mount", &log, None),
+            unmount: recording("unmount", &log, None),
+            force: recording("force", &log, None),
+            flush: None,
+        },
+    ));
+    let lines = export.reclaim();
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(
+        lines[0].starts_with("removed leftovers under "),
+        "{lines:?}"
+    );
+    assert!(!mounts.join(".appledouble").exists());
+    assert_eq!(fs::read(mounts.join("kept/note")).unwrap(), b"keep");
+    drop(fs::remove_dir_all(&mounts));
+    drop(fs::remove_file(&log));
+}
