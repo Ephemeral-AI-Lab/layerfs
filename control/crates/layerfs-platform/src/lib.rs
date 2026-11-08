@@ -43,7 +43,9 @@ pub use layerfs_sandbox_backend::Backend;
 pub use layerfs_sandbox::Backend;
 pub use options::{OptKind, OptSpec};
 pub use platform::{ExecutorKind, HostOs, How, KernelRoute, Platform, Profile, Route};
+#[cfg(unix)]
 pub use probe::{native_missing, probe, Probe};
+#[cfg(unix)]
 pub use setup::{
     copy_in, copy_out, create, forward, forward_close, load_image, provider_within, reach, remove,
     start, status, status_within, stop, State, Status,
@@ -83,6 +85,7 @@ pub use windows_stubs::stubs::{
     status as status, status_within as status_within, stop as stop,
 };
 
+#[cfg(unix)]
 #[cfg(unix)]
 pub use setup::{
     connect, copy_in, copy_out, create, forward, forward_close, host_identity, load_image, reach,

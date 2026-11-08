@@ -41,7 +41,7 @@ pub(crate) fn host_address(spec: &Spec) -> Result<String, MachineError> {
     Err(unsupported(spec))
 }
 
-/// Provider observation on unsupported native Windows.
-pub(crate) fn provider_state(spec: &Spec) -> Result<crate::setup::State, MachineError> {
-    status(spec).map(|value| value.state)
+/// Provider observation on unsupported native Windows: the stub refuses.
+pub(crate) fn provider_state(spec: &Spec) -> Result<crate::windows_stubs::stubs::Status, MachineError> {
+    Err(unsupported(spec))
 }
