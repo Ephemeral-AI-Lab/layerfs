@@ -70,7 +70,12 @@ pub fn print(topic: &[&str]) -> ExitCode {
                     crate::banner::paint("help", "1"),
                 )
             } else {
-                ("doctor".to_owned(), "import-env".to_owned(), "worker".to_owned(), "help".to_owned())
+                (
+                    "doctor".to_owned(),
+                    "import-env".to_owned(),
+                    "worker".to_owned(),
+                    "help".to_owned(),
+                )
             };
             text.push_str(&format!(
                 "\n  {:<10} report what is wrong in the home, changing nothing [--text]\n  {:<10} write this environment's 1.1.0 settings as records, once\n  {:<10} serve this machine's worker (inside a machine)\n  {:<10} this help; `layerfs help <family> [<call>]` for more\n\n",
