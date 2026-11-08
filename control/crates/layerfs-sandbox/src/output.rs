@@ -52,11 +52,21 @@ impl Spool {
                     .map_err(|refusal| io::Error::other(refusal.message))?[..12]
             )
         ));
+        #[cfg(unix)]
+        let file = {
+            use std::os::unix::fs::OpenOptionsExt;
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&name)?
+        };
+        #[cfg(windows)]
         let file = OpenOptions::new()
             .read(true)
             .write(true)
             .create_new(true)
-            .mode(0o600)
             .open(&name)?;
         // Unlinked at once: the open file is the only name, and closing it
         // (or the process ending) frees its space.
@@ -179,8 +189,30 @@ pub fn page(
     let length = page
         .len()
         .min(usize::try_from(size - offset).unwrap_or(usize::MAX));
-    file.read_exact_at(&mut page[..length], offset)
-        .map_err(failed)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileExt;
+        file.read_exact_at(&mut page[..length], offset).map_err(failed)?;
+    }
+    // Windows: seek_read answers the positioned read (it returns the byte
+    // count; the loop below re-reads on a short answer).
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::FileExt;
+        let mut done = 0;
+        while done < length {
+            let n = file
+                .seek_read(&mut page[done..length], offset + done as u64)
+                .map_err(failed)?;
+            if n == 0 {
+                return Err(failed(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "output page ends early",
+                )));
+            }
+            done += n;
+        }
+    }
     let end = offset + length as u64 == size;
     Ok((length, end))
 }

@@ -7,10 +7,10 @@ use crate::files as discovery;
 use crate::registry::SandboxState;
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
 use layerfs_home::outcome::{failed, refused, Outcome};
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 use std::{
     fs::{File, OpenOptions},
-    #[cfg(unix)]
-    os::unix::fs::OpenOptionsExt,
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -32,12 +32,25 @@ impl Drop for Lease {
     }
 }
 fn lease(path: &std::path::Path, exclusive: bool) -> Result<Option<Lease>, SdkRefusal> {
+    #[cfg(unix)]
+    let file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(path)
+            .map_err(failed)?
+    };
+    // Windows: no mode/O_NOFOLLOW on OpenOptions; the lease's privacy
+    // rides the folder's ACL and the private() check below.
+    #[cfg(windows)]
     let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
-        .mode(0o600)
-        .custom_flags(libc::O_NOFOLLOW)
         .open(path)
         .map_err(failed)?;
     layerfs_store::project::discovery::private(path, false)?;
