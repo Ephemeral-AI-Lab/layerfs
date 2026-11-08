@@ -1,0 +1,24 @@
+{
+  "name": "@layerfs/mcp",
+  "version": "2.0.0",
+  "description": "LayerFS over the Model Context Protocol (stdio): one tool per call of the call table, generated from the Node package's table.",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "layerfs-mcp": "src/server.js"
+  },
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 test/*.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "layerfs": "file:../node"
+  },
+  "license": "MIT"
+}
