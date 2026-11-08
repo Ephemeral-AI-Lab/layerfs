@@ -273,23 +273,6 @@ pub fn unchecked(id: &str, value: &DaemonRecord) -> Result<Recorded> {
     }
 }
 
-/// Non-unix: a layout-2 record with no runtime marker is a docker record
-/// and converts the same way; a native or namespaces marker is refused as
-/// one this host never ran.
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-pub(crate) fn unchecked(id: &str, value: &SdkValue) -> Result<Recorded> {
-    match value.get_text("runtime") {
-        None => {
-            let (docker, container, request) = runtime(value)?;
-            Ok(Recorded::Docker(docker, container, request))
-        }
-        Some(other) => Err(refused(
-            "InvalidInput",
-            format!("Sandbox {id} is a {other} Sandbox, which this host never reopens"),
-        )),
-    }
-}
-
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn local_record(_: &Host, id: &str, _: &DaemonRecord) -> Result<Recorded> {
     Err(refused(

@@ -82,6 +82,7 @@ pub fn into_connection(control: Control) -> Connection {
 }
 
 /// Transfers provider runtime, original channel and admitted command identity.
+#[cfg(unix)]
 pub fn split_provider(
     sandbox: crate::ProviderSandbox,
 ) -> (

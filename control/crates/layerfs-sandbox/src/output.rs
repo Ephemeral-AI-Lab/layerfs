@@ -9,29 +9,24 @@
 //! `workspace.exec_release` closes it. The Sandbox backend reads the command's stream only as fast as
 //! this sink takes it (an 8 KiB window), so a slow disk holds the command
 //! back. No total is capped: a spooled stream is bounded by free space.
-use crate::common::outcome::{failed, refused, Outcome};
-use crate::sandbox::registry::{lock, text};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::helpers::lock;
+use layerfs_home::outcome::{failed, refused};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufWriter, Write};
-#[cfg(unix)]
 use std::os::unix::fs::{FileExt, OpenOptionsExt};
-#[cfg(windows)]
-use std::os::windows::fs::FileExt as WinFileExt;
-#[cfg(windows)]
-use std::os::windows::fs::OpenOptionsExt as WinOpenOptionsExt;
 use std::sync::{Arc, Mutex, OnceLock};
 
 /// Bytes per stream a result carries inline.
-pub(crate) const INLINE: usize = 1 << 20;
+pub const INLINE: usize = 1 << 20;
 /// Largest page `execOutput` fills.
 const PAGE: usize = 1 << 20;
 /// Write buffer of a spooled stream.
 const BUFFER: usize = 64 * 1024;
 
 /// One stream: kept in memory up to its limit, then spooled to a file.
-pub(crate) struct Spool {
+pub struct Spool {
     kept: Vec<u8>,
     file: Option<BufWriter<File>>,
     total: u64,
@@ -40,7 +35,7 @@ pub(crate) struct Spool {
 
 impl Spool {
     /// Kept inline up to [`INLINE`] bytes, or spooled from the first byte.
-    pub(crate) fn new(spool: bool) -> Self {
+    pub fn new(spool: bool) -> Self {
         Self {
             kept: Vec::new(),
             file: None,
@@ -52,25 +47,15 @@ impl Spool {
         let name = std::env::temp_dir().join(format!(
             "layerfs-exec-{}",
             layerfs_bridge::sdk_values::hex(
-                &crate::sandbox::registry::random()
+                &layerfs_home::helpers::random()
                     .map_err(|refusal| io::Error::other(refusal.message))?[..12]
             )
         ));
-        #[cfg(unix)]
-        let file = {
-            use std::os::unix::fs::OpenOptionsExt;
-            OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create_new(true)
-                .mode(0o600)
-                .open(&name)?
-        };
-        #[cfg(not(unix))]
         let file = OpenOptions::new()
             .read(true)
             .write(true)
             .create_new(true)
+            .mode(0o600)
             .open(&name)?;
         // Unlinked at once: the open file is the only name, and closing it
         // (or the process ending) frees its space.
@@ -126,10 +111,7 @@ fn outputs() -> &'static Mutex<HashMap<String, Spooled>> {
 
 /// A finished command's result fields: each stream inline as text, or null
 /// when spooled; with any spooled, the output's id and both sizes follow.
-pub(crate) fn fields(
-    stdout: Spool,
-    stderr: Spool,
-) -> Result<Vec<(&'static str, SdkValue)>, SdkRefusal> {
+pub fn fields(stdout: Spool, stderr: Spool) -> Result<Vec<(&'static str, SdkValue)>, SdkRefusal> {
     let sizes = [stdout.total, stderr.total];
     let mut spooled = Spooled::default();
     let mut shown = Vec::new();
@@ -156,7 +138,7 @@ pub(crate) fn fields(
     }
     let id = format!(
         "out_{}",
-        layerfs_bridge::sdk_values::hex(&crate::sandbox::registry::random()?[..12])
+        layerfs_bridge::sdk_values::hex(&layerfs_home::helpers::random()?[..12])
     );
     lock(outputs())?.insert(id.clone(), spooled);
     let size = |n: u64| SdkValue::Int(i64::try_from(n).unwrap_or(i64::MAX));
@@ -166,18 +148,18 @@ pub(crate) fn fields(
     Ok(shown)
 }
 
-/// `execOutput({ output, stream, offset }, page)`: fills `page` (1..=1 MiB,
-/// the caller's reused window) with the spooled stream's bytes from `offset`
-/// and answers how many it wrote and whether they end the stream. Reading
-/// into the caller's buffer leaves no per-page allocation behind on either
-/// side, so a stream of any size passes through one page of memory.
-pub fn page(args: &SdkValue, page: &mut [u8]) -> Outcome {
-    let id = text(args, "output")?;
-    let stream = text(args, "stream")?;
-    let offset = args
-        .get_int("offset")
-        .and_then(|n| u64::try_from(n).ok())
-        .ok_or_else(|| refused("InvalidInput", "offset must be a nonnegative integer"))?;
+/// `execOutput(output, stream, offset, page)`: fills `page` (1..=1 MiB,
+/// the caller's reused window) with spooled output `id`'s `stream` bytes
+/// from `offset` and answers how many it wrote and whether they end the
+/// stream. Reading into the caller's buffer leaves no per-page allocation
+/// behind on either side, so a stream of any size passes through one page
+/// of memory.
+pub fn page(
+    id: &str,
+    stream: &str,
+    offset: u64,
+    page: &mut [u8],
+) -> Result<(usize, bool), SdkRefusal> {
     if !(1..=PAGE).contains(&page.len()) {
         return Err(refused(
             "InvalidInput",
@@ -196,43 +178,14 @@ pub fn page(args: &SdkValue, page: &mut [u8]) -> Outcome {
     let length = page
         .len()
         .min(usize::try_from(size - offset).unwrap_or(usize::MAX));
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::FileExt;
-        file.read_exact_at(&mut page[..length], offset).map_err(failed)?;
-    }
-    // Windows: seek_read is the positioned read; the shared Arc keeps its
-    // cursor untouched.
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::FileExt;
-        let mut done = 0;
-        while done < length {
-            let at = offset + done as u64;
-            let read = file.seek_read(&mut page[done..length], at).map_err(failed)?;
-            if read == 0 {
-                return Err(failed(io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    "spool ended early",
-                )));
-            }
-            done += read;
-        }
-    }
+    file.read_exact_at(&mut page[..length], offset)
+        .map_err(failed)?;
     let end = offset + length as u64 == size;
-    Ok(SdkValue::map([
-        ("kind", SdkValue::text("ok")),
-        ("length", SdkValue::Int(length as i64)),
-        ("end", SdkValue::Bool(end)),
-    ]))
+    Ok((length, end))
 }
 
-/// `workspace.exec_release({ output })`: closes a spooled output's files.
-pub(crate) fn release(args: &SdkValue) -> Outcome {
-    let id = text(args, "output")?;
-    let released = lock(outputs())?.remove(id).is_some();
-    Ok(SdkValue::map([
-        ("kind", SdkValue::text("ok")),
-        ("released", SdkValue::Bool(released)),
-    ]))
+/// `workspace.exec_release(output)`: closes spooled output `id`'s files;
+/// whether it was open.
+pub fn release(id: &str) -> Result<bool, SdkRefusal> {
+    Ok(lock(outputs())?.remove(id).is_some())
 }

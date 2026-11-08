@@ -3,14 +3,13 @@
 //! admission and shared-record cleanup, never during the daemon's helper wait.
 //! Mount paths are unique within one daemon lifetime; Sandbox removal clears
 //! the terminal records before that directory can be reused.
-use crate::common::outcome::{failed, refused, Outcome};
-use crate::sandbox::files as discovery;
-use crate::sandbox::registry::SandboxState;
+use crate::files as discovery;
+use crate::registry::SandboxState;
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
-#[cfg(unix)]
-use std::os::unix::fs::OpenOptionsExt;
+use layerfs_home::outcome::{failed, refused, Outcome};
 use std::{
     fs::{File, OpenOptions},
+    os::unix::fs::OpenOptionsExt,
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -28,42 +27,27 @@ fn record(state: &SandboxState, token: WorkspaceToken) -> PathBuf {
 struct Lease(File);
 impl Drop for Lease {
     fn drop(&mut self) {
-        crate::common::home::flock::unlock(&self.0);
+        layerfs_home::home::flock::unlock(&self.0);
     }
 }
 fn lease(path: &std::path::Path, exclusive: bool) -> Result<Option<Lease>, SdkRefusal> {
-    #[cfg(unix)]
-    let file = {
-        use std::os::unix::fs::OpenOptionsExt;
-        OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .mode(0o600)
-            .custom_flags(libc::O_NOFOLLOW)
-            .open(path)
-            .map_err(failed)?
-    };
-    #[cfg(not(unix))]
-    let file = {
-        use std::os::windows::fs::OpenOptionsExt;
-        OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .custom_flags(0x0020_0000)
-            .open(path)
-            .map_err(failed)?
-    };
-    discovery::private(path, false)?;
-    if crate::common::home::flock::try_lock(&file, exclusive).map_err(failed)? {
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(failed)?;
+    layerfs_store::project::discovery::private(path, false)?;
+    if layerfs_home::home::flock::try_lock(&file, exclusive).map_err(failed)? {
         Ok(Some(Lease(file)))
     } else {
         Ok(None)
     }
 }
 /// Explicit unlock matters when a concurrent fork inherited the descriptor.
-pub(crate) struct Attempt {
+pub struct Attempt {
     _lease: Lease,
     path: PathBuf,
     started: i64,
@@ -114,7 +98,7 @@ fn progress(value: &SdkValue, active: bool) -> SdkRefusal {
     }
 }
 fn observed(path: &std::path::Path) -> Result<Option<SdkValue>, SdkRefusal> {
-    match discovery::load(path) {
+    match layerfs_store::project::discovery::load(path) {
         Ok(value) => Ok(Some(value)),
         Err(_) if !path.exists() => Ok(None),
         Err(error) => Err(error),
@@ -167,7 +151,7 @@ fn unmounts_in(
         Err(error) => Err(failed(error)),
     }
 }
-pub(crate) fn check(state: &SandboxState, path: &str) -> Result<(), SdkRefusal> {
+pub fn check(state: &SandboxState, path: &str) -> Result<(), SdkRefusal> {
     if let Some(value) = find(state, path)? {
         if value.get_text("state") == Some("Unmounted") {
             return Err(refused("NotMounted", "Workspace already unmounted"));
@@ -176,10 +160,10 @@ pub(crate) fn check(state: &SandboxState, path: &str) -> Result<(), SdkRefusal> 
     }
     Ok(())
 }
-pub(crate) fn find(state: &SandboxState, path: &str) -> Result<Option<SdkValue>, SdkRefusal> {
+pub fn find(state: &SandboxState, path: &str) -> Result<Option<SdkValue>, SdkRefusal> {
     // Steady-state token/directory lookups already have a token: avoid a
     // directory scan proportional to the lifetime's completed unmounts.
-    let known = crate::sandbox::registry::lock(&state.mounts)?
+    let known = layerfs_home::helpers::lock(&state.mounts)?
         .get(path)
         .map(|mount| mount.workspace.bound.token);
     if let Some(token) = known {
@@ -189,7 +173,7 @@ pub(crate) fn find(state: &SandboxState, path: &str) -> Result<Option<SdkValue>,
 }
 /// [`check`] in Sandbox folder `directory`, with no live Sandbox: a caller
 /// that sends the Workspace's command to its machine (#535 G4).
-pub(crate) fn check_in(directory: &std::path::Path, path: &str) -> Result<(), SdkRefusal> {
+pub fn check_in(directory: &std::path::Path, path: &str) -> Result<(), SdkRefusal> {
     if let Some(value) = find_in(directory, path)? {
         if value.get_text("state") == Some("Unmounted") {
             return Err(refused("NotMounted", "Workspace already unmounted"));
@@ -213,7 +197,7 @@ fn find_in(directory: &std::path::Path, path: &str) -> Result<Option<SdkValue>, 
     Ok(None)
 }
 /// Closing a running Sandbox may not race a registered terminal operation.
-pub(crate) fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal> {
+pub fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal> {
     let mut recoverable = Vec::new();
     for entry in unmounts(state)? {
         let entry = entry.map_err(failed)?;
@@ -229,7 +213,7 @@ pub(crate) fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal>
             }
             if let Some(value) = inspect(&entry.path())? {
                 if value.get_text("state") == Some("Retained") {
-                    recoverable.push(crate::sandbox::registry::text(&value, "path")?.to_owned());
+                    recoverable.push(layerfs_home::helpers::text(&value, "path")?.to_owned());
                 }
             }
         }
@@ -237,7 +221,7 @@ pub(crate) fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal>
     Ok(recoverable)
 }
 /// Called under the Sandbox guard, after all before-effect checks.
-pub(crate) fn begin(
+pub fn begin(
     state: &SandboxState,
     token: WorkspaceToken,
     path: &str,
@@ -250,7 +234,7 @@ pub(crate) fn begin(
         path: path_record,
         started: millis(),
     };
-    discovery::save(
+    layerfs_store::project::discovery::save(
         &attempt.path,
         SdkValue::map([
             ("state", SdkValue::text("Unmounting")),
@@ -262,7 +246,7 @@ pub(crate) fn begin(
 }
 /// Publish while the Workspace lease prevents another terminal request.
 /// No Sandbox guard is needed to replace this attempt's own result file.
-pub(crate) fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result<(), SdkRefusal> {
+pub fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result<(), SdkRefusal> {
     match outcome {
         Err(error) if matches!(error.code.as_str(), "Busy" | "Dirty") => {
             std::fs::remove_file(&attempt.path).map_err(failed)?;
@@ -277,7 +261,7 @@ pub(crate) fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result
                     error.detail.clone(),
                 ),
             };
-            discovery::save(
+            layerfs_store::project::discovery::save(
                 &attempt.path,
                 SdkValue::map([
                     ("state", SdkValue::text(state)),
@@ -292,10 +276,10 @@ pub(crate) fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result
     }
     Ok(())
 }
-pub(crate) fn cancel(attempt: &Attempt) -> Result<(), SdkRefusal> {
+pub fn cancel(attempt: &Attempt) -> Result<(), SdkRefusal> {
     std::fs::remove_file(&attempt.path).map_err(failed)
 }
-pub(crate) fn cleanup_failure(mut outcome: Outcome, error: SdkRefusal) -> Outcome {
+pub fn cleanup_failure(mut outcome: Outcome, error: SdkRefusal) -> Outcome {
     // Do not replace a known daemon success with a cleanup Busy/Failed.
     match &mut outcome {
         Ok(SdkValue::Map(fields)) => {
@@ -311,6 +295,6 @@ pub(crate) fn cleanup_failure(mut outcome: Outcome, error: SdkRefusal) -> Outcom
     }
     outcome
 }
-pub(crate) fn repeat(value: &SdkValue) -> Outcome {
+pub fn repeat(value: &SdkValue) -> Outcome {
     result(value)
 }
