@@ -130,4 +130,4 @@ pub(crate) mod windows {
 }
 
 #[cfg(windows)]
-pub(crate) use windows::{try_lock, unlock};
+pub use windows::{try_lock, unlock};

@@ -225,21 +225,23 @@ fn sweep(parent: &Path) {
             continue;
         }
         let dir = entry.path();
-        #[cfg(unix)]
-        let Ok(lock) = {
-            use std::os::unix::fs::OpenOptionsExt;
-            OpenOptions::new()
-                .write(true)
-                .custom_flags(libc::O_NOFOLLOW)
-                .open(dir.join("lock"))
-        }
-        else {
-            continue;
+        let lock = {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                OpenOptions::new()
+                    .write(true)
+                    .custom_flags(libc::O_NOFOLLOW)
+                    .open(dir.join("lock"))
+            }
+            // Windows: open resolves a reparse point to its target; the
+            // lock's holder face is the same.
+            #[cfg(windows)]
+            {
+                OpenOptions::new().write(true).open(dir.join("lock"))
+            }
         };
-        // Windows: open resolves a reparse point to its target; the lock's
-        // holder face is the same.
-        #[cfg(windows)]
-        let Ok(lock) = OpenOptions::new().write(true).open(dir.join("lock")) else {
+        let Ok(lock) = lock else {
             continue;
         };
         if try_lock(&lock, true).unwrap_or(false) {
