@@ -56,7 +56,7 @@ impl Findings {
         self.add(Severity::Warning, entity, message, fix);
     }
 
-    fn to_sdk(&self) -> SdkValue {
+    pub(super) fn to_sdk(&self) -> SdkValue {
         let ok = !self.0.iter().any(|f| f.severity == Severity::Error);
         let findings = self.0.iter().map(|finding| {
             let severity = match finding.severity {

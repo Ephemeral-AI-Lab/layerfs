@@ -126,3 +126,25 @@ recorded, for its hello alone:
 ---
 
 ← [Management: Families](families.md) · [Up: Management](README.md) · [Control: Routing and workers](../routing/README.md) →
+
+## Explicit host diagnosis
+
+`layerfs doctor host` selects only the local installation and home. Unlike
+legacy no-argument doctor, this target never dials workers or inspects remote
+transfer files. It reports the calling build and native prerequisites, measures
+local filesystem capacity, and observes home layout, local records, modes,
+references, operation owners, leases, command records and local transfer
+remnants. Recorded daemon executability and applicable Linux bundle manifests
+and required files are inspected without deployment. Bundle content hashes are
+not recomputed and that coverage is reported explicitly. Optional unused
+providers are not probed.
+
+An absent home is reported as uninitialized and stays absent. Older layouts
+are surveyed without conversion. Metadata inventories before and after the
+record survey detect concurrent changes; an unstable or unreadable inventory
+produces an incomplete result rather than a stable consistency verdict. This
+observation is not a transaction over the home, and cannot exclude a change
+that is reversed between observations. Local filesystem calls themselves
+remain synchronous; the budget is checked between observations. The capacity
+subprocess has its own bounded deadline and is killed/reaped when exhausted.
+No machine-specific cleanup thresholds are used as product health limits.
