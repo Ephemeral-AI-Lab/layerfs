@@ -11,6 +11,7 @@ use std::{
 };
 
 pub(crate) enum Error {
+    Unsupported(&'static str),
     Database(postgres::Error),
     Deadline { released: bool },
     Refused(BackendError),
@@ -28,6 +29,7 @@ impl From<postgres::Error> for Error {
 impl Error {
     pub(crate) fn backend(&self) -> BackendError {
         match self {
+            Self::Unsupported(_) => BackendError::Unknown,
             Self::Database(error) => rows::error(error),
             Self::Deadline { released: true } => BackendError::Cancelled,
             Self::Deadline { released: false } => BackendError::Unknown,
@@ -53,6 +55,7 @@ pub(crate) struct Diagnostic {
     deadline: Option<Instant>,
     tls: Option<MakeTlsConnector>,
     released: std::cell::Cell<Option<bool>>,
+    cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Driver {
@@ -61,72 +64,77 @@ impl Driver {
         deadline: Option<Instant>,
         resolver: &mut crate::diagnostic::Resolver<'_>,
     ) -> Result<Self, Error> {
-        let mut config = tokio_postgres::Config::from_str(&selection.url)
+        let config = tokio_postgres::Config::from_str(&selection.url)
             .map_err(|_| BackendError::Integrity)?;
         let connect_deadline = deadline.unwrap_or_else(|| Instant::now() + Duration::from_secs(10));
+        if !config.get_hostaddrs().is_empty() || config.get_hosts().is_empty() {
+            return Self::diagnostic_config(config, deadline, connect_deadline);
+        }
+        if config.get_hosts().len() > 1
+            && config.get_load_balance_hosts() == tokio_postgres::config::LoadBalanceHosts::Random
         {
-            let admission_deadline = connect_deadline;
-            let deadline = admission_deadline;
-            if Instant::now() >= deadline {
+            return Err(Error::Unsupported(
+                "randomized multi-host diagnostic admission is not implemented",
+            ));
+        }
+        let mut last = Error::Refused(BackendError::Closed);
+        for (index, host) in config.get_hosts().iter().enumerate() {
+            if Instant::now() >= connect_deadline {
                 return Err(BackendError::Cancelled.into());
             }
-            if config.get_hostaddrs().is_empty() {
-                let hosts = config.get_hosts().to_vec();
-                let ports = config.get_ports().to_vec();
-                // Expanding all system addresses preserves every configured TCP
-                // endpoint and its hostname for TLS identity, without async DNS
-                // spawning an uncancellable blocking resolver thread.
-                let mut expanded = Vec::new();
-                for (index, host) in hosts.iter().enumerate() {
-                    match host {
-                        tokio_postgres::config::Host::Tcp(host) => {
-                            let port = ports
-                                .get(index)
-                                .or_else(|| ports.first())
-                                .copied()
-                                .unwrap_or(5432);
-                            let addresses = match host.parse::<std::net::IpAddr>() {
-                                Ok(ip) => Ok(vec![std::net::SocketAddr::new(ip, port)]),
-                                Err(_) => resolver(host, port, deadline),
+            let port = config
+                .get_ports()
+                .get(index)
+                .or_else(|| config.get_ports().first())
+                .copied()
+                .unwrap_or(5432);
+            match host {
+                tokio_postgres::config::Host::Tcp(host) => {
+                    let addresses = match host.parse::<std::net::IpAddr>() {
+                        Ok(ip) => vec![std::net::SocketAddr::new(ip, port)],
+                        Err(_) => match resolver(host, port, connect_deadline) {
+                            Ok(addresses) => addresses,
+                            Err(error) if error.kind() == std::io::ErrorKind::TimedOut => {
+                                return Err(BackendError::Cancelled.into())
                             }
-                            .map_err(|error| {
-                                if error.kind() == std::io::ErrorKind::TimedOut {
-                                    BackendError::Cancelled
-                                } else {
-                                    BackendError::Closed
-                                }
-                            })?;
-                            for address in addresses {
-                                expanded.push((host.clone(), address));
-                            }
-                        }
-                        #[cfg(unix)]
-                        tokio_postgres::config::Host::Unix(_) => {
-                            // Mixed TCP/Unix fallback cannot be expanded without
-                            // changing configured ordering/cardinality.
-                            if hosts
-                                .iter()
-                                .any(|h| matches!(h, tokio_postgres::config::Host::Tcp(_)))
-                            {
-                                return Err(BackendError::Integrity.into());
-                            }
+                            Err(_) => continue,
+                        },
+                    };
+                    for address in addresses {
+                        let candidate = resolved_config(&config, &[(host.clone(), address)])?;
+                        match Self::diagnostic_config(candidate, deadline, connect_deadline) {
+                            Ok(client) => return Ok(client),
+                            Err(error) => last = error,
                         }
                     }
                 }
-                if !expanded.is_empty() {
-                    // Config's host mutators append, so rebuild just the network
-                    // list through a parsed copy whose host list is cleared by
-                    // an explicit libpq-style host override in the URL.
-                    config = resolved_config(&config, &expanded)?;
+                #[cfg(unix)]
+                tokio_postgres::config::Host::Unix(path) => {
+                    let mut candidate = resolved_config(&config, &[])?;
+                    candidate.host_path(path).port(port);
+                    match Self::diagnostic_config(candidate, deadline, connect_deadline) {
+                        Ok(client) => return Ok(client),
+                        Err(error) => last = error,
+                    }
                 }
             }
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            config.connect_timeout(
-                config
-                    .get_connect_timeout()
-                    .map_or(remaining, |configured| remaining.min(*configured)),
-            );
         }
+        Err(last)
+    }
+    fn diagnostic_config(
+        mut config: tokio_postgres::Config,
+        deadline: Option<Instant>,
+        connect_deadline: Instant,
+    ) -> Result<Self, Error> {
+        let remaining = connect_deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(BackendError::Cancelled.into());
+        }
+        config.connect_timeout(
+            config
+                .get_connect_timeout()
+                .map_or(remaining, |configured| remaining.min(*configured)),
+        );
         if let Some(deadline) = deadline {
             let milliseconds = deadline
                 .saturating_duration_since(Instant::now())
@@ -179,6 +187,7 @@ impl Driver {
             deadline,
             tls,
             released: std::cell::Cell::new(None),
+            cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }))
     }
     pub(crate) fn prepare(&mut self, sql: &str) -> Result<Statement, Error> {
@@ -233,6 +242,12 @@ impl Driver {
             Self::Diagnostic(client) => client.run(client.client.batch_execute("")),
         }
     }
+    pub(crate) fn cancellation(&self) -> Option<std::sync::Arc<std::sync::atomic::AtomicBool>> {
+        match self {
+            Self::Sync(_) => None,
+            Self::Diagnostic(client) => Some(client.cancelled.clone()),
+        }
+    }
     pub(crate) fn released(&self) -> Option<bool> {
         match self {
             Self::Sync(_) => None,
@@ -253,18 +268,28 @@ impl Driver {
 impl Diagnostic {
     fn run<T>(&self, future: impl Future<Output = Result<T, postgres::Error>>) -> Result<T, Error> {
         let result = self.runtime.block_on(async {
-            match self.deadline {
-                Some(deadline) => {
-                    tokio::time::timeout_at(tokio::time::Instant::from_std(deadline), future)
-                        .await
-                        .map_err(|_| ())
+            let mut future = std::pin::pin!(future);
+            loop {
+                if self.cancelled.load(std::sync::atomic::Ordering::Relaxed)
+                    || self.deadline.is_some_and(|d| Instant::now() >= d)
+                {
+                    break Err(());
                 }
-                None => Ok(future.await),
+                let wait = self.deadline.map_or(Duration::from_millis(20), |d| {
+                    d.saturating_duration_since(Instant::now())
+                        .min(Duration::from_millis(20))
+                });
+                if let Ok(result) = tokio::time::timeout(wait, future.as_mut()).await {
+                    break Ok(result);
+                }
             }
         });
         match result {
             Ok(result) => result.map_err(Into::into),
             Err(()) => {
+                if let Some(released) = self.released.get() {
+                    return Err(Error::Deadline { released });
+                }
                 // Cancellation uses the established numeric endpoint, then drains
                 // a ROLLBACK reply before claiming source snapshot release.
                 let token = self.client.cancel_token();

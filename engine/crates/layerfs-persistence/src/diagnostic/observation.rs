@@ -67,3 +67,26 @@ pub(crate) fn emit(
 /// Implementations must finish by the deadline and reap any helper process.
 pub type Resolver<'a> =
     dyn FnMut(&str, u16, Instant) -> std::io::Result<Vec<std::net::SocketAddr>> + 'a;
+
+/// Preserve typed availability failures instead of asserting corrupted bytes.
+pub(crate) fn storage_outcome(error: &layerfs_storage::StorageError) -> Outcome {
+    use layerfs_storage::{port::PersistenceError as P, StorageError as S};
+    match error {
+        S::Io(error)
+            if matches!(
+                error.get_ref().and_then(|e| e.downcast_ref::<P>()),
+                Some(P::Malformed)
+            ) =>
+        {
+            Outcome::Fail
+        }
+        S::Content(layerfs_content::ContentError::ProviderFailure { .. })
+        | S::Io(_)
+        | S::Busy
+        | S::OwnershipUnavailable
+        | S::UnsupportedPolicy { .. }
+        | S::UnknownOutcome { .. }
+        | S::CapacityExceeded { .. } => Outcome::Unknown,
+        _ => Outcome::Fail,
+    }
+}

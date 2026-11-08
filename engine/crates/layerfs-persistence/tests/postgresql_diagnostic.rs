@@ -152,6 +152,28 @@ fn deadline_driver_reads_one_view_and_ordinary_sync_writes_still_work() {
         "{connection:?}"
     );
     drop(writer);
+    let fallback = PostgresSelection::new(
+        url.replace("127.0.0.1:", "missing.invalid,127.0.0.1:"),
+        &schema,
+    );
+    let mut fallback_observations = Vec::new();
+    diagnostic::postgresql_connection(
+        &fallback,
+        &authority.binding_key,
+        Options {
+            deadline: Some(Instant::now() + Duration::from_secs(3)),
+            ..Options::default()
+        },
+        &mut fixture_resolver,
+        &mut |o| fallback_observations.push(o),
+    )
+    .unwrap();
+    assert!(
+        fallback_observations
+            .iter()
+            .any(|o| o.id == "store.connection.identity" && o.outcome == Outcome::Pass),
+        "{fallback_observations:?}"
+    );
     let mut client = postgres::Client::connect(&url, postgres::NoTls).unwrap();
     client
         .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
@@ -220,6 +242,75 @@ fn lock_wait_cancellation_releases_backend_work_and_snapshot() {
         .unwrap();
 }
 
+#[test]
+fn cancellation_signal_without_deadline_releases_backend_work_and_snapshot() {
+    let Ok(url) = std::env::var("LAYERFS_TEST_POSTGRES_URL") else {
+        eprintln!("NOT_RUN: LAYERFS_TEST_POSTGRES_URL is unset");
+        return;
+    };
+    let schema = format!("doctor_signal_{}", std::process::id());
+    let application = format!("doctor_signal_{}", std::process::id());
+    // URL syntax is not reserialized or logged; an explicit startup option
+    // marks the diagnostic session for independent backend observation.
+    let diagnostic_url = format!(
+        "{url}{}application_name={application}",
+        if url.contains('?') { "&" } else { "?" }
+    );
+    let selection = PostgresSelection::new(&diagnostic_url, &schema);
+    let authority = HistoryCatalogConfig {
+        binding_key: b"doctor-pg-cancel".to_vec(),
+        cursor_key: [71; 32],
+        incarnation: 7,
+    };
+    let writer =
+        PostgresHandles::create(&selection, StoragePolicy::frozen_default(), &authority).unwrap();
+    let cancelled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let signal = cancelled.clone();
+    let signaller = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(100));
+        signal.store(true, std::sync::atomic::Ordering::Relaxed);
+    });
+    let reader = PostgresHandles::open_diagnostic(
+        &selection,
+        &authority.binding_key,
+        authority.cursor_key,
+        None,
+        &mut fixture_resolver,
+    )
+    .unwrap();
+    let mut lock = postgres::Client::connect(&url, postgres::NoTls).unwrap();
+    lock.batch_execute(&format!(
+        "BEGIN; LOCK TABLE {schema}.object_location IN ACCESS EXCLUSIVE MODE"
+    ))
+    .unwrap();
+    let mut observations = Vec::new();
+    let started = Instant::now();
+    assert!(reader
+        .diagnose(
+            Options {
+                deadline: None,
+                cancelled: Some(&cancelled),
+                ..Options::default()
+            },
+            &mut |o| observations.push(o)
+        )
+        .is_err());
+    signaller.join().unwrap();
+    assert!(started.elapsed() < Duration::from_millis(1500));
+    let mut monitor = postgres::Client::connect(&url, postgres::NoTls).unwrap();
+    let count:i64=monitor.query_one("SELECT count(*) FROM pg_stat_activity WHERE application_name=$1 AND (state LIKE 'idle in transaction%' OR (state='active' AND wait_event_type='Lock'))",&[&application]).unwrap().get(0);
+    assert_eq!(
+        count, 0,
+        "backend work/snapshot must be released; {observations:?}"
+    );
+    drop(reader);
+    lock.batch_execute("ROLLBACK").unwrap();
+    drop(writer);
+    monitor
+        .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+        .unwrap();
+}
+
 fn fixture_resolver(
     host: &str,
     port: u16,
@@ -233,4 +324,65 @@ fn fixture_resolver(
                 "fixture accepts numeric hosts only",
             )
         })
+}
+
+#[test]
+fn denied_signature_read_is_unknown_instead_of_corruption() {
+    let Ok(url) = std::env::var("LAYERFS_TEST_POSTGRES_URL") else {
+        return;
+    };
+    let schema = format!("doctor_denied_{}", std::process::id());
+    let role = format!("doctor_denied_{}", std::process::id());
+    let selection = PostgresSelection::new(&url, &schema);
+    let authority = HistoryCatalogConfig {
+        binding_key: b"doctor-denied".to_vec(),
+        cursor_key: [71; 32],
+        incarnation: 7,
+    };
+    let writer =
+        PostgresHandles::create(&selection, StoragePolicy::frozen_default(), &authority).unwrap();
+    let mut admin = postgres::Client::connect(&url, postgres::NoTls).unwrap();
+    admin.batch_execute(&format!("CREATE ROLE {role}; GRANT USAGE ON SCHEMA {schema} TO {role}; GRANT SELECT ON ALL TABLES IN SCHEMA {schema} TO {role}")).unwrap();
+    let restricted_url = format!(
+        "{url}{}options=-c%20role%3D{role}",
+        if url.contains('?') { "&" } else { "?" }
+    );
+    let restricted = PostgresSelection::new(&restricted_url, &schema);
+    let reader = PostgresHandles::open_diagnostic(
+        &restricted,
+        &authority.binding_key,
+        authority.cursor_key,
+        Some(Instant::now() + Duration::from_secs(3)),
+        &mut fixture_resolver,
+    )
+    .unwrap();
+    admin
+        .batch_execute(&format!(
+            "REVOKE SELECT ON {schema}.content_signature FROM {role}"
+        ))
+        .unwrap();
+    let mut observations = Vec::new();
+    let _ = reader.diagnose(
+        Options {
+            quick: true,
+            deadline: Some(Instant::now() + Duration::from_secs(2)),
+            cancelled: None,
+        },
+        &mut |o| observations.push(o),
+    );
+    assert!(
+        observations
+            .iter()
+            .any(|o| o.id == "store.advisory.signatures" && o.outcome == Outcome::Unknown),
+        "{observations:?}"
+    );
+    assert!(
+        !observations.iter().any(|o| o.outcome == Outcome::Fail),
+        "{observations:?}"
+    );
+    drop(reader);
+    drop(writer);
+    admin
+        .batch_execute(&format!("DROP SCHEMA {schema} CASCADE; DROP ROLE {role}"))
+        .unwrap();
 }

@@ -2,6 +2,7 @@
 use super::{emit, reader::Reader, transaction::View, Observation, Options, Outcome};
 use crate::backend::records::{BackendError, Param};
 use layerfs_content::ObjectId;
+use layerfs_storage::{port::PersistenceError, StorageError};
 use layerfs_telemetry::timer::Timing;
 
 pub(super) fn run(
@@ -32,9 +33,31 @@ pub(super) fn run(
     }
     emit(observer,"store.advisory.binding_hints.summary",if failed==0{Outcome::Pass}else{Outcome::Fail},format!("{checked} standalone binding hint blocks checked, including unused hints; {failed} failed"));
     let mut signatures = Vec::new();
-    match view.signatures(&mut signatures){Ok(())=>emit(observer,"store.advisory.signatures",Outcome::Pass,format!("{} bounded signature-ring rows decoded",signatures.len())),Err(_)=>emit(observer,"store.advisory.signatures",Outcome::Fail,"signature accelerator is malformed; this is distinct from authenticated content corruption")}
+    match view.signatures(&mut signatures) {
+        Ok(()) => emit(
+            observer,
+            "store.advisory.signatures",
+            Outcome::Pass,
+            format!("{} bounded signature-ring rows decoded", signatures.len()),
+        ),
+        Err(error) => emit(
+            observer,
+            "store.advisory.signatures",
+            if error == PersistenceError::Malformed {
+                Outcome::Fail
+            } else {
+                Outcome::Unknown
+            },
+            if error == PersistenceError::Malformed {
+                "signature accelerator is malformed; this is distinct from authenticated content corruption"
+            } else {
+                "signature accelerator could not be read; corruption is not established"
+            },
+        ),
+    }
     let (mut after, mut length, mut digests, mut stale, mut damaged) =
         (Vec::<u8>::new(), -1i64, 0u64, 0u64, 0u64);
+    let mut incomplete = false;
     loop {
         options.check()?;
         let rows=view.query("SELECT digest,length,root FROM file_digest WHERE digest>?1 OR (digest=?1 AND length>?2) ORDER BY digest,length LIMIT 64",vec![Param::Bytes(after.clone()),Param::I64(length)])?;
@@ -47,14 +70,13 @@ pub(super) fn run(
             length = row.get(1)?;
             digests += 1;
             let root = row.get::<Vec<u8>>(2)?;
-            let result = (|| -> Result<(), String> {
+            let result = (|| -> Result<(), StorageError> {
                 if after.len() != 32 || length < 0 {
-                    return Err("digest/length fields malformed".to_owned());
+                    return Err(StorageError::Integrity("digest/length fields malformed"));
                 }
-                let id = ObjectId::from_bytes(&root).map_err(|e| e.to_string())?;
+                let id = ObjectId::from_bytes(&root)?;
                 let mut locations = Vec::new();
-                view.locate(&[id], &mut locations)
-                    .map_err(|e| e.to_string())?;
+                view.locate(&[id], &mut locations)?;
                 // A digest written before an interrupted Commit can legally
                 // outlive a root that was never saved; ordinary lookup ignores it.
                 if locations.is_empty() {
@@ -65,30 +87,33 @@ pub(super) fn run(
                     let (actual, bytes) = Timing::disabled("diagnostic.digest", |timing| {
                         layerfs_content::file::content_digest(reader, id, timing.child("read"))
                     })
-                    .0
-                    .map_err(|e| e.to_string())?;
+                    .0?;
                     if actual.as_slice() != after || bytes != length as u64 {
-                        return Err(
-                            "whole-content digest or logical length differs from referenced file"
-                                .to_owned(),
-                        );
+                        return Err(StorageError::Integrity(
+                            "whole-content digest or logical length differs from referenced file",
+                        ));
                     }
                 }
                 Ok(())
             })();
             options.check()?;
             if let Err(error) = result {
-                damaged += 1;
+                let outcome = super::observation::storage_outcome(&error);
+                if outcome == Outcome::Fail {
+                    damaged += 1;
+                } else {
+                    incomplete = true;
+                }
                 emit(
                     observer,
                     "store.advisory.file_digests",
-                    Outcome::Fail,
+                    outcome,
                     format!("file digest root {}: {error}", hex(&root)),
                 );
             }
         }
     }
-    emit(observer,"store.advisory.file_digests.summary",if damaged==0{Outcome::Pass}else{Outcome::Fail},format!("{digests} digest records {}; {stale} legitimately stale/unsaved roots; {damaged} damaged hints",if reader.is_some(){"fully streamed and compared where root exists"}else{"metadata checked; quick mode excludes logical-byte digest recomputation"}));
+    emit(observer,"store.advisory.file_digests.summary",if damaged>0{Outcome::Fail}else if incomplete{Outcome::Unknown}else{Outcome::Pass},format!("{digests} digest records {}; {stale} legitimately stale/unsaved roots; {damaged} damaged hints",if reader.is_some(){"fully streamed and compared where root exists"}else{"metadata checked; quick mode excludes logical-byte digest recomputation"}));
     Ok(())
 }
 fn hex(bytes: &[u8]) -> String {

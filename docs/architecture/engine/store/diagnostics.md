@@ -44,7 +44,11 @@ TCP, TLS and authentication. PostgreSQL without an overall audit deadline still
 has a ten-second connection admission limit. Cancellation may take up to one
 additional second for server cancellation/ROLLBACK acknowledgment; uncertain
 release is reported explicitly. SQLite interrupts the actual connection and
-joins its scoped watcher. Remote diagnostic frames are bounded and calls are
+joins its scoped watcher. PostgreSQL also joins a scoped cancellation watcher;
+its owned cancellation flag interrupts in-flight queries without an overall deadline.
+Multi-host admission resolves/connects each configured endpoint in sequence,
+including Unix/TCP fallback; randomized multi-host admission is explicitly
+unsupported instead of changing the saved selection semantics. Remote diagnostic frames are bounded and calls are
 not replayed after uncertain transport loss.
 
 Findings distinguish authoritative inconsistencies from unavailable coverage.

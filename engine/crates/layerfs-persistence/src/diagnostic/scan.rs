@@ -62,6 +62,13 @@ fn packs(
         if rows.is_empty() {
             break;
         }
+        emit(
+            observer,
+            "store.inventory.progress",
+            Outcome::Pass,
+            "processing next bounded inventory window",
+        );
+        options.check()?;
         for row in rows {
             options.check()?;
             after = row.get(0)?;
@@ -135,6 +142,13 @@ fn objects(
         if rows.is_empty() {
             break;
         }
+        emit(
+            observer,
+            "store.inventory.progress",
+            Outcome::Pass,
+            "processing next bounded inventory window",
+        );
+        options.check()?;
         for row in rows {
             options.check()?;
             after = row.get(0)?;
@@ -262,13 +276,5 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 fn classify(error: &StorageError) -> Outcome {
-    match error {
-        StorageError::Io(_)
-        | StorageError::Busy
-        | StorageError::OwnershipUnavailable
-        | StorageError::UnsupportedPolicy { .. }
-        | StorageError::UnknownOutcome { .. }
-        | StorageError::CapacityExceeded { .. } => Outcome::Unknown,
-        _ => Outcome::Fail,
-    }
+    super::observation::storage_outcome(error)
 }

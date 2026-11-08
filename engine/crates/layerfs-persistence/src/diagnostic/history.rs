@@ -145,6 +145,7 @@ fn qualify(
     observer: &mut dyn FnMut(Observation),
 ) -> Result<(), BackendError> {
     let (mut after, mut checked, mut failed) = (Vec::<u8>::new(), 0u64, 0u64);
+    let mut incomplete = false;
     // A compound encoded continuation avoids deduplication by root alone.
     loop {
         options.check()?;
@@ -180,11 +181,18 @@ fn qualify(
             })();
             options.check()?;
             if let Err(error) = result {
-                failed += 1;
+                let outcome = super::observation::storage_outcome(
+                    &layerfs_storage::StorageError::Content(error.clone()),
+                );
+                if outcome == Outcome::Fail {
+                    failed += 1;
+                } else {
+                    incomplete = true;
+                }
                 emit(
                     observer,
                     "store.namespace",
-                    Outcome::Fail,
+                    outcome,
                     format!(
                         "root {} scope {} profile {}: {error}",
                         hex(&root),
@@ -198,10 +206,12 @@ fn qualify(
     emit(
         observer,
         "store.namespace.summary",
-        if failed == 0 {
-            Outcome::Pass
-        } else {
+        if failed > 0 {
             Outcome::Fail
+        } else if incomplete {
+            Outcome::Unknown
+        } else {
+            Outcome::Pass
         },
         format!("{checked} historical root/scope/profile contexts qualified; {failed} failed"),
     );

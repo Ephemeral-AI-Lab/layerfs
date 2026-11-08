@@ -101,6 +101,21 @@ fn resolve(
             return None;
         }
     };
+    if record.field("v").and_then(|v| {
+        if let SdkValue::Int(v) = v {
+            Some(*v)
+        } else {
+            None
+        }
+    }) != Some(layerfs_home::home::RECORD_VERSION)
+        || record.text("name") != Some(name)
+    {
+        checks.fail(
+            "store.record",
+            "saved Store record name or version is invalid",
+        );
+        return None;
+    }
     let identity = match identity::identity_in(&record) {
         Ok(identity) => identity,
         Err(_) => {
@@ -187,6 +202,9 @@ fn remote(
         let message = event
             .get_text("message")
             .ok_or_else(|| refused("Unknown", "worker diagnostic event lacks message"))?;
+        if id.ends_with(".progress") {
+            return Ok(());
+        }
         match event.get_text("outcome") {
             Some("pass") => checks.pass(id, message),
             Some("fail") if id.starts_with("store.advisory.") => checks.warning(id, message),

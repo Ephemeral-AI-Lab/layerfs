@@ -38,6 +38,7 @@ pub(crate) enum Mode {
 pub(crate) struct Transaction<'a> {
     state: RefCell<&'a mut State>,
     uncertain: Cell<bool>,
+    diagnostic: bool,
     /// `Mode::Statement`: whether its one statement was already sent.
     single: Option<Cell<bool>>,
     /// `Mode::Publish` outside a held lane: the lane row is still to lock.
@@ -78,7 +79,11 @@ impl Transaction<'_> {
     }
     fn checked<T>(&self, result: Result<T, super::driver::Error>) -> Result<T, BackendError> {
         result.map_err(|e| {
-            let error = e.backend();
+            let error = if self.diagnostic && e.code().is_some_and(|c| c.code() == "42501") {
+                BackendError::ReadOnly
+            } else {
+                e.backend()
+            };
             if error == BackendError::Unknown {
                 self.uncertain.set(true);
             }
@@ -280,6 +285,7 @@ impl Session {
             }
             let (result, uncertain) = {
                 let tx = Transaction {
+                    diagnostic: matches!(state.client, super::driver::Driver::Diagnostic(_)),
                     state: RefCell::new(&mut *state),
                     uncertain: Cell::new(false),
                     single: None,
@@ -346,6 +352,7 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
 ) -> Result<T, E> {
     let (result, uncertain) = {
         let tx = Transaction {
+            diagnostic: matches!(state.client, super::driver::Driver::Diagnostic(_)),
             state: RefCell::new(&mut *state),
             uncertain: Cell::new(false),
             single,

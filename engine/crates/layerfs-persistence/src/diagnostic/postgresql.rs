@@ -21,6 +21,16 @@ pub fn connection(
     let mut client = match Driver::diagnostic(selection, options.deadline, resolver) {
         Ok(client) => client,
         Err(error) => {
+            if let crate::backend::postgresql::session::driver::Error::Unsupported(reason) = &error
+            {
+                emit(
+                    observer,
+                    "store.connection.configuration",
+                    Outcome::Unknown,
+                    *reason,
+                );
+                return Ok(());
+            }
             let code = error.code().map(|c| c.code()).unwrap_or("unavailable");
             let (id, outcome) = if code.starts_with("28") {
                 ("store.connection.authentication", Outcome::Fail)
@@ -120,6 +130,41 @@ impl PostgresHandles {
     /// Audits logical LayerFS data in one REPEATABLE READ READ ONLY view.
     /// Online engine checks follow separately and carry their own observations.
     pub fn diagnose(
+        &self,
+        options: Options,
+        observer: &mut dyn FnMut(Observation),
+    ) -> Result<(), PersistenceError> {
+        let cancellation = self
+            .storage
+            .session
+            .state
+            .lock()
+            .map_err(|_| PersistenceError::Uncertain)?
+            .client
+            .cancellation();
+        let (done, ended) = std::sync::mpsc::channel::<()>();
+        std::thread::scope(|scope| {
+            let watcher = options.cancelled.zip(cancellation).map(|(source, target)| {
+                scope.spawn(move || loop {
+                    if source.load(std::sync::atomic::Ordering::Relaxed) {
+                        target.store(true, std::sync::atomic::Ordering::Relaxed);
+                        break;
+                    }
+                    match ended.recv_timeout(std::time::Duration::from_millis(20)) {
+                        Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                    }
+                })
+            });
+            let result = self.diagnose_inner(options, observer);
+            let _ = done.send(());
+            if watcher.is_some_and(|thread| thread.join().is_err()) {
+                return Err(PersistenceError::Uncertain);
+            }
+            result
+        })
+    }
+    fn diagnose_inner(
         &self,
         options: Options,
         observer: &mut dyn FnMut(Observation),
