@@ -20,6 +20,7 @@ pub fn call(service: &StoreService, call: &SdkCall) -> Answer {
     }
     match call.method.as_str() {
         "store.stats" => store::stats(service),
+        "project.stats" => project::stats(service, args),
         "project.list_branches" => project::list_branches(service, args),
         "branch.fork" => branch::fork(service, args),
         "branch.list_commits" => branch::list_commits(service, args),

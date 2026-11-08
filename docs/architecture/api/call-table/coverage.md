@@ -32,7 +32,7 @@ reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-65 calls in 9 families, counted from the Node table. Calls present: Node 65, Python 65, Python `aio` 65, CLI 65.
+66 calls in 9 families, counted from the Node table. Calls present: Node 66, Python 66, Python `aio` 66, CLI 66.
 
 Argument names that are Python keywords: none.
 
@@ -240,3 +240,5 @@ node api/scripts/gen-coverage.mjs --check          # fail when it is stale
 ---
 
 ← [Call table: Errors](errors.md) · [Up: Call table](README.md)
+
+`project.stats(project, branch?, commit?)` is supplied by every front end from the table; it reports pin and completeness.

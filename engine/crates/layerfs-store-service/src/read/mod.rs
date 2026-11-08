@@ -20,5 +20,6 @@ pub mod revision;
 pub(crate) mod revision_pages;
 pub mod search;
 pub mod snapshot;
+pub mod tree_stats;
 pub mod walk;
 pub mod window;
