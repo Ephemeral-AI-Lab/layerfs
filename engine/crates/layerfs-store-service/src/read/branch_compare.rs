@@ -156,7 +156,11 @@ pub fn diff(
             || item.get_bool("identity");
         let regular = before.is_some_and(|e| e.value.kind == InodeKind::RegularFile)
             && after.is_some_and(|e| e.value.kind == InodeKind::RegularFile);
-        let mut owner_changed = Some(false);
+        let mut owner_changed = if attribution && !regular && before.is_some() && after.is_some() {
+            None
+        } else {
+            Some(false)
+        };
         if attribution && regular {
             let summary = attribution::compare_bounded(
                 store,
@@ -204,7 +208,7 @@ pub fn diff(
                 SdkValue::Null
             },
         );
-        if !facts_changed && owner_changed == Some(false) {
+        if !facts_changed && (!regular || owner_changed == Some(false)) {
             continue;
         }
         if seen < skip {
@@ -215,7 +219,7 @@ pub fn diff(
             more = true;
             break;
         }
-        incomplete |= attribution && regular && owner_changed.is_none();
+        incomplete |= attribution && owner_changed.is_none();
         if hunks && item.get_bool("content") {
             set(&mut item, "hunksOmitted", SdkValue::Bool(true));
             set(

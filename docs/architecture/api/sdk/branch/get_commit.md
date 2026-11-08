@@ -43,3 +43,7 @@ This is a read-only Store call. No machine is started and no write lane is
 acquired. Implementation: API `branch/get_commit.rs` → control
 `calls::branch::get_commit` → Store method `branch.get_commit` → `history/saved.rs`.
 See [branch.commits](commits.md) and [shared contract](../saved-queries.md).
+
+Full record details, including persisted merge-unit reports, must fit the
+48 KiB reply budget. An oversized detail response refuses `Capacity` before
+transport encoding; `branch.commits` still provides its compact saved summary.

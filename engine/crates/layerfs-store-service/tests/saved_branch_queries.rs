@@ -333,3 +333,68 @@ fn unknown_prefix_and_lookahead_do_not_change_returned_page_coverage() {
     assert_eq!(warm.get("scan").unwrap().get_int("examined"), Some(1));
     f.cleanup();
 }
+
+#[test]
+fn oversized_saved_merge_details_refuse_before_wire_encoding() {
+    let f = fixture("saved-detail-budget");
+    f.fork("left");
+    f.fork("right");
+    f.apply("left", vec![write("/a", "left\n")]);
+    f.apply("right", vec![write("/b", "right\n")]);
+    let merged = f.call(
+        "branch.merge",
+        vec![
+            ("branch", text("left")),
+            ("with", text("right")),
+            ("name", text("merged")),
+            (
+                "units",
+                SdkValue::List(vec![SdkValue::map([
+                    ("name", SdkValue::text("u".repeat(48 * 1024))),
+                    ("patterns", SdkValue::List(vec![text("/not-present")])),
+                ])]),
+            ),
+        ],
+    );
+    let id = merged.get_text("head").unwrap();
+    let refusal = f
+        .try_call(
+            "branch.get_commit",
+            vec![("branch", text("merged")), ("commit", text(id))],
+        )
+        .unwrap_err();
+    assert_eq!(refusal.code, "Capacity");
+    let summary = history(&f, "merged", 1, None);
+    assert_eq!(items(&summary)[0].get_text("id"), Some(id));
+    assert!(items(&summary)[0].get_bool("detailsOmitted"));
+    f.cleanup();
+}
+
+#[test]
+fn requested_directory_attribution_remains_unknown_on_metadata_changes() {
+    let f = Fixture::new("saved-directory-owner", |source| {
+        fs::create_dir(source.join("folder")).unwrap();
+        1
+    });
+    f.fork("work");
+    f.chmod("work", "/folder", 0o700);
+    let result = f.call(
+        "branch.diff_branches",
+        vec![
+            ("from", text("main")),
+            ("to", text("work")),
+            ("includeAttribution", SdkValue::Bool(true)),
+            ("page", SdkValue::Int(1)),
+        ],
+    );
+    assert_eq!(paths(&result), ["/folder"]);
+    let item = &items(&result)[0];
+    assert!(item.get_bool("metadata"));
+    assert_eq!(item.get("attribution"), Some(&SdkValue::Null));
+    assert_eq!(
+        item.get("attributionCoverage").unwrap().get_text("status"),
+        Some("unavailable")
+    );
+    assert!(!result.get("coverage").unwrap().get_bool("complete"));
+    f.cleanup();
+}

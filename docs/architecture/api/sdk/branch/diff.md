@@ -11,7 +11,7 @@ may be `main`), with line hunks unless asked for paths only.
 | --- | --- |
 | Family | [branch](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/branch/diff.rs`](../../../../../api/crates/layerfs-api/src/branch/diff.rs) |
-| Implemented in | `layerfs_store::calls::branch_diff` → Store method `branch.diff_branches` ([`methods/branch/diff_branches.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/diff_branches.rs), [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs)) |
+| Implemented in | `layerfs_store::calls::branch::diff` → Store method `branch.diff_branches` ([`methods/branch/diff_branches.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/diff_branches.rs), [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs)) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -44,7 +44,7 @@ layerfs branch diff <store>/<project> <from_branch> <to_branch> \
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `paths_only` | Bool | false | sent as `hunks = !paths_only` | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) `diff_options` |
+| `paths_only` | Bool | false | sent as `hunks = !paths_only` | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls/branch.rs) `StoreOp::DiffBranches` (options forwarded by `calls/op.rs`) |
 | `page_size` | Int | 50 | 1..=1000 | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
 | `page_pos` | Int | 0 | offset from the last page's `next_page_pos` | same |
 | `cursor` | Text | none | the last page's `next_cursor` (a path); resumes after it | [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs) |

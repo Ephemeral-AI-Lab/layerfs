@@ -15,5 +15,11 @@ pub fn get_commit(service: &StoreService, args: &SdkValue) -> Answer {
         text(args, "branch")?,
         Some(text(args, "commit")?),
     )?;
-    saved::record(&service.store, node)
+    let record = saved::record(&service.store, node)?;
+    if saved::reply_cost(&record) > crate::read::window::BYTES - 512 {
+        return Err(crate::read::query::capacity(
+            "saved record details exceed reply budget; use branch.commits for its compact summary",
+        ));
+    }
+    Ok(record)
 }

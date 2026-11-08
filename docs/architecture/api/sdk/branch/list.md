@@ -10,7 +10,7 @@ Lists a project's Branches, `main` first, one page at a time.
 | --- | --- |
 | Family | [branch](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/branch/list.rs`](../../../../../api/crates/layerfs-api/src/branch/list.rs) |
-| Implemented in | `layerfs_store::calls::branch_list` → Store method `project.list_branches` ([`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs)) |
+| Implemented in | `layerfs_store::calls::branch::list` → Store method `project.list_branches` ([`calls.rs`](../../../../../control/crates/layerfs-store/src/calls/branch.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs)) |
 | Runs in | the caller's process for PostgreSQL and for sqlite on `native`; else the Store's machine worker (`store.call`) |
 
 ## Signature
@@ -86,7 +86,7 @@ A read: it never takes the publication lane. A stopped machine is
 
 | Folder-scoped client | Behaviour | Source |
 | --- | --- | --- |
-| scope with `branch: <ns>` | only Branches named `<ns>.<x>`, shown as `<x>`; read 1000 at a time and paged here | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) `branches_in` |
+| scope with `branch: <ns>` | only Branches named `<ns>.<x>`, shown as `<x>`; read 1000 at a time and paged here | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls/branch.rs) `branches_in` |
 | scope without `branch` | `InvalidInput` "out of scope: branch" | [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 
 ## Errors
@@ -97,7 +97,7 @@ A read: it never takes the publication lane. A stopped machine is
 | `NoSuchStore`, `NoSuchProject` | the Store or project is not recorded | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `Busy`, `Unresolved` | a push, pull or remove holds the Store | no | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) |
 | `Unavailable` | the machine's worker is not recorded or does not answer; an unreachable PostgreSQL server | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
-| `Failed` | a scoped list made no progress | no | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |
+| `Failed` | a scoped list made no progress | no | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls/branch.rs) |
 | `Unknown` | the worker's answer was lost | read-only; call again | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 ## Examples
