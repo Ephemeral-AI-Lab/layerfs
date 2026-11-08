@@ -69,6 +69,55 @@ fn registry_observation_is_complete_read_only_and_detects_membership_changes() {
         (before.statements, before.object_batches),
         (after.statements, after.object_batches)
     );
+    // Exercise the producer's actual nonblocking registry admission. Two
+    // bounded read-only callers contend; there is no private lock/test hook,
+    // synthetic Busy reply, mutation loop or unbounded pressure worker.
+    use std::sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Barrier,
+    };
+    let before_busy = fixture.work();
+    let start = Barrier::new(2);
+    let observed_busy = AtomicBool::new(false);
+    let calls = AtomicUsize::new(0);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+    std::thread::scope(|scope| {
+        for _ in 0..2 {
+            scope.spawn(|| {
+                start.wait();
+                for _ in 0..2048 {
+                    if observed_busy.load(Ordering::Acquire)
+                        || std::time::Instant::now() >= deadline
+                    {
+                        break;
+                    }
+                    calls.fetch_add(1, Ordering::Relaxed);
+                    match page(&service, 0, None) {
+                        Reply::Sdk(value) => assert_eq!(value.get_int("total"), Some(1)),
+                        Reply::SdkRefused(refusal) => {
+                            assert_eq!(refusal.code, "Busy");
+                            observed_busy.store(true, Ordering::Release);
+                        }
+                        other => panic!("unexpected registry admission reply: {other:?}"),
+                    }
+                }
+            });
+        }
+    });
+    assert!(observed_busy.load(Ordering::Acquire));
+    let after_busy = fixture.work();
+    assert_eq!(
+        (before_busy.statements, before_busy.object_batches),
+        (after_busy.statements, after_busy.object_batches)
+    );
+    let Reply::Sdk(released) = page(&service, 0, None) else {
+        panic!("registry admission not released")
+    };
+    assert_eq!(released, one);
+    println!(
+        "actual_registry_producer_busy=true calls={} threads_joined=2 rows_unchanged=true store_sql_delta=0 object_batch_delta=0",
+        calls.load(Ordering::Relaxed)
+    );
     service
         .execute_control(&Request::Unmount(UnmountControl {
             token,
