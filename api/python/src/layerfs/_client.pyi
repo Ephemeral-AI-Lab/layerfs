@@ -35,10 +35,29 @@ class ProjectFamily:
         """remove one project from its Store"""
 
 class BranchFamily:
-    def list(self, project: str, *, page_size: int | None = None, page_pos: int | None = None) -> Result:
+    def list(
+        self,
+        project: str,
+        *,
+        page_size: int | None = None,
+        page_pos: int | None = None,
+        page: int | None = None,
+    ) -> Result:
         """a project's Branches"""
     def get(self, project: str, branch: str) -> Result:
         """one Branch and its head Commit"""
+    def commits(
+        self,
+        project: str,
+        branch: str,
+        *,
+        page: int | None = None,
+        page_size: int | None = None,
+        at_commit: str | None = None,
+    ) -> Result:
+        """saved branch commits or main publications, newest first"""
+    def get_commit(self, project: str, branch: str, commit: str) -> Result:
+        """one saved Commit or main publication"""
     def fork(self, project: str, name: str, from_branch: str, from_commit: str | None = None) -> Result:
         """a new Branch from another Branch's head or Commit"""
     def merge(
@@ -64,6 +83,11 @@ class BranchFamily:
         page_size: int | None = None,
         page_pos: int | None = None,
         cursor: str | None = None,
+        page: int | None = None,
+        from_commit: str | None = None,
+        to_commit: str | None = None,
+        path_prefix: str | None = None,
+        include_attribution: bool | None = None,
     ) -> Result:
         """files that differ between two Branches' heads"""
 
@@ -107,6 +131,7 @@ class FileFamily:
         commit: str | None = None,
         *,
         page_size: int | None = None,
+        page: int | None = None,
         page_pos: int | None = None,
     ) -> Result:
         """a folder's entries"""
@@ -119,6 +144,7 @@ class FileFamily:
         commit: str | None = None,
         *,
         page_size: int | None = None,
+        page: int | None = None,
         page_pos: int | None = None,
     ) -> Result:
         """paths under `path` matching a glob"""
@@ -131,9 +157,22 @@ class FileFamily:
         commit: str | None = None,
         *,
         page_size: int | None = None,
+        page: int | None = None,
         page_pos: int | None = None,
     ) -> Result:
         """lines under `path` matching a regular expression"""
+    def revision(
+        self,
+        project: str,
+        branch: str,
+        path: str,
+        *,
+        at_commit: str | None = None,
+        traversal: str | None = None,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> Result:
+        """saved changes to a literal path"""
     def blame(
         self,
         project: str,
@@ -142,6 +181,7 @@ class FileFamily:
         commit: str | None = None,
         *,
         from_line: int | None = None,
+        line_count: int | None = None,
     ) -> Result:
         """the Commit of each line"""
     def diff(
@@ -154,6 +194,10 @@ class FileFamily:
         *,
         left_commit: str | None = None,
         right_commit: str | None = None,
+        include_attribution: bool | None = None,
+        allow_missing: bool | None = None,
+        page: int | None = None,
+        page_size: int | None = None,
     ) -> Result:
         """the difference between two files"""
     def write(

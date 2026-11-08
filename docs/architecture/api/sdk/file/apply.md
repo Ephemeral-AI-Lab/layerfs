@@ -10,7 +10,7 @@ Applies a list of changes (write, edit, mkdir, chmod, rm, cp, mv) on a Branch as
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/apply.rs`](../../../../../api/crates/layerfs-api/src/file/apply.rs) |
-| Implemented in | `layerfs_store::calls::file_apply` → `file`, Store method `fs.apply` ([`methods/file/apply.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/apply.rs)); each change's snake_case fields are renamed (`changes`) |
+| Implemented in | `layerfs_store::calls::file::apply`, Store method `fs.apply` ([`methods/file/apply.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/apply.rs)); each change's snake_case fields are renamed (`changes`) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -37,7 +37,7 @@ layerfs file apply <store>/<project> <branch> [--from FILE] [--message TEXT]
 | --- | --- | --- | --- |
 | `project` | Project | `<store>/<project>`; both records must exist | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `branch` | Name | the Branch to commit to; `main` is `ReadOnly` | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
-| `changes` | Json | a nonempty list of change records (below); the CLI reads it as JSON from stdin or `--from` | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) `changes` |
+| `changes` | Json | a nonempty list of change records (below); the CLI reads it as JSON from stdin or `--from` | [`calls/op.rs`](../../../../../control/crates/layerfs-store/src/calls/op.rs) `changes` |
 
 | `op` | Fields | Effect | Source |
 | --- | --- | --- | --- |
@@ -53,7 +53,7 @@ Control renames `old`/`new` to `oldText`/`newText`, `from_path`/`to_path`
 to `from`/`to`, and bytes `content` to `bytes`. A change that uses the
 Store's own names (`from`, `to`, `oldText`, `newText`, `bytes`) is refused,
 so a folder scope can check every path field
-([`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs)).
+([`calls/file.rs`](../../../../../control/crates/layerfs-store/src/calls/file.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs)).
 
 ## Options
 

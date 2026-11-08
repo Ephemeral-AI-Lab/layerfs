@@ -39,10 +39,29 @@ class AsyncProjectFamily:
         """remove one project from its Store"""
 
 class AsyncBranchFamily:
-    async def list(self, project: str, *, page_size: int | None = None, page_pos: int | None = None) -> Result:
+    async def list(
+        self,
+        project: str,
+        *,
+        page_size: int | None = None,
+        page_pos: int | None = None,
+        page: int | None = None,
+    ) -> Result:
         """a project's Branches"""
     async def get(self, project: str, branch: str) -> Result:
         """one Branch and its head Commit"""
+    async def commits(
+        self,
+        project: str,
+        branch: str,
+        *,
+        page: int | None = None,
+        page_size: int | None = None,
+        at_commit: str | None = None,
+    ) -> Result:
+        """saved branch commits or main publications, newest first"""
+    async def get_commit(self, project: str, branch: str, commit: str) -> Result:
+        """one saved Commit or main publication"""
     async def fork(self, project: str, name: str, from_branch: str, from_commit: str | None = None) -> Result:
         """a new Branch from another Branch's head or Commit"""
     async def merge(
@@ -68,6 +87,11 @@ class AsyncBranchFamily:
         page_size: int | None = None,
         page_pos: int | None = None,
         cursor: str | None = None,
+        page: int | None = None,
+        from_commit: str | None = None,
+        to_commit: str | None = None,
+        path_prefix: str | None = None,
+        include_attribution: bool | None = None,
     ) -> Result:
         """files that differ between two Branches' heads"""
 
@@ -118,6 +142,7 @@ class AsyncFileFamily:
         commit: str | None = None,
         *,
         page_size: int | None = None,
+        page: int | None = None,
         page_pos: int | None = None,
     ) -> Result:
         """a folder's entries"""
@@ -130,6 +155,7 @@ class AsyncFileFamily:
         commit: str | None = None,
         *,
         page_size: int | None = None,
+        page: int | None = None,
         page_pos: int | None = None,
     ) -> Result:
         """paths under `path` matching a glob"""
@@ -142,9 +168,22 @@ class AsyncFileFamily:
         commit: str | None = None,
         *,
         page_size: int | None = None,
+        page: int | None = None,
         page_pos: int | None = None,
     ) -> Result:
         """lines under `path` matching a regular expression"""
+    async def revision(
+        self,
+        project: str,
+        branch: str,
+        path: str,
+        *,
+        at_commit: str | None = None,
+        traversal: str | None = None,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> Result:
+        """saved changes to a literal path"""
     async def blame(
         self,
         project: str,
@@ -153,6 +192,7 @@ class AsyncFileFamily:
         commit: str | None = None,
         *,
         from_line: int | None = None,
+        line_count: int | None = None,
     ) -> Result:
         """the Commit of each line"""
     async def diff(
@@ -165,6 +205,10 @@ class AsyncFileFamily:
         *,
         left_commit: str | None = None,
         right_commit: str | None = None,
+        include_attribution: bool | None = None,
+        allow_missing: bool | None = None,
+        page: int | None = None,
+        page_size: int | None = None,
     ) -> Result:
         """the difference between two files"""
     async def write(

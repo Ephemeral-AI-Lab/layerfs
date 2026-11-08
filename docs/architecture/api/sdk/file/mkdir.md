@@ -10,7 +10,7 @@ Makes a folder, with any missing parents, on a Branch as one Commit.
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/mkdir.rs`](../../../../../api/crates/layerfs-api/src/file/mkdir.rs) |
-| Implemented in | `layerfs_store::calls::file_mkdir` → `file`, Store method `fs.mkdir` ([`methods/file/mkdir.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/mkdir.rs)) |
+| Implemented in | `layerfs_store::calls::file::mkdir`, Store method `fs.mkdir` ([`methods/file/mkdir.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/mkdir.rs)) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature

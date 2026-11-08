@@ -16,7 +16,7 @@ pub(crate) const CALL: Call = call(
         a("path", Text),
         opt("commit", Name),
     ],
-    &[opt("from_line", Int)],
+    &[opt("from_line", Int), opt("line_count", Int)],
     "the Commit of each line",
     run,
 );
@@ -30,6 +30,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         commit: text("commit"),
         path: text("path").unwrap_or_default(),
         from_line: args.get_int("from_line"),
+        line_count: args.get_int("line_count"),
     };
     let (home, events) = context.parts();
     blame(home, events, &request)

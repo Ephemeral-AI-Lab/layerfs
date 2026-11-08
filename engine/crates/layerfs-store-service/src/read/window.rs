@@ -92,22 +92,20 @@ fn skip(bytes: &[u8], count: u64) -> Result<usize, u64> {
     Err(seen)
 }
 
-/// Calls `visit` with the file's text, in order, as whole valid UTF-8 parts.
-/// A NUL or invalid UTF-8 ends the text at the start of the window it is
-/// found in, as the window-at-a-time scan did, and the scan then fails
-/// `Binary` unless `visit` stopped it first. A part may end inside a line.
-///
-/// A chunked file is read in one pass, so each chunk is decoded once and
-/// the mapping walked once; its text is handed on in parts of about
-/// [`BLOCK`] bytes as the pass delivers it, and stopping ends the pass.
-///
-/// `view` is the file's root when the caller read it already, as a batch.
-pub(super) fn texts(
+/// Logical payload actually delivered, and whether the request byte budget ended the scan.
+pub struct Scan {
+    pub bytes: u64,
+    pub exhausted: bool,
+}
+
+/// Streams admitted text using the existing window validation and early-stop semantics.
+pub(super) fn texts_bounded(
     reader: &dyn AuthenticatedObjects,
     entry: &EntryFacts,
     view: Option<FileView>,
+    budget: u64,
     mut visit: impl FnMut(&str) -> Result<bool, SdkRefusal>,
-) -> Result<(), SdkRefusal> {
+) -> Result<Scan, SdkRefusal> {
     if entry.value.kind != InodeKind::RegularFile {
         return Err(args::refuse(
             if entry.value.kind == InodeKind::Directory {
@@ -132,13 +130,18 @@ pub(super) fn texts(
         .map_err(args::content)?,
     };
     let size = view.logical_len();
-    // A whole-file payload is already in memory: one part, nothing copied.
+    let end = size.min(budget);
+    // A whole-file payload is already resident; only the admitted prefix is scanned.
     if let Some(payload) = view.whole_file_bytes().map_err(args::content)? {
-        let (text, bad) = checked(payload, 0, size, true);
-        return if !visit(text)? || !bad {
-            Ok(())
+        let (text, bad) = checked(&payload[..end as usize], 0, size, end == size);
+        let stopped = !visit(text)?;
+        return if stopped || !bad {
+            Ok(Scan {
+                bytes: end,
+                exhausted: end < size && !stopped,
+            })
         } else {
-            Err(binary())
+            Err(scan_error(binary(), end))
         };
     }
     let mut feed = Feed {
@@ -147,19 +150,49 @@ pub(super) fn texts(
         size,
         visit: &mut visit,
         end: None,
+        received: 0,
     };
     // The pass's time includes the scan of what it delivers.
     let read = crate::telemetry::timed("sdk.lines", |timing| {
         timing
             .child("content.read")
-            .run(|scope| view.read_range(reader, 0..size, &mut feed, scope))
+            .run(|scope| view.read_range(reader, 0..end, &mut feed, scope))
     });
-    if let Some(end) = feed.end.take() {
-        return end;
+    if let Some(result) = feed.end.take() {
+        result.map_err(|error| scan_error(error, feed.received))?;
+        return Ok(Scan {
+            bytes: feed.received,
+            exhausted: false,
+        });
     }
     read.map_err(args::content)?;
-    feed.deliver(true);
-    feed.end.unwrap_or(Ok(()))
+    feed.deliver(end == size);
+    let exhausted = end < size && feed.end.is_none();
+    feed.end
+        .unwrap_or(Ok(()))
+        .map_err(|error| scan_error(error, feed.received))?;
+    Ok(Scan {
+        bytes: feed.received,
+        exhausted,
+    })
+}
+
+/// Delivered-byte accounting belongs to the internal grep scanner, not public refusals.
+pub(super) fn without_scan_detail(mut error: SdkRefusal) -> SdkRefusal {
+    if error.code == "Binary" {
+        error.detail = layerfs_bridge::control::SdkValue::Null;
+    }
+    error
+}
+
+fn scan_error(mut error: SdkRefusal, bytes: u64) -> SdkRefusal {
+    if error.code == "Binary" {
+        error.detail = layerfs_bridge::control::SdkValue::map([(
+            "bytesScanned",
+            layerfs_bridge::control::SdkValue::Int(bytes as i64),
+        )]);
+    }
+    error
 }
 
 /// The sink of a file's single read pass: bytes not yet handed on, from file
@@ -170,6 +203,7 @@ struct Feed<'v> {
     size: u64,
     visit: &'v mut dyn FnMut(&str) -> Result<bool, SdkRefusal>,
     end: Option<Result<(), SdkRefusal>>,
+    received: u64,
 }
 
 impl Feed<'_> {
@@ -193,6 +227,7 @@ impl Feed<'_> {
 
 impl std::io::Write for Feed<'_> {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.received += bytes.len() as u64;
         self.pending.extend_from_slice(bytes);
         if self.pending.len() as u64 >= BLOCK && !self.deliver(false) {
             // Ends the read pass; `end` says why.
@@ -278,10 +313,22 @@ pub fn lines(
     entry: &EntryFacts,
     prefix: usize,
     from: u64,
-    mut visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
+    visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
 ) -> Result<(), SdkRefusal> {
+    lines_bounded(reader, entry, prefix, from, u64::MAX, visit).map(|_| ())
+}
+
+/// Same line semantics with an admitted logical read prefix, never a file-size cap.
+pub fn lines_bounded(
+    reader: &dyn AuthenticatedObjects,
+    entry: &EntryFacts,
+    prefix: usize,
+    from: u64,
+    budget: u64,
+    mut visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
+) -> Result<Scan, SdkRefusal> {
     let (mut open, mut stopped) = (Open::new(), false);
-    texts(reader, entry, None, |text| {
+    let scan = texts_bounded(reader, entry, None, budget, |text| {
         let bytes = text.as_bytes();
         let mut at = 0;
         while at < bytes.len() {
@@ -315,11 +362,15 @@ pub fn lines(
             }
         }
         Ok(true)
-    })?;
+    })
+    .map_err(without_scan_detail)?;
     if !stopped && open.length > 0 {
-        visit(open.number, open.finish(true))?;
+        let number = open.number;
+        let mut line = open.finish(true);
+        line.truncated |= scan.exhausted;
+        visit(number, line)?;
     }
-    Ok(())
+    Ok(scan)
 }
 
 pub(super) fn binary() -> SdkRefusal {

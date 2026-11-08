@@ -1,6 +1,6 @@
 //! `file.list`: a folder's entries.
-use crate::calls::table::Kind::{Name, Project, Text};
-use crate::calls::table::{a, call, opt, Call, PAGE};
+use crate::calls::table::Kind::{Int, Name, Project, Text};
+use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
@@ -17,7 +17,11 @@ pub(crate) const CALL: Call = call(
         a("path", Text),
         opt("commit", Name),
     ],
-    &PAGE,
+    &[
+        opt("page_size", Int),
+        opt("page", Int),
+        opt("page_pos", Int),
+    ],
     "a folder's entries",
     run,
 );
@@ -33,6 +37,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         page: Page {
             size: args.get_int("page_size"),
             pos: args.get_int("page_pos"),
+            number: args.get_int("page"),
         },
     };
     let (home, events) = context.parts();

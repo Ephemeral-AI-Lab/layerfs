@@ -32,7 +32,7 @@ reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-61 calls in 9 families, counted from the Node table. Calls present: Node 61, Python 61, Python `aio` 61, CLI 61.
+64 calls in 9 families, counted from the Node table. Calls present: Node 64, Python 64, Python `aio` 64, CLI 64.
 
 Argument names that are Python keywords: none.
 
@@ -45,22 +45,25 @@ Front-end problems: none.
 | `project.get` | project | - | yes | yes | yes | yes |
 | `project.export` | project, destination | branch, on_progress() | yes | yes | yes | yes (--progress) |
 | `project.remove` | project | - | yes | yes | yes | yes |
-| `branch.list` | project | page_size, page_pos | yes | yes | yes | yes |
+| `branch.list` | project | page_size, page_pos, page | yes | yes | yes | yes |
 | `branch.get` | project, branch | - | yes | yes | yes | yes |
+| `branch.commits` | project, branch | page, page_size, at_commit | yes | yes | yes | yes |
+| `branch.get_commit` | project, branch, commit | - | yes | yes | yes | yes |
 | `branch.fork` | project, name, from_branch, ?from_commit | - | yes | yes | yes | yes |
 | `branch.merge` | project, name, a, b | message, units | yes | yes | yes | yes |
 | `branch.publish` | project, branch, ?commit | - | yes | yes | yes | yes |
-| `branch.diff` | project, from_branch, to_branch | paths_only, page_size, page_pos, cursor | yes | yes | yes | yes |
+| `branch.diff` | project, from_branch, to_branch | paths_only, page_size, page_pos, cursor, page, from_commit, to_commit, path_prefix, include_attribution | yes | yes | yes | yes |
 | `commit.list` | project, branch | page_size, page_pos | yes | yes | yes | yes |
 | `commit.get` | project, branch, commit | - | yes | yes | yes | yes |
 | `commit.diff` | project, from_commit, to_commit | paths_only, page_size, page_pos, cursor | yes | yes | yes | yes |
 | `file.read` | project, branch, path, ?commit | start_line, end_line | yes | yes | yes | yes |
 | `file.stat` | project, branch, path, ?commit | - | yes | yes | yes | yes |
-| `file.list` | project, branch, path, ?commit | page_size, page_pos | yes | yes | yes | yes |
-| `file.glob` | project, branch, path, pattern, ?commit | page_size, page_pos | yes | yes | yes | yes |
-| `file.grep` | project, branch, path, pattern, ?commit | page_size, page_pos | yes | yes | yes | yes |
-| `file.blame` | project, branch, path, ?commit | from_line | yes | yes | yes | yes |
-| `file.diff` | project, left_branch, left_path, right_branch, right_path | left_commit, right_commit | yes | yes | yes | yes |
+| `file.list` | project, branch, path, ?commit | page_size, page, page_pos | yes | yes | yes | yes |
+| `file.glob` | project, branch, path, pattern, ?commit | page_size, page, page_pos | yes | yes | yes | yes |
+| `file.grep` | project, branch, path, pattern, ?commit | page_size, page, page_pos | yes | yes | yes | yes |
+| `file.revision` | project, branch, path | at_commit, traversal, page, page_size | yes | yes | yes | yes |
+| `file.blame` | project, branch, path, ?commit | from_line, line_count | yes | yes | yes | yes |
+| `file.diff` | project, left_branch, left_path, right_branch, right_path | left_commit, right_commit, include_attribution, allow_missing, page, page_size | yes | yes | yes | yes |
 | `file.write` | project, branch, path, content | message, mode | yes | yes | yes | yes (stdin/--from) |
 | `file.edit` | project, branch, path | old, new, message | yes | yes | yes | yes |
 | `file.rm` | project, branch, path | message | yes | yes | yes | yes |

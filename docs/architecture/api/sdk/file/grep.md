@@ -10,7 +10,7 @@ Finds the lines under a folder that contain a literal text, at a Branch, `main` 
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/grep.rs`](../../../../../api/crates/layerfs-api/src/file/grep.rs) |
-| Implemented in | `layerfs_store::calls::file_grep` → `file`, Store method `fs.grep` ([`methods/file/grep.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/grep.rs)) |
+| Implemented in | `layerfs_store::calls::file::grep`, Store method `fs.grep` ([`methods/file/grep.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/grep.rs)) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -126,3 +126,48 @@ layerfs file grep shop/api agent /src TODO
 ---
 
 ← [file.glob](glob.md) · [Up: file](README.md) · [file.blame](blame.md) →
+
+
+## Immutable saved references
+
+Responses include `at: { id, kind: "Commit" | "Layer", branch, root }` with full
+identities. Reuse `at.id` as the existing positional `commit` argument to pin later
+reads to the same saved tree. Historical IDs are validated against the selected
+project; an ID in another project cannot bypass that boundary. Reads do not inspect
+live Workspace overlays. See [saved queries](../saved-queries.md).
+
+## Numbered matching-result pages
+
+Add `page` alongside `page_size`; page 1 is first. Retain legacy `page_pos` when
+`page` is absent, and reject both together. For example:
+
+```js
+layerfs.file.grep(project, branch, path, pattern, pinned_id, { page: 2, page_size: 20 });
+```
+
+Numbered mode returns `page`, `page_size` and boolean `has_more`. Reuse the same
+pinned version, filters and page size. Ordering remains directory component/name
+order, with grep lines in ascending line order within each file. A successful
+page contains matching results; it does not silently skip results on reply-budget
+exhaustion. Work or mandatory-reply exhaustion returns `Capacity`; no total count
+or total pages is promised. Legacy offset response fields stay compatible.
+
+Numbered grep admits 10,000 candidate/matching-line visits and 16 MiB cumulative file payload per request; narrow the path when a query cannot finish. These are query admission bounds, not limits on file or project size. Binary files are counted as skipped.
+
+Numbered pages cache the last matching path and line, plus the observed binary
+skip count before that match. This permits resuming within one file without
+replaying preceding namespace paths; cached and cold pages retain the same
+matching records and skipped counts. The query key includes the full saved ID,
+path, literal pattern and page size, and cache state is bounded and evictable.
+
+The 16 MiB per-request replay admission counts payload actually delivered,
+including failed binary-validation windows. A larger file can produce a page
+from its early matching lines without admitting the whole file. Exhausting this
+budget before proving the requested matching page refuses Capacity; it does not
+silently truncate matching results. Legacy offset query behavior is preserved.
+
+The cached line boundary does not constitute a byte-offset index: within the
+resumed file, validation and line counting still replay from byte zero. A deep
+page inside one file can therefore refuse Capacity at the payload replay budget,
+even with a namespace cache hit. Narrow the path or literal query where useful;
+this change does not promise arbitrary deep-file line seeking.

@@ -14,6 +14,11 @@ async function main(): Promise<void> {
   await lfs.project.list("shop", { page_size: 10, page_pos: 2n });
   await lfs.branch.fork("shop/api", "agent", "main", "abc");
   await lfs.branch.fork("shop/api", "agent", "main", null);
+  await lfs.branch.commits("shop/api", "agent", { page: 1, page_size: 50, at_commit: "saved-id" });
+  await lfs.branch.get_commit("shop/api", "main", "layer-id");
+  await lfs.branch.diff("shop/api", "main", "agent", { from_commit: "layer-id", to_commit: "saved-id", include_attribution: true, page: 1 });
+  await lfs.file.revision("shop/api", "agent", "/README.md", { at_commit: "saved-id", page: 1, page_size: 10 });
+  await lfs.file.diff("shop/api", "main", "/README.md", "agent", "/README.md", { include_attribution: true, allow_missing: true, page: 1 });
   const options: FileReadOptions = { start_line: 2n, end_line: 5 };
   await lfs.file.read("shop/api", "main", "/README.md", null, options);
   await lfs.file.read("shop/api", "main", "/README.md", "commit-id", { start_line: 1 });

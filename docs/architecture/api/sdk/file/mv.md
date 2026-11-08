@@ -10,7 +10,7 @@ Moves (renames) a path on a Branch as one Commit; the target must not exist.
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/mv.rs`](../../../../../api/crates/layerfs-api/src/file/mv.rs) |
-| Implemented in | `layerfs_store::calls::file_mv` → `file`, Store method `fs.mv` ([`methods/file/mv.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/mv.rs)); `from_path`, `to_path` become `from`, `to` |
+| Implemented in | `layerfs_store::calls::file::mv`, Store method `fs.mv` ([`methods/file/mv.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/mv.rs)); `from_path`, `to_path` become `from`, `to` |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
