@@ -84,6 +84,20 @@ impl PostgresHandles {
         Self::open(selection, binding, cursor_key, false)
     }
 
+    /// Opens an independently owned observational connection whose DNS,
+    /// TCP/TLS/authentication and every statement honor the absolute deadline.
+    pub fn open_diagnostic(
+        selection: &PostgresSelection,
+        binding: &[u8],
+        cursor_key: [u8; 32],
+        deadline: Option<std::time::Instant>,
+        resolver: &mut crate::diagnostic::Resolver<'_>,
+    ) -> Result<Self, PersistenceError> {
+        let session = Arc::new(Session::connect_diagnostic(selection, deadline, resolver)?);
+        Self::validated(session, PostgresCheck::Full, Some(binding), cursor_key)
+            .map(|(_, handles)| handles)
+    }
+
     /// Opens one read-only session under the binding the schema records,
     /// returned for the caller to compare with its own (a Sandbox's reach
     /// check, #65): `selection.check` checks everything else, as an open

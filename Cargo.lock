@@ -909,6 +909,8 @@ dependencies = [
  "postgres-native-tls",
  "rusqlite",
  "sha2 0.11.0",
+ "tokio",
+ "tokio-postgres",
 ]
 
 [[package]]

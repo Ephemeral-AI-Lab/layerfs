@@ -3,6 +3,7 @@
 //! Entry module: declarations and re-exports only.
 
 pub mod assemble;
+pub mod audit;
 pub mod layout;
 
 pub use assemble::{

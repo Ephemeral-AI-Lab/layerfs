@@ -17,6 +17,10 @@ mod rows;
 mod transaction;
 pub(crate) use lineage_backfill::backfill_lineage;
 pub use provider::HistoryProvider;
+pub(crate) use rows::{
+    branch_row as diagnostic_branch, commit_row as diagnostic_commit,
+    layer_row as diagnostic_layer, stack_row as diagnostic_stack,
+};
 
 use bindings::params;
 use layerfs_history::query;
