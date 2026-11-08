@@ -115,6 +115,13 @@ only when stdout is a terminal; `NO_COLOR` turns its colours off.
 | stdout cannot be written while printing (reader gone, disk full) | nothing more; the call was already made and its effects stay | 125 | `print`; help and `--version` print the same way |
 | `doctor` | the legacy report as JSON, or with `--text` findings and fixes; explicit target commands also show outcomes and incomplete coverage | 0 for a produced report, including faults; usage 2, refusal 125 | `findings`, explicit `checks` and `complete` |
 
+In `--text` mode, scalar fields defined by the call table or docs as epoch-millisecond timestamps (`created`, `modified`, `at`) are rendered as `YYYY-MM-DD HH:MM:SS` UTC. Fields defined as byte counts (`size`, `bytes`, `part_size`, `memory`, `disk`, `free`, `free_disk`, `wal_bytes`, `incoming_bytes`, `stdout_bytes`, `stderr_bytes`, `logical`, `new_canonical`, `new_stored`, `new_metadata`) are rendered in human units (B, KiB, MiB, GiB, TiB, PiB). When stdout is a terminal, table headers are displayed in bold colour (reset afterwards, respecting `NO_COLOR`). Help section titles (`USAGE`, `COMMANDS`) are similarly highlighted on terminals.
+
+When a user makes a mistake on the command line:
+- An unknown call suggests the closest existing call in that family (or closest family) when one is close (e.g. `did you mean layerfs store get?`).
+- An unknown option lists the options accepted by that call.
+The existing error message remains the first line, and exit code remains 2.
+
 A stdout that is closed before the process starts (`>&-`) is not an error:
 the Rust runtime reopens it on `/dev/null`, so the call is made, nothing is
 shown and the exit is 0. A stderr that cannot be written loses its line
@@ -134,6 +141,8 @@ library event                  --progress      --stream       neither
 {stream:"stdout", bytes}    -> (dropped)        stdout        (dropped)
 {stream:"stderr", bytes}    -> (dropped)        stderr        (dropped)
 ```
+
+With `--progress`, if stderr is connected to an interactive terminal, the command prints one updating in-place status line displaying the phase, done/total progress, and transfer rate, clearing it upon completion. When stderr is not a terminal (e.g. piped to another command), it prints raw JSON lines byte-for-byte. If a script needs JSON lines on a terminal, setting the environment variable `LAYERFS_PROGRESS_JSON=1` forces JSON lines output on stderr even on a TTY.
 
 With `--stream` the result JSON is not printed. The exit code is the
 result's `exit_code` when it fits 0 to 255, 1 when it does not, 0 when the

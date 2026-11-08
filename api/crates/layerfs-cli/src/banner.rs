@@ -6,7 +6,7 @@ use std::io::IsTerminal;
 
 // Brand blue: bright blue foreground; reset afterwards. NO_COLOR turns
 // every color off (https://no-color.org/).
-fn paint(text: &str, code: &str) -> String {
+pub fn paint(text: &str, code: &str) -> String {
     if std::env::var_os("NO_COLOR").is_some() {
         text.to_owned()
     } else {
