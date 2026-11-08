@@ -21,7 +21,12 @@
 //! in all stay in memory; when a write or resize crosses that budget, the
 //! least recently touched resident bodies are spilled to the export's own
 //! scratch directory (one file per companion serial, read and written with
-//! `pread`/`pwrite` outside the companion lock). Removing or replacing a main
+//! `pread`/`pwrite` outside the companion lock). A spill writes a temporary
+//! `<serial>.<n>.tmp` that only the call adopting it renames to `<serial>`, so
+//! two calls spilling the same companion never share a file, and no descriptor
+//! is kept for a spilled body: an operation opens its file by path and closes
+//! it again, so open descriptors grow with concurrent operations and not with
+//! the number of spilled companions. Removing or replacing a main
 //! file drops its paired `._<name>` companion and any spilled file with it;
 //! when [`HELD`] is reached, orphan companions whose main file is no longer in
 //! the export's name index are reclaimed first, and only if [`HELD`] live
@@ -40,7 +45,7 @@ use std::{
     io,
     os::unix::fs::{DirBuilderExt, FileExt, OpenOptionsExt},
     path::{Path, PathBuf},
-    sync::{atomic::Ordering, Arc},
+    sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -55,10 +60,16 @@ pub const FILE_BYTES: u64 = 1 << 20;
 pub const RESIDENT_BYTES: usize = 32 << 20;
 /// Mode of a companion created without one.
 const MODE: u32 = 0o644;
+/// Temporary names tried for one spilled body before the spill gives up.
+const SPILL_TEMP_TRIES: u32 = 64;
+/// Counter behind the distinct temporary name of each spilled body.
+static SPILL_TEMP: AtomicU64 = AtomicU64::new(0);
 
 enum Body {
     Resident(Vec<u8>),
-    Spilled(Arc<File>),
+    /// On disk in the spill directory, under the companion's own serial; each
+    /// operation opens it by path instead of holding it open.
+    Spilled,
 }
 
 struct Companion {
@@ -72,7 +83,7 @@ impl Companion {
     fn resident_len(&self) -> usize {
         match &self.body {
             Body::Resident(bytes) => bytes.len(),
-            Body::Spilled(_) => 0,
+            Body::Spilled => 0,
         }
     }
 }
@@ -129,28 +140,35 @@ impl Companions {
         self.resident_bytes -= file.resident_len();
         match file.body {
             Body::Resident(_) => None,
-            Body::Spilled(_) => (self.spill_dir.as_ref()).map(|dir| dir.join(serial.to_string())),
+            Body::Spilled => (self.spill_dir.as_ref()).map(|dir| spill_path(dir, serial)),
         }
     }
-    /// Switches `serial` to the spilled `handle` of `len` bytes when nothing
-    /// touched it since `used` was read and its body is still resident. A body
-    /// another call changed or already spilled stays: `Ok(false)` then, and
-    /// the file just written is the caller's to unlink.
+    /// Renames the temporary file `temp`, which holds `serial`'s body of `len`
+    /// bytes, to the companion's own name in the spill directory and switches
+    /// the companion to it, when nothing touched it since `used` was read and
+    /// its body is still resident. A body another call changed or already
+    /// spilled stays: `Ok(false)` then, and `temp` is the caller's to unlink.
     fn adopt_spilled(
         &mut self,
         serial: u64,
         used: u64,
-        handle: Arc<File>,
+        temp: &Path,
         len: usize,
     ) -> Result<bool, Status> {
+        let path = self
+            .spill_dir
+            .as_ref()
+            .map(|dir| spill_path(dir, serial))
+            .ok_or(Status::NoSpc)?;
         let Some(file) = self.files.get_mut(&serial) else {
             return Err(Status::Stale);
         };
         if !spill_applies(used, file.used, matches!(file.body, Body::Resident(_))) {
             return Ok(false);
         }
+        fs::rename(temp, path).map_err(|e| io_status(&e))?;
         let old = file.resident_len();
-        file.body = Body::Spilled(handle);
+        file.body = Body::Spilled;
         file.len = file.len.max(len);
         self.resident_bytes -= old;
         Ok(true)
@@ -194,31 +212,46 @@ fn io_status(error: &io::Error) -> Status {
         _ => Status::Io,
     }
 }
-/// Creates `dir` and the spilled file of `serial` in it, holding `bytes` and
-/// extending it to `len` bytes. Only this user reads companion bodies, so the
-/// modes are set here rather than left to the caller's umask.
-fn create_spilled(dir: &Path, serial: u64, bytes: &[u8], len: u64) -> Result<Arc<File>, Status> {
+/// The spill directory's own file of `serial`.
+fn spill_path(dir: &Path, serial: u64) -> PathBuf {
+    dir.join(serial.to_string())
+}
+/// Creates `dir` and a temporary file in it holding `bytes` extended to `len`
+/// bytes, then closes it. Two calls spilling the same `serial` write different
+/// temporary files, and only the call whose file is adopted renames it to the
+/// companion's own name. Only this user reads companion bodies, so the modes
+/// are set here rather than left to the caller's umask.
+fn create_spilled(dir: &Path, serial: u64, bytes: &[u8], len: u64) -> Result<PathBuf, Status> {
     let made = fs::DirBuilder::new()
         .recursive(true)
         .mode(0o700)
         .create(dir);
     made.map_err(|e| io_status(&e))?;
-    let path = dir.join(serial.to_string());
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(&path)
-        .map_err(|e| io_status(&e))?;
-    let written = (file.write_all_at(bytes, 0)).and_then(|()| file.set_len(len));
-    if let Err(e) = written {
+    for _ in 0..SPILL_TEMP_TRIES {
+        let name = SPILL_TEMP.fetch_add(1, Ordering::Relaxed);
+        let path = dir.join(format!("{serial}.{name}.tmp"));
+        let file = match OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(io_status(&e)),
+        };
+        let written = (file.write_all_at(bytes, 0)).and_then(|()| file.set_len(len));
         drop(file);
-        drop(fs::remove_file(&path));
-        return Err(io_status(&e));
+        return match written {
+            Ok(()) => Ok(path),
+            Err(e) => {
+                drop(fs::remove_file(&path));
+                Err(io_status(&e))
+            }
+        };
     }
-    Ok(Arc::new(file))
+    Err(Status::Io)
 }
 /// Unlinks the spilled files a companion operation retired, outside the lock.
 fn unlink_paths(paths: impl IntoIterator<Item = PathBuf>) {
@@ -285,10 +318,11 @@ impl Edit<'_> {
 }
 /// Where [`Kernel::edit_resident`] found a companion's body.
 enum Room {
-    /// Applied to the resident body.
-    Resident,
-    /// On disk: finish with this handle outside the lock.
-    Spilled(Arc<File>),
+    /// Applied to the resident body, whose length, recency and time were
+    /// recorded under the same lock: this is the companion's stat afterwards.
+    Resident(ViewStat),
+    /// On disk: finish with its file outside the lock.
+    Spilled,
     /// Resident, but growing it needs this many more budget bytes first.
     Grow(usize),
 }
@@ -346,32 +380,47 @@ impl Kernel {
     }
     /// Writes `serial`'s body out to the spill directory and switches it to
     /// that file, keeping at least `keep` bytes (all of them when `None`),
-    /// with the disk I/O outside the companion lock. `Ok(None)` when another
+    /// with the disk I/O outside the companion lock. `Ok(false)` when another
     /// call changed the companion, or already spilled it, while the file was
-    /// written: that file is dropped and the caller decides again on the body
-    /// it now finds.
-    fn spill_one(&self, serial: u64, keep: Option<usize>) -> Result<Option<Arc<File>>, Status> {
+    /// written: that temporary file is dropped and the caller decides again on
+    /// the body it now finds.
+    fn spill_one(&self, serial: u64, keep: Option<usize>) -> Result<bool, Status> {
         let (dir, bytes, size, used) = {
             let companions = self.companions();
             let file = companions.files.get(&serial).ok_or(Status::Stale)?;
             let bytes = match &file.body {
                 Body::Resident(bytes) => bytes.clone(),
-                Body::Spilled(handle) => return Ok(Some(handle.clone())),
+                Body::Spilled => return Ok(true),
             };
             let dir = companions.spill_dir.clone().ok_or(Status::NoSpc)?;
             let size = keep.unwrap_or(0).max(bytes.len());
             (dir, bytes, size, file.used)
         };
-        let handle = create_spilled(&dir, serial, &bytes, size as u64)?;
-        let adopted = {
-            let mut companions = self.companions();
-            companions.adopt_spilled(serial, used, handle.clone(), size)
-        };
+        let temp = create_spilled(&dir, serial, &bytes, size as u64)?;
+        let adopted = self.companions().adopt_spilled(serial, used, &temp, size);
         if matches!(adopted, Ok(true)) {
-            return Ok(Some(handle));
+            return Ok(true);
         }
-        unlink_paths([dir.join(serial.to_string())]);
-        adopted.map(|_| None)
+        unlink_paths([temp]);
+        adopted.map(|_| false)
+    }
+    /// The spill directory's file of `serial`, opened for one operation and
+    /// closed again when the returned descriptor drops: the export holds no
+    /// descriptor per spilled companion. A file or directory that is gone
+    /// means the companion itself is gone.
+    fn spill_file(&self, serial: u64, write: bool) -> Result<File, Status> {
+        let dir = {
+            let companions = self.companions();
+            companions.spill_dir.clone().ok_or(Status::Stale)?
+        };
+        OpenOptions::new()
+            .read(true)
+            .write(write)
+            .open(spill_path(&dir, serial))
+            .map_err(|e| match e.kind() {
+                io::ErrorKind::NotFound => Status::Stale,
+                _ => io_status(&e),
+            })
     }
     /// GETATTR of a companion serial.
     pub(crate) fn companion_stat(&self, serial: u64) -> Result<ViewStat, Status> {
@@ -550,19 +599,22 @@ impl Kernel {
             let length = file.len as u64;
             let start = offset.min(length) as usize;
             let end = offset.saturating_add(u64::from(count)).min(length) as usize;
-            let handle = match &file.body {
+            let spilled = match &file.body {
                 Body::Resident(bytes) => {
-                    out.extend_from_slice(&bytes[start..end]);
-                    None
+                    // A body and its length are recorded under one lock; clamp
+                    // anyway so no reply slices past the bytes it holds.
+                    let stop = end.min(bytes.len());
+                    out.extend_from_slice(bytes.get(start..stop).unwrap_or_default());
+                    false
                 }
-                Body::Spilled(handle) => Some(handle.clone()),
+                Body::Spilled => true,
             };
             companions.use_serial(serial);
-            (handle, length, start, end)
+            (spilled, length, start, end)
         };
-        if let Some(spilled) = spilled {
+        if spilled {
             let mut buf = vec![0u8; end - start];
-            spilled
+            self.spill_file(serial, false)?
                 .read_exact_at(&mut buf, start as u64)
                 .map_err(|e| io_status(&e))?;
             out.extend_from_slice(&buf);
@@ -599,8 +651,8 @@ impl Kernel {
         // companion while its body was written out, which decides again.
         for _ in 0..3 {
             let spilled = match self.edit_resident(serial, target, &edit)? {
-                Room::Resident => return self.record_edit(serial, &edit),
-                Room::Spilled(handle) => Some(handle),
+                Room::Resident(stat) => return Ok(stat),
+                Room::Spilled => true,
                 Room::Grow(need) => {
                     if self.spill_for(serial, need)? {
                         continue;
@@ -608,38 +660,48 @@ impl Kernel {
                     self.spill_one(serial, Some(target))?
                 }
             };
-            if let Some(handle) = spilled {
-                edit.disk(&handle)?;
+            if spilled {
+                edit.disk(&self.spill_file(serial, true)?)?;
                 return self.record_edit(serial, &edit);
             }
         }
         // Only other calls changing this companion in every round get here.
         Err(Status::Io)
     }
-    /// Applies `edit` to `serial`'s resident body while the budget holds it.
+    /// Applies `edit` to `serial`'s resident body while the budget holds it,
+    /// recording its length, recency and time under the same lock so no other
+    /// call ever sees a body and a length that disagree.
     fn edit_resident(&self, serial: u64, target: usize, edit: &Edit<'_>) -> Result<Room, Status> {
-        let mut companions = self.companions();
-        let avail = companions
-            .resident_budget
-            .saturating_sub(companions.resident_bytes);
-        let (before, after) = {
-            let body = companions.files.get_mut(&serial).map(|file| &mut file.body);
-            match body {
-                None => return Err(Status::Stale),
-                Some(Body::Spilled(handle)) => return Ok(Room::Spilled(handle.clone())),
-                Some(Body::Resident(bytes)) => {
-                    let need = target.saturating_sub(bytes.len());
-                    if need > avail {
-                        return Ok(Room::Grow(need));
-                    }
-                    let before = bytes.len();
-                    edit.memory(bytes);
-                    (before, bytes.len())
+        let mut guard = self.companions();
+        let Companions {
+            files,
+            tick,
+            resident_bytes,
+            resident_budget,
+            ..
+        } = &mut *guard;
+        let avail = resident_budget.saturating_sub(*resident_bytes);
+        let Some(file) = files.get_mut(&serial) else {
+            return Err(Status::Stale);
+        };
+        let before = match &mut file.body {
+            Body::Spilled => return Ok(Room::Spilled),
+            Body::Resident(bytes) => {
+                let need = target.saturating_sub(bytes.len());
+                if need > avail {
+                    return Ok(Room::Grow(need));
                 }
+                let before = bytes.len();
+                edit.memory(bytes);
+                before
             }
         };
-        companions.resident_bytes = companions.resident_bytes - before + after;
-        Ok(Room::Resident)
+        edit.record(file);
+        touch(&mut file.metadata);
+        *tick += 1;
+        file.used = *tick;
+        *resident_bytes = *resident_bytes - before + file.resident_len();
+        Ok(Room::Resident(Companions::stat(serial, file)))
     }
     /// Records an applied edit on `serial` and answers its stat.
     fn record_edit(&self, serial: u64, edit: &Edit<'_>) -> Result<ViewStat, Status> {

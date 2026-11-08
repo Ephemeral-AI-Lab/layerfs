@@ -184,7 +184,9 @@ Refresh after an install is covered in
                     serial >= SERIALS = 1 << 62
                     resident body <= RESIDENT_BYTES (32 MiB) in all;
                     older bodies spill to <mounts>/.appledouble/<namespace>/<serial>
-                    (pread/pwrite outside the companion lock; dir 0700, file 0600)
+                    (dir 0700, file 0600; written as <serial>.<n>.tmp and
+                     renamed on adoption; pread/pwrite outside the companion
+                     lock, opened by path per call, never held open)
                     LOOKUP GETATTR ACCESS READ WRITE SETATTR COMMIT
                     REMOVE, RENAME to another "._" name: served here
                     READDIR: not listed;  engine: never called
@@ -209,15 +211,24 @@ export removes the entire `<mounts>/.appledouble/<namespace>` directory
 remounts, daemon restarts and Commits do not retain them. A name is
 AppleDouble when it starts with `._` and has at least one more byte.
 
-A body is written out from a snapshot taken under the companion lock and is
-switched to that file only if the companion is still the one the snapshot saw
-(same `used` tick, still resident): a body another call wrote to while the file
-was being written wins, and the file just written is dropped. Disk I/O therefore
-never holds the lock, and no write of one call is overwritten by the older
-snapshot of another. The scratch directory is created `0700` and each spilled
-file `0600`, set explicitly rather than left to the process umask, so a caller
-embedding this crate without the daemon's `umask(0o077)` still keeps companion
-bytes to its own user. The daemon's startup `reclaim` removes whatever
+A body is written out from a snapshot taken under the companion lock, as a new
+`<serial>.<n>.tmp` opened with `create_new`, and is switched to that file only
+if the companion is still the one the snapshot saw (same `used` tick, still
+resident): the adopting call renames its temporary file to `<serial>`, so two
+calls spilling the same companion never write to or unlink each other's file, a
+body another call wrote to while the file was being written wins, and the file
+just written is dropped. Disk I/O therefore never holds the lock, and no write
+of one call is overwritten by the older snapshot of another. No descriptor is
+kept for a spilled body: READ, WRITE and SETATTR open `<serial>` for their own
+`pread`/`pwrite`/`set_len` and close it again, so descriptors grow with
+concurrent operations and not with the number of spilled companions, and a
+companion count above the process's own `RLIMIT_NOFILE` still reads and writes.
+An edit records a body's bytes, length, recency tick and time under one lock, so
+no call sees a resident body and a length that disagree, and a reply never
+slices past the bytes it holds. The scratch directory is created `0700` and each
+spilled file `0600`, set explicitly rather than left to the process umask, so a
+caller embedding this crate without the daemon's `umask(0o077)` still keeps
+companion bytes to its own user. The daemon's startup `reclaim` removes whatever
 `<mounts>/.appledouble` a daemon that ended without unmounting left behind,
 before it serves any export, and touches nothing else under the mount home.
 
