@@ -18,9 +18,9 @@ pub fn reference(store: &Arc<Store>, node: NodeId) -> Result<SdkValue> {
             let branch = record
                 .meta
                 .branch
-                .map(|id| store.history().branch(id))
+                .map(|id| store.published(|history| history.branch(id)))
                 .transpose()
-                .map_err(args::history)?
+                .map_err(args::published)?
                 .flatten()
                 .map(|b| b.name.as_str().to_owned());
             (record.root, branch)
@@ -83,9 +83,9 @@ pub fn record(store: &Arc<Store>, node: NodeId) -> Result<SdkValue> {
                 .transpose()?;
             let source_branch = r
                 .source_branch
-                .map(|id| store.history().branch(id))
+                .map(|id| store.published(|history| history.branch(id)))
                 .transpose()
-                .map_err(args::history)?
+                .map_err(args::published)?
                 .flatten();
             let value = args::layer_value(&r, source_branch.as_ref().map(|b| b.name.as_str()));
             let SdkValue::Map(mut fields) = value else {

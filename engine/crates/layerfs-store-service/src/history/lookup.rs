@@ -67,7 +67,7 @@ pub fn content(error: ContentError) -> SdkRefusal {
 }
 
 /// A failed published-history lookup: its history error, else the reader's.
-fn published(error: Arc<PortError>) -> SdkRefusal {
+pub(super) fn published(error: Arc<PortError>) -> SdkRefusal {
     match error.as_ref() {
         PortError::History(error) => history(error.clone()),
         other => refuse("Unknown", other.to_string(), SdkValue::Null),
