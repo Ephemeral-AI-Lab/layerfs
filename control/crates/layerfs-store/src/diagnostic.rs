@@ -112,8 +112,12 @@ pub fn postgresql(
             options.deadline,
             admission,
             &mut layerfs_bridge::network::resolve_all_within,
+            options.cancelled,
         )
         .map_err(|_| {
+            if options.cancelled.is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed)) {
+                observer(Observation { id: "store.admission.cancelled", outcome: Outcome::Unknown, message: "pinned-open connection or schema admission cancelled; logical integrity audit did not start".to_owned() });
+            }
             refused(
                 "Unavailable",
                 "PostgreSQL read-only Store open failed; credentials and driver error text omitted",

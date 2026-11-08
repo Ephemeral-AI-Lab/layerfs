@@ -20,6 +20,8 @@ pub use sqlite_structure::sqlite_structure;
 mod transaction;
 #[cfg(feature = "postgresql")]
 pub use postgresql::connection as postgresql_connection;
+#[cfg(feature = "postgresql")]
+pub(crate) use postgresql::with_cancellation;
 
 mod observation;
 pub(crate) use observation::emit;

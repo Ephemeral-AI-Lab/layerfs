@@ -153,15 +153,15 @@ fn connection_queries(
     }
     let table = format!("\"{}\".history_meta", selection.schema.replace('"', "\"\""));
     match client.query_one(
-        &format!("SELECT CASE WHEN octet_length(binding_key) BETWEEN 1 AND 128 THEN binding_key END,catalog_incarnation,CASE WHEN octet_length(catalog_id)=32 THEN catalog_id END FROM {table} WHERE id=1"),
+        &format!("SELECT CASE WHEN octet_length(binding_key) BETWEEN 1 AND 128 THEN binding_key END,CASE WHEN pg_typeof(catalog_incarnation)='bigint'::regtype THEN catalog_incarnation::text::bigint END,CASE WHEN octet_length(catalog_id)=32 THEN catalog_id END FROM {table} WHERE id=1"),
         &[],
     ) {
         Ok(row) => {
             let recorded: Option<Vec<u8>> = row.try_get(0).map_err(|_| PersistenceError::Malformed)?;
-            let incarnation: i64 = row.try_get(1).map_err(|_| PersistenceError::Malformed)?;
+            let incarnation: Option<i64> = row.try_get(1).map_err(|_| PersistenceError::Malformed)?;
             let catalog: Option<Vec<u8>> = row.try_get(2).map_err(|_| PersistenceError::Malformed)?;
             let matches = recorded.as_deref() == Some(binding)
-                && incarnation > 0
+                && incarnation.is_some_and(|value| value > 0)
                 && layerfs_history::CatalogId::derive(recorded.as_deref().unwrap_or_default())
                     .is_ok_and(|id| Some(id.as_slice()) == catalog.as_deref());
             emit(
@@ -210,7 +210,7 @@ fn connection_queries(
     Ok(())
 }
 
-fn with_cancellation<T>(
+pub(crate) fn with_cancellation<T>(
     source: Option<&std::sync::atomic::AtomicBool>,
     target: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     body: impl FnOnce() -> T,
@@ -284,7 +284,7 @@ impl PostgresHandles {
                 emit(observer,"store.schema",if error==BackendError::Integrity{Outcome::Fail}else{Outcome::Unknown},"pinned PostgreSQL schema admission changed or is unavailable; remaining logical checks blocked; no content-corruption inference");
                 return Err(error);
             }
-            let identity=tx.query("SELECT txid_current_snapshot()::text,catalog_incarnation,CASE WHEN octet_length(catalog_id)=32 THEN catalog_id END,CASE WHEN octet_length(binding_key) BETWEEN 1 AND 128 THEN binding_key END FROM history_meta WHERE id=1",vec![])?;
+            let identity=tx.query("SELECT md5(txid_current_snapshot()::text),catalog_incarnation,CASE WHEN octet_length(catalog_id)=32 THEN catalog_id END,CASE WHEN octet_length(binding_key) BETWEEN 1 AND 128 THEN binding_key END FROM history_meta WHERE id=1",vec![])?;
             let row=identity.first().ok_or(BackendError::Integrity)?;
             let snapshot:String=row.get(0)?;let incarnation:i64=row.get(1)?;
             let catalog=row.get::<Vec<u8>>(2).ok();let binding=row.get::<Vec<u8>>(3).ok();
@@ -292,7 +292,7 @@ impl PostgresHandles {
                 emit(observer,"store.identity",Outcome::Fail,"Store catalog/binding/incarnation changed after admission; pinned logical authority rejected; no content-corruption inference");
                 return Err(BackendError::Integrity);
             }
-            emit(observer,"store.snapshot",Outcome::Pass,format!("PostgreSQL REPEATABLE READ READ ONLY snapshot {snapshot}; catalog incarnation {incarnation}; long scans retain MVCC versions"));
+            emit(observer,"store.snapshot",Outcome::Pass,format!("PostgreSQL REPEATABLE READ READ ONLY snapshot fingerprint md5 {snapshot} (observation label, not authority); catalog incarnation {incarnation}; long scans retain MVCC versions"));
             super::postgresql_contract::check(tx,options,observer)?;
             let rows=tx.query("SELECT COALESCE(MAX(pack_id),0) FROM pack",vec![])?;
             let ceiling=rows.first().ok_or(BackendError::Integrity)?.get(0)?;

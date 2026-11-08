@@ -281,6 +281,7 @@ fn shared_admission_budget_does_not_become_an_implicit_full_audit_limit() {
         None,
         until,
         &mut resolver,
+        None,
     )
     .unwrap();
     std::thread::sleep(until.saturating_duration_since(Instant::now()) + Duration::from_millis(20));
@@ -436,4 +437,104 @@ fn oversized_pack_descriptor_digest_is_rejected_before_wire_extraction() {
         "oversized digest crossed wire: {} bytes",
         proxy.bytes()
     );
+}
+
+#[test]
+fn altered_numeric_authority_types_do_not_materialize_large_text_values() {
+    use std::str::FromStr;
+    for (table, column) in [
+        ("history_meta", "catalog_incarnation"),
+        ("store_policy", "format_profile"),
+    ] {
+        let Some(mut f) = Fixture::new("numeric_type") else {
+            return;
+        };
+        let reader = f.reader();
+        let rows=f.admin.query("SELECT conname FROM pg_catalog.pg_constraint WHERE conrelid=$1::text::regclass AND contype='c'",&[&format!("{}.{}",f.selection.schema,table)]).unwrap();
+        for row in rows {
+            let name: String = row.get(0);
+            f.admin
+                .batch_execute(&format!(
+                    "ALTER TABLE {}.{table} DROP CONSTRAINT {name}",
+                    f.selection.schema
+                ))
+                .unwrap();
+        }
+        f.admin.batch_execute(&format!("ALTER TABLE {s}.{table} ALTER COLUMN {column} TYPE text USING {column}::text; UPDATE {s}.{table} SET {column}=repeat('8',1048576)",s=f.selection.schema)).unwrap();
+        let before = f.fingerprint();
+        let port = postgres::Config::from_str(&f.selection.url)
+            .unwrap()
+            .get_ports()[0];
+        let proxied = |port: u16| {
+            layerfs_persistence::PostgresSelection::new(
+                f.selection.url.replace(
+                    &format!(
+                        ":{}/",
+                        postgres::Config::from_str(&f.selection.url)
+                            .unwrap()
+                            .get_ports()[0]
+                    ),
+                    &format!(":{port}/"),
+                ),
+                &f.selection.schema,
+            )
+        };
+        if table == "history_meta" {
+            let proxy = proxy::Proxy::new(port);
+            let out = connection(&proxied(proxy.port), BINDING);
+            assert!(
+                has(&out, "store.connection.identity", Outcome::Fail),
+                "{out:?}"
+            );
+            assert!(
+                proxy.bytes() < 512 * 1024,
+                "corrupt scalar crossed preflight wire"
+            );
+            drop(proxy);
+        }
+        let proxy = proxy::Proxy::new(port);
+        assert!(PostgresHandles::open_diagnostic(
+            &proxied(proxy.port),
+            BINDING,
+            [71; 32],
+            Some(Instant::now() + Duration::from_secs(5)),
+            &mut resolver
+        )
+        .is_err());
+        assert!(
+            proxy.bytes() < 512 * 1024,
+            "corrupt scalar crossed admitted-open wire"
+        );
+        drop(proxy);
+        let (result, out) = audit(&reader, false);
+        assert!(result.is_err());
+        assert!(has(&out, "store.schema", Outcome::Fail), "{out:?}");
+        assert!(!has(&out, "store.snapshot", Outcome::Pass));
+        assert_eq!(before, f.fingerprint());
+    }
+}
+
+#[test]
+fn snapshot_evidence_is_a_fixed_fingerprint_instead_of_active_transaction_list() {
+    let Some(f) = Fixture::new("snapshot_label") else {
+        return;
+    };
+    let reader = f.reader();
+    let (result, out) = audit(&reader, true);
+    result.unwrap();
+    let row = out
+        .iter()
+        .find(|o| o.id == "store.snapshot" && o.outcome == Outcome::Pass)
+        .unwrap();
+    let fingerprint = row
+        .message
+        .split("fingerprint md5 ")
+        .nth(1)
+        .unwrap()
+        .split(' ')
+        .next()
+        .unwrap();
+    assert_eq!(fingerprint.len(), 32);
+    assert!(fingerprint.bytes().all(|b| b.is_ascii_hexdigit()));
+    assert!(row.message.contains("not authority"));
 }

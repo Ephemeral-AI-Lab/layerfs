@@ -96,3 +96,11 @@ missing/denied amcheck, source row fingerprints, read/write counters and indepen
 backend release observation. Harness, fixture identities and final receipts live
 in `layerfs-benchmark/doctor-postgresql` and its qualification report. Durable
 execution and offline corruption tooling are outside this evidence.
+
+Full integrity forwards cancellation across both independent admissions, including
+the second connection handshake and its schema SQL. The watcher is scoped and
+joined before returning, including observer unwind. Schema admission suppresses
+metadata row extraction unless the actual trusted column signature matches;
+preflight type-guards scalar authority. Snapshot evidence exposes a fixed-size
+server-side MD5 fingerprint as an observation label, never the unbounded active
+transaction list and never an authorization identity.

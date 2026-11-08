@@ -96,7 +96,7 @@ impl PostgresHandles {
         let admission = deadline
             .unwrap_or_else(|| std::time::Instant::now() + std::time::Duration::from_secs(10));
         Self::open_diagnostic_admitted(
-            selection, binding, cursor_key, deadline, admission, resolver,
+            selection, binding, cursor_key, deadline, admission, resolver, None,
         )
     }
 
@@ -110,9 +110,10 @@ impl PostgresHandles {
         deadline: Option<std::time::Instant>,
         admission: std::time::Instant,
         resolver: &mut crate::diagnostic::Resolver<'_>,
+        cancelled: Option<&std::sync::atomic::AtomicBool>,
     ) -> Result<Self, PersistenceError> {
         let session = Arc::new(Session::connect_diagnostic_admitted(
-            selection, deadline, admission, resolver,
+            selection, deadline, admission, resolver, cancelled,
         )?);
         session
             .state
@@ -122,12 +123,20 @@ impl PostgresHandles {
             .set_diagnostic_deadline(Some(
                 deadline.map_or(admission, |total| total.min(admission)),
             ));
-        let (_, handles) = Self::validated(
-            session.clone(),
-            PostgresCheck::Full,
-            Some(binding),
-            cursor_key,
-        )?;
+        let target = session
+            .state
+            .lock()
+            .map_err(|_| PersistenceError::Uncertain)?
+            .client
+            .cancellation();
+        let (_, handles) = crate::diagnostic::with_cancellation(cancelled, target, || {
+            Self::validated(
+                session.clone(),
+                PostgresCheck::Full,
+                Some(binding),
+                cursor_key,
+            )
+        })??;
         session
             .state
             .lock()

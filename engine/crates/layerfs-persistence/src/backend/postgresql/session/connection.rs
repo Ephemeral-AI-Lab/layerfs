@@ -138,12 +138,14 @@ impl Session {
         deadline: Option<Instant>,
         admission: Instant,
         resolver: &mut crate::diagnostic::Resolver<'_>,
+        cancelled: Option<&std::sync::atomic::AtomicBool>,
     ) -> Result<Self, BackendError> {
         let settings = Settings::new(selection)?;
         let connector = Connector::new(selection)?;
-        let client =
-            super::driver::Driver::diagnostic_admitted(selection, deadline, admission, resolver)
-                .map_err(|error| error.backend())?;
+        let client = super::driver::Driver::diagnostic_admitted(
+            selection, deadline, admission, resolver, cancelled,
+        )
+        .map_err(|error| error.backend())?;
         Ok(Self {
             admission: Admission::default(),
             state: Mutex::new(State {

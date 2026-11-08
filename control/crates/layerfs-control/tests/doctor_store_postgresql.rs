@@ -226,3 +226,6 @@ fn saved_integrity_distinguishes_authority_authentication_and_schema_without_mut
     assert_eq!(before, dump(&f.container, &f.database));
     assert!(!paths::store_file(&home, "saved").exists());
 }
+
+#[path = "pg_doctor/cancellation.rs"]
+mod pg_cancellation;

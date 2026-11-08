@@ -73,8 +73,9 @@ impl Driver {
         deadline: Option<Instant>,
         admission: Instant,
         resolver: &mut crate::diagnostic::Resolver<'_>,
+        cancelled: Option<&std::sync::atomic::AtomicBool>,
     ) -> Result<Self, Error> {
-        Self::diagnostic_selection(selection, deadline, admission, resolver, None)
+        Self::diagnostic_selection(selection, deadline, admission, resolver, cancelled)
     }
     fn diagnostic_selection(
         selection: &PostgresSelection,
