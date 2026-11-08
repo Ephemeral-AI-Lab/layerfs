@@ -7,7 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { close } from "../src/index.js";
 import { fixture } from "./branch-file/fixture.mjs";
-import { parity, requireFrontends } from "./branch-file/frontends.mjs";
+import { parity, requireFrontends, semantics } from "./branch-file/frontends.mjs";
 
 const saved = (ref, id, kind) => {
   assert.ok(ref, "resolved saved reference");
@@ -37,8 +37,15 @@ test("branch/file saved history, comparison and provenance agree across real fro
     ]);
     const nextId = first.items[0].parent;
     assert.ok(nextId);
-    await lfs.file.write(p, "left", "/later.txt", "head moved after first page\n");
+    const moved = await lfs.file.write(p, "left", "/later.txt", "head moved after first page\n");
     await run([
+      step("main typed saved head", "branch.get", [p, "main"], {}, v => saved(v.saved_head, f.publication, "Layer")),
+      step("side branch typed saved head", "branch.get", [p, "left"], {}, v => saved(v.saved_head, moved.head, "Commit")),
+      step("unwritten branch resolves its saved base", "branch.get", [p, "unwritten"], {}, v => saved(v.saved_head, f.init, "Layer")),
+      step("paged branches include main and typed heads", "branch.list", [p], { page: 1, page_size: 50 }, v => {
+        assert.ok(v.items.some(b => b.name === "main"));
+        for (const b of v.items) assert.ok(b.saved_head?.id);
+      }),
       step("pinned second history page survives head movement", "branch.commits", [p, "left"], { at_commit: f.head, page: 2, page_size: 1 }, v => {
         saved(v.at_commit, f.head, "Commit");
         assert.equal(v.items[0].id, nextId);
@@ -144,13 +151,21 @@ test("branch/file saved history, comparison and provenance agree across real fro
       bad("legacy missing-side refusal remains", "file.diff", [p, "main", "/new.txt", "left", "/new.txt"],
         { left_commit: f.init, right_commit: f.head }, "NoSuchPath"),
       step("binary attribution is unavailable, not equal ownership", "file.diff", [p, "left", "/blob.bin", "left", "/blob.bin"],
-        { left_commit: f.head, right_commit: f.head, include_attribution: true, page: 1, page_size: 50 }, v => {
+        { left_commit: f.binary, right_commit: f.head, include_attribution: true, page: 1, page_size: 50 }, v => {
           assert.equal(v.changes.attribution, null);
           assert.equal(v.attribution_coverage.status, "unavailable");
         }),
+      step("identical saved binary endpoints prove no owner change", "file.diff", [p, "left", "/blob.bin", "left", "/blob.bin"],
+        { left_commit: f.head, right_commit: f.head, include_attribution: true, page: 1, page_size: 50 }, v => {
+          assert.equal(v.changes.attribution, false);
+        }),
       bad("oversized mandatory diff row refuses without advancing a partial page", "file.diff",
         [p, "left", "/long.txt", "left", "/long.txt"],
-        { left_commit: f.head, right_commit: f.head, include_attribution: true, page: 1, page_size: 1 }, "Capacity"),
+        { left_commit: f.long, right_commit: f.head, include_attribution: true, page: 1, page_size: 1 }, "Capacity"),
+      step("clipped blame cannot claim complete attribution", "file.blame", [p, "left", "/long.txt", f.head], {}, v => {
+        assert.equal(v.coverage.status, "partial");
+        assert.ok(v.lines[0].clipped);
+      }),
       step("file revision includes metadata and inherited history", "file.revision", [p, "left", "/base.txt"],
         { at_commit: f.head, page: 1, page_size: 50 }, v => {
           saved(v.at, f.head, "Commit");
@@ -159,7 +174,11 @@ test("branch/file saved history, comparison and provenance agree across real fro
           assert.equal(typeof v.has_more, "boolean");
         }),
       bad("file revision invalid page", "file.revision", [p, "left", "/base.txt"], { page: 0 }),
-      bad("saved versions cannot cross project", "file.read", ["sdk/other", "left", "/base.txt", f.head], {}, "NoSuchProject"),
+      bad("saved versions cannot cross an existing project", "file.read", ["sdk/other", "main", "/base.txt", f.head], {}),
+      bad("foreign Layer cannot enter branch comparison", "branch.diff", [p, "main", "left"], { from_commit: f.foreign, to_commit: f.head }),
+      bad("foreign saved details cannot enter branch context", "branch.get_commit", [p, "main", f.foreign]),
+      bad("foreign file comparison endpoint", "file.diff", [p, "main", "/base.txt", "left", "/base.txt"],
+        { left_commit: f.foreign, right_commit: f.head, include_attribution: true }),
     ]);
 
     // Scope checks go through the bindings and CLI switches, not just engine calls.
@@ -167,8 +186,14 @@ test("branch/file saved history, comparison and provenance agree across real fro
       bad("folder scope cannot read project history", "branch.commits", [p, "left"], {}),
       bad("folder scope cannot inspect saved record", "branch.get_commit", [p, "left", f.source], {}),
       bad("folder scope cannot compare project trees", "branch.diff", [p, "main", "left"], { include_attribution: true }),
+      bad("folder scope cannot expose full revision metadata", "file.revision", [p, "left", "/inside/a.txt"], {}),
       bad("folder scope cannot escape file path", "file.read", [p, "main", "/base.txt", f.publication], {}),
     ], { project: p, folder: "/inside", branch: "agent" });
+    const cachedQuery = [step("cache-stable comparison page", "branch.diff", [p, "main", "left"],
+      { from_commit: f.publication, to_commit: f.head, include_attribution: true, page: 2, page_size: 2 })];
+    const cold = await run(cachedQuery);
+    const warm = await run(cachedQuery);
+    assert.deepEqual(semantics(warm), semantics(cold), "cache state changes work counters only, not membership/coverage");
     await f.cleanup();
   } finally {
     close();

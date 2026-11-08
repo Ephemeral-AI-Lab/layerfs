@@ -1,10 +1,35 @@
 // Disposable, mountless fixtures driven only through the public SDK. A caller
 // selects one real route per command; a PostgreSQL database must be private.
 import assert from "node:assert/strict";
-import { mkdtempSync, chmodSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, chmodSync, writeFileSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { client, close } from "../../src/index.js";
+
+function docker(args) {
+  const r = spawnSync("docker", args, { encoding: "utf8", timeout: 10_000 });
+  assert.equal(r.error, undefined, String(r.error));
+  assert.equal(r.status, 0, r.stderr);
+  return r.stdout;
+}
+
+function releaseStoppedWorker(home) {
+  const { id } = JSON.parse(readFileSync(join(home, "layerfs.json"), "utf8"));
+  assert.match(id, /^[0-9a-f]{32}$/);
+  const name = `lfs-${id.slice(0, 8)}-docker`;
+  const [owned] = JSON.parse(docker(["inspect", name]));
+  assert.equal(owned.Name, `/${name}`);
+  assert.equal(owned.State.Running, false);
+  assert.equal(owned.Config.Labels["layerfs.role"], "machine-worker");
+  const bundle = owned.Mounts.find(m => m.Destination === "/layerfs/bundle");
+  assert.ok(bundle?.Source.endsWith(realpathSync(process.env.LAYERFS_BUNDLE)));
+  const volume = owned.Mounts.find(m => m.Destination === "/layerfs/data");
+  assert.equal(volume?.Name, `${name}-data`);
+  // Exact stopped container ID and validated private volume only. No global prune.
+  docker(["rm", owned.Id]);
+  docker(["volume", "rm", volume.Name]);
+}
 
 export async function fixture() {
   const route = process.env.LAYERFS_BRANCH_FILE_ROUTE ?? "native";
@@ -27,6 +52,8 @@ export async function fixture() {
     assert.equal((await lfs.store.create("sdk")).profile, "disposable");
   }
   const init = await lfs.project.init(project, folder);
+  const otherProject = await lfs.project.init("sdk/other", folder);
+  await lfs.branch.fork(project, "unwritten", "main");
   await lfs.branch.fork(project, "left", "main");
   await lfs.branch.fork(project, "right", "main");
   const left = await lfs.file.write(project, "left", "/base.txt", "alpha\nkept\n", { message: "left independently changes line one" });
@@ -34,8 +61,8 @@ export async function fixture() {
   const published = await lfs.branch.publish(project, "left");
   await lfs.file.write(project, "left", "/new.txt", "added\n", { message: "add a path" });
   await lfs.file.rm(project, "left", "/remove.txt", { message: "remove a path" });
-  await lfs.file.write(project, "left", "/blob.bin", Buffer.from([0, 255, 1]), { message: "binary" });
-  await lfs.file.write(project, "left", "/long.txt", `${"x".repeat(70 * 1024)}\n`, { message: "single line exceeds a reply page" });
+  const binary = await lfs.file.write(project, "left", "/blob.bin", Buffer.from([0, 255, 1]), { message: "binary" });
+  const long = await lfs.file.write(project, "left", "/long.txt", `${"x".repeat(70 * 1024)}\n`, { message: "single line exceeds a reply page" });
   await lfs.file.write(project, "left", "/base.txt", "alpha\nkept\n", { mode: 0o600, message: "same bytes different mode" });
   const head = (await lfs.branch.get(project, "left")).head;
   if (route === "worker") {
@@ -48,12 +75,14 @@ export async function fixture() {
   return {
     route, home, folder, lfs, project, init: init.layer, head,
     source: left.head, other: right.head, publication: published.published_layer.id,
+    foreign: otherProject.layer, binary: binary.head, long: long.head,
     async cleanup() {
       // Never conceal a failed assertion by destroying its Store. The caller
       // invokes cleanup only after all assertions pass.
       if (route === "worker") {
         await lfs.store.remove("sdk");
         await lfs.machine.stop("docker");
+        releaseStoppedWorker(home);
       }
       close();
       rmSync(home, { recursive: true, force: true });

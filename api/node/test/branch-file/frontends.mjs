@@ -1,5 +1,6 @@
 // Read the SAME saved Store through each real front end. Full identities, nulls,
-// coverage and refusals must agree exactly; no ID/time normalization or mocks.
+// coverage and refusals must agree; only actual scan-work counters may differ
+// between cached persistent clients and fresh CLI processes. No ID/time rewrite.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -13,6 +14,22 @@ const driver = fileURLToPath(new URL("../contract/driver.py", import.meta.url));
 const python = process.env.LAYERFS_PYTHON ?? "python3";
 const command = process.env.LAYERFS_CLI ?? join(root, "target/debug/layerfs");
 const specs = new Map(table.map(s => [`${s.family}.${s.call}`, s]));
+
+export function semantics(value) {
+  if (Array.isArray(value)) return value.map(semantics);
+  if (!value || typeof value !== "object" || Buffer.isBuffer(value)) return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => {
+    if (key === "scan" && item && typeof item === "object") {
+      const fields = Object.entries(item).filter(([name, count]) => {
+        if (!["examined", "candidates_examined"].includes(name)) return true;
+        assert.ok(Number.isInteger(count) && count >= 0 && count <= 10_000, `${name}: bounded actual work`);
+        return false;
+      });
+      return [key, semantics(Object.fromEntries(fields))];
+    }
+    return [key, semantics(item)];
+  }));
+}
 
 function processResult(program, args, options = {}) {
   const r = spawnSync(program, args, { encoding: "utf8", timeout: 20_000, maxBuffer: 4 << 20, ...options });
@@ -61,7 +78,7 @@ export async function parity(home, cases, scope) {
   });
   cases.forEach((step, i) => {
     for (const [front, answers] of Object.entries(fronts)) {
-      assert.deepEqual(answers[i], node[i], `${step.name}: ${front} differs from Node on the same pinned Store`);
+      assert.deepEqual(semantics(answers[i]), semantics(node[i]), `${step.name}: ${front} differs from Node on the same pinned Store`);
       if (step.error) assert.equal(answers[i].refused?.code, step.error, `${step.name}: ${front}`);
       else {
         assert.ok(answers[i].ok, `${step.name}: ${front}: ${encode(answers[i])}`);

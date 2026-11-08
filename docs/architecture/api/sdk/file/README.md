@@ -14,21 +14,21 @@ The `file` calls.
 ## Calls
 
 ```text
- reads: at a Branch, main or a Commit        writes: one Commit on a Branch
+ reads: at a Branch, main, Commit or Layer        writes: one Commit on a Branch
  (immutable snapshot, no lane)               (never main: ReadOnly)
 
    stat  list  glob  grep                      write  edit  rm  mkdir
      \     |     |    /                        mv  cp       \    |
-      read     blame    diff                         apply (many in one)
+      read   revision   blame   diff                         apply (many in one)
                                                         |
                                     private Workspace on the Branch
                                     --> Commit (merge a moved head)
                                     --> Committed | UpToDate | Conflict
 ```
 
-Fourteen calls, in help order
+Fifteen calls, in help order
 ([`file/mod.rs`](../../../../../api/crates/layerfs-api/src/file/mod.rs)):
-seven reads at a Branch or Commit, then seven writes that each make one
+eight saved reads, then seven writes that each make one
 Commit on the named Branch, through a private Workspace bound to it. Each
 runs its own function of `layerfs_store::calls` (`file_<call>`).
 Every call takes `project` (Project) first; `branch` and `commit` are Name.
@@ -40,8 +40,9 @@ Every call takes `project` (Project) first; `branch` and `commit` are Name.
 | [`list`](list.md) | `branch`, `path`, `commit?` | `PAGE` | header + `items: [{ name, path, type, inode }]`, `has_more`, `next_page_pos` | `fs.list` |
 | [`glob`](glob.md) | `branch`, `path`, `pattern` (Text), `commit?` | `PAGE` | header + `items: [path]`, `has_more`, `next_page_pos` | `fs.glob` |
 | [`grep`](grep.md) | `branch`, `path`, `pattern`, `commit?` | `PAGE` | header + `items: [{ path, line, text, line_truncated }]`, `skipped`, `has_more`, `next_page_pos` | `fs.grep` |
-| [`blame`](blame.md) | `branch`, `path`, `commit?` | `from_line` (Int) | header + `lines: [{ n, text, line_truncated, commit, message, … }]`, `versions`, `comparison_coarse` | `fs.blame` |
-| [`diff`](diff.md) | `left_branch`, `left_path`, `right_branch`, `right_path` | `left_commit`, `right_commit` | `{ kind: Equal, Text or Binary, left, right, content_equal, same_inode, hunks_omitted, hunks }` | `fs.diff_files` |
+| [`revision`](revision.md) | `branch`, `path` | `at_commit`, `traversal`, `page`, `page_size` | pinned `at`, changed-path `items`, `has_more`, `scan` | `fs.revision` |
+| [`blame`](blame.md) | `branch`, `path`, `commit?` | `from_line`, `line_count` (Int) | header + typed line `owner`, legacy `commit`, `coverage`, `versions`, `comparison_coarse` | `fs.blame` |
+| [`diff`](diff.md) | `left_branch`, `left_path`, `right_branch`, `right_path` | `left_commit`, `right_commit`, `include_attribution`, `allow_missing`, `page`, `page_size` | legacy diff fields + pinned `left_ref`/`right_ref`, `before`/`after`, independent `changes`, aligned `rows`, coverage | `fs.diff_files` |
 | [`write`](write.md) | `branch`, `path`, `content` (Content) | `message`, `mode` (Int) | write outcome | `fs.write` |
 | [`edit`](edit.md) | `branch`, `path` | `old`, `new` (Text), `message` | write outcome | `fs.edit` |
 | [`rm`](rm.md) | `branch`, `path` | `message` | write outcome | `fs.rm` |
@@ -50,7 +51,8 @@ Every call takes `project` (Project) first; `branch` and `commit` are Name.
 | [`cp`](cp.md) | `branch`, `from_path`, `to_path` | `message` | write outcome | `fs.cp` |
 | [`apply`](apply.md) | `branch`, `changes` (Json) | `message` | write outcome | `fs.apply` |
 
-- The read header is `{ kind: "ok", snapshot, root, path }`
+- Saved reads retain the header `{ kind: "ok", snapshot, root, path }` and add
+  typed `at: { id, kind, branch, root }`
   ([`read/snapshot.rs`](../../../../../engine/crates/layerfs-store-service/src/read/snapshot.rs)).
 - The write outcome is `{ kind: "Committed", branch, head, commit }` or
   `{ kind: "UpToDate", branch, head, root }`
@@ -61,12 +63,23 @@ Every call takes `project` (Project) first; `branch` and `commit` are Name.
 | Table name | Store field | Note |
 | --- | --- | --- |
 | `branch`, `commit` | `branch`, `commit` | a read is at the Commit when given, else the Branch |
-| `start_line`, `end_line`, `from_line` | `startLine`, `endLine`, `fromLine` | positive line numbers |
-| `page_size`, `page_pos` | `pageSize`, `pagePos` | 1..=1000, default 50 |
+| `start_line`, `end_line`, `from_line`, `line_count` | camel-case counterparts | positive line windows |
+| `page_size`, `page_pos` | `pageSize`, `pagePos` | legacy list/glob/grep paging; page size 1..=1000, default 50 |
+| `page`, `page_size` | `page`, `pageSize` | one-based matching-result pages; do not combine with legacy offsets |
 | `content` text / bytes | `content` / `bytes` | bytes travel as `bytes` |
 | `old`, `new` | `oldText`, `newText` | `edit` replaces exactly one occurrence |
 | `from_path`, `to_path` | `from`, `to` | `mv`, `cp`, and inside `changes` |
 | `left_*`, `right_*` | `left`, `right` = `{ commit, path }` | `left_commit` wins over `left_branch` |
+
+Numbered queries are bounded matching-result pages: a query that cannot complete its
+requested page refuses `Capacity` without skipping unreturned records. Reuse the full
+resolved version for later pages. See [saved queries](../saved-queries.md).
+`file.revision` is refused under folder scopes because records expose whole-commit metadata.
+Existing path-scoped file reads, blame and diff retain their scope restrictions.
+
+`file.diff` keeps missing-side refusals by default; `allow_missing` admits one absent side
+and returns an explicit null. Attribution means Commit/Layer ownership, not human authorship.
+Unknown or coarse ownership stays explicit; publishing does not itself reassign source owners.
 
 A `changes` item is `{ op, path, from_path, to_path, content, old, new,
 mode }` with `op` one of `write`, `edit`, `mkdir`, `chmod`, `rm`, `cp`,
@@ -85,6 +98,7 @@ A read reply is bounded by `REPLY_BUDGET` (48 KiB); `truncated`,
 | `InvalidInput` | a bad argument, change or page; a path outside a folder scope (`out of scope: path`) | [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs), [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
 | `NoSuchStore`, `NoSuchProject`, `NoSuchBranch`, `NoSuchCommit` | a missing Store, project, Branch or Commit | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `NoSuchPath`, `NotFile`, `NotDirectory`, `IsDirectory`, `Exists` | a path of the wrong kind or missing | [`read/snapshot.rs`](../../../../../engine/crates/layerfs-store-service/src/read/snapshot.rs), [`write/mutation.rs`](../../../../../engine/crates/layerfs-store-service/src/write/mutation.rs) |
+| `Capacity` | a numbered page, history scan, aligned row or provenance query cannot fit the declared work/reply budget | [`read/query.rs`](../../../../../engine/crates/layerfs-store-service/src/read/query.rs) |
 | `Binary` | `read` or `edit` of a file that is not text | [`read/window.rs`](../../../../../engine/crates/layerfs-store-service/src/read/window.rs), [`write/edit.rs`](../../../../../engine/crates/layerfs-store-service/src/write/edit.rs) |
 | `NoMatch`, `AmbiguousMatch` | `edit` finds the old text 0 or more than 1 times (`detail.matches`) | [`write/edit.rs`](../../../../../engine/crates/layerfs-store-service/src/write/edit.rs) |
 | `ReadOnly` | a write to `main`, which changes only through `branch.publish` | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
