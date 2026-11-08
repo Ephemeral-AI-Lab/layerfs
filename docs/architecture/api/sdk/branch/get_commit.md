@@ -1,5 +1,7 @@
 # branch.get_commit
 
+> **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
+
 Returns full details for one saved Commit or main publication Layer admitted by
 its branch/project context. `commit` is the saved version's complete immutable
 ID, not an abbreviation. Existing `commit.get` prefix behavior is unchanged.

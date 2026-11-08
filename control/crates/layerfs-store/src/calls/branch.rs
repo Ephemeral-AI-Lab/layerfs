@@ -232,6 +232,7 @@ fn branches_in(
     let target = target(home, &request.project)?;
     let prefix = format!("{namespace}.");
     let (mut pos, mut seen, mut kept, mut more) = (0i64, 0i64, Vec::new(), false);
+    let mut reply_bytes = 0usize;
     'pages: loop {
         if pos >= 10_000 {
             return Err(refused(
@@ -260,6 +261,18 @@ fn branches_in(
                 more = true;
                 break 'pages;
             } else {
+                if request.page.number.is_some() {
+                    reply_bytes += match &name {
+                        SdkValue::Text(name) => name.len() + 768,
+                        _ => 768,
+                    };
+                    if reply_bytes > 40 * 1024 {
+                        return Err(refused(
+                            "Capacity",
+                            "scoped branch page exceeds reply budget; reduce page_size",
+                        ));
+                    }
+                }
                 kept.push(layerfs_home::home::with_field(item, "name", name));
             }
         }

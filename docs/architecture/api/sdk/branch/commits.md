@@ -1,5 +1,7 @@
 # branch.commits
 
+> **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
+
 Lists saved side-branch Commits or main publications newest first, at an immutable
 start. Main rows are Layers, not renamed source Commits. Saved branch commits
 are checkpoints; no separate checkpoint API is needed.
