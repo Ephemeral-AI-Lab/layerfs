@@ -253,14 +253,20 @@ fn namespaces(
 /// What a layout 2 Sandbox record names (#536 H10), read for its home's
 /// conversion with no directory check: the conversion checks that a local
 /// one's directory is in the home's old local root itself.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn unchecked(id: &str, value: &DaemonRecord) -> Result<Recorded> {
     match value.runtime() {
         None | Some("docker") => Err(retired(id, value.name().unwrap_or(""))),
+        #[cfg(unix)]
         Some(NATIVE) => {
             let (directory, record) = local_parts(value)?;
             local(directory, record, value)
         }
+        // Windows: no local Sandbox reopens until the host_process port.
+        #[cfg(windows)]
+        Some(NATIVE) => Err(refused(
+            "Unsupported",
+            format!("Sandbox {id} is a native Sandbox, which this Windows host reopens after the host_process port (#454)"),
+        )),
         #[cfg(target_os = "linux")]
         Some(NAMESPACES) => {
             let (directory, record) = local_parts(value)?;

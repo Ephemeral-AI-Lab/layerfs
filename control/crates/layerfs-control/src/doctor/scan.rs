@@ -11,6 +11,7 @@ use layerfs_machine::record::MachineRecord;
 use layerfs_sandbox::record::SandboxRecord;
 use layerfs_store::record::StoreRecord;
 use std::collections::BTreeSet;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
@@ -253,9 +254,25 @@ fn record(
 }
 
 /// The mode bits of `path` itself, if it is there.
+#[cfg(unix)]
 fn mode(path: &Path) -> Option<u32> {
+    use std::os::unix::fs::PermissionsExt;
     let metadata = std::fs::symlink_metadata(path).ok()?;
     Some(metadata.permissions().mode() & 0o7777)
+}
+
+/// Windows: the readonly attribute is the only mode bit; 0644/0755 faces.
+#[cfg(windows)]
+fn mode(path: &Path) -> Option<u32> {
+    let metadata = std::fs::symlink_metadata(path).ok()?;
+    let readonly = metadata.permissions().readonly();
+    Some(if metadata.is_dir() {
+        if readonly { 0o555 } else { 0o755 }
+    } else if readonly {
+        0o444
+    } else {
+        0o644
+    })
 }
 
 /// A folder others may list or change, or its group may use, is an error;

@@ -54,6 +54,7 @@ pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::R
     // the root holds Stores and records: private, as a home is (a machine's
     // data disk mounts 0755), but passable by others (0701), since a
     // namespaces Sandbox's commands run as another identity below it
+    #[cfg(unix)]
     {
         use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
         std::fs::DirBuilder::new()
@@ -62,6 +63,8 @@ pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::R
             .create(&root)?;
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o701))?;
     }
+    #[cfg(windows)]
+    std::fs::create_dir_all(&root)?;
     layerfs_home::home::guest::serve_root(&root);
     layerfs_home::home::guest::retire_layout_2(&root);
     let secret = Arc::new(secret);
