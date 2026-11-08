@@ -4,6 +4,9 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
+The [remaining backend work specification](doctor-remaining-spec.md) defines
+implementation/qualification closure for #116, excluding frontend work and GC.
+
 Health checks over the home.
 
 | | |
