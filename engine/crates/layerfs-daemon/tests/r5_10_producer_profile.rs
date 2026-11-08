@@ -26,6 +26,11 @@
 //! `engine/crates/*/src`; nothing here can make it select anything. The bound
 //! shown is the one the product has by construction.
 //!
+//! The Commit's one producer runs on one construction thread beside the
+//! Commit thread, which keeps the Save (owner approval, 2026-11-07): every
+//! writer call is still on the calling thread, and at most that one thread
+//! is added while the Commit runs.
+//!
 //! One test: the thread count is a process-wide observation.
 #![cfg(target_os = "linux")]
 #[allow(dead_code)]
@@ -407,17 +412,20 @@ fn r5_10_each_mounted_commit_has_one_producer_on_the_one_open_disposable_writer_
             calls.iter().all(|seen| seen.thread == me),
             "{name}: every writer call of the Commit is on the calling thread: {calls:?}"
         );
-        // No thread was added for the Commit: the count at every writer call
-        // and after the Commit is the count before it.
+        // At most the one construction thread was added for the Commit
+        // (owner approval, 2026-11-07): every writer call saw the count
+        // before it or one more, and it is gone after the Commit.
         let during = calls
             .iter()
             .map(|seen| seen.threads)
             .collect::<BTreeSet<_>>();
-        assert_eq!(
-            (during.into_iter().collect::<Vec<_>>(), after),
-            (vec![before], before),
-            "{name}: threads during the Commit"
+        assert!(
+            during
+                .iter()
+                .all(|seen| *seen == before || *seen == before + 1),
+            "{name}: threads during the Commit: {during:?}, before {before}"
         );
+        assert_eq!(after, before, "{name}: threads after the Commit");
 
         // The same open session: never dropped, sealed or reopened.
         assert!(std::ptr::eq(opened, Arc::as_ptr(&store)));
@@ -463,7 +471,7 @@ fn r5_10_each_mounted_commit_has_one_producer_on_the_one_open_disposable_writer_
         // Reading the published root back used the read sessions only.
         assert!(watch.take().is_empty());
         println!(
-            "{name} COMMIT round={round} mount={} receipt(storage.policy={} initial_reservations={} reservation_refills={} reserve={} publish={}) writer_port(policy={} reserve={} publish={} calls={}) caller_threads=1 process_threads(before={before} during={before} after={after}) writer_session(write_commits {}->{} transactions {}->{}) same_store=true same_session=true wal_present=true",
+            "{name} COMMIT round={round} mount={} receipt(storage.policy={} initial_reservations={} reservation_refills={} reserve={} publish={}) writer_port(policy={} reserve={} publish={} calls={}) caller_threads=1 process_threads(before={before} during={during:?} after={after}) writer_session(write_commits {}->{} transactions {}->{}) same_store=true same_session=true wal_present=true",
             if drained.is_some() { 2 } else { 1 },
             storage.policy,
             storage.initial_reservations,

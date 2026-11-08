@@ -11,8 +11,8 @@ the changes are merged first. The Workspace stays mounted.
 | | |
 | --- | --- |
 | Family | [workspace](README.md) |
-| Library entry | [`api/crates/layerfs-api/src/workspace/commit.rs`](../../../../../api/crates/layerfs-api/src/workspace/commit.rs) |
-| Implemented in | `layerfs_control::workspace::calls::workspace` → host operation `workspace.commit` → `workspace::serve::commit` ([`workspace/serve.rs`](../../../../../api/crates/layerfs-control/src/workspace/serve.rs)) |
+| Library entry | [`workspace/commit.rs`](../../../../../api/crates/layerfs-api/src/workspace/commit.rs) |
+| Implemented in | the library entry parses a typed `CommitRequest` → `layerfs_sandbox::workspace::calls::commit` → host operation `workspace.commit` → `workspace::serve::commit` ([`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs)) |
 | Runs in | the Sandbox's daemon, which opens the Store and saves and publishes in-process |
 
 ## Signature
@@ -36,13 +36,13 @@ layerfs workspace commit <ws> [--message TEXT] [--force]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `ws` | Text | a mounted Workspace, `<sandbox>:<path>` or `<sandbox>:<name>` | [`common/names.rs`](../../../../../api/crates/layerfs-control/src/common/names.rs) |
+| `ws` | Text | a mounted Workspace, `<sandbox>:<path>` or `<sandbox>:<name>` | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
 
 ## Options
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `message` | Text | none | the Commit's message | [`workspace/serve.rs`](../../../../../api/crates/layerfs-control/src/workspace/serve.rs) |
+| `message` | Text | none | the Commit's message | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `force` | Bool | false | publish over a moved head instead of merging (the head is displaced) | same, `CommitControl` |
 
 ## Returns
@@ -57,7 +57,7 @@ layerfs workspace commit <ws> [--message TEXT] [--force]
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `head`, `commit` | text, map | the new head and the Commit, as on [commit.list](../commit/list.md#returns) | [`daemon/values.rs`](../../../../../api/crates/layerfs-control/src/daemon/values.rs) `commit` |
+| `head`, `commit` | text, map | the new head and the Commit, as on [commit.list](../commit/list.md#returns) | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) `commit` |
 | `displaced_head` | text or null | the head it replaced, when it overwrote one | same |
 | `merged` | map or null | the head had moved: merged from `from` onto `head` | same |
 | `lww`, `lww_truncated` | list, bool | paths settled by `/.lww` rules in that merge | same |
@@ -85,7 +85,7 @@ layerfs workspace commit <ws> [--message TEXT] [--force]
 The capture takes the Workspace's locally published frontier, whichever
 process wrote it; it is not filtered by `exec`. Later writes keep going
 during the Commit and stay in the Workspace. Only the publish step holds
-the Store's lane. See the [routing table](../../routing/routing-table.md),
+the Store's lane. See the [routing table](../../../control/routing/routing-table.md),
 [Engine: Commit](../../../engine/commit/README.md) and
 [A Commit](../../../flows/commit.md).
 
@@ -93,16 +93,16 @@ the Store's lane. See the [routing table](../../routing/routing-table.md),
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad `ws` | no | [`common/names.rs`](../../../../../api/crates/layerfs-control/src/common/names.rs) |
-| `NoSuchSandbox`, `NotMounted` | no such Sandbox or Workspace | no | [`workspace/serve.rs`](../../../../../api/crates/layerfs-control/src/workspace/serve.rs) |
-| `Conflict` | the head moved and files conflict: markers are written into the Workspace and nothing is committed; or files still hold markers (`detail.head`, `base`, `markers`, `conflicts`, `written`, `lww`) | no | [`daemon/values.rs`](../../../../../api/crates/layerfs-control/src/daemon/values.rs) |
-| `Busy` | another control operation runs on the Workspace; or a `sandbox.create`/`close` holds the Sandbox | no | [`registry.rs`](../../../../../engine/crates/layerfs-daemon/src/control/registry.rs) `idle` |
-| `Unresolved` | the Sandbox's intent is unresolved | no | [`sandbox/record.rs`](../../../../../api/crates/layerfs-control/src/sandbox/record.rs) |
-| `Unknown`, phase `admission` | **an earlier Commit's install was uncertain or failed; the daemon keeps that custody and refuses new Commits** | **yes (the earlier one)** | [`registry.rs`](../../../../../engine/crates/layerfs-daemon/src/control/registry.rs) `idle` |
-| other daemon refusal codes | refused with `detail.phase` | no | [`daemon/values.rs`](../../../../../api/crates/layerfs-control/src/daemon/values.rs) `refusal` |
-| `Unavailable` | the worker is not recorded or does not answer | no | [`sandbox/route.rs`](../../../../../api/crates/layerfs-control/src/sandbox/route.rs) |
-| `Failed` | **a daemon exchange failed; `attempted` in the message says whether it may have published** | **maybe** | [`sandbox/serve.rs`](../../../../../api/crates/layerfs-control/src/sandbox/serve.rs) `operation` |
-| `Unknown` | **the worker's answer was lost** | **yes** | [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
+| `InvalidInput` | a bad `ws` | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
+| `NoSuchSandbox`, `NotMounted` | no such Sandbox or Workspace | no | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
+| `Conflict` | the head moved and files conflict: markers are written into the Workspace and nothing is committed; or files still hold markers (`detail.head`, `base`, `markers`, `conflicts`, `written`, `lww`) | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
+| `Busy` | another control operation runs on the Workspace; or a `sandbox.create`/`close` holds the Sandbox | no | [`control/registry.rs`](../../../../../engine/crates/layerfs-daemon/src/control/registry.rs) `idle` |
+| `Unresolved` | the Sandbox's intent is unresolved | no | [`record/sandbox.rs`](../../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) |
+| `Unknown`, phase `admission` | **an earlier Commit's install was uncertain or failed; the daemon keeps that custody and refuses new Commits** | **yes (the earlier one)** | [`control/registry.rs`](../../../../../engine/crates/layerfs-daemon/src/control/registry.rs) `idle` |
+| other daemon refusal codes | refused with `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) `refusal` |
+| `Unavailable` | the worker is not recorded or does not answer | no | [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) |
+| `Failed` | **a daemon exchange failed; `attempted` in the message says whether it may have published** | **maybe** | [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `operation` |
+| `Unknown` | **the worker's answer was lost** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After an uncertain Commit**, read [commit.list](../commit/list.md) for the
 Branch (did a new head appear?) and [workspace.status](status.md) (its
@@ -137,4 +137,4 @@ layerfs workspace commit s1:build --message 'tests pass'
 
 ---
 
-← [workspace.exec](exec.md) · [Up: workspace](README.md) · [workspace.unmount](unmount.md) →
+← [workspace.exec_cancel](exec_cancel.md) · [Up: workspace](README.md) · [workspace.unmount](unmount.md) →

@@ -2,12 +2,11 @@
 //! SETATTR, WRITE, CREATE, MKDIR, SYMLINK, MKNOD, REMOVE, RMDIR, RENAME,
 //! LINK and COMMIT.
 //!
-//! Every directory a procedure changes is answered with `wcc_data`: its
-//! attributes read just before the change and just after. The two reads are
-//! separate visits, not atomic with the change; the connection serves one
-//! call at a time, so they bracket it exactly unless another connection or
-//! a Commit installs a change in between, in which case the client sees an
-//! unexplained difference and drops its cache, which is safe.
+//! Every directory a procedure changes is answered with `wcc_data`: the
+//! attributes that the change's own publishing transaction read just before
+//! it and wrote just after, so the pair is one atomic window and no attribute
+//! is read for it outside that job. COMMIT answers the file's attributes from
+//! what this export last published or observed for it.
 //!
 //! WRITE answers `FILE_SYNC`: every window was published to the Workspace
 //! before the reply, as every FUSE write is. That is publication, not
@@ -15,7 +14,7 @@
 //! that ever sent UNSTABLE data resends it to a restarted export.
 use crate::{
     attributes::{post_op_maybe, pre_op, Status},
-    change::{How, Sattr, Tickets},
+    change::{How, Sattr, Tickets, Wcc},
     kernel::Kernel,
     xdr::{Garbage, Reader, Writer},
 };
@@ -72,33 +71,20 @@ fn wcc(kernel: &Kernel, out: &mut Writer, before: Option<&ViewStat>, after: Opti
     pre_op(out, before);
     post_op_maybe(kernel.identity(), out, after);
 }
-/// Attributes of `serial` when the handle was accepted.
-fn attributes(kernel: &Kernel, serial: &Result<u64, Status>) -> Option<ViewStat> {
-    serial
-        .as_ref()
-        .ok()
-        .and_then(|serial| kernel.getattr(*serial).ok())
-}
 /// The results of CREATE, MKDIR and SYMLINK.
-fn created(
-    kernel: &Kernel,
-    out: &mut Writer,
-    result: Result<ViewStat, Status>,
-    directory: &Result<u64, Status>,
-    before: Option<&ViewStat>,
-) {
-    let after = attributes(kernel, directory);
+fn created(kernel: &Kernel, out: &mut Writer, result: Result<(ViewStat, Wcc), Status>) {
     match result {
-        Ok(stat) => {
+        Ok((stat, directory)) => {
             out.u32(Status::Ok.code());
             out.bool(true).opaque(&kernel.encode(stat.serial));
             kernel.identity().post_op(out, &stat);
+            wcc(kernel, out, directory.0.as_ref(), directory.1.as_ref());
         }
         Err(status) => {
             out.u32(status.code());
+            wcc(kernel, out, None, None);
         }
     }
-    wcc(kernel, out, before, after.as_ref());
 }
 /// Decodes the arguments of changing `procedure`, runs it and appends its
 /// results. Mutations it decides go to `tickets`, released by the caller
@@ -120,17 +106,15 @@ pub fn call(
             } else {
                 None
             };
-            let before = attributes(kernel, &serial);
             let result = serial.and_then(|serial| kernel.setattr(serial, change, guard, tickets));
             match result {
-                Ok(stat) => {
+                Ok((_, changed)) => {
                     out.u32(Status::Ok.code());
-                    wcc(kernel, out, before.as_ref(), Some(&stat));
+                    wcc(kernel, out, changed.0.as_ref(), changed.1.as_ref());
                 }
                 Err(status) => {
                     out.u32(status.code());
-                    let after = attributes(kernel, &serial);
-                    wcc(kernel, out, before.as_ref(), after.as_ref());
+                    wcc(kernel, out, None, None);
                 }
             }
         }
@@ -141,25 +125,22 @@ pub fn call(
             let _stable = arguments.u32()?;
             let data = arguments.opaque(WRITE_LIMIT)?;
             let data = &data[..count.min(data.len())];
-            let before = attributes(kernel, &serial);
             let result = serial.and_then(|serial| kernel.write(serial, offset, data, tickets));
             match result {
-                Ok((written, stat)) => {
+                Ok((written, changed)) => {
                     out.u32(Status::Ok.code());
-                    wcc(kernel, out, before.as_ref(), Some(&stat));
+                    wcc(kernel, out, changed.0.as_ref(), changed.1.as_ref());
                     out.u32(written).u32(FILE_SYNC).fixed(&verifier);
                 }
                 Err(status) => {
                     out.u32(status.code());
-                    let after = attributes(kernel, &serial);
-                    wcc(kernel, out, before.as_ref(), after.as_ref());
+                    wcc(kernel, out, None, None);
                 }
             }
         }
         8..=10 => {
             let directory = handle(kernel, arguments)?;
             let name = arguments.opaque(NAME_LIMIT)?.to_vec();
-            let before = attributes(kernel, &directory);
             let result = match procedure {
                 8 => {
                     let how = match arguments.u32()? {
@@ -184,21 +165,19 @@ pub fn call(
                     directory.and_then(|parent| kernel.symlink(parent, &name, &target, tickets))
                 }
             };
-            created(kernel, out, result, &directory, before.as_ref());
+            created(kernel, out, result);
         }
         11 => {
             // Only regular files, directories and symlinks exist in the
             // canonical format: no device, socket or FIFO node.
             let directory = handle(kernel, arguments)?;
             let _name = arguments.opaque(NAME_LIMIT)?;
-            let before = attributes(kernel, &directory);
             let status = directory.err().unwrap_or(Status::NotSupp);
-            created(kernel, out, Err(status), &directory, before.as_ref());
+            created(kernel, out, Err(status));
         }
         12 | 13 => {
             let directory = handle(kernel, arguments)?;
             let name = arguments.opaque(NAME_LIMIT)?.to_vec();
-            let before = attributes(kernel, &directory);
             let result = directory.and_then(|parent| {
                 if procedure == 12 {
                     kernel.remove(parent, &name, tickets)
@@ -206,51 +185,56 @@ pub fn call(
                     kernel.rmdir(parent, &name, tickets)
                 }
             });
-            let after = attributes(kernel, &directory);
-            out.u32(result.err().unwrap_or(Status::Ok).code());
-            wcc(kernel, out, before.as_ref(), after.as_ref());
+            match result {
+                Ok(changed) => {
+                    out.u32(Status::Ok.code());
+                    wcc(kernel, out, changed.0.as_ref(), changed.1.as_ref());
+                }
+                Err(status) => {
+                    out.u32(status.code());
+                    wcc(kernel, out, None, None);
+                }
+            }
         }
         14 => {
             let from = handle(kernel, arguments)?;
             let name = arguments.opaque(NAME_LIMIT)?.to_vec();
             let to = handle(kernel, arguments)?;
             let new_name = arguments.opaque(NAME_LIMIT)?.to_vec();
-            let before_from = attributes(kernel, &from);
-            let before_to = attributes(kernel, &to);
-            let result = match (&from, &to) {
+            let changed = match (&from, &to) {
                 (Ok(from), Ok(to)) => kernel.rename(*from, &name, *to, &new_name, tickets),
                 (Err(status), _) | (_, Err(status)) => Err(*status),
             };
-            let after_from = attributes(kernel, &from);
-            let after_to = attributes(kernel, &to);
-            out.u32(result.err().unwrap_or(Status::Ok).code());
-            wcc(kernel, out, before_from.as_ref(), after_from.as_ref());
-            wcc(kernel, out, before_to.as_ref(), after_to.as_ref());
+            let (status, from_wcc, to_wcc) = match changed {
+                Ok([from_wcc, to_wcc]) => (Status::Ok, from_wcc, to_wcc),
+                Err(status) => (status, (None, None), (None, None)),
+            };
+            out.u32(status.code());
+            wcc(kernel, out, from_wcc.0.as_ref(), from_wcc.1.as_ref());
+            wcc(kernel, out, to_wcc.0.as_ref(), to_wcc.1.as_ref());
         }
         15 => {
             let file = handle(kernel, arguments)?;
             let directory = handle(kernel, arguments)?;
             let name = arguments.opaque(NAME_LIMIT)?.to_vec();
-            let before = attributes(kernel, &directory);
             let result = match (&file, &directory) {
                 (Ok(file), Ok(parent)) => kernel.link(*file, *parent, &name, tickets),
                 (Err(status), _) | (_, Err(status)) => Err(*status),
             };
-            let after = attributes(kernel, &directory);
-            let (status, object) = match result {
-                Ok(stat) => (Status::Ok, Some(stat)),
-                Err(status) => (status, attributes(kernel, &file)),
+            let (status, object, changed) = match result {
+                Ok((stat, changed)) => (Status::Ok, Some(stat), changed),
+                Err(status) => (status, None, (None, None)),
             };
             out.u32(status.code());
             post_op_maybe(kernel.identity(), out, object.as_ref());
-            wcc(kernel, out, before.as_ref(), after.as_ref());
+            wcc(kernel, out, changed.0.as_ref(), changed.1.as_ref());
         }
         21 => {
             // Every WRITE was answered FILE_SYNC, so nothing is uncommitted.
             let serial = handle(kernel, arguments)?;
             let _offset = arguments.u64()?;
             let _count = arguments.u32()?;
-            match serial.and_then(|serial| kernel.getattr(serial)) {
+            match serial.and_then(|serial| kernel.commit(serial)) {
                 Ok(stat) => {
                     out.u32(Status::Ok.code());
                     wcc(kernel, out, None, Some(&stat));

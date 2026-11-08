@@ -52,6 +52,13 @@ python api/python/tools/gen_stubs.py          # --check fails on drift
 cd api/python && maturin build --locked
 ```
 
+That is a debug build. The wheel to install is `maturin build --release
+--locked`; add `--features postgresql` (or `tls`) for PostgreSQL Stores,
+which needs the OpenSSL development files and `patchelf`. The wheel's
+platform tag follows the build host's glibc (`manylinux_2_39` on Ubuntu 26.04).
+The steps to install it into an empty virtualenv are in
+[api/README.md](../README.md#package-and-install).
+
 For the tests, either install the module in a virtualenv (`maturin develop
 --locked --offline` puts `_native.abi3.so` beside the package) or build it
 with Cargo and put it there:

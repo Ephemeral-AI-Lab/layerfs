@@ -36,6 +36,8 @@ layerfs.<family>.<call>(<positionals>, <option>=...)
 - A function option (`on_progress`, and `stdout`/`stderr` of
   `workspace.exec`) exists only in Node and Python. The shell has
   `--progress` and `--stream` instead.
+- A call name with `_` is written with `-` in the shell:
+  `layerfs workspace exec-cancel`.
 
 ### Names
 
@@ -75,13 +77,14 @@ Sandbox names (H §7.6).
 
 `[x]` is an optional positional. Every family's results are snake_case.
 
-### `project` (4)
+### `project` (5)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `init` | `project`, `folder` | `timeout` (ms, default 1 hour), `on_progress` | imports a folder on the caller's host as a new project into an existing Store |
 | `list` | `[store]` | `page_size`, `page_pos` | every project in the home, or one Store's |
 | `get` | `project` | — | a project's record: its Store, kind and machine |
+| `export` | `project`, `destination` | `branch` (default `main`), `on_progress` | exports a pinned committed Branch snapshot to a local directory |
 | `remove` | `project` | — | removes one project from its Store |
 
 - `init` never creates a Store; a missing one is `NotFound`. `folder` is
@@ -98,6 +101,34 @@ Sandbox names (H §7.6).
 - `remove` is refused `InUse` while a Sandbox of the project is recorded
   (`detail.related` lists each as `{kind: "sandbox", name}`), and is
   `Unsupported` for a PostgreSQL Store.
+
+`project export` ([reference](../../architecture/api/sdk/project/export.md)) exports a committed Branch snapshot. `destination` is an absolute path
+on the caller’s host, even for a worker Store. It must be absent or an empty
+real directory, outside the home, with an existing parent. A nonempty destination
+is `NotEmpty`; files and symlinks are refused. Same-parent staging is published
+by atomic rename only after all bytes and metadata are written; failures clean
+up this call’s staging without deleting unrelated files.
+
+Export takes a Branch name, with no `commit` option or `--commit` flag. It pins
+the node/root once, excludes uncommitted Workspace changes and is unaffected by
+later publications. SQLite reads locally or streams bounded frames from its
+worker; PostgreSQL reads in the caller’s process, for local or remote servers.
+A required stopped worker is `Unavailable` and is never started automatically.
+The fidelity contract includes binary files, empty directories, `.git`, ignored
+files, symlinks, permission bits and nanosecond `mtime` where the host supports
+them. Host name/case collisions are `Conflict`, rather than silent overwrites.
+
+```bash
+# Example, not run: /exports exists and /exports/api is absent or empty.
+layerfs project export shop/api /exports/api --branch agent --progress
+```
+
+The final JSON result contains `project`, `store`, `name`, `kind`, `machine`,
+`branch`, `snapshot`, `node`, `root`, `destination`, `files`, `directories`,
+`symlinks` and `bytes`. Progress on stderr is JSON Lines with `prepare`, `export`,
+`finalize`, local `files`/`directories`/`symlinks`/`bytes`, `done = bytes` during
+writing and `total: null`; `finalize` is the last event and comes only once the
+folder is in place. Events arrive at most every 200 ms.
 
 ### `branch` (6)
 
@@ -204,14 +235,24 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   calls but `status` are `Busy`; an `unresolved` Sandbox refuses them
   `Unresolved`, naming `layerfs sandbox get <name>` and `layerfs sandbox
   close <name>`, the call that clears it.
+- `lost` (layerfs-project#113): the record has an id but the Sandbox no
+  longer runs. `get` reports it when the Sandbox's process tree was ended
+  outside LayerFS (on `native`, its recorded daemon is gone); `list` reads
+  only records and does not ask the machine. `sandbox close` clears it:
+  the record goes and the name is free (`was_gone: true`).
 - A sqlite project's Sandbox runs on the machine that holds its Store;
   another machine is `Unsupported`, naming the Store's machine.
-- On `docker`, the image is `image`, else the one `machine update docker
-  --image` recorded, else the sealed bundle's `sandbox-image.tar`, loaded
-  into Docker once and recorded on the docker machine as `loaded_image`
-  (`{id, bundle}`; another bundle's image is loaded again). The docker
-  worker's own container runs the same default. A bundle without the
-  archive is `Unsupported`, naming it (#535 P5).
+- On `docker` a Sandbox runs `namespaces` in the docker machine's worker
+  container (D-8). Its root comes from the sealed bundle's
+  `sandbox-image.tar` in the worker; `image` (a `sha256:` digest) names an
+  image that archive must hold, as on a VM. The worker container's own
+  image is the one `machine update docker --image` recorded, else that
+  archive, loaded into Docker once and recorded on the docker machine as
+  `loaded_image` (`{id, bundle}`; another bundle's image is loaded again).
+  A bundle without the archive is `Unsupported`, naming it (#535 P5).
+  A Sandbox recorded under the retired docker backend is refused
+  `Unsupported`, asking to recreate it; `sandbox close` forgets it and
+  names its container for `docker rm`.
 - `list` and `get` page: `list` its Sandboxes, `get` the Sandbox's
   `workspaces` (`page_size` 1 to 1000, default 50; `page_pos`), with
   `next_page_pos`, `null` after the last page. Both show each Sandbox's
@@ -227,11 +268,16 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   Sandbox and removes the record at the end; a lost answer (`Unknown`)
   keeps the record with the `op` uncertain until another `close`, and any
   other refusal leaves the Sandbox as it was.
-- `close` without `force` is `MountsActive` while a Workspace is mounted.
+- `close` without `force` is `Busy` while a command runs in one of its
+  Workspaces (`detail.execs` names their exec ids), and `MountsActive`
+  while a Workspace is mounted. With `force`, each running command is
+  cancelled first, as `workspace exec-cancel` does with its default grace;
+  a cancel that is not confirmed refuses the close `Unknown` and nothing
+  more is done.
   With `force` (O31) it stops the Sandbox through its backend anyway and
-  answers `{kind: "Closed", sandbox, unknown}`: `unknown` lists the
-  Workspaces it could not drain, whose uncommitted changes and processes
-  end with the Sandbox. Closing a Sandbox that is already gone answers
+  answers `{kind: "Closed", sandbox, unknown}`: `unknown` lists every
+  Workspace still mounted, since a forced close drains none of them; their
+  uncommitted changes and processes end with the Sandbox. Closing a Sandbox that is already gone answers
   `{closed, was_gone: true}`; a gone native Sandbox's stopped runtime and
   local directory are deleted by that close.
 - A record with no id yet (a create in flight, one whose outcome was
@@ -243,7 +289,7 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 - Not run for this manual. See
   [limitations](limitations.md#not-built-refused-as-unsupported).
 
-### `workspace` (5)
+### `workspace` (6)
 
 A Workspace is `<sandbox>:<path>`, or `<sandbox>:<name>` when its mount
 named it, answered as `ws` by `mount`. Every `workspace` call takes either
@@ -252,7 +298,8 @@ form.
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `mount` | `sandbox`, `branch` | `name` | mounts a side Branch in a Sandbox; `main` is refused `InvalidInput` (fork a Branch from it) |
-| `exec` | `ws`, `command` | `message`, `stream`, `stdout`, `stderr` | runs one bash command in a Workspace |
+| `exec` | `ws`, `command` | `message`, `stream`, `stdout`, `stderr`, `exec_id`, `on_progress` | runs one bash command in a Workspace |
+| `exec_cancel` | `ws`, `exec_id` | `grace_ms` | ends a running command: SIGTERM, then SIGKILL after `grace_ms` |
 | `commit` | `ws` | `message`, `force` | commits a Workspace's changes to its Branch |
 | `unmount` | `ws` | `discard`, `force` | ends a Workspace |
 | `status` | `ws` | — | a Workspace's changes since its base (O14) |
@@ -263,7 +310,9 @@ form.
   `mount` answers `name` (or `null`) beside `path`. A name no mounted
   Workspace carries is `NotMounted`.
 - `exec` answers `kind` (`exit:<code>`), `exit_code`, `stdout`, `stderr`,
-  `message` and `truncated`. A command that exits non-zero is still exit 0
+  `message`, `truncated`, `exec_id` and `stop` (`cgroup` on Linux kernels,
+  the docker machine included; `group`, the command's own process group,
+  on macOS `native`). A command that exits non-zero is still exit 0
   for the shell unless `--stream` is given. Inline output that is not UTF-8
   comes back as bytes.
 - A stream over 1 MiB is not inline: it is sent as output events, one
@@ -275,41 +324,68 @@ form.
   output. `stream: true` without them writes it to the calling process's
   own stdout and stderr. The library sends the output after the command
   ends; there is no live output stream yet.
+- Every command has an exec id: `exec_id` names it (1 to 64 letters,
+  digits, `.`, `_` or `-`, not starting with `.` or `-`), else LayerFS
+  makes one (`exec-` and 16 hex digits). Either way it is the call's first
+  progress event, `{exec: {id}}`, given to `on_progress` (Node, Python)
+  and printed by `--progress` (shell) before the command starts. An id a
+  running command of the same Workspace carries is `Exists`.
+- While a command runs, its record lets any process end it:
+  `workspace exec-cancel <ws> <exec-id> [--grace-ms N]` sends SIGTERM to
+  everything it started, waits `grace_ms` (default 5000), then SIGKILL. It
+  answers `{outcome: "cancelled", signal}` (`signal` is the last one sent),
+  `{outcome: "ended"}` when the command had already finished (or has no
+  record), or `{outcome: "unknown"}` when the machine's worker was not
+  reached or did not answer: nothing is known to have changed. The
+  cancelled command's `exec` answers `kind: "cancelled"` with exit code
+  128 + the signal. A cancel that comes before the command starts answers
+  `cancelled` with `SIGKILL`, and the command is ended as it starts (exit
+  code 137). After `unknown` the record keeps the cancel's mark: cancel
+  again once the worker answers; if the command then ends by a signal,
+  its `exec` answers `kind: "cancelled"`. On Linux each command runs in its own cgroup, so
+  children that left its process group end too; on macOS a child that
+  calls `setsid` itself escapes the group.
+- A command record whose owning process is gone is stale. The next exec of
+  its id, cancel, unmount or close ends its command (no grace), removes it
+  and logs it to `log/exec.jsonl`; `layerfs doctor` reports it. On a
+  Sandbox the caller reaches directly, a stale record whose worker cannot
+  be reached is kept as it was.
 - `commit` merges first when the Branch moved since the mount; `force`
   publishes over a moved head instead.
 - `unmount` with `discard` drops uncommitted changes; `force` aborts its
-  connection.
+  connection. `unmount` is `Busy` while a command runs in the Workspace
+  (`detail.execs`); with `force` each one is cancelled first, and one whose
+  cancel is not confirmed refuses it `Unknown`.
 - `status` starts no machine (#535 P4): on a Sandbox whose machine is down
   it is `Unavailable`, naming `machine start`. `mount`, `exec`, `commit`
   and `unmount` on a stopped machine are refused the same way, as Store
   calls are; nothing starts a machine but `machine start` (#535 D11).
-- On `ssh`, `lima` and `docker`, `mount`, `commit`, `unmount` and
+- On `lima`, `mount`, `commit`, `unmount` and
   `status` go from the caller straight to the Sandbox's daemon (#535 G4);
-  `exec` goes through the machine's worker. See machines-and-stores.md,
+  `exec` goes through the machine's worker. On `docker` every call goes
+  through its worker (D-8). See machines-and-stores.md,
   Routes.
 - Not run for this manual.
 
-### `machine` (11)
+### `machine` (9)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `list` | — | — | every machine, with what it supports (`supports`) |
-| `platforms` | — | — | the platforms this host and build support: backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox runs and why not, readiness and options (#535; the rows of `connect/SUPPORT.json`) |
+| `platforms` | — | — | the platforms this host and build support: backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox runs and why not, readiness and options (#535; the rows of `control/SUPPORT.json`) |
 | `get` | `name` | — | a machine's record |
-| `status` | `name` | — | a machine's live state, free disk and tool version; `op` while a create, connect, remove or disconnect holds it (#536 H6) |
+| `status` | `name` | — | a machine's live state, free disk and tool version; `op` while a create or remove holds it (#536 H6) |
 | `start` | `name` | — | starts a stopped machine and its worker and waits until ready; a running one, and `native`, answer at once (#535 P1) |
 | `stop` | `name` | — | stops a machine's worker and, where it has one, its VM; disks stay; `InUse` while Sandboxes run on it (#535 P1) |
-| `create` | `name`, `platform` | `cpus`, `memory` (size), `disk` (size), `image`, `nested`, `host` | creates a VM machine |
-| `connect` | `name`, `host` | `user`, `port`, `identity`, `known_hosts`, `root` | connects an ssh host as a machine |
-| `remove` | `name` | — | deletes a VM machine and its disk |
-| `disconnect` | `name` | — | forgets an ssh machine; its data root stays |
+| `create` | `name`, `platform` | `cpus`, `memory` (size), `disk` (size), `image`, `nested`, `host` | creates an enabled VM machine (`apple-container`, `lima`) |
+| `remove` | `name` | — | deletes a VM machine and its disk; one of a removed platform (`ssh`, `microsandbox`) is only forgotten |
 | `update` | `name` | `cpus`, `memory`, `image`, `docker`, `wsl`, `daemon` | sets a built-in machine's image, Docker socket, WSL distribution and daemon (an absolute path to a file; it replaces what `import-env` recorded) (O11); `InUse` while Sandboxes run on the machine; resizing a VM is not built |
 
 Run:
 
 ```console
 $ layerfs machine list
-{"machines":[{"name":"docker","platform":"docker","backend":"docker","state":"ready","cpus":null,"memory":null,"disk":null,"supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"stores":[],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","state":"ready",…,"stores":["shop"],"sandboxes":[]}]}
+{"machines":[{"name":"docker","platform":"docker","backend":"namespaces","state":"ready","cpus":null,"memory":null,"disk":null,"supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"stores":[],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","state":"ready",…,"stores":["shop"],"sandboxes":[]}]}
 
 $ layerfs machine platforms
 {"host":"macos","platforms":[{"platform":"native","how":"built_in","backend":"native","kernel":"nfs","sqlite":"in_process","postgresql":{"store_calls":"in_process","sandbox":true,"reason":null},"ready":true,"missing":[],"version":null,"options":[],"description":"…"},…,{"platform":"lima","how":"created","backend":"namespaces","kernel":"fuse","sqlite":"worker","postgresql":{"store_calls":"in_process","sandbox":true,"reason":null},"ready":true,"missing":[],"version":"limactl version 2.2.1","options":[{"name":"cpus","kind":"int"},…],"description":"…"},…]}
@@ -326,6 +402,12 @@ $ layerfs machine status native
   runs under the machine's `start.lock`, so no `machine start` runs
   meanwhile, and removes `worker.json`; a later call that needs the machine
   is refused `Unavailable` until `machine start`.
+
+- A record of a removed platform (`ssh`, `microsandbox`) still shows in
+  `list` and `get` with `state: "unsupported"` and the reason; `remove`
+  forgets it and touches nothing outside the home. Every other call on it
+  is `Unsupported`. See
+  [removed platforms](machines-and-stores.md#removed-platforms-microsandbox-and-ssh).
 
 See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals.
@@ -415,7 +497,11 @@ layerfs doctor --text     # a count line, then each finding and its fix
   a layout 2 home's conversion; a partial `store.sqlite.incoming` on
   `native`; a copy a push or pull did not retire (its record's
   `last_transfer` says `retired: false`; a warning naming the next `store
-  pull` or `store push`, which deletes it first); and each running machine's worker build (its hello alone, no
+  pull` or `store push`, which deletes it first); command records in this
+  home (a stale one, whose owner is gone, is a warning naming `workspace
+  exec-cancel`, the unmount or the close that ends it; one that does not
+  read is an error; a Workspace folder with no Workspace record beside it is
+  a warning); and each running machine's worker build (its hello alone, no
   request; another build is a warning naming `machine stop` then `machine
   start`, a worker that does not answer one naming `machine start`).
 - Not checked: partial copies and leftover layout 2 folders on other
@@ -473,10 +559,10 @@ Codes seen in the 2.0 library include:
 | `NoSuchStore`, `NoSuchProject` | a call that names `<store>/<project>` whose Store or project is missing (1.1.0's codes, S §2.9) |
 | `NoSuchBranch`, `NoSuchCommit` | no such Branch, or no such Commit on it (`branch.get`, `commit.get`, …) |
 | `NoSuchPath`, `NoSuchSandbox`, `NoSuchProcess`, … | 1.1.0's codes for paths, Sandboxes and processes |
-| `Exists` | the name is taken, the same host or database is already connected (under any name), or a bucket object was exported from another home |
+| `Exists` | the name is taken, the same database or bucket is already connected (under any name), or a bucket object was exported from another home |
 | `InUse` | held: running Sandboxes, processes with the Store open, Stores on a machine; a layout 2 home with any of these, or with a move, removal or create still running, which is not converted yet ([the home](home.md#a-layout-2-home)) |
-| `Busy` | an operation runs on the entity: a Store being pushed, pulled or removed, a machine being made, connected or removed, a Sandbox being created or closed; the message names it (`op` id and phase) and its process (#536 §7.1); `detail` is `{entity: {kind, name}, phase, op}`. Also: another project is being added to the same Store |
-| `Unresolved` | an earlier operation on the entity ended with its outcome not known; its process is gone and its `op` stays. The message names the call that shows it (`store status`, `machine status`, `sandbox get`) and the one that clears it (`store remove`, `machine remove` or `disconnect`, `sandbox close`); `detail` as for `Busy` |
+| `Busy` | an operation runs on the entity: a Store being pushed, pulled or removed, a machine being made or removed, a Sandbox being created or closed; the message names it (`op` id and phase) and its process (#536 §7.1); `detail` is `{entity: {kind, name}, phase, op}`. Also: another project is being added to the same Store |
+| `Unresolved` | an earlier operation on the entity ended with its outcome not known; its process is gone and its `op` stays. The message names the call that shows it (`store status`, `machine status`, `sandbox get`) and the one that clears it (`store remove`, `machine remove`, `sandbox close`); `detail` as for `Busy` |
 | `Unsupported` | not possible here, or not built (see [limitations](limitations.md)); a missing tool is listed in `detail.missing` |
 | `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret |
 | `Conflict` | a merge or Commit conflict; for `backup.restore`, the Store changed since its last backup or restore |
@@ -493,7 +579,7 @@ Every call is one attempt. After `Unknown`, read the state with `list`,
 | Switch | Calls | Does |
 | --- | --- | --- |
 | `--text` | all | a readable result instead of JSON |
-| `--progress` | `project init`, `store push`, `store pull`, `backup create`, `backup restore` | progress as one JSON line per update on stderr, `{"progress": {…}}` |
+| `--progress` | `project init`, `project export`, `workspace exec`, `store push`, `store pull`, `backup create`, `backup restore` | progress as one JSON line per update on stderr, `{"progress": {…}}`; for `workspace exec`, the exec id first |
 | `--stream` | `workspace exec` | passes the command's stdout and stderr through (output over 1 MiB too) and exits with its code |
 | `--from <file>` | `file write`, `file apply` | reads the content or JSON from a file instead of stdin |
 | `--<option>-from <file>` | any optional text option (`--old-from`, `--new-from`, `--message-from`) | reads the option's value from a file |

@@ -17,8 +17,12 @@ Each example says whether it was run. "Run" means it was run on macOS
 - **Node.** The `layerfs` package is in `api/node`. Its native addon is
   built with `npm --prefix api run build:native`.
 - **Python.** The `layerfs` package is in `api/python`. Its module is built
-  with `cd api/python && maturin build --locked`; only a macOS arm64 wheel
-  was built on this branch.
+  with `cd api/python && maturin build --locked` (a debug wheel; add
+  `--release` for the one to install). A macOS arm64 wheel and a Linux x64
+  wheel were built and installed on this branch; Linux arm64 was not.
+  [api/README.md](../../../api/README.md#package-and-install) lists the
+  steps to install the Node tarball, the wheel and the command outside the
+  checkout.
 - **A Sandbox** on the `native` machine needs the LayerFS daemon (see
   [Sandboxes](#4-a-sandbox-a-workspace-and-a-commit)).
 

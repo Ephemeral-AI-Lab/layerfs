@@ -2,7 +2,7 @@
 
 > **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
 > `layerfs-sdk-observe` skill. **Not run in this pass** (no Sandbox was
-> started). Read from `connect/crates/layerfs-sandbox/src/backend/native/`,
+> started). Read from `control/crates/layerfs-sandbox-backend/src/backend/native/`,
 > `api/crates/layerfs-api/src/family/sandboxes.rs`. 1.1.0's `backend.daemon.sandbox.get_log` has no 2.0
 > call.
 
@@ -24,7 +24,7 @@ There is no general log level or logging framework.
 | Sandbox on | Log |
 | --- | --- |
 | `native` (macOS host processes, Linux namespaces) | The file `daemon.log` (stdout and stderr together, mode 0600) in the Sandbox's private folder under `$LAYERFS_HOME/machine/native/run/`. The folder is named `lfs-<home id, 8 digits>-<Sandbox name>`, the `container` field of `workspace.mount`'s result |
-| a VM or ssh machine | Inside that machine, under its worker's root; no call reads it from the host |
+| a VM machine | Inside that machine, under its worker's root; no call reads it from the host |
 | `docker` | Sandboxes on `docker` are `Unsupported` in this build |
 
 Copy the file before `sandbox.close`, which deletes its folder with the log.

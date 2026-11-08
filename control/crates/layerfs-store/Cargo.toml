@@ -1,0 +1,33 @@
+[package]
+name = "layerfs-store"
+description = "Store records and calls (layerfs-project#105): which Stores exist and where, sqlite/ and postgresql/ apart, backups, projects, placement and leases"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
+layerfs-content = { path = "../../../core/crates/layerfs-content" }
+layerfs-history = { path = "../../../core/crates/layerfs-history" }
+layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
+layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
+layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
+layerfs-project = { path = "../../../engine/crates/layerfs-project" }
+layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
+layerfs-home = { path = "../layerfs-home" }
+layerfs-machine = { path = "../layerfs-machine" }
+# Store backup to a bucket (#535).
+layerfs-bucket = { path = "../layerfs-bucket" }
+libc = "=0.2.189"
+nix = { version = "=0.31.3", default-features = false, features = ["fs", "user", "signal"] }
+
+[features]
+# PostgreSQL Stores (#506, #533): open, attach, create and Init.
+postgresql = [
+    "layerfs-persistence/postgresql",
+    "layerfs-project/postgresql",
+    "layerfs-store-service/postgresql",
+]
+# https:// remotes: Cloudflare R2, MinIO behind TLS.
+tls = ["layerfs-bucket/tls"]

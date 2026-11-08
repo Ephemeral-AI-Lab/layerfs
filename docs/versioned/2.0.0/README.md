@@ -20,7 +20,8 @@ Commit, merge, and publish to `main`.
   (default `~/.layerfs`). The 1.1.0 platform settings are gone. See
   [the home](home.md).
 - **Machines and Stores.** Compute is machines: `native` and `docker` are
-  built in; VM kinds are created by name; ssh hosts are connected. Storage is
+  built in; VM kinds (`apple-container`, `lima`) are created by name.
+  Microsandbox and SSH machines were removed in 2.0. Storage is
   Stores: a sqlite Store is one file on one machine, a postgresql Store is a
   database. Backups of sqlite Stores go to r2 or MinIO buckets. See
   [machines, Stores and backups](machines-and-stores.md).

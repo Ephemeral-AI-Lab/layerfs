@@ -68,18 +68,18 @@ inside the library are on [Table](../call-table/table.md).
 
 | Event | Shape | CLI | Node and Python |
 | --- | --- | --- | --- |
-| progress (`project.init`, `store.push`, `store.pull`, `backup.create`, `backup.restore`) | `{ progress: … }` | `--progress`: one JSON line per event on stderr | the `on_progress` function |
+| progress (`project.init`, `workspace.exec` (its exec id), `store.push`, `store.pull`, `backup.create`, `backup.restore`) | `{ progress: … }` | `--progress`: one JSON line per event on stderr | the `on_progress` function |
 | exec output (`workspace.exec`) | `{ stream, bytes }` | `--stream`: bytes to stdout or stderr | the `stdout` and `stderr` functions; `stream: true` without them writes to the process's own streams |
 
 Events come from the call's one event stream
-([`Context`](../../../../api/crates/layerfs-control/src/common/context.rs)).
+([`Context`](../../../../api/crates/layerfs-api/src/calls/context.rs)).
 `workspace.exec` sends its output after the command ends: an inline stream
-as one event ([`workspace/calls.rs`](../../../../api/crates/layerfs-control/src/workspace/calls.rs)),
+as one event ([`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs)),
 a stream over 1 MiB as 1 MiB pages from the host's spool, with the result
-marked `streamed` ([`sandbox/route.rs`](../../../../api/crates/layerfs-control/src/sandbox/route.rs) `drain`).
+marked `streamed` ([`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `drain`).
 
 Entries outside the table: `doctor` in every front end (report-only, see
-[Doctor](../control/doctor.md)); `close` in Node and Python, which runs
+[Doctor](../../control/management/doctor.md)); `close` in Node and Python, which runs
 `close_idle(0)` to close this process's idle Stores and drop their leases
 (the CLI does the same after every call); and, in the CLI only, `worker`,
 `import-env`, `help` and `--version`.
@@ -90,12 +90,12 @@ Entries outside the table: `doctor` in every front end (report-only, see
 | --- | --- |
 | Front ends add no behaviour of their own beyond argument and output shape. | Each function is built from the table and calls `call_json` or `call_scoped` once: [`index.js`](../../../../api/node/src/index.js) `bind`, [`_client.py`](../../../../api/python/src/layerfs/_client.py) `_bind`, [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) `one` |
 | No call, argument or result name is written in a front end. | [`api/AGENTS.md`](../../../../api/AGENTS.md): change the entry in `layerfs-api/src/<family>/<call>.rs` |
-| Nothing is retried in a front end. | [`layerfs-node/src/lib.rs`](../../../../api/crates/layerfs-node/src/lib.rs), [`calls/text.rs`](../../../../api/crates/layerfs-control/src/calls/text.rs) |
-| Argument checks are the library's, so a wrong call is refused the same way everywhere. | [`calls/check.rs`](../../../../api/crates/layerfs-control/src/calls/check.rs); compared in `shell.mjs` and `test_calls.py` |
-| Functions (`on_progress`, `stdout`, `stderr`) stay in the front end. | `check` refuses a `Function` argument as unknown ([`check.rs`](../../../../api/crates/layerfs-control/src/calls/check.rs)) |
-| Result keys are snake_case in every front end. | [`calls/keys.rs`](../../../../api/crates/layerfs-control/src/calls/keys.rs) |
+| Nothing is retried in a front end. | [`layerfs-node/src/lib.rs`](../../../../api/crates/layerfs-node/src/lib.rs), [`calls/text.rs`](../../../../api/crates/layerfs-api/src/calls/text.rs) |
+| Argument checks are the library's, so a wrong call is refused the same way everywhere. | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs); compared in `shell.mjs` and `test_calls.py` |
+| Functions (`on_progress`, `stdout`, `stderr`) stay in the front end. | `check` refuses a `Function` argument as unknown ([`check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs)) |
+| Result keys are snake_case in every front end. | [`calls/keys.rs`](../../../../api/crates/layerfs-api/src/calls/keys.rs) |
 | Bytes cross a language boundary as `{ "base64": … }`. | [`values.js`](../../../../api/node/src/values.js), [`_values.py`](../../../../api/python/src/layerfs/_values.py) |
-| LayerFS reads `LAYERFS_*` settings only and names no plugin. | `LAYERFS_HOME` in [`dispatch.rs`](../../../../api/crates/layerfs-control/src/calls/dispatch.rs) `home`; `LAYERFS_WORKER_*` in [`worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
+| LayerFS reads `LAYERFS_*` settings only and names no plugin. | `LAYERFS_HOME` in [`dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home`; `LAYERFS_WORKER_*` in [`worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
 
 ## Limits and failures
 
@@ -136,7 +136,9 @@ Give each a wall limit of at most 120 s.
   `{"ok":true,"findings":[]}` and does not create it; a Store record that
   is not JSON gives `1 error(s), 0 warning(s)` and its fix with `--text`;
   `doctor --all` is exit 2. Command:
-  `cargo +1.85.1 test --locked -p layerfs-cli --test doctor`. Needs Unix.
+  `cargo +1.85.1 test --locked -p layerfs-cli --test doctor`, built first
+  with `--no-run` (the cold build takes over a minute and would hit the
+  100 s limit). Needs Unix.
 - **Node tests**: `calls.mjs`, `shell.mjs`, `events.mjs`, `close.mjs`,
   `doctor.mjs`; see [Node](node.md#native-addon-build). Command:
   `perl -e 'alarm 100; exec @ARGV' npm --prefix api/node test`

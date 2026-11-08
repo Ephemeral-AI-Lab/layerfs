@@ -28,14 +28,24 @@ impl OwnerClient {
             db.acquire_captured_reader(capture, request)
         })
     }
+    /// Releases a Commit's captured reader. The reclamation it readies (the
+    /// captured generation's retired rows) stays queued for `reclaim` or the
+    /// next job, so it is not paid before the Commit's answer.
     pub fn release_captured_reader(
         &self,
         route: Route,
         reader: CapturedReader,
     ) -> Result<(), OwnerError> {
-        self.call(route, ServiceClass::General, None, move |db| {
-            db.release_captured_reader(reader)
-        })
+        self.call_deferred(route, move |db| db.release_captured_reader(reader))
+    }
+    /// `release_operation` for a Commit: its records' cleanup is deferred as
+    /// the captured reader's is.
+    pub fn release_operation_deferred(
+        &self,
+        route: Route,
+        owner: OperationOwner,
+    ) -> Result<(), OwnerError> {
+        self.call_deferred(route, move |db| db.release_operation(owner))
     }
     pub fn state(&self, route: Route) -> Result<layerfs_overlay::WorkspaceState, OwnerError> {
         self.call(route, ServiceClass::General, None, move |db| db.state())
@@ -70,8 +80,10 @@ impl OwnerClient {
             db.cleanup_state()
         })
     }
+    /// Terminal close drains no queued maintenance: the rows go with the
+    /// file, which terminal cleanup deletes as a whole.
     pub fn close(&self, route: Route) -> Result<(), OwnerError> {
-        self.call(route, ServiceClass::General, None, move |db| db.close())
+        self.call_deferred(route, move |db| db.close())
     }
     pub fn capture(&self, route: Route) -> Result<layerfs_overlay::Capture, OwnerError> {
         self.call(

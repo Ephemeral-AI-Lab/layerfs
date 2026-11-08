@@ -1,0 +1,22 @@
+[package]
+name = "layerfs-sandbox-backend"
+description = "Ordinary local Engine commands, streams and exact runtime status"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+# The local process identity (`LocalProcess`, `/proc` and `proc_pidinfo`
+# facts), shared with the home below both (layerfs-project#112).
+layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge", default-features = false }
+nix = { version = "=0.31.3", features = [
+    "poll",
+    "socket",
+    "fs",
+    "signal",
+    "mount",
+    "user",
+    "sched",
+    "process",
+] }

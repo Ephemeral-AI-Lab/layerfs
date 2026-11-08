@@ -177,25 +177,6 @@ fn a_gone_owner_s_unknown_outcome_is_unresolved_until_removed() {
     let got = call(&home, "machine.get", &[("name", t("dev"))]).unwrap();
     assert_eq!(got.get_text("state"), Some("unresolved"), "{got:?}");
     assert_eq!(got.get_text("error"), Some("lost the reply"), "{got:?}");
-    // an ssh machine's is cleared by a disconnect
-    let ssh = SdkValue::map([("host", t("h")), ("host_id", t("k"))]);
-    write_record(
-        &paths::machine_record(&home, "box"),
-        &SdkValue::map([
-            ("name", t("box")),
-            ("platform", t("ssh")),
-            ("ssh", ssh),
-            ("op", op("machine.connect", dead_pid(), true)),
-        ]),
-    )
-    .unwrap();
-    let refused = layerfs_api::running(&home, "box").unwrap_err();
-    assert_eq!(refused.code, "Unresolved", "{}", refused.message);
-    assert!(
-        refused.message.contains("`layerfs machine disconnect box`"),
-        "{}",
-        refused.message
-    );
     // the remove that clears it is not refused for it: it deletes, or its
     // delete is refused and the record stays as it was
     match call(&home, "machine.remove", &[("name", t("dev"))]) {

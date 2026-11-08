@@ -13,7 +13,7 @@
   Do not commit raw run output (`.json`, `.jsonl`, logs, databases) as
   documentation; keep the `.md` record and link to retained evidence.
 - `docs/architecture/<layer>/` is the maintained design reference for the
-  current source, one page per component of `core`, `engine`, `connect` and
+  current source, one page per component of `core`, `engine`, `control` and
   `api`, with cross-layer flows under `docs/architecture/flows/`. A change that
   alters a component's boundary, format, algorithm or named limit updates its
   page in the same commit.

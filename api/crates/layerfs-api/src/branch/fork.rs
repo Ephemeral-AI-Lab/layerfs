@@ -1,9 +1,10 @@
 //! `branch.fork`: a new Branch from another Branch's head or Commit.
+use crate::calls::table::Kind::{Name, Project};
+use crate::calls::table::{a, call, opt, Call};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::{Name, Project};
-use layerfs_control::calls::table::{a, call, opt, Call};
-use layerfs_control::calls::Context;
-use layerfs_control::common::outcome::Outcome;
+use layerfs_home::outcome::Outcome;
+use layerfs_store::calls::branch::{fork, BranchFork};
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -22,5 +23,13 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `branch.fork`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::store::calls::run(context, "branch", "fork", args)
+    let text = |name: &str| args.get_text(name).map(str::to_owned);
+    let request = BranchFork {
+        project: text("project").unwrap_or_default(),
+        name: text("name").unwrap_or_default(),
+        from_branch: text("from_branch").unwrap_or_default(),
+        from_commit: text("from_commit"),
+    };
+    let (home, events) = context.parts();
+    fork(home, events, &request)
 }

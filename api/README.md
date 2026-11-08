@@ -11,7 +11,7 @@ as nine families of functions:
 
 | Family | Calls |
 | --- | --- |
-| `project` | `init`, `list`, `get`, `remove` |
+| `project` | `init`, `list`, `get`, `export`, `remove` |
 | `branch` | `list`, `get`, `fork`, `merge`, `publish`, `diff` |
 | `commit` | `list`, `get`, `diff` |
 | `file` | `read`, `stat`, `list`, `glob`, `grep`, `blame`, `diff`, `write`, `edit`, `rm`, `mkdir`, `mv`, `cp`, `apply` |
@@ -63,6 +63,40 @@ artifact. The package loads that file, or the one `LAYERFS_NATIVE` names, and
 nothing else: it does not look in the source tree, and a missing addon is an
 error that says how to build it. `npm --prefix api run gen:types` regenerates
 `node/src/index.d.ts` after a change to the call table.
+
+### Package and install
+
+Each artifact is for the OS, CPU and C library it was built on (a Linux build
+needs at least the glibc of its build host). None is published; install the
+files you build, here into `$OUT`:
+
+```bash
+npm --prefix api run build:native                           # node/layerfs.node
+(cd api/node && npm pack --pack-destination "$OUT")         # layerfs-2.0.0.tgz
+npm install "$OUT/layerfs-2.0.0.tgz"                        # in an empty project
+
+(cd api/python && maturin build --release --locked -o "$OUT")   # layerfs-2.0.0-*.whl
+pip install "$OUT"/layerfs-2.0.0-*.whl                          # in a virtualenv
+
+cargo +1.85.1 build --release --locked -p layerfs-cli       # target/release/layerfs, one file
+```
+
+`npm pack` fails when `node/layerfs.node` is missing, so a tarball never lacks
+its addon. The default addon, wheel and command have no PostgreSQL and no TLS:
+a call that needs them is refused `Unsupported` ("this LayerFS build has no
+PostgreSQL engine"). Both are opt-in at build time and need the OpenSSL
+development files (`libssl-dev`) on the build host:
+
+```bash
+npm --prefix api run build:native -- --features postgresql     # or tls, or postgresql,tls
+(cd api/python && maturin build --release --locked --features postgresql -o "$OUT")
+cargo +1.85.1 build --release --locked -p layerfs-cli --features postgresql
+```
+
+For such a wheel `maturin` copies `libssl`, `libcrypto` and `libzstd` into it
+and needs `patchelf`; the addon and the command load them from the system.
+The runs behind these steps are in
+[artifact-qualification-2.0.0.md](../docs/general/artifact-qualification-2.0.0.md).
 
 Disposable/WAL/synchronous=OFF only. Durable execution is NOT_RUN — disabled by
 owner until explicit reauthorization. One attempted operation; no retry or replay.

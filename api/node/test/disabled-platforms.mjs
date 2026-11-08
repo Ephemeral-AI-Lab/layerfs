@@ -13,7 +13,10 @@ function snapshot(root, dir = root) {
     return e.isDirectory() ? snapshot(root, path) : [[path.slice(root.length), readFileSync(path).toString("base64")]];
   });
 }
-for (const platform of ["firecracker", "ssh"]) test(`${platform}: Node refuses new work without modifying records or contacting workers`, async () => {
+const reason = platform => platform === "firecracker"
+  ? `${platform} is permanently disabled by product policy (layerfs-project#7)`
+  : `platform \`${platform}\` was removed in LayerFS 2.0`;
+for (const platform of ["firecracker", "ssh", "microsandbox"]) test(`${platform}: Node refuses new work without modifying records or contacting workers`, async () => {
   const home = mkdtempSync(join(tmpdir(), "layerfs-disabled-node-"));
   const server = createServer(socket => { contacts++; socket.destroy(); });
   let contacts = 0;
@@ -31,8 +34,7 @@ for (const platform of ["firecracker", "ssh"]) test(`${platform}: Node refuses n
       const spec = table.find(s => s.family === family && s.call === call);
       const args = spec.args.map(a => row.args[a.name] ?? null);
       if (spec.options.length) args.push(Object.fromEntries(spec.options.filter(o => o.name in row.args).map(o => [o.name, row.args[o.name]])));
-      const disabled = row.call === "machine.connect" ? "ssh" : platform;
-      await assert.rejects(lfs[family][call](...args), e => e.code === "Unsupported" && e.message === `${disabled} is permanently disabled by product policy (layerfs-project#7)`, row.call);
+      await assert.rejects(lfs[family][call](...args), e => e.code === "Unsupported" && e.message === reason(platform), row.call);
       assert.deepEqual(snapshot(home), before, row.call);
     }
     await new Promise(resolve => setImmediate(resolve));

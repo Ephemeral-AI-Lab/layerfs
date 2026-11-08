@@ -32,8 +32,10 @@ pub struct Retained {
 pub const CALLS: usize = 64;
 /// The Store's shared immutable-object cache, as a daemon's.
 const CACHE_BYTES: usize = 64 * 1024;
-/// Each private overlay's page cache, as a daemon's.
-const PAGER_KIB: u32 = 1024;
+/// Each private overlay's page cache, as a daemon's: 4 MiB, four 4 KiB pages
+/// per byte of one write window's payload, so a window's transaction does not
+/// spill half way through it.
+const PAGER_KIB: u32 = 4096;
 
 /// Why a Store could not be opened directly.
 #[derive(Debug)]

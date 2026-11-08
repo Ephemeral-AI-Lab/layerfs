@@ -1,0 +1,47 @@
+[package]
+name = "layerfs-control"
+description = "The management library under the SDK call surface (#536): the home and its records, machines and workers, Stores, projects, Sandboxes and their Workspaces, and backups"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
+layerfs-home = { path = "../layerfs-home" }
+layerfs-machine = { path = "../layerfs-machine" }
+layerfs-store = { path = "../layerfs-store" }
+layerfs-sandbox = { path = "../layerfs-sandbox" }
+layerfs-project = { path = "../../../engine/crates/layerfs-project" }
+layerfs-sandbox-backend = { path = "../layerfs-sandbox-backend" }
+layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
+# Store backup to a bucket (#535).
+layerfs-bucket = { path = "../layerfs-bucket" }
+
+[features]
+# PostgreSQL Stores (#506, #533): open, attach, create and Init.
+# Off by default; the sealed Linux build the worker runs turns it on.
+postgresql = [
+    "layerfs-store/postgresql",
+    "layerfs-project/postgresql",
+    "layerfs-store-service/postgresql",
+]
+# https:// remotes: Cloudflare R2, MinIO behind TLS. Off by default; the
+# sealed Linux build the worker runs turns it on.
+tls = ["layerfs-store/tls", "layerfs-bucket/tls"]
+# The machine calls (2.0, #533): host builds only. The guest worker is built
+# without it, so no machine adapter runs inside a machine.
+machine = ["layerfs-machine/machine", "layerfs-sandbox/machine"]
+
+[dev-dependencies]
+layerfs-content = { path = "../../../core/crates/layerfs-content" }
+layerfs-history = { path = "../../../core/crates/layerfs-history" }
+layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
+layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
+layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
+nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
+layerfs-daemon = { path = "../../../engine/crates/layerfs-daemon" }
+layerfs-fuse = { path = "../../../engine/crates/layerfs-fuse" }
+# The daemon fixtures bind private Workspaces.
+layerfs-overlay = { path = "../../../engine/crates/layerfs-overlay" }
+layerfs-workspace = { path = "../../../engine/crates/layerfs-workspace" }

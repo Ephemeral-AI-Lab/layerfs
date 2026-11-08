@@ -1,9 +1,10 @@
-//! A docker Sandbox with no image named uses the bundle's Sandbox image
-//! (#535 P5): `sandbox-image.tar` is loaded into Docker once, by
-//! `machine.start docker` (the only call that starts a machine, D11), its
-//! image id recorded on the docker machine and used for the worker's
-//! container and the Sandbox; `--image` still overrides; a bundle without
-//! the archive is refused naming it. A stand-in `docker` (it loads, but runs no
+//! The docker machine's worker container runs the bundle's Sandbox image
+//! when the machine names none (#535 P5): `sandbox-image.tar` is loaded
+//! into Docker once, by `machine.start docker` (the only call that starts a
+//! machine, D11), its image id recorded on the docker machine; a Sandbox's
+//! create loads nothing (its namespaces root comes from the bundle's
+//! archive in the worker, D-8); a bundle without the archive is refused
+//! naming it. A stand-in `docker` (it loads, but runs no
 //! container) and a bundle folder of empty stand-ins; no Docker is used.
 //! One test, because it sets the process's environment.
 #![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
@@ -150,8 +151,8 @@ esac
     assert_eq!(calls.matches(" load ").count(), 1, "{calls}");
     assert_eq!(calls.matches(" run ").count(), 1, "{calls}");
 
-    // a named image overrides it: the worker still runs the loaded one,
-    // and nothing is loaded again
+    // a named image is the Sandbox's root, not the worker's: the worker
+    // still runs the loaded one, and nothing is loaded again
     let named = format!("sha256:{}", "2".repeat(64));
     let _ = create(&home, "s4", Some(&named));
     assert_eq!(log(&tools).matches(" load ").count(), 1);

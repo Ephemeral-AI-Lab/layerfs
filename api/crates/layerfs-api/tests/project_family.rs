@@ -190,6 +190,26 @@ fn init_files_branches_move_and_remove() {
     assert!(layerfs_api::json::print(&branches).contains("\"fix\""));
     ok(&home, "branch.get", &[p(), ("branch", t("fix"))]);
 
+    let export_dir = tempdir("export").join("out");
+    let exported = ok(
+        &home,
+        "project.export",
+        &[
+            p(),
+            ("destination", t(&export_dir.display().to_string())),
+            ("branch", t("fix")),
+        ],
+    );
+    assert_eq!(exported.get_text("project"), Some("shop/api"));
+    assert_eq!(exported.get_text("branch"), Some("fix"));
+    assert_eq!(exported.get_int("files"), Some(3));
+    assert_eq!(exported.get_int("directories"), Some(1));
+    assert_eq!(
+        std::fs::read_to_string(export_dir.join("NEW.md")).unwrap(),
+        "newer\n"
+    );
+    let _ = std::fs::remove_dir_all(export_dir.parent().unwrap());
+
     // the Store's open service is closed before a push: a lease of this
     // process would not block it, but the open file must be closed first
     std::thread::sleep(std::time::Duration::from_millis(10));

@@ -76,7 +76,7 @@ fn restore_over_a_store_with_a_running_sandbox_is_in_use() {
     dead_bucket(&home);
     // the Store links the bucket's file at its current heads, so only the
     // Sandbox stands in the way
-    let heads = layerfs_store_backup::backup::heads(&paths::store_file(&home, "shop")).unwrap();
+    let heads = layerfs_bucket::backup::heads(&paths::store_file(&home, "shop")).unwrap();
     let path = paths::store_record(&home, "shop");
     let record = read_record(&path).unwrap().unwrap();
     let linked = SdkValue::map([(

@@ -2,6 +2,11 @@ mod payload_support;
 use layerfs_overlay::*;
 use payload_support::*;
 
+// One write job of the size these shapes were calibrated at. The engine's
+// window is wider since #77 (a router's 256 KiB transfer is one job), so a
+// 128 KiB job is still exactly one window's work here.
+const WINDOW: usize = 128 * 1024;
+
 fn collect(db: &Overlay, mut cursor: CapturedRunCursor, base: &[u8]) -> (Vec<u8>, CapturedRunWork) {
     let mut bytes = Vec::new();
     let mut work = CapturedRunWork::default();
@@ -253,18 +258,19 @@ fn interleaved_live_and_stale_cells_keep_each_seek_and_trimmed_start_once() {
 }
 
 #[test]
-fn a_row_of_several_cells_is_one_metadata_row_and_one_window() {
+fn dense_rows_are_one_metadata_row_each_and_read_one_window_at_a_time() {
     let temp = Temp::new();
     let db = temp.db();
     db.open_workspace([150; 32]).unwrap();
     let source = db.acquire_base_source(1).unwrap();
     let mut file = File::new(&db, source, 23, Vec::new());
-    // Four rows of 32 KiB in the sealed generation.
-    file.write(0, &pattern(WRITE_WINDOW, 7));
+    // Eight rows of 32 KiB in the sealed generation.
+    file.write(0, &pattern(WINDOW, 7));
+    file.write(WINDOW as u64, &pattern(WINDOW, 8));
     db.release_base_source(source).unwrap();
     let capture = db.capture().unwrap();
     let reader = db.acquire_captured_reader(capture, 1).unwrap();
-    let size = WRITE_WINDOW as u64;
+    let size = 2 * WINDOW as u64;
     let windows = |from: u64| {
         let mut cursor = CapturedRunCursor::new(reader, 23, from, size).unwrap();
         let (mut seen, mut rows) = (Vec::new(), 0);
@@ -281,8 +287,10 @@ fn a_row_of_several_cells_is_one_metadata_row_and_one_window() {
                 CapturedRunStep::Local { .. } => panic!("shape step on a payload cursor"),
                 CapturedRunStep::Window { read, next } => {
                     let at = read.offset as usize;
+                    assert!(read.data.len() <= READ_WINDOW);
                     assert_eq!(read.data, file.expect[at..at + read.data.len()]);
                     assert!(read.inherited.is_empty());
+                    assert_eq!(next.offset(), read.offset + read.data.len() as u64);
                     seen.push((read.offset, read.data.len()));
                     cursor = next;
                 }
@@ -290,27 +298,22 @@ fn a_row_of_several_cells_is_one_metadata_row_and_one_window() {
         }
         panic!("cursor did not finish");
     };
-    // From the start: each row is found once and returned once, whole.
+    // From the start: each row is found once, and the dense rows come in
+    // whole read windows.
     let run = RUN_BYTES as u64;
     assert_eq!(
         windows(0),
-        (
-            (0..4).map(|row| (row * run, RUN_BYTES)).collect::<Vec<_>>(),
-            4
-        )
+        (vec![(0, READ_WINDOW), (4 * run, READ_WINDOW)], 8)
     );
     // From inside a row: the row that holds the first byte starts before
-    // it and is still found by one seek; the window ends with the row.
+    // it and is still found by one seek. A window ends with the last whole
+    // row that fits one read window; the row it stops before is found once.
     let from = run + 3 * CELL_BYTES as u64 + 17;
     assert_eq!(
         windows(from),
         (
-            vec![
-                (from, (2 * run - from) as usize),
-                (2 * run, RUN_BYTES),
-                (3 * run, RUN_BYTES)
-            ],
-            3
+            vec![(from, (5 * run - from) as usize), (5 * run, 3 * RUN_BYTES)],
+            7
         )
     );
     db.release_captured_reader(reader).unwrap();
@@ -373,12 +376,9 @@ fn a_shapes_only_pass_names_the_same_local_bytes_and_reads_no_dense_payload() {
     let db = temp.db();
     db.open_workspace([155; 32]).unwrap();
     let source = db.acquire_base_source(1).unwrap();
-    let mut file = File::new(&db, source, 41, pattern(3 * WRITE_WINDOW + 500, 3));
-    file.write(RUN_BYTES as u64, &pattern(WRITE_WINDOW, 9));
-    file.write(
-        (RUN_BYTES + WRITE_WINDOW) as u64,
-        &pattern(WRITE_WINDOW, 11),
-    );
+    let mut file = File::new(&db, source, 41, pattern(3 * WINDOW + 500, 3));
+    file.write(RUN_BYTES as u64, &pattern(WINDOW, 9));
+    file.write((RUN_BYTES + WINDOW) as u64, &pattern(WINDOW, 11));
     db.release_base_source(source).unwrap();
     let capture = db.capture().unwrap();
     let reader = db.acquire_captured_reader(capture, 2).unwrap();

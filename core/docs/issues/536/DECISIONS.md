@@ -13,7 +13,7 @@ to be re-confirmed.
 
 | # | Decision | Taken |
 | --- | --- | --- |
-| C1 | The management layer is a crate named `layerfs-control`, in the api layer (`api/crates/layerfs-control`): the library under the call surface `layerfs-api`. `connect/` keeps drivers only. | owner, 2026-11-03 |
+| C1 | The management layer is a crate named `layerfs-control`, in the api layer (`api/crates/layerfs-control`): the library under the call surface `layerfs-api`. `connect/` keeps drivers only. **Superseded** (owner, 2026-11-06, layerfs-project#101 D-2, D-5, D-6): management code leaves `api/`; `layerfs-control` moved to `control/crates/layerfs-control` (the `connect/` layer renamed `control/`) and is split by concern ([compute plane 2.0](../../proposals/compute-plane-2.0.md) §6). | owner, 2026-11-03 |
 | C2 | Sandboxes are recorded at the top of the home, `sandbox/<name>/`; the name is the only identity. The 1.1-era numbered state (`store/<s>/project/<p>/sandboxes/<n>/`), `machine/<m>/sandbox/<name>/` and `machine/native/sandbox-root/` are retired into it. | owner, 2026-11-03 |
 | C3 | Workspaces are children of their Sandbox (`sandbox/<name>/workspace/<id>.json`) and may have an optional user-chosen name, unique within the Sandbox. | owner, 2026-11-03 |
 | C4 | PostgreSQL Stores are usable from every machine automatically; there is no `store.attach`/`store.detach` (#535 G3, §7.4). Reach is rewritten per platform and checked inside `sandbox.create`. | owner, 2026-11-03 |

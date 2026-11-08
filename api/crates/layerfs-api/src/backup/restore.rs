@@ -1,9 +1,10 @@
 //! `backup.restore`: download a backup as a sqlite Store on native.
+use crate::calls::table::Kind::Name;
+use crate::calls::table::{a, call, opt, Call, PROGRESS};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::Name;
-use layerfs_control::calls::table::{a, call, opt, Call, PROGRESS};
-use layerfs_control::calls::Context;
-use layerfs_control::common::outcome::Outcome;
+use layerfs_home::outcome::Outcome;
+use layerfs_store::backup::family::BackupRestore;
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -17,5 +18,12 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `backup.restore`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::backup::family::run(context, "restore", args)
+    let text = |name: &str| args.get_text(name).map(str::to_owned);
+    let request = BackupRestore {
+        store: text("store").unwrap_or_default(),
+        bucket: text("bucket").unwrap_or_default(),
+        file: text("file"),
+    };
+    let (home, events) = context.parts();
+    layerfs_control::backup::restore(home, events, &request)
 }

@@ -135,7 +135,12 @@ same-operation provider; `SaveSink` is its consumer adapter and preserves the
 original typed error for `finish`.
 
 Wave membership includes offered ids, direct references and declared physical
-candidates. Known dependency chains are prefetched by level. Exact reuse checks
+candidates. It is located in slices whose ids fit the 4,096-entry locator cache,
+each admitted before the next is located, and publication checks external
+references in the same pages, so a reference is not evicted between its batched
+locate and its check (an append's mapping pages, emitted at finish, name every
+chunk the Save published: a 500 MiB append made 53,500 `locate` calls before
+this and 143 after). Known dependency chains are prefetched by level. Exact reuse checks
 role, length and reconstructed bytes. The existing selector, group builder and
 pack assembler supply the physical representation; queue flushes keep the old
 non-pooled placement boundaries. A registered object is immediately valid for
@@ -617,11 +622,12 @@ is the one to probe in qualification:
 | candidate absent from storage | FULL | **policy decision** |
 | candidate present but ineligible (depth/role) | FULL | **policy decision** |
 | chain would exceed its budget | FULL | **policy decision** |
+| chunk base lost its last trials in this Save, or won each by less than 1/8 | FULL, no trial | **policy decision** |
 | codec, allocation or read failure | **error returned** | **failure** |
 
 `DeltaCounters` distinguishes all of them: `prepared_full`, `trials`,
 `prefix_selected`, `full_losses`, `no_candidate`, `absent_candidates`,
-`ineligible_candidates`, `work_exceeded`. A receipt can therefore show *why* FULL
+`ineligible_candidates`, `work_exceeded`, `losing_skipped`. A receipt can therefore show *why* FULL
 was chosen rather than only that it was.
 
 **Chain bounds are separate from depths**, and the source says so explicitly: "a

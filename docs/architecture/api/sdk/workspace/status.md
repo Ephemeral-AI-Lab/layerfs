@@ -10,8 +10,8 @@ mount, what it is doing, and how many changes it holds, changing nothing.
 | | |
 | --- | --- |
 | Family | [workspace](README.md) |
-| Library entry | [`api/crates/layerfs-api/src/workspace/status.rs`](../../../../../api/crates/layerfs-api/src/workspace/status.rs) |
-| Implemented in | `layerfs_control::workspace::calls::workspace` → host operation `backend.daemon.workspace.status` → `workspace::serve::status` ([`workspace/serve.rs`](../../../../../api/crates/layerfs-control/src/workspace/serve.rs)) |
+| Library entry | [`workspace/status.rs`](../../../../../api/crates/layerfs-api/src/workspace/status.rs) |
+| Implemented in | the library entry parses a typed `StatusRequest` → `layerfs_sandbox::workspace::calls::status` → host operation `backend.daemon.workspace.status` → `workspace::serve::status` ([`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs)) |
 | Runs in | the Sandbox's daemon (status, reads no Store) and one head read on the Store's own route |
 
 ## Signature
@@ -35,7 +35,7 @@ layerfs workspace status <ws>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `ws` | Text | a mounted Workspace | [`common/names.rs`](../../../../../api/crates/layerfs-control/src/common/names.rs) |
+| `ws` | Text | a mounted Workspace | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
 
 ## Options
 
@@ -52,12 +52,12 @@ None.
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `base`, `base_layer` | text | the Commit and Layer the Workspace is bound to now | [`daemon/values.rs`](../../../../../api/crates/layerfs-control/src/daemon/values.rs) `status` |
-| `branch` | text or null | the Branch it was mounted from | [`workspace/serve.rs`](../../../../../api/crates/layerfs-control/src/workspace/serve.rs) |
+| `base`, `base_layer` | text | the Commit and Layer the Workspace is bound to now | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) `status` |
+| `branch` | text or null | the Branch it was mounted from | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `branch_head` | text or null | the Branch's head now; null when that read failed | same, `status` |
-| `head_moved_since_mount` | bool or null | the head differs from `base`; null when unread | [`daemon/values.rs`](../../../../../api/crates/layerfs-control/src/daemon/values.rs) |
+| `head_moved_since_mount` | bool or null | the head differs from `base`; null when unread | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
 | `activity` | text | `Idle`, `Committing`, `Closing`, `Attaching`, `Uncertain` (an unknown outcome keeps custody; Commit and unmount are refused) or `LocalFailure` (published, but the local install did not finish) | [`control_types.rs`](../../../../../engine/crates/layerfs-bridge/src/control_types.rs) `Activity` |
-| `overlay.inodes`, `overlay.entries` | int | uncaptured changed inodes and directory entries | [`daemon/values.rs`](../../../../../api/crates/layerfs-control/src/daemon/values.rs) |
+| `overlay.inodes`, `overlay.entries` | int | uncaptured changed inodes and directory entries | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
 | `overlay.pending_merge` | bool | the overlay's base root is not the binding's root (a merge is pending) | same |
 
 ## Where it runs
@@ -77,21 +77,21 @@ A read: it is answered while a `sandbox.create` or `close` holds the
 Sandbox, and it starts no machine (P4). The daemon's `Status` reads no
 Store; the head is read by the caller. For a PostgreSQL Store that read
 runs on the process's held read session (one light-checked connection per
-process, no Store service; [`store/reader.rs`](../../../../../api/crates/layerfs-control/src/store/reader.rs)).
+process, no Store service; [`postgresql/reader.rs`](../../../../../control/crates/layerfs-store/src/postgresql/reader.rs)).
 Unlike a mount, whose daemon finds the Branch by name (#64), a status still
 opens that connection in a new CLI process. See the
-[routing table](../../routing/routing-table.md).
+[routing table](../../../control/routing/routing-table.md).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad `ws` | no | [`common/names.rs`](../../../../../api/crates/layerfs-control/src/common/names.rs) |
-| `NoSuchSandbox`, `NotMounted` | no such Sandbox or Workspace | no | [`workspace/serve.rs`](../../../../../api/crates/layerfs-control/src/workspace/serve.rs) |
-| `Unavailable` | the machine is stopped or its worker gone | no | [`sandbox/route.rs`](../../../../../api/crates/layerfs-control/src/sandbox/route.rs) `reach` |
-| daemon refusal codes | refused with `detail.phase` | no | [`daemon/values.rs`](../../../../../api/crates/layerfs-control/src/daemon/values.rs) |
-| `Failed` | a daemon exchange failed | read-only | [`sandbox/serve.rs`](../../../../../api/crates/layerfs-control/src/sandbox/serve.rs) |
-| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
+| `InvalidInput` | a bad `ws` | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
+| `NoSuchSandbox`, `NotMounted` | no such Sandbox or Workspace | no | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
+| `Unavailable` | the machine is stopped or its worker gone | no | [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) `reach` |
+| daemon refusal codes | refused with `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
+| `Failed` | a daemon exchange failed | read-only | [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
+| `Unknown` | the worker's answer was lost | read-only; call again | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 `workspace.status` is the read to make after an uncertain
 [exec](exec.md) or [commit](commit.md): `activity` other than `Idle`, a new

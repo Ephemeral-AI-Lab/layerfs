@@ -1,7 +1,5 @@
-//! The `machine` family: 11 calls, one file each (O11: update; #535: platforms, start, stop).
-mod connect;
+//! The `machine` family: 9 calls, one file each (O11: update; #535: platforms, start, stop).
 mod create;
-mod disconnect;
 mod get;
 mod list;
 mod platforms;
@@ -11,7 +9,7 @@ mod status;
 mod stop;
 mod update;
 
-use layerfs_control::calls::Calls;
+use crate::calls::Calls;
 
 /// Its calls, in the order help lists them.
 pub(crate) fn calls() -> Calls {
@@ -23,9 +21,7 @@ pub(crate) fn calls() -> Calls {
         start::CALL,
         stop::CALL,
         create::CALL,
-        connect::CALL,
         remove::CALL,
-        disconnect::CALL,
         update::CALL,
     ]
 }

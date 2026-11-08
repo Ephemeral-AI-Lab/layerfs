@@ -2,7 +2,7 @@
 //! #5): a Store above the part size goes up in several multipart parts, and
 //! `backup.create` and `backup.restore` send their phases in order with byte
 //! counts that end on the bytes they moved. Needs the LAYERFS_REMOTE_*
-//! variables tests/minio_service.sh of layerfs-store-backup prints; without
+//! variables tests/minio_service.sh of layerfs-bucket prints; without
 //! them the test says NOT_RUN and passes.
 #![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
 

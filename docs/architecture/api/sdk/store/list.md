@@ -10,8 +10,8 @@ its projects and its current state.
 | | |
 | --- | --- |
 | Family | [store](README.md) |
-| Library entry | [`api/crates/layerfs-api/src/store/list.rs`](../../../../../api/crates/layerfs-api/src/store/list.rs) |
-| Implemented in | `layerfs_control::store::family::run` → `list` ([`store/list.rs`](../../../../../api/crates/layerfs-control/src/store/list.rs)) |
+| Library entry | [`store/list.rs`](../../../../../api/crates/layerfs-api/src/store/list.rs) |
+| Implemented in | `layerfs_store::sqlite::family::list` → `list` ([`list.rs`](../../../../../control/crates/layerfs-store/src/list.rs)) |
 | Runs in | the caller's process; one `store.file` `stat` in a machine's worker per sqlite Store that is not local |
 
 ## Signature
@@ -36,7 +36,7 @@ layerfs store list
 ## Arguments
 
 None. A positional is refused `InvalidInput` by the argument check
-([`calls/check.rs`](../../../../../api/crates/layerfs-control/src/calls/check.rs)).
+([`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs)).
 
 ## Options
 
@@ -63,10 +63,10 @@ None.
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| record fields | map | the Store record as written, `name` first; `cursor`, `binding` and `v` are never shown | [`record.rs`](../../../../../api/crates/layerfs-control/src/store/record.rs) `to_sdk` |
-| `op` | map | the recorded intent as `{ id, name, phase, started, uncertain }`, only when the record holds one | [`common/op.rs`](../../../../../api/crates/layerfs-control/src/common/op.rs) `to_sdk` |
-| `projects` | list of text | the names of the home's project records under `store/<name>/project/`, sorted | [`family.rs`](../../../../../api/crates/layerfs-control/src/store/family.rs) `public` |
-| `state` | text | `idle`, `in_use`, `busy`, `down` or `unresolved` (below) | [`record.rs`](../../../../../api/crates/layerfs-control/src/store/record.rs) `StoreRecord::state` |
+| record fields | map | the Store record as written, `name` first; `cursor`, `binding` and `v` are never shown | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) `to_sdk` |
+| `op` | map | the recorded intent as `{ id, name, phase, started, uncertain }`, only when the record holds one | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) `to_sdk` |
+| `projects` | list of text | the names of the home's project records under `store/<name>/project/`, sorted | [`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs) `public` |
+| `state` | text | `idle`, `in_use`, `busy`, `down` or `unresolved` (below) | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) `StoreRecord::state` |
 
 `get` shows the same record fields; [store.get](get.md) describes them.
 There are no paging fields.
@@ -95,19 +95,19 @@ There are no paging fields.
 
 | Store kind | Where | What it reads | Source |
 | --- | --- | --- | --- |
-| sqlite on `native` (Linux, macOS) | this process | the file's size, `-wal` size and free bytes | [`list.rs`](../../../../../api/crates/layerfs-control/src/store/list.rs), [`transfer/steps.rs`](../../../../../api/crates/layerfs-control/src/store/transfer/steps.rs) `stat` |
-| sqlite on another machine | that machine's worker | the same, under the worker's root | [`common/place.rs`](../../../../../api/crates/layerfs-control/src/common/place.rs) `plan` |
-| PostgreSQL | this process | records only; the server is not dialed | [`list.rs`](../../../../../api/crates/layerfs-control/src/store/list.rs) |
+| sqlite on `native` (Linux, macOS) | this process | the file's size, `-wal` size and free bytes | [`list.rs`](../../../../../control/crates/layerfs-store/src/list.rs), [`sqlite/transfer/steps.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) `stat` |
+| sqlite on another machine | that machine's worker | the same, under the worker's root | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) `plan` |
+| PostgreSQL | this process | records only; the server is not dialed | [`list.rs`](../../../../../control/crates/layerfs-store/src/list.rs) |
 
 It starts no machine, takes no lock and changes nothing. See the
-[routing table](../../routing/routing-table.md).
+[routing table](../../../control/routing/routing-table.md).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | the client has a folder scope (`out of scope: store.list`) | no | [`calls/scope.rs`](../../../../../api/crates/layerfs-control/src/calls/scope.rs) |
-| `Failed` | a Store record or lease folder cannot be read, or a record is not a map | no | [`common/home/records.rs`](../../../../../api/crates/layerfs-control/src/common/home/records.rs), [`record.rs`](../../../../../api/crates/layerfs-control/src/store/record.rs) |
+| `InvalidInput` | the client has a folder scope (`out of scope: store.list`) | no | [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
+| `Failed` | a Store record or lease folder cannot be read, or a record is not a map | no | [`home/records.rs`](../../../../../control/crates/layerfs-home/src/home/records.rs), [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) |
 
 A machine that does not answer is not an error: its Stores are `down`.
 
@@ -133,8 +133,8 @@ layerfs store list
 
 - Next: [store.status](status.md) for one Store's holders, `op` and size;
   [store.get](get.md) for its record alone.
-- [Control: Home and records](../../control/home-and-records.md),
-  [Routing table](../../routing/routing-table.md),
+- [Control: Home and records](../../../control/management/home-and-records.md),
+  [Routing table](../../../control/routing/routing-table.md),
   [Engine: Store](../../../engine/store/README.md).
 
 ---

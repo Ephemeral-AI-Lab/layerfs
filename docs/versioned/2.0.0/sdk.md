@@ -86,7 +86,7 @@ lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/web", "folder": "
 ```
 
 - Python 3.10 or later (abi3). The native module is `layerfs._native`,
-  built by PyO3 from `engine/crates/layerfs-python`.
+  built by PyO3 from `api/crates/layerfs-python`.
 - Calls are synchronous (O19). `layerfs.aio` has the same families and
   calls as coroutines; each runs the synchronous call on a thread, and the
   native call releases the interpreter. Its function options run on the
@@ -110,9 +110,11 @@ lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/web", "folder": "
 - `layerfs.close()` is Node's `close()`: it closes this process's open
   Stores, dropping their leases, and returns how many.
 - Build: `cd api/python && maturin build --locked` (maturin 1.9.6 or a
-  later 1.x, as `pyproject.toml` requires since `2793ee114c`). Only a macOS
-  arm64 wheel was built on this branch; the Linux x64 and arm64 glibc
-  wheels (O20) are `NOT_RUN`.
+  later 1.x, as `pyproject.toml` requires since `2793ee114c`); `--release`
+  for the wheel to install. A macOS arm64 wheel and a Linux x64 glibc wheel
+  were built and installed on this branch; the Linux arm64 wheel (O20) is
+  `NOT_RUN`. The installed artifacts were qualified in
+  [artifact-qualification-2.0.0.md](../../general/artifact-qualification-2.0.0.md).
 
 ```python
 import asyncio
@@ -126,11 +128,46 @@ async def main():
 asyncio.run(main())
 ```
 
+## Export a project snapshot
+
+See [`project.export`](../../architecture/api/sdk/project/export.md)
+for destination validation, fidelity, routing, refusal codes and result fields.
+The table has 61 calls, five in the `project` family.
+
+```js
+// /exports exists; the destination is absent or empty on this host.
+const exported = await layerfs.project.export("shop/api", "/exports/api", {
+  branch: "main",
+  on_progress: ({ phase, bytes }) => console.error(phase, bytes),
+});
+```
+
+```python
+result = layerfs.project.export("shop/api", "/exports/api", branch="main", on_progress=print)
+# Inside an async function, using a separate destination:
+# result = await layerfs.aio.project.export("shop/api", "/exports/api-agent", branch="agent", on_progress=print)
+```
+
+Omitting `branch` selects `main`. There is no `commit` option. The immutable
+node/root is pinned once; later publications and uncommitted Workspace changes
+do not enter the output. SQLite worker routes stream to the caller’s local
+writer; local/remote PostgreSQL connections read through the caller’s process.
+A required stopped machine is `Unavailable`.
+
+Callbacks receive `prepare`, `export`, `finalize` with monotonic local-output
+`files`, `directories`, `symlinks`, `bytes` and `done = bytes` during export; `total` is
+`None`/`null`. `finalize` comes only once the folder is in place, and `export`
+updates at most every 200 ms; only a successful return means success.
+Omit `on_progress` when unused: the current Python shell rejects explicit
+`on_progress=None`. Handler exceptions do not cancel export. Cancelling `aio`
+stops callbacks while the native operation continues, so inspect the destination
+before deciding on another attempt.
+
 ## Functions as options
 
 | Option | Calls | Called with |
 | --- | --- | --- |
-| `on_progress` | `project.init`, `store.push`, `store.pull`, `backup.create`, `backup.restore` | each progress update (an object or dict) |
+| `on_progress` | `project.init`, `project.export`, `workspace.exec`, `store.push`, `store.pull`, `backup.create`, `backup.restore` | each progress update (an object or dict); for `workspace.exec`, once, `{exec: {id}}` before the command starts |
 | `stdout`, `stderr` | `workspace.exec` | the command's output, piece by piece: a string when the piece is UTF-8, else a `Buffer` (Node) or `bytes` (Python) |
 
 There is one progress stream and no job registry (O22). Another process
@@ -140,6 +177,17 @@ is no live output stream yet. A stream over 1 MiB comes only through these
 functions (one 1 MiB piece at a time) or `stream: true`; the result then
 has that stream `null`, its byte count and `streamed: true`.
 
+- `on_progress` on `workspace.exec` gives the command's exec id while it
+  runs, so another call (in this process or another) can end it:
+
+  ```js
+  const id = new Promise((resolve) => {
+    lfs.workspace.exec(ws, "npm run dev", { on_progress: (p) => resolve(p.exec.id) });
+  });
+  await lfs.workspace.exec_cancel(ws, await id, { grace_ms: 2000 });
+  ```
+
+  Not run as written; the shell form was (`layerfs-cli/tests/exec_cancel.rs`).
 - `stream: true` on `workspace.exec` passes the output to the `stdout` and
   `stderr` functions, or, without them, to this process's own stdout and
   stderr (Python writes text to the text stream and bytes to its buffer).

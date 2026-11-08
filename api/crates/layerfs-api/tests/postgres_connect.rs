@@ -170,6 +170,30 @@ fn connect_read_and_disconnect() {
         "{status:?}"
     );
 
+    let export_dir = tempdir("export").join("out");
+    let exported = ok(
+        &home,
+        "project.export",
+        &[
+            ("project", t("pg/api")),
+            ("destination", t(&export_dir.display().to_string())),
+            ("branch", t("fix")),
+        ],
+    );
+    assert_eq!(exported.get_text("project"), Some("pg/api"));
+    assert_eq!(exported.get_text("kind"), Some("postgresql"));
+    assert_eq!(exported.get_text("branch"), Some("fix"));
+    assert_eq!(exported.get_int("files"), Some(2));
+    assert_eq!(
+        std::fs::read_to_string(export_dir.join("README.md")).unwrap(),
+        "hello pg\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(export_dir.join("NEW.md")).unwrap(),
+        "written\n"
+    );
+    let _ = std::fs::remove_dir_all(export_dir.parent().unwrap());
+
     assert_eq!(
         call(&home, "store.remove", &[("name", t("pg"))])
             .unwrap_err()

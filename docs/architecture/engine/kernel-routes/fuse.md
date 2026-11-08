@@ -133,7 +133,7 @@ different root ([Coherence: Invalidation](coherence.md#invalidation)).
 | `stop_receive` | Marks the mount terminal and wakes drain waiters. | [`requests.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/requests.rs) |
 | `stop_service` | `stop_receive`, stops the fence, unparks every running request so it sees the stop. | [`requests.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/requests.rs) |
 | `finish` | Releases the owner only when terminal with no active and no retained request; else `Busy`. | [`requests.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/requests.rs) |
-| `MAX_INPUT_BYTES` | `WRITE_WINDOW + 2 * 255` | [`types.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/types.rs) |
+| `MAX_INPUT_BYTES` | `READ_WINDOW + 2 * 255` | [`types.rs`](../../../../engine/crates/layerfs-fuse/src/dispatch/types.rs) |
 
 A receive loop runs its request itself, so a request waiting on a Store reader
 holds its loop. Two loops let one request proceed while another waits. A

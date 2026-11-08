@@ -1,9 +1,11 @@
 //! `sandbox.create`: start a named Sandbox of a project on a machine (default: its sqlite Store's, or native).
+use crate::calls::table::Kind::{Name, Project, Text};
+use crate::calls::table::{a, call, opt, Call};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::{Name, Project, Text};
-use layerfs_control::calls::table::{a, call, opt, Call};
-use layerfs_control::calls::Context;
-use layerfs_control::common::outcome::Outcome;
+use layerfs_home::home::with_field;
+use layerfs_home::outcome::{Outcome, View};
+use layerfs_sandbox::family::{create, CreateRequest};
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -15,7 +17,21 @@ pub(crate) const CALL: Call = call(
     run,
 );
 
-/// Runs `sandbox.create`.
+/// Runs `sandbox.create`: the Sandbox's record, with why its forward did
+/// not open (`forward_failed`) when it did not.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::sandbox::family::sandbox(context, "create", args)
+    let text = |name: &str| args.get_text(name).map(str::to_owned);
+    let request = CreateRequest {
+        project: text("project").unwrap_or_default(),
+        name: text("name").unwrap_or_default(),
+        machine: text("machine"),
+        image: text("image"),
+    };
+    let (home, events) = context.parts();
+    let created = create(home, events, &request)?;
+    let shown = created.record.to_sdk(View::Full);
+    Ok(match created.forward_failed {
+        Some(why) => with_field(shown, "forward_failed", SdkValue::Text(why)),
+        None => shown,
+    })
 }

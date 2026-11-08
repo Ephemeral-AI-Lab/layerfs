@@ -456,6 +456,10 @@ fn apple_double_files_stay_out_of_the_workspace() {
     let data = c.touch(&root, b"copied.rs", 0o644).unwrap();
     c.write(&data.handle, 0, b"fn main() {}").unwrap();
     let made = c.touch(&root, b"._copied.rs", 0o644).unwrap();
+    // The companion is the export's alone: the directory it names is answered
+    // whole in both halves of wcc_data, so the client keeps its cached
+    // attributes of the directory (see the job-count test for the facts).
+    assert!(made.directory.before.is_some() && made.directory.after.is_some());
     c.write(&made.handle, 0, b"AppleDouble header").unwrap();
     // It reads back under its name for the export's life ...
     let (handle, attr) = c.lookup(&root, b"._copied.rs").unwrap();
@@ -545,8 +549,10 @@ fn tickets_are_released_only_after_the_reply() {
     let root = c.mnt("/");
 
     let made = c.touch(&root, b"f", 0o644).unwrap();
-    // 300 000 bytes are three engine windows: three publications, three
-    // tickets, all released after the one reply.
+    // 300 000 bytes are whole engine windows: one publication and one ticket
+    // per window, all released after the one reply. The count follows the
+    // engine's window, which #77 widened to the export's transfer size.
+    let windows = 300_000_usize.div_ceil(layerfs_overlay::WRITE_WINDOW) as u64;
     c.write(&made.handle, 0, &pattern(2, 300_000)).unwrap();
     let truncate = Set {
         size: Some(10),
@@ -557,7 +563,7 @@ fn tickets_are_released_only_after_the_reply() {
     c.rename(&root, b"f", &root, b"g").unwrap();
     c.remove(&root, b"g").unwrap();
     let published = watch.published.load(Ordering::Acquire);
-    assert_eq!(published, 1 + 3 + 1 + 1 + 1 + 1);
+    assert_eq!(published, 1 + windows + 1 + 1 + 1 + 1);
     // The last call's tickets are released just after its reply arrived.
     let settled = std::time::Instant::now() + Duration::from_secs(5);
     while watch.released_after.load(Ordering::Acquire) < published
@@ -772,6 +778,474 @@ fn a_commit_holds_what_the_same_operations_make_of_a_host_tree() {
     rig.close_view(view);
     assert_eq!(OK, 0);
     drop(client);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[derive(Default)]
+struct JobCounts {
+    observe: std::sync::atomic::AtomicU64,
+    mutate: std::sync::atomic::AtomicU64,
+    close_file: std::sync::atomic::AtomicU64,
+    forget: std::sync::atomic::AtomicU64,
+}
+impl JobCounts {
+    fn snapshot(&self) -> (u64, u64, u64, u64) {
+        (
+            self.observe.load(Ordering::Acquire),
+            self.mutate.load(Ordering::Acquire),
+            self.close_file.load(Ordering::Acquire),
+            self.forget.load(Ordering::Acquire),
+        )
+    }
+}
+struct CountingMount {
+    inner: Arc<dyn layerfs_mount_ports::ports::MountServices>,
+    counts: Arc<JobCounts>,
+}
+struct CountingRequest {
+    inner: Arc<dyn layerfs_mount_ports::ports::RequestServices>,
+    counts: Arc<JobCounts>,
+}
+impl layerfs_mount_ports::ports::MountServices for CountingMount {
+    fn request(
+        &self,
+        fence: &layerfs_mount_ports::ports::Fence,
+    ) -> Result<
+        Arc<dyn layerfs_mount_ports::ports::RequestServices>,
+        layerfs_mount_ports::ports::ServiceError,
+    > {
+        Ok(Arc::new(CountingRequest {
+            inner: self.inner.request(fence)?,
+            counts: self.counts.clone(),
+        }))
+    }
+}
+impl layerfs_mount_ports::ports::RequestServices for CountingRequest {
+    fn directory_visit(
+        &self,
+        mount: layerfs_overlay::KernelMount,
+        serial: u64,
+        handle: u64,
+        offset: u64,
+        after: Option<Vec<u8>>,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<
+        '_,
+        layerfs_mount_ports::ports::ServiceReply<Arc<layerfs_workspace::KernelDirectoryWindow>>,
+    > {
+        self.inner
+            .directory_visit(mount, serial, handle, offset, after)
+    }
+    fn publish_cookies(
+        &self,
+        offer: layerfs_overlay::KernelCookieOffer,
+        names: Vec<Vec<u8>>,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_mount_ports::ports::ServiceReply<()>>
+    {
+        self.inner.publish_cookies(offer, names)
+    }
+    fn close_directory(
+        &self,
+        mount: layerfs_overlay::KernelMount,
+        serial: u64,
+        handle: u64,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_mount_ports::ports::ServiceReply<()>>
+    {
+        self.inner.close_directory(mount, serial, handle)
+    }
+    fn read_visit(
+        &self,
+        mount: layerfs_overlay::KernelMount,
+        serial: u64,
+        handle: Option<u64>,
+        offset: u64,
+        length: u32,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<
+        '_,
+        layerfs_mount_ports::ports::ServiceReply<Arc<layerfs_workspace::KernelWindow>>,
+    > {
+        self.inner.read_visit(mount, serial, handle, offset, length)
+    }
+    fn close_file(
+        &self,
+        mount: layerfs_overlay::KernelMount,
+        serial: u64,
+        handle: u64,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_mount_ports::ports::ServiceReply<()>>
+    {
+        self.counts.close_file.fetch_add(1, Ordering::AcqRel);
+        self.inner.close_file(mount, serial, handle)
+    }
+    fn provider_failure(
+        &self,
+    ) -> Result<
+        Option<layerfs_mount_ports::ports::ServiceError>,
+        layerfs_mount_ports::ports::ServiceError,
+    > {
+        self.inner.provider_failure()
+    }
+    fn failed_base_read(
+        &self,
+        step: layerfs_mount_ports::ports::ServiceError,
+    ) -> layerfs_mount_ports::ports::ServiceError {
+        self.inner.failed_base_read(step)
+    }
+    fn observe_visit(
+        &self,
+        mount: layerfs_overlay::KernelMount,
+        request: u64,
+        serial: u64,
+        handle: Option<u64>,
+        operation: layerfs_workspace::KernelReadOperation,
+        facts: Arc<layerfs_workspace::VisitFacts>,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<
+        '_,
+        layerfs_mount_ports::ports::ServiceReply<Arc<layerfs_workspace::KernelReadOutcome>>,
+    > {
+        self.counts.observe.fetch_add(1, Ordering::AcqRel);
+        self.inner
+            .observe_visit(mount, request, serial, handle, operation, facts)
+    }
+    fn base(&self) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_workspace::BaseView> {
+        self.inner.base()
+    }
+    fn mutate_visit(
+        &self,
+        request: layerfs_workspace::KernelVisitRequest,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<
+        '_,
+        layerfs_mount_ports::ports::ServiceReply<Arc<layerfs_workspace::KernelMutationOutcome>>,
+    > {
+        self.counts.mutate.fetch_add(1, Ordering::AcqRel);
+        self.inner.mutate_visit(request)
+    }
+    fn recognize(
+        &self,
+        serial: u64,
+        offset: u64,
+        data: layerfs_workspace::WriteData,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_workspace::WriteData> {
+        self.inner.recognize(serial, offset, data)
+    }
+    fn forget(
+        &self,
+        mount: layerfs_overlay::KernelMount,
+        serial: u64,
+        count: u64,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_mount_ports::ports::ServiceReply<()>>
+    {
+        self.counts.forget.fetch_add(1, Ordering::AcqRel);
+        self.inner.forget(mount, serial, count)
+    }
+    fn reserve_serial(&self) -> Result<Option<u64>, layerfs_mount_ports::ports::ServiceError> {
+        self.inner.reserve_serial()
+    }
+    fn reply_attempted(
+        &self,
+        publication: layerfs_overlay::Publication,
+    ) -> layerfs_mount_ports::ports::ServiceFuture<'_, layerfs_mount_ports::ports::ServiceReply<()>>
+    {
+        self.inner.reply_attempted(publication)
+    }
+}
+
+#[test]
+fn create_write_remove_and_apple_double_avoid_redundant_owner_jobs_and_orphans() {
+    let base = temp("job-counts");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let counts = Arc::new(JobCounts::default());
+    let services = Arc::new(CountingMount {
+        inner: Arc::new(Mounted(rig.bound.clone())),
+        counts: counts.clone(),
+    });
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let server = rig.export_services(listener, services, UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    // Warm the root directory's base facts with one initial MKDIR+RMDIR so
+    // subsequent single-visit assertions measure resident steady-state jobs.
+    let warm = c.mkdir(&root, b"warm", 0o755).unwrap();
+    assert!(warm.directory.before.is_some() && warm.directory.after.is_some());
+    let warm_rm = c.rmdir(&root, b"warm").unwrap();
+    assert!(warm_rm.before.is_some() && warm_rm.after.is_some());
+
+    // 1. CREATE opens an implicit writable handle in the same visit and
+    //    carries wcc_data from the transaction with 0 observe_visit calls.
+    let before = counts.snapshot();
+    let made = c.touch(&root, b"single.txt", 0o644).unwrap();
+    assert!(made.directory.before.is_some() && made.directory.after.is_some());
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 1, before.2, before.3),
+        "CREATE: 1 mutate_visit, 0 observe_visit, 0 close_file, 0 forget"
+    );
+    assert_eq!((server.held().files, server.held().lookups), (1, 1));
+
+    // 2. SETATTR carries wcc_data from the transaction with 0 observe_visit calls.
+    let before = counts.snapshot();
+    let chmod = Set {
+        mode: Some(0o600),
+        ..Set::default()
+    };
+    let wcc = c.setattr(&made.handle, chmod, None).unwrap();
+    assert!(wcc.before.is_some() && wcc.after.is_some());
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 1, before.2, before.3),
+        "SETATTR: 1 mutate_visit, 0 observe_visit"
+    );
+
+    // 3. WRITE reuses the implicit writable handle from CREATE (0 open_file
+    //    observe_visit) and carries wcc_data with 0 extra getattr calls.
+    let before = counts.snapshot();
+    let (written, _, _, wcc) = c.write(&made.handle, 0, b"payload").unwrap();
+    assert_eq!(written, 7);
+    assert!(wcc.before.is_some() && wcc.after.is_some());
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 1, before.2, before.3),
+        "WRITE: 1 mutate_visit, 0 observe_visit"
+    );
+
+    // 4. AppleDouble companion changing lifecycle (CREATE, WRITE, SETATTR,
+    //    REMOVE) issues 0 SQLite owner jobs (0 observe_visit, 0 mutate_visit),
+    //    and LOOKUP of an absent companion issues 0 lookup observe_visit
+    //    (only the 1 parent getattr in nfs.rs proc 3).
+    let before = counts.snapshot();
+    let ad = c.touch(&root, b"._single.txt", 0o644).unwrap();
+    // The directory's wcc_data is not a hole: a companion changes nothing in
+    // the directory it names, so both halves answer from the facts the export
+    // already had. A missing post-operation half makes the macOS client drop
+    // the directory's cached attributes and GETATTR it again for a later
+    // entry, which is the regression this cache removes.
+    let pre = ad
+        .directory
+        .before
+        .as_ref()
+        .expect("a companion CREATE answers the directory's pre-op attributes");
+    let post = ad
+        .directory
+        .after
+        .as_ref()
+        .expect("a companion CREATE answers the directory's post-op attributes");
+    assert_eq!(
+        pre.0, post.size,
+        "a companion changes nothing in its directory"
+    );
+    let (ad_written, _, _, ad_wcc) = c.write(&ad.handle, 0, b"xattr").unwrap();
+    assert_eq!(ad_written, 5);
+    assert!(ad_wcc.before.is_some() && ad_wcc.after.is_some());
+    let ad_set = c.setattr(&ad.handle, chmod, None).unwrap();
+    assert!(ad_set.before.is_some() && ad_set.after.is_some());
+    let ad_rm = c.remove(&root, b"._single.txt").unwrap();
+    assert!(
+        ad_rm.before.is_some() && ad_rm.after.is_some(),
+        "a companion REMOVE answers the directory's pre- and post-op attributes"
+    );
+    assert_eq!(
+        counts.snapshot(),
+        before,
+        "AppleDouble CREATE+WRITE+SETATTR+REMOVE must issue 0 engine owner jobs"
+    );
+    assert_eq!(c.lookup(&root, b"._single.txt").map(|_| ()), Err(NOENT));
+    assert_eq!(
+        counts.snapshot(),
+        (before.0 + 1, before.1, before.2, before.3),
+        "AppleDouble LOOKUP avoids the target lookup visit"
+    );
+
+    // 5. REMOVE drops the last link and retires the synthetic kernel's file
+    //    and lookup custody inside the publishing transaction: 1 mutate_visit,
+    //    0 observe_visit (no existing() lookup), 0 close_file, 0 forget, and
+    //    0 fake orphans in the overlay.
+    let before = counts.snapshot();
+    let rm_wcc = c.remove(&root, b"single.txt").unwrap();
+    assert!(rm_wcc.before.is_some() && rm_wcc.after.is_some());
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 1, before.2, before.3),
+        "REMOVE: 1 mutate_visit, 0 observe_visit, 0 close_file, 0 forget"
+    );
+    assert_eq!((server.held().files, server.held().lookups), (0, 0));
+    let resources = rig
+        .bound
+        .operation()
+        .unwrap()
+        .overlay()
+        .resources()
+        .unwrap();
+    assert_eq!(resources.open.orphan_files, 0, "no fake orphan created");
+    assert_eq!(resources.open.file_handles, 0);
+    assert_eq!(
+        resources.open.file_custody, 1,
+        "only the root mount reference remains"
+    );
+
+    // 6. FILES_HELD (1024) holds > 256 created+written files without LRU
+    //    close_file evictions, and removing them issues 0 close_file/forget.
+    let before = counts.snapshot();
+    for i in 0..300 {
+        let name = format!("batch-{i}");
+        let f = c.touch(&root, name.as_bytes(), 0o644).unwrap();
+        c.write(&f.handle, 0, b"x").unwrap();
+    }
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 600, before.2, before.3),
+        "300 files created+written: 600 mutate_visit, 0 observe_visit, 0 close_file evictions"
+    );
+    assert_eq!(server.held().files, 300);
+    for i in 0..300 {
+        let name = format!("batch-{i}");
+        c.remove(&root, name.as_bytes()).unwrap();
+    }
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 900, before.2, before.3),
+        "300 files removed: 300 mutate_visit, 0 observe_visit, 0 close_file, 0 forget"
+    );
+    assert_eq!((server.held().files, server.held().lookups), (0, 0));
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+/// What `git commit` does to `.git/index`: write the new index to
+/// `.git/index.lock`, `fsync` it (COMMIT, proc 21), rename it over `.git/index`
+/// (RENAME, proc 14). Neither procedure reads an attribute of its own, and the
+/// replaced inode gives back the export's custody inside the renaming job
+/// instead of being detached as an orphan of the export's own references.
+#[test]
+fn rename_over_an_existing_target_and_commit_avoid_redundant_owner_jobs_and_orphans() {
+    let base = temp("rename-commit");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let counts = Arc::new(JobCounts::default());
+    let services = Arc::new(CountingMount {
+        inner: Arc::new(Mounted(rig.bound.clone())),
+        counts: counts.clone(),
+    });
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let server = rig.export_services(listener, services, UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    // Warm the root directory's base facts so each assertion below measures
+    // the resident steady state of one publishing job.
+    let warm = c.mkdir(&root, b"warm", 0o755).unwrap();
+    assert!(warm.directory.before.is_some() && warm.directory.after.is_some());
+    c.rmdir(&root, b"warm").unwrap();
+
+    // The index the next commit replaces, then the lock file it writes.
+    let index = c.touch(&root, b"index", 0o644).unwrap();
+    c.write(&index.handle, 0, b"old index").unwrap();
+    let before = counts.snapshot();
+    let lock = c.touch(&root, b"index.lock", 0o644).unwrap();
+    let (written, _, _, _) = c.write(&lock.handle, 0, b"new index contents").unwrap();
+    assert_eq!(written, 18);
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 2, before.2, before.3),
+        "CREATE + WRITE: 1 mutate_visit each, 0 observe_visit"
+    );
+
+    // COMMIT (proc 21) answers from the facts this export last published for
+    // the file through its own descriptor: no owner job at all.
+    let before = counts.snapshot();
+    assert_eq!(c.commit(&lock.handle), Ok(server.verifier()));
+    assert_eq!(counts.snapshot(), before, "COMMIT: 0 engine owner jobs");
+
+    // RENAME over the existing index: one publishing job, no source or
+    // destination lookup, and both halves of wcc_data come from it.
+    let root_id = c.getattr(&root).unwrap().fileid;
+    let before = counts.snapshot();
+    let (from_wcc, to_wcc) = c.rename(&root, b"index.lock", &root, b"index").unwrap();
+    assert!(from_wcc.before.is_some() && from_wcc.after.is_some());
+    assert_eq!(from_wcc.before, to_wcc.before, "one directory, one window");
+    assert_eq!(
+        (from_wcc.after.unwrap().fileid, to_wcc.after.unwrap().fileid),
+        (root_id, root_id)
+    );
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 1, before.2, before.3),
+        "RENAME: 1 mutate_visit, 0 observe_visit, 0 close_file, 0 forget"
+    );
+
+    // The moved inode keeps its identity and content; the replaced one is
+    // gone with its handle.
+    let (moved, moved_attr) = c.lookup(&root, b"index").unwrap();
+    assert_eq!(moved_attr.fileid, lock.attr.fileid);
+    assert_eq!(moved_attr.size, 18);
+    assert_eq!(c.read_all(&moved, 4096), b"new index contents");
+    assert_eq!(c.getattr(&index.handle), Err(STALE), "the replaced inode");
+    assert_eq!(c.lookup(&root, b"index.lock").map(|_| ()), Err(NOENT));
+
+    // The export gave back the replaced inode's descriptor and reference in
+    // the renaming job: only the moved file is still held, and no orphan
+    // domain row was ever created for the replaced one.
+    assert_eq!((server.held().files, server.held().lookups), (1, 1));
+    let resources = rig
+        .bound
+        .operation()
+        .unwrap()
+        .overlay()
+        .resources()
+        .unwrap();
+    assert_eq!(resources.open.orphan_files, 0, "no fake orphan created");
+
+    // A plain rename into another directory is one job too, and the moved
+    // inode's handle keeps working under its new parent.
+    let docs = c.lookup(&root, b"docs").unwrap().0;
+    let before = counts.snapshot();
+    c.rename(&root, b"index", &docs, b"index").unwrap();
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 1, before.2, before.3),
+        "cross-directory RENAME: 1 mutate_visit, 0 observe_visit"
+    );
+    assert_eq!(c.getattr(&moved).unwrap().fileid, lock.attr.fileid);
+    assert_eq!(
+        c.lookup(&docs, b"index").unwrap().1.fileid,
+        lock.attr.fileid
+    );
+    assert_eq!(c.lookup(&root, b"index").map(|_| ()), Err(NOENT));
+
+    // Renaming one name of an inode over another name of the same inode
+    // publishes no binding: the inode keeps what it had. The reply still
+    // answers both halves of the directory's wcc_data from the window the job
+    // read, so the client keeps its cached attributes of that directory.
+    // `src/lib.rs` and `src/alias.rs` are two names of one inode.
+    let src = c.lookup(&root, b"src").unwrap().0;
+    c.lookup(&src, b"lib.rs").unwrap();
+    c.lookup(&src, b"alias.rs").unwrap();
+    let before = counts.snapshot();
+    let (from_wcc, to_wcc) = c.rename(&src, b"alias.rs", &src, b"lib.rs").unwrap();
+    assert!(
+        from_wcc.before.is_some() && from_wcc.after.is_some(),
+        "a same-inode RENAME answers the directory's pre- and post-op attributes"
+    );
+    assert!(
+        to_wcc.before.is_some() && to_wcc.after.is_some(),
+        "and the destination half of a same-directory move"
+    );
+    assert_eq!(from_wcc.before, to_wcc.before, "one directory, one window");
+    assert_eq!(
+        counts.snapshot(),
+        (before.0, before.1 + 1, before.2, before.3),
+        "a same-inode RENAME: 1 mutate_visit, 0 observe_visit"
+    );
+
+    drop(c);
     let released = server.stop();
     let (_, outstanding) = rig.stop(released);
     assert_eq!(outstanding, 0);

@@ -1,9 +1,10 @@
 //! `workspace.status`: a Workspace's changes since its base.
+use crate::calls::table::Kind::Text;
+use crate::calls::table::{a, call, Call};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::Text;
-use layerfs_control::calls::table::{a, call, Call};
-use layerfs_control::calls::Context;
-use layerfs_control::common::outcome::Outcome;
+use layerfs_home::outcome::Outcome;
+use layerfs_sandbox::workspace::calls::{status, StatusRequest};
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -15,7 +16,11 @@ pub(crate) const CALL: Call = call(
     run,
 );
 
-/// Runs `workspace.status`.
+/// Runs `workspace.status`: its side's answer.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::workspace::calls::workspace(context, "status", args)
+    let request = StatusRequest {
+        ws: args.get_text("ws").unwrap_or("").to_owned(),
+    };
+    let (home, events) = context.parts();
+    status(home, events, &request)
 }

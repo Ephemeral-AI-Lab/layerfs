@@ -9,13 +9,20 @@
 //! it ever reaches the engine, so the Workspace stays clean and no Commit can
 //! capture it. Everything is dropped when the export is released.
 //!
+//! The tree is not consulted for such a name: while this mode is on, a
+//! LOOKUP of a `._` name answers `NFS3ERR_NOENT` unless the export holds that
+//! companion, which is what a READDIR of that directory already shows by not
+//! listing them, so the two agree. Such a change also never touches the
+//! directory it names, so its `wcc_data` answers both halves from the last
+//! facts the export saw for it (see [`Kernel::directory_wcc`]).
+//!
 //! The memory is bounded: [`HELD`] companions of at most [`FILE_BYTES`]
 //! each and [`TOTAL_BYTES`] in all. Beyond the count a creation is refused
 //! (`NFS3ERR_ACCES`, as before this module), beyond the bytes a write
 //! (`NFS3ERR_FBIG` per file, `NFS3ERR_NOSPC` in all).
 use crate::{
     attributes::Status,
-    change::{How, Sattr, Tickets},
+    change::{How, Sattr, Tickets, Wcc},
     kernel::Kernel,
 };
 use layerfs_content::{filesystem::attributes::PortableMetadata, object::inode_leaf::InodeKind};
@@ -136,7 +143,8 @@ impl Kernel {
         name: &[u8],
         how: How,
         tickets: &mut Tickets,
-    ) -> Result<ViewStat, Status> {
+    ) -> Result<(ViewStat, Wcc), Status> {
+        let directory = self.directory_wcc(parent);
         if let Some(stat) = self.companion_named(parent, name) {
             // Opened again: UNCHECKED applies its size, as an open with
             // truncation would; GUARDED and EXCLUSIVE find it taken.
@@ -149,24 +157,17 @@ impl Kernel {
                         size: Some(size),
                         ..Sattr::default()
                     };
-                    self.companion_setattr(stat.serial, sized, None, tickets)
+                    let (stat, _) = self.companion_setattr(stat.serial, sized, None, tickets)?;
+                    Ok((stat, directory))
                 }
-                None => Ok(stat),
+                None => Ok((stat, directory)),
             };
         }
-        // A directory must exist and a companion the tree itself carries
-        // stays the tree's: neither is ours to shadow.
-        let directory = self.getattr(parent)?;
-        if directory.kind != InodeKind::Directory {
+        if parent != self.root() && !self.table().parents.contains_key(&parent) {
             return Err(Status::NotDir);
         }
-        let taken = match self.lookup(parent, name) {
-            Ok(_) => true,
-            Err(Status::NoEnt) => false,
-            Err(status) => return Err(status),
-        };
         let mut companions = self.companions();
-        if taken || companions.len() >= HELD {
+        if companions.len() >= HELD {
             drop(companions);
             self.names_refused.fetch_add(1, Ordering::Relaxed);
             return Err(Status::Access);
@@ -193,18 +194,17 @@ impl Kernel {
         let stat = Companions::stat(serial, file);
         drop(companions);
         self.names_detached.fetch_add(1, Ordering::Relaxed);
-        Ok(stat)
+        Ok((stat, directory))
     }
-    /// REMOVE of a companion name; `false` when none is held.
-    pub(crate) fn companion_remove(&self, parent: u64, name: &[u8]) -> bool {
-        let mut companions = self.companions();
-        match companions.names.get(&(parent, name.to_vec())).copied() {
-            Some(serial) => {
-                companions.drop_serial(serial);
-                true
-            }
-            None => false,
+    /// REMOVE of a companion name, with the directory's `wcc_data`; `None`
+    /// when no companion has that name.
+    pub(crate) fn companion_remove(&self, parent: u64, name: &[u8]) -> Option<Wcc> {
+        {
+            let mut companions = self.companions();
+            let serial = companions.names.get(&(parent, name.to_vec())).copied()?;
+            companions.drop_serial(serial);
         }
+        Some(self.directory_wcc(parent))
     }
     /// RENAME of a companion name: only to another AppleDouble name, which
     /// it replaces when held. `None` when no companion has that name.
@@ -233,19 +233,22 @@ impl Kernel {
         }
         Some(Ok(()))
     }
-    /// READ of a companion.
+    /// READ of a companion, at most `count` bytes from `offset`, appended to
+    /// `out`; `eof` when the reply reaches the companion's end.
     pub(crate) fn companion_read(
         &self,
         serial: u64,
         offset: u64,
         count: u32,
-    ) -> Result<(Vec<u8>, bool), Status> {
+        out: &mut Vec<u8>,
+    ) -> Result<bool, Status> {
         let companions = self.companions();
         let file = companions.files.get(&serial).ok_or(Status::Stale)?;
         let length = file.data.len() as u64;
         let start = offset.min(length) as usize;
         let end = offset.saturating_add(u64::from(count)).min(length) as usize;
-        Ok((file.data[start..end].to_vec(), end as u64 >= length))
+        out.extend_from_slice(&file.data[start..end]);
+        Ok(end as u64 >= length)
     }
     /// WRITE to a companion: all of it or nothing.
     pub(crate) fn companion_write(
@@ -253,23 +256,21 @@ impl Kernel {
         serial: u64,
         offset: u64,
         data: &[u8],
-    ) -> Result<(u32, ViewStat), Status> {
+    ) -> Result<(u32, Wcc), Status> {
         let mut companions = self.companions();
         let end = offset.checked_add(data.len() as u64).ok_or(Status::FBig)?;
-        let length = companions
-            .files
-            .get(&serial)
-            .ok_or(Status::Stale)?
-            .data
-            .len() as u64;
-        if end > length {
+        let before = {
+            let file = companions.files.get(&serial).ok_or(Status::Stale)?;
+            Companions::stat(serial, file)
+        };
+        if end > before.logical_len {
             companions.resize(serial, end)?;
         }
         let file = companions.files.get_mut(&serial).ok_or(Status::Stale)?;
         file.data[offset as usize..end as usize].copy_from_slice(data);
         touch(&mut file.metadata);
-        let stat = Companions::stat(serial, file);
-        Ok((data.len() as u32, stat))
+        let after = Companions::stat(serial, file);
+        Ok((data.len() as u32, (Some(before), Some(after))))
     }
     /// SETATTR of a companion: mode, size and modification time; the
     /// owner is the export's identity, as for every inode.
@@ -279,7 +280,7 @@ impl Kernel {
         sattr: Sattr,
         guard: Option<(u32, u32)>,
         _tickets: &mut Tickets,
-    ) -> Result<ViewStat, Status> {
+    ) -> Result<(ViewStat, Wcc), Status> {
         let identity = self.identity();
         let foreign = sattr.uid.is_some_and(|uid| uid != identity.uid)
             || sattr.gid.is_some_and(|gid| gid != identity.gid);
@@ -287,10 +288,12 @@ impl Kernel {
             return Err(Status::Perm);
         }
         let mut companions = self.companions();
-        if let Some(expected) = guard {
+        let before = {
             let file = companions.files.get(&serial).ok_or(Status::Stale)?;
-            let current = Companions::stat(serial, file);
-            if crate::attributes::ctime(&current) != expected {
+            Companions::stat(serial, file)
+        };
+        if let Some(expected) = guard {
+            if crate::attributes::ctime(&before) != expected {
                 return Err(Status::NotSync);
             }
         }
@@ -310,7 +313,8 @@ impl Kernel {
             None if sattr.size.is_some() => touch(&mut file.metadata),
             None => {}
         }
-        Ok(Companions::stat(serial, file))
+        let after = Companions::stat(serial, file);
+        Ok((after.clone(), (Some(before), Some(after))))
     }
     /// Drops every companion; their count.
     pub(crate) fn companions_release(&self) -> usize {

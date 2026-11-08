@@ -1,0 +1,14 @@
+[package]
+name = "layerfs-home"
+description = "The LayerFS home and its records, knowing no entity (layerfs-project#103): layout, paths, record files, locks, the one in-flight op intent, typed names, call outcomes, secrets and the call trace"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+# Also this process as a record names it (pid, kernel start time, boot):
+# `layerfs_bridge::process`, below the drivers (layerfs-project#112).
+layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
+libc = "=0.2.189"
+nix = { version = "=0.31.3", default-features = false, features = ["fs", "user", "signal"] }

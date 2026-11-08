@@ -2,7 +2,7 @@
 use super::{Failure, Service, Success};
 use crate::store::CommitError;
 use layerfs_bridge::{
-    control::{Answer, Call, ControlError, Reply},
+    control::{Answer, Call, ControlError, Reply, Request},
     duplex::{ChannelError, Connection},
 };
 use layerfs_content::filesystem::FilesystemRootId;
@@ -41,8 +41,16 @@ impl Service {
         ) -> Result<FilesystemRootId, CommitError>,
     ) -> Result<Served, Box<ServeFailure>> {
         let call = receive_call(connection)?;
+        let committed = match &call.request {
+            Request::Commit(control) => Some(control.token),
+            _ => None,
+        };
         let outcome = self.execute(&call.request, construct);
-        answer_call(connection, call, outcome, None)
+        let served = answer_call(connection, call, outcome, None);
+        if let Some(token) = committed {
+            self.reclaim_after_commit(token);
+        }
+        served
     }
     /// Receives one ordinary control without inventing a Commit producer.
     pub fn serve_one_control(
@@ -57,8 +65,16 @@ impl Service {
         connection: &mut Connection,
         call: Call,
     ) -> Result<Served, Box<ServeFailure>> {
+        let committed = match &call.request {
+            Request::Commit(control) => Some(control.token),
+            _ => None,
+        };
         let outcome = self.execute_control(&call.request);
-        answer_call(connection, call, outcome, None)
+        let served = answer_call(connection, call, outcome, None);
+        if let Some(token) = committed {
+            self.reclaim_after_commit(token);
+        }
+        served
     }
 }
 impl fmt::Display for ServeFailure {

@@ -211,6 +211,7 @@ impl Application {
                             ))
                         );
                     let ready = reported_ready(&outcome);
+                    let committed = committed_token(&call.request);
                     let served = match crate::control::answer_call(
                         &mut connection,
                         call,
@@ -223,6 +224,9 @@ impl Application {
                         }
                         Ok(served) => served,
                         Err(cause) => {
+                            if let Some(token) = committed {
+                                self.reclaim_after_commit(token);
+                            }
                             return Err(ConnectionFailure {
                                 slot,
                                 received: None,
@@ -230,9 +234,12 @@ impl Application {
                                 cause: ApplicationError::Control(cause),
                                 fence_error: None,
                                 diagnostic_error,
-                            })
+                            });
                         }
                     };
+                    if let Some(token) = committed {
+                        self.reclaim_after_commit(token);
+                    }
                     if let Some(error) = diagnostic_error {
                         return Err(ConnectionFailure {
                             slot,
@@ -326,6 +333,18 @@ impl Application {
             eprintln!("layerfs-daemon: idle Store reader thread not started: {error}");
         }
     }
+    /// After a Commit was answered (or its answer failed), drains on this
+    /// thread the overlay reclamation its releases left queued (owner
+    /// approval, 2026-11-07). The connection reads its next call after it.
+    fn reclaim_after_commit(&self, token: layerfs_bridge::control::WorkspaceToken) {
+        let service = match self.state.lock() {
+            Ok(state) => state.startup.service.clone(),
+            Err(_) => return,
+        };
+        if let Some(service) = service {
+            service.reclaim_after_commit(token);
+        }
+    }
     pub(super) fn control_operation(
         &self,
         request: &Request,
@@ -364,6 +383,15 @@ impl Application {
                 "Store control Service not ready",
             )),
         }
+    }
+}
+
+/// The Workspace of a Commit request, observed or not.
+fn committed_token(request: &Request) -> Option<layerfs_bridge::control::WorkspaceToken> {
+    match request {
+        Request::Commit(control) => Some(control.token),
+        Request::Observed { request, .. } => committed_token(request),
+        _ => None,
     }
 }
 

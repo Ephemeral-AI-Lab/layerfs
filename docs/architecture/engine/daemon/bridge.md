@@ -13,7 +13,9 @@ The wire between callers and the daemon.
 
 `layerfs-bridge` holds the authenticated channel, every record a controller
 and a daemon exchange, the daemon's private setup record and the Store
-install manifest. It carries no file data service.
+install manifest. It carries no file data service. It also holds the local
+process identity the home and the Sandbox driver share
+([Process identity](#process-identity)).
 
 ## Duplex channels
 
@@ -167,13 +169,27 @@ installer (Project Init side)              daemon (one install per process)
 [`control.rs`](../../../../engine/crates/layerfs-bridge/src/control.rs),
 [`install.rs`](../../../../engine/crates/layerfs-daemon/src/install.rs).
 
+## Process identity
+
+`process` (Linux and macOS only) names a local process by its id, kernel
+start time and boot, so a reused id, or the same id and start time after a
+reboot, is never taken for the process that was started. It moved here
+from the Sandbox driver (layerfs-project#112) so `layerfs-home` reaches no
+driver: both control crates sit above the bridge.
+
+| Item | Rule | Source |
+| --- | --- | --- |
+| `LocalProcess { pid, start, boot }` | `observe` reads it once; `alive` needs all three to match and the process not a zombie; `signal` sends once, only to one observed alive, never to one recorded without a boot. | [`process/identity.rs`](../../../../engine/crates/layerfs-bridge/src/process/identity.rs) |
+| Linux facts | `/proc/<pid>/stat` (state, group, start), `/proc/sys/kernel/random/boot_id`, the `/proc` table. | [`process/linux.rs`](../../../../engine/crates/layerfs-bridge/src/process/linux.rs) |
+| macOS facts | `proc_pidinfo` and `proc_listallpids` (not `ps`, which Seatbelt may refuse), `kern.bootsessionuuid` else `kern.boottime`. The crate's only `unsafe`; the guard allows no other file. | [`process/darwin.rs`](../../../../engine/crates/layerfs-bridge/src/process/darwin.rs) |
+
 ## Related
 
 - [Startup](startup.md): the listener, slots and first record.
 - [Control calls](control-calls.md): what each request does.
 - [Operator: Installs](operator.md#installs): the daemon side of provisioning.
 - [Project Init: Seal and install](../project-init/seal-and-install.md): the installer side.
-- [API: Routing and workers](../../api/routing/README.md): the controller side of the channel.
+- [Control: Routing and workers](../../control/routing/README.md): the controller side of the channel.
 - [Glossary](../../glossary.md).
 
 ---

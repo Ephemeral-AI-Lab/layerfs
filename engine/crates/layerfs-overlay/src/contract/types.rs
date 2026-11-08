@@ -23,11 +23,26 @@ pub const RECORD_ROWS: usize = 64;
 /// Maximum bytes in one operation_record record, not a total operation limit.
 pub const OPERATION_RECORD_BYTES: usize = 65_536;
 /// Largest byte window of one write job; larger requests arrive as several.
-pub const WRITE_WINDOW: usize = 128 * 1024;
-/// Largest byte window of one local read plan.
+/// This is the engine's window, not a router's transfer size: a router whose
+/// transfer is larger splits it into windows, and one whose transfer is
+/// smaller never reaches it.
+///
+/// 256 KiB, the transfer window an NFS export declares (the export asserts
+/// their equality at compile time), so one 256 KiB WRITE call is one job: one
+/// SQLite transaction and one publication, not two. It also bounds one job's
+/// claims (`WRITE_CLAIMS`) and its in-memory payload, which is why the window
+/// is not wider.
+pub const WRITE_WINDOW: usize = 256 * 1024;
+/// Largest byte window of one local read plan. It stays 128 KiB: it bounds the
+/// local buffer of one read and the piece rows one window can hold
+/// (`payload/pieces/rows.rs` asserts that count in SQL), whatever a client's
+/// transfer size is; a larger READ is composed from consecutive windows.
 pub const READ_WINDOW: usize = 128 * 1024;
-/// Most claimed ranges of one write job: one per matched run of a window.
-pub const WRITE_CLAIMS: usize = 18;
+/// Most claimed ranges of one write job: one per contiguous run of matched
+/// content in the window. A committed chunk is at least `MINIMUM_CHUNK_BYTES`
+/// (8 KiB), so a window holds at most `WRITE_WINDOW / 8 KiB` such runs, plus
+/// one that crosses either end of it.
+pub const WRITE_CLAIMS: usize = WRITE_WINDOW / 8_192 + 2;
 /// Most reference ranges of one read window: a range is a run of whole
 /// cells of the window, and no two ranges share a cell.
 pub const READ_REFERENCES: usize = READ_WINDOW / CELL_BYTES + 1;

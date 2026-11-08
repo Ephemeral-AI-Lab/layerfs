@@ -3,6 +3,7 @@ use super::{source::WaveSource, state::State};
 use crate::{
     encoding::delta::read::{BodyCaches, Resolver},
     error::{StorageError, StorageResult},
+    policy::READ_OBJECT_LIMIT,
     source::Source,
 };
 use layerfs_content::{FinalizedObject, ObjectId};
@@ -39,82 +40,94 @@ impl State<'_> {
         if objects.is_empty() {
             return Ok(());
         }
-        let membership = self.storage.work.span(super::Stage::Membership);
         self.storage.source.begin_demand();
-        let ids: Vec<_> = objects
-            .iter()
-            .flat_map(|o| {
-                std::iter::once(o.id())
-                    .chain(o.references().iter().copied())
-                    .chain(o.predecessors().ids())
-            })
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect();
-        self.storage.source.locate(&ids)?;
-        // Exact reuse and representation selection walk and authenticate their
-        // own required chains. Consume those inputs with the object demand:
-        // a wave-wide physical prewalk can exceed retention and evict them
-        // before admission, or acquire candidates selection never needs.
-        drop(membership);
-        let admission = self.storage.work.span(super::Stage::Admission);
-        // Keep the allocation block, but check the operation that can consume
-        // IDs rather than replacing a tail for an entire hypothetical wave.
         let mut prepared = BTreeMap::<ObjectId, usize>::new();
-        for (index, object) in objects.iter().enumerate() {
-            if let Some(prior) = prepared.get(&object.id()).copied() {
-                if objects[prior].canonical() != object.canonical()
-                    || objects[prior].role() != object.role()
-                {
-                    return Err(StorageError::Collision(object.id()));
-                }
-                self.outcome.reused += 1;
-                continue;
+        let mut start = 0;
+        while start < objects.len() {
+            // Membership is located a slice at a time, each slice's ids within
+            // the locator cache, so admission still finds every reference
+            // located: a wave of mapping pages can name far more payloads than
+            // the cache holds, and one demand for all of them would evict most
+            // before their pages are admitted, each then located alone.
+            let membership = self.storage.work.span(super::Stage::Membership);
+            let (end, ids) = demand(&objects, start);
+            self.storage.source.locate(&ids)?;
+            // Exact reuse and representation selection walk and authenticate
+            // their own required chains. Consume those inputs with the object
+            // demand: a wave-wide physical prewalk can exceed retention and
+            // evict them before admission, or acquire candidates selection
+            // never needs.
+            drop(membership);
+            let admission = self.storage.work.span(super::Stage::Admission);
+            for index in start..end {
+                self.admit(&objects, index, &mut prepared)?;
             }
-            prepared.insert(object.id(), index);
-            if self.packer.pending(object.id()) {
-                let required = self.packer.finish_pack_bound();
-                self.reserve_packs(required)?;
-                self.packer.seal_pending(
-                    &[object.id()],
-                    &mut self.compression,
-                    &mut self.next_pack,
-                    self.pack_end,
-                )?;
-            }
-            let view = WaveSource {
-                fetch: &self.storage.source,
-                packer: &self.packer,
-                signatures: &self.signatures,
-                values: &self.values,
-            };
-            if let Some(location) = view.location(object.id(), i64::MAX)? {
-                // Exact reuse trusts the content address (owner, 2026-10-19;
-                // #352 record 034 A-1): the id is the hash of the canonical
-                // bytes, so a stored object with this id, role and length is
-                // not read back. A role or length mismatch is still refused
-                // here. A corrupt stored copy fails later, at its first read,
-                // where every read authenticates bytes against the id.
-                if location.role != object.role()
-                    || location.canonical_length != object.canonical_len()
-                {
-                    return Err(StorageError::Collision(object.id()));
-                }
-                self.outcome.reused += 1;
-            } else {
-                // One new object group plus every currently unfinished group/queue.
-                let required = self.packer.finish_pack_bound() + 1;
-                self.reserve_packs(required)?;
-                self.offer(object)?;
-            }
+            drop(admission);
+            start = end;
         }
-        drop(admission);
         let flush = self.storage.work.span(super::Stage::Flush);
         // Keep the existing bounded partial queues until pressure, dependency
         // closure or finish requires them. Ready packs still publish this wave.
         self.flush_signatures()?;
         drop(flush);
         self.register_ready()
+    }
+    /// Admits `objects[index]`: a duplicate in the wave, an exact reuse or a
+    /// new object offered for selection.
+    fn admit(
+        &mut self,
+        objects: &[FinalizedObject],
+        index: usize,
+        prepared: &mut BTreeMap<ObjectId, usize>,
+    ) -> StorageResult<()> {
+        let object = &objects[index];
+        if let Some(prior) = prepared.get(&object.id()).copied() {
+            if objects[prior].canonical() != object.canonical()
+                || objects[prior].role() != object.role()
+            {
+                return Err(StorageError::Collision(object.id()));
+            }
+            self.outcome.reused += 1;
+            return Ok(());
+        }
+        prepared.insert(object.id(), index);
+        // Keep the allocation block, but check the operation that can consume
+        // IDs rather than replacing a tail for an entire hypothetical wave.
+        if self.packer.pending(object.id()) {
+            let required = self.packer.finish_pack_bound();
+            self.reserve_packs(required)?;
+            self.packer.seal_pending(
+                &[object.id()],
+                &mut self.compression,
+                &mut self.next_pack,
+                self.pack_end,
+            )?;
+        }
+        let view = WaveSource {
+            fetch: &self.storage.source,
+            packer: &self.packer,
+            signatures: &self.signatures,
+            values: &self.values,
+        };
+        if let Some(location) = view.location(object.id(), i64::MAX)? {
+            // Exact reuse trusts the content address (owner, 2026-10-19;
+            // #352 record 034 A-1): the id is the hash of the canonical
+            // bytes, so a stored object with this id, role and length is
+            // not read back. A role or length mismatch is still refused
+            // here. A corrupt stored copy fails later, at its first read,
+            // where every read authenticates bytes against the id.
+            if location.role != object.role() || location.canonical_length != object.canonical_len()
+            {
+                return Err(StorageError::Collision(object.id()));
+            }
+            self.outcome.reused += 1;
+        } else {
+            // One new object group plus every currently unfinished group/queue.
+            let required = self.packer.finish_pack_bound() + 1;
+            self.reserve_packs(required)?;
+            self.offer(object)?;
+        }
+        Ok(())
     }
     pub(super) fn flush_signatures(&mut self) -> StorageResult<()> {
         let view = WaveSource {
@@ -154,4 +167,26 @@ impl State<'_> {
         self.resolved.keep(id, &value);
         Ok(value)
     }
+}
+
+/// The end of the slice of `objects` from `start` whose ids, direct
+/// references and predecessors fit the locator cache together, and those ids
+/// sorted. A slice holds at least one object, however many ids it names.
+fn demand(objects: &[FinalizedObject], start: usize) -> (usize, Vec<ObjectId>) {
+    let mut ids = BTreeSet::new();
+    let mut end = start;
+    for object in &objects[start..] {
+        let named = || {
+            std::iter::once(object.id())
+                .chain(object.references().iter().copied())
+                .chain(object.predecessors().ids())
+        };
+        let added = named().filter(|id| !ids.contains(id)).count();
+        if end > start && ids.len() + added > READ_OBJECT_LIMIT {
+            break;
+        }
+        ids.extend(named());
+        end += 1;
+    }
+    (end, ids.into_iter().collect())
 }

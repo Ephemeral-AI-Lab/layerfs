@@ -66,6 +66,12 @@ export interface ProjectListOptions {
   page_pos?: WholeNumber;
 }
 
+/** Options of `project.export`; an unknown option is refused. */
+export interface ProjectExportOptions {
+  branch?: string;
+  on_progress?: ProgressHandler;
+}
+
 /** Options of `branch.list`; an unknown option is refused. */
 export interface BranchListOptions {
   page_size?: WholeNumber;
@@ -207,6 +213,13 @@ export interface WorkspaceExecOptions {
   stream?: boolean;
   stdout?: OutputHandler;
   stderr?: OutputHandler;
+  exec_id?: string;
+  on_progress?: ProgressHandler;
+}
+
+/** Options of `workspace.exec_cancel`; an unknown option is refused. */
+export interface WorkspaceExecCancelOptions {
+  grace_ms?: WholeNumber;
 }
 
 /** Options of `workspace.commit`; an unknown option is refused. */
@@ -229,15 +242,6 @@ export interface MachineCreateOptions {
   image?: string;
   nested?: boolean;
   host?: string;
-}
-
-/** Options of `machine.connect`; an unknown option is refused. */
-export interface MachineConnectOptions {
-  user?: string;
-  port?: WholeNumber;
-  identity?: string;
-  known_hosts?: string;
-  root?: string;
 }
 
 /** Options of `machine.update`; an unknown option is refused. */
@@ -291,6 +295,8 @@ export interface ProjectFamily {
   list(store?: string | null, options?: ProjectListOptions): Promise<Result>;
   /** a project's record: its Store, kind and machine */
   get(project: string): Promise<Result>;
+  /** export a project's snapshot from its Store to a local folder */
+  export(project: string, destination: string, options?: ProjectExportOptions): Promise<Result>;
   /** remove one project from its Store */
   remove(project: string): Promise<Result>;
 }
@@ -373,6 +379,8 @@ export interface WorkspaceFamily {
   mount(sandbox: string, branch: string, options?: WorkspaceMountOptions): Promise<Result>;
   /** run one bash command in a Workspace */
   exec(ws: string, command: string, options?: WorkspaceExecOptions): Promise<Result>;
+  /** end a running command: SIGTERM, then SIGKILL after grace_ms */
+  exec_cancel(ws: string, exec_id: string, options?: WorkspaceExecCancelOptions): Promise<Result>;
   /** commit a Workspace's changes to its Branch */
   commit(ws: string, options?: WorkspaceCommitOptions): Promise<Result>;
   /** end a Workspace */
@@ -394,14 +402,10 @@ export interface MachineFamily {
   start(name: string): Promise<Result>;
   /** stop a machine's worker and VM; its disks stay */
   stop(name: string): Promise<Result>;
-  /** create an enabled VM machine (apple-container, microsandbox, lima) */
+  /** create an enabled VM machine (apple-container, lima) */
   create(name: string, platform: string, options?: MachineCreateOptions): Promise<Result>;
-  /** SSH connections are permanently disabled; existing machines can be inspected or disconnected */
-  connect(name: string, host: string, options?: MachineConnectOptions): Promise<Result>;
-  /** delete a VM machine and its disk */
+  /** delete a VM machine and its disk; one of a removed platform is only forgotten */
   remove(name: string): Promise<Result>;
-  /** forget an ssh machine; its data root stays */
-  disconnect(name: string): Promise<Result>;
   /** resize a VM, or set a built-in machine's image, Docker socket and daemon */
   update(name: string, options?: MachineUpdateOptions): Promise<Result>;
 }

@@ -3,12 +3,10 @@
 //! with its daemon's endpoint and keys, `workspace.exec` and
 //! `sandbox.close`, and refuses everything else.
 //!
-//! What it proves: a Sandbox on an `ssh` machine is refused `Unsupported`
-//! (ssh is disabled by product policy, layerfs-project#7) before the worker
-//! is asked; on `docker` the daemon's published port is recorded as it is,
-//! with no forward process, and Workspace calls dial it from here; on
-//! `microsandbox`, whose adapter forwards nothing, every call goes through
-//! the worker as before. What it does not prove: a real daemon answering
+//! What it proves: a Sandbox on an `ssh` machine left by an older home is
+//! refused `Unsupported` (the platform was removed in 2.0) before the worker
+//! is asked; on `docker` (namespaces in its worker container, D-8), whose
+//! adapter forwards nothing, every call goes through the worker as before. What it does not prove: a real daemon answering
 //! (`sandbox_direct_live.rs` dials a host daemon). One test, because it
 //! sets the process's environment.
 #![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
@@ -189,7 +187,7 @@ fn ops(log: &Log) -> Vec<String> {
 }
 
 #[test]
-fn ssh_is_refused_and_docker_records_its_published_port() {
+fn ssh_is_refused_and_docker_goes_through_its_worker() {
     let cache = tempdir("cache");
     std::env::set_var("XDG_CACHE_HOME", &cache);
     let home = tempdir("home");
@@ -200,8 +198,8 @@ fn ssh_is_refused_and_docker_records_its_published_port() {
         .local_addr()
         .unwrap();
 
-    // ssh is disabled by product policy (layerfs-project#7): a Sandbox on
-    // it is refused before the worker is asked
+    // ssh was removed in 2.0: a Sandbox on a machine still recorded on it
+    // is refused before the worker is asked
     let (address, log) = worker(gone);
     machine(
         &home,
@@ -229,16 +227,14 @@ fn ssh_is_refused_and_docker_records_its_published_port() {
     )
     .unwrap_err();
     assert_eq!(code, "Unsupported", "{message}");
-    assert!(message.contains("ssh is permanently disabled"), "{message}");
+    assert_eq!(message, "platform `ssh` was removed in LayerFS 2.0");
     assert!(ops(&log).is_empty(), "{:?}", ops(&log));
 
-    // docker: its Sandbox publishes the daemon's port on this host's
-    // loopback, which is recorded as it is, with no forward process
-    let published = TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap();
-    let (address, log) = worker(published);
+    // docker: its worker container runs namespaces Sandboxes (D-8), whose
+    // daemon ports Docker cannot publish after the container started, so
+    // it records no keys or forward here and its
+    // Workspace calls go through the worker
+    let (address, log) = worker(gone);
     machine(&home, "docker", "docker", &[], address, "dock");
     call(
         &home,
@@ -247,54 +243,21 @@ fn ssh_is_refused_and_docker_records_its_published_port() {
             ("project", t("dock/api")),
             ("name", t("d1")),
             ("machine", t("docker")),
-            ("image", t(&format!("sha256:{}", "c".repeat(64)))),
         ],
     )
     .unwrap();
-    let record = read_record(&paths::sandbox_record(&home, "d1"))
-        .unwrap()
-        .unwrap();
-    let forward = record
-        .get("daemon")
-        .and_then(|d| d.get("forward"))
-        .cloned()
-        .unwrap();
-    assert_eq!(
-        forward.get_text("address"),
-        Some(published.to_string().as_str())
-    );
-    assert_eq!(forward.get_int("pid"), None);
-    let (code, _) = call(&home, "workspace.status", &[("ws", t("d1:/w/x"))]).unwrap_err();
-    assert_eq!(code, "Unavailable");
-    assert_eq!(ops(&log), ["sandbox.create"]);
-    call(&home, "sandbox.close", &[("name", t("d1"))]).unwrap();
-
-    // microsandbox forwards nothing: its Workspace calls go through the
-    // worker as before, and it records no keys here
-    let (address, log) = worker(gone);
-    machine(&home, "micro", "microsandbox", &[], address, "small");
-    call(
-        &home,
-        "sandbox.create",
-        &[
-            ("project", t("small/api")),
-            ("name", t("m1")),
-            ("machine", t("micro")),
-        ],
-    )
-    .unwrap();
-    let dir = paths::sandbox_dir(&home, "m1");
+    let dir = paths::sandbox_dir(&home, "d1");
     assert!(!dir.join("control.json").exists());
     let record = read_record(&dir.join("record.json")).unwrap().unwrap();
     assert!(record.get("daemon").is_none(), "{record:?}");
-    let (code, message) = call(&home, "workspace.status", &[("ws", t("m1:/w/x"))]).unwrap_err();
+    let (code, message) = call(&home, "workspace.status", &[("ws", t("d1:/w/x"))]).unwrap_err();
     assert_eq!(code, "Failed", "{message}");
     assert!(message.contains("stand-in worker refuses"), "{message}");
     assert_eq!(
         ops(&log),
         ["sandbox.create", "backend.daemon.workspace.status"]
     );
-    call(&home, "sandbox.close", &[("name", t("m1"))]).unwrap();
+    call(&home, "sandbox.close", &[("name", t("d1"))]).unwrap();
 
     std::fs::remove_dir_all(&home).unwrap();
     std::fs::remove_dir_all(&cache).unwrap();

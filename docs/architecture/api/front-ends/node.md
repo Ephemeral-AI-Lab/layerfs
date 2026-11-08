@@ -49,7 +49,7 @@ lfs.file.read(p, b, path, {..})
 | Rule | Behaviour | Source |
 | --- | --- | --- |
 | Building | `table = decode(native.table())`; `client({home, scope})` makes one function per entry, grouped by family, and freezes the client | [`index.js`](../../../../api/node/src/index.js) |
-| Defaults | the default export and the named family exports use `client()`: home from `LAYERFS_HOME`, else `~/.layerfs`, decided by the library | [`dispatch.rs`](../../../../api/crates/layerfs-control/src/calls/dispatch.rs) `home` |
+| Defaults | the default export and the named family exports use `client()`: home from `LAYERFS_HOME`, else `~/.layerfs`, decided by the library | [`dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home` |
 | Options object | a trailing plain object is the options when there are more values than positionals, or when its slot is not a `json` positional; so an optional positional can be left off | `bind` |
 | Checks before the call | options not an object, too many positionals, an unknown option, a function option that is not a function: `LayerFSError("InvalidInput")` | `bind` |
 | `null` / `undefined` | a positional or option with either is left out, so the library sees it as absent | `bind` |
@@ -124,7 +124,7 @@ api/crates/layerfs-node (cdylib, napi 2.16, napi4)
 
 | Step | What happens | Source |
 | --- | --- | --- |
-| Build | `npm --prefix api run build:native` runs `cargo +1.85.1 build --manifest-path Cargo.toml --offline --locked [--release] -p layerfs-node`; `-- --debug` builds a dev profile | [`build-native.mjs`](../../../../api/scripts/build-native.mjs) |
+| Build | `npm --prefix api run build:native` runs `cargo +1.85.1 build --manifest-path Cargo.toml --offline --locked [--release] -p layerfs-node`; `-- --debug` builds a dev profile; `-- --features postgresql,tls` (either name or both, nothing else) passes the opt-in features on, default none | [`build-native.mjs`](../../../../api/scripts/build-native.mjs) |
 | Host | `darwin` (`.dylib`) or `linux` (`.so`); any other platform, a set `CARGO_BUILD_TARGET`, or a `CARGO_TARGET_DIR` outside the worktree is refused | `build-native.mjs` |
 | Output | copied to `api/node/layerfs.node` (git-ignored; the package's own addon), or to `LAYERFS_NATIVE_OUTPUT`, through a staged file and a rename | `build-native.mjs` |
 | Loading | the file `LAYERFS_NATIVE` names, else `layerfs.node` beside the package's `src`; nothing else is looked at. A missing file, or one that does not load, throws one error naming the path, `platform/arch`, the Node version and how to build | [`native.js`](../../../../api/node/src/native.js) |
@@ -150,7 +150,7 @@ missing). Run one file at a time under a wall limit, for example
 
 | Test | Sets up | Checks | Needs |
 | --- | --- | --- | --- |
-| [`calls.mjs`](../../../../api/node/test/calls.mjs) | temporary homes, a folder with `README.md` | nine families and 61 functions; every call with a required argument is refused `InvalidInput` "is required"; empty lists; built-in machines `docker`, `native`; a Store, Init with progress, file and Branch calls, bytes, a folder scope | the addon |
+| [`calls.mjs`](../../../../api/node/test/calls.mjs) | temporary homes, a folder with `README.md` | nine families and 60 functions; every call with a required argument is refused `InvalidInput` "is required"; empty lists; built-in machines `docker`, `native`; a Store, Init with progress, file and Branch calls, bytes, a folder scope | the addon |
 | [`shell.mjs`](../../../../api/node/test/shell.mjs) | the `layerfs` debug binary beside the package | every call refused the same by the command and the package; exit 2 for a wrong line; a live Store read both ways; `--progress` lines | addon and command |
 | [`events.mjs`](../../../../api/node/test/events.mjs) | a `layerfs worker` started on loopback | a throwing `on_progress` does not stop a `store.push`, and every event arrives before the call settles; exec output through functions and `stream: true` | command; the exec half needs `LAYERFS_DAEMON`, else skipped `NOT_RUN` |
 | [`close.mjs`](../../../../api/node/test/close.mjs) | a Store and Init | `close()` drops this process's leases; a later call opens the Store again | the addon |

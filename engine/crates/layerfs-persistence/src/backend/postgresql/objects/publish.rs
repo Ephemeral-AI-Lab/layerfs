@@ -23,13 +23,14 @@ pub(crate) fn packs(tx: &Transaction<'_>, packs: &[PublishedPack]) -> Result<(),
         &[Type::INT8, Type::INT8, Type::BYTEA, Type::INT8, Type::BYTEA],
         |writer| {
             for pack in packs {
-                let domain = i64::from(pack.info.domain == PackDomain::Payload);
+                let info = pack.info();
+                let domain = i64::from(info.domain == PackDomain::Payload);
                 writer.write(&[
-                    &pack.info.pack_id,
+                    &info.pack_id,
                     &domain,
-                    &pack.info.key.as_bytes().as_slice(),
-                    &(pack.info.length as i64),
-                    &pack.body.as_slice(),
+                    &info.key.as_bytes().as_slice(),
+                    &(info.length as i64),
+                    &pack.body().as_slice(),
                 ])?;
             }
             Ok(())
@@ -105,13 +106,13 @@ pub(crate) fn rows(tx: &Transaction<'_>, batch: &Publication) -> Result<Publishe
     let metadata = batch
         .packs
         .iter()
-        .filter(|pack| pack.info.domain == PackDomain::Metadata)
-        .map(|pack| pack.info.length as i64)
+        .filter(|pack| pack.info().domain == PackDomain::Metadata)
+        .map(|pack| pack.info().length as i64)
         .sum::<i64>();
     let stored = batch
         .packs
         .iter()
-        .map(|pack| pack.info.length as i64)
+        .map(|pack| pack.info().length as i64)
         .sum::<i64>();
     // Blocks are encoded here, before the statement that holds the lane.
     let values = crate::blocks::values::encode(&batch.inode_values)?;

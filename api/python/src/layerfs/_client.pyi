@@ -22,6 +22,15 @@ class ProjectFamily:
         """every project in the home, or one Store's"""
     def get(self, project: str) -> Result:
         """a project's record: its Store, kind and machine"""
+    def export(
+        self,
+        project: str,
+        destination: str,
+        *,
+        branch: str | None = None,
+        on_progress: Callable[[Progress], object] = ...,
+    ) -> Result:
+        """export a project's snapshot from its Store to a local folder"""
     def remove(self, project: str) -> Result:
         """remove one project from its Store"""
 
@@ -210,8 +219,12 @@ class WorkspaceFamily:
         stream: bool | None = None,
         stdout: Callable[[Output], object] = ...,
         stderr: Callable[[Output], object] = ...,
+        exec_id: str | None = None,
+        on_progress: Callable[[Progress], object] = ...,
     ) -> Result:
         """run one bash command in a Workspace"""
+    def exec_cancel(self, ws: str, exec_id: str, *, grace_ms: int | None = None) -> Result:
+        """end a running command: SIGTERM, then SIGKILL after grace_ms"""
     def commit(self, ws: str, *, message: str | None = None, force: bool | None = None) -> Result:
         """commit a Workspace's changes to its Branch"""
     def unmount(self, ws: str, *, discard: bool | None = None, force: bool | None = None) -> Result:
@@ -244,23 +257,9 @@ class MachineFamily:
         nested: bool | None = None,
         host: str | None = None,
     ) -> Result:
-        """create an enabled VM machine (apple-container, microsandbox, lima)"""
-    def connect(
-        self,
-        name: str,
-        host: str,
-        *,
-        user: str | None = None,
-        port: int | None = None,
-        identity: str | None = None,
-        known_hosts: str | None = None,
-        root: str | None = None,
-    ) -> Result:
-        """SSH connections are permanently disabled; existing machines can be inspected or disconnected"""
+        """create an enabled VM machine (apple-container, lima)"""
     def remove(self, name: str) -> Result:
-        """delete a VM machine and its disk"""
-    def disconnect(self, name: str) -> Result:
-        """forget an ssh machine; its data root stays"""
+        """delete a VM machine and its disk; one of a removed platform is only forgotten"""
     def update(
         self,
         name: str,

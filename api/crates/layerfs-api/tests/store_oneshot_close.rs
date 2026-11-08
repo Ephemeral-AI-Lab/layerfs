@@ -7,7 +7,8 @@
 use layerfs_api::home::{self};
 
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::common::home::{lease, paths};
+use layerfs_home::home::paths;
+use layerfs_store::lease;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;

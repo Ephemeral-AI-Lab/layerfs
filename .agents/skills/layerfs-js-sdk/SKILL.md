@@ -121,7 +121,7 @@ decision in the result's `lww` list. Never list source files. Details:
 | Files | Read and change files on a Branch directly | `file` |
 | Sandbox | Named, bound to one project, running on one machine; holds up to 16 Workspaces | `sandbox` |
 | Workspace | A Branch mounted in a Sandbox, `<sandbox>:<path>`; commands run there | `workspace` |
-| Machine | Where Sandboxes run: `native`, `docker`, VMs, ssh hosts | `machine` |
+| Machine | Where Sandboxes run: `native`, `docker`, VMs (`apple-container`, `lima`) | `machine` |
 | Backup | A copy of a sqlite Store in an r2 or MinIO bucket | `backup` |
 
 ## The three front ends
@@ -290,13 +290,13 @@ and examples.
 
 | Family | Calls |
 | --- | --- |
-| [project](references/methods/project.md) | `init(project, folder, { timeout, on_progress })`, `list(store?, { page_size, page_pos })`, `get(project)`, `remove(project)` |
+| [project](references/methods/project.md) | `init(project, folder, { timeout, on_progress })`, `list(store?, { page_size, page_pos })`, `get(project)`, `export(project, destination, { branch, on_progress })`, `remove(project)` |
 | [branch](references/methods/branch.md) | `list(project)`, `get(project, branch)`, `fork(project, name, from_branch, from_commit?)`, `merge(project, name, a, b, { message, units })`, `publish(project, branch, commit?)`, `diff(project, from_branch, to_branch, { paths_only, page_size, page_pos, cursor })` |
 | [commit](references/methods/commit.md) | `list(project, branch)`, `get(project, branch, commit)`, `diff(project, from_commit, to_commit, { paths_only, … })` |
 | [file](references/methods/file.md) | reads `read`, `stat`, `list`, `glob`, `grep`, `blame`, `diff`; writes `write`, `edit`, `rm`, `mkdir`, `mv`, `cp`, `apply` |
 | [sandbox](references/methods/sandbox.md) | `create(project, name, machine?, { image })`, `list(project?, { page_size, page_pos })`, `get(name, { page_size, page_pos })`, `close(name, { force })` |
 | [workspace](references/methods/workspace.md) | `mount(sandbox, branch, { name })`, `exec(ws, command, { message, stream, stdout, stderr })`, `commit(ws, { message, force })`, `unmount(ws, { discard, force })`, `status(ws)` |
-| [machine](references/methods/machine.md) | `list`, `platforms`, `get`, `status`, `start`, `stop`, `create`, `connect`, `remove`, `disconnect`, `update` |
+| [machine](references/methods/machine.md) | `list`, `platforms`, `get`, `status`, `start`, `stop`, `create`, `remove`, `update` |
 | [store](references/methods/store.md) | `list`, `get`, `status`, `create`, `connect`, `push`, `pull`, `remove`, `disconnect` |
 | [backup](references/methods/backup.md) | `connect`, `disconnect`, `list`, `create`, `restore` |
 

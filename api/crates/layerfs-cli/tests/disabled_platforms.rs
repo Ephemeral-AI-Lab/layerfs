@@ -1,4 +1,5 @@
-//! CLI uses the same disabled-platform fixture as the SDKs.
+//! CLI uses the same disabled-platform fixture as the SDKs, for the disabled
+//! Firecracker and the platforms removed in 2.0.
 mod common;
 use layerfs_api::{json, Kind};
 use layerfs_bridge::control::SdkValue;
@@ -6,7 +7,13 @@ use std::net::TcpListener;
 
 #[test]
 fn cli_refuses_every_new_work_route_before_contacting_the_machine() {
-    for platform in ["firecracker", "ssh"] {
+    for platform in ["firecracker", "ssh", "microsandbox"] {
+        let reason = match platform {
+            "firecracker" => {
+                format!("{platform} is permanently disabled by product policy (layerfs-project#7)")
+            }
+            _ => format!("platform `{platform}` was removed in LayerFS 2.0"),
+        };
         let home = common::tempdir(&format!("disabled-{platform}"));
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
@@ -65,20 +72,7 @@ fn cli_refuses_every_new_work_route_before_contacting_the_machine() {
             );
             let refusal = json::parse(common::text(&out.stderr).trim()).unwrap();
             assert_eq!(refusal.get_text("code"), Some("Unsupported"), "{name}");
-            let disabled = if name == "machine.connect" {
-                "ssh"
-            } else {
-                platform
-            };
-            assert_eq!(
-                refusal.get_text("message"),
-                Some(
-                    format!(
-                        "{disabled} is permanently disabled by product policy (layerfs-project#7)"
-                    )
-                    .as_str()
-                )
-            );
+            assert_eq!(refusal.get_text("message"), Some(reason.as_str()), "{name}");
             assert!(
                 matches!(listener.accept(), Err(e) if e.kind() == std::io::ErrorKind::WouldBlock)
             );

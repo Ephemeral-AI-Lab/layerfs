@@ -69,9 +69,9 @@ fn named_sandboxes_on_native() {
     );
     write_record(
         &paths::machine_record(&home, "box"),
-        // microsandbox runs on macOS and Linux hosts, so the support table
-        // passes this machine on either
-        &SdkValue::map([("name", t("box")), ("platform", t("microsandbox"))]),
+        // docker runs on macOS and Linux hosts, so the support table passes
+        // this machine on either
+        &SdkValue::map([("name", t("box")), ("platform", t("docker"))]),
     )
     .unwrap();
 

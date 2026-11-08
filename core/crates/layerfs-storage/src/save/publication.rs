@@ -9,12 +9,13 @@ use crate::{
 use layerfs_content::ObjectId;
 use std::collections::{BTreeMap, BTreeSet};
 impl State<'_> {
-    fn pack_cost(&self, pack: PublishedPack) -> StorageResult<(usize, u64)> {
-        let cost = self.storage.source.metadata.publication_pack_cost(&pack)?;
+    fn pack_cost(&self, pack: &PublishedPack) -> StorageResult<(usize, u64)> {
+        let cost = self.storage.source.metadata.publication_pack_cost(pack)?;
+        let body = pack.body().len() as u64;
         if cost.0 == 0
             || cost.0 > crate::policy::GROUP_COUNT_LIMIT + 1
-            || cost.1 < pack.body.len() as u64
-            || cost.1 > pack.body.len() as u64 + 56 + 32 * crate::policy::GROUP_COUNT_LIMIT as u64
+            || cost.1 < body
+            || cost.1 > body + 56 + 32 * crate::policy::GROUP_COUNT_LIMIT as u64
         {
             return Err(StorageError::Integrity("publication pack cost"));
         }
@@ -63,21 +64,25 @@ impl State<'_> {
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect();
-        self.storage.source.locate(&external)?;
+        // Located and checked a cache's worth at a time, so each check finds
+        // its id still located rather than locating it alone again.
         let mut available = BTreeSet::new();
-        for id in external {
-            if self.storage.source.location(id, i64::MAX)?.is_none() {
-                let parent = members
-                    .iter()
-                    .find(|(_, (_, refs, _))| refs.contains(&id))
-                    .map(|(id, _)| *id)
-                    .ok_or(StorageError::Integrity("closure parent"))?;
-                return Err(StorageError::MissingDependency {
-                    object: parent,
-                    reference: id,
-                });
+        for slice in external.chunks(crate::policy::READ_OBJECT_LIMIT) {
+            self.storage.source.locate(slice)?;
+            for id in slice.iter().copied() {
+                if self.storage.source.location(id, i64::MAX)?.is_none() {
+                    let parent = members
+                        .iter()
+                        .find(|(_, (_, refs, _))| refs.contains(&id))
+                        .map(|(id, _)| *id)
+                        .ok_or(StorageError::Integrity("closure parent"))?;
+                    return Err(StorageError::MissingDependency {
+                        object: parent,
+                        reference: id,
+                    });
+                }
+                available.insert(id);
             }
-            available.insert(id);
         }
         let mut counts = BTreeMap::new();
         let mut dependents = BTreeMap::<ObjectId, Vec<ObjectId>>::new();
@@ -133,19 +138,15 @@ impl State<'_> {
         }
         for id in order {
             let (location, _, _) = &members[&id];
-            let pack = self
+            let sealed = self
                 .packer
                 .ready
                 .iter()
-                .find(|p| p.info.pack_id == location.pack_id)
+                .find(|p| p.pack.info().pack_id == location.pack_id)
                 .ok_or(StorageError::Integrity("registered pack missing"))?;
-            let info = pack.info;
             let added_pack = !packs.contains(&location.pack_id);
             let (added_rows, body_bytes) = if added_pack {
-                self.pack_cost(PublishedPack {
-                    info,
-                    body: pack.body.clone(),
-                })?
+                self.pack_cost(&sealed.pack)?
             } else {
                 (0, 0)
             };
@@ -164,16 +165,13 @@ impl State<'_> {
                 pack_rows = 0;
             }
             if added_pack {
-                let pack = self
+                let sealed = self
                     .packer
                     .ready
                     .iter()
-                    .find(|p| p.info.pack_id == location.pack_id)
+                    .find(|p| p.pack.info().pack_id == location.pack_id)
                     .ok_or(StorageError::Integrity("registered pack missing"))?;
-                batch.packs.push(PublishedPack {
-                    info: pack.info,
-                    body: pack.body.clone(),
-                });
+                batch.packs.push(sealed.pack.clone());
                 packs.insert(location.pack_id);
                 pack_rows += added_rows;
             }
@@ -240,8 +238,7 @@ impl State<'_> {
             c.pack_write_bytes += batch
                 .packs
                 .iter()
-                .map(|pack| &pack.body)
-                .map(|body| body.len() as u64)
+                .map(|pack| pack.body().len() as u64)
                 .sum::<u64>();
             c.pooled_groups += batch.inode_values.len() as u64;
         });
@@ -288,14 +285,14 @@ impl State<'_> {
         self.outcome.metadata_bytes += batch
             .packs
             .iter()
-            .filter(|pack| pack.info.domain == crate::location::PackDomain::Metadata)
-            .map(|pack| pack.info.length as u64)
+            .filter(|pack| pack.info().domain == crate::location::PackDomain::Metadata)
+            .map(|pack| pack.info().length as u64)
             .sum::<u64>();
         self.outcome.packs += batch.packs.len() as u64;
         self.outcome.stored_bytes += batch
             .packs
             .iter()
-            .map(|pack| pack.info.length as u64)
+            .map(|pack| pack.info().length as u64)
             .sum::<u64>();
         for row in &batch.signatures {
             self.signatures.borrow_mut().remove(&row.slot);

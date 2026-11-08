@@ -192,7 +192,9 @@ fn a_worker_replaces_a_removed_project_s_record() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     let served = root.clone();
-    std::thread::spawn(move || worker::serve(listener, "s".to_owned(), served));
+    std::thread::spawn(move || {
+        layerfs_control::worker_server::serve(listener, "s".to_owned(), served)
+    });
     let endpoint = worker::Endpoint {
         address,
         secret: "s".to_owned(),

@@ -1,9 +1,10 @@
 //! `project.get`: a project's record: its Store, kind and machine.
+use crate::calls::table::Kind::Project;
+use crate::calls::table::{a, call, Call};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::Project;
-use layerfs_control::calls::table::{a, call, Call};
-use layerfs_control::calls::Context;
-use layerfs_control::common::outcome::Outcome;
+use layerfs_home::names::ProjectRef;
+use layerfs_home::outcome::Outcome;
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -17,5 +18,6 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `project.get`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::project::family::run(context, "get", args)
+    let project = ProjectRef::parse(args.get_text("project").unwrap_or(""))?;
+    layerfs_store::project::family::get(&context.home, &project)
 }
