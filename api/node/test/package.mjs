@@ -20,6 +20,19 @@ test("the licence is the repository's MIT, shipped with the package", () => {
   assert.ok(manifest.files.includes("LICENSE"));
 });
 
+test("the package names its repository, platform and npm page", () => {
+  assert.deepEqual(manifest.os, ["linux"]);
+  assert.deepEqual(manifest.cpu, ["x64"]);
+  assert.deepEqual(manifest.libc, ["glibc"]);
+  assert.equal(manifest.repository.type, "git");
+  assert.equal(manifest.repository.url, "git+https://github.com/Ephemeral-AI-Lab/layerfs.git");
+  assert.equal(manifest.repository.directory, "api/node");
+  assert.equal(manifest.homepage, "https://github.com/Ephemeral-AI-Lab/layerfs#readme");
+  assert.equal(manifest.bugs.url, "https://github.com/Ephemeral-AI-Lab/layerfs/issues");
+  assert.ok(Array.isArray(manifest.keywords) && manifest.keywords.length >= 5);
+  assert.ok(manifest.description.length > 0 && !manifest.description.includes("#533"));
+});
+
 test("index.d.ts is exactly what the call table generates", () => {
   assert.equal(readFileSync(here("../src/index.d.ts"), "utf8"), render(table), "run node api/scripts/gen-node-types.mjs");
   assert.equal(manifest.types, "./src/index.d.ts");
