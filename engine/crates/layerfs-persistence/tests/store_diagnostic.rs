@@ -465,9 +465,13 @@ fn unused_ordinal_and_advisory_blocks_are_not_hidden_by_reachability() {
         SqliteHandles::create(config(&path), StoragePolicy::frozen_default(), &authority())
             .unwrap();
     let raw = rusqlite::Connection::open(&path).unwrap();
+    // Malformed fixture only: bypass source checks to exercise bounded reads
+    // of a corrupt oversized row before its bytes enter the diagnostic process.
+    raw.execute_batch("PRAGMA ignore_check_constraints=ON")
+        .unwrap();
     raw.execute(
         "INSERT INTO inode_value_block(first_ordinal,last_ordinal,body) VALUES(1,1,?1)",
-        [vec![0u8; 9]],
+        [vec![0u8; 4001]],
     )
     .unwrap();
     raw.execute(
@@ -486,6 +490,36 @@ fn unused_ordinal_and_advisory_blocks_are_not_hidden_by_reachability() {
         result
             .iter()
             .any(|o| o.id == "store.advisory.binding_hints" && o.outcome == Outcome::Fail),
+        "{result:?}"
+    );
+}
+
+#[test]
+fn oversized_monolithic_pack_body_is_rejected_before_body_acquisition() {
+    let temp = support::Temp::new("doctor-oversized-pack");
+    let path = temp.join("store.sqlite");
+    let writer = SqliteHandles::create(
+        config(&path).with_sqlite_pack_layout(SqlitePackLayout::Monolithic),
+        StoragePolicy::frozen_default(),
+        &authority(),
+    )
+    .unwrap();
+    put(&writer);
+    let raw = rusqlite::Connection::open(&path).unwrap();
+    let trigger: String = raw
+        .query_row(
+            "SELECT sql FROM sqlite_schema WHERE type='trigger' AND name='pack_immutable_update'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    raw.execute_batch("PRAGMA ignore_check_constraints=ON; DROP TRIGGER pack_immutable_update; UPDATE pack SET body=CAST(body||zeroblob(1048576) AS BLOB)").unwrap();
+    raw.execute_batch(&trigger).unwrap();
+    let result = observations(&writer, false);
+    assert!(
+        result
+            .iter()
+            .any(|o| o.id == "store.packs" && o.outcome == Outcome::Fail),
         "{result:?}"
     );
 }

@@ -53,8 +53,8 @@ pub(crate) fn read(
             continue;
         }
         let mut rows = tx.query(
-            "SELECT body FROM pack WHERE pack_id=?1",
-            vec![Param::I64(info.pack_id)],
+            "SELECT CASE WHEN length(body)=?2 THEN body END FROM pack WHERE pack_id=?1",
+            vec![Param::I64(info.pack_id), Param::I64(info.length as i64)],
         )?;
         let body: Vec<u8> = rows
             .first_mut()

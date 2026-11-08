@@ -230,7 +230,7 @@ fn blocks(
     let (mut after, mut checked, mut failed) = (0i64, 0u64, 0u64);
     loop {
         options.check()?;
-        let rows=view.query("SELECT first_ordinal,last_ordinal,body FROM inode_value_block WHERE first_ordinal>?1 ORDER BY first_ordinal LIMIT 64",vec![Param::I64(after)])?;
+        let rows=view.query("SELECT first_ordinal,last_ordinal,CASE WHEN length(body)<=4000 THEN body ELSE NULL END FROM inode_value_block WHERE first_ordinal>?1 ORDER BY first_ordinal LIMIT 64",vec![Param::I64(after)])?;
         if rows.is_empty() {
             break;
         }

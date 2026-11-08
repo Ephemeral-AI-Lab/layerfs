@@ -28,7 +28,7 @@ pub(crate) fn read(
         &format!(
             "WITH d AS (SELECT count(*) AS n, coalesce(sum(length),0) AS total FROM {s}.pack WHERE pack_id = ANY($1::bigint[])) \
              SELECT p.pack_id,p.domain,p.digest,p.length,\
-             CASE WHEN d.n = cardinality($1::bigint[]) AND (d.total <= $2::bigint OR (d.n = 1 AND d.total <= $3::bigint)) THEN p.body END \
+             CASE WHEN d.n = cardinality($1::bigint[]) AND (d.total <= $2::bigint OR (d.n = 1 AND d.total <= $3::bigint)) AND octet_length(p.body)=p.length AND p.length BETWEEN 32 AND $3::bigint THEN p.body END \
              FROM {s}.pack p, d WHERE p.pack_id = ANY($1::bigint[]) ORDER BY p.pack_id",
             s = tx.schema
         ),
