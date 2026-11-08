@@ -13,6 +13,7 @@ use layerfs_bucket::bucket::pieces;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use std::io::{Read, Seek, SeekFrom, Write};
+#[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
@@ -35,12 +36,20 @@ fn length(path: &Path) -> Result<u64, SdkRefusal> {
 
 /// The bytes free to this process on the filesystem that holds `path`,
 /// or would: its nearest existing ancestor.
+#[cfg(unix)]
 fn free(path: &Path) -> Result<u64, SdkRefusal> {
     let at = path.ancestors().find(|at| at.exists()).unwrap_or(path);
     let filesystem = nix::sys::statvfs::statvfs(at).map_err(failed)?;
     let free = u128::from(filesystem.blocks_available()) * u128::from(filesystem.fragment_size());
     Ok(u64::try_from(free).unwrap_or(u64::MAX))
 }
+
+#[cfg(windows)]
+fn free(_path: &Path) -> Result<u64, SdkRefusal> {
+    // The volume free-space answer waits for the volume-guard port (#454).
+    Ok(u64::MAX)
+}
+
 
 fn hex(bytes: &[u8]) -> SdkValue {
     SdkValue::text(layerfs_bridge::sdk_values::hex(bytes))
@@ -176,13 +185,13 @@ pub fn run(root: &Path, frame: &StepFrame) -> Outcome {
                 ));
             }
             layerfs_home::home::private_dir(&paths::store_dir(root, store))?;
-            let mut handle = std::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(offset == 0)
-                .mode(0o600)
-                .open(&incoming)
-                .map_err(failed)?;
+            #[cfg(unix)]
+            let mut handle = {
+                use std::os::unix::fs::OpenOptionsExt;
+                std::fs::OpenOptions::new().write(true).create(true).truncate(offset == 0).mode(0o600).open(&incoming).map_err(failed)?
+            };
+            #[cfg(windows)]
+            let mut handle = std::fs::OpenOptions::new().write(true).create(true).truncate(offset == 0).open(&incoming).map_err(failed)?;
             if handle.metadata().map_err(failed)?.len() != offset {
                 return Err(refused(
                     "Failed",
@@ -227,6 +236,7 @@ pub fn run(root: &Path, frame: &StepFrame) -> Outcome {
                     format!("a Store file is already at {}", file.display()),
                 ));
             }
+            #[cfg(unix)]
             std::fs::set_permissions(&incoming, std::fs::Permissions::from_mode(0o600))
                 .map_err(failed)?;
             std::fs::rename(&incoming, &file).map_err(failed)?;

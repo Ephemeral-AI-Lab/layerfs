@@ -10,10 +10,11 @@ use layerfs_bridge::{
 use layerfs_home::helpers;
 use layerfs_home::outcome::{failed, refused};
 use layerfs_persistence::{SealedStore, SqlitePersistenceProfile};
+    #[cfg(unix)]
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
-    os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
     path::{Path, PathBuf},
     sync::Mutex,
     time::Duration,
@@ -48,7 +49,9 @@ pub fn home_of(home: Option<&Path>) -> Result<PathBuf> {
 /// namespaces Sandbox's local root must ([`layerfs_home::home::traversable`]).
 pub fn private(path: &Path, dir: bool) -> Result<()> {
     let meta = fs::symlink_metadata(path).map_err(failed)?;
+    #[cfg(unix)]
     let others = if dir { 0o076 } else { 0o077 };
+    #[cfg(unix)]
     if meta.file_type().is_symlink()
         || meta.is_dir() != dir
         || (!dir && !meta.is_file())
@@ -60,10 +63,24 @@ pub fn private(path: &Path, dir: bool) -> Result<()> {
             format!("{} must be owned by this user and private", path.display()),
         ));
     }
+    #[cfg(windows)]
+    if meta.file_type().is_symlink() || meta.is_dir() != dir || (!dir && !meta.is_file()) {
+        return Err(refused(
+            "Unauthorized",
+            format!("{} must be a plain {} on this host", path.display(), if dir { "directory" } else { "file" }),
+        ));
+    }
     Ok(())
 }
 pub fn directory(path: &Path) -> Result<()> {
-    match fs::DirBuilder::new().mode(0o700).create(path) {
+    #[cfg(unix)]
+    let built = {
+        use std::os::unix::fs::DirBuilderExt;
+        fs::DirBuilder::new().mode(0o700).create(path)
+    };
+    #[cfg(windows)]
+    let built = fs::DirBuilder::new().create(path);
+    match built {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
         Err(e) => return Err(failed(e)),
@@ -160,12 +177,23 @@ pub const TURN: &str = "serve.lock";
 /// process exits.
 fn os_lock(directory: &Path, deadline: std::time::Instant) -> Result<File> {
     let path = directory.join(TURN);
+    #[cfg(unix)]
+    let file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .mode(0o600)
+            .custom_flags(no_follow())
+            .open(&path)
+            .map_err(failed)?
+    };
+    #[cfg(windows)]
     let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
-        .mode(0o600)
-        .custom_flags(no_follow())
         .open(&path)
         .map_err(failed)?;
     private(&path, false)?;
@@ -189,6 +217,11 @@ fn no_follow() -> i32 {
     0x20000
 }
 
+#[cfg(windows)]
+fn no_follow() -> u32 {
+    0x0020_0000
+}
+
 pub fn save(path: &Path, value: SdkValue) -> Result<()> {
     let bytes = layerfs_bridge::control::Answer {
         id: 1,
@@ -201,11 +234,21 @@ pub fn save(path: &Path, value: SdkValue) -> Result<()> {
         std::process::id(),
         layerfs_bridge::sdk_values::hex(&helpers::random()?[..8])
     ));
+    #[cfg(unix)]
+    let mut file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .custom_flags(no_follow())
+            .open(&temp)
+            .map_err(failed)?
+    };
+    #[cfg(windows)]
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
-        .mode(0o600)
-        .custom_flags(no_follow())
         .open(&temp)
         .map_err(failed)?;
     file.write_all(&bytes).map_err(failed)?;
@@ -214,11 +257,13 @@ pub fn save(path: &Path, value: SdkValue) -> Result<()> {
 }
 pub fn load(path: &Path) -> Result<SdkValue> {
     private(path, false)?;
-    let file = OpenOptions::new()
-        .read(true)
-        .custom_flags(no_follow())
-        .open(path)
-        .map_err(failed)?;
+    #[cfg(unix)]
+    let file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        OpenOptions::new().read(true).custom_flags(no_follow()).open(path).map_err(failed)?
+    };
+    #[cfg(windows)]
+    let file = OpenOptions::new().read(true).open(path).map_err(failed)?;
     if file.metadata().map_err(failed)?.len() > 65535 {
         return Err(refused("InvalidInput", "discovery record too large"));
     }

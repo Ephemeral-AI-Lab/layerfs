@@ -96,7 +96,7 @@ fn one(dir: &Path, record: Record<'_>, strict: bool) -> Result<()> {
                     {
                         use std::os::unix::fs::DirBuilderExt;
                         fs::DirBuilder::new()
-                            .mode(0o700)
+                            
                             .create(&at)
                             .map_err(|e| io_refusal(&at, e))
                     }
@@ -162,7 +162,7 @@ fn one(dir: &Path, record: Record<'_>, strict: bool) -> Result<()> {
             #[cfg(windows)]
             {
                 let target = from_bytes(target);
-                std::os::windows::fs::symlink(target.as_os_str(), &at)
+                std::os::windows::fs::symlink_file(target.as_os_str(), &at)
                     .map_err(|e| io_refusal(&at, e))
             }
         }
@@ -261,7 +261,13 @@ fn io_refusal(at: &Path, error: std::io::Error) -> SdkRefusal {
 /// part's record may make it first. Anything else there, a link to a
 /// directory included, is refused.
 fn folder_at(at: &Path) -> std::result::Result<(), String> {
-    let made = fs::DirBuilder::new().mode(0o700).create(at);
+    #[cfg(unix)]
+    let made = {
+        use std::os::unix::fs::DirBuilderExt;
+        fs::DirBuilder::new().mode(0o700).create(at)
+    };
+    #[cfg(windows)]
+    let made = fs::DirBuilder::new().create(at);
     if let Err(e) = made {
         if e.kind() != std::io::ErrorKind::AlreadyExists {
             return Err(format!("{}: {e}", at.display()));
@@ -300,7 +306,10 @@ fn place(
                 String::from_utf8_lossy(path)
             ));
         }
+        #[cfg(unix)]
         at.push(OsStr::from_bytes(name));
+        #[cfg(windows)]
+        at.push(from_bytes(name));
         if names.peek().is_some() {
             match strict {
                 true => real_dir(&at)?,
@@ -333,6 +342,7 @@ pub fn remove(dir: &Path) -> Result<()> {
         if !meta.is_dir() || meta.file_type().is_symlink() {
             continue;
         }
+        #[cfg(unix)]
         if meta.permissions().mode() & 0o700 != 0o700 {
             fs::set_permissions(&at, fs::Permissions::from_mode(0o700))
                 .map_err(|e| refused("Failed", format!("{}: {e}", at.display())))?;

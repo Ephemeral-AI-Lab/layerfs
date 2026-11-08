@@ -208,12 +208,16 @@ pub fn make_empty(
     identity: &Identity,
     policy: layerfs_storage::StoragePolicy,
 ) -> Result<SealedStore> {
+#[cfg(unix)]
     use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
     if !global.exists() {
-        std::fs::DirBuilder::new()
-            .mode(0o700)
-            .create(global)
-            .map_err(failed)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            std::fs::DirBuilder::new().mode(0o700).create(global).map_err(failed)?;
+        }
+        #[cfg(windows)]
+        std::fs::DirBuilder::new().create(global).map_err(failed)?;
     }
     let (target, _) = layerfs_store_service::install::paths(destination).map_err(failed)?;
     layerfs_store_service::install::absent(&target)
@@ -236,8 +240,12 @@ pub fn make_empty(
             })
             .map_err(|error| refused("Failed", format!("Store create: {error:?}")))?;
         // a daemon opens only a Store file only its user can read
-        std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600))
-            .map_err(failed)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600))
+                .map_err(failed)?;
+        }
         layerfs_store_service::install::absent(&target).map_err(failed)?;
         std::fs::rename(&temporary, &target).map_err(failed)?;
         Ok(sealed)

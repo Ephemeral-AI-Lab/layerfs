@@ -80,7 +80,9 @@ pub fn make_entry(home: &Path, store: &str, name: &str) -> Result<PathBuf> {
             failed(error)
         }
     })?;
+#[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
+    #[cfg(unix)]
     std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o700)).map_err(failed)?;
     Ok(entry)
 }

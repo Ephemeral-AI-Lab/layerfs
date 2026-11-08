@@ -187,7 +187,7 @@ fn walk(folder: &Path, project: &str, visit: &mut Visitor<'_>) -> Result<()> {
         #[cfg(unix)]
         let name_bytes = name.as_bytes().to_vec();
         #[cfg(windows)]
-        let name_bytes = as_bytes(name).to_vec();
+        let name_bytes = as_bytes(name.as_os_str()).to_vec();
         rel.extend_from_slice(&name_bytes);
         #[cfg(unix)]
         let path = folder.join(OsStr::from_bytes(&rel));
