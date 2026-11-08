@@ -64,7 +64,7 @@ fn packs(
         }
         emit(
             observer,
-            "store.inventory.progress",
+            "store.packs.progress",
             Outcome::Pass,
             "processing next bounded inventory window",
         );
@@ -144,7 +144,7 @@ fn objects(
         }
         emit(
             observer,
-            "store.inventory.progress",
+            "store.objects.progress",
             Outcome::Pass,
             "processing next bounded inventory window",
         );
