@@ -6,6 +6,7 @@
 //! taken. One test, because it sets the process's environment.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths, write_record};
+use layerfs_api::worker::read_frame;
 use layerfs_bridge::control::SdkValue;
 use std::net::{SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
@@ -84,7 +85,7 @@ enum Meet {
     Deny,
 }
 
-/// A stand-in worker; its log holds each request's text, or `hello` for a
+/// A stand-in worker; its log holds each request's `op`, or `hello` for a
 /// connection that sent none.
 fn worker(meet: Meet) -> (SocketAddr, Arc<Mutex<Vec<String>>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -118,6 +119,7 @@ fn worker(meet: Meet) -> (SocketAddr, Arc<Mutex<Vec<String>>>) {
                 continue;
             }
             // this build's hello: its protocol, no sealed bundle
+<<<<<<< HEAD
             let hello = layerfs_api::worker::Hello {
                 protocol: Some(layerfs_api::worker::PROTOCOL),
                 bundle: None,
@@ -129,6 +131,22 @@ fn worker(meet: Meet) -> (SocketAddr, Arc<Mutex<Vec<String>>>) {
             seen.lock()
                 .unwrap()
                 .push(layerfs_api::json::print(&request));
+=======
+            send(
+                &mut stream,
+                format!(
+                    r#"{{"ready":true,"protocol":{},"bundle":null}}"#,
+                    layerfs_api::worker::PROTOCOL
+                )
+                .as_bytes(),
+            );
+            let request = read_frame(&mut stream).ok().flatten();
+            let op = request
+                .as_ref()
+                .and_then(|request| request.get_text("op"))
+                .unwrap_or_default();
+            seen.lock().unwrap().push(op.to_owned());
+>>>>>>> 5f59e68f7 (test(api): worker_dial's stand-in worker speaks protocol 3 and reads attached frames)
             if let Meet::Answer = meet {
                 layerfs_api::worker::write_frame(
                     &mut stream,
@@ -165,8 +183,7 @@ fn a_worker_call_dials_once_and_never_starts_its_machine() {
     assert_eq!(value.get("answered"), Some(&SdkValue::Bool(true)));
     let requests = log.lock().unwrap().clone();
     assert_eq!(requests.len(), 1, "{requests:?}");
-    assert!(requests[0].contains(r#""op":"store.call""#), "{requests:?}");
-    assert!(!requests[0].contains("worker.ping"), "{requests:?}");
+    assert_eq!(requests[0], "store.call", "{requests:?}");
     assert!(!started(&home), "an answering worker starts nothing");
     std::fs::remove_dir_all(&home).unwrap();
 
