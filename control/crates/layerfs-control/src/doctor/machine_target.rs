@@ -26,12 +26,12 @@ pub(super) fn diagnose(home: &Path, name: &str, budget: &Budget, checks: &mut Ch
     };
     if record.int("v") != Some(home::RECORD_VERSION)
         || record.text("name") != Some(name)
-        || !valid_numbers(&record)
+        || !valid_saved_fields(&record)
         || (record.field("op").is_some() && record.op().is_none())
     {
         checks.fail(
             "machine.record",
-            "machine record identity or numeric configuration is invalid",
+            "machine record identity, state or numeric configuration is invalid",
         );
         return;
     }
@@ -44,7 +44,7 @@ pub(super) fn diagnose(home: &Path, name: &str, budget: &Budget, checks: &mut Ch
     };
     checks.pass(
         "machine.record",
-        "machine record identity, platform and numeric fields are valid",
+        "machine record identity, platform, state and numeric fields are valid",
     );
     checks.evidence(
         "machine.record",
@@ -55,12 +55,15 @@ pub(super) fn diagnose(home: &Path, name: &str, budget: &Budget, checks: &mut Ch
             ),
             (
                 "recorded_state",
-                record.field("state").cloned().unwrap_or_default(),
+                layerfs_bridge::control::SdkValue::opt_text(
+                    record.recorded_state().map(str::to_owned),
+                ),
             ),
         ]),
     );
     if let Some(op) = record.op() {
-        match op.standing() {
+        let standing = op.standing();
+        match standing {
             Standing::Running => checks.warning(
                 "machine.operation",
                 "a live operation owns this machine; no provider or worker probes were made",
@@ -74,8 +77,8 @@ pub(super) fn diagnose(home: &Path, name: &str, budget: &Budget, checks: &mut Ch
                 "the recorded operation ended with a certain outcome; record was left unchanged",
             ),
         }
-        checks.evidence("machine.operation", op.to_sdk());
-        if record.in_flight() {
+        checks.evidence("machine.operation", operation_evidence(&op, standing));
+        if standing != Standing::Stale {
             checks.blocked(
                 "machine.provider",
                 "provider observation blocked by the machine operation",
@@ -216,7 +219,15 @@ pub(super) fn diagnose(home: &Path, name: &str, budget: &Budget, checks: &mut Ch
 }
 
 #[cfg(feature = "machine")]
-fn valid_numbers(record: &layerfs_machine::record::MachineRecord) -> bool {
+fn valid_saved_fields(record: &layerfs_machine::record::MachineRecord) -> bool {
+    if record.field("state").is_some()
+        && !matches!(
+            record.recorded_state(),
+            Some("running" | "stopped" | "failed")
+        )
+    {
+        return false;
+    }
     for field in ["cpus", "memory", "disk"] {
         if record.field(field).is_some()
             && !record
@@ -438,4 +449,56 @@ fn block_after_endpoint(checks: &mut Checks) {
             "machine.worker.endpoint",
         );
     }
+}
+
+#[cfg(feature = "machine")]
+fn operation_evidence(
+    op: &layerfs_home::op::Op,
+    standing: layerfs_home::op::Standing,
+) -> layerfs_bridge::control::SdkValue {
+    use layerfs_bridge::control::SdkValue;
+    use layerfs_home::op::Standing;
+    let id = op.id();
+    let valid_id = id.len() == 19
+        && id
+            .strip_prefix("op-")
+            .is_some_and(|suffix| suffix.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    SdkValue::map([
+        (
+            "standing",
+            SdkValue::text(match standing {
+                Standing::Running => "running",
+                Standing::Unresolved => "unresolved",
+                Standing::Stale => "stale",
+            }),
+        ),
+        ("uncertain", SdkValue::Bool(op.uncertain())),
+        (
+            "id",
+            if valid_id {
+                SdkValue::text(id)
+            } else {
+                SdkValue::Null
+            },
+        ),
+        (
+            "name",
+            if matches!(
+                op.name(),
+                layerfs_machine::record::CREATE | layerfs_machine::record::REMOVE
+            ) {
+                SdkValue::text(op.name())
+            } else {
+                SdkValue::Null
+            },
+        ),
+        (
+            "phase",
+            if matches!(op.phase(), "create" | "delete") {
+                SdkValue::text(op.phase())
+            } else {
+                SdkValue::Null
+            },
+        ),
+    ])
 }

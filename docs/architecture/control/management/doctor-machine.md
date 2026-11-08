@@ -59,3 +59,11 @@ failure handling; they do not qualify live Docker, Lima or Apple Container
 installations. Native host checks and filesystem available-byte observations
 use the actual host. Targeted diagnostic fixtures create no Store and execute
 neither Disposable nor Durable persistence.
+
+Saved runtime state is restricted to the producer's `running`, `stopped` and
+`failed` values. Malformed state is reported without echoing its payload.
+Operation evidence exposes typed standing/uncertainty and only recognized
+machine operation names/phases and well-formed operation IDs. Arbitrary saved
+operation fields, timestamps, arguments and nested values are not copied into
+diagnostic output. An operation's standing is observed once for the report and
+its conservative no-probe boundary.

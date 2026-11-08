@@ -231,6 +231,51 @@ fn machine_target_reports_dependencies_and_preserves_home() {
         "machine.record",
         "fail",
     );
+    // Malformed saved state and operation metadata must not become report text.
+    let sensitive = "private-saved-value-must-not-be-displayed";
+    for state in [
+        SdkValue::text(sensitive),
+        SdkValue::map([("secret", SdkValue::text(sensitive))]),
+    ] {
+        MachineRecord::built_in("native")
+            .with("state", state)
+            .write(&f.home)
+            .unwrap();
+        let report = f.report("native", Duration::from_secs(1));
+        outcome(&report, "machine.record", "fail");
+        assert!(!format!("{report:?}").contains(sensitive));
+    }
+    for state in ["running", "stopped", "failed"] {
+        MachineRecord::built_in("native")
+            .with("state", SdkValue::text(state))
+            .write(&f.home)
+            .unwrap();
+        outcome(
+            &f.report("native", Duration::from_secs(1)),
+            "machine.record",
+            "pass",
+        );
+    }
+    let malformed_op = SdkValue::map([
+        ("id", SdkValue::map([("secret", SdkValue::text(sensitive))])),
+        ("name", SdkValue::text(sensitive)),
+        ("phase", SdkValue::text(sensitive)),
+        (
+            "started",
+            SdkValue::map([("secret", SdkValue::text(sensitive))]),
+        ),
+        ("args", SdkValue::text(sensitive)),
+        ("owner", SdkValue::map([("pid", SdkValue::Int(0))])),
+        ("uncertain", SdkValue::Bool(true)),
+    ]);
+    MachineRecord::built_in("native")
+        .with("op", malformed_op)
+        .write(&f.home)
+        .unwrap();
+    let report = f.report("native", Duration::from_secs(1));
+    outcome(&report, "machine.provider", "blocked");
+    assert!(!format!("{report:?}").contains(sensitive));
+    assert_eq!(std::fs::read(f.root.join("calls")).unwrap(), provider_calls);
     assert!(home::filesystem_available(&f.home).unwrap() > 0);
 }
 fn record_without_op(home: &Path) {
