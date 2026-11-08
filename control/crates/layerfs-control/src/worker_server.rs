@@ -212,6 +212,7 @@ fn run(
                     .collect(),
             ))
         }
+        "doctor.sandbox" => crate::doctor::diagnose_worker_sandbox(root, args),
         // one Store call, on the Store file under this worker's root (2.0)
         "store.call" => {
             let call = layerfs_store::call::CallFrame::decode(&args)?;
