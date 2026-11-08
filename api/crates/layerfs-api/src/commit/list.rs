@@ -24,6 +24,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         project: text("project").unwrap_or_default(),
         branch: text("branch").unwrap_or_default(),
         page: Page {
+            number: None,
             size: args.get_int("page_size"),
             pos: args.get_int("page_pos"),
         },

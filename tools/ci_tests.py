@@ -62,7 +62,7 @@ SLOW = {
     ("layerfs-store-service", "history_ancestry_oracle"): 7.6,
     ("layerfs-store-service", "sdk_list_entries"): 7.6,
     ("layerfs-store-service", "history_diff_oracle"): 6.0,
-    ("layerfs-store-service", "sdk_text_scan"): 5.9,
+    ("layerfs-store-service", "sdk_text_scan"): 7.0,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run

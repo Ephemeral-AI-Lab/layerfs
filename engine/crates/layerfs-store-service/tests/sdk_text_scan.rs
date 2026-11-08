@@ -1,5 +1,7 @@
-//! `fs.grep` and `fs.read` give the window-at-a-time scan's results (#354,
-//! #352 F-035). The whole-buffer scan reads blocks of 16 windows and searches
+//! `fs.grep` and the saved-file reader preserve the window-at-a-time scan's results
+//! (#354, #352 F-035). The SDK read adds an immutable header and can stop earlier
+//! to fit that complete response, while preserving exact prefixes and line continuity.
+//! The whole-buffer scan reads blocks of 16 windows and searches
 //! a block at once; its lines, Binary skips, truncation and stops are checked
 //! against that scan, kept here as the reference, on files built to put a NUL,
 //! invalid UTF-8, a character, a match or a long line on every window and
@@ -326,6 +328,52 @@ fn grep(fixture: &Fixture, path: &str, pattern: &str, limit: i64) -> (Vec<Item>,
     (items, skipped, boolean(&reply, "hasMore"))
 }
 
+fn read_shape(reply: &SdkValue) -> (String, Option<u64>, bool, Option<u64>) {
+    (
+        text(reply, "text"),
+        int(reply, "endLine"),
+        boolean(reply, "truncated"),
+        int(reply, "nextLine"),
+    )
+}
+
+/// Validate the public bounded window without duplicating its clipping algorithm.
+fn assert_pinned_window(reply: &SdkValue, raw: &SdkValue, at: &SdkValue, start: u64) {
+    use layerfs_store_service::read::file_facts::value_bytes;
+    assert_eq!(reply.get("at"), Some(at));
+    assert!(value_bytes(reply) <= BUDGET);
+    let SdkValue::Map(mut complete) = raw.clone() else {
+        panic!("nonmap saved read")
+    };
+    complete.push(("at".into(), at.clone()));
+    let whole = SdkValue::Map(complete);
+    if value_bytes(&whole) <= BUDGET {
+        assert_eq!(reply, &whole, "a complete fitting read must not be clipped");
+        return;
+    }
+    let shown = reply.get_text("text").unwrap();
+    let full = raw.get_text("text").unwrap();
+    assert!(
+        full.starts_with(shown),
+        "public window must be an exact raw prefix"
+    );
+    assert!(!shown.is_empty() && shown.len() < full.len());
+    assert!(reply.get_bool("truncated"));
+    let count = shown.split_inclusive('\n').count() as u64;
+    assert_eq!(int(reply, "endLine"), Some(start + count - 1));
+    assert_eq!(int(reply, "nextLine"), Some(start + count));
+    if !shown.ends_with('\n') {
+        assert!(reply.get_bool("lineTruncated"));
+    } else {
+        // Whole-line rounding can leave a line's worth plus small metadata slack.
+        let next = full[shown.len()..].split_inclusive('\n').next().unwrap();
+        assert!(
+            value_bytes(reply) + value_bytes(&SdkValue::text(next)) + 512 > BUDGET,
+            "public read stopped unnecessarily far before its reply budget"
+        );
+    }
+}
+
 #[test]
 fn grep_and_read_give_the_window_scan_results() {
     let files = files();
@@ -373,6 +421,14 @@ fn grep_and_read_give_the_window_scan_results() {
             );
         }
     }
+    let stack =
+        layerfs_store_service::history::lookup::project(&fixture.service.store, "installed")
+            .unwrap();
+    let (reader, snap) =
+        layerfs_store_service::read::snapshot::open(&fixture.service.store, &stack, "main")
+            .unwrap();
+    let at = layerfs_store_service::history::saved::reference(&fixture.service.store, snap.node)
+        .unwrap();
     for (path, bytes) in &rooted {
         for (start, end) in [
             (1, None),
@@ -391,14 +447,22 @@ fn grep_and_read_give_the_window_scan_results() {
             if let Some(end) = end {
                 fields.push(("endLine", SdkValue::Int(end as i64)));
             }
-            let got = fixture.try_call("fs.read", fields).map(|reply| {
-                (
-                    text(&reply, "text"),
-                    int(&reply, "endLine"),
-                    boolean(&reply, "truncated"),
-                    int(&reply, "nextLine"),
-                )
-            });
+            let public = fixture.try_call("fs.read", fields);
+            let got = layerfs_store_service::read::reads::read(
+                &reader,
+                &snap,
+                path,
+                Ok(start),
+                Ok(end.unwrap_or(9_007_199_254_740_991)),
+            );
+            match (&public, &got) {
+                (Ok(public), Ok(raw)) => assert_pinned_window(public, raw, &at, start),
+                (Err(public), Err(raw)) => {
+                    assert_eq!(public, raw, "SDK must preserve exact Binary/UTF8 refusals")
+                }
+                other => panic!("public/core read outcomes differ: {other:?}"),
+            }
+            let got = got.map(|reply| read_shape(&reply));
             let want = reference_read(bytes, start, end);
             match (got, want) {
                 (Ok(got), Some(want)) => assert_eq!(got, want, "read {path} {start} {end:?}"),
@@ -411,4 +475,66 @@ fn grep_and_read_give_the_window_scan_results() {
             }
         }
     }
+}
+
+#[test]
+fn pinned_public_windows_reconstruct_utf8_without_line_gaps() {
+    use std::fmt::Write;
+    let content = (0..10_000).fold(String::new(), |mut text, n| {
+        writeln!(
+            text,
+            "{n:05} é😀 \"quoted\" \\ payload repeated on each line"
+        )
+        .unwrap();
+        text
+    });
+    let fixture = Fixture::new("sdk-pinned-window-continuity", |source| {
+        std::fs::write(source.join("text"), &content).unwrap();
+        1
+    });
+    let (mut start, mut joined, mut pin) = (1u64, String::new(), None::<String>);
+    let mut ended = false;
+    for _ in 0..100 {
+        let mut args = vec![
+            ("branch", SdkValue::text("main")),
+            ("path", SdkValue::text("/text")),
+            ("startLine", SdkValue::Int(start as i64)),
+        ];
+        if let Some(pin) = pin.as_deref() {
+            args.push(("commit", SdkValue::text(pin)));
+        }
+        let reply = fixture.call("fs.read", args);
+        let reference = reply.get("at").unwrap().get_text("id").unwrap();
+        match &pin {
+            Some(pin) => assert_eq!(pin, reference),
+            None => pin = Some(reference.to_owned()),
+        }
+        assert!(layerfs_store_service::read::file_facts::value_bytes(&reply) <= BUDGET);
+        assert!(
+            !reply.get_bool("lineTruncated"),
+            "short source lines must remain whole"
+        );
+        let shown = reply.get_text("text").unwrap();
+        let count = shown.split_inclusive('\n').count() as u64;
+        assert!(count > 0);
+        assert_eq!(int(&reply, "endLine"), Some(start + count - 1));
+        joined.push_str(shown);
+        match int(&reply, "nextLine") {
+            Some(next) => {
+                assert_eq!(next, start + count);
+                assert!(next > start);
+                start = next;
+            }
+            None => {
+                ended = true;
+                break;
+            }
+        }
+    }
+    assert!(ended, "bounded public read did not finish in 100 windows");
+    assert_eq!(
+        joined, content,
+        "windows must neither skip nor duplicate source lines"
+    );
+    fixture.cleanup();
 }

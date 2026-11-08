@@ -64,6 +64,13 @@ pub fn resolve(
         let node = branch_node(&branch);
         (Kind::Branch, format!("{name}@{}", short(node)), node)
     };
+    let belongs = match node {
+        NodeId::Commit(id) => args::commit(store, id)?.stack == stack.id,
+        NodeId::Layer(id) => args::layer(store, id)?.stack == stack.id,
+    };
+    if !belongs {
+        return Err(invalid("saved version belongs to another project"));
+    }
     let root = args::root(store, node)?;
     let tree = TreeTable::open(reader, FilesystemRootId(root)).map_err(args::content)?;
     Ok(Snap {

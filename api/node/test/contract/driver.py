@@ -42,7 +42,7 @@ def refusal(error):
 
 
 def run_sync(request):
-    client = layerfs.client(home=request["home"])
+    client = layerfs.client(home=request["home"], scope=request.get("scope"))
     out = []
     for step in request["steps"]:
         try:
@@ -57,7 +57,7 @@ def run_sync(request):
 
 
 async def run_aio(request):
-    client = aio.client(home=request["home"])
+    client = aio.client(home=request["home"], scope=request.get("scope"))
     out = []
     for step in request["steps"]:
         try:

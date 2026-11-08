@@ -85,7 +85,12 @@ impl Worker {
     /// [`Worker::call`] whose `events` may refuse one: the connection then
     /// closes, the worker stops at its next event, and the call's outcome
     /// is that refusal (`project.export`'s local writer failed).
-    pub fn call_until(&mut self, op: &str, request: SdkValue, events: &mut EventSink<'_>) -> Outcome {
+    pub fn call_until(
+        &mut self,
+        op: &str,
+        request: SdkValue,
+        events: &mut EventSink<'_>,
+    ) -> Outcome {
         let request = worker::request(op, request)?;
         self.attempt_framed(op, &request, events)
             .unwrap_or_else(|Unreached(refusal)| Err(refusal))

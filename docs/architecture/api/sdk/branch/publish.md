@@ -12,7 +12,7 @@ not merged.
 | --- | --- |
 | Family | [branch](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/branch/publish.rs`](../../../../../api/crates/layerfs-api/src/branch/publish.rs) |
-| Implemented in | `layerfs_store::calls::branch_publish` → Store method `branch.publish` ([`methods/branch/publish.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/publish.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) `publish`) |
+| Implemented in | `layerfs_store::calls::branch::publish` → Store method `branch.publish` ([`methods/branch/publish.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/publish.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) `publish`) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature

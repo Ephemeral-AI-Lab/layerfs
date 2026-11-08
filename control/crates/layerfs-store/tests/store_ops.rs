@@ -60,6 +60,7 @@ fn absent_options_are_not_sent_and_names_keep_their_order() {
     let page = StoreOp::ListBranches {
         name: None,
         page: Page {
+            number: None,
             size: Some(5),
             pos: None,
         },
@@ -75,6 +76,7 @@ fn a_diff_sends_hunks_as_the_opposite_of_paths_only() {
         to_branch: t("b"),
         options: DiffOptions {
             page: Page {
+                number: None,
                 size: Some(10),
                 pos: Some(0),
             },
@@ -154,5 +156,110 @@ fn bytes_content_is_sent_as_bytes() {
             ("bytes", SdkValue::Bytes(vec![3])),
             ("oldText", SdkValue::text("x")),
         ])])
+    );
+}
+
+#[test]
+fn saved_query_selectors_and_numbered_pages_are_forwarded_without_resolving_heads() {
+    use layerfs_store::calls::branch::{BranchCommits, BranchGetCommit};
+    use layerfs_store::calls::file::{FileBlame, FileRevision};
+    let history = BranchCommits {
+        project: t("s/p"),
+        branch: t("main"),
+        at_commit: Some(t("saved")),
+        page: Some(2),
+        page_size: Some(5),
+    };
+    assert_eq!(StoreOp::BranchCommits(&history).method(), "branch.commits");
+    assert_eq!(
+        StoreOp::BranchCommits(&history).engine_args(),
+        vec![
+            (t("branch"), SdkValue::text("main")),
+            (t("atCommit"), SdkValue::text("saved")),
+            (t("page"), SdkValue::Int(2)),
+            (t("pageSize"), SdkValue::Int(5)),
+        ]
+    );
+    let detail = BranchGetCommit {
+        project: t("s/p"),
+        branch: t("main"),
+        commit: t("saved"),
+    };
+    assert_eq!(
+        StoreOp::BranchGetCommit(&detail).method(),
+        "branch.get_commit"
+    );
+    assert_eq!(
+        names(&StoreOp::BranchGetCommit(&detail)),
+        ["branch", "commit"]
+    );
+    let numbered = Page {
+        number: Some(2),
+        size: Some(5),
+        pos: None,
+    };
+    let diff = BranchDiff {
+        from_branch: t("main"),
+        to_branch: t("feature"),
+        from_commit: Some(t("a")),
+        to_commit: Some(t("b")),
+        path_prefix: Some(t("/src")),
+        include_attribution: Some(true),
+        options: DiffOptions {
+            page: numbered,
+            ..DiffOptions::default()
+        },
+        ..BranchDiff::default()
+    };
+    assert_eq!(
+        names(&StoreOp::DiffBranches(&diff)),
+        [
+            "from",
+            "to",
+            "fromCommit",
+            "toCommit",
+            "pathPrefix",
+            "includeAttribution",
+            "pageSize",
+            "page"
+        ]
+    );
+    let revision = FileRevision {
+        branch: t("feature"),
+        path: t("/src/a"),
+        at_commit: Some(t("a")),
+        traversal: Some(t("provenance")),
+        page: numbered,
+        ..FileRevision::default()
+    };
+    assert_eq!(StoreOp::Revision(&revision).method(), "fs.revision");
+    assert_eq!(
+        names(&StoreOp::Revision(&revision)),
+        ["branch", "commit", "path", "traversal", "pageSize", "page"]
+    );
+    let blame = FileBlame {
+        line_count: Some(7),
+        ..FileBlame::default()
+    };
+    assert_eq!(
+        names(&StoreOp::Blame(&blame)),
+        ["branch", "path", "lineCount"]
+    );
+    let file_diff = FileDiff {
+        include_attribution: Some(true),
+        allow_missing: Some(true),
+        page: numbered,
+        ..FileDiff::default()
+    };
+    assert_eq!(
+        names(&StoreOp::DiffFiles(&file_diff)),
+        [
+            "left",
+            "right",
+            "includeAttribution",
+            "allowMissing",
+            "pageSize",
+            "page"
+        ]
     );
 }

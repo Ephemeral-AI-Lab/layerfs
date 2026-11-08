@@ -85,6 +85,52 @@ impl<'a> Walker<'a> {
         Self::within(reader, snap, path, None)
     }
 
+    /// Resume in component order after a saved path. Ancestor directory frames
+    /// start after their cursor component, while the cursor directory itself is
+    /// entered before its children. Missing components on one side of a diff do
+    /// not require walking that side's earlier siblings.
+    pub fn after(
+        reader: &'a StorePorts,
+        snap: &'a snapshot::Snap,
+        path: &str,
+        after: Option<&str>,
+    ) -> Result<Self, SdkRefusal> {
+        let mut walker = Self::new(reader, snap, path)?;
+        let Some(after) = after else {
+            return Ok(walker);
+        };
+        let rest = if path == "/" {
+            after.strip_prefix('/')
+        } else if after == path {
+            Some("")
+        } else {
+            after.strip_prefix(path).and_then(|s| s.strip_prefix('/'))
+        }
+        .ok_or_else(|| args::invalid("resume path is outside the query path"))?;
+        if walker.top.is_some() {
+            walker.top = None;
+            return Ok(walker);
+        }
+        let mut current = path.to_owned();
+        for component in rest.split('/').filter(|s| !s.is_empty()) {
+            let name =
+                PathName::new(component).map_err(|_| args::invalid("invalid resume component"))?;
+            let Some(frame) = walker.stack.last_mut() else {
+                break;
+            };
+            frame.after = Some(name.clone());
+            current = layerfs_content::compare::tree::join(&current, &name);
+            let entry = snapshot::find(&walker.memo, &snap.tree, &current)?;
+            match entry {
+                Some(entry) if entry.value.kind == InodeKind::Directory => {
+                    walker.stack.push(Frame::new(current.clone(), entry));
+                }
+                _ => break,
+            }
+        }
+        Ok(walker)
+    }
+
     /// A walk that descends only into folders that agree with `within`. Its
     /// entries are the full walk's, less those no path starting with
     /// `within` can be, in the same order. A walk from above `within` starts
