@@ -9,7 +9,6 @@ pub(super) fn run(
     options: Options,
     observer: &mut dyn FnMut(Observation),
 ) -> Result<(), BackendError> {
-    emit(observer,"store.history.overwrite.coverage",Outcome::Unknown,"Layer overwrite count is range checked; exact overwrite reconstruction is not yet implemented");
     let db = &scratch.0;
     db.execute_batch("CREATE TABLE saved_commit(id BLOB PRIMARY KEY,run BLOB NOT NULL,depth INTEGER NOT NULL,newest INTEGER NOT NULL,merged BLOB) WITHOUT ROWID; CREATE TABLE saved_layer(id BLOB PRIMARY KEY,stack BLOB NOT NULL,height INTEGER NOT NULL,overwrote INTEGER NOT NULL) WITHOUT ROWID; CREATE TABLE saved_absorbed(run BLOB NOT NULL,depth INTEGER NOT NULL,height INTEGER NOT NULL,PRIMARY KEY(run,depth)) WITHOUT ROWID; CREATE TABLE saved_reach(k BLOB NOT NULL,x INTEGER NOT NULL,height INTEGER NOT NULL,PRIMARY KEY(k,x)) WITHOUT ROWID; CREATE TABLE absorption(id BLOB PRIMARY KEY,height INTEGER NOT NULL) WITHOUT ROWID; CREATE TABLE expected_reach(k BLOB NOT NULL,x INTEGER NOT NULL,height INTEGER NOT NULL,PRIMARY KEY(k,x)) WITHOUT ROWID; CREATE TABLE local_edges(child BLOB NOT NULL,parent BLOB NOT NULL,PRIMARY KEY(child,parent)) WITHOUT ROWID; INSERT INTO local_edges SELECT id,parent FROM nodes WHERE kind=1 AND parent IS NOT NULL; INSERT OR IGNORE INTO local_edges SELECT c.id,c.second FROM nodes c JOIN nodes p ON p.id=c.second WHERE c.kind=1 AND p.kind=1;").map_err(sql)?;
     copy(view, db, options)?;
@@ -47,6 +46,12 @@ pub(super) fn run(
         emit(observer,"store.history.lineage.coverage",Outcome::Unknown,"run labels failed validation; absorption/reach comparison blocked by invalid lineage prerequisites");
         return Ok(());
     }
+    emit(observer,"store.history.lineage.graph",Outcome::Pass,"immutable Layer heights and Commit depths/newest/merge edges independently checked; publication reconstruction pending");
+    db.execute(
+        "CREATE INDEX diagnostic_layer_heights ON nodes(stack,height) WHERE kind=2",
+        [],
+    )
+    .map_err(sql)?;
     // Validated run labels only compress graph-proven facts below; no ordinary
     // History ancestry API or saved absorption/reach answer is consulted.
     let mut last_height = -1i64;
@@ -70,10 +75,25 @@ pub(super) fn run(
         if rows.is_empty() {
             break;
         }
-        for (_, stack, source, height) in rows {
+        for (id, stack, source, height) in rows {
             options.check()?;
             last_stack = stack.clone();
             last_height = height;
+            // Evaluate BEFORE this publication changes absorption. A Commit
+            // contains its local Commit ancestors and all ancestry through its
+            // newest Layer. A previous publication is covered when its source
+            // is local, or was already absorbed by that newest Layer. This
+            // graph equation deliberately avoids saved reach/run answers.
+            let (covered, saved): (i64, i64) = db.query_row(
+                "WITH RECURSIVE ancestors(id) AS (SELECT ?1 UNION SELECT e.parent FROM local_edges e JOIN ancestors a ON e.child=a.id) SELECT min(?3-1,max(c.newest,COALESCE((SELECT max(p.height) FROM nodes p WHERE p.kind=2 AND p.stack=?2 AND p.height<?3 AND (p.source IN (SELECT id FROM ancestors) OR EXISTS(SELECT 1 FROM absorption a WHERE a.id=p.source AND a.height<=c.newest))),0))),s.overwrote FROM nodes c JOIN saved_layer s ON s.id=?4 WHERE c.id=?1",
+                params![source,stack,height,id],
+                |r| Ok((r.get(0)?,r.get(1)?)),
+            ).map_err(sql)?;
+            let expected = height - 1 - covered;
+            if saved != expected {
+                failures += 1;
+                emit(observer,"store.history.overwrite",Outcome::Fail,format!("{}: Layer overwrite count {saved} differs from authoritative ancestry count {expected}",hex(&id)));
+            }
             let before: Option<i64> = db
                 .query_row(
                     "SELECT height FROM absorption WHERE id=?1",
@@ -122,7 +142,7 @@ pub(super) fn run(
             }
         }
     }
-    emit(observer,"store.history.lineage.summary",if failures==0{Outcome::Pass}else{Outcome::Fail},format!("Layer heights, Commit depths/newest, permitted run partitions, absorption and reach independently checked; {failures} findings"));
+    emit(observer,"store.history.lineage.summary",if failures==0{Outcome::Pass}else{Outcome::Fail},format!("Layer heights/overwrite counts, Commit depths/newest, permitted run partitions, absorption and reach independently checked; {failures} findings"));
     Ok(())
 }
 

@@ -17,7 +17,7 @@ run afterward and explicitly have a different observation interval.
 | --- | --- | --- |
 | SQLite original engine | integrity_check plus foreign_key_check | quick_check plus foreign_key_check |
 | Schema and typed history rows/identities/graph | Yes | Yes |
-| Independent lineage/run/absorption/reach | Yes | Yes |
+| Independent lineage/overwrite/run/absorption/reach | Yes | Yes |
 | Ordinal blocks and advisory hint/signature syntax | Yes | Yes |
 | Every pack and winning stored object, including retained orphans | Yes | Skipped |
 | Contextual historical namespace qualification | Yes | Skipped |
@@ -49,9 +49,30 @@ not replayed after uncertain transport loss.
 
 Findings distinguish authoritative inconsistencies from unavailable coverage.
 Advisory hint/signature/digest failures become warnings in Control. Current
-explicit limits: exact Layer overwrite reconstruction is not implemented
-(range checks only); exhaustive adversarial merge/force-history, file-mapping,
+explicit limits: exhaustive adversarial merge/force-history, file-mapping,
 attribute and symlink corruption qualification remains pending. Unsupported
 SQLite versions and unsupported connection configurations are incomplete,
 not evidence of corruption. Engine error output is capped at 100 messages per
 SQLite check or PostgreSQL heap and truncation is reported.
+
+### Exact Layer overwrite reconstruction
+
+Before each publication at height `h`, the audit derives the source Commit's
+newest Layer height `n` from immutable edges. It finds the greatest earlier
+publication height whose source is either a local Commit ancestor of that source
+(first and Commit-second parents only), or a Commit first absorbed at or below
+`n`. Together with `n`, capped at `h - 1`, this is the covered height; the
+expected overwrite count is `(h - 1) - covered`. The second case includes late
+publication of a Commit already represented through Layer ancestry.
+
+This is the graph equation behind `history/lineage.rs::covered` and
+`history/layerstack.rs::add_layer`, evaluated before adding this publication to
+the reconstructed absorption map. The oracle reads neither saved reach answers
+nor saved run labels. It audits every retained publication, across separate
+stacks, even when the legacy `layer.overwrote` blob is empty (as it is for modern
+writes). Invalid authoritative graphs block reconstruction explicitly.
+
+A scoped, joined interruption watcher covers scratch SQL as well as source SQL;
+deadline or cancellation interrupts recursive queries and leaves coverage
+incomplete rather than declaring corruption. Graph closure and prior publication
+lookups use private disk-backed scratch; runtime can grow with history size.

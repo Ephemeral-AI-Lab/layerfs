@@ -20,6 +20,47 @@ impl Scratch {
         connection.execute_batch("PRAGMA journal_mode=MEMORY; PRAGMA synchronous=OFF; PRAGMA cache_size=-2048; PRAGMA temp_store=FILE; CREATE TABLE records(kind INTEGER NOT NULL,k BLOB NOT NULL,v BLOB NOT NULL,PRIMARY KEY(kind,k)) WITHOUT ROWID;").map_err(error)?;
         Ok(Self(connection))
     }
+    /// Keep scratch SQL cancellable, including statements which emit no rows.
+    /// The scoped watcher owns only SQLite's interruption handle and is joined
+    /// before this independently owned connection can be reused or closed.
+    pub fn observe<T>(
+        &mut self,
+        options: super::Options<'_>,
+        run: impl FnOnce(&mut Self) -> Result<T, crate::backend::records::BackendError>,
+    ) -> Result<T, crate::backend::records::BackendError> {
+        let interrupt = self.0.get_interrupt_handle();
+        let (done, ended) = std::sync::mpsc::channel::<()>();
+        std::thread::scope(|scope| {
+            let watcher = (options.deadline.is_some() || options.cancelled.is_some()).then(|| {
+                scope.spawn(move || loop {
+                    if options.check().is_err() {
+                        interrupt.interrupt();
+                        break;
+                    }
+                    let wait =
+                        options
+                            .deadline
+                            .map_or(std::time::Duration::from_millis(20), |deadline| {
+                                deadline
+                                    .saturating_duration_since(std::time::Instant::now())
+                                    .min(std::time::Duration::from_millis(20))
+                            });
+                    match ended.recv_timeout(wait) {
+                        Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                    }
+                })
+            });
+            let result = run(self);
+            let _ = done.send(());
+            if watcher.is_some_and(|thread| thread.join().is_err()) {
+                return Err(crate::backend::records::BackendError::Cancelled);
+            }
+            // SQLite interruption itself is never evidence of data corruption.
+            options.check()?;
+            result
+        })
+    }
     pub fn clear(&mut self) -> ContentResult<()> {
         self.0.execute("DELETE FROM records", []).map_err(error)?;
         Ok(())

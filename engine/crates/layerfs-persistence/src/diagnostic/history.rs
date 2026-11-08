@@ -20,9 +20,21 @@ pub(super) fn run(
     observer: &mut dyn FnMut(Observation),
 ) -> Result<(), BackendError> {
     let mut scratch = Scratch::new().map_err(|_| BackendError::Capacity)?;
+    scratch.observe(options, |scratch| {
+        inspect(view, scratch, reader, options, observer)
+    })
+}
+
+fn inspect(
+    view: &dyn View,
+    scratch: &mut Scratch,
+    reader: Option<&Reader<'_>>,
+    options: Options,
+    observer: &mut dyn FnMut(Observation),
+) -> Result<(), BackendError> {
     scratch.0.execute_batch("CREATE TABLE nodes(id BLOB PRIMARY KEY,kind INTEGER NOT NULL,stack BLOB NOT NULL,root BLOB NOT NULL,parent BLOB,base BLOB,second BLOB,source BLOB,source_branch BLOB,done INTEGER NOT NULL DEFAULT 0,height INTEGER,depth INTEGER,newest INTEGER,run BLOB,overwrote INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID; CREATE TABLE edges(child BLOB NOT NULL,parent BLOB NOT NULL,PRIMARY KEY(child,parent)) WITHOUT ROWID; CREATE INDEX parent_edges ON edges(parent,child); CREATE TABLE stacks(id BLOB PRIMARY KEY,scope BLOB NOT NULL,profile BLOB NOT NULL,head BLOB NOT NULL) WITHOUT ROWID; CREATE TABLE branches(id BLOB PRIMARY KEY,stack BLOB NOT NULL,base BLOB NOT NULL,head BLOB,fork BLOB) WITHOUT ROWID; CREATE TABLE contexts(root BLOB,scope BLOB,profile BLOB,PRIMARY KEY(root,scope,profile)) WITHOUT ROWID;").map_err(sql)?;
     let mut failures = 0u64;
-    inventory(view, &mut scratch, options, observer, &mut failures)?;
+    inventory(view, scratch, options, observer, &mut failures)?;
     for (id,query,message) in [
         ("store.history.references","SELECT e.child,e.parent FROM edges e LEFT JOIN nodes p ON p.id=e.parent LEFT JOIN nodes c ON c.id=e.child WHERE p.id IS NULL OR p.stack!=c.stack","missing or cross-stack history dependency"),
         ("store.history.stacks","SELECT n.id,n.stack FROM nodes n LEFT JOIN stacks s ON s.id=n.stack WHERE s.id IS NULL","history node references absent stack"),
@@ -73,10 +85,10 @@ pub(super) fn run(
     }
     emit(observer,"store.history.summary",if failures==0{Outcome::Pass}else{Outcome::Fail},format!("all stored history records, identities, references, stack membership and graph checked; {failures} findings"));
     if let Some(reader) = reader {
-        qualify(&mut scratch, reader, options, observer)?;
+        qualify(scratch, reader, options, observer)?;
     }
     if failures == 0 {
-        super::lineage::run(view, &mut scratch, options, observer)?;
+        super::lineage::run(view, scratch, options, observer)?;
     } else {
         emit(
             observer,
@@ -166,6 +178,7 @@ fn qualify(
                 };
                 qualify_root(reader, scratch, &context, &mut QualificationWork::default())
             })();
+            options.check()?;
             if let Err(error) = result {
                 failed += 1;
                 emit(
