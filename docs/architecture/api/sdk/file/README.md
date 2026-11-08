@@ -9,7 +9,7 @@ The `file` calls.
 | | |
 | --- | --- |
 | Component | [Call table](../../call-table/README.md) |
-| Source | [`api/crates/layerfs-api/src/file`](../../../../../api/crates/layerfs-api/src/file), [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs), [`engine/crates/layerfs-store-service/src/methods/file`](../../../../../engine/crates/layerfs-store-service/src/methods/file) |
+| Source | [`api/crates/layerfs-api/src/file`](../../../../../api/crates/layerfs-api/src/file), [`calls/file.rs`](../../../../../control/crates/layerfs-store/src/calls/file.rs), [`engine/crates/layerfs-store-service/src/methods/file`](../../../../../engine/crates/layerfs-store-service/src/methods/file) |
 
 ## Calls
 
@@ -30,7 +30,7 @@ Fifteen calls, in help order
 ([`file/mod.rs`](../../../../../api/crates/layerfs-api/src/file/mod.rs)):
 eight saved reads, then seven writes that each make one
 Commit on the named Branch, through a private Workspace bound to it. Each
-runs its own function of `layerfs_store::calls` (`file_<call>`).
+forwards a typed request to its own function under `layerfs_store::calls::file`.
 Every call takes `project` (Project) first; `branch` and `commit` are Name.
 
 | Call | Arguments after `project` | Options | Returns | Store method |
@@ -85,7 +85,7 @@ A `changes` item is `{ op, path, from_path, to_path, content, old, new,
 mode }` with `op` one of `write`, `edit`, `mkdir`, `chmod`, `rm`, `cp`,
 `mv`. The Store's own names (`from`, `to`, `oldText`, `newText`, `bytes`)
 are refused in a change, so the folder scope checks every path field
-([`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs),
+([`calls/file.rs`](../../../../../control/crates/layerfs-store/src/calls/file.rs),
 [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs)).
 A read reply is bounded by `REPLY_BUDGET` (48 KiB); `truncated`,
 `next_line` and `has_more` say where to go on
