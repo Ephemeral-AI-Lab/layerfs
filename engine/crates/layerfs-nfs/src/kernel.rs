@@ -781,9 +781,11 @@ impl Kernel {
     /// Retained mutation failures keep their custody and are only counted.
     pub fn release(&self) -> Released {
         let table = std::mem::take(&mut *self.table());
-        let companions = self.companions_release();
+        let (companions, companion_bytes, companions_spilled) = self.companions_release();
         let released = Released {
             companions,
+            companion_bytes,
+            companions_spilled,
             files: table.files.len(),
             directories: table.directories.len(),
             lookups: table.lookups.len(),
@@ -816,8 +818,11 @@ impl Kernel {
     /// Current holdings, for diagnostics.
     pub fn held(&self) -> Released {
         let table = self.table();
+        let (companions, companion_bytes, companions_spilled) = self.companions_held();
         Released {
-            companions: self.companions_held(),
+            companions,
+            companion_bytes,
+            companions_spilled,
             files: table.files.len(),
             directories: table.directories.len(),
             lookups: table.lookups.len(),
@@ -920,8 +925,12 @@ pub struct Released {
     pub silly_renamed: u64,
     /// Creations refused for their AppleDouble name, over the export's life.
     pub names_refused: u64,
-    /// AppleDouble companions held in memory (see [`crate::apple_double`]).
+    /// AppleDouble companions held in the export's index (see [`crate::apple_double`]).
     pub companions: usize,
+    /// AppleDouble companion payload bytes currently resident in memory.
+    pub companion_bytes: usize,
+    /// AppleDouble companions whose payload is spilled to disk.
+    pub companions_spilled: usize,
     /// AppleDouble companions created, over the export's life.
     pub names_detached: u64,
     /// References collected beyond the bound, over the export's life.

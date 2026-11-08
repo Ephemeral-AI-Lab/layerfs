@@ -40,6 +40,12 @@ pub struct Rig {
     pub entries: u64,
     /// The reference bound exports of this rig are configured with.
     pub lookups_held: usize,
+    /// Resident memory budget for AppleDouble companion bodies.
+    pub companion_resident_bytes: usize,
+    /// Maximum AppleDouble companion index entries held at once.
+    pub companions_held: usize,
+    /// Optional explicit spill directory override for AppleDouble companions.
+    pub companion_spill_dir: Option<PathBuf>,
 }
 impl Rig {
     /// Initializes a Store from `source`, publishes Branch `main` at that
@@ -142,7 +148,15 @@ impl Rig {
             branch,
             entries: initialized.entries,
             lookups_held: layerfs_nfs::kernel::LOOKUPS_HELD,
+            companion_resident_bytes: layerfs_nfs::apple_double::RESIDENT_BYTES,
+            companions_held: layerfs_nfs::apple_double::HELD,
+            companion_spill_dir: None,
         }
+    }
+    fn spill_dir(&self, sub: &str) -> PathBuf {
+        self.companion_spill_dir
+            .clone()
+            .unwrap_or_else(|| self.directory.join("tmp").join("appledouble").join(sub))
     }
     /// Serves this rig's engine mount read-only on `listener`.
     pub fn serve(&self, listener: TcpListener, uid: u32, gid: u32) -> Server {
@@ -179,6 +193,9 @@ impl Rig {
                 read_only,
                 refuse_apple_double: true,
                 lookups_held: self.lookups_held,
+                companion_spill_dir: Some(self.spill_dir("export")),
+                companion_resident_bytes: self.companion_resident_bytes,
+                companions_held: self.companions_held,
             },
         )
         .unwrap()
@@ -247,6 +264,9 @@ impl Rig {
                 read_only: true,
                 refuse_apple_double: true,
                 lookups_held: self.lookups_held,
+                companion_spill_dir: Some(self.spill_dir(&format!("view-{}", view.1.owner_id()))),
+                companion_resident_bytes: self.companion_resident_bytes,
+                companions_held: self.companions_held,
             },
         )
         .unwrap()

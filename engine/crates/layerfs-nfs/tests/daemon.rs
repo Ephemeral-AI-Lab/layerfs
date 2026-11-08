@@ -136,8 +136,18 @@ fn workspace_control_over_the_nfs_route() {
 
     // Mount + Attach: Ready with an NFS receipt; the helper mounted it.
     let token = bind(&service, 31, rig.branch);
+    let spill_dir = mounts
+        .join(".appledouble")
+        .join(token.namespace.to_string());
+    fs::create_dir_all(&spill_dir).unwrap();
+    let stale_spill = spill_dir.join("stale-from-crashed-daemon");
+    fs::write(&stale_spill, b"stale").unwrap();
     assert_eq!(phase(&service, token), MountPhase::Unattached);
     let ready = attach(&service, token);
+    assert!(
+        !stale_spill.exists(),
+        "Attach cleans any leftover companion spill directory"
+    );
     assert_eq!(ready.receipt.abi_major, 0);
     assert_eq!(
         ready.directory,
@@ -242,6 +252,7 @@ fn workspace_control_over_the_nfs_route() {
         Reply::Unmounted(token)
     );
     assert!(!Path::new(&ready.directory).exists());
+    assert!(!spill_dir.exists());
     let released = service.export_released(token).unwrap();
     assert_eq!(released.lookups, held.lookups);
     assert_eq!(released.retained, 0);

@@ -463,6 +463,7 @@ impl Kernel {
     /// export held for the inode it detached. Only the inode the publishing
     /// job itself retired skips the release jobs.
     fn finish_unlink(&self, parent: u64, name: &[u8], retire: Retire, detached: Option<ViewStat>) {
+        self.companion_drop_for(parent, name);
         self.table().by_name.remove(&(parent, name.to_vec()));
         let Some(target) = detached else {
             return;
@@ -572,6 +573,7 @@ impl Kernel {
                     self.mutate(from, None, None, Expect::Nothing, tickets, |_| {
                         Ok(MutationInput::Named(remove::unlink(from, source_name)))
                     })?;
+                self.companion_drop_for(from, name);
                 self.silly_renamed.fetch_add(1, Ordering::Relaxed);
                 let replaced = {
                     let mut table = self.table();

@@ -532,6 +532,240 @@ fn apple_double_files_stay_out_of_the_workspace() {
 }
 
 #[test]
+fn apple_double_companions_spill_preserve_all_bytes_reclaim_orphans_and_clean_up() {
+    use layerfs_nfs::apple_double::{FILE_BYTES, HELD};
+    let base = temp("appledouble-spill");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+
+    // 1. Pre-populate a leftover file in the spill directory (simulating a
+    //    crashed daemon) and configure a small resident budget (64 KiB) so
+    //    spilling is exercised across both the old 4096 companion count and
+    //    the memory budget.
+    let spill_dir = base.join("spill-export");
+    fs::create_dir_all(&spill_dir).unwrap();
+    let stale_residue = spill_dir.join("stale-from-crash");
+    fs::write(&stale_residue, b"leftover").unwrap();
+    assert!(stale_residue.exists());
+
+    let budget = 64 * 1024;
+    rig.companion_spill_dir = Some(spill_dir.clone());
+    rig.companion_resident_bytes = budget;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    assert!(
+        !stale_residue.exists(),
+        "starting an export cleans any leftover spill directory from an earlier crash"
+    );
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    // 2. Removing a main file, silly-renaming it, or replacing it with RENAME
+    //    drops its paired `._<name>` companion and deletes its spilled disk
+    //    file at once. Plain non-replacing RENAME (`mv plain_a plain_b`)
+    //    cleans only the destination side so the client can subsequently
+    //    rename `._plain_a -> ._plain_b`.
+    let big_payload = pattern(11, 40 * 1024);
+    c.touch(&root, b"rm.txt", 0o644).unwrap();
+    let rm_ad = c.touch(&root, b"._rm.txt", 0o644).unwrap();
+    c.write(&rm_ad.handle, 0, &big_payload).unwrap();
+    c.touch(&root, b"silly.txt", 0o644).unwrap();
+    let silly_ad = c.touch(&root, b"._silly.txt", 0o644).unwrap();
+    c.write(&silly_ad.handle, 0, &big_payload).unwrap();
+    // Second 40 KiB write crosses the 64 KiB budget, spilling `._rm.txt`.
+    let rm_spill_file = spill_dir.join(rm_ad.attr.fileid.to_string());
+    assert!(
+        rm_spill_file.is_file(),
+        "oldest companion body spilled to disk"
+    );
+    assert!(server.held().companion_bytes <= budget);
+    assert_eq!(server.held().companions_spilled, 1);
+
+    c.remove(&root, b"rm.txt").unwrap();
+    assert!(
+        !rm_spill_file.exists(),
+        "removing the main file unlinks its spilled companion file"
+    );
+    assert_eq!(c.lookup(&root, b"._rm.txt").map(|_| ()), Err(NOENT));
+    assert_eq!(c.getattr(&rm_ad.handle), Err(STALE));
+
+    c.rename(&root, b"silly.txt", &root, MAC_SILLY).unwrap();
+    assert_eq!(server.held().companions, 0);
+    assert_eq!(c.getattr(&silly_ad.handle), Err(STALE));
+    c.remove(&root, MAC_SILLY).unwrap();
+
+    c.touch(&root, b"src.txt", 0o644).unwrap();
+    c.touch(&root, b"dst.txt", 0o644).unwrap();
+    let dst_ad = c.touch(&root, b"._dst.txt", 0o644).unwrap();
+    c.write(&dst_ad.handle, 0, &big_payload).unwrap();
+    let src_ad = c.touch(&root, b"._src.txt", 0o644).unwrap();
+    c.write(&src_ad.handle, 0, &big_payload).unwrap();
+    let dst_spill_file = spill_dir.join(dst_ad.attr.fileid.to_string());
+    assert!(dst_spill_file.is_file());
+    c.rename(&root, b"src.txt", &root, b"dst.txt").unwrap();
+    assert!(
+        !dst_spill_file.exists(),
+        "replacing RENAME unlinks the destination's spilled companion"
+    );
+    assert_eq!(c.getattr(&dst_ad.handle), Err(STALE));
+    // Source companion `._src.txt` is still present so the client can rename
+    // it to `._dst.txt`, then remove `dst.txt`.
+    c.rename(&root, b"._src.txt", &root, b"._dst.txt").unwrap();
+    assert_eq!(c.read_all(&src_ad.handle, 64 * 1024), big_payload);
+    c.remove(&root, b"dst.txt").unwrap();
+    assert_eq!(server.held().companions, 0);
+    assert_eq!(server.held().companion_bytes, 0);
+
+    // 3. Create and write > 4096 companions (4160), crossing both the old
+    //    4096 cap and the 64 KiB resident memory budget: every CREATE, WRITE
+    //    and READ succeeds, resident bytes never exceed `budget`, spilled
+    //    files exist on disk, and the earliest companions read back byte for
+    //    byte (0 data loss).
+    const TOTAL_COUNT: usize = 4160;
+    let mut handles = Vec::with_capacity(TOTAL_COUNT);
+    for i in 0..TOTAL_COUNT {
+        let name = format!("._c-{i}");
+        let made = c.touch(&root, name.as_bytes(), 0o644).unwrap();
+        let payload = if i < 32 || i % 128 == 0 {
+            format!("companion-payload-{i:04}-{}", "x".repeat(2048)).into_bytes()
+        } else {
+            format!("short-{i:04}").into_bytes()
+        };
+        c.write(&made.handle, 0, &payload).unwrap();
+        assert!(
+            server.held().companion_bytes <= budget,
+            "resident bytes {} exceeded budget {budget} at {i}",
+            server.held().companion_bytes
+        );
+        handles.push((made.handle, made.attr.fileid, payload));
+    }
+    assert_eq!(server.held().companions, TOTAL_COUNT);
+    assert_eq!(server.held().names_refused, 0);
+    assert!(server.held().companions_spilled > 0);
+    assert!(spill_dir.join(handles[0].1.to_string()).is_file());
+
+    // Earliest, middle and latest companions all read back byte-for-byte.
+    for idx in [
+        0,
+        1,
+        2,
+        15,
+        31,
+        128,
+        1024,
+        2048,
+        4095,
+        4096,
+        TOTAL_COUNT - 1,
+    ] {
+        let (ref handle, _, ref expected) = handles[idx];
+        let name = format!("._c-{idx}");
+        let (looked, attr) = c.lookup(&root, name.as_bytes()).unwrap();
+        assert_eq!(&looked, handle);
+        assert_eq!(attr.size, expected.len() as u64);
+        assert_eq!(
+            c.read_all(handle, 64 * 1024),
+            *expected,
+            "companion {idx} content mismatch"
+        );
+    }
+
+    // Overwriting and truncating an already-spilled companion works via
+    // pread/pwrite/set_len and removes its disk file on explicit REMOVE.
+    let (ref h0, id0, _) = handles[0];
+    c.write(h0, 0, b"updated-header").unwrap();
+    let shrink = Set {
+        size: Some(14),
+        ..Set::default()
+    };
+    c.setattr(h0, shrink, None).unwrap();
+    assert_eq!(c.read_all(h0, 64), b"updated-header");
+    c.remove(&root, b"._c-0").unwrap();
+    assert!(!spill_dir.join(id0.to_string()).exists());
+
+    // Single-file limit `FILE_BYTES` (1 MiB) is still enforced (`NFS3ERR_FBIG`).
+    const FBIG: u32 = 27;
+    let (ref h_last, _, _) = handles[TOTAL_COUNT - 1];
+    assert_eq!(c.write(h_last, FILE_BYTES, b"!").map(|_| ()), Err(FBIG));
+
+    // 4. Stopping the export removes the entire spill directory.
+    drop(c);
+    let released = server.stop();
+    assert_eq!(released.companions, TOTAL_COUNT - 1);
+    assert!(released.companion_bytes <= budget);
+    assert!(
+        !spill_dir.exists(),
+        "export stop removes the spill directory"
+    );
+
+    // 5. At the index bound (`companions_held`; default `HELD` = 65_536):
+    //    orphan companions (whose paired main file is not in `Table::by_name`)
+    //    are reclaimed first so new creations succeed; when all slots are
+    //    held by live main files, `CREATE` answers `NFS3ERR_ACCES`.
+    assert_eq!(HELD, 65_536);
+    let small_cap = 8;
+    let cap_spill = base.join("spill-cap");
+    rig.companion_spill_dir = Some(cap_spill.clone());
+    rig.companions_held = small_cap;
+    rig.companion_resident_bytes = 1024;
+    let server2 = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c2 = Client::connect(server2.local_addr(), UID, GID);
+    let root2 = c2.mnt("/");
+
+    // Create 4 live pairs (main file + companion) and 4 orphan companions
+    // (no main file created), filling all 8 index slots and spilling some.
+    for i in 0..4 {
+        let main = format!("live-{i}");
+        let comp = format!("._live-{i}");
+        c2.touch(&root2, main.as_bytes(), 0o644).unwrap();
+        let ad = c2.touch(&root2, comp.as_bytes(), 0o644).unwrap();
+        c2.write(&ad.handle, 0, &[b'L'; 512]).unwrap();
+    }
+    let mut orphan_handles = Vec::new();
+    for i in 0..4 {
+        let comp = format!("._orphan-{i}");
+        let ad = c2.touch(&root2, comp.as_bytes(), 0o644).unwrap();
+        c2.write(&ad.handle, 0, &[b'O'; 512]).unwrap();
+        orphan_handles.push((ad.handle, ad.attr.fileid));
+    }
+    assert_eq!(server2.held().companions, small_cap);
+
+    // Creating 4 more live pairs at the bound reclaims the 4 orphans (and
+    // unlinks their spilled files) while preserving the first 4 live pairs.
+    for i in 4..small_cap {
+        let main = format!("live-{i}");
+        let comp = format!("._live-{i}");
+        c2.touch(&root2, main.as_bytes(), 0o644).unwrap();
+        let ad = c2.touch(&root2, comp.as_bytes(), 0o644).unwrap();
+        c2.write(&ad.handle, 0, &[b'N'; 128]).unwrap();
+    }
+    assert_eq!(server2.held().companions, small_cap);
+    assert_eq!(server2.held().names_refused, 0);
+    for (oh, oid) in &orphan_handles {
+        assert_eq!(c2.getattr(oh), Err(STALE));
+        assert!(!cap_spill.join(oid.to_string()).exists());
+    }
+    for i in 0..4 {
+        let comp = format!("._live-{i}");
+        let (lh, _) = c2.lookup(&root2, comp.as_bytes()).unwrap();
+        assert_eq!(c2.read_all(&lh, 1024), vec![b'L'; 512]);
+    }
+
+    // Now all 8 slots belong to live main files: one more companion CREATE
+    // finds no orphans to reclaim and answers `NFS3ERR_ACCES`.
+    c2.touch(&root2, b"extra", 0o644).unwrap();
+    assert_eq!(c2.touch(&root2, b"._extra", 0o644).map(|_| ()), Err(ACCES));
+    assert_eq!(server2.held().names_refused, 1);
+
+    drop(c2);
+    let released2 = server2.stop();
+    assert!(!cap_spill.exists());
+    let (_, outstanding) = rig.stop(released2);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn tickets_are_released_only_after_the_reply() {
     let base = temp("tickets");
     let tree = base.join("tree");

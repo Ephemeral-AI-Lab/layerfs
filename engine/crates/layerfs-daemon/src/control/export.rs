@@ -177,6 +177,12 @@ impl ExportServing {
     fn directory(&self, token: WorkspaceToken) -> PathBuf {
         self.config.mounts.join(token.namespace.to_string())
     }
+    fn companion_spill_dir(&self, token: WorkspaceToken) -> PathBuf {
+        self.config
+            .mounts
+            .join(".appledouble")
+            .join(token.namespace.to_string())
+    }
     /// At startup, before any Attach: every mount the host still has at or
     /// under the mount home is one a daemon that ended without unmounting
     /// left (its export is gone, so the client would hang on it). Each is
@@ -485,6 +491,9 @@ impl Service {
             read_only: false,
             refuse_apple_double: config.refuse_apple_double,
             lookups_held: config.lookups_held,
+            companion_spill_dir: Some(serving.companion_spill_dir(token)),
+            companion_resident_bytes: layerfs_nfs::apple_double::RESIDENT_BYTES,
+            companions_held: layerfs_nfs::apple_double::HELD,
         };
         let started = TcpListener::bind((config.listen, 0)).and_then(|listener| {
             Server::start(
@@ -529,6 +538,9 @@ impl Service {
             Ran::Busy(detail) | Ran::Failed(detail) => {
                 let released = server.stop();
                 drop(std::fs::remove_dir(&directory));
+                drop(std::fs::remove_dir(
+                    serving.config.mounts.join(".appledouble"),
+                ));
                 return Err(self.unwind_export(
                     workspace,
                     mount,
@@ -745,6 +757,11 @@ impl Service {
             return Err(Failure::Retained(Box::new(reply)));
         }
         drop(std::fs::remove_dir(&ready.directory));
+        if let Some(serving) = self.export.as_ref() {
+            drop(std::fs::remove_dir(
+                serving.config.mounts.join(".appledouble"),
+            ));
+        }
         if let Ok(mut entries) = self.entries.lock() {
             if let Ok(binding) = bound_mut(&mut entries, token) {
                 binding.kernel = Kernel::Unattached;

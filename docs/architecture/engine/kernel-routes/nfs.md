@@ -44,7 +44,7 @@ client mount it ([`export.rs`](../../../../engine/crates/layerfs-daemon/src/cont
 | Item | Meaning | Source |
 | --- | --- | --- |
 | `Server::start(listener, services, mount, config)` | Starts the accept thread. One connection serves one call at a time, in arrival order. | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
-| `ExportConfig` | `path` (normally `/`), `uid`/`gid` shown on every inode, `read_only`, `refuse_apple_double`, `lookups_held`. `writable(uid, gid)` is the default. | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
+| `ExportConfig` | `path` (normally `/`), `uid`/`gid` shown on every inode, `read_only`, `refuse_apple_double`, `lookups_held`, `companion_spill_dir`, `companion_resident_bytes`, `companions_held`. `writable(uid, gid)` is the default. | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
 | `Server::stop` | Stop accepting, shut down and join every connection, then `Kernel::release`: descriptors first, then lookup references. The engine mount stays with the caller. | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs), [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
 | `Kernel` | What a FUSE kernel would hold for a stateless client: one lookup reference per handed-out serial, implicit file and directory descriptors with the facts last published through each file descriptor, a parent index for `..`. | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
 | Verifier | One WRITE/COMMIT verifier per export, from the clock and process id under a random key. | [`server.rs`](../../../../engine/crates/layerfs-nfs/src/server.rs) |
@@ -180,8 +180,11 @@ Refresh after an install is covered in
 
 ```text
  CREATE "._name" (refuse_apple_double = true)
-   regular file --> Companions (export memory only)
+   regular file --> Companions (export index in memory; body resident or spilled)
                     serial >= SERIALS = 1 << 62
+                    resident body <= RESIDENT_BYTES (32 MiB) in all;
+                    older bodies spill to <mounts>/.appledouble/<namespace>/<serial>
+                    (pread/pwrite outside the companion lock)
                     LOOKUP GETATTR ACCESS READ WRITE SETATTR COMMIT
                     REMOVE, RENAME to another "._" name: served here
                     READDIR: not listed;  engine: never called
@@ -190,15 +193,21 @@ Refresh after an install is covered in
 
 | Bound | Value | Over the bound | Source |
 | --- | --- | --- | --- |
-| `HELD` | 4096 companions | CREATE `NFS3ERR_ACCES` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
-| `FILE_BYTES` | 1 MiB per companion | WRITE `NFS3ERR_FBIG` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
-| `TOTAL_BYTES` | 64 MiB in all | WRITE `NFS3ERR_NOSPC` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| `HELD` | 65,536 companion index entries | Reclaim orphan companions whose main file is not in `Table::by_name`; if still at the bound, CREATE answers `NFS3ERR_ACCES` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| `FILE_BYTES` | 1 MiB per companion | WRITE / SETATTR `NFS3ERR_FBIG` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| `RESIDENT_BYTES` | 32 MiB resident bodies in all | Spill least recently touched resident bodies to `companion_spill_dir` (`<mounts>/.appledouble/<namespace>/<serial>`); host disk I/O errors map to `NFS3ERR_NOSPC` (`ENOSPC`/`EDQUOT`), `NFS3ERR_FBIG` (`EFBIG`), `NFS3ERR_ACCES` (`EACCES`), `NFS3ERR_PERM` (`EPERM`), `NFS3ERR_ROFS` (`EROFS`) or `NFS3ERR_IO` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 
 On NFSv3 the macOS client stores extended attributes and resource forks in
-`._<name>` files. Keeping them in export memory lets `cp`, `copyfile`,
-`ditto` and `tar` succeed while nothing reaches the Workspace or a Commit.
-Everything is dropped when the export is released. A name is AppleDouble when
-it starts with `._` and has at least one more byte.
+`._<name>` files. Keeping their index in export memory and spilling excess
+bodies to the export's scratch directory lets `cp`, `copyfile`, `ditto` and
+`tar` succeed without losing companion bytes during the mount, while nothing
+reaches the Workspace, SQLite overlay or a Commit. Removing, silly-renaming or
+replacing a main file drops its paired `._<name>` companion and unlinks any
+spilled file at once. Companions remain mount-session state: releasing the
+export removes the entire `<mounts>/.appledouble/<namespace>` directory
+(and a fresh Attach cleans any leftover directory from a crashed daemon), so
+remounts, daemon restarts and Commits do not retain them. A name is
+AppleDouble when it starts with `._` and has at least one more byte.
 
 ## Mount
 
