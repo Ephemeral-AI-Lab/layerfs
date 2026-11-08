@@ -72,6 +72,7 @@ pub fn get(home: &Path, events: &mut Events<'_>, request: &CommitGet) -> Outcome
         let op = StoreOp::ListCommits {
             branch: &request.branch,
             page: Page {
+                number: None,
                 size: Some(1000),
                 pos: Some(pos),
             },
