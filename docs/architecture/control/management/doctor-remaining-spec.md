@@ -1,9 +1,12 @@
 # Doctor remaining backend work and closure specification
 
-> **Status:** Proposal; target LayerFS 2.0.0; not a released contract.
+> **Status:** Historical completion specification; backend implementation and
+> qualification completed for LayerFS 2.0.0. Merge/issue receipts are tracked in #116.
 
-Specification for remaining backend implementation and qualification. It does
-not claim that the cases below have passed.
+The final [backend qualification report](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/result/2026-11-08/doctor-integration/6b9640783c4652b7ad662d9610ab8a89670a7d85/report.md)
+reconciles B1–B6, actual results, source/binary identities and limitations. The
+requirements below preserve the agreed scope; their original wording is not a
+replacement for the recorded evidence. Frontend additions and GC remain excluded.
 
 Tracking: [parent #116](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/116).
 Implementation baseline: `ff06da3a71e946bc75121ce81dc8f16e37109224` on
