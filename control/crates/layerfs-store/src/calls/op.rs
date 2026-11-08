@@ -58,6 +58,8 @@ pub struct Change {
 
 /// One Store method with its arguments.
 pub enum StoreOp<'a> {
+    /// Store-wide statistics (no project required).
+    Statistics,
     /// `project.list_branches`: the Branch `name`, or one page.
     ListBranches {
         /// The one Branch it lists.
@@ -230,6 +232,7 @@ impl StoreOp<'_> {
     /// The engine method.
     pub fn method(&self) -> &'static str {
         match self {
+            Self::Statistics => "store.stats",
             Self::ListBranches { .. } => "project.list_branches",
             Self::ListCommits { .. } => "branch.list_commits",
             Self::BranchCommits(_) => "branch.commits",
@@ -261,6 +264,7 @@ impl StoreOp<'_> {
     pub fn engine_args(&self) -> Vec<(String, SdkValue)> {
         let mut args = Args::default();
         match self {
+            Self::Statistics => &mut args,
             Self::ListBranches { name, page } => args.opt("name", *name).page(*page),
             Self::ListCommits { branch, page } => args.text("branch", branch).page(*page),
             Self::BranchCommits(r) => args

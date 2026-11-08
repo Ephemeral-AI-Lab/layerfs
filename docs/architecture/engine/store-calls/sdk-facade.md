@@ -155,3 +155,11 @@ this repository; Not established from source which front end routes
 ---
 
 ← [Store calls: Branches](branches.md) · [Up: Store calls](README.md) · [Engine: Project Init](../project-init/README.md) →
+
+## Store statistics
+
+`store.stats` is a public Store method over the existing `StoreStatistics`
+publication counters, through `methods/store.rs`. It uses the same fixed
+statistics read as the operator, renames logical to `historyLogical`, and
+omits text ratios. The control call adds name/kind and makes PostgreSQL free
+null. No project is required; the standard Store lease and worker route apply.

@@ -147,3 +147,5 @@ $ layerfs store push shop vm1 --progress
 ---
 
 ← [machine.update](../machine/update.md) · [Up: SDK](../README.md) · [store.list](list.md) →
+
+- [stats](stats.md): Store-wide publication and allocation counters.

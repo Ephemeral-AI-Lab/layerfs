@@ -206,3 +206,5 @@ Its protocol is on [Workers](../../control/routing/workers.md).
 ---
 
 ← [API: Front ends](README.md) · [Up: Front ends](README.md) · [Front ends: Node](node.md) →
+
+`store stats <name>` exposes [Store-wide counters](../sdk/store/stats.md) through the call table.

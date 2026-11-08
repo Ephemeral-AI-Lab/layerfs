@@ -1,4 +1,4 @@
-//! The call table and its dispatcher (#533 step 2): 64 calls in nine
+//! The call table and its dispatcher (#533 step 2): 65 calls in nine
 //! families, arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::{families, json, keys, size, Call, Kind};
@@ -51,9 +51,9 @@ fn code(name: &str, args: SdkValue) -> String {
 }
 
 #[test]
-fn the_table_has_nine_families_and_64_calls() {
+fn the_table_has_nine_families_and_65_calls() {
     let all: Vec<&Call> = layerfs_api::calls();
-    assert_eq!(all.len(), 64);
+    assert_eq!(all.len(), 65);
     // each family holds only its own calls, and has at least one
     for family in families() {
         assert!(!family.calls().is_empty(), "{}", family.name);
@@ -66,7 +66,7 @@ fn the_table_has_nine_families_and_64_calls() {
     let mut names: Vec<_> = all.iter().map(|c| c.name()).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 64, "call names are unique");
+    assert_eq!(names.len(), 65, "call names are unique");
     // an optional positional is only ever followed by optional ones (D7)
     for c in &all {
         let first_optional = c.args.iter().position(|a| a.optional);
@@ -75,7 +75,7 @@ fn the_table_has_nine_families_and_64_calls() {
         }
     }
     let counts: Vec<usize> = families().iter().map(|f| f.calls().len()).collect();
-    assert_eq!(counts, [5, 8, 3, 15, 4, 6, 9, 9, 5]);
+    assert_eq!(counts, [5, 8, 3, 15, 4, 6, 9, 10, 5]);
 }
 
 #[test]

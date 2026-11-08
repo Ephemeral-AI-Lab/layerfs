@@ -32,7 +32,7 @@ reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-64 calls in 9 families, counted from the Node table. Calls present: Node 64, Python 64, Python `aio` 64, CLI 64.
+65 calls in 9 families, counted from the Node table. Calls present: Node 65, Python 65, Python `aio` 65, CLI 65.
 
 Argument names that are Python keywords: none.
 
@@ -93,6 +93,7 @@ Front-end problems: none.
 | `store.list` | - | - | yes | yes | yes | yes |
 | `store.get` | name | - | yes | yes | yes | yes |
 | `store.status` | name | - | yes | yes | yes | yes |
+| `store.stats` | name | - | yes | yes | yes | yes |
 | `store.create` | name | - | yes | yes | yes | yes |
 | `store.connect` | name, url | password, synchronous_commit | yes | yes | yes | yes |
 | `store.push` | name, machine | on_progress() | yes | yes | yes | yes (--progress) |
