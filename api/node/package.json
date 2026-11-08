@@ -1,7 +1,25 @@
 {
-  "name": "layerfs",
-  "version": "2.0.0",
-  "description": "LayerFS for Node: the nine families of the one call table (project, branch, commit, file, sandbox, workspace, machine, store, backup), each a call into the native library (#533).",
+  "name": "@layerfs/node",
+  "version": "2.0.0-rc.1",
+  "description": "The LayerFS SDK for Node: one call table of nine families (project, branch, commit, file, sandbox, workspace, machine, store, backup) over one native library.",
+  "keywords": [
+    "layerfs",
+    "filesystem",
+    "version-control",
+    "sandbox",
+    "workspace",
+    "sqlite",
+    "sdk"
+  ],
+  "homepage": "https://layerfs.ai/",
+  "bugs": {
+    "url": "https://github.com/Ephemeral-AI-Lab/layerfs/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ephemeral-AI-Lab/layerfs.git",
+    "directory": "api/node"
+  },
   "type": "module",
   "main": "src/index.js",
   "exports": {
@@ -18,6 +36,15 @@
   "engines": {
     "node": ">=22"
   },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "libc": [
+    "glibc"
+  ],
   "scripts": {
     "prepack": "node -e \"require('node:fs').existsSync('layerfs.node') || (console.error('layerfs.node is missing: run npm --prefix api run build:native before packing'), process.exit(1))\"",
     "test": "node --test test/*.mjs"

@@ -34,9 +34,10 @@ for this manual.
   Microsandbox and SSH were removed afterwards, on 2026-11-08). See
   [TERMINAL-PASS.md](../../../core/docs/issues/533/TERMINAL-PASS.md) for
   the latest pass.
-- The workspace's Cargo version is `2.0.0` (since `085376a7a8`), as are
-  the Node package and the Python wheel; the bundle and daemon cache paths
-  use `<cache>/layerfs/bundle/2.0.0/`.
+- The workspace's Cargo version is `2.0.0` (since `085376a7a8`), as is
+  the Python wheel; the Node package is `2.0.0-rc.1` for its first npm
+  prerelease. The bundle and daemon cache paths use
+  `<cache>/layerfs/bundle/2.0.0/`.
 - Only the Disposable Store profile runs. Durable execution is `NOT_RUN —
   disabled by owner until explicit reauthorization`.
 - Every call is one attempt. There is no retry, busy handler or replay.

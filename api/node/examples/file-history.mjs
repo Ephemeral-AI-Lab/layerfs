@@ -6,7 +6,7 @@
 //   node api/node/examples/file-history.mjs
 // The temporary directory must be on ext4, xfs or btrfs (a Store needs SQLite
 // locks); set TMPDIR to such a directory if /tmp is not. Installed, import
-// from "layerfs" instead of "../src/index.js".
+// from "@layerfs/node" instead of "../src/index.js".
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

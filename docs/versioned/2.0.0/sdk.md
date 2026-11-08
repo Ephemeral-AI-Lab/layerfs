@@ -21,7 +21,7 @@ registries.
 ## Node
 
 ```js
-import layerfs, { LayerFSError, table, families } from "layerfs";
+import layerfs, { LayerFSError, table, families } from "@layerfs/node";
 
 await layerfs.store.create("shop");
 await layerfs.project.init("shop/api", "/src/api", { on_progress: console.log });

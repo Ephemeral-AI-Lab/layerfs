@@ -43,7 +43,7 @@ are null outside `send`.
 | `on_progress` | A function called with each progress update (shell: `--progress`, JSON lines on stderr) |
 
 ```js
-import layerfs from "layerfs";
+import layerfs from "@layerfs/node";
 
 await layerfs.store.create("shop");
 const p = await layerfs.project.init("shop/api", "/work/api", { on_progress: (u) => console.log(u) });

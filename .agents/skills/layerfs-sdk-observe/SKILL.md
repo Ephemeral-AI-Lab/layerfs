@@ -76,7 +76,7 @@ benchmark measurement.
 
 ```js
 // collect.mjs: node collect.mjs shop/api > run/commits.json
-import layerfs from "layerfs";
+import layerfs from "@layerfs/node";
 
 const project = process.argv[2];
 const out = {};
