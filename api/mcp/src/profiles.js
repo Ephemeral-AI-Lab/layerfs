@@ -60,7 +60,7 @@ export function whyOf(spec) {
   if (spec.family === "project" && spec.call === "remove") return "remove a project from its Store; administration";
   if (spec.family === "sandbox" && spec.call === "create") return "start a Sandbox process; administration";
   if (spec.family === "sandbox" && spec.call === "close") return "stop a Sandbox; administration";
-  if (spec.family === "project" && spec.call === "export") return "export a Branch snapshot to a local folder; a folder scope refuses it";
+  if (spec.family === "project" && spec.call === "export") return "export a Branch snapshot to a local folder under a launch-time --export-root; a folder scope refuses it";
   return WHY[spec.family] ?? "not classified";
 }
 

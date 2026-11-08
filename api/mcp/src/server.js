@@ -20,6 +20,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import layerfs, { LayerFSError } from "layerfs";
 import { errorResult } from "./errors.js";
+import { exportRefusal, resolveRoots } from "./exportroots.js";
 import { PROFILES, check as checkProfiles, tools as toolsOfProfile } from "./profiles.js";
 import { progressReporter } from "./progress.js";
 import { toolsOf } from "./tools.js";
@@ -31,6 +32,7 @@ const GRACE_MS = 2000;
 
 const USAGE = `usage: layerfs-mcp [--profile work|admin] [--home DIR]
                   [--scope-project <store>/<project> --scope-folder DIR [--scope-branch NAME]]
+                  [--export-root DIR]...
                   [--help] [--version]
 
   --profile work   the calls an agent works with (default)
@@ -40,6 +42,8 @@ const USAGE = `usage: layerfs-mcp [--profile work|admin] [--home DIR]
   --scope-project  the folder scope's project, with --scope-folder
   --scope-folder   the folder scope; the library checks every scoped call
   --scope-branch   the scope's Branch namespace; Branch and file calls need it
+  --export-root    a directory project_export may write under; repeat for more.
+                   With none, project_export is refused.
 
 while serving, stdout carries the MCP protocol only; logs go to stderr.
 `;
@@ -59,7 +63,7 @@ function usageError(message) {
 
 /** `{ profile, home, scope }` from the command line, or a usage exit. */
 function flagsOf(argv) {
-  const flags = { profile: "work", home: undefined, scopeProject: undefined, scopeFolder: undefined, scopeBranch: undefined };
+  const flags = { profile: "work", home: undefined, scopeProject: undefined, scopeFolder: undefined, scopeBranch: undefined, exportRoots: [] };
   for (let i = 0; i < argv.length; i += 1) {
     let word = argv[i];
     let inline;
@@ -91,6 +95,9 @@ function flagsOf(argv) {
       case "--scope-branch":
         flags.scopeBranch = take();
         break;
+      case "--export-root":
+        flags.exportRoots.push(take());
+        break;
       case "--help":
       case "-h":
         writeSync(1, USAGE);
@@ -111,10 +118,16 @@ function flagsOf(argv) {
   if (flags.scopeBranch !== undefined && !project) usageError("--scope-branch needs --scope-project and --scope-folder");
   if (flags.scopeBranch !== undefined && flags.scopeBranch === "") usageError("--scope-branch needs a name");
   if (project && flags.scopeFolder === "") usageError("--scope-folder needs a directory");
+  let exportRoots;
+  try {
+    exportRoots = resolveRoots(flags.exportRoots);
+  } catch (error) {
+    usageError(error.message);
+  }
   const scope = project
     ? { project: flags.scopeProject, folder: flags.scopeFolder, ...(flags.scopeBranch === undefined ? {} : { branch: flags.scopeBranch }) }
     : undefined;
-  return { profile: flags.profile, home: flags.home, scope };
+  return { profile: flags.profile, home: flags.home, scope, exportRoots };
 }
 
 const flags = flagsOf(process.argv.slice(2));
@@ -157,6 +170,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   } catch (error) {
     if (error instanceof InvalidArguments) throw new McpError(ErrorCode.InvalidParams, error.message);
     throw error;
+  }
+  if (tool.spec.family === "project" && tool.spec.call === "export") {
+    // the operator's allowlist, before anything is attempted; a missing argument position fails closed
+    const at = tool.spec.args.findIndex((arg) => arg.name === "destination");
+    const reason = exportRefusal(read.positionals[at], flags.exportRoots);
+    if (reason !== null) {
+      log(`${name} refused InvalidInput (export roots)`);
+      return errorResult({ code: "InvalidInput", message: reason, detail: null });
+    }
   }
   const reporter = progressReporter(extra.sendNotification, extra._meta?.progressToken);
   if (reporter && tool.spec.options.some((option) => option.name === "on_progress")) {
@@ -233,5 +255,6 @@ process.stdout.on("error", (error) => log(`stdout error: ${error?.message ?? err
 await server.connect(transport);
 log(
   `layerfs-mcp ${VERSION}: profile ${flags.profile}, ${tools.length} tools, home ${flags.home ?? process.env.LAYERFS_HOME ?? "default"}` +
-    (flags.scope ? `, scope ${flags.scope.project} at ${flags.scope.folder}${flags.scope.branch ? ` (branch ${flags.scope.branch})` : ""}` : ""),
+    (flags.scope ? `, scope ${flags.scope.project} at ${flags.scope.folder}${flags.scope.branch ? ` (branch ${flags.scope.branch})` : ""}` : "") +
+    `, export roots ${flags.exportRoots.length === 0 ? "none (project_export is refused)" : flags.exportRoots.join(", ")}`,
 );
