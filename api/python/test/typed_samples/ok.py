@@ -37,6 +37,9 @@ def sync_flow() -> None:
     lfs.machine.create("box", "docker", memory="2G", cpus=2)
     lfs.workspace.exec("ws", "ls", stdout=on_output, stderr=on_output, stream=False)
     lfs.backup.create("shop", "bucket", on_progress=on_progress)
+    lfs.project.export("shop/api", "/exports/api", branch="main", on_progress=on_progress)
+    lfs.project.export("shop/api", "/exports/api-default")
+    lfs.workspace.exec_cancel("ws", "exec-0123456789abcdef", grace_ms=1000)
     try:
         lfs.sandbox.close("s1", force=True)
     except layerfs.LayerFSError as error:
@@ -64,6 +67,8 @@ async def async_flow() -> None:
     print(listed["items"])
     await asyncio.gather(lfs.store.create("a"), lfs.store.create("b"))
     await lfs.workspace.exec("ws", "ls", stdout=on_output)
+    await lfs.project.export("shop/api", "/exports/api", branch="agent", on_progress=on_progress)
+    await lfs.workspace.exec_cancel("ws", "exec-0123456789abcdef")
     await aio.store.push("shop", "machine", on_progress=on_progress)
     try:
         await aio.file.stat("shop/api", "main", "/a")
