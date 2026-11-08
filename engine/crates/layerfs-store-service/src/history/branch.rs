@@ -59,6 +59,18 @@ pub fn list(
     pos: u64,
     name: Option<&str>,
 ) -> Answer {
+    list_bounded(store, stack, limit, pos, name, None)
+}
+
+/// Numbered reads cap actual candidate visits rather than page ordinals.
+pub fn list_bounded(
+    store: &Arc<Store>,
+    stack: &LayerStackRecord,
+    limit: usize,
+    pos: u64,
+    name: Option<&str>,
+    work_limit: Option<usize>,
+) -> Answer {
     if let Some(name) = name {
         let found = if name == MAIN {
             Some(main_item(stack))
@@ -86,7 +98,13 @@ pub fn list(
     let (mut seen, mut items, mut more, mut spent) = (0u64, Vec::new(), false, 0);
     // Main participates in the same byte-name ordering as the Branches.
     let mut main = Some(main_item(stack));
+    let (mut work, mut bound_hit) = (0usize, false);
     let mut add = |value: SdkValue| -> bool {
+        if work_limit.is_some_and(|limit| work >= limit) {
+            bound_hit = true;
+            return false;
+        }
+        work += 1;
         if seen < pos {
             seen += 1;
             return true;
@@ -126,6 +144,11 @@ pub fn list(
                 break;
             }
         }
+    }
+    if bound_hit {
+        return Err(crate::read::query::capacity(
+            "branch inventory query work bound reached",
+        ));
     }
     let next = args::next_page(pos, items.len(), more);
     Ok(SdkValue::map([

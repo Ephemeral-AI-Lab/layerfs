@@ -22,6 +22,8 @@ pub fn call(service: &StoreService, call: &SdkCall) -> Answer {
         "project.list_branches" => project::list_branches(service, args),
         "branch.fork" => branch::fork(service, args),
         "branch.list_commits" => branch::list_commits(service, args),
+        "branch.commits" => branch::commits(service, args),
+        "branch.get_commit" => branch::get_commit(service, args),
         "branch.merge" => branch::merge(service, args),
         "branch.publish" => branch::publish(service, args),
         "branch.diff_commits" => branch::diff_commits(service, args),

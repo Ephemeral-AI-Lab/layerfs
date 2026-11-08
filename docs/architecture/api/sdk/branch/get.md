@@ -106,3 +106,10 @@ layerfs branch get shop/api main
 ---
 
 ← [branch.list](list.md) · [Up: branch](README.md) · [branch.fork](fork.md) →
+
+## Typed saved head
+
+The response additionally includes `saved_head:{id,kind,branch,root}`. Main's
+saved head is a Layer; an empty side branch uses its base Layer. Existing
+`head` and `base` retain their meanings and types. Branch listings additionally
+report `consistency:"live"`: branch inventory can change between numbered pages.

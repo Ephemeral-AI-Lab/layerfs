@@ -128,3 +128,13 @@ layerfs branch list shop/api
 ---
 
 ← [SDK: branch](README.md) · [Up: branch](README.md) · [branch.get](get.md) →
+
+## Numbered pages and saved heads
+
+`page` adds a one-based result-page interface with `page_size` (default 50).
+It cannot be combined with `page_pos`. Inventory remains live: response
+`consistency:"live"` does not promise a frozen branch list as branches are added.
+Each item gains typed `saved_head:{id,kind,branch,root}`, preserving legacy head/base.
+Numbered inventory seeking and scoped filtering refuse `Capacity` at the query
+work bound rather than silently returning an incomplete page. Existing offset
+options remain available for compatibility.

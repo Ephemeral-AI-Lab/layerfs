@@ -25,6 +25,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         page: Page {
             size: args.get_int("page_size"),
             pos: args.get_int("page_pos"),
+            number: None,
         },
     };
     list(&context.home, &request)

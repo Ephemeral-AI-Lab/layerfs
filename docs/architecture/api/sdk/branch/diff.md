@@ -124,3 +124,41 @@ layerfs branch diff shop/api main agent --paths-only
 ---
 
 ← [branch.publish](publish.md) · [Up: branch](README.md) · [SDK: commit](../commit/README.md) →
+
+## Pinned saved endpoints and attribution
+
+Optional `from_commit` and `to_commit` select full Commit or Layer IDs through
+those branch contexts. All Commit/Layer combinations work; the response `from`
+and `to` are full typed references `{id,kind,branch,root}` in the extended query
+mode. Pin their IDs for subsequent file reads/comparisons and result pages.
+
+`page` selects one-based matching-result pages with `page_size`. New endpoint,
+`path_prefix` or `include_attribution` options also select this mode; legacy
+`page_pos`/`cursor` cannot be mixed into it. Old branch-only calls keep their
+legacy response and paging behavior. `path_prefix` matches full path components.
+
+`include_attribution:true` discovers equal-content files whose aligned unchanged
+lines have different known owners. Full namespace traversal avoids equal-root
+pruning in this opt-in mode. Independent `attribution`, `attribution_coverage`
+and `changed_owner_lines` accompany content/metadata/identity flags. Unknown
+provenance remains null and is included as an unresolved candidate, not silently
+classified unchanged. Returned-page `coverage.complete` discloses unknown path owners;
+`scan.complete` concerns completion of the mandatory matching-result page.
+Publication alone retains source Commit ownership.
+
+Mandatory path summaries and seeking are bounded. The query refuses `Capacity`
+when the requested page cannot complete within work/reply budgets; no paths are
+silently skipped by page advancement. Text hunks which do not fit the path
+summary are explicitly omitted; use `file.diff` at the same endpoints for the
+bounded content/attribution view. Folder-scope refusal remains unchanged.
+See [shared saved-query contract](../saved-queries.md).
+
+Sequential numbered comparisons cache at most 128 weak-Store-keyed path
+boundaries, qualified by both saved IDs, path prefix, attribution/hunk options and
+page size. Namespace walks resume with indexed name boundaries instead of
+replaying all earlier names. Cache eviction changes cost, never the matching
+result definition. Request-level content comparison and attribution payload
+admission are each bounded to 64 MiB; exhaustion refuses the mandatory page.
+The cumulative provenance work budget is shared across paths. Inherent binary,
+coarse or unavailable ownership remains explicitly unknown; query-budget
+exhaustion never changes membership into a successful sparse result page.

@@ -2,6 +2,8 @@
 //! reads over a Branch, `main`, or a Commit or Layer identity, with bounded
 //! windows and the call caches they share.
 pub mod blame;
+pub mod branch_compare;
+pub mod comparison_pages;
 pub mod cached;
 pub mod compare;
 pub mod plans;

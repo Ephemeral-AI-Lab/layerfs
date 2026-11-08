@@ -2,6 +2,7 @@
 //! listings, and the lookups and refusals the Store calls share.
 pub mod branch;
 pub mod lookup;
+pub mod pages;
 pub mod saved;
 mod units;
 

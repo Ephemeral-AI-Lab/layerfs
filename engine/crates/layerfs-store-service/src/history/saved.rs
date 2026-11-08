@@ -143,6 +143,16 @@ pub fn resolve_context(
     };
     let Some(at) = at else { return Ok(head) };
     let wanted = args::node(at)?;
+    if branch == MAIN {
+        if let NodeId::Layer(id) = wanted {
+            let record = args::layer(store, id)?;
+            if record.stack != stack.id {
+                return Err(args::invalid("Layer belongs to another project"));
+            }
+            return Ok(wanted);
+        }
+    }
+
     if let NodeId::Commit(id) = wanted {
         let record = args::commit(store, id)?;
         if record.stack != stack.id {
@@ -194,14 +204,66 @@ pub fn reply_cost(value: &SdkValue) -> usize {
     match value {
         SdkValue::Null | SdkValue::Bool(_) => 8,
         SdkValue::Int(_) => 24,
-        SdkValue::Text(s) => 8 + s.len().saturating_mul(6),
+        SdkValue::Text(s) => {
+            8 + s
+                .bytes()
+                .map(|b| match b {
+                    b'"' | b'\\' => 2,
+                    0..=31 => 6,
+                    _ => 1,
+                })
+                .sum::<usize>()
+        }
         SdkValue::Bytes(b) => 8 + b.len().saturating_mul(2),
         SdkValue::List(v) => 8 + v.iter().map(reply_cost).sum::<usize>(),
         SdkValue::Map(v) => {
             8 + v
                 .iter()
-                .map(|(k, v)| 8 + k.len() * 6 + reply_cost(v))
+                .map(|(k, v)| 8 + k.len() + reply_cost(v))
                 .sum::<usize>()
         }
     }
+}
+
+/// Compact listing metadata; full relationships and optional reports use get_commit.
+pub fn summary(store: &Arc<Store>, node: NodeId) -> Result<SdkValue> {
+    let full = record(store, node)?;
+    let keys = [
+        "id",
+        "ref",
+        "parent",
+        "secondParent",
+        "base",
+        "sourceCommit",
+        "sourceBranch",
+        "time",
+        "sourceTime",
+        "timeStatus",
+        "via",
+        "logical",
+    ];
+    let mut fields: Vec<(String, SdkValue)> = keys
+        .iter()
+        .filter_map(|key| {
+            full.get(key)
+                .map(|value| ((*key).to_owned(), value.clone()))
+        })
+        .collect();
+    let message = full.get_text("message");
+    let clipped = message.is_some_and(|s| s.len() > 128);
+    let message = message
+        .map(|s| {
+            let mut n = s.len().min(128);
+            while !s.is_char_boundary(n) {
+                n -= 1
+            }
+            SdkValue::text(&s[..n])
+        })
+        .unwrap_or_default();
+    fields.extend([
+        ("message".into(), message),
+        ("messageTruncated".into(), SdkValue::Bool(clipped)),
+        ("detailsOmitted".into(), SdkValue::Bool(true)),
+    ]);
+    Ok(SdkValue::Map(fields))
 }
