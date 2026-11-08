@@ -51,11 +51,14 @@ pub fn help() -> ExitCode {
             .map(|c| c.name())
             .collect::<Vec<_>>()
     };
-    let switch = |name, applies: Vec<String>| {
+    let switch = |name: &str, applies: Vec<String>| {
         SdkValue::map([("name", SdkValue::text(name)), ("calls", strings(applies))])
     };
-    let switches = vec![
+    let mut switches = vec![
         switch("--text", all()),
+        switch("-h", all()),
+        switch("--help", all()),
+        switch("--", all()),
         switch("--progress", selected(|c| c.arg("on_progress").is_some())),
         switch("--stream", selected(|c| c.arg("stream").is_some())),
         switch("--events", selected(|c| c.arg("stdout").is_some())),
@@ -75,6 +78,19 @@ pub fn help() -> ExitCode {
             selected(|c| c.options.iter().any(|a| a.name == "message")),
         ),
     ];
+    let mut from = std::collections::BTreeMap::<String, Vec<String>>::new();
+    for call in &calls {
+        for arg in call.args.iter().chain(call.options) {
+            if arg.optional && arg.kind == Kind::Text {
+                from.entry(format!("--{}-from", arg.name.replace('_', "-")))
+                    .or_default()
+                    .push(call.name());
+            }
+        }
+    }
+    for (name, calls) in from {
+        switches.push(switch(&name, calls));
+    }
     let command = |name, args: &[&str], options: &[&str]| {
         SdkValue::map([
             ("name", SdkValue::text(name)),

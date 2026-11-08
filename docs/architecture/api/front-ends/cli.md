@@ -117,7 +117,8 @@ not identified by the commit alone. Both forms need no home.
 `calls` is exactly `layerfs_api::table_json`; `commands` lists the outside-table
 commands by shell name with positional arguments and options, including every
 Doctor target, `import-env` and `worker`. `switches` lists each front-end switch
-and the API call names it applies to. Table option names use underscores;
+and the API call names it applies to, including help/end-of-options markers
+and the generated `--<text-argument>-from` spellings. Table option names use underscores;
 CLI spellings use hyphens. Discovery neither opens nor creates a home.
 
 ## Output

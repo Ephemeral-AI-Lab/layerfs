@@ -78,6 +78,12 @@ fn capabilities_include_the_table_and_cli_only_commands() {
         stream.get("calls"),
         Some(&SdkValue::List(vec![SdkValue::text("workspace.exec")]))
     );
+    for flag in ["-h", "--help", "--", "--message-from"] {
+        assert!(
+            switches.iter().any(|s| s.get_text("name") == Some(flag)),
+            "missing {flag}"
+        );
+    }
     assert!(!home.exists());
 }
 
