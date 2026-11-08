@@ -63,9 +63,10 @@ impl Driver {
         selection: &PostgresSelection,
         deadline: Option<Instant>,
         resolver: &mut crate::diagnostic::Resolver<'_>,
+        cancelled: Option<&std::sync::atomic::AtomicBool>,
     ) -> Result<Self, Error> {
         let admission = deadline.unwrap_or_else(|| Instant::now() + Duration::from_secs(10));
-        Self::diagnostic_admitted(selection, deadline, admission, resolver)
+        Self::diagnostic_selection(selection, deadline, admission, resolver, cancelled)
     }
     pub(crate) fn diagnostic_admitted(
         selection: &PostgresSelection,
@@ -73,11 +74,23 @@ impl Driver {
         admission: Instant,
         resolver: &mut crate::diagnostic::Resolver<'_>,
     ) -> Result<Self, Error> {
+        Self::diagnostic_selection(selection, deadline, admission, resolver, None)
+    }
+    fn diagnostic_selection(
+        selection: &PostgresSelection,
+        deadline: Option<Instant>,
+        admission: Instant,
+        resolver: &mut crate::diagnostic::Resolver<'_>,
+        cancelled: Option<&std::sync::atomic::AtomicBool>,
+    ) -> Result<Self, Error> {
+        if cancelled.is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed)) {
+            return Err(BackendError::Cancelled.into());
+        }
         let config = tokio_postgres::Config::from_str(&selection.url)
             .map_err(|_| BackendError::Integrity)?;
         let connect_deadline = deadline.map_or(admission, |total| total.min(admission));
         if !config.get_hostaddrs().is_empty() || config.get_hosts().is_empty() {
-            return Self::diagnostic_config(config, deadline, connect_deadline);
+            return Self::diagnostic_config(config, deadline, connect_deadline, cancelled);
         }
         if config.get_hosts().len() > 1
             && config.get_load_balance_hosts() == tokio_postgres::config::LoadBalanceHosts::Random
@@ -88,7 +101,9 @@ impl Driver {
         }
         let mut last = Error::Refused(BackendError::Closed);
         for (index, host) in config.get_hosts().iter().enumerate() {
-            if Instant::now() >= connect_deadline {
+            if Instant::now() >= connect_deadline
+                || cancelled.is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+            {
                 return Err(BackendError::Cancelled.into());
             }
             let port = config
@@ -110,8 +125,18 @@ impl Driver {
                         },
                     };
                     for address in addresses {
+                        if cancelled
+                            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+                        {
+                            return Err(BackendError::Cancelled.into());
+                        }
                         let candidate = resolved_config(&config, &[(host.clone(), address)])?;
-                        match Self::diagnostic_config(candidate, deadline, connect_deadline) {
+                        match Self::diagnostic_config(
+                            candidate,
+                            deadline,
+                            connect_deadline,
+                            cancelled,
+                        ) {
                             Ok(client) => return Ok(client),
                             Err(error) => last = error,
                         }
@@ -121,7 +146,8 @@ impl Driver {
                 tokio_postgres::config::Host::Unix(path) => {
                     let mut candidate = resolved_config(&config, &[])?;
                     candidate.host_path(path).port(port);
-                    match Self::diagnostic_config(candidate, deadline, connect_deadline) {
+                    match Self::diagnostic_config(candidate, deadline, connect_deadline, cancelled)
+                    {
                         Ok(client) => return Ok(client),
                         Err(error) => last = error,
                     }
@@ -134,6 +160,7 @@ impl Driver {
         mut config: tokio_postgres::Config,
         deadline: Option<Instant>,
         connect_deadline: Instant,
+        cancelled: Option<&std::sync::atomic::AtomicBool>,
     ) -> Result<Self, Error> {
         let remaining = connect_deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
@@ -170,6 +197,7 @@ impl Driver {
                 let (client, connection) = connect(
                     &runtime,
                     Some(connect_deadline),
+                    cancelled,
                     config.connect(tls.clone()),
                 )?;
                 let connection = runtime.spawn(async move {
@@ -181,6 +209,7 @@ impl Driver {
                 let (client, connection) = connect(
                     &runtime,
                     Some(connect_deadline),
+                    cancelled,
                     config.connect(tokio_postgres::NoTls),
                 )?;
                 let connection = runtime.spawn(async move {
@@ -332,17 +361,25 @@ impl Drop for Diagnostic {
 fn connect<T>(
     runtime: &tokio::runtime::Runtime,
     deadline: Option<Instant>,
+    cancelled: Option<&std::sync::atomic::AtomicBool>,
     future: impl Future<Output = Result<T, postgres::Error>>,
 ) -> Result<T, Error> {
     runtime.block_on(async {
-        match deadline {
-            Some(deadline) => {
-                tokio::time::timeout_at(tokio::time::Instant::from_std(deadline), future)
-                    .await
-                    .map_err(|_| Error::Deadline { released: true })?
-                    .map_err(Error::Database)
+        let mut future = std::pin::pin!(future);
+        loop {
+            if cancelled.is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+                || deadline.is_some_and(|until| Instant::now() >= until)
+            {
+                return Err(Error::Deadline { released: true });
             }
-            None => future.await.map_err(Error::Database),
+            let wait = deadline.map_or(Duration::from_millis(20), |until| {
+                until
+                    .saturating_duration_since(Instant::now())
+                    .min(Duration::from_millis(20))
+            });
+            if let Ok(result) = tokio::time::timeout(wait, future.as_mut()).await {
+                return result.map_err(Error::Database);
+            }
         }
     })
 }

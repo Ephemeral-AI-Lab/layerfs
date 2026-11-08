@@ -69,7 +69,13 @@ DNS admission preserves configured lazy host order, all resolved addresses,
 Unix/TCP fallback and the hostname used for TLS identity. Randomized multi-host
 admission remains explicitly unsupported. TLS uses the ordinary configured policy
 and system trust, including rejection of an untrusted fixture certificate.
-Actual stalled TLS and authentication sockets are bounded and closed.
+Actual stalled TLS and authentication sockets are bounded and closed. The
+caller's cancellation flag is checked before admission and while polling the
+owned async connect/handshake. A joined watcher carries the flag to preflight
+SQL; cancellation performs the same bounded server-cancel/ROLLBACK cleanup.
+Resolver callbacks check cancellation at their bounded entry/return boundaries;
+this does not promise instant preemption inside a synchronous system resolver.
+Scoped watchers stop and join even if an observer unwinds.
 
 Pack bodies must match their bounded descriptor before crossing the wire;
 descriptor digests, object IDs, signatures and ordinal bodies have format-derived

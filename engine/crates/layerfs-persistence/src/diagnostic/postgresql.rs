@@ -18,9 +18,30 @@ pub fn connection(
     resolver: &mut super::Resolver<'_>,
     observer: &mut dyn FnMut(Observation),
 ) -> Result<(), PersistenceError> {
-    let mut client = match Driver::diagnostic(selection, options.deadline, resolver) {
+    if options.check().is_err() {
+        emit(
+            observer,
+            "store.connection.cancelled",
+            Outcome::Unknown,
+            "connection diagnosis cancelled or deadline expired before admission",
+        );
+        return Ok(());
+    }
+    let mut client = match Driver::diagnostic(
+        selection,
+        options.deadline,
+        resolver,
+        options.cancelled,
+    ) {
         Ok(client) => client,
         Err(error) => {
+            if matches!(
+                error,
+                crate::backend::postgresql::session::driver::Error::Deadline { .. }
+            ) || error.backend() == BackendError::Cancelled
+            {
+                emit(observer,"store.connection.cancelled",Outcome::Unknown,"connection admission cancelled or deadline expired; owned connect/handshake future dropped at its bounded boundary");
+            }
             if let crate::backend::postgresql::session::driver::Error::Unsupported(reason) = &error
             {
                 emit(
@@ -43,7 +64,54 @@ pub fn connection(
             return Ok(());
         }
     };
+    let target = client.cancellation();
+    let result = with_cancellation(options.cancelled, target, || {
+        connection_queries(&mut client, selection, binding, options, observer)
+    });
+    if let Some(released) = client.released() {
+        emit(
+            observer,
+            "store.connection.cancellation.release",
+            if released {
+                Outcome::Pass
+            } else {
+                Outcome::Unknown
+            },
+            if released {
+                "server cancellation and ROLLBACK acknowledged; preflight query/snapshot released"
+            } else {
+                "preflight query/snapshot release was not acknowledged within bounded cleanup grace"
+            },
+        );
+    }
+    if client.close().is_err() {
+        emit(
+            observer,
+            "store.connection.close",
+            Outcome::Unknown,
+            "database session close was not acknowledged",
+        );
+    }
+    result?
+}
+
+fn connection_queries(
+    client: &mut Driver,
+    selection: &PostgresSelection,
+    binding: &[u8],
+    options: Options,
+    observer: &mut dyn FnMut(Observation),
+) -> Result<(), PersistenceError> {
     emit(observer,"store.connection.authentication",Outcome::Pass,"PostgreSQL driver established authenticated database session using configured TLS policy; DNS/TCP/TLS were combined by the driver");
+    if options.check().is_err() {
+        emit(
+            observer,
+            "store.connection.cancelled",
+            Outcome::Unknown,
+            "connection diagnosis cancelled before schema read",
+        );
+        return Ok(());
+    }
     let result=client.query_one("SELECT COALESCE(has_schema_privilege((SELECT oid FROM pg_catalog.pg_namespace WHERE nspname=$1),'USAGE'),false), EXISTS(SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname=$1)",&[&selection.schema]);
     match result {
         Ok(row) => {
@@ -73,6 +141,15 @@ pub fn connection(
                 error.code().map(|c| c.code()).unwrap_or("unavailable")
             ),
         ),
+    }
+    if options.check().is_err() {
+        emit(
+            observer,
+            "store.connection.cancelled",
+            Outcome::Unknown,
+            "connection diagnosis interrupted before identity read",
+        );
+        return Ok(());
     }
     let table = format!("\"{}\".history_meta", selection.schema.replace('"', "\"\""));
     match client.query_one(
@@ -116,20 +193,59 @@ pub fn connection(
             ),
         ),
     }
+    if options.check().is_err() {
+        emit(
+            observer,
+            "store.connection.cancelled",
+            Outcome::Unknown,
+            "connection diagnosis interrupted before negotiated TLS observation",
+        );
+        return Ok(());
+    }
     // Establish actual negotiated TLS when the server exposes this observation.
     match client.query_one("SELECT ssl FROM pg_catalog.pg_stat_ssl WHERE pid=pg_backend_pid()",&[]){
         Ok(row)=>{let ssl:bool=row.try_get(0).map_err(|_|PersistenceError::Malformed)?;emit(observer,"store.connection.tls",Outcome::Pass,if ssl{"server reports TLS active; verification followed configured driver policy"}else{"server reports no TLS; connection followed configured driver policy"});}
         Err(_)=>emit(observer,"store.connection.tls",Outcome::Unknown,"negotiated TLS observation unavailable; successful connection alone does not establish TLS"),
     }
-    if client.close().is_err() {
-        emit(
-            observer,
-            "store.connection.close",
-            Outcome::Unknown,
-            "database session close was not acknowledged",
-        );
-    }
     Ok(())
+}
+
+fn with_cancellation<T>(
+    source: Option<&std::sync::atomic::AtomicBool>,
+    target: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    body: impl FnOnce() -> T,
+) -> Result<T, PersistenceError> {
+    let Some((source, target)) = source.zip(target) else {
+        return Ok(body());
+    };
+    std::thread::scope(|scope| {
+        let (done, ended) = std::sync::mpsc::channel::<()>();
+        struct Stop(Option<std::sync::mpsc::Sender<()>>);
+        impl Drop for Stop {
+            fn drop(&mut self) {
+                if let Some(done) = self.0.take() {
+                    let _ = done.send(());
+                }
+            }
+        }
+        let watcher = scope.spawn(move || loop {
+            if source.load(std::sync::atomic::Ordering::Relaxed) {
+                target.store(true, std::sync::atomic::Ordering::Relaxed);
+                break;
+            }
+            match ended.recv_timeout(std::time::Duration::from_millis(20)) {
+                Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            }
+        });
+        let stop = Stop(Some(done));
+        let result = body();
+        drop(stop);
+        if watcher.join().is_err() {
+            return Err(PersistenceError::Uncertain);
+        }
+        Ok(result)
+    })
 }
 
 impl PostgresHandles {
@@ -148,28 +264,11 @@ impl PostgresHandles {
             .map_err(|_| PersistenceError::Uncertain)?
             .client
             .cancellation();
-        let (done, ended) = std::sync::mpsc::channel::<()>();
-        std::thread::scope(|scope| {
-            let watcher = options.cancelled.zip(cancellation).map(|(source, target)| {
-                scope.spawn(move || loop {
-                    if source.load(std::sync::atomic::Ordering::Relaxed) {
-                        target.store(true, std::sync::atomic::Ordering::Relaxed);
-                        break;
-                    }
-                    match ended.recv_timeout(std::time::Duration::from_millis(20)) {
-                        Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
-                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
-                    }
-                })
-            });
-            let result = self.diagnose_inner(options, observer);
-            let _ = done.send(());
-            if watcher.is_some_and(|thread| thread.join().is_err()) {
-                return Err(PersistenceError::Uncertain);
-            }
-            result
-        })
+        with_cancellation(options.cancelled, cancellation, || {
+            self.diagnose_inner(options, observer)
+        })?
     }
+
     fn diagnose_inner(
         &self,
         options: Options,
