@@ -7,7 +7,8 @@
 //! re-exported here. The `branch`, `commit` and `file`
 //! calls reach the Store engine's SDK facade (layerfs-store-service
 //! `methods/`) in the caller's process, the only route for Store calls
-//! (#352 F-020).
+//! (#352 F-020). Explicit doctor options live outside the call table and
+//! bypass normal home initialization/migration.
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
@@ -15,6 +16,7 @@ mod backup;
 mod branch;
 pub mod calls;
 mod commit;
+mod doctor;
 mod file;
 mod machine;
 mod project;
@@ -40,8 +42,13 @@ pub mod home {
     pub use layerfs_home::process;
     pub use layerfs_store::lease;
 }
+pub use doctor::{
+    doctor_options_json, doctor_request, doctor_with_options, duration as doctor_duration,
+};
 /// `layerfs doctor` (#536 H7): report-only, outside the call table.
-pub use layerfs_control::doctor::{doctor, doctor_json};
+pub use layerfs_control::doctor::{
+    doctor, doctor_json, doctor_target, DoctorRequest, DoctorTarget,
+};
 #[cfg(feature = "machine")]
 #[doc(hidden)]
 pub use layerfs_machine::running;

@@ -69,10 +69,7 @@ pub(super) fn artifacts(records: &Scanned, budget: &Budget, checks: &mut Checks)
         .iter()
         .any(|m| m.name() == "native" && m.daemon().is_some());
     if !native_override {
-        match bundle_dir(std::env::consts::OS) {
-            Ok(dir) if executable(&dir.join("layerfs-daemon")) => checks.pass("host.native_daemon", "Default native daemon is executable"),
-            _ => checks.warning("host.native_daemon", "Default native daemon is unavailable; existing remote operations may still be usable"),
-        }
+        default_native(checks);
     }
     let remote = records.machines.iter().any(|m| m.name() != "native")
         || records.sandboxes.iter().any(|s| s.machine() != "native")
@@ -119,5 +116,35 @@ pub(super) fn artifacts(records: &Scanned, budget: &Budget, checks: &mut Checks)
             "host.bundle",
             "Applicable Linux bundle is missing required executable/image files",
         );
+    }
+}
+
+/// Installation observations independent of an initialized current-layout home.
+pub(super) fn without_inventory(checks: &mut Checks, blocked: bool) {
+    default_native(checks);
+    if blocked {
+        checks.blocked(
+            "host.artifacts",
+            "Configured artifact applicability requires a stable readable record inventory",
+            "host.records",
+        );
+        checks.blocked(
+            "host.bundle",
+            "Configured remote bundle applicability could not be established",
+            "host.records",
+        );
+    } else {
+        checks.skip("host.artifacts", "Configured artifact checks require a current-layout home; default installation was inspected independently");
+        checks.skip(
+            "host.bundle",
+            "Configured remote bundle checks require a current-layout home",
+        );
+    }
+}
+
+fn default_native(checks: &mut Checks) {
+    match bundle_dir(std::env::consts::OS) {
+        Ok(dir) if executable(&dir.join("layerfs-daemon")) => checks.pass("host.native_daemon", "Default native daemon is executable"),
+        _ => checks.warning("host.native_daemon", "Default native daemon is unavailable; configured overrides or remote operations may still be usable"),
     }
 }

@@ -32,6 +32,7 @@ pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
                 "Home layout could not be established",
                 "host.layout",
             );
+            install::without_inventory(checks, true);
             return;
         }
     };
@@ -51,6 +52,7 @@ pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
                 "Home is not initialized; no home was created",
             );
             checks.skip("host.records", "No initialized home to inspect");
+            install::without_inventory(checks, false);
         }
         Layout::Old => {
             checks.warning(
@@ -61,6 +63,7 @@ pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
                 "host.records",
                 "Current-layout checks do not apply to this home",
             );
+            install::without_inventory(checks, false);
         }
         Layout::Previous(_) => {
             checks.warning(
@@ -98,6 +101,7 @@ fn observed(home: &Path, budget: &Budget, checks: &mut Checks, previous: bool) {
     let after = fingerprint(home, budget);
     if budget.expired() || before.is_err() || after.is_err() || before.ok() != after.ok() {
         checks.unknown("host.records", "Record inventory changed or could not be observed completely; no stable consistency verdict");
+        install::without_inventory(checks, true);
         return;
     }
     if result.is_err() {
@@ -105,11 +109,14 @@ fn observed(home: &Path, budget: &Budget, checks: &mut Checks, previous: bool) {
             "host.records",
             "Local record or lease inspection could not complete",
         );
+        install::without_inventory(checks, true);
         return;
     }
     publish(findings, checks);
     if let Some(records) = scanned {
         install::artifacts(&records, budget, checks);
+    } else {
+        install::without_inventory(checks, false);
     }
     checks.skip(
         "host.remote",

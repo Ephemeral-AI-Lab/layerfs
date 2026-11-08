@@ -148,3 +148,76 @@ that is reversed between observations. Local filesystem calls themselves
 remain synchronous; the budget is checked between observations. The capacity
 subprocess has its own bounded deadline and is killed/reaped when exhausted.
 No machine-specific cleanup thresholds are used as product health limits.
+
+## Explicit target commands
+
+The legacy no-argument entry above remains unchanged. Explicit diagnosis stays
+outside the ordinary call dispatcher, which can initialize or convert a home.
+
+```bash
+layerfs doctor host
+layerfs doctor machine lima1
+layerfs doctor sandbox api-dev
+layerfs doctor store integrity app
+layerfs doctor store integrity app --quick --timeout 10m
+layerfs doctor store connection team-db
+layerfs doctor backup connection production
+layerfs doctor backup connection production --write-test
+```
+
+All explicit commands accept `--timeout <duration>` and `--text`; JSON is the
+default. Durations are positive whole `ms`, `s`, `m` or `h` values. Host, Machine
+and Sandbox default to 30 seconds. PostgreSQL and backup connection default to
+10 seconds, or 30 seconds for the explicit backup write test. Store integrity
+has no arbitrary total default cutoff: it accepts an explicit overall deadline,
+while individual external probes must still be bounded. These are diagnostic
+budgets, not runtime limits for ordinary commands or Commits.
+
+Sandbox diagnosis always includes its daemon. `store connection` accepts only a
+registered PostgreSQL Store; `store integrity` selects SQLite or PostgreSQL from
+the Store record. Backup connection takes a registered backup alias, including
+its configured prefix and credential references. No raw passwords, access keys,
+or signed URLs belong in command options or reports.
+
+### Outcomes and coverage
+
+Explicit reports retain legacy `ok` and `findings` and add `target`, `operation`,
+`mode`, `home`, `checks`, `counts`, `complete`, `truncated` and observation timing.
+Each check has stable `id`/`code`, separate outcome and severity, bounded redacted
+evidence, `blocked_by`, and timing. A per-check duration is null when not measured.
+
+| Outcome | Meaning |
+| --- | --- |
+| pass | Expected behavior was observed |
+| fail | A concrete fault was observed; its cause is not necessarily corruption |
+| blocked | A failed or unobserved prerequisite prevented this check |
+| skipped | Not applicable or intentionally outside the selected mode |
+| unknown | Requested coverage could not be established |
+
+`ok` means no retained or counted error finding, not proof of complete health.
+Always inspect `complete`, mode and coverage. A confirmed failure stays a failure
+when later work times out, and the report also remains incomplete. Retained check
+entries and evidence are bounded; truncation retains counts and prevents a
+complete result. CLI reports still exit 0 once produced, including findings;
+usage and refusal exits remain 2 and 125. `--text` shows all retained check
+outcomes, including blocked and unknown results, rather than an empty findings
+list being rendered as healthy.
+
+### SDK selection
+
+```js
+await layerfs.doctor({ home, target: "host" });
+await layerfs.doctor({ home, target: "machine", name: "lima1", timeout: "10s" });
+await layerfs.doctor({ home, target: "store.integrity", name: "app", quick: true });
+await layerfs.doctor({ home, target: "backup.connection", name: "production", write_test: true });
+```
+
+```python
+layerfs.doctor(home, target="sandbox", name="api-dev", timeout="10s")
+layerfs.doctor(home, target="store.connection", name="team-db")
+```
+
+Empty options still select legacy doctor. Unknown or misplaced options are
+refused before diagnosis. `quick` belongs only to Store integrity and
+`write_test` only to backup connection. The shared implementation owns deadlines;
+a wrapper Promise timeout alone does not stop a synchronous database query.

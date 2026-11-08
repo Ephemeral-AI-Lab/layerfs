@@ -105,11 +105,14 @@ export function client({ home, scope } = {}) {
 }
 
 /** `layerfs doctor`: what is wrong in `home` (default `LAYERFS_HOME`, else
- * `~/.layerfs`), changing nothing and starting no machine. Resolves to
+ * `~/.layerfs`), without changing LayerFS state or starting a machine. Resolves to
  * `{ ok, findings: [{ severity, entity: { kind, name }, message, fix }] }`;
- * `ok` is false when a finding is an error. Outside the call table. */
-export async function doctor({ home } = {}) {
-  const answer = decode(await native.doctor(home ?? null));
+ * `ok` is false when a finding is an error. Explicit `{ target, name?, timeout?,
+ * quick?, write_test? }` selects one scope and adds checks/complete/coverage;
+ * empty options retain the legacy report. Explicit backup write_test may create
+ * and delete its own temporary S3 object version. Outside the call table. */
+export async function doctor({ home, ...options } = {}) {
+  const answer = decode(await native.doctor(home ?? null, encode(options)));
   if (answer.refused) throw new LayerFSError(answer.refused.code, answer.refused.message, answer.refused.detail);
   return answer.value;
 }

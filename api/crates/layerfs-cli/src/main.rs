@@ -10,6 +10,7 @@
 #![forbid(unsafe_code)]
 
 mod banner;
+mod doctor;
 mod help;
 mod output;
 mod parse;

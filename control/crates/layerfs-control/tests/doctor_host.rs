@@ -71,6 +71,8 @@ fn absent_home_stays_absent_and_reports_uninitialized() {
     let report = run(&home);
     assert!(!home.exists());
     assert!(contains(&report, "not initialized"));
+    assert!(contains(&report, "host.native_daemon"));
+    assert!(contains(&report, "host.artifacts"));
 }
 #[test]
 fn current_and_previous_layouts_are_observed_without_conversion_or_files() {
@@ -190,7 +192,10 @@ fn arbitrary_version_value_is_not_echoed_and_timeout_is_incomplete() {
     let report = run(&home);
     assert!(!contains(&report, "secret-token-value"));
     assert!(contains(&report, "non-integer"));
-    let timed = doctor_target(&home, &request(Duration::ZERO)).unwrap();
+    let invalid = doctor_target(&home, &request(Duration::ZERO)).unwrap_err();
+    assert_eq!(invalid.code, "InvalidInput");
+    // Positive budgets are valid even when exhausted before local inspection.
+    let timed = doctor_target(&home, &request(Duration::from_nanos(1))).unwrap();
     assert!(!timed.get_bool("complete"));
     std::fs::remove_dir_all(home).unwrap();
 }

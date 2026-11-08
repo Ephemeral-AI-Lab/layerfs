@@ -89,10 +89,42 @@ export interface CallSpec {
   help: string;
 }
 
+export interface DoctorCheck {
+  id: string;
+  code: string;
+  outcome: "pass" | "fail" | "blocked" | "skipped" | "unknown";
+  severity: "error" | "warning" | null;
+  entity: { kind: string; name: string };
+  message: string;
+  evidence: Value;
+  fix: string;
+  blocked_by: string[];
+  observed_ms: number;
+  duration_ms: number | null;
+}
+export interface DoctorOptions {
+  home?: string;
+  target?: "host" | "machine" | "sandbox" | "store.integrity" | "store.connection" | "backup.connection";
+  name?: string;
+  timeout?: string;
+  quick?: boolean;
+  write_test?: boolean;
+}
 export interface DoctorReport {
   ok: boolean;
+  complete?: boolean;
+  checks?: DoctorCheck[];
+  truncated?: boolean;
+  counts?: Record<string, number>;
+  target?: { kind: string; name: string };
+  home?: string;
+  operation?: "diagnose" | "integrity" | "connection";
+  mode?: "full" | "quick" | "observation";
+  observed_at_ms?: number;
+  duration_ms?: number;
   findings: { severity: string; entity: { kind: string; name: string }; message: string; fix: string | null }[];
 }
+
 `];
   for (const spec of table) {
     if (spec.options.length === 0) continue;
@@ -137,8 +169,8 @@ export const families: readonly string[];
 
 /** A client of \`home\` with an optional folder scope. */
 export function client(options?: ClientOptions): Client;
-/** What is wrong in \`home\`; changes nothing and starts no machine. Outside the call table. */
-export function doctor(options?: { home?: string }): Promise<DoctorReport>;
+/** Diagnoses without LayerFS state changes; explicit backup write_test uses its own temporary S3 version. */
+export function doctor(options?: DoctorOptions): Promise<DoctorReport>;
 /** Closes every Store this process holds open with no call running; answers how many. Outside the call table. */
 export function close(): number;
 

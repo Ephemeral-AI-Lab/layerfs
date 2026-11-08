@@ -65,10 +65,7 @@ pub fn print(topic: &[&str]) -> ExitCode {
             ));
             output::print(&text)
         }
-        ["doctor"] => output::print(concat!(
-            "layerfs doctor [--text]\n",
-            "    report what is wrong in the home, changing nothing; exit 0 whenever the report is made (`ok` says whether it is clean)\n",
-        )),
+        ["doctor", rest @ ..] => crate::doctor::help(rest),
         [family] if layerfs_api::families().iter().any(|f| f.name == *family) => {
             let calls = layerfs_api::calls();
             let shown = calls.into_iter().filter(|c| c.family == *family);
