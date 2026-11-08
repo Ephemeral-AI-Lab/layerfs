@@ -145,3 +145,96 @@ fn c01_wrong_descriptor_digest_and_length_are_attributable() {
         failure(&f.audit(false), "store.packs");
     }
 }
+
+#[test]
+fn c01_unlocated_payload_records_validate_their_own_lane_framing() {
+    use layerfs_storage::{
+        encoding::delta::record,
+        pack::{
+            frame_group,
+            layout::{EncodedGroup, GroupCodec},
+        },
+    };
+    for lane in [PackLane::Chunk, PackLane::Singleton, PackLane::WholeFile] {
+        for damaged in [false, true] {
+            let f = Fixture::new();
+            let record = record::encode_stored(lane, 4, b"data").unwrap();
+            let valid = assemble(lane, &[build_group(lane, &[record], None).unwrap()]).unwrap();
+            let reserved = f
+                .handles
+                .storage
+                .reserve(Reserve {
+                    packs: 1,
+                    ordinals: 0,
+                })
+                .unwrap();
+            f.handles
+                .storage
+                .publish(&Publication {
+                    packs: vec![PublishedPack::seal(
+                        reserved.first_pack_id,
+                        PackDomain::for_lane(lane),
+                        Arc::new(valid.clone()),
+                    )],
+                    ..Publication::default()
+                })
+                .unwrap();
+            clean(&f.audit(false));
+            if damaged {
+                let group = frame_group(&[vec![0]]).unwrap();
+                let body = assemble(
+                    lane,
+                    &[EncodedGroup {
+                        decoded_length: group.len(),
+                        bytes: group,
+                        records: 1,
+                        codec: GroupCodec::Raw,
+                    }],
+                )
+                .unwrap();
+                let raw = f.raw();
+                let trigger: String = raw
+                    .query_row(
+                        "SELECT sql FROM sqlite_schema WHERE name='pack_immutable_update'",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .unwrap();
+                raw.execute_batch("DROP TRIGGER pack_immutable_update")
+                    .unwrap();
+                let digest = layerfs_storage::port::ObjectKey::for_bytes(&body);
+                raw.execute(
+                    "UPDATE pack SET body=?1,digest=?2,length=?3 WHERE pack_id=?4",
+                    rusqlite::params![
+                        body,
+                        digest.as_bytes().as_slice(),
+                        body.len() as i64,
+                        reserved.first_pack_id
+                    ],
+                )
+                .unwrap();
+                let delta = body.len() as i64 - valid.len() as i64;
+                raw.execute(
+                    "UPDATE store_totals SET stored=stored+?1,metadata=metadata+?2",
+                    rusqlite::params![
+                        delta,
+                        if PackDomain::for_lane(lane) == PackDomain::Metadata {
+                            delta
+                        } else {
+                            0
+                        }
+                    ],
+                )
+                .unwrap();
+                raw.execute_batch(&trigger).unwrap();
+                let out = f.audit(false);
+                failure(&out, "store.packs");
+                assert!(
+                    out.iter()
+                        .any(|o| o.id == "store.packs" && o.message.contains("record")),
+                    "{lane:?}: {out:?}"
+                );
+            }
+        }
+    }
+}

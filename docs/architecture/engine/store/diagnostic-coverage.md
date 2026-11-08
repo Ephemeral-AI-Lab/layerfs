@@ -82,7 +82,7 @@ lineage reconstruction until authoritative findings are resolved.
 | Requirement | Persisted proof in `engine/crates/layerfs-persistence/tests/` |
 | --- | --- |
 | B1 acquisition/auxiliary | `diagnostic_inventory.rs`: active unpublished roots, pending file identity, aliases, all cleanup phases, bounded paging, malformed metadata/owners/charges, opaque retained merge state and deleted sequence gaps |
-| C01 physical framing | `diagnostic_framing.rs`: resealed truncation, malformed directory, bad unlocated record tag, descriptor digest/length; `store_diagnostic.rs`: oversized body before extraction |
+| C01 physical framing | `diagnostic_framing.rs`: resealed truncation, malformed directory, bad unlocated ordinary record tag, unlocated Chunk/Singleton/compact WholeFile truncation, descriptor digest/length; `store_diagnostic.rs`: oversized body before extraction |
 | C02 canonical identity | `store_diagnostic.rs::retained_object_corruption_with_resealed_pack_is_detected_and_quick_excludes_it` |
 | C03 winning locators | `diagnostic_dependencies.rs`: wrong role/length/group/record and missing winning base with its physical copy retained; independent valid objects remain inventoried |
 | C04 dependencies | `diagnostic_dependencies.rs`: forward dependency, missing base, actual two-object cycle, policy depth boundary, wrong base role and fully replacing delta requiring corrupt base |

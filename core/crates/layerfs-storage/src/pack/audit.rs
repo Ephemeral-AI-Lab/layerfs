@@ -78,8 +78,8 @@ pub fn validate_records(body: &[u8], proceed: &mut dyn FnMut() -> bool) -> Stora
                     }
                     _ => return Err(StorageError::Integrity("audit ordinary record tag")),
                 }
-            } else if tag > 2 {
-                return Err(StorageError::Integrity("audit payload record tag"));
+            } else {
+                crate::encoding::delta::record::validate_framing(header.lane, record)?;
             }
         }
         records = records
