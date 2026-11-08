@@ -16,7 +16,7 @@ const BINARY = Buffer.from([0x00, 0x01, 0x02, 0xff, 0xfe, 0x80, 0x7f]);
 
 test("a binary file round-trips byte for byte through file_write and export", async () => {
   const box = workspace("values", { "seed.txt": "seed\n" });
-  const server = await connect({ home: box.home, profile: "admin" });
+  const server = await connect({ home: box.home, profile: "admin", extra: ["--export-root", box.root] });
   try {
     const run = async (name, args) => value((await call(server.client, name, args)).result);
     await run("store_create", { name: "shop" });

@@ -17,7 +17,7 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
   const box = workspace("workflow", { "a.txt": "hello\n", "sub/b.txt": "bee\n" });
   let server;
   try {
-    server = await connect({ home: box.home, profile: "admin" });
+    server = await connect({ home: box.home, profile: "admin", extra: ["--export-root", box.root] });
     assert.equal(server.client.getServerVersion()?.name, "layerfs-mcp");
 
     const listed = await server.client.listTools();
@@ -134,6 +134,8 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
       home: box.home,
       profile: "admin",
       scope: { project: "shop/api", folder: "/sub", branch: "feat" },
+      // a root, so the library's own scope refusal is what answers the export
+      extra: ["--export-root", box.root],
     });
     const storeRefusal = (await call(scoped.client, "store_list", {})).result;
     assert.equal(storeRefusal.isError, true);
