@@ -47,9 +47,12 @@ fn hex(bytes: &[u8]) -> SdkValue {
 }
 
 /// `{ bytes, sha256, heads }` of the closed Store file at `file`.
-fn digest(file: &Path) -> Outcome {
-    let (bytes, sha256) =
-        pieces::sha256_file(file, None).map_err(|why| refused("Failed", why.to_string()))?;
+fn digest(file: &Path, progress: Option<&mut dyn FnMut(u64, u64)>) -> Outcome {
+    let (bytes, sha256) = match progress {
+        Some(emit) => pieces::sha256_file_observed(file, emit),
+        None => pieces::sha256_file(file, None),
+    }
+    .map_err(|why| refused("Failed", why.to_string()))?;
     let heads = heads(file).map_err(|why| refused("Failed", why))?;
     Ok(SdkValue::map([
         ("bytes", SdkValue::Int(bytes as i64)),
@@ -58,9 +61,41 @@ fn digest(file: &Path) -> Outcome {
     ]))
 }
 
+/// Checkpoints and closes a crashed opener's leftover `-wal` beside `file`,
+/// through the same `seal` a graceful close takes (#86): a Store whose last
+/// opener was killed keeps its committed frames in the log, which blocks a
+/// snapshot until one opener folds them in. Nothing runs while no live
+/// process holds the Store (the caller holds the exclusive intent and
+/// lease), so this opens it once here and seals it.
+fn checkpoint_leftover_wal(file: &Path, frame: &StepFrame) -> Result<(), SdkRefusal> {
+    if length(&with_suffix(file, "-wal"))? == 0 {
+        return Ok(());
+    }
+    let Some(record) = &frame.store_record else {
+        return Ok(());
+    };
+    let identity = crate::identity::identity_of(record)?;
+    if let Ok(handles) = layerfs_persistence::SqliteHandles::open_writable(
+        layerfs_persistence::PersistenceConfig::sqlite(file)
+            .with_sqlite_profile(layerfs_persistence::SqlitePersistenceProfile::Disposable),
+        &identity.binding,
+        identity.cursor_key,
+    ) {
+        // a failure leaves the log for the caller's own message: no retry
+        let _ = handles.seal();
+    }
+    Ok(())
+}
+
 /// Runs `frame`'s step on its Store under `root` (the home, or a worker's
 /// root).
 pub fn run(root: &Path, frame: &StepFrame) -> Outcome {
+    run_observed(root, frame, &mut |_, _| {})
+}
+
+/// [`run`], reporting `(done, total)` bytes while hashing a `snapshot` or a
+/// `verify` (#536 §10b).
+pub fn run_observed(root: &Path, frame: &StepFrame, progress: &mut dyn FnMut(u64, u64)) -> Outcome {
     let store = frame.store.as_str();
     layerfs_home::names::StoreName::parse(store)?;
     let file = paths::store_file(root, store);
@@ -72,8 +107,9 @@ pub fn run(root: &Path, frame: &StepFrame) -> Outcome {
         crate::open::close(&file)?;
     }
     match &frame.step {
-        // whether the file is here, its size with its write-ahead log, and
-        // the free bytes where it is (or would be)
+        // whether the file is here, its size with its write-ahead log and
+        // any partial incoming copy, and the free bytes where it is (or
+        // would be)
         StoreStep::Stat => Ok(SdkValue::map([
             ("exists", SdkValue::Bool(file.is_file())),
             (
@@ -85,9 +121,11 @@ pub fn run(root: &Path, frame: &StepFrame) -> Outcome {
                 "wal_bytes",
                 SdkValue::Int(length(&with_suffix(&file, "-wal"))? as i64),
             ),
+            ("incoming_bytes", SdkValue::Int(length(&incoming)? as i64)),
         ])),
         // snapshot: the idle Store's bytes, sha256 and history heads. A Store
-        // nobody holds has no write-ahead log left unless a process crashed.
+        // nobody holds has no write-ahead log left unless a process crashed;
+        // if a crashed opener left one, checkpoint and close it first.
         StoreStep::Snapshot => {
             if !file.is_file() {
                 return Err(refused(
@@ -95,6 +133,7 @@ pub fn run(root: &Path, frame: &StepFrame) -> Outcome {
                     format!("no Store file {}", file.display()),
                 ));
             }
+            checkpoint_leftover_wal(&file, frame)?;
             if length(&with_suffix(&file, "-wal"))? > 0 {
                 return Err(refused(
                     "Failed",
@@ -104,7 +143,7 @@ pub fn run(root: &Path, frame: &StepFrame) -> Outcome {
                     ),
                 ));
             }
-            digest(&file)
+            digest(&file, Some(progress))
         }
         // a consistent snapshot of the live Store for a backup, staged
         // beside it; `{ bytes, sha256, heads, sqlite }`
@@ -134,7 +173,7 @@ pub fn run(root: &Path, frame: &StepFrame) -> Outcome {
                     .snapshot(&staged, &mut |_, _| {})
                     .map_err(|e| refused("Failed", format!("snapshot: {e}")))
             })?;
-            let digest = digest(&staged)?;
+            let digest = digest(&staged, None)?;
             Ok(layerfs_home::home::with_field(
                 digest,
                 "sqlite",
@@ -202,7 +241,7 @@ pub fn run(root: &Path, frame: &StepFrame) -> Outcome {
             sha256,
             heads,
         } => {
-            let got = digest(&incoming)?;
+            let got = digest(&incoming, Some(progress))?;
             let text = |t: &Option<String>| t.as_deref().map(SdkValue::text);
             let expected = [
                 ("bytes", bytes.map(SdkValue::Int)),

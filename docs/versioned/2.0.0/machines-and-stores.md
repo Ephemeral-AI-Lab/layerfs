@@ -277,8 +277,8 @@ sqlite Store is Disposable (WAL, `synchronous=OFF`); its record says so.
 
 ```console
 $ layerfs store create shop          # run
-$ layerfs store push shop dev --progress   # not run
-$ layerfs store pull shop --progress       # not run
+$ layerfs store push shop dev --progress   # run (2026-11-08: docker, lima, apple-container)
+$ layerfs store pull shop --progress       # run (2026-11-08: docker, lima, apple-container)
 ```
 
 - `store create` makes an empty sqlite Store on `native`, at
@@ -341,13 +341,23 @@ $ layerfs store pull shop --progress       # not run
   - Once that process is gone, an uncertain `op` makes every later
     operation, lease and Store call on the Store `Unresolved`, naming
     `layerfs store status <name>` and the call that clears it: a new
-    `layerfs store push <name> <machine>` (with the machine the push named)
+    `layerfs store push <name> <machine>` (with the machine the push named,
+    never the opposite direction or another machine)
     or `layerfs store pull <name>`. A new push or pull first deletes the
     copy left on whichever of the two machines the record does not name (on
     `native` its file and any partial copy; on another machine the Store's
     folder under its worker's root), then runs as usual. `store remove`
-    clears it too, but deletes only the copy on the record's machine. A
-    certain `op` holds nothing.
+    clears it too, deleting both the copy on the record's machine and any
+    copy or partial `.incoming` copy on the other machine (`incoming_on`). A
+    certain `op` holds nothing; a certain failure at `send`, `verify` or
+    `install` records `incoming_on: <machine>` so `layerfs doctor` reports
+    the partial `.incoming` bytes and the next `store push` or `store remove`
+    cleans it up.
+  - During `snapshot`, an idle Store whose crashed opener left a non-empty
+    `-wal` is automatically checkpointed (`seal`) under the transfer's
+    exclusive lease before hashing. During `send` of a `store pull`, the
+    read-only piece read (`StoreStep::Read`) retries a lost worker answer
+    (`Unknown`) up to 3 times (50 ms apart); write steps are never replayed.
   - A failure names its phase in the message and in `detail.phase`, and
     keeps whatever exists.
   - While it runs, `store status` shows `state: "busy"` and `op`.

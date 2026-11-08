@@ -292,6 +292,50 @@ pub fn sha256_file(path: &Path, span: Option<Span>) -> Result<(u64, [u8; 32]), R
     hash_file(path, span, false)
 }
 
+/// [`sha256_file`] over the whole file, calling `on_bytes(done, total)` at
+/// the start `(0, total)`, at most once per [`progress::INTERVAL`] while
+/// hashing, and once at `(total, total)`: the bytes one hashing phase has
+/// read, for a caller that reports progress itself.
+pub fn sha256_file_observed(
+    path: &Path,
+    on_bytes: &mut dyn FnMut(u64, u64),
+) -> Result<(u64, [u8; 32]), RemoteError> {
+    let (mut file, span) = open_span(path, None)?;
+    file.seek(SeekFrom::Start(span.offset))
+        .map_err(|e| local("seek", e))?;
+    let total = span.length;
+    let mut last = std::time::Instant::now();
+    on_bytes(0, total);
+    let mut digest = Sha256::new();
+    let mut done = 0u64;
+    let mut shown = Some(0u64);
+    let mut buf = [0u8; 64 * 1024];
+    let mut limited = file.take(total);
+    loop {
+        let n = limited.read(&mut buf).map_err(|e| local("read", e))?;
+        if n == 0 {
+            break;
+        }
+        digest.update(&buf[..n]);
+        done += n as u64;
+        if (done == total || last.elapsed() >= progress::INTERVAL) && shown != Some(done) {
+            shown = Some(done);
+            last = std::time::Instant::now();
+            on_bytes(done, total);
+        }
+    }
+    if done != total {
+        return Err(RemoteError::Local(format!(
+            "{} shrank while read",
+            path.display()
+        )));
+    }
+    if shown != Some(total) {
+        on_bytes(total, total);
+    }
+    Ok((done, digest.finalize().into()))
+}
+
 /// The sha256 of `bytes`.
 pub fn sha256(bytes: &[u8]) -> [u8; 32] {
     Sha256::digest(bytes).into()

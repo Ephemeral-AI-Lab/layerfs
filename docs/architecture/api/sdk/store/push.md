@@ -44,7 +44,7 @@ layerfs store push <name> <machine> [--progress]
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `on_progress` | Function | none | called with `{ phase, done, total }`; `done` and `total` are bytes during `send`, null otherwise; the CLI prints them with `--progress` | [`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs) `progress` |
+| `on_progress` | Function | none | called with `{ phase, done, total }`; `done` and `total` are bytes during `snapshot`, `send` and `verify` (starting at null when `snapshot` or `verify` begins), null otherwise; the CLI prints them with `--progress` | [`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs) `progress`, `step_observed` |
 
 ## Returns
 
@@ -83,10 +83,10 @@ The record now names `machine: <to>` and keeps a `last_transfer`
 | Phase | Written to `op` first | A failure here is | Source |
 | --- | --- | --- | --- |
 | `check` | before `op` exists | certain; nothing changed | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) `run`, `reach` |
-| `snapshot`, `send`, `verify` | yes | certain; the partial copy stays as `.incoming` | same, `phases` |
-| `install` | yes, uncertain | uncertain only when the step answers `Unknown` | same |
+| `snapshot`, `send`, `verify` | yes | certain; the partial copy stays as `.incoming` (at `send` or `verify` the record also keeps the target in `incoming_on`, so the doctor reports the bytes and `store remove` deletes it) | same, `phases`, `transfer` |
+| `install` | yes, uncertain | uncertain when the step answers `Unknown`; a certain failure (`Exists`, I/O) leaves the target's `.incoming` and keeps the target in `incoming_on` the same way | same |
 | `record` | yes | **always uncertain**: both copies exist | same, `transfer` |
-| `retire` | yes, certain | certain; the Store is on `to`, `last_transfer.retired` stays false | same |
+| `retire` | yes, certain | certain; the Store is on `to`, `last_transfer.retired` stays false (`detail` carries `authority: <to>`, `source: <from>`, `retired: false`) | same |
 
 Locks are held only for the checks and record writes, never across a
 step. Each step runs once; a lost worker answer is never resent. See the
@@ -108,7 +108,7 @@ Every refusal's message starts `store push, <phase>:` and carries
 | `Unavailable` | the target machine is stopped or its worker gone; names `layerfs machine start`, nothing is started | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
 | `Unsupported` | the target's worker does not report free disk (an older bundle) | no | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
 | `Conflict` | the Store moved between check and `op` | no | same, `run` |
-| `Failed` | an unfinished `-wal` at snapshot; a digest mismatch at verify; I/O | no, unless at `record` | [`sqlite/transfer/steps.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) |
+| `Failed` | an unfinished `-wal` at snapshot that no open-and-close could checkpoint; a digest mismatch at verify; I/O | no, unless at `record` | [`sqlite/transfer/steps.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) |
 | `Unknown` | **a worker's answer was lost, or any failure of `record`** | **yes** | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) `transfer` |
 
 **After an uncertain push**, both copies are kept, `op` stays marked

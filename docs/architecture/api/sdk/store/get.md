@@ -56,8 +56,9 @@ None.
    last_transfer?: { call, from, to,     created,
      at, bytes, sha256, heads,           password?,      (env:/file: ref)
      retired },                          op?,
-   backups?: { <bucket>: { file,         projects: [name]
-     heads, last: { op, at, bytes,     }
+   incoming_on?: <machine>,              projects: [name]
+   backups?: { <bucket>: { file,         }
+     heads, last: { op, at, bytes,
      sha256 } } },
    op?: { id, name, phase, started,
           uncertain },
@@ -74,6 +75,7 @@ None.
 | `created` | int | milliseconds since the Unix epoch | same |
 | `sqlite` | text | the SQLite version that made the file (`store.create` only; a restored Store has none) | [`sqlite/create.rs`](../../../../../control/crates/layerfs-store/src/sqlite/create.rs) |
 | `last_transfer` | map | the last push or pull; `retired: false` means the source copy is not yet deleted | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
+| `incoming_on` | text | a machine a `store.push` that failed for certain at `send`, `verify` or `install` left a partial copy on, kept while the intent that named it is gone; the doctor reports that copy, and the next `store push` or `store remove` deletes it (until the record names the target the Store is on `native`, where `store pull` is refused) | [`sqlite/transfer/resolve.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/resolve.rs) `note_incoming`, `partial_on` |
 | `backups` | map | one link per bucket: the file, its heads and the last `create` or `restore` | [`backup/record.rs`](../../../../../control/crates/layerfs-store/src/backup/record.rs) `StoreLink` |
 | `url`, `schema`, `synchronous_commit`, `password` | text | PostgreSQL: the URL without a password, the fixed schema, the setting, and the password reference | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) `connected` |
 | `op` | map | the recorded intent, when there is one | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) `to_sdk` |
