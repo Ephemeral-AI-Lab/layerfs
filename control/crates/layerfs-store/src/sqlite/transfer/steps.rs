@@ -6,13 +6,13 @@
 //! read, replace or delete the file close this process's open copy first
 //! (a worker keeps a Store open after its calls); a call running on it is
 //! `InUse`.
-use crate::common::home::paths;
-use crate::common::outcome::{failed, refused, Outcome};
+use super::step::{StepFrame, StoreStep};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_store_backup::backup::heads::heads;
-use layerfs_store_backup::bucket::pieces;
+use layerfs_bucket::backup::heads::heads;
+use layerfs_bucket::bucket::pieces;
+use layerfs_home::home::paths;
+use layerfs_home::outcome::{failed, refused, Outcome};
 use std::io::{Read, Seek, SeekFrom, Write};
-#[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
@@ -25,16 +25,6 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
-fn int(args: &SdkValue, name: &str) -> Result<u64, SdkRefusal> {
-    match args.get(name) {
-        Some(SdkValue::Int(n)) if *n >= 0 => Ok(*n as u64),
-        _ => Err(refused(
-            "InvalidInput",
-            format!("`{name}` must be a whole number"),
-        )),
-    }
-}
-
 fn length(path: &Path) -> Result<u64, SdkRefusal> {
     match std::fs::metadata(path) {
         Ok(meta) => Ok(meta.len()),
@@ -45,20 +35,11 @@ fn length(path: &Path) -> Result<u64, SdkRefusal> {
 
 /// The bytes free to this process on the filesystem that holds `path`,
 /// or would: its nearest existing ancestor.
-#[cfg(unix)]
 fn free(path: &Path) -> Result<u64, SdkRefusal> {
     let at = path.ancestors().find(|at| at.exists()).unwrap_or(path);
     let filesystem = nix::sys::statvfs::statvfs(at).map_err(failed)?;
     let free = u128::from(filesystem.blocks_available()) * u128::from(filesystem.fragment_size());
     Ok(u64::try_from(free).unwrap_or(u64::MAX))
-}
-
-/// Windows: the volume free-space query is the volume-guard port (#454);
-/// until it lands, an unknowable budget reads as unbounded and the transfer
-/// itself fails on a full disk, the same best-effort end state.
-#[cfg(not(unix))]
-fn free(_path: &Path) -> Result<u64, SdkRefusal> {
-    Ok(u64::MAX)
 }
 
 fn hex(bytes: &[u8]) -> SdkValue {
@@ -77,21 +58,23 @@ fn digest(file: &Path) -> Outcome {
     ]))
 }
 
-/// Runs step `op` on Store `store` under `root` (the home, or a worker's root).
-pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
-    let store = args
-        .get_text("store")
-        .ok_or_else(|| refused("InvalidInput", "a Store step names its Store"))?;
-    crate::common::names::StoreName::parse(store)?;
+/// Runs `frame`'s step on its Store under `root` (the home, or a worker's
+/// root).
+pub fn run(root: &Path, frame: &StepFrame) -> Outcome {
+    let store = frame.store.as_str();
+    layerfs_home::names::StoreName::parse(store)?;
     let file = paths::store_file(root, store);
     let incoming = with_suffix(&file, ".incoming");
-    if matches!(op, "snapshot" | "install" | "retire" | "remove") {
-        crate::store::open::close(&file)?;
+    if matches!(
+        frame.step,
+        StoreStep::Snapshot | StoreStep::Install | StoreStep::Retire | StoreStep::Remove
+    ) {
+        crate::open::close(&file)?;
     }
-    match op {
+    match &frame.step {
         // whether the file is here, its size with its write-ahead log, and
         // the free bytes where it is (or would be)
-        "stat" => Ok(SdkValue::map([
+        StoreStep::Stat => Ok(SdkValue::map([
             ("exists", SdkValue::Bool(file.is_file())),
             (
                 "free",
@@ -105,7 +88,7 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
         ])),
         // snapshot: the idle Store's bytes, sha256 and history heads. A Store
         // nobody holds has no write-ahead log left unless a process crashed.
-        "snapshot" => {
+        StoreStep::Snapshot => {
             if !file.is_file() {
                 return Err(refused(
                     "NotFound",
@@ -125,22 +108,17 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
         }
         // a consistent snapshot of the live Store for a backup, staged
         // beside it; `{ bytes, sha256, heads, sqlite }`
-        "stage" => {
+        StoreStep::Stage => {
             let staged = with_suffix(&file, ".backup");
             let _ = std::fs::remove_file(&staged);
-            let mut fields = match args.clone() {
-                SdkValue::Map(fields) => fields,
-                _ => Vec::new(),
+            let open = crate::open_args::OpenArgs {
+                home: Some(root.to_path_buf()),
+                store: Some(store.to_owned()),
+                store_path: Some(file.display().to_string()),
+                store_record: frame.store_record.clone(),
+                ..Default::default()
             };
-            fields.push((
-                "home".to_owned(),
-                SdkValue::text(root.display().to_string()),
-            ));
-            fields.push((
-                "storePath".to_owned(),
-                SdkValue::text(file.display().to_string()),
-            ));
-            let sealed = crate::store::service::with_service(&SdkValue::Map(fields), |service| {
+            let sealed = crate::service::with_service(&open, |service| {
                 service
                     .opened
                     .file()
@@ -157,23 +135,26 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
                     .map_err(|e| refused("Failed", format!("snapshot: {e}")))
             })?;
             let digest = digest(&staged)?;
-            Ok(crate::common::home::with_field(
+            Ok(layerfs_home::home::with_field(
                 digest,
                 "sqlite",
                 SdkValue::text(sealed.sqlite_version),
             ))
         }
-        "unstage" => {
+        StoreStep::Unstage => {
             match std::fs::remove_file(with_suffix(&file, ".backup")) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(failed(e)),
                 _ => {}
             }
             Ok(SdkValue::map([("unstaged", SdkValue::Bool(true))]))
         }
-        "read" => {
-            let offset = int(args, "offset")?;
-            let len = int(args, "len")?.min(CHUNK);
-            let source = if matches!(args.get("staged"), Some(SdkValue::Bool(true))) {
+        StoreStep::Read {
+            offset,
+            len,
+            staged,
+        } => {
+            let (offset, len) = (*offset, (*len).min(CHUNK));
+            let source = if *staged {
                 with_suffix(&file, ".backup")
             } else {
                 file.clone()
@@ -186,34 +167,20 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
         }
         // send: the transfer's own staging file, written in order; offset 0
         // starts it again
-        "write" => {
-            let offset = int(args, "offset")?;
-            let Some(SdkValue::Bytes(bytes)) = args.get("bytes") else {
-                return Err(refused("InvalidInput", "`bytes` must be bytes"));
-            };
+        StoreStep::Write { offset, bytes } => {
+            let offset = *offset;
             if file.exists() {
                 return Err(refused(
                     "Exists",
                     format!("a Store file is already at {}", file.display()),
                 ));
             }
-            crate::common::home::private_dir(&paths::store_dir(root, store))?;
-            #[cfg(unix)]
-            let mut handle = {
-                use std::os::unix::fs::OpenOptionsExt;
-                std::fs::OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .truncate(offset == 0)
-                    .mode(0o600)
-                    .open(&incoming)
-                    .map_err(failed)?
-            };
-            #[cfg(not(unix))]
+            layerfs_home::home::private_dir(&paths::store_dir(root, store))?;
             let mut handle = std::fs::OpenOptions::new()
                 .write(true)
                 .create(true)
                 .truncate(offset == 0)
+                .mode(0o600)
                 .open(&incoming)
                 .map_err(failed)?;
             if handle.metadata().map_err(failed)?.len() != offset {
@@ -230,10 +197,20 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
             )]))
         }
         // verify: the staged copy's sha256 and heads are the snapshot's
-        "verify" => {
+        StoreStep::Verify {
+            bytes,
+            sha256,
+            heads,
+        } => {
             let got = digest(&incoming)?;
-            for field in ["bytes", "sha256", "heads"] {
-                if got.get(field) != args.get(field) {
+            let text = |t: &Option<String>| t.as_deref().map(SdkValue::text);
+            let expected = [
+                ("bytes", bytes.map(SdkValue::Int)),
+                ("sha256", text(sha256)),
+                ("heads", text(heads)),
+            ];
+            for (field, want) in expected {
+                if got.get(field) != Some(&want.unwrap_or_default()) {
                     return Err(refused(
                         "Failed",
                         format!("the copied Store's {field} is not the snapshot's; the copy is kept at {}", incoming.display()),
@@ -243,19 +220,15 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
             Ok(got)
         }
         // install: rename the verified copy into place, never over a Store
-        "install" => {
+        StoreStep::Install => {
             if file.exists() {
                 return Err(refused(
                     "Exists",
                     format!("a Store file is already at {}", file.display()),
                 ));
             }
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(&incoming, std::fs::Permissions::from_mode(0o600))
-                    .map_err(failed)?;
-            }
+            std::fs::set_permissions(&incoming, std::fs::Permissions::from_mode(0o600))
+                .map_err(failed)?;
             std::fs::rename(&incoming, &file).map_err(failed)?;
             Ok(SdkValue::map([(
                 "installed",
@@ -265,7 +238,7 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
         // retire: a copy the record does not name (the source's, after the
         // record names the target, or what an ended transfer left), with
         // any partial copy; the Store's folder and records stay
-        "retire" => {
+        StoreStep::Retire => {
             for path in [
                 file.clone(),
                 with_suffix(&file, "-wal"),
@@ -283,7 +256,7 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
         // root: `store.remove`, and the retire of a push's or pull's
         // source there). A symlink in it, or the directory itself if it is
         // one, is removed, never followed.
-        "remove" => {
+        StoreStep::Remove => {
             let dir = paths::store_dir(root, store);
             let existed = std::fs::symlink_metadata(&dir).is_ok();
             if existed {
@@ -291,6 +264,5 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
             }
             Ok(SdkValue::map([("removed", SdkValue::Bool(existed))]))
         }
-        _ => Err(refused("InvalidInput", format!("no Store step {op}"))),
     }
 }

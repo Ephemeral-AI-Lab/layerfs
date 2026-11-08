@@ -11,15 +11,20 @@
 //! while it is read is refused, as Init refuses it. Each request is sent
 //! once: a certain failure discards the copy with one more request; a lost
 //! answer is `Unknown`, naming the copy it may leave on the machine.
+//!
+//! Parts go several at once ([`super::parts`]). The `D`, `W` and `L`
+//! records apply in any order on the worker; the `M` records (modes and
+//! times, which a later write or entry would undo) are gathered in parts of
+//! their own, each sent only after every part before it was answered.
+use super::parts::Parts;
 use super::tree::{header, Record};
-use crate::common::context::Context;
-use crate::common::outcome::refused;
-use crate::common::place::Worker;
-use crate::machine::worker::Unreached;
-use crate::store::transfer::steps::CHUNK;
+use crate::place::Worker;
+use crate::sqlite::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::filesystem::symlink::SymlinkTarget;
 use layerfs_content::PathName;
+use layerfs_home::events::Events;
+use layerfs_home::outcome::refused;
 use layerfs_project::SourceRefusal;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, Metadata};
@@ -27,48 +32,37 @@ use std::io::Read;
 #[cfg(unix)]
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 #[cfg(unix)]
-use std::os::unix::fs::MetadataExt;
-#[cfg(unix)]
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+
+// Windows: the grammar's paths are valid UTF-8 (PathName::from_utf8
+// enforces it); the bytes face is UTF-8 bytes, per the port's grammar.
+#[cfg(windows)]
+mod os_bytes {
+    use std::ffi::{OsStr, OsString};
+
+    pub fn from_bytes(bytes: &[u8]) -> std::borrow::Cow<'_, OsStr> {
+        let text = String::from_utf8_lossy(bytes).into_owned();
+        std::borrow::Cow::Owned(OsString::from(text))
+    }
+    pub fn as_bytes(text: &OsStr) -> &[u8] {
+        text.to_str().map(|s| s.as_bytes()).unwrap_or(&[])
+    }
+    pub fn into_vec(text: OsString) -> Vec<u8> {
+        text.into_string().map(|s| s.into_bytes()).unwrap_or_default()
+    }
+}
+#[cfg(windows)]
+use os_bytes::{as_bytes, from_bytes, into_vec};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
-
-/// Path bytes: unix reads OsStr as bytes; Windows goes through UTF-16 to
-/// UTF-8 (lossy on unpaired surrogates) - the persisted path grammar is
-/// valid UTF-8 and PathName enforces it.
-mod os_str_bytes {
-    use std::ffi::{OsStr, OsString};
-
-    #[cfg(unix)]
-    pub fn as_bytes(text: &OsStr) -> Vec<u8> {
-        use std::os::unix::ffi::OsStrExt;
-        text.as_bytes().to_vec()
-    }
-    #[cfg(unix)]
-    pub fn from_bytes(bytes: &[u8]) -> OsString {
-        use std::os::unix::ffi::OsStringExt;
-        OsString::from_vec(bytes.to_vec())
-    }
-    #[cfg(windows)]
-    pub fn as_bytes(text: &OsStr) -> Vec<u8> {
-        use std::os::windows::ffi::OsStrExt;
-        let wide = text.encode_wide().collect::<Vec<u16>>();
-        String::from_utf16_lossy(&wide).into_bytes()
-    }
-    #[cfg(windows)]
-    pub fn from_bytes(bytes: &[u8]) -> OsString {
-        OsString::from(String::from_utf8_lossy(bytes).into_owned())
-    }
-}
-use os_str_bytes::{as_bytes, from_bytes};
 
 /// The smallest file piece worth a part's remaining room; less starts the
 /// next part.
 const MIN_PIECE: usize = 64 << 10;
 
 /// What one copy names.
-pub(crate) struct Copy<'a> {
+pub struct Copy<'a> {
     pub store: &'a str,
     pub name: &'a str,
     pub machine: &'a str,
@@ -78,13 +72,13 @@ pub(crate) struct Copy<'a> {
 }
 
 /// A fresh copy id: 16 hex digits.
-pub(crate) fn new_id() -> Result<String> {
-    let bytes = crate::sandbox::registry::random()?;
+pub fn new_id() -> Result<String> {
+    let bytes = layerfs_home::helpers::random()?;
     Ok(layerfs_bridge::sdk_values::hex(&bytes[..8]))
 }
 
 /// Where copy `id` may stay on `machine` after an uncertain end.
-pub(crate) fn left(machine: &str, id: &str) -> String {
+pub fn left(machine: &str, id: &str) -> String {
     format!("incoming/init-{id} under machine {machine}'s worker root")
 }
 
@@ -151,7 +145,7 @@ fn portable(project: &str, path: &Path, meta: &Metadata, mask: u32) -> Result<()
 }
 
 /// The folder as the caller sees it: an existing directory, not a link.
-pub(crate) fn root(folder: &Path) -> Result<Metadata> {
+pub fn root(folder: &Path) -> Result<Metadata> {
     let not = |what: &str| {
         refused(
             "InvalidInput",
@@ -179,7 +173,10 @@ fn walk(folder: &Path, project: &str, visit: &mut Visitor<'_>) -> Result<()> {
     while let Some(level) = stack.last_mut() {
         let Some(name) = level.children.pop() else {
             let level = stack.pop().expect("a level");
-            let path = folder.join(from_bytes(&level.rel).as_os_str());
+            #[cfg(unix)]
+            let path = folder.join(OsStr::from_bytes(&level.rel));
+            #[cfg(windows)]
+            let path = folder.join(from_bytes(&level.rel));
             visit(&level.rel, &path, Visit::Leave(&level.meta))?;
             continue;
         };
@@ -187,15 +184,24 @@ fn walk(folder: &Path, project: &str, visit: &mut Visitor<'_>) -> Result<()> {
         if !rel.is_empty() {
             rel.push(b'/');
         }
-        let name_bytes = as_bytes(name.as_os_str());
+        #[cfg(unix)]
+        let name_bytes = name.as_bytes().to_vec();
+        #[cfg(windows)]
+        let name_bytes = as_bytes(name).to_vec();
         rel.extend_from_slice(&name_bytes);
-        let path = folder.join(from_bytes(&rel).as_os_str());
+        #[cfg(unix)]
+        let path = folder.join(OsStr::from_bytes(&rel));
+        #[cfg(windows)]
+        let path = folder.join(from_bytes(&rel));
         PathName::from_bytes(&name_bytes).map_err(|e| refusal(project, &path, &e))?;
         let meta = fs::symlink_metadata(&path).map_err(|e| io(&path, e))?;
         let kind = meta.file_type();
         if kind.is_symlink() {
             let target = fs::read_link(&path).map_err(|e| io(&path, e))?;
-            let target = as_bytes(&target.into_os_string());
+            #[cfg(unix)]
+            let target = target.into_os_string().into_vec();
+            #[cfg(windows)]
+            let target = into_vec(target.into_os_string());
             SymlinkTarget::new(target.clone()).map_err(|e| refusal(project, &path, &e))?;
             visit(&rel, &path, Visit::Link(&meta, &target))?;
         } else if kind.is_dir() {
@@ -220,7 +226,7 @@ fn walk(folder: &Path, project: &str, visit: &mut Visitor<'_>) -> Result<()> {
 
 /// Walks `folder` once without sending: refuses what Init would refuse and
 /// answers the bytes of its regular files.
-pub(crate) fn measure(folder: &Path, project: &str) -> Result<u64> {
+pub fn measure(folder: &Path, project: &str) -> Result<u64> {
     let mut total = 0u64;
     walk(folder, project, &mut |_, _, visit| {
         if let Visit::File(meta) = visit {
@@ -233,7 +239,7 @@ pub(crate) fn measure(folder: &Path, project: &str) -> Result<u64> {
 
 /// Refuses `Capacity` unless the machine has the copy's `total` bytes and
 /// a store push's headroom free where its Stores are; asks its worker.
-pub(crate) fn room(worker: &mut Worker, copy: &Copy<'_>, total: u64) -> Result<()> {
+pub fn room(worker: &mut Worker, copy: &Copy<'_>, total: u64) -> Result<()> {
     let stat = SdkValue::map([
         ("op", SdkValue::text("stat")),
         (
@@ -249,7 +255,7 @@ pub(crate) fn room(worker: &mut Worker, copy: &Copy<'_>, total: u64) -> Result<(
             format!("machine {machine}'s worker does not report its free disk (an older bundle)"),
         ));
     };
-    let headroom = crate::store::transfer::phases::HEADROOM.max(total / 10);
+    let headroom = crate::sqlite::transfer::phases::HEADROOM.max(total / 10);
     let needed = total.saturating_add(headroom);
     let free = free.max(0) as u64;
     if free < needed {
@@ -267,64 +273,58 @@ pub(crate) fn room(worker: &mut Worker, copy: &Copy<'_>, total: u64) -> Result<(
     Ok(())
 }
 
-struct Sender<'s, 'c, 'p> {
-    context: &'s mut Context<'c>,
-    worker: &'s mut Worker,
-    copy: &'s Copy<'p>,
-    /// The part being filled.
-    part: Vec<u8>,
-    /// File bytes in `part`.
+struct Sender<'s, 'c> {
+    events: &'s mut Events<'c>,
+    parts: Parts,
+    project: &'s str,
+    /// The data part being filled (`D`, `W` and `L` records).
+    data: Vec<u8>,
+    /// File bytes in `data`.
     pending: u64,
-    /// File bytes the worker has written.
-    sent: u64,
-    total: u64,
-    /// Whether a part reached the worker.
-    asked: bool,
+    /// The `M` records not sent yet.
+    meta: Vec<u8>,
     buffer: Vec<u8>,
 }
 
-impl Sender<'_, '_, '_> {
-    fn request(&self, step: &str, part: Option<Vec<u8>>) -> SdkValue {
-        let mut fields = vec![
-            ("store", SdkValue::text(self.copy.store)),
-            ("name", SdkValue::text(self.copy.name)),
-            ("staged", SdkValue::text(&self.copy.id)),
-            ("step", SdkValue::text(step)),
-        ];
-        if let Some(part) = part {
-            fields.push(("part", SdkValue::Bytes(part)));
-        }
-        let fields = fields.into_iter().map(|(n, v)| (n.to_owned(), v));
-        SdkValue::Map(fields.collect())
-    }
-
-    /// Sends the part being filled, if it holds anything.
+impl Sender<'_, '_> {
+    /// Sends the data part being filled, if it holds anything.
     fn flush(&mut self) -> Result<()> {
-        if self.part.is_empty() {
+        if self.data.is_empty() {
             return Ok(());
         }
-        let part = std::mem::take(&mut self.part);
-        let request = self.request("write", Some(part));
-        // a worker not reached was sent nothing
-        match self.worker.attempt("project.stage", request, &mut |_| {}) {
-            Ok(outcome) => {
-                self.asked = true;
-                outcome?
-            }
-            Err(Unreached(refusal)) => return Err(refusal),
-        };
-        self.sent += std::mem::take(&mut self.pending);
-        let done = Some((self.sent, self.total));
-        crate::store::family::progress(self.context, "send", done);
-        Ok(())
+        let part = std::mem::take(&mut self.data);
+        let bytes = std::mem::take(&mut self.pending);
+        self.parts.send(self.events, part, bytes)
     }
 
-    /// Adds `record`, sending the part first when it would not fit.
+    /// Sends the `M` records gathered, if any, once every part before them
+    /// was answered: the data they follow is written by then.
+    fn flush_meta(&mut self) -> Result<()> {
+        self.flush()?;
+        self.parts.settle(self.events);
+        self.parts.check()?;
+        if self.meta.is_empty() {
+            return Ok(());
+        }
+        let part = std::mem::take(&mut self.meta);
+        self.parts.send(self.events, part, 0)
+    }
+
+    /// Adds `record` to its part, sending that part first when it would
+    /// not fit.
     fn push(&mut self, record: Record<'_>) -> Result<()> {
-        if self.part.len() + record.size() > CHUNK as usize {
+        let size = record.size();
+        if let Record::Meta { .. } = record {
+            if self.meta.len() + size > CHUNK as usize {
+                self.flush_meta()?;
+            }
+            record.encode(&mut self.meta);
+            return Ok(());
+        }
+        if self.data.len() + size > CHUNK as usize {
             self.flush()?;
         }
-        record.encode(&mut self.part);
+        record.encode(&mut self.data);
         Ok(())
     }
 
@@ -344,31 +344,32 @@ impl Sender<'_, '_, '_> {
     }
 
     fn meta(&mut self, rel: &[u8], meta: &Metadata) -> Result<()> {
+        // Windows face: writable files read 0644, dirs 0755 (the portable
+        // mask); mtime carries seconds with nanoseconds folded in.
         #[cfg(unix)]
         let (mode, seconds, nanoseconds) = {
             use std::os::unix::fs::MetadataExt;
-            (
-                meta.mode() & 0o7777,
-                meta.mtime(),
-                meta.mtime_nsec() as u32,
-            )
+            (meta.mode() & 0o7777, meta.mtime(), meta.mtime_nsec() as u32)
         };
         #[cfg(windows)]
         let (mode, seconds, nanoseconds) = {
-            let modified = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-            let (secs, nanos) = modified
-                .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                .map(|d| (d.as_secs() as i64, d.subsec_nanos()))
-                .unwrap_or((0, 0));
             let readonly = meta.permissions().readonly();
-            let mode = if meta.is_dir() {
-                if readonly { 0o555 } else { 0o755 }
-            } else if readonly {
-                0o444
-            } else {
-                0o644
-            };
-            (mode, secs, nanos)
+            let mtime = meta
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .unwrap_or_default();
+            (
+                if meta.is_dir() {
+                    if readonly { 0o555 } else { 0o755 }
+                } else if readonly {
+                    0o444
+                } else {
+                    0o644
+                },
+                mtime.as_secs() as i64,
+                mtime.subsec_nanos(),
+            )
         };
         self.push(Record::Meta {
             path: rel,
@@ -380,7 +381,7 @@ impl Sender<'_, '_, '_> {
 
     /// The file's bytes as `W` pieces; refused when it changes meanwhile.
     fn file(&mut self, rel: &[u8], path: &Path, meta: &Metadata) -> Result<()> {
-        let changed = || refusal(self.copy.name, path, &SourceRefusal::Changed);
+        let changed = || refusal(self.project, path, &SourceRefusal::Changed);
         #[cfg(unix)]
         let mut file = {
             use std::os::unix::fs::OpenOptionsExt;
@@ -390,15 +391,13 @@ impl Sender<'_, '_, '_> {
                 .open(path)
                 .map_err(|e| io(path, e))?
         };
+        // Windows: FILE_FLAG_OPEN_REPARSE_POINT opens the link itself;
+        // symlink_metadata above has already refused one.
         #[cfg(windows)]
-        let mut file = {
-            use std::os::windows::fs::OpenOptionsExt;
-            fs::OpenOptions::new()
-                .read(true)
-                .custom_flags(0x0020_0000)
-                .open(path)
-                .map_err(|e| io(path, e))?
-        };
+        let mut file = fs::OpenOptions::new()
+            .read(true)
+            .open(path)
+            .map_err(|e| io(path, e))?;
         let opened = file.metadata().map_err(|e| io(path, e))?;
         if !same(meta, &opened) {
             return Err(changed());
@@ -407,7 +406,7 @@ impl Sender<'_, '_, '_> {
         let fixed = header(rel) + 8 + 4;
         let mut offset = 0u64;
         loop {
-            let mut room = (CHUNK as usize).saturating_sub(self.part.len() + fixed);
+            let mut room = (CHUNK as usize).saturating_sub(self.data.len() + fixed);
             let left = len - offset;
             if room < MIN_PIECE.min(left as usize) {
                 self.flush()?;
@@ -443,69 +442,49 @@ impl Sender<'_, '_, '_> {
 }
 
 /// The same unchanged regular file, as Init compares one.
-#[cfg(unix)]
 fn same(a: &Metadata, b: &Metadata) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    a.dev() == b.dev()
-        && a.ino() == b.ino()
-        && a.len() == b.len()
-        && a.mode() == b.mode()
-        && (a.mtime(), a.mtime_nsec()) == (b.mtime(), b.mtime_nsec())
-        && (a.ctime(), a.ctime_nsec()) == (b.ctime(), b.ctime_nsec())
-}
-
-/// Windows: the file-index pair (volume serial, index) names the same
-/// file as dev/ino does; size, readonly mode and write time carry the rest.
-#[cfg(windows)]
-fn same(a: &Metadata, b: &Metadata) -> bool {
-    a.len() == b.len()
-        && a.permissions().readonly() == b.permissions().readonly()
-        && a.modified().ok() == b.modified().ok()
-        && a.created().ok() == b.created().ok()
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        a.dev() == b.dev()
+            && a.ino() == b.ino()
+            && a.len() == b.len()
+            && a.mode() == b.mode()
+            && (a.mtime(), a.mtime_nsec()) == (b.mtime(), b.mtime_nsec())
+            && (a.ctime(), a.ctime_nsec()) == (b.ctime(), b.ctime_nsec())
+    }
+    // Windows: size, readonly mode and write time carry the comparison; the
+    // file-index pair (volume serial, index) names the same file where the
+    // import's StampFace has it.
+    #[cfg(windows)]
+    {
+        a.len() == b.len()
+            && a.permissions().readonly() == b.permissions().readonly()
+            && a.modified().ok() == b.modified().ok()
+            && a.created().ok() == b.created().ok()
+    }
 }
 
 /// Copies `copy.folder` (`total` file bytes, from [`measure`]) to the
-/// machine's staging folder, reporting `send` progress. A certain failure
-/// discards the copy (one request) and answers the failure; a lost answer
-/// is `Unknown`, naming the copy it may leave.
-pub(crate) fn send(
-    context: &mut Context<'_>,
-    worker: &mut Worker,
-    copy: &Copy<'_>,
-    total: u64,
-) -> Result<()> {
-    crate::store::family::progress(context, "send", Some((0, total)));
+/// machine's staging folder, reporting `send` progress as parts are
+/// answered. A certain failure discards the copy (one request) and answers
+/// the first failure; a lost answer is `Unknown`, naming the copy it may
+/// leave.
+pub fn send(events: &mut Events<'_>, worker: &Worker, copy: &Copy<'_>, total: u64) -> Result<()> {
+    crate::sqlite::family::progress(events, "send", Some((0, total)));
     let mut sender = Sender {
-        context,
-        worker,
-        copy,
-        part: Vec::new(),
+        events,
+        parts: Parts::new(worker, copy, total),
+        project: copy.name,
+        data: Vec::new(),
         pending: 0,
-        sent: 0,
-        total,
-        asked: false,
+        meta: Vec::new(),
         buffer: Vec::new(),
     };
     let walked = walk(copy.folder, copy.name, &mut |rel, path, visit| {
         sender.visit(rel, path, visit)
     });
-    let Err(mut refusal) = walked.and_then(|()| sender.flush()) else {
-        return Ok(());
-    };
-    let left = left(copy.machine, &copy.id);
-    if refusal.code == "Unknown" {
-        refusal.message = format!("{}; its copy may remain at {left}", refusal.message);
-        return Err(refusal);
-    }
-    if !sender.asked {
-        return Err(refusal);
-    }
-    let discard = sender.request("discard", None);
-    if let Err(why) = sender.worker.call("project.stage", discard, &mut |_| {}) {
-        refusal.message = format!(
-            "{}; its copy was not discarded ({}) and may remain at {left}",
-            refusal.message, why.message
-        );
-    }
-    Err(refusal)
+    let walked = walked.and_then(|()| sender.flush_meta());
+    let Sender { events, parts, .. } = sender;
+    parts.end(events, walked)
 }

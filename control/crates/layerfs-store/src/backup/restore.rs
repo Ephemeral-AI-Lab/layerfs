@@ -2,22 +2,26 @@
 use super::family::{hex, write_link};
 use super::progress::Shown;
 use super::record::{BucketRecord, StoreLink};
-use crate::common::context::Context;
-use crate::common::home::flock::{try_lock, unlock};
-use crate::common::home::lease;
-use crate::common::home::{self, paths};
-use crate::common::outcome::{failed, refused, Outcome};
+use crate::lease;
 use crate::project::record::ProjectRecord;
-use crate::store::record::{StoreKind, StoreRecord};
+use crate::record::{StoreKind, StoreRecord};
+use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_store_backup::backup as remote;
-use layerfs_store_backup::bucket::pieces;
+use layerfs_bucket::backup as remote;
+use layerfs_bucket::bucket::pieces;
+use layerfs_home::events::Events;
+use layerfs_home::home::flock::{try_lock, unlock};
+use layerfs_home::home::{self, paths};
+use layerfs_home::outcome::{failed, refused, Outcome};
 use std::fs::{File, OpenOptions};
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
+
+/// `backup.restore(store, bucket, file?)`.
+pub type BackupRestore = super::create::BackupCreate;
 
 /// `backup.restore(store, bucket, file?)`: the backup as a sqlite Store on
 /// `native`: a new Store when `store` does not exist, else it replaces an
@@ -26,16 +30,21 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// its projects runs). The download, its checks and the read of its
 /// projects happen before the home lock; the lock covers the re-checks, the
 /// install and the record writes only.
-pub(super) fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    let home = context.home.clone();
-    let store = args.get_text("store").unwrap_or("");
-    crate::common::names::StoreName::parse(store)?;
-    let bucket = args.get_text("bucket").unwrap_or("");
+pub fn restore(
+    home: &Path,
+    events: &mut Events<'_>,
+    request: &BackupRestore,
+    related: Related,
+) -> Outcome {
+    let home = home.to_path_buf();
+    let store = request.store.as_str();
+    layerfs_home::names::StoreName::parse(store)?;
+    let bucket = request.bucket.as_str();
     let driver = BucketRecord::of(&home, bucket)?.driver()?;
     let existing = StoreRecord::read(&home, store)?;
-    let file = args
-        .get_text("file")
-        .map(str::to_owned)
+    let file = request
+        .file
+        .clone()
         .or_else(|| {
             let link = existing.as_ref()?.link(bucket)?;
             link.file().map(str::to_owned)
@@ -51,12 +60,12 @@ pub(super) fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
                     format!("Store {store} is a PostgreSQL database"),
                 ));
             }
-            let identity = crate::store::identity::identity_in(record)?;
+            let identity = crate::identity::identity_in(record)?;
             // refused before the download too; checked again before the install
             {
                 let _lock = home::lock::take(&home)?;
-                let _store = crate::store::record::lock(&home, store)?;
-                replaceable(&home, store, bucket, record)?;
+                let _store = crate::record::lock(&home, store)?;
+                replaceable(&home, store, bucket, record, related)?;
             }
             _lease = Some(lease::hold(&home, store)?);
             Some(identity)
@@ -64,15 +73,15 @@ pub(super) fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     };
     let cursor = match &identity {
         Some(identity) => identity.cursor_key,
-        None => crate::sandbox::registry::random()?,
+        None => layerfs_home::helpers::random()?,
     };
     let mut shown = Shown::new();
-    shown.phase(context, "check");
+    shown.phase(events, "check");
     let staging = Staging::make(&home)?;
     let staged = staging.0.join(remote::STORE_FILE);
     // `download` with its bytes and pieces, `verify`, then `install`
     let loaded = shown
-        .transfer(context, || {
+        .transfer(events, || {
             remote::load(driver.as_ref(), &file, &staged, cursor)
         })
         // the cause alone: what the load left is in `staging`, removed below
@@ -93,12 +102,12 @@ pub(super) fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         _ => StoreRecord::restored(store, &loaded.binding, &cursor),
     };
     let found = projects_in(&home, store, &record, &staged)?;
-    shown.phase(context, "install");
+    shown.phase(events, "install");
     let _lock = home::lock::take(&home)?;
     // a Store replaced here is checked and replaced under its lock, which
     // the link below takes again
     let store_lock = match &existing {
-        Some(_) => Some(crate::store::record::lock(&home, store)?),
+        Some(_) => Some(crate::record::lock(&home, store)?),
         None => None,
     };
     let destination = paths::store_file(&home, store);
@@ -129,7 +138,7 @@ pub(super) fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
                     format!("Store {store} was replaced while this restore downloaded"),
                 ));
             }
-            replaceable(&home, store, bucket, &now)?;
+            replaceable(&home, store, bucket, &now, related)?;
             std::fs::rename(&staged, &destination).map_err(failed)?;
         }
     }
@@ -168,7 +177,7 @@ struct Staging(std::path::PathBuf, File);
 
 impl Staging {
     fn make(home: &Path) -> Result<Self> {
-        let random = crate::sandbox::registry::random()?;
+        let random = layerfs_home::helpers::random()?;
         let parent = home.join("store");
         let dir = parent.join(format!(".restore-{}", pieces::hex(&random[..12])));
         // under the home lock no folder is between its creation and its lock
@@ -176,13 +185,16 @@ impl Staging {
         sweep(&parent);
         home::private_dir(&dir)?;
         #[cfg(unix)]
-        let lock = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(dir.join("lock"))
-            .map_err(failed)?;
-        #[cfg(not(unix))]
+        let lock = {
+            use std::os::unix::fs::OpenOptionsExt;
+            OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(dir.join("lock"))
+                .map_err(failed)?
+        };
+        #[cfg(windows)]
         let lock = OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -214,16 +226,20 @@ fn sweep(parent: &Path) {
         }
         let dir = entry.path();
         #[cfg(unix)]
-        let lock = {
+        let Ok(lock) = {
             use std::os::unix::fs::OpenOptionsExt;
             OpenOptions::new()
                 .write(true)
                 .custom_flags(libc::O_NOFOLLOW)
                 .open(dir.join("lock"))
+        }
+        else {
+            continue;
         };
-        #[cfg(not(unix))]
-        let lock = OpenOptions::new().write(true).open(dir.join("lock"));
-        let Ok(lock) = lock else {
+        // Windows: open resolves a reparse point to its target; the lock's
+        // holder face is the same.
+        #[cfg(windows)]
+        let Ok(lock) = OpenOptions::new().write(true).open(dir.join("lock")) else {
             continue;
         };
         if try_lock(&lock, true).unwrap_or(false) {
@@ -236,7 +252,13 @@ fn sweep(parent: &Path) {
 /// Refuses replacing Store `store` unless it is an idle sqlite Store on
 /// `native`, unchanged since its last backup or restore through `bucket`.
 /// Under the home lock and the Store's lock.
-fn replaceable(home: &Path, store: &str, bucket: &str, record: &StoreRecord) -> Result<()> {
+fn replaceable(
+    home: &Path,
+    store: &str,
+    bucket: &str,
+    record: &StoreRecord,
+    related: Related,
+) -> Result<()> {
     let machine = record.machine()?;
     if machine != "native" {
         return Err(refused("Unsupported", format!("Store {store} is on {machine}; a restore replaces a Store on native: move it there first")));
@@ -244,8 +266,8 @@ fn replaceable(home: &Path, store: &str, bucket: &str, record: &StoreRecord) -> 
     record.unblocked()?;
     let destination = paths::store_file(home, store);
     // this process's own open copy closes first
-    crate::store::open::close(&destination)?;
-    crate::inventory::store_idle(home, store)?;
+    crate::open::close(&destination)?;
+    (related.store_idle)(home, store)?;
     let linked = record.link(bucket).and_then(|link| link.heads());
     let now = remote::heads(&destination).ok().map(|h| pieces::hex(&h));
     if linked.is_none() || now != linked {
@@ -277,13 +299,14 @@ fn projects_in(
     record: &StoreRecord,
     file: &Path,
 ) -> Result<Vec<(String, SdkValue)>> {
-    let args = SdkValue::map([
-        ("home", SdkValue::text(home.display().to_string())),
-        ("store", SdkValue::text(store)),
-        ("store_record", record.to_record().clone()),
-        ("storePath", SdkValue::text(file.display().to_string())),
-    ]);
-    let SdkValue::List(items) = crate::store::identity::list_projects(&args)? else {
+    let open = crate::open_args::OpenArgs {
+        home: Some(home.to_path_buf()),
+        store: Some(store.to_owned()),
+        store_record: Some(record.to_record().clone()),
+        store_path: Some(file.display().to_string()),
+        ..Default::default()
+    };
+    let SdkValue::List(items) = crate::identity::list_projects(&open)? else {
         return Err(refused("Failed", "the Store's project list is not a list"));
     };
     Ok(items

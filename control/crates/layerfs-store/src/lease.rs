@@ -13,14 +13,14 @@
 //! without closing its Stores leaves nothing once the Store is used again;
 //! reads (`store.status`, `store.list`, `layerfs doctor`) ignore it and
 //! change nothing.
-use crate::common::home::{self, paths};
-use crate::common::outcome::{failed, refused};
-use crate::store::record::StoreRecord;
+use crate::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_sandbox::local::LocalProcess;
+use layerfs_home::home::{self, paths};
+use layerfs_home::outcome::{failed, refused};
+use layerfs_home::process::{alive_as, me};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 
 /// This process's leases and how many holders use each.
 static HELD: Mutex<BTreeMap<PathBuf, usize>> = Mutex::new(BTreeMap::new());
@@ -43,56 +43,6 @@ impl Drop for Lease {
     }
 }
 
-/// This process as leases name it, read once; `None` where the kernel does
-/// not say (its leases are then matched by id alone).
-#[cfg(unix)]
-fn me() -> Option<(u64, u128)> {
-    static ME: OnceLock<Option<(u64, u128)>> = OnceLock::new();
-    *ME.get_or_init(|| {
-        let process = LocalProcess::observe(std::process::id()).ok()?;
-        Some((process.start, process.boot?))
-    })
-}
-
-/// Windows: observe names this process by its absolute creation time; the
-/// boot half of the pair stays 0 (no boot id on Windows - the id+start
-/// match the module documents), and identity omits the boot field.
-#[cfg(windows)]
-fn me() -> Option<(u64, u128)> {
-    static ME: OnceLock<Option<(u64, u128)>> = OnceLock::new();
-    *ME.get_or_init(|| {
-        let process = LocalProcess::observe(std::process::id()).ok()?;
-        Some((process.start, 0))
-    })
-}
-
-/// The fields that name this process in a record (an `op`'s owner).
-pub(crate) fn identity() -> Vec<(&'static str, SdkValue)> {
-    let mut fields = vec![("pid", SdkValue::Int(i64::from(std::process::id())))];
-    if let Some((start, boot)) = me() {
-        fields.push(("pid_start", SdkValue::text(start.to_string())));
-        #[cfg(unix)]
-        fields.push(("pid_boot", SdkValue::text(format!("{boot:032x}"))));
-        #[cfg(windows)]
-        let _ = boot;
-    }
-    fields
-}
-
-/// Whether the process a record's [`identity`] fields name is alive.
-pub(crate) fn recorded_alive(value: &SdkValue) -> bool {
-    let Some(pid) = value.get_int("pid").and_then(|p| u32::try_from(p).ok()) else {
-        return false;
-    };
-    alive_as(
-        pid,
-        value.get_text("pid_start").and_then(|s| s.parse().ok()),
-        value
-            .get_text("pid_boot")
-            .and_then(|b| u128::from_str_radix(b, 16).ok()),
-    )
-}
-
 /// Holds Store `store`'s lease for this process. Under the Store's lock it
 /// re-reads the Store's record: no record is `NoSuchStore`; an operation
 /// running on it (by any live process, this one included) is `Busy`, one a
@@ -103,12 +53,12 @@ pub fn hold(home: &Path, store: &str) -> Result<Lease, SdkRefusal> {
 }
 
 /// [`hold`], answering the Store's record as read under the Store's lock.
-pub(crate) fn claim(home: &Path, store: &str) -> Result<(Lease, StoreRecord), SdkRefusal> {
+pub fn claim(home: &Path, store: &str) -> Result<(Lease, StoreRecord), SdkRefusal> {
     let none = || refused("NoSuchStore", format!("no Store named {store}"));
     if !paths::store_record(home, store).is_file() {
         return Err(none());
     }
-    let _store = crate::store::record::lock(home, store)?;
+    let _store = crate::record::lock(home, store)?;
     let record = StoreRecord::read(home, store)?.ok_or_else(none)?;
     record.unblocked()?;
     // the leases of processes that ended go now; the live holders' stay
@@ -118,7 +68,7 @@ pub(crate) fn claim(home: &Path, store: &str) -> Result<(Lease, StoreRecord), Sd
 
 /// Holds Store `store`'s lease under `root` with no record check: the
 /// caller holds the Store's lock, or is a worker under its own root.
-pub(crate) fn hold_locked(root: &Path, store: &str) -> Result<Lease, SdkRefusal> {
+pub fn hold_locked(root: &Path, store: &str) -> Result<Lease, SdkRefusal> {
     let dir = paths::lease_dir(root, store);
     let path = dir.join(std::process::id().to_string());
     let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
@@ -140,90 +90,11 @@ pub(crate) fn hold_locked(root: &Path, store: &str) -> Result<Lease, SdkRefusal>
 }
 
 /// Whether this process holds Store `store`'s lease under `root` now.
-pub(crate) fn held_here(root: &Path, store: &str) -> bool {
+pub fn held_here(root: &Path, store: &str) -> bool {
     let path = paths::lease_dir(root, store).join(std::process::id().to_string());
     HELD.lock()
         .unwrap_or_else(|e| e.into_inner())
         .contains_key(&path)
-}
-
-/// Whether process `pid` is alive on this host. Ids 0 and above `i32::MAX`
-/// name no single process (`kill` would read them as a group): never alive.
-#[cfg(unix)]
-pub fn alive(pid: u32) -> bool {
-    use nix::errno::Errno;
-    let id = match i32::try_from(pid) {
-        Ok(id) if id > 0 => id,
-        _ => return false,
-    };
-    match nix::sys::signal::kill(nix::unistd::Pid::from_raw(id), None) {
-        Ok(()) => true,
-        Err(Errno::EPERM) => true,
-        Err(_) => false,
-    }
-}
-
-/// Windows: a process is alive when it can be queried and has not exited.
-/// A refusal to open it (access denied) still proves it exists, matching
-/// the unix EPERM branch; the query handle is closed at once.
-#[cfg(windows)]
-#[allow(unsafe_code)] // the crate's audited Win32 process-query surface
-pub fn alive(pid: u32) -> bool {
-    if pid == 0 {
-        return false;
-    }
-    extern "system" {
-        #[link_name = "OpenProcess"]
-        fn OpenProcess(access: u32, inherit: u32, id: u32) -> isize;
-        #[link_name = "GetExitCodeProcess"]
-        fn GetExitCodeProcess(process: isize, code: *mut u32) -> u32;
-        #[link_name = "CloseHandle"]
-        fn CloseHandle(process: isize) -> u32;
-    }
-    const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
-    const STILL_ACTIVE: u32 = 259;
-    const ERROR_ACCESS_DENIED: i32 = 5;
-    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
-    if process == 0 {
-        return std::io::Error::last_os_error().raw_os_error() == Some(ERROR_ACCESS_DENIED);
-    }
-    let mut code: u32 = 0;
-    let read = unsafe { GetExitCodeProcess(process, &mut code) };
-    unsafe { CloseHandle(process) };
-    read != 0 && code == STILL_ACTIVE
-}
-
-/// Whether `pid` is alive and, when its start time and boot were recorded,
-/// still the same process.
-fn alive_as(pid: u32, start: Option<u64>, boot: Option<u128>) -> bool {
-    if !alive(pid) {
-        return false;
-    }
-    #[cfg(unix)]
-    {
-        match (start, boot) {
-            (Some(start), Some(boot)) => LocalProcess {
-                pid,
-                start,
-                boot: Some(boot),
-            }
-            .alive(),
-            _ => true,
-        }
-    }
-    // Windows: leases and ops record the id and the absolute creation
-    // time; a recorded start that differs names a process that is gone
-    // (or was replaced), exactly the unix judgement in its own units.
-    #[cfg(windows)]
-    {
-        let _ = boot;
-        match start {
-            Some(recorded) => LocalProcess::observe(pid)
-                .map(|now| now.start == recorded)
-                .unwrap_or(false),
-            None => LocalProcess::observe(pid).map(|_| true).unwrap_or(false),
-        }
-    }
 }
 
 /// Whether lease text `text` (`<at> [<start> <boot>]`) of `pid` names a
@@ -295,7 +166,7 @@ pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
 /// Read only (`layerfs doctor`, `store.status`, `store.list`, a layout 2
 /// home's survey): the live and the stale holders of Store `store` other than this process; nothing is
 /// removed and no lock is taken.
-pub(crate) fn read_holders(home: &Path, store: &str) -> Result<(Vec<u32>, Vec<u32>), SdkRefusal> {
+pub fn read_holders(home: &Path, store: &str) -> Result<(Vec<u32>, Vec<u32>), SdkRefusal> {
     let (mut live, mut stale) = (Vec::new(), Vec::new());
     for (pid, _, alive) in leases(home, store)? {
         if alive {

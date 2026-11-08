@@ -9,7 +9,7 @@ use std::fs::File;
 /// owner holds it, Err any other failure.
 #[cfg(unix)]
 #[allow(deprecated)] // nix's Flock consumes the file; the locks here keep it.
-pub(crate) fn try_lock(file: &File, exclusive: bool) -> std::io::Result<bool> {
+pub fn try_lock(file: &File, exclusive: bool) -> std::io::Result<bool> {
     use nix::fcntl::{flock, FlockArg};
     use std::os::unix::io::AsRawFd;
     let arg = if exclusive {
@@ -29,7 +29,7 @@ pub(crate) fn try_lock(file: &File, exclusive: bool) -> std::io::Result<bool> {
 /// leave it held (F-053).
 #[cfg(unix)]
 #[allow(deprecated)]
-pub(crate) fn unlock(file: &File) {
+pub fn unlock(file: &File) {
     use std::os::unix::io::AsRawFd;
     let _ = nix::fcntl::flock(file.as_raw_fd(), nix::fcntl::FlockArg::Unlock);
 }
@@ -93,7 +93,7 @@ pub(crate) mod windows {
     const ERROR_LOCK_VIOLATION: i32 = 33;
 
     /// Ok(true) held, Ok(false) another handle holds the range.
-    pub(crate) fn try_lock(file: &File, exclusive: bool) -> io::Result<bool> {
+    pub fn try_lock(file: &File, exclusive: bool) -> io::Result<bool> {
         let mut overlapped: OVERLAPPED = unsafe { std::mem::zeroed() };
         let mut flags = LOCKFILE_FAIL_IMMEDIATELY;
         if exclusive {
@@ -121,7 +121,7 @@ pub(crate) mod windows {
     }
 
     /// Releases the range this handle locked; a closed handle frees it too.
-    pub(crate) fn unlock(file: &File) {
+    pub fn unlock(file: &File) {
         let mut overlapped: OVERLAPPED = unsafe { std::mem::zeroed() };
         let _ = unsafe {
             UnlockFileEx(file.as_raw_handle() as usize, 0, u32::MAX, u32::MAX, &mut overlapped)
