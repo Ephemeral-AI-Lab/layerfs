@@ -57,7 +57,9 @@ impl KernelSession {
     /// created loop joined, the owner and watcher returned, and no received or
     /// retained request left. A receive loop runs its request itself, so a
     /// running request is observed first: it is what keeps its loop unjoined.
-    /// It makes no syscall and releases nothing.
+    /// After a known detach and idle requests, remove the private directory
+    /// before waiting for loops: rmdir also detaches copies in other mount
+    /// namespaces, which can otherwise keep the kernel receive loops alive.
     pub(super) fn quiesce(&mut self, deadline: Instant) -> Result<MountWork, Stop> {
         let stop = |stage, panic| Stop {
             stage,
@@ -74,6 +76,9 @@ impl KernelSession {
                     lane: Some(lane),
                 })
             }
+        }
+        if self.is_detached() && self.removed.is_none() {
+            self.removed = Some(fs::remove_dir(&self.directory));
         }
         if let (Some(monitor), true) = (&self.monitor, self.owner.is_some()) {
             let mut loops = monitor.snapshot();
@@ -107,8 +112,9 @@ impl KernelSession {
         }
     }
     /// The release half, only for a detached and quiesced connection: the
-    /// request owner, then the one removal of the unmounted directory.
-    pub(super) fn release(self, work: MountWork) -> Result<Box<Drained>, Box<Undrained>> {
+    /// request owner and the original result of the one directory removal.
+    /// Forced teardown that detached after quiescence removes it here.
+    pub(super) fn release(mut self, work: MountWork) -> Result<Box<Drained>, Box<Undrained>> {
         if let Err(lane) = self.queue.finish() {
             let mut undrained = self.undrained(DrainStage::Lane, None);
             undrained.lane = Some(lane);
@@ -118,7 +124,10 @@ impl KernelSession {
             mount: self.mount,
             forced: self.forced(),
             opcodes: self.accounting.observe(),
-            removed: fs::remove_dir(&self.directory),
+            removed: self
+                .removed
+                .take()
+                .unwrap_or_else(|| fs::remove_dir(&self.directory)),
             directory: self.directory,
             outcome: self.outcome,
             work,
