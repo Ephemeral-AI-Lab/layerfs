@@ -122,6 +122,29 @@ pub(super) fn observe(keys: &SdkValue, budget: &Budget, checks: &mut Checks) {
         "Daemon peer authenticated with saved control identities",
     );
     let mut control = Control::new(connection);
+    inspect(&mut control, instance, deadline, checks);
+    if control.is_failed() || Instant::now() >= deadline {
+        checks.unknown(
+            "sandbox.session",
+            "Diagnostic exchange ended uncertain or expired; no EndSession was sent or replayed",
+        );
+        return;
+    }
+    // Ends only this control conversation; the protocol explicitly preserves
+    // filesystem ownership. The original socket deadline still applies.
+    match control.call(Request::EndSession) {
+        Ok(Reply::SessionEnded) => checks.pass(
+            "sandbox.session",
+            "Own diagnostic control session ended and its socket was fenced",
+        ),
+        _ => checks.unknown(
+            "sandbox.session",
+            "Own-session end acknowledgement or socket fence was uncertain; not replayed",
+        ),
+    }
+}
+
+fn inspect(control: &mut Control, instance: [u8; 32], deadline: Instant, checks: &mut Checks) {
     // Observe identity explicitly so a restarted instance is not collapsed into a
     // generic correlation failure. No startup wait or lifecycle action is requested.
     match control.call(Request::Hello(HelloRequest {
@@ -177,7 +200,7 @@ pub(super) fn observe(keys: &SdkValue, budget: &Budget, checks: &mut Checks) {
             return;
         }
     }
-    workspaces(&mut control, deadline, checks);
+    workspaces(control, deadline, checks);
     checks.skip("sandbox.filesystem_serving", "Control observations do not verify application FUSE/NFS reads, overlay integrity or Store integrity");
 }
 

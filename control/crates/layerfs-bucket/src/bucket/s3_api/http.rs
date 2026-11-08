@@ -88,9 +88,9 @@ fn connect(
         }
     };
     let deadline = super::deadline::current();
-    let address = match deadline {
+    let addresses = match deadline {
         Some(deadline) => match host.parse::<std::net::IpAddr>() {
-            Ok(ip) => std::net::SocketAddr::new(ip, port),
+            Ok(ip) => vec![std::net::SocketAddr::new(ip, port)],
             Err(_) => resolver.ok_or_else(|| {
                 at(
                     "DNS",
@@ -102,16 +102,30 @@ fn connect(
             })?(host, port, deadline)
             .map_err(|error| at("DNS", error))?,
         },
-        None => (host, port)
+        None => vec![(host, port)
             .to_socket_addrs()
             .map_err(unavailable)?
             .next()
-            .ok_or_else(|| RemoteError::Unavailable("endpoint has no address".to_owned()))?,
+            .ok_or_else(|| RemoteError::Unavailable("endpoint has no address".to_owned()))?],
     };
-    let connect_timeout = super::deadline::remaining(deadline, config.connect_timeout)
-        .map_err(|error| at("TCP", error))?;
-    let socket =
-        TcpStream::connect_timeout(&address, connect_timeout).map_err(|error| at("TCP", error))?;
+    // Only pre-request TCP admission may advance through resolved addresses.
+    // No request bytes or TLS handshake have been sent on a failed connect.
+    // Each address consumes the same absolute budget; ordinary transfers still
+    // retain their original single-address behavior above.
+    let mut last = io::Error::new(io::ErrorKind::NotFound, "endpoint has no address");
+    let mut connected = None;
+    for address in addresses {
+        let connect_timeout = super::deadline::remaining(deadline, config.connect_timeout)
+            .map_err(|error| at("TCP", error))?;
+        match TcpStream::connect_timeout(&address, connect_timeout) {
+            Ok(socket) => {
+                connected = Some(socket);
+                break;
+            }
+            Err(error) => last = error,
+        }
+    }
+    let socket = connected.ok_or_else(|| at("TCP", last))?;
     let configure = |socket: &TcpStream| {
         socket.set_nodelay(true)?;
         socket.set_read_timeout(Some(config.io_timeout))?;

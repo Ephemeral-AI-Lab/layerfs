@@ -22,4 +22,4 @@ pub use diagnostic::{DiagnosticObject, DIAGNOSTIC_PREFIX};
 
 /// Network-owner callback; must return by the absolute deadline and reap helpers.
 pub type DiagnosticResolver =
-    fn(&str, u16, std::time::Instant) -> std::io::Result<std::net::SocketAddr>;
+    fn(&str, u16, std::time::Instant) -> std::io::Result<Vec<std::net::SocketAddr>>;

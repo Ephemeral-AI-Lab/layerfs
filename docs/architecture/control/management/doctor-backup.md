@@ -80,3 +80,10 @@ are not claims of live R2 or MinIO qualification. Source:
 Provider contract references: [R2 S3 compatibility](https://developers.cloudflare.com/r2/api/s3/api/),
 [MinIO conditional headers](https://docs.min.io/aistor/developers/s3-api-compatibility/),
 [older MinIO conditional-delete behavior](https://github.com/minio/minio/issues/21677).
+
+Diagnostic DNS preserves all returned addresses. TCP admission may advance to
+the next address only when the preceding connection attempt failed before any
+TLS handshake or HTTP request bytes, under the same absolute deadline. The
+original hostname remains the TLS identity. Once a socket is admitted, a failed
+TLS handshake or sent/lost HTTP operation is never replayed through another
+address. Ordinary backup transfers retain their existing connection behavior.

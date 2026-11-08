@@ -99,10 +99,14 @@ fn expired_budget_sends_no_request() {
 
 #[test]
 fn hostname_diagnostics_require_the_network_owners_bounded_resolver() {
-    fn resolve(host: &str, port: u16, until: Instant) -> std::io::Result<std::net::SocketAddr> {
+    fn resolve(
+        host: &str,
+        port: u16,
+        until: Instant,
+    ) -> std::io::Result<Vec<std::net::SocketAddr>> {
         assert_eq!(host, "diagnostic.fixture.invalid");
         assert!(until > Instant::now());
-        Ok(std::net::SocketAddr::from(([127, 0, 0, 1], port)))
+        Ok(vec![std::net::SocketAddr::from(([127, 0, 0, 1], port))])
     }
     let server = Server::new(Mode::default());
     let mut config = server.config();
@@ -122,4 +126,42 @@ fn hostname_diagnostics_require_the_network_owners_bounded_resolver() {
         .diagnostic_list(Instant::now() + Duration::from_secs(1))
         .unwrap();
     assert_eq!(server.state.lock().unwrap().requests.len(), 1);
+}
+
+#[test]
+fn tcp_address_fallback_sends_one_put_and_never_replays_a_lost_reply() {
+    fn resolve(_: &str, port: u16, _: Instant) -> std::io::Result<Vec<std::net::SocketAddr>> {
+        Ok(vec![
+            std::net::SocketAddr::new(std::net::Ipv6Addr::LOCALHOST.into(), port),
+            std::net::SocketAddr::from(([127, 0, 0, 1], port)),
+        ])
+    }
+    for lost_put in [false, true] {
+        let server = Server::new(Mode {
+            lost_put,
+            ..Mode::default()
+        });
+        let mut config = server.config();
+        config.endpoint = config
+            .endpoint
+            .replace("127.0.0.1", "diagnostic.fixture.invalid");
+        let client = S3Client::new(config)
+            .unwrap()
+            .with_diagnostic_resolver(resolve);
+        // This fixture is explicitly versioned; make PUT the first wire request
+        // so TCP fallback is exercised on the mutation's connection admission.
+        let result = client.diagnostic_create(peer::TOKEN, Instant::now() + Duration::from_secs(1));
+        if lost_put {
+            assert!(matches!(
+                result,
+                Err(layerfs_bucket::bucket::RemoteError::Uncertain(_))
+            ));
+        } else {
+            assert!(result.is_ok());
+        }
+        let state = server.state.lock().unwrap();
+        assert_eq!(state.requests.len(), 1, "no HTTP operation replay");
+        assert_eq!(state.requests[0].method, "PUT");
+        assert_eq!(state.versions.len(), 1, "one committed immutable version");
+    }
 }

@@ -199,3 +199,72 @@ fn arbitrary_version_value_is_not_echoed_and_timeout_is_incomplete() {
     assert!(!timed.get_bool("complete"));
     std::fs::remove_dir_all(home).unwrap();
 }
+
+#[test]
+fn runtime_mount_and_log_subtrees_are_outside_record_fingerprinting() {
+    use std::os::unix::fs::PermissionsExt;
+    let home = home(3);
+    layerfs_machine::record::MachineRecord::built_in("native")
+        .write(&home)
+        .unwrap();
+    let runtime = paths::machine_dir(&home, "native").join("run");
+    private_dir(&runtime).unwrap();
+    let trap = runtime.join("unreadable-runtime-tree");
+    private_dir(&trap).unwrap();
+    std::fs::set_permissions(&trap, std::fs::Permissions::from_mode(0o0)).unwrap();
+    let report = run(&home);
+    let Some(SdkValue::List(checks)) = report.get("checks") else {
+        panic!("checks")
+    };
+    assert!(checks
+        .iter()
+        .any(|row| row.get_text("id") == Some("host.records")
+            && row.get_text("outcome") == Some("pass")));
+    assert_eq!(std::fs::metadata(&trap).unwrap().mode() & 0o777, 0);
+    std::fs::set_permissions(&trap, std::fs::Permissions::from_mode(0o700)).unwrap();
+    std::fs::remove_dir_all(home).unwrap();
+}
+#[test]
+fn concurrent_management_record_rewrites_leave_consistency_incomplete() {
+    use std::sync::{atomic::AtomicBool, Arc};
+    let home = home(3);
+    for n in 0..128 {
+        write_entity(
+            &paths::machine_record(&home, &format!("m{n}")),
+            &SdkValue::map([("platform", t("lima"))]),
+        )
+        .unwrap();
+    }
+    let path = paths::machine_record(&home, "racing");
+    write_entity(&path, &SdkValue::map([("platform", t("lima"))])).unwrap();
+    let done = Arc::new(AtomicBool::new(false));
+    let flag = done.clone();
+    let writer = std::thread::spawn(move || {
+        let mut epoch = 0;
+        while !flag.load(Ordering::Relaxed) {
+            epoch += 1;
+            write_entity(
+                &path,
+                &SdkValue::map([
+                    ("platform", t("lima")),
+                    ("race_epoch", SdkValue::Int(epoch)),
+                ]),
+            )
+            .unwrap();
+            std::thread::yield_now();
+        }
+        epoch
+    });
+    let report = run(&home);
+    done.store(true, Ordering::Relaxed);
+    assert!(writer.join().unwrap() > 0);
+    let Some(SdkValue::List(checks)) = report.get("checks") else {
+        panic!("checks")
+    };
+    assert!(checks
+        .iter()
+        .any(|row| row.get_text("id") == Some("host.records")
+            && row.get_text("outcome") == Some("unknown")));
+    assert!(!report.get_bool("complete"));
+    std::fs::remove_dir_all(home).unwrap();
+}

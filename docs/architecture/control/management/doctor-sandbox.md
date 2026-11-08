@@ -49,3 +49,10 @@ Forwarded daemon identity establishes daemon presence, while guest runtime
 containment is explicitly not separately inspected through a mandatory worker
 RPC. Existing daemon builds without the diagnostic method report incomplete
 workspace coverage.
+
+A completed diagnostic conversation ends its own authenticated control session
+with `EndSession`, under the same remaining deadline. The daemon protocol leaves
+filesystem/Workspace ownership unchanged. No session-end request is sent after a
+quarantined/lost exchange or expired budget, and an uncertain acknowledgment is
+reported incomplete rather than retried. Normal completed diagnosis does not
+manufacture daemon connection-error log entries by dropping an open session.

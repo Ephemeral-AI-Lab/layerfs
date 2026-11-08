@@ -3,15 +3,15 @@ use super::report::Findings;
 use super::target::{Budget, Checks};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{detect, Layout};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 #[path = "host_capacity.rs"]
 mod capacity;
 #[path = "host_install.rs"]
 mod install;
+#[path = "host_inventory.rs"]
+mod inventory;
 
 pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
     install::identity(checks);
@@ -80,7 +80,12 @@ pub(super) fn diagnose(home: &Path, budget: &Budget, checks: &mut Checks) {
 }
 
 fn observed(home: &Path, budget: &Budget, checks: &mut Checks, previous: bool) {
-    let before = fingerprint(home, budget);
+    let before = inventory::fingerprint(home, budget);
+    if before.is_err() {
+        checks.unknown("host.records", "Management record metadata could not be observed completely; no consistency scan attempted");
+        install::without_inventory(checks, true);
+        return;
+    }
     let mut findings = Findings::default();
     let mut scanned = None;
     let result = if budget.expired() {
@@ -98,7 +103,7 @@ fn observed(home: &Path, budget: &Budget, checks: &mut Checks, previous: bool) {
                 result
             })
     };
-    let after = fingerprint(home, budget);
+    let after = inventory::fingerprint(home, budget);
     if budget.expired() || before.is_err() || after.is_err() || before.ok() != after.ok() {
         checks.unknown("host.records", "Record inventory changed or could not be observed completely; no stable consistency verdict");
         install::without_inventory(checks, true);
@@ -150,41 +155,6 @@ fn publish(findings: Findings, checks: &mut Checks) {
             checks.evidence("host.records", entity.clone());
         }
     }
-}
-
-// Fingerprints metadata only, never reads database payloads or follows links.
-// Comparing both observations prevents a changed inventory becoming a corruption verdict.
-fn fingerprint(home: &Path, budget: &Budget) -> Result<u64, ()> {
-    fn visit(path: &Path, budget: &Budget, hash: &mut DefaultHasher) -> Result<(), ()> {
-        if budget.expired() {
-            return Err(());
-        }
-        let meta = std::fs::symlink_metadata(path).map_err(|_| ())?;
-        path.hash(hash);
-        (
-            meta.ino(),
-            meta.dev(),
-            meta.len(),
-            meta.mtime(),
-            meta.mtime_nsec(),
-            meta.mode(),
-        )
-            .hash(hash);
-        if meta.is_dir() {
-            let mut entries = std::fs::read_dir(path)
-                .map_err(|_| ())?
-                .map(|entry| entry.map(|e| e.path()).map_err(|_| ()))
-                .collect::<Result<Vec<_>, _>>()?;
-            entries.sort();
-            for entry in entries {
-                visit(&entry, budget, hash)?;
-            }
-        }
-        Ok(())
-    }
-    let mut hash = DefaultHasher::new();
-    visit(home, budget, &mut hash)?;
-    Ok(hash.finish())
 }
 
 pub(super) fn executable(path: &Path) -> bool {

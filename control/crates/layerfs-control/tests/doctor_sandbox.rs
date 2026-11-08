@@ -166,15 +166,26 @@ fn daemon(home: &Path, mode: Mode) -> (String, std::thread::JoinHandle<usize>) {
             .send
             .send(&Answer { id: call.id, reply }.encode().unwrap())
             .unwrap();
-        if matches!(mode, Mode::Stale | Mode::NotReady) {
-            return 0;
-        }
         let mut calls = 0;
         loop {
             let Ok(bytes) = channel.receive.receive() else {
                 break;
             };
             let call = Call::decode(bytes).unwrap();
+            if matches!(call.request, Request::EndSession) {
+                channel
+                    .send
+                    .send(
+                        &Answer {
+                            id: call.id,
+                            reply: Reply::SessionEnded,
+                        }
+                        .encode()
+                        .unwrap(),
+                    )
+                    .unwrap();
+                break;
+            }
             let Request::Sdk(sdk) = &call.request else {
                 panic!("only read-only SDK request")
             };
@@ -236,9 +247,6 @@ fn daemon(home: &Path, mode: Mode) -> (String, std::thread::JoinHandle<usize>) {
                 .send(&Answer { id: call.id, reply }.encode().unwrap())
                 .is_err()
             {
-                break;
-            }
-            if !matches!(mode, Mode::Pages | Mode::LostPage | Mode::Changed) || calls == 2 {
                 break;
             }
         }
