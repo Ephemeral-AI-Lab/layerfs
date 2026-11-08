@@ -64,7 +64,11 @@ Commit times use the recorded Commit time. Known origin branch names come from
 history; missing names remain null.
 
 Successful pages contain matching changes, not sparse candidate windows.
-Per-request traversal admission is 10,000 visited records and a 48 KiB response.
+Per-request traversal admission is 10,000 visited records, 64 MiB potential logical
+content-comparison payload, and a 48 KiB response. Different-root, equal-length
+regular-file pairs reserve their combined length before exact byte comparison;
+equal roots and unequal lengths need no payload replay. The payload admission
+is cumulative across the revision query and is not a file-size limit.
 Budget exhaustion refuses with `Capacity`; it cannot return false exhaustion or
 advance beyond an unreturned revision. A bounded cache of immutable page
 boundaries avoids repeated prefix traversal for sequential pages. It retains four

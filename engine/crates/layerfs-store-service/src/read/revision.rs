@@ -70,6 +70,7 @@ pub fn list(
         next: None,
         candidate,
     };
+    let mut content_budget = file_facts::CONTENT_QUERY_BYTES;
     while let Some(node) = next {
         if examined as u64 == query::MAXIMUM_QUERY_WORK {
             return Err(args::refuse(
@@ -90,7 +91,8 @@ pub fn list(
         } else {
             previous
         };
-        let (content, metadata, identity) = file_facts::changes(reader, before, now)?;
+        let (content, metadata, identity) =
+            file_facts::changes_bounded(reader, before, now, &mut content_budget)?;
         if before.is_none() && now.is_none()
             || before.is_some() && now.is_some() && !content && !metadata && !identity
         {

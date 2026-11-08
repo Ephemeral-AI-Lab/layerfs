@@ -110,7 +110,12 @@ pub fn diff(
             SdkValue::Null,
         ));
     }
-    let (content, metadata, identity) = file_facts::changes(&reader, left.entry, right.entry)?;
+    let mut content_budget = file_facts::CONTENT_QUERY_BYTES;
+    let (content, metadata, identity) = if options.extended {
+        file_facts::changes_bounded(&reader, left.entry, right.entry, &mut content_budget)?
+    } else {
+        file_facts::changes(&reader, left.entry, right.entry)?
+    };
     let equal = left.entry.is_some() && right.entry.is_some() && !content;
     let same_inode = left
         .entry

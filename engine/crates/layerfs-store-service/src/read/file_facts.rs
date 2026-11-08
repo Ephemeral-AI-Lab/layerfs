@@ -56,6 +56,39 @@ pub fn changes(
     ))
 }
 
+/// Potential logical payload admitted by a new comparison/history query.
+/// Equal roots and unequal lengths settle byte equality without payload replay.
+pub const CONTENT_QUERY_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Reserve payload work before an exact different-root byte comparison. Capacity
+/// is unknown/refused work, never a false content change as a root-only fallback.
+pub fn changes_bounded(
+    reader: &StorePorts,
+    left: Option<EntryFacts>,
+    right: Option<EntryFacts>,
+    remaining: &mut u64,
+) -> Result<(bool, bool, bool), SdkRefusal> {
+    if let (Some(left), Some(right)) = (left, right) {
+        if left.value.kind == layerfs_content::object::inode_leaf::InodeKind::RegularFile
+            && right.value.kind == left.value.kind
+            && left.value.content_root != right.value.content_root
+        {
+            let a = snapshot::size(reader, &left)?;
+            let b = snapshot::size(reader, &right)?;
+            if a == b {
+                let required = a.saturating_add(b);
+                if required > *remaining {
+                    return Err(super::query::capacity(
+                        "content comparison payload budget reached; narrow the saved comparison",
+                    ));
+                }
+                *remaining -= required;
+            }
+        }
+    }
+    changes(reader, left, right)
+}
+
 pub fn flags(content: bool, metadata: bool, identity: bool, attribution: Option<bool>) -> SdkValue {
     SdkValue::map([
         ("content", SdkValue::Bool(content)),

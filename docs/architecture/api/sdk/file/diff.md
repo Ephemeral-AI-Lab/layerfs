@@ -170,3 +170,12 @@ logical provenance-read budget, not a file-size limit. Mandatory row pages must 
 No row is silently skipped. Partial ownership remains unknown. Legacy hunks can
 be omitted with `hunks_omitted` when detail rows consume the response budget.
 See [saved queries](../saved-queries.md).
+
+New-option mode also admits at most 64 MiB of potential logical content-comparison
+payload, separately from the 64 MiB provenance-read budget, before exact
+different-root, equal-length regular-file comparisons. Equal
+content roots and unequal lengths resolve without spending this payload budget.
+If exact equality cannot be admitted, the call returns Capacity rather than
+claiming unequal bytes from unequal roots. Calls without the new options retain
+the legacy comparison behavior. This is per-request work admission, not a total
+file-size limit: large same-root comparisons remain available.
