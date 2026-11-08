@@ -27,7 +27,6 @@ mod postgres_url;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod runtime;
 pub mod steps;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod stop;
 mod types;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -40,10 +39,41 @@ pub mod local;
 pub use backend::host_process::HostProcessProvider;
 pub use helper_spec::HelperSpec;
 pub use postgres_url::PostgresUrl;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(unix)]
 pub use runtime::{LaunchFailure, Runtime, Sandbox};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use stop::{Cancelled, ExecSlot, Stop};
+
+// Windows face of the launched Sandbox owner: the runtime itself is a
+// unix surface (namespaces/host_process; #454 carries the Windows
+// host_process port). Records and ids flow; nothing launches.
+#[cfg(windows)]
+pub use windows_runtime::{LaunchFailure, Sandbox};
+
+#[cfg(windows)]
+pub mod windows_runtime {
+    use std::path::PathBuf;
+
+    /// The failure of a launch that never ran on this host.
+    #[derive(Debug)]
+    pub struct LaunchFailure(pub String);
+
+    /// A launched Sandbox as the records name it: its id and root flow;
+    /// every runtime method answers Unsupported until the port.
+    #[derive(Clone, Debug)]
+    pub struct Sandbox {
+        pub id: crate::types::SandboxId,
+        pub root: PathBuf,
+    }
+
+    impl Sandbox {
+        pub fn id(&self) -> crate::types::SandboxId {
+            self.id
+        }
+        pub fn root(&self) -> &std::path::Path {
+            &self.root
+        }
+    }
+}
 pub use types::{
     Bind, CommandIdentity, ContainerId, ExecExit, ExecRequest, Image, IsolationModel, LaunchPhase,
     LaunchRequest, LocalRecord, MountDriver, NamespaceRecord, PendingRequest, ProviderCapabilities,

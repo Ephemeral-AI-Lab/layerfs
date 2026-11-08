@@ -15,7 +15,27 @@
 //! Cancel is one explicit attempt: nothing here times a command out,
 //! retries or replays.
 use layerfs_bridge::process::LocalProcess;
+#[cfg(unix)]
 use nix::sys::signal::Signal;
+
+/// Windows face of the stop signal: the number travels in records; the
+/// runtime that acts on it is the unix host_process port (#454).
+#[cfg(windows)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Signal(pub i32);
+
+impl Signal {
+    pub const SIGTERM: Self = Self(15);
+    pub const SIGKILL: Self = Self(9);
+    /// The name records show (SIGTERM/SIGKILL).
+    pub fn as_str(self) -> &'static str {
+        match self.0 {
+            15 => "SIGTERM",
+            9 => "SIGKILL",
+            _ => "SIG<other>",
+        }
+    }
+}
 use std::{
     io,
     path::PathBuf,
@@ -104,7 +124,15 @@ pub fn cancel(stop: &Stop, grace: Duration) -> io::Result<Cancelled> {
             io::ErrorKind::Unsupported,
             "a cgroup stop handle is acted on by the Linux kernel that holds it",
         )),
+        #[cfg(unix)]
         Stop::Group { pgid, leader } => ended(&crate::local::groups::Led(*pgid, *leader), grace),
+        // Windows has no process groups of the unix shape; nothing to act on
+        // until the host_process port (#454) brings its own face.
+        #[cfg(windows)]
+        Stop::Group { .. } => Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "a process-group stop handle is acted on by the unix kernel that holds it",
+        )),
     }
 }
 
