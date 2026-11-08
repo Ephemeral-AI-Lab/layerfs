@@ -38,9 +38,6 @@ pub fn result_page(args: &SdkValue) -> Result<ResultPage, SdkRefusal> {
     let skip = (number - 1)
         .checked_mul(size)
         .ok_or_else(|| invalid("page offset overflows"))?;
-    if skip >= MAXIMUM_QUERY_WORK {
-        return Err(capacity("numbered page exceeds the query replay budget"));
-    }
     Ok(ResultPage {
         limit: size as usize,
         skip,

@@ -28,11 +28,12 @@ fn numbered_pages_count_result_offsets_and_validate_conflicting_legacy_options()
     }
     let cursor = SdkValue::map([("cursor", SdkValue::text("/a"))]);
     assert_eq!(result_page(&cursor).unwrap_err().code, "InvalidInput");
+    // A large ordinal is not itself expensive: indexed/cached seeking may admit it.
     assert_eq!(
         result_page(&args(&[("page", 1001), ("pageSize", 10)]))
-            .unwrap_err()
-            .code,
-        "Capacity"
+            .unwrap()
+            .skip,
+        10_000
     );
 }
 
