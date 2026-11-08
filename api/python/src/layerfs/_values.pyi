@@ -59,7 +59,7 @@ class DoctorReport(TypedDict):
     target: NotRequired[Entity]
     home: NotRequired[str]
     operation: NotRequired[Literal["diagnose", "integrity", "connection"]]
-    mode: NotRequired[Literal["full", "quick", "observation"]]
+    mode: NotRequired[Literal["full", "quick", "observation", "write-test"]]
     observed_at_ms: NotRequired[int]
     duration_ms: NotRequired[int]
 

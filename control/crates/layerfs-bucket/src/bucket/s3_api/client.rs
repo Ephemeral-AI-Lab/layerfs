@@ -9,7 +9,7 @@ use crate::bucket::error::{local, RemoteError};
 use crate::bucket::limits::Limits;
 use crate::bucket::s3_api::config::S3Config;
 use crate::bucket::s3_api::connection::Kept;
-use crate::bucket::s3_api::http::{exchange, parse_length, Body, Reply, Sink};
+use crate::bucket::s3_api::http::{exchange, parse_length, Body, Reply, Sink, Transport};
 use crate::bucket::s3_api::{multipart, sign};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -70,9 +70,11 @@ impl S3Client {
             format!("{path}?{query}")
         };
         exchange(
-            &self.config,
-            &self.kept,
-            self.diagnostic_resolver,
+            Transport {
+                config: &self.config,
+                kept: &self.kept,
+                resolver: self.diagnostic_resolver,
+            },
             method,
             &target,
             &headers,

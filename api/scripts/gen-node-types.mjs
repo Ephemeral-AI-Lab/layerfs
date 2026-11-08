@@ -119,7 +119,7 @@ export interface DoctorReport {
   target?: { kind: string; name: string };
   home?: string;
   operation?: "diagnose" | "integrity" | "connection";
-  mode?: "full" | "quick" | "observation";
+  mode?: "full" | "quick" | "observation" | "write-test";
   observed_at_ms?: number;
   duration_ms?: number;
   findings: { severity: string; entity: { kind: string; name: string }; message: string; fix: string | null }[];

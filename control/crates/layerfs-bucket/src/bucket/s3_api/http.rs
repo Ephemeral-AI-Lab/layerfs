@@ -58,6 +58,12 @@ pub(crate) struct Reply {
     pub(crate) streamed: u64,
 }
 
+pub(crate) struct Transport<'a> {
+    pub(crate) config: &'a S3Config,
+    pub(crate) kept: &'a Kept,
+    pub(crate) resolver: Option<super::DiagnosticResolver>,
+}
+
 enum Framing {
     Length(u64),
     Chunked,
@@ -118,15 +124,18 @@ fn connect(
 /// Sends one request, on a connection `kept` holds or a new one, and reads
 /// its reply; a connection the reply leaves reusable goes back to `kept`.
 pub(crate) fn exchange(
-    config: &S3Config,
-    kept: &Kept,
-    resolver: Option<super::DiagnosticResolver>,
+    transport: Transport<'_>,
     method: &str,
     target: &str,
     headers: &BTreeMap<String, String>,
     mut body: Body<'_>,
     sink: Option<Sink<'_>>,
 ) -> Result<Reply, RemoteError> {
+    let Transport {
+        config,
+        kept,
+        resolver,
+    } = transport;
     let (host, port, _, tls) = config.address()?;
     if let Body::File { file, span } = &mut body {
         file.seek(SeekFrom::Start(span.offset))

@@ -82,6 +82,16 @@ fn every_family_produces_a_real_report_without_creating_an_absent_home() {
             "backup",
             "connection",
         ),
+        (
+            vec!["doctor", "backup", "connection", "missing", "--write-test"],
+            "backup",
+            "connection",
+        ),
+        (
+            vec!["doctor", "store", "integrity", "missing", "--quick"],
+            "store",
+            "integrity",
+        ),
     ] {
         let out = Command::new(CLI)
             .args(&args)
@@ -93,6 +103,16 @@ fn every_family_produces_a_real_report_without_creating_an_absent_home() {
         let report = layerfs_api::json::parse(&raw).unwrap();
         assert_eq!(report.get("target").unwrap().get_text("kind"), Some(kind));
         assert_eq!(report.get_text("operation"), Some(operation));
+        let mode = if args.contains(&"--write-test") {
+            "write-test"
+        } else if args.contains(&"--quick") {
+            "quick"
+        } else if operation == "integrity" {
+            "full"
+        } else {
+            "observation"
+        };
+        assert_eq!(report.get_text("mode"), Some(mode));
         assert!(report.get("complete").is_some());
         assert!(!raw.contains("integration.pending"), "{args:?}");
         assert!(!root.exists(), "{args:?} created a home");

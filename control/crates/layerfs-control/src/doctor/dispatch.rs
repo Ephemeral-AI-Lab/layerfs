@@ -89,6 +89,8 @@ pub fn doctor_target(home: &Path, request: &DoctorRequest) -> Outcome {
                     } else {
                         "full"
                     }
+                } else if request.write_test {
+                    "write-test"
                 } else {
                     "observation"
                 },

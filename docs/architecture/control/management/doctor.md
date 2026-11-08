@@ -185,6 +185,8 @@ Explicit reports retain legacy `ok` and `findings` and add `target`, `operation`
 `mode`, `home`, `checks`, `counts`, `complete`, `truncated` and observation timing.
 Each check has stable `id`/`code`, separate outcome and severity, bounded redacted
 evidence, `blocked_by`, and timing. A per-check duration is null when not measured.
+The report mode is `full`/`quick` for integrity, `write-test` for an explicitly
+requested backup probe, and `observation` for the remaining commands.
 
 | Outcome | Meaning |
 | --- | --- |
