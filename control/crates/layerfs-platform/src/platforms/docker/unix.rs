@@ -76,6 +76,24 @@ pub(crate) fn guest(spec: &Spec) -> Result<Guest, MachineError> {
     })
 }
 
+/// The worker container's provider state, without dialing the worker or exec.
+pub(crate) fn provider_state(spec: &Spec) -> Result<State, MachineError> {
+    match inspect(spec)? {
+        None => Ok(State::Missing),
+        Some((_, role)) if role != "machine-worker" => Err(MachineError::new(
+            Code::Failed,
+            "the Docker container with this machine's name is not a LayerFS worker",
+        )),
+        Some((state, _)) => match state.as_str() {
+            "running" => Ok(State::Running),
+            "created" | "exited" => Ok(State::Stopped),
+            "dead" => Ok(State::Failed),
+            _ => Err(MachineError::new(Code::Unavailable,
+                "the Docker worker container is paused, restarting, removing or in an unknown state")),
+        },
+    }
+}
+
 pub(crate) fn status(spec: &Spec) -> Result<Status, MachineError> {
     let version = engine_version(spec);
     if version.is_none() {

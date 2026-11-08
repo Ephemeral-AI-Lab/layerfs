@@ -30,6 +30,9 @@ pub fn result(value: &SdkValue, text: bool) -> ExitCode {
 /// `layerfs doctor --text`: a count line, then each finding as
 /// `<severity> <kind> <name>: <message>` and its fix on the next line.
 pub fn findings(report: &SdkValue) -> ExitCode {
+    if matches!(report.get("checks"), Some(SdkValue::List(_))) {
+        return checks(report);
+    }
     let empty = Vec::new();
     let found = match report.get("findings") {
         Some(SdkValue::List(found)) => found,
@@ -260,4 +263,50 @@ fn table(name: &str, rows: &[SdkValue]) -> String {
         out.push_str(&line(row));
     }
     out
+}
+
+/// Shows every completed, failed or unverified explicit diagnostic check.
+fn checks(report: &SdkValue) -> ExitCode {
+    let mut shown = String::new();
+    let complete = report.get("complete") == Some(&SdkValue::Bool(true));
+    shown.push_str(if complete {
+        "Diagnostic coverage: complete\n"
+    } else {
+        "Diagnostic coverage: incomplete\n"
+    });
+    if let Some(SdkValue::List(checks)) = report.get("checks") {
+        for check in checks {
+            let outcome = check.get_text("outcome").unwrap_or("unknown");
+            let status = match check.get_text("severity") {
+                Some(severity) => format!("{outcome}/{severity}"),
+                None => outcome.to_owned(),
+            };
+            shown.push_str(&format!(
+                "{status:<12} {}: {}\n",
+                check.get_text("id").unwrap_or(""),
+                check.get_text("message").unwrap_or("")
+            ));
+            if let Some(fix) = check.get_text("fix").filter(|f| !f.is_empty()) {
+                shown.push_str(&format!("         suggested: {fix}\n"));
+            }
+            if outcome != "pass" && outcome != "skipped" {
+                if let Some(evidence) = check.get("evidence").filter(|v| **v != SdkValue::Null) {
+                    let evidence = json::print(evidence);
+                    let compact: String = evidence.chars().take(1024).collect();
+                    shown.push_str(&format!("         evidence: {compact}"));
+                    if evidence.chars().count() > 1024 {
+                        shown.push_str("... (use JSON for full evidence)");
+                    }
+                    shown.push('\n');
+                }
+            }
+        }
+    }
+    if report.get("truncated") == Some(&SdkValue::Bool(true)) {
+        shown.push_str("Report entries truncated.\n");
+    }
+    if let Some(counts) = report.get("counts") {
+        shown.push_str(&format!("Check totals: {}\n", json::print(counts)));
+    }
+    print(&shown)
 }

@@ -17,7 +17,7 @@ snow = { version = "=0.9.6", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 # The local process identity (`process`): kill and, on macOS, proc_pidinfo.
-nix = { version = "=0.31.3", default-features = false, features = ["signal"] }
+nix = { version = "=0.31.3", default-features = false, features = ["signal", "fs"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [

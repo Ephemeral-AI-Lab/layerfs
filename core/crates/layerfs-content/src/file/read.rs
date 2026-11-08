@@ -56,6 +56,38 @@ pub fn read_all(
     read_all_bounded(reader, root, u64::MAX, sink, scope)
 }
 
+/// Streams a saved file's complete logical bytes through BLAKE3, without
+/// retaining file-sized buffers. Used to verify recorded whole-content hints.
+pub fn content_digest(
+    reader: &dyn AuthenticatedObjects,
+    root: ObjectId,
+    scope: TimingScope<'_>,
+) -> ContentResult<([u8; 32], u64)> {
+    struct Digest {
+        hash: blake3::Hasher,
+        bytes: u64,
+    }
+    impl Write for Digest {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.bytes = self
+                .bytes
+                .checked_add(bytes.len() as u64)
+                .ok_or_else(|| std::io::Error::other("file digest length overflow"))?;
+            self.hash.update(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut sink = Digest {
+        hash: blake3::Hasher::new(),
+        bytes: 0,
+    };
+    read_all(reader, root, &mut sink, scope)?;
+    Ok((*sink.hash.finalize().as_bytes(), sink.bytes))
+}
+
 /// Reads a logical range of a file root.
 pub fn read_range(
     reader: &dyn AuthenticatedObjects,

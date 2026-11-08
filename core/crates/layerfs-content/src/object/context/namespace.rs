@@ -11,14 +11,14 @@ pub(super) fn directory(
     canonical: &[u8],
     reader: &dyn AuthenticatedObjects,
     inode_scope: InodeScope,
-    root_serial: u64,
+    root_serial: Option<u64>,
 ) -> ContentResult<()> {
     let page = decode_directory_page(canonical)?;
     match page {
         DirectoryPage::Leaf { entries } => {
             for (_, serial) in entries {
                 InodeIdentity::new(inode_scope, serial)?;
-                if serial == root_serial {
+                if Some(serial) == root_serial {
                     return Err(ContentError::InvalidRecord("root directory binding"));
                 }
             }
@@ -43,7 +43,7 @@ pub(super) fn directory(
                     DirectoryPage::Leaf { entries } => {
                         for (_, serial) in entries {
                             InodeIdentity::new(inode_scope, *serial)?;
-                            if *serial == root_serial {
+                            if Some(*serial) == root_serial {
                                 return Err(ContentError::InvalidRecord("root directory binding"));
                             }
                         }

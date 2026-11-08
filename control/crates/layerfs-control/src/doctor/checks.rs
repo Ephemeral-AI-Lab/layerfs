@@ -27,6 +27,24 @@ pub(super) fn check(
     scanned: &Scanned,
     findings: &mut Findings,
 ) -> Result<(), SdkRefusal> {
+    check_scope(home, scanned, findings, true)
+}
+
+/// The same record checks without connecting to machines for transfer files.
+pub(super) fn check_local(
+    home: &Path,
+    scanned: &Scanned,
+    findings: &mut Findings,
+) -> Result<(), SdkRefusal> {
+    check_scope(home, scanned, findings, false)
+}
+
+fn check_scope(
+    home: &Path,
+    scanned: &Scanned,
+    findings: &mut Findings,
+    remote: bool,
+) -> Result<(), SdkRefusal> {
     machines(scanned, findings);
     for store in &scanned.stores {
         let name = store.name();
@@ -62,7 +80,7 @@ pub(super) fn check(
                 // a transfer running now owns its partial copy
                 let standing = op.as_ref().map(Op::standing);
                 if standing != Some(Standing::Running) {
-                    incoming(home, store, machine == "native", findings);
+                    incoming(home, store, machine == "native", remote, findings);
                 }
                 // an unresolved intent's own finding names its clearing call
                 if standing != Some(Standing::Unresolved) {
@@ -223,7 +241,13 @@ fn leftover(store: &StoreRecord, machine: &str, findings: &mut Findings) {
 /// intent is still there, or, after a certain failure dropped it, the machine
 /// its record kept. A machine's is read through its worker's `stat`, which
 /// changes nothing.
-fn incoming(home: &Path, store: &StoreRecord, on_native: bool, findings: &mut Findings) {
+fn incoming(
+    home: &Path,
+    store: &StoreRecord,
+    on_native: bool,
+    remote: bool,
+    findings: &mut Findings,
+) {
     let name = store.name();
     let file = paths::store_file(home, name);
     let local_incoming = file.with_file_name("store.sqlite.incoming");
@@ -244,6 +268,9 @@ fn incoming(home: &Path, store: &StoreRecord, on_native: bool, findings: &mut Fi
             ),
             fix,
         );
+    }
+    if !remote {
+        return;
     }
     let remote =
         layerfs_store::sqlite::transfer::resolve::partial_on(store).filter(|to| to != "native");

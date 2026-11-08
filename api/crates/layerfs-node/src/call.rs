@@ -59,13 +59,14 @@ pub fn close() -> u32 {
 /// `{ refused }`; it may dial running workers, so it runs off the
 /// JavaScript thread.
 #[napi]
-pub fn doctor(home: Option<String>) -> AsyncTask<Doctor> {
-    AsyncTask::new(Doctor { home })
+pub fn doctor(home: Option<String>, options: Option<String>) -> AsyncTask<Doctor> {
+    AsyncTask::new(Doctor { home, options })
 }
 
 /// One doctor report, run off the JavaScript thread.
 pub struct Doctor {
     home: Option<String>,
+    options: Option<String>,
 }
 
 impl Task for Doctor {
@@ -74,7 +75,10 @@ impl Task for Doctor {
 
     fn compute(&mut self) -> napi::Result<String> {
         let home = layerfs_api::home(self.home.as_deref().map(Path::new));
-        Ok(layerfs_api::doctor_json(home))
+        Ok(layerfs_api::doctor_options_json(
+            home,
+            self.options.as_deref().unwrap_or("{}"),
+        ))
     }
 
     fn resolve(&mut self, _env: Env, answer: String) -> napi::Result<String> {

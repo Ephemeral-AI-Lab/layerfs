@@ -42,6 +42,8 @@ API_MOUNT_TARGETS = {"kernel_mount_routes", "kernel_application", "observed_appl
 
 # (package, test target): run seconds on the macOS host, 2026-10-23.
 SLOW = {
+    # Independent overwrite closure and interruption fixture (4096 Commits).
+    ("layerfs-persistence", "diagnostic_overwrite"): 15.33,
     ("layerfs-nfs", "helper_deadline"): 60.1,
     # Six Linux FUSE teardown cases, including two bounded Join observations.
     ("layerfs-daemon", "stalled_unmount"): 21.28,

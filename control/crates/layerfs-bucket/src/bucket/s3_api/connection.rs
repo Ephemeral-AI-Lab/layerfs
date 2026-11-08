@@ -29,15 +29,29 @@ const MAX_KEPT: usize = 4;
 
 /// One connection: TCP, or TLS over it.
 pub(crate) enum Connection {
-    Plain(TcpStream),
+    Plain(TimedSocket),
     #[cfg(feature = "tls")]
-    Tls(Box<native_tls::TlsStream<TcpStream>>),
+    Tls(Box<native_tls::TlsStream<TimedSocket>>),
 }
 
 impl Connection {
     /// Wraps `socket` in TLS for `host` when `tls`; the handshake checks the
     /// certificate against the system's roots and `host`.
     pub(crate) fn open(socket: TcpStream, host: &str, tls: bool) -> Result<Self, String> {
+        let socket = TimedSocket {
+            read_timeout: socket
+                .read_timeout()
+                .ok()
+                .flatten()
+                .unwrap_or(Duration::from_secs(60)),
+            write_timeout: socket
+                .write_timeout()
+                .ok()
+                .flatten()
+                .unwrap_or(Duration::from_secs(60)),
+            socket,
+            deadline: super::deadline::current(),
+        };
         if !tls {
             return Ok(Self::Plain(socket));
         }
@@ -53,11 +67,20 @@ impl Connection {
         Err(format!("TLS to {host}: this build has no tls feature"))
     }
 
+    fn check_deadline(&self) -> io::Result<()> {
+        let deadline = match self {
+            Self::Plain(socket) => socket.deadline,
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.get_ref().deadline,
+        };
+        super::deadline::remaining(deadline, Duration::from_secs(60)).map(|_| ())
+    }
+
     fn socket(&self) -> &TcpStream {
         match self {
-            Self::Plain(socket) => socket,
+            Self::Plain(socket) => &socket.socket,
             #[cfg(feature = "tls")]
-            Self::Tls(stream) => stream.get_ref(),
+            Self::Tls(stream) => &stream.get_ref().socket,
         }
     }
 
@@ -76,6 +99,7 @@ impl Connection {
 
 impl Read for Connection {
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.check_deadline()?;
         match self {
             Self::Plain(socket) => socket.read(buffer),
             #[cfg(feature = "tls")]
@@ -86,6 +110,7 @@ impl Read for Connection {
 
 impl Write for Connection {
     fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        self.check_deadline()?;
         match self {
             Self::Plain(socket) => socket.write(buffer),
             #[cfg(feature = "tls")]
@@ -94,6 +119,7 @@ impl Write for Connection {
     }
 
     fn flush(&mut self) -> io::Result<()> {
+        self.check_deadline()?;
         match self {
             Self::Plain(socket) => socket.flush(),
             #[cfg(feature = "tls")]
@@ -135,5 +161,48 @@ impl Kept {
         if idle.len() < MAX_KEPT {
             idle.push((connection, Instant::now()));
         }
+    }
+}
+
+/// Socket-level budget covers every TLS handshake and application I/O operation.
+#[derive(Debug)]
+pub(crate) struct TimedSocket {
+    socket: TcpStream,
+    deadline: Option<Instant>,
+    read_timeout: Duration,
+    write_timeout: Duration,
+}
+impl Read for TimedSocket {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        if self.deadline.is_some() {
+            self.socket
+                .set_read_timeout(Some(super::deadline::remaining(
+                    self.deadline,
+                    self.read_timeout,
+                )?))?;
+        }
+        self.socket.read(buffer)
+    }
+}
+impl Write for TimedSocket {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        if self.deadline.is_some() {
+            self.socket
+                .set_write_timeout(Some(super::deadline::remaining(
+                    self.deadline,
+                    self.write_timeout,
+                )?))?;
+        }
+        self.socket.write(buffer)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        if self.deadline.is_some() {
+            self.socket
+                .set_write_timeout(Some(super::deadline::remaining(
+                    self.deadline,
+                    self.write_timeout,
+                )?))?;
+        }
+        self.socket.flush()
     }
 }

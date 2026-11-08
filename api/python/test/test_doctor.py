@@ -25,6 +25,30 @@ class Close(unittest.TestCase):
 
 
 class Doctor(unittest.TestCase):
+    def test_host_target_has_explicit_coverage_without_creating_a_home(self):
+        with tempfile.TemporaryDirectory(prefix="layerfs-py-doctor-target-") as parent:
+            home = os.path.join(parent, "absent")
+            report = layerfs.doctor(home, target="host", timeout="1s")
+            self.assertEqual(report["target"], {"kind": "host", "name": "local"})
+            self.assertIsInstance(report["complete"], bool)
+            self.assertTrue(report["checks"])
+            self.assertFalse(os.path.exists(home))
+
+    def test_invalid_target_options_refuse_before_home_effects(self):
+        with tempfile.TemporaryDirectory(prefix="layerfs-py-doctor-invalid-") as parent:
+            home = os.path.join(parent, "absent")
+            for options in (
+                {"target": "sandbox"},
+                {"target": "host", "quick": False},
+                {"target": "machine", "name": "dev", "write_test": False},
+                {"target": "host", "timeout": "0s"},
+            ):
+                with self.subTest(options=options):
+                    with self.assertRaises(layerfs.LayerFSError) as refused:
+                        layerfs.doctor(home, **options)
+                    self.assertEqual(refused.exception.code, "InvalidInput")
+                    self.assertFalse(os.path.exists(home))
+
     def test_a_home_not_made_yet_is_ok_and_stays_absent(self):
         parent = tempfile.mkdtemp(prefix="layerfs-py-doctor-")
         home = os.path.join(parent, "home")

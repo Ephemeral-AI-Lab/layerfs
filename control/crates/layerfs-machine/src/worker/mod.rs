@@ -17,12 +17,14 @@
 //! every entity's operations, is `layerfs-control` `worker_server`
 //! (layerfs-project#104).
 mod client;
+mod diagnostic;
 mod frame;
 mod hello;
 
 pub use client::{
     call, hello, ping, request, send, Endpoint, EventSink, Unreached, HELLO_WAIT, PING_WAIT,
 };
+pub use diagnostic::{diagnostic_connect, DiagnosticOperation, DiagnosticWorker};
 pub use frame::{
     frame_bytes, read_frame, read_frame_within, write_frame, ATTACHED, MAX_FRAME, MAX_HELLO,
 };

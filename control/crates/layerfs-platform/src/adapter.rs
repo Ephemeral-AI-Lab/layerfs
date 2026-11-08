@@ -7,7 +7,7 @@ use crate::error::{Code, MachineError};
 use crate::platform::{HostOs, Platform};
 use crate::platforms::{apple_container, docker, lima, native};
 use crate::setup::guest::Guest;
-use crate::setup::Status;
+use crate::setup::{State, Status};
 use crate::spec::{Bundle, Forward, Running, Spec, Tools};
 
 /// What a platform does; implemented once per platform folder.
@@ -25,6 +25,8 @@ pub(crate) trait Adapter: Sync {
     fn start(&self, spec: &Spec, bundle: &Bundle) -> Result<Option<Running>, MachineError>;
     /// Stops the worker and, where there is one, the VM.
     fn stop(&self, spec: &Spec) -> Result<(), MachineError>;
+    /// Provider runtime state only, without worker contact or guest commands.
+    fn provider_state(&self, spec: &Spec) -> Result<State, MachineError>;
     /// The machine's state now; starts nothing.
     fn status(&self, spec: &Spec) -> Result<Status, MachineError>;
     /// The PostgreSQL Store URL the machine's Sandbox daemons dial for

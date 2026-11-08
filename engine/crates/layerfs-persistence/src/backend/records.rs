@@ -123,6 +123,8 @@ pub(crate) enum BackendError {
     /// A SQLite Store of schema version 1 (before #91): refused at open with
     /// the offline conversion named, never misread.
     SchemaVersion1,
+    /// Stored SQLite layout is not implemented; this is not a corruption verdict.
+    UnsupportedSchemaVersion(i64),
     Unknown,
 }
 /// The refusal a schema version 1 SQLite Store gets at open.
@@ -137,6 +139,9 @@ impl From<BackendError> for layerfs_storage::port::PersistenceError {
             BackendError::Integrity => Self::Malformed,
             BackendError::SchemaVersion1 => Self::Refused {
                 status: SCHEMA_VERSION_1.to_owned(),
+            },
+            BackendError::UnsupportedSchemaVersion(version) => Self::Refused {
+                status: format!("unsupported SQLite Store schema version {version}; supported versions are 36/37/38 and 42/43/44; no migration performed"),
             },
             _ => Self::Refused {
                 status: format!("{e:?}"),
@@ -156,6 +161,9 @@ impl From<BackendError> for layerfs_history::HistoryError {
             BackendError::Capacity => Self::Capacity("persistence"),
             BackendError::Integrity => Self::Integrity("persistence"),
             BackendError::SchemaVersion1 => Self::Integrity(SCHEMA_VERSION_1),
+            BackendError::UnsupportedSchemaVersion(_) => {
+                Self::Unsupported("SQLite Store schema version")
+            }
             BackendError::Unknown => Self::UnknownOutcome,
         }
     }

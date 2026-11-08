@@ -70,7 +70,12 @@ pub fn print(topic: &[&str]) -> ExitCode {
                     crate::banner::paint("help", "1"),
                 )
             } else {
-                ("doctor".to_owned(), "import-env".to_owned(), "worker".to_owned(), "help".to_owned())
+                (
+                    "doctor".to_owned(),
+                    "import-env".to_owned(),
+                    "worker".to_owned(),
+                    "help".to_owned(),
+                )
             };
             text.push_str(&format!(
                 "\n  {:<10} report what is wrong in the home, changing nothing [--text]\n  {:<10} write this environment's 1.1.0 settings as records, once\n  {:<10} serve this machine's worker (inside a machine)\n  {:<10} this help; `layerfs help <family> [<call>]` for more\n\n",
@@ -79,10 +84,7 @@ pub fn print(topic: &[&str]) -> ExitCode {
             text.push_str("The home is LAYERFS_HOME, else ~/.layerfs. Exit 0: done; 2: wrong command line; 125: refused.\n");
             output::print(&text)
         }
-        ["doctor"] => output::print(concat!(
-            "layerfs doctor [--text]\n",
-            "    report what is wrong in the home, changing nothing; exit 0 whenever the report is made (`ok` says whether it is clean)\n",
-        )),
+        ["doctor", rest @ ..] => crate::doctor::help(rest),
         [family] if layerfs_api::families().iter().any(|f| f.name == *family) => {
             let calls = layerfs_api::calls();
             let shown = calls.into_iter().filter(|c| c.family == *family);

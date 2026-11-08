@@ -21,7 +21,7 @@ layerfs <family> <call> <positionals...> [--options] [switches]
    +-- --version ------------------> "layerfs <version>"  (exit 0)
    +-- worker (alone) -------------> worker::main          (outside table)
    +-- import-env (alone) ---------> home::import_env      (outside table)
-   +-- doctor [--text] ------------> layerfs_api::doctor   (outside table)
+   +-- doctor [target ...] [--text] -> layerfs_api::doctor / doctor_with_options (outside table)
    +-- <family> <call> ------------> layerfs_api::find("family.call")
                                         |
                                         v
@@ -87,7 +87,7 @@ layerfs help                  banner (TTY only), usage line, every family
 layerfs help <family>         each call's usage line and help text
 layerfs help <family> <call>  one call
 layerfs <family> <call> -h    the same as the line above
-layerfs help doctor           doctor's usage line and one line of help
+layerfs help doctor           legacy usage and the explicit target commands
 layerfs doctor -h             the same (also --help); exit 0
 ```
 
@@ -113,7 +113,7 @@ only when stdout is a terminal; `NO_COLOR` turns its colours off.
 | refusal | `{"code","message","detail"}` on stderr | 125 | `refusal` |
 | wrong command line | `layerfs: <message>` on stderr | 2 | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) `wrong` |
 | stdout cannot be written while printing (reader gone, disk full) | nothing more; the call was already made and its effects stay | 125 | `print`; help and `--version` print the same way |
-| `doctor` | the report as JSON, or with `--text` a count line and one finding per entry with its `fix` | 0 whatever it finds, by design (`ok` says whether the home is clean) | `findings` |
+| `doctor` | the legacy report as JSON, or with `--text` findings and fixes; explicit target commands also show outcomes and incomplete coverage | 0 for a produced report, including faults; usage 2, refusal 125 | `findings`, explicit `checks` and `complete` |
 
 In `--text` mode, scalar fields defined by the call table or docs as epoch-millisecond timestamps (`created`, `modified`, `at`) are rendered as `YYYY-MM-DD HH:MM:SS` UTC. Fields defined as byte counts (`size`, `bytes`, `part_size`, `memory`, `disk`, `free`, `free_disk`, `wal_bytes`, `incoming_bytes`, `stdout_bytes`, `stderr_bytes`, `logical`, `new_canonical`, `new_stored`, `new_metadata`) are rendered in human units (B, KiB, MiB, GiB, TiB, PiB). When stdout is a terminal, table headers are displayed in bold colour (reset afterwards, respecting `NO_COLOR`). Help section titles (`USAGE`, `COMMANDS`) are similarly highlighted on terminals.
 

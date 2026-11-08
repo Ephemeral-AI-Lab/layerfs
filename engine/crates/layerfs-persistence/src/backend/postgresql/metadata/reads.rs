@@ -58,7 +58,7 @@ pub(crate) fn locate(
     // compared (#90); `OFFSET 0` keeps that a probe per id rather than a hash
     // of the whole table.
     let sql = format!(
-        "SELECT o.object_id,o.role::bigint,o.canonical_length::bigint,o.group_number::bigint,o.record_number::bigint,p.pack_id,p.domain,p.digest,p.length \
+        "SELECT CASE WHEN octet_length(o.object_id)=32 THEN o.object_id END,o.role::bigint,o.canonical_length::bigint,o.group_number::bigint,o.record_number::bigint,p.pack_id,p.domain,CASE WHEN octet_length(p.digest)=32 THEN p.digest END,p.length \
          FROM unnest($1::bytea[],$2::bigint[]) k(i,k) CROSS JOIN LATERAL (SELECT * FROM {s}.object_location x \
          WHERE ('x'||encode(substring(x.object_id FROM 1 FOR 8),'hex'))::bit(64)::bigint=k.k AND x.object_id=k.i OFFSET 0) o \
          JOIN {s}.pack p ON p.pack_id=o.pack_id",
@@ -113,7 +113,7 @@ pub(crate) fn inode_values(
         }
     }
     let sql = format!(
-        "SELECT b.first_ordinal,b.last_ordinal,b.body FROM {s}.inode_value_block b WHERE b.first_ordinal IN (\
+        "SELECT b.first_ordinal,b.last_ordinal,CASE WHEN octet_length(b.body) BETWEEN 9 AND 4000 THEN b.body END FROM {s}.inode_value_block b WHERE b.first_ordinal IN (\
          SELECT x.first_ordinal FROM unnest($1::bigint[],$2::bigint[]) r(lo,hi) JOIN {s}.inode_value_block x \
          ON x.first_ordinal BETWEEN coalesce((SELECT max(y.first_ordinal) FROM {s}.inode_value_block y \
          WHERE y.first_ordinal<=r.lo),0) AND r.hi) ORDER BY b.first_ordinal",
@@ -140,7 +140,7 @@ pub(crate) fn signatures(
     out: &mut Vec<SignatureRow>,
 ) -> Result<(), PersistenceError> {
     let rows = tx.query(
-        "SELECT slot,stamp,object_id,signature FROM content_signature ORDER BY slot LIMIT 8193",
+        "SELECT slot,stamp,CASE WHEN octet_length(object_id)=32 THEN object_id END,CASE WHEN octet_length(signature)=32 THEN signature END FROM content_signature ORDER BY slot LIMIT 8193",
         vec![],
     )?;
     if rows.len() > 8192 {

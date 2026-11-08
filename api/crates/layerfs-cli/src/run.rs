@@ -21,7 +21,7 @@ pub fn main(words: Vec<String>) -> ExitCode {
         Some("--version") => output::print(&format!("layerfs {}\n", env!("CARGO_PKG_VERSION"))),
         Some("worker") if words.len() == 1 => worker::main(),
         Some("import-env") if words.len() == 1 => import_env(),
-        Some("doctor") => doctor(&words[1..]),
+        Some("doctor") => crate::doctor::main(&words[1..]),
         Some(family) => {
             let Some(name) = words.get(1) else {
                 return help::print(&[family]);
@@ -90,22 +90,6 @@ fn import_env() -> ExitCode {
         layerfs_api::home(None).and_then(|home| layerfs_api::home::import_env(&home, &env));
     match outcome {
         Ok(value) => output::result(&value, false),
-        Err(refusal) => output::refusal(&refusal),
-    }
-}
-
-/// `layerfs doctor [--text]`: what is wrong in the home, changing nothing.
-/// Exit 0 once the report is made, whatever it finds (`ok` says).
-fn doctor(words: &[String]) -> ExitCode {
-    let text = match words {
-        [] => false,
-        [flag] if flag == "--text" => true,
-        [flag] if flag == "-h" || flag == "--help" => return help::print(&["doctor"]),
-        _ => return wrong("`layerfs doctor` takes only `--text`".to_owned()),
-    };
-    match layerfs_api::home(None).and_then(|home| layerfs_api::doctor(&home)) {
-        Ok(report) if text => output::findings(&report),
-        Ok(report) => output::result(&report, false),
         Err(refusal) => output::refusal(&refusal),
     }
 }

@@ -130,6 +130,12 @@ pub(crate) fn run(
     }
     let own = Instant::now() + timeout;
     let deadline = cap.map_or(own, |cap| cap.min(own));
+    if Instant::now() >= deadline {
+        return Err(MachineError::new(
+            Code::Unknown,
+            format!("{what}: probe deadline already exceeded; no command was started"),
+        ));
+    }
     let mut child = command.spawn().map_err(|e| spawn_failed(what, &e))?;
     let feeder = match (input, child.stdin.take()) {
         (Some(bytes), Some(mut stdin)) => {
@@ -143,13 +149,27 @@ pub(crate) fn run(
     };
     let out = collect(child.stdout.take());
     let err = collect(child.stderr.take());
-    let status = wait_for(&mut child, deadline, cap.is_some())
-        .map_err(|e| MachineError::new(Code::Unknown, format!("{what}: waiting failed: {e}")))?;
+    let waited = wait_for(&mut child, deadline, cap.is_some());
+    if waited.is_err() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    // A version/list command may exit while a descendant still holds its pipes.
+    // Under an observational deadline, end that private process group before
+    // joining the collectors; otherwise pipe EOF could outlive the budget.
+    if cap.is_some() {
+        if let Ok(pid) = i32::try_from(child.id()) {
+            let _ = kill(Pid::from_raw(-pid), Signal::SIGKILL);
+        }
+    }
     if let Some(feeder) = feeder {
         let _ = feeder.join();
     }
     let stdout = out.join().unwrap_or_default();
     let stderr = err.join().unwrap_or_default();
+    let status = waited.map_err(|error| {
+        MachineError::new(Code::Unknown, format!("{what}: waiting failed: {error}"))
+    })?;
     match status {
         Some(status) => Ok(Output {
             code: status.code(),

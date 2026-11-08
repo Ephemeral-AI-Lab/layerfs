@@ -57,7 +57,13 @@ pub(crate) fn observe(spec: &Spec) -> Result<(State, Option<PathBuf>), MachineEr
     let state = match status {
         "Running" => State::Running,
         "Broken" => State::Failed,
-        _ => State::Stopped,
+        "Stopped" => State::Stopped,
+        _ => {
+            return Err(MachineError::new(
+                Code::Unavailable,
+                "Lima reports an unrecognized or transitional runtime state",
+            ))
+        }
     };
     Ok((state, (!dir.is_empty()).then(|| PathBuf::from(dir))))
 }

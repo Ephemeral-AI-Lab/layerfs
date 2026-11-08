@@ -7,3 +7,4 @@ mod namespace;
 mod read;
 
 pub(super) use dispatch::validate;
+pub(super) use dispatch::validate_unbound;

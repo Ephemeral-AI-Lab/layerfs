@@ -100,6 +100,13 @@ pub fn tools(home: &Path) -> Result<Tools> {
 
 /// The adapters' description of the machine `record` describes.
 pub fn spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> {
+    let mut spec = provider_spec(home, home_id, record)?;
+    spec.worker = worker(home, record.name())?;
+    Ok(spec)
+}
+
+/// A provider description that does not read or authenticate the worker endpoint.
+pub fn provider_spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> {
     let name = record.name();
     let kind = record.platform()?;
     let lasting = record.field("lasting");
@@ -132,7 +139,7 @@ pub fn spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> 
                 .and_then(|l| l.get_text("gateway"))
                 .and_then(|g| g.parse().ok()),
         },
-        worker: worker(home, name)?,
+        worker: None,
         work_dir: paths::machine_dir(home, name),
         tools: tools(home)?,
     })

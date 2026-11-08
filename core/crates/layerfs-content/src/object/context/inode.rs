@@ -15,14 +15,18 @@ pub(super) fn page(
     reader: &dyn AuthenticatedObjects,
     policy: ConstructionPolicy,
     inode_scope: InodeScope,
-    root_serial: u64,
+    root_serial: Option<u64>,
 ) -> ContentResult<()> {
     match decode_inode_page(canonical)? {
         InodePage::Leaf { entries } => {
             // Reject every placement/identity before any content demand.
             for (serial, value) in &entries {
                 InodeIdentity::new(inode_scope, *serial)?;
-                value.validate(*serial == root_serial)?;
+                value.validate(root_serial.map_or(
+                    value.kind == crate::object::InodeKind::Directory
+                        && value.namespace_ref_count == 0,
+                    |root| *serial == root,
+                ))?;
             }
             for (_, value) in entries {
                 content(value, reader, policy)?;

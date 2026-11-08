@@ -381,8 +381,14 @@ fn the_source_is_one_file_per_call_under_its_family() {
     let mut expected: Vec<String> = families().iter().map(|f| f.name.to_owned()).collect();
     expected.push("lib.rs".to_owned());
     expected.push("calls".to_owned());
+    // Explicit doctor stays outside the normal table/home dispatcher.
+    expected.push("doctor".to_owned());
     expected.sort();
     assert_eq!(names(&src), expected);
+    assert_eq!(
+        names(&src.join("doctor")),
+        ["mod.rs", "options.rs", "run.rs"]
+    );
     for family in families() {
         let mut files: Vec<String> = family
             .calls()
