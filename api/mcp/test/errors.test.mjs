@@ -32,17 +32,21 @@ test("an uncertain outcome says so; a known Failed does not", () => {
   assert.equal(isUncertain({ code: "Failed", message: "attempted: false", detail: { attempted: false } }), false);
 });
 
-test("progress is coalesced to one notification per interval, and finished before the result", async () => {
+test("progress sends the first and last events, coalescing the rest", async () => {
   const sent = [];
   const reporter = progressReporter(async (notification) => sent.push(notification), "token-1", 100);
   for (let index = 0; index < 50; index += 1) reporter.on_progress({ phase: "export", bytes: index, total: 100 });
-  assert.equal(sent.length, 0, "nothing may be sent synchronously");
+  assert.equal(sent.length, 0);
+  await Promise.resolve();
+  assert.equal(sent.length, 1, "the first event is sent at once");
   await reporter.finish();
-  assert.equal(sent.length, 1, "50 events inside one interval are one notification");
+  assert.equal(sent.length, 2, "50 events inside one interval are two notifications: first and last");
   assert.deepEqual(sent[0].params.progressToken, "token-1");
   assert.equal(sent[0].params.progress, 1);
   assert.equal(sent[0].params.total, 100);
-  assert.match(sent[0].params.message, /"bytes":49/);
+  assert.match(sent[0].params.message, /"bytes":0/);
+  assert.equal(sent[1].params.progress, 2);
+  assert.match(sent[1].params.message, /"bytes":49/);
 
   const noToken = progressReporter(async () => {}, undefined);
   assert.equal(noToken, null);

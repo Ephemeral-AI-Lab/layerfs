@@ -1,15 +1,24 @@
 // Progress: a call's on_progress events become notifications/progress for the
 // request's token, coalesced so one call cannot flood the channel.
 //
-// Rule: at most one notification every INTERVAL_MS (100 ms), carrying the
-// latest event; `finish()` always sends the last one before the tool result.
-// `progress` is a strictly increasing counter of notifications (1, 2, 3, ...),
-// because event counters are not monotonic across every phase; `total` is
-// included only when the latest event's total is a positive safe integer;
-// `message` is that event as JSON, cut at MESSAGE_BYTES.
+// Rule: the first event is sent at once; after that at most one every
+// INTERVAL_MS (100 ms), carrying the latest event; `finish()` sends the last
+// event if it is not the one already sent. `progress` is a strictly increasing
+// counter of notifications (1, 2, 3, ...), because event counters are not
+// monotonic across every phase; `total` is included only when the latest
+// event's total is a positive safe integer; `message` is that event as JSON,
+// cut at MESSAGE_CHARS.
+//
+// `finish()` then yields SETTLE_MS before the caller writes the tool result.
+// The MCP client SDK dispatches notifications in a microtask but responses
+// synchronously, so a notification written in the same pipe chunk as its
+// response can be dropped as an unknown token; the yield makes the client read
+// the notification first. It is only paid by a call that sent a notification.
 
 const INTERVAL_MS = 100;
-const MESSAGE_BYTES = 512;
+const SETTLE_MS = 10;
+const MESSAGE_CHARS = 512;
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * A reporter for one request, or null when the client sent no progress token.
@@ -19,6 +28,7 @@ export function progressReporter(send, token, interval = INTERVAL_MS) {
   if (token === undefined || token === null) return null;
   let latest = null;
   let sent = 0;
+  let first = true;
   let timer = null;
   let chain = Promise.resolve();
   let closed = false;
@@ -30,7 +40,7 @@ export function progressReporter(send, token, interval = INTERVAL_MS) {
     } catch {
       text = String(event);
     }
-    return text.length > MESSAGE_BYTES ? `${text.slice(0, MESSAGE_BYTES)}…` : text;
+    return text.length > MESSAGE_CHARS ? `${text.slice(0, MESSAGE_CHARS)}…` : text;
   };
 
   const flush = () => {
@@ -48,6 +58,11 @@ export function progressReporter(send, token, interval = INTERVAL_MS) {
     /** The call's on_progress handler; synchronous and cheap. */
     on_progress(event) {
       latest = event;
+      if (first) {
+        first = false;
+        flush();
+        return;
+      }
       if (timer !== null) return;
       timer = setTimeout(() => {
         timer = null;
@@ -64,6 +79,7 @@ export function progressReporter(send, token, interval = INTERVAL_MS) {
       flush();
       closed = true;
       await chain;
+      if (sent > 0) await pause(SETTLE_MS);
     },
   };
 }

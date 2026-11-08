@@ -41,7 +41,7 @@ const USAGE = `usage: layerfs-mcp [--profile work|admin] [--home DIR]
   --scope-folder   the folder scope; the library checks every scoped call
   --scope-branch   the scope's Branch namespace; Branch and file calls need it
 
-stdout carries the MCP protocol only; logs go to stderr.
+while serving, stdout carries the MCP protocol only; logs go to stderr.
 `;
 
 function log(line) {
