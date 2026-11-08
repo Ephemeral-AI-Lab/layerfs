@@ -158,6 +158,15 @@ fn publish(findings: Findings, checks: &mut Checks) {
     }
 }
 
+#[cfg(unix)]
 pub(super) fn executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
     std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+}
+
+/// Windows: any readable file may run (PATHEXT decides); the x bits
+/// carry no meaning there.
+#[cfg(windows)]
+pub(super) fn executable(path: &Path) -> bool {
+    std::fs::metadata(path).is_ok_and(|m| m.is_file())
 }

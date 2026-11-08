@@ -2,7 +2,7 @@
 use super::target::{Budget, Checks};
 use std::path::Path;
 
-#[cfg(not(feature = "machine"))]
+#[cfg(not(all(unix, feature = "machine")))]
 pub(super) fn diagnose(_home: &Path, _name: &str, _budget: &Budget, checks: &mut Checks) {
     checks.unknown(
         "machine.platform",
@@ -10,7 +10,7 @@ pub(super) fn diagnose(_home: &Path, _name: &str, _budget: &Budget, checks: &mut
     );
 }
 
-#[cfg(feature = "machine")]
+#[cfg(all(unix, feature = "machine"))]
 pub(super) fn diagnose(home: &Path, name: &str, budget: &Budget, checks: &mut Checks) {
     use layerfs_home::home;
     use layerfs_home::op::Standing;

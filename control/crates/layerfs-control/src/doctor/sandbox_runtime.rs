@@ -137,6 +137,7 @@ enum Observation {
     Gone,
     Unknown,
 }
+#[cfg(unix)]
 fn observed(expected: LocalProcess) -> Observation {
     if expected.pid == 0 || expected.pid > i32::MAX as u32 {
         return Observation::Gone;
@@ -158,4 +159,15 @@ fn observed(expected: LocalProcess) -> Observation {
         }
         Err(_) => Observation::Unknown,
     }
+}#[cfg(windows)]
+/// Windows: the observation rides LocalProcess::observe (absolute
+/// creation time, boot None) - the same judgement in its own units.
+fn observed(expected: LocalProcess) -> Observation {
+    match LocalProcess::observe(expected.pid) {
+        Ok(now) if now.start == expected.start => Observation::Present,
+        Ok(_) => Observation::Unknown,
+        Err(_) => Observation::Gone,
+    }
 }
+
+
