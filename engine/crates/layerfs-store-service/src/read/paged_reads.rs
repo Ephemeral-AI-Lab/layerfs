@@ -61,7 +61,7 @@ fn finish(
 fn exhausted(cached: &Option<Option<Boundary>>) -> bool {
     cached
         .as_ref()
-        .is_some_and(|value| value.as_ref().map_or(true, |boundary| boundary.exhausted))
+        .is_some_and(|value| value.as_ref().is_none_or(|boundary| boundary.exhausted))
 }
 
 fn key(snap: &Snap, mode: &'static str, path: &str, pattern: &str, page: ResultPage) -> Key {
