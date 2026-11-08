@@ -203,6 +203,9 @@ fn machine_target_reports_dependencies_and_preserves_home() {
     outcome(&running, "machine.capacity", "pass");
     assert_eq!(running.get("complete"), Some(&SdkValue::Bool(true)));
     server.join().unwrap();
+    for mode in ["protocol", "version", "refusal", "timeout"] {
+        worker_failure(&f, mode);
+    }
     let record = MachineRecord::of(&f.home, "docker").unwrap();
     let op = layerfs_home::op::Op::begin("machine.create", "prepare", SdkValue::Null).unwrap();
     record.with_op(&op).write(&f.home).unwrap();
@@ -277,6 +280,92 @@ fn machine_target_reports_dependencies_and_preserves_home() {
     assert!(!format!("{report:?}").contains(sensitive));
     assert_eq!(std::fs::read(f.root.join("calls")).unwrap(), provider_calls);
     assert!(home::filesystem_available(&f.home).unwrap() > 0);
+}
+fn worker_failure(fixture: &Fixture, mode: &'static str) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    write_record(
+        &paths::worker_record(&fixture.home, "docker"),
+        &SdkValue::map([
+            (
+                "address",
+                SdkValue::text(listener.local_addr().unwrap().to_string()),
+            ),
+            ("secret", SdkValue::text("test-secret")),
+        ]),
+    )
+    .unwrap();
+    let server = std::thread::spawn(move || {
+        use std::io::Read;
+        let (mut stream, _) = listener.accept().unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(1)))
+            .unwrap();
+        stream
+            .set_write_timeout(Some(Duration::from_secs(1)))
+            .unwrap();
+        assert!(read_frame_within(&mut stream, MAX_HELLO).unwrap().is_some());
+        write_frame(
+            &mut stream,
+            &SdkValue::map([
+                ("ready", SdkValue::Bool(true)),
+                (
+                    "protocol",
+                    SdkValue::Int(if mode == "protocol" {
+                        PROTOCOL + 1
+                    } else {
+                        PROTOCOL
+                    }),
+                ),
+            ]),
+        )
+        .unwrap();
+        if mode != "protocol" {
+            let request = read_frame_within(&mut stream, MAX_HELLO).unwrap().unwrap();
+            assert_eq!(request.get_text("op"), Some("worker.ping"));
+            if mode == "version" {
+                write_frame(
+                    &mut stream,
+                    &SdkValue::map([(
+                        "value",
+                        SdkValue::map([
+                            ("kind", SdkValue::text("worker")),
+                            ("pid", SdkValue::Int(42)),
+                            ("version", SdkValue::text("different-version")),
+                        ]),
+                    )]),
+                )
+                .unwrap();
+            } else if mode == "refusal" {
+                write_frame(
+                    &mut stream,
+                    &SdkValue::map([(
+                        "refused",
+                        SdkValue::map([
+                            ("code", SdkValue::text("Denied")),
+                            ("message", SdkValue::text("owned fixture refusal")),
+                        ]),
+                    )]),
+                )
+                .unwrap();
+            }
+        }
+        // No second request and no abandoned peer after timeout or refusal.
+        assert_eq!(stream.read(&mut [0; 1]).unwrap(), 0);
+    });
+    let report = fixture.report("docker", Duration::from_millis(250));
+    if mode == "protocol" {
+        outcome(&report, "machine.worker.compatibility", "fail");
+        outcome(&report, "machine.worker.ping", "blocked");
+    } else {
+        outcome(
+            &report,
+            "machine.worker.ping",
+            if mode == "timeout" { "unknown" } else { "fail" },
+        );
+        outcome(&report, "machine.capacity", "blocked");
+    }
+    assert_eq!(report.get("complete"), Some(&SdkValue::Bool(false)));
+    server.join().unwrap();
 }
 fn record_without_op(home: &Path) {
     MachineRecord::of(home, "docker")
