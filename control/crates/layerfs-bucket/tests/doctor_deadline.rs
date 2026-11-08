@@ -96,3 +96,30 @@ fn expired_budget_sends_no_request() {
     assert!(server.client().diagnostic_list(Instant::now()).is_err());
     assert!(server.state.lock().unwrap().requests.is_empty());
 }
+
+#[test]
+fn hostname_diagnostics_require_the_network_owners_bounded_resolver() {
+    fn resolve(host: &str, port: u16, until: Instant) -> std::io::Result<std::net::SocketAddr> {
+        assert_eq!(host, "diagnostic.fixture.invalid");
+        assert!(until > Instant::now());
+        Ok(std::net::SocketAddr::from(([127, 0, 0, 1], port)))
+    }
+    let server = Server::new(Mode::default());
+    let mut config = server.config();
+    config.endpoint = config
+        .endpoint
+        .replace("127.0.0.1", "diagnostic.fixture.invalid");
+    let client = S3Client::new(config).unwrap();
+    assert!(client
+        .diagnostic_list(Instant::now() + Duration::from_secs(1))
+        .is_err());
+    assert!(
+        server.state.lock().unwrap().requests.is_empty(),
+        "no ordinary/unbounded DNS fallback"
+    );
+    let client = client.with_diagnostic_resolver(resolve);
+    client
+        .diagnostic_list(Instant::now() + Duration::from_secs(1))
+        .unwrap();
+    assert_eq!(server.state.lock().unwrap().requests.len(), 1);
+}

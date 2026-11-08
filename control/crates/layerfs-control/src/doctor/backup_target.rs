@@ -56,7 +56,7 @@ pub(super) fn diagnose(
         return;
     }
     let client = match record.diagnostic_client() {
-        Ok(client) => client,
+        Ok(client) => client.with_diagnostic_resolver(layerfs_bridge::network::resolve_within),
         Err(_) => {
             checks.fail("backup.configuration", "saved endpoint, bucket, prefix, region or credential reference could not be validated; secrets were not displayed");
             blocked_requests(checks, write_test, "backup.configuration");

@@ -66,7 +66,13 @@ enum Framing {
 }
 
 /// Opens a new connection to the endpoint; nothing is sent yet.
-fn connect(config: &S3Config, host: &str, port: u16, tls: bool) -> Result<Connection, RemoteError> {
+fn connect(
+    config: &S3Config,
+    resolver: Option<super::DiagnosticResolver>,
+    host: &str,
+    port: u16,
+    tls: bool,
+) -> Result<Connection, RemoteError> {
     let unavailable = |e: io::Error| RemoteError::Unavailable(format!("{host}:{port}: {e}"));
     let at = |phase: &str, error: io::Error| {
         if super::deadline::current().is_some() {
@@ -77,8 +83,19 @@ fn connect(config: &S3Config, host: &str, port: u16, tls: bool) -> Result<Connec
     };
     let deadline = super::deadline::current();
     let address = match deadline {
-        Some(deadline) => layerfs_bridge::network::resolve_within(host, port, deadline)
+        Some(deadline) => match host.parse::<std::net::IpAddr>() {
+            Ok(ip) => std::net::SocketAddr::new(ip, port),
+            Err(_) => resolver.ok_or_else(|| {
+                at(
+                    "DNS",
+                    io::Error::new(
+                        io::ErrorKind::Unsupported,
+                        "bounded diagnostic resolver unavailable",
+                    ),
+                )
+            })?(host, port, deadline)
             .map_err(|error| at("DNS", error))?,
+        },
         None => (host, port)
             .to_socket_addrs()
             .map_err(unavailable)?
@@ -103,6 +120,7 @@ fn connect(config: &S3Config, host: &str, port: u16, tls: bool) -> Result<Connec
 pub(crate) fn exchange(
     config: &S3Config,
     kept: &Kept,
+    resolver: Option<super::DiagnosticResolver>,
     method: &str,
     target: &str,
     headers: &BTreeMap<String, String>,
@@ -124,7 +142,7 @@ pub(crate) fn exchange(
             ),
         ),
         None => (
-            connect(config, &host, port, tls)?,
+            connect(config, resolver, &host, port, tls)?,
             format!("{method} {path}"),
         ),
     };

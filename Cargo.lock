@@ -738,7 +738,6 @@ dependencies = [
 name = "layerfs-bucket"
 version = "2.0.0"
 dependencies = [
- "layerfs-bridge",
  "layerfs-persistence",
  "layerfs-storage",
  "layerfs-store-service",

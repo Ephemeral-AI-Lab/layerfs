@@ -25,6 +25,7 @@ pub struct S3Client {
     config: S3Config,
     /// Idle connections for the next requests.
     kept: Kept,
+    diagnostic_resolver: Option<super::DiagnosticResolver>,
 }
 
 impl S3Client {
@@ -34,7 +35,15 @@ impl S3Client {
         Ok(Self {
             config,
             kept: Kept::default(),
+            diagnostic_resolver: None,
         })
+    }
+
+    /// Supplies the network owner's bounded resolver for diagnostic requests.
+    /// Ordinary transfers keep their existing resolver and timeout behavior.
+    pub fn with_diagnostic_resolver(mut self, resolver: super::DiagnosticResolver) -> Self {
+        self.diagnostic_resolver = Some(resolver);
+        self
     }
 
     pub fn config(&self) -> &S3Config {
@@ -63,6 +72,7 @@ impl S3Client {
         exchange(
             &self.config,
             &self.kept,
+            self.diagnostic_resolver,
             method,
             &target,
             &headers,

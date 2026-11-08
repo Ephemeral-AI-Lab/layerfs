@@ -19,3 +19,7 @@ pub use multipart::{part_size, MAX_PART, MAX_PARTS, MIN_PART};
 
 pub use deadline::within as diagnostic_within;
 pub use diagnostic::{DiagnosticObject, DIAGNOSTIC_PREFIX};
+
+/// Network-owner callback; must return by the absolute deadline and reap helpers.
+pub type DiagnosticResolver =
+    fn(&str, u16, std::time::Instant) -> std::io::Result<std::net::SocketAddr>;
