@@ -17,9 +17,9 @@ routed and run.
 ## The SDK
 
 ```text
- import layerfs from "layerfs"     import layerfs        layerfs <family> <call>
- await layerfs.<family>.<call>(    layerfs.<family>.     <positionals> --options
-   positionals..., { options })      <call>(..., opt=...)
+ import layerfs from "@layerfs/node"     import layerfs        layerfs <family> <call>
+ await layerfs.<family>.<call>(          layerfs.<family>.     <positionals> --options
+   positionals..., { options })            <call>(..., opt=...)
                 \                         |                      /
                  +---- one entry in the call table, one call ----+
                                           |

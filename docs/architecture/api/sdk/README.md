@@ -83,7 +83,7 @@ arguments in JavaScript, Python and the `layerfs` command.
 
 | | JavaScript | Python | CLI |
 | --- | --- | --- | --- |
-| Install / import | `import layerfs from "layerfs"` ([`index.js`](../../../../api/node/src/index.js)) | `import layerfs` ([`__init__.py`](../../../../api/python/src/layerfs/__init__.py)) | the `layerfs` command ([`layerfs-cli`](../../../../api/crates/layerfs-cli/src)) |
+| Install / import | `import layerfs from "@layerfs/node"` ([`index.js`](../../../../api/node/src/index.js)) | `import layerfs` ([`__init__.py`](../../../../api/python/src/layerfs/__init__.py)) | the `layerfs` command ([`layerfs-cli`](../../../../api/crates/layerfs-cli/src)) |
 | Default client | the module's families: `layerfs.store.list()` | the module's families: `layerfs.store.list()` | every command |
 | Another home or a scope | `layerfs.client({ home, scope })` | `layerfs.client(home=..., scope=...)` | `LAYERFS_HOME` |
 | Home default | `LAYERFS_HOME`, else `~/.layerfs` | same | same |

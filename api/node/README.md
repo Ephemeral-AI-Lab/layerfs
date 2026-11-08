@@ -11,12 +11,12 @@ are generated from the call table.
 ## Install
 
 ```bash
-npm install layerfs@next
+npm install @layerfs/node@rc
 ```
 
-`2.0.0-rc.1` is a prerelease under the `next` tag. npm also creates `latest`
-on a package's first publish, even with `--tag next`, so both tags point at
-this version until a stable version is published; `npm install layerfs` then
+`2.0.0-rc.1` is a prerelease under the `rc` tag. npm also creates `latest`
+on a package's first publish, even with `--tag rc`, so both tags point at
+this version until a stable version is published; `npm install @layerfs/node` then
 also installs the prerelease.
 
 Node 22 or later. The package is an ES module. TypeScript users need
@@ -45,7 +45,7 @@ required glibc symbol is `GLIBC_2.39`.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { client, close } from "layerfs";
+import { client, close } from "@layerfs/node";
 
 const root = mkdtempSync(join(tmpdir(), "layerfs-"));
 const folder = join(root, "app");

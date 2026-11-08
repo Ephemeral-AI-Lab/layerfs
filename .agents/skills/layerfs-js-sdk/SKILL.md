@@ -1,6 +1,6 @@
 ---
 name: layerfs-js-sdk
-description: Use when building, editing, testing or inspecting a project through LayerFS 2.0 with the `layerfs` package (`import layerfs from "layerfs"`), its Python twin or the `layerfs` command. Activates on LayerFS projects (`<store>/<project>`), Branches, Commits, Workspaces or Sandboxes; `layerfs.file.*`, `layerfs.branch.*`, `layerfs.commit.*`, `layerfs.sandbox.*`, `layerfs.workspace.*` or `layerfs.project.*` calls; `layerfs file read …`-style commands; running npm install, build or tests inside a mounted Workspace; or resolving LayerFS Conflict, HeadMoved, Dirty or ReadOnly refusals.
+description: Use when building, editing, testing or inspecting a project through LayerFS 2.0 with the `@layerfs/node` package (`import layerfs from "@layerfs/node"`), its Python twin or the `layerfs` command. Activates on LayerFS projects (`<store>/<project>`), Branches, Commits, Workspaces or Sandboxes; `layerfs.file.*`, `layerfs.branch.*`, `layerfs.commit.*`, `layerfs.sandbox.*`, `layerfs.workspace.*` or `layerfs.project.*` calls; `layerfs file read …`-style commands; running npm install, build or tests inside a mounted Workspace; or resolving LayerFS Conflict, HeadMoved, Dirty or ReadOnly refusals.
 ---
 
 # LayerFS: working on a project
@@ -128,7 +128,7 @@ decision in the result's `lww` list. Never list source files. Details:
 
 ```js
 // Node 22+, ES module
-import layerfs, { LayerFSError } from "layerfs";
+import layerfs, { LayerFSError } from "@layerfs/node";
 const text = (await layerfs.file.read("shop/api", "work", "/README.md")).text;
 ```
 
@@ -177,7 +177,7 @@ after `cargo +1.85.1 build -p layerfs-cli`.
 
 ```js
 // step.mjs: run with `node step.mjs`
-import layerfs from "layerfs";
+import layerfs from "@layerfs/node";
 
 const P = "shop/api";
 await layerfs.branch.fork(P, "work", "main");           // { kind: "Forked", branch, base, head: null }
