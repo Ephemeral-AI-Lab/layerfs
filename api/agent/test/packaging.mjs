@@ -31,11 +31,11 @@ if (selected === "surface") {
   assert.equal(shop.projectName, "website");
   assert.equal(shop.options.home, "/private/configured-home");
   assert.deepEqual(shop.options.deploy, { docker: "/configured/docker.sock", image: "configured-image", volume: "configured-volume", daemon: "/configured/daemon" });
-  // five groups: project 2, branch 6, fs 14, sandbox 3, workspace 4
+  // five groups: project 2, branch 6, fs 15, sandbox 3, workspace 4
   const methods = (group) => Object.keys(shop[group]).sort();
   assert.deepEqual(methods("project"), ["list_branches", "list_sandboxes"]);
   assert.deepEqual(methods("branch"), ["diff_branches", "diff_commits", "fork", "list_commits", "merge", "publish"]);
-  assert.equal(methods("fs").length, 14);
+  assert.equal(methods("fs").length, 15);
   assert.deepEqual(methods("sandbox"), ["close", "create", "list_workspaces"]);
   assert.deepEqual(methods("workspace"), ["commit", "exec", "mount", "unmount"]);
   assert.equal(shop.inspect, undefined);

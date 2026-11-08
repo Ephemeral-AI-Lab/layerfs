@@ -76,6 +76,55 @@ pub fn read(
     answer(fields)
 }
 
+/// One bounded window of the file at `path` as raw bytes, from `offset` for
+/// at most `length` bytes. `length` is capped at [`window::BYTES`], and an
+/// offset past the end returns no bytes with `hasMore: false`.
+pub fn read_bytes(
+    reader: &StorePorts,
+    snap: &Snap,
+    path: &str,
+    offset: Arg<u64>,
+    length: Arg<u64>,
+) -> Answer {
+    let cached = Cached::new(reader)?;
+    let entry = existing(&Memo::new(&cached), snap, path)?;
+    if entry.value.kind != InodeKind::RegularFile {
+        return Err(args::refuse(
+            if entry.value.kind == InodeKind::Directory {
+                "IsDirectory"
+            } else {
+                "NotFile"
+            },
+            "expected a regular file",
+            SdkValue::Null,
+        ));
+    }
+    let offset = offset?;
+    let length = length?.min(window::BYTES as u64);
+    let size = size(reader, &entry)?;
+    let end = offset.saturating_add(length).min(size);
+    let mut bytes = Vec::new();
+    if offset < end {
+        crate::telemetry::timed("sdk.bytes", |timing| {
+            layerfs_content::file::read_range(
+                &cached,
+                entry.value.content_root,
+                offset..end,
+                &mut bytes,
+                timing.child("content.read"),
+            )
+        })
+        .map_err(args::content)?;
+    }
+    let mut fields = header(snap, path);
+    fields.extend([
+        ("bytes", SdkValue::Bytes(bytes)),
+        ("size", SdkValue::Int(size as i64)),
+        ("hasMore", SdkValue::Bool(end < size)),
+    ]);
+    answer(fields)
+}
+
 /// The type, inode, size and permission mode of the entry at `path`. An
 /// inline mode costs no object read.
 pub fn stat(reader: &StorePorts, snap: &Snap, path: &str) -> Answer {
