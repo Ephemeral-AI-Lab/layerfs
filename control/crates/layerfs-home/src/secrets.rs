@@ -85,15 +85,12 @@ pub fn with_password(url: &str, password: Option<&str>) -> Result<String> {
 }
 
 /// What a machine's `worker.json` records: its worker's address and
-/// secret, and the process of an ssh forward to it.
+/// secret.
 pub struct WorkerSecret {
     /// The worker's loopback address.
     pub address: SocketAddr,
     /// The worker's secret.
     pub secret: String,
-    /// The process of an ssh forward to the worker; read by the machine
-    /// adapters only (`machine/spec.rs`).
-    pub forward_pid: Option<u32>,
 }
 
 /// Machine `machine`'s `worker.json`, if it has one; one without an
@@ -114,7 +111,6 @@ pub fn worker_secret(home: &Path, machine: &str) -> Result<Option<WorkerSecret>>
     Ok(Some(WorkerSecret {
         address,
         secret: value.get_text("secret").unwrap_or("").to_owned(),
-        forward_pid: value.get_int("forward_pid").map(|p| p as u32),
     }))
 }
 

@@ -1,6 +1,6 @@
 //! A machine's records become the adapters' [`Spec`]: its
-//! [`MachineRecord`] and `machine/<name>/worker.json` (endpoint, secret,
-//! live forward; 0600, while the worker runs). Nothing in the adapters
+//! [`MachineRecord`] and `machine/<name>/worker.json` (endpoint and
+//! secret; 0600, while the worker runs). Nothing in the adapters
 //! reads the home.
 use super::record::MachineRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -102,13 +102,6 @@ pub fn tools(home: &Path) -> Result<Tools> {
 pub fn spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> {
     let name = record.name();
     let kind = record.platform()?;
-    let host = match record.host() {
-        Some(host) if kind == Platform::Firecracker => {
-            let host_record = machine_of(home, host)?;
-            Some(Box::new(spec(home, home_id, &host_record)?))
-        }
-        _ => None,
-    };
     let lasting = record.field("lasting");
     Ok(Spec {
         name: name.to_owned(),
@@ -133,11 +126,8 @@ pub fn spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> 
             .text("os_image")
             .or(record.image().filter(|_| kind == Platform::Docker))
             .map(str::to_owned),
-        nested: record.nested(),
-        host,
         state: Lasting {
             port: lasting.and_then(|l| l.get_int("port")).map(|p| p as u16),
-            network: lasting.and_then(|l| l.get_int("network")).map(|n| n as u8),
             gateway: lasting
                 .and_then(|l| l.get_text("gateway"))
                 .and_then(|g| g.parse().ok()),
@@ -154,7 +144,6 @@ pub fn worker(home: &Path, name: &str) -> Result<Option<Endpoint>> {
     Ok(worker.map(|worker| Endpoint {
         address: worker.address,
         secret: worker.secret,
-        forward_pid: worker.forward_pid,
     }))
 }
 
@@ -168,22 +157,12 @@ pub fn save_running(home: &Path, name: &str, running: &Running) -> Result<()> {
         &SdkValue::map([
             ("address", SdkValue::text(endpoint.address.to_string())),
             ("secret", SdkValue::text(&endpoint.secret)),
-            (
-                "forward_pid",
-                endpoint
-                    .forward_pid
-                    .map(|p| SdkValue::Int(i64::from(p)))
-                    .unwrap_or_default(),
-            ),
             ("started", SdkValue::Int(home::now_ms())),
         ]),
     )?;
     let mut lasting = Vec::new();
     if let Some(port) = running.lasting.port {
         lasting.push(("port".to_owned(), SdkValue::Int(i64::from(port))));
-    }
-    if let Some(network) = running.lasting.network {
-        lasting.push(("network".to_owned(), SdkValue::Int(i64::from(network))));
     }
     if let Some(gateway) = running.lasting.gateway {
         lasting.push(("gateway".to_owned(), SdkValue::text(gateway.to_string())));

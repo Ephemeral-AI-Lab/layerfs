@@ -9,7 +9,6 @@ use crate::options::OptSpec;
 use crate::platform::{ExecutorKind, HostOs, How, KernelRoute, Platform};
 pub use layerfs_bridge::StoreKind;
 use layerfs_sandbox_backend::json::quoted;
-use layerfs_sandbox_backend::platform_policy::disabled_reason;
 use layerfs_sandbox_backend::Backend;
 
 /// Where a Store's calls run for a machine.
@@ -66,9 +65,6 @@ const NO_BACKEND: &str = "no Sandbox backend on Windows (O5)";
 
 /// Why `platform` cannot be on `host`, or `None` where it can.
 fn host_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
-    if let Some(reason) = disabled_reason(platform.name()) {
-        return Some(reason);
-    }
     if host == HostOs::Other {
         return Some(OTHER_HOST);
     }
@@ -79,7 +75,6 @@ fn host_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
         Platform::Docker => "docker through WSL2 is not designed yet",
         Platform::AppleContainer => "apple-container runs on macOS hosts only",
         Platform::Lima => "lima runs on macOS hosts only",
-        Platform::Firecracker => "firecracker runs on macOS hosts only, in a nested lima machine",
         Platform::Native => OTHER_HOST,
     })
 }
@@ -87,7 +82,7 @@ fn host_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
 /// Why a PostgreSQL Sandbox does not run on `platform` (on a host it is
 /// on, with a backend), or `None` where it does. Every platform with a
 /// backend runs them: native (Linux namespaces with no bind; #535 phase
-/// 5a), docker, and lima, apple-container and firecracker through their `reach`
+/// 5a), docker, and lima and apple-container through their `reach`
 /// routes (`platforms/*/adapter.rs`; G7 live receipts).
 fn postgresql_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
     match (platform, host) {
@@ -136,15 +131,10 @@ pub fn support(platform: Platform, host: HostOs) -> SupportRow {
             sandbox: postgresql.is_ok(),
             reason: postgresql.err(),
         },
-        options: if disabled_reason(platform.name()).is_some() {
-            &[]
-        } else {
-            profile.options
-        },
-        description: match (disabled_reason(platform.name()), backend) {
-            (Some(reason), _) => reason.to_owned(),
-            (None, Some(backend)) => format!("{}; {}", profile.description, backend.description()),
-            (None, None) => profile.description.to_owned(),
+        options: profile.options,
+        description: match backend {
+            Some(backend) => format!("{}; {}", profile.description, backend.description()),
+            None => profile.description.to_owned(),
         },
     }
 }

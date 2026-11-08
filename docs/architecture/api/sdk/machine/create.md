@@ -4,13 +4,9 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Firecracker is **permanently disabled for new work**. Its code and records
-remain for inspection and explicit cleanup. Microsandbox and SSH machines
-were removed in 2.0; a record an older home still holds for one is shown,
-refused and only forgotten. See the [platform restriction](../../../control/support-matrix/disabled-platforms.md) for
-refusals, existing-resource handling and the source change required for
-re-enabling. Descriptions of Firecracker's adapter mechanics below are
-retained implementation details, not selectable features.
+Firecracker, Microsandbox and SSH machines were removed in 2.0; a record
+an older home still holds for one is shown, refused and only forgotten.
+See [removed platforms](../../../control/support-matrix/disabled-platforms.md).
 
 Makes a new VM machine on this host, copies the sealed Linux bundle in and
 starts its worker, so Stores and Sandboxes can be placed on it.
@@ -26,20 +22,20 @@ starts its worker, so Stores and Sandboxes can be placed on it.
 
 ```js
 // JavaScript
-await layerfs.machine.create(name, platform, { cpus, memory, disk, image, nested, host });
-await client.machine.create(name, platform, { cpus, memory, disk, image, nested, host });
+await layerfs.machine.create(name, platform, { cpus, memory, disk, image });
+await client.machine.create(name, platform, { cpus, memory, disk, image });
 ```
 
 ```python
 # Python
 layerfs.machine.create(name, platform, cpus=None, memory=None, disk=None,
-                       image=None, nested=None, host=None)
+                       image=None)
 ```
 
 ```bash
 # CLI
 layerfs machine create <name> <platform> [--cpus N] [--memory SIZE] \
-  [--disk SIZE] [--image TEXT] [--nested] [--host NAME]
+  [--disk SIZE] [--image TEXT]
 ```
 
 ## Arguments
@@ -56,11 +52,10 @@ Which platform this host may create comes from the support table
 | Platform | macOS | Linux | Windows | Options | Page |
 | --- | --- | --- | --- | --- | --- |
 | `apple-container` | yes | no | no | cpus, memory, disk, image | [apple-container](../../../control/machines/platforms/apple-container.md) |
-| `lima` | yes | no | no | cpus, memory, disk, image, nested | [lima](../../../control/machines/platforms/lima.md) |
-| `firecracker` | disabled | disabled | disabled | none selectable | [firecracker](../../../control/machines/platforms/firecracker.md) |
+| `lima` | yes | no | no | cpus, memory, disk, image | [lima](../../../control/machines/platforms/lima.md) |
 
-`native` and `docker` are built in. `microsandbox` and `ssh` were removed
-in 2.0: naming one is refused `Unsupported` with
+`native` and `docker` are built in. `firecracker`, `microsandbox` and `ssh`
+were removed in 2.0: naming one is refused `Unsupported` with
 ``platform `<name>` was removed in LayerFS 2.0``.
 
 ## Options
@@ -71,8 +66,6 @@ in 2.0: naming one is refused `Unsupported` with
 | `memory` | Size | 4 GiB | bytes, or `K`/`M`/`G` text (powers of 1024) | same, `DEFAULT_MEMORY` |
 | `disk` | Size | 20 GiB | the data disk mounted at `/layerfs/data` | same, `DEFAULT_DISK` |
 | `image` | Text | none | recorded as given; see below | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `spec` |
-| `nested` | Bool | false | `lima` only: a VM that can host `firecracker` | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) |
-| `host` | Name | none | `firecracker` only, and required: a `lima` machine made with `nested` | same |
 
 `image` means two things. The platform profiles declare it as the VM's own
 system image ([`options.rs`](../../../../../control/crates/layerfs-platform/src/options.rs)
@@ -92,7 +85,7 @@ The machine's summary, with `state: "running"` once its worker answered:
 ```text
  { name, platform, backend, supports: { sqlite, postgresql_sandbox, reason },
    state, cpus, memory, disk, stores: [], sandboxes: [],
-   image?, host?, nested?, error? }
+   image?, error? }
 ```
 
 The fields are the same as [machine.get](get.md#returns) and are described
@@ -105,11 +98,11 @@ on [machine.list](list.md#returns). The record also keeps `vm_name`
 ```text
  caller process                                  provider CLI / VM
  --------------                                  -----------------
- Platform::parse; created? nested/host rules
+ Platform::parse; created?
  sandbox_allowed(kind, host, sqlite) --> Unsupported (table's reason)
  probe tools --> Unsupported, detail.missing
  bundle(): sealed Linux bundle --> Unsupported if absent
- home lock: new_name, host check, write record with op "create"
+ home lock: new_name, write record with op "create"
  progress { phase: "create", machine }
  start lock (a machine start waits)
  layerfs_platform::create ----------------------->  VM + data disk
@@ -133,11 +126,9 @@ See the [routing table](../../../control/routing/routing-table.md).
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | bad name; a built-in name; unknown platform; a built-in platform; `nested` off lima; firecracker without `host` or with a host that is not a nested lima; a folder-scoped client | no | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) |
+| `InvalidInput` | bad name; a built-in name; unknown platform; a built-in platform; a folder-scoped client | no | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) |
 | `Exists` | a machine of that name exists | no | same, `new_name` |
-| `NotFound` | `host` names no machine | no | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) |
-| `Busy` / `Unresolved` | `host` is held by another operation | no | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `machine_of` |
-| `Unsupported` | the platform is disabled (`firecracker`) or was removed (`microsandbox`, `ssh`); it is not supported on this host; its tool is missing (`detail.missing`); no sealed bundle; a build without the `machine` feature | no | same, [`bundle.rs`](../../../../../control/crates/layerfs-machine/src/bundle.rs) |
+| `Unsupported` | the platform was removed (`firecracker`, `microsandbox`, `ssh`); it is not supported on this host; its tool is missing (`detail.missing`); no sealed bundle; a build without the `machine` feature | no | same, [`bundle.rs`](../../../../../control/crates/layerfs-machine/src/bundle.rs) |
 | `Unavailable`, `Denied`, `Failed` | the provider refused or failed; `detail.vm_exists` says whether the VM is kept | no | [`error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
 | `Unknown` | **the provider timed out or its answer was lost** | **yes** | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) `finish` |
 
@@ -158,7 +149,7 @@ layerfs.machine.create("box", "apple-container", memory="2G")
 ```
 
 ```bash
-# Permanently refused: layerfs machine create fc1 firecracker --host vm1
+layerfs machine create vm1 lima --cpus 4 --memory 8G
 ```
 
 ## Related

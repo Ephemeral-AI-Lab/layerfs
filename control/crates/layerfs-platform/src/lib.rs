@@ -28,7 +28,7 @@ pub use layerfs_sandbox_backend::platform_policy;
 pub use layerfs_sandbox_backend::Backend;
 pub use options::{OptKind, OptSpec};
 pub use platform::{ExecutorKind, HostOs, How, KernelRoute, Platform, Profile, Route};
-pub use probe::{native_missing, nested_missing, probe, Probe};
+pub use probe::{native_missing, probe, Probe};
 pub use setup::{
     copy_in, copy_out, create, forward, forward_close, load_image, reach, remove, start, status,
     status_within, stop, State, Status,

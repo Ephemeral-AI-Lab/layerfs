@@ -1,7 +1,6 @@
 //! The checks on what the scan read: broken references (a Sandbox whose
 //! Store, project or machine is gone, a Store on a machine with no record,
-//! a Firecracker machine whose host is gone, a built-in machine's recorded
-//! daemon that is not there), dead and uncertain `op`
+//! a built-in machine's recorded daemon that is not there), dead and uncertain `op`
 //! intents, stale Store leases (read, never removed), a partial Store
 //! copy (`store.sqlite.incoming`) an interrupted or certain-failed transfer
 //! left on `native` or on a push's target machine, and a copy a push or pull
@@ -96,8 +95,8 @@ pub(super) fn check(
     Ok(())
 }
 
-/// Machines: their intents, a Firecracker machine's Lima host, and a
-/// built-in machine's recorded daemon that is not there.
+/// Machines: their intents, and a built-in machine's recorded daemon that
+/// is not there.
 fn machines(scanned: &Scanned, findings: &mut Findings) {
     for machine in &scanned.machines {
         let name = machine.name();
@@ -118,15 +117,6 @@ fn machines(scanned: &Scanned, findings: &mut Findings) {
                 &clear,
                 findings,
             );
-        }
-        if let Some(host) = machine.host() {
-            if !scanned.machine_names.contains(host) {
-                findings.error(
-                    entity,
-                    format!("machine {name}'s Lima host {host} has no record"),
-                    format!("`layerfs machine remove {name}`"),
-                );
-            }
         }
     }
 }

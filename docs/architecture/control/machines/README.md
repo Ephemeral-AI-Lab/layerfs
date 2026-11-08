@@ -4,13 +4,9 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Firecracker is **permanently disabled for new work**. Its code and records
-remain for inspection and explicit cleanup. Microsandbox and SSH machines
-were removed in 2.0; a record an older home still holds for one is shown,
-refused and only forgotten. See the [platform restriction](../support-matrix/disabled-platforms.md) for
-refusals, existing-resource handling and the source change required for
-re-enabling. Descriptions of Firecracker's adapter mechanics below are
-retained implementation details, not selectable features.
+Firecracker, Microsandbox and SSH machines were removed in 2.0; a record
+an older home still holds for one is shown, refused and only forgotten.
+See [removed platforms](../support-matrix/disabled-platforms.md).
 
 Where Sandboxes run: one adapter per platform that probes, creates, starts, stops and removes a machine.
 
@@ -37,7 +33,6 @@ for what a diagram or table cannot say.
 | [Docker](platforms/docker.md) | The Docker platform. |
 | [Apple container](platforms/apple-container.md) | The Apple container platform. |
 | [Lima](platforms/lima.md) | The Lima platform. |
-| [Firecracker](platforms/firecracker.md) | The Firecracker platform. |
 | [Adding a platform](adding-a-platform.md) | The recipe for a new platform. |
 
 ## The picture
@@ -61,11 +56,11 @@ for what a diagram or table cannot say.
  setup/vm.rs      one provider CLI call, sizes, ports
  setup/guest.rs   a root shell in the guest (the Guest enum)
  setup/worker.rs  steps 2-4: prepare, install, launch, ready
- setup/forward.rs detached `ssh -N -L` (lima, firecracker)
+ setup/forward.rs detached `ssh -N -L` (lima's daemon ports)
       |
       v
- Running { endpoint: host loopback address + secret (+ forward pid),
-           lasting: worker port, firecracker network }
+ Running { endpoint: host loopback address + secret,
+           lasting: worker port, apple-container gateway }
       --> caller writes worker.json and record.json (step 5)
 ```
 
@@ -77,16 +72,15 @@ for what a diagram or table cannot say.
 | `docker` | built in | nothing: one privileged worker container on Docker's kernel, which runs namespaces Sandboxes (D-8) | Docker Desktop's VM or the Linux host | [`docker/`](../../../../control/crates/layerfs-platform/src/platforms/docker) |
 | `apple-container` | created | `container run` | an Apple container VM | [`apple_container/`](../../../../control/crates/layerfs-platform/src/platforms/apple_container) |
 | `lima` | created | `limactl create` from a template | a Lima `vz` VM | [`lima/`](../../../../control/crates/layerfs-platform/src/platforms/lima) |
-| `firecracker` | created | scripts in a nested `lima` machine | a Firecracker microVM | [`firecracker/`](../../../../control/crates/layerfs-platform/src/platforms/firecracker) |
 
-Microsandbox (`msb`) and SSH machines were removed in 2.0 (owner,
-2026-11-08): no `Platform` variant, adapter or profile is left. A home's
+Firecracker, Microsandbox (`msb`) and SSH machines were removed in 2.0
+(owner, 2026-11-08): no `Platform` variant, adapter or profile is left. A home's
 record that still names one is handled above this crate, in
 `layerfs-machine` ([`record.rs`](../../../../control/crates/layerfs-machine/src/record.rs),
 [`remove.rs`](../../../../control/crates/layerfs-machine/src/remove.rs)):
 shown by `machine list` and `get`, refused `Unsupported` elsewhere, and only
 forgotten by `machine remove`. See
-[disabled platforms](../support-matrix/disabled-platforms.md).
+[removed platforms](../support-matrix/disabled-platforms.md).
 
 What each lifecycle call does, per platform ("refused" is `InvalidInput`
 with the fixed text of [Adapter](adapter.md#the-sealed-adapter)):
@@ -97,7 +91,6 @@ with the fixed text of [Adapter](adapter.md#the-sealed-adapter)):
 | `docker` | refused | replace and run the worker container | `docker stop` the worker | refused |
 | `apple-container` | volume, `container run`, worker | `container start`, worker | `container stop` | container, then volume |
 | `lima` | disk, instance, boot, worker | `limactl start`, worker | `limactl stop` | instance, then disk |
-| `firecracker` | disk, VM folder, boot, `ssh -L`, worker | boot, new `ssh -L`, worker | forward, then VM | forward, VM, folder, disk |
 
 ## Invariants
 

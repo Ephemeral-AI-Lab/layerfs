@@ -18,13 +18,10 @@ depends on `control/`.
 | `layerfs-sandbox-backend` | *How* does a Sandbox run on that machine's kernel? | backend: `src/backend/<backend>/` |
 | `layerfs-bucket` | *How* is a Store backed up to a bucket? | provider: `src/bucket/<provider>/` |
 
-Firecracker is **permanently disabled for new product work**. Its adapter
-remains compiled; inspection and explicit cleanup remain available. The
-Microsandbox and SSH platforms were removed in LayerFS 2.0: a home's old
-record of one is still shown (unsupported) and can only be forgotten with
-`machine remove`. The [restriction contract](../docs/architecture/control/support-matrix/disabled-platforms.md)
-defines existing-resource handling and re-enablement. Platform profiles below
-describe retained mechanics; `SUPPORT.json` decides availability.
+The Firecracker, Microsandbox and SSH platforms were removed in LayerFS 2.0:
+a home's old record of one is still shown (unsupported) and can only be
+forgotten with `machine remove`. The [restriction contract](../docs/architecture/control/support-matrix/disabled-platforms.md)
+defines how such records are handled; `SUPPORT.json` decides availability.
 
 ## Reading the tree
 
@@ -43,9 +40,8 @@ describe retained mechanics; `SUPPORT.json` decides availability.
   host's network); `docker` on Docker Desktop (the address its running
   worker resolves `host.docker.internal` to, D-8) and `lima`
   (`192.168.5.2`, the address of `host.lima.internal`) rewrite a loopback
-  host to that address, and so do
-  `apple-container` (its network's gateway from `container inspect`) and
-  `firecracker` (`192.168.5.2`, through the Lima host's masquerade). Facts:
+  host to that address, and so does
+  `apple-container` (its network's gateway from `container inspect`). Facts:
   the G7 receipt in
   `core/docs/issues/535/receipts/g7-reach/`. A
   rewrite is refused for `sslmode=verify-full`; other hosts are used as
@@ -60,15 +56,14 @@ describe retained mechanics; `SUPPORT.json` decides availability.
   `ssh.config`, as its template forwards no guest port but the worker's)
   and answer its pid. `docker` (its worker container's ports are
   published only when it starts, so a Sandbox daemon's port in it cannot
-  be published later; D-8), `apple-container` (ports are published only
-  at create) and `firecracker` (its daemons listen on
-  the microVM's loopback; the Lima host's forward reaches only its tap
-  address) refuse `Unsupported`, and their Workspace calls stay on the
+  be published later; D-8) and `apple-container` (ports are published only
+  at create) refuse `Unsupported`, and their Workspace calls stay on the
   worker.
 - `layerfs-platform/src/support.rs` is the one support table:
   platform × host × Store kind → supported, or a refusal with its reason.
-  It consumes the fixed restrictions in `layerfs-sandbox-backend/src/platform_policy.rs`,
-  also used by the API dispatcher in builds without machine adapters.
+  `layerfs-sandbox-backend/src/platform_policy.rs` names the removed
+  platforms, for records that still name one; the API dispatcher uses it
+  too, also in builds without machine adapters.
 - `layerfs-platform/src/platforms/<p>/`: `profile.rs` holds its `PROFILE`
   and `adapter.rs` its `ADAPTER` (the guard keeps both out of `mod.rs`);
   `observe.rs`, `create.rs` (create and remove), `power.rs` (start and
@@ -113,15 +108,15 @@ host without its live fields (`ready`, `missing`, `version`):
   PostgreSQL Store's Sandbox runs there) and `reason`, the exact refusal
   text the product returns, or `null`;
 - `options`: the `machine create` options, each with
-  its `kind` (`int`, `size`, `text`, `bool`, `name`);
+  its `kind` (`int`, `size`, `text`);
 - `description`: the platform and how its Sandboxes run.
 
-The table encodes what is allowed; Firecracker now refuses new work.
-Historical enablements remain evidence only: #535 phase 5a enabled PostgreSQL
-Sandboxes on `native` (macOS and Linux), `docker` and `ssh`; the G7 live
-receipts (`core/docs/issues/535/receipts/g7-live/`) enabled them on `lima`,
-`apple-container`, `microsandbox` and `firecracker` (`ssh` and
-`microsandbox` have since been removed). `layerfs machine platforms` (the call `machine.platforms`)
+The table encodes what is allowed. Historical enablements remain evidence
+only: #535 phase 5a enabled PostgreSQL Sandboxes on `native` (macOS and
+Linux), `docker` and `ssh`; the G7 live receipts
+(`core/docs/issues/535/receipts/g7-live/`) enabled them on `lima`,
+`apple-container`, `microsandbox` and `firecracker` (`ssh`, `microsandbox`
+and `firecracker` have since been removed). `layerfs machine platforms` (the call `machine.platforms`)
 returns the same data for the running host.
 
 ## Adding things

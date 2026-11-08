@@ -2,20 +2,17 @@
 
 > **Status:** Proposal; target LayerFS 2.0.0; not a released contract.
 
-Firecracker is permanently disabled for new work on every host. Its code,
-records and historical evidence remain. See
-[disabled platforms](../../architecture/control/support-matrix/disabled-platforms.md)
-for inspection, explicit cleanup and the transfer verification selection.
-
-Microsandbox and SSH machines were removed in 2.0 (owner, 2026-11-08); their
-code is gone. A record of one that a home still holds shows in `machine
-list` and `machine get` as `state: "unsupported"` with the reason
-(``platform `ssh` was removed in LayerFS 2.0``, or the same for
-`microsandbox`). Every other call on it is `Unsupported` with that reason.
-`machine remove` forgets the record only; nothing on its host is touched,
-so remove a microsandbox VM yourself with `msb remove --force <vm>` and
-`msb volume remove <vm>-data`. See
-[machines](machines-and-stores.md#removed-platforms-microsandbox-and-ssh).
+Firecracker, Microsandbox and SSH machines were removed in 2.0 (owner,
+2026-11-08); their code is gone. A record of one that a home still holds
+shows in `machine list` and `machine get` as `state: "unsupported"` with
+the reason (``platform `ssh` was removed in LayerFS 2.0``, or the same for
+`firecracker` or `microsandbox`). Every other call on it is `Unsupported`
+with that reason. `machine remove` forgets the record only; nothing on its
+host is touched, so remove a microsandbox VM yourself with
+`msb remove --force <vm>` and `msb volume remove <vm>-data`, and a
+firecracker microVM's files from its Lima host (the note names them). See
+[machines](machines-and-stores.md#removed-platforms-firecracker-microsandbox-and-ssh)
+and [removed platforms](../../architecture/control/support-matrix/disabled-platforms.md).
 
 Part of the [2.0.0 manual](README.md). This page lists what is not built,
 what the code refuses as `Unsupported`, and what was not verified on branch
@@ -33,8 +30,8 @@ for this manual.
   `docker` machine, as did MinIO backups, PostgreSQL Init and Sandboxes,
   and the three front ends compared; every VM kind, ssh, R2, Linux and
   Windows were `NOT_RUN`. Step 19 passes only when the twelve cells pass on
-  all seven machine kinds (owner direction, 2026-11-02; Microsandbox and
-  SSH were removed afterwards, on 2026-11-08). See
+  all seven machine kinds (owner direction, 2026-11-02; Firecracker,
+  Microsandbox and SSH were removed afterwards, on 2026-11-08). See
   [TERMINAL-PASS.md](../../../core/docs/issues/533/TERMINAL-PASS.md) for
   the latest pass.
 - The workspace's Cargo version is `2.0.0` (since `085376a7a8`), as are
@@ -48,7 +45,7 @@ for this manual.
 
 | What | Refusal |
 | --- | --- |
-| A machine, Sandbox or Store call on a removed platform's record (`ssh`, `microsandbox`) | ``platform `<name>` was removed in LayerFS 2.0``; only `machine list`, `machine get` and `machine remove` (forgets the record) answer |
+| A machine, Sandbox or Store call on a removed platform's record (`firecracker`, `ssh`, `microsandbox`) | ``platform `<name>` was removed in LayerFS 2.0``; only `machine list`, `machine get` and `machine remove` (forgets the record) answer |
 | A Sandbox on a platform and Store kind the support table refuses (`layerfs machine platforms`, `control/SUPPORT.json`): docker on Windows | the table's reason, word for word, such as "docker through WSL2 is not designed yet" |
 | A Sandbox on a machine other than its sqlite Store's | names the Store's machine; `store pull` and `store push` move the Store |
 | `project remove` from a PostgreSQL Store | "removing a project from a PostgreSQL Store is not built" |
@@ -115,8 +112,7 @@ None of these was run on this branch, except where a line says what ran.
 They are taken from the work order's "Not verified at writing" list and the
 step commits.
 
-- **VM kinds.** No real `firecracker` machine was created; its adapter was
-  tested with provider tests only. A `lima` (Lima 2.2.1, vz) and an `apple-container`
+- **VM kinds.** A `lima` (Lima 2.2.1, vz) and an `apple-container`
   (container 1.6.1) machine were created, started, stopped and started
   again on macOS with the release CLI, and ran the sqlite smoke and
   `workspace exec-cancel` (on Lima also stale and unreachable forwarded

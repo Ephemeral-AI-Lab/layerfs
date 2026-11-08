@@ -287,8 +287,6 @@ class AsyncMachineFamily:
         memory: Size | None = None,
         disk: Size | None = None,
         image: str | None = None,
-        nested: bool | None = None,
-        host: str | None = None,
     ) -> Result:
         """create an enabled VM machine (apple-container, lima)"""
     async def remove(self, name: str) -> Result:

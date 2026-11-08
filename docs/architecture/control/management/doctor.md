@@ -39,7 +39,6 @@ From [`checks.rs`](../../../../control/crates/layerfs-control/src/doctor/checks.
 | Entity | Finding | Severity | Fix it names |
 | --- | --- | --- | --- |
 | machine | recorded `daemon` file missing | error | `layerfs machine update <m> --daemon <path>` |
-| machine | Firecracker machine whose Lima host has no record | error | `layerfs machine remove <m>` |
 | store | record cannot be read | error | repair the record by hand |
 | store | sqlite Store on a machine with no record | error | make the machine again, or delete the folder by hand |
 | store | 1.1.0 Store whose machine is unknown | warning | `layerfs import-env` |

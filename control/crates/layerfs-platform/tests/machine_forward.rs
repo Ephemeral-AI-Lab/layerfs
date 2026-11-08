@@ -12,7 +12,6 @@
 #[path = "support/standin.rs"]
 mod standin;
 use layerfs_platform::{self as machine, Code, Forward, Platform, Spec};
-use layerfs_sandbox_backend::platform_policy::disabled_reason;
 use standin::Scratch;
 use std::net::SocketAddr;
 use std::process::Command;
@@ -156,28 +155,12 @@ fn a_stopped_lima_machine_forwards_nothing() {
 #[test]
 fn the_other_platforms_refuse_before_any_tool_runs() {
     let scratch = Scratch::new("forward-refused");
-    for kind in [
-        Platform::Docker,
-        Platform::AppleContainer,
-        Platform::Firecracker,
-    ] {
-        let mut spec = scratch.spec(kind);
-        if kind == Platform::Firecracker {
-            let mut host = scratch.spec(Platform::Lima);
-            host.nested = true;
-            spec.host = Some(Box::new(host));
-        }
+    for kind in [Platform::Docker, Platform::AppleContainer] {
+        let spec = scratch.spec(kind);
         let error = machine::forward(&spec, 40006).unwrap_err();
-        if let Some(reason) = disabled_reason(kind.name()) {
-            assert_eq!(error.code, Code::Unsupported);
-            assert_eq!(error.message, reason);
-            assert!(!error.vm_exists);
-            continue;
-        }
         let (code, why) = match kind {
             Platform::Docker => (Code::Unsupported, "Docker publishes a container's ports only when it starts, so a Sandbox daemon's port in the worker container cannot be published later; its Workspace calls go through the worker"),
-            Platform::AppleContainer => (Code::Unsupported, "the container CLI publishes a port only when the machine's container is created, so a Sandbox daemon's port cannot be published later; its Workspace calls go through the worker"),
-            _ => (Code::Unsupported, "its Sandbox daemons listen on the microVM's loopback, which a forward through the Lima host cannot reach (it reaches only the microVM's tap address); its Workspace calls go through the worker"),
+            _ => (Code::Unsupported, "the container CLI publishes a port only when the machine's container is created, so a Sandbox daemon's port cannot be published later; its Workspace calls go through the worker"),
         };
         assert_eq!(error.code, code, "{kind:?}");
         assert_eq!(
@@ -196,17 +179,9 @@ fn the_other_platforms_refuse_before_any_tool_runs() {
 fn port_zero_is_refused_before_any_tool_runs() {
     let scratch = Scratch::new("forward-zero");
     scratch.tool("ssh", FORWARDING);
-    for kind in [Platform::Native, Platform::Lima, Platform::Firecracker] {
+    for kind in [Platform::Native, Platform::Lima] {
         let error = machine::forward(&scratch.spec(kind), 0).unwrap_err();
-        assert_eq!(
-            error.code,
-            if disabled_reason(kind.name()).is_some() {
-                Code::Unsupported
-            } else {
-                Code::InvalidInput
-            },
-            "{kind:?}"
-        );
+        assert_eq!(error.code, Code::InvalidInput, "{kind:?}");
     }
     assert!(scratch.log().is_empty(), "{}", scratch.log());
 }

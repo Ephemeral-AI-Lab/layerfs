@@ -36,7 +36,7 @@ that must run on the machine's kernel: sqlite Store calls (`store.call`,
  worker::ready     until the guest listens on the port AND the host's
    |               127.0.0.1:<port> accepts; at most 60 s; every 200 ms
    v
- Running { endpoint: { address, secret, forward_pid }, lasting }
+ Running { endpoint: { address, secret }, lasting }
    |
    | 5  the caller writes worker.json and record.json
    v
@@ -70,7 +70,6 @@ How each platform carries the worker's guest port to the host's loopback:
 | Platform | Worker binds in the guest | Carried to host `127.0.0.1:<port>` by | Source |
 | --- | --- | --- | --- |
 | `lima` | `127.0.0.1:7070` | Lima template port forward, guest 7070 to host `<port>` | [`lima/template.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/template.rs) |
-| `firecracker` | `0.0.0.0:7070` in the microVM | `ssh -L` through the Lima host to `<microVM ip>:7070` | [`firecracker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/firecracker/power.rs) |
 | `apple-container` | `0.0.0.0:7070` | `--publish 127.0.0.1:<port>:7070` at create | [`apple_container/create.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/create.rs) |
 | `docker` (macOS) | `0.0.0.0:7070` in the worker container | `-p 127.0.0.1::7070`, port read back with `docker port` | [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
 | `docker` (Linux) | `127.0.0.1:<free port>`, host network | nothing: the container shares the host's network | [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
@@ -78,7 +77,7 @@ How each platform carries the worker's guest port to the host's loopback:
 
 The bind address is the profile's `worker_bind`
 ([`platform.rs`](../../../../control/crates/layerfs-platform/src/platform.rs)).
-On three platforms (`apple-container`, `firecracker`, `docker`) it is
+On two platforms (`apple-container`, `docker`) it is
 `0.0.0.0` inside the guest's own network; every
 host-side address is loopback.
 
@@ -128,7 +127,6 @@ Setup reaches each guest's shell as root through one `Guest` variant:
 | --- | --- |
 | `Lima` | `ssh -F <dir>/ssh.config lima-<vm> -- sudo -n -- …` |
 | `AppleContainer` | `container exec [-i] <vm> …` |
-| `Firecracker` | its Lima host's command, then ssh to the microVM |
 | `Docker` | `docker -H unix://<socket> exec [-i] <container> …` |
 
 Source: [`guest.rs`](../../../../control/crates/layerfs-platform/src/setup/guest.rs).

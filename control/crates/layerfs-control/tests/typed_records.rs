@@ -139,7 +139,7 @@ mod machines {
             "dev",
             value(
                 r#"{"v":1,"name":"dev","platform":"lima","cpus":2,"memory":4,"disk":20,"vm_name":"lfs-x-dev",
-                   "state":"running","created":1,"image":"sha256:ab","nested":true,"error":"old",
+                   "state":"running","created":1,"image":"sha256:ab","error":"old",
                    "lasting":{"port":2222}}"#,
             ),
         );
@@ -163,7 +163,6 @@ mod machines {
                 "stores",
                 "sandboxes",
                 "image",
-                "nested",
                 "error"
             ]
         );
@@ -173,7 +172,6 @@ mod machines {
         assert_eq!(shown.get("cpus"), Some(&SdkValue::Int(2)));
         assert_eq!(print(shown.get("stores").unwrap()), r#"["shop"]"#);
         assert_eq!(print(shown.get("sandboxes").unwrap()), r#"["t1"]"#);
-        assert_eq!(shown.get("nested"), Some(&SdkValue::Bool(true)));
         assert_eq!(record.state(Some("missing")).unwrap(), "missing");
         assert_eq!(record.state(None).unwrap(), "running");
         // without a live answer the record's state and error show

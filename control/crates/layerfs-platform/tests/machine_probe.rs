@@ -2,8 +2,7 @@
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
-use layerfs_platform::{native_missing, nested_missing, probe, HostOs, Platform};
-use layerfs_sandbox_backend::platform_policy::disabled_reason;
+use layerfs_platform::{native_missing, probe, HostOs, Platform};
 use standin::Scratch;
 
 #[test]
@@ -14,15 +13,12 @@ fn an_empty_search_path_names_every_missing_tool() {
         (Platform::Docker, "tool:docker"),
         (Platform::AppleContainer, "tool:container"),
         (Platform::Lima, "tool:limactl"),
-        (Platform::Firecracker, "tool:limactl"),
     ] {
         let found = probe(kind, &tools);
         assert_eq!(found.kind, kind);
         assert!(!found.ready, "{kind:?}");
         assert!(
-            found
-                .missing
-                .contains(&disabled_reason(kind.name()).unwrap_or(tool).to_owned()),
+            found.missing.contains(&tool.to_owned()),
             "{kind:?}: {:?}",
             found.missing
         );
@@ -35,31 +31,12 @@ fn macos_only_kinds_name_the_host_elsewhere() {
     let scratch = Scratch::new("probe-host");
     let tools = scratch.tools();
     let on_macos = HostOs::current() == HostOs::Macos;
-    for kind in [
-        Platform::Lima,
-        Platform::Firecracker,
-        Platform::AppleContainer,
-    ] {
+    for kind in [Platform::Lima, Platform::AppleContainer] {
         let found = probe(kind, &tools);
-        if let Some(reason) = disabled_reason(kind.name()) {
-            assert_eq!(found.missing, [reason]);
-            continue;
-        }
         assert_eq!(
             found.missing.contains(&"host:macos".to_owned()),
             !on_macos,
             "{kind:?}"
-        );
-    }
-    let firecracker = probe(Platform::Firecracker, &tools);
-    if disabled_reason("firecracker").is_none() {
-        for fact in nested_missing(HostOs::current()) {
-            assert!(firecracker.missing.contains(&fact));
-        }
-    } else {
-        assert_eq!(
-            firecracker.missing,
-            [disabled_reason("firecracker").unwrap()]
         );
     }
 }
@@ -114,7 +91,6 @@ fn native_names_only_linux_host_facts() {
     }
     assert_eq!(native_missing(HostOs::Windows), ["host:macos-or-linux"]);
     assert!(native_missing(HostOs::Macos).is_empty());
-    assert!(nested_missing(HostOs::Linux).is_empty());
 }
 
 /// A provider call is answered when its command ends, not at the next

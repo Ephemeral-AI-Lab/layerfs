@@ -1,6 +1,6 @@
 //! Which refusal wins when a machine call breaks several rules
 //! (layerfs-project#109): a bad name is the name check's own text, create
-//! refuses any `nested` off lima before it checks the name, and update
+//! refuses an unknown platform before it checks the name, and update
 //! checks size, then the built-in settings, then the daemon, then wsl.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{paths, write_record};
@@ -61,20 +61,6 @@ fn the_first_broken_rule_is_the_refusal() {
         assert_eq!(got, ("InvalidInput".to_owned(), bad.clone()), "{call}");
     }
 
-    let nested = |value: bool| {
-        refusal(
-            home,
-            "machine.create",
-            &[
-                ("name", t("-x")),
-                ("platform", t("apple-container")),
-                ("nested", SdkValue::Bool(value)),
-            ],
-        )
-    };
-    for value in [false, true] {
-        assert_eq!(nested(value).1, "only a lima machine is nested");
-    }
     let unknown = refusal(
         home,
         "machine.create",

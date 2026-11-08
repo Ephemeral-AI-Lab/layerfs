@@ -17,10 +17,7 @@ FIXTURE = (HERE.parent.parent / "test/disabled-platforms.json").read_text()
 class DisabledPlatforms(unittest.TestCase):
     def test_new_work_is_refused_before_any_effect(self):
         for platform in ("firecracker", "ssh", "microsandbox"):
-            if platform == "firecracker":
-                reason = f"{platform} is permanently disabled by product policy (layerfs-project#7)"
-            else:
-                reason = f"platform `{platform}` was removed in LayerFS 2.0"
+            reason = f"platform `{platform}` was removed in LayerFS 2.0"
             with (
                 self.subTest(platform=platform),
                 tempfile.TemporaryDirectory(prefix="lfs-disabled-py-") as folder,

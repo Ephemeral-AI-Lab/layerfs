@@ -1,9 +1,9 @@
-//! The five machine platforms and the one table that describes each: its
+//! The four machine platforms and the one table that describes each: its
 //! [`Profile`], one `PROFILE` per platform folder (H §7.10.1, #535 §6.2).
 //! [`Platform::profile`] is the one match; every other per-platform value is
 //! read from the profile.
 use crate::options::OptSpec;
-use crate::platforms::{apple_container, docker, firecracker, lima, native};
+use crate::platforms::{apple_container, docker, lima, native};
 pub use layerfs_bridge::KernelRoute;
 use layerfs_sandbox_backend::Backend;
 use std::net::Ipv4Addr;
@@ -15,7 +15,6 @@ pub enum Platform {
     Docker,
     AppleContainer,
     Lima,
-    Firecracker,
 }
 
 /// Where a machine's Store calls run.
@@ -137,12 +136,11 @@ pub(crate) fn worker(_: HostOs) -> ExecutorKind {
 }
 
 impl Platform {
-    pub const ALL: [Platform; 5] = [
+    pub const ALL: [Platform; 4] = [
         Platform::Native,
         Platform::Docker,
         Platform::AppleContainer,
         Platform::Lima,
-        Platform::Firecracker,
     ];
 
     /// The platform's profile: the one match over platforms for its facts.
@@ -152,7 +150,6 @@ impl Platform {
             Self::Docker => &docker::PROFILE,
             Self::AppleContainer => &apple_container::PROFILE,
             Self::Lima => &lima::PROFILE,
-            Self::Firecracker => &firecracker::PROFILE,
         }
     }
 
@@ -209,9 +206,7 @@ impl Platform {
     /// The guest address the worker binds. Loopback wherever the provider's
     /// forward reaches the guest's loopback (Lima's port forwarding); every
     /// interface where the forward arrives on the guest's network
-    /// (`apple-container` publishes a port,
-    /// `firecracker`'s forward ends at its tap address, `docker` publishes a
-    /// container port). The worker's secret guards it either way.
+    /// (`apple-container` and `docker` publish a port). The worker's secret guards it either way.
     pub fn worker_bind(self) -> Ipv4Addr {
         self.profile().worker_bind
     }

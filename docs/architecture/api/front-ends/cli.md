@@ -49,7 +49,7 @@ named on the command line, because the calls take text.
 | a word not starting with `-` (or `-` itself) | the next positional, in table order | count must lie between the required and the total number of on-line positionals, else exit 2 |
 | `--` | every later word is a positional | |
 | `--<name> <value>` or `--<name>=<value>` | option `<name>` with `-` read as `_` (`--start-line` → `start_line`) | parsed by the option's `Kind`: `Int` a whole number, `Bool` `true`/`false`, `Json` JSON text, `Size` a number or text such as `8G`, the rest text |
-| `--<bool-option>` alone | `true` | `--nested=false` gives false |
+| `--<bool-option>` alone | `true` | `--force=false` gives false |
 | `--<text-option>-from <file>` | option `<name>` read from the file | only for an optional `Text` option |
 | `-m <text>` | the `message` option | exit 2 when the call has none |
 | content or JSON positional (`file write` content, `file apply` changes) | read from stdin, or from `--from <file>` | not counted on the line; JSON must be UTF-8 JSON |

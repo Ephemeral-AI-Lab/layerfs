@@ -23,14 +23,6 @@ const ANSWER: Duration = Duration::from_secs(10);
 
 /// Probes `kind` on this host.
 pub fn probe(kind: Platform, tools: &Tools) -> Probe {
-    if let Some(reason) = layerfs_sandbox_backend::platform_policy::disabled_reason(kind.name()) {
-        return Probe {
-            kind,
-            ready: false,
-            missing: vec![reason.to_owned()],
-            version: None,
-        };
-    }
     let mut missing = Vec::new();
     let version = adapter(kind).probe(tools, HostOs::current(), &mut missing);
     Probe {
@@ -64,48 +56,13 @@ pub fn native_missing(host: HostOs) -> Vec<String> {
     }
 }
 
-/// Lima's `vz`, Apple Container and Firecracker's host are macOS only today.
+/// Lima's `vz` and Apple Container are macOS only today.
 pub(crate) fn macos_missing(host: HostOs) -> Vec<String> {
     if host == HostOs::Macos {
         Vec::new()
     } else {
         vec!["host:macos".into()]
     }
-}
-
-/// Nested virtualization under `vz`: macOS 15 or newer on an M3 or newer.
-pub fn nested_missing(host: HostOs) -> Vec<String> {
-    if host != HostOs::Macos {
-        return Vec::new();
-    }
-    let mut missing = Vec::new();
-    let release = first_line(
-        tool::command(Path::new("/usr/bin/sw_vers"), ["-productVersion"]),
-        false,
-    );
-    let major = release
-        .as_deref()
-        .and_then(|v| v.split('.').next())
-        .and_then(|m| m.parse::<u32>().ok());
-    if major.is_none_or(|m| m < 15) {
-        missing.push("host:macos15".into());
-    }
-    let brand = first_line(
-        tool::command(
-            Path::new("/usr/sbin/sysctl"),
-            ["-n", "machdep.cpu.brand_string"],
-        ),
-        false,
-    );
-    let generation = brand
-        .as_deref()
-        .and_then(|b| b.strip_prefix("Apple M"))
-        .and_then(|rest| rest.split(|c: char| !c.is_ascii_digit()).next())
-        .and_then(|digits| digits.parse::<u32>().ok());
-    if generation.is_none_or(|g| g < 3) {
-        missing.push("host:apple-m3".into());
-    }
-    missing
 }
 
 pub(crate) fn tool_version(

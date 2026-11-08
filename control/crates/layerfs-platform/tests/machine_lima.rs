@@ -3,7 +3,7 @@
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
-use layerfs_platform::{self as machine, nested_missing, Code, HostOs, Platform, State};
+use layerfs_platform::{self as machine, Code, HostOs, Platform, State};
 use standin::{read, Scratch};
 
 /// A `limactl` that knows no instance or disk, saves `create`'s stdin as
@@ -107,28 +107,6 @@ fn an_existing_instance_is_refused_and_left_alone() {
     assert_eq!(scratch.log().lines().count(), 1, "only the list ran");
 }
 
-#[test]
-fn nested_adds_nested_virtualization_or_names_what_the_mac_lacks() {
-    let scratch = lima("lima-nested");
-    let mut spec = scratch.spec(Platform::Lima);
-    spec.nested = true;
-    let error = machine::create(&spec, &scratch.bundle()).unwrap_err();
-    let lacking = nested_missing(HostOs::current());
-    if HostOs::current() != HostOs::Macos || !lacking.is_empty() {
-        assert_eq!(error.code, Code::Unsupported);
-        for fact in lacking {
-            assert!(error.missing.contains(&fact), "{error}");
-        }
-        assert!(scratch.log().is_empty());
-        return;
-    }
-    let template = read(&scratch.path("template.json"));
-    assert!(
-        template.contains("\"nestedVirtualization\": true"),
-        "{template}"
-    );
-}
-
 /// A `limactl` whose instance runs once `create` made it.
 const LIMACTL_MADE: &str = r#"case "$1" in
   list) [ -e "$SCRATCH/created" ] && printf 'Running\t%s\n' "$SCRATCH/lima-host"; exit 0 ;;
@@ -136,51 +114,6 @@ const LIMACTL_MADE: &str = r#"case "$1" in
   --version) echo "limactl version 9.9.9" ;;
 esac
 exit 0"#;
-
-#[test]
-fn only_a_nested_host_takes_the_bundle_s_firecracker_files() {
-    if HostOs::current() != HostOs::Macos || !nested_missing(HostOs::current()).is_empty() {
-        return;
-    }
-    let scratch = Scratch::new("lima-fc-files");
-    scratch.tool("limactl", LIMACTL_MADE);
-    // a guest that takes every stream and refuses to start the worker
-    scratch.tool(
-        "ssh",
-        r#"case "$*" in
-  *"tar -C"*) cat > /dev/null ;;
-  *max_user_namespaces*) echo 0 ;;
-  *"setsid nohup"*) exit 7 ;;
-esac
-exit 0"#,
-    );
-    scratch.tool("tar", "exit 0");
-    let bundle = scratch.bundle();
-    std::fs::create_dir_all(bundle.dir.join("firecracker")).unwrap();
-    std::fs::write(bundle.dir.join("firecracker/vmlinux"), b"").unwrap();
-    let mut spec = scratch.spec(Platform::Lima);
-    spec.nested = true;
-    machine::create(&spec, &bundle).unwrap_err();
-    let log = scratch.log();
-    let packs: Vec<&str> = log.lines().filter(|l| l.starts_with("tar ")).collect();
-    let dir = bundle.dir.display();
-    assert_eq!(
-        packs,
-        [
-            format!("tar -C {dir}/firecracker -cf - ."),
-            format!("tar -C {dir} --exclude=./firecracker -cf - ."),
-        ],
-        "{log}"
-    );
-    // the guest side of each stream, in order
-    let unpacks: Vec<&str> = log
-        .lines()
-        .filter(|l| l.starts_with("ssh ") && l.contains("tar -C"))
-        .collect();
-    assert_eq!(unpacks.len(), 2, "{log}");
-    assert!(unpacks[0].ends_with(" /layerfs/data/firecracker"), "{log}");
-    assert!(unpacks[1].ends_with(" /layerfs/bundle"), "{log}");
-}
 
 #[test]
 fn a_restarted_guest_ends_only_the_bundle_s_worker() {

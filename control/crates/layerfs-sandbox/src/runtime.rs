@@ -88,14 +88,7 @@ pub fn backend(deploy: &Deploy) -> Result<Backend, SdkRefusal> {
 
 /// The platforms a Sandbox names (#529 P4): what a caller chooses and
 /// reads. The record keeps the lower-level `runtime` beside it.
-pub const PLATFORMS: [&str; 6] = [
-    "docker",
-    "mac",
-    "linux",
-    "apple-container",
-    "lima",
-    "firecracker",
-];
+pub const PLATFORMS: [&str; 5] = ["docker", "mac", "linux", "apple-container", "lima"];
 
 /// The platform a `sandbox.create` call names (`platform`), checked against
 /// the backend its deployment (`deploy`) selects before any effect:

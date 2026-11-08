@@ -4,13 +4,10 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Firecracker is **permanently disabled for new work**. Its code and records
-remain for inspection and explicit cleanup. Microsandbox and SSH machines
-were removed in 2.0: a record a home still holds for one is shown by `list`
-and `get`, every other call on it is refused, and `remove` only forgets it.
-See the [platform restriction](../../../control/support-matrix/disabled-platforms.md)
-for refusals, existing-resource handling and the source change required for
-re-enabling.
+Firecracker, Microsandbox and SSH machines were removed in 2.0: a record
+a home still holds for one is shown by `list` and `get`, every other call
+on it is refused, and `remove` only forgets it. See
+[removed platforms](../../../control/support-matrix/disabled-platforms.md).
 
 The `machine` calls.
 
@@ -52,7 +49,7 @@ state, cpus, memory, disk, stores, sandboxes, … }`
 | [`status`](status.md) | `name` | — | `{ name, platform, state, free_disk, tool_version, down_reason, stores, … , op? }` |
 | [`start`](start.md) | `name` | — | summary, once the worker answers its secret |
 | [`stop`](stop.md) | `name` | — | summary with `state: "stopped"` |
-| [`create`](create.md) | `name`, `platform` (Name) | `cpus` (Int), `memory`, `disk` (Size), `image` (Text), `nested` (Bool), `host` (Name) | summary |
+| [`create`](create.md) | `name`, `platform` (Name) | `cpus` (Int), `memory`, `disk` (Size), `image` (Text) | summary |
 | [`remove`](remove.md) | `name` | — | `{ name, removed: true }`; a removed platform's record adds `note` |
 | [`update`](update.md) | `name` | `cpus` (Int), `memory` (Size), `image`, `docker`, `wsl`, `daemon` (Text) | summary |
 
@@ -86,7 +83,7 @@ show a probe that did not answer as `unknown`.
 | `NotFound` | no machine of that name | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) |
 | `Exists` | the name, VM or disk is taken | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) |
 | `InUse` | `stop`, `remove` or a resize while Sandboxes run (`detail.related`) | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) |
-| `Unsupported` | a platform this host or build lacks (`detail.missing`); a disabled platform; any call but `list`, `get` and `remove` on a machine of a removed platform (``platform `ssh` was removed in LayerFS 2.0``); every machine call in a build without the `machine` feature | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs), [`api/…/machine/create.rs`](../../../../../api/crates/layerfs-api/src/machine/create.rs) |
+| `Unsupported` | a platform this host or build lacks (`detail.missing`); any call but `list`, `get` and `remove` on a machine of a removed platform (``platform `ssh` was removed in LayerFS 2.0``); every machine call in a build without the `machine` feature | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs), [`api/…/machine/create.rs`](../../../../../api/crates/layerfs-api/src/machine/create.rs) |
 | `Unavailable`, `Denied` | a provider or guest that does not answer, or refuses | [`layerfs-platform` `error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
 | `Busy`, `Unresolved` | another operation's `op` on the machine | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
 | `Failed` | it ran once and failed; a create that failed after its VM existed keeps it as `failed` | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) |

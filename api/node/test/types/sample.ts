@@ -23,7 +23,7 @@ async function main(): Promise<void> {
   await lfs.file.write("shop/api", "agent", "/a.txt", "text");
   await lfs.file.apply("shop/api", "agent", [{ op: "write", path: "/a", content: new Uint8Array([0, 255]) }], { message: "m" });
   await lfs.workspace.exec("ws", "ls", { stream: true, stdout: (bytes) => process.stdout.write(bytes), stderr: (bytes) => void bytes });
-  await lfs.machine.create("vm", "lima", { cpus: 2, memory: "8G", disk: 8589934592n, nested: true });
+  await lfs.machine.create("vm", "lima", { cpus: 2, memory: "8G", disk: 8589934592n });
   await lfs.backup.create("shop", "bucket", "file", { on_progress: () => {} });
   const report = await doctor({ home: "/tmp/home" });
   const worst: string | undefined = report.findings[0]?.severity;

@@ -64,22 +64,8 @@ fn machines_over_records() {
     let SdkValue::List(rows) = platforms.get("platforms").unwrap() else {
         panic!()
     };
-    assert_eq!(rows.len(), 5);
+    assert_eq!(rows.len(), 4);
     for row in rows {
-        if let Some(reason) = layerfs_sandbox_backend::platform_policy::disabled_reason(
-            row.get_text("platform").unwrap(),
-        ) {
-            assert_eq!(row.get("ready"), Some(&SdkValue::Bool(false)));
-            assert_eq!(row.get("backend"), Some(&SdkValue::Null));
-            assert_eq!(row.get("kernel"), Some(&SdkValue::Null));
-            assert_eq!(row.get("sqlite"), Some(&SdkValue::Null));
-            assert_eq!(row.get("options"), Some(&SdkValue::List(vec![])));
-            assert_eq!(
-                row.get("postgresql").unwrap().get_text("reason"),
-                Some(reason)
-            );
-            assert_eq!(row.get("missing"), Some(&SdkValue::List(vec![t(reason)])));
-        }
         let created = row.get_text("how") != Some("built_in");
         if created && row.get("backend") != Some(&SdkValue::Null) {
             // no provider tool on PATH: a platform that needs one is not ready
