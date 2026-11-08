@@ -1,5 +1,5 @@
-//! Command construction for apple-container, Firecracker,
-//! docker and native through stand-in tools. No VM or container is made.
+//! Command construction for apple-container, docker and native through
+//! stand-in tools. No VM or container is made.
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
@@ -75,112 +75,6 @@ esac"#,
     assert!(scratch
         .log()
         .contains("container exec lfs-dev df -kP /layerfs/data"));
-}
-
-#[test]
-#[ignore = "retained adapter qualification; platform permanently disabled by layerfs-project#7"]
-fn firecracker_names_what_its_lima_host_lacks() {
-    let scratch = Scratch::new("fc-check");
-    scratch.tool(
-        "limactl",
-        &format!(
-            "[ \"$1\" = list ] && printf 'Running\\t{}\\n'; exit 0",
-            scratch.path("lima-host").display()
-        ),
-    );
-    scratch.tool(
-        "ssh",
-        r#"echo "/dev/kvm"; echo "/layerfs/data/firecracker/vmlinux"; echo "tool:flock""#,
-    );
-    let mut host = scratch.spec(Platform::Lima);
-    host.name = "fc-host".into();
-    host.vm_name = "lfs-fc-host".into();
-    host.nested = true;
-    let mut spec = scratch.spec(Platform::Firecracker);
-    spec.host = Some(Box::new(host));
-    let error = machine::create(&spec, &scratch.bundle()).unwrap_err();
-    assert_eq!(error.code, Code::Unsupported, "{error}");
-    assert_eq!(
-        error.missing,
-        [
-            "host:fc-host:/dev/kvm",
-            "host:fc-host:/layerfs/data/firecracker/vmlinux",
-            "host:fc-host:tool:flock"
-        ]
-    );
-    let log = scratch.log();
-    let ssh = line(&log, "ssh ");
-    let config = scratch.path("lima-host").join("ssh.config");
-    assert!(
-        ssh.starts_with(&format!(
-            "ssh -F {} lima-lfs-fc-host -- sudo -n -- sh -c",
-            config.display()
-        )),
-        "{ssh}"
-    );
-    assert!(
-        log.contains("true' sh /layerfs/data/firecracker\n"),
-        "{log}"
-    );
-}
-
-#[test]
-#[ignore = "retained adapter qualification; platform permanently disabled by layerfs-project#7"]
-fn firecracker_on_a_stopped_host_is_unavailable() {
-    let scratch = Scratch::new("fc-host-down");
-    scratch.tool(
-        "limactl",
-        "[ \"$1\" = list ] && printf 'Stopped\\t/tmp/x\\n'; exit 0",
-    );
-    let mut host = scratch.spec(Platform::Lima);
-    host.nested = true;
-    let mut spec = scratch.spec(Platform::Firecracker);
-    spec.host = Some(Box::new(host));
-    let error = machine::create(&spec, &scratch.bundle()).unwrap_err();
-    assert_eq!(error.code, Code::Unsupported, "no ssh stand-in: {error}");
-    scratch.tool("ssh", "exit 0");
-    let error = machine::create(&spec, &scratch.bundle()).unwrap_err();
-    assert_eq!(error.code, Code::Unavailable, "{error}");
-    let status = machine::status(&spec).unwrap();
-    assert_eq!(status.state, State::Stopped);
-    assert!(status.down_reason.unwrap().contains("Lima host"));
-}
-
-#[test]
-#[ignore = "retained adapter qualification; platform permanently disabled by layerfs-project#7"]
-fn a_microvm_chooses_its_huge_pages_at_each_boot() {
-    // the terminal pass: a host's huge pages do not outlive its reboot, so
-    // a choice made at create made a restarted microVM fail to load
-    let scratch = Scratch::new("fc-boot");
-    scratch.tool(
-        "limactl",
-        &format!(
-            "[ \"$1\" = list ] && printf 'Running\\t{}\\n'; exit 0",
-            scratch.path("lima-host").display()
-        ),
-    );
-    scratch.tool(
-        "ssh",
-        r#"case "$*" in
-  *"echo running; else echo stopped"*) printf 'stopped\n172.30.1.2\n' ;;
-  *firecracker.pid*) exit 1 ;;
-esac
-exit 0"#,
-    );
-    let mut host = scratch.spec(Platform::Lima);
-    host.nested = true;
-    let mut spec = scratch.spec(Platform::Firecracker);
-    spec.host = Some(Box::new(host));
-    machine::start(&spec, &scratch.bundle()).unwrap_err();
-    let log = scratch.log();
-    let boot = log
-        .split("ssh ")
-        .find(|call| call.contains("--config-file"))
-        .unwrap_or_else(|| panic!("no boot in:\n{log}"));
-    let choose = boot.find("huge=None").expect("chosen at boot");
-    let rewrite = boot.find(r#"sed -i "s/\"huge_pages\""#).expect("written");
-    let start = boot.find("--config-file").unwrap();
-    assert!(choose < rewrite && rewrite < start, "{boot}");
 }
 
 #[test]

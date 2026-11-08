@@ -21,7 +21,7 @@ use std::{
 const STATEMENT_CACHE: usize = 256;
 
 pub(crate) struct State {
-    pub(crate) client: Client,
+    pub(crate) client: super::driver::Driver,
     statements: HashMap<String, Statement>,
     pub(crate) quarantined: bool,
     pub(crate) work: SqlWork,
@@ -29,7 +29,7 @@ pub(crate) struct State {
 
 impl State {
     /// One prepared statement for `sql`, prepared once per connection.
-    pub(crate) fn statement(&mut self, sql: &str) -> Result<Statement, postgres::Error> {
+    pub(crate) fn statement(&mut self, sql: &str) -> Result<Statement, super::driver::Error> {
         if let Some(statement) = self.statements.get(sql) {
             return Ok(statement.clone());
         }
@@ -133,6 +133,39 @@ impl LaneWork {
 }
 
 impl Session {
+    pub(crate) fn connect_diagnostic_admitted(
+        selection: &PostgresSelection,
+        deadline: Option<Instant>,
+        admission: Instant,
+        resolver: &mut crate::diagnostic::Resolver<'_>,
+        cancelled: Option<&std::sync::atomic::AtomicBool>,
+    ) -> Result<Self, BackendError> {
+        let settings = Settings::new(selection)?;
+        let connector = Connector::new(selection)?;
+        let client = super::driver::Driver::diagnostic_admitted(
+            selection, deadline, admission, resolver, cancelled,
+        )
+        .map_err(|error| error.backend())?;
+        Ok(Self {
+            admission: Admission::default(),
+            state: Mutex::new(State {
+                client,
+                statements: HashMap::new(),
+                quarantined: false,
+                work: SqlWork {
+                    connects: 1,
+                    ..SqlWork::default()
+                },
+            }),
+            lane: Mutex::new(None),
+            writable: false,
+            settings,
+            server_version: OnceLock::new(),
+            policy: OnceLock::new(),
+            connector,
+            lane_work: LaneWork::default(),
+        })
+    }
     pub(crate) fn connect(
         selection: &PostgresSelection,
         writable: bool,
@@ -143,7 +176,7 @@ impl Session {
         Ok(Self {
             admission: Admission::default(),
             state: Mutex::new(State {
-                client,
+                client: super::driver::Driver::Sync(client),
                 statements: HashMap::new(),
                 quarantined: false,
                 // The connection; the open's check reads the server version.
@@ -181,7 +214,7 @@ impl Session {
         work.statements += 1;
         work.round_trips += 1;
         work.statement_ns += elapsed;
-        let messages = result.map_err(|e| rows::error(&e))?;
+        let messages = result.map_err(|e| e.backend())?;
         let mut groups = Vec::new();
         let mut rows = Vec::new();
         for message in messages {

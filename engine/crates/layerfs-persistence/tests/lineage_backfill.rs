@@ -246,4 +246,7 @@ fn a_pre_lineage_store_is_backfilled_at_open_and_answers_the_same() {
     assert!(history.is_ancestor(head, NodeId::Layer(published)).unwrap());
     drop(handles);
     reopen(&path);
+    // Legitimate additive migration preserves the shipped diagnostic schema.
+    SqliteHandles::open_diagnostic(&path, BINDING, [71; 32])
+        .expect("diagnostic admission accepts a legitimately migrated Store");
 }

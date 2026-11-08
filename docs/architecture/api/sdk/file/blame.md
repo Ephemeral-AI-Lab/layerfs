@@ -10,7 +10,7 @@ Shows, for each line of a file, the Commit that last changed it, walking first p
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/blame.rs`](../../../../../api/crates/layerfs-api/src/file/blame.rs) |
-| Implemented in | `layerfs_store::calls::file_blame` → `file`, Store method `fs.blame` ([`methods/file/blame.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/blame.rs)); `from_line` becomes `fromLine` |
+| Implemented in | `layerfs_store::calls::file::blame`, Store method `fs.blame` ([`methods/file/blame.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/blame.rs)); `from_line` becomes `fromLine` |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -69,7 +69,7 @@ layerfs file blame <store>/<project> <branch> <path> [<commit>] [--from-line N]
    both texts in window  -> line LCS;  else coarse prefix/suffix
 ```
 
-The walk has no fixed depth limit in source.
+The saved history itself has no fixed depth limit. Per-request work admission is described below.
 
 ## Where it runs
 
@@ -126,3 +126,29 @@ layerfs file blame shop/api agent /src/app.ts --from-line 40
 ---
 
 ← [file.grep](grep.md) · [Up: file](README.md) · [file.diff](diff.md) →
+
+## Typed owners and bounded windows
+
+Add `line_count` (1..2000, default 2000) alongside existing `from_line`. The result
+includes `at: { id, kind: "Commit" | "Layer", branch, root }`; reuse `at.id` as the
+existing saved-version argument on later windows. Each line adds nullable
+`owner: { ref, message }`, with a full typed Commit/Layer ref, and `origins`
+deduplicates returned owners. Existing commit/message fields remain. Owner branch
+names are recorded facts or null; no human author is inferred.
+
+`coverage` reports status, exact/coarse comparison, and reasons such as
+`history_budget` or `line_clipped`. Unknown owners remain null; unresolved lines
+are never assigned to the tip. Content's LCS fallback is coarse, including when
+text windows themselves fit. A published line follows its source Commit; Init
+can own lines as a Layer. Publication time is not line ownership.
+
+The tip window streams only the requested/admitted prefix; a large total file
+size does not itself refuse a small first-line query. A request admits 10,000
+ancestry visits and 64 MiB logical payload work across its window and ancestor
+comparisons. An ancestry comparison that cannot fit leaves unresolved owners
+unknown with partial coverage. If the byte budget ends before the requested line,
+return `Capacity` rather than an exhausted empty answer. Clipped lines remain
+explicit. Responses admit complete line and deduplicated origin records together
+within 48 KiB, accounting for repeated messages and JSON escaping; `next_line`
+identifies the first unreturned line. A mandatory line/owner that cannot fit
+refuses with Capacity. See [saved queries](../saved-queries.md).

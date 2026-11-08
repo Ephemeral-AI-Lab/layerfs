@@ -4,13 +4,9 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Firecracker is **permanently disabled for new work**. Its code and records
-remain for inspection and explicit cleanup. Microsandbox and SSH machines
-were removed in 2.0; a record an older home still holds for one is shown,
-refused and only forgotten. See the [platform restriction](../../../control/support-matrix/disabled-platforms.md) for
-refusals, existing-resource handling and the source change required for
-re-enabling. Descriptions of Firecracker's adapter mechanics below are
-retained implementation details, not selectable features.
+Firecracker, Microsandbox and SSH machines were removed in 2.0; a record
+an older home still holds for one is shown, refused and only forgotten.
+See [removed platforms](../../../control/support-matrix/disabled-platforms.md).
 
 `machine.platforms` answers the support table for this host: each platform,
 how its machines come to exist, where their Store calls run, the options
@@ -53,7 +49,7 @@ None.
 
 ```text
 { host: "macos" | "linux" | "windows" | "other",
-  platforms: [                          five rows, in Platform::ALL order
+  platforms: [                          four rows, in Platform::ALL order
     { platform, how, backend, kernel, sqlite,
       postgresql: { store_calls, sandbox, reason },
       ready, missing: [text], version,     <- live probe
@@ -85,20 +81,18 @@ The rows without the live fields are
 | [`native`](../../../control/machines/platforms/native.md) | built_in | native, nfs | namespaces, fuse | records only | — |
 | [`docker`](../../../control/machines/platforms/docker.md) | built_in | namespaces, fuse | namespaces, fuse | not designed | — |
 | [`apple-container`](../../../control/machines/platforms/apple-container.md) | created | namespaces, fuse | — | — | `cpus`, `memory`, `disk`, `image` |
-| [`lima`](../../../control/machines/platforms/lima.md) | created | namespaces, fuse | — | — | `cpus`, `memory`, `disk`, `image`, `nested` |
-| [`firecracker`](../../../control/machines/platforms/firecracker.md) | created | disabled | disabled | disabled | — (profile: `cpus`, `memory`, `disk`, `image`, `host`) |
+| [`lima`](../../../control/machines/platforms/lima.md) | created | namespaces, fuse | — | — | `cpus`, `memory`, `disk`, `image` |
 
 "—" means the platform is not on that host; its row says why in
-`postgresql.reason` ("lima runs on macOS hosts only"); a disabled one says
-its policy reason on every host. Microsandbox and SSH were removed in 2.0
-and have no row.
+`postgresql.reason` ("lima runs on macOS hosts only"). Firecracker,
+Microsandbox and SSH were removed in 2.0 and have no row.
 
 ## Where it runs
 
 ```text
 caller's process
   HostOs::current()
-  for each of the five platforms:
+  for each of the four platforms:
     support(platform, host)           fixed table, no I/O
     probe(platform, tools)            tool lookup and version query
                                       (each command bounded at 10 s)

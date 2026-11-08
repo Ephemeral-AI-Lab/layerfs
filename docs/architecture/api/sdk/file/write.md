@@ -10,7 +10,7 @@ Writes one file's whole content on a Branch as one Commit, creating it or replac
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/write.rs`](../../../../../api/crates/layerfs-api/src/file/write.rs) |
-| Implemented in | `layerfs_store::calls::file_write` → `file`, Store method `fs.write` ([`methods/file/write.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/write.rs)); text `content` is sent as `content`, bytes as `bytes` |
+| Implemented in | `layerfs_store::calls::file::write`, Store method `fs.write` ([`methods/file/write.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/write.rs)); text `content` is sent as `content`, bytes as `bytes` |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -38,7 +38,7 @@ layerfs file write <store>/<project> <branch> <path> [--from FILE] \
 | `project` | Project | `<store>/<project>`; both records must exist | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `branch` | Name | the Branch to commit to; `main` is `ReadOnly` | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 | `path` | Text | absolute, at most 4096 bytes, no NUL, no trailing `/`, no empty, `.` or `..` component | [`files::path`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
-| `content` | Content | text (JS string, Python `str`) or bytes (`Uint8Array`/`Buffer`, `bytes`); the CLI reads stdin or `--from` | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |
+| `content` | Content | text (JS string, Python `str`) or bytes (`Uint8Array`/`Buffer`, `bytes`); the CLI reads stdin or `--from` | [`calls/file.rs`](../../../../../control/crates/layerfs-store/src/calls/file.rs) |
 
 ## Options
 

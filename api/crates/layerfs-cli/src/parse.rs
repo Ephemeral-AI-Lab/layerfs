@@ -129,8 +129,41 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                 option(call, "message", &text, &mut fields)?;
             }
             _ => {
+                let fail = || {
+                    let mut accepted = Vec::new();
+                    if call.options.iter().any(|a| a.name == "message") {
+                        accepted.push("-m".to_owned());
+                    }
+                    if call.args.iter().any(piped) {
+                        accepted.push("--from".to_owned());
+                    }
+                    if call.arg("on_progress").is_some() {
+                        accepted.push("--progress".to_owned());
+                    }
+                    if call.arg("stream").is_some() {
+                        accepted.push("--stream".to_owned());
+                    }
+                    accepted.push("--text".to_owned());
+                    for opt in call.options {
+                        if opt.kind != Kind::Function && opt.name != "message" {
+                            accepted.push(format!("--{}", opt.name.replace('_', "-")));
+                        }
+                    }
+                    if accepted.is_empty() {
+                        usage(format!(
+                            "{}: unknown option {flag}; this call takes no options",
+                            call.name()
+                        ))
+                    } else {
+                        usage(format!(
+                            "{}: unknown option {flag}\naccepted options: {}",
+                            call.name(),
+                            accepted.join(", ")
+                        ))
+                    }
+                };
                 let Some(name) = flag.strip_prefix("--") else {
-                    return Err(usage(format!("{}: unknown option {flag}", call.name())));
+                    return Err(fail());
                 };
                 let name = name.replace('-', "_");
                 if let Some(base) = name.strip_suffix("_from") {
@@ -148,7 +181,7 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                         let text = take(&mut i)?;
                         fields.push((name, value(call, arg, &text)?));
                     }
-                    _ => return Err(usage(format!("{}: unknown option {flag}", call.name()))),
+                    _ => return Err(fail()),
                 }
             }
         }

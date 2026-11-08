@@ -30,6 +30,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         to_commit: text("to_commit").unwrap_or_default(),
         options: DiffOptions {
             page: Page {
+                number: None,
                 size: args.get_int("page_size"),
                 pos: args.get_int("page_pos"),
             },

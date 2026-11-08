@@ -76,7 +76,6 @@ unused (`IDLE`), never while a call runs on it.
 | `native` | in process | in process | worker | every interface |
 | `docker` | worker | worker | worker | every interface |
 | `apple-container` | worker | worker | worker | every interface |
-| `firecracker` | worker | worker | worker | every interface |
 | `lima` | worker | worker | worker | loopback |
 
 Whether a platform can exist on a host at all is the

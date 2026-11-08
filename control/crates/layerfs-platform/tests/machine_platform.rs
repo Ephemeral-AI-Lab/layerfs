@@ -7,15 +7,16 @@ use std::net::Ipv4Addr;
 #[test]
 fn every_kind_parses_back_from_its_name() {
     let names: Vec<&str> = Platform::ALL.iter().map(|k| k.name()).collect();
-    assert_eq!(
-        names,
-        ["native", "docker", "apple-container", "lima", "firecracker"]
-    );
+    assert_eq!(names, ["native", "docker", "apple-container", "lima"]);
     for kind in Platform::ALL {
         assert_eq!(Platform::parse(kind.name()), Some(kind));
     }
     assert_eq!(Platform::parse("vm:lima"), None);
     assert_eq!(Platform::parse("Lima"), None);
+    // removed in 2.0: a record may still name one, but no platform parses
+    for removed in ["firecracker", "microsandbox", "ssh"] {
+        assert_eq!(Platform::parse(removed), None);
+    }
 }
 
 #[test]
@@ -30,12 +31,7 @@ fn backends_follow_the_kind_and_host() {
     );
     assert_eq!(Platform::Native.backend(HostOs::Windows), None);
     for host in [HostOs::Linux, HostOs::Macos, HostOs::Windows] {
-        for kind in [
-            Platform::Docker,
-            Platform::AppleContainer,
-            Platform::Lima,
-            Platform::Firecracker,
-        ] {
+        for kind in [Platform::Docker, Platform::AppleContainer, Platform::Lima] {
             assert_eq!(
                 kind.backend(host),
                 Some(Backend::Namespaces),
@@ -55,11 +51,7 @@ fn routes_are_in_process_only_for_native() {
     assert_eq!(Platform::Docker.route(HostOs::Macos), Route::Worker);
     assert_eq!(Platform::Docker.route(HostOs::Windows), Route::Worker);
     for host in [HostOs::Linux, HostOs::Macos, HostOs::Windows] {
-        for kind in [
-            Platform::AppleContainer,
-            Platform::Lima,
-            Platform::Firecracker,
-        ] {
+        for kind in [Platform::AppleContainer, Platform::Lima] {
             assert_eq!(kind.route(host), Route::Worker, "{kind:?} on {host:?}");
         }
     }
@@ -68,11 +60,7 @@ fn routes_are_in_process_only_for_native() {
 #[test]
 fn workers_bind_loopback_where_the_forward_reaches_it() {
     assert_eq!(Platform::Lima.worker_bind(), Ipv4Addr::LOCALHOST);
-    for kind in [
-        Platform::AppleContainer,
-        Platform::Firecracker,
-        Platform::Docker,
-    ] {
+    for kind in [Platform::AppleContainer, Platform::Docker] {
         assert_eq!(kind.worker_bind(), Ipv4Addr::UNSPECIFIED, "{kind:?}");
     }
 }
@@ -82,16 +70,9 @@ fn built_in_created_and_tools() {
     let built_in: Vec<Platform> = Platform::ALL.into_iter().filter(|k| k.built_in()).collect();
     assert_eq!(built_in, [Platform::Native, Platform::Docker]);
     let created: Vec<Platform> = Platform::ALL.into_iter().filter(|k| k.created()).collect();
-    assert_eq!(
-        created,
-        [
-            Platform::AppleContainer,
-            Platform::Lima,
-            Platform::Firecracker
-        ]
-    );
+    assert_eq!(created, [Platform::AppleContainer, Platform::Lima]);
     assert_eq!(Platform::Native.tool(), None);
-    assert_eq!(Platform::Firecracker.tool(), Some("limactl"));
+    assert_eq!(Platform::Lima.tool(), Some("limactl"));
     assert_eq!(Platform::AppleContainer.tool(), Some("container"));
 }
 
@@ -151,11 +132,7 @@ fn hosts_follow_todays_host_rules() {
     let any = HostOs::NAMED.to_vec();
     assert_eq!(hosts(Platform::Native), any);
     assert_eq!(hosts(Platform::Docker), [HostOs::Macos, HostOs::Linux]);
-    for kind in [
-        Platform::AppleContainer,
-        Platform::Lima,
-        Platform::Firecracker,
-    ] {
+    for kind in [Platform::AppleContainer, Platform::Lima] {
         assert_eq!(hosts(kind), [HostOs::Macos], "{kind:?}");
     }
     let names: Vec<&str> = HostOs::NAMED.iter().map(|h| h.as_str()).collect();
@@ -180,10 +157,5 @@ fn options_are_what_create_takes() {
     assert_eq!(options(Platform::Native), []);
     assert_eq!(options(Platform::Docker), []);
     assert_eq!(options(Platform::AppleContainer), vm);
-    let mut lima = vm.to_vec();
-    lima.push(("nested", "bool"));
-    assert_eq!(options(Platform::Lima), lima);
-    let mut firecracker = vm.to_vec();
-    firecracker.push(("host", "name"));
-    assert_eq!(options(Platform::Firecracker), firecracker);
+    assert_eq!(options(Platform::Lima), vm);
 }

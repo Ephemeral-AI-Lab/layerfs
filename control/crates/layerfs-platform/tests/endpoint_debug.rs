@@ -6,7 +6,6 @@ fn debug_redacts_the_secret() {
     let endpoint = Endpoint {
         address: "127.0.0.1:7070".parse().unwrap(),
         secret: "s3cr3t-token".into(),
-        forward_pid: Some(7),
     };
     let running = Running {
         endpoint: endpoint.clone(),

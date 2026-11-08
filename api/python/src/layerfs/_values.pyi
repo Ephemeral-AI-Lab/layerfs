@@ -36,9 +36,32 @@ class Finding(TypedDict):
     message: str
     fix: str
 
+class DoctorCheck(TypedDict):
+    id: str
+    code: str
+    outcome: Literal["pass", "fail", "blocked", "skipped", "unknown"]
+    severity: Literal["error", "warning"] | None
+    entity: Entity
+    message: str
+    evidence: JSON
+    fix: str
+    blocked_by: list[str]
+    observed_ms: int
+    duration_ms: int | None
+
 class DoctorReport(TypedDict):
     ok: bool
     findings: list[Finding]
+    complete: NotRequired[bool]
+    checks: NotRequired[list[DoctorCheck]]
+    truncated: NotRequired[bool]
+    counts: NotRequired[dict[str, int]]
+    target: NotRequired[Entity]
+    home: NotRequired[str]
+    operation: NotRequired[Literal["diagnose", "integrity", "connection"]]
+    mode: NotRequired[Literal["full", "quick", "observation", "write-test"]]
+    observed_at_ms: NotRequired[int]
+    duration_ms: NotRequired[int]
 
 def encode(value: JSON) -> str: ...
 def decode(text: str) -> Any: ...

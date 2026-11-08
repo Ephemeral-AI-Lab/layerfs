@@ -27,7 +27,7 @@ the Python package in [`python/`](python/README.md), which has the same
 families.
 
 ```js
-import layerfs from "layerfs";
+import layerfs from "@layerfs/node";
 
 await layerfs.store.create("shop");
 await layerfs.project.init("shop/api", "/src/api", { on_progress: console.log });
@@ -72,8 +72,8 @@ files you build, here into `$OUT`:
 
 ```bash
 npm --prefix api run build:native                           # node/layerfs.node
-(cd api/node && npm pack --pack-destination "$OUT")         # layerfs-2.0.0.tgz
-npm install "$OUT/layerfs-2.0.0.tgz"                        # in an empty project
+(cd api/node && npm pack --pack-destination "$OUT")         # layerfs-node-2.0.0-rc.1.tgz
+npm install "$OUT/layerfs-node-2.0.0-rc.1.tgz"                   # in an empty project
 
 (cd api/python && maturin build --release --locked -o "$OUT")   # layerfs-2.0.0-*.whl
 pip install "$OUT"/layerfs-2.0.0-*.whl                          # in a virtualenv
@@ -82,7 +82,12 @@ cargo +1.85.1 build --release --locked -p layerfs-cli       # target/release/lay
 ```
 
 `npm pack` fails when `node/layerfs.node` is missing, so a tarball never lacks
-its addon. The default addon, wheel and command have no PostgreSQL and no TLS:
+its addon. `node/package.json` declares `os: ["linux"]`, `cpu: ["x64"]` and
+`libc: ["glibc"]`, and the one addon needs glibc >= 2.39, so npm refuses another
+host with `EBADPLATFORM` instead of installing a package that cannot load.
+macOS, Windows, Linux arm64 and musl need a per-platform prebuild scheme that
+is not built; [`node/README.md`](node/README.md) is the npm page. The default
+addon, wheel and command have no PostgreSQL and no TLS:
 a call that needs them is refused `Unsupported` ("this LayerFS build has no
 PostgreSQL engine"). Both are opt-in at build time and need the OpenSSL
 development files (`libssl-dev`) on the build host:

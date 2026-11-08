@@ -351,3 +351,209 @@ fn a_pull_leaves_no_store_folder_on_the_worker_and_follows_no_symlink_out_of_it(
     let _ = std::fs::remove_dir_all(root);
     let _ = std::fs::remove_dir_all(outside);
 }
+
+#[test]
+fn wrong_direction_refuses_unresolved_without_deleting_leftover_and_remove_cleans_both_sides() {
+    let (home, root) = home_with_shop();
+    let push = [("name", t("shop")), ("machine", t("box"))];
+    let pull = [("name", t("shop"))];
+
+    // 1. A push stopped between install and record is `Unresolved` (the
+    // record names native, `box` holds a copy). The opposite command must
+    // refuse it without deleting that copy or clearing the intent.
+    let op = stopped_at(&home, "store.push", &push, "record");
+    assert_eq!(op.get("uncertain"), Some(&SdkValue::Bool(true)));
+    assert!(paths::store_file(&root, "shop").exists());
+
+    let (code, message) = call(&home, "store.pull", &pull).unwrap_err();
+    assert_eq!(code, "Unresolved", "{message}");
+    assert!(
+        message.contains("`layerfs store push shop box`"),
+        "{message}"
+    );
+    assert!(
+        paths::store_file(&root, "shop").exists(),
+        "a wrong-direction pull must not delete the remote copy"
+    );
+    assert!(
+        record(&home).get("op").is_some(),
+        "a wrong-direction pull must not clear the unresolved intent"
+    );
+
+    // A push to another machine refuses it too, keeping `box`'s copy.
+    write_record(
+        &paths::machine_record(&home, "other"),
+        &SdkValue::map([("name", t("other")), ("platform", t("lima"))]),
+    )
+    .unwrap();
+    let (code, message) = call(
+        &home,
+        "store.push",
+        &[("name", t("shop")), ("machine", t("other"))],
+    )
+    .unwrap_err();
+    assert_eq!(code, "Unresolved", "{message}");
+    assert!(paths::store_file(&root, "shop").exists());
+    assert!(record(&home).get("op").is_some());
+
+    // 2. `store.remove` deletes both the record's machine's copy and the
+    // leftover on `box`, so the name is free again.
+    call_ok(&home, "store.remove", &[("name", t("shop"))]);
+    assert!(!paths::store_dir(&home, "shop").exists());
+    assert!(
+        !paths::store_dir(&root, "shop").exists(),
+        "store.remove must delete the leftover remote Store directory on box"
+    );
+    call_ok(&home, "store.create", &[("name", t("shop"))]);
+    call_ok(&home, "store.push", &push);
+
+    // 3. A pull stopped at retire names native and leaves the copy on `box`.
+    // A `store.remove` whose cleanup of `box` loses its answer records
+    // `leftover: "box"`, so a second call still cleans both sides.
+    stopped_at(&home, "store.pull", &pull, "retire");
+    assert_eq!(record(&home).get_text("machine"), Some("native"));
+    assert_eq!(retired(&home), Some(SdkValue::Bool(false)));
+    assert!(paths::store_file(&root, "shop").exists());
+
+    // A proxy answers the worker's hello and drops the request: `Unknown`.
+    let real_addr: std::net::SocketAddr = read_record(&paths::worker_record(&home, "box"))
+        .unwrap()
+        .unwrap()
+        .get_text("address")
+        .unwrap()
+        .parse()
+        .unwrap();
+    let drop_listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let drop_addr = drop_listener.local_addr().unwrap().to_string();
+    std::thread::spawn(move || {
+        for client in drop_listener.incoming().flatten() {
+            let mut client = client;
+            let Ok(Some(hello)) =
+                layerfs_api::worker::read_frame_within(&mut client, layerfs_api::worker::MAX_HELLO)
+            else {
+                continue;
+            };
+            let mut upstream = std::net::TcpStream::connect(real_addr).unwrap();
+            layerfs_api::worker::write_frame(&mut upstream, &hello).unwrap();
+            let ready = layerfs_api::worker::read_frame(&mut upstream)
+                .unwrap()
+                .unwrap();
+            layerfs_api::worker::write_frame(&mut client, &ready).unwrap();
+            let Some(request) = layerfs_api::worker::read_frame(&mut client).unwrap() else {
+                continue;
+            };
+            if request.get_text("op") == Some("store.file") {
+                // drop the connection during the cleanup: the answer is lost
+                break;
+            }
+            layerfs_api::worker::write_frame(&mut upstream, &request).unwrap();
+            if let Some(answer) = layerfs_api::worker::read_frame(&mut upstream).unwrap() {
+                let _ = layerfs_api::worker::write_frame(&mut client, &answer);
+            }
+        }
+    });
+    write_record(
+        &paths::worker_record(&home, "box"),
+        &SdkValue::map([("address", t(&drop_addr)), ("secret", t("k"))]),
+    )
+    .unwrap();
+    let (code, _) = call(&home, "store.remove", &[("name", t("shop"))]).unwrap_err();
+    assert_eq!(code, "Unknown");
+    let remove_op = record(&home)
+        .get("op")
+        .cloned()
+        .expect("an unresolved remove intent");
+    assert_eq!(remove_op.get_text("name"), Some("store.remove"));
+    assert_eq!(
+        remove_op
+            .get("args")
+            .and_then(|args| args.get_text("leftover")),
+        Some("box")
+    );
+    // the intent's owner is made gone, as a killed process would leave it
+    let owner = remove_op.get("owner").cloned().unwrap();
+    let start: u64 = owner.get_text("pid_start").unwrap().parse().unwrap();
+    let gone = home::with_field(owner, "pid_start", t(&(start + 1).to_string()));
+    let remove_op = home::with_field(remove_op, "owner", gone);
+    write_record(
+        &paths::store_record(&home, "shop"),
+        &home::with_field(record(&home), "op", remove_op),
+    )
+    .unwrap();
+    write_record(
+        &paths::worker_record(&home, "box"),
+        &SdkValue::map([("address", t(&real_addr.to_string())), ("secret", t("k"))]),
+    )
+    .unwrap();
+
+    call_ok(&home, "store.remove", &[("name", t("shop"))]);
+    assert!(!paths::store_dir(&home, "shop").exists());
+    assert!(
+        !paths::store_dir(&root, "shop").exists(),
+        "the second store.remove must still delete the leftover copy on box"
+    );
+
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn retire_failure_reports_authority_switched_to_target_and_source_unretired() {
+    let (home, root) = home_with_shop();
+    let push = [("name", t("shop")), ("machine", t("box"))];
+    call_ok(&home, "store.push", &push);
+
+    // A pull that reaches `retire` has already written `machine: native` and
+    // `last_transfer.retired: false`; make the source's folder undeletable so
+    // retiring it fails.
+    let refusal = layerfs_api::call(
+        Some(&home),
+        "store.pull",
+        map(&[("name", t("shop"))]),
+        &mut |event| {
+            let progress = event.get("progress").unwrap();
+            if progress.get_text("phase") == Some("retire") {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(
+                    paths::store_dir(&root, "shop"),
+                    std::fs::Permissions::from_mode(0o000),
+                );
+                let _ = std::fs::set_permissions(
+                    root.join("store"),
+                    std::fs::Permissions::from_mode(0o500),
+                );
+            }
+        },
+    )
+    .unwrap_err();
+
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(root.join("store"), std::fs::Permissions::from_mode(0o700));
+    let _ = std::fs::set_permissions(
+        paths::store_dir(&root, "shop"),
+        std::fs::Permissions::from_mode(0o700),
+    );
+
+    assert_eq!(refusal.code, "Failed");
+    assert_eq!(refusal.detail.get_text("phase"), Some("retire"));
+    assert_eq!(refusal.detail.get_text("authority"), Some("native"));
+    assert_eq!(refusal.detail.get_text("source"), Some("box"));
+    assert_eq!(refusal.detail.get("retired"), Some(&SdkValue::Bool(false)));
+    assert!(
+        refusal.message.contains("authority switched to native"),
+        "{}",
+        refusal.message
+    );
+    assert!(
+        refusal
+            .message
+            .contains("source copy on box was not retired"),
+        "{}",
+        refusal.message
+    );
+    assert_eq!(record(&home).get_text("machine"), Some("native"));
+    assert_eq!(retired(&home), Some(SdkValue::Bool(false)));
+
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(root);
+}

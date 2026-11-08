@@ -211,7 +211,7 @@ Written from the call table and native integration tests (`project_export.rs`,
 and each destination must be absent or empty.
 
 ```js
-import layerfs from "layerfs";
+import layerfs from "@layerfs/node";
 const result = await layerfs.project.export("shop/api", "/exports/api", {
   branch: "agent",
   on_progress: ({ phase, bytes }) => console.error(phase, bytes),

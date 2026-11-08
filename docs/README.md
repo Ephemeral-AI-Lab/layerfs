@@ -78,6 +78,7 @@
 - [Benchmark rules](general/benchmark_rules.md)
 - [Benchmark instruction: the optimization iteration and its metrics](general/benchmark_instruction.md)
 - [Release policy](general/release-policy.md)
+- [Publishing the `layerfs` Node package to npm](general/npm-release.md): release build, tarball checks, the first prerelease, verification and rollback
 - [Documentation policy](general/documentation-policy.md)
 - [Development workspace cleanup](general/cleanup.md): ownership checks, verified recovery, evidence retention, and disk-space reporting
 - [Parallel worktree development](general/parallel-worktrees.md): private Cargo resources, prepared dependencies, pinned SDK builds, and per-run Docker E2E state

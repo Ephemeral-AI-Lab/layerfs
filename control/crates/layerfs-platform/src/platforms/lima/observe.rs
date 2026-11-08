@@ -10,17 +10,12 @@
 //! - The template mounts nothing (`mounts: []`): the guest never sees the
 //!   host home. Its one port forward is guest `127.0.0.1:7070` to host
 //!   `127.0.0.1:<port>`; every other guest port is ignored.
-//! - `nested` adds `nestedVirtualization` (macOS 15+, M3 or newer): such a
-//!   machine hosts Firecracker machines, and the bundle's `firecracker/`
-//!   folder (binary, kernel, root filesystem, guest key), when it has one, is
-//!   copied from the host straight to `/layerfs/data/firecracker` before the
-//!   worker starts. No guest's bundle copy carries that folder.
 //! - Commands go through ssh with Lima's own `ssh.config`, then `sudo -n`, so
 //!   the quoting is this crate's, not the CLI's.
 use crate::error::{Code, MachineError};
 use crate::facts;
 use crate::platform::HostOs;
-use crate::probe::{first_line, nested_missing};
+use crate::probe::first_line;
 use crate::setup::forward;
 use crate::setup::guest::Guest;
 use crate::setup::vm::{call, checked, CALL};
@@ -62,7 +57,13 @@ pub(crate) fn observe(spec: &Spec) -> Result<(State, Option<PathBuf>), MachineEr
     let state = match status {
         "Running" => State::Running,
         "Broken" => State::Failed,
-        _ => State::Stopped,
+        "Stopped" => State::Stopped,
+        _ => {
+            return Err(MachineError::new(
+                Code::Unavailable,
+                "Lima reports an unrecognized or transitional runtime state",
+            ))
+        }
     };
     Ok((state, (!dir.is_empty()).then(|| PathBuf::from(dir))))
 }
@@ -84,7 +85,7 @@ pub(crate) fn guest(spec: &Spec) -> Result<Guest, MachineError> {
 /// The ssh options and destination of a detached forward through a running
 /// Lima instance (`setup/forward.rs`): Lima's own `ssh.config`, without its
 /// shared connection, so the forward is its own ssh process.
-pub(crate) fn tunnel(dir: &Path, vm: &str) -> (Vec<String>, String) {
+fn tunnel(dir: &Path, vm: &str) -> (Vec<String>, String) {
     #[rustfmt::skip]
     let options: Vec<String> = [
         "-F", &dir.join("ssh.config").display().to_string(),
@@ -113,9 +114,6 @@ pub(super) fn host_check(spec: &Spec) -> Result<(), MachineError> {
     if HostOs::current() != HostOs::Macos {
         missing.push("host:macos".to_owned());
     }
-    if spec.nested {
-        missing.extend(nested_missing(HostOs::current()));
-    }
     if tool::lookup(&spec.tools, CLI).is_none() {
         missing.push(format!("tool:{CLI}"));
     }
@@ -123,14 +121,7 @@ pub(super) fn host_check(spec: &Spec) -> Result<(), MachineError> {
         return Ok(());
     }
     Err(MachineError::missing(
-        format!(
-            "a lima machine{} cannot run on this host",
-            if spec.nested {
-                " with nested virtualization"
-            } else {
-                ""
-            }
-        ),
+        "a lima machine cannot run on this host",
         missing,
     ))
 }

@@ -1,7 +1,6 @@
-//! The detached `ssh -N -L 127.0.0.1:<port>:<target>` that carries a worker's
-//! port to the host (`firecracker`, through its Lima host), or a Sandbox
-//! daemon's (`lima`; #535 G4). It is started detached so it
-//! outlives one CLI call; its pid goes into the endpoint or the [`Forward`].
+//! The detached `ssh -N -L 127.0.0.1:<port>:<target>` that carries a Sandbox
+//! daemon's port to the host (`lima`; #535 G4). It is started detached so it
+//! outlives one CLI call; its pid goes into the [`Forward`].
 //! `ExitOnForwardFailure` makes a busy port fail at once.
 use crate::error::{Code, MachineError};
 use crate::setup::{tool, worker};
@@ -19,7 +18,7 @@ fn marker(port: u16) -> String {
 }
 
 /// Opens the forward with `ssh <options...> -N -L 127.0.0.1:port:target dest`.
-pub(crate) fn open(
+fn open(
     spec: &Spec,
     options: &[String],
     dest: &str,
@@ -90,27 +89,9 @@ pub(crate) fn refuse(spec: &Spec, code: Code, why: &str) -> MachineError {
     )
 }
 
-/// Ends the forward recorded in the machine's last endpoint, if it still runs.
-pub(crate) fn close(spec: &Spec) {
-    if let Some(endpoint) = &spec.worker {
-        if let Some(pid) = endpoint.forward_pid {
-            end(spec, pid, endpoint.address.port());
-        }
-    }
-}
-
 /// Ends the forward `pid` on `port`, if it is still that forward.
 pub(crate) fn end(spec: &Spec, pid: u32, port: u16) {
     tool::end(&spec.tools, pid, &marker(port));
-}
-
-/// Whether the recorded forward still runs.
-pub(crate) fn running(spec: &Spec) -> bool {
-    spec.worker.as_ref().is_some_and(|endpoint| {
-        endpoint
-            .forward_pid
-            .is_some_and(|pid| tool::alive(&spec.tools, pid, &marker(endpoint.address.port())))
-    })
 }
 
 fn tail(log: &Path) -> String {

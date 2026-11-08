@@ -4,13 +4,9 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Firecracker is **permanently disabled for new work**. Its code and records
-remain for inspection and explicit cleanup. Microsandbox and SSH machines
-were removed in 2.0; a record an older home still holds for one is shown,
-refused and only forgotten. See the [platform restriction](../support-matrix/disabled-platforms.md) for
-refusals, existing-resource handling and the source change required for
-re-enabling. Descriptions of Firecracker's adapter mechanics below are
-retained implementation details, not selectable features.
+Firecracker, Microsandbox and SSH machines were removed in 2.0; a record
+an older home still holds for one is shown, refused and only forgotten.
+See [removed platforms](../support-matrix/disabled-platforms.md).
 
 The sealed Adapter every platform implements.
 
@@ -43,7 +39,6 @@ for what a diagram or table cannot say.
          Docker         => &docker::ADAPTER,
          AppleContainer => &apple_container::ADAPTER,
          Lima           => &lima::ADAPTER,
-         Firecracker    => &firecracker::ADAPTER,
      }
  }
 ```
@@ -68,16 +63,16 @@ A machine's lifecycle, and which calls each platform takes:
      remove <---------------------+   (from running or stopped)
 ```
 
-| Call | `native` | `docker` | `apple-container` | `lima` | `firecracker` |
-| --- | --- | --- | --- | --- | --- |
-| `create` | refused | refused | yes | yes | yes |
-| `remove` | refused | refused | yes | yes | yes |
-| `start` | `None` (macOS, Linux) | yes | yes | yes | yes |
-| `stop` | `Ok`, nothing | worker only | yes | yes | yes |
-| `status` | `Running` | yes | yes | yes | yes |
-| `guest` | refused | yes (macOS, Linux) | `container exec` | Lima ssh | via Lima host |
-| `reach` | as given | Desktop: worker's `host.docker.internal` address; Linux: as given | gateway lookup | `192.168.5.2` | `192.168.5.2` |
-| `forward` | port as it is | `Unsupported` | `Unsupported` | `ssh -L` | `Unsupported` |
+| Call | `native` | `docker` | `apple-container` | `lima` |
+| --- | --- | --- | --- | --- |
+| `create` | refused | refused | yes | yes |
+| `remove` | refused | refused | yes | yes |
+| `start` | `None` (macOS, Linux) | yes | yes | yes |
+| `stop` | `Ok`, nothing | worker only | yes | yes |
+| `status` | `Running` | yes | yes | yes |
+| `guest` | refused | yes (macOS, Linux) | `container exec` | Lima ssh |
+| `reach` | as given | Desktop: worker's `host.docker.internal` address; Linux: as given | gateway lookup | `192.168.5.2` |
+| `forward` | port as it is | `Unsupported` | `Unsupported` | `ssh -L` |
 
 A refusal from `adapter::refused` is `InvalidInput`, "the <platform>
 machine <name> <why>", raised before any tool runs:
@@ -107,13 +102,9 @@ machine <name> <why>", raised before any tool runs:
 | `docker` | Windows: `host:wsl2`; `tool:docker`; `host:<socket>` when the Engine does not answer | `docker -H unix://<socket> version` (server) |
 | `apple-container` | `host:macos`; `host:apple-silicon` on a non-`aarch64` Mac; `tool:container` | `container --version` |
 | `lima` | `host:macos`; `tool:limactl` | `limactl --version` |
-| `firecracker` | `host:macos`; `host:macos15`, `host:apple-m3` (`nested_missing`); `tool:limactl` | `limactl --version` |
 
 A probe starts nothing. Each version query is one command with a 10 s
 deadline (`ANSWER`); its first non-empty line is the version.
-`nested_missing` reads `sw_vers -productVersion` (needs 15 or newer) and
-`sysctl -n machdep.cpu.brand_string` (needs `Apple M3` or newer). A `lima`
-create with `nested` checks it too ([`lima/observe.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/observe.rs)).
 `machine.platforms` shows each probe as `ready`, `missing` and `version`.
 
 ## Facts

@@ -23,7 +23,7 @@ a template written to `limactl create`'s stdin
 
 ```text
  create(spec, bundle)                              lima/create.rs
-   host_check: macOS; nested -> host:macos15, host:apple-m3; `limactl`
+   host_check: macOS; `limactl`
    limactl list <vm>                       present -> Exists
    limactl disk list --json: lfs<8 hex>    present -> Exists
    port = spec.state.port or a free host port
@@ -33,14 +33,13 @@ a template written to `limactl create`'s stdin
        fails, instance exists: Failed, vm_exists (kept)
    limactl start --tty=false <vm>
    ATTACH: /mnt/lima-lfs<8 hex> must be ext4; bind it at /layerfs/data
-   nested: bundle's firecracker/ -> /layerfs/data/firecracker (once)
    worker::bring_up over ssh -F <dir>/ssh.config lima-<vm> sudo -n:
      launch on 127.0.0.1:7070 -> ready at host 127.0.0.1:<port>
 ```
 
 | Template key ([`lima/template.rs`](../../../../../control/crates/layerfs-platform/src/platforms/lima/template.rs)) | Value |
 | --- | --- |
-| `vmType` | `vz`; `nestedVirtualization: true` when `nested` |
+| `vmType` | `vz` |
 | `cpus`, `memory` | from the spec (`memory` in MiB) |
 | `images` | `os_image` when it is an `https://` URL or an absolute path, else Ubuntu 24.04's release cloud image for `aarch64` and `x86_64` |
 | `containerd` | system and user off |
@@ -54,7 +53,7 @@ is found again at every boot.
 
 | Call | Does | Source |
 | --- | --- | --- |
-| `start` | needs the recorded port; `NotFound` if missing; `Failed` if broken; boots if stopped; then attach, nested files, `bring_up` | [`lima/power.rs`](../../../../../control/crates/layerfs-platform/src/platforms/lima/power.rs) |
+| `start` | needs the recorded port; `NotFound` if missing; `Failed` if broken; boots if stopped; then attach, `bring_up` | [`lima/power.rs`](../../../../../control/crates/layerfs-platform/src/platforms/lima/power.rs) |
 | `stop` | `limactl stop` if running (up to 300 s); the instance and disk stay | same |
 | `remove` | `limactl delete --force`, then `limactl disk delete` | [`lima/create.rs`](../../../../../control/crates/layerfs-platform/src/platforms/lima/create.rs) |
 | `status` | `limactl list`: `Running`, `Broken` (failed), else stopped; through `with_worker` | `observe.rs` |
@@ -99,7 +98,6 @@ daemon runs in the Sandbox image's root, which has no such hosts entry.
 | --- | --- | --- |
 | `cpus`, `memory`, `disk` | int, size, size | `cpus`, `memory`, `disk` (the data disk only; Lima's root disk keeps Lima's size) |
 | `image` | text | see [Options](../platforms-and-profiles.md#options) |
-| `nested` | bool | `nested`: a host for `firecracker` machines |
 
 ## Live receipts
 
@@ -117,7 +115,6 @@ daemon runs in the Sandbox image's root, which has no such hosts entry.
 | Symptom | Cause | Source |
 | --- | --- | --- |
 | `missing: host:macos` / `tool:limactl` | not a Mac, or no `limactl` | `observe.rs` `host_check` |
-| `missing: host:macos15` / `host:apple-m3` | `nested` on an older macOS or chip | [`probe.rs`](../../../../../control/crates/layerfs-platform/src/probe.rs) `nested_missing` |
 | `Exists`: "the Lima disk … for … already exists; it is left alone" | a disk from an earlier machine | `create.rs` |
 | `Failed`: "the Lima instance … is broken" | `limactl list` says `Broken` | `power.rs` |
 | "/mnt/lima-… is not an ext4 mount" | the data disk did not attach as ext4 | `power.rs` `ATTACH` |
@@ -126,11 +123,10 @@ daemon runs in the Sandbox image's root, which has no such hosts entry.
 
 ## Related
 
-- [Firecracker](firecracker.md): runs inside a `nested` lima machine.
 - [Sandboxes: Native and namespaces](../../sandboxes/native-and-namespaces.md).
 - [Network: Workers](../../network/workers.md), [Network: Reach](../../network/reach.md), [Network: Forwards](../../network/forwards.md).
 - [Adapter](../adapter.md), [Support matrix: Table](../../support-matrix/table.md).
 
 ---
 
-← [Machines: Apple container](apple-container.md) · [Up: Machines](../README.md) · [Machines: Firecracker](firecracker.md) →
+← [Machines: Apple container](apple-container.md) · [Up: Machines](../README.md) · [Machines: Adding a platform](../adding-a-platform.md) →

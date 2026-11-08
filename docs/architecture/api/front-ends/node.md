@@ -57,7 +57,7 @@ lfs.file.read(p, b, path, {..})
 | Event order | `call.rs` counts each event it queued; the package resolves only after it has delivered that many | [`call.rs`](../../../../api/crates/layerfs-node/src/call.rs), `bind` |
 | A throwing function | caught; reported with `process.emitWarning(…, "LayerFSHandlerWarning")`; the call goes on | `bind` |
 | Values | `Uint8Array` / `Buffer` → `{ base64 }`; `bigint` → its exact digits; whole numbers back as `number` (safe integers) or `bigint`; `{ base64 }` back → `Buffer`; see [Values](#values) | [`values.js`](../../../../api/node/src/values.js) |
-| Outside the table | `doctor({home})` (runs off the JS thread; may dial running workers), `close()` (synchronous; closes idle Stores, answers how many) | [`index.js`](../../../../api/node/src/index.js), [`call.rs`](../../../../api/crates/layerfs-node/src/call.rs) |
+| Outside the table | `doctor({home, target?, name?, timeout?, quick?, write_test?})` (runs off the JS thread; empty options preserve legacy diagnosis), `close()` (synchronous; closes idle Stores, answers how many) | [`index.js`](../../../../api/node/src/index.js), [`call.rs`](../../../../api/crates/layerfs-node/src/call.rs) |
 
 The package is an ES module named `layerfs`, version 2.0.0, MIT licensed
 (the repository's [`LICENSE`](../../../../LICENSE), copied into the package),
@@ -119,7 +119,7 @@ api/crates/layerfs-node (cdylib, napi 2.16, napi4)
   call.rs  table()  -> layerfs_api::table_json()
            call()   -> AsyncTask Call: layerfs_api::call_json once
            close()  -> layerfs_api::close_idle(0)
-           doctor() -> AsyncTask Doctor: layerfs_api::doctor_json
+           doctor() -> AsyncTask Doctor: layerfs_api::doctor_options_json
 ```
 
 | Step | What happens | Source |

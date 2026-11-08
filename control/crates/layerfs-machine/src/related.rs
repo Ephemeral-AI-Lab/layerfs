@@ -18,7 +18,7 @@ pub struct Related {
     /// The Sandboxes whose record names the machine.
     pub sandboxes_on: Names,
     /// `machine.remove`: refused while the machine
-    /// holds Stores, Sandboxes or hosted machines.
+    /// holds Stores or Sandboxes.
     pub can_remove: Check,
     /// `machine.stop`: refused while Sandboxes run on it.
     pub can_stop: Check,

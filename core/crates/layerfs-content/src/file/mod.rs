@@ -25,7 +25,7 @@ pub use edit::{
     EDIT_DEFERRED_LIMIT,
 };
 pub use mapping::{Extent, ExtentBuilder, ExtentCursor, PredecessorBase, ReadCounters};
-pub use read::{read_all, read_all_bounded, read_range};
+pub use read::{content_digest, read_all, read_all_bounded, read_range};
 pub use runs::{
     construct_runs, construct_runs_with_predecessor, FileRun, FileRuns, RunConstruction,
 };

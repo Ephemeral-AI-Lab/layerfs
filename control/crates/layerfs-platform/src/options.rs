@@ -10,9 +10,6 @@ pub enum OptKind {
     Size,
     /// Free text: a path, an image reference, a user.
     Text,
-    Bool,
-    /// Another machine's name (`firecracker`'s `host`).
-    Name,
 }
 
 /// One option a platform takes.
@@ -29,8 +26,6 @@ impl OptKind {
             Self::Int => "int",
             Self::Size => "size",
             Self::Text => "text",
-            Self::Bool => "bool",
-            Self::Name => "name",
         }
     }
 }

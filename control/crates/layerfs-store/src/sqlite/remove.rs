@@ -1,7 +1,7 @@
 //! `store.remove`: a sqlite Store deleted wherever it is, with its projects.
 use crate::place::{self, Executor};
 use crate::record::{self, StoreRef};
-use crate::sqlite::family::{advance, begin, ended, record_of, settle, step_on};
+use crate::sqlite::family::{advance, begin, ended, fields_map, record_of, settle, step_on};
 use crate::sqlite::transfer::step::StoreStep;
 use crate::Related;
 use layerfs_bridge::control::SdkValue;
@@ -29,13 +29,40 @@ pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
     if let Executor::Worker(worker) = &mut executor {
         worker.ready()?;
     }
-    let args = SdkValue::map([("machine", SdkValue::text(&machine))]);
+    // the copy an ended push or pull left on the other machine, if the
+    // record names one: it goes too, and `op.args.leftover` records it so a
+    // second `store.remove` finishes an interrupted one
+    let left = crate::sqlite::transfer::resolve::leftover(&record);
+    let mut leftover_executor = match &left {
+        Some(left) if left.on != machine => {
+            let mut ex = place::on_machine(home, &left.on)?;
+            if let Executor::Worker(worker) = &mut ex {
+                worker.ready()?;
+            }
+            Some((left.clone(), ex))
+        }
+        _ => None,
+    };
+    let mut fields = vec![("machine", SdkValue::text(&machine))];
+    if let Some((left, _)) = &leftover_executor {
+        fields.push(("leftover", SdkValue::text(&left.on)));
+    }
+    let args = fields_map(fields);
     let mut op = Op::begin("store.remove", "check", args)?;
     let previous = begin(home, name, &op, related, |record| {
         if record.machine()? != machine {
             return Err(refused(
                 "Conflict",
                 format!("Store {name} moved off {machine} meanwhile; nothing was removed"),
+            ));
+        }
+        let now_left =
+            crate::sqlite::transfer::resolve::leftover(record).filter(|left| left.on != machine);
+        let want_left = leftover_executor.as_ref().map(|(left, _)| left);
+        if now_left.as_ref() != want_left {
+            return Err(refused(
+                "Conflict",
+                format!("Store {name} changed meanwhile; nothing was removed"),
             ));
         }
         let previous = record.op();
@@ -54,6 +81,11 @@ pub fn remove(home: &Path, name: &str, related: Related) -> Outcome {
         let unknown = op.clone().as_uncertain();
         op = unknown;
         advance(home, name, &mut op, phase)?;
+        if let Some((_, ex)) = &mut leftover_executor {
+            if let Executor::Worker(_) = ex {
+                step_on(home, ex, name, StoreStep::Remove)?;
+            }
+        }
         match executor {
             Executor::Local => Ok(SdkValue::Null),
             Executor::Worker(_) => step_on(home, &mut executor, name, StoreStep::Remove),

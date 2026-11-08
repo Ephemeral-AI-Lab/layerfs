@@ -35,7 +35,6 @@ use layerfs_platform::{
     self as machine, platforms, sandbox_allowed, support, Backend, CallSite, Code, ExecutorKind,
     Forward, HostOs, How, KernelRoute, MachineError, OptKind, Platform, Route, Spec, StoreKind,
 };
-use layerfs_sandbox_backend::platform_policy::disabled_reason;
 use layerfs_sandbox_backend::MountDriver;
 use standin::Scratch;
 use std::collections::BTreeSet;
@@ -82,18 +81,8 @@ fn each_profile_is_its_support_rows_on_every_host() {
             let at = format!("{platform:?} on {host:?}");
             assert_eq!((row.platform, row.host), (platform, host), "{at}");
             assert_eq!(row.how, profile.how, "{at}");
-            assert_eq!(
-                row.options,
-                if disabled_reason(platform.name()).is_some() {
-                    &[][..]
-                } else {
-                    profile.options
-                },
-                "{at}"
-            );
-            let on_host =
-                profile.hosts.contains(&host) && disabled_reason(platform.name()).is_none();
-            if on_host {
+            assert_eq!(row.options, profile.options, "{at}");
+            if profile.hosts.contains(&host) {
                 assert_eq!(row.backend, platform.backend(host), "{at}");
                 assert_eq!(row.kernel, platform.kernel(host), "{at}");
                 let sqlite = match platform.executor(host) {
@@ -124,11 +113,7 @@ fn each_profile_is_its_support_rows_on_every_host() {
                     format!("{}; {}", profile.description, backend.description()),
                     "{at}"
                 ),
-                None => assert_eq!(
-                    row.description,
-                    disabled_reason(platform.name()).unwrap_or(profile.description),
-                    "{at}"
-                ),
+                None => assert_eq!(row.description, profile.description, "{at}"),
             }
         }
     }
@@ -266,32 +251,11 @@ fn refusing_tools(scratch: &Scratch) {
     }
 }
 
-/// Whether `platform` declares the option `name`.
-fn declares(platform: Platform, name: &str) -> bool {
-    platform.profile().options.iter().any(|o| o.name == name)
-}
-
-/// The platform whose machines are nested hosts (the one that declares
-/// `nested`); a `host` option names one of them.
-fn nested_host_kind() -> Platform {
-    let mut hosts = Platform::ALL.into_iter().filter(|p| declares(*p, "nested"));
-    let kind = hosts.next().expect("a platform declares `nested`");
-    assert!(hosts.next().is_none(), "one platform declares `nested`");
-    kind
-}
-
-/// A valid spec of `platform`, built only from what its profile declares:
-/// a nested host machine where it takes `host`. The docker worker container's image comes from the bundle
-/// (#535 E7) and is passed as `os_image`.
+/// A valid spec of `platform`, built only from what its profile declares.
+/// The docker worker container's image comes from the bundle (#535 E7) and
+/// is passed as `os_image`.
 fn valid_spec(scratch: &Scratch, platform: Platform) -> Spec {
     let mut spec = scratch.spec(platform);
-    if declares(platform, "host") {
-        let mut host = scratch.spec(nested_host_kind());
-        host.name = "host".into();
-        host.vm_name = "lfs-host".into();
-        host.nested = true;
-        spec.host = Some(Box::new(host));
-    }
     if platform == Platform::Docker {
         spec.os_image = Some("debian:trixie-slim".into());
     }
@@ -326,15 +290,6 @@ fn each_lifecycle_call_runs_through_the_tool_or_gives_the_fixed_refusal() {
             let log = scratch.log();
             let tools = standin::read(&scratch.path("tools.log"));
             let at = format!("{platform:?} {call:?}: {outcome:?}\n{log}");
-            if matches!(call, Call::Create | Call::Start) {
-                if let Some(reason) = disabled_reason(platform.name()) {
-                    let error = outcome.unwrap_err();
-                    assert_eq!(error.code, Code::Unsupported, "{at}");
-                    assert_eq!(error.message, reason, "{at}");
-                    assert!(log.is_empty(), "disabled platform ran a tool: {at}");
-                    continue;
-                }
-            }
             if let Some(why) = refusal(profile.how, call) {
                 let error = outcome.expect_err(&at);
                 assert_eq!(error.code, Code::InvalidInput, "{at}");
@@ -400,13 +355,11 @@ fn loopback(spec: &Spec) -> Loopback {
     match spec.kind {
         Platform::Native => Loopback::Shared,
         // a Linux Engine's worker shares the host's network; Docker
-        // Desktop's resolves `host.docker.internal` (`reach_specs`; D-8)
+        // Desktop's resolves `host.docker.internal` (`reach_spec`; D-8)
         Platform::Docker if cfg!(target_os = "linux") => Loopback::Shared,
         Platform::Docker => Loopback::Alias("192.168.65.254".into()),
         Platform::Lima => Loopback::Alias("192.168.5.2".into()),
-        // the Lima host's own host address, through its masquerade
-        Platform::Firecracker => Loopback::Alias("192.168.5.2".into()),
-        // the gateway the stand-in `container inspect` reports (`reach_specs`)
+        // the gateway the stand-in `container inspect` reports (`reach_spec`)
         Platform::AppleContainer => Loopback::Alias("192.168.64.1".into()),
     }
 }
@@ -443,9 +396,8 @@ fn refused(platform: Platform, outcome: Result<String, MachineError>) -> (Code, 
     (error.code, error.message)
 }
 
-/// Each platform's spec for `reach` with and without a recorded network
-/// number (none reads it since the G7 receipt; both are kept).
-fn reach_specs(scratch: &Scratch, platform: Platform) -> Vec<Spec> {
+/// Each platform's spec for `reach`, its stand-in tools answering.
+fn reach_spec(scratch: &Scratch, platform: Platform) -> Spec {
     if platform == Platform::AppleContainer {
         scratch.tool(
             "container",
@@ -458,46 +410,41 @@ fn reach_specs(scratch: &Scratch, platform: Platform) -> Vec<Spec> {
             r#"printf '192.168.65.254  host.docker.internal\n'"#,
         );
     }
-    let mut with_network = valid_spec(scratch, platform);
-    with_network.state.network = Some(7);
-    let mut without = with_network.clone();
-    without.state.network = None;
-    vec![with_network, without]
+    valid_spec(scratch, platform)
 }
 
 #[test]
 fn each_platform_reaches_a_loopback_server_as_it_declares() {
     let scratch = Scratch::new("kit-reach");
     for platform in Platform::ALL {
-        for spec in reach_specs(&scratch, platform) {
-            let prefix = format!(
-                "the {} machine dev cannot reach the PostgreSQL Store's server: ",
-                platform.name()
-            );
-            for query in ["", "?sslmode=disable", "?sslmode=verify-ca"] {
-                for (i, url) in loopback_urls(query).iter().enumerate() {
-                    let outcome = machine::reach(&spec, url);
-                    match loopback(&spec) {
-                        Loopback::Shared => assert_eq!(outcome.as_ref(), Ok(url)),
-                        Loopback::Alias(alias) => assert_eq!(
-                            outcome,
-                            Ok(with_host(&alias, query)[i].clone()),
-                            "{platform:?}"
-                        ),
-                    }
+        let spec = reach_spec(&scratch, platform);
+        let prefix = format!(
+            "the {} machine dev cannot reach the PostgreSQL Store's server: ",
+            platform.name()
+        );
+        for query in ["", "?sslmode=disable", "?sslmode=verify-ca"] {
+            for (i, url) in loopback_urls(query).iter().enumerate() {
+                let outcome = machine::reach(&spec, url);
+                match loopback(&spec) {
+                    Loopback::Shared => assert_eq!(outcome.as_ref(), Ok(url)),
+                    Loopback::Alias(alias) => assert_eq!(
+                        outcome,
+                        Ok(with_host(&alias, query)[i].clone()),
+                        "{platform:?}"
+                    ),
                 }
             }
-            // the server's certificate names the loopback host, not an alias
-            for url in loopback_urls("?sslmode=verify-full") {
-                let outcome = machine::reach(&spec, &url);
-                match loopback(&spec) {
-                    Loopback::Shared => assert_eq!(outcome, Ok(url)),
-                    Loopback::Alias(_) => {
-                        let (code, message) = refused(platform, outcome);
-                        assert_eq!(code, Code::Unsupported, "{message}");
-                        assert!(message.starts_with(&prefix), "{message}");
-                        assert!(message.contains("sslmode=verify-full"), "{message}");
-                    }
+        }
+        // the server's certificate names the loopback host, not an alias
+        for url in loopback_urls("?sslmode=verify-full") {
+            let outcome = machine::reach(&spec, &url);
+            match loopback(&spec) {
+                Loopback::Shared => assert_eq!(outcome, Ok(url)),
+                Loopback::Alias(_) => {
+                    let (code, message) = refused(platform, outcome);
+                    assert_eq!(code, Code::Unsupported, "{message}");
+                    assert!(message.starts_with(&prefix), "{message}");
+                    assert!(message.contains("sslmode=verify-full"), "{message}");
                 }
             }
         }
@@ -515,10 +462,9 @@ fn every_other_server_is_dialled_as_given_on_every_platform() {
         "postgres://u@127.0.0.2/db".to_owned(),
     ];
     for platform in Platform::ALL {
-        for spec in reach_specs(&scratch, platform) {
-            for url in &urls {
-                assert_eq!(machine::reach(&spec, url).as_ref(), Ok(url), "{platform:?}");
-            }
+        let spec = reach_spec(&scratch, platform);
+        for url in &urls {
+            assert_eq!(machine::reach(&spec, url).as_ref(), Ok(url), "{platform:?}");
         }
     }
 }
@@ -549,15 +495,14 @@ fn a_url_reach_cannot_rewrite_is_refused_unless_the_loopback_is_shared() {
         ),
     ];
     for platform in Platform::ALL {
-        for spec in reach_specs(&scratch, platform) {
-            for (url, code) in &cases {
-                let outcome = machine::reach(&spec, url);
-                if matches!(loopback(&spec), Loopback::Shared) {
-                    assert_eq!(outcome.as_ref(), Ok(url), "{platform:?}");
-                } else {
-                    let (got, message) = refused(platform, outcome);
-                    assert_eq!(got, *code, "{platform:?}: {message}");
-                }
+        let spec = reach_spec(&scratch, platform);
+        for (url, code) in &cases {
+            let outcome = machine::reach(&spec, url);
+            if matches!(loopback(&spec), Loopback::Shared) {
+                assert_eq!(outcome.as_ref(), Ok(url), "{platform:?}");
+            } else {
+                let (got, message) = refused(platform, outcome);
+                assert_eq!(got, *code, "{platform:?}: {message}");
             }
         }
     }
@@ -567,17 +512,13 @@ fn a_url_reach_cannot_rewrite_is_refused_unless_the_loopback_is_shared() {
 // Options and Spec
 // ---------------------------------------------------------------------------
 
-/// Which `Spec` field a `machine create` / `machine connect` option sets.
+/// Which `Spec` field a `machine create` option sets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Field {
     /// `cpus`, `memory`, `disk`: the VM's size.
     Size,
     /// `image`: `os_image`, the VM's own system.
     OsImage,
-    /// `nested`.
-    Nested,
-    /// `host`: the nested machine it runs in.
-    Host,
 }
 
 /// An option's kind and field. A new option fails here until the kit maps it.
@@ -586,8 +527,6 @@ fn field(name: &str) -> (OptKind, Field) {
         "cpus" => (OptKind::Int, Field::Size),
         "memory" | "disk" => (OptKind::Size, Field::Size),
         "image" => (OptKind::Text, Field::OsImage),
-        "nested" => (OptKind::Bool, Field::Nested),
-        "host" => (OptKind::Name, Field::Host),
         other => panic!("option {other} has no Spec field in the conformance kit; map it"),
     }
 }
@@ -617,10 +556,9 @@ fn each_declared_option_is_a_spec_field_of_its_kind() {
             assert_eq!(option.kind, field(option.name).0, "{platform:?} {option:?}");
         }
         // a field is declared whole or not at all
-        for (wanted, all) in [(Field::Size, &["cpus", "memory", "disk"][..])] {
-            let count = all.iter().filter(|n| names.contains(*n)).count();
-            assert!(count == 0 || count == all.len(), "{platform:?} {wanted:?}");
-        }
+        let size = ["cpus", "memory", "disk"];
+        let count = size.iter().filter(|n| names.contains(*n)).count();
+        assert!(count == 0 || count == size.len(), "{platform:?} size");
         // created machines are sized and given their own system
         assert_eq!(
             takes(platform, Field::Size),
@@ -641,19 +579,6 @@ fn spec_accepts_exactly_the_fields_the_profile_declares() {
     for platform in Platform::ALL {
         let base = valid_spec(&scratch, platform);
         let at = format!("{platform:?}");
-
-        let mut spec = base.clone();
-        spec.nested = true;
-        assert_eq!(refused_spec(&spec), !takes(platform, Field::Nested), "{at}");
-
-        let mut without = base.clone();
-        without.host = None;
-        let mut with = base.clone();
-        let mut host = scratch.spec(nested_host_kind());
-        host.nested = true;
-        with.host = Some(Box::new(host));
-        assert_eq!(refused_spec(&with), !takes(platform, Field::Host), "{at}");
-        assert_eq!(refused_spec(&without), takes(platform, Field::Host), "{at}");
 
         // sizes are checked where they are declared and ignored elsewhere
         let sized = takes(platform, Field::Size);
@@ -690,7 +615,6 @@ fn daemon_port(spec: &Spec) -> DaemonPort {
         Platform::Lima => DaemonPort::Tunnel,
         Platform::Docker => DaemonPort::Refused(Code::Unsupported, "Docker publishes a container's ports only when it starts, so a Sandbox daemon's port in the worker container cannot be published later; its Workspace calls go through the worker"),
         Platform::AppleContainer => DaemonPort::Refused(Code::Unsupported, "the container CLI publishes a port only when the machine's container is created, so a Sandbox daemon's port cannot be published later; its Workspace calls go through the worker"),
-        Platform::Firecracker => DaemonPort::Refused(Code::Unsupported, "its Sandbox daemons listen on the microVM's loopback, which a forward through the Lima host cannot reach (it reaches only the microVM's tap address); its Workspace calls go through the worker"),
     }
 }
 
@@ -713,13 +637,6 @@ fn each_platform_forwards_a_daemon_port_as_it_declares() {
         let log = scratch.log();
         let tools = standin::read(&scratch.path("tools.log"));
         let at = format!("{platform:?}: {outcome:?}\n{log}");
-        if let Some(reason) = disabled_reason(platform.name()) {
-            let error = outcome.unwrap_err();
-            assert_eq!(error.code, Code::Unsupported);
-            assert_eq!(error.message, reason);
-            assert!(log.is_empty());
-            continue;
-        }
         match daemon_port(&spec) {
             DaemonPort::Shared => {
                 let shared = Forward {

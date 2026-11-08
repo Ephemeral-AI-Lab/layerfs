@@ -14,6 +14,11 @@ async function main(): Promise<void> {
   await lfs.project.list("shop", { page_size: 10, page_pos: 2n });
   await lfs.branch.fork("shop/api", "agent", "main", "abc");
   await lfs.branch.fork("shop/api", "agent", "main", null);
+  await lfs.branch.commits("shop/api", "agent", { page: 1, page_size: 50, at_commit: "saved-id" });
+  await lfs.branch.get_commit("shop/api", "main", "layer-id");
+  await lfs.branch.diff("shop/api", "main", "agent", { from_commit: "layer-id", to_commit: "saved-id", include_attribution: true, page: 1 });
+  await lfs.file.revision("shop/api", "agent", "/README.md", { at_commit: "saved-id", page: 1, page_size: 10 });
+  await lfs.file.diff("shop/api", "main", "/README.md", "agent", "/README.md", { include_attribution: true, allow_missing: true, page: 1 });
   const options: FileReadOptions = { start_line: 2n, end_line: 5 };
   await lfs.file.read("shop/api", "main", "/README.md", null, options);
   await lfs.file.read("shop/api", "main", "/README.md", "commit-id", { start_line: 1 });
@@ -23,13 +28,18 @@ async function main(): Promise<void> {
   await lfs.file.write("shop/api", "agent", "/a.txt", "text");
   await lfs.file.apply("shop/api", "agent", [{ op: "write", path: "/a", content: new Uint8Array([0, 255]) }], { message: "m" });
   await lfs.workspace.exec("ws", "ls", { stream: true, stdout: (bytes) => process.stdout.write(bytes), stderr: (bytes) => void bytes });
-  await lfs.machine.create("vm", "lima", { cpus: 2, memory: "8G", disk: 8589934592n, nested: true });
+  await lfs.machine.create("vm", "lima", { cpus: 2, memory: "8G", disk: 8589934592n });
   await lfs.backup.create("shop", "bucket", "file", { on_progress: () => {} });
+  const exported: Result = await lfs.project.export("shop/api", "/exports/api", {
+    branch: "main", on_progress: (p) => progress.push(p),
+  });
+  await lfs.project.export("shop/api", "/exports/api-default");
+  const cancelled: Result = await lfs.workspace.exec_cancel("ws", "exec-0123456789abcdef", { grace_ms: 1_000 });
   const report = await doctor({ home: "/tmp/home" });
   const worst: string | undefined = report.findings[0]?.severity;
   const closed: number = close();
   const first = table[0];
-  void [page, worst, closed, first.family, progress];
+  void [page, worst, closed, first.family, progress, exported, cancelled];
   try {
     await lfs.store.list();
   } catch (error) {
@@ -57,3 +67,7 @@ void lfs.nothing;
 void lfs.machine.create("vm", "lima", { memory: true });
 // @ts-expect-error a scope needs its project and folder
 void client({ scope: { folder: "/web" } });
+// @ts-expect-error export has no commit option
+void lfs.project.export("shop/api", "/exports/api", { commit: "main" });
+// @ts-expect-error a cancel grace is a whole number
+void lfs.workspace.exec_cancel("ws", "exec-1", { grace_ms: "5s" });

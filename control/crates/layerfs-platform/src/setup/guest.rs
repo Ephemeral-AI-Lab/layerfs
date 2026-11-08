@@ -3,7 +3,6 @@
 //! (a `tar` stream in, `cat` out), never buffered whole.
 use super::tool::{self, shell_escape, Output};
 use crate::error::{Code, MachineError};
-use crate::platforms::firecracker::FIRECRACKER_GUEST;
 use crate::spec::Tools;
 use std::fs::OpenOptions;
 use std::os::unix::fs::OpenOptionsExt;
@@ -21,12 +20,6 @@ pub(crate) enum Guest {
     Lima { dir: PathBuf, vm: String },
     /// `container exec`.
     AppleContainer { vm: String },
-    /// Through its Lima host, then ssh from there to the microVM.
-    Firecracker {
-        host: Box<Guest>,
-        root: String,
-        vm: String,
-    },
     /// `docker exec` in the docker machine's worker container (macOS, Linux).
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     Docker { socket: PathBuf, container: String },
@@ -62,12 +55,6 @@ impl Guest {
                 }
                 c.arg(vm).args(argv);
                 c
-            }
-            Self::Firecracker { host, root, vm } => {
-                let mut inner = vec!["sh", "-c", FIRECRACKER_GUEST, "sh", root, vm];
-                let escaped: Vec<String> = argv.iter().map(|a| shell_escape(a)).collect();
-                inner.extend(escaped.iter().map(String::as_str));
-                return host.command(tools, &inner, stdin);
             }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Docker { socket, container } => {
@@ -149,8 +136,8 @@ impl Guest {
         }
     }
 
-    /// Copies `entry` of the host folder `dir` (or all of it but its top
-    /// folder `skip`) into the guest folder `destination` as one `tar`
+    /// Copies `entry` of the host folder `dir` (or all of it) into the
+    /// guest folder `destination` as one `tar`
     /// stream piped straight into the guest; `COPYFILE_DISABLE` keeps macOS
     /// `tar` from adding `._` files.
     pub fn copy_in(
@@ -158,15 +145,11 @@ impl Guest {
         tools: &Tools,
         dir: &Path,
         entry: Option<&str>,
-        skip: Option<&str>,
         destination: &str,
     ) -> Result<(), MachineError> {
         let what = format!("copying {} into the guest's {destination}", dir.display());
         let mut pack = tool::command(&tool::find(tools, "tar")?, ["-C"]);
         pack.arg(dir);
-        if let Some(skip) = skip {
-            pack.arg(format!("--exclude=./{skip}"));
-        }
         pack.args(["-cf", "-", entry.unwrap_or(".")])
             .env("COPYFILE_DISABLE", "1")
             .stdin(Stdio::null())

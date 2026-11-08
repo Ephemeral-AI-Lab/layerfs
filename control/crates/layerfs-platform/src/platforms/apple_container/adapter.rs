@@ -42,6 +42,9 @@ impl Adapter for AppleContainer {
     fn stop(&self, spec: &Spec) -> Result<(), MachineError> {
         stop(spec)
     }
+    fn provider_state(&self, spec: &Spec) -> Result<crate::setup::State, MachineError> {
+        super::observe::observe(spec)
+    }
     fn status(&self, spec: &Spec) -> Result<Status, MachineError> {
         status(spec)
     }

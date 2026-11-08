@@ -19,6 +19,7 @@ The one global Store: SQLite and PostgreSQL backends side by side, one writer, s
 
 | Topic | What it covers |
 | --- | --- |
+| [Diagnostics](diagnostics.md) | Read-only integrity, connection, coverage and cancellation semantics. |
 | [Lifecycle](lifecycle.md) | Selecting, opening and sealing a Store. |
 | [Backends](backends.md) | The backend seam shared by SQLite and PostgreSQL. |
 | [SQLite](sqlite.md) | The SQLite backend. |

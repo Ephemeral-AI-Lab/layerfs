@@ -1,4 +1,4 @@
-//! A machine record naming a platform removed in 2.0 (`ssh`,
+//! A machine record naming a platform removed in 2.0 (`firecracker`, `ssh`,
 //! `microsandbox`), left by an older home: `machine.list` and `machine.get`
 //! still answer and say why it is gone, every other call on it is refused
 //! `Unsupported` with that reason, and `machine.remove` forgets the record
@@ -72,14 +72,18 @@ fn a_removed_platform_is_shown_refused_and_forgotten() {
             "microsandbox",
             ("vm_name", t("lfs-0123abcd-old-msb")),
         ),
+        ("old-fc", "firecracker", ("host", t("dev"))),
     ];
     for (name, platform, extra) in &machines {
-        let record = SdkValue::map([
+        let mut record = SdkValue::map([
             ("name", t(name)),
             ("platform", t(platform)),
             ("state", t("running")),
             extra.clone(),
         ]);
+        if *platform == "firecracker" {
+            record = layerfs_api::home::with_field(record, "vm_name", t("lfs-0123abcd-old-fc"));
+        }
         write_record(&paths::machine_record(&home, name), &record).unwrap();
     }
 
@@ -142,6 +146,7 @@ fn a_removed_platform_is_shown_refused_and_forgotten() {
         assert!(note.contains(reason), "{note}");
         let left = match *platform {
             "ssh" => "nothing on its host was touched",
+            "firecracker" => "its microVM lfs-0123abcd-old-fc was not touched: its folder /layerfs/data/firecracker/vms/lfs-0123abcd-old-fc and data disk /layerfs/data/firecracker/disks/lfs-0123abcd-old-fc.ext4 stay in Lima machine dev",
             _ => "`msb remove --force lfs-0123abcd-old-msb` and `msb volume remove lfs-0123abcd-old-msb-data`",
         };
         assert!(note.contains(left), "{note}");

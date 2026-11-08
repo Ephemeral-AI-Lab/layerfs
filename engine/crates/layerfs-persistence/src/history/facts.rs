@@ -179,3 +179,93 @@ impl HistoryProvider {
         Ok(())
     }
 }
+
+/// Validates persisted facts with bounded scratch instead of allocating their
+/// total text/decision count. LWW details and units are outside Commit identity.
+/// The owning format stays here; diagnostics supply a snapshot-bound reader.
+pub(crate) fn validate_stream(reader: &mut dyn std::io::Read) -> HistoryResult<()> {
+    use std::io::Read;
+    fn exact(reader: &mut dyn Read, bytes: &mut [u8]) -> HistoryResult<()> {
+        reader
+            .read_exact(bytes)
+            .map_err(|_| HistoryError::Integrity("history fact extent/read"))
+    }
+    fn number(reader: &mut dyn Read) -> HistoryResult<u32> {
+        let mut bytes = [0; 4];
+        exact(reader, &mut bytes)?;
+        Ok(u32::from_be_bytes(bytes))
+    }
+    fn text(reader: &mut dyn Read, length: u32) -> HistoryResult<()> {
+        let mut left = length as u64;
+        let mut pending = Vec::with_capacity(8196);
+        let mut bytes = [0; 8192];
+        while left != 0 {
+            let size = left.min(bytes.len() as u64) as usize;
+            exact(reader, &mut bytes[..size])?;
+            left -= size as u64;
+            pending.extend_from_slice(&bytes[..size]);
+            match std::str::from_utf8(&pending) {
+                Ok(_) => pending.clear(),
+                Err(error) => {
+                    if error.error_len().is_some() {
+                        return Err(HistoryError::Integrity("history fact UTF-8"));
+                    }
+                    let first = error.valid_up_to();
+                    pending.drain(..first);
+                }
+            }
+        }
+        if !pending.is_empty() {
+            return Err(HistoryError::Integrity("history fact UTF-8"));
+        }
+        Ok(())
+    }
+    loop {
+        let mut prefix = [0; 4];
+        let mut filled = 0;
+        while filled < 4 {
+            let n = reader
+                .read(&mut prefix[filled..])
+                .map_err(|_| HistoryError::Integrity("history fact read"))?;
+            if n == 0 {
+                if filled == 0 {
+                    return Ok(());
+                }
+                return Err(HistoryError::Integrity("history fact length"));
+            }
+            filled += n;
+        }
+        if prefix == UNITS {
+            let count = number(reader)?;
+            if count == 0 {
+                return Err(HistoryError::Integrity("history fact units"));
+            }
+            for _ in 0..count {
+                let len = number(reader)?;
+                text(reader, len)?;
+                let patterns = number(reader)?;
+                for _ in 0..patterns {
+                    let len = number(reader)?;
+                    text(reader, len)?;
+                }
+            }
+            let mut byte = [0];
+            if reader
+                .read(&mut byte)
+                .map_err(|_| HistoryError::Integrity("history fact read"))?
+                != 0
+            {
+                return Err(HistoryError::Integrity("history fact units"));
+            }
+            return Ok(());
+        }
+        text(reader, u32::from_be_bytes(prefix))?;
+        let len = number(reader)?;
+        text(reader, len)?;
+        let mut flags = [0];
+        exact(reader, &mut flags)?;
+        if flags[0] > 3 {
+            return Err(HistoryError::Integrity("history fact flags"));
+        }
+    }
+}

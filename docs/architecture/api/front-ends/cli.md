@@ -21,7 +21,7 @@ layerfs <family> <call> <positionals...> [--options] [switches]
    +-- --version ------------------> "layerfs <version>"  (exit 0)
    +-- worker (alone) -------------> worker::main          (outside table)
    +-- import-env (alone) ---------> home::import_env      (outside table)
-   +-- doctor [--text] ------------> layerfs_api::doctor   (outside table)
+   +-- doctor [target ...] [--text] -> layerfs_api::doctor / doctor_with_options (outside table)
    +-- <family> <call> ------------> layerfs_api::find("family.call")
                                         |
                                         v
@@ -49,7 +49,7 @@ named on the command line, because the calls take text.
 | a word not starting with `-` (or `-` itself) | the next positional, in table order | count must lie between the required and the total number of on-line positionals, else exit 2 |
 | `--` | every later word is a positional | |
 | `--<name> <value>` or `--<name>=<value>` | option `<name>` with `-` read as `_` (`--start-line` → `start_line`) | parsed by the option's `Kind`: `Int` a whole number, `Bool` `true`/`false`, `Json` JSON text, `Size` a number or text such as `8G`, the rest text |
-| `--<bool-option>` alone | `true` | `--nested=false` gives false |
+| `--<bool-option>` alone | `true` | `--force=false` gives false |
 | `--<text-option>-from <file>` | option `<name>` read from the file | only for an optional `Text` option |
 | `-m <text>` | the `message` option | exit 2 when the call has none |
 | content or JSON positional (`file write` content, `file apply` changes) | read from stdin, or from `--from <file>` | not counted on the line; JSON must be UTF-8 JSON |
@@ -87,7 +87,7 @@ layerfs help                  banner (TTY only), usage line, every family
 layerfs help <family>         each call's usage line and help text
 layerfs help <family> <call>  one call
 layerfs <family> <call> -h    the same as the line above
-layerfs help doctor           doctor's usage line and one line of help
+layerfs help doctor           legacy usage and the explicit target commands
 layerfs doctor -h             the same (also --help); exit 0
 ```
 
@@ -113,7 +113,14 @@ only when stdout is a terminal; `NO_COLOR` turns its colours off.
 | refusal | `{"code","message","detail"}` on stderr | 125 | `refusal` |
 | wrong command line | `layerfs: <message>` on stderr | 2 | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) `wrong` |
 | stdout cannot be written while printing (reader gone, disk full) | nothing more; the call was already made and its effects stay | 125 | `print`; help and `--version` print the same way |
-| `doctor` | the report as JSON, or with `--text` a count line and one finding per entry with its `fix` | 0 whatever it finds, by design (`ok` says whether the home is clean) | `findings` |
+| `doctor` | the legacy report as JSON, or with `--text` findings and fixes; explicit target commands also show outcomes and incomplete coverage | 0 for a produced report, including faults; usage 2, refusal 125 | `findings`, explicit `checks` and `complete` |
+
+In `--text` mode, scalar fields defined by the call table or docs as epoch-millisecond timestamps (`created`, `modified`, `at`) are rendered as `YYYY-MM-DD HH:MM:SS` UTC. Fields defined as byte counts (`size`, `bytes`, `part_size`, `memory`, `disk`, `free`, `free_disk`, `wal_bytes`, `incoming_bytes`, `stdout_bytes`, `stderr_bytes`, `logical`, `new_canonical`, `new_stored`, `new_metadata`) are rendered in human units (B, KiB, MiB, GiB, TiB, PiB). When stdout is a terminal, table headers are displayed in bold colour (reset afterwards, respecting `NO_COLOR`). Help section titles (`USAGE`, `COMMANDS`) are similarly highlighted on terminals.
+
+When a user makes a mistake on the command line:
+- An unknown call suggests the closest existing call in that family (or closest family) when one is close (e.g. `did you mean layerfs store get?`).
+- An unknown option lists the options accepted by that call.
+The existing error message remains the first line, and exit code remains 2.
 
 A stdout that is closed before the process starts (`>&-`) is not an error:
 the Rust runtime reopens it on `/dev/null`, so the call is made, nothing is
@@ -134,6 +141,8 @@ library event                  --progress      --stream       neither
 {stream:"stdout", bytes}    -> (dropped)        stdout        (dropped)
 {stream:"stderr", bytes}    -> (dropped)        stderr        (dropped)
 ```
+
+With `--progress`, if stderr is connected to an interactive terminal, the command prints one updating in-place status line displaying the phase, done/total progress, and transfer rate, clearing it upon completion. When stderr is not a terminal (e.g. piped to another command), it prints raw JSON lines byte-for-byte. If a script needs JSON lines on a terminal, setting the environment variable `LAYERFS_PROGRESS_JSON=1` forces JSON lines output on stderr even on a TTY.
 
 With `--stream` the result JSON is not printed. The exit code is the
 result's `exit_code` when it fits 0 to 255, 1 when it does not, 0 when the

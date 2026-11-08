@@ -27,8 +27,8 @@ pub(crate) fn read(
     let found = tx.typed(
         &format!(
             "WITH d AS (SELECT count(*) AS n, coalesce(sum(length),0) AS total FROM {s}.pack WHERE pack_id = ANY($1::bigint[])) \
-             SELECT p.pack_id,p.domain,p.digest,p.length,\
-             CASE WHEN d.n = cardinality($1::bigint[]) AND (d.total <= $2::bigint OR (d.n = 1 AND d.total <= $3::bigint)) THEN p.body END \
+             SELECT p.pack_id,p.domain,CASE WHEN octet_length(p.digest)=32 THEN p.digest END,p.length,\
+             CASE WHEN d.n = cardinality($1::bigint[]) AND (d.total <= $2::bigint OR (d.n = 1 AND d.total <= $3::bigint)) AND octet_length(p.body)=p.length AND p.length BETWEEN 32 AND $3::bigint THEN p.body END \
              FROM {s}.pack p, d WHERE p.pack_id = ANY($1::bigint[]) ORDER BY p.pack_id",
             s = tx.schema
         ),
@@ -105,7 +105,7 @@ fn read_with<T>(
     }
     let found = tx.typed(
         &format!(
-            "SELECT pack_id,domain,digest,length,substring(body FROM 1 FOR $2) FROM {}.pack WHERE pack_id=$1",
+            "SELECT pack_id,domain,CASE WHEN octet_length(digest)=32 THEN digest END,length,CASE WHEN octet_length(body)=length THEN substring(body FROM 1 FOR $2) END FROM {}.pack WHERE pack_id=$1",
             tx.schema
         ),
         &[&id, &HEAD_BYTES],

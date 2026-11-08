@@ -6,7 +6,6 @@ use layerfs_platform::{
     platforms, sandbox_allowed, support, support_json, Backend, CallSite, HostOs, KernelRoute,
     Platform, StoreKind,
 };
-use layerfs_sandbox_backend::platform_policy::disabled_reason;
 use std::path::PathBuf;
 
 fn committed() -> PathBuf {
@@ -46,8 +45,7 @@ fn every_refusal_is_the_rows_reason() {
 
 /// #535 §7.3: PostgreSQL Sandboxes run on native (macOS, and Linux
 /// namespaces with no bind; phase 5a), docker, and since the G7 live
-/// receipts on lima, apple-container and firecracker, on every host each is
-/// on.
+/// receipts on lima and apple-container, on every host each is on.
 #[test]
 fn postgresql_sandboxes_run_on_every_platform_with_a_backend() {
     let allowed = |p, h| sandbox_allowed(p, h, StoreKind::Postgresql);
@@ -55,16 +53,8 @@ fn postgresql_sandboxes_run_on_every_platform_with_a_backend() {
         assert_eq!(allowed(Platform::Native, host), Ok(()));
         assert_eq!(allowed(Platform::Docker, host), Ok(()));
     }
-    for platform in [
-        Platform::Lima,
-        Platform::AppleContainer,
-        Platform::Firecracker,
-    ] {
-        assert_eq!(
-            allowed(platform, HostOs::Macos),
-            disabled_reason(platform.name()).map_or(Ok(()), Err),
-            "{platform:?}"
-        );
+    for platform in [Platform::Lima, Platform::AppleContainer] {
+        assert_eq!(allowed(platform, HostOs::Macos), Ok(()), "{platform:?}");
     }
     assert_eq!(
         allowed(Platform::Native, HostOs::Windows),
@@ -80,11 +70,7 @@ fn postgresql_sandboxes_run_on_every_platform_with_a_backend() {
     );
     for platform in Platform::ALL {
         let sqlite = sandbox_allowed(platform, HostOs::Macos, StoreKind::Sqlite);
-        assert_eq!(
-            sqlite,
-            disabled_reason(platform.name()).map_or(Ok(()), Err),
-            "{platform:?}"
-        );
+        assert_eq!(sqlite, Ok(()), "{platform:?}");
     }
 }
 

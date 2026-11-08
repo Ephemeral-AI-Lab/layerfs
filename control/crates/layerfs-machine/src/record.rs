@@ -2,11 +2,10 @@
 //! platform, size, images, lasting guest state, the state a create, start
 //! or stop left, the `op` of a create or remove in flight (#536 §7.1), and
 //! the built-in machines' settings. A record may still name a platform
-//! removed in 2.0 (`microsandbox`, `ssh`): it is shown with that reason,
-//! every other call on it is refused `Unsupported`, and `machine remove`
-//! forgets it. Read
-//! once and kept whole, so `machine.get` and `machine.list` show what they
-//! showed before. Built without the `machine` feature too (the guest
+//! removed in 2.0 (`firecracker`, `microsandbox`, `ssh`): it is shown with
+//! that reason, every other call on it is refused `Unsupported`, and
+//! `machine remove` forgets it. Read once and kept whole, so `machine.get`
+//! and `machine.list` show what they showed before. Built without the `machine` feature too (the guest
 //! worker reads its own `native` and `docker` records); the platform and
 //! the summary need the adapters.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -171,16 +170,6 @@ impl MachineRecord {
         self.fields.get_text("daemon")
     }
 
-    /// A Firecracker machine's Lima host.
-    pub fn host(&self) -> Option<&str> {
-        self.fields.get_text("host")
-    }
-
-    /// Whether a Lima machine was made `--nested`.
-    pub fn nested(&self) -> bool {
-        matches!(self.fields.get("nested"), Some(SdkValue::Bool(true)))
-    }
-
     /// The record with `state` and the `error` that left it there.
     pub fn failed_as(self, state: &str, error: &str) -> Self {
         let record = self.with("state", SdkValue::text(state));
@@ -231,7 +220,7 @@ impl MachineRecord {
     }
 
     /// Why the record's platform is gone, when it names one removed in 2.0
-    /// (`microsandbox`, `ssh`).
+    /// (`firecracker`, `microsandbox`, `ssh`).
     pub fn removed(&self) -> Option<&'static str> {
         self.platform_name()
             .and_then(layerfs_platform::platform_policy::removed_reason)
@@ -265,8 +254,8 @@ impl MachineRecord {
     /// The machine as `machine.get`, each `machine.list` item, `start`,
     /// `stop`, `update` and `create` show it: name, platform, backend,
     /// `supports`, state, size, Stores and Sandboxes, then the settings it
-    /// has (`image`, `host`, `nested`, `docker`, `wsl`, `error`, and a
-    /// removed platform's `ssh` or `vm_name`). A machine of a removed
+    /// has (`image`, `docker`, `wsl`, `error`, and a removed platform's
+    /// `ssh`, `host` or `vm_name`). A machine of a removed
     /// platform has backend `-`, supports nothing, state `unsupported` and
     /// the removal as its `error`.
     pub fn to_sdk(
@@ -312,9 +301,7 @@ impl MachineRecord {
             ("stores", list(&derived.stores)),
             ("sandboxes", list(&derived.sandboxes)),
         ];
-        for extra in [
-            "image", "host", "nested", "docker", "wsl", "daemon", "error",
-        ] {
+        for extra in ["image", "docker", "wsl", "daemon", "error"] {
             if let Some(value) = self
                 .field(extra)
                 .filter(|_| extra != "error" || error.is_none())
@@ -326,7 +313,7 @@ impl MachineRecord {
             fields.push(("error", SdkValue::Text(error)));
         }
         if self.removed().is_some() {
-            for extra in ["ssh", "vm_name"] {
+            for extra in ["ssh", "host", "vm_name"] {
                 if let Some(value) = self.field(extra) {
                     fields.push((extra, value.clone()));
                 }

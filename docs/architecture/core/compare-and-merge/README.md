@@ -88,7 +88,7 @@ still holds a complete marker block. Details are in [Merge](merge.md).
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
 | Largest file compared or merged line by line | `MAXIMUM_TEXT_BYTES` = 1 MiB; larger is binary | [`compare/text.rs`](../../../../core/crates/layerfs-content/src/compare/text.rs) |
-| Largest line-diff table | `MAXIMUM_DIFF_CELLS` = 2^20 cells; past it the middle is one removed-then-added block | [`compare/text.rs`](../../../../core/crates/layerfs-content/src/compare/text.rs) |
+| Largest line-diff table | `MAXIMUM_DIFF_CELLS` = 2^20 cells; past it the middle is matched on the lines that occur once on each side, its gaps' tables share that budget, and a gap past it is one removed-then-added block | [`compare/text.rs`](../../../../core/crates/layerfs-content/src/compare/text.rs) |
 | Changed inodes a planned walk accepts | `MAXIMUM_CHANGED` = 65,536; past it `Plan::make` answers `None` and the caller walks the full trees | [`compare/changes.rs`](../../../../core/crates/layerfs-content/src/compare/changes.rs) |
 | Objects one comparison memo holds | `MEMO_PAGES` = 256, least recently used evicted | [`compare/memo.rs`](../../../../core/crates/layerfs-content/src/compare/memo.rs) |
 | Naming from hints | depth 4,096 components, 1,024 paths per inode; past either, breadth-first `locate` names the inode | [`compare/named.rs`](../../../../core/crates/layerfs-content/src/compare/named.rs) |

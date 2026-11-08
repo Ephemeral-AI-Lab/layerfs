@@ -196,11 +196,27 @@ fn run(
     events: &mut dyn FnMut(SdkValue) -> std::result::Result<(), SdkRefusal>,
 ) -> Outcome {
     match op {
-        "worker.ping" => Ok(SdkValue::map([
-            ("kind", SdkValue::text("worker")),
-            ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
-            ("pid", SdkValue::Int(i64::from(std::process::id()))),
-        ])),
+        "worker.ping" => {
+            let mut fields = vec![
+                ("kind", SdkValue::text("worker")),
+                ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
+                ("pid", SdkValue::Int(i64::from(std::process::id()))),
+            ];
+            if args.get("capacity") == Some(&SdkValue::Bool(true)) {
+                let available = layerfs_home::home::filesystem_available(root)
+                    .ok()
+                    .and_then(|bytes| i64::try_from(bytes).ok());
+                fields.push(("free_disk", available.map_or(SdkValue::Null, SdkValue::Int)));
+            }
+            Ok(SdkValue::Map(
+                fields
+                    .into_iter()
+                    .map(|(name, value)| (name.to_owned(), value))
+                    .collect(),
+            ))
+        }
+        "doctor.sandbox" => crate::doctor::diagnose_worker_sandbox(root, args),
+        "store.diagnose" => crate::doctor::diagnose_store_in_worker(root, args, events),
         // one Store call, on the Store file under this worker's root (2.0)
         "store.call" => {
             let call = layerfs_store::call::CallFrame::decode(&args)?;
@@ -220,7 +236,23 @@ fn run(
         // one step of a Store move or remove on this machine
         "store.file" => {
             let frame = layerfs_store::sqlite::transfer::step::StepFrame::decode(&args)?;
-            layerfs_store::sqlite::transfer::steps::run(root, &frame)
+            // a hashing step (snapshot, verify) reports its bytes as events
+            // the caller passes on (#536 §10b); a closed stream fails the
+            // answer's own write once the hash ends
+            layerfs_store::sqlite::transfer::steps::run_observed(
+                root,
+                &frame,
+                &mut |done, total| {
+                    let _ = events(SdkValue::map([(
+                        "progress",
+                        SdkValue::map([
+                            ("phase", SdkValue::text(frame.step.name())),
+                            ("done", SdkValue::Int(done as i64)),
+                            ("total", SdkValue::Int(total as i64)),
+                        ]),
+                    )]));
+                },
+            )
         }
         // a Sandbox or Workspace operation on this machine's own native
         "sandbox.host" => layerfs_sandbox::route::in_worker(

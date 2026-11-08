@@ -14,6 +14,7 @@ pub mod backup;
 pub mod call;
 #[doc(hidden)]
 pub mod calls;
+pub mod diagnostic;
 #[doc(hidden)]
 pub mod identity;
 #[doc(hidden)]

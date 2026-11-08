@@ -11,7 +11,7 @@ a given Commit. It writes metadata only and copies no files.
 | --- | --- |
 | Family | [branch](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/branch/fork.rs`](../../../../../api/crates/layerfs-api/src/branch/fork.rs) |
-| Implemented in | `layerfs_store::calls::branch_fork` → Store method `branch.fork` ([`methods/branch/fork.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/fork.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) `fork`) |
+| Implemented in | `layerfs_store::calls::branch::fork` → Store method `branch.fork` ([`methods/branch/fork.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/fork.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) `fork`) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -38,7 +38,7 @@ layerfs branch fork <store>/<project> <name> <from_branch> [<from_commit>]
 | `project` | Project | `<store>/<project>` | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `name` | Name | a new Branch name; not `main`, not taken | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `from_branch` | Name | the source Branch, or `main` | same |
-| `from_commit` | Name, optional | a 66-hex Commit or Layer id; when given it replaces `from_branch` as the source | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |
+| `from_commit` | Name, optional | a 66-hex Commit or Layer id; when given it replaces `from_branch` as the source | [`calls/branch.rs`](../../../../../control/crates/layerfs-store/src/calls/branch.rs) |
 
 Control sends one `from`: `from_commit` if given, else `from_branch`.
 

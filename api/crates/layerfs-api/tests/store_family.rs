@@ -98,6 +98,10 @@ fn create_list_get_and_status() {
         status.get("file").and_then(|f| f.get("exists")),
         Some(&SdkValue::Bool(true))
     );
+    assert_eq!(
+        status.get("file").and_then(|f| f.get("incoming_bytes")),
+        Some(&SdkValue::Int(0))
+    );
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
 }
@@ -109,7 +113,9 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
     let bytes = std::fs::read(paths::store_file(&home, "shop")).unwrap();
 
     let mut phases = Vec::new();
+    let mut snap = Vec::new();
     let mut sent = Vec::new();
+    let mut verified = Vec::new();
     let args = SdkValue::map([("name", t("shop")), ("machine", t("box"))]);
     let moved = layerfs_api::call(Some(&home), "store.push", args, &mut |event| {
         let progress = event.get("progress").unwrap();
@@ -117,10 +123,13 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
         if phases.last().map(String::as_str) != Some(phase) {
             phases.push(phase.to_owned());
         }
-        // bytes while sending, null in every other phase (#536 §10b)
+        // bytes while hashing (`snapshot`, `verify`) or sending (`send`),
+        // null in every other phase (#536 §10b)
         let (done, total) = (progress.get("done"), progress.get("total"));
         match phase {
+            "snapshot" => snap.push((done.cloned(), total.cloned())),
             "send" => sent.push((done.cloned(), total.cloned())),
+            "verify" => verified.push((done.cloned(), total.cloned())),
             _ => assert_eq!(
                 (done, total),
                 (Some(&SdkValue::Null), Some(&SdkValue::Null))
@@ -134,10 +143,26 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
     );
     let all = SdkValue::Int(bytes.len() as i64);
     assert_eq!(
+        snap,
+        vec![
+            (Some(SdkValue::Null), Some(SdkValue::Null)),
+            (Some(SdkValue::Int(0)), Some(all.clone())),
+            (Some(all.clone()), Some(all.clone())),
+        ]
+    );
+    assert_eq!(
         sent.first(),
         Some(&(Some(SdkValue::Int(0)), Some(all.clone())))
     );
-    assert_eq!(sent.last(), Some(&(Some(all.clone()), Some(all))));
+    assert_eq!(sent.last(), Some(&(Some(all.clone()), Some(all.clone()))));
+    assert_eq!(
+        verified,
+        vec![
+            (Some(SdkValue::Null), Some(SdkValue::Null)),
+            (Some(SdkValue::Int(0)), Some(all.clone())),
+            (Some(all.clone()), Some(all.clone())),
+        ]
+    );
     let heads = moved.get("heads").cloned().unwrap();
     assert!(
         !paths::store_file(&home, "shop").exists(),
@@ -176,7 +201,43 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
     assert_eq!(code, "InvalidInput", "{message}");
     assert!(message.contains("store pull shop"), "{message}");
 
-    let back = call(&home, "store.pull", &[("name", t("shop"))]).unwrap();
+    let mut pull_snap = Vec::new();
+    let mut pull_verified = Vec::new();
+    let back = layerfs_api::call(
+        Some(&home),
+        "store.pull",
+        SdkValue::map([("name", t("shop"))]),
+        &mut |event| {
+            let progress = event.get("progress").unwrap();
+            let phase = progress.get_text("phase").unwrap();
+            let (done, total) = (
+                progress.get("done").cloned(),
+                progress.get("total").cloned(),
+            );
+            match phase {
+                "snapshot" => pull_snap.push((done, total)),
+                "verify" => pull_verified.push((done, total)),
+                _ => {}
+            }
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        pull_snap,
+        vec![
+            (Some(SdkValue::Null), Some(SdkValue::Null)),
+            (Some(SdkValue::Int(0)), Some(all.clone())),
+            (Some(all.clone()), Some(all.clone())),
+        ]
+    );
+    assert_eq!(
+        pull_verified,
+        vec![
+            (Some(SdkValue::Null), Some(SdkValue::Null)),
+            (Some(SdkValue::Int(0)), Some(all.clone())),
+            (Some(all.clone()), Some(all)),
+        ]
+    );
     assert_eq!(back.get_text("from"), Some("box"));
     assert_eq!(back.get_text("to"), Some("native"));
     assert_eq!(back.get("heads"), Some(&heads));
@@ -251,4 +312,161 @@ fn push_and_remove_refuse_a_store_in_use_and_remove_deletes_it() {
     assert!(!paths::store_dir(&home, "shop").exists());
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
+}
+
+/// The frames a killed opener leaves in `file`'s write-ahead log (#12): one
+/// writable session saves an object and the process ends without closing it
+/// (`process::exit` runs no destructor), which is what a `SIGKILL`ed opener
+/// leaves. It runs as a child of the test below, never on its own.
+#[test]
+#[ignore = "child of snapshot_checkpoints_an_unheld_leftover_wal_before_pushing_and_pulling"]
+fn a_killed_opener_leaves_its_log_frames() {
+    let Ok(home) = std::env::var("LAYERFS_TEST_WAL_HOME") else {
+        return;
+    };
+    let Ok(file) = std::env::var("LAYERFS_TEST_WAL_FILE") else {
+        return;
+    };
+    let home = PathBuf::from(home);
+    let record = read_record(&paths::store_record(&home, "shop"))
+        .unwrap()
+        .unwrap();
+    let identity = layerfs_store::identity::identity_of(&record).unwrap();
+    let handles = layerfs_persistence::SqliteHandles::open_writable(
+        layerfs_persistence::PersistenceConfig::sqlite(&file)
+            .with_sqlite_profile(layerfs_persistence::SqlitePersistenceProfile::Disposable),
+        &identity.binding,
+        identity.cursor_key,
+    )
+    .unwrap();
+    save_one_object(&handles);
+    std::process::exit(70);
+}
+
+/// One committed save, whose frames sit in the log until a checkpoint.
+fn save_one_object(handles: &layerfs_persistence::SqliteHandles) {
+    let storage = layerfs_storage::Storage::new(handles.storage.clone()).unwrap();
+    let save = storage.begin_save().unwrap();
+    let policy = storage.policy();
+    let root = layerfs_telemetry::timer::Timing::disabled("construct", |scope| {
+        layerfs_content::construct_bytes(
+            policy.construction(),
+            &policy.construction().capacities(),
+            b"leftover write-ahead log frames",
+            &mut save.sink(),
+            scope.child("content"),
+        )
+    })
+    .0
+    .unwrap()
+    .root;
+    save.finish().unwrap();
+    let _ = root;
+}
+
+/// Runs the child above on Store file `file`, which leaves a killed opener's
+/// non-empty write-ahead log beside it.
+fn kill_an_opener(home: &Path, file: &Path) {
+    let child = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "a_killed_opener_leaves_its_log_frames",
+            "--ignored",
+            "--nocapture",
+        ])
+        .env("LAYERFS_TEST_WAL_HOME", home)
+        .env("LAYERFS_TEST_WAL_FILE", file)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    assert_eq!(
+        child.code(),
+        Some(70),
+        "the child did not leave its log unclosed"
+    );
+}
+
+fn wal_bytes(file: &Path) -> u64 {
+    std::fs::metadata(file.with_file_name("store.sqlite-wal")).map_or(0, |meta| meta.len())
+}
+
+#[test]
+fn snapshot_checkpoints_an_unheld_leftover_wal_before_pushing_and_pulling() {
+    use std::os::unix::fs::PermissionsExt;
+    let (home, root) = home_with_box();
+    std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
+    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let folder = tempdir("folder");
+    std::fs::write(folder.join("README.md"), b"hello\n").unwrap();
+    call(&home, "store.create", &[("name", t("shop"))]).unwrap();
+    call(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/api")),
+            ("folder", t(&folder.display().to_string())),
+        ],
+    )
+    .unwrap();
+    call(
+        &home,
+        "branch.fork",
+        &[
+            ("project", t("shop/api")),
+            ("name", t("dev")),
+            ("from_branch", t("main")),
+        ],
+    )
+    .unwrap();
+    call(
+        &home,
+        "file.write",
+        &[
+            ("project", t("shop/api")),
+            ("branch", t("dev")),
+            ("path", t("/README.md")),
+            ("content", t("from-wal\n")),
+            ("message", t("wal commit")),
+        ],
+    )
+    .unwrap();
+    layerfs_api::close_idle(std::time::Duration::ZERO);
+    let store_path = paths::store_file(&home, "shop");
+    assert_eq!(wal_bytes(&store_path), 0, "a closed Store keeps no log");
+
+    // a killed opener's log on native: `store.push` folds it in and sends
+    kill_an_opener(&home, &store_path);
+    assert!(wal_bytes(&store_path) > 0, "the killed opener kept its log");
+    let pushed = call(
+        &home,
+        "store.push",
+        &[("name", t("shop")), ("machine", t("box"))],
+    )
+    .unwrap();
+    assert_eq!(pushed.get_text("to"), Some("box"));
+    assert_eq!(wal_bytes(&store_path), 0, "the push folded the log in");
+
+    // and on the machine: `store.pull` folds it in there before reading
+    let remote = paths::store_file(&root, "shop");
+    kill_an_opener(&home, &remote);
+    assert!(wal_bytes(&remote) > 0, "the killed opener kept its log");
+    let pulled = call(&home, "store.pull", &[("name", t("shop"))]).unwrap();
+    assert_eq!(pulled.get_text("to"), Some("native"));
+    let read = call(
+        &home,
+        "file.read",
+        &[
+            ("project", t("shop/api")),
+            ("branch", t("dev")),
+            ("path", t("/README.md")),
+        ],
+    )
+    .unwrap();
+    assert_eq!(read.get_text("text"), Some("from-wal\n"));
+
+    layerfs_api::close_idle(std::time::Duration::ZERO);
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(folder);
 }

@@ -138,3 +138,5 @@ pub mod sqlite {
         .map_err(|_| HistoryError::Integrity("persistence open"))
     }
 }
+
+pub mod doctor;

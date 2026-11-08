@@ -4,7 +4,7 @@ use super::{registry::Entry, Service};
 use crate::operator::{self, WorkspaceView};
 use layerfs_bridge::control::{Activity, MountPhase, Reply, SdkCall, SdkRefusal, SdkValue};
 
-fn activity(value: Activity) -> &'static str {
+pub(super) fn activity(value: Activity) -> &'static str {
     match value {
         Activity::Idle => "idle",
         Activity::Committing => "committing",

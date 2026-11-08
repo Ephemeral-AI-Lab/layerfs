@@ -59,14 +59,14 @@ VM platforms use:
    failure, nothing under the name:  remove the disk this create made
    failure, VM exists:               .kept() -> vm_exists = true
  boot, attach /layerfs/data
- worker::bring_up(spec, guest, bundle, port, forward_pid)
+ worker::bring_up(spec, guest, bundle, port)
    prepare (folders, user namespaces off) -> install (bundle, image)
    -> launch (secret, worker on worker_bind:7070) -> ready (60 s)
  Running { endpoint, lasting: Lasting { port: Some(port), .. } }
 ```
 
 Outside this crate, `layerfs-control` holds a few per-platform cases (for
-example `machine/endpoint.rs` for `firecracker` and `docker`,
+example `machine/endpoint.rs` for `docker`,
 `sandbox/route.rs` for `apple-container`).
 A new option also needs its entry in the call table
 ([`layerfs-api/src/machine/create.rs`](../../../../api/crates/layerfs-api/src/machine/create.rs))
@@ -100,4 +100,4 @@ The commands were not run while writing this page.
 
 ---
 
-← [Machines: Firecracker](platforms/firecracker.md) · [Up: Machines](README.md) · [Control: Network](../network/README.md) →
+← [Machines: Lima](platforms/lima.md) · [Up: Machines](README.md) · [Control: Network](../network/README.md) →

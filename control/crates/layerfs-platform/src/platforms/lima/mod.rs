@@ -14,8 +14,6 @@ mod template;
 pub(crate) use adapter::ADAPTER;
 #[cfg(unix)]
 pub(crate) use create::{create, remove};
-#[cfg(unix)]
-pub(crate) use observe::{daemon_forward, guest, status, tunnel};
-#[cfg(unix)]
+pub(crate) use observe::{daemon_forward, guest, status};
 pub(crate) use power::{start, stop};
 pub(crate) use profile::PROFILE;

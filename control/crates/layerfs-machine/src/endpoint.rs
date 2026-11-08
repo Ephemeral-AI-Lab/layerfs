@@ -3,8 +3,7 @@
 //! not answer, starts the machine and its worker, waits until it is ready
 //! (a readiness wait, not a retry) and replaces `worker.json`
 //! ([`running`]). Two processes starting the same machine take turns on its
-//! `start.lock`. A Firecracker machine's Lima host is started first by the
-//! same call.
+//! `start.lock`.
 use super::record::MachineRecord;
 use super::spec::{self as record, machine_of, refusal, save_running};
 use crate::worker::Endpoint;
@@ -21,16 +20,12 @@ const START_WAIT: Duration = Duration::from_secs(600);
 pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> {
     let record = machine_of(home, name)?;
     let kind = record.platform()?;
-    if let Some(reason) = layerfs_platform::platform_policy::disabled_reason(kind.name()) {
-        return Err(layerfs_home::outcome::refused("Unsupported", reason));
-    }
     if kind.route(HostOs::current()) == Route::InProcess {
         return Ok(None);
     }
     if let Some(endpoint) = answering(home, name)? {
         return Ok(Some(endpoint));
     }
-    host_first(home, &record)?;
     let _start = start_lock(home, name)?;
     // another process may have started it, or removed it, meanwhile
     let record = machine_of(home, name)?;
@@ -38,16 +33,6 @@ pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> 
         return Ok(Some(endpoint));
     }
     start(home, name, &record)
-}
-
-/// A Firecracker machine's Lima host, started first if it does not answer.
-fn host_first(home: &Path, record: &MachineRecord) -> Result<(), SdkRefusal> {
-    if record.platform()? == Platform::Firecracker {
-        if let Some(host) = record.host() {
-            running(home, host)?;
-        }
-    }
-    Ok(())
 }
 
 /// Starts machine `name` (its `record`) and records its worker; under its

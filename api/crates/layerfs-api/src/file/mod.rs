@@ -1,4 +1,4 @@
-//! The `file` family: 14 calls, one file each (O13: was fs).
+//! The `file` family: 15 calls, one file each (O13: was fs).
 mod apply;
 mod blame;
 mod cp;
@@ -10,6 +10,7 @@ mod list;
 mod mkdir;
 mod mv;
 mod read;
+mod revision;
 mod rm;
 mod stat;
 mod write;
@@ -24,6 +25,7 @@ pub(crate) fn calls() -> Calls {
         list::CALL,
         glob::CALL,
         grep::CALL,
+        revision::CALL,
         blame::CALL,
         diff::CALL,
         write::CALL,

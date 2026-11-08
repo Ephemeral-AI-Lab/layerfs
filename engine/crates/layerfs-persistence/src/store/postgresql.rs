@@ -84,6 +84,68 @@ impl PostgresHandles {
         Self::open(selection, binding, cursor_key, false)
     }
 
+    /// Opens an independently owned observational connection whose DNS,
+    /// TCP/TLS/authentication and every statement honor the absolute deadline.
+    pub fn open_diagnostic(
+        selection: &PostgresSelection,
+        binding: &[u8],
+        cursor_key: [u8; 32],
+        deadline: Option<std::time::Instant>,
+        resolver: &mut crate::diagnostic::Resolver<'_>,
+    ) -> Result<Self, PersistenceError> {
+        let admission = deadline
+            .unwrap_or_else(|| std::time::Instant::now() + std::time::Duration::from_secs(10));
+        Self::open_diagnostic_admitted(
+            selection, binding, cursor_key, deadline, admission, resolver, None,
+        )
+    }
+
+    /// Shares a caller's absolute admission budget across independent read-only
+    /// preflight and pinned-open sessions. Logical audit stays unlimited when
+    /// `deadline` is None after bounded schema/identity admission finishes.
+    pub fn open_diagnostic_admitted(
+        selection: &PostgresSelection,
+        binding: &[u8],
+        cursor_key: [u8; 32],
+        deadline: Option<std::time::Instant>,
+        admission: std::time::Instant,
+        resolver: &mut crate::diagnostic::Resolver<'_>,
+        cancelled: Option<&std::sync::atomic::AtomicBool>,
+    ) -> Result<Self, PersistenceError> {
+        let session = Arc::new(Session::connect_diagnostic_admitted(
+            selection, deadline, admission, resolver, cancelled,
+        )?);
+        session
+            .state
+            .lock()
+            .map_err(|_| PersistenceError::Uncertain)?
+            .client
+            .set_diagnostic_deadline(Some(
+                deadline.map_or(admission, |total| total.min(admission)),
+            ));
+        let target = session
+            .state
+            .lock()
+            .map_err(|_| PersistenceError::Uncertain)?
+            .client
+            .cancellation();
+        let (_, handles) = crate::diagnostic::with_cancellation(cancelled, target, || {
+            Self::validated(
+                session.clone(),
+                PostgresCheck::Full,
+                Some(binding),
+                cursor_key,
+            )
+        })??;
+        session
+            .state
+            .lock()
+            .map_err(|_| PersistenceError::Uncertain)?
+            .client
+            .set_diagnostic_deadline(deadline);
+        Ok(handles)
+    }
+
     /// Opens one read-only session under the binding the schema records,
     /// returned for the caller to compare with its own (a Sandbox's reach
     /// check, #65): `selection.check` checks everything else, as an open

@@ -39,7 +39,7 @@ pub(crate) fn read(
     out: &mut Vec<InodeValueRow>,
 ) -> Result<(), PersistenceError> {
     let rows = tx.query(
-        "SELECT b.first_ordinal,b.last_ordinal,b.body FROM inode_value_block b WHERE b.first_ordinal IN (\
+        "SELECT b.first_ordinal,b.last_ordinal,CASE WHEN (CASE WHEN typeof(b.body)='blob' THEN length(CAST(b.body AS BLOB)) ELSE NULL END)<=4000 THEN b.body END FROM inode_value_block b WHERE b.first_ordinal IN (\
          SELECT x.first_ordinal FROM json_each(?1) r JOIN inode_value_block x \
          ON x.first_ordinal BETWEEN coalesce((SELECT max(y.first_ordinal) FROM inode_value_block y \
          WHERE y.first_ordinal<=json_extract(r.value,'$[0]')),0) AND json_extract(r.value,'$[1]')) \

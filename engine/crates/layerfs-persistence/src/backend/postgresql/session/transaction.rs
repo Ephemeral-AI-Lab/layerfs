@@ -38,6 +38,7 @@ pub(crate) enum Mode {
 pub(crate) struct Transaction<'a> {
     state: RefCell<&'a mut State>,
     uncertain: Cell<bool>,
+    diagnostic: bool,
     /// `Mode::Statement`: whether its one statement was already sent.
     single: Option<Cell<bool>>,
     /// `Mode::Publish` outside a held lane: the lane row is still to lock.
@@ -47,9 +48,42 @@ pub(crate) struct Transaction<'a> {
 }
 
 impl Transaction<'_> {
-    fn checked<T>(&self, result: Result<T, postgres::Error>) -> Result<T, BackendError> {
+    /// Online engine check preserving the server's concrete corruption verdict.
+    /// Other refusals (including permissions) retain ordinary typed custody.
+    pub(crate) fn engine_check(
+        &self,
+        sql: &str,
+        oid: i64,
+        corrupt: &mut bool,
+    ) -> Result<Vec<Record>, BackendError> {
+        self.admit()?;
+        let start = Instant::now();
+        let mut state = self.state.borrow_mut();
+        let statement = self.checked(state.statement(sql))?;
+        let result = state.client.query(&statement, &[&oid]);
+        state.work.statements += 1;
+        state.work.round_trips += 1;
+        state.work.bound_bytes += 8;
+        state.work.statement_ns += start.elapsed().as_nanos() as u64;
+        if result
+            .as_ref()
+            .err()
+            .and_then(|e| e.code())
+            .is_some_and(|code| matches!(code.code(), "XX001" | "XX002"))
+        {
+            *corrupt = true;
+            return Err(BackendError::Integrity);
+        }
+        self.checked(result)
+            .and_then(|rows| rows.iter().map(rows::record).collect())
+    }
+    fn checked<T>(&self, result: Result<T, super::driver::Error>) -> Result<T, BackendError> {
         result.map_err(|e| {
-            let error = rows::error(&e);
+            let error = if self.diagnostic && e.code().is_some_and(|c| c.code() == "42501") {
+                BackendError::ReadOnly
+            } else {
+                e.backend()
+            };
             if error == BackendError::Unknown {
                 self.uncertain.set(true);
             }
@@ -140,8 +174,8 @@ impl Transaction<'_> {
             state.work.round_trips += 2;
             let writer = state.client.copy_in(&statement)?;
             let mut writer = BinaryCopyInWriter::new(writer, types);
-            rows(&mut writer)?;
-            writer.finish()
+            rows(&mut writer).map_err(super::driver::Error::from)?;
+            writer.finish().map_err(super::driver::Error::from)
         })();
         state.work.statements += 1;
         state.work.statement_ns += start.elapsed().as_nanos() as u64;
@@ -237,7 +271,7 @@ impl Session {
         let result = (|| {
             state.work.round_trips += 1;
             if let Err(e) = state.client.batch_execute(&begin) {
-                let error = rows::error(&e);
+                let error = e.backend();
                 if error == BackendError::Unknown || rollback(state).is_err() {
                     state.quarantined = true;
                     return Err(BackendError::Unknown.into());
@@ -251,6 +285,7 @@ impl Session {
             }
             let (result, uncertain) = {
                 let tx = Transaction {
+                    diagnostic: matches!(state.client, super::driver::Driver::Diagnostic(_)),
                     state: RefCell::new(&mut *state),
                     uncertain: Cell::new(false),
                     single: None,
@@ -283,7 +318,7 @@ impl Session {
                         Err(e) => {
                             // A COMMIT whose reply was lost is uncertain; one
                             // the server refused (a deferred constraint) rolled back.
-                            let error = rows::error(&e);
+                            let error = e.backend();
                             if error == BackendError::Unknown {
                                 state.quarantined = true;
                             } else {
@@ -317,6 +352,7 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
 ) -> Result<T, E> {
     let (result, uncertain) = {
         let tx = Transaction {
+            diagnostic: matches!(state.client, super::driver::Driver::Diagnostic(_)),
             state: RefCell::new(&mut *state),
             uncertain: Cell::new(false),
             single,
@@ -334,7 +370,7 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
     result
 }
 
-fn rollback(state: &mut State) -> Result<(), postgres::Error> {
+fn rollback(state: &mut State) -> Result<(), super::driver::Error> {
     state.work.round_trips += 1;
     state.client.batch_execute("ROLLBACK")
 }

@@ -189,6 +189,42 @@ fn parse_compact(record: &[u8], canonical_length: usize) -> StorageResult<Parsed
     if raw_length == 0 {
         return Err(StorageError::Integrity("compact raw length"));
     }
+    let (tag, base, frame) = compact_parts(record)?;
+    Ok(ParsedRecord {
+        tag,
+        raw_length,
+        base,
+        frame,
+    })
+}
+
+/// Validates locally decidable framing without a winning locator or graph.
+/// Compact records omit raw length; never fabricate one for an orphan/loser.
+/// Canonical identity, codec reconstruction and base authentication still need
+/// the winning binding and are performed by the ordinary dependency reader.
+pub fn validate_framing(lane: PackLane, record: &[u8]) -> StorageResult<()> {
+    let parsed = match lane {
+        PackLane::WholeFile => {
+            compact_parts(record)?;
+            return Ok(());
+        }
+        PackLane::Chunk => parse_chunk(record)?,
+        PackLane::Singleton => parse_framed(record)?,
+        PackLane::Ordinary => {
+            return Err(StorageError::Integrity("ordinary framing requires role"))
+        }
+    };
+    if parsed.raw_length > crate::policy::CANONICAL_LIMIT {
+        return Err(StorageError::Integrity(
+            "payload raw length exceeds canonical profile",
+        ));
+    }
+    if is_stored(parsed.tag) && parsed.frame.len() != parsed.raw_length {
+        return Err(StorageError::Integrity("stored payload framing length"));
+    }
+    Ok(())
+}
+fn compact_parts(record: &[u8]) -> StorageResult<(u8, Option<ObjectId>, &[u8])> {
     let tag = *record
         .first()
         .ok_or(StorageError::Integrity("compact record width"))?;
@@ -210,12 +246,7 @@ fn parse_compact(record: &[u8], canonical_length: usize) -> StorageResult<Parsed
     if frame.is_empty() {
         return Err(StorageError::Integrity("compact record frame"));
     }
-    Ok(ParsedRecord {
-        tag,
-        raw_length,
-        base,
-        frame,
-    })
+    Ok((tag, base, frame))
 }
 
 /// Parses a chunk chunk record.

@@ -122,6 +122,12 @@ fn equal_edges(reader: &StorePorts, newer: EntryFacts, older: EntryFacts) -> Res
     Ok((prefix, suffix))
 }
 
+/// Remaining ancestry and payload admission shared across comparison windows.
+pub struct Limits {
+    pub versions: u64,
+    pub bytes: u64,
+}
+
 /// The origin Commit of each line of the regular file at `path`, from line
 /// `from` on, along persisted first parents.
 pub fn blame(
@@ -130,6 +136,8 @@ pub fn blame(
     snap: &Snap,
     path: &str,
     from: Arg<u64>,
+    count: Arg<u64>,
+    limits: &mut Limits,
 ) -> Answer {
     let tip = snapshot::existing(reader, snap, path)?;
     if tip.value.kind != InodeKind::RegularFile {
@@ -140,37 +148,63 @@ pub fn blame(
         ));
     }
     let from = from?;
+    let count = count?;
+    if count == 0 || count > window::LINES as u64 {
+        return Err(args::invalid("lineCount must be in 1..=2000"));
+    }
     let (mut tracks, mut spent, mut next_line) = (Vec::new(), 0, None);
-    window::lines(reader, &tip, window::BYTES, 1, |n, line| {
+    let tip_size = snapshot::size(reader, &tip)?;
+    let mut offset = 0u64;
+    let scan = window::lines_bounded(reader, &tip, window::BYTES, 1, limits.bytes, |n, line| {
+        offset = offset.saturating_add(line.bytes);
         if n < from {
             return Ok(true);
         }
         // Include maximum message/identity overhead for each origin on the wire.
-        if tracks.len() == window::LINES
-            || (!tracks.is_empty() && spent + line.text.len() + 256 > window::BYTES - 8192)
+        if tracks.len() == count as usize
+            || (!tracks.is_empty() && spent + line.text.len() + 640 > window::BYTES - 8192)
         {
             next_line = Some(n);
             return Ok(false);
         }
         let mut shown = line.text;
-        let mut end = shown.len().min(window::BYTES - 8192 - 256 - spent);
+        let mut end = shown.len().min(window::BYTES - 8192 - 640 - spent);
         while !shown.is_char_boundary(end) {
             end -= 1;
         }
         let clipped = line.truncated || end < shown.len();
         shown.truncate(end);
-        spent += shown.len() + 256;
+        spent += shown.len() + 640;
         tracks.push(Track {
             number: n,
             text: shown,
             clipped,
             owner: None,
         });
+        if tracks.len() == count as usize {
+            next_line = (offset < tip_size).then_some(n + 1);
+            return Ok(false);
+        }
         Ok(true)
     })?;
+    limits.bytes = limits.bytes.saturating_sub(scan.bytes);
+    if scan.exhausted && tracks.is_empty() {
+        return Err(super::query::capacity(
+            "blame scan budget reached before requested line",
+        ));
+    }
     let (mut node, mut current, mut versions, mut coarse) = (snap.node, tip, 0i64, false);
 
+    let mut history_limited = scan.exhausted;
     loop {
+        if tracks.iter().all(|t| t.owner.is_some()) {
+            break;
+        }
+        if limits.versions == 0 {
+            history_limited = true;
+            break;
+        }
+        limits.versions -= 1;
         let (_, parent, value) = revision(store, node)?;
         versions += 1;
         let older = parent
@@ -189,10 +223,19 @@ pub fn blame(
                 current = older;
                 continue;
             }
+            let bytes = snapshot::size(reader, &current)?
+                .saturating_add(snapshot::size(reader, &older)?)
+                .saturating_mul(3);
+            if bytes > limits.bytes {
+                history_limited = true;
+                break;
+            }
+            limits.bytes -= bytes;
             let (new, old) = (text(reader, current)?, text(reader, older)?);
             if new.complete && old.complete {
                 let a = old.prefix.iter().map(String::as_str).collect::<Vec<_>>();
                 let b = new.prefix.iter().map(String::as_str).collect::<Vec<_>>();
+                coarse |= !super::line_alignment::exact(&a, &b);
                 let mapping = match_lines(&a, &b);
                 for t in tracks.iter_mut().filter(|t| t.owner.is_none()) {
                     if let Some(n) = mapping
@@ -245,29 +288,72 @@ pub fn blame(
             break;
         }
     }
-    // Origins carry only identifiers here; each line already carries its message.
-    let (mut lines, mut bytes) = (Vec::new(), 0usize);
+    // Admit complete line records together with their deduplicated origin facts.
+    let display_clipped = tracks.iter().any(|t| t.clipped);
+    let (mut lines, mut bytes) = (Vec::new(), 2048usize + path.len());
+    let mut origins = std::collections::BTreeMap::new();
     for (i, t) in tracks.into_iter().enumerate() {
         let owner = t.owner.unwrap_or_default();
-        let cost = t.text.len() + owner.get_text("message").map_or(0, str::len) + 256;
-        if bytes + cost > window::BYTES && !lines.is_empty() {
-            next_line = Some(from + i as u64);
-            break;
-        }
-        bytes += cost;
-        lines.push(SdkValue::map([
+        let typed_owner = match owner.get_text("id") {
+            Some(id) => SdkValue::map([
+                (
+                    "ref",
+                    crate::history::saved::reference(store, args::node(id)?)?,
+                ),
+                ("message", owner.get("message").cloned().unwrap_or_default()),
+            ]),
+            None => SdkValue::Null,
+        };
+        let origin = owner.get_text("id").filter(|id| !origins.contains_key(*id));
+        let origin_cost = origin.map_or(0, |_| super::file_facts::value_bytes(&typed_owner));
+        let line = SdkValue::map([
             ("n", SdkValue::Int((from + i as u64) as i64)),
+            ("owner", typed_owner.clone()),
             ("text", SdkValue::text(t.text.trim_end_matches('\n'))),
             ("lineTruncated", SdkValue::Bool(t.clipped)),
             ("clipped", SdkValue::Bool(t.clipped)),
             ("commit", owner.get("id").cloned().unwrap_or_default()),
             ("message", owner.get("message").cloned().unwrap_or_default()),
-        ]));
+        ]);
+        let cost = super::file_facts::value_bytes(&line) + origin_cost;
+        if bytes + cost > window::BYTES {
+            if lines.is_empty() {
+                return Err(super::query::capacity(
+                    "blame line and owner exceed reply budget",
+                ));
+            }
+            next_line = Some(from + i as u64);
+            break;
+        }
+        bytes += cost;
+        if let Some(id) = origin {
+            origins.insert(id.to_owned(), typed_owner);
+        }
+        lines.push(line);
     }
     let mut fields = snapshot::header(snap, path);
     fields.extend([
+        ("at", crate::history::saved::reference(store, snap.node)?),
+        (
+            "coverage",
+            super::file_facts::coverage(
+                if history_limited || display_clipped {
+                    "partial"
+                } else {
+                    "complete"
+                },
+                Some(if coarse { "coarse" } else { "exact" }),
+                if history_limited {
+                    &["history_budget"]
+                } else if display_clipped {
+                    &["line_clipped"]
+                } else {
+                    &[]
+                },
+            ),
+        ),
         ("lines", SdkValue::List(lines)),
-        ("origins", SdkValue::List(Vec::new())),
+        ("origins", SdkValue::List(origins.into_values().collect())),
         ("versions", SdkValue::Int(versions)),
         ("comparisonCoarse", SdkValue::Bool(coarse)),
         (
@@ -275,5 +361,9 @@ pub fn blame(
             next_line.map_or(SdkValue::Null, |n| SdkValue::Int(n as i64)),
         ),
     ]);
-    snapshot::answer(fields)
+    let answer = snapshot::answer(fields)?;
+    if super::file_facts::value_bytes(&answer) > window::BYTES {
+        return Err(super::query::capacity("blame reply exceeds byte budget"));
+    }
+    Ok(answer)
 }

@@ -49,7 +49,6 @@ pub struct Status {
 /// the VM exists removes what it made; once it exists, the error has
 /// `vm_exists` and the VM is kept for inspection. `Unknown` keeps everything.
 pub fn create(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
-    new_work(spec)?;
     spec.validate()?;
     worker::check_bundle(bundle)?;
     adapter(spec.kind).create(spec, bundle)
@@ -59,7 +58,6 @@ pub fn create(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
 /// runs) and waits until the worker is ready. `None`: the machine's calls
 /// run in the caller's process and there is nothing to start.
 pub fn start(spec: &Spec, bundle: &Bundle) -> Result<Option<Running>, MachineError> {
-    new_work(spec)?;
     spec.validate()?;
     if spec.kind.route(HostOs::current()) == Route::InProcess {
         return Ok(None);
@@ -96,12 +94,49 @@ pub fn status_within(spec: &Spec, deadline: Instant) -> Result<Status, MachineEr
     super::tool::within(deadline, || status(spec))
 }
 
+/// Observes provider prerequisites, version and runtime state by `deadline`.
+/// Unlike status, this never dials a worker or executes a guest command.
+/// Capacity is not observed; caller must report it as unverified.
+pub fn provider_within(spec: &Spec, deadline: Instant) -> Result<Status, MachineError> {
+    spec.validate()?;
+    if crate::support::support(spec.kind, HostOs::current())
+        .backend
+        .is_none()
+    {
+        return Err(MachineError::new(
+            Code::Unsupported,
+            "machine platform is unsupported on this host",
+        ));
+    }
+    super::tool::within(deadline, || {
+        let probe = crate::probe::probe(spec.kind, &spec.tools);
+        if Instant::now() >= deadline {
+            return Err(MachineError::new(
+                Code::Unknown,
+                "provider observation deadline exceeded",
+            ));
+        }
+        if !probe.ready {
+            return Err(MachineError::missing(
+                "provider prerequisites are unavailable",
+                probe.missing,
+            ));
+        }
+        let state = adapter(spec.kind).provider_state(spec)?;
+        Ok(Status {
+            state,
+            free_disk: None,
+            tool_version: probe.version,
+            down_reason: None,
+        })
+    })
+}
+
 /// Loads the docker-archive `archive` into the `docker` machine's Engine
 /// and answers the image id Docker reports (#535 P5): what `machine start`
 /// uses on `docker` for the worker container when no image is named. Refused for
 /// any other platform.
 pub fn load_image(spec: &Spec, archive: &Path) -> Result<String, MachineError> {
-    new_work(spec)?;
     spec.validate()?;
     if spec.kind != crate::platform::Platform::Docker {
         return Err(refused(spec, "loads no Docker image"));
@@ -113,8 +148,8 @@ pub fn load_image(spec: &Spec, archive: &Path) -> Result<String, MachineError> {
 /// `url` (#535 §7.3): `native` uses it as given; a loopback host becomes the
 /// machine's host alias (`docker`: on Docker Desktop the address its running
 /// worker container resolves `host.docker.internal` to, on a Linux Engine
-/// the URL as given; `lima` and
-/// `firecracker`: `192.168.5.2`, `apple-container`: its network's gateway;
+/// the URL as given; `lima`: `192.168.5.2`, `apple-container`: its
+/// network's gateway;
 /// G7 receipts); a rewrite is refused when the URL asks for
 /// `sslmode=verify-full`. Every other host is used as given. Starts nothing;
 /// no message holds any part of the URL.
@@ -131,13 +166,9 @@ pub fn reach(spec: &Spec, url: &str) -> Result<String, MachineError> {
 /// through its own `ssh.config`, as its template forwards no other guest
 /// port) and answer its pid, which [`forward_close`] ends. `docker` (its
 /// worker container's ports are published only at start, D-8),
-/// `apple-container` (ports are published only at create) and
-/// `firecracker`
-/// (its daemons listen on the microVM's loopback, which its Lima host's
-/// forward cannot reach) refuse `Unsupported`; their Workspace calls stay
-/// on the worker. One attempt: a forward that ends at once is `Failed`.
+/// `apple-container` (ports are published only at create) refuse
+/// `Unsupported`; their Workspace calls stay on the worker. One attempt: a forward that ends at once is `Failed`.
 pub fn forward(spec: &Spec, guest_port: u16) -> Result<Forward, MachineError> {
-    new_work(spec)?;
     spec.validate()?;
     if guest_port == 0 {
         return Err(MachineError::new(
@@ -165,14 +196,12 @@ pub fn copy_in(
     entry: Option<&str>,
     destination: &str,
 ) -> Result<(), MachineError> {
-    new_work(spec)?;
     spec.validate()?;
-    guest_of(spec)?.copy_in(&spec.tools, dir, entry, None, destination)
+    guest_of(spec)?.copy_in(&spec.tools, dir, entry, destination)
 }
 
 /// Streams one guest file of a running machine to a new 0600 host file.
 pub fn copy_out(spec: &Spec, source: &str, file: &Path) -> Result<(), MachineError> {
-    new_work(spec)?;
     spec.validate()?;
     guest_of(spec)?.copy_out(&spec.tools, source, file)
 }
@@ -212,13 +241,5 @@ pub(crate) fn with_worker(
         free_disk,
         tool_version,
         down_reason,
-    }
-}
-
-/// New work is refused before tools, bundle reads, or platform effects.
-fn new_work(spec: &Spec) -> Result<(), MachineError> {
-    match layerfs_sandbox_backend::platform_policy::disabled_reason(spec.kind.name()) {
-        Some(reason) => Err(MachineError::new(Code::Unsupported, reason)),
-        None => Ok(()),
     }
 }

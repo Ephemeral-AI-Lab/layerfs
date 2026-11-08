@@ -3,8 +3,8 @@
 //! `native` answers both at once; a running machine's `start` answers at
 //! once, starting nothing; a stopped one's runs a start (refused here at
 //! the missing Linux bundle, after its `start.lock`); `stop` is `InUse`
-//! with `detail.related` while Sandboxes run on the machine or on a
-//! Firecracker machine it hosts, and otherwise stops the VM, removes
+//! with `detail.related` while Sandboxes run on the machine, and otherwise
+//! stops the VM, removes
 //! `worker.json` and answers the machine as `machine.get` does. One test,
 //! because it sets the process's environment.
 #![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
@@ -137,27 +137,15 @@ fn start_and_stop_a_machine() {
     assert!(!paths::machine_dir(&home, "dev").join("start.lock").exists());
     assert!(!log(&tools).contains("start"), "{}", log(&tools));
 
-    // stop is InUse while a Sandbox runs on it or on a microVM it hosts
+    // stop is InUse while a Sandbox runs on it
     sandbox(&home, "dev", "s1");
-    write_record(
-        &paths::machine_record(&home, "fc"),
-        &SdkValue::map([
-            ("name", t("fc")),
-            ("platform", t("firecracker")),
-            ("host", t("dev")),
-        ]),
-    )
-    .unwrap();
-    sandbox(&home, "fc", "s2");
     let refusal = call(&home, "machine.stop", "dev").unwrap_err();
     assert_eq!(refusal.code, "InUse", "{}", refusal.message);
     let related = refusal.detail.get("related").cloned().unwrap_or_default();
     let named = |name: &str| SdkValue::map([("kind", t("sandbox")), ("name", t(name))]);
-    assert_eq!(related, SdkValue::List(vec![named("s1"), named("s2")]));
+    assert_eq!(related, SdkValue::List(vec![named("s1")]));
     assert!(!log(&tools).contains("stop"), "{}", log(&tools));
-    for name in ["s1", "s2"] {
-        std::fs::remove_dir_all(paths::sandbox_dir(&home, name)).unwrap();
-    }
+    std::fs::remove_dir_all(paths::sandbox_dir(&home, "s1")).unwrap();
 
     // stop stops the VM and forgets its worker; disks and records stay
     let stopped = call(&home, "machine.stop", "dev").unwrap();

@@ -14,7 +14,7 @@ Each example says whether it was run. "Run" means it was run on macOS
 
 - **The command.** `cargo +1.85.1 build -p layerfs-cli` builds `layerfs`
   into the worktree's `target/debug/`. `layerfs help` lists every call.
-- **Node.** The `layerfs` package is in `api/node`. Its native addon is
+- **Node.** The `@layerfs/node` package is in `api/node`. Its native addon is
   built with `npm --prefix api run build:native`.
 - **Python.** The `layerfs` package is in `api/python`. Its module is built
   with `cd api/python && maturin build --locked` (a debug wheel; add
@@ -150,7 +150,7 @@ layerfs sandbox close tests
 Run (Store, Init, files and a refusal; not the Sandbox part):
 
 ```js
-import layerfs, { LayerFSError } from "layerfs";
+import layerfs, { LayerFSError } from "@layerfs/node";
 
 const lfs = layerfs.client({ home: "/path/to/home" });
 await lfs.store.create("web");

@@ -67,7 +67,9 @@ pub use remove::remove;
 #[cfg(feature = "machine")]
 pub use spec::{ensure_built_ins, machine_of, vm_name};
 #[cfg(feature = "machine")]
-pub use spec::{refusal as machine_refusal, spec as machine_spec};
+pub use spec::{
+    provider_spec as machine_provider_spec, refusal as machine_refusal, spec as machine_spec,
+};
 #[cfg(feature = "machine")]
 pub use status::status;
 #[cfg(feature = "machine")]

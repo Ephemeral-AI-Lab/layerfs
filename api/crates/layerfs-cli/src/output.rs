@@ -3,7 +3,7 @@
 use crate::run::REFUSED;
 use layerfs_api::json;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::process::ExitCode;
 
 /// Prints `refusal` as `{"code","message","detail"}` on stderr.
@@ -30,6 +30,9 @@ pub fn result(value: &SdkValue, text: bool) -> ExitCode {
 /// `layerfs doctor --text`: a count line, then each finding as
 /// `<severity> <kind> <name>: <message>` and its fix on the next line.
 pub fn findings(report: &SdkValue) -> ExitCode {
+    if matches!(report.get("checks"), Some(SdkValue::List(_))) {
+        return checks(report);
+    }
     let empty = Vec::new();
     let found = match report.get("findings") {
         Some(SdkValue::List(found)) => found,
@@ -78,6 +81,88 @@ pub fn print(printed: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// Fields formatted as dates in UTC (YYYY-MM-DD HH:MM:SS) in `--text`.
+const TIME_FIELDS: &[&str] = &["created", "modified", "at"];
+
+/// Fields formatted as human sizes in `--text`.
+const SIZE_FIELDS: &[&str] = &[
+    "size",
+    "bytes",
+    "part_size",
+    "memory",
+    "disk",
+    "free",
+    "free_disk",
+    "wal_bytes",
+    "incoming_bytes",
+    "stdout_bytes",
+    "stderr_bytes",
+    "logical",
+    "new_canonical",
+    "new_stored",
+    "new_metadata",
+];
+
+/// Formats epoch milliseconds as `YYYY-MM-DD HH:MM:SS` UTC.
+pub fn format_time(ms: i64) -> String {
+    if ms < 0 {
+        return ms.to_string();
+    }
+    let s = ms / 1000;
+    let rem_s = s % 86400;
+    let sec = rem_s % 60;
+    let rem_m = rem_s / 60;
+    let min = rem_m % 60;
+    let hour = rem_m / 60;
+    let days = s / 86400;
+
+    let z = days + 719468;
+    let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let mut y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    if m <= 2 {
+        y += 1;
+    }
+    format!("{y:04}-{m:02}-{d:02} {hour:02}:{min:02}:{sec:02}")
+}
+
+/// Formats byte counts as human units (B, KiB, MiB, GiB, TiB, PiB).
+pub fn format_size(bytes: i64) -> String {
+    if bytes < 0 {
+        return bytes.to_string();
+    }
+    if bytes < 1024 {
+        return format!("{bytes} B");
+    }
+    let units = ["KiB", "MiB", "GiB", "TiB", "PiB"];
+    let mut val = bytes as f64;
+    for (i, unit) in units.iter().enumerate() {
+        val /= 1024.0;
+        if val < 1024.0 || i == units.len() - 1 {
+            let mut s = format!("{val:.1}");
+            if s.ends_with(".0") {
+                s.truncate(s.len() - 2);
+            }
+            return format!("{s} {unit}");
+        }
+    }
+    format!("{bytes} B")
+}
+
+/// One scalar as a table cell, formatted for human reading if field name matches.
+pub fn format_field(key: &str, value: &SdkValue) -> String {
+    match value {
+        SdkValue::Int(n) if TIME_FIELDS.contains(&key) => format_time(*n),
+        SdkValue::Int(n) if SIZE_FIELDS.contains(&key) => format_size(*n),
+        _ => cell(value),
+    }
+}
+
 /// One scalar as a table cell.
 fn cell(value: &SdkValue) -> String {
     match value {
@@ -107,7 +192,7 @@ fn readable(value: &SdkValue) -> String {
                 }
                 out.push_str(&table(name, rows));
             }
-            _ => out.push_str(&format!("{name}  {}\n", cell(field))),
+            _ => out.push_str(&format!("{name}  {}\n", format_field(name, field))),
         }
     }
     out
@@ -135,7 +220,11 @@ fn table(name: &str, rows: &[SdkValue]) -> String {
         .map(|row| {
             columns
                 .iter()
-                .map(|c| row.get(c).map(cell).unwrap_or_else(|| "-".to_owned()))
+                .map(|c| {
+                    row.get(c)
+                        .map(|v| format_field(c, v))
+                        .unwrap_or_else(|| "-".to_owned())
+                })
                 .collect()
         })
         .collect();
@@ -162,9 +251,62 @@ fn table(name: &str, rows: &[SdkValue]) -> String {
         text.push('\n');
         text
     };
-    let mut out = line(columns.iter().map(|c| c.to_uppercase()).collect());
+    let raw_header = line(columns.iter().map(|c| c.to_uppercase()).collect());
+    let mut out = if std::io::stdout().is_terminal() {
+        // Paint header in bold (1)
+        let trimmed = raw_header.trim_end_matches('\n');
+        format!("{}\n", crate::banner::paint(trimmed, "1"))
+    } else {
+        raw_header
+    };
     for row in cells {
         out.push_str(&line(row));
     }
     out
+}
+
+/// Shows every completed, failed or unverified explicit diagnostic check.
+fn checks(report: &SdkValue) -> ExitCode {
+    let mut shown = String::new();
+    let complete = report.get("complete") == Some(&SdkValue::Bool(true));
+    shown.push_str(if complete {
+        "Diagnostic coverage: complete\n"
+    } else {
+        "Diagnostic coverage: incomplete\n"
+    });
+    if let Some(SdkValue::List(checks)) = report.get("checks") {
+        for check in checks {
+            let outcome = check.get_text("outcome").unwrap_or("unknown");
+            let status = match check.get_text("severity") {
+                Some(severity) => format!("{outcome}/{severity}"),
+                None => outcome.to_owned(),
+            };
+            shown.push_str(&format!(
+                "{status:<12} {}: {}\n",
+                check.get_text("id").unwrap_or(""),
+                check.get_text("message").unwrap_or("")
+            ));
+            if let Some(fix) = check.get_text("fix").filter(|f| !f.is_empty()) {
+                shown.push_str(&format!("         suggested: {fix}\n"));
+            }
+            if outcome != "pass" && outcome != "skipped" {
+                if let Some(evidence) = check.get("evidence").filter(|v| **v != SdkValue::Null) {
+                    let evidence = json::print(evidence);
+                    let compact: String = evidence.chars().take(1024).collect();
+                    shown.push_str(&format!("         evidence: {compact}"));
+                    if evidence.chars().count() > 1024 {
+                        shown.push_str("... (use JSON for full evidence)");
+                    }
+                    shown.push('\n');
+                }
+            }
+        }
+    }
+    if report.get("truncated") == Some(&SdkValue::Bool(true)) {
+        shown.push_str("Report entries truncated.\n");
+    }
+    if let Some(counts) = report.get("counts") {
+        shown.push_str(&format!("Check totals: {}\n", json::print(counts)));
+    }
+    print(&shown)
 }

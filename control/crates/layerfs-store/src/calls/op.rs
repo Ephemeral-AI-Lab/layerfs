@@ -2,11 +2,13 @@
 //! to its engine method and arguments: snake_case to the engine's camelCase,
 //! an absent option not sent. Both routes send these (in this process, or in
 //! a `store.call` frame to the Store's worker).
-use super::branch::{BranchDiff, BranchFork, BranchMerge, BranchPublish};
+use super::branch::{
+    BranchCommits, BranchDiff, BranchFork, BranchGetCommit, BranchMerge, BranchPublish,
+};
 use super::commit::CommitDiff;
 use super::file::{
     FileApply, FileBlame, FileCp, FileDiff, FileEdit, FileGlob, FileGrep, FileList, FileMkdir,
-    FileMv, FileRead, FileRm, FileStat, FileWrite, Side,
+    FileMv, FileRead, FileRevision, FileRm, FileStat, FileWrite, Side,
 };
 use crate::call::store_call;
 use crate::resolve::target;
@@ -18,6 +20,8 @@ use std::path::Path;
 /// One page of a list: its size and position, each when sent.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Page {
+    /// One-based `page`, mutually exclusive with `page_pos`.
+    pub number: Option<i64>,
     /// `page_size`.
     pub size: Option<i64>,
     /// `page_pos`.
@@ -68,6 +72,12 @@ pub enum StoreOp<'a> {
         /// The page.
         page: Page,
     },
+    /// `branch.commits`: pinned saved history, including main Layers.
+    BranchCommits(&'a BranchCommits),
+    /// `branch.get_commit`: one saved record in its branch context.
+    BranchGetCommit(&'a BranchGetCommit),
+    /// `fs.revision`: saved changes to one path.
+    Revision(&'a FileRevision),
     /// `branch.fork`.
     Fork(&'a BranchFork),
     /// `branch.merge`.
@@ -144,8 +154,17 @@ impl Args {
         }
     }
 
+    fn boolean(&mut self, name: &str, value: Option<bool>) -> &mut Self {
+        match value {
+            Some(value) => self.put(name, SdkValue::Bool(value)),
+            None => self,
+        }
+    }
+
     fn page(&mut self, page: Page) -> &mut Self {
-        self.int("pageSize", page.size).int("pagePos", page.pos)
+        self.int("pageSize", page.size)
+            .int("pagePos", page.pos)
+            .int("page", page.number)
     }
 
     /// A diff's page and whether it carries hunks (`paths_only` is its
@@ -213,6 +232,9 @@ impl StoreOp<'_> {
         match self {
             Self::ListBranches { .. } => "project.list_branches",
             Self::ListCommits { .. } => "branch.list_commits",
+            Self::BranchCommits(_) => "branch.commits",
+            Self::BranchGetCommit(_) => "branch.get_commit",
+            Self::Revision(_) => "fs.revision",
             Self::Fork(_) => "branch.fork",
             Self::Merge(_) => "branch.merge",
             Self::Publish(_) => "branch.publish",
@@ -241,6 +263,17 @@ impl StoreOp<'_> {
         match self {
             Self::ListBranches { name, page } => args.opt("name", *name).page(*page),
             Self::ListCommits { branch, page } => args.text("branch", branch).page(*page),
+            Self::BranchCommits(r) => args
+                .text("branch", &r.branch)
+                .opt("atCommit", r.at_commit.as_deref())
+                .int("page", r.page)
+                .int("pageSize", r.page_size),
+            Self::BranchGetCommit(r) => args.text("branch", &r.branch).text("commit", &r.commit),
+            Self::Revision(r) => args
+                .at(&r.branch, r.at_commit.as_deref())
+                .text("path", &r.path)
+                .opt("traversal", r.traversal.as_deref())
+                .page(r.page),
             Self::Fork(r) => {
                 let from = r.from_commit.as_deref().unwrap_or(&r.from_branch);
                 args.text("name", &r.name).text("from", from)
@@ -257,6 +290,10 @@ impl StoreOp<'_> {
             Self::DiffBranches(r) => args
                 .text("from", &r.from_branch)
                 .text("to", &r.to_branch)
+                .opt("fromCommit", r.from_commit.as_deref())
+                .opt("toCommit", r.to_commit.as_deref())
+                .opt("pathPrefix", r.path_prefix.as_deref())
+                .boolean("includeAttribution", r.include_attribution)
                 .diff(&r.options),
             Self::DiffCommits(r) => args
                 .text("from", &r.from_commit)
@@ -282,8 +319,14 @@ impl StoreOp<'_> {
             Self::Blame(r) => args
                 .at(&r.branch, r.commit.as_deref())
                 .text("path", &r.path)
-                .int("fromLine", r.from_line),
-            Self::DiffFiles(r) => args.put("left", side(&r.left)).put("right", side(&r.right)),
+                .int("fromLine", r.from_line)
+                .int("lineCount", r.line_count),
+            Self::DiffFiles(r) => args
+                .put("left", side(&r.left))
+                .put("right", side(&r.right))
+                .boolean("includeAttribution", r.include_attribution)
+                .boolean("allowMissing", r.allow_missing)
+                .page(r.page),
             Self::Write(r) => args
                 .text("branch", &r.branch)
                 .text("path", &r.path)

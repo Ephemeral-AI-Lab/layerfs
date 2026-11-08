@@ -90,7 +90,7 @@ fields added from `probe`: `ready`, `missing` and `version`
 | A host other than macOS, Linux or Windows | "LayerFS names no host other than macOS, Linux and Windows" | `OTHER_HOST` in [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs) |
 | `native` on Windows | "no Sandbox backend on Windows (O5)"; sqlite calls still route to a `worker` that is not designed | `NO_BACKEND`; [`native/profile.rs`](../../../../control/crates/layerfs-platform/src/platforms/native/profile.rs) |
 | `docker` on Windows | "docker through WSL2 is not designed yet" | `host_refusal` |
-| `apple-container`, `lima`, `firecracker` off macOS | "… runs on macOS hosts only" (firecracker adds ", in a nested lima machine") | `host_refusal` |
+| `apple-container`, `lima` off macOS | "… runs on macOS hosts only" | `host_refusal` |
 | A combination enabled without live evidence | none today: the G7 live receipts enabled PostgreSQL Sandboxes on the VM platforms ([`g7-live`](../../../../core/docs/issues/535/receipts/g7-live/RECEIPT.md)) | #535 G7, D13 |
 | The crate builds only on Unix | `#![cfg(unix)]`: the Windows rows are table data, not a built or tested host | [`lib.rs`](../../../../control/crates/layerfs-platform/src/lib.rs) |
 

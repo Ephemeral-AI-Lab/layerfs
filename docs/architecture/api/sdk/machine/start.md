@@ -4,13 +4,9 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Firecracker is **permanently disabled for new work**. Its code and records
-remain for inspection and explicit cleanup. Microsandbox and SSH machines
-were removed in 2.0; a record an older home still holds for one is shown,
-refused and only forgotten. See the [platform restriction](../../../control/support-matrix/disabled-platforms.md) for
-refusals, existing-resource handling and the source change required for
-re-enabling. Descriptions of Firecracker's adapter mechanics below are
-retained implementation details, not selectable features.
+Firecracker, Microsandbox and SSH machines were removed in 2.0; a record
+an older home still holds for one is shown, refused and only forgotten.
+See [removed platforms](../../../control/support-matrix/disabled-platforms.md).
 
 `machine.start` starts a stopped machine and its `layerfs worker`, waits
 until the worker answers its secret, and answers the machine's summary. A
@@ -68,7 +64,6 @@ caller's process                                 machine
  machine_of(name)        Busy | Unresolved | NotFound
  native? --> answer get(name)   (nothing to start)
  worker.json's worker answers hello? --> answer get(name)
- firecracker? --> start its lima host first (same steps)
  take machine/<name>/start.lock  (wait <= 600 s)
  worker answers now? (another process started it) --> get
  spec + sealed Linux bundle
@@ -93,7 +88,6 @@ The home lock is held only to write the records, never while the VM boots.
 | `native` | nothing; answers at once | [`power.rs`](../../../../../control/crates/layerfs-machine/src/power.rs) |
 | `docker` | runs the privileged worker container (`--pull never`) from the recorded image, else the bundle's image loaded once; the worker runs namespaces Sandboxes inside it, rooted in the bundle's `sandbox-image.tar` (D-8) | [`image.rs`](../../../../../control/crates/layerfs-machine/src/image.rs), [`platforms/docker/power.rs`](../../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
 | `lima`, `apple-container` | boots the VM if stopped, then sets up and starts the worker | [`platforms/`](../../../../../control/crates/layerfs-platform/src/platforms) |
-| `firecracker` | starts its Lima host first, then the microVM | `endpoint.rs` `host_first` |
 
 Every other call on a stopped machine is refused `Unavailable`, naming
 `layerfs machine start` ([`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs)).
@@ -105,10 +99,10 @@ See [workers](../../../control/routing/workers.md#lifecycle) and the
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
 | `InvalidInput`, `NotFound` | bad name; no such machine | no | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) `of` |
-| `Busy`, `Unresolved` | a create or remove holds it (or its firecracker host) | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) `blocks` |
+| `Busy`, `Unresolved` | a create or remove holds it | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) `blocks` |
 | `Unavailable` | `start.lock` held by another process for 600 s; nothing changed | no | [`home/entity_lock.rs`](../../../../../control/crates/layerfs-home/src/home/entity_lock.rs) |
 | `Unavailable` | the started worker is of another build: the bundle is older than this build (`detail.worker`, `expected`, `bundle`) | no: the machine runs and is recorded | [`worker/hello.rs`](../../../../../control/crates/layerfs-machine/src/worker/hello.rs) `stale_bundle` |
-| `Unsupported` | a disabled platform, or a record of a removed one (`microsandbox`, `ssh`: ``platform `ssh` was removed in LayerFS 2.0``); no sealed Linux bundle (`detail.missing: ["bundle:<dir>"]`); docker with no image and no `sandbox-image.tar`; a build without the `machine` feature | no | [`bundle.rs`](../../../../../control/crates/layerfs-machine/src/bundle.rs), `image.rs` |
+| `Unsupported` | a record of a removed platform (`firecracker`, `microsandbox`, `ssh`: ``platform `ssh` was removed in LayerFS 2.0``); no sealed Linux bundle (`detail.missing: ["bundle:<dir>"]`); docker with no image and no `sandbox-image.tar`; a build without the `machine` feature | no | [`bundle.rs`](../../../../../control/crates/layerfs-machine/src/bundle.rs), `image.rs` |
 | `NotFound` | the provider holds no VM of that name | no | [`setup/vm.rs`](../../../../../control/crates/layerfs-platform/src/setup/vm.rs) |
 | `Unavailable`, `Denied`, `Failed` | the provider or guest did not answer or refused; a step failed once | no | [`error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
 | `Unknown` | **a provider command timed out or its answer was lost: the VM or worker may be up with no `worker.json` written.** Read `machine status` first; a new `machine start` is a new call, not a replay | **yes** | [`setup/tool.rs`](../../../../../control/crates/layerfs-platform/src/setup/tool.rs) |

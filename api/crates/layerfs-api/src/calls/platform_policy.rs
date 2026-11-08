@@ -1,4 +1,4 @@
-//! Refuse new work on disabled platforms before home creation, locks, or
+//! Refuse new work on removed platforms before home creation, locks, or
 //! dispatch. Read-only inspection and explicit teardown retain their routes.
 //! This also runs in builds without machine adapters, so a recorded worker or
 //! a forwarded daemon cannot bypass the product policy.
@@ -60,7 +60,7 @@ fn transfer(home: &Path, name: &str) -> Result {
     store(home, name)?;
     if let Some(record) = StoreRecord::read(home, name)? {
         // A new transfer must not implicitly retire a historical copy on a
-        // disabled machine before it checks the newly selected destination.
+        // machine of a removed platform before it checks the newly selected destination.
         if let Some(left) = layerfs_store::sqlite::transfer::resolve::leftover(&record) {
             machine(home, &left.from)?;
             machine(home, &left.to)?;

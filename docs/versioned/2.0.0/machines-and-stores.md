@@ -14,14 +14,9 @@ a copy of a sqlite Store in a bucket.
 
 ## Machines
 
-Firecracker is permanently disabled for new work. Its records and adapter
-code remain; see [disabled platforms](../../architecture/control/support-matrix/disabled-platforms.md).
-Create, start, update, new Sandbox/Workspace work and transfers involving
-it return `Unsupported` before platform effects. Machine inspection shows
-recorded state and the disabled reason without probing or starting them. Explicit
-cleanup remains available with its existing ownership checks. No runtime override
-exists. The platform-specific mechanics below are retained reference only.
-
+Firecracker, Microsandbox and SSH machines were removed in 2.0; see
+[removed platforms](#removed-platforms-firecracker-microsandbox-and-ssh) and
+the [contract](../../architecture/control/support-matrix/disabled-platforms.md).
 
 | Kind | How many | Made by | Sandboxes run as | Tool |
 | --- | --- | --- | --- | --- |
@@ -29,7 +24,6 @@ exists. The platform-specific mechanics below are retained reference only.
 | `docker` | one, built in | — | namespaces inside its worker container (D-8), rooted in the bundle's Sandbox image. The image `machine update docker --image` records, else the bundle's Sandbox image loaded into Docker once (#535 P5), is the worker container's; see Routes | `docker` |
 | `apple-container` | many | `machine create` | namespaces inside the VM | `container` |
 | `lima` | many | `machine create` | namespaces inside the VM | `limactl` |
-| `firecracker` | existing records only | disabled | no new Sandboxes | retained `limactl` adapter |
 
 - "Platform" is only a machine's kind. A caller never chooses how a
   Sandbox runs; the kind decides.
@@ -51,9 +45,10 @@ exists. The platform-specific mechanics below are retained reference only.
   state.
 - `native` and `docker` are never created or removed.
 
-### Removed platforms: Microsandbox and SSH
+### Removed platforms: Firecracker, Microsandbox and SSH
 
-Microsandbox and SSH machines were removed in 2.0. `machine create` and
+Firecracker, Microsandbox and SSH machines were removed in 2.0, and with
+them Lima's `nested` option (it only hosted Firecracker). `machine create` and
 `sandbox.create`'s `platform` refuse them `Unsupported`; there is no
 `machine connect` or `machine disconnect`. A home may still hold a record of
 one:
@@ -61,22 +56,24 @@ one:
 - `machine list` and `machine get` answer it: `platform` as recorded,
   `backend: "-"`, `supports` false for both with the reason, `state:
   "unsupported"` and `error` the reason (``platform `ssh` was removed in
-  LayerFS 2.0``, or the same for `microsandbox`), plus its recorded `ssh`
-  settings or `vm_name`.
+  LayerFS 2.0``, or the same for `firecracker` or `microsandbox`), plus its
+  recorded `ssh` settings, `host` or `vm_name`.
 - Every other call on it, its Sandboxes or a sqlite Store on it is
   `Unsupported` with that reason.
 - `machine remove <name>` only forgets the record (`InUse` while Stores or
   Sandboxes are recorded on it, as for any remove). Its `note` says nothing
   on the host was touched. For microsandbox, remove the VM and its volume
   yourself: `msb remove --force <vm>` and `msb volume remove <vm>-data`.
+  For firecracker, the note names the microVM's folder
+  `/layerfs/data/firecracker/vms/<vm>` and data disk
+  `/layerfs/data/firecracker/disks/<vm>.ext4`, left in its Lima host;
+  removing that Lima machine removes them with its data disk.
 
 ### Creating a VM machine
 
 ```bash
 # not run
 layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
-layerfs machine create host1 lima --nested
-# Permanently refused: layerfs machine create fc1 firecracker --host host1
 ```
 
 - Defaults: 2 CPUs, 4 GiB memory, 20 GiB disk. Sizes are bytes, or text
@@ -93,9 +90,6 @@ layerfs machine create host1 lima --nested
   `docker` the recorded `image` is only its worker container's image; its
   Sandboxes' root is the bundle's `sandbox-image.tar` (D-8).
   The image is not published yet; a build places it with the bundle.
-- `nested` is for `lima` only: a VM able to host Firecracker machines.
-  `firecracker` requires `host`, a `lima` machine made with `--nested`. The
-  `lima` machine is `InUse` while it hosts any.
 - A create checks the kind's tools first; a missing tool is `Unsupported`
   with `detail.missing`.
 - A create needs the sealed Linux bundle (O16): the guest worker, the
@@ -125,9 +119,8 @@ layerfs machine create host1 lima --nested
 
 ### Removing and updating
 
-- `machine remove` is `InUse` while the machine holds Stores, Sandboxes or
-  hosted Firecracker machines; `detail.related` names each as `{kind:
-  "store" | "sandbox" | "machine", name}`.
+- `machine remove` is `InUse` while the machine holds Stores or Sandboxes;
+  `detail.related` names each as `{kind: "store" | "sandbox", name}`.
 - A remove takes the machine's `start.lock` first, then, under the home
   lock, writes its `op` (`machine.remove`) into the record. The VM is deleted outside the home lock. While that
   process lives, every call that would start the machine, push a Store to
@@ -191,8 +184,6 @@ layerfs machine create host1 lima --nested
   also take. The second waits up to 600 s, then is refused `Unavailable`.
   The lock is always taken before the home lock, and the start re-reads the
   record once it holds it.
-- `machine start` on a Firecracker machine is refused even when its
-  saved worker answers. It does not start Firecracker's Lima host.
 - `machine status` answers `state`, `free_disk`, `tool_version` and
   `down_reason` (O34). A stopped VM answers without being started. While a
   record holds an `op`, it also answers `op` (`id`, `name`, `phase`,
@@ -259,8 +250,7 @@ layerfs machine create host1 lima --nested
   and the caller sends the directory its record names. `sandbox.create`
   and `sandbox.close` go through the worker; a close ends the forward.
   `docker` (its worker container's ports are published only when it
-  starts), `apple-container` and `firecracker` forward
-  nothing:
+  starts) and `apple-container` forward nothing:
   every call goes through the worker. A forward that failed at create
   leaves the Sandbox on the worker route (`forward_failed` in the answer).
   On a stopped machine these calls are `Unavailable`, naming `machine
@@ -277,8 +267,8 @@ sqlite Store is Disposable (WAL, `synchronous=OFF`); its record says so.
 
 ```console
 $ layerfs store create shop          # run
-$ layerfs store push shop dev --progress   # not run
-$ layerfs store pull shop --progress       # not run
+$ layerfs store push shop dev --progress   # run (2026-11-08: docker, lima, apple-container)
+$ layerfs store pull shop --progress       # run (2026-11-08: docker, lima, apple-container)
 ```
 
 - `store create` makes an empty sqlite Store on `native`, at
@@ -341,13 +331,23 @@ $ layerfs store pull shop --progress       # not run
   - Once that process is gone, an uncertain `op` makes every later
     operation, lease and Store call on the Store `Unresolved`, naming
     `layerfs store status <name>` and the call that clears it: a new
-    `layerfs store push <name> <machine>` (with the machine the push named)
+    `layerfs store push <name> <machine>` (with the machine the push named,
+    never the opposite direction or another machine)
     or `layerfs store pull <name>`. A new push or pull first deletes the
     copy left on whichever of the two machines the record does not name (on
     `native` its file and any partial copy; on another machine the Store's
     folder under its worker's root), then runs as usual. `store remove`
-    clears it too, but deletes only the copy on the record's machine. A
-    certain `op` holds nothing.
+    clears it too, deleting both the copy on the record's machine and any
+    copy or partial `.incoming` copy on the other machine (`incoming_on`). A
+    certain `op` holds nothing; a certain failure at `send`, `verify` or
+    `install` records `incoming_on: <machine>` so `layerfs doctor` reports
+    the partial `.incoming` bytes and the next `store push` or `store remove`
+    cleans it up.
+  - During `snapshot`, an idle Store whose crashed opener left a non-empty
+    `-wal` is automatically checkpointed (`seal`) under the transfer's
+    exclusive lease before hashing. Every step runs once: a lost worker
+    answer (`Unknown`), a read's included, fails the transfer uncertain and
+    nothing is resent.
   - A failure names its phase in the message and in `detail.phase`, and
     keeps whatever exists.
   - While it runs, `store status` shows `state: "busy"` and `op`.
@@ -448,8 +448,6 @@ layerfs project init pg-main/load ./load
     `container inspect` (192.168.64.1 by default). The server must listen
     on that bridge (`0.0.0.0`, as Docker Desktop publishes a port), not on
     127.0.0.1 alone, and admit connections from it.
-  - `firecracker`: `192.168.5.2`, the Lima host's own host address; the
-    Lima host forwards and masquerades its microVMs' traffic.
 - Not built: `project remove` from a PostgreSQL Store, and backups of
   PostgreSQL Stores (back it up with PostgreSQL's own tools).
 - The step 10a and 10b commits record `store connect` and Init into a

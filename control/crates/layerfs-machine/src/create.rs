@@ -52,13 +52,9 @@ pub struct MachineCreate {
     pub disk: Option<i64>,
     /// Its image.
     pub image: Option<String>,
-    /// Whether it hosts nested machines; given at all, only a lima machine is.
-    pub nested: Option<bool>,
-    /// A firecracker machine's lima `--nested` host.
-    pub host: Option<String>,
 }
 
-/// `machine.create(name, platform, { cpus, memory, disk, image, nested, host })`.
+/// `machine.create(name, platform, { cpus, memory, disk, image })`.
 pub fn create(
     home: &Path,
     events: &mut Events<'_>,
@@ -74,15 +70,6 @@ pub fn create(
         return Err(refused(
             "InvalidInput",
             format!("a {platform} machine is built in"),
-        ));
-    }
-    if request.nested.is_some() && kind != Platform::Lima {
-        return Err(refused("InvalidInput", "only a lima machine is nested"));
-    }
-    if kind == Platform::Firecracker && request.host.is_none() {
-        return Err(refused(
-            "InvalidInput",
-            "a firecracker machine names its lima --nested host",
         ));
     }
     // a platform not on this host is refused in the support table's words
@@ -121,12 +108,6 @@ pub fn create(
     if let Some(image) = &request.image {
         fields.push(("image", SdkValue::text(image)));
     }
-    if request.nested == Some(true) {
-        fields.push(("nested", SdkValue::Bool(true)));
-    }
-    if let Some(host) = &request.host {
-        fields.push(("host", SdkValue::text(host)));
-    }
     let fields = fields.into_iter().map(|(n, v)| (n.to_owned(), v));
     let op = Op::begin(CREATE, "create", SdkValue::Null)?;
     let record = MachineRecord::from_record(name, SdkValue::Map(fields.collect())).with_op(&op);
@@ -134,15 +115,6 @@ pub fn create(
     let spec = {
         let _lock = lock::take(&home)?;
         new_name(&home, name)?;
-        if let Some(host) = &request.host {
-            let host_record = machine_of(&home, host)?;
-            if host_record.platform()? != Platform::Lima || !host_record.nested() {
-                return Err(refused(
-                    "InvalidInput",
-                    format!("{host} is not a lima machine made with --nested"),
-                ));
-            }
-        }
         record.write(&home)?;
         record::spec(&home, &id, &record)
     };

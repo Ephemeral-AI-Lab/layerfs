@@ -151,6 +151,7 @@ pub(crate) struct State {
     pub(crate) writer_hold: Option<crate::backend::sqlite::lane::writer_admission::Writer>,
 }
 pub(crate) struct Session {
+    pub(crate) diagnostic: bool,
     /// A writable Disposable session's checkpoint thread; dropped first, so
     /// it ends before the session's own connection closes.
     pub(crate) background: Option<super::background::Checkpointer>,
@@ -173,6 +174,39 @@ impl Session {
     ) -> Result<Self, BackendError> {
         // The engine is the same SQLite everywhere; the platform list was
         // the pre-Windows build boundary (#454).
+        Self::connect_mode(
+            path,
+            writable,
+            create,
+            selected,
+            creation_layout,
+            creation_acquisition,
+            false,
+        )
+    }
+    pub(crate) fn connect_diagnostic(path: &Path) -> Result<Self, BackendError> {
+        Self::connect_mode(
+            path,
+            false,
+            false,
+            SqlitePersistenceProfile::Disposable,
+            crate::SqlitePackLayout::Monolithic,
+            crate::SqliteAcquisitionSchema::Absent,
+            true,
+        )
+    }
+    fn connect_mode(
+        path: &Path,
+        writable: bool,
+        create: bool,
+        selected: SqlitePersistenceProfile,
+        creation_layout: crate::SqlitePackLayout,
+        creation_acquisition: crate::SqliteAcquisitionSchema,
+        diagnostic: bool,
+    ) -> Result<Self, BackendError> {
+        if !cfg!(any(target_os = "macos", target_os = "linux")) {
+            return Err(BackendError::Integrity);
+        }
         let flags = if writable {
             OpenFlags::SQLITE_OPEN_READ_WRITE
         } else {
@@ -187,7 +221,13 @@ impl Session {
         connection
             .set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
             .map_err(rows::error)?;
-        profile::apply(&connection, create, selected, creation_acquisition, &work)?;
+        if diagnostic {
+            // These are private read-connection limits, not source format,
+            // journal, checkpoint or synchronous-policy changes.
+            connection.execute_batch("PRAGMA query_only=ON; PRAGMA cache_size=-2048; PRAGMA mmap_size=0; PRAGMA temp_store=FILE").map_err(rows::error)?;
+        } else {
+            profile::apply(&connection, create, selected, creation_acquisition, &work)?;
+        }
         let (layout, acquisition) = if create {
             (creation_layout, creation_acquisition)
         } else {
@@ -205,7 +245,13 @@ impl Session {
                 36..=38 => crate::SqliteAcquisitionSchema::Absent,
                 42..=44 => crate::SqliteAcquisitionSchema::Tables,
                 16..=18 | 22..=24 => return Err(BackendError::SchemaVersion1),
-                _ => return Err(BackendError::Integrity),
+                _ => {
+                    return Err(if diagnostic {
+                        BackendError::UnsupportedSchemaVersion(stored)
+                    } else {
+                        BackendError::Integrity
+                    })
+                }
             };
             let layout = match stored - acquisition.version_offset() {
                 36 => crate::SqlitePackLayout::Monolithic,
@@ -263,12 +309,15 @@ impl Session {
                 .limit(Limit::SQLITE_LIMIT_LENGTH)
                 .map_err(rows::error)? as usize,
         };
-        profile::check(&profile)?;
+        if !diagnostic {
+            profile::check(&profile)?;
+        }
         super::thread_work::add(&work.borrow());
         let background = (writable && selected == SqlitePersistenceProfile::Disposable)
             .then(|| super::background::Checkpointer::start(path))
             .transpose()?;
         Ok(Self {
+            diagnostic,
             background,
             admission: crate::backend::admission::Admission::default(),
             path: path.to_path_buf(),

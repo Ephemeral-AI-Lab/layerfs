@@ -235,9 +235,11 @@ fn record(
         }
     };
     if versioned && value.get_int("v") != Some(RECORD_VERSION) {
-        let v = value
-            .get("v")
-            .map_or("none".to_owned(), layerfs_home::json::print);
+        let v = match value.get("v") {
+            None => "none".to_owned(),
+            Some(SdkValue::Int(n)) => n.to_string(),
+            Some(_) => "non-integer".to_owned(),
+        };
         findings.error(
             entity,
             format!(

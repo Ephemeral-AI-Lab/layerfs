@@ -23,7 +23,7 @@ Layout 3, from [`home/paths.rs`](../../../../control/crates/layerfs-home/src/hom
   layerfs.lock              home lock (flock, host processes only)
   machine/<name>/
     record.json             platform, size, state, op
-    worker.json             worker address, secret, forward pid (0600)
+    worker.json             worker address and secret (0600)
     start.lock              held across a start, stop, create, remove
   machine/native/run/       native Sandbox folders, images/ cache
   store/<name>/

@@ -73,6 +73,22 @@ impl BucketRecord {
         driver(&self.fields)
     }
 
+    /// Diagnostic S3 client from the exact saved provider settings; sends nothing.
+    pub fn diagnostic_client(&self) -> Result<layerfs_bucket::bucket::s3_api::S3Client> {
+        match provider(&self.fields)? {
+            Provider::Minio(settings) => {
+                layerfs_bucket::bucket::minio::connect(&settings).map_err(remote_error)
+            }
+            Provider::R2(settings) => {
+                layerfs_bucket::bucket::r2::connect(&settings).map_err(remote_error)
+            }
+            Provider::LocalFolder(_) => Err(refused(
+                "Unsupported",
+                "backup connection diagnosis requires an S3-compatible provider",
+            )),
+        }
+    }
+
     /// A bucket record from `request`'s URL:
     /// `http(s)://host:port/<bucket>/<prefix>` for MinIO,
     /// `r2://<account>/<bucket>/<prefix>[?jurisdiction=eu|fedramp]` for r2.
@@ -99,6 +115,10 @@ pub struct BucketConnect {
 
 /// The driver of a bucket record.
 fn driver(record: &SdkValue) -> Result<Box<dyn Driver>> {
+    provider(record)?.driver().map_err(remote_error)
+}
+
+fn provider(record: &SdkValue) -> Result<Provider> {
     let text = |name: &str| record.get_text(name).unwrap_or("").to_owned();
     let credentials = CredentialRef::parse(&text("key")).map_err(remote_error)?;
     let part_size = record
@@ -124,7 +144,7 @@ fn driver(record: &SdkValue) -> Result<Box<dyn Driver>> {
         }),
         _ => return Err(refused("Failed", "a bucket record names no known provider")),
     };
-    provider.driver().map_err(remote_error)
+    Ok(provider)
 }
 
 /// `(bucket, prefix)` of a URL's path.

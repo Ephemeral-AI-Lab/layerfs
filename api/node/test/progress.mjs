@@ -39,11 +39,17 @@ function folderOf(files) {
 
 const calling = (name) => table.filter((c) => c.options.some((o) => o.name === name && o.kind === "function")).map((c) => `${c.family}.${c.call}`);
 
-test("the table: six calls take on_progress, one takes the exec sinks, machine.create takes neither", async () => {
-  assert.deepEqual(calling("on_progress"), ["project.init", "workspace.exec", "store.push", "store.pull", "backup.create", "backup.restore"]);
+test("the table: seven calls take on_progress, one takes the exec sinks, machine.create takes neither", async () => {
+<<<<<<< HEAD
+  assert.deepEqual(calling("on_progress"), ["project.init", "project.export", "workspace.exec", "store.push", "store.pull", "backup.create", "backup.restore"]);
+=======
+  assert.deepEqual(calling("on_progress"), [
+    "project.init", "project.export", "workspace.exec", "store.push", "store.pull", "backup.create", "backup.restore",
+  ]);
+>>>>>>> addbf29dc (test(sdk): pin the seven progress calls and project.export across the front ends)
   assert.deepEqual(calling("stdout"), ["workspace.exec"]);
   assert.deepEqual(calling("stderr"), ["workspace.exec"]);
-  assert.equal(table.flatMap((c) => c.options).filter((o) => o.kind === "function").length, 6 + 2);
+  assert.equal(table.flatMap((c) => c.options).filter((o) => o.kind === "function").length, 7 + 2);
   const home = temp("machine");
   try {
     // the library emits { phase: "create" } for this call, but no handler can be given
@@ -179,10 +185,10 @@ async function worker(dir) {
   return { address: `127.0.0.1:${port}`, stop: () => child.kill() };
 }
 
-/** The `send` events of one call: byte counts, which only this phase has. */
+/** The `send` events of one call, by phase name. */
 const sends = (events) => events.filter((p) => p.phase === "send");
 
-test("through a worker: store.push, project.init and store.pull report bytes in `send` and null counts elsewhere; the last `send` precedes verification and installation", { timeout: 90_000, skip: noCommand }, async () => {
+test("through a worker: push, pull and init report bytes per phase; null outside it; the last `send` precedes verification and installation", { timeout: 90_000, skip: noCommand }, async () => {
   const home = temp("worker-home");
   const guest = temp("worker-guest");
   const folder = folderOf(100);
@@ -209,20 +215,32 @@ test("through a worker: store.push, project.init and store.pull report bytes in 
     assert.equal(pulled[0].phase, "check");
     assert.equal(pulled[pulled.length - 1].phase, "retire");
 
-    for (const [name, events] of [["store.push", pushed], ["project.init", inited], ["store.pull", pulled]]) {
+    // `snapshot` and `verify` count their own bytes in push and pull
+    // (layerfs-project#8 hardening); Init through a worker counts its tree.
+    for (const [name, events, counted] of [
+      ["store.push", pushed, ["snapshot", "send", "verify"]],
+      ["project.init", inited, ["send"]],
+      ["store.pull", pulled, ["snapshot", "send", "verify"]],
+    ]) {
       // one shape: exactly phase, done and total
       for (const p of events) assert.deepEqual(Object.keys(p).sort(), ["done", "phase", "total"], `${name}: ${JSON.stringify(p)}`);
-      // counts are bytes in `send` and null in every other phase
+      // a counted phase has an entry marker with null counts, then byte
+      // counts; every other phase has null counts throughout
       for (const p of events) {
-        if (p.phase === "send") assert.ok(Number.isInteger(p.done) && Number.isInteger(p.total), `${name}: ${JSON.stringify(p)}`);
-        else assert.deepEqual([p.done, p.total], [null, null], `${name}: ${JSON.stringify(p)}`);
+        if (!counted.includes(p.phase)) assert.deepEqual([p.done, p.total], [null, null], `${name}: ${JSON.stringify(p)}`);
+        else assert.ok((p.done === null && p.total === null) || (Number.isInteger(p.done) && Number.isInteger(p.total)), `${name}: ${JSON.stringify(p)}`);
       }
-      // `send` starts at 0, never goes down or past its total, and ends at it
+      for (const phase of counted) {
+        const seen = events.filter((p) => p.phase === phase && p.done !== null);
+        assert.ok(seen.length >= 1, `${name}: no ${phase} count: ${JSON.stringify(events)}`);
+        // starts at 0, never goes down or past its total, and ends at it
+        assert.equal(seen[0].done, 0, `${name} ${phase}: ${JSON.stringify(seen)}`);
+        assert.equal(seen[0].total, seen.at(-1).total, `${name} ${phase}: the total changed`);
+        assert.ok(seen.every((p, i) => p.done <= p.total && (i === 0 || seen[i - 1].done <= p.done)), `${name} ${phase}: ${JSON.stringify(seen)}`);
+        assert.equal(seen.at(-1).done, seen[0].total, `${name} ${phase}: did not reach its total`);
+      }
       const s = sends(events);
       assert.ok(s.length >= 2, `${name}: ${JSON.stringify(s)}`);
-      assert.equal(s[0].done, 0);
-      assert.ok(s.every((p, i) => p.total === s[0].total && p.done <= p.total && (i === 0 || s[i - 1].done <= p.done)), `${name}: ${JSON.stringify(s)}`);
-      assert.equal(s[s.length - 1].done, s[0].total);
       // bytes sent is not completion: `send` reaches 100% and the call
       // still has phases to run (the worker verifies and installs after it)
       const last = events.map((p) => p.phase).lastIndexOf("send");

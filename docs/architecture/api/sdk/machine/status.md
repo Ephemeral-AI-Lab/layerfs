@@ -87,8 +87,7 @@ stopped VM answers `stopped` without being started.
 | `InvalidInput`, `NotFound` | bad name; no such machine | no | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) `of` |
 | `Unavailable`, `Denied`, `Failed` | the provider or guest does not answer or refuses; the probe failed | no: a read changes nothing | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `refusal` |
 | `Unknown` | a provider command did not end in time and was stopped | no: a read changes nothing | [`setup/tool.rs`](../../../../../control/crates/layerfs-platform/src/setup/tool.rs) |
-| `Busy`, `Unresolved` | a firecracker machine whose Lima host is held by an `op` | no | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `machine_of` |
-| `Unsupported` | a record of a removed platform (`microsandbox`, `ssh`: ``platform `ssh` was removed in LayerFS 2.0``; `list` and `get` still show it); a build without the `machine` feature | no | [`machine/status.rs`](../../../../../api/crates/layerfs-api/src/machine/status.rs) |
+| `Unsupported` | a record of a removed platform (`firecracker`, `microsandbox`, `ssh`: ``platform `ssh` was removed in LayerFS 2.0``; `list` and `get` still show it); a build without the `machine` feature | no | [`machine/status.rs`](../../../../../api/crates/layerfs-api/src/machine/status.rs) |
 
 Unlike `list` and `get`, a failed probe is the call's error. An
 `unresolved` state is cleared by [`machine.remove`](remove.md); see
