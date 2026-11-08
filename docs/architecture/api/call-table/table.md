@@ -41,7 +41,7 @@ The table is code: one file per call under its family folder in
 the `run` function that hands it to `layerfs-control`
 ([`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs),
 [`table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs)).
-There are 61 calls in nine families, including
+There are 64 calls in nine families, including
 [`project.export`](../sdk/project/export.md). `layerfs.table` is the JSON form front
 ends build their functions from (`table_json`); `layerfs doctor` and
 `layerfs worker` sit outside it.
@@ -49,9 +49,9 @@ ends build their functions from (`table_json`); `layerfs doctor` and
 | Family | Calls, in help order | Count |
 | --- | --- | --- |
 | [project](../sdk/project/README.md) | init, list, get, export, remove | 5 |
-| [branch](../sdk/branch/README.md) | list, get, fork, merge, publish, diff | 6 |
+| [branch](../sdk/branch/README.md) | list, get, fork, merge, publish, diff, commits, get_commit | 8 |
 | [commit](../sdk/commit/README.md) | list, get, diff | 3 |
-| [file](../sdk/file/README.md) | read, stat, list, glob, grep, blame, diff, write, edit, rm, mkdir, mv, cp, apply | 14 |
+| [file](../sdk/file/README.md) | read, stat, list, glob, grep, blame, diff, write, edit, rm, mkdir, mv, cp, apply, revision | 15 |
 | [sandbox](../sdk/sandbox/README.md) | create, list, get, close | 4 |
 | [workspace](../sdk/workspace/README.md) | mount, exec, exec_cancel, commit, unmount, status | 6 |
 | [machine](../sdk/machine/README.md) | list, platforms, get, status, start, stop, create, remove, update | 9 |
