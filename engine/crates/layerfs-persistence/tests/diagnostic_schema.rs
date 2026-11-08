@@ -218,3 +218,68 @@ fn huge_text_in_integer_cell_is_rejected_before_pack_inventory() {
     assert_eq!(before.write_commits, after.write_commits);
     assert_eq!(before.write_transactions, after.write_transactions);
 }
+
+#[test]
+fn malformed_incarnation_after_admission_has_an_explicit_authority_failure() {
+    let temp = support::Temp::new("doctor-schema-malformed-incarnation");
+    let path = temp.join("store.sqlite");
+    let _writer = create(&path);
+    let reader = SqliteHandles::open_diagnostic(&path, b"doctor-schema", [71; 32]).unwrap();
+    let db = rusqlite::Connection::open(&path).unwrap();
+    let sql: String = db
+        .query_row(
+            "SELECT sql FROM sqlite_schema WHERE name='history_meta'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let version: i64 = db
+        .query_row("PRAGMA schema_version", [], |r| r.get(0))
+        .unwrap();
+    db.execute_batch("PRAGMA writable_schema=ON;").unwrap();
+    db.execute(
+        "UPDATE sqlite_schema SET sql=?1 WHERE name='history_meta'",
+        [sql.replace(") STRICT", ")")],
+    )
+    .unwrap();
+    db.execute_batch(&format!(
+        "PRAGMA schema_version={}; PRAGMA writable_schema=OFF;",
+        version + 10
+    ))
+    .unwrap();
+    drop(db);
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch("PRAGMA ignore_check_constraints=ON;")
+        .unwrap();
+    db.execute(
+        "UPDATE history_meta SET catalog_incarnation=?1",
+        [format!("\0{}", "x".repeat(1024 * 1024))],
+    )
+    .unwrap();
+    db.execute_batch("PRAGMA writable_schema=ON;").unwrap();
+    db.execute(
+        "UPDATE sqlite_schema SET sql=?1 WHERE name='history_meta'",
+        [sql],
+    )
+    .unwrap();
+    db.execute_batch(&format!(
+        "PRAGMA schema_version={}; PRAGMA writable_schema=OFF;",
+        version + 20
+    ))
+    .unwrap();
+    drop(db);
+    let before = reader.diagnostics().unwrap();
+    let mut out = Vec::new();
+    assert!(reader
+        .diagnose(Options::default(), &mut |o| out.push(o))
+        .is_err());
+    assert!(
+        out.iter()
+            .any(|o| o.id == "store.identity" && o.outcome == Outcome::Fail),
+        "{out:?}"
+    );
+    assert!(!out.iter().any(|o| o.id == "store.objects.summary"));
+    let after = reader.diagnostics().unwrap();
+    assert_eq!(before.write_transactions, after.write_transactions);
+    assert_eq!(before.write_commits, after.write_commits);
+}

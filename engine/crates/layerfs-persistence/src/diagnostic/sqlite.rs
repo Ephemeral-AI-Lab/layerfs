@@ -49,7 +49,13 @@ impl SqliteHandles {
             options.check()?;
             // First data read pins the view before inventory and decoders run.
             let identity = tx.query("SELECT CASE WHEN typeof(catalog_incarnation)='integer' THEN catalog_incarnation END FROM history_meta WHERE id=1", vec![])?;
-            let incarnation:i64 = identity.first().ok_or(BackendError::Integrity)?.get(0)?;
+            let incarnation:i64 = match identity.first().ok_or(BackendError::Integrity).and_then(|row|row.get(0)) {
+                Ok(value)=>value,
+                Err(error)=>{
+                    emit(observer,"store.identity",Outcome::Fail,"pinned catalog authority is missing or has a malformed incarnation storage class; dependent logical checks blocked; this does not establish content corruption");
+                    return Err(error);
+                }
+            };
             emit(observer, "store.snapshot", Outcome::Pass, format!("SQLite read transaction pinned; catalog incarnation {incarnation}; committed WAL included; long scans retain WAL frames"));
             if let Err(error) = crate::backend::sqlite::schema_diagnostic::check(tx,self.storage.session.acquisition) {
                 emit(observer,"store.schema",if error==BackendError::Integrity {Outcome::Fail}else{Outcome::Unknown},"SQLite schema/authority claims could not be verified against shipped definitions; no untrusted schema payload extracted; this does not establish content corruption");
