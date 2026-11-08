@@ -20,6 +20,8 @@ pub struct Switches {
     /// `--stream` (`workspace exec`): the command's output and exit code
     /// passed through.
     pub stream: bool,
+    /// Framed output events followed by one result or refusal on stdout.
+    pub events: bool,
     /// `--scope <folder>` with `--scope-project <store>/<project>` and
     /// `--scope-branch <name>` (O32).
     pub scope: Option<SdkValue>,
@@ -115,6 +117,7 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
         };
         match flag {
             "--text" => switches.text = true,
+            "--events" if call.arg("stdout").is_some() => switches.events = true,
             "--progress" if call.arg("on_progress").is_some() => switches.progress = true,
             "--stream" if call.arg("stream").is_some() => {
                 switches.stream = true;
@@ -185,6 +188,9 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                 }
             }
         }
+    }
+    if switches.events && (switches.stream || switches.text) {
+        return Err(usage("--events is exclusive with --stream and --text"));
     }
     if (scope_branch.is_some() || scope_project.is_some()) && scope_folder.is_none() {
         return Err(usage("--scope-branch and --scope-project need --scope"));

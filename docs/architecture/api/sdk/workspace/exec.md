@@ -188,3 +188,12 @@ layerfs workspace exec-cancel s1:build dev
 ---
 
 ← [workspace.mount](mount.md) · [Up: workspace](README.md) · [workspace.exec_cancel](exec_cancel.md) →
+
+## CLI framed output
+
+`layerfs workspace exec <ws> <command> --events` delivers every output byte
+as NDJSON output events, followed by one `{result}` or `{refusal}` frame.
+It includes progress and is exclusive with `--stream` and `--text`. A result
+exits 0 regardless of the command's exit code; refusal exits 125 and usage
+exits 2. Bytes use UTF-8 text or `{base64: ...}`. A failed stdout exits 125
+with effects kept and delivery incomplete; never replay the operation.

@@ -70,6 +70,7 @@ so a value the shell accepts can still be refused `InvalidInput`.
 | --- | --- | --- |
 | `--text` | all | readable output instead of JSON |
 | `--progress` | calls with `on_progress` | each `{progress}` event as one JSON line on stderr |
+| `--events` | calls with output events (`workspace exec`) | NDJSON progress and output on stdout, then exactly one `{result}` or `{refusal}`; exclusive with `--stream` and `--text` |
 | `--stream` | calls with a `stream` option (`workspace exec`) | sets `stream: true`; output events go to stdout and stderr; exit with the command's code |
 | `--scope <folder>` | all | a folder scope; needs `--scope-project <store>/<project>` |
 | `--scope-project`, `--scope-branch` | with `--scope` | the scope's project and Branch namespace; alone they are exit 2 |
@@ -147,6 +148,22 @@ After every table call, before printing, the command runs
 `layerfs_api::close_idle(Duration::ZERO)`: the Stores the call opened are
 closed, so a SQLite Store leaves no write-ahead log behind
 ([`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs)).
+
+## Framed exec output
+
+`workspace exec --events` writes ordered NDJSON to stdout: `{progress: ...}`,
+`{stream: "stdout"|"stderr", bytes: ...}`, then exactly one `{result: ...}`
+or `{refusal: {code,message,detail}}`. Bytes are text when UTF-8, otherwise
+`{base64: ...}`. Spooled streams are delivered in pages of at most 1 MiB,
+without dropping output above the inline window. Output delivery follows command
+completion; this mode does not promise live interleaving between stdout and stderr.
+Progress is included without requiring `--progress`. Each frame is flushed.
+
+Exit 0 means a result, even when the command exited 2 or 125; 125 means a
+refusal. Usage remains `layerfs: ...` on stderr with exit 2. `--events` is
+exclusive with `--stream` and `--text`. If stdout fails, delivery stops and
+exit is 125; effects remain and there may be no final frame. A consumer must
+require both a complete final frame and process completion. No operation is replayed.
 
 ## Streams
 

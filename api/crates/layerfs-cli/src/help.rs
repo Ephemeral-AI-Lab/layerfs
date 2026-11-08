@@ -33,6 +33,9 @@ pub fn usage(call: &Call) -> String {
     {
         line.push_str(" [--from <file>] (content from stdin)");
     }
+    if call.arg("stdout").is_some() {
+        line.push_str(" [--events]");
+    }
     line
 }
 
