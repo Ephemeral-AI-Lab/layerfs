@@ -18,12 +18,11 @@
 mod backend;
 #[cfg(unix)]
 pub use backend::Backend;
-#[cfg(unix)]
+#[cfg(not(unix))]
+pub use types::kind::Backend;
 mod helper_spec;
-#[cfg(unix)]
 pub mod json;
 pub mod platform_policy;
-#[cfg(unix)]
 mod postgres_url;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod runtime;
@@ -39,9 +38,7 @@ pub use backend::namespaces::{self, NamespaceProvider};
 pub mod local;
 #[cfg(target_os = "macos")]
 pub use backend::host_process::HostProcessProvider;
-#[cfg(unix)]
 pub use helper_spec::HelperSpec;
-#[cfg(unix)]
 pub use postgres_url::PostgresUrl;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use runtime::{LaunchFailure, Runtime, Sandbox};

@@ -21,27 +21,38 @@ mod error;
 mod facts;
 mod options;
 mod platform;
+// The setup stub face lives in stubs.rs; probe's Windows twin lives in
+// windows_stubs.rs with it.
+#[cfg(windows)]
+mod windows_stubs;
+#[cfg(windows)]
+pub use windows_stubs::probe;
 pub(crate) mod platforms;
 #[cfg(unix)]
 mod probe;
+#[cfg(unix)]
 mod reach;
 #[cfg(unix)]
 mod setup;
 pub(crate) mod spec;
 pub(crate) mod support;
 pub use error::{Code, MachineError};
+pub use layerfs_sandbox_backend::platform_policy;
+pub use layerfs_sandbox_backend::Backend;
+#[cfg(any())]
 pub use layerfs_sandbox::Backend;
 pub use options::{OptKind, OptSpec};
 pub use platform::{ExecutorKind, HostOs, How, KernelRoute, Platform, Profile, Route};
 pub use spec::{
-    parse_size, Bundle, Endpoint, Forward, Lasting, Running, Spec, SshSpec, Tools, BUNDLE, DATA,
+    parse_size, Bundle, Endpoint, Forward, Lasting, Running, Spec, Tools, BUNDLE, DATA,
     IMAGE, STATE, WORKER_PORT,
 };
 pub use support::{
     platforms, sandbox_allowed, support, support_json, CallSite, PostgresqlSupport, StoreKind,
     SupportRow, Supports,
 };
-/// One kind's readiness - pure data, every host.
+/// One kind's readiness - pure data, every host (unix; Windows reads
+/// the stub face until the platform port, #454).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Probe {
     pub kind: Platform,
@@ -56,15 +67,7 @@ pub use probe::{native_missing, nested_missing, probe as unix_probe};
 
 /// Non-unix: every platform reads not-ready with the one reason; nothing
 /// is probed and no tool runs.
-#[cfg(not(unix))]
-pub fn probe(kind: Platform, _tools: &spec::Tools) -> Probe {
-    Probe {
-        kind,
-        ready: false,
-        missing: vec!["host:machine-adapter".into()],
-        version: None,
-    }
-}
+
 /// Non-unix root twins of the setup calls: same names and signatures,
 /// each answering the stub refusal.
 #[cfg(not(unix))]

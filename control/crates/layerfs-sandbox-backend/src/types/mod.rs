@@ -1,5 +1,6 @@
 //! Exact ordinary runtime identities, independent process/output knowledge and
 //! failures, and the launch inputs and observations every backend shares.
+pub mod kind;
 mod bind;
 mod capabilities;
 mod execution;

@@ -15,7 +15,10 @@ use std::io;
 /// alive.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LocalProcess {
+    /// The process id.
     pub pid: u32,
+    /// The process start time (clock ticks since boot on unix; absolute
+    /// FILETIME 100ns units on Windows).
     pub start: u64,
     /// The boot id as a number. `None` only for a record written before boot
     /// ids were kept: it is matched by id and start time alone, as it was
@@ -26,7 +29,8 @@ pub struct LocalProcess {
 impl LocalProcess {
     /// The process running now under `pid`, read once from this kernel, in
     /// this boot.
-    #[cfg(any(target_os = "linux", target_os = "macos"))]    pub fn observe(pid: u32) -> io::Result<Self> {
+    #[cfg(not(windows))]
+    pub fn observe(pid: u32) -> io::Result<Self> {
         let stat = stat(pid)?;
         Ok(Self {
             pid,
@@ -34,6 +38,7 @@ impl LocalProcess {
             boot: Some(boot()?),
         })
     }
+
     /// True while this exact process exists and has not exited: a zombie
     /// (or a dead entry) is not alive, and another process under the same id
     /// has another start time or another boot.
