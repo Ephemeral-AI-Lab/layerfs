@@ -8,7 +8,7 @@ use layerfs_bridge::control::SdkValue;
 
 fn call(home: &std::path::Path, name: &str, args: SdkValue) -> layerfs_bridge::control::SdkValue {
     let mut events = |_event: SdkValue| {};
-    layerfs_control::calls::call(layerfs_api::families(), Some(home), name, args, &mut events)
+    layerfs_api::calls::call(layerfs_api::families(), Some(home), name, args, &mut events)
         .expect("the call refuses")
 }
 

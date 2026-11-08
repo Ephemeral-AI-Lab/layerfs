@@ -1,3 +1,4 @@
+#![cfg(unix)]
 //! `lost` is reachable (layerfs-project#113, compute-plane 2.0 P-1, §8): a
 //! Sandbox whose process tree is killed behind control's back reads `lost`
 //! in `sandbox.get`, and `sandbox.close` clears it. The live half needs the
