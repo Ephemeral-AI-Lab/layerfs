@@ -61,7 +61,7 @@ node api/mcp/src/server.js --help
 | Flag | Meaning |
 | --- | --- |
 | `--profile work` | the default; the `work` calls, below |
-| `--profile admin` | the `work` calls plus every administrative call: project create/remove, Sandbox create/close, machine, Store and backup |
+| `--profile admin` | the `work` calls plus every administrative call: project init/remove, Sandbox create/close, machine, Store and backup |
 | `--home <dir>` | the LayerFS home; default `LAYERFS_HOME`, else `~/.layerfs` |
 | `--scope-project <store>/<project>` | the folder scope's project; must be given with `--scope-folder` |
 | `--scope-folder <dir>` | the folder scope inside the project; the library checks every scoped call |
@@ -82,10 +82,18 @@ root configured the call is refused (`InvalidInput`, naming `--export-root`), an
 not the root itself or beneath one. The destination's parent is resolved through symlinks first, so a link
 inside a root that leads out does not pass, and a sibling that only shares a root's name as a prefix
 (`<root>-x`) does not either. A relative path, a `..` path and a missing parent are refused the same way.
+A trailing separator or a NUL byte is refused too: a trailing separator makes the kernel follow a symlink
+destination, which would let the library look inside a directory outside every root.
 The refusal names the allowed roots, is returned as a tool result with `isError`, and happens before the
 library is called, so nothing was created and nothing is uncertain. The library's own destination rules and
 the folder scope still apply after it. The check is made once, before the call; it does not defend against a
 local process that can rewrite directories under a root while an export runs.
+
+The allowlist covers `project_export` only. Other tools take inputs that name the host and are all `admin`
+(`project_init` reads a host folder; `machine_update` names a daemon file and a Docker socket). `workspace_exec`
+is in `work` and runs commands in a Workspace; where the Workspace backend is a plain host process (the
+documentation says `native` is one on macOS), the commands are not confined by this list. That last point
+comes from the documentation and was not tested.
 
 ## Profiles
 
