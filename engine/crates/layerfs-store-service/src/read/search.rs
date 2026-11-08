@@ -18,7 +18,9 @@ pub fn matches(
     pattern: &str,
     visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
 ) -> Result<(), SdkRefusal> {
-    matches_bounded(reader, entry, view, prefix, pattern, u64::MAX, visit).map(|_| ())
+    matches_bounded(reader, entry, view, prefix, pattern, u64::MAX, visit)
+        .map(|_| ())
+        .map_err(window::without_scan_detail)
 }
 
 /// Literal matching with an actual delivered-byte budget; the legacy wrapper is unchanged.

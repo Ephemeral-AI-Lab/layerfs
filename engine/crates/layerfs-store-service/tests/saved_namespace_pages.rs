@@ -109,3 +109,72 @@ fn grep_admits_delivered_prefixes_of_large_text_and_binary_files() {
     assert_eq!(result.get_int("skipped"), Some(1));
     f.cleanup();
 }
+
+#[test]
+fn nested_glob_cache_keys_isolate_patterns_page_sizes_and_pinned_moving_heads() {
+    let f = Fixture::new("namespace-nested-cache", |source| {
+        for folder in ["allowed/src/nested", "allowed/src2", "other"] {
+            fs::create_dir_all(source.join(folder)).unwrap();
+        }
+        for path in [
+            "allowed/src/a.rs",
+            "allowed/src/b.rs",
+            "allowed/src/c.ts",
+            "allowed/src/nested/d.rs",
+            "allowed/src/nested/e.rs",
+            "allowed/src/nested/f.ts",
+            "allowed/src2/outside.rs",
+            "other/outside.rs",
+        ] {
+            fs::write(source.join(path), "x\n").unwrap();
+        }
+        13
+    });
+    f.fork("work");
+    let query = |pattern: &str, number, size, commit: Option<&str>| {
+        let mut args = vec![
+            ("branch", text("work")),
+            ("path", text("/allowed")),
+            ("pattern", text(pattern)),
+            ("page", SdkValue::Int(number)),
+            ("pageSize", SdkValue::Int(size)),
+        ];
+        if let Some(commit) = commit {
+            args.push(("commit", text(commit)));
+        }
+        f.call("fs.glob", args)
+    };
+    let primary = "/allowed/src/**/*.rs";
+    let cold = query(primary, 2, 1, None);
+    let at = cold.get("at").unwrap().get_text("id").unwrap().to_owned();
+    let first = query(primary, 1, 1, Some(&at));
+    let warm = query(primary, 2, 1, Some(&at));
+    assert_eq!(warm.get("items"), cold.get("items"));
+    assert_eq!(warm.get("hasMore"), cold.get("hasMore"));
+    assert_eq!(warm.get("at"), cold.get("at"));
+    assert!(items(&first).iter().chain(items(&warm)).all(
+        |v| matches!(v,SdkValue::Text(p) if p.starts_with("/allowed/src/") && !p.contains("src2"))
+    ));
+    let grouped = query(primary, 1, 2, Some(&at));
+    assert_eq!(items(&grouped).len(), 2);
+    assert_eq!(items(&grouped)[0], items(&first)[0]);
+    assert_eq!(items(&grouped)[1], items(&warm)[0]);
+    let alternate = query("/allowed/src/nested/*.ts", 1, 1, Some(&at));
+    assert_eq!(items(&alternate), &[text("/allowed/src/nested/f.ts")]);
+    let old_all = query(primary, 1, 50, Some(&at));
+    f.apply(
+        "work",
+        vec![
+            support::operation("mkdir", "/allowed/src/000"),
+            support::write("/allowed/src/000/000.rs", "new\n"),
+        ],
+    );
+    let pinned_after_move = query(primary, 2, 1, Some(&at));
+    assert_eq!(pinned_after_move.get("items"), warm.get("items"));
+    let pinned_cold_size = query(primary, 1, 49, Some(&at));
+    assert_eq!(pinned_cold_size.get("items"), old_all.get("items"));
+    let live = query(primary, 1, 50, None);
+    assert_ne!(live.get("at"), old_all.get("at"));
+    assert_eq!(items(&live).len(), items(&old_all).len() + 1);
+    f.cleanup();
+}

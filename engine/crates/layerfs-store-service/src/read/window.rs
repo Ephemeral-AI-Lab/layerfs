@@ -177,6 +177,14 @@ pub(super) fn texts_bounded(
     })
 }
 
+/// Delivered-byte accounting belongs to the internal grep scanner, not public refusals.
+pub(super) fn without_scan_detail(mut error: SdkRefusal) -> SdkRefusal {
+    if error.code == "Binary" {
+        error.detail = layerfs_bridge::control::SdkValue::Null;
+    }
+    error
+}
+
 fn scan_error(mut error: SdkRefusal, bytes: u64) -> SdkRefusal {
     if error.code == "Binary" {
         error.detail = layerfs_bridge::control::SdkValue::map([(
@@ -354,7 +362,8 @@ pub fn lines_bounded(
             }
         }
         Ok(true)
-    })?;
+    })
+    .map_err(without_scan_detail)?;
     if !stopped && open.length > 0 {
         let number = open.number;
         let mut line = open.finish(true);
