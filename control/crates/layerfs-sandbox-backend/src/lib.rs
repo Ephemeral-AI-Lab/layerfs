@@ -43,10 +43,8 @@ pub use runtime::{LaunchFailure, Sandbox};
 pub use runtime::Runtime;
 pub use stop::{Cancelled, ExecSlot, Stop};
 
-#[cfg(windows)]
-mod windows_runtime;
-#[cfg(windows)]
-pub use windows_runtime::WireFailure;
+// The WireFailure twin for the Windows face lives in runtime.rs
+// alongside the Sandbox enum (windows_runtime keeps only helpers).
 pub use types::{
     Bind, CommandIdentity, ContainerId, ExecExit, ExecRequest, Image, IsolationModel, LaunchPhase,
     LaunchRequest, LocalRecord, MountDriver, NamespaceRecord, PendingRequest, ProviderCapabilities,
