@@ -60,7 +60,7 @@ test("the package ships its source, typings, addon and licence, and requires Nod
   const pack = spawnSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { cwd: here(".."), encoding: "utf8", timeout: 60_000 });
   assert.equal(pack.status, 0, pack.stderr);
   const files = JSON.parse(pack.stdout)[0].files.map((file) => file.path).sort();
-  for (const wanted of ["LICENSE", "package.json", "src/errors.js", "src/index.d.ts", "src/index.js", "src/native.js", "src/values.js"]) {
+  for (const wanted of ["LICENSE", "README.md", "package.json", "src/errors.js", "src/index.d.ts", "src/index.js", "src/native.js", "src/values.js"]) {
     assert.ok(files.includes(wanted), `${wanted} in ${files}`);
   }
   assert.ok(files.every((file) => !file.startsWith("test/")), "tests are not shipped");
