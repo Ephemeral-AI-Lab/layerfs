@@ -1,8 +1,8 @@
 # Saved branch and file queries
 
-> **Status:** Proposal; target LayerFS 2.0.0; not a released contract.
+> **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The implementation work is tracked by
+The implemented branch/file extension is tracked by
 [layerfs-project#128](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/128).
 These shared decisions govern its branch/file call additions and extensions.
 Connect's existing renderer simulation informed the requirements; integration with
