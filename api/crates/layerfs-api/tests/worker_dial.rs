@@ -119,19 +119,6 @@ fn worker(meet: Meet) -> (SocketAddr, Arc<Mutex<Vec<String>>>) {
                 continue;
             }
             // this build's hello: its protocol, no sealed bundle
-<<<<<<< HEAD
-            let hello = layerfs_api::worker::Hello {
-                protocol: Some(layerfs_api::worker::PROTOCOL),
-                bundle: None,
-            };
-            layerfs_api::worker::write_frame(&mut stream, &hello.to_frame()).unwrap();
-            let request = layerfs_api::worker::read_frame(&mut stream)
-                .unwrap()
-                .unwrap_or_default();
-            seen.lock()
-                .unwrap()
-                .push(layerfs_api::json::print(&request));
-=======
             send(
                 &mut stream,
                 format!(
@@ -146,7 +133,6 @@ fn worker(meet: Meet) -> (SocketAddr, Arc<Mutex<Vec<String>>>) {
                 .and_then(|request| request.get_text("op"))
                 .unwrap_or_default();
             seen.lock().unwrap().push(op.to_owned());
->>>>>>> 5f59e68f7 (test(api): worker_dial's stand-in worker speaks protocol 3 and reads attached frames)
             if let Meet::Answer = meet {
                 layerfs_api::worker::write_frame(
                     &mut stream,
