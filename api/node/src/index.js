@@ -3,7 +3,7 @@
 // Each function takes its positionals in the table's order, then an options
 // object; every call is one call into the library, made once.
 //
-//   import layerfs from "layerfs";
+//   import layerfs from "@layerfs/node";
 //   await layerfs.store.create("shop");
 //   await layerfs.project.init("shop/api", "/src/api", { on_progress: console.log });
 //   const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/api", folder: "/web", branch: "agent" } });
