@@ -4,6 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { rmSync } from "node:fs";
 import { CLI, SERVER, temp } from "./helpers.mjs";
 
 const INITIALIZE = {
@@ -73,5 +74,6 @@ test("only JSON-RPC lines on stdout while a call logs to stderr", async () => {
     assert.deepEqual(exited, { code: 0, signal: null });
   } finally {
     if (child.exitCode === null) child.kill("SIGKILL");
+    rmSync(home, { recursive: true, force: true });
   }
 });
