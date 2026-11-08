@@ -144,6 +144,18 @@ pub enum Sandbox {
     HostProcess(host_process::Sandbox),
     #[cfg(target_os = "linux")]
     Namespaces(Box<namespaces::Sandbox>),
+    /// Windows: nothing launches; the variant carries the records face
+    /// until the host_process port (#454).
+    #[cfg(windows)]
+    Windows(WindowsStub),
+}
+
+/// The Windows records face: an id and root that flow in records.
+#[cfg(windows)]
+#[derive(Debug)]
+pub struct WindowsStub {
+    pub id: crate::types::SandboxId,
+    pub root: std::path::PathBuf,
 }
 
 impl Sandbox {

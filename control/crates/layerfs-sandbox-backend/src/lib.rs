@@ -24,7 +24,6 @@ mod helper_spec;
 pub mod json;
 pub mod platform_policy;
 mod postgres_url;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod runtime;
 pub mod steps;
 pub mod stop;
@@ -39,14 +38,15 @@ pub mod local;
 pub use backend::host_process::HostProcessProvider;
 pub use helper_spec::HelperSpec;
 pub use postgres_url::PostgresUrl;
+pub use runtime::{LaunchFailure, Sandbox};
 #[cfg(unix)]
-pub use runtime::{LaunchFailure, Runtime, Sandbox};
+pub use runtime::Runtime;
 pub use stop::{Cancelled, ExecSlot, Stop};
 
 #[cfg(windows)]
 mod windows_runtime;
 #[cfg(windows)]
-pub use windows_runtime::{LaunchFailure, Sandbox};
+pub use windows_runtime::WireFailure;
 pub use types::{
     Bind, CommandIdentity, ContainerId, ExecExit, ExecRequest, Image, IsolationModel, LaunchPhase,
     LaunchRequest, LocalRecord, MountDriver, NamespaceRecord, PendingRequest, ProviderCapabilities,
