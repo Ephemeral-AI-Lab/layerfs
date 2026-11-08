@@ -67,7 +67,7 @@ pub fn diff(
         page: page.number,
     };
     let cached = super::comparison_pages::find(store, &key);
-    let exhausted = matches!(cached, Some(None));
+    let exhausted = left.node == right.node || matches!(cached, Some(None));
     let after = cached.as_ref().and_then(|v| v.as_deref());
     let skip = if cached.is_some() { 0 } else { page.skip };
     let mut lw = if exhausted {

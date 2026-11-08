@@ -279,3 +279,57 @@ fn first_commit_base_comparison_and_component_prefix_are_preserved() {
     assert_eq!(removed.get_text("kind"), Some("Removed"));
     f.cleanup();
 }
+
+#[test]
+fn identical_saved_endpoint_needs_no_binary_attribution_guess() {
+    let f = Fixture::new("saved-equal-binary", |source| {
+        fs::write(source.join("binary"), [0u8, 255, 0, 128]).unwrap();
+        1
+    });
+    let result = f.call(
+        "branch.diff_branches",
+        vec![
+            ("from", text("main")),
+            ("to", text("main")),
+            ("includeAttribution", SdkValue::Bool(true)),
+            ("page", SdkValue::Int(1)),
+        ],
+    );
+    assert!(items(&result).is_empty(), "{result:?}");
+    assert!(result.get("coverage").unwrap().get_bool("complete"));
+    assert_eq!(result.get("scan").unwrap().get_int("examined"), Some(0));
+    f.cleanup();
+}
+
+#[test]
+fn unknown_prefix_and_lookahead_do_not_change_returned_page_coverage() {
+    let f = Fixture::new("saved-page-coverage", |source| {
+        fs::write(source.join("a"), [0u8, 255, 0, 128]).unwrap();
+        fs::write(source.join("b"), "base\n").unwrap();
+        2
+    });
+    f.fork("left");
+    f.fork("right");
+    f.apply("left", vec![write("/b", "same\n")]);
+    f.apply("right", vec![write("/b", "same\n")]);
+    let query = |page| {
+        vec![
+            ("from", text("left")),
+            ("to", text("right")),
+            ("includeAttribution", SdkValue::Bool(true)),
+            ("page", SdkValue::Int(page)),
+            ("pageSize", SdkValue::Int(1)),
+        ]
+    };
+    let cold = f.call("branch.diff_branches", query(2));
+    assert_eq!(paths(&cold), ["/b"]);
+    assert!(cold.get("coverage").unwrap().get_bool("complete"));
+    let first = f.call("branch.diff_branches", query(1));
+    assert_eq!(paths(&first), ["/a"]);
+    assert!(!first.get("coverage").unwrap().get_bool("complete"));
+    let warm = f.call("branch.diff_branches", query(2));
+    assert_eq!(warm.get("items"), cold.get("items"));
+    assert_eq!(warm.get("coverage"), cold.get("coverage"));
+    assert_eq!(warm.get("scan").unwrap().get_int("examined"), Some(1));
+    f.cleanup();
+}
