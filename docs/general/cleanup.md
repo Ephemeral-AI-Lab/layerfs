@@ -464,7 +464,11 @@ The script enforces these boundaries:
   daemon; both plan and apply require it to contain only one `layerfs-daemon`
   process, with no Exec descendants. Protected containers and binds are refused.
   The daemon is stopped before recovery capture. A changed identity or newly
-  active command blocks removal. Recovery images retain changed filesystem layers;
+  active command blocks removal. The identity is the container's id, creation
+  time, image, configuration, mounts and execution state, checked at apply and
+  again after recovery capture. Docker lists mounts in no fixed order, so they
+  are compared as a set: a reordering alone is not a change, but an added,
+  removed or altered mount is. Recovery images retain changed filesystem layers;
   removing a container alone may reclaim little space. For aggressive retirement,
   an exact action may set `discard_rootfs: true` and list `preserve_paths`, such as
   `/layerfs-local/config` and `/usr/local/bin/layerfs-daemon`. Those files are
