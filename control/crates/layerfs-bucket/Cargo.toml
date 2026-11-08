@@ -20,6 +20,7 @@ tls = ["s3_api", "dep:native-tls"]
 minio = ["s3_api"]
 
 [dependencies]
+layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
 sha2 = "=0.11.0"
 layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
 layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }

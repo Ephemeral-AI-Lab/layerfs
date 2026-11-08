@@ -174,3 +174,9 @@ the reference ([2.0.0 manual: Keys](../../../versioned/2.0.0/backups.md#keys)).
 ---
 
 ← [Control: Backups](README.md) · [Up: Backups](README.md) · [Backups: Pieces and manifest](pieces-and-manifest.md) →
+
+## Connection diagnostics
+
+[Backup Doctor](../management/doctor-backup.md) uses the same S3 signer and HTTP
+codec for one bounded prefix page, with optional conditional/version-owned
+temporary probes. It never uses full backup enumeration as a connectivity check.

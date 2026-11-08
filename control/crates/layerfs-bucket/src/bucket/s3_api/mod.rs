@@ -7,6 +7,8 @@
 mod client;
 mod config;
 mod connection;
+mod deadline;
+mod diagnostic;
 mod http;
 mod multipart;
 mod sign;
@@ -14,3 +16,6 @@ mod sign;
 pub use client::S3Client;
 pub use config::S3Config;
 pub use multipart::{part_size, MAX_PART, MAX_PARTS, MIN_PART};
+
+pub use deadline::within as diagnostic_within;
+pub use diagnostic::{DiagnosticObject, DIAGNOSTIC_PREFIX};

@@ -68,13 +68,27 @@ enum Framing {
 /// Opens a new connection to the endpoint; nothing is sent yet.
 fn connect(config: &S3Config, host: &str, port: u16, tls: bool) -> Result<Connection, RemoteError> {
     let unavailable = |e: io::Error| RemoteError::Unavailable(format!("{host}:{port}: {e}"));
-    let address = (host, port)
-        .to_socket_addrs()
-        .map_err(unavailable)?
-        .next()
-        .ok_or_else(|| RemoteError::Unavailable(format!("{host} has no address")))?;
+    let at = |phase: &str, error: io::Error| {
+        if super::deadline::current().is_some() {
+            RemoteError::Unavailable(format!("{phase}: {error}"))
+        } else {
+            unavailable(error)
+        }
+    };
+    let deadline = super::deadline::current();
+    let address = match deadline {
+        Some(deadline) => layerfs_bridge::network::resolve_within(host, port, deadline)
+            .map_err(|error| at("DNS", error))?,
+        None => (host, port)
+            .to_socket_addrs()
+            .map_err(unavailable)?
+            .next()
+            .ok_or_else(|| RemoteError::Unavailable("endpoint has no address".to_owned()))?,
+    };
+    let connect_timeout = super::deadline::remaining(deadline, config.connect_timeout)
+        .map_err(|error| at("TCP", error))?;
     let socket =
-        TcpStream::connect_timeout(&address, config.connect_timeout).map_err(unavailable)?;
+        TcpStream::connect_timeout(&address, connect_timeout).map_err(|error| at("TCP", error))?;
     let configure = |socket: &TcpStream| {
         socket.set_nodelay(true)?;
         socket.set_read_timeout(Some(config.io_timeout))?;
