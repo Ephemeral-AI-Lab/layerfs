@@ -14,18 +14,24 @@ are generated from the call table.
 npm install layerfs@next
 ```
 
-`2.0.0-rc.1` is a prerelease under the `next` tag. Once a stable version
-carries the `latest` tag, `npm install layerfs` is the form.
+`2.0.0-rc.1` is a prerelease under the `next` tag. npm also creates `latest`
+on a package's first publish, even with `--tag next`, so both tags point at
+this version until a stable version is published; `npm install layerfs` then
+also installs the prerelease.
 
-Node 22 or later. The package is an ES module.
+Node 22 or later. The package is an ES module. TypeScript users need
+`@types/node` 22 or later: `src/index.d.ts` references Node's types.
 
 ## Platform
 
-The tarball contains one native addon, built on Linux x64 against glibc 2.39.
+The tarball contains one native addon, built on Linux x64; its highest
+required glibc symbol is `GLIBC_2.39`.
 
 - **linux / x64 / glibc >= 2.39 only.** `os`, `cpu` and `libc` make npm
-  refuse other platforms with `EBADPLATFORM` instead of installing a package
-  that cannot load.
+  refuse another OS, CPU or C library family with `EBADPLATFORM` instead of
+  installing a package that cannot load. npm cannot check the glibc
+  *version*: a glibc older than 2.39 still installs, then fails to load the
+  addon.
 - macOS, Windows, Linux arm64 and musl (Alpine) need a per-platform prebuild
   scheme, which does not exist yet. This version does not support them.
 - The addon is `layerfs.node` beside `src/`, or the file `LAYERFS_NATIVE`
@@ -77,11 +83,11 @@ a directory if `/tmp` is not one.
 
 ## Docs
 
-- [LayerFS 2.0 manual](https://github.com/Ephemeral-AI-Lab/layerfs/blob/layerfs_v2_0_0/docs/versioned/2.0.0/README.md)
-- [The 61 calls](https://github.com/Ephemeral-AI-Lab/layerfs/blob/layerfs_v2_0_0/docs/versioned/2.0.0/calls.md)
-- [Node and Python SDK](https://github.com/Ephemeral-AI-Lab/layerfs/blob/layerfs_v2_0_0/docs/versioned/2.0.0/sdk.md)
-- [Limitations](https://github.com/Ephemeral-AI-Lab/layerfs/blob/layerfs_v2_0_0/docs/versioned/2.0.0/limitations.md)
-- [The JavaScript package guide](https://github.com/Ephemeral-AI-Lab/layerfs/blob/layerfs_v2_0_0/api/README.md)
+- [LayerFS 2.0 manual](https://github.com/Ephemeral-AI-Lab/layerfs/blob/716197c4999fb087aa0fb17bac5ceb48b0b556ae/docs/versioned/2.0.0/README.md)
+- [The 61 calls](https://github.com/Ephemeral-AI-Lab/layerfs/blob/716197c4999fb087aa0fb17bac5ceb48b0b556ae/docs/versioned/2.0.0/calls.md)
+- [Node and Python SDK](https://github.com/Ephemeral-AI-Lab/layerfs/blob/716197c4999fb087aa0fb17bac5ceb48b0b556ae/docs/versioned/2.0.0/sdk.md)
+- [Limitations](https://github.com/Ephemeral-AI-Lab/layerfs/blob/716197c4999fb087aa0fb17bac5ceb48b0b556ae/docs/versioned/2.0.0/limitations.md)
+- [The JavaScript package guide](https://github.com/Ephemeral-AI-Lab/layerfs/blob/716197c4999fb087aa0fb17bac5ceb48b0b556ae/api/README.md)
 - [Source and issues](https://github.com/Ephemeral-AI-Lab/layerfs)
 
 MIT licensed. The tarball ships `LICENSE`, `README.md`, `package.json`,

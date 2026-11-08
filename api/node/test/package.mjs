@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { table } from "../src/index.js";
 import { render } from "../../scripts/gen-node-types.mjs";
@@ -27,7 +27,7 @@ test("the package names its repository, platform and npm page", () => {
   assert.equal(manifest.repository.type, "git");
   assert.equal(manifest.repository.url, "git+https://github.com/Ephemeral-AI-Lab/layerfs.git");
   assert.equal(manifest.repository.directory, "api/node");
-  assert.equal(manifest.homepage, "https://github.com/Ephemeral-AI-Lab/layerfs#readme");
+  assert.equal(manifest.homepage, "https://layerfs.ai/");
   assert.equal(manifest.bugs.url, "https://github.com/Ephemeral-AI-Lab/layerfs/issues");
   assert.ok(Array.isArray(manifest.keywords) && manifest.keywords.length >= 5);
   assert.ok(manifest.description.length > 0 && !manifest.description.includes("#533"));
@@ -60,8 +60,9 @@ test("the package ships its source, typings, addon and licence, and requires Nod
   const pack = spawnSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { cwd: here(".."), encoding: "utf8", timeout: 60_000 });
   assert.equal(pack.status, 0, pack.stderr);
   const files = JSON.parse(pack.stdout)[0].files.map((file) => file.path).sort();
-  for (const wanted of ["LICENSE", "README.md", "package.json", "src/errors.js", "src/index.d.ts", "src/index.js", "src/native.js", "src/values.js"]) {
-    assert.ok(files.includes(wanted), `${wanted} in ${files}`);
-  }
-  assert.ok(files.every((file) => !file.startsWith("test/")), "tests are not shipped");
+  // `--ignore-scripts` keeps this runnable before the addon is built; when it
+  // is built, the tarball must carry it, and nothing else may appear.
+  const expected = ["LICENSE", "README.md", "package.json", "src/errors.js", "src/index.d.ts", "src/index.js", "src/native.js", "src/values.js"];
+  if (existsSync(here("../layerfs.node"))) expected.push("layerfs.node");
+  assert.deepEqual(files, expected.sort(), `the tarball is exactly ${expected.join(", ")}`);
 });
