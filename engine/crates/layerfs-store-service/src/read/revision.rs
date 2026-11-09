@@ -28,16 +28,29 @@ fn parent(
     })
 }
 
+/// The matching-result query and its optional stateless position.
+pub struct Request<'a> {
+    pub path: &'a str,
+    pub traversal: &'a str,
+    pub page: query::ResultPage,
+    pub branch: &'a str,
+    pub continuation: Option<&'a str>,
+}
+
 /// A complete page or Capacity: never advance past unreturned matches.
 pub fn list(
     store: &Arc<Store>,
     reader: &StorePorts,
     start: NodeId,
-    path: &str,
-    traversal: &str,
-    page: query::ResultPage,
-    branch: &str,
+    request: Request<'_>,
 ) -> args::Answer {
+    let Request {
+        path,
+        traversal,
+        mut page,
+        branch,
+        continuation,
+    } = request;
     let provenance = match traversal {
         "provenance" => true,
         "branch" => false,
@@ -50,7 +63,32 @@ pub fn list(
         branch,
         size: page.limit,
     };
-    let cached = revision_pages::find(store, &key, page.skip);
+    let query = SdkValue::map([
+        ("kind", SdkValue::text("revision")),
+        ("start", SdkValue::text(args::node_text(start))),
+        ("path", SdkValue::text(path)),
+        ("branch", SdkValue::text(branch)),
+        ("traversal", SdkValue::text(traversal)),
+        ("size", SdkValue::Int(page.limit as i64)),
+    ]);
+    let resumed = continuation
+        .map(|token| super::continuation::decode(store, token, &query))
+        .transpose()?;
+    let cached = if let Some(state) = &resumed {
+        page.number = super::continuation::page(state, page.number)?;
+        page.skip = (page.number - 1)
+            .checked_mul(page.limit as u64)
+            .ok_or_else(|| args::invalid("continuation page overflow"))?;
+        Some(Boundary {
+            next: state.get_text("next").map(args::node).transpose()?,
+            candidate: state
+                .get_int("candidate")
+                .and_then(|n| u64::try_from(n).ok())
+                .ok_or_else(|| args::invalid("invalid continuation candidate"))?,
+        })
+    } else {
+        revision_pages::find(store, &key, page.skip)
+    };
     let initial = if !provenance && branch != "main" && matches!(start, NodeId::Layer(_)) {
         None
     } else {
@@ -153,7 +191,36 @@ pub fn list(
         ]));
     }
     let count = items.len();
+    let continuation = if more {
+        super::continuation::encode(
+            store,
+            query,
+            SdkValue::map([
+                (
+                    "next",
+                    SdkValue::opt_text(boundary.next.map(args::node_text)),
+                ),
+                (
+                    "candidate",
+                    SdkValue::Int(
+                        i64::try_from(boundary.candidate)
+                            .map_err(|_| query::capacity("continuation candidate overflow"))?,
+                    ),
+                ),
+                (
+                    "page",
+                    SdkValue::Int(
+                        i64::try_from(page.number + 1)
+                            .map_err(|_| query::capacity("continuation page overflow"))?,
+                    ),
+                ),
+            ]),
+        )?
+    } else {
+        SdkValue::Null
+    };
     let answer = snapshot::answer(vec![
+        ("continuation", continuation),
         ("kind", SdkValue::text("ok")),
         ("at", saved::reference(store, start)?),
         ("path", SdkValue::text(path)),

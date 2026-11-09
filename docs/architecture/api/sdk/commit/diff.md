@@ -38,7 +38,7 @@ layerfs commit diff <store>/<project> <from_commit> <to_commit> \
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
 | `project` | Project | `<store>/<project>` | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
-| `from_commit`, `to_commit` | Name | each must resolve to a saved Commit of the project (a Branch or Layer is `InvalidInput`); sent as `from`, `to` | [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs) `diff_commits` |
+| `from_commit`, `to_commit` | Name | each must be a full saved Commit or Layer id of the project (Branch names are `InvalidInput`); sent as `from`, `to` | [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs) `diff_commits` |
 
 The two Commits may be on different Branches of the same project.
 
@@ -111,3 +111,13 @@ layerfs commit diff shop/api <older-id> <newer-id> --paths-only
 ---
 
 ← [commit.get](get.md) · [Up: commit](README.md) · [SDK: file](../file/README.md) →
+
+## Layer endpoints
+
+`commit diff` accepts Layer↔Layer and Commit↔Layer endpoints as well as
+Commit↔Commit. The existing changed-inode/binding plan prunes unchanged
+namespace state when its hints qualify; fallback and Capacity semantics are
+unchanged. Use it for main-publication comparisons and first Commit versus
+its base Layer. The legacy side field `commit` holds the supplied saved id
+(including a typed Layer id); `root` remains the immutable filesystem root.
+The existing `next_cursor` path resumes this saved comparison.

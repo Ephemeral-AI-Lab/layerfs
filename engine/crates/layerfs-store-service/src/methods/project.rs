@@ -53,3 +53,28 @@ pub fn list_branches(service: &StoreService, args: &SdkValue) -> Answer {
     }
     Ok(result)
 }
+
+/// `project.stats`: resolve the Branch-qualified immutable pin once, then count it.
+pub fn stats(service: &StoreService, args: &SdkValue) -> Answer {
+    let stack = project(service, args)?;
+    let branch = args.get_text("branch").unwrap_or("main");
+    let node = crate::history::saved::resolve_context(
+        &service.store,
+        &stack,
+        branch,
+        args.get_text("commit"),
+    )?;
+    let reader = crate::read::snapshot::reader(&service.store, &stack);
+    let snap = crate::read::snapshot::resolve(
+        &service.store,
+        &stack,
+        &reader,
+        &crate::history::lookup::node_text(node),
+    )?;
+    crate::read::tree_stats::count(
+        &service.store,
+        &reader,
+        &snap,
+        crate::methods::args::text(args, "project")?,
+    )
+}

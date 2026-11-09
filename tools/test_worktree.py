@@ -61,6 +61,13 @@ class WorktreeTests(unittest.TestCase):
         self.path = self.root / "state" / resources.identity(self.repo) / "resources.json"
         self.record = resources.load(self.path)
 
+    def test_build_identity_matches_the_registered_source(self):
+        env = resources.environment(self.record, "linux")
+        self.assertEqual(env["LAYERFS_BUILD_COMMIT"], git(self.repo, "rev-parse", "HEAD").decode().strip())
+        self.assertEqual(env["LAYERFS_BUILD_DIRTY"], "false")
+        (self.repo / "Cargo.toml").write_text("changed")
+        self.assertEqual(resources.environment(self.record, "linux")["LAYERFS_BUILD_DIRTY"], "true")
+
     def test_build_identity_covers_each_product_layer(self):
         before = resources.inputs(self.record)
         for relative in (

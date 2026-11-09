@@ -172,3 +172,21 @@ no cache of its own ([Service](service.md#read-handles)).
 ---
 
 ← [Store calls: Service](service.md) · [Up: Store calls](README.md) · [Store calls: Writes](writes.md) →
+
+## Stateless saved-query continuation
+
+`read/continuation.rs` encodes query and next-position values through the
+existing Bridge Answer codec in an `lfq1` token. HistoryProvider authenticates
+it with the existing authority capability, CatalogId and incarnation; the
+engine verifies the tag before decoding, then compares every query field.
+No key is exposed and no continuation state is stored. Payload admission is
+4 KiB, leaving space for it alongside a result page.
+
+Revisions bind saved start id, Branch, literal path, traversal and page size;
+they retain the next immutable node and candidate index. Pinned comparisons
+bind both ids, Branch contexts, path prefix, attribution/hunks and page size,
+and retain the last delivered matching path. Resuming uses the existing
+indexed path/name seeker or immutable parent traversal from that position.
+It does not replay previous pages, while normal Capacity semantics remain.
+Commit differences accept full Commit or Layer endpoints and keep the
+existing changed-entry plan.

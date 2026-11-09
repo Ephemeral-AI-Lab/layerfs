@@ -26,6 +26,7 @@ pub(crate) const CALL: Call = call(
         opt("to_commit", Text),
         opt("path_prefix", Text),
         opt("include_attribution", Bool),
+        opt("continuation", Text),
     ],
     "files that differ between two Branches' heads",
     run,
@@ -41,6 +42,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         from_commit: text("from_commit"),
         to_commit: text("to_commit"),
         path_prefix: text("path_prefix"),
+        continuation: text("continuation"),
         include_attribution: match args.get("include_attribution") {
             Some(SdkValue::Bool(v)) => Some(*v),
             _ => None,

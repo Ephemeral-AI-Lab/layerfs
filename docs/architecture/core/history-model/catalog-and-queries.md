@@ -150,3 +150,14 @@ Callers match variants; nothing parses the message text
 ---
 
 ← [History model: Entities](entities.md) · [Up: History model](README.md) · [History model: Allocation](allocation.md) →
+
+## Saved-query authentication
+
+`HistoryCatalog::query_authenticator` authenticates a bounded opaque payload
+with the catalog's existing cursor capability, without exposing the secret
+or opening a transaction. The default is `Unsupported`; HistoryProvider
+overrides it for both SQLite and PostgreSQL. `query::authenticate_query` uses
+keyed BLAKE3 in the distinct `layerfs/saved-query/v1` domain and binds
+CatalogId and incarnation before up to 16 KiB of payload. Existing 160-byte
+history cursors keep their frozen format. The Store-call layer owns the
+query/position shape and validates it after authentication.

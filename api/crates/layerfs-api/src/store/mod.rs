@@ -1,4 +1,4 @@
-//! The `store` family: 9 calls, one file each (H1: push and pull replace move).
+//! The `store` family: 10 calls, one file each (H1: push and pull replace move).
 mod connect;
 mod create;
 mod disconnect;
@@ -7,6 +7,7 @@ mod list;
 mod pull;
 mod push;
 mod remove;
+mod stats;
 mod status;
 
 use crate::calls::Calls;
@@ -17,6 +18,7 @@ pub(crate) fn calls() -> Calls {
         list::CALL,
         get::CALL,
         status::CALL,
+        stats::CALL,
         create::CALL,
         connect::CALL,
         push::CALL,

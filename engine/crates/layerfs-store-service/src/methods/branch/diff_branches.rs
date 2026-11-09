@@ -15,6 +15,7 @@ pub fn diff_branches(service: &StoreService, args: &SdkValue) -> Answer {
         "toCommit",
         "pathPrefix",
         "includeAttribution",
+        "continuation",
     ]
     .iter()
     .any(|key| args.get(key).is_some_and(|v| !matches!(v, SdkValue::Null)));

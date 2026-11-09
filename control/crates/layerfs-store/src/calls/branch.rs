@@ -135,6 +135,8 @@ pub struct BranchDiff {
     pub path_prefix: Option<String>,
     /// Discover equal-content paths with different owning commits.
     pub include_attribution: Option<bool>,
+    /// Stateless continuation of a pinned comparison.
+    pub continuation: Option<String>,
 }
 
 /// `branch.list`: one page of the project's Branches.

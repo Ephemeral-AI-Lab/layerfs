@@ -121,14 +121,15 @@ fn worker(meet: Meet) -> (SocketAddr, Arc<Mutex<Vec<String>>>) {
                 continue;
             }
             // this build's hello: its protocol, no sealed bundle
-            send(
+            layerfs_api::worker::write_frame(
                 &mut stream,
-                format!(
-                    r#"{{"ready":true,"protocol":{},"bundle":null}}"#,
-                    layerfs_api::worker::PROTOCOL
-                )
-                .as_bytes(),
-            );
+                &SdkValue::map([
+                    ("ready", SdkValue::Bool(true)),
+                    ("protocol", SdkValue::Int(layerfs_api::worker::PROTOCOL)),
+                    ("bundle", SdkValue::Null),
+                ]),
+            )
+            .unwrap();
             let request = read_frame(&mut stream).ok().flatten();
             let op = request
                 .as_ref()

@@ -147,11 +147,20 @@ def environment(record, platform):
     for name in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_TARGET", "CARGO_BUILD_RUSTFLAGS", "RUSTC"):
         if os.environ.get(name):
             raise Refused(f"Unset {name}; this launcher uses the repository's native ARM64 profile")
+    identity = {
+        "LAYERFS_BUILD_COMMIT": git(Path(record["worktree"]), "rev-parse", "HEAD").decode().strip(),
+        "LAYERFS_BUILD_DIRTY": str(bool(git(Path(record["worktree"]), "status", "--porcelain"))).lower(),
+    }
     if platform == "macos":
         if os.uname().sysname != "Darwin":
             raise Refused("macos builds require a macOS host")
-        return {**os.environ, "CARGO_HOME": record["macos_cargo_home"], "CARGO_TARGET_DIR": record["macos_target"]}
-    return {"CARGO_HOME": "/cargo-home", "CARGO_TARGET_DIR": "/work/target"}
+        return {
+            **os.environ,
+            **identity,
+            "CARGO_HOME": record["macos_cargo_home"],
+            "CARGO_TARGET_DIR": record["macos_target"],
+        }
+    return {**identity, "CARGO_HOME": "/cargo-home", "CARGO_TARGET_DIR": "/work/target"}
 
 
 def docker_build(record, command, extra=(), network="none"):

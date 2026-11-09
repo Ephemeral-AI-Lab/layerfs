@@ -85,3 +85,12 @@ forward the same checked options and preserve structured refusals without replay
 The call table owns JS/Python/CLI names/options; generated declarations and per-call
 pages must agree with the implementation. Nullable/partial additions must not
 silently widen legacy boolean fields or replace established refusal behavior.
+
+## Stateless matching-result continuation
+
+Pinned `branch.diff` and `file.revision` return a `continuation` when another
+page exists. A new process repeats the pin/query and passes the token to seek
+from its authenticated immutable boundary. Page cache eviction is irrelevant
+to this route. Query/pin mismatches and tampering are `InvalidInput`; all
+existing per-page Capacity refusals remain. Commit comparisons now also
+accept full Layer endpoints through the existing scalable plan and path cursor.
