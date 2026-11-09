@@ -30,7 +30,7 @@
 //! file drops its paired `._<name>` companion and any spilled file with it;
 //! when [`HELD`] is reached, orphan companions whose main file is no longer in
 //! the export's name index are reclaimed first, and only if [`HELD`] live
-//! companions still remain does `CREATE` answer `NFS3ERR_ACCES`.
+//! companions still remain does `CREATE` answer `NFS3ERR_NOSPC`.
 use crate::{
     attributes::Status,
     change::{How, Sattr, Tickets, Wcc},
@@ -46,7 +46,7 @@ use std::{
     os::unix::fs::{DirBuilderExt, FileExt, OpenOptionsExt},
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 /// The first serial of the export's own companions, far above any serial the
@@ -98,6 +98,7 @@ pub(crate) struct Companions {
     spill_dir: Option<PathBuf>,
     resident_budget: usize,
     held_limit: usize,
+    last_refusal_log: Option<Instant>,
 }
 impl Default for Companions {
     fn default() -> Self {
@@ -110,6 +111,7 @@ impl Default for Companions {
             spill_dir: None,
             resident_budget: RESIDENT_BYTES,
             held_limit: HELD,
+            last_refusal_log: None,
         }
     }
 }
@@ -450,7 +452,25 @@ impl Kernel {
         tickets: &mut Tickets,
     ) -> Result<(ViewStat, Wcc), Status> {
         let directory = self.directory_wcc(parent);
-        if let Some(stat) = self.companion_named(parent, name) {
+        if parent != self.root() && !self.table().parents.contains_key(&parent) {
+            return Err(Status::NotDir);
+        }
+        let mut companions = self.companions();
+        // Never acquire the kernel table under the companion lock. If full,
+        // snapshot live names first, then recheck everything under one lock.
+        let live = if companions.files.len() >= companions.held_limit {
+            drop(companions);
+            let live = self.table().by_name.keys().cloned().collect::<HashSet<_>>();
+            companions = self.companions();
+            Some(live)
+        } else {
+            None
+        };
+        let named = (parent, name.to_vec());
+        if let Some(&serial) = companions.names.get(&named) {
+            let stat = Companions::stat(serial, &companions.files[&serial]);
+            companions.use_serial(serial);
+            drop(companions);
             // Opened again: UNCHECKED applies its size, as an open with
             // truncation would; GUARDED and EXCLUSIVE find it taken.
             let How::Unchecked(sattr) = how else {
@@ -468,27 +488,31 @@ impl Kernel {
                 None => Ok((stat, directory)),
             };
         }
-        if parent != self.root() && !self.table().parents.contains_key(&parent) {
-            return Err(Status::NotDir);
-        }
-        let at_limit = {
-            let companions = self.companions();
-            companions.files.len() >= companions.held_limit
+        let reclaimed = if companions.files.len() >= companions.held_limit {
+            companions.reclaim_orphans(live.as_ref().expect("full table has a live-name snapshot"))
+        } else {
+            Vec::new()
         };
-        let mut reclaimed = Vec::new();
-        if at_limit {
-            let live: HashSet<(u64, Vec<u8>)> = self.table().by_name.keys().cloned().collect();
-            let mut companions = self.companions();
-            if companions.files.len() >= companions.held_limit {
-                reclaimed = companions.reclaim_orphans(&live);
-            }
-        }
-        unlink_paths(reclaimed);
-        let mut companions = self.companions();
         if companions.files.len() >= companions.held_limit {
+            let held = companions.files.len();
+            let limit = companions.held_limit;
+            let log = companions
+                .last_refusal_log
+                .is_none_or(|last| last.elapsed() >= Duration::from_secs(60));
+            let namespace = log.then(|| companions.spill_dir.clone());
+            if log {
+                companions.last_refusal_log = Some(Instant::now());
+            }
             drop(companions);
-            self.names_refused.fetch_add(1, Ordering::Relaxed);
-            return Err(Status::Access);
+            unlink_paths(reclaimed);
+            let refused = self.names_refused.fetch_add(1, Ordering::Relaxed) + 1;
+            if let Some(namespace) = namespace {
+                eprintln!(
+                    "layerfs-nfs: AppleDouble index full: export={:?} namespace={namespace:?} parent={parent} companions={held} limit={limit} names_refused={refused}; NFS3ERR_NOSPC",
+                    self.mount()
+                );
+            }
+            return Err(Status::NoSpc);
         }
         let mut metadata = now();
         if let How::Unchecked(sattr) | How::Guarded(sattr) = how {
@@ -499,7 +523,6 @@ impl Kernel {
         let serial = SERIALS + companions.next;
         companions.next += 1;
         let used = companions.tick();
-        let named = (parent, name.to_vec());
         companions.names.insert(named.clone(), serial);
         companions.files.insert(
             serial,
@@ -514,6 +537,7 @@ impl Kernel {
         let file = &companions.files[&serial];
         let stat = Companions::stat(serial, file);
         drop(companions);
+        unlink_paths(reclaimed);
         self.names_detached.fetch_add(1, Ordering::Relaxed);
         Ok((stat, directory))
     }

@@ -195,7 +195,7 @@ Refresh after an install is covered in
 
 | Bound | Value | Over the bound | Source |
 | --- | --- | --- | --- |
-| `HELD` | 65,536 companion index entries | Reclaim orphan companions whose main file is not in `Table::by_name`; if still at the bound, CREATE answers `NFS3ERR_ACCES` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| `HELD` | 65,536 companion index entries | Reclaim orphan companions whose main file is not in `Table::by_name`; if still at the bound, CREATE answers `NFS3ERR_NOSPC`, increments `names_refused` and logs the export/namespace, current count and limit at most once per 60 seconds per export | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 | `FILE_BYTES` | 1 MiB per companion | WRITE / SETATTR `NFS3ERR_FBIG` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 | `RESIDENT_BYTES` | 32 MiB resident bodies in all | Spill least recently touched resident bodies to `companion_spill_dir` (`<mounts>/.appledouble/<namespace>/<serial>`); host disk I/O errors map to `NFS3ERR_NOSPC` (`ENOSPC`/`EDQUOT`), `NFS3ERR_FBIG` (`EFBIG`), `NFS3ERR_ACCES` (`EACCES`), `NFS3ERR_PERM` (`EPERM`), `NFS3ERR_ROFS` (`EROFS`) or `NFS3ERR_IO` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 
@@ -210,6 +210,21 @@ export removes the entire `<mounts>/.appledouble/<namespace>` directory
 (and a fresh Attach cleans any leftover directory from a crashed daemon), so
 remounts, daemon restarts and Commits do not retain them. A name is
 AppleDouble when it starts with `._` and has at least one more byte.
+
+CREATE checks an existing companion name, checks the entry limit, reclaims
+orphans and inserts a new serial under one companion-lock hold, so concurrent
+GUARDED creates of one name yield one serial and one `NFS3ERR_EXIST`. An
+existing name is still usable when the table is full. `Table::by_name` keeps
+every observed main-file name, including all seen hard-link aliases, rather
+than only the latest name of an inode. Unlink and rename remove known vanished
+names; retiring an inode removes all keys for its serial. Reclamation therefore
+keeps a companion when a second name for its main file was observed. The index
+remains an observation cache: retained names can delay reclamation. Its existing
+`Table::names` admission bound is unchanged; a separate bound on `by_name`
+(alias keys) remains future work. The companion entry limit stays 65,536; NOSPC
+reports exhaustion of this export resource, not a permission failure or a
+per-user quota. The first full-table refusal logs immediately, with later logs
+at least 60 seconds apart; every refusal still increments `names_refused`.
 
 A body is written out from a snapshot taken under the companion lock, as a new
 `<serial>.<n>.tmp` opened with `create_new`, and is switched to that file only

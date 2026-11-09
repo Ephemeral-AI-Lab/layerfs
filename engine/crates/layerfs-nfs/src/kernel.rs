@@ -106,7 +106,9 @@ pub(crate) struct Table {
     /// Serial -> the name it was last reached by, kept after its reference
     /// is collected so a later handle can be resolved again.
     pub names: HashMap<u64, Named>,
-    /// (directory, name) -> serial last seen under that name.
+    /// Every observed (directory, name) -> serial, including hard-link aliases.
+    /// A second name does not retire the first; unlink/rename remove known
+    /// vanished names, and retiring a serial removes all its keys.
     pub by_name: HashMap<Named, u64>,
     /// Serial -> last use, for the collection order.
     pub used: HashMap<u64, u64>,
@@ -423,11 +425,7 @@ impl Kernel {
                 table.used.insert(stat.serial, tick);
                 if table.names.len() < NAMES_HELD || table.names.contains_key(&stat.serial) {
                     let named = (parent, name.to_vec());
-                    if let Some(old) = table.names.insert(stat.serial, named.clone()) {
-                        if table.by_name.get(&old) == Some(&stat.serial) {
-                            table.by_name.remove(&old);
-                        }
-                    }
+                    table.names.insert(stat.serial, named.clone());
                     table.by_name.insert(named, stat.serial);
                 }
             }
@@ -486,11 +484,8 @@ impl Kernel {
             let mut table = self.table();
             table.parents.remove(&serial);
             table.directory_stats.remove(&serial);
-            if let Some(old) = table.names.remove(&serial) {
-                if table.by_name.get(&old) == Some(&serial) {
-                    table.by_name.remove(&old);
-                }
-            }
+            table.names.remove(&serial);
+            table.by_name.retain(|_, held| *held != serial);
             table.used.remove(&serial);
             table.verifiers.retain(|_, entry| entry.1 != serial);
             let directories: Vec<u64> = table

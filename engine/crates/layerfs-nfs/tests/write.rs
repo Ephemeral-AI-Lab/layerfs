@@ -33,6 +33,7 @@ use std::{
 const UID: u32 = 501;
 const GID: u32 = 20;
 const FILE_SYNC: u32 = 2;
+const NOSPC: u32 = 28;
 const LINUX_SILLY: &[u8] = b".nfs00000000000012ab00000001";
 const MAC_SILLY: &[u8] = b".nfs.20051025.b896";
 
@@ -722,7 +723,7 @@ fn apple_double_companions_spill_preserve_all_bytes_reclaim_orphans_and_clean_up
     // 5. At the index bound (`companions_held`; default `HELD` = 65_536):
     //    orphan companions (whose paired main file is not in `Table::by_name`)
     //    are reclaimed first so new creations succeed; when all slots are
-    //    held by live main files, `CREATE` answers `NFS3ERR_ACCES`.
+    //    held by live main files, `CREATE` answers `NFS3ERR_NOSPC`.
     assert_eq!(HELD, 65_536);
     let small_cap = 8;
     let cap_spill = base.join("spill-cap");
@@ -773,15 +774,109 @@ fn apple_double_companions_spill_preserve_all_bytes_reclaim_orphans_and_clean_up
     }
 
     // Now all 8 slots belong to live main files: one more companion CREATE
-    // finds no orphans to reclaim and answers `NFS3ERR_ACCES`.
+    // finds no orphans to reclaim and answers `NFS3ERR_NOSPC`. Repeated
+    // refusals count individually but log at most once per minute per export.
     c2.touch(&root2, b"extra", 0o644).unwrap();
-    assert_eq!(c2.touch(&root2, b"._extra", 0o644).map(|_| ()), Err(ACCES));
-    assert_eq!(server2.held().names_refused, 1);
+    for _ in 0..3 {
+        assert_eq!(c2.touch(&root2, b"._extra", 0o644).map(|_| ()), Err(NOSPC));
+    }
+    assert_eq!(server2.held().names_refused, 3);
+    // Existing names still honor GUARDED / UNCHECKED when the table is full.
+    assert_eq!(
+        c2.create(&root2, b"._live-0", How::Guarded(Set::default()))
+            .map(|_| ()),
+        Err(EXIST)
+    );
+    c2.touch(&root2, b"._live-0", 0o644).unwrap();
+    c2.remove(&root2, b"live-7").unwrap();
+    c2.touch(&root2, b"._extra", 0o644).unwrap();
+    assert_eq!(server2.held().names_refused, 3);
 
     drop(c2);
     let released2 = server2.stop();
     assert!(!cap_spill.exists());
     let (_, outstanding) = rig.stop(released2);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn two_guarded_creates_of_one_companion_name_leave_one_entry() {
+    let base = temp("appledouble-create-race");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    rig.companions_held = 8;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let mut other = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    c.touch(&root, b"dup", 0o644).unwrap();
+
+    // Two actual connections start each CREATE together. Repeat the schedule
+    // with an empty companion table, so every round exercises first insertion.
+    for _ in 0..4096 {
+        let start = std::sync::Barrier::new(2);
+        let (a, b) = std::thread::scope(|scope| {
+            let a = scope.spawn(|| {
+                start.wait();
+                c.create(&root, b"._dup", How::Guarded(Set::default()))
+            });
+            let b = scope.spawn(|| {
+                start.wait();
+                other.create(&root, b"._dup", How::Guarded(Set::default()))
+            });
+            (a.join().unwrap(), b.join().unwrap())
+        });
+        let mut statuses = [
+            a.as_ref().map(|_| OK).unwrap_or_else(|e| *e),
+            b.as_ref().map(|_| OK).unwrap_or_else(|e| *e),
+        ];
+        statuses.sort();
+        assert_eq!(statuses, [OK, EXIST]);
+        let made = a.or(b).unwrap();
+        assert_eq!(server.held().companions, 1);
+        c.remove(&root, b"._dup").unwrap();
+        assert_eq!(server.held().companions, 0);
+        assert_eq!(c.getattr(&made.handle), Err(STALE));
+    }
+    c.touch(&root, b"._dup", 0o644).unwrap();
+    assert_eq!(server.held().names_refused, 0);
+    drop((c, other));
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_companion_survives_reclaim_after_its_main_file_gains_a_second_name() {
+    let base = temp("appledouble-hardlink-reclaim");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    rig.companions_held = 2;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    let main = c.touch(&root, b"anchor", 0o644).unwrap();
+    let companion = c.touch(&root, b"._anchor", 0o644).unwrap();
+    let payload = b"held-cap-preserve-me";
+    c.write(&companion.handle, 0, payload).unwrap();
+    c.link(&main.handle, &root, b"anchor-alias").unwrap();
+    let orphan = c.touch(&root, b"._orphan", 0o644).unwrap();
+    assert_eq!(server.held().companions, 2);
+    c.touch(&root, b"other", 0o644).unwrap();
+    c.touch(&root, b"._other", 0o644).unwrap();
+    assert_eq!(c.read_all(&companion.handle, 1024), payload);
+    assert_eq!(c.lookup(&root, b"anchor").unwrap().0, main.handle);
+    assert_eq!(c.lookup(&root, b"anchor-alias").unwrap().0, main.handle);
+    assert_eq!(c.getattr(&orphan.handle), Err(STALE));
+    assert_eq!(server.held().companions, 2);
+    assert_eq!(server.held().names_refused, 0);
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
     assert_eq!(outstanding, 0);
     fs::remove_dir_all(base).unwrap();
 }
