@@ -41,8 +41,7 @@ fn home_with_a_named_workspace(tag: &str) -> PathBuf {
         &SdkValue::map([("name", t("app")), ("created", SdkValue::Int(1))]),
     )
     .unwrap();
-    // the native daemon a call would launch: never started here, but the
-    // record must name a file so the call reaches the Sandbox itself
+    // the native daemon a call would launch: never started here
     let native = paths::machine_record(&home, "native");
     // (a home made without the machine calls has no native record yet)
     let record = read_record(&native)
