@@ -37,9 +37,6 @@ fn kernel(host: HostOs) -> Option<KernelRoute> {
 
 /// In the caller's process, except on Windows, whose Stores are in the WSL
 /// worker.
-fn executor(host: HostOs) -> ExecutorKind {
-    match host {
-        HostOs::Windows => ExecutorKind::Worker,
-        _ => ExecutorKind::Local,
-    }
+fn executor(_host: HostOs) -> ExecutorKind {
+    ExecutorKind::Local
 }
