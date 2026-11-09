@@ -1,8 +1,8 @@
 //! One shared dispatcher for every mount, and the exact owners an entry keeps.
 use super::kernel::{bounded, KernelConfig};
 use layerfs_bridge::control::{
-    ForcedFacts, MountPhase, MountReceipt, MountWork, ReadyMount, TeardownCustody, TeardownStage,
-    WorkspaceToken,
+    AbortDisposition, DetachDisposition, ForcedFacts, MountPhase, MountReceipt, MountWork,
+    ReadyMount, TeardownCustody, TeardownStage, WorkspaceToken,
 };
 use layerfs_fuse::{
     session::{DrainStage, KernelSession, SessionFacts, SessionObserver, Undrained},
@@ -74,19 +74,25 @@ impl fmt::Debug for Kept {
             .finish()
     }
 }
-/// What a retained entry owns. Only `Stalled` can still be ended, by one
-/// forced unmount; every other owner is kept as it is.
+/// What a retained entry owns. `Stalled` can still be ended by one forced
+/// unmount; `Undrained` keeps a forced teardown's connection so a later
+/// terminal call can re-attempt its one detach once the holder is gone; every
+/// other owner is kept as it is.
 pub(super) enum Evidence {
     /// A normal unmount's drain that stopped at `Join` after its plain detach.
     Stalled(Box<Undrained>),
-    /// An undrained session, a drained receipt or a refused engine completion.
+    /// A forced teardown's connection stopped at any drain stage, including
+    /// the one detach the kernel refused `EBUSY`. Typed so a later terminal
+    /// call can retry that detach from the recorded session.
+    Undrained(Box<Undrained>),
+    /// A drained receipt or a refused engine completion.
     Other(Box<dyn fmt::Debug + Send>),
 }
 /// Shows the owner itself, as the retained-owner observation always has.
 impl fmt::Debug for Evidence {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Stalled(undrained) => undrained.fmt(f),
+            Self::Stalled(undrained) | Self::Undrained(undrained) => undrained.fmt(f),
             Self::Other(owner) => owner.fmt(f),
         }
     }
@@ -100,6 +106,16 @@ impl Kept {
             && self.ready.is_some()
             && facts
                 .is_some_and(|facts| facts.detached && facts.abort_bound && facts.aborted.is_none())
+    }
+    /// A forced teardown stopped at its one plain detach with `EBUSY`: a
+    /// later terminal call may re-attempt that detach once the holder is
+    /// gone. The abort write is never repeated, only the detach.
+    pub(super) fn retryable(&self) -> bool {
+        self.stage == TeardownStage::Detach
+            && self.forced.as_ref().is_some_and(|facts| {
+                facts.abort == AbortDisposition::Written && facts.detach == DetachDisposition::Busy
+            })
+            && matches!(self.evidence, Evidence::Undrained(_))
     }
     pub(super) fn custody(&self, token: WorkspaceToken) -> TeardownCustody {
         let facts = self.observer.as_ref().map(SessionObserver::facts);

@@ -107,4 +107,19 @@ impl Undrained {
             }
         }
     }
+
+    /// A forced teardown stopped at its one plain detach with `EBUSY`
+    /// (`DetachAttempt::Failed`), re-attempted once the holder is gone. Only
+    /// that recorded failure is retryable: any other stop returns the
+    /// connection as it was, with no syscall. The abort write is never
+    /// repeated; the one detach is re-attempted after a fresh local drain.
+    pub fn retry_detach(mut self) -> Result<Box<Drained>, Box<Undrained>> {
+        if self.stage != DrainStage::Detach
+            || !matches!(self.session.forced_detach, DetachAttempt::Failed(_))
+        {
+            return Err(Box::new(self));
+        }
+        self.session.forced_detach = DetachAttempt::NotAttempted;
+        self.session.force_drain()
+    }
 }

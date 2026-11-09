@@ -26,6 +26,7 @@ pub fn call(host: Host, call: Call) -> Outcome {
         Call::Close { force, held } => {
             crate::lifecycle::close(&host, force, held.as_deref().unwrap_or_default())
         }
+        Call::Destroy => crate::lifecycle::destroy(&host),
         _ => Err(refused(
             "UnknownMethod",
             format!("no operation {}", call.op().name()),

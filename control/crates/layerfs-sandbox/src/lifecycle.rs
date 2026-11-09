@@ -344,6 +344,44 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     ]))
 }
 
+/// `sandbox.destroy`: delete only Sandbox `id`'s data plane, for an
+/// invisible holder (a copied mount namespace) that exec records cannot see
+/// and no unmount can name. It asks the daemon nothing and settles no
+/// command: its runtime is stopped and deleted, and the folder goes with it,
+/// whatever still holds the mount. The shared Store is outside the folder and
+/// never touched.
+pub fn destroy(host: &Host) -> Outcome {
+    let id = host.sandbox()?.to_owned();
+    let directory = crate::files::sandbox_dir(host)?;
+    let Some(recorded) = crate::files::started(&directory)? else {
+        return Err(refused(
+            "NoSuchSandbox",
+            format!("no Sandbox {id} runs on this machine"),
+        ));
+    };
+    if recorded.retired() {
+        return Err(crate::reopen::retired(&id, recorded.name().unwrap_or("")));
+    }
+    let _guard = layerfs_store::project::discovery::guard(&directory)?;
+    let Some(value) = crate::files::started(&directory)? else {
+        return Err(refused(
+            "NoSuchSandbox",
+            format!("Sandbox {id} was destroyed"),
+        ));
+    };
+    let mut owner = crate::reopen::recorded(host, &id, &value)?
+        .reopen()
+        .map_err(failed)?;
+    owner.stop(STOP_S).map_err(failed)?;
+    owner.delete().map_err(failed)?;
+    lock(&SANDBOXES)?.remove(&directory);
+    std::fs::remove_dir_all(&directory).map_err(failed)?;
+    Ok(SdkValue::map([
+        ("kind", SdkValue::text("Destroyed")),
+        ("sandbox", SdkValue::text(&id)),
+    ]))
+}
+
 /// Forgets Sandbox `id`, recorded in `directory` (its daemon record
 /// `recorded`) under the retired docker backend (D-8, layerfs-project#111):
 /// its folder goes and the answer names its container, which is left for

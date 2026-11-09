@@ -3,7 +3,7 @@
 //! A normal unmount stalled at Join is forced the same way, its plain detach
 //! counting as the one detach.
 #[cfg(target_os = "linux")]
-use super::serving::{stage, work, Attached, Evidence, Leaving};
+use super::serving::{stage, work, Attached, Evidence, Kept, Leaving};
 use super::{
     kernel::Kernel,
     registry::{bound_mut, Binding},
@@ -21,10 +21,10 @@ use layerfs_bridge::control::{Activity, CommitKnowledge, ControlCode, WorkspaceT
 #[cfg(target_os = "linux")]
 use layerfs_fuse::{
     mount::AbortWrite,
-    session::{DetachAttempt, SessionFacts},
+    session::{DetachAttempt, Drained, SessionFacts, SessionObserver},
 };
 #[cfg(target_os = "linux")]
-use layerfs_overlay::CleanupState;
+use layerfs_overlay::{CleanupState, KernelMount};
 #[cfg(target_os = "linux")]
 use nix::errno::Errno;
 #[cfg(target_os = "linux")]
@@ -212,6 +212,11 @@ impl Service {
         if self.export.is_some() {
             return self.force_export(token, relinquish_unknown);
         }
+        // A retained detach the kernel refused `EBUSY` is re-attempted first:
+        // the holder may be gone.
+        if let Some((workspace, kept)) = self.take_retryable(token)? {
+            return self.retry_detach(token, workspace, kept);
+        }
         let admitted = self.admit_force(token, relinquish_unknown)?;
         self.force_admitted(token, admitted)
     }
@@ -336,7 +341,7 @@ impl Service {
                     .map_or(DetachAttempt::NotAttempted, |forced| forced.detach);
                 facts.detach = detach(attempt);
                 facts.fenced = undrained.forced.map_or(0, |forced| forced.terminal_replies);
-                return Err(self.retain(
+                return Err(self.keep(
                     token,
                     stage(undrained.stage),
                     format!(
@@ -344,11 +349,26 @@ impl Service {
                         undrained.stage, undrained.loops, undrained.work
                     ),
                     Some(observer),
-                    undrained,
+                    Evidence::Undrained(undrained),
                     Some(facts),
                 ));
             }
         };
+        self.force_completed(token, &workspace, mount, observer, drained, facts)
+    }
+
+    /// The forced teardown after its one detach: Revoke, then Close, then the
+    /// one cleanup observation and routing removal. Shared by a fresh force
+    /// and by a retry of a recorded `EBUSY` detach.
+    fn force_completed(
+        &self,
+        token: WorkspaceToken,
+        workspace: &BoundWorkspace,
+        mount: KernelMount,
+        observer: SessionObserver,
+        drained: Box<Drained>,
+        mut facts: ForcedFacts,
+    ) -> Result<Success, Failure> {
         facts.detach = DetachDisposition::Detached;
         facts.fenced = drained.forced.map_or(0, |forced| forced.terminal_replies);
         // The mount is released, so its last counters come from the receipt.
@@ -375,7 +395,7 @@ impl Service {
                 ));
             }
         }
-        let kernel = self.closed(token, &workspace, Some(drained), Some(facts.clone()))?;
+        let kernel = self.closed(token, workspace, Some(drained), Some(facts.clone()))?;
         // One observation of the closed namespace; a failed one claims no
         // state. Its completion is read and dropped here.
         let (cleanup, observation_failure) = match self
@@ -411,5 +431,73 @@ impl Service {
                 kernel,
             },
         )
+    }
+
+    /// Takes a retained `Detach` custody refused `EBUSY` out for a retry,
+    /// under the registry lock. `None` when the entry is not that custody,
+    /// left unchanged.
+    pub(super) fn take_retryable(
+        &self,
+        token: WorkspaceToken,
+    ) -> Result<Option<(Arc<BoundWorkspace>, Box<Kept>)>, Failure> {
+        let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
+        let value = bound_mut(&mut entries, token)?;
+        if !matches!(&value.kernel, Kernel::Retained(kept) if kept.retryable()) {
+            return Ok(None);
+        }
+        let Kernel::Retained(kept) = std::mem::replace(&mut value.kernel, Kernel::Attaching) else {
+            unreachable!("checked retryable custody");
+        };
+        value.activity = Activity::Closing;
+        value.epoch = value.epoch.saturating_add(1);
+        Ok(Some((value.workspace.clone(), kept)))
+    }
+
+    /// Re-attempts the one plain detach a forced teardown recorded `EBUSY`,
+    /// now that the holder may be gone. Success continues the forced teardown
+    /// (revoke, close); a holder still present keeps the exact custody with
+    /// the re-attempted detach disposition.
+    pub(super) fn retry_detach(
+        &self,
+        token: WorkspaceToken,
+        workspace: Arc<BoundWorkspace>,
+        kept: Box<Kept>,
+    ) -> Result<Success, Failure> {
+        let Kept {
+            evidence, forced, ..
+        } = *kept;
+        let facts = forced.unwrap_or(ForcedFacts {
+            abort: AbortDisposition::Written,
+            detach: DetachDisposition::NotAttempted,
+            commit: CommitKnowledge::Absent,
+            fenced: 0,
+        });
+        let Evidence::Undrained(undrained) = evidence else {
+            unreachable!("checked retryable custody");
+        };
+        let observer = undrained.session.observer();
+        let mount = undrained.session.mount();
+        match undrained.retry_detach() {
+            Ok(drained) => self.force_completed(token, &workspace, mount, observer, drained, facts),
+            Err(undrained) => {
+                let attempt = undrained
+                    .forced
+                    .map_or(DetachAttempt::NotAttempted, |forced| forced.detach);
+                let mut facts = facts;
+                facts.detach = detach(attempt);
+                facts.fenced = undrained.forced.map_or(0, |forced| forced.terminal_replies);
+                Err(self.keep(
+                    token,
+                    stage(undrained.stage),
+                    format!(
+                        "detach retry stopped at {:?}: detach {attempt:?}, loops {:?}, work {:?}",
+                        undrained.stage, undrained.loops, undrained.work
+                    ),
+                    Some(observer),
+                    Evidence::Undrained(undrained),
+                    Some(facts),
+                ))
+            }
+        }
     }
 }

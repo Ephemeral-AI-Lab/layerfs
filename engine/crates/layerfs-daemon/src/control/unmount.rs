@@ -24,6 +24,13 @@ impl Service {
     /// Refuses uncommitted changes with their paths unless `discard`.
     pub(crate) fn unmount(&self, control: UnmountControl) -> Result<Success, Failure> {
         let token = control.token;
+        // A retained detach the kernel refused `EBUSY` is re-attempted, as on
+        // a later force: the holder may be gone. The earlier force already
+        // dropped uncommitted changes, so no dirty check applies to it.
+        #[cfg(target_os = "linux")]
+        if let Some((workspace, kept)) = self.take_retryable(token)? {
+            return self.retry_detach(token, workspace, kept);
+        }
         if !control.discard {
             if let Some(report) = self.dirty(token)? {
                 return Ok(Success::reply(Reply::Dirty(Box::new(report))));

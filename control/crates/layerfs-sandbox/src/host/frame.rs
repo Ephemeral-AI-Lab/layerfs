@@ -78,6 +78,7 @@ fn fields(call: &Call, sent: &Message, sandbox: Option<&str>) -> Vec<(&'static s
                 fields.push(("held", SdkValue::List(held)));
             }
         }
+        Call::Destroy => {}
         Call::ListWorkspaces { path } | Call::Status { path } => {
             fields.extend(path.as_deref().map(|p| ("path", text(p))))
         }
@@ -249,6 +250,7 @@ fn call(op: Op, more: &SdkValue) -> Call {
                 _ => None,
             },
         },
+        Op::SandboxDestroy => Call::Destroy,
         Op::ListWorkspaces => Call::ListWorkspaces { path: text("path") },
         Op::Capacity => Call::Capacity,
         Op::Mount => Call::Mount {

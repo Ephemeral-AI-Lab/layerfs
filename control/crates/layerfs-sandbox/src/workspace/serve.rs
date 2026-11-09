@@ -250,13 +250,19 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     let state = sandbox(host)?;
     let path = required(path, "path")?;
     if let Some(value) = crate::unmount_guard::find(&state, path)? {
-        return crate::unmount_guard::repeat(&value);
+        if !crate::unmount_guard::retry(&value) {
+            return crate::unmount_guard::repeat(&value);
+        }
+        // A recorded forced detach refused `EBUSY`: fall through and ask the
+        // daemon to re-attempt that detach once the holder is gone.
     }
     let guard = layerfs_store::project::discovery::guard(&state.directory)?;
     // Another process may have registered while this call waited for the
     // short admission section. Check again before sending anything.
     if let Some(value) = crate::unmount_guard::find(&state, path)? {
-        return crate::unmount_guard::repeat(&value);
+        if !crate::unmount_guard::retry(&value) {
+            return crate::unmount_guard::repeat(&value);
+        }
     }
     let token = state.token(path)?;
     // its running commands (D-10): `Busy`, or with `force` cancelled first
@@ -273,6 +279,7 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     // Only this Workspace's lease remains held. Other Workspaces and
     // processes can take Sandbox ownership while the daemon helper waits.
     let mut sent = false;
+    let mut retryable = false;
     let outcome = (|| {
         let mut control = crate::daemon::trace::control(&state.controls)?;
         sent = true;
@@ -280,14 +287,21 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
         // Forced: one abort write ends the connection, also after a normal
         // unmount stalled at Join; uncommitted changes are dropped.
         if force {
-            match api.unmount(token, true).map_err(operation)? {
-                Some(outcome) => Ok(values::force_unmounted(&outcome)),
-                None => values::unmounted(&Unmounted::Closed),
+            match api.unmount(token, true) {
+                Ok(Some(outcome)) => Ok(values::force_unmounted(&outcome)),
+                Ok(None) => values::unmounted(&Unmounted::Closed),
+                Err(error) => {
+                    retryable = crate::unmount_guard::retryable(&error);
+                    Err(operation(error))
+                }
             }
         } else {
             match api.unmount_checked(token, discard) {
                 Ok(answer) => values::unmounted(&answer),
-                Err(error) => Err(operation(error)),
+                Err(error) => {
+                    retryable = crate::unmount_guard::retryable(&error);
+                    Err(operation(error))
+                }
             }
         }
     })();
@@ -302,7 +316,7 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     let publication = if !sent {
         crate::unmount_guard::cancel(&attempt)
     } else {
-        crate::unmount_guard::finish(&attempt, path, &outcome)
+        crate::unmount_guard::finish(&attempt, path, &outcome, retryable)
     };
     if let Err(error) = publication {
         return crate::unmount_guard::cleanup_failure(outcome, error);
