@@ -1,8 +1,9 @@
 //! Normal terminal unmount: reversible probe, complete drain, then Close.
+#[cfg(target_os = "linux")]
+use super::serving::Stop;
 use super::{
     kernel::Kernel,
     registry::{bound_mut, idle},
-    serving::Stop,
     Failure, KernelEvidence, Service, Success, UnmountAbort,
 };
 use crate::store::BoundWorkspace;
@@ -153,12 +154,13 @@ impl Service {
         failure: Failure,
         kernel: Receipt,
         forced: Option<ForcedFacts>,
-        mut abort: Option<Box<UnmountAbort>>,
+        abort: Option<Box<UnmountAbort>>,
     ) -> Failure {
         #[cfg(target_os = "linux")]
         if kernel.is_some() {
             // Close stopped with the abort path already recorded: the retained
             // observation names this boundary, not the drain that preceded it.
+            let mut abort = abort;
             if let Some(abort) = abort.as_mut() {
                 abort.stage = layerfs_bridge::control::TeardownStage::Close;
             }
