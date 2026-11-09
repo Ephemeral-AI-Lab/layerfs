@@ -20,3 +20,4 @@ agentgit/
 snapshot.sqlite
 layerfs-a2-bench/
 ephemeral-sandbox/
+tmp/
