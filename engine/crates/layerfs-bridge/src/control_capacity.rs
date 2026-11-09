@@ -10,6 +10,9 @@ use crate::control::SdkValue;
 
 /// The daemon backend method that returns this read model.
 pub const OPERATION: &str = "backend.daemon.connection_failures";
+/// The daemon backend method that closes one named worker's socket and
+/// records `Reclaimed` (#547 slice 5).
+pub const RECLAIM: &str = "backend.daemon.reclaim";
 
 /// Vacant and in-use control slots by admission class.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

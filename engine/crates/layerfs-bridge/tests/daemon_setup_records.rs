@@ -45,6 +45,7 @@ fn setup(store: DaemonStore, route: KernelRoute) -> DaemonSetup {
             connections: 8,
             handshake_ms: 2000,
             idle_ttl_ms: 60_000,
+            request_deadline_ms: 60_000,
             cache_bytes: 1 << 20,
             namespaces: 16,
             pager_kib: 1024,
@@ -130,6 +131,6 @@ fn unknown_route_or_store_bytes_and_the_old_magic_are_refused() {
     bad_kind[store_field - 1 + 1] = 9;
     assert!(DaemonSetup::decode(&bad_kind).is_err());
     let mut old = bytes;
-    old[4] = 6;
+    old[4] = 8;
     assert!(DaemonSetup::decode(&old).is_err());
 }

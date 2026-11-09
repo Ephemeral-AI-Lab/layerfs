@@ -18,8 +18,8 @@ mod host;
 
 use layerfs_bridge::{
     control::{
-        Answer, Call, CapacityModel, DaemonPhase, HelloRequest, Reply, Request, SdkCall, SdkValue,
-        OPERATION,
+        Answer, Call, CapacityModel, ControlCode, DaemonPhase, HelloRequest, Reply, Request,
+        SdkCall, SdkValue, OPERATION, RECLAIM,
     },
     daemon_setup::{DaemonLimits, DaemonSetup},
     duplex::{self, ChannelError, Connection},
@@ -70,7 +70,7 @@ fn private_directory(path: &Path) {
 }
 
 /// Starts the actual executable and returns it once it reports its listener.
-fn start(label: &str, handshake_ms: u32, idle_ttl_ms: u32) -> Daemon {
+fn start(label: &str, handshake_ms: u32, idle_ttl_ms: u32, request_deadline_ms: u32) -> Daemon {
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let directory = std::env::temp_dir().join(format!(
@@ -97,6 +97,7 @@ fn start(label: &str, handshake_ms: u32, idle_ttl_ms: u32) -> Daemon {
             connections: CONNECTIONS,
             handshake_ms,
             idle_ttl_ms,
+            request_deadline_ms,
             cache_bytes: 1024 * 1024,
             namespaces: 16,
             pager_kib: 1024,
@@ -231,7 +232,7 @@ fn wait_for_log(path: &Path, needle: &str, count: usize) {
 /// admitted, the pool is whole, and one log line names each failure (#540).
 #[test]
 fn undecodable_records_do_not_consume_control_slots() {
-    let daemon = start("slots", 2000, 60_000);
+    let daemon = start("slots", 2000, 60_000, 60_000);
     for round in 0..ROUNDS {
         let mut connection = connect(daemon.address);
         connection.send.send(DIE).unwrap();
@@ -282,7 +283,7 @@ fn undecodable_records_do_not_consume_control_slots() {
 /// `LAYERFS-CAPACITY` body instead of a bare EOF (#540).
 #[test]
 fn no_vacant_slot_writes_the_capacity_notice() {
-    let daemon = start("notice", 10_000, 60_000);
+    let daemon = start("notice", 10_000, 60_000, 60_000);
     let mut holders = Vec::new();
     for _ in 0..CONNECTIONS {
         holders.push(hello(daemon.address));
@@ -327,7 +328,7 @@ fn no_vacant_slot_writes_the_capacity_notice() {
 /// authenticated client is still admitted afterwards.
 #[test]
 fn concurrent_failures_do_not_deadlock_or_leak() {
-    let daemon = start("concurrent", 3000, 60_000);
+    let daemon = start("concurrent", 3000, 60_000, 60_000);
     let address = daemon.address;
     let mut threads = Vec::new();
     for _ in 0..16 {
@@ -392,7 +393,7 @@ fn concurrent_failures_do_not_deadlock_or_leak() {
 #[test]
 fn idle_clients_are_reclaimed_for_a_new_connection() {
     const IDLE_TTL_MS: u32 = 300;
-    let daemon = start("idle", 60_000, IDLE_TTL_MS);
+    let daemon = start("idle", 60_000, IDLE_TTL_MS, 60_000);
     let holders: Vec<Connection> = (0..CONNECTIONS).map(|_| hello(daemon.address)).collect();
     // Let every idle worker pass the TTL so the next admission reclaims one.
     thread::sleep(Duration::from_millis(u64::from(IDLE_TTL_MS) + 400));
@@ -471,6 +472,7 @@ fn start_ready(label: &str) -> Daemon {
             connections: CONNECTIONS,
             handshake_ms: 60_000,
             idle_ttl_ms: 60_000,
+            request_deadline_ms: 60_000,
             cache_bytes: 1024 * 1024,
             namespaces: 16,
             pager_kib: 1024,
@@ -637,4 +639,125 @@ fn reserved_slot_serves_recovery_and_refuses_everything_else() {
     }
 
     drop(holders);
+}
+
+/// A worker whose decoded request passes `request_deadline` is expired: its
+/// slot is freed, its socket is closed (so the caller observes the loss), and
+/// one `Expired` retained failure is recorded (#547 slice 5). The interrupted
+/// operation's effect is unknown, so it is never released as clean.
+#[test]
+fn in_flight_expiry_records_expired_and_closes_the_socket() {
+    const DEADLINE_MS: u32 = 300;
+    let daemon = start("expiry", 60_000, 60_000, DEADLINE_MS);
+    // Park one worker in-flight: a Hello that waits for a Store that never
+    // installs blocks its worker in `hello()` past the request deadline.
+    let mut parked = connect(daemon.address);
+    parked
+        .send
+        .send(
+            &Call {
+                id: 1,
+                request: Request::Hello(HelloRequest {
+                    expected_instance: None,
+                    wait_for_store: true,
+                }),
+            }
+            .encode()
+            .unwrap(),
+        )
+        .unwrap();
+    thread::sleep(Duration::from_millis(u64::from(DEADLINE_MS) + 400));
+
+    // The capacity query's admission sweeps the expired slot first, so the
+    // read model already carries the Expired record.
+    let model = capacity(daemon.address);
+
+    // The parked worker's socket was closed by expiry: the caller observes
+    // EOF, never a silent hang.
+    assert!(parked.receive.receive().is_err());
+
+    let expired = model
+        .retained
+        .failures
+        .iter()
+        .find(|record| record.cause == "Expired")
+        .expect("no Expired retained failure");
+    assert_eq!(expired.class, "pool");
+    assert!(!expired.reply_sent);
+    assert!(expired.generation > 0);
+    // The slot was freed: only the query's own connection is running now.
+    assert_eq!(model.admission.pool_running, 1);
+    assert_eq!(model.admission.pool_vacant, i64::from(CONNECTIONS) - 1);
+}
+
+/// `backend.daemon.reclaim { slot, generation }` closes the named worker's
+/// socket, records `Reclaimed` and is one-shot: a second reclaim of the same
+/// generation answers `Invalid` (#547 slice 5).
+#[test]
+fn reclaim_closes_the_named_worker_and_answers_invalid_on_mismatch() {
+    let daemon = start("reclaim", 60_000, 60_000, 60_000);
+    // The first admitted worker: slot 0, generation 1.
+    let mut parked = connect(daemon.address);
+    parked
+        .send
+        .send(
+            &Call {
+                id: 1,
+                request: Request::Hello(HelloRequest {
+                    expected_instance: None,
+                    wait_for_store: true,
+                }),
+            }
+            .encode()
+            .unwrap(),
+        )
+        .unwrap();
+    thread::sleep(Duration::from_millis(200));
+
+    let reclaim = |slot: i64, generation: i64| {
+        let mut operator = connect(daemon.address);
+        operator
+            .send
+            .send(
+                &Call {
+                    id: 9,
+                    request: Request::Sdk(SdkCall {
+                        method: RECLAIM.to_owned(),
+                        args: SdkValue::map([
+                            ("slot", SdkValue::Int(slot)),
+                            ("generation", SdkValue::Int(generation)),
+                        ]),
+                    }),
+                }
+                .encode()
+                .unwrap(),
+            )
+            .unwrap();
+        Answer::decode(operator.receive.receive().unwrap())
+            .unwrap()
+            .reply
+    };
+
+    // The exact generation succeeds and frees the slot.
+    match reclaim(0, 1) {
+        Reply::Sdk(value) => {
+            assert_eq!(value.get_text("outcome"), Some("reclaimed"));
+            assert_eq!(value.get_int("slot"), Some(0));
+            assert_eq!(value.get_int("generation"), Some(1));
+        }
+        other => panic!("reclaim was not answered: {other:?}"),
+    }
+    // The parked worker's socket was closed by the reclaim.
+    assert!(parked.receive.receive().is_err());
+
+    // One-shot: the same generation now answers Invalid.
+    match reclaim(0, 1) {
+        Reply::Refused(refusal) => assert_eq!(refusal.code, ControlCode::Invalid),
+        other => panic!("stale reclaim was not refused: {other:?}"),
+    }
+    // A wrong generation on the now-reoccupied slot answers Invalid too.
+    match reclaim(0, 999) {
+        Reply::Refused(refusal) => assert_eq!(refusal.code, ControlCode::Invalid),
+        other => panic!("mismatched reclaim was not refused: {other:?}"),
+    }
 }

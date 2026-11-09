@@ -3,11 +3,11 @@ use super::{
     owner::{
         disposition, recovery_request, AdmissionClass, Finished, SlotClass, SlotCounts, SlotTicket,
     },
-    retained::RetainedSnapshot,
+    retained::{RetainedFailure, RetainedSnapshot},
     Application, ApplicationError, ConnectionFailure,
 };
 use layerfs_bridge::{
-    control::{Call, DaemonPhase, Reply, Request},
+    control::{Call, DaemonPhase, Reply, Request, RECLAIM},
     duplex::{
         self as transport,
         admission::{self as admission_notice, AdmissionNotice, AdmissionReason},
@@ -150,6 +150,17 @@ impl Application {
             let ticket = {
                 let idle_ttl = Duration::from_millis(u64::from(self.setup.limits.idle_ttl_ms));
                 let mut state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
+                // In-flight expiry (#547 slice 5): a pool slot whose decoded
+                // request is still executing past `request_deadline` has an
+                // unknown effect; free it, close its socket and record
+                // `Expired` so the caller observes
+                // `Unavailable { outcome: unknown }` rather than a silent hang.
+                let expired = state.slots.reap_expired(Instant::now());
+                if !expired.is_empty() {
+                    drop(state);
+                    self.expire_in_flight(&expired);
+                    state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
+                }
                 let mut picked = state.slots.admit(AdmissionClass::ControlPool);
                 // Idle reclamation (#547 slice 4): a pool slot whose worker
                 // is parked in `receive()` past `idle_ttl` holds nothing in
@@ -159,10 +170,11 @@ impl Application {
                     if !reaped.is_empty() {
                         drop(state);
                         self.close_slot_fences(&reaped);
-                        for &index in &reaped {
+                        for ticket in &reaped {
                             let _ = writeln!(
                                 std::io::stderr().lock(),
-                                "layerfs-daemon: reclaimed idle control slot {index}"
+                                "layerfs-daemon: reclaimed idle control slot {}",
+                                ticket.index
                             );
                         }
                         state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
@@ -206,11 +218,10 @@ impl Application {
                     }
                 }
             };
-            let previous = self
-                .workers
-                .lock()
-                .map_err(|_| ApplicationError::Poisoned)?[ticket.index]
-                .take();
+            let previous = {
+                let mut state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
+                state.workers[ticket.index].take()
+            };
             if let Some(worker) = previous {
                 worker.join().map_err(|_| {
                     ApplicationError::Io(std::io::Error::other(
@@ -238,14 +249,15 @@ impl Application {
                         application.connection(stream, ticket)
                     }))
                     .unwrap_or_else(|payload| Err(panic_failure(ticket, payload)));
-                    application.clear_fence(ticket.index);
+                    application.clear_fence(ticket);
                     guard.finish(result);
                 });
             match worker {
                 Ok(worker) => {
-                    self.workers
+                    self.state
                         .lock()
-                        .map_err(|_| ApplicationError::Poisoned)?[ticket.index] = Some(worker)
+                        .map_err(|_| ApplicationError::Poisoned)?
+                        .workers[ticket.index] = Some(worker)
                 }
                 Err(_cause) => {
                     // Spawning dropped the closure, so the guard's `Drop`
@@ -268,35 +280,45 @@ impl Application {
         )
     }
 
-    /// Stores the socket fence for `slot`, so the accept loop can close it to
-    /// reclaim an idle connection (#547 slice 4).
-    fn set_fence(&self, slot: usize, fence: transport::CloseHandle) {
+    /// Stores the socket fence of one worker, keyed by its admission
+    /// generation, so the accept loop can close it to reclaim an idle
+    /// connection or expire an in-flight request (#547 slices 4-5).
+    fn set_fence(&self, ticket: SlotTicket, fence: transport::CloseHandle) {
         if let Ok(mut fences) = self.fences.lock() {
-            if let Some(entry) = fences.get_mut(slot) {
-                *entry = Some(fence);
+            if let Some(entry) = fences.get_mut(ticket.index) {
+                *entry = Some((ticket.generation, fence));
             }
         }
     }
 
-    /// Removes the socket fence for `slot`; its worker is finished with it.
-    fn clear_fence(&self, slot: usize) {
+    /// Removes one worker's socket fence. A stale worker that finished after
+    /// its slot was reclaimed or expired skips a newer worker's fence because
+    /// the generation no longer matches (#547 slice 5).
+    fn clear_fence(&self, ticket: SlotTicket) {
         if let Ok(mut fences) = self.fences.lock() {
-            if let Some(entry) = fences.get_mut(slot) {
-                *entry = None;
+            if let Some(entry) = fences.get_mut(ticket.index) {
+                if matches!(entry, Some((generation, _)) if *generation == ticket.generation) {
+                    *entry = None;
+                }
             }
         }
     }
 
-    /// Closes the socket fence of each named slot, waking its worker parked
-    /// in `receive()`. A missing fence (the worker already ended) is skipped.
-    fn close_slot_fences(&self, slots: &[usize]) {
+    /// Closes the socket fence of each named worker generation, waking one
+    /// parked in `receive()` or a fence wait. A missing or stale fence (the
+    /// worker already ended or its slot was re-admitted) is skipped.
+    fn close_slot_fences(&self, tickets: &[SlotTicket]) {
         let mut fences = self
             .fences
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        for &index in slots {
-            if let Some(fence) = fences.get_mut(index).and_then(|entry| entry.take()) {
-                let _ = fence.close();
+        for ticket in tickets {
+            if let Some(entry) = fences.get_mut(ticket.index) {
+                if matches!(entry, Some((generation, _)) if *generation == ticket.generation) {
+                    if let Some((_, fence)) = entry.take() {
+                        let _ = fence.close();
+                    }
+                }
             }
         }
     }
@@ -308,11 +330,37 @@ impl Application {
         }
     }
 
-    /// Marks one worker's slot as executing again (not reapable).
-    fn mark_busy(&self, ticket: SlotTicket) {
+    /// Marks one worker's slot as executing one decoded request with its
+    /// expiry deadline (#547 slice 5).
+    fn mark_inflight(&self, ticket: SlotTicket, started: Instant, deadline: Instant) {
         if let Ok(mut state) = self.state.lock() {
-            state.slots.busy(ticket);
+            state.slots.inflight(ticket, started, deadline);
         }
+    }
+
+    /// Frees every slot whose in-flight request passed `request_deadline`
+    /// (#547 slice 5): closes its socket (waking a worker parked in socket
+    /// I/O; a worker parked elsewhere finishes stale when it returns) and
+    /// records one `Expired` retained failure each. The interrupted
+    /// operation's effect is unknown, so it is never released as clean.
+    fn expire_in_flight(&self, tickets: &[SlotTicket]) {
+        let now = Instant::now();
+        self.close_slot_fences(tickets);
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        for ticket in tickets {
+            // Detach the stuck worker: its eventual finish is stale, and the
+            // accept loop must never join a worker a Store/fence wait holds.
+            state.workers[ticket.index] = None;
+            let owner = self.owner_label(*ticket);
+            let recorded = state
+                .retained
+                .record(RetainedFailure::expired(*ticket, &owner), now);
+            let _ = writeln!(std::io::stderr().lock(), "{recorded}");
+        }
+        self.changed.notify_all();
     }
 
     fn connection(&self, stream: TcpStream, ticket: SlotTicket) -> Result<(), ConnectionFailure> {
@@ -355,7 +403,7 @@ impl Application {
                 fence_error: None,
                 diagnostic_error: None,
             })?;
-        self.set_fence(slot, fence);
+        self.set_fence(ticket, fence);
         let mut first = true;
         loop {
             // An established connection parked for the next request is
@@ -394,8 +442,13 @@ impl Application {
                     }
                 }
             };
-            // A request arrived: the slot is executing again, not reapable.
-            self.mark_busy(ticket);
+            // A request arrived: the slot is executing one decoded request
+            // under an explicit deadline (in-flight, #547 slice 5), not
+            // reapable as idle.
+            let started = Instant::now();
+            let deadline =
+                started + Duration::from_millis(u64::from(self.setup.limits.request_deadline_ms));
+            self.mark_inflight(ticket, started, deadline);
             if first {
                 if let Err(cause) = settings
                     .set_read_timeout(None)
@@ -625,12 +678,18 @@ impl Application {
                 "reserved recovery slot",
             ));
         }
-        // Operator-visible retained failures live with the application, not
-        // with the Store control Service, so answer this one here.
+        // Operator-visible retained failures and the reclaim verb live with
+        // the application, not with the Store control Service, so answer
+        // these here (#540, #547 slice 5).
         if let Request::Sdk(call) = request {
             if call.method == layerfs_bridge::control::OPERATION {
                 return self
                     .connection_failures()
+                    .map(|value| Success::reply(Reply::Sdk(value)));
+            }
+            if call.method == RECLAIM {
+                return self
+                    .reclaim(call)
                     .map(|value| Success::reply(Reply::Sdk(value)));
             }
         }
@@ -645,6 +704,79 @@ impl Application {
                 "Store control Service not ready",
             )),
         }
+    }
+
+    /// `backend.daemon.reclaim { slot, generation }` (#547 slice 5): closes
+    /// the named worker's socket, records `Reclaimed`, and frees its slot. It
+    /// is generation-checked (a vacant slot or a newer worker answers
+    /// `Invalid`), one-shot, never restarts the daemon and never touches a
+    /// Workspace.
+    fn reclaim(
+        &self,
+        call: &layerfs_bridge::control::SdkCall,
+    ) -> Result<layerfs_bridge::control::SdkValue, crate::control::Failure> {
+        use crate::control::Failure;
+        use layerfs_bridge::control::{ControlCode, SdkValue};
+        let slot = match call
+            .args
+            .get_int("slot")
+            .and_then(|value| usize::try_from(value).ok())
+        {
+            Some(slot) => slot,
+            None => {
+                return Err(Failure::Rejected(
+                    ControlCode::Invalid,
+                    "reclaim names the slot to close",
+                ))
+            }
+        };
+        let generation = match call
+            .args
+            .get_int("generation")
+            .and_then(|value| u64::try_from(value).ok())
+        {
+            Some(generation) => generation,
+            None => {
+                return Err(Failure::Rejected(
+                    ControlCode::Invalid,
+                    "reclaim names the generation to close",
+                ))
+            }
+        };
+        // Free the named slot and detach its worker under one lock, so the
+        // accept loop can never join a worker this reclaim leaves running.
+        // Then close the socket and record `Reclaimed`.
+        let (ticket, owner) = {
+            let mut state = self.state.lock().map_err(|_| Failure::Poisoned)?;
+            match state.slots.reclaim(slot, generation) {
+                Some(ticket) => {
+                    state.workers[ticket.index] = None;
+                    (ticket, self.owner_label(ticket))
+                }
+                None => {
+                    return Err(Failure::Rejected(
+                        ControlCode::Invalid,
+                        "reclaim generation mismatch",
+                    ))
+                }
+            }
+        };
+        self.close_slot_fences(std::slice::from_ref(&ticket));
+        let now = Instant::now();
+        let recorded = {
+            let mut state = self.state.lock().map_err(|_| Failure::Poisoned)?;
+            let recorded = state
+                .retained
+                .record(RetainedFailure::reclaimed(ticket, &owner), now);
+            self.changed.notify_all();
+            recorded
+        };
+        let _ = writeln!(std::io::stderr().lock(), "{recorded}");
+        Ok(SdkValue::map([
+            ("outcome", SdkValue::text("reclaimed")),
+            ("slot", SdkValue::Int(slot as i64)),
+            ("generation", SdkValue::Int(generation as i64)),
+        ]))
     }
 
     /// The operator read model of control admission and retained failures.

@@ -69,11 +69,14 @@ impl AdmissionClass {
 /// The lifecycle phase of one admitted (non-vacant) slot.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Phase {
-    /// Authenticating or executing one request. Nothing here is reapable.
+    /// Authenticating before the first request. Nothing here is reapable.
     Busy,
     /// Blocked in `receive()` awaiting the next request: nothing is in
     /// flight, so the daemon may reclaim it once `idle_ttl` passes (#547).
     Idle { since: Instant },
+    /// Executing one decoded request; past `deadline` its effect is unknown
+    /// and the daemon expires it (#547 slice 5).
+    InFlight { started: Instant, deadline: Instant },
 }
 
 /// One admission slot: free, or running one worker generation in a phase.
@@ -214,12 +217,30 @@ impl Slots {
         running
     }
 
+    /// Marks one running slot as executing one decoded request with its
+    /// expiry deadline (#547 slice 5); a stale ticket changes nothing.
+    pub fn inflight(&mut self, ticket: SlotTicket, started: Instant, deadline: Instant) -> bool {
+        let running = matches!(
+            self.slots.get(ticket.index),
+            Some(SlotState::Running { generation, class, .. })
+                if *generation == ticket.generation && *class == ticket.class
+        );
+        if running {
+            self.slots[ticket.index] = SlotState::Running {
+                generation: ticket.generation,
+                class: ticket.class,
+                phase: Phase::InFlight { started, deadline },
+            };
+        }
+        running
+    }
+
     /// Frees every pool slot whose worker has been parked in `receive()` for
-    /// at least `idle_ttl`, returning their indexes. The caller closes their
+    /// at least `idle_ttl`, returning their tickets. The caller closes their
     /// sockets; the woken workers finish with a stale ticket and change
     /// nothing (invariant 1). Reserved slots are never reaped: recovery is
     /// closed after one request and install is one-time.
-    pub fn reap_idle(&mut self, now: Instant, idle_ttl: Duration) -> Vec<usize> {
+    pub fn reap_idle(&mut self, now: Instant, idle_ttl: Duration) -> Vec<SlotTicket> {
         let pool = self.pool;
         let mut reaped = Vec::new();
         for (index, slot) in self.slots.iter_mut().enumerate() {
@@ -227,17 +248,77 @@ impl Slots {
                 break;
             }
             if let SlotState::Running {
+                generation,
+                class,
                 phase: Phase::Idle { since },
-                ..
             } = slot
             {
                 if now.saturating_duration_since(*since) >= idle_ttl {
+                    reaped.push(SlotTicket {
+                        index,
+                        generation: *generation,
+                        class: *class,
+                    });
                     *slot = SlotState::Vacant;
-                    reaped.push(index);
                 }
             }
         }
         reaped
+    }
+
+    /// Frees every pool slot whose in-flight request passed its `deadline`,
+    /// returning their tickets so the caller closes their sockets and records
+    /// one `Expired` retained failure each (#547 slice 5). The interrupted
+    /// operation's effect is unknown, so it is never released as clean. The
+    /// reserved slot is never expired automatically: install is one-time and
+    /// recovery is closed after one request.
+    pub fn reap_expired(&mut self, now: Instant) -> Vec<SlotTicket> {
+        let pool = self.pool;
+        let mut expired = Vec::new();
+        for (index, slot) in self.slots.iter_mut().enumerate() {
+            if index >= pool {
+                break;
+            }
+            if let SlotState::Running {
+                generation,
+                class,
+                phase: Phase::InFlight { deadline, .. },
+            } = slot
+            {
+                if now >= *deadline {
+                    expired.push(SlotTicket {
+                        index,
+                        generation: *generation,
+                        class: *class,
+                    });
+                    *slot = SlotState::Vacant;
+                }
+            }
+        }
+        expired
+    }
+
+    /// Frees one running slot whose generation matches, returning its ticket;
+    /// `None` when the slot is vacant or a newer worker owns it (#547 slice
+    /// 5). Unlike `finish`, this is operator-initiated: the caller closes the
+    /// socket and records `Reclaimed`. Any class may be reclaimed.
+    pub fn reclaim(&mut self, slot: usize, generation: u64) -> Option<SlotTicket> {
+        match self.slots.get(slot) {
+            Some(SlotState::Running {
+                generation: owned,
+                class,
+                ..
+            }) if *owned == generation => {
+                let ticket = SlotTicket {
+                    index: slot,
+                    generation: *owned,
+                    class: *class,
+                };
+                self.slots[slot] = SlotState::Vacant;
+                Some(ticket)
+            }
+            _ => None,
+        }
     }
 
     /// Ends one worker: releases its slot and, for a retained failure, returns
@@ -309,14 +390,17 @@ pub enum Disposition {
 }
 
 /// The recovery operation set the reserved slot serves once the daemon is
-/// ControlReady (#547 slice 3): close, workspace status, and the operator
-/// read model. Everything else is refused `Capacity` and the connection is
-/// closed. `backend.daemon.reclaim` joins this set in slice 5.
+/// ControlReady (#547 slice 3): close, workspace status, the operator read
+/// model and reclaim (#547 slice 5). Everything else is refused `Capacity`
+/// and the connection is closed.
 pub fn recovery_request(request: &layerfs_bridge::control::Request) -> bool {
     use layerfs_bridge::control::Request;
     match request {
         Request::Status(_) | Request::Unmount(_) => true,
-        Request::Sdk(call) => call.method == layerfs_bridge::control::OPERATION,
+        Request::Sdk(call) => {
+            call.method == layerfs_bridge::control::OPERATION
+                || call.method == layerfs_bridge::control::RECLAIM
+        }
         _ => false,
     }
 }
@@ -354,6 +438,10 @@ pub(super) struct State {
     pub startup: Startup,
     pub slots: Slots,
     pub retained: RetainedFailures,
+    /// One detached or joined worker per slot. A reclaimed or expired slot
+    /// detaches its stuck worker (its handle is dropped here) so the accept
+    /// loop never joins a worker that a Store/fence wait still holds.
+    pub workers: Vec<Option<JoinHandle<()>>>,
 }
 /// One real daemon application; Store/Overlay are initialized once and reused.
 pub struct Application {
@@ -366,10 +454,11 @@ pub struct Application {
     pub(super) export: Option<Arc<crate::control::ExportServing>>,
     pub(super) state: Mutex<State>,
     pub(super) changed: Condvar,
-    pub(super) workers: Mutex<Vec<Option<JoinHandle<()>>>>,
-    /// Per-slot socket fences: the accept loop closes one to reclaim an idle
-    /// slot, waking its worker parked in `receive()` (#547 slice 4).
-    pub(super) fences: Mutex<Vec<Option<transport::CloseHandle>>>,
+    /// Per-slot socket fences, keyed by the admission generation that owns
+    /// them: the accept loop closes one to reclaim an idle slot or to expire
+    /// an in-flight request (#547 slices 4-5). A generation key lets a stale
+    /// worker's late `clear_fence` skip a newer worker's fence.
+    pub(super) fences: Mutex<Vec<Option<(u64, transport::CloseHandle)>>>,
 }
 impl Application {
     pub(super) fn start(setup: DaemonSetup) -> Result<Arc<Self>, ApplicationError> {
@@ -524,9 +613,9 @@ impl Application {
                 },
                 slots: Slots::new(count),
                 retained: RetainedFailures::default(),
+                workers: (0..count).map(|_| None).collect(),
             }),
             changed: Condvar::new(),
-            workers: Mutex::new((0..count).map(|_| None).collect()),
             fences: Mutex::new((0..count).map(|_| None).collect()),
         }))
     }
