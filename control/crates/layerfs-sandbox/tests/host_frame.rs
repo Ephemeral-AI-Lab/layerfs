@@ -73,6 +73,7 @@ fn a_frame_reads_back_to_its_request() {
             force: true,
             held: None,
         },
+        Call::Destroy,
         Call::ListWorkspaces { path: None },
         Call::Capacity,
         Call::Mount {
