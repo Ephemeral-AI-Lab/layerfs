@@ -3,7 +3,7 @@
 //! blame keeps the lines between them; a middle with no such line stays one
 //! block, and the gaps share one table's budget.
 
-use layerfs_content::compare::text::{diff_lines, match_lines, DiffLine, LineOp};
+use layerfs_content::compare::text::{diff_exact, diff_lines, match_lines, DiffLine, LineOp};
 use layerfs_content::merge::merge3;
 
 const LABELS: [&str; 2] = ["ours", "theirs"];
@@ -174,4 +174,27 @@ fn differences_past_the_bound_rebuild_both_sides() {
         assert_eq!(side(&diff, LineOp::Added), x, "round {round}: left side");
         assert_eq!(side(&diff, LineOp::Removed), y, "round {round}: right side");
     }
+}
+
+#[test]
+fn diff_exact_discloses_only_a_true_coarse_fallback() {
+    // A middle of distinct numbered lines resolves on its unique lines: exact.
+    let base = numbered(2000);
+    let new = edited(&base, &[(200, "A"), (1300, "A")]);
+    assert!(diff_exact(&refs(&base), &refs(&new)));
+    // A middle with no line on both sides stays one block: coarse.
+    let x: Vec<String> = (0..1100).map(|i| format!("line{i}")).collect();
+    let y: Vec<String> = (0..1100).map(|i| format!("other{i}")).collect();
+    assert!(!diff_exact(&refs(&x), &refs(&y)));
+    // Gaps share one table budget: past it the remaining gaps are coarse.
+    let (mut left, mut right) = (Vec::new(), Vec::new());
+    for k in 0..500 {
+        for i in 0..1000 {
+            left.push(["a", "b"][i % 2].to_owned());
+            right.push(["b", "a"][i % 2].to_owned());
+        }
+        left.push(format!("unique{k}"));
+        right.push(format!("unique{k}"));
+    }
+    assert!(!diff_exact(&refs(&left), &refs(&right)));
 }
