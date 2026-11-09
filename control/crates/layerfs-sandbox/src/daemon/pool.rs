@@ -12,9 +12,7 @@
 //! before it is refused `Busy`. Opening a connection is not an attempt
 //! of any operation: nothing is sent before the connection is ready.
 use crate::internal::Control;
-use layerfs_bridge::control::{
-    DaemonPhase, HelloRequest, Reply, Request, SdkRefusal, SdkValue,
-};
+use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkRefusal, SdkValue};
 use layerfs_bridge::duplex::{
     admission::{AdmissionNotice, AdmissionReason},
     initiate_observed, ChannelError,
@@ -210,7 +208,8 @@ impl Dial {
                 .saturating_duration_since(Instant::now())
                 .max(Duration::from_millis(1))
         };
-        let stream = std::net::TcpStream::connect_timeout(&self.endpoint, remaining()).map_err(failed)?;
+        let stream =
+            std::net::TcpStream::connect_timeout(&self.endpoint, remaining()).map_err(failed)?;
         stream.set_read_timeout(Some(remaining())).map_err(failed)?;
         stream
             .set_write_timeout(Some(remaining()))

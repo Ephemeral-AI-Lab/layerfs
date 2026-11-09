@@ -583,7 +583,6 @@ fn exec_records_are_checked_and_left_as_they_are() {
     std::fs::remove_dir_all(home).unwrap();
 }
 
-
 #[test]
 fn a_stalled_daemon_endpoint_is_a_bounded_warning_and_starts_nothing() {
     let home = new_home("stalled");
