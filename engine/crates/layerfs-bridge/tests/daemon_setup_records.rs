@@ -44,6 +44,7 @@ fn setup(store: DaemonStore, route: KernelRoute) -> DaemonSetup {
         limits: DaemonLimits {
             connections: 8,
             handshake_ms: 2000,
+            idle_ttl_ms: 60_000,
             cache_bytes: 1 << 20,
             namespaces: 16,
             pager_kib: 1024,

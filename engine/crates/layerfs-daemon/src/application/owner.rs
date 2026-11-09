@@ -20,7 +20,7 @@ use layerfs_storage::ReservationBlocks;
 use std::{
     sync::{Arc, Condvar, Mutex},
     thread::JoinHandle,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 /// Slots reserved for the installer (and, later, a presence lease); ordinary
@@ -50,24 +50,41 @@ impl SlotClass {
 pub enum AdmissionClass {
     /// An ordinary control connection.
     ControlPool,
-    /// The one-time Store installer.
+    /// The one-time Store installer, admitted only during startup.
     Install,
+    /// The recovery class: the reserved slot once the daemon is ready, used
+    /// only when the pool has no vacant slot (#547 slice 3).
+    Recovery,
 }
 
 impl AdmissionClass {
     fn slot_class(self) -> SlotClass {
         match self {
             Self::ControlPool => SlotClass::Pool,
-            Self::Install => SlotClass::Reserved,
+            Self::Install | Self::Recovery => SlotClass::Reserved,
         }
     }
 }
 
-/// One admission slot: free, or running one worker generation.
+/// The lifecycle phase of one admitted (non-vacant) slot.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Phase {
+    /// Authenticating or executing one request. Nothing here is reapable.
+    Busy,
+    /// Blocked in `receive()` awaiting the next request: nothing is in
+    /// flight, so the daemon may reclaim it once `idle_ttl` passes (#547).
+    Idle { since: Instant },
+}
+
+/// One admission slot: free, or running one worker generation in a phase.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum SlotState {
     Vacant,
-    Running { generation: u64, class: SlotClass },
+    Running {
+        generation: u64,
+        class: SlotClass,
+        phase: Phase,
+    },
 }
 
 /// Proof that one admission owns a slot and generation. Every path ends in
@@ -149,12 +166,78 @@ impl Slots {
     fn generation_ticket(&mut self, index: usize, class: SlotClass) -> Option<SlotTicket> {
         self.next_generation = self.next_generation.saturating_add(1);
         let generation = self.next_generation;
-        *self.slots.get_mut(index)? = SlotState::Running { generation, class };
+        *self.slots.get_mut(index)? = SlotState::Running {
+            generation,
+            class,
+            phase: Phase::Busy,
+        };
         Some(SlotTicket {
             index,
             generation,
             class,
         })
+    }
+
+    /// Marks one running slot as blocked in `receive()`; a stale ticket
+    /// changes nothing.
+    pub fn idle(&mut self, ticket: SlotTicket, since: Instant) -> bool {
+        let running = matches!(
+            self.slots.get(ticket.index),
+            Some(SlotState::Running { generation, class, .. })
+                if *generation == ticket.generation && *class == ticket.class
+        );
+        if running {
+            self.slots[ticket.index] = SlotState::Running {
+                generation: ticket.generation,
+                class: ticket.class,
+                phase: Phase::Idle { since },
+            };
+        }
+        running
+    }
+
+    /// Marks one running slot as executing again (not reapable); a stale
+    /// ticket changes nothing.
+    pub fn busy(&mut self, ticket: SlotTicket) -> bool {
+        let running = matches!(
+            self.slots.get(ticket.index),
+            Some(SlotState::Running { generation, class, .. })
+                if *generation == ticket.generation && *class == ticket.class
+        );
+        if running {
+            self.slots[ticket.index] = SlotState::Running {
+                generation: ticket.generation,
+                class: ticket.class,
+                phase: Phase::Busy,
+            };
+        }
+        running
+    }
+
+    /// Frees every pool slot whose worker has been parked in `receive()` for
+    /// at least `idle_ttl`, returning their indexes. The caller closes their
+    /// sockets; the woken workers finish with a stale ticket and change
+    /// nothing (invariant 1). Reserved slots are never reaped: recovery is
+    /// closed after one request and install is one-time.
+    pub fn reap_idle(&mut self, now: Instant, idle_ttl: Duration) -> Vec<usize> {
+        let pool = self.pool;
+        let mut reaped = Vec::new();
+        for (index, slot) in self.slots.iter_mut().enumerate() {
+            if index >= pool {
+                break;
+            }
+            if let SlotState::Running {
+                phase: Phase::Idle { since },
+                ..
+            } = slot
+            {
+                if now.saturating_duration_since(*since) >= idle_ttl {
+                    *slot = SlotState::Vacant;
+                    reaped.push(index);
+                }
+            }
+        }
+        reaped
     }
 
     /// Ends one worker: releases its slot and, for a retained failure, returns
@@ -168,7 +251,7 @@ impl Slots {
     ) -> Finished {
         let running = matches!(
             self.slots.get(ticket.index),
-            Some(SlotState::Running { generation, class })
+            Some(SlotState::Running { generation, class, .. })
                 if *generation == ticket.generation && *class == ticket.class
         );
         if !running {
@@ -225,6 +308,19 @@ pub enum Disposition {
     Retained(Box<RetainedFailure>),
 }
 
+/// The recovery operation set the reserved slot serves once the daemon is
+/// ControlReady (#547 slice 3): close, workspace status, and the operator
+/// read model. Everything else is refused `Capacity` and the connection is
+/// closed. `backend.daemon.reclaim` joins this set in slice 5.
+pub fn recovery_request(request: &layerfs_bridge::control::Request) -> bool {
+    use layerfs_bridge::control::Request;
+    match request {
+        Request::Status(_) | Request::Unmount(_) => true,
+        Request::Sdk(call) => call.method == layerfs_bridge::control::OPERATION,
+        _ => false,
+    }
+}
+
 /// Classifies one finished failure and builds the bounded record for a
 /// retained one. Pure: no lock and no store access. `owner` names the worker
 /// in a retained record; `now` is reserved for the in-flight deadline a later
@@ -271,6 +367,9 @@ pub struct Application {
     pub(super) state: Mutex<State>,
     pub(super) changed: Condvar,
     pub(super) workers: Mutex<Vec<Option<JoinHandle<()>>>>,
+    /// Per-slot socket fences: the accept loop closes one to reclaim an idle
+    /// slot, waking its worker parked in `receive()` (#547 slice 4).
+    pub(super) fences: Mutex<Vec<Option<transport::CloseHandle>>>,
 }
 impl Application {
     pub(super) fn start(setup: DaemonSetup) -> Result<Arc<Self>, ApplicationError> {
@@ -428,6 +527,7 @@ impl Application {
             }),
             changed: Condvar::new(),
             workers: Mutex::new((0..count).map(|_| None).collect()),
+            fences: Mutex::new((0..count).map(|_| None).collect()),
         }))
     }
     /// Copies actual startup facts. It never opens/refreshes a Store or claims FUSE Ready.

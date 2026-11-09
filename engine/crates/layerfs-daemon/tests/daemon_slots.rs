@@ -12,6 +12,10 @@
 
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 
+#[allow(dead_code)]
+#[path = "support/host_install.rs"]
+mod host;
+
 use layerfs_bridge::{
     control::{
         Answer, Call, CapacityModel, DaemonPhase, HelloRequest, Reply, Request, SdkCall, SdkValue,
@@ -66,7 +70,7 @@ fn private_directory(path: &Path) {
 }
 
 /// Starts the actual executable and returns it once it reports its listener.
-fn start(label: &str, handshake_ms: u32) -> Daemon {
+fn start(label: &str, handshake_ms: u32, idle_ttl_ms: u32) -> Daemon {
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let directory = std::env::temp_dir().join(format!(
@@ -92,6 +96,7 @@ fn start(label: &str, handshake_ms: u32) -> Daemon {
         limits: DaemonLimits {
             connections: CONNECTIONS,
             handshake_ms,
+            idle_ttl_ms,
             cache_bytes: 1024 * 1024,
             namespaces: 16,
             pager_kib: 1024,
@@ -226,7 +231,7 @@ fn wait_for_log(path: &Path, needle: &str, count: usize) {
 /// admitted, the pool is whole, and one log line names each failure (#540).
 #[test]
 fn undecodable_records_do_not_consume_control_slots() {
-    let daemon = start("slots", 2000);
+    let daemon = start("slots", 2000, 60_000);
     for round in 0..ROUNDS {
         let mut connection = connect(daemon.address);
         connection.send.send(DIE).unwrap();
@@ -277,7 +282,7 @@ fn undecodable_records_do_not_consume_control_slots() {
 /// `LAYERFS-CAPACITY` body instead of a bare EOF (#540).
 #[test]
 fn no_vacant_slot_writes_the_capacity_notice() {
-    let daemon = start("notice", 10_000);
+    let daemon = start("notice", 10_000, 60_000);
     let mut holders = Vec::new();
     for _ in 0..CONNECTIONS {
         holders.push(hello(daemon.address));
@@ -322,7 +327,7 @@ fn no_vacant_slot_writes_the_capacity_notice() {
 /// authenticated client is still admitted afterwards.
 #[test]
 fn concurrent_failures_do_not_deadlock_or_leak() {
-    let daemon = start("concurrent", 3000);
+    let daemon = start("concurrent", 3000, 60_000);
     let address = daemon.address;
     let mut threads = Vec::new();
     for _ in 0..16 {
@@ -378,4 +383,258 @@ fn concurrent_failures_do_not_deadlock_or_leak() {
     // A fresh authenticated client is admitted after the storm.
     drop(hello(address));
     wait_for_log(&daemon.stderr, "ConnectionFailure {", 1);
+}
+
+/// Eight idle clients hold every pool slot. Once they have been parked in
+/// `receive()` past `idle_ttl`, a ninth client is admitted by idle
+/// reclamation instead of being refused (#547 slice 4). The ninth reaches its
+/// Hello reply, which it could not do on the installer-only reserved slot.
+#[test]
+fn idle_clients_are_reclaimed_for_a_new_connection() {
+    const IDLE_TTL_MS: u32 = 300;
+    let daemon = start("idle", 60_000, IDLE_TTL_MS);
+    let holders: Vec<Connection> = (0..CONNECTIONS).map(|_| hello(daemon.address)).collect();
+    // Let every idle worker pass the TTL so the next admission reclaims one.
+    thread::sleep(Duration::from_millis(u64::from(IDLE_TTL_MS) + 400));
+    // A ninth client is admitted and reaches its Hello reply: the accept loop
+    // reclaimed an idle pool slot under pressure.
+    drop(hello(daemon.address));
+
+    // The reclamation freed the whole idle pool: only the capacity query's
+    // own connection is running at this observation.
+    let model = capacity(daemon.address);
+    assert_eq!(model.admission.pool_running, 1);
+    assert_eq!(model.admission.pool_vacant, i64::from(CONNECTIONS) - 1);
+
+    drop(holders);
+}
+
+/// An authenticated client that reaches its Hello reply on a ControlReady
+/// daemon and then holds the connection idle.
+fn hello_ready(address: SocketAddr) -> Connection {
+    let mut connection = connect(address);
+    let call = Call {
+        id: 1,
+        request: Request::Hello(HelloRequest {
+            expected_instance: None,
+            wait_for_store: false,
+        }),
+    };
+    connection.send.send(&call.encode().unwrap()).unwrap();
+    match Answer::decode(connection.receive.receive().unwrap())
+        .unwrap()
+        .reply
+    {
+        Reply::Hello(status) => assert_eq!(status.phase, DaemonPhase::ControlReady),
+        other => panic!("unexpected Hello reply: {other:?}"),
+    }
+    connection
+}
+
+/// Starts the real executable with an installed Store, so it reports
+/// ControlReady: the phase where the reserved slot is the recovery class.
+fn start_ready(label: &str) -> Daemon {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let directory = std::env::temp_dir().join(format!(
+        "layerfs-547-ready-{label}-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let _ = fs::remove_dir_all(&directory);
+    private_directory(&directory);
+    let mounts = directory.join("mounts");
+    private_directory(&mounts);
+    let identity = fs::metadata(&directory).unwrap();
+
+    // Build an installed Store at this daemon's own path. Init only seals;
+    // the install step is a copy to the manifest's locator. Then set the
+    // post-install metadata the daemon's protected-config gate expects.
+    let store_path = directory.join("store.sqlite");
+    let fixture = host::Fixture::new(label, Some(store_path.to_str().unwrap()));
+    fs::copy(&fixture.project.store.path, &store_path).unwrap();
+    let mut manifest = fixture.project.manifest.clone();
+    manifest.daemon_sqlite = Some("3.50.4".to_owned());
+    fixture.cleanup();
+    fs::set_permissions(&store_path, fs::Permissions::from_mode(0o600)).unwrap();
+
+    let setup = DaemonSetup {
+        listen: "127.0.0.1:0".into(),
+        private_key: SERVER_PRIVATE,
+        control_peer: duplex::public_key(&CLIENT_PRIVATE).unwrap(),
+        route: KernelRoute::Nfs,
+        overlay: directory.join("overlay.sqlite").display().to_string(),
+        mounts: mounts.display().to_string(),
+        command_uid: identity.uid(),
+        command_gid: identity.gid(),
+        limits: DaemonLimits {
+            connections: CONNECTIONS,
+            handshake_ms: 60_000,
+            idle_ttl_ms: 60_000,
+            cache_bytes: 1024 * 1024,
+            namespaces: 16,
+            pager_kib: 1024,
+            serial_low_water: 256,
+        },
+        store: DaemonStore::Sqlite {
+            locator: manifest.locator.clone(),
+            install: Some(manifest),
+        },
+    };
+    let config = directory.join("daemon.config");
+    fs::write(&config, setup.encode().unwrap()).unwrap();
+    fs::set_permissions(&config, fs::Permissions::from_mode(0o600)).unwrap();
+    let stderr = directory.join("daemon.stderr");
+    let child = Command::new(env!("CARGO_BIN_EXE_layerfs-daemon"))
+        .arg("--config")
+        .arg(&config)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::from(File::create(&stderr).unwrap()))
+        .spawn()
+        .expect("spawn layerfs-daemon");
+    let mut child = Daemon {
+        child,
+        address: "127.0.0.1:0".parse().unwrap(),
+        stderr,
+        directory,
+    };
+    let stdout = child.child.stdout.take().unwrap();
+    let (send, receive) = mpsc::sync_channel(1);
+    let reader = thread::spawn(move || {
+        let mut line = String::new();
+        let result = BufReader::new(stdout).read_line(&mut line).map(|_| line);
+        let _ = send.send(result);
+    });
+    let line = match receive.recv_timeout(Duration::from_secs(10)) {
+        Ok(Ok(line)) => line,
+        _ => {
+            let output = fs::read_to_string(&child.stderr).unwrap_or_default();
+            panic!("daemon never reported a listener; stderr:\n{output}");
+        }
+    };
+    reader.join().unwrap();
+    child.address = line
+        .strip_prefix("LAYERFS_DAEMON_LISTEN ")
+        .unwrap_or_else(|| panic!("unexpected daemon startup line: {line:?}"))
+        .trim()
+        .parse()
+        .unwrap();
+    child
+}
+
+/// Once the daemon is ControlReady, a full pool admits one connection into
+/// the reserved slot (recovery class): it serves the recovery set and refuses
+/// anything else with `Capacity` and a close (#547 slice 3).
+#[test]
+fn reserved_slot_serves_recovery_and_refuses_everything_else() {
+    let daemon = start_ready("recovery");
+    // The daemon opened its Store and reports ControlReady.
+    drop(hello_ready(daemon.address));
+
+    // Hold every pool slot idle; `idle_ttl` is large, so no reclamation runs.
+    let holders: Vec<Connection> = (0..CONNECTIONS)
+        .map(|_| hello_ready(daemon.address))
+        .collect();
+
+    // A ninth connection is admitted to the reserved slot and serves one
+    // recovery operation: the operator read model.
+    {
+        let mut recovery = connect(daemon.address);
+        recovery
+            .send
+            .send(
+                &Call {
+                    id: 1,
+                    request: Request::Hello(HelloRequest {
+                        expected_instance: None,
+                        wait_for_store: false,
+                    }),
+                }
+                .encode()
+                .unwrap(),
+            )
+            .unwrap();
+        assert!(matches!(
+            Answer::decode(recovery.receive.receive().unwrap())
+                .unwrap()
+                .reply,
+            Reply::Hello(_)
+        ));
+        recovery
+            .send
+            .send(
+                &Call {
+                    id: 2,
+                    request: Request::Sdk(SdkCall {
+                        method: OPERATION.to_owned(),
+                        args: SdkValue::Null,
+                    }),
+                }
+                .encode()
+                .unwrap(),
+            )
+            .unwrap();
+        match Answer::decode(recovery.receive.receive().unwrap())
+            .unwrap()
+            .reply
+        {
+            Reply::Sdk(value) => {
+                let model = CapacityModel::parse(&value);
+                assert_eq!(model.admission.pool_running, i64::from(CONNECTIONS));
+            }
+            other => panic!("recovery operation was not served: {other:?}"),
+        }
+    }
+
+    // A tenth connection is also admitted to the reserved slot, but a
+    // non-recovery request is refused `Capacity` and the connection closes.
+    {
+        let mut refused = connect(daemon.address);
+        refused
+            .send
+            .send(
+                &Call {
+                    id: 1,
+                    request: Request::Hello(HelloRequest {
+                        expected_instance: None,
+                        wait_for_store: false,
+                    }),
+                }
+                .encode()
+                .unwrap(),
+            )
+            .unwrap();
+        assert!(matches!(
+            Answer::decode(refused.receive.receive().unwrap())
+                .unwrap()
+                .reply,
+            Reply::Hello(_)
+        ));
+        refused
+            .send
+            .send(
+                &Call {
+                    id: 2,
+                    request: Request::Sdk(SdkCall {
+                        method: "sandbox.list_workspaces".to_owned(),
+                        args: SdkValue::Null,
+                    }),
+                }
+                .encode()
+                .unwrap(),
+            )
+            .unwrap();
+        match Answer::decode(refused.receive.receive().unwrap())
+            .unwrap()
+            .reply
+        {
+            Reply::Refused(refusal) => {
+                assert_eq!(refusal.code, layerfs_bridge::control::ControlCode::Capacity)
+            }
+            other => panic!("non-recovery request was not refused: {other:?}"),
+        }
+    }
+
+    drop(holders);
 }

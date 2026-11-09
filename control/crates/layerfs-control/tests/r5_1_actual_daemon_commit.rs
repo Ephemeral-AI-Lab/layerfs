@@ -117,6 +117,7 @@ fn start(f: &support::Fixture, mounts: &Path) -> (Process, SocketAddr) {
         limits: DaemonLimits {
             connections: 4,
             handshake_ms: 3000,
+            idle_ttl_ms: 60_000,
             cache_bytes: 64 * 1024,
             namespaces: 8,
             pager_kib: 1024,
