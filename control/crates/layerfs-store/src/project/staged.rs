@@ -38,7 +38,7 @@ use std::os::unix::fs::{DirBuilderExt, FileExt, OpenOptionsExt, PermissionsExt};
 // Windows face: the bytes grammar is UTF-8 (PathName enforces it);
 // the conversions live in layerfs_home::os_bytes.
 #[cfg(windows)]
-use layerfs_home::os_bytes::from_bytes;
+use layerfs_bridge::os_bytes::from_bytes;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

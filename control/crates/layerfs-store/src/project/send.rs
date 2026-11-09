@@ -37,7 +37,7 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 // Windows: the grammar's paths are valid UTF-8 (PathName::from_utf8
 // enforces it); the bytes face is the shared layerfs_home::os_bytes.
 #[cfg(windows)]
-use layerfs_home::os_bytes::{as_bytes, from_bytes, into_vec};
+use layerfs_bridge::os_bytes::{as_bytes, from_bytes, into_vec};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

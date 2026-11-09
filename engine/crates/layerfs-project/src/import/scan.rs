@@ -89,10 +89,10 @@ impl Roots<'_, '_> {
     ) -> Result<NewEntry, Failure> {
         let path = || match parent {
             Some(_) => child_path(directory, &child.name),
-            None => super::bytes::as_bytes(directory.as_os_str()),
+            None => layerfs_bridge::os_bytes::as_bytes(directory.as_os_str()),
         };
         let mode = child.portable_mode().map_err(|reason| {
-            Failure::refused(reason, PathBuf::from(super::bytes::os_string(&path())))
+            Failure::refused(reason, PathBuf::from(layerfs_bridge::os_bytes::os_string(&path())))
         })?;
         let nanos = child.stamp.mtime_nsec as u32;
         let key = (child.kind.code(), mode, child.stamp.mtime, nanos);
@@ -130,7 +130,7 @@ impl Roots<'_, '_> {
 }
 
 fn child_path(directory: &Path, name: &[u8]) -> Vec<u8> {
-    super::bytes::as_bytes(directory.join(super::bytes::os_string(name)).as_os_str())
+    layerfs_bridge::os_bytes::as_bytes(directory.join(layerfs_bridge::os_bytes::os_string(name)).as_os_str())
 }
 
 /// Positions being assigned while directories are read.
@@ -196,12 +196,12 @@ pub(crate) fn scan(
         placement.frontier -= 1;
         progress.tick()?;
         let parent = directory.position;
-        let path = PathBuf::from(super::bytes::os_string(&directory.host_path));
+        let path = PathBuf::from(layerfs_bridge::os_bytes::os_string(&directory.host_path));
         let (mut count, mut wide) = (0usize, false);
         for child in fs::read_dir(&path)? {
             progress.tick()?;
             let child = child?;
-            buffer.push(observe(&child.path(), &super::bytes::as_bytes(&child.file_name()))?);
+            buffer.push(observe(&child.path(), &layerfs_bridge::os_bytes::as_bytes(&child.file_name()))?);
             count += 1;
             progress.counters.entry();
             if buffer.len() == WINDOW_ROWS {

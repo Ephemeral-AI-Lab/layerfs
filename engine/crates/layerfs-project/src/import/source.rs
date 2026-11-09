@@ -24,7 +24,7 @@ pub(super) fn read_link(path: &Path, scanned: &Metadata) -> Result<Vec<u8>, Proj
         return Err(ProjectError::refused(SourceRefusal::Changed, path));
     }
     // Keep the canonical target bound/grammar: no normalization or UTF-8 cast.
-    let target = SymlinkTarget::new(super::bytes::as_bytes(target.as_os_str()))
+    let target = SymlinkTarget::new(layerfs_bridge::os_bytes::as_bytes(target.as_os_str()))
         .map_err(ProjectError::Content)?;
     Ok(target.as_bytes().to_vec())
 }

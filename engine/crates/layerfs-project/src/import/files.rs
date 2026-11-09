@@ -38,7 +38,7 @@ impl Job {
         Self {
             id: job.position,
             stamp: Stamp::from_identity(&job.host),
-            path: PathBuf::from(super::bytes::os_string(&job.host_path)),
+            path: PathBuf::from(layerfs_bridge::os_bytes::os_string(&job.host_path)),
         }
     }
 }
@@ -170,7 +170,7 @@ fn check_aliases(backing: &Backing<'_>, progress: &mut ImportProgress) -> Result
         };
         let parent = entry.key.parent.ok_or_else(malformed)?;
         if directory.as_ref().is_none_or(|(held, _)| *held != parent) {
-            let path = super::bytes::os_string(&backing.directory_path(parent)?);
+            let path = layerfs_bridge::os_bytes::os_string(&backing.directory_path(parent)?);
             directory = Some((parent, PathBuf::from(path)));
         }
         if first.is_none_or(|(held, _)| held != canonical) {
@@ -180,7 +180,7 @@ fn check_aliases(backing: &Backing<'_>, progress: &mut ImportProgress) -> Result
         let (Some((_, directory)), Some((_, stamp))) = (&directory, &first) else {
             return Err(malformed());
         };
-        let path = directory.join(super::bytes::os_string(&entry.key.name));
+        let path = directory.join(layerfs_bridge::os_bytes::os_string(&entry.key.name));
         if !stamp.matches_file(&path, &fs::symlink_metadata(&path)?) {
             return Err(Failure::refused(SourceRefusal::Changed, path));
         }

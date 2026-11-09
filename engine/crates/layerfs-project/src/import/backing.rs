@@ -474,7 +474,7 @@ pub(crate) fn window_full(rows: usize, held: usize, bytes: usize) -> bool {
 fn changed_source(error: AcquisitionError, path: impl Fn(u64) -> Option<Vec<u8>>) -> Failure {
     if let AcquisitionError::Changed { position } = error {
         if let Some(path) = path(position) {
-            let path = PathBuf::from(super::bytes::os_string(&path));
+            let path = PathBuf::from(layerfs_bridge::os_bytes::os_string(&path));
             return Failure::refused(SourceRefusal::Changed, path);
         }
     }

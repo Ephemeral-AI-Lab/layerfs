@@ -1,7 +1,6 @@
 //! Responsibility-scoped implementation modules and reexports.
 pub(crate) mod backing;
 pub(crate) mod batch;
-pub(super) mod bytes;
 pub(super) mod host_id;
 pub(crate) mod error;
 pub(crate) mod files;
