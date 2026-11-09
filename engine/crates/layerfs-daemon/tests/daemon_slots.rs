@@ -15,7 +15,7 @@
 use layerfs_bridge::{
     control::{
         Answer, Call, CapacityModel, DaemonPhase, HelloRequest, Reply, Request, SdkCall, SdkValue,
-        CAPACITY_OPERATION,
+        OPERATION,
     },
     daemon_setup::{DaemonLimits, DaemonSetup},
     duplex::{self, ChannelError, Connection},
@@ -190,7 +190,7 @@ fn capacity(address: SocketAddr) -> CapacityModel {
     let call = Call {
         id: 7,
         request: Request::Sdk(SdkCall {
-            method: CAPACITY_OPERATION.to_owned(),
+            method: OPERATION.to_owned(),
             args: SdkValue::Null,
         }),
     };

@@ -52,16 +52,13 @@ pub enum AdmissionClass {
     ControlPool,
     /// The one-time Store installer.
     Install,
-    /// A future presence lease.
-    #[allow(dead_code)]
-    Lease,
 }
 
 impl AdmissionClass {
     fn slot_class(self) -> SlotClass {
         match self {
             Self::ControlPool => SlotClass::Pool,
-            Self::Install | Self::Lease => SlotClass::Reserved,
+            Self::Install => SlotClass::Reserved,
         }
     }
 }
@@ -104,10 +101,11 @@ pub struct SlotCounts {
     pub reserved_running: usize,
 }
 
-/// The fixed control-slot table and the bounded retained-failure store beside it.
+/// The fixed control-slot table; the bounded retained-failure store lives
+/// beside it in [`State`].
 ///
 /// A retained failure never owns a slot: `finish` always leaves it `Vacant`
-/// and only records the failure. Admission capacity therefore cannot leak
+/// and only describes the failure. Admission capacity therefore cannot leak
 /// (#540). The layout is `connections` `Pool` entries followed by
 /// [`RESERVED_SLOTS`] `Reserved` entries; a class only ever admits within its
 /// own range.
@@ -115,7 +113,6 @@ pub struct Slots {
     slots: Vec<SlotState>,
     pool: usize,
     next_generation: u64,
-    retained: RetainedFailures,
 }
 
 impl Slots {
@@ -128,7 +125,6 @@ impl Slots {
             slots,
             pool,
             next_generation: 0,
-            retained: RetainedFailures::default(),
         }
     }
 
@@ -161,15 +157,14 @@ impl Slots {
         })
     }
 
-    /// Ends one worker: release its slot and, for a retained failure, record
-    /// the already-built record. A ticket whose generation or class no longer
-    /// matches changes nothing.
+    /// Ends one worker: releases its slot and, for a retained failure, returns
+    /// the already-described record for the caller to store. A ticket whose
+    /// generation or class no longer matches changes nothing.
     pub fn finish(
         &mut self,
         ticket: SlotTicket,
         result: Result<(), ConnectionFailure>,
-        prebuilt: Option<RetainedFailure>,
-        now: Instant,
+        disposition: Option<Disposition>,
     ) -> Finished {
         let running = matches!(
             self.slots.get(ticket.index),
@@ -182,19 +177,12 @@ impl Slots {
         self.slots[ticket.index] = SlotState::Vacant;
         match result {
             Ok(()) => Finished::Clean,
-            Err(failure) if releases_after_logging(&failure) => {
-                Finished::Released(Box::new(failure))
-            }
-            Err(_) => {
-                let record = prebuilt.expect("a retained failure is described before the lock");
-                let record = self.retained.record(record, now);
-                Finished::Retained(Box::new(record))
-            }
+            Err(failure) => match disposition {
+                Some(Disposition::Released) => Finished::Released(Box::new(failure)),
+                Some(Disposition::Retained(record)) => Finished::Retained(record),
+                None => unreachable!("a finished failure is classified before the lock"),
+            },
         }
-    }
-
-    pub fn snapshot(&mut self, now: Instant) -> RetainedSnapshot {
-        self.retained.snapshot(now)
     }
 
     /// Admission counts for each class.
@@ -215,16 +203,6 @@ impl Slots {
         }
         counts
     }
-
-    /// Visible retained records, for the admission notice.
-    pub fn visible(&mut self) -> usize {
-        self.retained.len()
-    }
-
-    /// Drops expired records; the accept loop reaps when it refuses admission.
-    pub fn reap(&mut self, now: Instant) {
-        self.retained.reap(now);
-    }
 }
 
 /// A failure with no decoded product attempt or custody: the existing daemon
@@ -237,6 +215,38 @@ fn releases_after_logging(failure: &ConnectionFailure) -> bool {
             ApplicationError::Channel(_) | ApplicationError::Io(_)
         )
 }
+
+/// The terminal disposition of one finished connection failure.
+#[derive(Debug)]
+pub enum Disposition {
+    /// Logged only: the slot is already free and no record is kept.
+    Released,
+    /// A bounded retained record is kept in the store.
+    Retained(Box<RetainedFailure>),
+}
+
+/// Classifies one finished failure and builds the bounded record for a
+/// retained one. Pure: no lock and no store access. `owner` names the worker
+/// in a retained record; `now` is reserved for the in-flight deadline a later
+/// slice adds.
+pub fn disposition(
+    failure: &ConnectionFailure,
+    ticket: SlotTicket,
+    owner: &str,
+    _now: Instant,
+) -> Disposition {
+    if releases_after_logging(failure) {
+        Disposition::Released
+    } else {
+        Disposition::Retained(Box::new(RetainedFailure::describe(
+            failure,
+            ticket.class,
+            ticket.generation,
+            owner,
+        )))
+    }
+}
+
 pub(super) struct Startup {
     pub phase: DaemonPhase,
     pub service: Option<Arc<Service>>,
@@ -247,6 +257,7 @@ pub(super) struct Startup {
 pub(super) struct State {
     pub startup: Startup,
     pub slots: Slots,
+    pub retained: RetainedFailures,
 }
 /// One real daemon application; Store/Overlay are initialized once and reused.
 pub struct Application {
@@ -413,6 +424,7 @@ impl Application {
                     install_failure: None,
                 },
                 slots: Slots::new(count),
+                retained: RetainedFailures::default(),
             }),
             changed: Condvar::new(),
             workers: Mutex::new((0..count).map(|_| None).collect()),
@@ -447,12 +459,12 @@ impl Application {
     pub(super) fn hello(
         &self,
         request: HelloRequest,
-        slot: usize,
+        class: SlotClass,
     ) -> Result<DaemonStatus, crate::control::Failure> {
         use crate::control::Failure;
         use layerfs_bridge::control::ControlCode;
         let mut state = self.state.lock().map_err(|_| Failure::Poisoned)?;
-        if slot == usize::from(self.setup.limits.connections)
+        if class == SlotClass::Reserved
             && matches!(
                 state.startup.phase,
                 DaemonPhase::InstallPending | DaemonPhase::Installing
@@ -485,7 +497,7 @@ impl Application {
     /// The bounded retained-failure store, pruned at this observation.
     pub fn retained_connection_failures(&self) -> Result<RetainedSnapshot, ApplicationError> {
         let mut state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
-        Ok(state.slots.snapshot(Instant::now()))
+        Ok(state.retained.snapshot(Instant::now()))
     }
 
     /// Vacant and in-use control slots, by class.

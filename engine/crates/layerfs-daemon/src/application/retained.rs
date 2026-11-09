@@ -213,7 +213,7 @@ impl RetainedFailures {
         }
     }
 
-    pub fn len(&self) -> usize {
+    pub(super) fn len(&self) -> usize {
         self.entries.len()
     }
 }

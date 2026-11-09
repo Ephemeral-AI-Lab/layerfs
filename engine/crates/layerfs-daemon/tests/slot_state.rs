@@ -9,12 +9,14 @@
 use layerfs_bridge::control::{Call, Reply, Request};
 use layerfs_bridge::duplex::{ChannelError, ChannelWork, PeerEndFailure, PeerEndPhase};
 use layerfs_daemon::application::internals::{
-    AdmissionClass, Finished, RetainedFailure, RetainedFailures, SlotClass, Slots, LIMIT,
-    RESERVED_SLOTS, TTL,
+    disposition, AdmissionClass, Finished, RetainedFailure, RetainedFailures, SlotClass, Slots,
+    LIMIT, RESERVED_SLOTS, TTL,
 };
 use layerfs_daemon::application::{ApplicationError, ConnectionFailure};
 use layerfs_daemon::control::{Served, Success};
 use std::time::{Duration, Instant};
+
+const OWNER: &str = "daemon:pid:layerfs-control-0";
 
 /// A failure after a decoded request: retained, never released.
 fn failure(slot: usize) -> ConnectionFailure {
@@ -29,12 +31,7 @@ fn failure(slot: usize) -> ConnectionFailure {
 }
 
 fn describe(slot: usize, class: SlotClass, generation: u64) -> RetainedFailure {
-    RetainedFailure::describe(
-        &failure(slot),
-        class,
-        generation,
-        "daemon:pid:layerfs-control-0",
-    )
+    RetainedFailure::describe(&failure(slot), class, generation, OWNER)
 }
 
 /// A pool admission never takes the reserved slot and vice versa.
@@ -52,7 +49,6 @@ fn admit_uses_only_its_class() {
     let reserved = slots.admit(AdmissionClass::Install).unwrap();
     assert_eq!(reserved.index, 8);
     assert_eq!(reserved.class, SlotClass::Reserved);
-    assert_eq!(slots.admit(AdmissionClass::Lease), None);
     let counts = slots.counts();
     assert_eq!(counts.pool_vacant, 0);
     assert_eq!(counts.pool_running, 8);
@@ -61,22 +57,24 @@ fn admit_uses_only_its_class() {
 }
 
 /// A retained failure is a record, not a slot: finishing the worker frees the
-/// slot before the record is stored (#540).
+/// slot, and the bounded record is stored beside the slots (#540).
 #[test]
 fn finish_frees_even_for_a_retained_failure() {
     let mut slots = Slots::new(8 + RESERVED_SLOTS);
+    let mut store = RetainedFailures::default();
     let now = Instant::now();
     let ticket = slots.admit(AdmissionClass::ControlPool).unwrap();
-    let prebuilt = describe(ticket.index, ticket.class, ticket.generation);
-    match slots.finish(ticket, Err(failure(ticket.index)), Some(prebuilt), now) {
+    let classified = disposition(&failure(ticket.index), ticket, OWNER, now);
+    match slots.finish(ticket, Err(failure(ticket.index)), Some(classified)) {
         Finished::Retained(record) => {
             assert_eq!(record.class, "pool");
             assert_eq!(record.generation, ticket.generation);
+            store.record(*record, now);
         }
         _ => panic!("a decoded failure was not retained"),
     }
     assert_eq!(slots.counts().pool_vacant, 8);
-    assert_eq!(slots.snapshot(now).failures.len(), 1);
+    assert_eq!(store.snapshot(now).failures.len(), 1);
 }
 
 /// Every running slot ends exactly once; a duplicate or stale finish releases
@@ -86,27 +84,17 @@ fn stale_or_duplicate_finish_changes_nothing() {
     let mut slots = Slots::new(8 + RESERVED_SLOTS);
     let now = Instant::now();
     let first = slots.admit(AdmissionClass::ControlPool).unwrap();
-    slots.finish(
-        first,
-        Err(failure(first.index)),
-        Some(describe(first.index, first.class, first.generation)),
-        now,
-    );
+    let classified = disposition(&failure(first.index), first, OWNER, now);
+    slots.finish(first, Err(failure(first.index)), Some(classified));
     // A duplicate finish of the same ticket changes nothing.
-    assert!(matches!(
-        slots.finish(first, Ok(()), None, now),
-        Finished::Stale
-    ));
+    assert!(matches!(slots.finish(first, Ok(()), None), Finished::Stale));
     let second = slots.admit(AdmissionClass::ControlPool).unwrap();
     assert_eq!(second.index, first.index);
     assert!(second.generation > first.generation);
     // The old ticket cannot free the newer worker.
-    assert!(matches!(
-        slots.finish(first, Ok(()), None, now),
-        Finished::Stale
-    ));
+    assert!(matches!(slots.finish(first, Ok(()), None), Finished::Stale));
     assert_eq!(slots.counts().pool_running, 1);
-    slots.finish(second, Ok(()), None, now);
+    slots.finish(second, Ok(()), None);
     assert_eq!(slots.counts().pool_vacant, 8);
 }
 
@@ -119,8 +107,8 @@ fn ring_limit_evicts_oldest_and_counts_drops() {
     for slot in 0..5 {
         store.record(describe(slot, SlotClass::Pool, slot as u64 + 1), now);
     }
-    assert_eq!(store.len(), 3);
     let snapshot = store.snapshot(now);
+    assert_eq!(snapshot.failures.len(), 3);
     assert_eq!(snapshot.dropped, 2);
     assert_eq!(snapshot.recorded, 5);
     assert_eq!(
@@ -162,17 +150,18 @@ fn ttl_prunes_expired_records() {
 #[test]
 fn retained_store_reaps_expired_records() {
     let mut slots = Slots::new(1 + RESERVED_SLOTS);
+    let mut store = RetainedFailures::default();
     let now = Instant::now();
     let ticket = slots.admit(AdmissionClass::ControlPool).unwrap();
-    slots.finish(
-        ticket,
-        Err(failure(ticket.index)),
-        Some(describe(ticket.index, ticket.class, ticket.generation)),
-        now,
-    );
-    slots.reap(now + TTL + Duration::from_secs(1));
+    let classified = disposition(&failure(ticket.index), ticket, OWNER, now);
+    if let Finished::Retained(record) =
+        slots.finish(ticket, Err(failure(ticket.index)), Some(classified))
+    {
+        store.record(*record, now);
+    }
+    store.reap(now + TTL + Duration::from_secs(1));
     assert_eq!(
-        slots
+        store
             .snapshot(now + TTL + Duration::from_secs(1))
             .failures
             .len(),
@@ -277,6 +266,7 @@ fn owner_and_deadline_are_visible() {
 #[test]
 fn guard_drop_releases_the_slot_and_records_once() {
     let mut slots = Slots::new(1 + RESERVED_SLOTS);
+    let mut store = RetainedFailures::default();
     let now = Instant::now();
     let ticket = slots.admit(AdmissionClass::ControlPool).unwrap();
     let failure = ConnectionFailure {
@@ -287,13 +277,8 @@ fn guard_drop_releases_the_slot_and_records_once() {
         fence_error: None,
         diagnostic_error: None,
     };
-    let record = RetainedFailure::describe(
-        &failure,
-        ticket.class,
-        ticket.generation,
-        "daemon:pid:layerfs-control-0",
-    );
-    match slots.finish(ticket, Err(failure), Some(record), now) {
+    let classified = disposition(&failure, ticket, OWNER, now);
+    match slots.finish(ticket, Err(failure), Some(classified)) {
         Finished::Retained(record) => {
             assert_eq!(record.slot, ticket.index);
             assert_eq!(record.class, "pool");
@@ -303,6 +288,7 @@ fn guard_drop_releases_the_slot_and_records_once() {
                 "{}",
                 record.cause
             );
+            store.record(*record, now);
         }
         _ => panic!("an abandoned slot was not recorded"),
     }
@@ -311,8 +297,8 @@ fn guard_drop_releases_the_slot_and_records_once() {
     assert_eq!(counts.pool_vacant, 1);
     // A second finish of the same ticket is stale: the record is never doubled.
     assert!(matches!(
-        slots.finish(ticket, Ok(()), None, now),
+        slots.finish(ticket, Ok(()), None),
         Finished::Stale
     ));
-    assert_eq!(slots.snapshot(now).failures.len(), 1);
+    assert_eq!(store.snapshot(now).failures.len(), 1);
 }

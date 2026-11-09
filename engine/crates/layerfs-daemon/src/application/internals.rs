@@ -11,7 +11,8 @@
 
 #[doc(hidden)]
 pub use super::owner::{
-    AdmissionClass, Finished, SlotClass, SlotCounts, SlotTicket, Slots, RESERVED_SLOTS,
+    disposition, AdmissionClass, Disposition, Finished, SlotClass, SlotCounts, SlotTicket, Slots,
+    RESERVED_SLOTS,
 };
 #[doc(hidden)]
 pub use super::retained::{RetainedFailure, RetainedFailures, RetainedSnapshot, LIMIT, TTL};

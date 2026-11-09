@@ -1,7 +1,7 @@
 //! Bounded real authenticated connection workers and retained original failures.
 use super::{
-    owner::{AdmissionClass, Finished, SlotClass, SlotTicket},
-    retained::RetainedFailure,
+    owner::{disposition, AdmissionClass, Finished, SlotClass, SlotCounts, SlotTicket},
+    retained::RetainedSnapshot,
     Application, ApplicationError, ConnectionFailure,
 };
 use layerfs_bridge::{
@@ -80,15 +80,12 @@ impl SlotGuard {
             return;
         }
         self.done = true;
-        // Build the bounded record before taking the state lock.
-        let prebuilt = result.as_ref().err().map(|failure| {
-            RetainedFailure::describe(
-                failure,
-                self.ticket.class,
-                self.ticket.generation,
-                &self.owner,
-            )
-        });
+        let now = Instant::now();
+        // Classify and build the bounded record before taking the state lock.
+        let classified = result
+            .as_ref()
+            .err()
+            .map(|failure| disposition(failure, self.ticket, &self.owner, now));
         // Poison recovery here only releases the slot and records; normal
         // admission still reports `Poisoned` rather than trusting corrupt state.
         let finished = {
@@ -97,9 +94,14 @@ impl SlotGuard {
                 .state
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            let finished = state
-                .slots
-                .finish(self.ticket, result, prebuilt, Instant::now());
+            let finished = state.slots.finish(self.ticket, result, classified);
+            let finished = match finished {
+                Finished::Retained(record) => {
+                    let recorded = state.retained.record(*record, now);
+                    Finished::Retained(Box::new(recorded))
+                }
+                other => other,
+            };
             self.application.changed.notify_all();
             finished
         };
@@ -161,8 +163,8 @@ impl Application {
                     Some(ticket) => ticket,
                     None => {
                         let counts = state.slots.counts();
-                        let retained = state.slots.visible();
-                        state.slots.reap(Instant::now());
+                        let retained = state.retained.len();
+                        state.retained.reap(Instant::now());
                         let reason = if state.startup.phase != DaemonPhase::ControlReady {
                             AdmissionReason::Starting
                         } else {
@@ -332,9 +334,9 @@ impl Application {
                     let bodies = super::bodies::Bodies::of(&call.request, &mut connection.receive);
                     let (outcome, diagnostic_error, telemetry) =
                         if matches!(call.request, Request::Observed { .. }) {
-                            self.observed_control(&call, slot)
+                            self.observed_control(&call, slot, ticket.class)
                         } else {
-                            (self.control(&call, slot), None, None)
+                            (self.control(&call, ticket.class), None, None)
                         };
                     if let Err(cause) = bodies.finish() {
                         return Err(ConnectionFailure {
@@ -446,9 +448,9 @@ impl Application {
     fn control(
         &self,
         call: &Call,
-        slot: usize,
+        class: SlotClass,
     ) -> Result<crate::control::Success, crate::control::Failure> {
-        self.control_operation(&call.request, slot)
+        self.control_operation(&call.request, class)
     }
     /// After the daemon reported ready (a `Hello` answered ControlReady was
     /// sent), opens one idle Store reader on a thread of its own, so the
@@ -494,7 +496,7 @@ impl Application {
     pub(super) fn control_operation(
         &self,
         request: &Request,
-        slot: usize,
+        class: SlotClass,
     ) -> Result<crate::control::Success, crate::control::Failure> {
         use crate::control::{Failure, Success};
         use layerfs_bridge::control::{ControlCode, DaemonPhase};
@@ -503,13 +505,11 @@ impl Application {
         }
         if let Request::Hello(request) = request {
             return self
-                .hello(*request, slot)
+                .hello(*request, class)
                 .map(|status| Success::reply(Reply::Hello(status)));
         }
         let state = self.state.lock().map_err(|_| Failure::Poisoned)?;
-        if slot == usize::from(self.setup.limits.connections)
-            && state.startup.phase != DaemonPhase::ControlReady
-        {
+        if class == SlotClass::Reserved && state.startup.phase != DaemonPhase::ControlReady {
             return Err(Failure::Rejected(
                 ControlCode::Capacity,
                 "reserved installer slot",
@@ -521,7 +521,7 @@ impl Application {
         // Operator-visible retained failures live with the application, not
         // with the Store control Service, so answer this one here.
         if let Request::Sdk(call) = request {
-            if call.method == CONNECTION_FAILURES {
+            if call.method == layerfs_bridge::control::OPERATION {
                 return self
                     .connection_failures()
                     .map(|value| Success::reply(Reply::Sdk(value)));
@@ -545,47 +545,53 @@ impl Application {
         &self,
     ) -> Result<layerfs_bridge::control::SdkValue, crate::control::Failure> {
         use crate::control::Failure;
-        use layerfs_bridge::control::{
-            AdmissionModel, CapacityModel, RetainedFailureModel, RetainedModel,
-        };
         let counts = self.connection_slots().map_err(|_| Failure::Poisoned)?;
         let snapshot = self
             .retained_connection_failures()
             .map_err(|_| Failure::Poisoned)?;
-        let failures = snapshot
-            .failures
-            .iter()
-            .map(|failure| RetainedFailureModel {
-                slot: failure.slot as i64,
-                class: failure.class.to_owned(),
-                generation: failure.generation as i64,
-                owner: failure.owner.clone(),
-                received_bytes: failure.received_bytes.map(|bytes| bytes as i64),
-                request: failure.request.map(str::to_owned),
-                reply_sent: failure.reply_sent,
-                cause: failure.cause.clone(),
-                fence_error: failure.fence_error.clone(),
-                diagnostic_error: failure.diagnostic_error.clone(),
-                age_ms: failure.age.as_millis() as i64,
-                expires_in_ms: failure.expires_in.as_millis() as i64,
-            });
-        Ok(CapacityModel {
-            admission: AdmissionModel {
-                pool_vacant: counts.pool_vacant as i64,
-                pool_running: counts.pool_running as i64,
-                reserved_vacant: counts.reserved_vacant as i64,
-                reserved_running: counts.reserved_running as i64,
-            },
-            retained: RetainedModel {
-                limit: snapshot.limit as i64,
-                ttl_ms: snapshot.ttl.as_millis() as i64,
-                count: snapshot.failures.len() as i64,
-                dropped: snapshot.dropped as i64,
-                recorded: snapshot.recorded as i64,
-                failures: failures.collect(),
-            },
-        }
-        .to_sdk())
+        Ok(capacity_report(counts, snapshot).to_sdk())
+    }
+}
+
+/// The daemon's control-capacity read model from its slot counts and its
+/// bounded retained-failure snapshot (#540). Pure: no lock and no store.
+fn capacity_report(
+    counts: SlotCounts,
+    snapshot: RetainedSnapshot,
+) -> layerfs_bridge::control::CapacityModel {
+    use layerfs_bridge::control::{AdmissionModel, RetainedFailureModel, RetainedModel};
+    let failures = snapshot
+        .failures
+        .iter()
+        .map(|failure| RetainedFailureModel {
+            slot: failure.slot as i64,
+            class: failure.class.to_owned(),
+            generation: failure.generation as i64,
+            owner: failure.owner.clone(),
+            received_bytes: failure.received_bytes.map(|bytes| bytes as i64),
+            request: failure.request.map(str::to_owned),
+            reply_sent: failure.reply_sent,
+            cause: failure.cause.clone(),
+            fence_error: failure.fence_error.clone(),
+            diagnostic_error: failure.diagnostic_error.clone(),
+            age_ms: failure.age.as_millis() as i64,
+            expires_in_ms: failure.expires_in.as_millis() as i64,
+        });
+    layerfs_bridge::control::CapacityModel {
+        admission: AdmissionModel {
+            pool_vacant: counts.pool_vacant as i64,
+            pool_running: counts.pool_running as i64,
+            reserved_vacant: counts.reserved_vacant as i64,
+            reserved_running: counts.reserved_running as i64,
+        },
+        retained: RetainedModel {
+            limit: snapshot.limit as i64,
+            ttl_ms: snapshot.ttl.as_millis() as i64,
+            count: snapshot.failures.len() as i64,
+            dropped: snapshot.dropped as i64,
+            recorded: snapshot.recorded as i64,
+            failures: failures.collect(),
+        },
     }
 }
 
@@ -605,7 +611,3 @@ fn reported_ready(outcome: &Result<crate::control::Success, crate::control::Fail
         Reply::Hello(status) if status.phase == layerfs_bridge::control::DaemonPhase::ControlReady
     ))
 }
-
-/// Operator/control method for the daemon's control admission and retained
-/// connection failures.
-pub(super) const CONNECTION_FAILURES: &str = layerfs_bridge::control::CAPACITY_OPERATION;
