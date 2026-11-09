@@ -3,8 +3,10 @@
 //! admission and shared-record cleanup, never during the daemon's helper wait.
 //! Mount paths are unique within one daemon lifetime; Sandbox removal clears
 //! the terminal records before that directory can be reused.
+use crate::daemon::values;
 use crate::files as discovery;
 use crate::registry::SandboxState;
+use crate::Unmounted;
 use layerfs_bridge::control::{
     AbortDisposition, DetachDisposition, SdkRefusal, SdkValue, TeardownStage, WorkspaceToken,
 };
@@ -232,8 +234,18 @@ pub fn token(state: &SandboxState, path: &str) -> Result<WorkspaceToken, SdkRefu
         format!("{}:{path} is not mounted", state.id),
     ))
 }
+/// A Workspace a terminal unmount left Retained, and whether its recorded
+/// custody is a forced detach the kernel refused `EBUSY` (`retryable`),
+/// which a later terminal call may re-attempt once the holder is gone.
+pub struct Retained {
+    /// The Workspace's mount path.
+    pub path: String,
+    /// Whether a later terminal call may re-attempt its detach.
+    pub retryable: bool,
+}
+
 /// Closing a running Sandbox may not race a registered terminal operation.
-pub fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal> {
+pub fn check_all(state: &SandboxState) -> Result<Vec<Retained>, SdkRefusal> {
     let mut recoverable = Vec::new();
     for entry in unmounts(state)? {
         let entry = entry.map_err(failed)?;
@@ -249,12 +261,49 @@ pub fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal> {
             }
             if let Some(value) = inspect(&entry.path())? {
                 if value.get_text("state") == Some("Retained") {
-                    recoverable.push(layerfs_home::helpers::text(&value, "path")?.to_owned());
+                    recoverable.push(Retained {
+                        path: layerfs_home::helpers::text(&value, "path")?.to_owned(),
+                        retryable: retry(&value),
+                    });
                 }
             }
         }
     }
     Ok(recoverable)
+}
+
+/// Whether a terminal reply is `Missing`: the daemon already unmounted the
+/// Workspace (an earlier retry detached it, so its stale record remains).
+fn absent(failure: &crate::OperationFailure) -> bool {
+    matches!(
+        &failure.cause,
+        crate::OperationCause::Remote(refusal)
+            if refusal.code == layerfs_bridge::control::ControlCode::Missing
+    )
+}
+
+/// Re-attempts the clean detach of every Retained retryable Workspace in
+/// `retained` (one normal unmount on the daemon, which re-attempts only the
+/// recorded `EBUSY` detach and never repeats the abort write). Answers the
+/// paths whose detach is still refused — their holder is still alive — which
+/// a close must refuse rather than delete; any other failure is returned as
+/// its refusal.
+pub fn retry_held(state: &SandboxState, retained: &[Retained]) -> Result<Vec<String>, SdkRefusal> {
+    let mut held = Vec::new();
+    for entry in retained.iter().filter(|entry| entry.retryable) {
+        let token = token(state, &entry.path)?;
+        let mut control = crate::daemon::trace::control(&state.controls)?;
+        match crate::internal::workspace(&mut control).unmount_checked(token, false) {
+            Ok(Unmounted::Closed) => {}
+            Ok(Unmounted::Dirty(_)) => unreachable!("a retryable detach skips the dirty check"),
+            Err(failure) if absent(&failure) => {}
+            Err(failure) if retryable(&failure) => held.push(entry.path.clone()),
+            Err(failure) => {
+                return Err(values::refusal(&failure).unwrap_or_else(|| failed(failure)))
+            }
+        }
+    }
+    Ok(held)
 }
 /// Called under the Sandbox guard, after all before-effect checks.
 pub fn begin(

@@ -331,7 +331,10 @@ fn served(home: &Path, record: &SandboxRecord, call: Call) -> Outcome {
 /// The Workspaces forwarded Sandbox `record` holds, which its close sends
 /// its worker (`held`): those its daemon still has, checked under the
 /// folder's turn with no unmount in progress; when the daemon cannot be
-/// reached, every Workspace recorded in the home folder.
+/// reached, every Workspace recorded in the home folder. A Workspace whose
+/// forced unmount left a Retained detach the kernel refused `EBUSY` is
+/// re-attempted here (this process reaches the daemon directly) and the
+/// close is refused `Busy` while its holder is still alive.
 pub fn held(home: &Path, record: &SandboxRecord) -> Result<Vec<String>> {
     let target = resolve::target(home, record.project().unwrap_or(""))?;
     let host = host(home, record, &target, Message::Absent);
@@ -341,8 +344,31 @@ pub fn held(home: &Path, record: &SandboxRecord) -> Result<Vec<String>> {
             .collect();
     };
     let _guard = layerfs_store::project::discovery::guard(&state.directory)?;
-    let recoverable = unmount_guard::check_all(&state)?;
+    let retained = unmount_guard::check_all(&state)?;
+    let recoverable = retained
+        .iter()
+        .map(|entry| entry.path.clone())
+        .collect::<Vec<_>>();
     files::refresh_except(&state, &recoverable)?;
+    // A Retained unmount whose forced detach the kernel refused `EBUSY` is
+    // re-attempted here (this process reaches the daemon directly); a holder
+    // still alive refuses the close rather than deleting the data plane.
+    let still_held = unmount_guard::retry_held(&state, &retained)?;
+    if !still_held.is_empty() {
+        let held = still_held.join(", ");
+        let count = still_held.len();
+        return Err(SdkRefusal {
+            code: "Busy".to_owned(),
+            message: format!(
+                "Sandbox {} still holds {count} Workspace(s) whose unmount a live holder refuses: {held}; wait for the holder to exit, then close again",
+                record.name()
+            ),
+            detail: SdkValue::map([(
+                "workspaces",
+                SdkValue::List(still_held.into_iter().map(SdkValue::Text).collect()),
+            )]),
+        });
+    }
     let mounted = helpers::lock(&state.mounts)?
         .keys()
         .filter(|path| !recoverable.contains(path))
