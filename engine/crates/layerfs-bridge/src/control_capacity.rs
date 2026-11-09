@@ -6,6 +6,21 @@
 //! slots by class) and one [`RetainedModel`] (the bounded store of connection
 //! failures that used to retain a slot). It is a plain value object: parse a
 //! daemon answer once, then read typed fields instead of string keys.
+//!
+//! # Version skew
+//!
+//! This model crosses three separately deployed components (the daemon, the
+//! control binding and the doctor), so a field one side adds is read by an
+//! older side as absent:
+//!
+//! | new × old | failure shape |
+//! |---|---|
+//! | new daemon × old control binding | an unknown admission reason reads as `Unknown { observed }`, never a hang; a new `admission`/`retained` field reads as zero |
+//! | old daemon × new control binding | no notice is written before a full pool, so the binding reports `Unknown { observed: UnexpectedEof }`, never "no vacant slot" |
+//! | new control × old worker bundle | a new `outcome`/`retry_after` detail field is absent and reads as null; nothing is retried on the caller's behalf |
+//!
+//! Every field is defaulted when absent so a newer daemon stays legible to an
+//! older reader, and every unknown reason stays a named refusal, never a hang.
 use crate::control::SdkValue;
 
 /// The daemon backend method that returns this read model.
@@ -29,6 +44,7 @@ pub struct AdmissionModel {
 
 impl AdmissionModel {
     /// The model in `value`, or all zero when the record does not carry one.
+    #[must_use]
     pub fn parse(value: &SdkValue) -> Self {
         let admission = value.get("admission").unwrap_or(&SdkValue::Null);
         Self {
@@ -40,6 +56,7 @@ impl AdmissionModel {
     }
 
     /// The model as the read model's `admission` record.
+    #[must_use]
     pub fn to_sdk(&self) -> SdkValue {
         SdkValue::map([
             ("pool_vacant", SdkValue::Int(self.pool_vacant)),
@@ -50,6 +67,7 @@ impl AdmissionModel {
     }
 
     /// Whether the pool has no vacant slot while it is in use at all.
+    #[must_use]
     pub fn exhausted(&self) -> bool {
         self.pool_vacant == 0 && self.pool_running > 0
     }
@@ -87,6 +105,7 @@ pub struct RetainedFailureModel {
 
 impl RetainedFailureModel {
     /// The record in `value`, or `None` when it is not a failure record.
+    #[must_use]
     pub fn parse(value: &SdkValue) -> Option<Self> {
         Some(Self {
             slot: value.get_int("slot")?,
@@ -105,6 +124,7 @@ impl RetainedFailureModel {
     }
 
     /// The record as the read model's `retained.failures` item.
+    #[must_use]
     pub fn to_sdk(&self) -> SdkValue {
         SdkValue::map([
             ("slot", SdkValue::Int(self.slot)),
@@ -148,6 +168,7 @@ pub struct RetainedModel {
 
 impl RetainedModel {
     /// The model in `value`, or all zero when the record does not carry one.
+    #[must_use]
     pub fn parse(value: &SdkValue) -> Self {
         let retained = value.get("retained").unwrap_or(&SdkValue::Null);
         let failures = match retained.get("failures") {
@@ -168,6 +189,7 @@ impl RetainedModel {
     }
 
     /// The model as the read model's `retained` record.
+    #[must_use]
     pub fn to_sdk(&self) -> SdkValue {
         SdkValue::map([
             ("limit", SdkValue::Int(self.limit)),
@@ -200,6 +222,7 @@ pub struct CapacityModel {
 impl CapacityModel {
     /// Parse one `backend.daemon.connection_failures` answer. A field the
     /// record does not carry reads as zero, so a newer daemon stays legible.
+    #[must_use]
     pub fn parse(value: &SdkValue) -> Self {
         Self {
             admission: AdmissionModel::parse(value),
@@ -208,6 +231,7 @@ impl CapacityModel {
     }
 
     /// The answer a daemon publishes for this model.
+    #[must_use]
     pub fn to_sdk(&self) -> SdkValue {
         SdkValue::map([
             ("admission", self.admission.to_sdk()),

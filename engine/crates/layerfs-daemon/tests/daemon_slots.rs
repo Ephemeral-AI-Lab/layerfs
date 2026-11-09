@@ -313,7 +313,7 @@ fn no_vacant_slot_writes_the_capacity_notice() {
     // No Store is installed, so the daemon is still starting.
     assert_eq!(
         notice.reason,
-        layerfs_bridge::duplex::admission::AdmissionReason::Starting
+        layerfs_bridge::duplex::admission::AdmissionReason::starting()
     );
     assert_eq!(notice.pool_vacant, 0);
     assert_eq!(notice.reserved_vacant, 0);

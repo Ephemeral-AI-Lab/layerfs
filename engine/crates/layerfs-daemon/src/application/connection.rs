@@ -200,9 +200,9 @@ impl Application {
                         let retained = state.retained.len();
                         state.retained.reap(Instant::now());
                         let reason = if state.startup.phase != DaemonPhase::ControlReady {
-                            AdmissionReason::Starting
+                            AdmissionReason::starting()
                         } else {
-                            AdmissionReason::NoPoolSlot
+                            AdmissionReason::no_pool_slot()
                         };
                         let notice = AdmissionNotice::new(
                             reason,
