@@ -158,6 +158,10 @@ impl Service {
         ))
     }
 }
+/// A retained `Detach` custody taken out for a retry: its Workspace and its
+/// typed keeper, whose recorded session is re-attempted.
+#[cfg(target_os = "linux")]
+type Retryable = (Arc<BoundWorkspace>, Box<Kept>);
 /// What forced admission took out of the registry entry.
 #[cfg(target_os = "linux")]
 struct Admitted {
@@ -439,7 +443,7 @@ impl Service {
     pub(super) fn take_retryable(
         &self,
         token: WorkspaceToken,
-    ) -> Result<Option<(Arc<BoundWorkspace>, Box<Kept>)>, Failure> {
+    ) -> Result<Option<Retryable>, Failure> {
         let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
         let value = bound_mut(&mut entries, token)?;
         if !matches!(&value.kernel, Kernel::Retained(kept) if kept.retryable()) {
