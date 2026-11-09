@@ -204,7 +204,10 @@ impl Session {
         creation_acquisition: crate::SqliteAcquisitionSchema,
         diagnostic: bool,
     ) -> Result<Self, BackendError> {
-        if !cfg!(any(target_os = "macos", target_os = "linux")) {
+        // Windows joins the sole-kernel answers: one Windows kernel
+        // coordinates the Store sqlite locks exactly as macOS one does
+        // (#454); the volume-guard allowlist is the follow-up.
+        if !cfg!(any(target_os = "macos", target_os = "linux", target_os = "windows")) {
             return Err(BackendError::Integrity);
         }
         let flags = if writable {
