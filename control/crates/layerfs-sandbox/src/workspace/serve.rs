@@ -259,12 +259,22 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     let guard = layerfs_store::project::discovery::guard(&state.directory)?;
     // Another process may have registered while this call waited for the
     // short admission section. Check again before sending anything.
-    if let Some(value) = crate::unmount_guard::find(&state, path)? {
-        if !crate::unmount_guard::retry(&value) {
+    let retrying = match crate::unmount_guard::find(&state, path)? {
+        Some(value) if !crate::unmount_guard::retry(&value) => {
             return crate::unmount_guard::repeat(&value);
         }
-    }
-    let token = state.token(path)?;
+        Some(_) => true,
+        None => false,
+    };
+    // A retryable Retained Workspace's live mount table no longer answers:
+    // read its token from the workspace record (as `sandbox.close` does)
+    // instead of re-running `unmount_guard::check`, which would re-report
+    // the Retained custody before the retry ever reaches the daemon (#538).
+    let token = if retrying {
+        crate::unmount_guard::token(&state, path)?
+    } else {
+        state.token(path)?
+    };
     // its running commands (D-10): `Busy`, or with `force` cancelled first
     let wsid = layerfs_bridge::sdk_values::hex(&token.workspace.to_bytes());
     let unreached = &mut crate::exec::cancel::unreached;

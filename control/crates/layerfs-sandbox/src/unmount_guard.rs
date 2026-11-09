@@ -219,6 +219,19 @@ fn find_in(directory: &std::path::Path, path: &str) -> Result<Option<SdkValue>, 
     }
     Ok(None)
 }
+/// The token of the Workspace recorded at `path`, read from its record: the
+/// live mount table no longer answers a Retained Workspace.
+pub fn token(state: &SandboxState, path: &str) -> Result<WorkspaceToken, SdkRefusal> {
+    for (_, record) in discovery::workspaces(&state.directory)? {
+        if record.path() == Some(path) {
+            return discovery::token_of(&record);
+        }
+    }
+    Err(refused(
+        "NotMounted",
+        format!("{}:{path} is not mounted", state.id),
+    ))
+}
 /// Closing a running Sandbox may not race a registered terminal operation.
 pub fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal> {
     let mut recoverable = Vec::new();
