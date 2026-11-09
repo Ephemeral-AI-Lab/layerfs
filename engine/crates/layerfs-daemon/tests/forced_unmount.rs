@@ -43,9 +43,8 @@ mod mounted;
 #[path = "support/mounted_commit.rs"]
 mod rig;
 use layerfs_bridge::control::{
-    AbortDisposition, Activity, CommitKnowledge, ControlCode, DetachDisposition, ForcedFacts,
-    ForcedOutcome, MountPhase, MountWork, Reply, Request, TeardownCustody, TeardownStage,
-    WorkspaceToken,
+    AbortDisposition, Activity, CommitKnowledge, ControlCode, DetachDisposition, ForcedOutcome,
+    MountPhase, MountWork, Reply, Request, TeardownCustody, TeardownStage, WorkspaceToken,
 };
 use layerfs_daemon::control::Failure;
 use mounted::{mount_entry, Harness, COMMAND};
@@ -376,18 +375,6 @@ fn force(harness: &Harness, token: WorkspaceToken) -> Ended {
         Err(other) => panic!("forced unmount: {}", brief(&other)),
     }
 }
-/// The fields of a stored custody that never change; `detached` and `work`
-/// are read live from the connection's maintained counters.
-fn stable(
-    custody: &TeardownCustody,
-) -> (WorkspaceToken, TeardownStage, &str, Option<&ForcedFacts>) {
-    (
-        custody.token,
-        custody.stage,
-        custody.detail.as_str(),
-        custody.forced.as_ref(),
-    )
-}
 /// Every later terminal or attach call on a retained entry, each once.
 fn later(harness: &Harness, token: WorkspaceToken) -> Vec<(&'static str, TeardownCustody)> {
     [
@@ -574,19 +561,20 @@ fn held_reference(name: &'static str, label: &str, mode: &str) {
         status.activity
     );
 
-    // Every later call returns the stored custody and makes no effect.
+    // Every later terminal call re-attempts the one detach while the holder
+    // is still there: the kernel refuses it `EBUSY` again, so the exact
+    // aborted-and-mounted custody is re-reported (`Attach` does not retry).
     let again = later(&rig.harness, token);
     for (call, repeated) in &again {
-        checks.that(
-            stable(repeated) == stable(&custody) && !repeated.detached,
-            || format!("{name}: {call} returned another custody: {repeated:?}"),
-        );
+        checks.that(aborted_and_mounted(repeated, token), || {
+            format!("{name}: {call} returned another custody: {repeated:?}")
+        });
     }
     let repeated_status = rig.harness.status(token);
     let repeated_row = row(&ready.directory);
     checks.that(
         repeated_row.as_deref() == Some(before_row.as_str())
-            && repeated_status.epoch == status.epoch
+            && repeated_status.epoch > status.epoch
             && repeated_status.kernel.as_ref().map(|kernel| kernel.phase)
                 == Some(MountPhase::Retained),
         || {
@@ -598,13 +586,13 @@ fn held_reference(name: &'static str, label: &str, mode: &str) {
     );
     let still = holder.ask("probe");
     println!(
-        "{name} later_calls={:?} equal_custody={} mount_row=unchanged:{} epoch_unchanged={} holder_call={still:?}",
+        "{name} later_calls={:?} aborted_and_mounted={} mount_row=unchanged:{} epoch_advanced={} holder_call={still:?}",
         again.iter().map(|(call, _)| *call).collect::<Vec<_>>(),
         again
             .iter()
-            .all(|(_, repeated)| stable(repeated) == stable(&custody)),
+            .all(|(_, repeated)| aborted_and_mounted(repeated, token)),
         repeated_row.as_deref() == Some(before_row.as_str()),
-        repeated_status.epoch == status.epoch
+        repeated_status.epoch > status.epoch
     );
 
     // The holder leaves by itself; nothing signalled it.
@@ -613,43 +601,31 @@ fn held_reference(name: &'static str, label: &str, mode: &str) {
         exit.code() == Some(0) && exit.signal().is_none() && signals == "signals 0",
         || format!("{name}: the holder ended {exit:?} after {signals:?}"),
     );
-    // Nothing changes once the reference is gone: no detach is made now
-    // that it would succeed.
-    let gone = later(&rig.harness, token);
-    let gone_row = row(&ready.directory);
-    let gone_status = rig.harness.status(token);
-    checks.that(
-        gone.iter()
-            .all(|(_, repeated)| stable(repeated) == stable(&custody) && !repeated.detached)
-            && gone_row.as_deref() == Some(before_row.as_str())
-            && gone_status.epoch == status.epoch,
-        || {
-            format!(
-                "{name}: something changed after the holder exited: row {gone_row:?}, epoch {} -> {}, {gone:?}",
-                status.epoch, gone_status.epoch
-            )
-        },
-    );
-    println!(
-        "{name} after_holder_exit: holder_exit={:?} {signals:?} equal_custody={} mount_row=unchanged:{} own_connection={} phase={:?}",
-        exit.code(),
-        gone.iter()
-            .all(|(_, repeated)| stable(repeated) == stable(&custody)),
-        gone_row.as_deref() == Some(before_row.as_str()),
-        connection.exists(),
-        gone_status.kernel.as_ref().map(|kernel| kernel.phase)
-    );
-
-    // Teardown by the test: the product never detaches this mount again.
-    let detached = plain_umount(&ready.directory);
-    assert!(detached.success(), "{name}: umount: {detached:?}");
-    assert!(mount_entry(&ready.directory).is_none());
+    // Once the holder is gone, a later unmount re-attempts the detach and
+    // completes the teardown: the mount row and the connection's own
+    // directory are removed and the Workspace answers Unmounted.
+    let recovered = rig.harness.try_unmount(token);
+    let unmounted = match &recovered {
+        Ok(done) => done.reply == Reply::Unmounted(token),
+        Err(failure) => {
+            println!("{name}: recovery failure: {}", brief(failure));
+            false
+        }
+    };
+    checks.that(unmounted, || {
+        format!("{name}: unmount after the holder exited: {recovered:?}")
+    });
+    checks.that(mount_entry(&ready.directory).is_none(), || {
+        format!(
+            "{name}: the mount row survived the recovery: {:?}",
+            row(&ready.directory)
+        )
+    });
     within("own connection directory removed", || !connection.exists());
     println!(
-        "{name} teardown: by_test=plain umount(8) status={:?} mount_row=None own_connection=absent registry_phase={:?} deviations={}",
-        detached.code(),
-        rig.harness.phase(token),
-        checks.0.len()
+        "{name} after_holder_exit: holder_exit={:?} {signals:?} recovery=Unmounted mount_row=None own_connection={}",
+        exit.code(),
+        connection.exists()
     );
     abandon(rig);
     checks.done(name);

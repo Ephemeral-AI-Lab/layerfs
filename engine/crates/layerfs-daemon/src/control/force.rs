@@ -162,6 +162,15 @@ impl Service {
 /// typed keeper, whose recorded session is re-attempted.
 #[cfg(target_os = "linux")]
 type Retryable = (Arc<BoundWorkspace>, Box<Kept>);
+/// A re-attempted detach that succeeded: the drained connection and the
+/// forced facts to carry it through Revoke and Close.
+#[cfg(target_os = "linux")]
+pub(super) struct Retried {
+    pub(super) drained: Box<Drained>,
+    pub(super) observer: SessionObserver,
+    pub(super) mount: KernelMount,
+    pub(super) facts: ForcedFacts,
+}
 /// What forced admission took out of the registry entry.
 #[cfg(target_os = "linux")]
 struct Admitted {
@@ -219,7 +228,15 @@ impl Service {
         // A retained detach the kernel refused `EBUSY` is re-attempted first:
         // the holder may be gone.
         if let Some((workspace, kept)) = self.take_retryable(token)? {
-            return self.retry_detach(token, workspace, kept);
+            let retried = self.retry_detach(token, kept)?;
+            return self.force_completed(
+                token,
+                &workspace,
+                retried.mount,
+                retried.observer,
+                retried.drained,
+                retried.facts,
+            );
         }
         let admitted = self.admit_force(token, relinquish_unknown)?;
         self.force_admitted(token, admitted)
@@ -458,15 +475,15 @@ impl Service {
     }
 
     /// Re-attempts the one plain detach a forced teardown recorded `EBUSY`,
-    /// now that the holder may be gone. Success continues the forced teardown
-    /// (revoke, close); a holder still present keeps the exact custody with
+    /// now that the holder may be gone. Success returns the drained
+    /// connection for the caller to complete (a forced teardown, or a normal
+    /// unmount's close); a holder still present keeps the exact custody with
     /// the re-attempted detach disposition.
     pub(super) fn retry_detach(
         &self,
         token: WorkspaceToken,
-        workspace: Arc<BoundWorkspace>,
         kept: Box<Kept>,
-    ) -> Result<Success, Failure> {
+    ) -> Result<Retried, Failure> {
         let Kept {
             evidence, forced, ..
         } = *kept;
@@ -482,7 +499,12 @@ impl Service {
         let observer = undrained.session.observer();
         let mount = undrained.session.mount();
         match undrained.retry_detach() {
-            Ok(drained) => self.force_completed(token, &workspace, mount, observer, drained, facts),
+            Ok(drained) => Ok(Retried {
+                drained,
+                observer,
+                mount,
+                facts,
+            }),
             Err(undrained) => {
                 let attempt = undrained
                     .forced

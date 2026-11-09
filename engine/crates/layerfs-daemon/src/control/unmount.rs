@@ -29,7 +29,8 @@ impl Service {
         // dropped uncommitted changes, so no dirty check applies to it.
         #[cfg(target_os = "linux")]
         if let Some((workspace, kept)) = self.take_retryable(token)? {
-            return self.retry_detach(token, workspace, kept);
+            let retried = self.retry_detach(token, kept)?;
+            return self.close(token, &workspace, Some(retried.drained));
         }
         if !control.discard {
             if let Some(report) = self.dirty(token)? {
