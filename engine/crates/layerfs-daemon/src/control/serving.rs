@@ -1,5 +1,8 @@
 //! One shared dispatcher for every mount, and the exact owners an entry keeps.
-use super::kernel::{bounded, KernelConfig};
+use super::{
+    kernel::{bounded, KernelConfig},
+    UnmountAbort,
+};
 use layerfs_bridge::control::{
     ForcedFacts, MountPhase, MountReceipt, MountWork, ReadyMount, TeardownCustody, TeardownStage,
     WorkspaceToken,
@@ -49,6 +52,16 @@ pub(super) struct Leaving {
     pub observer: SessionObserver,
     pub phase: MountPhase,
 }
+/// One terminal stop's inputs: the boundary, its bounded detail, the owner
+/// observation and the forced and abort facts kept beside it. `keep` fills in
+/// the mount receipt from the entry.
+pub(super) struct Stop {
+    pub stage: TeardownStage,
+    pub detail: String,
+    pub observer: Option<SessionObserver>,
+    pub forced: Option<ForcedFacts>,
+    pub abort: Option<Box<UnmountAbort>>,
+}
 /// Custody that a terminal or attach operation could not finish disposing.
 /// Nothing here is dropped, retried or settled by a later observation.
 pub(super) struct Kept {
@@ -61,6 +74,9 @@ pub(super) struct Kept {
     /// Abort effects as recorded where teardown stopped, including a normal
     /// unmount's stalled connection. Absent when no abort was attempted.
     pub forced: Option<ForcedFacts>,
+    /// The normal unmount's abort path when it ran, exactly as it stood there,
+    /// for the retained entry's observation. Absent when no abort was made.
+    pub abort: Option<Box<UnmountAbort>>,
 }
 impl fmt::Debug for Kept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -71,6 +87,7 @@ impl fmt::Debug for Kept {
             .field("observer", &self.observer)
             .field("evidence", &self.evidence)
             .field("forced", &self.forced)
+            .field("abort", &self.abort)
             .finish()
     }
 }
