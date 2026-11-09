@@ -1,4 +1,5 @@
 //! One startup lifecycle owner, Store transfer and bounded connection custody.
+use super::retained::{RetainedFailure, RetainedFailures, RetainedSnapshot};
 use super::{ApplicationError, ConnectionFailure};
 use crate::{
     bootstrap::{open_store_observed, OpenedStore},
@@ -19,12 +20,222 @@ use layerfs_storage::ReservationBlocks;
 use std::{
     sync::{Arc, Condvar, Mutex},
     thread::JoinHandle,
+    time::Instant,
 };
 
-pub(super) enum Slot {
+/// Slots reserved for the installer (and, later, a presence lease); ordinary
+/// controls never consume them.
+pub(super) const RESERVED_SLOTS: usize = 1;
+
+/// The fixed class of one slot index.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum SlotClass {
+    /// Ordinary authenticated control connections.
+    Pool,
+    /// Installer today, a presence lease later.
+    Reserved,
+}
+
+impl SlotClass {
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            Self::Pool => "pool",
+            Self::Reserved => "reserved",
+        }
+    }
+}
+
+/// What a caller is admitted for; maps to the slot class it may use.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum AdmissionClass {
+    /// An ordinary control connection.
+    ControlPool,
+    /// The one-time Store installer.
+    Install,
+    /// A future presence lease.
+    #[allow(dead_code)]
+    Lease,
+}
+
+impl AdmissionClass {
+    fn slot_class(self) -> SlotClass {
+        match self {
+            Self::ControlPool => SlotClass::Pool,
+            Self::Install | Self::Lease => SlotClass::Reserved,
+        }
+    }
+}
+
+/// One admission slot: free, or running one worker generation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum SlotState {
     Vacant,
-    Running,
-    Retained(Box<ConnectionFailure>),
+    Running { generation: u64, class: SlotClass },
+}
+
+/// Proof that one admission owns a slot and generation. Every path ends in
+/// exactly one `Slots::finish` with this ticket; a stale ticket changes
+/// nothing, so a duplicate or late finish cannot free a newer worker.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct SlotTicket {
+    pub(super) index: usize,
+    pub(super) generation: u64,
+    pub(super) class: SlotClass,
+}
+
+/// What finishing one connection did with its failure, if any.
+pub(super) enum Finished {
+    /// The worker ended without a failure.
+    Clean,
+    /// The failure was written to the daemon log and needs no record.
+    Released(Box<ConnectionFailure>),
+    /// The failure was recorded in the bounded store; its slot is already free.
+    Retained(Box<RetainedFailure>),
+    /// A stale or duplicate finish: nothing changed.
+    Stale,
+}
+
+/// Admission counts by class.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SlotCounts {
+    pub pool_vacant: usize,
+    pub pool_running: usize,
+    pub reserved_vacant: usize,
+    pub reserved_running: usize,
+}
+
+/// The fixed control-slot table and the bounded retained-failure store beside it.
+///
+/// A retained failure never owns a slot: `finish` always leaves it `Vacant`
+/// and only records the failure. Admission capacity therefore cannot leak
+/// (#540). The layout is `connections` `Pool` entries followed by
+/// [`RESERVED_SLOTS`] `Reserved` entries; a class only ever admits within its
+/// own range.
+pub(super) struct Slots {
+    slots: Vec<SlotState>,
+    pool: usize,
+    next_generation: u64,
+    retained: RetainedFailures,
+}
+
+impl Slots {
+    pub(super) fn new(count: usize) -> Self {
+        let pool = count.saturating_sub(RESERVED_SLOTS);
+        let mut slots = Vec::with_capacity(pool + RESERVED_SLOTS);
+        slots.resize(pool, SlotState::Vacant);
+        slots.resize(pool + RESERVED_SLOTS, SlotState::Vacant);
+        Self {
+            slots,
+            pool,
+            next_generation: 0,
+            retained: RetainedFailures::default(),
+        }
+    }
+
+    fn class_of(&self, index: usize) -> SlotClass {
+        if index < self.pool {
+            SlotClass::Pool
+        } else {
+            SlotClass::Reserved
+        }
+    }
+
+    /// Claims one vacant slot of `class`, or `None` when that class is full.
+    /// A pool admission never takes a reserved slot and vice versa.
+    pub(super) fn admit(&mut self, class: AdmissionClass) -> Option<SlotTicket> {
+        let wanted = class.slot_class();
+        let index = self.slots.iter().enumerate().find_map(|(index, value)| {
+            (self.class_of(index) == wanted && matches!(value, SlotState::Vacant)).then_some(index)
+        })?;
+        self.generation_ticket(index, wanted)
+    }
+
+    fn generation_ticket(&mut self, index: usize, class: SlotClass) -> Option<SlotTicket> {
+        self.next_generation = self.next_generation.saturating_add(1);
+        let generation = self.next_generation;
+        *self.slots.get_mut(index)? = SlotState::Running { generation, class };
+        Some(SlotTicket {
+            index,
+            generation,
+            class,
+        })
+    }
+
+    /// Ends one worker: release its slot and, for a retained failure, record
+    /// the already-built record. A ticket whose generation or class no longer
+    /// matches changes nothing.
+    pub(super) fn finish(
+        &mut self,
+        ticket: SlotTicket,
+        result: Result<(), ConnectionFailure>,
+        prebuilt: Option<RetainedFailure>,
+        now: Instant,
+    ) -> Finished {
+        let running = matches!(
+            self.slots.get(ticket.index),
+            Some(SlotState::Running { generation, class })
+                if *generation == ticket.generation && *class == ticket.class
+        );
+        if !running {
+            return Finished::Stale;
+        }
+        self.slots[ticket.index] = SlotState::Vacant;
+        match result {
+            Ok(()) => Finished::Clean,
+            Err(failure) if releases_after_logging(&failure) => {
+                Finished::Released(Box::new(failure))
+            }
+            Err(_) => {
+                let record = prebuilt.expect("a retained failure is described before the lock");
+                let record = self.retained.record(record, now);
+                Finished::Retained(Box::new(record))
+            }
+        }
+    }
+
+    pub(super) fn snapshot(&mut self, now: Instant) -> RetainedSnapshot {
+        self.retained.snapshot(now)
+    }
+
+    /// Admission counts for each class.
+    pub(super) fn counts(&self) -> SlotCounts {
+        let mut counts = SlotCounts {
+            pool_vacant: 0,
+            pool_running: 0,
+            reserved_vacant: 0,
+            reserved_running: 0,
+        };
+        for (index, value) in self.slots.iter().enumerate() {
+            match (self.class_of(index), value) {
+                (SlotClass::Pool, SlotState::Vacant) => counts.pool_vacant += 1,
+                (SlotClass::Pool, SlotState::Running { .. }) => counts.pool_running += 1,
+                (SlotClass::Reserved, SlotState::Vacant) => counts.reserved_vacant += 1,
+                (SlotClass::Reserved, SlotState::Running { .. }) => counts.reserved_running += 1,
+            }
+        }
+        counts
+    }
+
+    /// Visible retained records, for the admission notice.
+    pub(super) fn visible(&mut self) -> usize {
+        self.retained.len()
+    }
+
+    /// Drops expired records; the accept loop reaps when it refuses admission.
+    pub(super) fn reap(&mut self, now: Instant) {
+        self.retained.reap(now);
+    }
+}
+
+/// A failure with no decoded product attempt or custody: the existing daemon
+/// log line is the whole record, and the slot is released.
+fn releases_after_logging(failure: &ConnectionFailure) -> bool {
+    failure.original.is_none()
+        && failure.received.is_none()
+        && matches!(
+            failure.cause,
+            ApplicationError::Channel(_) | ApplicationError::Io(_)
+        )
 }
 pub(super) struct Startup {
     pub phase: DaemonPhase,
@@ -35,7 +246,7 @@ pub(super) struct Startup {
 }
 pub(super) struct State {
     pub startup: Startup,
-    pub slots: Vec<Slot>,
+    pub slots: Slots,
 }
 /// One real daemon application; Store/Overlay are initialized once and reused.
 pub struct Application {
@@ -201,7 +412,7 @@ impl Application {
                     existing,
                     install_failure: None,
                 },
-                slots: (0..count).map(|_| Slot::Vacant).collect(),
+                slots: Slots::new(count),
             }),
             changed: Condvar::new(),
             workers: Mutex::new((0..count).map(|_| None).collect()),
@@ -271,27 +482,16 @@ impl Application {
         }
         Ok(self.observation(&state))
     }
-    /// Transfers original failed connection custody out only at an explicit operator request.
-    /// Taking a receipt does not resolve its unknowns, replay it or remove artifacts.
-    pub fn take_connection_failure(
-        &self,
-        slot: usize,
-    ) -> Result<Option<Box<ConnectionFailure>>, ApplicationError> {
+    /// The bounded retained-failure store, pruned at this observation.
+    pub fn retained_connection_failures(&self) -> Result<RetainedSnapshot, ApplicationError> {
         let mut state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
-        let current = state.slots.get_mut(slot).ok_or_else(|| {
-            ApplicationError::Io(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "connection slot",
-            ))
-        })?;
-        if !matches!(current, Slot::Retained(_)) {
-            return Ok(None);
-        }
-        let Slot::Retained(failure) = std::mem::replace(current, Slot::Vacant) else {
-            unreachable!()
-        };
-        self.changed.notify_all();
-        Ok(Some(failure))
+        Ok(state.slots.snapshot(Instant::now()))
+    }
+
+    /// Vacant and in-use control slots, by class.
+    pub fn connection_slots(&self) -> Result<SlotCounts, ApplicationError> {
+        let state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
+        Ok(state.slots.counts())
     }
 }
 

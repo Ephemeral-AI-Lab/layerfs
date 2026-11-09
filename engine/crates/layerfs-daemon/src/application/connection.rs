@@ -1,40 +1,191 @@
 //! Bounded real authenticated connection workers and retained original failures.
-use super::{owner::Slot, Application, ApplicationError, ConnectionFailure};
+use super::{
+    owner::{AdmissionClass, Finished, SlotClass, SlotTicket},
+    retained::RetainedFailure,
+    Application, ApplicationError, ConnectionFailure,
+};
 use layerfs_bridge::{
-    control::{Call, Reply, Request},
-    duplex::{self as transport},
+    control::{Call, DaemonPhase, Reply, Request},
+    duplex::{
+        self as transport,
+        admission::{self as admission_notice, AdmissionNotice, AdmissionReason},
+    },
     initial_record::InitialRecord,
 };
 use std::{
-    io::Write,
+    io::{Read, Write},
     net::{TcpListener, TcpStream},
     sync::Arc,
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
+
+/// Bounded conversion of an admission count to the notice's one byte.
+fn saturating(count: usize) -> u8 {
+    u8::try_from(count).unwrap_or(u8::MAX)
+}
+
+/// Writes one advisory pre-handshake capacity notice and drains what the
+/// caller may still send, so it reads the notice rather than a reset. Every
+/// socket operation is bounded; failure is ignored (the socket ends anyway).
+fn write_capacity_notice(stream: &mut TcpStream, notice: &AdmissionNotice) {
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(100)));
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(50)));
+    if admission_notice::write(stream, notice).is_err() {
+        return;
+    }
+    let mut sink = [0u8; 512];
+    let _ = stream.read(&mut sink);
+}
+
+/// A synthetic failure for a worker that panicked: bounded, and recorded
+/// through the same one-finish path as any other failure.
+fn panic_failure(ticket: SlotTicket, payload: Box<dyn std::any::Any + Send>) -> ConnectionFailure {
+    let message = payload
+        .downcast_ref::<&str>()
+        .map(|text| (*text).to_owned())
+        .or_else(|| payload.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "non-string panic payload".to_owned());
+    let mut message = format!("connection worker panicked: {message}");
+    if message.len() > 512 {
+        let mut end = 512;
+        while !message.is_char_boundary(end) {
+            end -= 1;
+        }
+        message.truncate(end);
+        message.push('…');
+    }
+    ConnectionFailure {
+        slot: ticket.index,
+        received: None,
+        original: None,
+        cause: ApplicationError::Worker(message),
+        fence_error: None,
+        diagnostic_error: None,
+    }
+}
+
+/// Owns one admission ticket. Exactly one `finish` happens: the explicit
+/// call, or `Drop` during an unwind or a spawn failure.
+struct SlotGuard {
+    application: Arc<Application>,
+    ticket: SlotTicket,
+    owner: String,
+    done: bool,
+}
+
+impl SlotGuard {
+    fn finish(&mut self, result: Result<(), ConnectionFailure>) {
+        if self.done {
+            return;
+        }
+        self.done = true;
+        // Build the bounded record before taking the state lock.
+        let prebuilt = result.as_ref().err().map(|failure| {
+            RetainedFailure::describe(
+                failure,
+                self.ticket.class,
+                self.ticket.generation,
+                &self.owner,
+            )
+        });
+        // Poison recovery here only releases the slot and records; normal
+        // admission still reports `Poisoned` rather than trusting corrupt state.
+        let finished = {
+            let mut state = self
+                .application
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let finished = state
+                .slots
+                .finish(self.ticket, result, prebuilt, Instant::now());
+            self.application.changed.notify_all();
+            finished
+        };
+        log_finished(finished);
+    }
+}
+
+impl Drop for SlotGuard {
+    fn drop(&mut self) {
+        if !self.done {
+            self.finish(Err(ConnectionFailure {
+                slot: self.ticket.index,
+                received: None,
+                original: None,
+                cause: ApplicationError::Worker("dropped before completion".to_owned()),
+                fence_error: None,
+                diagnostic_error: None,
+            }));
+        }
+    }
+}
+
+/// One bounded daemon-log line per terminal transition.
+fn log_finished(finished: Finished) {
+    match finished {
+        Finished::Clean | Finished::Stale => {}
+        Finished::Released(failure) => {
+            let _ = writeln!(std::io::stderr().lock(), "{failure:?}");
+        }
+        Finished::Retained(record) => {
+            let _ = writeln!(std::io::stderr().lock(), "{record}");
+        }
+    }
+}
 
 impl Application {
     /// Accepts ordinary authenticated controls on one listener. The listener and
     /// each admitted worker own their exact sockets; no command execution occurs.
-    /// A failed connection keeps its bounded slot/custody until explicit transfer.
+    /// A failed connection releases its slot at once; a compact record of a
+    /// failure that used to retain custody stays in the bounded store.
     pub fn serve(self: &Arc<Self>, listener: TcpListener) -> Result<(), ApplicationError> {
         loop {
-            let (stream, _) = listener.accept().map_err(ApplicationError::Io)?;
-            let slot = {
+            let (mut stream, _) = listener.accept().map_err(ApplicationError::Io)?;
+            let ticket = {
                 let mut state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
-                let Some(slot) = state.slots.iter().position(|v| matches!(v, Slot::Vacant)) else {
-                    // No authenticated operation has entered; admission ends this
-                    // socket once, rather than allocating an unbounded worker.
-                    drop(stream);
-                    continue;
-                };
-                state.slots[slot] = Slot::Running;
-                slot
+                let picked = state.slots.admit(AdmissionClass::ControlPool).or_else(|| {
+                    // Only while the one-time installer may still run: an
+                    // ordinary control never takes the reserved slot.
+                    if matches!(
+                        state.startup.phase,
+                        DaemonPhase::InstallPending | DaemonPhase::Installing
+                    ) {
+                        state.slots.admit(AdmissionClass::Install)
+                    } else {
+                        None
+                    }
+                });
+                match picked {
+                    Some(ticket) => ticket,
+                    None => {
+                        let counts = state.slots.counts();
+                        let retained = state.slots.visible();
+                        state.slots.reap(Instant::now());
+                        let reason = if state.startup.phase != DaemonPhase::ControlReady {
+                            AdmissionReason::Starting
+                        } else {
+                            AdmissionReason::NoPoolSlot
+                        };
+                        let notice = AdmissionNotice::new(
+                            reason,
+                            saturating(retained),
+                            saturating(counts.pool_vacant),
+                            saturating(counts.reserved_vacant),
+                        );
+                        drop(state);
+                        // No authenticated operation has entered; tell the
+                        // caller why once, then end the socket (#540).
+                        write_capacity_notice(&mut stream, &notice);
+                        continue;
+                    }
+                }
             };
             let previous = self
                 .workers
                 .lock()
-                .map_err(|_| ApplicationError::Poisoned)?[slot]
+                .map_err(|_| ApplicationError::Poisoned)?[ticket.index]
                 .take();
             if let Some(worker) = previous {
                 worker.join().map_err(|_| {
@@ -44,60 +195,55 @@ impl Application {
                 })?;
             }
             let application = self.clone();
+            let owner = self.owner_label(ticket);
+            // The guard owns the ticket: if the worker body unwinds (or the
+            // thread never starts), it releases the slot and records exactly
+            // once. The normal path calls `finish` explicitly, so no path can
+            // leak a slot (#540).
+            let guard = SlotGuard {
+                application: self.clone(),
+                ticket,
+                owner,
+                done: false,
+            };
             let worker = thread::Builder::new()
-                .name(format!("layerfs-control-{slot}"))
+                .name(format!("layerfs-control-{}", ticket.index))
                 .spawn(move || {
-                    let mut result = application.connection(stream, slot);
-                    if let Err(failure) = &mut result {
-                        if failure.original.is_none()
-                            && failure.received.is_none()
-                            && matches!(
-                                failure.cause,
-                                ApplicationError::Channel(_) | ApplicationError::Io(_)
-                            )
-                        {
-                            // No decoded product attempt/custody exists at this boundary.
-                            // Transfer this bounded original diagnostic to the daemon
-                            // stderr owner before releasing capacity. Failed transfer
-                            // keeps the original receipt and its distinct output error.
-                            match writeln!(std::io::stderr().lock(), "{failure:?}") {
-                                Ok(()) => result = Ok(()),
-                                Err(error) => failure.diagnostic_error = Some(error),
-                            }
-                        }
-                    }
-                    {
-                        // Poison recovery retains this exact result only; poisoned
-                        // state never authorizes another product operation.
-                        let mut state = application.state.lock().unwrap_or_else(|e| e.into_inner());
-                        state.slots[slot] = match result {
-                            Ok(()) => Slot::Vacant,
-                            Err(cause) => Slot::Retained(Box::new(cause)),
-                        };
-                        application.changed.notify_all();
-                    }
+                    let mut guard = guard;
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        application.connection(stream, ticket)
+                    }))
+                    .unwrap_or_else(|payload| Err(panic_failure(ticket, payload)));
+                    guard.finish(result);
                 });
             match worker {
                 Ok(worker) => {
                     self.workers
                         .lock()
-                        .map_err(|_| ApplicationError::Poisoned)?[slot] = Some(worker)
+                        .map_err(|_| ApplicationError::Poisoned)?[ticket.index] = Some(worker)
                 }
-                Err(cause) => {
-                    let mut state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
-                    state.slots[slot] = Slot::Retained(Box::new(ConnectionFailure {
-                        slot,
-                        received: None,
-                        original: None,
-                        cause: ApplicationError::Io(cause),
-                        fence_error: None,
-                        diagnostic_error: None,
-                    }));
+                Err(_cause) => {
+                    // Spawning dropped the closure, so the guard's `Drop`
+                    // already released the slot and recorded the failure.
                 }
             }
         }
     }
-    fn connection(&self, stream: TcpStream, slot: usize) -> Result<(), ConnectionFailure> {
+
+    /// A bounded owner label for one worker's retained record.
+    fn owner_label(&self, ticket: SlotTicket) -> String {
+        format!(
+            "{:02x}{:02x}{:02x}{:02x}:{}:layerfs-control-{}",
+            self.instance[0],
+            self.instance[1],
+            self.instance[2],
+            self.instance[3],
+            std::process::id(),
+            ticket.index
+        )
+    }
+    fn connection(&self, stream: TcpStream, ticket: SlotTicket) -> Result<(), ConnectionFailure> {
+        let slot = ticket.index;
         let timeout = Some(Duration::from_millis(u64::from(
             self.setup.limits.handshake_ms,
         )));
@@ -202,7 +348,7 @@ impl Application {
                     }
                     let session_end =
                         matches!(call.request, Request::EndSession) && outcome.is_ok();
-                    let reserved_refusal = slot == usize::from(self.setup.limits.connections)
+                    let reserved_refusal = ticket.class == SlotClass::Reserved
                         && matches!(
                             &outcome,
                             Err(crate::control::Failure::Rejected(
@@ -372,6 +518,15 @@ impl Application {
         let service = state.startup.service.clone();
         let phase = state.startup.phase;
         drop(state);
+        // Operator-visible retained failures live with the application, not
+        // with the Store control Service, so answer this one here.
+        if let Request::Sdk(call) = request {
+            if call.method == CONNECTION_FAILURES {
+                return self
+                    .connection_failures()
+                    .map(|value| Success::reply(Reply::Sdk(value)));
+            }
+        }
         match service {
             Some(service) => service.execute_control(request),
             None if phase == DaemonPhase::Retained => Err(Failure::Rejected(
@@ -383,6 +538,54 @@ impl Application {
                 "Store control Service not ready",
             )),
         }
+    }
+
+    /// The operator read model of control admission and retained failures.
+    fn connection_failures(
+        &self,
+    ) -> Result<layerfs_bridge::control::SdkValue, crate::control::Failure> {
+        use crate::control::Failure;
+        use layerfs_bridge::control::{
+            AdmissionModel, CapacityModel, RetainedFailureModel, RetainedModel,
+        };
+        let counts = self.connection_slots().map_err(|_| Failure::Poisoned)?;
+        let snapshot = self
+            .retained_connection_failures()
+            .map_err(|_| Failure::Poisoned)?;
+        let failures = snapshot
+            .failures
+            .iter()
+            .map(|failure| RetainedFailureModel {
+                slot: failure.slot as i64,
+                class: failure.class.to_owned(),
+                generation: failure.generation as i64,
+                owner: failure.owner.clone(),
+                received_bytes: failure.received_bytes.map(|bytes| bytes as i64),
+                request: failure.request.map(str::to_owned),
+                reply_sent: failure.reply_sent,
+                cause: failure.cause.clone(),
+                fence_error: failure.fence_error.clone(),
+                diagnostic_error: failure.diagnostic_error.clone(),
+                age_ms: failure.age.as_millis() as i64,
+                expires_in_ms: failure.expires_in.as_millis() as i64,
+            });
+        Ok(CapacityModel {
+            admission: AdmissionModel {
+                pool_vacant: counts.pool_vacant as i64,
+                pool_running: counts.pool_running as i64,
+                reserved_vacant: counts.reserved_vacant as i64,
+                reserved_running: counts.reserved_running as i64,
+            },
+            retained: RetainedModel {
+                limit: snapshot.limit as i64,
+                ttl_ms: snapshot.ttl.as_millis() as i64,
+                count: snapshot.failures.len() as i64,
+                dropped: snapshot.dropped as i64,
+                recorded: snapshot.recorded as i64,
+                failures: failures.collect(),
+            },
+        }
+        .to_sdk())
     }
 }
 
@@ -402,3 +605,7 @@ fn reported_ready(outcome: &Result<crate::control::Success, crate::control::Fail
         Reply::Hello(status) if status.phase == layerfs_bridge::control::DaemonPhase::ControlReady
     ))
 }
+
+/// Operator/control method for the daemon's control admission and retained
+/// connection failures.
+pub(super) const CONNECTION_FAILURES: &str = layerfs_bridge::control::CAPACITY_OPERATION;

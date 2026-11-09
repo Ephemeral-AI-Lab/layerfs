@@ -54,7 +54,7 @@ fn unit(pack_id: i64, objects: usize) -> Publication {
     }
 }
 #[test]
-fn wal_full_settings_and_unavailable_engine_are_explicit() {
+fn wal_full_settings_are_explicit() {
     let t = Temp::new("durable-profile");
     let path = t.join("db");
     // without the `postgresql` feature a PostgreSQL selection is unavailable
