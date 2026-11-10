@@ -25,86 +25,84 @@ One row per call of the table, counted by the generator from the Node package's 
   the content and JSON positionals (read from stdin or `--from`), with `on_progress` as `--progress`,
   and without the output functions (`--stream` is a plain option of `workspace.exec`).
 
-A cell that is not `yes` is `NO`, and the reason is listed under "Front-end problems". The matrix is
+A cell is `yes` when that front end has the call and `NO` otherwise, with the reason listed under
+"Front-end problems". The MCP column can also be `admin` for a call only `--profile admin` lists; that is a
+cell the profile is expected to have, not a problem. The matrix is
 rewritten by `node api/scripts/gen-coverage.mjs` and `--check` fails when it is stale;
 `api/node/test/coverage.mjs` runs that check and also proves that a missing, renamed or extra call is
 reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-66 calls in 9 families, counted from the Node table. Calls present: Node 66, Python 66, Python `aio` 66, CLI 66.
+61 calls in 9 families, counted from the Node table. Calls present: Node 61, Python 61, Python `aio` 61, CLI 61, MCP 61 (34 in `work`, 27 admin only).
 
 Argument names that are Python keywords: none.
 
 Front-end problems: none.
 
-| Call | Positionals (`?` optional) | Options (`()` a function) | Node | Python | Python `aio` | CLI |
-| --- | --- | --- | --- | --- | --- | --- |
-| `project.init` | project, folder | timeout, on_progress() | yes | yes | yes | yes (--progress) |
-| `project.list` | ?store | page_size, page_pos | yes | yes | yes | yes |
-| `project.get` | project | - | yes | yes | yes | yes |
-| `project.export` | project, destination | branch, on_progress() | yes | yes | yes | yes (--progress) |
-| `project.remove` | project | - | yes | yes | yes | yes |
-| `branch.list` | project | page_size, page_pos, page | yes | yes | yes | yes |
-| `branch.get` | project, branch | - | yes | yes | yes | yes |
-| `branch.commits` | project, branch | page, page_size, at_commit | yes | yes | yes | yes |
-| `branch.get_commit` | project, branch, commit | - | yes | yes | yes | yes |
-| `branch.fork` | project, name, from_branch, ?from_commit | - | yes | yes | yes | yes |
-| `branch.merge` | project, name, a, b | message, units | yes | yes | yes | yes |
-| `branch.publish` | project, branch, ?commit | - | yes | yes | yes | yes |
-| `branch.diff` | project, from_branch, to_branch | paths_only, page_size, page_pos, cursor, page, from_commit, to_commit, path_prefix, include_attribution, continuation | yes | yes | yes | yes |
-| `commit.list` | project, branch | page_size, page_pos | yes | yes | yes | yes |
-| `commit.get` | project, branch, commit | - | yes | yes | yes | yes |
-| `commit.diff` | project, from_commit, to_commit | paths_only, page_size, page_pos, cursor | yes | yes | yes | yes |
-| `file.read` | project, branch, path, ?commit | start_line, end_line | yes | yes | yes | yes |
-| `file.stat` | project, branch, path, ?commit | - | yes | yes | yes | yes |
-| `file.list` | project, branch, path, ?commit | page_size, page, page_pos | yes | yes | yes | yes |
-| `file.glob` | project, branch, path, pattern, ?commit | page_size, page, page_pos | yes | yes | yes | yes |
-| `file.grep` | project, branch, path, pattern, ?commit | page_size, page, page_pos | yes | yes | yes | yes |
-| `file.revision` | project, branch, path | at_commit, traversal, page, page_size, continuation | yes | yes | yes | yes |
-| `file.blame` | project, branch, path, ?commit | from_line, line_count | yes | yes | yes | yes |
-| `file.diff` | project, left_branch, left_path, right_branch, right_path | left_commit, right_commit, include_attribution, allow_missing, page, page_size | yes | yes | yes | yes |
-| `file.write` | project, branch, path, content | message, mode | yes | yes | yes | yes (stdin/--from) |
-| `file.edit` | project, branch, path | old, new, message | yes | yes | yes | yes |
-| `file.rm` | project, branch, path | message | yes | yes | yes | yes |
-| `file.mkdir` | project, branch, path | message, mode | yes | yes | yes | yes |
-| `file.mv` | project, branch, from_path, to_path | message | yes | yes | yes | yes |
-| `file.cp` | project, branch, from_path, to_path | message | yes | yes | yes | yes |
-| `file.apply` | project, branch, changes | message | yes | yes | yes | yes (stdin/--from) |
-| `sandbox.create` | project, name, ?machine | image | yes | yes | yes | yes |
-| `sandbox.list` | ?project | page_size, page_pos | yes | yes | yes | yes |
-| `sandbox.get` | name | page_size, page_pos | yes | yes | yes | yes |
-| `sandbox.close` | name | force | yes | yes | yes | yes |
-| `workspace.mount` | sandbox, branch | name | yes | yes | yes | yes |
-| `workspace.exec` | ws, command | message, stream, stdout(), stderr(), exec_id, on_progress() | yes | yes | yes | yes (--progress, --stream) |
-| `workspace.exec_cancel` | ws, exec_id | grace_ms | yes | yes | yes | yes |
-| `workspace.commit` | ws | message, force | yes | yes | yes | yes |
-| `workspace.unmount` | ws | discard, force | yes | yes | yes | yes |
-| `workspace.status` | ws | - | yes | yes | yes | yes |
-| `machine.list` | - | - | yes | yes | yes | yes |
-| `machine.platforms` | - | - | yes | yes | yes | yes |
-| `machine.get` | name | - | yes | yes | yes | yes |
-| `machine.status` | name | - | yes | yes | yes | yes |
-| `machine.start` | name | - | yes | yes | yes | yes |
-| `machine.stop` | name | - | yes | yes | yes | yes |
-| `machine.create` | name, platform | cpus, memory, disk, image | yes | yes | yes | yes |
-| `machine.remove` | name | - | yes | yes | yes | yes |
-| `machine.update` | name | cpus, memory, image, docker, wsl, daemon | yes | yes | yes | yes |
-| `store.list` | - | - | yes | yes | yes | yes |
-| `store.get` | name | - | yes | yes | yes | yes |
-| `store.status` | name | - | yes | yes | yes | yes |
-| `store.stats` | name | - | yes | yes | yes | yes |
-| `store.create` | name | - | yes | yes | yes | yes |
-| `store.connect` | name, url | password, synchronous_commit | yes | yes | yes | yes |
-| `store.push` | name, machine | on_progress() | yes | yes | yes | yes (--progress) |
-| `store.pull` | name | on_progress() | yes | yes | yes | yes (--progress) |
-| `store.remove` | name | - | yes | yes | yes | yes |
-| `store.disconnect` | name | - | yes | yes | yes | yes |
-| `backup.connect` | name, url | key, region, part_size | yes | yes | yes | yes |
-| `backup.disconnect` | name | - | yes | yes | yes | yes |
-| `backup.list` | ?bucket | - | yes | yes | yes | yes |
-| `backup.create` | store, bucket, ?file | on_progress() | yes | yes | yes | yes (--progress) |
-| `backup.restore` | store, bucket, ?file | on_progress() | yes | yes | yes | yes (--progress) |
+| Call | Positionals (`?` optional) | Options (`()` a function) | Node | Python | Python `aio` | CLI | MCP |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `project.init` | project, folder | timeout, on_progress() | yes | yes | yes | yes (--progress) | admin |
+| `project.list` | ?store | page_size, page_pos | yes | yes | yes | yes | yes |
+| `project.get` | project | - | yes | yes | yes | yes | yes |
+| `project.export` | project, destination | branch, on_progress() | yes | yes | yes | yes (--progress) | yes |
+| `project.remove` | project | - | yes | yes | yes | yes | admin |
+| `branch.list` | project | page_size, page_pos | yes | yes | yes | yes | yes |
+| `branch.get` | project, branch | - | yes | yes | yes | yes | yes |
+| `branch.fork` | project, name, from_branch, ?from_commit | - | yes | yes | yes | yes | yes |
+| `branch.merge` | project, name, a, b | message, units | yes | yes | yes | yes | yes |
+| `branch.publish` | project, branch, ?commit | - | yes | yes | yes | yes | yes |
+| `branch.diff` | project, from_branch, to_branch | paths_only, page_size, page_pos, cursor | yes | yes | yes | yes | yes |
+| `commit.list` | project, branch | page_size, page_pos | yes | yes | yes | yes | yes |
+| `commit.get` | project, branch, commit | - | yes | yes | yes | yes | yes |
+| `commit.diff` | project, from_commit, to_commit | paths_only, page_size, page_pos, cursor | yes | yes | yes | yes | yes |
+| `file.read` | project, branch, path, ?commit | start_line, end_line | yes | yes | yes | yes | yes |
+| `file.stat` | project, branch, path, ?commit | - | yes | yes | yes | yes | yes |
+| `file.list` | project, branch, path, ?commit | page_size, page_pos | yes | yes | yes | yes | yes |
+| `file.glob` | project, branch, path, pattern, ?commit | page_size, page_pos | yes | yes | yes | yes | yes |
+| `file.grep` | project, branch, path, pattern, ?commit | page_size, page_pos | yes | yes | yes | yes | yes |
+| `file.blame` | project, branch, path, ?commit | from_line | yes | yes | yes | yes | yes |
+| `file.diff` | project, left_branch, left_path, right_branch, right_path | left_commit, right_commit | yes | yes | yes | yes | yes |
+| `file.write` | project, branch, path, content | message, mode | yes | yes | yes | yes (stdin/--from) | yes |
+| `file.edit` | project, branch, path | old, new, message | yes | yes | yes | yes | yes |
+| `file.rm` | project, branch, path | message | yes | yes | yes | yes | yes |
+| `file.mkdir` | project, branch, path | message, mode | yes | yes | yes | yes | yes |
+| `file.mv` | project, branch, from_path, to_path | message | yes | yes | yes | yes | yes |
+| `file.cp` | project, branch, from_path, to_path | message | yes | yes | yes | yes | yes |
+| `file.apply` | project, branch, changes | message | yes | yes | yes | yes (stdin/--from) | yes |
+| `sandbox.create` | project, name, ?machine | image | yes | yes | yes | yes | admin |
+| `sandbox.list` | ?project | page_size, page_pos | yes | yes | yes | yes | yes |
+| `sandbox.get` | name | page_size, page_pos | yes | yes | yes | yes | yes |
+| `sandbox.close` | name | force | yes | yes | yes | yes | admin |
+| `workspace.mount` | sandbox, branch | name | yes | yes | yes | yes | yes |
+| `workspace.exec` | ws, command | message, stream, stdout(), stderr(), exec_id, on_progress() | yes | yes | yes | yes (--progress, --stream) | yes |
+| `workspace.exec_cancel` | ws, exec_id | grace_ms | yes | yes | yes | yes | yes |
+| `workspace.commit` | ws | message, force | yes | yes | yes | yes | yes |
+| `workspace.unmount` | ws | discard, force | yes | yes | yes | yes | yes |
+| `workspace.status` | ws | - | yes | yes | yes | yes | yes |
+| `machine.list` | - | - | yes | yes | yes | yes | admin |
+| `machine.platforms` | - | - | yes | yes | yes | yes | admin |
+| `machine.get` | name | - | yes | yes | yes | yes | admin |
+| `machine.status` | name | - | yes | yes | yes | yes | admin |
+| `machine.start` | name | - | yes | yes | yes | yes | admin |
+| `machine.stop` | name | - | yes | yes | yes | yes | admin |
+| `machine.create` | name, platform | cpus, memory, disk, image | yes | yes | yes | yes | admin |
+| `machine.remove` | name | - | yes | yes | yes | yes | admin |
+| `machine.update` | name | cpus, memory, image, docker, wsl, daemon | yes | yes | yes | yes | admin |
+| `store.list` | - | - | yes | yes | yes | yes | admin |
+| `store.get` | name | - | yes | yes | yes | yes | admin |
+| `store.status` | name | - | yes | yes | yes | yes | admin |
+| `store.create` | name | - | yes | yes | yes | yes | admin |
+| `store.connect` | name, url | password, synchronous_commit | yes | yes | yes | yes | admin |
+| `store.push` | name, machine | on_progress() | yes | yes | yes | yes (--progress) | admin |
+| `store.pull` | name | on_progress() | yes | yes | yes | yes (--progress) | admin |
+| `store.remove` | name | - | yes | yes | yes | yes | admin |
+| `store.disconnect` | name | - | yes | yes | yes | yes | admin |
+| `backup.connect` | name, url | key, region, part_size | yes | yes | yes | yes | admin |
+| `backup.disconnect` | name | - | yes | yes | yes | yes | admin |
+| `backup.list` | ?bucket | - | yes | yes | yes | yes | admin |
+| `backup.create` | store, bucket, ?file | on_progress() | yes | yes | yes | yes (--progress) | admin |
+| `backup.restore` | store, bucket, ?file | on_progress() | yes | yes | yes | yes (--progress) | admin |
 
 <!-- END GENERATED -->
 
