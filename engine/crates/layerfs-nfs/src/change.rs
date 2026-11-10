@@ -633,7 +633,7 @@ impl Kernel {
         if directory {
             self.saw_directory(serial, to);
         }
-        self.renamed(serial, to, new_name);
+        self.renamed(serial, from, name, to, new_name);
     }
     /// LINK: one more name for `serial`.
     pub fn link(

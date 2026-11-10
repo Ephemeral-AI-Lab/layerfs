@@ -447,15 +447,18 @@ impl Kernel {
         }
         self.observed(stat);
     }
-    /// Records that `serial` is now reached as `name` in `parent` (RENAME).
-    pub(crate) fn renamed(&self, serial: u64, parent: u64, name: &[u8]) {
+    /// Records that `serial` is now reached as `new_name` in `to` rather than as
+    /// `name` in `from` (RENAME). Only the name that moved leaves the index:
+    /// other names of the inode, its hard links, stay reachable as they were.
+    pub(crate) fn renamed(&self, serial: u64, from: u64, name: &[u8], to: u64, new_name: &[u8]) {
         let mut table = self.table();
-        let named = (parent, name.to_vec());
+        let named = (to, new_name.to_vec());
+        let moved = (from, name.to_vec());
+        if table.by_name.get(&moved) == Some(&serial) {
+            table.by_name.remove(&moved);
+        }
         if let Some(slot) = table.names.get_mut(&serial) {
-            let old = std::mem::replace(slot, named.clone());
-            if table.by_name.get(&old) == Some(&serial) {
-                table.by_name.remove(&old);
-            }
+            *slot = named.clone();
             table.by_name.insert(named, serial);
         }
     }

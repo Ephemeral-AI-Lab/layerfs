@@ -423,3 +423,201 @@ fn a_replaced_main_file_takes_its_companion_with_it() {
     assert_eq!(outstanding, 0);
     fs::remove_dir_all(base).unwrap();
 }
+
+#[test]
+fn a_decoded_companion_is_edited_under_a_full_resident_budget() {
+    let base = temp("decoded-budget");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    // A body budget smaller than one encoded image: an edit that leaves the
+    // image not whole has to spill rather than grow memory.
+    rig.companion_resident_bytes = 1024;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    let main = c.touch(&root, b"full", 0o644).unwrap();
+    c.write(&main.handle, 0, b"the data file").unwrap();
+    let ad = c.touch(&root, b"._full", 0o644).unwrap();
+    let whole = image(
+        [0x77; 32],
+        &[
+            (b"com.apple.provenance", pattern(30, 40)),
+            (b"user.big", pattern(31, 4096)),
+        ],
+    );
+    // Another companion's body stays in memory; truncating a decoded body needs
+    // no room for its image, so that body must not be evicted for it.
+    c.touch(&root, b"other", 0o644).unwrap();
+    let other = c.touch(&root, b"._other", 0o644).unwrap();
+    c.write(&other.handle, 0, &pattern(35, 100)).unwrap();
+    assert_eq!(server.held().companion_bytes, 100);
+
+    // A whole image costs its attributes, not its bytes: it is decoded.
+    c.write(&ad.handle, 0, &whole).unwrap();
+    assert_eq!(c.read_all(&ad.handle, 64 * 1024), whole);
+    assert_eq!(server.held().companions_decoded, 1);
+
+    // Truncating a decoded body to nothing is the client's truncation, with no
+    // resident room for its image, and a rewrite decodes again.
+    let empty = Set {
+        size: Some(0),
+        ..Set::default()
+    };
+    c.setattr(&ad.handle, empty, None).unwrap();
+    assert_eq!(c.getattr(&ad.handle).unwrap().size, 0);
+    assert_eq!(c.read_all(&ad.handle, 4096), Vec::<u8>::new());
+    assert_eq!(server.held().companions_decoded, 0);
+    assert_eq!(
+        server.held().companion_bytes,
+        100,
+        "the image was never resident, so nothing had to be evicted for it"
+    );
+    c.write(&ad.handle, 0, &whole).unwrap();
+    assert_eq!(c.read_all(&ad.handle, 64 * 1024), whole);
+    assert_eq!(server.held().companions_decoded, 1);
+
+    // An edit that leaves the image not whole cannot grow memory: the decoded
+    // body is spilled and the write applied to its file, not refused.
+    let mut edited = whole.clone();
+    edited[24..28].copy_from_slice(b"EDIT");
+    c.write(&ad.handle, 24, b"EDIT").unwrap();
+    assert_eq!(c.read_all(&ad.handle, 64 * 1024), edited);
+    assert_eq!(server.held().companions_decoded, 0);
+
+    // Truncating the spilled body is the client's truncation.
+    c.setattr(&ad.handle, empty, None).unwrap();
+    assert_eq!(c.getattr(&ad.handle).unwrap().size, 0);
+    assert_eq!(c.read_all(&ad.handle, 4096), Vec::<u8>::new());
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_companion_without_a_main_file_takes_a_slot_and_is_reclaimed() {
+    let base = temp("no-main");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    rig.companions_held = 3;
+    // Too small for the image written below, so that write needs the spill path.
+    rig.companion_resident_bytes = 1024;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    // A whole image under a name whose main file the export does not know is
+    // not decoded: it keeps the client's bytes and a slot of the index bound,
+    // both when it fits the resident budget and when it does not.
+    let small = image([0x88; 32], &[(b"user.small", pattern(32, 16))]);
+    c.touch(&root, b"._small", 0o644).unwrap();
+    let fits = c.lookup(&root, b"._small").unwrap().0;
+    c.write(&fits, 0, &small).unwrap();
+    assert_eq!(c.read_all(&fits, 4096), small);
+    let big = image([0x89; 32], &[(b"user.big", pattern(33, 4096))]);
+    c.touch(&root, b"._no-main", 0o644).unwrap();
+    let spilled = c.lookup(&root, b"._no-main").unwrap().0;
+    c.write(&spilled, 0, &big).unwrap();
+    assert_eq!(c.read_all(&spilled, 64 * 1024), big);
+    let held = server.held();
+    assert_eq!(
+        (
+            held.companions,
+            held.companions_decoded,
+            held.companions_slotted
+        ),
+        (2, 0, 2),
+        "a companion with no main file is stored as written and takes its slot"
+    );
+
+    // A decoded companion renamed onto a name whose main file is unknown is no
+    // longer an inode's: it keeps the bytes as written and takes its slot too.
+    let main = c.touch(&root, b"owned", 0o644).unwrap();
+    c.write(&main.handle, 0, b"owned by an inode").unwrap();
+    let owned = c.touch(&root, b"._owned", 0o644).unwrap();
+    c.write(&owned.handle, 0, &small).unwrap();
+    assert_eq!(server.held().companions_decoded, 1);
+    c.rename(&root, b"._owned", &root, b"._gone").unwrap();
+    assert_eq!(c.read_all(&owned.handle, 4096), small);
+    let held = server.held();
+    assert_eq!(
+        (
+            held.companions,
+            held.companions_decoded,
+            held.companions_slotted
+        ),
+        (3, 0, 3),
+        "a companion with no main file is never a whole image"
+    );
+
+    // The bound reclaims them as orphans instead of refusing the next CREATE.
+    c.touch(&root, b"next", 0o644).unwrap();
+    c.touch(&root, b"._next", 0o644).unwrap();
+    let held = server.held();
+    assert_eq!(
+        (held.companions, held.companions_slotted, held.names_refused),
+        (1, 1, 0),
+        "the three companions with no main file were reclaimed"
+    );
+    assert_eq!(c.getattr(&spilled), Err(STALE));
+    assert_eq!(c.getattr(&owned.handle), Err(STALE));
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_rename_keeps_the_other_names_of_the_inode_companion() {
+    let base = temp("aliases");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    let main = c.touch(&root, b"a", 0o644).unwrap();
+    c.write(&main.handle, 0, b"two names, one inode").unwrap();
+    let ad = c.touch(&root, b"._a", 0o644).unwrap();
+    let bytes = image([0x99; 32], &[(b"user.link", pattern(34, 64))]);
+    c.write(&ad.handle, 0, &bytes).unwrap();
+    c.link(&main.handle, &root, b"b").unwrap();
+    assert_eq!(c.lookup(&root, b"._b").unwrap().0, ad.handle);
+
+    // RENAME moves one name of the inode: every other name still reaches the
+    // companion, before and after the moved name goes.
+    c.rename(&root, b"a", &root, b"c").unwrap();
+    assert_eq!(
+        c.lookup(&root, b"._b").unwrap().0,
+        ad.handle,
+        "b still names the inode"
+    );
+    assert_eq!(c.lookup(&root, b"._c").unwrap().0, ad.handle);
+    assert_eq!(c.read_all(&ad.handle, 4096), bytes);
+    c.remove(&root, b"c").unwrap();
+    assert_eq!(
+        c.lookup(&root, b"._b").unwrap().0,
+        ad.handle,
+        "b is the inode's last name"
+    );
+    assert_eq!(c.read_all(&ad.handle, 4096), bytes);
+
+    // The companion goes with the inode's last name.
+    c.remove(&root, b"b").unwrap();
+    assert_eq!(server.held().companions, 0);
+    assert_eq!(c.lookup(&root, b"._b").map(|_| ()), Err(NOENT));
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}

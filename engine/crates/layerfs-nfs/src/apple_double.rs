@@ -241,10 +241,18 @@ impl Companions {
         main.and_then(|main| self.inodes.get(&main).copied())
     }
     /// Replaces `serial`'s body by the decoded form of `bytes`, the caller's
-    /// edited body of `len` bytes, when the decoded budget takes it. The
-    /// decoded form costs its attributes rather than its image, so a body that
-    /// decodes needs no resident budget at all.
+    /// edited body of `len` bytes, when the decoded budget takes it and the
+    /// export knows the companion's main inode. The decoded form costs its
+    /// attributes rather than its image, so a body that decodes needs no
+    /// resident budget at all.
     fn keep_decoded(&mut self, serial: u64, bytes: &[u8], len: usize) -> bool {
+        // Only an inode's companion is decoded: one whose main file the export
+        // never saw keeps the client's bytes as written and a slot of the
+        // index bound, so that bound and orphan reclamation still reach it.
+        let inode = self.files.get(&serial).and_then(|file| file.inode);
+        if inode.is_none() {
+            return false;
+        }
         let Some(image) = Image::compact(bytes) else {
             return false;
         };
@@ -268,13 +276,26 @@ impl Companions {
         self.attach(serial, file);
         true
     }
-    /// Decides whether `file`'s body is a whole image: a decoded body always
-    /// is; a resident body of an inode's companion is decoded when it parses
-    /// back to the same bytes and the decoded budget takes it. `file` must be
-    /// detached from the index.
+    /// Decides whether `file`'s body is a whole image: a decoded body of an
+    /// inode's companion always is; a resident body of one is decoded when it
+    /// parses back to the same bytes and the decoded budget takes it. A
+    /// companion whose main file the export does not know is never a whole
+    /// image: it keeps the client's bytes as written and a slot of the index
+    /// bound. `file` must be detached from the index.
     fn classify(&self, file: &mut Companion) {
+        if file.inode.is_none() {
+            let decoded = match &file.body {
+                Body::Decoded(image) => Some(image.encode()),
+                Body::Resident(_) | Body::Spilled => None,
+            };
+            if let Some(bytes) = decoded {
+                file.body = Body::Resident(bytes);
+            }
+            file.whole = false;
+            return;
+        }
         file.whole = matches!(file.body, Body::Decoded(_));
-        let (Some(_), Body::Resident(bytes)) = (file.inode, &file.body) else {
+        let Body::Resident(bytes) = &file.body else {
             return;
         };
         let Some(image) = Image::compact(bytes) else {
@@ -297,8 +318,9 @@ impl Companions {
     /// Renames the temporary file `temp`, which holds `serial`'s body of `len`
     /// bytes, to the companion's own name in the spill directory and switches
     /// the companion to it, when nothing touched it since `used` was read and
-    /// its body is still resident. A body another call changed or already
-    /// spilled stays: `Ok(false)` then, and `temp` is the caller's to unlink.
+    /// its body is still in memory (resident or decoded). A body another call
+    /// changed or already spilled stays: `Ok(false)` then, and `temp` is the
+    /// caller's to unlink.
     fn adopt_spilled(
         &mut self,
         serial: u64,
@@ -314,7 +336,7 @@ impl Companions {
         let Some(file) = self.files.get_mut(&serial) else {
             return Err(Status::Stale);
         };
-        if !spill_applies(used, file.used, matches!(file.body, Body::Resident(_))) {
+        if !spill_applies(used, file.used, !matches!(file.body, Body::Spilled)) {
             return Ok(false);
         }
         fs::rename(temp, path).map_err(|e| io_status(&e))?;
@@ -376,7 +398,7 @@ impl Companions {
 }
 /// Whether a body a spill wrote out still replaces its companion: only when the
 /// companion is the one the snapshot saw (`used` is the tick read then) and its
-/// body is still resident, so no call wrote to it while the file was written.
+/// body is still in memory, so no call wrote to it while the file was written.
 pub fn spill_applies(used: u64, file_used: u64, resident: bool) -> bool {
     used == file_used && resident
 }
@@ -813,7 +835,7 @@ impl Kernel {
         let need = match &file.body {
             Body::Spilled => return Ok(Room::Spilled),
             Body::Resident(bytes) => target.saturating_sub(bytes.len()),
-            Body::Decoded(image) => target.max(image.len()),
+            Body::Decoded(image) => edited_len(edit, image.len()),
         };
         if need > avail {
             // The body does not fit the resident budget, but the edit may
