@@ -94,7 +94,7 @@ impl Records {
     pub fn read(&mut self, stream: &mut impl Read) -> io::Result<Option<Vec<u8>>> {
         loop {
             if self.valid < 4 {
-                if !self.receive(stream, 4)? {
+                if !self.receive(stream)? {
                     return Ok(None);
                 }
                 continue;
@@ -121,35 +121,40 @@ impl Records {
             if 4 + length > READ_AHEAD {
                 return self.large(stream, length);
             }
-            if !self.receive(stream, 4 + length)? {
+            if !self.receive(stream)? {
                 return Err(io::Error::from(io::ErrorKind::UnexpectedEof));
             }
         }
     }
-    /// Receives more bytes; `false` is an orderly end of stream before any.
-    fn receive(&mut self, stream: &mut impl Read, need: usize) -> io::Result<bool> {
-        let target = need.max(READ_AHEAD);
-        if self.buffer.len() < target {
-            self.buffer.resize(target, 0);
+    /// Receives more bytes into the read-ahead buffer, allocated once on the
+    /// first read; `false` is an orderly end of stream before any. A blocked
+    /// `read` a signal interrupts is retried, as `read_exact` and
+    /// [`write_record`] do, and the bytes already received stay buffered.
+    fn receive(&mut self, stream: &mut impl Read) -> io::Result<bool> {
+        if self.buffer.len() < READ_AHEAD {
+            self.buffer.resize(READ_AHEAD, 0);
         }
-        let read = stream.read(&mut self.buffer[self.valid..])?;
-        if read == 0 {
-            return if self.valid == 0 {
-                Ok(false)
-            } else {
-                Err(io::Error::from(io::ErrorKind::UnexpectedEof))
+        loop {
+            let read = match stream.read(&mut self.buffer[self.valid..]) {
+                Ok(read) => read,
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                Err(error) => return Err(error),
             };
+            if read == 0 {
+                return if self.valid == 0 {
+                    Ok(false)
+                } else {
+                    Err(io::Error::from(io::ErrorKind::UnexpectedEof))
+                };
+            }
+            self.valid += read;
+            return Ok(true);
         }
-        self.valid += read;
-        Ok(true)
     }
-    /// Drops the first `consumed` bytes and gives back a large buffer.
+    /// Drops the first `consumed` bytes; the read-ahead buffer stays.
     fn consume(&mut self, consumed: usize) {
         self.buffer.copy_within(consumed..self.valid, 0);
         self.valid -= consumed;
-        if self.valid == 0 && self.buffer.len() > READ_AHEAD {
-            self.buffer = vec![0; READ_AHEAD];
-        }
     }
     /// One final fragment larger than the read-ahead, read into its own
     /// buffer: the bulk of it is never copied.
@@ -157,7 +162,6 @@ impl Records {
         let buffered = self.valid - 4;
         let mut record = Vec::with_capacity(length);
         record.extend_from_slice(&self.buffer[4..self.valid]);
-        self.buffer = vec![0; READ_AHEAD];
         self.valid = 0;
         record.resize(length, 0);
         stream.read_exact(&mut record[buffered..])?;

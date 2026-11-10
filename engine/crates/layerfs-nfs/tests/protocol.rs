@@ -19,7 +19,7 @@ use layerfs_nfs::{
 };
 use std::{
     fs,
-    io::{self, Write},
+    io::{self, Read, Write},
     net::TcpListener,
     path::{Path, PathBuf},
     sync::{atomic::Ordering, Arc},
@@ -84,6 +84,192 @@ fn records_join_fragments_and_respect_their_bound() {
     let huge = (RECORD_LIMIT as u32 + 1) | (1 << 31);
     assert!(Records::new().read(&mut &huge.to_be_bytes()[..]).is_err());
 }
+/// The read-ahead one connection receives, as the framing tests see it.
+const AHEAD: usize = 8 * 1024;
+/// A stream that hands out at most `step` bytes of each read, as a socket
+/// whose receive buffer is only partly filled does.
+struct Pieces<'a> {
+    bytes: &'a [u8],
+    step: usize,
+}
+impl Read for Pieces<'_> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        let taken = buffer.len().min(self.step).min(self.bytes.len());
+        buffer[..taken].copy_from_slice(&self.bytes[..taken]);
+        self.bytes = &self.bytes[taken..];
+        Ok(taken)
+    }
+}
+/// A stream whose reads report these outcomes in order and then hand out the
+/// rest of its bytes, as a signal and a partly filled buffer do.
+struct Scripted {
+    /// Per read: the error to report, or the most bytes to hand out.
+    outcomes: Vec<Result<usize, io::ErrorKind>>,
+    bytes: Vec<u8>,
+}
+impl Read for Scripted {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        let most = if !self.outcomes.is_empty() {
+            self.outcomes.remove(0)?
+        } else {
+            buffer.len()
+        };
+        let taken = most.min(buffer.len()).min(self.bytes.len());
+        buffer[..taken].copy_from_slice(&self.bytes[..taken]);
+        self.bytes.drain(..taken);
+        Ok(taken)
+    }
+}
+/// A record of `length` bytes of one pattern, framed as one last fragment.
+fn framed(length: usize, seed: u32) -> (Vec<u8>, Vec<u8>) {
+    let body = pattern(seed, length);
+    let mut wire = (length as u32 | (1 << 31)).to_be_bytes().to_vec();
+    wire.extend_from_slice(&body);
+    (wire, body)
+}
+
+#[test]
+fn a_record_split_across_reads_is_framed_whole() {
+    // The four-byte header, a body of a few bytes, a body larger than the
+    // read-ahead and a fragment chain, each arriving in pieces.
+    let (small, small_body) = framed(150, 5);
+    let big = AHEAD * 3 + 7;
+    let (large, large_body) = framed(big, 6);
+    let (first, second) = (framed(5, 7), framed(9, 8));
+    let mut chain = (first.0.len() as u32 - 4).to_be_bytes().to_vec();
+    chain.extend_from_slice(&first.0[4..]);
+    chain.extend_from_slice(&((second.0.len() as u32 - 4) | (1 << 31)).to_be_bytes());
+    chain.extend_from_slice(&second.0[4..]);
+    let mut joined = first.1.clone();
+    joined.extend_from_slice(&second.1);
+    for step in [1, 2, 3, 5, 511, 1024, 4096, 3 * AHEAD] {
+        let mut stream = Pieces {
+            bytes: &small,
+            step,
+        };
+        let mut records = Records::new();
+        assert_eq!(
+            records.read(&mut stream).unwrap(),
+            Some(small_body.clone()),
+            "a body of 150 bytes in pieces of {step}"
+        );
+        assert_eq!(records.read(&mut stream).unwrap(), None, "{step}");
+        let mut stream = Pieces {
+            bytes: &large,
+            step,
+        };
+        let mut records = Records::new();
+        assert_eq!(
+            records.read(&mut stream).unwrap(),
+            Some(large_body.clone()),
+            "a body of {big} bytes, past the read-ahead, in pieces of {step}"
+        );
+        let mut stream = Pieces {
+            bytes: &chain,
+            step,
+        };
+        let mut records = Records::new();
+        assert_eq!(
+            records.read(&mut stream).unwrap(),
+            Some(joined.clone()),
+            "a two-fragment chain in pieces of {step}"
+        );
+        assert_eq!(records.read(&mut stream).unwrap(), None, "{step}");
+    }
+}
+
+#[test]
+fn a_small_record_ahead_of_a_large_one_keeps_its_neighbour() {
+    // One read carries a whole small record and the start of a large one: the
+    // second record's buffered prefix is framed, not dropped or misread.
+    let (small, small_body) = framed(64, 9);
+    let (large, large_body) = framed(2 * AHEAD + 11, 10);
+    let mut wire = small.clone();
+    wire.extend_from_slice(&large);
+    for step in [AHEAD, 1000, wire.len()] {
+        let mut stream = Pieces { bytes: &wire, step };
+        let mut records = Records::new();
+        assert_eq!(records.read(&mut stream).unwrap(), Some(small_body.clone()));
+        assert_eq!(
+            records.read(&mut stream).unwrap(),
+            Some(large_body.clone()),
+            "the large record's prefix came from the buffer: {step}"
+        );
+        assert_eq!(records.read(&mut stream).unwrap(), None, "{step}");
+    }
+}
+
+#[test]
+fn a_record_of_two_reads_is_two_records_from_one_buffer() {
+    // Two small records that one read delivers together: the second costs no
+    // further read and is framed from what is left.
+    let (one, one_body) = framed(7, 11);
+    let (two, two_body) = framed(9, 12);
+    let mut wire = one.clone();
+    wire.extend_from_slice(&two);
+    let mut stream = &wire[..];
+    let mut records = Records::new();
+    assert_eq!(records.read(&mut stream).unwrap(), Some(one_body));
+    assert_eq!(records.read(&mut stream).unwrap(), Some(two_body));
+    assert_eq!(records.read(&mut stream).unwrap(), None);
+}
+
+#[test]
+fn a_fragment_chain_beyond_the_record_bound_is_refused() {
+    // Each fragment stays within RECORD_LIMIT; together they exceed it, both
+    // as a final fragment and as one that continues.
+    for last in [true, false] {
+        let bit = if last { 1 << 31 } else { 0 };
+        let mut wire = (1024u32).to_be_bytes().to_vec();
+        wire.extend_from_slice(&[7; 1024]);
+        wire.extend_from_slice(&(RECORD_LIMIT as u32 | bit).to_be_bytes());
+        let error = Records::new().read(&mut &wire[..]).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData, "last={last}");
+    }
+}
+
+#[test]
+fn an_incomplete_record_is_an_error_not_an_end() {
+    // A header cut short: three of its four bytes, then the stream ends.
+    let error = Records::new().read(&mut &[0, 0, 0][..]).unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+    // A body cut short.
+    let mut wire = (10u32 | (1 << 31)).to_be_bytes().to_vec();
+    wire.extend_from_slice(b"abc");
+    let error = Records::new().read(&mut &wire[..]).unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+    // A record past the read-ahead cut short.
+    let mut wire = ((AHEAD + 100) as u32 | (1 << 31)).to_be_bytes().to_vec();
+    wire.extend_from_slice(&[1; 200]);
+    let error = Records::new().read(&mut &wire[..]).unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+    // A fragment chain cut short after its first fragment.
+    let mut wire = 4u32.to_be_bytes().to_vec();
+    wire.extend_from_slice(b"abcd");
+    let error = Records::new().read(&mut &wire[..]).unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+}
+
+#[test]
+fn an_interrupted_read_is_retried_without_losing_its_bytes() {
+    // A signal interrupts the blocking read after two bytes of the header, and
+    // twice more while the body arrives: every retry continues where it
+    // stopped.
+    let (wire, body) = framed(40, 13);
+    let mut stream = Scripted {
+        outcomes: vec![
+            Ok(2),
+            Err(io::ErrorKind::Interrupted),
+            Ok(1),
+            Err(io::ErrorKind::Interrupted),
+        ],
+        bytes: wire,
+    };
+    let mut records = Records::new();
+    assert_eq!(records.read(&mut stream).unwrap(), Some(body));
+    assert_eq!(records.read(&mut stream).unwrap(), None);
+}
+
 /// A stream that accepts at most `step` bytes of each write and says so,
 /// as a socket with a full send buffer does.
 struct Trickle {
