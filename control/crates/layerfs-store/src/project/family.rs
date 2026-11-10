@@ -94,13 +94,15 @@ pub fn list(home: &Path, request: &ProjectList) -> Outcome {
     let pos = request.page.pos.unwrap_or(0).max(0) as usize;
     let total = items.len();
     let page: Vec<SdkValue> = items.into_iter().skip(pos).take(size).collect();
-    let next = if pos + page.len() < total {
+    let more = pos + page.len() < total;
+    let next = if more {
         SdkValue::Int((pos + page.len()) as i64)
     } else {
         SdkValue::Null
     };
     Ok(SdkValue::map([
         ("items", SdkValue::List(page)),
+        ("has_more", SdkValue::Bool(more)),
         ("next_page_pos", next),
     ]))
 }
