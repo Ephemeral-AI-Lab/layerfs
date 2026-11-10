@@ -130,6 +130,13 @@ fn inspect(path: &std::path::Path) -> Result<Option<SdkValue>, SdkRefusal> {
                     value.get("startedMs").cloned().unwrap_or_default(),
                 ),
                 ("path", value.get("path").cloned().unwrap_or_default()),
+                (
+                    "forced",
+                    value
+                        .get("forced")
+                        .cloned()
+                        .unwrap_or(SdkValue::Bool(false)),
+                ),
                 ("code", SdkValue::text(error.code)),
                 ("message", SdkValue::text(error.message)),
                 ("detail", error.detail),
@@ -184,7 +191,7 @@ pub fn check_in(directory: &std::path::Path, path: &str) -> Result<(), SdkRefusa
     Ok(())
 }
 /// [`find`] by scanning Sandbox folder `directory`'s unmount records.
-fn find_in(directory: &std::path::Path, path: &str) -> Result<Option<SdkValue>, SdkRefusal> {
+pub fn find_in(directory: &std::path::Path, path: &str) -> Result<Option<SdkValue>, SdkRefusal> {
     for entry in unmounts_in(directory)? {
         let entry = entry.map_err(failed)?;
         if entry.path().extension().is_some_and(|ext| ext == "unmount") {
@@ -223,7 +230,8 @@ pub fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal> {
 }
 pub fn forceable(value: &SdkValue) -> bool {
     value.get_text("state") == Some("Retained")
-        && value.get("forced") != Some(&SdkValue::Bool(true))
+        && value.get("forced") == Some(&SdkValue::Bool(false))
+        && value.get_text("code") == Some("Failed")
 }
 /// Called under the Sandbox guard, after all before-effect checks.
 pub fn begin(
@@ -247,6 +255,7 @@ pub fn begin(
             ("state", SdkValue::text("Unmounting")),
             ("startedMs", SdkValue::Int(attempt.started)),
             ("path", SdkValue::text(path)),
+            ("forced", SdkValue::Bool(attempt.forced)),
         ]),
     )?;
     Ok(attempt)

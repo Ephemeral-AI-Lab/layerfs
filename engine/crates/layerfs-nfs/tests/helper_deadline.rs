@@ -423,3 +423,105 @@ fn timed_out_helper_when_mount_already_gone_completes_teardown() {
         .expect("bounded test timed out");
     worker.join().unwrap();
 }
+
+#[test]
+fn canonical_mount_paths_and_unreadable_table_preserve_detach_safety() {
+    let (send, receive) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let base = base("canon-table");
+        drop(fs::remove_dir_all(&base));
+        fs::create_dir_all(base.join("src")).unwrap();
+        fs::create_dir_all(base.join("real_mounts")).unwrap();
+        let link_mounts = base.join("link_mounts");
+        std::os::unix::fs::symlink(base.join("real_mounts"), &link_mounts).unwrap();
+        fs::write(base.join("src/file"), b"fixture").unwrap();
+        let table = base.join("mount.table");
+        let rig = rig::Rig::new(
+            &base.join("src"),
+            &base.join("work"),
+            Duration::from_secs(5),
+        );
+        let mut config = ExportServingConfig::new(
+            link_mounts,
+            501,
+            20,
+            Mounter {
+                // Record the canonicalized path (like macOS /sbin/mount printing /private/...).
+                mount: Helper(vec![
+                    "sh".into(),
+                    "-c".into(),
+                    format!("cd '{{dir}}' && pwd -P > {}", table.display()),
+                ]),
+                unmount: Helper(vec!["sh".into(), "-c".into(), "exit 1".into()]),
+                force: Helper(vec!["sh".into(), "-c".into(), "exit 1".into()]),
+                flush: None,
+            },
+        );
+        config.mount_table = Some(table.clone());
+        let export = Arc::new(ExportServing::start(config));
+        let service = rig.service(export);
+        let token = match service
+            .execute_control(&Request::Mount {
+                workspace: WorkspaceId::from_authority([36; 32]).unwrap(),
+                branch: rig.branch,
+            })
+            .unwrap()
+            .reply
+        {
+            Reply::Bound { token, .. } => token,
+            other => panic!("{other:?}"),
+        };
+        let ready = match service
+            .execute_control(&Request::Attach(token))
+            .unwrap()
+            .reply
+        {
+            Reply::Ready(ready) => *ready,
+            other => panic!("{other:?}"),
+        };
+
+        // M1: Replace mount.table with a directory so reading fails with a non-NotFound error.
+        // Unmount must NOT treat the read error as an empty mount table; it must keep Retained.
+        fs::remove_file(&table).unwrap();
+        fs::create_dir(&table).unwrap();
+        let err = service
+            .execute_control(&Request::Unmount(UnmountControl {
+                token,
+                discard: true,
+            }))
+            .unwrap_err();
+        assert!(
+            matches!(err, Failure::Retained(_)),
+            "expected Retained, got {err:?}"
+        );
+        assert!(Path::new(&ready.directory).exists());
+
+        // M2: Once mount.table is removed (NotFound -> mount gone), even if force helper exits 1
+        // ("not currently mounted"), canonicalized tracked path recognizes the mount is gone.
+        fs::remove_dir(&table).unwrap();
+        match service
+            .execute_control(&Request::ForceUnmount {
+                token,
+                relinquish_unknown: false,
+            })
+            .unwrap()
+            .reply
+        {
+            Reply::ForceUnmounted(done) => {
+                assert_eq!(done.outcome.facts.detach, DetachDisposition::Detached);
+                assert_eq!(done.outcome.work.loops_joined, 1);
+            }
+            other => panic!("expected ForceUnmounted, got {other:?}"),
+        }
+        assert!(!Path::new(&ready.directory).exists());
+
+        drop(service);
+        drop(rig);
+        fs::remove_dir_all(base).unwrap();
+        let _ = send.send(());
+    });
+    receive
+        .recv_timeout(Duration::from_secs(10))
+        .expect("bounded test timed out");
+    worker.join().unwrap();
+}

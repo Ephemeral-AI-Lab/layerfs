@@ -216,7 +216,11 @@ impl Helpers {
 /// mount table (`mount` on macOS, `/proc/self/mountinfo` on Linux).
 pub(super) fn mounted_under(home: &Path, table: Option<&Path>) -> io::Result<Vec<PathBuf>> {
     let points: Vec<PathBuf> = if let Some(table) = table {
-        let text = std::fs::read_to_string(table).unwrap_or_default();
+        let text = match std::fs::read_to_string(table) {
+            Ok(text) => text,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => String::new(),
+            Err(error) => return Err(error),
+        };
         (text.lines().map(str::trim).filter(|l| !l.is_empty()))
             .map(PathBuf::from)
             .collect()
@@ -227,6 +231,12 @@ pub(super) fn mounted_under(home: &Path, table: Option<&Path>) -> io::Result<Vec
                 .env("LC_ALL", "C")
                 .stdin(Stdio::null())
                 .output()?;
+            if !out.status.success() {
+                return Err(io::Error::other(format!(
+                    "mount listing failed: {}",
+                    out.status
+                )));
+            }
             (String::from_utf8_lossy(&out.stdout).lines())
                 .filter_map(|l| Some(PathBuf::from(l.split_once(" on ")?.1.rsplit_once(" (")?.0)))
                 .collect()
@@ -238,7 +248,10 @@ pub(super) fn mounted_under(home: &Path, table: Option<&Path>) -> io::Result<Vec
             .collect();
         points
     };
-    let mut found: Vec<PathBuf> = points.into_iter().filter(|p| p.starts_with(home)).collect();
+    let real = home.canonicalize().ok();
+    let mut found: Vec<PathBuf> = (points.into_iter())
+        .filter(|p| p.starts_with(home) || real.as_deref().is_some_and(|r| p.starts_with(r)))
+        .collect();
     found.sort_by_key(|point| std::cmp::Reverse(point.components().count()));
     found.dedup();
     Ok(found)

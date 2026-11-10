@@ -88,3 +88,81 @@ fn a_workspace_record_is_written_in_its_order() {
     assert!(!std::fs::read_to_string(&file).unwrap().contains("\"name\""));
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn unmount_guard_forceable_rejects_crashed_and_already_forced_records() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let (send, receive) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let dir = std::env::temp_dir().join(format!("lfs-unmount-guard-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let ws = dir.join("workspace");
+        std::fs::create_dir_all(&ws).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        std::fs::set_permissions(&ws, std::fs::Permissions::from_mode(0o700)).unwrap();
+
+        let write_rec = |name: &str, text: &str| {
+            let p = ws.join(name);
+            let bytes = layerfs_bridge::control::Answer {
+                id: 1,
+                reply: layerfs_bridge::control::Reply::Sdk(value(text)),
+            }
+            .encode()
+            .unwrap();
+            std::fs::write(&p, bytes).unwrap();
+            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600)).unwrap();
+        };
+        // 1. Crashed force unmount (state=Unmounting, forced=true, no active lock -> code=Unknown)
+        write_rec(
+            "01.unmount",
+            r#"{"state":"Unmounting","startedMs":1,"path":"/w/1","forced":true}"#,
+        );
+        let r1 = layerfs_sandbox::unmount_guard::find_in(&dir, "/w/1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(r1.get_text("code"), Some("Unknown"));
+        assert_eq!(r1.get("forced"), Some(&SdkValue::Bool(true)));
+        assert!(!layerfs_sandbox::unmount_guard::forceable(&r1));
+
+        // 2. Crashed normal unmount (state=Unmounting, forced=false, no active lock -> code=Unknown)
+        write_rec(
+            "02.unmount",
+            r#"{"state":"Unmounting","startedMs":1,"path":"/w/2","forced":false}"#,
+        );
+        let r2 = layerfs_sandbox::unmount_guard::find_in(&dir, "/w/2")
+            .unwrap()
+            .unwrap();
+        assert_eq!(r2.get_text("code"), Some("Unknown"));
+        assert!(!layerfs_sandbox::unmount_guard::forceable(&r2));
+
+        // 3. Completed forced unmount that remained Retained (forced=true, code=Failed)
+        write_rec(
+            "03.unmount",
+            r#"{"state":"Retained","startedMs":1,"path":"/w/3","forced":true,"code":"Failed","message":"m","detail":null}"#,
+        );
+        let r3 = layerfs_sandbox::unmount_guard::find_in(&dir, "/w/3")
+            .unwrap()
+            .unwrap();
+        assert!(!layerfs_sandbox::unmount_guard::forceable(&r3));
+
+        // 4. Completed normal unmount that returned Retained (forced=false, code=Failed) -> forceable!
+        write_rec(
+            "04.unmount",
+            r#"{"state":"Retained","startedMs":1,"path":"/w/4","forced":false,"code":"Failed","message":"m","detail":null}"#,
+        );
+        let r4 = layerfs_sandbox::unmount_guard::find_in(&dir, "/w/4")
+            .unwrap()
+            .unwrap();
+        assert!(layerfs_sandbox::unmount_guard::forceable(&r4));
+
+        std::fs::remove_dir_all(dir).unwrap();
+        let _ = send.send(());
+    });
+    receive
+        .recv_timeout(Duration::from_secs(5))
+        .expect("bounded test timed out");
+    worker.join().unwrap();
+}

@@ -184,8 +184,11 @@ impl ExportServing {
     }
     fn is_mounted(&self, directory: &str) -> std::io::Result<bool> {
         let target = std::path::Path::new(directory);
+        let real = target.canonicalize().ok();
         let points = mounted_under(&self.config.mounts, self.config.mount_table.as_deref())?;
-        Ok(points.iter().any(|point| point == target))
+        Ok(points
+            .iter()
+            .any(|p| p == target || real.as_deref().is_some_and(|r| p == r)))
     }
     /// At startup, before any Attach: every mount the host still has at or
     /// under the mount home is one a daemon that ended without unmounting
