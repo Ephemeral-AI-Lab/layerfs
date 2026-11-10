@@ -83,7 +83,9 @@ size, ordered names and continuation shape without a second request.
 
 [Commits](../../engine/crates/layerfs-store-service/src/methods/branch/list_commits.rs) renames the public
 history method. It sends the unchanged History request and returns one anchored,
-bounded ancestry page, newest first. Cursor authentication, captured-head scope,
+bounded ancestry page, newest first. On `main` it pages the stack's published
+Layers, each with its source Branch and Commit (S §3.3: on main, a Layer id is
+accepted wherever a Commit is; #611). Cursor authentication, captured-head scope,
 publication semantics and original control bytes are unchanged.
 
 ## Sandbox

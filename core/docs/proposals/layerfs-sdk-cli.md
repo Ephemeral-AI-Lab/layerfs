@@ -359,7 +359,8 @@ commit.get(project, branch, commit)
 commit.diff(project, from_commit, to_commit, { paths_only, page_size, page_pos, cursor })
 ```
 
-- **`list`**: a Branch's Commits, newest first; `page_size` default 50
+- **`list`**: a Branch's Commits, newest first; on `main`, its published
+  Layers, newest first; `page_size` default 50
   (was `branch list_commits`).
 - **`get`**: one Commit of that Branch: its message, parent, time and Layer.
   New; 1.1.0 has no single-Commit call.
@@ -369,7 +370,11 @@ commit.diff(project, from_commit, to_commit, { paths_only, page_size, page_pos, 
 A Commit id is unique in its project, so `commit.diff` needs no Branch.
 `commit.get` takes one and checks that the Commit is on it. A Commit given
 with a Branch must belong to that Branch; otherwise `InvalidInput`. On
-`main`, a Layer id is accepted wherever a Commit is.
+`main`, a Layer id is accepted wherever a Commit is. `commit.get` also
+accepts a prefix of 8 or more characters of a Commit id; `commit.diff` and
+the read calls take full identities only — a hex-shaped id of 8 to 65
+characters is refused `InvalidInput`, not as a Branch, and a shorter hex
+name is a Branch name.
 
 ### 3.4 `fs` (14)
 

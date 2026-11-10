@@ -188,3 +188,68 @@ fn the_first_fault_met_is_the_refusal() {
     assert!(support::items(&commits).is_empty());
     fixture.cleanup();
 }
+
+/// A hex-shaped snapshot name of 8 or more characters that is no Branch is
+/// an identity fault, not a missing Branch (#611): a truncated or
+/// wrong-length identity never reaches the Branch index as a name. A
+/// shorter hex name stays a Branch name, and the Branch is resolved before
+/// the page arguments, as always.
+#[test]
+fn a_short_identity_is_not_a_missing_branch() {
+    let fixture = Fixture::new("short-identity", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    let listed = fixture.call("branch.list_commits", vec![("branch", t("main"))]);
+    let id = support::items(&listed)[0]
+        .get_text("id")
+        .unwrap()
+        .to_owned();
+    fixture.call(
+        "branch.diff_commits",
+        vec![("from", t(&id)), ("to", t(&id))],
+    );
+    let truncated = |n: usize| id[..n].to_owned();
+    let r = refused(
+        &fixture,
+        "branch.diff_commits",
+        vec![("from", t(&truncated(12))), ("to", t(&id))],
+    );
+    assert_eq!(r.code, "InvalidInput");
+    assert_eq!(
+        r.message,
+        format!(
+            "`{}` is not a Branch, and not a full Commit or Layer identity (66 hex characters)",
+            truncated(12)
+        )
+    );
+    // An odd-length truncation is identity-shaped too, not only an even one.
+    let r = refused(
+        &fixture,
+        "branch.diff_commits",
+        vec![("from", t(&truncated(65))), ("to", t(&id))],
+    );
+    assert_eq!(r.code, "InvalidInput");
+    // A hex name shorter than a commit.get prefix stays a Branch name.
+    let r = refused(
+        &fixture,
+        "branch.diff_commits",
+        vec![("from", t("cafe")), ("to", t(&id))],
+    );
+    assert_eq!(r.code, "NoSuchBranch");
+    // A non-hex name stays a Branch refusal.
+    let r = refused(
+        &fixture,
+        "branch.diff_commits",
+        vec![("from", t("ghost")), ("to", t(&id))],
+    );
+    assert_eq!(r.code, "NoSuchBranch");
+    // The Branch is resolved before the page arguments are read.
+    let r = refused(
+        &fixture,
+        "branch.list_commits",
+        vec![("branch", t("ghost")), ("pageSize", SdkValue::Int(0))],
+    );
+    assert_eq!(r.code, "NoSuchBranch");
+    fixture.cleanup();
+}

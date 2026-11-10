@@ -120,6 +120,44 @@ fn init_files_branches_move_and_remove() {
     assert_eq!(items.len(), 1);
     ok(&home, "project.get", &[("project", t("shop/api"))]);
 
+    // project.list pages with `has_more` (#611)
+    let web = tempdir("web");
+    std::fs::write(web.join("index.html"), "<h1>shop</h1>\n").unwrap();
+    ok(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/web")),
+            ("folder", t(&web.display().to_string())),
+        ],
+    );
+    let page = ok(&home, "project.list", &[("page_size", SdkValue::Int(1))]);
+    let SdkValue::List(one) = page.get("items").unwrap() else {
+        panic!("{page:?}")
+    };
+    assert_eq!(one.len(), 1);
+    assert_eq!(page.get("has_more"), Some(&SdkValue::Bool(true)));
+    assert_eq!(page.get("next_page_pos"), Some(&SdkValue::Int(1)));
+    let page = ok(
+        &home,
+        "project.list",
+        &[
+            ("page_size", SdkValue::Int(1)),
+            ("page_pos", SdkValue::Int(1)),
+        ],
+    );
+    let SdkValue::List(two) = page.get("items").unwrap() else {
+        panic!("{page:?}")
+    };
+    assert_eq!(two.len(), 1);
+    assert_eq!(page.get("has_more"), Some(&SdkValue::Bool(false)));
+    assert_eq!(page.get("next_page_pos"), Some(&SdkValue::Null));
+    assert_eq!(
+        [one[0].get_text("name"), two[0].get_text("name")],
+        [Some("api"), Some("web")]
+    );
+    let _ = std::fs::remove_dir_all(web);
+
     let p = || ("project", t("shop/api"));
     let read = ok(
         &home,
@@ -169,6 +207,51 @@ fn init_files_branches_move_and_remove() {
         layerfs_api::json::print(&diff).contains("NEW.md"),
         "{diff:?}"
     );
+
+    // main lists its published Layers, where a Layer id stands for a Commit
+    // (S §3.3); a short identity is an identity fault, not a Branch fault
+    // (#611). The publish below advances main to fix's head before fix is
+    // edited again.
+    let main = ok(&home, "commit.list", &[p(), ("branch", t("main"))]);
+    let SdkValue::List(layers) = main.get("items").unwrap() else {
+        panic!("{main:?}")
+    };
+    assert_eq!(layers.len(), 1);
+    assert_eq!(layers[0].get("parent"), Some(&SdkValue::Null));
+    let base_layer = layers[0].get_text("id").unwrap().to_owned();
+    ok(&home, "branch.publish", &[p(), ("branch", t("fix"))]);
+    let main = ok(&home, "commit.list", &[p(), ("branch", t("main"))]);
+    let SdkValue::List(layers) = main.get("items").unwrap() else {
+        panic!("{main:?}")
+    };
+    assert_eq!(layers.len(), 2);
+    assert_eq!(layers[0].get_text("source_commit"), Some(id.as_str()));
+    assert_eq!(layers[0].get_text("source_branch"), Some("fix"));
+    let short: String = id.chars().take(12).collect();
+    assert_eq!(
+        call(
+            &home,
+            "commit.diff",
+            &[
+                p(),
+                ("from_commit", t(&short)),
+                ("to_commit", t(&base_layer))
+            ]
+        )
+        .unwrap_err()
+        .0,
+        "InvalidInput"
+    );
+    ok(
+        &home,
+        "commit.diff",
+        &[
+            p(),
+            ("from_commit", t(&base_layer)),
+            ("to_commit", t(&base_layer)),
+        ],
+    );
+
     ok(
         &home,
         "file.edit",
