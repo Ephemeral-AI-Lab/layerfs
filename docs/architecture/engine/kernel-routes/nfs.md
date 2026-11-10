@@ -180,13 +180,20 @@ Refresh after an install is covered in
 
 ```text
  CREATE "._name" (refuse_apple_double = true)
-   regular file --> Companions (export index in memory; body resident or spilled)
+   regular file --> Companions (export index in memory; body resident, spilled or decoded)
                     serial >= SERIALS = 1 << 62
+                    main inode known from Table::by_name --> that inode's companion:
+                      any name of the inode reads it, RENAME follows the inode,
+                      its last name drops it
                     resident body <= RESIDENT_BYTES (32 MiB) in all;
                     older bodies spill to <mounts>/.appledouble/<namespace>/<serial>
                     (dir 0700, file 0600; written as <serial>.<n>.tmp and
                      renamed on adoption; pread/pwrite outside the companion
                      lock, opened by path per call, never held open)
+                    a whole AppleDouble image decodes (apple_double_codec):
+                      FinderInfo + attributes kept under the main inode's serial,
+                      reads synthesize the client's own bytes, takes no HELD slot;
+                      <= DECODED_BYTES in all, each <= DECODED_ENTRY_BYTES
                     LOOKUP GETATTR ACCESS READ WRITE SETATTR COMMIT
                     REMOVE, RENAME to another "._" name: served here
                     READDIR: not listed;  engine: never called
@@ -195,21 +202,52 @@ Refresh after an install is covered in
 
 | Bound | Value | Over the bound | Source |
 | --- | --- | --- | --- |
-| `HELD` | 65,536 companion index entries | Reclaim orphan companions whose main file is not in `Table::by_name`; if still at the bound, CREATE answers `NFS3ERR_NOSPC`, increments `names_refused` and logs the export/namespace, current count and limit at most once per 60 seconds per export | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| `HELD` | 65,536 companion index entries not holding a whole image | Reclaim orphan companions whose main inode (or, for a companion whose main file the export never saw, whose main file) is no longer known; if still at the bound, CREATE answers `NFS3ERR_NOSPC`, increments `names_refused` and logs the export/namespace, current count and limit at most once per 60 seconds per export | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 | `FILE_BYTES` | 1 MiB per companion | WRITE / SETATTR `NFS3ERR_FBIG` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 | `RESIDENT_BYTES` | 32 MiB resident bodies in all | Spill least recently touched resident bodies to `companion_spill_dir` (`<mounts>/.appledouble/<namespace>/<serial>`); host disk I/O errors map to `NFS3ERR_NOSPC` (`ENOSPC`/`EDQUOT`), `NFS3ERR_FBIG` (`EFBIG`), `NFS3ERR_ACCES` (`EACCES`), `NFS3ERR_PERM` (`EPERM`), `NFS3ERR_ROFS` (`EROFS`) or `NFS3ERR_IO` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
+| `DECODED_BYTES` | 512 MiB counted over all decoded companions | A further whole image keeps its bytes as written, and still takes no slot | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| `DECODED_ENTRY_BYTES` | 128 KiB counted per decoded companion | That image keeps its bytes as written, and still takes no slot | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 
 On NFSv3 the macOS client stores extended attributes and resource forks in
 `._<name>` files. Keeping their index in export memory and spilling excess
 bodies to the export's scratch directory lets `cp`, `copyfile`, `ditto` and
 `tar` succeed without losing companion bytes during the mount, while nothing
-reaches the Workspace, SQLite overlay or a Commit. Removing, silly-renaming or
+reaches the Workspace, SQLite overlay or a Commit.
+
+A companion whose main inode the export knows belongs to that inode rather than
+to one name: every hard-link alias reaches it, RENAME of the main file keeps it
+reachable under the new name, unlink or a replacing RENAME of the main file only
+unbinds the paired `._` name, and the inode's last name (or its silly rename)
+drops it. Its FinderInfo and extended attributes are therefore kept once per
+inode, not once per name. When a write leaves such a companion holding a whole
+AppleDouble image the client laid out itself (`apple_double_codec::Image`), the
+body is decoded: the FinderInfo, every attribute name and value, the client's
+alignment padding after a name, the tag and the resource-fork entry are kept,
+and each READ encodes the image again. Decoding requires that the decoded form
+encode back to the very same bytes, so a synthesized read is byte for byte what
+the client wrote; a state the client is still writing (a header, a truncation,
+an edit that leaves the layout incomplete) stays its own bytes, and an image
+with a resource fork or another layout keeps the stored-as-written path. A
+companion that is a whole image takes no slot of `HELD`, which is what keeps a
+large tree's attribute copies from exhausting the index bound; the bound, its
+`NFS3ERR_NOSPC`, its rate-limited log and orphan reclamation remain the fallback
+for everything that is not a whole image. No attribute is dropped:
+`com.apple.provenance`, `com.apple.quarantine`, `com.apple.FinderInfo` and user
+attributes are all kept, and nothing here reaches the Store or a Commit.
+
+Removing, silly-renaming or
 replacing a main file drops its paired `._<name>` companion and unlinks any
 spilled file at once. Companions remain mount-session state: releasing the
 export removes the entire `<mounts>/.appledouble/<namespace>` directory
 (and a fresh Attach cleans any leftover directory from a crashed daemon), so
 remounts, daemon restarts and Commits do not retain them. A name is
 AppleDouble when it starts with `._` and has at least one more byte.
+
+The image layout, the decoded form, and the requirement that a decoded image
+encode back to exactly the bytes the client wrote, are in
+[`apple_double_codec.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_codec.rs);
+the spill helpers are in
+[`apple_double_spill.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_spill.rs).
 
 CREATE checks an existing companion name, checks the entry limit, reclaims
 orphans and inserts a new serial under one companion-lock hold, so concurrent

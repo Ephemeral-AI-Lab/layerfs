@@ -574,6 +574,10 @@ impl Kernel {
                         Ok(MutationInput::Named(remove::unlink(from, source_name)))
                     })?;
                 self.companion_drop_for(from, name);
+                if source.namespace_refs <= 1 {
+                    // The last name of the inode went with the silly rename.
+                    self.companion_drop_inode(source.serial);
+                }
                 self.silly_renamed.fetch_add(1, Ordering::Relaxed);
                 let replaced = {
                     let mut table = self.table();

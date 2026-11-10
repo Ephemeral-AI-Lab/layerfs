@@ -1,0 +1,425 @@
+//! AppleDouble companions decoded into their main inode's own record: a
+//! `._<name>` the client writes is served byte for byte, takes no slot of the
+//! index bound, is shared by every name of the inode, follows the inode
+//! through RENAME and goes with its last name. A body that is not a whole
+//! image (a resource fork, another layout, a half-written one) is stored as
+//! the client wrote it, which is the #636 fallback.
+#[allow(dead_code)]
+#[path = "support/client.rs"]
+mod client;
+#[allow(dead_code)]
+#[path = "support/rig.rs"]
+mod rig;
+#[allow(dead_code)]
+#[path = "support/spy.rs"]
+mod spy;
+#[allow(dead_code)]
+#[path = "support/tree.rs"]
+mod tree;
+use client::{Client, Set, NOENT, STALE};
+use layerfs_nfs::apple_double_codec::{Attribute, Image};
+use std::{
+    fs,
+    net::TcpListener,
+    path::{Path, PathBuf},
+    time::Duration,
+};
+
+const NOSPC: u32 = 28;
+const UID: u32 = 501;
+const GID: u32 = 20;
+
+fn temp(label: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("layerfs-nfs-ad{}-{label}", std::process::id()))
+}
+fn source(root: &Path) {
+    fs::create_dir_all(root.join("docs")).unwrap();
+    fs::write(root.join("README.md"), b"# fixture\nhello nfs\n").unwrap();
+    fs::write(root.join("docs/guide.md"), b"guide\n").unwrap();
+}
+fn pattern(seed: u32, length: usize) -> Vec<u8> {
+    (0..length)
+        .map(|n| (n as u32).wrapping_mul(31).wrapping_add(seed * 97) as u8)
+        .collect()
+}
+/// The image a macOS client writes for these attributes.
+fn image(finder: [u8; 32], attrs: &[(&[u8], Vec<u8>)]) -> Vec<u8> {
+    let attrs = attrs
+        .iter()
+        .map(|(name, value)| Attribute::new(name, value))
+        .collect();
+    Image::new(finder, 0, attrs)
+        .expect("an entry can describe these attributes")
+        .encode()
+}
+
+#[test]
+fn a_whole_image_is_read_back_as_written_from_every_name_of_the_inode() {
+    let base = temp("decode");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    // What `cp` does: the data file, then its companion with the attributes.
+    let main = c.touch(&root, b"f", 0o644).unwrap();
+    c.write(&main.handle, 0, b"the data file").unwrap();
+    let ad = c.touch(&root, b"._f", 0o644).unwrap();
+    let finder = [0x11; 32];
+    let first = image(
+        finder,
+        &[
+            (b"com.apple.provenance", pattern(1, 40)),
+            (b"com.apple.quarantine", pattern(2, 150)),
+            (b"com.apple.FinderInfo", finder.to_vec()),
+            (b"user.custom", pattern(3, 4096)),
+        ],
+    );
+    c.write(&ad.handle, 0, &first).unwrap();
+    assert_eq!(c.getattr(&ad.handle).unwrap().size, first.len() as u64);
+    assert_eq!(c.read_all(&ad.handle, 64 * 1024), first);
+    let held = server.held();
+    assert_eq!(
+        (
+            held.companions,
+            held.companions_decoded,
+            held.companions_slotted
+        ),
+        (1, 1, 0),
+        "a whole image is decoded and takes no slot"
+    );
+    assert!(held.companion_decoded_bytes >= 4096);
+
+    // A second name of the same inode reads the same companion.
+    c.link(&main.handle, &root, b"g").unwrap();
+    let (alias, attr) = c.lookup(&root, b"._g").unwrap();
+    assert_eq!(alias, ad.handle, "hard links share one companion");
+    assert_eq!(attr.size, first.len() as u64);
+    assert_eq!(c.read_all(&alias, 64 * 1024), first);
+
+    // A write under the alias changes the inode's attributes for every name.
+    let second = image(
+        [0x22; 32],
+        &[
+            (b"com.apple.provenance", pattern(4, 40)),
+            (b"user.custom", pattern(5, 100 * 1024)),
+        ],
+    );
+    c.write(&alias, 0, &second).unwrap();
+    assert_eq!(c.read_all(&ad.handle, 256 * 1024), second);
+
+    // RENAME of the main file carries the companion to the new name.
+    c.rename(&root, b"f", &root, b"h").unwrap();
+    let (renamed, _) = c.lookup(&root, b"._h").unwrap();
+    assert_eq!(renamed, ad.handle);
+    assert_eq!(c.read_all(&renamed, 256 * 1024), second);
+
+    // The companion goes with the inode's last name, not with one name.
+    c.remove(&root, b"h").unwrap();
+    assert_eq!(server.held().companions, 1, "g still names the inode");
+    assert_eq!(c.read_all(&alias, 256 * 1024), second);
+    c.remove(&root, b"g").unwrap();
+    assert_eq!(server.held().companions, 0);
+    assert_eq!(c.getattr(&alias), Err(STALE));
+    assert_eq!(c.lookup(&root, b"._h").map(|_| ()), Err(NOENT));
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn the_clients_write_sequence_is_served_byte_for_byte() {
+    let base = temp("sequence");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    let main = c.touch(&root, b"seq", 0o644).unwrap();
+    c.write(&main.handle, 0, b"data").unwrap();
+    let ad = c.touch(&root, b"._seq", 0o644).unwrap();
+    let whole = image(
+        [0x33; 32],
+        &[
+            (b"com.apple.provenance", pattern(6, 40)),
+            (b"user.big", pattern(7, 4096)),
+        ],
+    );
+    // The client writes the header first: a half-written image is served
+    // exactly as written and never claimed as a whole one.
+    c.write(&ad.handle, 0, &whole[..50]).unwrap();
+    assert_eq!(c.getattr(&ad.handle).unwrap().size, 50);
+    assert_eq!(c.read_all(&ad.handle, 4096), whole[..50]);
+    assert_eq!(server.held().companions_decoded, 0);
+    // The rest arrives: the image is whole now and reads synthesize it.
+    c.write(&ad.handle, 50, &whole[50..]).unwrap();
+    assert_eq!(c.read_all(&ad.handle, 64 * 1024), whole);
+    assert_eq!(server.held().companions_decoded, 1);
+
+    // A delete and rebuild starts empty and decodes the rewrite again.
+    c.remove(&root, b"._seq").unwrap();
+    assert_eq!(c.getattr(&ad.handle), Err(STALE));
+    let again = c.touch(&root, b"._seq", 0o644).unwrap();
+    assert_eq!(again.attr.size, 0);
+    assert_eq!(c.read_all(&again.handle, 4096), Vec::<u8>::new());
+    let rebuilt = image(
+        [0x44; 32],
+        &[
+            (b"com.apple.provenance", pattern(8, 40)),
+            (b"user.other", pattern(9, 64 * 1024)),
+        ],
+    );
+    c.write(&again.handle, 0, &rebuilt).unwrap();
+    assert_eq!(c.read_all(&again.handle, 128 * 1024), rebuilt);
+
+    // An edit that leaves the image not whole is served as written, and a
+    // later edit that completes it decodes again: both are the client's own
+    // bytes.
+    let mut edited = rebuilt.clone();
+    edited[24..28].copy_from_slice(b"EDIT");
+    c.write(&again.handle, 24, b"EDIT").unwrap();
+    assert_eq!(c.read_all(&again.handle, 128 * 1024), edited);
+    assert_eq!(server.held().companions_decoded, 0);
+    c.write(&again.handle, 24, &rebuilt[24..28]).unwrap();
+    assert_eq!(c.read_all(&again.handle, 128 * 1024), rebuilt);
+    assert_eq!(server.held().companions_decoded, 1);
+
+    // Truncating below the image is served as the client's truncation, and
+    // resizing back up serves zeros, as on any file.
+    let shrink = Set {
+        size: Some(64),
+        ..Set::default()
+    };
+    c.setattr(&again.handle, shrink, None).unwrap();
+    assert_eq!(c.read_all(&again.handle, 4096), rebuilt[..64]);
+    let grow = Set {
+        size: Some(rebuilt.len() as u64),
+        ..Set::default()
+    };
+    c.setattr(&again.handle, grow, None).unwrap();
+    let mut zeros = rebuilt[..64].to_vec();
+    zeros.resize(rebuilt.len(), 0);
+    assert_eq!(c.read_all(&again.handle, 128 * 1024), zeros);
+    c.write(&again.handle, 0, &rebuilt).unwrap();
+    assert_eq!(c.read_all(&again.handle, 128 * 1024), rebuilt);
+
+    // The companion never reaches the Workspace.
+    let (entries, _) = c.list(&root, 64 * 1024, true);
+    assert!(entries.iter().all(|entry| !entry.name.starts_with(b"._")));
+    drop(c);
+    let released = server.stop();
+    assert_eq!(released.companions_decoded, 1);
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_resource_fork_keeps_the_stored_as_written_fallback() {
+    let base = temp("fork");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    // A file with a resource fork: the fork's entry carries 286 bytes of the
+    // client's own, which the decoded form does not keep.
+    c.touch(&root, b"rf", 0o644).unwrap();
+    let ad = c.touch(&root, b"._rf", 0o644).unwrap();
+    let plain = image([0x55; 32], &[(b"com.apple.provenance", pattern(10, 40))]);
+    let mut forked = plain.clone();
+    let fork = pattern(11, 286);
+    forked[plain.len() - 286..].copy_from_slice(&fork);
+    c.write(&ad.handle, 0, &forked).unwrap();
+    assert_eq!(c.read_all(&ad.handle, 64 * 1024), forked);
+    let held = server.held();
+    assert_eq!(
+        (
+            held.companions,
+            held.companions_decoded,
+            held.companions_slotted
+        ),
+        (1, 0, 1),
+        "a resource fork takes the stored-as-written path and its slot"
+    );
+    // A companion whose main file the export never saw keeps that path too.
+    let _unknown = c.touch(&root, b"._no-main", 0o644).unwrap();
+    let unknown = c.lookup(&root, b"._no-main").unwrap().0;
+    c.write(&unknown, 0, b"not an image").unwrap();
+    assert_eq!(server.held().companions_slotted, 2);
+
+    drop(c);
+    let released = server.stop();
+    assert_eq!(released.companions_decoded, 0);
+    assert_eq!(released.companions_slotted, 2);
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn whole_images_take_no_slot_of_the_index_bound() {
+    let base = temp("slots");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    // Two slots, and a body budget small enough that raw bodies spill.
+    rig.companions_held = 2;
+    rig.companion_resident_bytes = 1024;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    // More whole images than slots: every one is accepted.
+    let mut images = Vec::new();
+    for i in 0..5 {
+        let main = format!("live-{i}");
+        c.touch(&root, main.as_bytes(), 0o644).unwrap();
+        let ad = c
+            .touch(&root, format!("._{main}").as_bytes(), 0o644)
+            .unwrap();
+        let bytes = image(
+            [0; 32],
+            &[(b"user.value", format!("value-{i}").into_bytes())],
+        );
+        c.write(&ad.handle, 0, &bytes).unwrap();
+        images.push((ad.handle, bytes));
+    }
+    let held = server.held();
+    assert_eq!(
+        (
+            held.companions,
+            held.companions_decoded,
+            held.companions_slotted
+        ),
+        (5, 5, 0)
+    );
+    assert_eq!(held.names_refused, 0);
+
+    // Bodies that are not whole images do take slots: the bound still answers
+    // NOSPC once they fill it, and its rate-limited log is the same.
+    for i in 0..2 {
+        let main = format!("raw-{i}");
+        c.touch(&root, main.as_bytes(), 0o644).unwrap();
+        let ad = c
+            .touch(&root, format!("._{main}").as_bytes(), 0o644)
+            .unwrap();
+        c.write(&ad.handle, 0, b"stored as written").unwrap();
+    }
+    assert_eq!(server.held().companions_slotted, 2);
+    c.touch(&root, b"raw-extra", 0o644).unwrap();
+    assert_eq!(
+        c.touch(&root, b"._raw-extra", 0o644).map(|_| ()),
+        Err(NOSPC)
+    );
+    assert_eq!(server.held().names_refused, 1);
+    // Removing a raw companion's main file frees its slot, and a new whole
+    // image is then accepted again without taking one.
+    c.remove(&root, b"raw-0").unwrap();
+    assert_eq!(server.held().companions_slotted, 1);
+    c.touch(&root, b"new-image", 0o644).unwrap();
+    let ad = c.touch(&root, b"._new-image", 0o644).unwrap();
+    let fresh = image([1; 32], &[(b"user.fresh", pattern(20, 64))]);
+    c.write(&ad.handle, 0, &fresh).unwrap();
+    assert_eq!(server.held().companions_slotted, 1);
+    assert_eq!(server.held().names_refused, 1);
+    assert_eq!(c.read_all(&ad.handle, 4096), fresh);
+    // The refused raw companion now fits.
+    c.touch(&root, b"._raw-extra", 0o644).unwrap();
+    assert_eq!(server.held().companions_slotted, 2);
+    // Every whole image still reads back byte for byte.
+    for (handle, bytes) in &images {
+        assert_eq!(&c.read_all(handle, 64 * 1024), bytes);
+    }
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_decoded_companion_is_gone_once_its_inode_is_silly_renamed() {
+    let base = temp("silly");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    let main = c.touch(&root, b"open", 0o644).unwrap();
+    c.write(&main.handle, 0, b"still open").unwrap();
+    let ad = c.touch(&root, b"._open", 0o644).unwrap();
+    let bytes = image([2; 32], &[(b"user.a", pattern(12, 32))]);
+    c.write(&ad.handle, 0, &bytes).unwrap();
+    assert_eq!(server.held().companions_decoded, 1);
+    // A client that unlinks a file it keeps open renames it to a silly name.
+    let silly: &[u8] = b".nfs.20051025.b896";
+    c.rename(&root, b"open", &root, silly).unwrap();
+    assert_eq!(server.held().companions, 0, "the last name went");
+    assert_eq!(c.getattr(&ad.handle), Err(STALE));
+    c.remove(&root, silly).unwrap();
+    assert_eq!(c.lookup(&root, silly).map(|_| ()), Err(NOENT));
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_replaced_main_file_takes_its_companion_with_it() {
+    let base = temp("replace");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    c.touch(&root, b"dst", 0o644).unwrap();
+    c.touch(&root, b"src", 0o644).unwrap();
+    let dst = c.touch(&root, b"._dst", 0o644).unwrap();
+    c.write(
+        &dst.handle,
+        0,
+        &image([3; 32], &[(b"user.dst", pattern(13, 16))]),
+    )
+    .unwrap();
+    let src = c.touch(&root, b"._src", 0o644).unwrap();
+    c.write(
+        &src.handle,
+        0,
+        &image([4; 32], &[(b"user.src", pattern(14, 16))]),
+    )
+    .unwrap();
+    assert_eq!(server.held().companions_decoded, 2);
+    // RENAME over the destination detaches it as an unlink would.
+    c.rename(&root, b"src", &root, b"dst").unwrap();
+    assert_eq!(c.getattr(&dst.handle), Err(STALE));
+    assert_eq!(server.held().companions_decoded, 1, "only src's is left");
+    // The client moves the source's companion to the destination's name.
+    c.rename(&root, b"._src", &root, b"._dst").unwrap();
+    let (moved, _) = c.lookup(&root, b"._dst").unwrap();
+    assert_eq!(moved, src.handle);
+    assert_eq!(
+        c.read_all(&moved, 4096),
+        image([4; 32], &[(b"user.src", pattern(14, 16))])
+    );
+    c.remove(&root, b"dst").unwrap();
+    assert_eq!(server.held().companions, 0);
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}

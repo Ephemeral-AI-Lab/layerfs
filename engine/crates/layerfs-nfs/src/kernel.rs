@@ -516,6 +516,8 @@ impl Kernel {
         if held && !retired_in_job {
             self.forget(serial, 1);
         }
+        // An inode's last name is gone: so is its AppleDouble companion.
+        self.companion_drop_inode(serial);
     }
     /// Records the parent of a directory seen in a listing or moved by RENAME.
     pub fn saw_directory(&self, serial: u64, parent: u64) {
@@ -776,8 +778,8 @@ impl Kernel {
     /// Retained mutation failures keep their custody and are only counted.
     pub fn release(&self) -> Released {
         let table = std::mem::take(&mut *self.table());
-        let (companions, companion_bytes) = self.companions_release();
-        let released = self.holdings(&table, companions, companion_bytes);
+        let companions = self.companions_release();
+        let released = self.holdings(&table, companions);
         for (serial, held) in table.files {
             self.close_file(serial, held.handle);
         }
@@ -798,15 +800,18 @@ impl Kernel {
     /// Current holdings, for diagnostics.
     pub fn held(&self) -> Released {
         let table = self.table();
-        let (companions, companion_bytes) = self.companions_held();
-        self.holdings(&table, companions, companion_bytes)
+        let companions = self.companions_held();
+        self.holdings(&table, companions)
     }
     /// What this export holds now, as [`Released`] reports it.
-    fn holdings(&self, table: &Table, companions: usize, companion_bytes: usize) -> Released {
+    fn holdings(&self, table: &Table, companions: crate::apple_double::Holding) -> Released {
         let count = |counter: &AtomicU64| counter.load(Ordering::Relaxed);
         Released {
-            companions,
-            companion_bytes,
+            companions: companions.held,
+            companion_bytes: companions.resident_bytes,
+            companions_slotted: companions.slotted,
+            companions_decoded: companions.decoded,
+            companion_decoded_bytes: companions.decoded_bytes,
             files: table.files.len(),
             directories: table.directories.len(),
             lookups: table.lookups.len(),
@@ -909,10 +914,18 @@ pub struct Released {
     pub silly_renamed: u64,
     /// Creations refused for their AppleDouble name, over the export's life.
     pub names_refused: u64,
-    /// AppleDouble companions held in the export's index (see [`crate::apple_double`]).
+    /// AppleDouble companions held in the export's index (see
+    /// [`crate::apple_double`]), whole images included.
     pub companions: usize,
-    /// AppleDouble companion payload bytes currently resident in memory.
+    /// Companion payload bytes currently resident in memory.
     pub companion_bytes: usize,
+    /// Of the companions held, those taking a slot of the index bound: all but
+    /// the ones holding a whole image.
+    pub companions_slotted: usize,
+    /// Of the companions held, those kept decoded, and the bytes counted for
+    /// them.
+    pub companions_decoded: usize,
+    pub companion_decoded_bytes: usize,
     /// AppleDouble companions created, over the export's life.
     pub names_detached: u64,
     /// References collected beyond the bound, over the export's life.
