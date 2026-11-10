@@ -13,7 +13,7 @@ mod spy;
 use client::{Client, OK};
 use layerfs_nfs::{
     handle::{HandleError, SqliteHandles, HANDLE_BYTES},
-    rpc::{parse_call, read_record, write_record, Refused, RECORD_LIMIT},
+    rpc::{parse_call, write_record, Records, Refused, RECORD_LIMIT},
     xdr::{opaque_size, Reader, Writer},
     TRANSFER_WINDOW,
 };
@@ -77,11 +77,12 @@ fn records_join_fragments_and_respect_their_bound() {
     wire.extend_from_slice(b"de");
     write_record(&mut wire, b"next").unwrap();
     let mut stream = &wire[..];
-    assert_eq!(read_record(&mut stream).unwrap(), Some(b"abcde".to_vec()));
-    assert_eq!(read_record(&mut stream).unwrap(), Some(b"next".to_vec()));
-    assert_eq!(read_record(&mut stream).unwrap(), None, "orderly end");
+    let mut records = Records::new();
+    assert_eq!(records.read(&mut stream).unwrap(), Some(b"abcde".to_vec()));
+    assert_eq!(records.read(&mut stream).unwrap(), Some(b"next".to_vec()));
+    assert_eq!(records.read(&mut stream).unwrap(), None, "orderly end");
     let huge = (RECORD_LIMIT as u32 + 1) | (1 << 31);
-    assert!(read_record(&mut &huge.to_be_bytes()[..]).is_err());
+    assert!(Records::new().read(&mut &huge.to_be_bytes()[..]).is_err());
 }
 /// A stream that accepts at most `step` bytes of each write and says so,
 /// as a socket with a full send buffer does.
@@ -113,12 +114,13 @@ fn a_framed_reply_reaches_a_stream_that_takes_it_in_pieces() {
         };
         write_record(&mut stream, &reply).unwrap();
         let mut wire = &stream.bytes[..];
+        let mut records = Records::new();
         assert_eq!(
-            read_record(&mut wire).unwrap(),
+            records.read(&mut wire).unwrap(),
             Some(reply.clone()),
             "{step}"
         );
-        assert_eq!(read_record(&mut wire).unwrap(), None, "{step}");
+        assert_eq!(records.read(&mut wire).unwrap(), None, "{step}");
     }
 }
 

@@ -28,7 +28,7 @@ client mount it ([`export.rs`](../../../../engine/crates/layerfs-daemon/src/cont
  | Server                                                        |
  |  thread layerfs-nfs-accept                                    |
  |  thread layerfs-nfs-connection  (one per TCP connection)      |
- |    loop:  read_record -> answer(call) -> write_record         |
+ |    loop:  Records::read -> answer(call) -> write_record      |
  |           -> Tickets::replied   (after the one send attempt)  |
  |                                                               |
  |  Kernel  (synthetic kernel, shared by all connections)        |
@@ -86,6 +86,12 @@ NFSv3 procedure is served. A read-only export answers each changing procedure
 opaque data to four bytes
 ([`xdr.rs`](../../../../engine/crates/layerfs-nfs/src/xdr.rs)). A reply is
 written as one last fragment.
+
+A call is framed from the bytes one `read` delivered: the connection keeps them
+in [`rpc::Records`](../../../../engine/crates/layerfs-nfs/src/rpc.rs), so a call
+whose fragments arrived together costs one socket read. A record larger than
+the 8 KiB read-ahead (a WRITE of a transfer window) is read into a buffer of its
+own, so its bytes are not copied twice.
 
 ## Handles
 

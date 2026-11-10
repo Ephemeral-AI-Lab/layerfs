@@ -61,33 +61,150 @@ pub enum Refused {
     Reply(Vec<u8>),
 }
 
-/// Reads one whole record (all fragments), bounded by [`RECORD_LIMIT`].
-/// `Ok(None)` is an orderly end of stream before a record started.
-pub fn read_record(stream: &mut impl Read) -> io::Result<Option<Vec<u8>>> {
-    let mut record = Vec::new();
-    loop {
-        let mut header = [0; 4];
-        if let Err(error) = stream.read_exact(&mut header) {
-            if error.kind() == io::ErrorKind::UnexpectedEof && record.is_empty() {
-                return Ok(None);
-            }
-            return Err(error);
-        }
-        let header = u32::from_be_bytes(header);
-        let length = (header & !LAST_FRAGMENT) as usize;
-        if record.len() + length > RECORD_LIMIT {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "RPC record exceeds its bound",
-            ));
-        }
-        let start = record.len();
-        record.resize(start + length, 0);
-        stream.read_exact(&mut record[start..])?;
-        if header & LAST_FRAGMENT != 0 {
-            return Ok(Some(record));
+/// Bytes one connection receives ahead of a record's length: one `read` of
+/// this much carries any metadata call whole, so such a call costs one read.
+const READ_AHEAD: usize = 8 * 1024;
+
+/// One connection's received records.
+///
+/// A call the client sent in one piece is framed from the bytes one `read`
+/// delivered, so it costs one read instead of the header read plus the body
+/// read a plain `read_exact` pair makes. A record larger than the read-ahead
+/// (a WRITE of a transfer window) is read into its own buffer with
+/// `read_exact`, so its bytes are not copied twice.
+pub struct Records {
+    /// Received bytes, of which `valid` are data not yet consumed.
+    buffer: Vec<u8>,
+    valid: usize,
+}
+impl Default for Records {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl Records {
+    pub fn new() -> Self {
+        Self {
+            buffer: Vec::new(),
+            valid: 0,
         }
     }
+    /// Reads one whole record (all fragments), bounded by [`RECORD_LIMIT`].
+    /// `Ok(None)` is an orderly end of stream before a record started.
+    pub fn read(&mut self, stream: &mut impl Read) -> io::Result<Option<Vec<u8>>> {
+        loop {
+            if self.valid < 4 {
+                if !self.receive(stream, 4)? {
+                    return Ok(None);
+                }
+                continue;
+            }
+            let header = u32::from_be_bytes([
+                self.buffer[0],
+                self.buffer[1],
+                self.buffer[2],
+                self.buffer[3],
+            ]);
+            let length = (header & !LAST_FRAGMENT) as usize;
+            if length > RECORD_LIMIT {
+                return Err(too_large());
+            }
+            if header & LAST_FRAGMENT == 0 {
+                // A fragment chain: its bodies are not contiguous.
+                return self.chain(stream, length);
+            }
+            if self.valid >= 4 + length {
+                let record = self.buffer[4..4 + length].to_vec();
+                self.consume(4 + length);
+                return Ok(Some(record));
+            }
+            if 4 + length > READ_AHEAD {
+                return self.large(stream, length);
+            }
+            if !self.receive(stream, 4 + length)? {
+                return Err(io::Error::from(io::ErrorKind::UnexpectedEof));
+            }
+        }
+    }
+    /// Receives more bytes; `false` is an orderly end of stream before any.
+    fn receive(&mut self, stream: &mut impl Read, need: usize) -> io::Result<bool> {
+        let target = need.max(READ_AHEAD);
+        if self.buffer.len() < target {
+            self.buffer.resize(target, 0);
+        }
+        let read = stream.read(&mut self.buffer[self.valid..])?;
+        if read == 0 {
+            return if self.valid == 0 {
+                Ok(false)
+            } else {
+                Err(io::Error::from(io::ErrorKind::UnexpectedEof))
+            };
+        }
+        self.valid += read;
+        Ok(true)
+    }
+    /// Drops the first `consumed` bytes and gives back a large buffer.
+    fn consume(&mut self, consumed: usize) {
+        self.buffer.copy_within(consumed..self.valid, 0);
+        self.valid -= consumed;
+        if self.valid == 0 && self.buffer.len() > READ_AHEAD {
+            self.buffer = vec![0; READ_AHEAD];
+        }
+    }
+    /// One final fragment larger than the read-ahead, read into its own
+    /// buffer: the bulk of it is never copied.
+    fn large(&mut self, stream: &mut impl Read, length: usize) -> io::Result<Option<Vec<u8>>> {
+        let buffered = self.valid - 4;
+        let mut record = Vec::with_capacity(length);
+        record.extend_from_slice(&self.buffer[4..self.valid]);
+        self.buffer = vec![0; READ_AHEAD];
+        self.valid = 0;
+        record.resize(length, 0);
+        stream.read_exact(&mut record[buffered..])?;
+        Ok(Some(record))
+    }
+    /// A fragment chain: each fragment's body follows its own header.
+    fn chain(&mut self, stream: &mut impl Read, mut length: usize) -> io::Result<Option<Vec<u8>>> {
+        self.consume(4); // the first fragment's header, already framed
+        let mut record = Vec::new();
+        let mut header = [0; 4];
+        loop {
+            if record.len() + length > RECORD_LIMIT {
+                return Err(too_large());
+            }
+            let start = record.len();
+            record.resize(start + length, 0);
+            self.take(stream, &mut record[start..])?;
+            self.take(stream, &mut header)?;
+            let word = u32::from_be_bytes(header);
+            length = (word & !LAST_FRAGMENT) as usize;
+            if length > RECORD_LIMIT {
+                return Err(too_large());
+            }
+            if word & LAST_FRAGMENT != 0 {
+                if record.len() + length > RECORD_LIMIT {
+                    return Err(too_large());
+                }
+                let start = record.len();
+                record.resize(start + length, 0);
+                self.take(stream, &mut record[start..])?;
+                return Ok(Some(record));
+            }
+        }
+    }
+    /// Fills `into` from the buffered bytes first, then from the stream.
+    fn take(&mut self, stream: &mut impl Read, into: &mut [u8]) -> io::Result<()> {
+        let buffered = self.valid.min(into.len());
+        into[..buffered].copy_from_slice(&self.buffer[..buffered]);
+        self.consume(buffered);
+        if buffered < into.len() {
+            stream.read_exact(&mut into[buffered..])?;
+        }
+        Ok(())
+    }
+}
+fn too_large() -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, "RPC record exceeds its bound")
 }
 /// Writes one reply as a single last fragment. The four-byte fragment header
 /// and the reply go out as two writes of one vectored write, so a reply is
