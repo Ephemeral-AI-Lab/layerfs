@@ -60,7 +60,23 @@ pub fn resolve(
         };
         (kind, short(node), node)
     } else {
-        let branch = args::branch(store, stack, name)?;
+        let branch = args::branch(store, stack, name).map_err(|refusal| {
+            // A hex-shaped name of 8 or more characters (as long as a
+            // commit.get prefix) that is no Branch is a truncated or
+            // wrong-length identity, not a missing Branch; a shorter one
+            // stays a Branch name.
+            let identity_shaped = name.len() >= 8
+                && name.chars().all(|c| c.is_ascii_hexdigit())
+                && name.len() != NODE_TEXT;
+            if refusal.code == "NoSuchBranch" && identity_shaped {
+                invalid(format!(
+                    "`{name}` is not a Branch, and not a full Commit or Layer \
+                     identity (66 hex characters)"
+                ))
+            } else {
+                refusal
+            }
+        })?;
         let node = branch_node(&branch);
         (Kind::Branch, format!("{name}@{}", short(node)), node)
     };
