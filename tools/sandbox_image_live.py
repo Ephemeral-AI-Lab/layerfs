@@ -56,16 +56,30 @@ def prepare(args, work):
             raise ValueError('config exceeds bounded metadata size')
         config = json.load(source.extractfile(member))
         config.setdefault('config', {}).setdefault('Labels', {})['org.layerfs.image-proof'] = identity
+        layer_io = io.BytesIO()
+        with tarfile.open(fileobj=layer_io, mode='w', format=tarfile.USTAR_FORMAT) as layer:
+            body = identity.encode() + b'\n'
+            marker = tarfile.TarInfo('.layerfs-image-proof')
+            marker.mode = 0o644
+            marker.size = len(body)
+            layer.addfile(marker, io.BytesIO(body))
+        proof_layer = layer_io.getvalue()
+        manifest[0]['Layers'] = manifest[0]['Layers'][:2]
+        config['rootfs']['diff_ids'] = config['rootfs']['diff_ids'][:2]
+        config['history'] = [entry for entry in config.get('history', []) if not entry.get('empty_layer')][:2]
+        config['rootfs']['diff_ids'].append('sha256:' + hashlib.sha256(proof_layer).hexdigest())
+        config.setdefault('history', []).append({'created_by': 'LayerFS custom-image live proof'})
+        manifest[0]['Layers'].append('proof-layer.tar')
         encoded = json.dumps(config, separators=(',', ':'), sort_keys=True).encode()
         digest = hashlib.sha256(encoded).hexdigest()
         manifest[0]['Config'] = digest + '.json'
         manifest[0]['RepoTags'] = ['layerfs-proof:' + identity]
         with tarfile.open(output, 'w', format=tarfile.USTAR_FORMAT) as target:
             for member in source:
-                if member.name in ('manifest.json', config_name, 'repositories'):
+                if member.name not in manifest[0]['Layers'][:-1]:
                     continue
                 target.addfile(member, source.extractfile(member) if member.isfile() else None)
-            for name, body in [('manifest.json', json.dumps(manifest).encode()), (digest + '.json', encoded)]:
+            for name, body in [('manifest.json', json.dumps(manifest).encode()), (digest + '.json', encoded), ('proof-layer.tar', proof_layer)]:
                 member = tarfile.TarInfo(name)
                 member.mode = 0o644
                 member.size = len(body)
@@ -77,10 +91,12 @@ def prepare(args, work):
     native = Path(args.native).resolve(strict=True)
     root = Path(__file__).resolve().parent.parent
     plan = {'version': 1, 'identity': identity, 'home': str(work / 'home'),
-            'archive': str(output), 'digest': 'sha256:' + digest, 'source': str(source_dir),
+            'fixture_treatment': 'first-two-original-layers-plus-sentinel', 'archive': str(output), 'digest': 'sha256:' + digest, 'source': str(source_dir),
             'cli': str(cli), 'cli_sha256': sha(cli), 'native': str(native), 'native_sha256': sha(native),
             'bundle': str(bundle), 'bundle_manifest': json.loads((bundle / 'bundle.json').read_text()),
             'sdk': str(root / 'api/node/src/index.js'), 'osImage': args.os_image,
+            'runner_sha256': sha(Path(__file__).resolve()), 'worker_script_sha256': sha(Path(__file__).with_suffix('.mjs')),
+            'source_commit': subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip(),
             'providers': {'lima': {'machine': 'proof-' + identity}, 'docker': {'machine': 'docker'}}}
     with (work / 'plan.json').open('x') as stream:
         json.dump(plan, stream, indent=2)

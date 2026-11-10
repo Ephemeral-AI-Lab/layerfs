@@ -47,7 +47,7 @@ try {
     const mount = await call('workspace.mount', () => lfs.workspace.mount(name, 'verify', { name: 'proof' }));
     writeFileSync(statePath, JSON.stringify({ ws: mount.ws }));
     assert.equal(mount.image, plan.digest);
-    const command = 'set -eu; test "$(cat proof.txt)" = "custom-image-proof"; command -v bash; uname -s; cat /etc/os-release; found=; for f in /proc/[0-9]*/comm; do IFS= read -r name < "$f" || continue; if [ "$name" = layerfs-daemon ]; then found=yes; fi; done; test "$found" = yes; printf "injected-daemon-serving-workspace\\n"';
+    const command = `set -eu; test "$(cat /.layerfs-image-proof)" = "${plan.identity}"; test "$(cat proof.txt)" = "custom-image-proof"; command -v bash; uname -s; cat /etc/os-release; found=; for f in /proc/[0-9]*/comm; do IFS= read -r name < "$f" || continue; if [ "$name" = layerfs-daemon ]; then found=yes; fi; done; test "$found" = yes; printf "injected-daemon-serving-workspace\\n"`;
     const result = await call('workspace.exec', () => lfs.workspace.exec(mount.ws, command));
     assert.equal(result.exit_code, 0);
     assert.match(String(result.stdout), /injected-daemon-serving-workspace/);
