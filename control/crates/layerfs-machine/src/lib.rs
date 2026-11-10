@@ -18,6 +18,7 @@ mod endpoint;
 #[cfg(feature = "machine")]
 mod get;
 #[cfg(feature = "machine")]
+#[cfg(unix)]
 mod image;
 #[cfg(feature = "machine")]
 mod list;
@@ -51,6 +52,7 @@ pub use endpoint::{running, running_with_progress};
 #[cfg(feature = "machine")]
 pub use get::get;
 #[cfg(feature = "machine")]
+#[cfg(unix)]
 pub use image::docker_default;
 /// The platform driver, for the Sandbox code that reaches a machine's
 /// adapters through its machine (layerfs-project#106).
