@@ -163,6 +163,19 @@ impl FinalizedObject {
         super::context::validate(self, provider, policy, inode_scope, root_serial, timing)
     }
 
+    /// Validates direct stored children even when no owning history survives.
+    /// Checks roles, grammar, child summaries, content kinds and attributes.
+    /// Root-serial binding rules require separate whole-root qualification;
+    /// this method neither fabricates that context nor asserts reachability.
+    pub fn validate_stored_children(
+        &self,
+        provider: &dyn crate::object::AuthenticatedObjects,
+        policy: crate::policy::ConstructionPolicy,
+        timing: layerfs_telemetry::timer::TimingScope<'_>,
+    ) -> ContentResult<()> {
+        super::context::validate_unbound(self, provider, policy, timing)
+    }
+
     /// Attaches the direct logical references this object was built from.
     pub fn with_references(mut self, references: Vec<ObjectId>) -> Self {
         self.references = references;

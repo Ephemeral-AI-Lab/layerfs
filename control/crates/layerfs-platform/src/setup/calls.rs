@@ -94,6 +94,44 @@ pub fn status_within(spec: &Spec, deadline: Instant) -> Result<Status, MachineEr
     super::tool::within(deadline, || status(spec))
 }
 
+/// Observes provider prerequisites, version and runtime state by `deadline`.
+/// Unlike status, this never dials a worker or executes a guest command.
+/// Capacity is not observed; caller must report it as unverified.
+pub fn provider_within(spec: &Spec, deadline: Instant) -> Result<Status, MachineError> {
+    spec.validate()?;
+    if crate::support::support(spec.kind, HostOs::current())
+        .backend
+        .is_none()
+    {
+        return Err(MachineError::new(
+            Code::Unsupported,
+            "machine platform is unsupported on this host",
+        ));
+    }
+    super::tool::within(deadline, || {
+        let probe = crate::probe::probe(spec.kind, &spec.tools);
+        if Instant::now() >= deadline {
+            return Err(MachineError::new(
+                Code::Unknown,
+                "provider observation deadline exceeded",
+            ));
+        }
+        if !probe.ready {
+            return Err(MachineError::missing(
+                "provider prerequisites are unavailable",
+                probe.missing,
+            ));
+        }
+        let state = adapter(spec.kind).provider_state(spec)?;
+        Ok(Status {
+            state,
+            free_disk: None,
+            tool_version: probe.version,
+            down_reason: None,
+        })
+    })
+}
+
 /// Loads the docker-archive `archive` into the `docker` machine's Engine
 /// and answers the image id Docker reports (#535 P5): what `machine start`
 /// uses on `docker` for the worker container when no image is named. Refused for
@@ -204,4 +242,20 @@ pub(crate) fn with_worker(
         tool_version,
         down_reason,
     }
+}
+
+/// Reuses the Engine's content-tagged Sandbox image, or imports it once.
+/// `previous` is a recorded Docker ID known by the caller to hold this content.
+/// Docker's actual imported ID is returned, never the archive config digest.
+pub fn cached_image(
+    spec: &Spec,
+    archive: &Path,
+    content: &str,
+    previous: Option<&str>,
+) -> Result<String, MachineError> {
+    spec.validate()?;
+    if spec.kind != crate::platform::Platform::Docker {
+        return Err(refused(spec, "loads no Docker image"));
+    }
+    crate::platforms::docker::cached_image(spec, archive, content, previous)
 }

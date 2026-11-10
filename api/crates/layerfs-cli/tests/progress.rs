@@ -162,18 +162,18 @@ fn a_refusal_before_the_first_phase_prints_no_progress() {
 }
 
 #[test]
-fn only_the_six_calls_that_declare_on_progress_take_progress() {
+fn only_calls_declaring_on_progress_accept_the_cli_switch() {
     let home = tempdir("flag-home");
-    for words in [
-        ["store", "list", "--progress"].as_slice(),
-        ["machine", "create", "m1", "lima", "--progress"].as_slice(),
-    ] {
+    {
+        let words = ["store", "list", "--progress"].as_slice();
         let run = layerfs(&home, words);
         assert_eq!(run.status.code(), Some(2), "{words:?}: {run:?}");
         let err = String::from_utf8_lossy(&run.stderr);
         assert!(err.contains("unknown option --progress"), "{err}");
     }
     for words in [
+        ["machine", "create", "--help"],
+        ["machine", "start", "--help"],
         ["project", "init", "--help"],
         ["store", "push", "--help"],
         ["store", "pull", "--help"],

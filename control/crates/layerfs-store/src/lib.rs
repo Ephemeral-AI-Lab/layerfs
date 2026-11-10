@@ -14,6 +14,7 @@ pub mod backup;
 pub mod call;
 #[doc(hidden)]
 pub mod calls;
+pub mod diagnostic;
 #[doc(hidden)]
 pub mod identity;
 #[doc(hidden)]
@@ -35,6 +36,7 @@ pub mod resolve;
 #[doc(hidden)]
 pub mod service;
 pub mod sqlite;
+pub mod stats;
 mod status;
 
 /// The Store connection reaper (not lifecycle, #535 D11), for its test.

@@ -74,6 +74,9 @@ class LinuxBundleTests(unittest.TestCase):
         }
         self.source = {"head": "abc", "sha256": "src1", "files": {}}
         self.commands = []
+        protocol = self.worktree / "control/crates/layerfs-machine/src/worker/hello.rs"
+        protocol.parent.mkdir(parents=True)
+        protocol.write_text("pub const PROTOCOL: i64 = 3;\n")
         patches = [
             patch.object(bundle, "inputs", lambda record: dict(self.source)),
             patch.object(bundle, "docker_build", lambda record, command, extra=(): ["docker-run", *extra, *command]),
@@ -140,6 +143,8 @@ class LinuxBundleTests(unittest.TestCase):
         files = {n: hashlib.sha256(n.encode()).hexdigest() for n in bundle.BINARIES}
         files[bundle.ARCHIVE] = hashlib.sha256((final / bundle.ARCHIVE).read_bytes()).hexdigest()
         self.assertEqual(manifest["files"], files)
+        self.assertEqual(manifest["protocol"], 3)
+        self.assertEqual(manifest["runtime"], bundle.bundle_hash({n: files[n] for n in bundle.BINARIES}))
         # the namespaces backend's shape: uncompressed layers, config named by its digest
         with tarfile.open(final / bundle.ARCHIVE) as tar:
             listing = json.load(tar.extractfile("manifest.json"))
@@ -170,6 +175,26 @@ class LinuxBundleTests(unittest.TestCase):
         with patch.object(bundle, "execute", failing), self.assertRaises(Refused):
             bundle.seal(self.record, "debug", None, dest, 120)
         self.assertEqual(list((dest / "9.8.7").iterdir()), [])
+
+    def test_image_archive_is_identical_across_seals(self):
+        saved = self.root / "saved.tar"
+        saved_archive(saved)
+        first, second = self.root / "first.tar", self.root / "second.tar"
+        bundle.docker_archive(saved, first, self.root)
+        # Temporary layer timestamps must not leak into the archive identity.
+        import os
+
+        real_open = Path.open
+
+        def opened(path, *args, **kwargs):
+            stream = real_open(path, *args, **kwargs)
+            if path.name.startswith(".layer-") and args and args[0] == "rb":
+                os.utime(path, (2000000000, 2000000000))
+            return stream
+
+        with patch.object(Path, "open", opened):
+            bundle.docker_archive(saved, second, self.root)
+        self.assertEqual(first.read_bytes(), second.read_bytes())
 
     def test_a_step_s_time_limit_is_bounded(self):
         with patch.object(bundle, "load", lambda path: self.record):

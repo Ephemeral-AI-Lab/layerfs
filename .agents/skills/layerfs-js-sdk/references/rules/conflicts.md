@@ -73,7 +73,7 @@ Gathering the reading for one file, with `base` and `head` from the refusal's
 
 ```js
 // inspect.mjs: node inspect.mjs <ws> <base> <head> <path>
-import layerfs from "layerfs";
+import layerfs from "@layerfs/node";
 
 const P = "shop/api";
 const [ws, base, head, path] = process.argv.slice(2);
@@ -158,7 +158,7 @@ overlap the other side's diff and conflict. Keep the original Branches:
 
 ```js
 // merge-fix.mjs: cart and checkout both changed /src/price.js
-import layerfs from "layerfs";
+import layerfs from "@layerfs/node";
 
 const P = "shop/api";
 const [mergeBase, path] = process.argv.slice(2);   // from the refusal's detail
@@ -172,7 +172,7 @@ console.log("cart:\n" + cartChange.hunks.map((h) => h.op + h.text).join("\n"));
 
 ```js
 // merge-apply.mjs: after deciding, write the reviewed result on two working forks
-import layerfs from "layerfs";
+import layerfs from "@layerfs/node";
 
 const P = "shop/api";
 const combined = "export const rate = 9;\nexport const cartRounding = true;\n"; // your reviewed resolution

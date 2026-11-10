@@ -4,6 +4,7 @@ mod attach;
 mod cleanup;
 #[cfg(target_os = "linux")]
 mod detach;
+mod diagnostic;
 mod dirty;
 mod export;
 mod export_helper;

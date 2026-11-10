@@ -526,7 +526,7 @@ fn field(name: &str) -> (OptKind, Field) {
     match name {
         "cpus" => (OptKind::Int, Field::Size),
         "memory" | "disk" => (OptKind::Size, Field::Size),
-        "image" => (OptKind::Text, Field::OsImage),
+        "image" | "os_image" => (OptKind::Text, Field::OsImage),
         other => panic!("option {other} has no Spec field in the conformance kit; map it"),
     }
 }

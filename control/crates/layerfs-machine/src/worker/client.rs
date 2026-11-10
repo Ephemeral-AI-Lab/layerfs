@@ -196,12 +196,7 @@ pub fn hello(endpoint: &Endpoint) -> Result<Hello, SdkRefusal> {
 }
 
 /// Writes the request and reads the events and the answer.
-fn answer(
-    mut stream: TcpStream,
-    op: &str,
-    request: &[u8],
-    events: &mut EventSink<'_>,
-) -> Outcome {
+fn answer(mut stream: TcpStream, op: &str, request: &[u8], events: &mut EventSink<'_>) -> Outcome {
     stream
         .write_all(request)
         .and_then(|()| stream.flush())
@@ -243,7 +238,7 @@ fn answer(
     }
 }
 
-fn refusal_of(refusal: &SdkValue) -> SdkRefusal {
+pub(super) fn refusal_of(refusal: &SdkValue) -> SdkRefusal {
     SdkRefusal {
         code: refusal.get_text("code").unwrap_or("Failed").to_owned(),
         message: refusal.get_text("message").unwrap_or("").to_owned(),

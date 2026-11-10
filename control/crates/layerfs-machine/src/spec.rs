@@ -100,6 +100,13 @@ pub fn tools(home: &Path) -> Result<Tools> {
 
 /// The adapters' description of the machine `record` describes.
 pub fn spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> {
+    let mut spec = provider_spec(home, home_id, record)?;
+    spec.worker = worker(home, record.name())?;
+    Ok(spec)
+}
+
+/// A provider description that does not read or authenticate the worker endpoint.
+pub fn provider_spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> {
     let name = record.name();
     let kind = record.platform()?;
     let lasting = record.field("lasting");
@@ -132,7 +139,7 @@ pub fn spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> 
                 .and_then(|l| l.get_text("gateway"))
                 .and_then(|g| g.parse().ok()),
         },
-        worker: worker(home, name)?,
+        worker: None,
         work_dir: paths::machine_dir(home, name),
         tools: tools(home)?,
     })
@@ -151,6 +158,15 @@ pub fn worker(home: &Path, name: &str) -> Result<Option<Endpoint>> {
 /// record write that says `running` drops a create's `op` (a
 /// start runs under the machine's start lock, where no other one lives).
 pub fn save_running(home: &Path, name: &str, running: &Running) -> Result<()> {
+    save_started(home, name, running, None)
+}
+
+/// Retains a started provider's endpoint and lasting state without claiming readiness.
+pub fn save_unready(home: &Path, name: &str, running: &Running, error: &str) -> Result<()> {
+    save_started(home, name, running, Some(error))
+}
+
+fn save_started(home: &Path, name: &str, running: &Running, error: Option<&str>) -> Result<()> {
     let endpoint = &running.endpoint;
     write_record(
         &paths::worker_record(home, name),
@@ -169,7 +185,13 @@ pub fn save_running(home: &Path, name: &str, running: &Running) -> Result<()> {
     }
     update(home, name, |record| {
         let record = record.with("lasting", SdkValue::Map(lasting));
-        record.with("state", SdkValue::text("running")).without_op()
+        match error {
+            Some(error) => record.failed_as("failed", error).without_op(),
+            None => record
+                .with("state", SdkValue::text("running"))
+                .with("error", SdkValue::Null)
+                .without_op(),
+        }
     })
 }
 

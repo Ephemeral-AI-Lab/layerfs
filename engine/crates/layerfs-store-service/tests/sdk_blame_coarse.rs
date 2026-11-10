@@ -1,7 +1,8 @@
 //! `fs.blame` of a file past its line-by-line bound (2,000 lines or 48 KiB) compares two versions by
 //! the bytes they share at both ends. A line of the newer version goes back to the older one only
 //! where the older text starts a line at the same place: a line split in two, or one that lost its
-//! first characters, is new text and keeps the Commit that wrote it.
+//! first characters, is new text and keeps the Commit that wrote it. Within the bound it matches
+//! lines, also when the changed middle is past one difference table (#517).
 #[path = "support/installed_store.rs"]
 #[allow(dead_code)]
 mod installed;
@@ -216,4 +217,20 @@ fn a_split_line_in_a_small_file_is_credited_to_the_commit_that_split_it() {
     let before = format!("alpha beta\n{rest}");
     let after = format!("alpha\nbeta\n{rest}");
     check("small", &before, &[(&after, &[1, 2])], false);
+}
+
+#[test]
+fn lines_between_distant_edits_keep_their_origin() {
+    // Within the line-by-line bound, but the changed middle (lines 200 to 1300) is past one
+    // difference table (#517): only the two edited lines are the Commit's.
+    let before = lines(1, 1990);
+    let after: String = before
+        .lines()
+        .enumerate()
+        .map(|(i, line)| match i + 1 {
+            200 | 1300 => format!("{line} edited\n"),
+            _ => format!("{line}\n"),
+        })
+        .collect();
+    check("distant-edits", &before, &[(&after, &[200, 1300])], false);
 }

@@ -10,7 +10,7 @@ Removes a path on a Branch, a folder with everything in it, as one Commit.
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/rm.rs`](../../../../../api/crates/layerfs-api/src/file/rm.rs) |
-| Implemented in | `layerfs_store::calls::file_rm` → `file`, Store method `fs.rm` ([`methods/file/rm.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/rm.rs)) |
+| Implemented in | `layerfs_store::calls::file::rm`, Store method `fs.rm` ([`methods/file/rm.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/rm.rs)) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature

@@ -186,6 +186,26 @@ class AsyncBinding(unittest.IsolatedAsyncioTestCase):
         self.assertNotEqual(native_threads, [loop_thread])
         check_progress(self, events, result)
 
+    async def test_a_call_that_never_yields_still_delivers_its_queued_events(self):
+        # A result may resume the coroutine before callbacks already queued
+        # with call_soon_threadsafe run (asyncio.wait_for does it). An
+        # immediately finished to_thread makes that certain: before aio.py
+        # flushed them, `finally` dropped every event.
+        events = []
+
+        def call(name, args, home, scope, on_event):
+            for progress in PROGRESS:
+                on_event(json.dumps({"progress": progress}))
+            return json.dumps({"value": RESULT})
+
+        async def immediate(function, *args, **keywords):
+            return function(*args, **keywords)
+
+        with patch.object(native, "call", call, create=True), patch.object(asyncio, "to_thread", immediate):
+            result = await aio.project.export("shop/api", "/exports/api", on_progress=events.append)
+        self.assertEqual(events, PROGRESS)
+        check_progress(self, events, result)
+
     async def test_throwing_aio_handler_reaches_loop_handler_without_aborting_export(self):
         loop = asyncio.get_running_loop()
         errors, events = [], []
@@ -273,6 +293,8 @@ class NativeExport(unittest.TestCase):
             (source / ".git" / "config").write_bytes(b"[core]\n")
             (source / ".gitignore").write_bytes(b"ignored.bin\n")
             (source / "ignored.bin").write_bytes(bytes([0, 255, 128, 1]))
+            (source / "empty.bin").write_bytes(b"")
+            (source / "héllo ☃.txt").write_text("unicode ☃\n", encoding="utf-8")
             (source / "link").symlink_to("ignored.bin")
             timestamp = 1_700_000_000_123_456_789
             os.utime(source / "ignored.bin", ns=(timestamp, timestamp))
@@ -292,6 +314,8 @@ class NativeExport(unittest.TestCase):
                 check_progress(self, events, result)
                 self.assertEqual((dest / "ignored.bin").read_bytes(), bytes([0, 255, 128, 1]))
                 self.assertEqual((dest / "ignored.bin").stat().st_mtime_ns, (source / "ignored.bin").stat().st_mtime_ns)
+                self.assertEqual((dest / "empty.bin").read_bytes(), b"")
+                self.assertEqual((dest / "héllo ☃.txt").read_text(encoding="utf-8"), "unicode ☃\n")
                 self.assertEqual((dest / "link").readlink(), Path("ignored.bin"))
                 self.assertEqual(list((dest / "empty").iterdir()), [])
                 self.assertEqual((dest / ".git" / "config").read_bytes(), b"[core]\n")
@@ -299,6 +323,12 @@ class NativeExport(unittest.TestCase):
                     lfs.project.export("shop/api", str(dest))
                 self.assertEqual(caught.exception.code, "NotEmpty")
                 self.assertEqual((dest / "ignored.bin").read_bytes(), bytes([0, 255, 128, 1]))
+                plain = parent / "plain-file"
+                plain.write_text("not a folder")
+                with self.assertRaises(self.real.LayerFSError) as caught:
+                    lfs.project.export("shop/api", str(plain))
+                self.assertIn(caught.exception.code, ("Exists", "NotDirectory"))
+                self.assertEqual(plain.read_text(), "not a folder")
 
                 async def export_branch():
                     destination = parent / "agent"

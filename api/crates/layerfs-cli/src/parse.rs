@@ -20,6 +20,8 @@ pub struct Switches {
     /// `--stream` (`workspace exec`): the command's output and exit code
     /// passed through.
     pub stream: bool,
+    /// Framed output events followed by one result or refusal on stdout.
+    pub events: bool,
     /// `--scope <folder>` with `--scope-project <store>/<project>` and
     /// `--scope-branch <name>` (O32).
     pub scope: Option<SdkValue>,
@@ -115,6 +117,7 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
         };
         match flag {
             "--text" => switches.text = true,
+            "--events" if call.arg("stdout").is_some() => switches.events = true,
             "--progress" if call.arg("on_progress").is_some() => switches.progress = true,
             "--stream" if call.arg("stream").is_some() => {
                 switches.stream = true;
@@ -129,8 +132,41 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                 option(call, "message", &text, &mut fields)?;
             }
             _ => {
+                let fail = || {
+                    let mut accepted = Vec::new();
+                    if call.options.iter().any(|a| a.name == "message") {
+                        accepted.push("-m".to_owned());
+                    }
+                    if call.args.iter().any(piped) {
+                        accepted.push("--from".to_owned());
+                    }
+                    if call.arg("on_progress").is_some() {
+                        accepted.push("--progress".to_owned());
+                    }
+                    if call.arg("stream").is_some() {
+                        accepted.push("--stream".to_owned());
+                    }
+                    accepted.push("--text".to_owned());
+                    for opt in call.options {
+                        if opt.kind != Kind::Function && opt.name != "message" {
+                            accepted.push(format!("--{}", opt.name.replace('_', "-")));
+                        }
+                    }
+                    if accepted.is_empty() {
+                        usage(format!(
+                            "{}: unknown option {flag}; this call takes no options",
+                            call.name()
+                        ))
+                    } else {
+                        usage(format!(
+                            "{}: unknown option {flag}\naccepted options: {}",
+                            call.name(),
+                            accepted.join(", ")
+                        ))
+                    }
+                };
                 let Some(name) = flag.strip_prefix("--") else {
-                    return Err(usage(format!("{}: unknown option {flag}", call.name())));
+                    return Err(fail());
                 };
                 let name = name.replace('-', "_");
                 if let Some(base) = name.strip_suffix("_from") {
@@ -148,10 +184,13 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
                         let text = take(&mut i)?;
                         fields.push((name, value(call, arg, &text)?));
                     }
-                    _ => return Err(usage(format!("{}: unknown option {flag}", call.name()))),
+                    _ => return Err(fail()),
                 }
             }
         }
+    }
+    if switches.events && (switches.stream || switches.text) {
+        return Err(usage("--events is exclusive with --stream and --text"));
     }
     if (scope_branch.is_some() || scope_project.is_some()) && scope_folder.is_none() {
         return Err(usage("--scope-branch and --scope-project need --scope"));

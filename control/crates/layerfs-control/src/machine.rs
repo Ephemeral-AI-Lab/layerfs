@@ -38,6 +38,11 @@ pub fn start(home: &Path, name: &MachineName) -> Outcome {
     layerfs_machine::start(home, name, RELATED)
 }
 
+/// `machine.start` with stage progress.
+pub fn start_with_progress(home: &Path, events: &mut Events<'_>, name: &MachineName) -> Outcome {
+    layerfs_machine::start_with_progress(home, name, RELATED, events)
+}
+
 /// `machine.stop`.
 pub fn stop(home: &Path, name: &MachineName) -> Outcome {
     layerfs_machine::stop(home, name, RELATED)

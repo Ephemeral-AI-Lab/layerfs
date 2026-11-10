@@ -10,7 +10,7 @@ Replaces exactly one occurrence of a text in a file on a Branch, as one Commit.
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/edit.rs`](../../../../../api/crates/layerfs-api/src/file/edit.rs) |
-| Implemented in | `layerfs_store::calls::file_edit` → `file`, Store method `fs.edit` ([`methods/file/edit.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/edit.rs)); `old`, `new` become `oldText`, `newText` |
+| Implemented in | `layerfs_store::calls::file::edit`, Store method `fs.edit` ([`methods/file/edit.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/edit.rs)); `old`, `new` become `oldText`, `newText` |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature

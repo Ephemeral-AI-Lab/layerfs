@@ -10,7 +10,7 @@ Shows one path's kind, inode serial, size and mode at a Branch, `main` or a Comm
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/stat.rs`](../../../../../api/crates/layerfs-api/src/file/stat.rs) |
-| Implemented in | `layerfs_store::calls::file_stat` → `file`, Store method `fs.stat` ([`methods/file/stat.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/stat.rs)) |
+| Implemented in | `layerfs_store::calls::file::stat`, Store method `fs.stat` ([`methods/file/stat.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/stat.rs)) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -110,3 +110,12 @@ layerfs file stat shop/api agent /package.json
 ---
 
 ← [file.read](read.md) · [Up: file](README.md) · [file.list](list.md) →
+
+
+## Immutable saved references
+
+Responses include `at: { id, kind: "Commit" | "Layer", branch, root }` with full
+identities. Reuse `at.id` as the existing positional `commit` argument to pin later
+reads to the same saved tree. Historical IDs are validated against the selected
+project; an ID in another project cannot bypass that boundary. Reads do not inspect
+live Workspace overlays. See [saved queries](../saved-queries.md).

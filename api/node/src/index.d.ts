@@ -49,10 +49,42 @@ export interface CallSpec {
   help: string;
 }
 
+export interface DoctorCheck {
+  id: string;
+  code: string;
+  outcome: "pass" | "fail" | "blocked" | "skipped" | "unknown";
+  severity: "error" | "warning" | null;
+  entity: { kind: string; name: string };
+  message: string;
+  evidence: Value;
+  fix: string;
+  blocked_by: string[];
+  observed_ms: number;
+  duration_ms: number | null;
+}
+export interface DoctorOptions {
+  home?: string;
+  target?: "host" | "machine" | "sandbox" | "store.integrity" | "store.connection" | "backup.connection";
+  name?: string;
+  timeout?: string;
+  quick?: boolean;
+  write_test?: boolean;
+}
 export interface DoctorReport {
   ok: boolean;
+  complete?: boolean;
+  checks?: DoctorCheck[];
+  truncated?: boolean;
+  counts?: Record<string, number>;
+  target?: { kind: string; name: string };
+  home?: string;
+  operation?: "diagnose" | "integrity" | "connection";
+  mode?: "full" | "quick" | "observation" | "write-test";
+  observed_at_ms?: number;
+  duration_ms?: number;
   findings: { severity: string; entity: { kind: string; name: string }; message: string; fix: string | null }[];
 }
+
 
 /** Options of `project.init`; an unknown option is refused. */
 export interface ProjectInitOptions {
@@ -76,6 +108,14 @@ export interface ProjectExportOptions {
 export interface BranchListOptions {
   page_size?: WholeNumber;
   page_pos?: WholeNumber;
+  page?: WholeNumber;
+}
+
+/** Options of `branch.commits`; an unknown option is refused. */
+export interface BranchCommitsOptions {
+  page?: WholeNumber;
+  page_size?: WholeNumber;
+  at_commit?: string;
 }
 
 /** Options of `branch.merge`; an unknown option is refused. */
@@ -90,6 +130,11 @@ export interface BranchDiffOptions {
   page_size?: WholeNumber;
   page_pos?: WholeNumber;
   cursor?: string;
+  page?: WholeNumber;
+  from_commit?: string;
+  to_commit?: string;
+  path_prefix?: string;
+  include_attribution?: boolean;
 }
 
 /** Options of `commit.list`; an unknown option is refused. */
@@ -115,30 +160,46 @@ export interface FileReadOptions {
 /** Options of `file.list`; an unknown option is refused. */
 export interface FileListOptions {
   page_size?: WholeNumber;
+  page?: WholeNumber;
   page_pos?: WholeNumber;
 }
 
 /** Options of `file.glob`; an unknown option is refused. */
 export interface FileGlobOptions {
   page_size?: WholeNumber;
+  page?: WholeNumber;
   page_pos?: WholeNumber;
 }
 
 /** Options of `file.grep`; an unknown option is refused. */
 export interface FileGrepOptions {
   page_size?: WholeNumber;
+  page?: WholeNumber;
   page_pos?: WholeNumber;
+}
+
+/** Options of `file.revision`; an unknown option is refused. */
+export interface FileRevisionOptions {
+  at_commit?: string;
+  traversal?: string;
+  page?: WholeNumber;
+  page_size?: WholeNumber;
 }
 
 /** Options of `file.blame`; an unknown option is refused. */
 export interface FileBlameOptions {
   from_line?: WholeNumber;
+  line_count?: WholeNumber;
 }
 
 /** Options of `file.diff`; an unknown option is refused. */
 export interface FileDiffOptions {
   left_commit?: string;
   right_commit?: string;
+  include_attribution?: boolean;
+  allow_missing?: boolean;
+  page?: WholeNumber;
+  page_size?: WholeNumber;
 }
 
 /** Options of `file.write`; an unknown option is refused. */
@@ -304,6 +365,10 @@ export interface BranchFamily {
   list(project: string, options?: BranchListOptions): Promise<Result>;
   /** one Branch and its head Commit */
   get(project: string, branch: string): Promise<Result>;
+  /** saved branch commits or main publications, newest first */
+  commits(project: string, branch: string, options?: BranchCommitsOptions): Promise<Result>;
+  /** one saved Commit or main publication */
+  get_commit(project: string, branch: string, commit: string): Promise<Result>;
   /** a new Branch from another Branch's head or Commit */
   fork(project: string, name: string, from_branch: string, from_commit?: string | null): Promise<Result>;
   /** merge two Branches into a new one */
@@ -338,6 +403,8 @@ export interface FileFamily {
   /** lines under `path` matching a regular expression */
   grep(project: string, branch: string, path: string, pattern: string, options: FileGrepOptions): Promise<Result>;
   grep(project: string, branch: string, path: string, pattern: string, commit?: string | null, options?: FileGrepOptions): Promise<Result>;
+  /** saved changes to a literal path */
+  revision(project: string, branch: string, path: string, options?: FileRevisionOptions): Promise<Result>;
   /** the Commit of each line */
   blame(project: string, branch: string, path: string, options: FileBlameOptions): Promise<Result>;
   blame(project: string, branch: string, path: string, commit?: string | null, options?: FileBlameOptions): Promise<Result>;
@@ -465,8 +532,8 @@ export const families: readonly string[];
 
 /** A client of `home` with an optional folder scope. */
 export function client(options?: ClientOptions): Client;
-/** What is wrong in `home`; changes nothing and starts no machine. Outside the call table. */
-export function doctor(options?: { home?: string }): Promise<DoctorReport>;
+/** Diagnoses without LayerFS state changes; explicit backup write_test uses its own temporary S3 version. */
+export function doctor(options?: DoctorOptions): Promise<DoctorReport>;
 /** Closes every Store this process holds open with no call running; answers how many. Outside the call table. */
 export function close(): number;
 

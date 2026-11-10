@@ -95,6 +95,7 @@ pub fn cancel(
     let record = {
         let _sandbox = lock_in(dir, sandbox)?;
         let Some(mut record) = record::read(file)? else {
+            super::pending::mark(file)?;
             return Ok(Outcome::Ended);
         };
         match (record.owned(), &record.route) {

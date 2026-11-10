@@ -42,6 +42,10 @@ API_MOUNT_TARGETS = {"kernel_mount_routes", "kernel_application", "observed_appl
 
 # (package, test target): run seconds on the macOS host, 2026-10-23.
 SLOW = {
+    # Native CLI forwarded cancellation, phase 1 verification, 2026-11-09.
+    ("layerfs-cli", "exec_cancel_forwarded"): 6.09,
+    # Independent overwrite closure and interruption fixture (4096 Commits).
+    ("layerfs-persistence", "diagnostic_overwrite"): 15.33,
     ("layerfs-nfs", "helper_deadline"): 60.1,
     # Six Linux FUSE teardown cases, including two bounded Join observations.
     ("layerfs-daemon", "stalled_unmount"): 21.28,
@@ -60,7 +64,7 @@ SLOW = {
     ("layerfs-store-service", "history_ancestry_oracle"): 7.6,
     ("layerfs-store-service", "sdk_list_entries"): 7.6,
     ("layerfs-store-service", "history_diff_oracle"): 6.0,
-    ("layerfs-store-service", "sdk_text_scan"): 5.9,
+    ("layerfs-store-service", "sdk_text_scan"): 7.0,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run

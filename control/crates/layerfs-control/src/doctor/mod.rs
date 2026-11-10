@@ -12,3 +12,18 @@ mod scan;
 mod workers;
 
 pub use report::{doctor, doctor_json};
+
+mod check_report;
+pub mod target;
+
+mod dispatch;
+pub use dispatch::doctor_target;
+pub use target::{DoctorRequest, DoctorTarget};
+
+mod host_target;
+mod machine_target;
+mod sandbox_target;
+pub(crate) use sandbox_target::worker_diagnose as diagnose_worker_sandbox;
+mod backup_target;
+mod store_target;
+pub(crate) use store_target::in_worker as diagnose_store_in_worker;

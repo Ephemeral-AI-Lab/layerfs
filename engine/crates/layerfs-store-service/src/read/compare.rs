@@ -25,7 +25,7 @@ use std::sync::Arc;
 const ITEM_COST: usize = 160;
 
 /// Lines as SDK values, or `None` when they do not fit `budget`.
-fn hunks(lines: &[DiffLine], budget: &mut usize) -> Option<SdkValue> {
+pub(crate) fn hunks(lines: &[DiffLine], budget: &mut usize) -> Option<SdkValue> {
     let cost = lines.iter().map(|line| line.text.len() + 24).sum::<usize>();
     if cost > *budget {
         return None;
@@ -55,7 +55,7 @@ fn hunks(lines: &[DiffLine], budget: &mut usize) -> Option<SdkValue> {
 /// regular files whose different roots hold the same bytes. A root depends on
 /// how the file was built, so a file edited away and back can keep its bytes
 /// under a new root (#352 F-073).
-fn same_content(
+pub fn same_content(
     reader: &StorePorts,
     left: &EntryFacts,
     right: &EntryFacts,
@@ -156,7 +156,7 @@ fn facts(entry: Option<EntryFacts>) -> SdkValue {
 }
 
 /// One listed change, or `None` for a directory whose children changed.
-fn change(
+pub(crate) fn change(
     reader: &StorePorts,
     change: &PathChange,
     budget: &mut usize,
@@ -442,8 +442,10 @@ pub fn diff_commits(
     to: &Snap,
     request: Arg<Request>,
 ) -> Answer {
-    if from.kind != Kind::Commit || to.kind != Kind::Commit {
-        return Err(invalid("diff_commits takes two saved Commits"));
+    if !matches!(from.kind, Kind::Commit | Kind::Layer)
+        || !matches!(to.kind, Kind::Commit | Kind::Layer)
+    {
+        return Err(invalid("diff_commits takes saved Commit or Layer ids"));
     }
     let side = |snap: &Snap| {
         SdkValue::map([

@@ -19,6 +19,9 @@ use layerfs_history::{CatalogId, HistoryCatalogConfig};
 use layerfs_storage::{port::PersistenceError, StoragePolicy};
 use postgres::SimpleQueryRow;
 
+#[path = "schema_diagnostic.rs"]
+mod diagnostic;
+
 pub(crate) const SCHEMA: &str = include_str!("../../../sql/postgresql/schema.sql");
 /// Init's acquisition tables, created after [`SCHEMA`] in a new schema.
 const ACQUISITION: &str = include_str!("../../../sql/postgresql/acquisition.sql");
@@ -158,7 +161,13 @@ pub(crate) fn check(
     binding: Option<&[u8]>,
 ) -> Result<Checked, PersistenceError> {
     let s = &session.settings.schema;
+    let observational = session
+        .state
+        .lock()
+        .map_err(|_| BackendError::Unknown)
+        .map(|state| matches!(state.client, super::session::driver::Driver::Diagnostic(_)))?;
     let (row, acquisition) = match check {
+        PostgresCheck::Full if observational => diagnostic::row(session)?,
         PostgresCheck::Full => {
             let sql = format!(
                 "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SET LOCAL search_path TO {s}; \
@@ -308,4 +317,9 @@ pub(crate) fn binding(tx: &Transaction<'_>) -> Result<Vec<u8>, BackendError> {
         [row] => row.get(0),
         _ => Err(BackendError::Integrity),
     }
+}
+
+/// Revalidates bounded trusted schema projections in the caller's pinned view.
+pub(crate) fn diagnostic_guard(tx: &Transaction<'_>) -> Result<(), BackendError> {
+    diagnostic::guard(tx)
 }

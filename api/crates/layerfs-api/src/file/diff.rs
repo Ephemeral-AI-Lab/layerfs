@@ -1,10 +1,11 @@
 //! `file.diff`: the difference between two files.
-use crate::calls::table::Kind::{Name, Project, Text};
+use crate::calls::table::Kind::{Bool, Int, Name, Project, Text};
 use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
 use layerfs_store::calls::file::{diff, FileDiff, Side};
+use layerfs_store::calls::Page;
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -17,7 +18,14 @@ pub(crate) const CALL: Call = call(
         a("right_branch", Name),
         a("right_path", Text),
     ],
-    &[opt("left_commit", Name), opt("right_commit", Name)],
+    &[
+        opt("left_commit", Name),
+        opt("right_commit", Name),
+        opt("include_attribution", Bool),
+        opt("allow_missing", Bool),
+        opt("page", Int),
+        opt("page_size", Int),
+    ],
     "the difference between two files",
     run,
 );
@@ -32,6 +40,19 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     };
     let request = FileDiff {
         project: text("project").unwrap_or_default(),
+        page: Page {
+            size: args.get_int("page_size"),
+            number: args.get_int("page"),
+            pos: None,
+        },
+        include_attribution: match args.get("include_attribution") {
+            Some(SdkValue::Bool(v)) => Some(*v),
+            _ => None,
+        },
+        allow_missing: match args.get("allow_missing") {
+            Some(SdkValue::Bool(v)) => Some(*v),
+            _ => None,
+        },
         left: side("left"),
         right: side("right"),
     };

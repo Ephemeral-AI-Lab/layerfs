@@ -63,17 +63,23 @@ class Progress(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.home, True)
         self.addCleanup(shutil.rmtree, self.folder, True)
 
-    def test_the_table_six_calls_take_on_progress_and_machine_create_does_not(self):
+    def test_the_table_nine_calls_take_on_progress(self):
         self.assertEqual(
             declaring("on_progress"),
-            ["project.init", "workspace.exec", "store.push", "store.pull", "backup.create", "backup.restore"],
+            [
+                "project.init",
+                "project.export",
+                "workspace.exec",
+                "machine.start",
+                "machine.create",
+                "store.push",
+                "store.pull",
+                "backup.create",
+                "backup.restore",
+            ],
         )
         self.assertEqual(declaring("stdout"), ["workspace.exec"])
         self.assertEqual(declaring("stderr"), ["workspace.exec"])
-        # the library emits { phase: "create" } for machine.create, but no function can be given
-        with self.assertRaisesRegex(layerfs.LayerFSError, 'unknown option "on_progress"') as raised:
-            layerfs.client(home=self.home).machine.create("m1", "lima", on_progress=print)
-        self.assertEqual(raised.exception.code, "InvalidInput")
 
     def test_sync_init_reports_check_install_record_while_it_runs_before_it_returns(self):
         lfs = layerfs.client(home=self.home)

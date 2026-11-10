@@ -10,7 +10,7 @@ Lists one folder's entries at a Branch, `main` or a Commit, one page at a time.
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/list.rs`](../../../../../api/crates/layerfs-api/src/file/list.rs) |
-| Implemented in | `layerfs_store::calls::file_list` → `file`, Store method `fs.list` ([`methods/file/list.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/list.rs)); `page_size`, `page_pos` become `pageSize`, `pagePos` |
+| Implemented in | `layerfs_store::calls::file::list`, Store method `fs.list` ([`methods/file/list.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/list.rs)); `page_size`, `page_pos` become `pageSize`, `pagePos` |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -119,3 +119,37 @@ layerfs file list shop/api agent /src --page-size 200
 ---
 
 ← [file.stat](stat.md) · [Up: file](README.md) · [file.glob](glob.md) →
+
+
+## Immutable saved references
+
+Responses include `at: { id, kind: "Commit" | "Layer", branch, root }` with full
+identities. Reuse `at.id` as the existing positional `commit` argument to pin later
+reads to the same saved tree. Historical IDs are validated against the selected
+project; an ID in another project cannot bypass that boundary. Reads do not inspect
+live Workspace overlays. See [saved queries](../saved-queries.md).
+
+## Numbered matching-result pages
+
+Add `page` alongside `page_size`; page 1 is first. Retain legacy `page_pos` when
+`page` is absent, and reject both together. For example:
+
+```js
+layerfs.file.list(project, branch, path, pinned_id, { page: 2, page_size: 20 });
+```
+
+Numbered mode returns `page`, `page_size` and boolean `has_more`. Reuse the same
+pinned version, filters and page size. Ordering remains directory component/name
+order, with grep lines in ascending line order within each file. A successful
+page contains matching results; it does not silently skip results on reply-budget
+exhaustion. Work or mandatory-reply exhaustion returns `Capacity`; no total count
+or total pages is promised. Legacy offset response fields stay compatible.
+
+Numbered directory replay is admitted within 10,000 entries per request.
+
+Numbered pages retain at most 128 disposable namespace boundaries, qualified by
+Store lifetime, saved ID, path, query kind and page size. Sequential directory
+pages resume through indexed names. A cache miss uses bounded actual candidate
+visits; a large page number alone is not a refusal when exhaustion is cheap.
+Cache eviction affects cost only, never the immutable result sequence. Live
+`branch.list` inventory does not use this saved-file cache.

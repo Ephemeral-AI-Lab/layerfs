@@ -75,6 +75,14 @@ pub(crate) fn branch_row(row: &Row) -> HistoryResult<BranchRecord> {
 
 /// Decodes one Commit row.
 pub(crate) fn commit_row(row: &Row) -> HistoryResult<CommitRecord> {
+    decode_commit(row, true)
+}
+/// Diagnostic graph facts remain observable even when the saved CID is wrong.
+/// The caller must separately report identity mismatch before trusting lineage.
+pub(crate) fn commit_graph_row(row: &Row) -> HistoryResult<CommitRecord> {
+    decode_commit(row, false)
+}
+fn decode_commit(row: &Row, check_identity: bool) -> HistoryResult<CommitRecord> {
     let (lww, units) = super::facts::decode(&cell::<Vec<u8>>(row, 15)?)?;
     let record = CommitRecord {
         id: required(commit_column(row, 0)?, "Commit identity")?,
@@ -109,13 +117,14 @@ pub(crate) fn commit_row(row: &Row) -> HistoryResult<CommitRecord> {
         },
     };
     record.meta.check()?;
-    if CommitId::derive(
-        record.root,
-        record.parent,
-        record.base_layer,
-        record.second_parent,
-        &record.meta,
-    ) != record.id
+    if check_identity
+        && CommitId::derive(
+            record.root,
+            record.parent,
+            record.base_layer,
+            record.second_parent,
+            &record.meta,
+        ) != record.id
     {
         return Err(HistoryError::Integrity("Commit v3 identity"));
     }

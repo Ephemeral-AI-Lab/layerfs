@@ -65,6 +65,7 @@ impl KernelSession {
         let mut session = Self {
             mount: queue.identity(),
             directory: config.directory.clone(),
+            removed: None,
             accounting: filesystem.accounting(),
             fence: queue.fence(),
             queue,

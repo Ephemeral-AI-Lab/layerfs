@@ -1546,7 +1546,11 @@ fn finalize_follows_publication_and_never_a_failed_publish() {
     let left: Vec<_> = std::fs::read_dir(&parent)
         .unwrap()
         .filter_map(|e| e.ok())
-        .filter(|e| e.file_name().to_string_lossy().starts_with(".layerfs-export-"))
+        .filter(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .starts_with(".layerfs-export-")
+        })
         .collect();
     assert!(left.is_empty(), "staging left behind: {left:?}");
     for d in [home, source, parent] {

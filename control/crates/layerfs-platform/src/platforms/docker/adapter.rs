@@ -58,6 +58,9 @@ impl Adapter for Docker {
     fn stop(&self, spec: &Spec) -> Result<(), MachineError> {
         stop(spec)
     }
+    fn provider_state(&self, spec: &Spec) -> Result<crate::setup::State, MachineError> {
+        super::provider_state(spec)
+    }
     fn status(&self, spec: &Spec) -> Result<Status, MachineError> {
         status(spec)
     }

@@ -146,7 +146,11 @@ impl Scope {
             _ => Err(out("project")),
         };
         match (family, call) {
-            ("commit", _) | ("branch", "diff") => return Err(out("history")),
+            ("commit", _)
+            | ("branch", "diff" | "commits" | "get_commit")
+            | ("file", "revision") => {
+                return Err(out("history"));
+            }
             ("file", _) => {
                 bound(&args)?;
                 let paths: &[&str] = match call {

@@ -22,7 +22,7 @@ impl Input {
         // CASE bounds extraction inside SQLite, even if stored constraints were bypassed.
         let prefix_limit = PACK_READ_PREFIX_BYTES as i64;
         let mut descriptors = tx.mapped(
-            "SELECT CASE WHEN length(control) BETWEEN 24 AND ?2 THEN control END AS control,pack_id,domain,digest,length,length(control) FROM pack WHERE pack_id=?1",
+            "SELECT CASE WHEN (CASE WHEN typeof(control)='blob' THEN length(CAST(control AS BLOB)) ELSE NULL END) BETWEEN 24 AND ?2 THEN control END AS control,pack_id,domain,CASE WHEN (CASE WHEN typeof(digest)='blob' THEN length(CAST(digest AS BLOB)) ELSE NULL END)=32 THEN digest END,length,(CASE WHEN typeof(control)='blob' THEN length(CAST(control AS BLOB)) ELSE NULL END) FROM pack WHERE pack_id=?1",
             &[&id, &prefix_limit], 16, 1,
             |row| {
                 let info = typed_info(row, 1)?;

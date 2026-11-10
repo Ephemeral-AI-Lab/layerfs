@@ -6,7 +6,11 @@ use layerfs_bridge::control::{Reply, SdkCall, SdkRefusal, SdkValue};
 
 /// Whether `method` is on this table; any other SDK name is a Store call.
 pub(crate) fn admits(method: &str) -> bool {
-    method.starts_with("backend.") || method == "sandbox.list_workspaces"
+    method.starts_with("backend.")
+        || matches!(
+            method,
+            "sandbox.list_workspaces" | "sandbox.doctor_workspaces"
+        )
 }
 
 pub(crate) fn dispatch(service: &Service, call: &SdkCall) -> Reply {
@@ -14,6 +18,7 @@ pub(crate) fn dispatch(service: &Service, call: &SdkCall) -> Reply {
         "backend.daemon.workspace.get_storage" => super::workspace::overlay(service, &call.args),
         "backend.daemon.workspace.list_changes" => super::workspace::changes(service, &call.args),
         "sandbox.list_workspaces" => return service.inspect(call),
+        "sandbox.doctor_workspaces" => return service.diagnostic_workspaces(call),
         method => Err(SdkRefusal {
             code: "UnknownMethod".into(),
             message: format!("no daemon backend method {method}"),

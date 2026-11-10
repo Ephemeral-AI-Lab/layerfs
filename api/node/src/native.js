@@ -16,7 +16,7 @@ if (!existsSync(path)) {
   throw new Error(`the LayerFS native addon is missing: ${path} (${explicit ? "named by LAYERFS_NATIVE" : "the package's own"}; this is ${where}); ${build}`);
 }
 
-/** `{ table(), call(name, argsJson, home, scopeJson, onEvent), doctor(home), close() }`;
+/** `{ table(), call(name, argsJson, home, scopeJson, onEvent), doctor(home, optionsJson?), close() }`;
  * `call` resolves to JSON `{ events, answer }`. */
 export let native;
 try {

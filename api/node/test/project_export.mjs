@@ -189,6 +189,8 @@ function fixture() {
   writeFileSync(join(source, ".git", "config"), "[core]\n");
   writeFileSync(join(source, ".gitignore"), "ignored.bin\n");
   writeFileSync(join(source, "ignored.bin"), Buffer.from([0, 255, 128, 1]));
+  writeFileSync(join(source, "empty.bin"), Buffer.alloc(0));
+  writeFileSync(join(source, "héllo ☃.txt"), "unicode ☃\n");
   writeFileSync(join(source, "run.sh"), "#!/bin/sh\nexit 0\n");
   chmodSync(join(source, "run.sh"), 0o755);
   symlinkSync("ignored.bin", join(source, "link"));
@@ -196,6 +198,8 @@ function fixture() {
 }
 function checkTree(destination) {
   assert.deepEqual(readFileSync(join(destination, "ignored.bin")), Buffer.from([0, 255, 128, 1]));
+  assert.equal(readFileSync(join(destination, "empty.bin")).length, 0);
+  assert.equal(readFileSync(join(destination, "héllo ☃.txt"), "utf8"), "unicode ☃\n");
   assert.equal(readFileSync(join(destination, ".git", "config"), "utf8"), "[core]\n");
   assert.deepEqual(readdirSync(join(destination, "empty")), []);
   assert.equal(readlinkSync(join(destination, "link")), "ignored.bin");
@@ -233,6 +237,10 @@ test("native Node export: default main, selected Branch, callbacks, refusals and
     assert.equal(readFileSync(join(branchDest, "branch.txt"), "utf8"), "agent\n");
     await assert.rejects(lfs.project.export("shop/api", dest), (e) => e.code === "NotEmpty");
     checkTree(dest);
+    const plainFile = join(f.parent, "plain-file");
+    writeFileSync(plainFile, "not a folder");
+    await assert.rejects(lfs.project.export("shop/api", plainFile), (e) => ["Exists", "NotDirectory"].includes(e.code));
+    assert.equal(readFileSync(plainFile, "utf8"), "not a folder");
     await assert.rejects(lfs.project.export("shop/api", join(f.parent, "missing"), { branch: "absent" }), (e) => e.code === "NoSuchBranch");
     const scoped = real.client({ home: f.home, scope: { project: "shop/api", folder: "/", branch: "agent" } });
     await assert.rejects(scoped.project.export("shop/api", join(f.parent, "scoped")), /out of scope: project.export/);

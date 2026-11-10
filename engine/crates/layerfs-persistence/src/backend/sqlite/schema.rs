@@ -19,7 +19,7 @@ const UNIT_INDEX: &str = include_str!("../../../sql/sqlite/objects_units_index.s
 const UNITS: &str = include_str!("../../../sql/sqlite/objects_units.sql");
 const ACQUISITION: &str = include_str!("../../../sql/sqlite/acquisition/schema.sql");
 type Selection = (crate::SqlitePackLayout, crate::SqliteAcquisitionSchema);
-fn scripts((layout, acquisition): Selection) -> Vec<String> {
+pub(super) fn scripts((layout, acquisition): Selection) -> Vec<String> {
     let objects = match layout {
         crate::SqlitePackLayout::Monolithic => OBJECTS.to_owned(),
         crate::SqlitePackLayout::GroupRows => UNITS.to_owned(),
@@ -310,6 +310,7 @@ impl super::session::connection::Session {
     ) -> Result<(u64, u64), BackendError> {
         self.run::<_,BackendError>(false,|tx| {
    let selection=(self.layout,self.acquisition);
+   if self.diagnostic { super::schema_diagnostic::check(tx,self.acquisition)?; }
    check(tx.connection,tx.work,selection)?;
    let rows=tx.query("SELECT catalog_id,catalog_incarnation,binding_key,identity_format,schema_version,schema_source,schema_definition FROM history_meta WHERE id=1",vec![])?;
    let r=rows.first().filter(|_|rows.len()==1).ok_or(BackendError::Integrity)?;

@@ -12,7 +12,7 @@ paths.
 | --- | --- |
 | Family | [branch](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/branch/merge.rs`](../../../../../api/crates/layerfs-api/src/branch/merge.rs) |
-| Implemented in | `layerfs_store::calls::branch_merge` → Store method `branch.merge` ([`methods/branch/merge.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/merge.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) `merge`) |
+| Implemented in | `layerfs_store::calls::branch::merge` → Store method `branch.merge` ([`methods/branch/merge.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/merge.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) `merge`) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -38,7 +38,7 @@ layerfs branch merge <store>/<project> <name> <a> <b> [--message TEXT] [--units 
 | --- | --- | --- | --- |
 | `project` | Project | `<store>/<project>` | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `name` | Name | the new Branch; not `main`, not taken | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
-| `a` | Name | the left side ("ours"), sent as `branch`; may be `main` | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |
+| `a` | Name | the left side ("ours"), sent as `branch`; may be `main` | [`calls/branch.rs`](../../../../../control/crates/layerfs-store/src/calls/branch.rs) |
 | `b` | Name | the right side ("theirs"), sent as `with`; may be `main`; not equal to `a` | same |
 
 ## Options

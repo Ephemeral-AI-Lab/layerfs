@@ -147,8 +147,8 @@ def render(entries):
         "    Scope as Scope,\n"
         ")\n"
         "\n"
-        f"def doctor(home: {HOME} = None) -> DoctorReport:\n"
-        '    """`layerfs doctor`: what is wrong in `home`, changing nothing."""\n'
+        f"def doctor(home: {HOME} = None, *, target: str | None = None, name: str | None = None, timeout: str | None = None, quick: bool | None = None, write_test: bool | None = None) -> DoctorReport:\n"
+        '    """Diagnoses without LayerFS state changes; backup write_test uses its own temporary S3 version."""\n'
         "\n"
         "def close() -> int:\n"
         '    """Closes every Store this process holds open with no call running."""\n'

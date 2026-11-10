@@ -114,7 +114,7 @@ for (;;) {
 `type` is `file`, `dir` or `symlink`; `mode` is decimal (420 = `0644`).
 
 ```js
-import layerfs, { LayerFSError } from "layerfs";
+import layerfs, { LayerFSError } from "@layerfs/node";
 const exists = await layerfs.file.stat(P, "work", "/package.json").then(
   () => true,
   (e) => { if (e instanceof LayerFSError && e.code === "NoSuchPath") return false; throw e; },

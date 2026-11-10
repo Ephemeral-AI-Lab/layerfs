@@ -10,7 +10,7 @@ Reads lines of one text file at a Branch, `main` or a Commit, one bounded window
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/read.rs`](../../../../../api/crates/layerfs-api/src/file/read.rs) |
-| Implemented in | `layerfs_store::calls::file_read` → `file`, Store method `fs.read` ([`methods/file/read.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/read.rs)); `start_line`, `end_line` become `startLine`, `endLine` |
+| Implemented in | `layerfs_store::calls::file::read`, Store method `fs.read` ([`methods/file/read.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/read.rs)); `start_line`, `end_line` become `startLine`, `endLine` |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -130,3 +130,12 @@ layerfs file read shop/api agent /src/index.ts --start-line 1 --end-line 80
 ---
 
 ← [SDK: file](README.md) · [Up: file](README.md) · [file.stat](stat.md) →
+
+
+## Immutable saved references
+
+Responses include `at: { id, kind: "Commit" | "Layer", branch, root }` with full
+identities. Reuse `at.id` as the existing positional `commit` argument to pin later
+reads to the same saved tree. Historical IDs are validated against the selected
+project; an ID in another project cannot bypass that boundary. Reads do not inspect
+live Workspace overlays. See [saved queries](../saved-queries.md).

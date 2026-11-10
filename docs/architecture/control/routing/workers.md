@@ -82,7 +82,7 @@ be served at once; each connection still carries one request.
 
 | Operation | Runs on the machine | Source |
 | --- | --- | --- |
-| `worker.ping` | answers `{kind: "worker", version, pid}` | `server.rs` `run` |
+| `worker.ping` | answers `{kind: "worker", version, pid}`; diagnostic `args.capacity=true` adds nullable `free_disk`, observed on the worker's own data-root filesystem without guest commands | `server.rs` `run` |
 | `store.call` | one Store method on `store/<name>/store.sqlite` under the worker's root, holding the Store's lease there | `server.rs`, [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs) |
 | `store.file` | one step of a Store push, pull, remove, stat or backup | [`sqlite/transfer/steps.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) |
 | `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`: one of the nine in the host operation table (`OPS`, `workspace.exec_cancel` among them), decoded into the typed request by `decode`, else refused before any effect | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `in_worker`, [`host/call.rs`](../../../../control/crates/layerfs-sandbox/src/host/call.rs) `OPS`, [`host/frame.rs`](../../../../control/crates/layerfs-sandbox/src/host/frame.rs) `decode` |

@@ -1,22 +1,21 @@
-//! A normal unmount whose connection outlives its mount (issues #426, #460).
+//! Copied mount namespaces and normal unmount (issues #426, #460).
 //!
 //! Real kernel mount, staging, hook-free. After Attach, `unshare -m` makes a
 //! second mount namespace that holds a copy of the Workspace mount, the way an
 //! engine or VM agent outside a Sandbox can. The daemon's plain detach then
-//! succeeds in its own namespace while the superblock lives on in the copy, so
-//! the kernel never ends the connection: the receive loops stay blocked and
-//! the drain stops at Join. The normal unmount then makes the same single
-//! abort write a forced unmount would, drains again, revokes and closes, so it
-//! ends the connection itself. Removing the mount directory then detaches the
-//! copy's mount too (Linux detaches the mounts on a removed mount point in
-//! every namespace), so the connection's control entry goes while the copy
-//! still runs, and the copy finds no mount there.
+//! succeeds in its own namespace while the superblock lives on in the copy.
+//! Removing the private mount directory before joining detaches the copy too,
+//! ending the connection without an abort. If removal is denied, the bounded
+//! Join wait and its single abort remain the fallback, with original failures
+//! retained through later operations.
 //!
 //! The safety rule of `support/fusectl.rs` binds this file: nothing here
 //! writes under `/sys/fs/fuse/connections` or reads another connection.
 #![cfg(target_os = "linux")]
 #[path = "support/abort_write.rs"]
 mod abort_write;
+#[path = "support/directory_remove.rs"]
+mod directory_remove;
 #[allow(dead_code)]
 #[path = "support/fusectl.rs"]
 mod fusectl;
@@ -128,7 +127,7 @@ impl Drop for Copy {
 }
 
 #[test]
-fn a_normal_unmount_stalled_at_join_ends_itself_with_one_abort_write() {
+fn a_normal_unmount_retires_a_copied_mount_before_join_without_abort() {
     fusectl::mount();
     let rig = Rig::new("stalled-join");
     let ready = rig.mount(1);
@@ -137,8 +136,7 @@ fn a_normal_unmount_stalled_at_join_ends_itself_with_one_abort_write() {
     let connection = fusectl::own(&ready);
     let mut copy = Copy::spawn(root(&ready));
 
-    // The plain detach succeeds here; the connection outlives it, so the drain
-    // stops at Join and the normal unmount ends it with one abort write.
+    // The directory removal retires the copied mount before the join barrier.
     let done = match rig.harness.try_unmount(token) {
         Ok(done) => done,
         Err(failure) => panic!("normal unmount of a copied mount: {failure:?}"),
@@ -146,12 +144,8 @@ fn a_normal_unmount_stalled_at_join_ends_itself_with_one_abort_write() {
     println!("STALLED plain unmount={:?}", done.reply);
     assert_eq!(done.reply, Reply::Unmounted(token));
     let drained = done.kernel.as_ref().expect("drain receipt");
-    let forced = drained.forced.expect("normal unmount made its abort");
-    assert_eq!(forced.abort, layerfs_fuse::mount::AbortWrite::Written);
-    assert_eq!(
-        forced.detach,
-        layerfs_fuse::session::DetachAttempt::Detached
-    );
+    assert!(drained.forced.is_none(), "unexpected abort: {drained:?}");
+    assert!(drained.clean(), "{drained:?}");
     assert!(
         mount_entry(&ready.directory).is_none(),
         "the daemon's mount row remains"
@@ -186,6 +180,7 @@ fn rejected_abort(errno: Option<u32>, disposition: AbortDisposition, detail: &st
     let (send, receive) = mpsc::channel();
     let (listen, listener) = mpsc::channel();
     let thread = thread::spawn(move || {
+        directory_remove::deny();
         match errno {
             Some(errno) => abort_write::deny_write(descriptor, errno),
             None => listen
@@ -288,7 +283,16 @@ fn later_failure(stage: TeardownStage) {
         _ => unreachable!(),
     }
     drop(operation);
-    let result = rig.harness.try_unmount(token);
+    let service = rig.harness.service.clone();
+    let result = thread::spawn(move || {
+        directory_remove::deny();
+        service.execute_control(&Request::Unmount(UnmountControl {
+            token,
+            discard: true,
+        }))
+    })
+    .join()
+    .unwrap();
     let again = rig.harness.try_force(token, false);
     assert!(copy.leave());
     drop(copy);
@@ -324,4 +328,43 @@ fn stalled_abort_facts_survive_close_failure() {
 #[test]
 fn stalled_abort_facts_survive_a_second_drain_stop() {
     rejected_abort(None, AbortDisposition::Written, "Some(Written)");
+}
+
+#[test]
+fn a_failed_directory_removal_survives_the_successful_abort_fallback() {
+    fusectl::mount();
+    let rig = Rig::new("stalled-removal-error");
+    let ready = rig.mount(1);
+    let token = ready.token;
+    let connection = fusectl::own(&ready);
+    let mut copy = Copy::spawn(root(&ready));
+    let service = rig.harness.service.clone();
+    let done = thread::spawn(move || {
+        directory_remove::deny();
+        service.execute_control(&Request::Unmount(UnmountControl {
+            token,
+            discard: true,
+        }))
+    })
+    .join()
+    .unwrap()
+    .unwrap();
+    assert_eq!(done.reply, Reply::Unmounted(token));
+    let drained = done.kernel.as_ref().expect("drain receipt");
+    assert_eq!(
+        drained.removed.as_ref().unwrap_err().raw_os_error(),
+        Some(nix::libc::EACCES)
+    );
+    assert!(!drained.clean());
+    assert_eq!(
+        drained.forced.unwrap().abort,
+        layerfs_fuse::mount::AbortWrite::Written
+    );
+    assert_eq!(drained.work.active, 0);
+    assert_eq!(drained.work.retained, 0);
+    assert!(Path::new(&ready.directory).exists());
+    assert!(copy.leave());
+    drop(copy);
+    until("own connection entry removed", || !connection.exists());
+    rig.finish();
 }

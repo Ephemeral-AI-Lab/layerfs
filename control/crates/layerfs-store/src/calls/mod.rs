@@ -6,5 +6,6 @@ pub mod branch;
 pub mod commit;
 pub mod file;
 mod op;
+pub mod project;
 
 pub use op::{Change, Content, DiffOptions, Page, StoreOp};

@@ -28,6 +28,52 @@ pub struct BranchGet {
     pub branch: String,
 }
 
+/// Saved branch history, pinned to an optional immutable start.
+#[derive(Clone, Debug, Default)]
+pub struct BranchCommits {
+    /// Project qualified by Store.
+    pub project: String,
+    /// Branch context, including main.
+    pub branch: String,
+    /// One-based result page.
+    pub page: Option<i64>,
+    /// Maximum matching records.
+    pub page_size: Option<i64>,
+    /// Full immutable starting identity.
+    pub at_commit: Option<String>,
+}
+
+/// One saved record admitted through its branch context.
+#[derive(Clone, Debug, Default)]
+pub struct BranchGetCommit {
+    /// Project qualified by Store.
+    pub project: String,
+    /// Branch context.
+    pub branch: String,
+    /// Full immutable identity.
+    pub commit: String,
+}
+
+/// Read pinned saved history without changing the branch.
+pub fn commits(home: &Path, events: &mut Events<'_>, request: &BranchCommits) -> Outcome {
+    on_project(
+        home,
+        events,
+        &request.project,
+        StoreOp::BranchCommits(request),
+    )
+}
+
+/// Read one saved Commit or publication Layer.
+pub fn get_commit(home: &Path, events: &mut Events<'_>, request: &BranchGetCommit) -> Outcome {
+    on_project(
+        home,
+        events,
+        &request.project,
+        StoreOp::BranchGetCommit(request),
+    )
+}
+
 /// `branch.fork(project, name, from_branch, from_commit)`.
 #[derive(Clone, Debug, Default)]
 pub struct BranchFork {
@@ -81,6 +127,16 @@ pub struct BranchDiff {
     pub to_branch: String,
     /// Its options.
     pub options: DiffOptions,
+    /// Full saved left endpoint, else the branch head.
+    pub from_commit: Option<String>,
+    /// Full saved right endpoint, else the branch head.
+    pub to_commit: Option<String>,
+    /// Component-qualified absolute subtree filter.
+    pub path_prefix: Option<String>,
+    /// Discover equal-content paths with different owning commits.
+    pub include_attribution: Option<bool>,
+    /// Stateless continuation of a pinned comparison.
+    pub continuation: Option<String>,
 }
 
 /// `branch.list`: one page of the project's Branches.
@@ -156,7 +212,19 @@ fn branches_in(
     namespace: &str,
 ) -> Outcome {
     let size = request.page.size.unwrap_or(50);
-    let skip = request.page.pos.unwrap_or(0);
+    if request.page.number.is_some() && request.page.pos.is_some() {
+        return Err(refused(
+            "InvalidInput",
+            "page cannot be combined with page_pos",
+        ));
+    }
+    let skip = match request.page.number {
+        Some(page) if page > 0 => (page - 1)
+            .checked_mul(size)
+            .ok_or_else(|| refused("InvalidInput", "page overflow"))?,
+        Some(_) => return Err(refused("InvalidInput", "page must be positive")),
+        None => request.page.pos.unwrap_or(0),
+    };
     if !(1..=1000).contains(&size) || skip < 0 {
         return Err(refused(
             "InvalidInput",
@@ -166,12 +234,20 @@ fn branches_in(
     let target = target(home, &request.project)?;
     let prefix = format!("{namespace}.");
     let (mut pos, mut seen, mut kept, mut more) = (0i64, 0i64, Vec::new(), false);
+    let mut reply_bytes = 0usize;
     'pages: loop {
+        if pos >= 10_000 {
+            return Err(refused(
+                "Capacity",
+                "scoped branch listing work bound reached",
+            ));
+        }
         let op = StoreOp::ListBranches {
             name: None,
             page: Page {
                 size: Some(1000),
                 pos: Some(pos),
+                number: None,
             },
         };
         let page = store_call(home, events, &target, &op)?;
@@ -187,6 +263,18 @@ fn branches_in(
                 more = true;
                 break 'pages;
             } else {
+                if request.page.number.is_some() {
+                    reply_bytes += match &name {
+                        SdkValue::Text(name) => name.len() + 768,
+                        _ => 768,
+                    };
+                    if reply_bytes > 40 * 1024 {
+                        return Err(refused(
+                            "Capacity",
+                            "scoped branch page exceeds reply budget; reduce page_size",
+                        ));
+                    }
+                }
                 kept.push(layerfs_home::home::with_field(item, "name", name));
             }
         }

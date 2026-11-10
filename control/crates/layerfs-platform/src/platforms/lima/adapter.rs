@@ -39,6 +39,9 @@ impl Adapter for Lima {
     fn stop(&self, spec: &Spec) -> Result<(), MachineError> {
         stop(spec)
     }
+    fn provider_state(&self, spec: &Spec) -> Result<crate::setup::State, MachineError> {
+        super::observe::observe(spec).map(|(state, _)| state)
+    }
     fn status(&self, spec: &Spec) -> Result<Status, MachineError> {
         status(spec)
     }

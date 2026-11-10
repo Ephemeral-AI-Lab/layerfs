@@ -15,6 +15,7 @@ its outcome is dropped. Read the state again (``list``, ``get``,
 
 import asyncio
 import functools
+import threading
 
 from ._client import _FUNCTION, FAMILIES, TABLE, Client, Family, _streamed
 from ._errors import LayerFSError
@@ -37,22 +38,50 @@ def _coroutine(sync, functions):
     @functools.wraps(sync)
     async def call(*given, **keywords):
         loop = asyncio.get_running_loop()
-        live = [True]
+        lock = threading.Lock()
+        live = True
+        pending = 0
+        drained = asyncio.Event()
 
         def on_loop(function):
             def deliver(*values):
-                if live[0]:
-                    function(*values)
+                nonlocal pending
+                try:
+                    with lock:
+                        active = live
+                    # User code runs on the loop, outside the state lock.
+                    if active:
+                        function(*values)
+                finally:
+                    with lock:
+                        pending -= 1
+                        if pending == 0:
+                            drained.set()
 
             def marshal(*values):
-                if live[0]:
+                nonlocal live, pending
+                with lock:
+                    if not live:
+                        return
+                    pending += 1
                     try:
                         loop.call_soon_threadsafe(deliver, *values)
                     except RuntimeError:
-                        # the loop has closed: nothing is left to deliver to
-                        live[0] = False
+                        # The loop has closed; undo this undeliverable event.
+                        pending -= 1
+                        live = False
 
             return marshal
+
+        async def drain():
+            while True:
+                with lock:
+                    if pending == 0:
+                        return
+                    # Only the loop touches the Event; clear and recheck share
+                    # the counter lock so a notification cannot be lost.
+                    drained.clear()
+                await drained.wait()
 
         if keywords.get("stream") is True:
             _streamed(keywords)
@@ -60,11 +89,19 @@ def _coroutine(sync, functions):
             if callable(keywords.get(name)):
                 keywords[name] = on_loop(keywords[name])
         try:
-            # the events were queued on the loop before the call's result,
-            # so each runs before this returns
-            return await asyncio.to_thread(sync, *given, **keywords)
+            try:
+                result = await asyncio.to_thread(sync, *given, **keywords)
+            except asyncio.CancelledError:
+                # Cancellation closes delivery without waiting for the worker.
+                raise
+            except BaseException:
+                await drain()
+                raise
+            await drain()
+            return result
         finally:
-            live[0] = False
+            with lock:
+                live = False
 
     return call
 

@@ -1,6 +1,6 @@
 //! `machine.start`: start a stopped machine and its worker; a running one answers at once.
 use crate::calls::table::Kind::Name;
-use crate::calls::table::{a, call, Call};
+use crate::calls::table::{a, call, Call, PROGRESS};
 use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
 #[cfg(feature = "machine")]
@@ -12,7 +12,7 @@ pub(crate) const CALL: Call = call(
     "machine",
     "start",
     &[a("name", Name)],
-    &[],
+    &[PROGRESS],
     "start a stopped machine and its worker; a running one answers at once",
     run,
 );
@@ -21,7 +21,8 @@ pub(crate) const CALL: Call = call(
 #[cfg(feature = "machine")]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let name = MachineName::parse(args.get_text("name").unwrap_or(""))?;
-    layerfs_control::machine::start(&context.home, &name)
+    let (home, events) = context.parts();
+    layerfs_control::machine::start_with_progress(home, events, &name)
 }
 
 /// Without the `machine` feature (the guest worker's build) it is

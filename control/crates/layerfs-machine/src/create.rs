@@ -52,6 +52,8 @@ pub struct MachineCreate {
     pub disk: Option<i64>,
     /// Its image.
     pub image: Option<String>,
+    /// The VM OS image or prepared machine image, separate from its Sandbox image.
+    pub os_image: Option<String>,
 }
 
 /// `machine.create(name, platform, { cpus, memory, disk, image })`.
@@ -85,7 +87,11 @@ pub fn create(
             probe.missing,
         )));
     }
-    let bundle = bundle()?;
+    let bundle = crate::progress::stage(events, "bundle-validation", bundle)?;
+    let os_image = match &request.os_image {
+        Some(image) => Some(image.clone()),
+        None => super::bundle::prepared_os_image(kind, &bundle)?,
+    };
     let id = home_id(&home)?;
     let mut fields = vec![
         ("name", SdkValue::text(name)),
@@ -107,6 +113,9 @@ pub fn create(
     ];
     if let Some(image) = &request.image {
         fields.push(("image", SdkValue::text(image)));
+    }
+    if let Some(image) = os_image {
+        fields.push(("os_image", SdkValue::text(image)));
     }
     let fields = fields.into_iter().map(|(n, v)| (n.to_owned(), v));
     let op = Op::begin(CREATE, "create", SdkValue::Null)?;
@@ -131,7 +140,28 @@ pub fn create(
     ]));
     // a `machine start` waits for its create
     let _start = super::endpoint::start_lock(&home, name)?;
-    finish(&home, name, op, adapters::create(&spec, &bundle), related)
+    let outcome = crate::progress::stage(events, "provider-and-worker", || {
+        adapters::create(&spec, &bundle)
+    });
+    if let Ok(running) = &outcome {
+        let endpoint = crate::worker::Endpoint {
+            address: running.endpoint.address,
+            secret: running.endpoint.secret.clone(),
+        };
+        let checked = crate::progress::stage(events, "worker-compatibility", || {
+            let hello = crate::worker::hello(&endpoint)?;
+            match hello.stale_bundle(name, &bundle.dir, &endpoint.address.to_string()) {
+                Some(refusal) => Err(refusal),
+                None => Ok(()),
+            }
+        });
+        if let Err(error) = checked {
+            let _lock = lock::take(&home)?;
+            record::save_unready(&home, name, running, &error.message)?;
+            return Err(error);
+        }
+    }
+    finish(&home, name, op, outcome, related)
 }
 
 /// Records the outcome of a create (H §7.1.1 step 5) that `op` names: running drops it; a failure that kept the VM drops it with state

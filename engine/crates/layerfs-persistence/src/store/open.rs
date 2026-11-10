@@ -61,6 +61,21 @@ impl SqliteHandles {
     ) -> Result<Self, PersistenceError> {
         Self::open(config, binding, cursor_key, false)
     }
+    /// Opens for diagnosis without changing journal/checkpoint settings or
+    /// migrating the source. Uses the explicitly Disposable execution policy.
+    pub fn open_diagnostic(
+        path: &std::path::Path,
+        binding: &[u8],
+        cursor_key: [u8; 32],
+    ) -> Result<Self, PersistenceError> {
+        let session = Arc::new(Session::connect_diagnostic(path)?);
+        Self::validated(
+            session,
+            path.parent().map(std::path::Path::to_path_buf),
+            binding,
+            cursor_key,
+        )
+    }
     fn open(
         config: PersistenceConfig,
         binding: &[u8],

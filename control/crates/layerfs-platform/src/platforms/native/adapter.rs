@@ -33,6 +33,9 @@ impl Adapter for Native {
     fn stop(&self, _spec: &Spec) -> Result<(), MachineError> {
         Ok(())
     }
+    fn provider_state(&self, _spec: &Spec) -> Result<crate::setup::State, MachineError> {
+        Ok(crate::setup::State::Running)
+    }
     fn status(&self, _spec: &Spec) -> Result<Status, MachineError> {
         Ok(status())
     }

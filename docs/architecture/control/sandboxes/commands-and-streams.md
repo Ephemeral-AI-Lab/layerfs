@@ -150,3 +150,17 @@ daemon or init stage that already exited; a running one is left for `stop`.
 ---
 
 ← [Sandboxes: Native and namespaces](native-and-namespaces.md) · [Up: Sandboxes](README.md) · [Sandboxes: Adding a backend](adding-a-backend.md) →
+
+### Cancellation before registration
+
+A cancel with no registered command retains a pending mark for 30 seconds
+while answering `ended`. `Running::start` consumes it under the Sandbox lock
+and ends the command at spawn (`kind: "cancelled"`, exit code 128 + the signal).
+The mark
+is local to the Workspace and id, removed when consumed and ignored after
+expiration. Reuse after consumption is unaffected. An unconsumed mark may
+cancel reuse within that interval; use unique ids. Expired unconsumed files
+are removed on access or Workspace teardown. No call is retried or replayed.
+
+At-spawn cancellation can finish under SIGTERM before SIGKILL. The exec
+reports the actual 128 + signal exit (143 or 137), with `kind: "cancelled"`.

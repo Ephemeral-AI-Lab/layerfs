@@ -19,7 +19,7 @@ Branches of its project. `sandbox.create` is the only call that starts one;
 `workspace.mount(sandbox, branch)` mounts in the one it names.
 
 ```js
-import layerfs from "layerfs";
+import layerfs from "@layerfs/node";
 
 const P = "shop/api";
 await layerfs.sandbox.create(P, "build-1", "native");

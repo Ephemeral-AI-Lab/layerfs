@@ -51,7 +51,12 @@ pub fn close(py: Python<'_>) -> usize {
 /// the library's default), with the interpreter released. Returns JSON
 /// text `{ value }` or `{ refused }`.
 #[pyfunction]
-#[pyo3(signature = (home=None))]
-pub fn doctor(py: Python<'_>, home: Option<String>) -> String {
-    py.detach(move || layerfs_api::doctor_json(layerfs_api::home(home.as_deref().map(Path::new))))
+#[pyo3(signature = (home=None, options=None))]
+pub fn doctor(py: Python<'_>, home: Option<String>, options: Option<String>) -> String {
+    py.detach(move || {
+        layerfs_api::doctor_options_json(
+            layerfs_api::home(home.as_deref().map(Path::new)),
+            options.as_deref().unwrap_or("{}"),
+        )
+    })
 }

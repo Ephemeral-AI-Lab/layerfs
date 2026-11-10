@@ -85,6 +85,8 @@ pub struct FileBlame {
     pub path: String,
     /// The first line.
     pub from_line: Option<i64>,
+    /// Maximum returned lines, at most 2000.
+    pub line_count: Option<i64>,
 }
 
 /// One side of `file.diff`: a path at a Commit, else at a Branch's head.
@@ -108,6 +110,31 @@ pub struct FileDiff {
     pub left: Side,
     /// The right side.
     pub right: Side,
+    /// Optional matching row page.
+    pub page: Page,
+    /// Include aligned line ownership.
+    pub include_attribution: Option<bool>,
+    /// Admit one missing path side.
+    pub allow_missing: Option<bool>,
+}
+
+/// Saved revisions of a literal path at an immutable anchor.
+#[derive(Clone, Debug, Default)]
+pub struct FileRevision {
+    /// Project selector.
+    pub project: String,
+    /// Branch context.
+    pub branch: String,
+    /// Literal absolute path, allowed to be absent at the tip.
+    pub path: String,
+    /// Immutable starting identity.
+    pub at_commit: Option<String>,
+    /// `provenance` or `branch`.
+    pub traversal: Option<String>,
+    /// One-based matching-result page.
+    pub page: Page,
+    /// Stateless continuation of the same immutable pin and query.
+    pub continuation: Option<String>,
 }
 
 /// `file.write(project, branch, path, content, { message, mode })`.
@@ -237,6 +264,11 @@ pub fn blame(home: &Path, events: &mut Events<'_>, request: &FileBlame) -> Outco
 /// `file.diff`: the changes between two files.
 pub fn diff(home: &Path, events: &mut Events<'_>, request: &FileDiff) -> Outcome {
     on_project(home, events, &request.project, StoreOp::DiffFiles(request))
+}
+
+/// `file.revision`: saved changes to a literal path.
+pub fn revision(home: &Path, events: &mut Events<'_>, request: &FileRevision) -> Outcome {
+    on_project(home, events, &request.project, StoreOp::Revision(request))
 }
 
 /// `file.write`: a file written, as one Commit.

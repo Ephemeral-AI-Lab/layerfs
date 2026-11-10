@@ -21,7 +21,7 @@ itself.
 | `binding_changes` | names whose binding differs in two directory contents | one directory difference |
 | `locate` | first path of each wanted serial | breadth-first listing, stops when all are named or at a listing limit |
 | `root_changes` | path-level Added/Removed/Modified with both sides' facts | the above, plus the subtree under a rebound directory |
-| `line_diff`, `match_lines` | the simulator's line difference | LCS table bounded by `MAXIMUM_DIFF_CELLS`; beyond it the common prefix and suffix are kept and the middle is one block |
+| `line_diff`, `match_lines` | the simulator's line difference | LCS table bounded by `MAXIMUM_DIFF_CELLS`; beyond it the common prefix and suffix are kept and the middle is matched on the lines that occur once on each side in order (#517); the gaps between them get tables while their cells together stay within `MAXIMUM_DIFF_CELLS`, and a gap past that, or a middle with no such line, is one block |
 
 | `inode_differences` | serials whose stored value differs, reference counts included | one inode-table difference (#352) |
 | `new_bindings` | `(child, parent, name)` bindings one root holds that another lacks | the inode difference, then each changed directory's binding difference or new directory's listing (#352) |

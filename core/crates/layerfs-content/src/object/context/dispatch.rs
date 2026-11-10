@@ -38,10 +38,10 @@ pub(crate) fn validate(
             }
             ObjectRole::FileState => super::mapping::state(canonical, &reader).map(|_| ()),
             ObjectRole::InodeLeaf | ObjectRole::InodeBranch => {
-                super::inode::page(canonical, &reader, policy, inode_scope, root_serial)
+                super::inode::page(canonical, &reader, policy, inode_scope, Some(root_serial))
             }
             ObjectRole::DirectoryLeaf | ObjectRole::DirectoryBranch => {
-                super::namespace::directory(canonical, &reader, inode_scope, root_serial)
+                super::namespace::directory(canonical, &reader, inode_scope, Some(root_serial))
             }
             ObjectRole::AttributeLeaf | ObjectRole::AttributeBranch => {
                 super::namespace::attributes(canonical, &reader)
@@ -51,4 +51,36 @@ pub(crate) fn validate(
             }
         }
     })
+}
+
+/// Checks stored children without inventing a surviving namespace context.
+pub(crate) fn validate_unbound(
+    object: &FinalizedObject,
+    provider: &dyn AuthenticatedObjects,
+    policy: ConstructionPolicy,
+    timing: TimingScope<'_>,
+) -> ContentResult<()> {
+    let scope = InodeScope::from_object(crate::ObjectId::for_bytes(b"unbound-stored-object"));
+    match object.role() {
+        ObjectRole::InodeLeaf | ObjectRole::InodeBranch => timing.run(|active| {
+            let reader = super::read::Reader::new(provider, active);
+            super::inode::page(object.canonical(), &reader, policy, scope, None)
+        }),
+        ObjectRole::DirectoryLeaf | ObjectRole::DirectoryBranch => timing.run(|active| {
+            let reader = super::read::Reader::new(provider, active);
+            super::namespace::directory(object.canonical(), &reader, scope, None)
+        }),
+        ObjectRole::FilesystemRoot => {
+            let root = crate::filesystem::FilesystemRoot::decode(object.canonical())?;
+            validate(
+                object,
+                provider,
+                policy,
+                root.scope(),
+                root.root_inode().serial(),
+                timing,
+            )
+        }
+        _ => validate(object, provider, policy, scope, 1, timing),
+    }
 }

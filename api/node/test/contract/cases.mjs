@@ -171,4 +171,15 @@ export const steps = [
   ok("projects", "flow", "project.list", []),
   ok("stores", "flow", "store.list", []),
   ok("doctor", "flow", "doctor", [], {}, { check: (v) => assert.equal(typeof v.ok, "boolean") }),
+
+  // --- project.export: a fresh directory, the default and an explicit Branch, and refusals
+  ok("export main", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-main`], {}, {
+    check: (v) => assert.deepEqual([v.branch, v.files, v.directories, v.symlinks], ["main", 1, 0, 0]),
+  }),
+  ok("export merged", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-merged`], { branch: "merged" }, {
+    check: (v) => assert.equal(v.branch, "merged"),
+  }),
+  bad("export nonempty", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-main`], "NotEmpty"),
+  bad("export commit option", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-commit`], "InvalidInput", { commit: "main" }, { cli: "usage" }),
+  bad("export absent branch", "export", "project.export", (ctx) => [P, `${ctx.folder}-export-absent`], "NoSuchBranch", { branch: "absent" }),
 ];

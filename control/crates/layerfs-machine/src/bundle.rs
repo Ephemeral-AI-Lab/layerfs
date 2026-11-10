@@ -23,17 +23,7 @@ pub fn bundle_dir(os: &str) -> Result<PathBuf, SdkRefusal> {
             return Ok(PathBuf::from(dir));
         }
     }
-    let cache = match std::env::var_os("XDG_CACHE_HOME").filter(|d| !d.is_empty()) {
-        Some(dir) => PathBuf::from(dir),
-        None => std::env::var_os("HOME")
-            .map(|home| PathBuf::from(home).join(".cache"))
-            .ok_or_else(|| {
-                refused(
-                    "InvalidInput",
-                    "HOME is unset, so the user cache is unknown",
-                )
-            })?,
-    };
+    let cache = cache_root()?;
     Ok(cache
         .join("layerfs")
         .join("bundle")
@@ -61,5 +51,95 @@ pub fn bundle() -> Result<Bundle, SdkRefusal> {
             )]);
             refusal
         })?;
+    let manifest = layerfs_home::home::read_record(&dir.join("bundle.json"))?;
+    if let Some(manifest) = manifest {
+        if let Some(protocol) = manifest.get("protocol") {
+            if protocol != &layerfs_bridge::control::SdkValue::Int(crate::worker::PROTOCOL) {
+                return Err(refused("Unavailable", format!(
+                    "the Linux bundle at {} has an incompatible worker protocol; rebuild it with `python3 tools/linux_bundle.py` before starting a machine (expected protocol {})",
+                    dir.display(), crate::worker::PROTOCOL)));
+            }
+        }
+        if let Some(platform) = manifest.get_text("platform") {
+            if platform != format!("linux-{}", std::env::consts::ARCH) {
+                return Err(refused(
+                    "Unsupported",
+                    format!(
+                        "the Linux bundle is for {platform}, not linux-{}",
+                        std::env::consts::ARCH
+                    ),
+                ));
+            }
+        }
+    }
     Ok(Bundle { dir, hash })
+}
+
+/// The user's cache root, shared by all homes and bundle overrides.
+pub fn cache_root() -> Result<PathBuf, SdkRefusal> {
+    match std::env::var_os("XDG_CACHE_HOME").filter(|d| !d.is_empty()) {
+        Some(dir) => Ok(PathBuf::from(dir)),
+        None => std::env::var_os("HOME")
+            .map(|home| PathBuf::from(home).join(".cache"))
+            .ok_or_else(|| {
+                refused(
+                    "InvalidInput",
+                    "HOME is unset, so the user cache is unknown",
+                )
+            }),
+    }
+}
+
+/// A locally prepared, provider-specific OS image for this Sandbox content.
+/// Preparation is explicit; an absent mapping keeps the provider's stock image.
+/// An invalid or incompatible mapping is refused rather than silently bypassed.
+#[cfg(feature = "machine")]
+pub fn prepared_os_image(
+    kind: layerfs_platform::Platform,
+    bundle: &Bundle,
+) -> Result<Option<String>, SdkRefusal> {
+    use layerfs_bridge::control::SdkValue;
+    use layerfs_home::home::read_record;
+    use layerfs_platform::Platform;
+    if !matches!(kind, Platform::Lima | Platform::AppleContainer) {
+        return Ok(None);
+    }
+    let manifest = read_record(&bundle.dir.join("bundle.json"))?;
+    let Some(content) = manifest.as_ref().and_then(|m| m.get_text("image")) else {
+        return Ok(None);
+    };
+    let Some(hex) = content
+        .strip_prefix("sha256:")
+        .filter(|s| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+    else {
+        return Err(refused("InvalidInput", "the bundle image ID is not sha256"));
+    };
+    let platform = format!("linux-{}", std::env::consts::ARCH);
+    let path = cache_root()?
+        .join("layerfs/machine-images")
+        .join(kind.name())
+        .join(&platform)
+        .join(hex)
+        .join("current.json");
+    let Some(prepared) = read_record(&path)? else {
+        return Ok(None);
+    };
+    if prepared.get_int("version") != Some(1)
+        || prepared.get_int("protocol") != Some(crate::worker::PROTOCOL)
+        || prepared.get_text("platform") != Some(platform.as_str())
+        || prepared.get_text("image") != Some(content)
+        || prepared.get_text("provider") != Some(kind.name())
+        || prepared.get("sanitized") != Some(&SdkValue::Bool(true))
+    {
+        return Err(refused("Unavailable", format!("the prepared machine image mapping {} is incompatible or unsanitized; rebuild it with tools/machine_image.py", path.display())));
+    }
+    let image = prepared
+        .get_text("os_image")
+        .ok_or_else(|| refused("InvalidInput", "the prepared image mapping has no os_image"))?;
+    if kind == Platform::Lima
+        && (!std::path::Path::new(image).is_absolute() || !std::path::Path::new(image).is_file())
+    {
+        return Err(refused("Unsupported", format!("the prepared Lima image {image} is missing; rebuild it with tools/machine_image.py")));
+    }
+    Ok(Some(image.to_owned()))
 }

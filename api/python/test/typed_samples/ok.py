@@ -23,6 +23,11 @@ def sync_flow() -> None:
     lfs.project.init("shop/api", "/src/api", on_progress=on_progress, timeout=60)
     lfs.branch.fork("shop/api", "agent", "main")
     lfs.branch.fork(project="shop/api", name="agent", from_branch="main", from_commit=None)
+    lfs.branch.commits("shop/api", "agent", page=1, page_size=50, at_commit="saved-id")
+    lfs.branch.get_commit("shop/api", "main", "layer-id")
+    lfs.branch.diff("shop/api", "main", "agent", from_commit="layer-id", to_commit="saved-id", include_attribution=True, page=1)
+    lfs.file.revision("shop/api", "agent", "/README.md", at_commit="saved-id", page=1, page_size=10)
+    lfs.file.diff("shop/api", "main", "/README.md", "agent", "/README.md", include_attribution=True, allow_missing=True, page=1)
     lfs.file.write("shop/api", "agent", "/a.bin", b"\x00\xff", message="bytes")
     lfs.file.write("shop/api", "agent", "/a.txt", "text\n")
     text = lfs.file.read("shop/api", "agent", "/a.txt", start_line=2)["text"]
@@ -32,6 +37,9 @@ def sync_flow() -> None:
     lfs.machine.create("box", "docker", memory="2G", cpus=2)
     lfs.workspace.exec("ws", "ls", stdout=on_output, stderr=on_output, stream=False)
     lfs.backup.create("shop", "bucket", on_progress=on_progress)
+    lfs.project.export("shop/api", "/exports/api", branch="main", on_progress=on_progress)
+    lfs.project.export("shop/api", "/exports/api-default")
+    lfs.workspace.exec_cancel("ws", "exec-0123456789abcdef", grace_ms=1000)
     try:
         lfs.sandbox.close("s1", force=True)
     except layerfs.LayerFSError as error:
@@ -52,10 +60,15 @@ async def async_flow() -> None:
     lfs = aio.client(home="/data/lfs")
     await lfs.store.create("shop")
     await lfs.project.init("shop/api", "/src/api", on_progress=on_progress)
+    await lfs.branch.commits("shop/api", "main", page=1, page_size=10)
+    await lfs.branch.get_commit("shop/api", "agent", "saved-id")
+    await lfs.file.revision("shop/api", "agent", "/README.md", at_commit="saved-id", page=1)
     listed = await lfs.project.list("shop", page_size=10)
     print(listed["items"])
     await asyncio.gather(lfs.store.create("a"), lfs.store.create("b"))
     await lfs.workspace.exec("ws", "ls", stdout=on_output)
+    await lfs.project.export("shop/api", "/exports/api", branch="agent", on_progress=on_progress)
+    await lfs.workspace.exec_cancel("ws", "exec-0123456789abcdef")
     await aio.store.push("shop", "machine", on_progress=on_progress)
     try:
         await aio.file.stat("shop/api", "main", "/a")

@@ -11,7 +11,7 @@ may be `main`), with line hunks unless asked for paths only.
 | --- | --- |
 | Family | [branch](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/branch/diff.rs`](../../../../../api/crates/layerfs-api/src/branch/diff.rs) |
-| Implemented in | `layerfs_store::calls::branch_diff` → Store method `branch.diff_branches` ([`methods/branch/diff_branches.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/diff_branches.rs), [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs)) |
+| Implemented in | `layerfs_store::calls::branch::diff` → Store method `branch.diff_branches` ([`methods/branch/diff_branches.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/diff_branches.rs), [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs)) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -44,7 +44,7 @@ layerfs branch diff <store>/<project> <from_branch> <to_branch> \
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `paths_only` | Bool | false | sent as `hunks = !paths_only` | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) `diff_options` |
+| `paths_only` | Bool | false | sent as `hunks = !paths_only` | [`calls/branch.rs`](../../../../../control/crates/layerfs-store/src/calls/branch.rs) `StoreOp::DiffBranches` (options forwarded by `calls/op.rs`) |
 | `page_size` | Int | 50 | 1..=1000 | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
 | `page_pos` | Int | 0 | offset from the last page's `next_page_pos` | same |
 | `cursor` | Text | none | the last page's `next_cursor` (a path); resumes after it | [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs) |
@@ -124,3 +124,61 @@ layerfs branch diff shop/api main agent --paths-only
 ---
 
 ← [branch.publish](publish.md) · [Up: branch](README.md) · [SDK: commit](../commit/README.md) →
+
+## Pinned saved endpoints and attribution
+
+Optional `from_commit` and `to_commit` select full Commit or Layer IDs through
+those branch contexts. All Commit/Layer combinations work; the response `from`
+and `to` are full typed references `{id,kind,branch,root}` in the extended query
+mode. Pin their IDs for subsequent file reads/comparisons and result pages.
+
+`page` selects one-based matching-result pages with `page_size`. New endpoint,
+`path_prefix` or `include_attribution` options also select this mode; legacy
+`page_pos`/`cursor` cannot be mixed into it. Old branch-only calls keep their
+legacy response and paging behavior. `path_prefix` matches full path components.
+
+`include_attribution:true` discovers equal-content files whose aligned unchanged
+lines have different known owners. Full namespace traversal avoids equal-root
+pruning in this opt-in mode. Independent `attribution`, `attribution_coverage`
+and `changed_owner_lines` accompany content/metadata/identity flags. Unknown
+provenance remains null and is included as an unresolved candidate, not silently
+classified unchanged. Returned-page `coverage.complete` discloses unknown path owners;
+`scan.complete` concerns completion of the mandatory matching-result page.
+Publication alone retains source Commit ownership.
+
+Mandatory path summaries and seeking are bounded. The query refuses `Capacity`
+when the requested page cannot complete within work/reply budgets; no paths are
+silently skipped by page advancement. Text hunks which do not fit the path
+summary are explicitly omitted; use `file.diff` at the same endpoints for the
+bounded content/attribution view. Folder-scope refusal remains unchanged.
+See [shared saved-query contract](../saved-queries.md).
+
+Sequential numbered comparisons cache at most 128 weak-Store-keyed path
+boundaries, qualified by both saved IDs, path prefix, attribution/hunk options and
+page size. Namespace walks resume with indexed name boundaries instead of
+replaying all earlier names. Cache eviction changes cost, never the matching
+result definition. Request-level content comparison and attribution payload
+admission are each bounded to 64 MiB; exhaustion refuses the mandatory page.
+The cumulative provenance work budget is shared across paths. Inherent binary,
+coarse or unavailable ownership remains explicitly unknown; query-budget
+exhaustion never changes membership into a successful sparse result page.
+
+## Stateless continuation
+
+Optional `continuation` (CLI `--continuation TOKEN`) resumes the next matching
+page in a new process. A page with more results returns a non-null
+`continuation`; the last page returns null. Repeat the same immutable pin(s),
+Branch context(s), path/filter, traversal or attribution/hunk options, and
+`page_size`. Keep the saved IDs returned by the first page: a changed live
+head is a different query. Omit `page` on resume, or send the token's next page
+number; another page number is `InvalidInput`. Legacy cursor/page_pos options
+cannot be combined with numbered continuation.
+
+The opaque `lfq1` token is authenticated with the Store's existing cursor
+capability and binds catalog/incarnation, saved id(s), the query and next
+position. Mismatched or tampered tokens are `InvalidInput`. No server session
+or process cache is required. Resuming seeks from the saved path boundary
+(comparison) or next immutable history node (revision), without replaying
+previous result pages. Normal per-request work/content/reply bounds remain;
+a page that exceeds them is still `Capacity`. The bounded token payload
+(4 KiB before hex encoding) also participates in reply admission.

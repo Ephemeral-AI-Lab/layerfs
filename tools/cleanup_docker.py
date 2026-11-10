@@ -15,10 +15,26 @@ def inspect(name):
     return json.loads(run(["docker", "container", "inspect", name]).stdout)[0]
 
 
+def _mount_key(mount):
+    fields = tuple(str(mount.get(key) or "") for key in ("Type", "Name", "Source", "Destination"))
+    return fields + (json.dumps(mount, sort_keys=True),)
+
+
+def normalized(recorded):
+    # Docker reports Mounts in no fixed order, so compare them as a set.
+    return recorded | {"Mounts": sorted(recorded.get("Mounts") or [], key=_mount_key)}
+
+
 def identity(info):
-    return {key: info[key] for key in ("Id", "Created", "Image", "Config", "Mounts")} | {
-        "state": {key: info["State"][key] for key in ("Status", "Running", "StartedAt", "FinishedAt")}
-    }
+    return normalized(
+        {key: info[key] for key in ("Id", "Created", "Image", "Config", "Mounts")}
+        | {"state": {key: info["State"][key] for key in ("Status", "Running", "StartedAt", "FinishedAt")}}
+    )
+
+
+def same(recorded, current):
+    """Compare identities; also accepts plans recorded before Mounts were sorted."""
+    return normalized(recorded) == normalized(current)
 
 
 def guard(info, action, scope):
@@ -47,7 +63,7 @@ def guard(info, action, scope):
 def retire(action, scope, output, pass_id, record_event, repo=None):
     info = inspect(action["name"])
     guard(info, action, scope)
-    if identity(info) != action["identity"]:
+    if not same(action["identity"], identity(info)):
         raise Refused("Container identity or execution state changed since plan")
     dest = output / ("container-" + info["Id"][:12])
     dest.mkdir(mode=0o700)
@@ -116,7 +132,7 @@ def retire(action, scope, output, pass_id, record_event, repo=None):
     record_event(output, state="archived", action=action, recovery=recovery)
     current = inspect(info["Id"])
     guard(current, action, scope)
-    if identity(current) != stopped:
+    if not same(stopped, identity(current)):
         raise Refused("Container changed during recovery capture")
     record_event(output, state="removing", action=action, recovery=recovery)
     run(["docker", "rm", info["Id"]])
