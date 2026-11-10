@@ -87,6 +87,7 @@ pub fn exec(home: &Path, events: &mut Events<'_>, request: &ExecRequest) -> Answ
         call,
         message: request.message.clone(),
         image: None,
+        image_archive: None,
     };
     let out = match &running {
         // the worker tells when the command started: its stop handle is

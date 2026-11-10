@@ -36,6 +36,11 @@ mod get;
 #[doc(hidden)]
 pub mod host;
 #[doc(hidden)]
+pub mod image_artifact;
+mod image_choice;
+#[doc(hidden)]
+pub mod images;
+#[doc(hidden)]
 pub mod launch;
 #[doc(hidden)]
 pub mod lifecycle;

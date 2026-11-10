@@ -7,6 +7,7 @@ use super::{
     PATH_MAX,
 };
 use crate::{json::Json, Image, RuntimeError};
+use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     fs::{self, File, OpenOptions},
@@ -26,6 +27,7 @@ const LAYERS_MAX: usize = 1024;
 struct Manifest {
     config: PathBuf,
     layers: Vec<PathBuf>,
+    tags: Vec<String>,
 }
 
 /// Where one blob of the archive is: the offset its bytes start at, and how
@@ -102,7 +104,7 @@ pub fn holds(archive: &Path, image: &Image) -> Result<(), RuntimeError> {
 
 /// The archive's `manifest.json`, as the entry whose config digest is
 /// `image`, or with no `image` its one entry.
-fn manifest(archive: &Path, image: Option<&Image>) -> Result<Manifest, RuntimeError> {
+fn manifest_bytes(archive: &Path) -> Result<Vec<u8>, RuntimeError> {
     let located = locate(archive, &[PathBuf::from("manifest.json")])?;
     let blob = located
         .first()
@@ -112,23 +114,253 @@ fn manifest(archive: &Path, image: Option<&Image>) -> Result<Manifest, RuntimeEr
     if blob.size > MANIFEST_MAX as u64 {
         return Err(refuse("the image archive's manifest.json is too long"));
     }
-    read_blob(archive, blob, MANIFEST_MAX).and_then(|bytes| parse_manifest(&bytes, image))
+    read_blob(archive, blob, MANIFEST_MAX)
 }
 
-/// Reads `manifest.json` and keeps the entry whose config digest is `image`,
-/// or with no `image` the one entry it must hold.
-fn parse_manifest(bytes: &[u8], image: Option<&Image>) -> Result<Manifest, RuntimeError> {
-    let mut found: Option<Manifest> = None;
-    let mut named: Vec<String> = Vec::new();
-    let mut entries = 0usize;
+/// One selectable image in a Docker-save archive.
+#[derive(Debug)]
+pub struct ImageEntry {
+    /// Docker image config digest, accepted by Sandbox creation.
+    pub digest: Image,
+    /// Repository tags carried in the archive, used only for display.
+    pub tags: Vec<String>,
+    /// Operating system from the verified config blob.
+    pub os: Option<String>,
+    /// CPU architecture from the verified config blob.
+    pub architecture: Option<String>,
+}
+
+/// Enumerates an archive without extracting its layers. Every advertised
+/// image has a valid config identity and all referenced blobs present.
+pub fn images(archive: &Path) -> Result<Vec<ImageEntry>, RuntimeError> {
+    let manifests = parse_manifests(&manifest_bytes(archive)?)?;
+    let mut images = Vec::new();
+    for manifest in manifests {
+        let digest = config_image(&manifest.config)?;
+        let mut wanted = vec![manifest.config];
+        wanted.extend(manifest.layers);
+        let blobs = locate(archive, &wanted)?;
+        let config_blob = blobs[0].expect("located config");
+        let metadata = config_metadata(archive, config_blob, &digest)?;
+        for blob in blobs.iter().skip(1).flatten() {
+            compatible_layer(archive, *blob)?;
+        }
+        images.push(ImageEntry {
+            digest,
+            tags: manifest.tags,
+            os: metadata.os,
+            architecture: metadata.architecture,
+        });
+    }
+    Ok(images)
+}
+
+/// Validates a user-provided archive before publication: config identity,
+/// uncompressed layer identities and the config's rootfs reference closure.
+/// This scans layer bytes once on import, never during read-only inventory.
+pub fn validate_import(archive: &Path) -> Result<(), RuntimeError> {
+    let manifests = parse_manifests(&manifest_bytes(archive)?)?;
+    if manifests.is_empty() {
+        return Err(refuse("image archive contains no images"));
+    }
+    for manifest in manifests {
+        let digest = config_image(&manifest.config)?;
+        let mut wanted = vec![manifest.config];
+        wanted.extend(manifest.layers);
+        let blobs = locate(archive, &wanted)?;
+        let metadata = config_metadata(archive, blobs[0].expect("located config"), &digest)?;
+        if !metadata.has_rootfs || metadata.rootfs_type.as_deref() != Some("layers") {
+            return Err(refuse(
+                "image config requires rootfs type layers and diff_ids",
+            ));
+        }
+        if metadata.diff_ids.len() != blobs.len() - 1 {
+            return Err(refuse(
+                "image config rootfs.diff_ids does not match its layer count",
+            ));
+        }
+        for (blob, expected) in blobs.into_iter().skip(1).zip(metadata.diff_ids) {
+            let blob = blob.expect("located layer");
+            compatible_layer(archive, blob)?;
+            if hash_blob(archive, blob)? != expected {
+                return Err(refuse(
+                    "image layer SHA256 does not match config rootfs.diff_ids",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+#[derive(Default)]
+struct ConfigMetadata {
+    os: Option<String>,
+    architecture: Option<String>,
+    diff_ids: Vec<String>,
+    has_rootfs: bool,
+    rootfs_type: Option<String>,
+}
+
+fn config_metadata(
+    archive: &Path,
+    blob: Blob,
+    expected: &Image,
+) -> Result<ConfigMetadata, RuntimeError> {
+    let bytes = read_blob(archive, blob, MANIFEST_MAX)?;
+    let actual = digest_text(Sha256::digest(&bytes).as_ref());
+    if actual != expected.as_str() {
+        return Err(refuse(
+            "image config SHA256 does not match its advertised digest",
+        ));
+    }
+    let mut metadata = ConfigMetadata::default();
+    let mut json = Json::new(bytes.as_slice());
+    let mut seen = 0;
+    json.object(|reader, key| {
+        match key.text() {
+            "os" | "architecture" => {
+                let bit = if key.text() == "os" { 1 } else { 2 };
+                crate::json::once(&mut seen, bit)?;
+                let mut text = Vec::new();
+                reader.text_into(&mut text, PATH_MAX)?;
+                let text = String::from_utf8(text)
+                    .map_err(|_| refuse("image config text is not UTF-8"))?;
+                if bit == 1 {
+                    metadata.os = Some(text);
+                } else {
+                    metadata.architecture = Some(text);
+                }
+            }
+            "rootfs" => {
+                crate::json::once(&mut seen, 4)?;
+                let mut fields = 0;
+                reader.object(|reader, key| {
+                    if key.text() == "type" {
+                        crate::json::once(&mut fields, 2)?;
+                        let mut text = Vec::new();
+                        reader.text_into(&mut text, PATH_MAX)?;
+                        metadata.rootfs_type = Some(
+                            String::from_utf8(text)
+                                .map_err(|_| refuse("image rootfs type is not UTF-8"))?,
+                        );
+                        Ok(())
+                    } else if key.text() == "diff_ids" {
+                        metadata.has_rootfs = true;
+                        crate::json::once(&mut fields, 1)?;
+                        reader.array(|reader| {
+                            if metadata.diff_ids.len() == LAYERS_MAX {
+                                return Err(refuse("too many image diff_ids"));
+                            }
+                            let mut text = Vec::new();
+                            reader.text_into(&mut text, PATH_MAX)?;
+                            let text = String::from_utf8(text)
+                                .map_err(|_| refuse("image diff_id is not UTF-8"))?;
+                            Image::parse(&text)?;
+                            metadata.diff_ids.push(text);
+                            Ok(())
+                        })
+                    } else {
+                        reader.skip(0)
+                    }
+                })?;
+            }
+            _ => reader.skip(0)?,
+        }
+        Ok(())
+    })?;
+    json.finish()?;
+    Ok(metadata)
+}
+
+fn hash_blob(archive: &Path, blob: Blob) -> Result<String, RuntimeError> {
+    let mut file = open(archive)?;
+    file.seek(SeekFrom::Start(blob.offset))?;
+    let mut input = file.take(blob.size);
+    let mut hash = Sha256::new();
+    let mut buffer = [0; 64 * 1024];
+    let mut total = 0;
+    loop {
+        let count = input.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        total += count as u64;
+        hash.update(&buffer[..count]);
+    }
+    if total != blob.size {
+        return Err(refuse("truncated image blob"));
+    }
+    Ok(digest_text(hash.finalize().as_ref()))
+}
+
+fn digest_text(bytes: &[u8]) -> String {
+    let mut text = String::with_capacity(71);
+    text.push_str("sha256:");
+    for byte in bytes {
+        use std::fmt::Write;
+        write!(&mut text, "{byte:02x}").expect("writing a String");
+    }
+    text
+}
+
+fn compatible_layer(archive: &Path, blob: Blob) -> Result<(), RuntimeError> {
+    let mut file = open(archive)?;
+    file.seek(SeekFrom::Start(blob.offset))?;
+    match magic(&mut file)? {
+        Magic::Tar => Ok(()),
+        Magic::Gzip | Magic::Zstd => {
+            Err(refuse("image layers must be uncompressed docker-save tars"))
+        }
+    }
+}
+
+fn config_image(config: &Path) -> Result<Image, RuntimeError> {
+    let name = config
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| refuse("the image archive's config name"))?;
+    Image::parse(&format!(
+        "sha256:{}",
+        name.strip_suffix(".json").unwrap_or(name)
+    ))
+}
+
+fn manifest(archive: &Path, image: Option<&Image>) -> Result<Manifest, RuntimeError> {
+    let manifests = parse_manifests(&manifest_bytes(archive)?)?;
+    let named = manifests
+        .iter()
+        .take(8)
+        .map(|entry| entry.config.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let count = manifests.len();
+    match image {
+        None if count != 1 => Err(refuse(format!(
+            "the image archive names {count} images ({named}); give the Sandbox's image digest"
+        ))),
+        None => Ok(manifests.into_iter().next().expect("one image")),
+        Some(image) => manifests.into_iter()
+            .find(|entry| check_config(image, &entry.config).is_ok())
+            .ok_or_else(|| refuse(format!(
+                "the image archive's config digest is {named}, not the requested {}: the bundle does not hold that image",
+                image.as_str()
+            ))),
+    }
+}
+
+/// Reads the shared creation/inventory manifest shape, preserving tags only
+/// as labels. Unknown fields are streamed past without retaining them.
+fn parse_manifests(bytes: &[u8]) -> Result<Vec<Manifest>, RuntimeError> {
+    let mut manifests = Vec::new();
     let mut json = Json::new(bytes);
     json.array(|element| {
         let mut config: Option<Vec<u8>> = None;
         let mut layers: Option<Vec<Vec<u8>>> = None;
+        let mut tags = Vec::new();
         let mut seen: u8 = 0;
         element.object(|reader, key| {
             if key.overflow {
-                return Ok(());
+                return reader.skip(0);
             }
             match key.text() {
                 "Config" => {
@@ -151,50 +383,41 @@ fn parse_manifest(bytes: &[u8], image: Option<&Image>) -> Result<Manifest, Runti
                     })?;
                     layers = Some(items);
                 }
+                "RepoTags" => {
+                    crate::json::once(&mut seen, 4)?;
+                    if !reader.null()? {
+                        reader.array(|entry| {
+                            let mut text = Vec::new();
+                            entry.text_into(&mut text, PATH_MAX)?;
+                            tags.push(
+                                String::from_utf8(text)
+                                    .map_err(|_| refuse("image tag is not UTF-8"))?,
+                            );
+                            Ok(())
+                        })?;
+                    }
+                }
                 _ => reader.skip(0)?,
             }
             Ok(())
         })?;
         let (Some(config), Some(layers)) = (config, layers) else {
-            return Ok(());
+            return Err(refuse("the image archive entry needs Config and Layers"));
         };
         let config = path_of(&config)?;
-        entries += 1;
-        if named.len() < 8 {
-            named.push(config.display().to_string());
-        }
-        if found.is_none() && image.is_none_or(|image| check_config(image, &config).is_ok()) {
-            found = Some(Manifest {
-                config,
-                layers: (layers.iter())
-                    .map(|layer| path_of(layer))
-                    .collect::<Result<Vec<_>, _>>()?,
-            });
-        }
+        config_image(&config)?;
+        manifests.push(Manifest {
+            config,
+            layers: layers
+                .iter()
+                .map(|layer| path_of(layer))
+                .collect::<Result<Vec<_>, _>>()?,
+            tags,
+        });
         Ok(())
     })?;
     json.finish()?;
-    let Some(image) = image else {
-        return match (entries, found) {
-            (1, Some(manifest)) => Ok(manifest),
-            _ => Err(refuse(format!(
-                "the image archive names {entries} images ({}); give the Sandbox's image digest",
-                named.join(", ")
-            ))),
-        };
-    };
-    found.ok_or_else(|| {
-        refuse(format!(
-            "the image archive's config digest is {}, not the requested {}: the bundle does not \
-             hold that image",
-            if named.is_empty() {
-                "missing".to_owned()
-            } else {
-                named.join(", ")
-            },
-            image.as_str()
-        ))
-    })
+    Ok(manifests)
 }
 
 /// The config digest check: the archive names its config blob by that digest

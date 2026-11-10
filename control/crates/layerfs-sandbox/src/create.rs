@@ -25,6 +25,8 @@ pub struct CreateRequest {
     pub machine: Option<String>,
     /// The image a namespaces Sandbox runs.
     pub image: Option<String>,
+    /// A caller-local docker archive, transferred to the selected machine.
+    pub image_archive: Option<String>,
 }
 
 /// A Sandbox just started, as recorded.
@@ -140,6 +142,7 @@ pub fn create(
         call: Call::Create { platform: None },
         message: Message::Absent,
         image: request.image.clone(),
+        image_archive: request.image_archive.clone(),
     };
     let started = on_machine(&home, events, &record, asked, crate::dispatch::call)
         .map(|value| Started::read(&value));

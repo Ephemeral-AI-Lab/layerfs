@@ -1,4 +1,4 @@
-//! The call table and its dispatcher (#533 step 2): 70 calls in ten
+//! The call table and its dispatcher (#533 step 2): 71 calls in ten
 //! families, arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::{families, json, keys, size, Call, Kind};
@@ -51,9 +51,9 @@ fn code(name: &str, args: SdkValue) -> String {
 }
 
 #[test]
-fn the_table_has_ten_families_and_70_calls() {
+fn the_table_has_ten_families_and_71_calls() {
     let all: Vec<&Call> = layerfs_api::calls();
-    assert_eq!(all.len(), 70);
+    assert_eq!(all.len(), 71);
     // each family holds only its own calls, and has at least one
     for family in families() {
         assert!(!family.calls().is_empty(), "{}", family.name);
@@ -66,7 +66,7 @@ fn the_table_has_ten_families_and_70_calls() {
     let mut names: Vec<_> = all.iter().map(|c| c.name()).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 70, "call names are unique");
+    assert_eq!(names.len(), 71, "call names are unique");
     // an optional positional is only ever followed by optional ones (D7)
     for c in &all {
         let first_optional = c.args.iter().position(|a| a.optional);
@@ -75,7 +75,7 @@ fn the_table_has_ten_families_and_70_calls() {
         }
     }
     let counts: Vec<usize> = families().iter().map(|f| f.calls().len()).collect();
-    assert_eq!(counts, [6, 8, 3, 15, 4, 6, 9, 12, 5, 2]);
+    assert_eq!(counts, [6, 8, 3, 15, 4, 6, 10, 12, 5, 2]);
 }
 
 #[test]
@@ -399,4 +399,15 @@ fn the_source_is_one_file_per_call_under_its_family() {
         files.sort();
         assert_eq!(names(&src.join(family.name)), files, "{}", family.name);
     }
+}
+
+#[cfg(all(feature = "machine", target_os = "macos"))]
+#[test]
+fn native_machine_images_reports_host_userland_without_a_bundle() {
+    let (outcome, events) = run("machine.images", map(&[("name", t("native"))]));
+    let result = outcome.unwrap();
+    assert_eq!(result.get_text("mode"), Some("host"));
+    assert_eq!(result.get("default_digest"), Some(&SdkValue::Null));
+    assert_eq!(result.get("images"), Some(&SdkValue::List(vec![])));
+    assert!(events.is_empty());
 }

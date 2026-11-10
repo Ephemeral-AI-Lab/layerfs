@@ -212,6 +212,7 @@ fn run(
                     .collect(),
             ))
         }
+        "machine.images" => layerfs_sandbox::images::in_worker(root, args),
         "doctor.sandbox" => crate::doctor::diagnose_worker_sandbox(root, args),
         "store.diagnose" => crate::doctor::diagnose_store_in_worker(root, args, events),
         // `store.attach`'s check of this machine's connection to a
@@ -255,6 +256,15 @@ fn run(
             )
         }
         // a Sandbox or Workspace operation on this machine's own native
+        "image.artifact" => {
+            if args.get_text("step") == Some("publish") {
+                events(SdkValue::map([(
+                    "progress",
+                    SdkValue::map([("phase", SdkValue::text("image-verification"))]),
+                )]))?;
+            }
+            layerfs_sandbox::image_artifact::in_worker(root, &args)
+        }
         "sandbox.host" => layerfs_sandbox::route::in_worker(
             root,
             layerfs_sandbox::host::decode(&args)?,

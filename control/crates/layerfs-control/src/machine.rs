@@ -63,3 +63,8 @@ pub fn remove(home: &Path, name: &MachineName) -> Outcome {
 pub fn update(home: &Path, request: &MachineUpdate) -> Outcome {
     layerfs_machine::update(home, request, RELATED)
 }
+
+/// `machine.images`: selectable Sandbox images on this machine.
+pub fn images(home: &Path, name: &MachineName) -> Outcome {
+    layerfs_sandbox::images::list(home, name)
+}

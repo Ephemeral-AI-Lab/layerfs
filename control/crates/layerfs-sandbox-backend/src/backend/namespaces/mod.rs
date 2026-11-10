@@ -29,7 +29,6 @@ mod host;
 mod paths;
 #[cfg(target_os = "linux")]
 mod provider;
-#[cfg(target_os = "linux")]
 pub mod rootfs;
 #[cfg(target_os = "linux")]
 mod sandbox;

@@ -1,6 +1,7 @@
-//! The `machine` family: 9 calls, one file each (O11: update; #535: platforms, start, stop).
+//! The `machine` family: 10 calls, one file each (O11: update; #535: platforms, start, stop).
 mod create;
 mod get;
+mod images;
 mod list;
 mod platforms;
 mod remove;
@@ -17,6 +18,7 @@ pub(crate) fn calls() -> Calls {
         list::CALL,
         platforms::CALL,
         get::CALL,
+        images::CALL,
         status::CALL,
         start::CALL,
         stop::CALL,
