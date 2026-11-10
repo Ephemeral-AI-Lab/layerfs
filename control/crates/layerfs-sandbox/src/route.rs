@@ -265,12 +265,13 @@ fn host_op(
     // the Sandbox's name is its identity on every machine
     let sandbox = Some(record.name().to_owned());
     // the call's image (sandbox.create) else the Sandbox's own travels in
-    // the deploy settings, never as a top-level argument
+    // the deploy settings, never as a top-level argument. A native host
+    // Sandbox records `local`, which is a runtime marker, not an image.
     let image = match image {
         Some(text) => Some(text),
         _ => record
             .image()
-            .filter(|_| op != Op::SandboxCreate)
+            .filter(|image| op != Op::SandboxCreate && crate::image_artifact::digest(image))
             .map(str::to_owned),
     };
     let kind = target.store_ref.kind();
