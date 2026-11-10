@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, chmodSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import layerfs, { client, table, families, LayerFSError } from "../src/index.js";
+import layerfs, { client, close, table, families, LayerFSError } from "../src/index.js";
 
 const temp = (tag) => {
   const dir = mkdtempSync(join(tmpdir(), `layerfs-node-${tag}-`));
@@ -16,7 +16,9 @@ const temp = (tag) => {
 
 test("the table: nine families, 64 calls, each a function", () => {
   assert.deepEqual(families, ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup"]);
-  assert.equal(table.length, 64);
+  // the shipped table counts 66 (file grew to 15); the pin was stale because
+  // layerfs-node stays out of upstream CI - synced to the table this tree builds
+  assert.equal(table.length, 66);
   for (const spec of table) assert.equal(typeof layerfs[spec.family][spec.call], "function", `${spec.family}.${spec.call}`);
 });
 
@@ -74,6 +76,8 @@ test("a Store, an Init with progress, files, Branches and a folder scope", async
   await assert.rejects(scoped.file.stat("shop/other", "main", "/web/a.bin"), /out of scope: project/);
   await assert.rejects(client({ home, scope: { folder: "/web" } }).store.list(), /scope.project/);
   await assert.rejects(client({ home, scope: { project: "shop/api", folder: "web" } }).file.stat("shop/api", "main", "/web"), /canonical/);
+  // Windows cannot remove a Store its process still holds open; close first
+  await close();
   rmSync(home, { recursive: true, force: true });
   rmSync(folder, { recursive: true, force: true });
 });
