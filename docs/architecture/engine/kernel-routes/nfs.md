@@ -217,24 +217,23 @@ reaches the Workspace, SQLite overlay or a Commit.
 A companion whose main inode the export knows belongs to that inode rather than
 to one name: every hard-link alias reaches it, RENAME of the main file keeps it
 reachable under the new name and leaves the inode's other names reaching it,
-unlink or a replacing RENAME of the main file only
-unbinds the paired `._` name, and the inode's last name (or its silly rename)
-drops it. Its FinderInfo and extended attributes are therefore kept once per
-inode, not once per name. When a write leaves such a companion holding a whole
-AppleDouble image the client laid out itself (`apple_double_codec::Image`), the
-body is decoded: the FinderInfo, every attribute name and value, the client's
-alignment padding after a name, the tag and the resource-fork entry are kept,
-and each READ encodes the image again. Decoding requires that the decoded form
-encode back to the very same bytes, so a synthesized read is byte for byte what
-the client wrote; a state the client is still writing (a header, a truncation,
-an edit that leaves the layout incomplete) stays its own bytes, and an image
-with a resource fork, another layout or a main file the export does not know
-keeps the stored-as-written path, and a body that becomes one of those is
-written back out as the client's own bytes. A
-companion that is a whole image takes no slot of `HELD`, which is what keeps a
-large tree's attribute copies from exhausting the index bound; the bound, its
-`NFS3ERR_NOSPC`, its rate-limited log and orphan reclamation remain the fallback
-for everything that is not a whole image. No attribute is dropped:
+unlink or a replacing RENAME of the main file only unbinds the paired `._` name,
+and the inode's last name (or its silly rename) drops it. Its FinderInfo and
+extended attributes are therefore kept once per inode, not once per name. When a
+write leaves such a companion holding a whole AppleDouble image the client laid
+out itself (`apple_double_codec::Image`), the body is decoded: the FinderInfo,
+every attribute name and value, the client's alignment padding after a name, the
+tag and the resource-fork entry are kept, and each READ encodes the image again.
+Decoding requires that the decoded form encode back to the very same bytes, so a
+synthesized read is byte for byte what the client wrote; a state the client is
+still writing (a header, a truncation, an edit that leaves the layout
+incomplete) stays its own bytes, and an image with a resource fork, another
+layout or a main file the export does not know keeps the stored-as-written path,
+a body that becomes one of those being written back out as the client's own
+bytes. A companion that is a whole image takes no slot of `HELD`, which is what
+keeps a large tree's attribute copies from exhausting the index bound; the bound,
+its `NFS3ERR_NOSPC`, its rate-limited log and orphan reclamation remain the
+fallback for everything that is not a whole image. No attribute is dropped:
 `com.apple.provenance`, `com.apple.quarantine`, `com.apple.FinderInfo` and user
 attributes are all kept, and nothing here reaches the Store or a Commit.
 
