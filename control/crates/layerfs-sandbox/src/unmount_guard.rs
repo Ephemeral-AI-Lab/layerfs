@@ -51,6 +51,7 @@ pub struct Attempt {
     _lease: Lease,
     path: PathBuf,
     started: i64,
+    forced: bool,
 }
 fn result(value: &SdkValue) -> Outcome {
     if value.get_text("state") == Some("Unmounted") {
@@ -220,11 +221,16 @@ pub fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal> {
     }
     Ok(recoverable)
 }
+pub fn forceable(value: &SdkValue) -> bool {
+    value.get_text("state") == Some("Retained")
+        && value.get("forced") != Some(&SdkValue::Bool(true))
+}
 /// Called under the Sandbox guard, after all before-effect checks.
 pub fn begin(
     state: &SandboxState,
     token: WorkspaceToken,
     path: &str,
+    forced: bool,
 ) -> Result<Attempt, SdkRefusal> {
     let path_record = record(state, token);
     let file = lease(&path_record.with_extension("unmount-lock"), true)?
@@ -233,6 +239,7 @@ pub fn begin(
         _lease: file,
         path: path_record,
         started: millis(),
+        forced,
     };
     layerfs_store::project::discovery::save(
         &attempt.path,
@@ -267,6 +274,7 @@ pub fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result<(), Sd
                     ("state", SdkValue::text(state)),
                     ("startedMs", SdkValue::Int(attempt.started)),
                     ("path", SdkValue::text(path)),
+                    ("forced", SdkValue::Bool(attempt.forced)),
                     ("code", SdkValue::text(code)),
                     ("message", SdkValue::text(message)),
                     ("detail", detail),

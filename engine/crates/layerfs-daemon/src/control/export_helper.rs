@@ -2,14 +2,18 @@
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use std::{
     io::{self, Read},
+    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     time::{Duration, Instant},
 };
 
 /// How long one helper run may take before it is killed and reported.
 pub const HELPER_WAIT: Duration = Duration::from_secs(60);
-const REAP_WAIT: Duration = Duration::from_secs(5);
+pub const REAP_WAIT: Duration = Duration::from_secs(5);
 const PAUSE: Duration = Duration::from_millis(5);
 const OUTPUT: usize = 2048;
 
@@ -42,15 +46,74 @@ pub(super) enum Ran {
 }
 
 /// Retained children are never waited on synchronously or signalled twice.
-/// A later helper attempt may only reap their observed exits, not replay them.
+/// A bounded background reaper reaps their exits and records their status.
 #[derive(Debug, Default)]
-pub(super) struct Helpers(Mutex<Vec<Child>>);
+pub(super) struct Helpers {
+    held: Mutex<Vec<Child>>,
+    reaped: Mutex<Vec<(u32, String)>>,
+    reaping: AtomicBool,
+    pub helper_wait: Duration,
+    pub reap_wait: Duration,
+}
 impl Helpers {
-    pub fn run(&self, helper: &Helper, port: u16, directory: &str) -> Ran {
-        {
-            let mut held = self.0.lock().unwrap_or_else(|error| error.into_inner());
-            held.retain_mut(|child| !matches!(child.try_wait(), Ok(Some(_))));
+    pub fn new(helper_wait: Duration, reap_wait: Duration) -> Arc<Self> {
+        Arc::new(Self {
+            helper_wait,
+            reap_wait,
+            ..Self::default()
+        })
+    }
+    pub fn reap(&self) -> bool {
+        let mut held = self.held.lock().unwrap_or_else(|e| e.into_inner());
+        let mut reaped = self.reaped.lock().unwrap_or_else(|e| e.into_inner());
+        held.retain_mut(|child| match child.try_wait() {
+            Ok(Some(s)) => {
+                reaped.push((child.id(), s.to_string()));
+                false
+            }
+            Ok(None) => true,
+            Err(e) => {
+                reaped.push((child.id(), format!("wait error: {e}")));
+                false
+            }
+        });
+        let excess = reaped.len().saturating_sub(64);
+        reaped.drain(..excess);
+        held.is_empty()
+    }
+    pub fn reaped(&self) -> Vec<(u32, String)> {
+        self.reap();
+        self.reaped
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+    fn retain(self: &Arc<Self>, child: Child) {
+        self.held
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(child);
+        if !self.reaping.swap(true, Ordering::AcqRel) {
+            let queue = self.clone();
+            if std::thread::Builder::new()
+                .name("layerfs-helper-reap".into())
+                .spawn(move || loop {
+                    if queue.reap() {
+                        queue.reaping.store(false, Ordering::Release);
+                        if queue.reap() || queue.reaping.swap(true, Ordering::AcqRel) {
+                            break;
+                        }
+                    }
+                    std::thread::sleep(Duration::from_millis(20));
+                })
+                .is_err()
+            {
+                self.reaping.store(false, Ordering::Release);
+            }
         }
+    }
+    pub fn run(self: &Arc<Self>, helper: &Helper, port: u16, directory: &str) -> Ran {
+        self.reap();
         let Some(mut command) = helper.command(port, directory) else {
             return Ran::Failed("empty helper command".into());
         };
@@ -86,7 +149,7 @@ impl Helpers {
             }
         }
         let mut output = Vec::new();
-        let deadline = Instant::now() + HELPER_WAIT;
+        let deadline = Instant::now() + self.helper_wait;
         let status = loop {
             drain(&mut pipes, &mut output);
             if let Some(error) = pipe_error.take() {
@@ -95,7 +158,7 @@ impl Helpers {
             match child.try_wait() {
                 Ok(Some(status)) => break Ok(status),
                 Ok(None) if Instant::now() < deadline => std::thread::sleep(PAUSE),
-                Ok(None) => break Err(format!("helper did not finish in {HELPER_WAIT:?}")),
+                Ok(None) => break Err(format!("helper did not finish in {:?}", self.helper_wait)),
                 Err(error) => break Err(format!("helper wait: {error}")),
             }
         };
@@ -103,23 +166,31 @@ impl Helpers {
             Ok(status) => Ok(status),
             Err(detail) => {
                 let kill = child.kill();
-                let deadline = Instant::now() + REAP_WAIT;
-                let reaped = loop {
-                    match child.try_wait() {
-                        Ok(Some(_)) => break true,
-                        Ok(None) if Instant::now() < deadline => std::thread::sleep(PAUSE),
-                        Ok(None) | Err(_) => break false,
+                let deadline = Instant::now() + self.reap_wait;
+                let reaped = if self.reap_wait.is_zero() {
+                    None
+                } else {
+                    loop {
+                        match child.try_wait() {
+                            Ok(Some(status)) => break Some(status),
+                            Ok(None) if Instant::now() < deadline => std::thread::sleep(PAUSE),
+                            Ok(None) | Err(_) => break None,
+                        }
                     }
                 };
                 let pid = child.id();
-                let disposition = if reaped {
-                    "exit reaped".to_owned()
-                } else {
-                    self.0
-                        .lock()
-                        .unwrap_or_else(|error| error.into_inner())
-                        .push(child);
-                    "exit not observed after 5s; helper may remain in kernel wait; child custody retained".into()
+                let disposition = match reaped {
+                    Some(status) => {
+                        self.reaped
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .push((pid, status.to_string()));
+                        format!("exit reaped ({status})")
+                    }
+                    None => {
+                        self.retain(child);
+                        format!("exit not observed after {:?}; helper may remain in kernel wait; child custody retained", self.reap_wait)
+                    }
                 };
                 Err(format!("{detail}; pid={pid}; KILL={kill:?}; {disposition}"))
             }
@@ -139,6 +210,38 @@ impl Helpers {
             Err(detail) => Ran::Interrupted(format!("{detail}: {}", output.trim())),
         }
     }
+}
+
+/// Mount points at or under `home`, deepest first, from `table` or the host's
+/// mount table (`mount` on macOS, `/proc/self/mountinfo` on Linux).
+pub(super) fn mounted_under(home: &Path, table: Option<&Path>) -> io::Result<Vec<PathBuf>> {
+    let points: Vec<PathBuf> = if let Some(table) = table {
+        let text = std::fs::read_to_string(table).unwrap_or_default();
+        (text.lines().map(str::trim).filter(|l| !l.is_empty()))
+            .map(PathBuf::from)
+            .collect()
+    } else {
+        #[cfg(target_os = "macos")]
+        let points = {
+            let out = Command::new("/sbin/mount")
+                .env("LC_ALL", "C")
+                .stdin(Stdio::null())
+                .output()?;
+            (String::from_utf8_lossy(&out.stdout).lines())
+                .filter_map(|l| Some(PathBuf::from(l.split_once(" on ")?.1.rsplit_once(" (")?.0)))
+                .collect()
+        };
+        #[cfg(not(target_os = "macos"))]
+        let points = (std::fs::read_to_string("/proc/self/mountinfo")?.lines())
+            .filter_map(|line| line.split(' ').nth(4))
+            .map(|point| PathBuf::from(point.replace("\\040", " ").replace("\\011", "\t")))
+            .collect();
+        points
+    };
+    let mut found: Vec<PathBuf> = points.into_iter().filter(|p| p.starts_with(home)).collect();
+    found.sort_by_key(|point| std::cmp::Reverse(point.components().count()));
+    found.dedup();
+    Ok(found)
 }
 
 fn drain(pipes: &mut [Box<dyn Read>], output: &mut Vec<u8>) {

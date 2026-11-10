@@ -54,6 +54,9 @@ pub(super) fn guard(
     // it. The one exception is a normal unmount stalled at Join, admitted
     // idle with no Commit custody, whose abort control is still unused.
     if let Kernel::ExportKept(kept) = &value.kernel {
+        if kept.forceable() {
+            return Ok(CommitKnowledge::Absent);
+        }
         return Err(Failure::Retained(Box::new(kept.custody(token))));
     }
     #[cfg(target_os = "linux")]

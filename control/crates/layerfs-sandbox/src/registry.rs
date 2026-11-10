@@ -106,11 +106,18 @@ impl SandboxState {
 
     /// The token of the Workspace mounted at `path`.
     pub fn token(&self, path: &str) -> Result<WorkspaceToken, SdkRefusal> {
+        crate::unmount_guard::check(self, path)?;
+        self.mounted(path, |mount| mount.workspace.bound.token)
+    }
+
+    /// The token of the Workspace at `path` after unmount admission checked it.
+    pub fn unmount_token(&self, path: &str) -> Result<WorkspaceToken, SdkRefusal> {
         self.mounted(path, |mount| mount.workspace.bound.token)
     }
 
     /// The kernel directory of the Workspace mounted at `path`.
     pub fn directory(&self, path: &str) -> Result<String, SdkRefusal> {
+        crate::unmount_guard::check(self, path)?;
         self.mounted(path, |mount| mount.workspace.ready.directory.clone())
     }
 
@@ -120,7 +127,6 @@ impl SandboxState {
     /// once, for whatever is mounted there now; the full refresh replaces
     /// the table, so a stale entry goes with it.
     fn mounted<T>(&self, path: &str, pick: impl Fn(&Mount) -> T) -> Result<T, SdkRefusal> {
-        crate::unmount_guard::check(self, path)?;
         let known = lock(&self.mounts)?
             .get(path)
             .map(|mount| (mount.workspace.bound.token, pick(mount)));

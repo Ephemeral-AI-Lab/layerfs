@@ -8,7 +8,10 @@ use std::{
     io::{self, Read},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
     time::{Duration, Instant},
 };
 
@@ -48,13 +51,18 @@ fn mount_point(line: &str) -> Option<PathBuf> {
     Some(PathBuf::from(point))
 }
 
+static RETAINED: Mutex<Vec<Child>> = Mutex::new(Vec::new());
+static REAPING: AtomicBool = AtomicBool::new(false);
+
+fn reap_retained() -> bool {
+    let mut held = RETAINED.lock().unwrap_or_else(|error| error.into_inner());
+    held.retain_mut(|child| !matches!(child.try_wait(), Ok(Some(_)) | Err(_)));
+    held.is_empty()
+}
+
 /// Forces the mount at `point` off once; a point no longer mounted is done.
 pub(crate) fn force_unmount(point: &Path) -> io::Result<()> {
-    static RETAINED: Mutex<Vec<Child>> = Mutex::new(Vec::new());
-    {
-        let mut held = RETAINED.lock().unwrap_or_else(|error| error.into_inner());
-        held.retain_mut(|child| !matches!(child.try_wait(), Ok(Some(_))));
-    }
+    reap_retained();
     let mut child = Command::new(UMOUNT)
         .arg("-f")
         .arg(point)
@@ -98,21 +106,39 @@ pub(crate) fn force_unmount(point: &Path) -> io::Result<()> {
             let reaped = loop {
                 unmount_output(&mut stderr, &mut output);
                 match child.try_wait() {
-                    Ok(Some(_)) => break true,
+                    Ok(Some(status)) => break Some(status),
                     Ok(None) if Instant::now() < deadline => {
                         std::thread::sleep(Duration::from_millis(5));
                     }
-                    Ok(None) | Err(_) => break false,
+                    Ok(None) | Err(_) => break None,
                 }
             };
-            let disposition = if reaped {
-                "exit reaped"
-            } else {
-                RETAINED
-                    .lock()
-                    .unwrap_or_else(|error| error.into_inner())
-                    .push(child);
-                "exit not observed after 5s; child custody retained (possible kernel wait)"
+            let disposition = match reaped {
+                Some(status) => format!("exit reaped ({status})"),
+                None => {
+                    RETAINED
+                        .lock()
+                        .unwrap_or_else(|error| error.into_inner())
+                        .push(child);
+                    if !REAPING.swap(true, Ordering::AcqRel)
+                        && std::thread::Builder::new()
+                            .name("layerfs-darwin-reap".into())
+                            .spawn(|| loop {
+                                if reap_retained() {
+                                    REAPING.store(false, Ordering::Release);
+                                    if reap_retained() || REAPING.swap(true, Ordering::AcqRel) {
+                                        break;
+                                    }
+                                }
+                                std::thread::sleep(Duration::from_millis(20));
+                            })
+                            .is_err()
+                    {
+                        REAPING.store(false, Ordering::Release);
+                    }
+                    "exit not observed after 5s; child custody retained (possible kernel wait)"
+                        .into()
+                }
             };
             return Err(io::Error::new(
                 error.kind(),
