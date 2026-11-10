@@ -31,7 +31,7 @@
           "kernel": "fuse",
           "sqlite": "worker",
           "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
-          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "os_image", "kind": "text" } ],
           "description": "an Apple container VM (Apple silicon); Sandboxes run in Linux namespaces and a cgroup"
         },
         {
@@ -41,7 +41,7 @@
           "kernel": "fuse",
           "sqlite": "worker",
           "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
-          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "os_image", "kind": "text" } ],
           "description": "a Lima VM (vz); Sandboxes run in Linux namespaces and a cgroup"
         }
       ]
@@ -76,7 +76,7 @@
           "kernel": null,
           "sqlite": null,
           "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "apple-container runs on macOS hosts only" },
-          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "os_image", "kind": "text" } ],
           "description": "an Apple container VM (Apple silicon)"
         },
         {
@@ -86,7 +86,7 @@
           "kernel": null,
           "sqlite": null,
           "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "lima runs on macOS hosts only" },
-          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "os_image", "kind": "text" } ],
           "description": "a Lima VM (vz)"
         }
       ]
@@ -121,7 +121,7 @@
           "kernel": null,
           "sqlite": null,
           "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "apple-container runs on macOS hosts only" },
-          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "os_image", "kind": "text" } ],
           "description": "an Apple container VM (Apple silicon)"
         },
         {
@@ -131,7 +131,7 @@
           "kernel": null,
           "sqlite": null,
           "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "lima runs on macOS hosts only" },
-          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
+          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "os_image", "kind": "text" } ],
           "description": "a Lima VM (vz)"
         }
       ]

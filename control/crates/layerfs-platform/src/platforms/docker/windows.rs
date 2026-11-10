@@ -43,3 +43,13 @@ pub(crate) fn host_address(spec: &Spec) -> Result<String, MachineError> {
 pub(crate) fn provider_state(spec: &Spec) -> Result<crate::setup::State, MachineError> {
     status(spec).map(|value| value.state)
 }
+
+/// Image reuse is unavailable on unsupported hosts.
+pub(crate) fn cached_image(
+    spec: &Spec,
+    _archive: &std::path::Path,
+    _content: &str,
+    _previous: Option<&str>,
+) -> Result<String, MachineError> {
+    Err(unsupported(spec))
+}

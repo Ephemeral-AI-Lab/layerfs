@@ -26,6 +26,8 @@ mod local;
 mod platforms;
 #[cfg(feature = "machine")]
 mod power;
+#[cfg(feature = "machine")]
+mod progress;
 #[doc(hidden)]
 pub mod record;
 mod related;
@@ -45,7 +47,7 @@ pub use bundle::{bundle_dir, IMAGE_ARCHIVE};
 #[cfg(feature = "machine")]
 pub use create::{create, MachineCreate};
 #[cfg(feature = "machine")]
-pub use endpoint::running;
+pub use endpoint::{running, running_with_progress};
 #[cfg(feature = "machine")]
 pub use get::get;
 #[cfg(feature = "machine")]
@@ -60,7 +62,7 @@ pub use local::runs_here;
 #[cfg(feature = "machine")]
 pub use platforms::platforms;
 #[cfg(feature = "machine")]
-pub use power::{start, stop};
+pub use power::{start, start_with_progress, stop};
 pub use related::Related;
 #[cfg(feature = "machine")]
 pub use remove::remove;
