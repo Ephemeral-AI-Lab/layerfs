@@ -77,8 +77,9 @@ pub struct Mounter {
     pub mount: Helper,
     pub unmount: Helper,
     pub force: Helper,
-    /// Writes back what the client buffered before a Commit; `sync(2)` of
-    /// the daemon itself when absent.
+    /// Writes back what the client buffered before a Commit; `sync_volume_np`
+    /// of the export directory on macOS (falling back to `sync(2)`) or
+    /// `sync(2)` elsewhere when absent.
     pub flush: Option<Helper>,
 }
 impl Mounter {
@@ -583,7 +584,7 @@ impl Service {
             return Ok(());
         };
         match &serving.config.mounter.flush {
-            None => nix::unistd::sync(),
+            None => flush_default(std::path::Path::new(&directory)),
             Some(helper) => {
                 match serving
                     .helpers
@@ -931,4 +932,20 @@ pub(super) fn take(kernel: &mut Kernel, phase: MountPhase) -> Result<Exported, F
         work: work(&exported.server),
     }));
     Ok(*exported)
+}
+
+#[cfg(target_os = "macos")]
+fn flush_default(directory: &std::path::Path) {
+    if let Err(error) = layerfs_bridge::process::sync_volume_wait(directory) {
+        eprintln!(
+            "layerfs-daemon: warn: sync_volume_np({}) failed ({error}); falling back to sync()",
+            directory.display()
+        );
+        nix::unistd::sync();
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn flush_default(_directory: &std::path::Path) {
+    nix::unistd::sync();
 }

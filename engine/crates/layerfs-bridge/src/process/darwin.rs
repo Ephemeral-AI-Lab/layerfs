@@ -7,12 +7,20 @@
 use super::Stat;
 use nix::libc;
 use std::{
+    ffi::CString,
     io,
+    os::unix::ffi::OsStrExt,
+    path::Path,
     process::{Command, Stdio},
     sync::OnceLock,
 };
 
 const SYSCTL: &str = "/usr/sbin/sysctl";
+/// Wait for volume writeback completion (`SYNC_VOLUME_WAIT = 0x02` in macOS
+/// SDK `<unistd.h>`; checked against `<sys/mount.h>`, where `MNT_WAIT = 1` is
+/// for `getfsstat(2)`/`vfs_sync` while `sync_volume_np(3)` and its flags live
+/// in `<unistd.h>`).
+const SYNC_VOLUME_WAIT: libc::c_int = 0x02;
 
 /// One tool's standard output, or its failure with what it said.
 fn output(program: &str, args: &[&str]) -> io::Result<(bool, String)> {
@@ -154,4 +162,23 @@ fn boottime(text: &str) -> Option<u128> {
         digits.parse().ok()
     };
     Some(field("sec")? * 1_000_000 + field("usec")?)
+}
+
+/// Flush buffered writes on the volume containing `path` and wait for
+/// completion (`sync_volume_np(path, SYNC_VOLUME_WAIT)`).
+#[allow(unsafe_code)]
+pub fn sync_volume_wait(path: &Path) -> io::Result<()> {
+    extern "C" {
+        fn sync_volume_np(path: *const libc::c_char, flags: libc::c_int) -> libc::c_int;
+    }
+    let c_path = CString::new(path.as_os_str().as_bytes())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "path contains interior NUL"))?;
+    // SAFETY: `c_path` is a valid NUL-terminated C string alive for the call,
+    // and `SYNC_VOLUME_WAIT` is the documented wait flag for `sync_volume_np`.
+    let rc = unsafe { sync_volume_np(c_path.as_ptr(), SYNC_VOLUME_WAIT) };
+    match rc {
+        0 => Ok(()),
+        1.. => Err(io::Error::from_raw_os_error(rc)),
+        _ => Err(io::Error::last_os_error()),
+    }
 }
