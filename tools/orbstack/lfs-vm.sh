@@ -39,6 +39,13 @@
 # Each year's summaries folder is its own mount: at a new year, add it and
 # recreate. Removal condition: Foxway summaries move out of summaries/.
 #
+# The memoryd daemon runs in `lfs-orb` (memoryd ADR 0069). It reads these
+# Mac folders read-only at their Mac paths, so its folder keys match the
+# Mac's: the transcript roots of ~/.config/memoryd/config.json that have no
+# `host`, the pull mirror ~/.local/share/memoryd/remote, and ~/repos.
+# Agents can read them too, Foxway transcripts and repositories included:
+# the operator accepted that on 2026-11-10. A new root needs a recreate.
+#
 # Agents may use DNS and HTTPS to any host, the Agent Vault proxy, the Mac
 # bridge, and SSH of github.com and gitlab.com (iptables rules for uid 501). Root is not limited. vm-boot.sh applies the
 # rule and starts sshd at each container start.
@@ -99,14 +106,24 @@ case $name in
     mkdir -p "$share"
     vault_mounts=(-v "$share":/share -v "$vault/features":/vaults/fleet-memory/features -v "$vault/diagrams":/vaults/fleet-memory/diagrams
       -v "$vault/summaries/$year":"/vaults/fleet-memory/summaries/$year"
-      -v "$vault/router":/vaults/fleet-memory/router:ro) ;;
+      -v "$vault/router":/vaults/fleet-memory/router:ro)
+    memoryd_config=${MEMORYD_CONFIG:-$HOME/.config/memoryd/config.json}
+    [[ -f $memoryd_config ]] || { echo "lfs-vm: lfs-orb needs the memoryd config $memoryd_config" >&2; exit 64; }
+    memoryd_dirs=(${(f)"$(python3 -I -c 'import json, sys
+for r in json.load(open(sys.argv[1]))["roots"]:
+    if "host" not in r: print(r["path"])' "$memoryd_config")"} "$HOME/.local/share/memoryd/remote" "$HOME/repos")
+    memoryd_mounts=()
+    for dir in $memoryd_dirs; do
+      [[ -d $dir ]] && memoryd_mounts+=(-v "${dir}:${dir}:ro")
+    done ;;
   lfs-foxway)
     [[ ${AGENT_VAULT_VAULT:-} == foxway* ]] || { echo "lfs-vm: lfs-foxway needs a Foxway vault (agent-vault-run foxway-workspace-dev)" >&2; exit 64; }
     volume=lfs-foxway-data ssh_port=${LFS_VM_SSH_PORT:-2224} memory=${LFS_VM_MEMORY:-8G}
     git_ssh_hosts="ssh.dev.azure.com" sandbox_prefix=foxway-
     service_forwards=""
     mkdir -p "$vault/summaries/foxway"
-    vault_mounts=(-v "$vault/summaries/foxway":/vaults/fleet-memory/summaries/foxway) ;;
+    vault_mounts=(-v "$vault/summaries/foxway":/vaults/fleet-memory/summaries/foxway)
+    memoryd_mounts=() ;;
   *) echo "usage: lfs-vm.sh <bundle-dir> [lfs-orb|lfs-foxway]" >&2; exit 64 ;;
 esac
 
@@ -135,7 +152,7 @@ flags=(--device /dev/fuse --device /dev/net/tun --security-opt systempaths=uncon
 docker run -d --init --name $name --cpus 10 --memory $memory --cap-add CAP_SYS_ADMIN --cap-add CAP_NET_ADMIN --cap-add CAP_SYS_PTRACE \
   $flags -p "127.0.0.1:$ssh_port:22" -v $volume:/var/lib/layerfs-data \
   -v "$bundle":/opt/layerfs/bundle:ro -v "$repo/sdk/js":/opt/layerfs/sdk:ro \
-  -v "$repo/tools/orbstack":/opt/layerfs/tools:ro $vault_mounts \
+  -v "$repo/tools/orbstack":/opt/layerfs/tools:ro $vault_mounts $memoryd_mounts \
   node:24-bookworm-slim /opt/layerfs/tools/vm-boot.sh run
 
 # The Agent Vault proxy: its CA and its tailnet address (the VM's DNS has no
