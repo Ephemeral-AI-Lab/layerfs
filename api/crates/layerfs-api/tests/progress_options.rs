@@ -1,9 +1,4 @@
-//! Which calls take `on_progress` (#37): the table declares it on exactly seven
-//! calls (`workspace.exec` for its exec id, layerfs-project#113), and a call
-//! that does not declare it refuses it before any effect.
-//! `machine.create` is not one of the seven, so a caller cannot ask for the
-//! `{ phase: "create", machine }` event the library emits for it.
-//! The page that states this: docs/architecture/api/call-table/events.md.
+//! Progress declarations include machine provisioning and retain function-value refusal.
 use layerfs_api::Kind;
 use layerfs_bridge::control::SdkValue;
 
@@ -20,13 +15,15 @@ fn declaring(option: &str) -> Vec<String> {
 }
 
 #[test]
-fn seven_calls_declare_on_progress_and_one_declares_the_exec_sinks() {
+fn nine_calls_declare_on_progress_and_one_declares_the_exec_sinks() {
     assert_eq!(
         declaring("on_progress"),
         [
             "project.init",
             "project.export",
             "workspace.exec",
+            "machine.start",
+            "machine.create",
             "store.push",
             "store.pull",
             "backup.create",
@@ -45,13 +42,16 @@ fn seven_calls_declare_on_progress_and_one_declares_the_exec_sinks() {
                 .count()
         })
         .sum();
-    assert_eq!(functions, 7 + 2);
+    assert_eq!(functions, 9 + 2);
 }
 
 #[test]
-fn machine_create_declares_no_on_progress_and_refuses_it() {
+fn function_options_are_refused_as_values_before_any_effect() {
     let create = layerfs_api::find("machine.create").expect("machine.create is in the table");
-    assert!(create.options.iter().all(|o| o.name != "on_progress"));
+    assert!(create
+        .options
+        .iter()
+        .any(|o| o.name == "on_progress" && o.kind == Kind::Function));
     let home =
         std::env::temp_dir().join(format!("layerfs-progress-options-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
@@ -63,7 +63,7 @@ fn machine_create_declares_no_on_progress_and_refuses_it() {
     ]);
     let mut events = Vec::new();
     let refused = layerfs_api::call(Some(&home), "machine.create", args, &mut |e| events.push(e))
-        .expect_err("an undeclared option is refused");
+        .expect_err("a callback cannot cross the library boundary as a value");
     assert_eq!(refused.code, "InvalidInput", "{}", refused.message);
     assert!(events.is_empty(), "refused before any effect: {events:?}");
     assert!(!home.join("machine").exists(), "nothing was created");

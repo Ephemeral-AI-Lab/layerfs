@@ -39,3 +39,6 @@ pub(crate) const CPUS: OptSpec = opt("cpus", OptKind::Int);
 pub(crate) const MEMORY: OptSpec = opt("memory", OptKind::Size);
 pub(crate) const DISK: OptSpec = opt("disk", OptKind::Size);
 pub(crate) const IMAGE: OptSpec = opt("image", OptKind::Text);
+
+/// The machine OS image; `image` remains the Sandbox image.
+pub(crate) const OS_IMAGE: OptSpec = opt("os_image", OptKind::Text);

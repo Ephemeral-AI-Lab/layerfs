@@ -68,7 +68,9 @@ fn worker() -> SocketAddr {
         for stream in listener.incoming() {
             let Ok(mut stream) = stream else { return };
             let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
-            if frame(&mut stream).is_none() || send(&mut stream, br#"{"ready":true}"#).is_none() {
+            if frame(&mut stream).is_none()
+                || send(&mut stream, br#"{"ready":true,"protocol":3}"#).is_none()
+            {
                 continue;
             }
             if frame(&mut stream).is_some() {

@@ -243,3 +243,19 @@ pub(crate) fn with_worker(
         down_reason,
     }
 }
+
+/// Reuses the Engine's content-tagged Sandbox image, or imports it once.
+/// `previous` is a recorded Docker ID known by the caller to hold this content.
+/// Docker's actual imported ID is returned, never the archive config digest.
+pub fn cached_image(
+    spec: &Spec,
+    archive: &Path,
+    content: &str,
+    previous: Option<&str>,
+) -> Result<String, MachineError> {
+    spec.validate()?;
+    if spec.kind != crate::platform::Platform::Docker {
+        return Err(refused(spec, "loads no Docker image"));
+    }
+    crate::platforms::docker::cached_image(spec, archive, content, previous)
+}

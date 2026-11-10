@@ -39,27 +39,11 @@ function folderOf(files) {
 
 const calling = (name) => table.filter((c) => c.options.some((o) => o.name === name && o.kind === "function")).map((c) => `${c.family}.${c.call}`);
 
-test("the table: seven calls take on_progress, one takes the exec sinks, machine.create takes neither", async () => {
-<<<<<<< HEAD
-  assert.deepEqual(calling("on_progress"), ["project.init", "project.export", "workspace.exec", "store.push", "store.pull", "backup.create", "backup.restore"]);
-=======
-  assert.deepEqual(calling("on_progress"), [
-    "project.init", "project.export", "workspace.exec", "store.push", "store.pull", "backup.create", "backup.restore",
-  ]);
->>>>>>> addbf29dc (test(sdk): pin the seven progress calls and project.export across the front ends)
+test("the table: nine calls take on_progress and one takes the exec sinks", () => {
+  assert.deepEqual(calling("on_progress"), ["project.init", "project.export", "workspace.exec", "machine.start", "machine.create", "store.push", "store.pull", "backup.create", "backup.restore"]);
   assert.deepEqual(calling("stdout"), ["workspace.exec"]);
   assert.deepEqual(calling("stderr"), ["workspace.exec"]);
-  assert.equal(table.flatMap((c) => c.options).filter((o) => o.kind === "function").length, 7 + 2);
-  const home = temp("machine");
-  try {
-    // the library emits { phase: "create" } for this call, but no handler can be given
-    await assert.rejects(
-      client({ home }).machine.create("m1", "lima", { on_progress: () => {} }),
-      (error) => error instanceof LayerFSError && error.code === "InvalidInput" && /unknown option "on_progress"/.test(error.message),
-    );
-  } finally {
-    rmSync(home, { recursive: true, force: true });
-  }
+  assert.equal(table.flatMap((c) => c.options).filter((o) => o.kind === "function").length, 9 + 2);
 });
 
 test("project.init in this process: check, install, record with null counts, while it runs, before it settles", { timeout: 90_000 }, async () => {

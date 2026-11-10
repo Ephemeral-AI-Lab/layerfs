@@ -158,6 +158,15 @@ pub fn worker(home: &Path, name: &str) -> Result<Option<Endpoint>> {
 /// record write that says `running` drops a create's `op` (a
 /// start runs under the machine's start lock, where no other one lives).
 pub fn save_running(home: &Path, name: &str, running: &Running) -> Result<()> {
+    save_started(home, name, running, None)
+}
+
+/// Retains a started provider's endpoint and lasting state without claiming readiness.
+pub fn save_unready(home: &Path, name: &str, running: &Running, error: &str) -> Result<()> {
+    save_started(home, name, running, Some(error))
+}
+
+fn save_started(home: &Path, name: &str, running: &Running, error: Option<&str>) -> Result<()> {
     let endpoint = &running.endpoint;
     write_record(
         &paths::worker_record(home, name),
@@ -176,7 +185,13 @@ pub fn save_running(home: &Path, name: &str, running: &Running) -> Result<()> {
     }
     update(home, name, |record| {
         let record = record.with("lasting", SdkValue::Map(lasting));
-        record.with("state", SdkValue::text("running")).without_op()
+        match error {
+            Some(error) => record.failed_as("failed", error).without_op(),
+            None => record
+                .with("state", SdkValue::text("running"))
+                .with("error", SdkValue::Null)
+                .without_op(),
+        }
     })
 }
 

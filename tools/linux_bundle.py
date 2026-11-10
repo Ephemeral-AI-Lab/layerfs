@@ -33,6 +33,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -79,6 +80,14 @@ def cache_root():
 def version(worktree):
     manifest = tomllib.loads((Path(worktree) / "Cargo.toml").read_text())
     return manifest["workspace"]["package"]["version"]
+
+
+def protocol(worktree):
+    source = Path(worktree) / "control/crates/layerfs-machine/src/worker/hello.rs"
+    match = re.search(r"pub const PROTOCOL: i64 = (\d+);", source.read_text())
+    if not match:
+        raise Refused("the worker protocol constant could not be read")
+    return int(match[1])
 
 
 def jobs(worktree):
@@ -197,6 +206,8 @@ def seal(record, profile, image, dest, timeout):
             "platform": name,
             "profile": profile,
             "image": config,
+            "protocol": protocol(record["worktree"]),
+            "runtime": bundle_hash({f: files[f] for f in BINARIES}),
             "saved_from": image,
             "source": {"head": now["head"], "sha256": now["sha256"]},
             "toolchain": TOOLCHAIN,
@@ -248,7 +259,10 @@ def docker_archive(saved, out, scratch):
                     # an empty layer is a tar of zero blocks
                     if block[257:262] != b"ustar" and block.strip(b"\0"):
                         raise Refused(f"the saved layer {name} is not a tar once decompressed")
-                archive.add(plain, arcname=f"{n}/layer.tar")
+                info = tarfile.TarInfo(f"{n}/layer.tar")
+                info.size, info.mode = plain.stat().st_size, 0o644
+                with plain.open("rb") as layer:
+                    archive.addfile(info, layer)
                 plain.unlink()
                 layers.append(f"{n}/layer.tar")
             listing = json.dumps([{"Config": hexes + ".json", "RepoTags": None, "Layers": layers}]).encode()

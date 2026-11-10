@@ -1,0 +1,14 @@
+[Unit]
+Description=Run Lima provisioning on prepared LayerFS image
+Requires=layerfs-image-identity.service
+After=layerfs-image-identity.service network.target
+
+[Service]
+Type=oneshot
+Environment=LIMA_CIDATA_MNT=/mnt/lima-cidata
+ExecStart=/mnt/lima-cidata/boot.sh
+RemainAfterExit=yes
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

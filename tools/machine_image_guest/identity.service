@@ -1,0 +1,13 @@
+[Unit]
+Description=Initialize private LayerFS Lima instance identity
+Requires=dev-disk-by\x2dlabel-cidata.device
+After=local-fs.target dev-disk-by\x2dlabel-cidata.device
+Before=ssh.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/layerfs-image-identity
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

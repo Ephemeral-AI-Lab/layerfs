@@ -153,6 +153,7 @@ fn options_are_what_create_takes() {
         ("memory", "size"),
         ("disk", "size"),
         ("image", "text"),
+        ("os_image", "text"),
     ];
     assert_eq!(options(Platform::Native), []);
     assert_eq!(options(Platform::Docker), []);

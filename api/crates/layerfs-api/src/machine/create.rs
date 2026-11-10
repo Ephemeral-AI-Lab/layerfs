@@ -1,6 +1,6 @@
 //! `machine.create`: create a VM machine.
 use crate::calls::table::Kind::{Int, Name, Size, Text};
-use crate::calls::table::{a, call, opt, Call};
+use crate::calls::table::{a, call, opt, Call, PROGRESS};
 use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
@@ -15,6 +15,8 @@ pub(crate) const CALL: Call = call(
         opt("memory", Size),
         opt("disk", Size),
         opt("image", Text),
+        opt("os_image", Text),
+        PROGRESS,
     ],
     "create an enabled VM machine (apple-container, lima)",
     run,
@@ -31,6 +33,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         memory: args.get_int("memory"),
         disk: args.get_int("disk"),
         image: text("image"),
+        os_image: text("os_image"),
     };
     let (home, events) = context.parts();
     layerfs_control::machine::create(home, events, &request)

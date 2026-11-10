@@ -8,10 +8,10 @@ const UBUNTU: &str =
 /// The instance's template, as JSON (which is YAML).
 pub(crate) fn template(spec: &Spec, port: u16) -> String {
     let images = match spec.os_image.as_deref() {
-        Some(image) if image.starts_with("https://") || image.starts_with('/') => {
+        Some(image) => {
             format!("[{{\"location\": {}}}]", quote(image))
         }
-        _ => format!(
+        None => format!(
             "[{{\"location\": \"{UBUNTU}-arm64.img\", \"arch\": \"aarch64\"}}, \
              {{\"location\": \"{UBUNTU}-amd64.img\", \"arch\": \"x86_64\"}}]"
         ),
