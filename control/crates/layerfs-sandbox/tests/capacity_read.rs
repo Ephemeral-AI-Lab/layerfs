@@ -1,7 +1,8 @@
 //! The `backend.daemon.connection_failures` read model's bounds (#540,
 //! #543): one query ends its control session instead of dropping the socket,
-//! a daemon that trickles is fenced at the deadline, and a read on the
-//! Sandbox's pool takes no second connection.
+//! a daemon that trickles is fenced at the deadline, a read on the Sandbox's
+//! pool takes no second connection, and a connection a fence or a session end
+//! quarantined is never lent again or reported as an attempt.
 //!
 //! Nothing runs: a stand-in daemon answers the query on the connections it
 //! accepts, and counts what it saw.
@@ -13,9 +14,12 @@ use layerfs_bridge::duplex;
 use layerfs_home::home::paths;
 use layerfs_home::secrets;
 use layerfs_sandbox::daemon::capacity;
+use layerfs_sandbox::daemon::channel::ControlPhase;
+use layerfs_sandbox::daemon::operator;
 use layerfs_sandbox::daemon::pool::{Controls, Dial};
 use layerfs_sandbox::host::{Call as HostCall, Host, Message};
 use layerfs_sandbox::record::SandboxRecord;
+use layerfs_sandbox::{OperationCause, SdkError};
 use std::io::Write;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::os::unix::fs::PermissionsExt;
@@ -297,4 +301,55 @@ fn the_worker_s_side_reads_the_capacity_model() {
     assert_eq!(model.admission.reserved_vacant, 1, "{answer:?}");
     assert_eq!(seen.queries.load(Ordering::SeqCst), 1);
     std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_fenced_connection_is_not_lent_again() {
+    let (endpoint, seen) = daemon(Behavior::Model);
+    let dial = dial(endpoint);
+    let first = dial.open().unwrap();
+    let controls = Controls::new(first, dial);
+    {
+        let lease = controls.lend().unwrap().0;
+        // the fence's end, outside any exchange: the channel is shut down
+        // while this `Control` never saw a call fail, which is the window
+        // between a returned reply and `drop(fence)`
+        lease.close_handle().unwrap().close().unwrap();
+        assert!(
+            lease.is_failed(),
+            "a channel a fence closed was still reported healthy"
+        );
+    }
+    // and the pool closed it rather than lending it again: the next read
+    // opens a connection and answers, instead of reporting the dead one
+    let answer = capacity::lent(&controls).unwrap();
+    assert_eq!(CapacityModel::parse(&answer).admission.pool_vacant, 0);
+    assert_eq!(seen.connections.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn a_quarantined_connection_attempts_nothing() {
+    let (endpoint, seen) = daemon(Behavior::Model);
+    let dial = dial(endpoint);
+    let first = dial.open().unwrap();
+    let controls = Controls::new(first, dial);
+    let mut lease = controls.lend().unwrap().0;
+    lease.close_handle().unwrap().close().unwrap();
+    // the call a pooled lease would make next: refused before sending, so it
+    // is not an attempt whose effect is unknown
+    let error = operator::call(&mut lease, CAPACITY_OPERATION, SdkValue::Null).unwrap_err();
+    match error {
+        SdkError::Operation(failure) => match failure.cause {
+            OperationCause::Exchange(channel) => {
+                assert!(
+                    !channel.attempted,
+                    "a closed channel was reported attempted"
+                );
+                assert_eq!(channel.phase, ControlPhase::Encode);
+            }
+            other => panic!("{other:?}"),
+        },
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(seen.queries.load(Ordering::SeqCst), 0);
 }

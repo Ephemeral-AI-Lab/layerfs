@@ -27,8 +27,9 @@ impl End {
             Self::Socket(socket) => {
                 let _ = socket.shutdown(Shutdown::Both);
             }
-            // the handle quarantines the channel too, so the pool closes the
-            // connection instead of lending it again
+            // the handle quarantines the channel itself, and the pool reads
+            // that flag, so it closes the connection instead of lending it
+            // again
             Self::Channel(handle) => {
                 let _ = handle.close();
             }

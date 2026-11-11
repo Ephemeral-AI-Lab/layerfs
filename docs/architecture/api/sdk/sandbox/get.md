@@ -106,7 +106,9 @@ the Workspace list lent from the Sandbox's pool
 ([`daemon/pool.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs)),
 bounded to 2 s for admission and for
 the exchange and fenced at that deadline ([`daemon/fence.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/fence.rs)),
-so a daemon that trickles cannot hold the slot; a forwarded daemon's forward
+so a daemon that trickles cannot hold the slot, and a connection the fence
+ends is quarantined rather than lent again; a window the admission wait used
+up refuses the read before it is sent. A forwarded daemon's forward
 and its machine are checked before it is dialed (`direct::check`), so a
 stopped machine is `down_reason` and never a 2 s wait on a reused port. See
 the [routing table](../../../control/routing/routing-table.md) and the

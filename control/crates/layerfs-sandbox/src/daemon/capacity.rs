@@ -46,12 +46,25 @@ pub fn read(
 /// The daemon's answer to [`OPERATION`] on a connection the Sandbox's pool
 /// lends (`sandbox.get`, #543): at most [`WAIT`] for admission and for the
 /// exchange, which is fenced at the same deadline, so this read takes no
-/// second connection and no second slot of its own. Nothing is sent again,
-/// and the connection goes back to the pool (or is closed, when the fence
-/// quarantined it).
+/// second connection and no second slot of its own. A window the admission
+/// wait used up refuses the read before it is sent, and a connection the
+/// fence ends stays quarantined: the pool closes it instead of lending it
+/// again. Nothing is sent again.
 pub fn lent(controls: &Controls) -> Result<SdkValue, SdkRefusal> {
     let deadline = Instant::now() + WAIT;
     let mut control = trace::control_within(controls, WAIT)?;
+    if deadline.saturating_duration_since(Instant::now()).is_zero() {
+        // the admission wait used the whole window. The connection is healthy
+        // and returns to the pool; arming a fence for a deadline that already
+        // passed would shut it down for nothing, so nothing is sent.
+        return Err(refused(
+            "Unavailable",
+            format!(
+                "no control connection came free within {}s, so the capacity read was not sent",
+                WAIT.as_secs()
+            ),
+        ));
+    }
     let fence = Fence::channel((control.close_handle().map_err(failed))?, deadline);
     let answer = exchange(&mut control);
     drop(fence);

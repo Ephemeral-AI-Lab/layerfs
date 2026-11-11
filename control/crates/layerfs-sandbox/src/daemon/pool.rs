@@ -5,8 +5,9 @@
 //! every call wait for the one before it, a 1 ms read behind a whole Commit. A
 //! Sandbox keeps up to [`CONNECTIONS`] connections and opens one only when
 //! every open one is busy. Each exchange runs whole on one connection, sent
-//! once. A connection whose exchange failed is quarantined by its `Control`
-//! and is closed rather than reused; the failed call is never sent again.
+//! once. A connection whose exchange failed, or whose channel an application
+//! fence (`daemon::fence`) shut down, is quarantined by its `Control` and is
+//! closed rather than reused; the failed call is never sent again.
 //! When the daemon admits no more connections, the Sandbox keeps the ones it
 //! has and callers take turns on them, each waiting at most [`LEND_WAIT`]
 //! before it is refused `Busy`. Opening a connection is not an attempt
@@ -411,7 +412,8 @@ impl Drop for Lease<'_> {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if control.is_failed() {
-            // Quarantined: closed, and a later call may open another.
+            // Quarantined: its own failure or its channel's fence ended it,
+            // and a later call may open another.
             pool.open -= 1;
             drop(control);
         } else {
