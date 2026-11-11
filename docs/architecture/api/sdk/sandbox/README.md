@@ -36,7 +36,7 @@ unique across the home.
 | --- | --- | --- | --- | --- |
 | [`create`](create.md) | `project` (Project), `name` (Name), `machine?` (Name) | `image` (Text) | the Sandbox record with `state`; `forward_failed` when a direct daemon forward did not open | its machine: here or `sandbox.host` in the worker |
 | [`list`](list.md) | `project?` (Project) | `page_size`, `page_pos` (Int) | `{ items: [record], next_page_pos }` | caller's process, home records only |
-| [`get`](get.md) | `name` (Name) | `page_size`, `page_pos` | the record with `state`, `workspaces`, `next_page_pos`, and `down_reason` when its machine is down | its machine or its daemon; starts nothing |
+| [`get`](get.md) | `name` (Name) | `page_size`, `page_pos` | the record with `state`, `workspaces`, `next_page_pos`, `down_reason` when its machine is down, and `daemon_capacity` when its daemon answers the bounded capacity read | its machine or its daemon; starts nothing |
 | [`close`](close.md) | `name` (Name) | `force` (Bool) | `{ kind: "Closed", sandbox, unknown, closed }`, or `{ closed, was_gone: true }`, or `{ closed, was, left? }` for a record with no id | its machine: here or `sandbox.host` in the worker |
 
 The record is `SandboxRecord::to_sdk`
@@ -47,7 +47,11 @@ its stored fields except `v`, `runtime_id` and `daemon`, plus the derived
 ([`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs)).
 Each Workspace in `get` carries `ws` (`<sandbox>:<name>` or
 `<sandbox>:<path>`), `name` and `path`
-([`get.rs`](../../../../../control/crates/layerfs-sandbox/src/get.rs)).
+([`get.rs`](../../../../../control/crates/layerfs-sandbox/src/get.rs)), and
+its `daemon_capacity` is the daemon's `backend.daemon.connection_failures`
+read model, read best effort and bounded to 2 s on the connection the
+Workspace list already lent
+([`daemon/capacity.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/capacity.rs)).
 
 ## Arguments and options
 

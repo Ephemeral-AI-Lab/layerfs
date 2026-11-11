@@ -5,12 +5,14 @@
 //! every call wait for the one before it, a 1 ms read behind a whole Commit. A
 //! Sandbox keeps up to [`CONNECTIONS`] connections and opens one only when
 //! every open one is busy. Each exchange runs whole on one connection, sent
-//! once. A connection whose exchange failed is quarantined by its `Control`
-//! and is closed rather than reused; the failed call is never sent again.
+//! once. A connection whose exchange failed, or whose channel an application
+//! fence (`daemon::fence`) shut down, is quarantined by its `Control` and is
+//! closed rather than reused; the failed call is never sent again.
 //! When the daemon admits no more connections, the Sandbox keeps the ones it
 //! has and callers take turns on them, each waiting at most [`LEND_WAIT`]
 //! before it is refused `Busy`. Opening a connection is not an attempt
 //! of any operation: nothing is sent before the connection is ready.
+use crate::daemon::fence::Fence;
 use crate::internal::Control;
 use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkRefusal, SdkValue};
 use layerfs_bridge::duplex::{
@@ -196,12 +198,14 @@ impl Dial {
         self.open_admitted(ADMISSION_WAIT)
     }
 
-    /// [`Dial::open`] within `within` (#540 doctor): connecting, the
-    /// handshake and its Hello must finish inside that time, and the
-    /// connection keeps those I/O waits for the one bounded call made on
-    /// it. Nothing is retried and no admission wait applies: a daemon that
-    /// refuses or does not answer is reported as it came.
-    pub fn open_within(&self, within: Duration) -> Result<Control, SdkRefusal> {
+    /// [`Dial::open_within`], with the fence that ends this connection at
+    /// the same deadline: connecting, the handshake and its Hello must finish
+    /// inside that time, and a daemon that trickles any of them is shut down
+    /// at `deadline` rather than kept waiting. The connection keeps those I/O
+    /// waits for the one bounded call made on it. Nothing is retried and no
+    /// admission wait applies: a daemon that refuses or does not answer is
+    /// reported as it came.
+    pub fn open_within(&self, within: Duration) -> Result<(Control, Fence), SdkRefusal> {
         let deadline = Instant::now() + within;
         let remaining = || {
             deadline
@@ -214,6 +218,9 @@ impl Dial {
         stream
             .set_write_timeout(Some(remaining()))
             .map_err(failed)?;
+        // armed before the handshake: a trickling far side cannot outlive the
+        // deadline this open promised, and neither can the one call made on it
+        let fence = Fence::on(stream.try_clone().map_err(failed)?, deadline);
         let connection = match initiate_observed(stream, &self.secret, self.peer).result {
             Ok(connection) => connection,
             Err(ChannelError::Admission(notice)) => return Err(notice_refusal(notice)),
@@ -221,14 +228,16 @@ impl Dial {
         };
         // the waits stay: the caller makes exactly one call and drops it
         let mut control = Control::new(connection);
-        match control
+        let hello = control
             .call(Request::Hello(HelloRequest {
                 expected_instance: Some(self.instance),
                 wait_for_store: false,
             }))
-            .map_err(failed)?
-        {
-            Reply::Hello(status) if status.phase == DaemonPhase::ControlReady => Ok(control),
+            .map_err(failed)?;
+        match hello {
+            Reply::Hello(status) if status.phase == DaemonPhase::ControlReady => {
+                Ok((control, fence))
+            }
             _ => Err(refused("StaleSandbox", "saved daemon is not ControlReady")),
         }
     }
@@ -403,7 +412,8 @@ impl Drop for Lease<'_> {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if control.is_failed() {
-            // Quarantined: closed, and a later call may open another.
+            // Quarantined: its own failure or its channel's fence ended it,
+            // and a later call may open another.
             pool.open -= 1;
             drop(control);
         } else {
