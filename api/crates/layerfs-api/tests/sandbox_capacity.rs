@@ -1,8 +1,10 @@
-//! `sandbox.get`'s `daemon_capacity` (#540): the daemon's
+//! `sandbox.get`'s `daemon_capacity` (#540, #543): the daemon's
 //! `backend.daemon.connection_failures` read model, shown best-effort and
-//! bounded the same way the doctor reads it. Nothing runs: a stand-in
-//! daemon answers the Sandbox's Workspace list and its capacity model, a
-//! second one answers the list and then says nothing.
+//! bounded on the connection the Workspace list lent from this process's
+//! pool. Nothing runs: a stand-in daemon answers the Sandbox's Workspace list
+//! and its capacity model on the same connection, a second one answers the
+//! list and then says nothing, and a Sandbox whose machine or forward is
+//! already down is not dialed at all.
 #![cfg(unix)]
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_bridge::control::{
@@ -13,14 +15,21 @@ use layerfs_bridge::duplex;
 use std::net::{SocketAddr, TcpListener};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const CLIENT_PRIVATE: [u8; 32] = [2; 32];
 const DAEMON_PRIVATE: [u8; 32] = [1; 32];
 const DAEMON_INSTANCE: [u8; 32] = [3; 32];
 
+/// Names the homes of one test process apart.
+static HOMES: AtomicUsize = AtomicUsize::new(0);
+
 fn tempdir(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("lfs-scap-{tag}-{}", std::process::id()));
+    let sequence = HOMES.fetch_add(1, Ordering::Relaxed);
+    let dir =
+        std::env::temp_dir().join(format!("lfs-scap-{tag}-{}-{sequence}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
@@ -50,24 +59,27 @@ fn no_workspaces() -> SdkValue {
     ])
 }
 
-/// A stand-in daemon at its own loopback port: it answers this Sandbox's
-/// Workspace list, then its capacity model with `model`. With `stall` it
-/// answers the Workspace list, reads the capacity query and never answers
-/// it, which is what a daemon stuck behind its own slots looks like.
-fn daemon(model: SdkValue, stall: bool) -> SocketAddr {
+/// A stand-in daemon at its own loopback port, and how many connections it
+/// served: it answers this Sandbox's Workspace list and its capacity model
+/// with `model` on the connection it was given. With `stall` it answers the
+/// Workspace list, reads the capacity query and never answers it, which is
+/// what a daemon stuck behind its own slots looks like.
+fn daemon(model: SdkValue, stall: bool) -> (SocketAddr, Arc<AtomicUsize>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let endpoint = listener.local_addr().unwrap();
-    let model = std::sync::Arc::new(model);
+    let model = Arc::new(model);
+    let served = Arc::new(AtomicUsize::new(0));
+    let counted = served.clone();
     std::thread::spawn(move || {
         for stream in listener.incoming() {
             let Ok(stream) = stream else { return };
+            counted.fetch_add(1, Ordering::SeqCst);
             let model = model.clone();
-            // one worker per connection: a used list connection stays open
-            // beside the capacity query's own
+            // one worker per connection: the pool keeps one and reuses it
             std::thread::spawn(move || serve(stream, &model, stall));
         }
     });
-    endpoint
+    (endpoint, served)
 }
 
 /// One stand-in connection: its Hello, then each call's answer until the
@@ -97,8 +109,8 @@ fn serve(stream: std::net::TcpStream, model: &SdkValue, stall: bool) {
             }
             Request::Sdk(sdk) if sdk.method == CAPACITY_OPERATION => {
                 if stall {
-                    // read but never answered: the caller's own bound, not a
-                    // closed socket, ends its wait
+                    // read but never answered: the read model's own fence, not
+                    // a closed socket, ends its wait
                     std::thread::sleep(Duration::from_secs(6));
                     break;
                 }
@@ -126,22 +138,23 @@ fn map(fields: &[(&str, SdkValue)]) -> SdkValue {
     )
 }
 
-/// A home with Store `shop` (project `api`) and Sandbox `s1` on `native`,
-/// recorded as a started Sandbox whose daemon this host reaches through the
-/// forward `daemon` names; its keys are `endpoint`'s.
-fn forwarded_sandbox(home: &Path, endpoint: SocketAddr) {
+/// The home's machine, Store `shop` and project `api`; the machine's `worker`
+/// record only while it runs (its absence is a stopped machine, #535 D11).
+fn home_records(home: &Path, worker: bool) {
     write_record(
         &paths::machine_record(home, "native"),
         &map(&[("name", t("native")), ("platform", t("native"))]),
     )
     .unwrap();
-    // the forward's machine answers: a forward with no recorded process is
-    // not checked against one
-    write_record(
-        &paths::worker_record(home, "native"),
-        &map(&[("address", t("127.0.0.1:1")), ("secret", t("5e"))]),
-    )
-    .unwrap();
+    if worker {
+        // the forward's machine answers: a forward with no recorded process is
+        // not checked against one
+        write_record(
+            &paths::worker_record(home, "native"),
+            &map(&[("address", t("127.0.0.1:1")), ("secret", t("5e"))]),
+        )
+        .unwrap();
+    }
     write_record(
         &paths::store_record(home, "shop"),
         &map(&[
@@ -159,29 +172,33 @@ fn forwarded_sandbox(home: &Path, endpoint: SocketAddr) {
         &map(&[("name", t("api"))]),
     )
     .unwrap();
-    write_record(
-        &paths::sandbox_record(home, "s1"),
-        &map(&[
-            ("name", t("s1")),
-            ("project", t("shop/api")),
-            ("machine", t("native")),
-            ("id", t("s-1")),
-            (
-                "daemon",
-                map(&[
-                    ("name", t("lfs-x-s1")),
-                    (
-                        "forward",
-                        map(&[
-                            ("address", t(&endpoint.to_string())),
-                            ("machine", t("native")),
-                        ]),
-                    ),
-                ]),
-            ),
-        ]),
-    )
-    .unwrap();
+}
+
+/// Sandbox `s1` on `native`, recorded with its `id` (`None`: gone, its create
+/// never recorded one) whose daemon this host reaches through the forward to
+/// `endpoint`, carried by forward process `pid` (`None`: a port nothing
+/// carries).
+fn sandbox_record(home: &Path, endpoint: SocketAddr, id: Option<&str>, pid: Option<i64>) {
+    let mut forward = vec![
+        ("address", t(&endpoint.to_string())),
+        ("machine", t("native")),
+    ];
+    if let Some(pid) = pid {
+        forward.push(("pid", SdkValue::Int(pid)));
+    }
+    let mut fields = vec![
+        ("name", t("s1")),
+        ("project", t("shop/api")),
+        ("machine", t("native")),
+    ];
+    if let Some(id) = id {
+        fields.push(("id", t(id)));
+    }
+    fields.push((
+        "daemon",
+        map(&[("name", t("lfs-x-s1")), ("forward", map(&forward))]),
+    ));
+    write_record(&paths::sandbox_record(home, "s1"), &map(&fields)).unwrap();
     write_record(
         &paths::sandbox_control(home, "s1"),
         &map(&[
@@ -233,10 +250,11 @@ fn busy() -> SdkValue {
 
 #[test]
 fn a_running_sandbox_s_get_shows_its_daemon_capacity() {
-    let endpoint = daemon(busy(), false);
+    let (endpoint, served) = daemon(busy(), false);
     let home = tempdir("shown");
     home::open(&home).unwrap();
-    forwarded_sandbox(&home, endpoint);
+    home_records(&home, true);
+    sandbox_record(&home, endpoint, Some("s-1"), None);
     let got = call(&home, "sandbox.get", &[("name", t("s1"))]).unwrap();
     assert_eq!(got.get_text("state"), Some("running"), "{got:?}");
     let capacity = got
@@ -263,15 +281,19 @@ fn a_running_sandbox_s_get_shows_its_daemon_capacity() {
     );
     assert_eq!(failures[0].get_int("generation"), Some(6));
     assert_eq!(failures[0].get_text("request"), Some("unmount"));
+    // the Workspace list and the capacity read share the one pooled
+    // connection (#543): a get takes no second control slot of its own
+    assert_eq!(served.load(Ordering::SeqCst), 1, "{got:?}");
     std::fs::remove_dir_all(home).unwrap();
 }
 
 #[test]
 fn a_daemon_that_does_not_answer_leaves_daemon_capacity_out() {
-    let endpoint = daemon(busy(), true);
+    let (endpoint, _served) = daemon(busy(), true);
     let home = tempdir("stalled");
     home::open(&home).unwrap();
-    forwarded_sandbox(&home, endpoint);
+    home_records(&home, true);
+    sandbox_record(&home, endpoint, Some("s-1"), None);
     let at = Instant::now();
     let got = call(&home, "sandbox.get", &[("name", t("s1"))]).unwrap();
     let elapsed = at.elapsed();
@@ -286,5 +308,58 @@ fn a_daemon_that_does_not_answer_leaves_daemon_capacity_out() {
     );
     assert!(got.get("daemon_capacity").is_none(), "{got:?}");
     assert_eq!(got.get_text("state"), Some("running"), "{got:?}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_stopped_machine_is_never_dialed() {
+    let (endpoint, served) = daemon(busy(), false);
+    let home = tempdir("stopped");
+    home::open(&home).unwrap();
+    // the machine records no worker: nothing starts it (#535 D11)
+    home_records(&home, false);
+    sandbox_record(&home, endpoint, Some("s-1"), None);
+    let at = Instant::now();
+    let got = call(&home, "sandbox.get", &[("name", t("s1"))]).unwrap();
+    let elapsed = at.elapsed();
+    assert!(got.get("down_reason").is_some(), "{got:?}");
+    assert!(got.get("daemon_capacity").is_none(), "{got:?}");
+    // a down machine is answered from its records: no port is dialed and
+    // nothing waits for a daemon that is not there
+    assert_eq!(served.load(Ordering::SeqCst), 0, "{got:?}");
+    assert!(elapsed < Duration::from_secs(1), "{elapsed:?}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn an_ended_forward_is_never_dialed() {
+    let (endpoint, served) = daemon(busy(), false);
+    let home = tempdir("forward-ended");
+    home::open(&home).unwrap();
+    home_records(&home, true);
+    // a recorded forward process that is not alive: its port may be reused by
+    // another process, so it is never dialed
+    sandbox_record(&home, endpoint, Some("s-1"), Some(3_999_999));
+    let at = Instant::now();
+    let got = call(&home, "sandbox.get", &[("name", t("s1"))]).unwrap();
+    let elapsed = at.elapsed();
+    assert!(got.get("down_reason").is_some(), "{got:?}");
+    assert!(got.get("daemon_capacity").is_none(), "{got:?}");
+    assert_eq!(served.load(Ordering::SeqCst), 0, "{got:?}");
+    assert!(elapsed < Duration::from_secs(1), "{elapsed:?}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_sandbox_with_no_id_is_never_dialed() {
+    let (endpoint, served) = daemon(busy(), false);
+    let home = tempdir("gone");
+    home::open(&home).unwrap();
+    home_records(&home, true);
+    sandbox_record(&home, endpoint, None, None);
+    let got = call(&home, "sandbox.get", &[("name", t("s1"))]).unwrap();
+    assert_eq!(got.get_text("state"), Some("gone"), "{got:?}");
+    assert!(got.get("daemon_capacity").is_none(), "{got:?}");
+    assert_eq!(served.load(Ordering::SeqCst), 0, "{got:?}");
     std::fs::remove_dir_all(home).unwrap();
 }
