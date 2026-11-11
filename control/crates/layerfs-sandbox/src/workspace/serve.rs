@@ -236,6 +236,11 @@ pub fn commit(host: &Host, path: Option<&str>, force: bool) -> Outcome {
     values::commit(&reply)
 }
 
+/// How long unmount's Workspace status probe waits for the daemon. After
+/// slot reclamation the ordinary path succeeds; a truly exhausted daemon
+/// returns `Capacity` in bounded time instead of blocking behind the guard.
+const UNMOUNT_STATUS_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
 /// `workspace.unmount(ws, { discard?, force? })` of the Workspace at
 /// `path`: the daemon's answer. It is refused `Busy` while a command of the
 /// Workspace runs; `force` cancels them first (D-10). A stale command
@@ -258,7 +263,10 @@ pub fn unmount(host: &Host, path: Option<&str>, discard: bool, force: bool) -> O
     let wsid = layerfs_bridge::sdk_values::hex(&token.workspace.to_bytes());
     let unreached = &mut crate::exec::cancel::unreached;
     crate::exec::cancel::settle(&state.directory, &state.id, Some(&wsid), force, unreached)?;
-    crate::files::refresh(&state)?;
+    // One short deadline, not the full admission wait: a Workspace unmount
+    // must not hold the folder guard while a refusing daemon keeps the
+    // ordinary 60 s control wait running (#540).
+    crate::files::refresh_within(&state, UNMOUNT_STATUS_WAIT)?;
     // the daemon's kernel probe answers Busy for a process still holding it
     let attempt = crate::unmount_guard::begin(&state, token, path)?;
     drop(guard);

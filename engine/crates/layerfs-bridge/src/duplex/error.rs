@@ -1,4 +1,5 @@
 //! Transport failures retain original crypto/I/O and failed close evidence.
+use super::admission::AdmissionNotice;
 use std::{fmt, io};
 
 /// One duplex channel failure, without retries or inferred product disposition.
@@ -14,6 +15,9 @@ pub enum ChannelError {
     RecordLimit,
     /// The physical Noise nonce space is exhausted.
     NonceExhausted,
+    /// The daemon refused admission before the handshake and sent its advisory
+    /// capacity notice (#540). Nothing was attempted; retrying is safe.
+    Admission(AdmissionNotice),
     /// Either direction previously failed or explicitly closed this connection.
     Quarantined,
     /// Connection quarantine also failed to interrupt socket I/O.
@@ -42,6 +46,14 @@ impl fmt::Display for ChannelError {
             Self::Invalid(what) => write!(f, "invalid duplex channel: {what}"),
             Self::RecordLimit => f.write_str("duplex record processing window exceeded"),
             Self::NonceExhausted => f.write_str("duplex Noise nonce exhausted"),
+            Self::Admission(notice) => write!(
+                f,
+                "daemon admission refused ({}): retained {}, pool vacant {}, reserved vacant {}",
+                notice.reason.as_str(),
+                notice.retained,
+                notice.pool_vacant,
+                notice.reserved_vacant
+            ),
             Self::Quarantined => f.write_str("duplex channel quarantined"),
             Self::CloseFailed { original, close } => {
                 write!(f, "{original}; shutdown also failed: {close}")

@@ -4,7 +4,7 @@ use super::family::{page, sandbox_of, Page};
 use super::record::SandboxRecord;
 use crate::host::Call;
 use crate::route::reach;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::control::{CapacityModel, SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_machine::worker::Unreached;
 use std::path::Path;
@@ -44,6 +44,9 @@ pub struct Got {
     pub down_reason: Option<String>,
     /// The next page's position; `None` after the last.
     pub next: Option<usize>,
+    /// Its daemon's control-capacity read model (#540), when a running
+    /// Sandbox answered the bounded read (#543).
+    pub daemon_capacity: Option<CapacityModel>,
 }
 
 /// Its record with one page of its Workspaces. Reading never clears an
@@ -80,13 +83,45 @@ pub fn get(home: &Path, events: &mut Events<'_>, request: &GetRequest) -> Result
         Err(Unreached(why)) => (Vec::new(), Some(why.message), false),
     };
     let (workspaces, next) = page(all, request.page);
+    let state = record.state(gone);
+    // best effort, bounded, and only for a Sandbox its daemon still serves:
+    // this read never fails a get (#540, #543)
+    let down = down_reason.is_some();
+    let daemon_capacity = capacity(&home, events, &record, gone, state, down);
     Ok(Got {
-        state: record.state(gone),
+        state,
         record,
         workspaces,
         down_reason,
         next,
+        daemon_capacity,
     })
+}
+
+/// The daemon's `backend.daemon.connection_failures` read model of a Sandbox
+/// this process still reaches (#540): read once, best effort, and omitted
+/// when the Sandbox is gone, is not running, or its machine or forward is
+/// already down — a get dials nothing for one of those (#543).
+fn capacity(
+    home: &Path,
+    events: &mut Events<'_>,
+    record: &SandboxRecord,
+    gone: bool,
+    state: &str,
+    down: bool,
+) -> Option<CapacityModel> {
+    if gone || down || state != "running" {
+        return None;
+    }
+    record.id()?;
+    // the forwarded daemon is dialed from here, its machine's from its worker:
+    // either route reads it with the connection the Workspace list lent
+    let answer = if direct::forwarded(record) {
+        direct::capacity(home, record)
+    } else {
+        reach(home, events, record, Call::Capacity, crate::dispatch::call).ok()?
+    };
+    Some(CapacityModel::parse(&answer.ok()?))
 }
 
 /// Workspace `item` of Sandbox `sandbox`, as its daemon answered it.

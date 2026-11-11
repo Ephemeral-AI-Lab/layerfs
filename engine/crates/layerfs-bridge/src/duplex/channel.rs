@@ -62,6 +62,13 @@ impl Connection {
             shared: self.receive.shared.clone(),
         })
     }
+    /// Whether this channel is quarantined: a failed exchange, an ended
+    /// session or an application fence (`CloseHandle`) shut both directions
+    /// down, and no record may be sent on it again. All owners read the one
+    /// shared flag, so a fence's close is visible to whoever borrowed it.
+    pub fn is_quarantined(&self) -> bool {
+        self.receive.shared.ready().is_err()
+    }
     /// Clears explicit handshake I/O waits on the actual shared socket before long-lived operations.
     /// An original policy-change error quarantines/fences this owner once.
     pub fn clear_io_waits(&self) -> ChannelResult<()> {
