@@ -19,6 +19,9 @@ pub fn call(host: Host, call: Call) -> Outcome {
             let directory = crate::files::sandbox_dir(&host)?;
             listed(daemon_backend(&host, &call)?, &directory)
         }
+        // the operator view of control admission and retained failures
+        // (#540): a bounded read model, never a product operation
+        Call::Capacity => capacity(&host),
         Call::Create { platform } => crate::lifecycle::create(&host, platform.as_deref()),
         Call::Close { force, held } => {
             crate::lifecycle::close(&host, force, held.as_deref().unwrap_or_default())
@@ -101,6 +104,15 @@ fn daemon_backend(host: &Host, call: &Call) -> Outcome {
         }
         crate::SdkError::Mount(failure) => outcome::failed(failure),
     })
+}
+
+/// The daemon's `backend.daemon.connection_failures` read model (#540): the
+/// connection the Workspace list lent from the Sandbox's pool, under one
+/// bound for admission and the exchange (#543). Nothing starts: the caller
+/// asks only a Sandbox this process still reaches.
+fn capacity(host: &Host) -> Outcome {
+    let state = registry::sandbox_live(host)?;
+    crate::daemon::capacity::lent(&state.controls)
 }
 
 /// Refuses an invalid Commit `message` before any effect.

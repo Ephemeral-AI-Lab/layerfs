@@ -1,7 +1,7 @@
 //! One attempted authenticated control exchange, retaining the original unknown.
 use layerfs_bridge::{
     control::{Answer, Call, ControlError, Reply, Request, SdkValue},
-    duplex::{ChannelError, ChannelWork, Connection},
+    duplex::{ChannelError, ChannelWork, CloseHandle, Connection},
 };
 use std::fmt;
 /// One sequential control connection. Concurrent callers may use separate channels.
@@ -242,6 +242,12 @@ impl Control {
     }
     pub fn clear_io_waits(&self) -> Result<(), ChannelError> {
         self.connection.clear_io_waits()
+    }
+    /// A clone of this channel's socket for an application-owned fence
+    /// (`daemon::fence`): it carries no send or replay capability, and
+    /// shutting it down quarantines the channel.
+    pub fn close_handle(&self) -> Result<CloseHandle, ChannelError> {
+        self.connection.close_handle()
     }
     /// Actual cumulative duplex send/receive work for this connection.
     pub fn channel_work(&self) -> (ChannelWork, ChannelWork) {

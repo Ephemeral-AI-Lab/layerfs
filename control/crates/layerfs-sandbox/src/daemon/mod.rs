@@ -9,6 +9,8 @@ pub mod channel;
 #[doc(hidden)]
 pub mod failure;
 #[doc(hidden)]
+pub mod fence;
+#[doc(hidden)]
 pub mod internal;
 #[doc(hidden)]
 pub mod operator;
