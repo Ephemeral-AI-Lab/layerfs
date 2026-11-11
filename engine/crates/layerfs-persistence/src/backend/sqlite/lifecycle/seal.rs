@@ -19,7 +19,10 @@ impl Session {
         if state.quarantined || !state.connection.is_autocommit() {
             return Err(PersistenceError::Uncertain);
         }
-        #[cfg(target_os = "linux")]
+        // The same advisory lane as a write transaction: a seal is the sole
+        // owner's offline handoff, so no other opener may write while the
+        // checkpoint, close and sidecar removal below run.
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         let state = {
             let mut state = state;
             state.writer_hold =
