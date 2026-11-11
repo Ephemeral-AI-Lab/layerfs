@@ -57,7 +57,8 @@ open_direct(store, binding, cursor_key, template)
        SqliteHandles::open_writable     (the writer session)
        factory(0) -> control reader     (read-only session)
        Store::new(..).with_merge_scratch(..)
-                                        --> Failed("Store open: ..")
+                                        --> Busy("Store open: ..") /
+                                            Failed("Store open: ..")
   4 Owner::start(template, pager 1024 KiB, namespaces 64)
                                         --> Failed("overlay template: ..")
 ```

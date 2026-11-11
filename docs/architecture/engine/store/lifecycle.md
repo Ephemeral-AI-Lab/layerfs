@@ -126,7 +126,7 @@ StoreFile::checkpoint(&self)                  (live shared session; stays open)
     -wal empty or absent? ------------------------------------> Ok(true), no SQL
     FIFO turn (Writer); this thread holds the lane? ----------> Ok(false)
     quarantined or open transaction? ---------------------------> Unknown
-    Writer::try_acquire: Linux directory lane, one attempt
+    Writer::try_acquire: directory lane (Linux and macOS), one attempt
       another holder (EWOULDBLOCK) ----------------------------> Ok(false)
     a background checkpoint pass running? wait for it to end
     PRAGMA wal_checkpoint(TRUNCATE), once; release the lane
@@ -141,8 +141,10 @@ live daemon still keeps its Store across Saves and Commits, and the 60 s idle
 close is unchanged. A checkpoint left by `Ok(false)` is never retried; its
 frames stay valid and the last close checkpoints them. A process-level close (`close_idle`, which the CLI runs before it exits) waits for a checkpoint still running and then closes the Store; it never skips it. The lane is taken
 first because a TRUNCATE checkpoint holds SQLite's WAL write lock, which a
-writer of another process would otherwise meet as `Busy`; off Linux there is
-no lane, and concurrent writers keep exact `Busy`, as for any write there.
+writer of another process would otherwise meet as `Busy`; every host that
+opens a SQLite Store takes this lane, so a writer there waits for it or the
+checkpoint is left, and only a writer that bypasses the lane meets exact
+`Busy`.
 Sources: [`session/checkpoint.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/checkpoint.rs),
 [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs).
 
