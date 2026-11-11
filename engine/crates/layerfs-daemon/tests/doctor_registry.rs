@@ -86,8 +86,10 @@ fn registry_observation_is_complete_read_only_and_detects_membership_changes() {
     // The order holder-in-job -> mounter-holds-registry -> Busy is forced by
     // those two locks: no sleep, attempt count or time budget decides the
     // outcome. There is no private lock/test hook and no synthetic Busy reply.
-    // GUARD only turns a broken construction (a Mount admission that no longer
-    // waits while it holds the registry) into a failure instead of a hang.
+    // GUARD only turns a broken construction into a failure instead of a hang.
+    // The holder waits for the test for at most GUARD and then releases the
+    // connection lock itself, so an admission that never returns cannot keep
+    // the wait cycle alive; that expiry fails the test below.
     const GUARD: std::time::Duration = std::time::Duration::from_secs(30);
     // Admissions repeated while the registry stays held.
     const HELD: usize = 8;
@@ -100,16 +102,25 @@ fn registry_observation_is_complete_read_only_and_detects_membership_changes() {
     let branch = fixture.host.branch;
     let (entered, parked) = mpsc::channel();
     let (release, released) = mpsc::channel::<()>();
+    let (expired, expiry) = mpsc::channel::<()>();
     let before_busy = fixture.work();
     let (pages, second_token) = std::thread::scope(|scope| {
         // Owned by this closure: a failed assertion below drops it while
         // unwinding, which lets the holder go before the scope joins it.
         let release = release;
+        let expired = expired;
         let holder = scope.spawn(move || {
             overlay.call(route, ServiceClass::General, None, move |_| {
                 let _ = entered.send(());
-                // Returns when the test releases it, or when the test is gone.
-                let _ = released.recv();
+                // Bounded: returns when the test releases it, when the test is
+                // gone, or at GUARD. A timeout means the test never reached its
+                // release, so the holder lets go and records the failure.
+                match released.recv_timeout(GUARD) {
+                    Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => {}
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        let _ = expired.send(());
+                    }
+                }
                 Ok(())
             })
         });
@@ -122,12 +133,24 @@ fn registry_observation_is_complete_read_only_and_detects_membership_changes() {
                 branch,
             })
         });
+        // A registry admission that never returns is the one hang the
+        // complete-page loop cannot reach by itself; the holder's bounded wait
+        // breaks that wait cycle, and this check reports it as a failure.
+        let held_within_guard = || {
+            assert!(
+                expiry.try_recv().is_err(),
+                "the owner job's release did not arrive within {:?}: the registry \
+                 admission never returned, so the holder released itself",
+                GUARD
+            );
+        };
         let started = std::time::Instant::now();
         let mut pages = 0usize;
         let first = loop {
             match page(&service, 0, None) {
                 // The mounter has not taken the registry yet.
                 Reply::Sdk(value) => {
+                    held_within_guard();
                     assert!(
                         !mounter.is_finished(),
                         "Mount returned while the owner job was parked"
@@ -140,7 +163,10 @@ fn registry_observation_is_complete_read_only_and_detects_membership_changes() {
                     pages += 1;
                     std::thread::yield_now();
                 }
-                Reply::SdkRefused(refusal) => break refusal,
+                Reply::SdkRefused(refusal) => {
+                    held_within_guard();
+                    break refusal;
+                }
                 other => panic!("unexpected registry admission reply: {other:?}"),
             }
         };
@@ -148,11 +174,13 @@ fn registry_observation_is_complete_read_only_and_detects_membership_changes() {
         // Both threads stay parked, so every later admission is refused too,
         // and none of them reaches the Store.
         for _ in 0..HELD {
-            // A holder that was only preempted would run and finish here.
+            // Give the competing threads a chance to run; determinism comes
+            // from the holder's release channel and the lock chain.
             std::thread::yield_now();
             let Reply::SdkRefused(refusal) = page(&service, 0, None) else {
                 panic!("registry admission completed while a Mount admission held it")
             };
+            held_within_guard();
             assert_eq!(refusal.code, "Busy");
         }
         let after_busy = fixture.work();
@@ -164,6 +192,7 @@ fn registry_observation_is_complete_read_only_and_detects_membership_changes() {
             !mounter.is_finished(),
             "Mount returned while the owner job was parked"
         );
+        held_within_guard();
         release.send(()).expect("holder still parked");
         holder.join().unwrap().expect("parked owner job");
         let Reply::Bound { token, .. } = mounter.join().unwrap().unwrap().reply else {
@@ -171,6 +200,12 @@ fn registry_observation_is_complete_read_only_and_detects_membership_changes() {
         };
         (pages, token)
     });
+    // The bounded wait never expired on the normal path.
+    assert!(
+        expiry.try_recv().is_err(),
+        "the owner job's release did not arrive within {:?}: the holder released itself",
+        GUARD
+    );
     // Released: the admission completes again and shows the Mount it waited on.
     let Reply::Sdk(both) = page(&service, 0, None) else {
         panic!("registry admission not released")
