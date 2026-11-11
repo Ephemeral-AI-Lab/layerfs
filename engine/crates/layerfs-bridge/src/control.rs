@@ -164,6 +164,10 @@ fn boolean(value: u8) -> Result<bool, ControlError> {
     }
 }
 
+pub use crate::control_capacity::{
+    AdmissionModel, CapacityModel, RetainedFailureModel, RetainedModel,
+    OPERATION as CAPACITY_OPERATION,
+};
 pub use crate::control_forced::{
     AbortDisposition, CommitKnowledge, DetachDisposition, ForceUnmounted, ForcedCleanup,
     ForcedFacts, ForcedOutcome,

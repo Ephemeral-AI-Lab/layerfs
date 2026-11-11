@@ -19,6 +19,7 @@ mod filesystem;
 #[cfg(unix)]
 mod owner;
 #[cfg(unix)]
+mod retained;
 mod serve;
 #[cfg(unix)]
 pub use cli::main;
@@ -30,3 +31,4 @@ pub(crate) use diagnostics::{commit_parts, namespace_values, storage_values};
 pub use failure::{ApplicationError, ConnectionFailure};
 #[cfg(unix)]
 pub use owner::Application;
+pub use retained::{RetainedFailure, RetainedSnapshot};
