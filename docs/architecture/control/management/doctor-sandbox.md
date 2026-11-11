@@ -32,6 +32,10 @@ request is never replayed after a lost answer.
 `sandbox.doctor_workspaces` is an internal daemon control method, not a normal
 SDK call-table entry. It uses nonblocking registry admission and returns at
 most 32 fixed-size fact rows per page, without history, Store or overlay reads.
+Admission is `Busy` while another control step holds the registry. Most steps
+hold it for one map update. A Mount's admission also reads each live
+Workspace's retained maintenance failure under it, which waits for a job
+running on that Workspace's connection, so `Busy` lasts until that job ends.
 Membership/binding-epoch generation and ordered identities detect changed,
 repeated or incomplete pagination. Reports retain counts/activity/mount facts
 and bounded examples of retained failed or uncertain activity, not an unbounded

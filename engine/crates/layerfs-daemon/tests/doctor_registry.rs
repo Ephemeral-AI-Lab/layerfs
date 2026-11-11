@@ -6,7 +6,7 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 use layerfs_bridge::control::{Reply, Request, SdkCall, SdkValue, UnmountControl};
-use layerfs_daemon::control::Service;
+use layerfs_daemon::{control::Service, ServiceClass};
 use layerfs_history::WorkspaceId;
 
 fn page(service: &Service, offset: i64, generation: Option<String>) -> Reply {
@@ -69,68 +69,126 @@ fn registry_observation_is_complete_read_only_and_detects_membership_changes() {
         (before.statements, before.object_batches),
         (after.statements, after.object_batches)
     );
-    // Exercise the producer's actual nonblocking registry admission. Two
-    // bounded read-only callers contend; there is no private lock/test hook,
-    // synthetic Busy reply, mutation loop or unbounded pressure worker. The
-    // refused admission is only produced while one caller is inside the
-    // producer's short try-lock window, so the attempt budget is the declared
-    // deadline below and not a fixed attempt count: a host that serializes
-    // these two callers can spend a few thousand calls inside one scheduling
-    // slice without ever co-scheduling them (measured 7 of 72 loaded runs,
-    // and 2 of 15 on one CPU, with a 2048-attempt cap).
+    // Exercise the producer's actual nonblocking registry admission against a
+    // registry holder this test parks, not against a second caller it hopes
+    // to collide with. A Mount's admission reads each live Workspace's
+    // retained maintenance failure while it holds the registry, and that read
+    // takes the Workspace's connection lock. So:
     //
-    // This is a bounded contention observation, not a constructed rendezvous.
-    // No product operation holds the registry mutex at a point a test can
-    // hold it open (every acquisition is a short atomic step, and the daemon
-    // never holds it across Store, overlay or provider I/O), so the reply is
-    // not guaranteed to arrive on any host. Each caller measures its own
-    // deadline from the barrier, so thread start-up cost cannot consume it.
-    const DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);
-    use std::sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
-        Barrier,
+    //   holder  runs one owner job on the bound Workspace and parks inside it
+    //           (the public job entry runs its caller's closure under the
+    //           connection lock);
+    //   mounter sends a second Mount, whose admission takes the registry and
+    //           then waits for that connection lock;
+    //   here    every admission is a complete page until the mounter holds the
+    //           registry, and a typed Busy from then until the holder is let go.
+    //
+    // The order holder-in-job -> mounter-holds-registry -> Busy is forced by
+    // those two locks: no sleep, attempt count or time budget decides the
+    // outcome. There is no private lock/test hook and no synthetic Busy reply.
+    // GUARD only turns a broken construction (a Mount admission that no longer
+    // waits while it holds the registry) into a failure instead of a hang.
+    const GUARD: std::time::Duration = std::time::Duration::from_secs(30);
+    // Admissions repeated while the registry stays held.
+    const HELD: usize = 8;
+    use std::sync::mpsc;
+    let (route, overlay) = {
+        let operation = service.operation(token).unwrap();
+        (operation.workspace().route(), operation.overlay().clone())
     };
+    let second = WorkspaceId::from_authority([8; 32]).unwrap();
+    let branch = fixture.host.branch;
+    let (entered, parked) = mpsc::channel();
+    let (release, released) = mpsc::channel::<()>();
     let before_busy = fixture.work();
-    let start = Barrier::new(2);
-    let observed_busy = AtomicBool::new(false);
-    let calls = AtomicUsize::new(0);
-    std::thread::scope(|scope| {
-        for _ in 0..2 {
-            scope.spawn(|| {
-                start.wait();
-                let deadline = std::time::Instant::now() + DEADLINE;
-                while std::time::Instant::now() < deadline && !observed_busy.load(Ordering::Acquire)
-                {
-                    calls.fetch_add(1, Ordering::Relaxed);
-                    match page(&service, 0, None) {
-                        Reply::Sdk(value) => assert_eq!(value.get_int("total"), Some(1)),
-                        Reply::SdkRefused(refusal) => {
-                            assert_eq!(refusal.code, "Busy");
-                            observed_busy.store(true, Ordering::Release);
-                        }
-                        other => panic!("unexpected registry admission reply: {other:?}"),
-                    }
+    let (pages, second_token) = std::thread::scope(|scope| {
+        // Owned by this closure: a failed assertion below drops it while
+        // unwinding, which lets the holder go before the scope joins it.
+        let release = release;
+        let holder = scope.spawn(move || {
+            overlay.call(route, ServiceClass::General, None, move |_| {
+                let _ = entered.send(());
+                // Returns when the test releases it, or when the test is gone.
+                let _ = released.recv();
+                Ok(())
+            })
+        });
+        parked
+            .recv_timeout(GUARD)
+            .expect("owner job entered the Workspace connection lock");
+        let mounter = scope.spawn(|| {
+            service.execute_control(&Request::Mount {
+                workspace: second,
+                branch,
+            })
+        });
+        let started = std::time::Instant::now();
+        let mut pages = 0usize;
+        let first = loop {
+            match page(&service, 0, None) {
+                // The mounter has not taken the registry yet.
+                Reply::Sdk(value) => {
+                    assert!(
+                        !mounter.is_finished(),
+                        "Mount returned while the owner job was parked"
+                    );
+                    assert!(
+                        started.elapsed() < GUARD,
+                        "Mount admission did not hold the registry after {pages} complete pages"
+                    );
+                    assert_eq!(value, one);
+                    pages += 1;
+                    std::thread::yield_now();
                 }
-            });
+                Reply::SdkRefused(refusal) => break refusal,
+                other => panic!("unexpected registry admission reply: {other:?}"),
+            }
+        };
+        assert_eq!(first.code, "Busy");
+        // Both threads stay parked, so every later admission is refused too,
+        // and none of them reaches the Store.
+        for _ in 0..HELD {
+            // A holder that was only preempted would run and finish here.
+            std::thread::yield_now();
+            let Reply::SdkRefused(refusal) = page(&service, 0, None) else {
+                panic!("registry admission completed while a Mount admission held it")
+            };
+            assert_eq!(refusal.code, "Busy");
         }
+        let after_busy = fixture.work();
+        assert_eq!(
+            (before_busy.statements, before_busy.object_batches),
+            (after_busy.statements, after_busy.object_batches)
+        );
+        assert!(
+            !mounter.is_finished(),
+            "Mount returned while the owner job was parked"
+        );
+        release.send(()).expect("holder still parked");
+        holder.join().unwrap().expect("parked owner job");
+        let Reply::Bound { token, .. } = mounter.join().unwrap().unwrap().reply else {
+            panic!("second bind")
+        };
+        (pages, token)
     });
-    assert!(
-        observed_busy.load(Ordering::Acquire),
-        "no typed Busy refusal from {} admissions within {DEADLINE:?} on each caller",
-        calls.load(Ordering::Relaxed)
-    );
-    let after_busy = fixture.work();
-    assert_eq!(
-        (before_busy.statements, before_busy.object_batches),
-        (after_busy.statements, after_busy.object_batches)
-    );
+    // Released: the admission completes again and shows the Mount it waited on.
+    let Reply::Sdk(both) = page(&service, 0, None) else {
+        panic!("registry admission not released")
+    };
+    assert_eq!(both.get_int("total"), Some(2));
+    service
+        .execute_control(&Request::Unmount(UnmountControl {
+            token: second_token,
+            discard: true,
+        }))
+        .unwrap();
     let Reply::Sdk(released) = page(&service, 0, None) else {
         panic!("registry admission not released")
     };
     assert_eq!(released, one);
     println!(
-        "actual_registry_producer_busy=true calls={} threads_joined=2 rows_unchanged=true store_sql_delta=0 object_batch_delta=0",
-        calls.load(Ordering::Relaxed)
+        "actual_registry_producer_busy=true pages_before_hold={pages} refused_while_held={} threads_joined=2 rows_unchanged=true store_sql_delta=0 object_batch_delta=0",
+        HELD + 1
     );
     service
         .execute_control(&Request::Unmount(UnmountControl {
