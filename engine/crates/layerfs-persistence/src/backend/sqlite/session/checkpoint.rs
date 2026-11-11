@@ -12,10 +12,10 @@ impl Session {
     /// empty (it was, or it is now). `Ok(false)`: it could not complete now
     /// and is left as it is (its frames stay valid; the last close checkpoints
     /// them): this thread holds the publication lane, another process holds
-    /// the writer lane (Linux, tried without waiting), or a reader in another
-    /// process still reads a snapshot in the log (`busy`). Nothing is retried
-    /// and no busy handler waits. Short holds: the FIFO turn and the
-    /// connection lock are held for this one statement only.
+    /// the writer lane (Linux or macOS, tried without waiting), or a reader
+    /// in another process still reads a snapshot in the log (`busy`).
+    /// Nothing is retried and no busy handler waits. Short holds: the FIFO
+    /// turn and the connection lock are held for this one statement only.
     pub(crate) fn checkpoint_idle(&self) -> Result<bool, BackendError> {
         if !self.writable {
             return Err(BackendError::ReadOnly);
