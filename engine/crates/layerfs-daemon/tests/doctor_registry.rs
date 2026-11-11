@@ -72,12 +72,20 @@ fn registry_observation_is_complete_read_only_and_detects_membership_changes() {
     // Exercise the producer's actual nonblocking registry admission. Two
     // bounded read-only callers contend; there is no private lock/test hook,
     // synthetic Busy reply, mutation loop or unbounded pressure worker. The
-    // refused admission is only observable while one caller is inside the
+    // refused admission is only produced while one caller is inside the
     // producer's short try-lock window, so the attempt budget is the declared
     // deadline below and not a fixed attempt count: a host that serializes
     // these two callers can spend a few thousand calls inside one scheduling
     // slice without ever co-scheduling them (measured 7 of 72 loaded runs,
     // and 2 of 15 on one CPU, with a 2048-attempt cap).
+    //
+    // This is a bounded contention observation, not a constructed rendezvous.
+    // No product operation holds the registry mutex at a point a test can
+    // hold it open (every acquisition is a short atomic step, and the daemon
+    // never holds it across Store, overlay or provider I/O), so the reply is
+    // not guaranteed to arrive on any host. Each caller measures its own
+    // deadline from the barrier, so thread start-up cost cannot consume it.
+    const DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);
     use std::sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Barrier,
@@ -86,11 +94,11 @@ fn registry_observation_is_complete_read_only_and_detects_membership_changes() {
     let start = Barrier::new(2);
     let observed_busy = AtomicBool::new(false);
     let calls = AtomicUsize::new(0);
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
     std::thread::scope(|scope| {
         for _ in 0..2 {
             scope.spawn(|| {
                 start.wait();
+                let deadline = std::time::Instant::now() + DEADLINE;
                 while std::time::Instant::now() < deadline && !observed_busy.load(Ordering::Acquire)
                 {
                     calls.fetch_add(1, Ordering::Relaxed);
@@ -106,7 +114,11 @@ fn registry_observation_is_complete_read_only_and_detects_membership_changes() {
             });
         }
     });
-    assert!(observed_busy.load(Ordering::Acquire));
+    assert!(
+        observed_busy.load(Ordering::Acquire),
+        "no typed Busy refusal from {} admissions within {DEADLINE:?} on each caller",
+        calls.load(Ordering::Relaxed)
+    );
     let after_busy = fixture.work();
     assert_eq!(
         (before_busy.statements, before_busy.object_batches),
