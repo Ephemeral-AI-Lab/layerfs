@@ -71,7 +71,13 @@ fn registry_observation_is_complete_read_only_and_detects_membership_changes() {
     );
     // Exercise the producer's actual nonblocking registry admission. Two
     // bounded read-only callers contend; there is no private lock/test hook,
-    // synthetic Busy reply, mutation loop or unbounded pressure worker.
+    // synthetic Busy reply, mutation loop or unbounded pressure worker. The
+    // refused admission is only observable while one caller is inside the
+    // producer's short try-lock window, so the attempt budget is the declared
+    // deadline below and not a fixed attempt count: a host that serializes
+    // these two callers can spend a few thousand calls inside one scheduling
+    // slice without ever co-scheduling them (measured 7 of 72 loaded runs,
+    // and 2 of 15 on one CPU, with a 2048-attempt cap).
     use std::sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Barrier,
@@ -85,12 +91,8 @@ fn registry_observation_is_complete_read_only_and_detects_membership_changes() {
         for _ in 0..2 {
             scope.spawn(|| {
                 start.wait();
-                for _ in 0..2048 {
-                    if observed_busy.load(Ordering::Acquire)
-                        || std::time::Instant::now() >= deadline
-                    {
-                        break;
-                    }
+                while std::time::Instant::now() < deadline && !observed_busy.load(Ordering::Acquire)
+                {
                     calls.fetch_add(1, Ordering::Relaxed);
                     match page(&service, 0, None) {
                         Reply::Sdk(value) => assert_eq!(value.get_int("total"), Some(1)),
