@@ -4,7 +4,7 @@ use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{location::PackInfo, port::*, Storage, StoragePolicy};
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::{
     io::{Read, Write},
     os::unix::net::{UnixListener, UnixStream},
@@ -26,7 +26,7 @@ fn config(path: &Path) -> PersistenceConfig {
 fn create(path: &Path) -> SqliteHandles {
     SqliteHandles::create(config(path), StoragePolicy::frozen_default(), &authority()).unwrap()
 }
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn open(path: &Path) -> SqliteHandles {
     SqliteHandles::open_writable(
         config(path),
@@ -130,12 +130,12 @@ fn shared_session_reservation_waits_for_an_ordinary_public_read_owner() {
     assert_eq!(after.rollbacks, before.rollbacks);
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 struct Held {
     child: Child,
     socket: UnixStream,
 }
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 impl Held {
     fn start(path: &Path, socket_path: &Path) -> Self {
         let listener = UnixListener::bind(socket_path).unwrap();
@@ -169,6 +169,7 @@ impl Held {
             }
         };
         let mut held = Self { child, socket };
+        held.socket.set_nonblocking(false).unwrap();
         held.socket
             .set_read_timeout(Some(Duration::from_secs(3)))
             .unwrap();
@@ -189,11 +190,11 @@ impl Held {
                 break;
             }
             assert!(Instant::now() < deadline, "child exit deadline");
-            std::thread::yield_now();
+            std::thread::yield_now()
         }
     }
 }
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 impl Drop for Held {
     fn drop(&mut self) {
         let _ = self.child.kill();
@@ -202,7 +203,7 @@ impl Drop for Held {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn another_process_admission_precedes_the_single_sqlite_begin() {
     // Keep the owned AF_UNIX path below Darwin's sockaddr_un capacity.
     let temp = support::Temp::new("wa");
@@ -243,7 +244,7 @@ fn another_process_admission_precedes_the_single_sqlite_begin() {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn two_opened_handles_admit_eight_distinct_reservations_without_conflict() {
     let temp = support::Temp::new("writer-admission-two-handles");
     let path = temp.join("store.sqlite");
@@ -373,7 +374,7 @@ fn queued_writers_outlive_the_old_window_and_all_succeed() {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn a_cross_process_waiter_outlives_the_old_window_and_succeeds() {
     let temp = support::Temp::new("wl");
     let path = temp.join("store.sqlite");
@@ -497,7 +498,7 @@ fn writers_queue_behind_a_held_publication_lane_without_deadlock() {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn a_holder_process_that_exits_hands_the_lock_to_the_waiter() {
     let temp = support::Temp::new("wx");
     let path = temp.join("store.sqlite");
@@ -605,4 +606,84 @@ fn a_thread_reentering_its_own_turn_is_refused_instead_of_deadlocking() {
     );
     // The turn was released: the next call is admitted at once.
     assert!(handles.storage.reserve(reserve()).is_ok());
+}
+
+/// Child half of `three_processes_open_and_reserve_concurrently`: it waits for
+/// the parent's go on the inherited socket name, then opens the Store (which
+/// takes the open-time lane) and makes twenty reservations there.
+#[test]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn concurrent_open_child() {
+    let Some(path) = std::env::var_os("LAYERFS_ADMISSION_OPEN_STORE") else {
+        return;
+    };
+    let mut sock =
+        UnixStream::connect(std::env::var_os("LAYERFS_ADMISSION_OPEN_SOCK").unwrap()).unwrap();
+    sock.write_all(b"R").unwrap();
+    let mut go = [0u8; 1];
+    sock.read_exact(&mut go).unwrap();
+    let handles = open(Path::new(&path));
+    for _ in 0..20 {
+        handles.storage.reserve(reserve()).unwrap();
+    }
+}
+
+/// Three processes open the same Store at once: the open-time lane and the
+/// transaction lane queue them instead of meeting SQLite's Busy, so every
+/// open and every reservation of all three succeeds (#534, #647).
+#[test]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn three_processes_open_and_reserve_concurrently() {
+    let temp = support::Temp::new("wo");
+    let path = temp.join("store.sqlite");
+    create(&path).seal().unwrap();
+    let sock_path = temp.join("s");
+    let listener = UnixListener::bind(&sock_path).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let exe = std::env::current_exe().unwrap();
+    let children: Vec<_> = (0..3)
+        .map(|_| {
+            Command::new(&exe)
+                .args(["--exact", "concurrent_open_child", "--nocapture"])
+                .env("LAYERFS_ADMISSION_OPEN_STORE", &path)
+                .env("LAYERFS_ADMISSION_OPEN_SOCK", &sock_path)
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap()
+        })
+        .collect();
+    let mut sockets = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while sockets.len() < 3 {
+        match listener.accept() {
+            Ok((mut stream, _)) => {
+                stream.set_nonblocking(false).unwrap();
+                let mut ready = [0u8; 1];
+                stream.read_exact(&mut ready).unwrap();
+                assert_eq!(&ready, b"R");
+                sockets.push(stream);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline => {
+                std::thread::yield_now();
+            }
+            Err(e) => panic!("barrier accept: {e}"),
+        }
+    }
+    for mut stream in sockets {
+        stream.write_all(b"G").unwrap();
+    }
+    for child in children {
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let handles = open(&path);
+    let next = handles.storage.reserve(reserve()).unwrap();
+    assert_eq!(next.first_pack_id, 61);
+    assert_eq!(next.first_ordinal, 61);
 }
