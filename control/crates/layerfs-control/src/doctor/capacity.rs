@@ -5,29 +5,15 @@
 //! naming its endpoint and the operation, never an error, because the
 //! doctor changes nothing and a stopped daemon is a normal state.
 //! Two more warnings come from the model itself: retained connection
-//! failures, and a pool with no vacant control slot.
+//! failures, and a pool with no vacant control slot. The one bounded query
+//! itself is `layerfs_sandbox::daemon::capacity`, shared with the
+//! `daemon_capacity` field `sandbox.get` shows.
 use super::report::Findings;
 use super::scan::Scanned;
-use layerfs_bridge::control::{CapacityModel, SdkRefusal, SdkValue};
-use layerfs_home::home::paths;
-use layerfs_home::outcome::{failed, refused};
-use layerfs_home::secrets;
-use layerfs_sandbox::daemon::operator;
-use layerfs_sandbox::direct;
-use layerfs_sandbox::record::SandboxRecord;
+use layerfs_bridge::control::{CapacityModel, SdkRefusal};
+use layerfs_sandbox::daemon::capacity::{endpoint, read, OPERATION, WAIT};
 use std::net::SocketAddr;
 use std::path::Path;
-use std::sync::mpsc;
-use std::time::Duration;
-
-/// The daemon's operator read model of control admission and retained
-/// connection failures.
-const OPERATION: &str = layerfs_bridge::control::CAPACITY_OPERATION;
-
-/// How long one daemon query may take: connecting, its Hello and its one
-/// exchange. Short on purpose: the doctor must not stall behind a daemon
-/// that is unreachable, as an ordinary 60 s admission wait would.
-const WAIT: Duration = Duration::from_secs(2);
 
 /// Queries the daemon of every running Sandbox whose endpoint is known.
 pub(super) fn check(home: &Path, scanned: &Scanned, findings: &mut Findings) {
@@ -43,71 +29,11 @@ pub(super) fn check(home: &Path, scanned: &Scanned, findings: &mut Findings) {
             // listens, and the doctor starts nothing to find out
             continue;
         };
-        match probe_bounded(home, sandbox, endpoint) {
-            Ok(value) => capacity(findings, name, endpoint, &CapacityModel::parse(&value)),
+        match read(home, sandbox, endpoint) {
+            Ok(model) => capacity(findings, name, endpoint, &model),
             Err(refusal) => unanswered(findings, name, endpoint, &refusal),
         }
     }
-}
-
-/// The address of a running Sandbox's daemon when its record names one to
-/// this host: a forwarded machine's forward, else the endpoint the start
-/// recorded in `control.json`. Nothing is observed or started.
-fn endpoint(home: &Path, sandbox: &SandboxRecord) -> Option<SocketAddr> {
-    if let Some(forward) = sandbox.daemon().and_then(direct::forward_of) {
-        return Some(forward);
-    }
-    let keys = secrets::daemon_keys(&paths::sandbox_dir(home, sandbox.name()))
-        .ok()
-        .flatten()?;
-    keys.get_text("endpoint")?.parse().ok()
-}
-
-/// [`probe`] under a hard wall: a daemon that accepts a connection and then
-/// says nothing must not hold the doctor past [`WAIT`].
-fn probe_bounded(
-    home: &Path,
-    sandbox: &SandboxRecord,
-    endpoint: SocketAddr,
-) -> Result<SdkValue, SdkRefusal> {
-    let home = home.to_owned();
-    let sandbox = sandbox.clone();
-    let (sent, received) = mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = sent.send(probe(&home, &sandbox, endpoint));
-    });
-    match received.recv_timeout(WAIT) {
-        Ok(result) => result,
-        Err(_) => Err(refused(
-            "Unavailable",
-            format!("the daemon did not answer within {}s", WAIT.as_secs()),
-        )),
-    }
-}
-
-/// One daemon query: dial its recorded endpoint with its keys for at most
-/// [`WAIT`], then read the capacity model once.
-fn probe(
-    home: &Path,
-    sandbox: &SandboxRecord,
-    endpoint: SocketAddr,
-) -> Result<SdkValue, SdkRefusal> {
-    let keys = secrets::daemon_keys(&paths::sandbox_dir(home, sandbox.name()))?
-        .ok_or_else(|| refused("NoSuchSandbox", "the Sandbox has no daemon keys"))?;
-    let dial = layerfs_sandbox::daemon::pool::Dial {
-        endpoint,
-        secret: secrets::key(&keys, "secret")?,
-        peer: secrets::key(&keys, "peer")?,
-        instance: secrets::key(&keys, "instance")?,
-    };
-    let mut control = dial.open_within(WAIT)?;
-    operator::call(&mut control, OPERATION, SdkValue::Null).map_err(|error| match error {
-        layerfs_sandbox::SdkError::Refused(refusal) => refusal,
-        layerfs_sandbox::SdkError::Operation(failure) => {
-            layerfs_sandbox::daemon::values::refusal(&failure).unwrap_or_else(|| failed(failure))
-        }
-        layerfs_sandbox::SdkError::Mount(failure) => failed(failure),
-    })
 }
 
 /// A daemon that did not answer: a warning naming its endpoint and the
