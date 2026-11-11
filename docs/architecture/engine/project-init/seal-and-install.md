@@ -24,7 +24,7 @@ live Store instead, and what each route leaves when its outcome is unknown.
      Arc::try_unwrap(storage, session) ----- still shared? --> Busy
      Session::seal
        writable, not quarantined, autocommit --- else ReadOnly/Uncertain
-       Linux: take the cross-process writer hold
+       take the cross-process writer hold (Linux and macOS)
        macOS: capture file identity; disable persistent WAL
        PRAGMA wal_checkpoint(TRUNCATE) ------- busy != 0 --> Busy
        close connection; release writer hold

@@ -108,7 +108,7 @@ SqliteHandles::seal(self)
   Session::seal
     read-only session? ----------------------> Refused "ReadOnly"
     quarantined or open transaction? ---------------------------> Uncertain
-    Linux: take the directory writer lock
+    take the directory writer lock (Linux and macOS)
     macOS: capture file identity; clear SQLITE_FCNTL_PERSIST_WAL
     PRAGMA wal_checkpoint(TRUNCATE) -- not complete -----------> Busy
     close the connection, then release the writer lock

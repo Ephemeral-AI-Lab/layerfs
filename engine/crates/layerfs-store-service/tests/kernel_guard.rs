@@ -83,6 +83,7 @@ fn open_direct_reports_busy_when_locked_and_failed_when_corrupt() {
     fixture.cleanup();
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn open_concurrent_child() {
     let Some(store) = std::env::var_os("LAYERFS_OPEN_CONCURRENT_STORE") else {
@@ -152,8 +153,10 @@ fn three_processes_open_direct_and_commit_concurrently() {
     use std::process::{Command, Stdio};
     use std::time::{Duration, Instant};
 
-    let fixture = installed::Fixture::new(2, "concurrent-open");
-    let sock_path = fixture.directory.join("barrier.sock");
+    // A short fixture label and socket name: `sockaddr_un.sun_path` is 104 bytes on
+    // Darwin (103 of path), and this directory sits under the host's TMPDIR.
+    let fixture = installed::Fixture::new(2, "co");
+    let sock_path = fixture.directory.join("s");
     let listener = UnixListener::bind(&sock_path).unwrap();
     listener.set_nonblocking(true).unwrap();
 
