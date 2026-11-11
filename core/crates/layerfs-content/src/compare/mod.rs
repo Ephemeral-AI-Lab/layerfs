@@ -16,7 +16,7 @@ pub use memo::{Memo, MEMO_PAGES};
 pub use named::{name_from_hints, NamingWork};
 pub use sorted::DifferenceWork;
 pub use text::{
-    as_text, line_diff, lines, match_lines, DiffLine, LineOp, MAXIMUM_DIFF_CELLS,
+    as_text, diff_exact, line_diff, lines, match_lines, DiffLine, LineOp, MAXIMUM_DIFF_CELLS,
     MAXIMUM_TEXT_BYTES,
 };
 pub use tree::{

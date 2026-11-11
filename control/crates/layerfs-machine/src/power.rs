@@ -4,11 +4,12 @@
 //! is ready; a running one answers at once. `stop` stops the worker and,
 //! where there is one, the VM; its disks stay. Built-in `native` answers
 //! both at once. Each answers the machine's summary as `machine.get` does.
-use super::endpoint::{running, start_lock};
+use super::endpoint::{running_with_progress, start_lock};
 use super::spec::{self as record, machine_of, refusal};
 use super::status::home_id;
 use crate::Related;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::events::Events;
 use layerfs_home::home::{lock, paths};
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::{failed, Outcome};
@@ -19,8 +20,19 @@ use std::path::Path;
 /// machine and its worker are started (under its `start.lock`) and waited
 /// for. A readiness wait, not a retry.
 pub fn start(home: &Path, name: &MachineName, related: Related) -> Outcome {
+    let mut sink = |_| {};
+    start_with_progress(home, name, related, &mut Events::new(&mut sink))
+}
+
+/// `machine.start` with stage progress on the caller's event stream.
+pub fn start_with_progress(
+    home: &Path,
+    name: &MachineName,
+    related: Related,
+    events: &mut Events<'_>,
+) -> Outcome {
     if machine_of(home, name)?.platform()? != Platform::Native {
-        running(home, name)?;
+        running_with_progress(home, name, events)?;
     }
     super::get::get(home, name, related)
 }

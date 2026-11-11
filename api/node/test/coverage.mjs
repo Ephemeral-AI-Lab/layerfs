@@ -1,6 +1,7 @@
-// docs/architecture/api/call-table/coverage.md holds a matrix generated from the three front ends'
+// docs/architecture/api/call-table/coverage.md holds a matrix generated from the four front ends'
 // own call lists (api/scripts/gen-coverage.mjs): this fails when the committed block is not what
-// they give now, or when a front end lacks a call or disagrees with the Node table (#32).
+// they give now, or when a front end lacks a call or disagrees with the Node table (#32). MCP's
+// column is derived from the generated tool list and the profile buckets of api/mcp.
 // Needs the built addon, LAYERFS_PYTHON (default python3) able to import layerfs, and the built
 // command; without them the tests are skipped with the reason, never passed.
 import { test } from "node:test";
@@ -48,4 +49,27 @@ test("a call missing from a front end, or one that differs, is a problem and cha
   const extra = structuredClone(view);
   extra.cli["file.bogus"] = { positionals: [], options: [], from: false };
   assert.match(render(extra).problems.join("\n"), /file\.bogus: a call of a front end that the Node table does not have/);
+
+  const tool = `${nodeSpec.family}_${nodeSpec.call}`;
+  const noMcp = structuredClone(view);
+  delete noMcp.mcp.tools[tool];
+  assert.match(render(noMcp).problems.join("\n"), new RegExp(`${name}: no MCP tool`));
+  assert.notEqual(render(noMcp).block, block);
+
+  const otherSchema = structuredClone(view);
+  otherSchema.mcp.tools[tool].inputSchema.properties.renamed = { type: "string" };
+  assert.match(render(otherSchema).problems.join("\n"), new RegExp(`${name}: the MCP tool's schema or description differs`));
+
+  const workTool = view.mcp.work[0];
+  const workName = workTool.replace("_", ".");
+  const noWork = structuredClone(view);
+  noWork.mcp.work = noWork.mcp.work.filter((entry) => entry !== workTool);
+  assert.match(render(noWork).problems.join("\n"), new RegExp(`${workName}: the MCP work profile does not list it`));
+
+  const adminInWork = structuredClone(view);
+  const adminSpec = view.node.table.find((spec) => `${spec.family}_${spec.call}` !== tool && !view.mcp.work.includes(`${spec.family}_${spec.call}`));
+  if (adminSpec) {
+    adminInWork.mcp.work.push(`${adminSpec.family}_${adminSpec.call}`);
+    assert.match(render(adminInWork).problems.join("\n"), /the MCP work profile lists an admin call/);
+  }
 });

@@ -52,8 +52,8 @@ pub struct Lasting {
 }
 
 /// The sealed Linux bundle: `layerfs`, `layerfs-daemon`,
-/// `layerfs-sandbox-helper` and `images/<digest>.tar`, copied into a guest
-/// once per `hash`.
+/// `layerfs-sandbox-helper` and `sandbox-image.tar`. Guests reuse unchanged
+/// files by manifest identity; `hash` remains the worker compatibility seal.
 #[derive(Clone, Debug)]
 pub struct Bundle {
     pub dir: PathBuf,

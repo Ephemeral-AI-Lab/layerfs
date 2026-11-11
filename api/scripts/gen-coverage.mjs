@@ -1,8 +1,9 @@
 // Generates the call-by-front-end matrix of docs/architecture/api/call-table/coverage.md
-// from the three front ends' own call lists:
+// from the four front ends' own call lists:
 //   Node    the package's `table` and its bound functions
 //   Python  `layerfs.TABLE`, the sync functions and the `layerfs.aio` coroutines
 //   CLI     `layerfs help <family>`, one usage line per call
+//   MCP     the generated tool list of api/mcp, and the profile that lists it
 //   node api/scripts/gen-coverage.mjs          rewrite the generated block
 //   node api/scripts/gen-coverage.mjs --check  exit 1 when the block is not what the front ends give,
 //                                              or when a front end disagrees with the Node table
@@ -13,6 +14,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { bucketOf, tools as toolsOfProfile } from "../mcp/src/profiles.js";
+import { toolFor, toolsOf } from "../mcp/src/tools.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 export const document = join(root, "docs/architecture/api/call-table/coverage.md");
@@ -47,11 +50,17 @@ print(json.dumps({
 }))
 `;
 
-/** Each front end's own view of the calls: `{ node, python, cli }`. */
+/** Each front end's own view of the calls: `{ node, python, cli, mcp }`. */
 export async function collect({ python, cli }) {
   const node = await import("../node/src/index.js");
+  const toolName = (spec) => `${spec.family}_${spec.call}`;
   const view = {
     node: { table: node.table, bound: node.table.filter((s) => typeof node.default[s.family]?.[s.call] === "function").map(nameOf) },
+    mcp: {
+      tools: Object.fromEntries(toolsOf(node.table).map((tool) => [tool.name, tool])),
+      work: toolsOfProfile(node.table, "work").map(toolName),
+      admin: toolsOfProfile(node.table, "admin").map(toolName),
+    },
   };
   const run = spawnSync(python, ["-B", "-c", PYTHON_VIEW], {
     cwd: join(root, "api/python"),
@@ -114,7 +123,9 @@ export function render(view) {
   for (const name of [...python.keys(), ...Object.keys(view.cli)]) {
     if (!names.has(name)) problems.push(`${name}: a call of a front end that the Node table does not have`);
   }
-  const counts = { node: 0, python: 0, aio: 0, cli: 0 };
+  const counts = { node: 0, python: 0, aio: 0, cli: 0, mcp: 0 };
+  const work = new Set(view.mcp.work);
+  const admin = new Set(view.mcp.admin);
   const rows = table.map((spec) => {
     const name = nameOf(spec);
     const cell = (ok, why) => (ok ? "yes" : (problems.push(`${name}: ${why}`), "NO"));
@@ -131,27 +142,45 @@ export function render(view) {
     const cliOk = given !== undefined && same(given, want);
     counts.cli += cliOk;
     const cli = cell(cliOk, given === undefined ? "no command" : `the command line differs: ${describeCli(given)} is not ${describeCli(want)}`);
+    const built = toolFor(spec);
+    const mcpTool = view.mcp.tools[built.name];
+    const bucket = bucketOf(spec);
+    const listed = { work: work.has(built.name), admin: admin.has(built.name) };
+    const mcpProblem = mcpTool === undefined
+      ? "no MCP tool"
+      : !same(mcpTool.inputSchema, built.inputSchema) || mcpTool.description !== built.description
+        ? "the MCP tool's schema or description differs from the table"
+        : bucket === null
+          ? "no MCP profile bucket"
+          : bucket === "work" && !(listed.work && listed.admin)
+            ? "the MCP work profile does not list it"
+            : bucket === "admin" && (listed.work || !listed.admin)
+              ? (listed.work ? "the MCP work profile lists an admin call" : "the MCP admin profile does not list it")
+              : null;
+    if (mcpProblem === null) counts.mcp += 1;
+    else problems.push(`${name}: ${mcpProblem}`);
+    const mcp = mcpProblem === null ? (bucket === "work" ? "yes" : "admin") : "NO";
     const notes = [
       spec.args.some(piped) ? "stdin/--from" : "",
       spec.options.some((o) => o.name === "on_progress") ? "--progress" : "",
       spec.options.some((o) => o.name === "stream") ? "--stream" : "",
     ].filter(Boolean);
     const options = spec.options.map((o) => (o.kind === FUNCTION ? `${o.name}()` : o.name)).join(", ");
-    return `| \`${name}\` | ${shape(spec.args) || "-"} | ${options || "-"} | ${node} | ${py} | ${coroutine} | ${cli}${cli === "yes" && notes.length ? ` (${notes.join(", ")})` : ""} |`;
+    return `| \`${name}\` | ${shape(spec.args) || "-"} | ${options || "-"} | ${node} | ${py} | ${coroutine} | ${cli}${cli === "yes" && notes.length ? ` (${notes.join(", ")})` : ""} | ${mcp} |`;
   });
   const families = [...new Set(table.map((s) => s.family))];
   const lines = [
     BEGIN,
     "",
-    `${table.length} calls in ${families.length} families, counted from the Node table. Calls present: Node ${counts.node}, Python ${counts.python}, Python \`aio\` ${counts.aio}, CLI ${counts.cli}.`,
+    `${table.length} calls in ${families.length} families, counted from the Node table. Calls present: Node ${counts.node}, Python ${counts.python}, Python \`aio\` ${counts.aio}, CLI ${counts.cli}, MCP ${counts.mcp} (${work.size} in \`work\`, ${admin.size - work.size} admin only).`,
     "",
     `Argument names that are Python keywords: ${view.python.keywords.length === 0 ? "none" : view.python.keywords.join(", ")}.`,
     "",
     `Front-end problems: ${problems.length === 0 ? "none" : problems.length}.`,
     ...problems.map((p) => `- ${p}`),
     "",
-    "| Call | Positionals (`?` optional) | Options (`()` a function) | Node | Python | Python `aio` | CLI |",
-    "| --- | --- | --- | --- | --- | --- | --- |",
+    "| Call | Positionals (`?` optional) | Options (`()` a function) | Node | Python | Python `aio` | CLI | MCP |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ...rows,
     "",
     END,

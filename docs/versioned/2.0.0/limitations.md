@@ -97,7 +97,12 @@ Also not built:
 - **Background processes, operator and diagnostic calls, and the trace
   subscription** of 1.1.0's `@layerfs/backend` (O25, O26). Trace files
   under `trace/` are the feed.
-- **An MCP server** (O32). Folder scope is a client option instead.
+- **An MCP server's HTTP transport, authentication and remote clients.** The
+  private `@layerfs/mcp` package is a local stdio server over the Node package
+  ([MCP](../../architecture/api/front-ends/mcp.md)); it needs the built addon,
+  runs as the user who launched it and is not published. MCP was dropped from
+  2.0 by O32 and reinstated by the assignee's instruction of 2026-11-07, to be
+  confirmed by the maintainers. Folder scope remains a client option.
 - **A by-id Commit lookup.** `commit.get` reads the Branch's Commits page
   by page, following `next_page_pos` (a page holds what fits the reply
   budget, about 47 Commits), until it finds the id or prefix; its cost grows

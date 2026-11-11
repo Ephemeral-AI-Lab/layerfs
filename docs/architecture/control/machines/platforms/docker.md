@@ -166,3 +166,13 @@ docker machine running `namespaces` has not been verified live yet.
 ---
 
 ← [Machines: Native](native.md) · [Up: Machines](../README.md) · [Machines: Apple container](apple-container.md) →
+
+### Shared default image cache
+
+The default-image resolver uses the archive config digest independently of the
+runtime bundle hash. The Engine tag `layerfs-cache/sandbox:<config-hex>` maps to
+the actual imported Docker image ID, checked with `docker image inspect` before
+reuse. Each Engine owns its own tags, so homes and runtime builds on that Engine
+share the mapping while different Engines do not. Pruning an image causes one
+new import; daemon errors and failed imports are returned without replay. Existing
+matching home records can seed this tag. Explicitly configured images are unchanged.

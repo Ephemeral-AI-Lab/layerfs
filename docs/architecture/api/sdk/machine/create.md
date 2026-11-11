@@ -22,20 +22,20 @@ starts its worker, so Stores and Sandboxes can be placed on it.
 
 ```js
 // JavaScript
-await layerfs.machine.create(name, platform, { cpus, memory, disk, image });
-await client.machine.create(name, platform, { cpus, memory, disk, image });
+await layerfs.machine.create(name, platform, { cpus, memory, disk, image, os_image, on_progress });
+await client.machine.create(name, platform, { cpus, memory, disk, image, os_image, on_progress });
 ```
 
 ```python
 # Python
 layerfs.machine.create(name, platform, cpus=None, memory=None, disk=None,
-                       image=None)
+                       image=None, os_image=None, on_progress=None)
 ```
 
 ```bash
 # CLI
 layerfs machine create <name> <platform> [--cpus N] [--memory SIZE] \
-  [--disk SIZE] [--image TEXT]
+  [--disk SIZE] [--image TEXT] [--os-image TEXT] [--progress]
 ```
 
 ## Arguments
@@ -65,18 +65,21 @@ were removed in 2.0: naming one is refused `Unsupported` with
 | `cpus` | Int | 2 | the VM's CPUs | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `DEFAULT_CPUS` |
 | `memory` | Size | 4 GiB | bytes, or `K`/`M`/`G` text (powers of 1024) | same, `DEFAULT_MEMORY` |
 | `disk` | Size | 20 GiB | the data disk mounted at `/layerfs/data` | same, `DEFAULT_DISK` |
-| `image` | Text | none | recorded as given; see below | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `spec` |
+| `image` | Text | none | Sandbox image; see below | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `spec` |
+| `os_image` | Text | installed prepared image, else stock | VM operating-system image | `bundle::prepared_os_image`, `spec.rs` |
+| `on_progress` | Function | none | startup stage events | `progress.rs` |
 
-`image` means two things. The platform profiles declare it as the VM's own
-system image ([`options.rs`](../../../../../control/crates/layerfs-platform/src/options.rs)
-`IMAGE`; `apple-container` boots `Spec::os_image`, default
-`debian:trixie-slim`). Control does not pass it that
-way: `machine::spec` turns an `image` that starts with `/` into
-`Spec::image`, the Sandbox image archive copied in at start, and fills
-`Spec::os_image` from `image` only for the `docker` machine. So on a
-created VM an absolute path selects the Sandbox image archive, and any
-other value is recorded but does not reach the VM's system image (the
-record's `os_image` field does, and no call writes it).
+`image` selects the Sandbox image archive or content identity. `os_image` selects
+the machine's operating-system image: an installed OCI reference for Apple
+Container, or an OS image location for Lima. An explicit selection is passed to
+the provider without silently substituting its stock image. With no explicit
+selection, a compatible locally prepared mapping is used if installed; otherwise
+the stock provider image is used. Preparation is explicit through
+`tools/machine_image.py`; it is separate from machine creation and startup.
+
+`on_progress` reports stage boundaries and elapsed milliseconds. See
+[machine.start](start.md#options). The selected OS image is stored and returned as
+`os_image`; each instance still gets private writable state and worker credentials.
 
 ## Returns
 
@@ -165,3 +168,12 @@ layerfs machine create vm1 lima --cpus 4 --memory 8G
 ---
 
 ← [machine.stop](stop.md) · [Up: machine](README.md) · [machine.remove](remove.md) →
+
+## Provisioning progress and cached artifacts
+
+The optional `on_progress` callback (CLI `--progress`) reports bundle validation
+and provider/worker setup with elapsed milliseconds. The existing create event
+naming the machine is retained. Bundle protocol and architecture metadata are
+checked before claiming the machine or booting it. Guest installation preserves
+unchanged artifacts, including those preinstalled in a Lima image selected by
+`os_image`. See [machine.start artifact reuse](start.md#artifact-reuse).

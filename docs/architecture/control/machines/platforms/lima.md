@@ -130,3 +130,13 @@ daemon runs in the Sandbox image's root, which has no such hosts entry.
 ---
 
 ← [Machines: Apple container](apple-container.md) · [Up: Machines](../README.md) · [Machines: Adding a platform](../adding-a-platform.md) →
+
+### Preinstalled and updated artifacts
+
+The absolute-path/HTTPS `os_image` option accepts a prepared OS image.
+A stopped prepared image can include the public bundle files and their manifest;
+each new machine still owns its data disk, worker endpoint and secret. The shared
+installer compares per-file identities and presence, copies only missing or changed
+files and publishes the manifest last. A binary update no longer deletes and
+recopies an unchanged Sandbox image. This change does not itself replace Ubuntu,
+trim cloud-init, or establish a cold-boot latency target.

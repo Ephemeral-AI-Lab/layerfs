@@ -24,11 +24,12 @@ a measurement.
 
 ## Which calls take `on_progress`
 
-Exactly seven calls declare the shared `PROGRESS` option
+Nine calls declare the shared `PROGRESS` option
 ([`calls/table.rs:134`](../../../../api/crates/layerfs-api/src/calls/table.rs)):
 
 | Call | Declared in | Run |
 | --- | --- | --- |
+| `machine.start`, `machine.create` | [`machine/start.rs`](../../../../api/crates/layerfs-api/src/machine/start.rs), [`machine/create.rs`](../../../../api/crates/layerfs-api/src/machine/create.rs) | machine startup diagnostics and `progress_options.rs` |
 | `project.init` | [`project/init.rs:13`](../../../../api/crates/layerfs-api/src/project/init.rs) | table check: `progress_options.rs`, `progress.mjs`, `test_progress.py` |
 | `project.export` | [`project/export.rs:15`](../../../../api/crates/layerfs-api/src/project/export.rs) | same, and its own events: `project_export.mjs`, `test_project_export.py`, `project_export.rs` |
 | `store.push`, `store.pull` | [`store/push.rs:13`](../../../../api/crates/layerfs-api/src/store/push.rs), [`store/pull.rs:13`](../../../../api/crates/layerfs-api/src/store/pull.rs) | same |
@@ -37,10 +38,10 @@ Exactly seven calls declare the shared `PROGRESS` option
 
 `workspace.exec` is the only call that declares `stdout` and `stderr`
 (Function options). No other option of any call is a function. The CLI
-takes `--progress` only on the seven (`store list --progress` and
-`machine create --progress` are `unknown option`, exit 2; run:
-`layerfs-cli/tests/progress.rs` for the six it lists, and `project_export.mjs`
-for `project export` and its `--progress`). A function never crosses into the library:
+takes `--progress` only on the nine. `store list --progress` remains an unknown
+option. Machine events report `{ stage, state, elapsed_ms? }` for validation,
+image resolution, provider/worker provisioning and compatibility; completion or
+failure includes elapsed milliseconds. A function never crosses into the library:
 `check.rs` refuses it as a value ([`calls/check.rs:18`](../../../../api/crates/layerfs-api/src/calls/check.rs)).
 
 ## The event stream
@@ -50,7 +51,7 @@ with three senders (`context.rs:21-35`):
 
 | Sender | Event | Used by |
 | --- | --- | --- |
-| `progress(v)` | `{ progress: v }` | the seven calls above, and `machine.create` (see [below](#machinecreate-emits-an-event-nobody-can-receive)) |
+| `progress(v)` | `{ progress: v }` | the nine calls above |
 | `event(e)` | a worker's event, as it came | calls routed to a worker ([workers](../../control/routing/workers.md)) |
 | `output(stream, bytes)` | `{ stream, bytes }` | `workspace.exec` |
 
@@ -215,7 +216,11 @@ Anything that adds per-file or per-chunk events (for example a
 `project.export`) must bound the rate in Rust, before the Node queue; see
 [Open decisions](#open-decisions).
 
-## `machine.create` emits an event nobody can receive
+## Historical machine.create event audit
+
+Superseded on 2026-11-09: `machine.create` and `machine.start` now declare
+`PROGRESS`; the statements and old receipts below describe the earlier source.
+
 
 `machine.create` sends `{ progress: { phase: "create", machine } }` after its
 record is claimed and before the VM is made

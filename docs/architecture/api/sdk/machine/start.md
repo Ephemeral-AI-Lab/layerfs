@@ -45,7 +45,13 @@ layerfs machine start <name>
 
 ## Options
 
-None.
+`on_progress` receives stage events. The CLI exposes it as `--progress`, emitting
+JSON lines on stderr while stdout retains the final result. Each started stage
+has a `completed` or `failed` event with `elapsed_ms`. Stages are
+`bundle-validation`, `sandbox-image` (default Docker image only),
+`provider-and-worker` (includes guest provisioning and readiness), and
+`worker-compatibility`. An already answering worker takes no provisioning stages and is still checked
+for protocol/bundle compatibility.
 
 ## Returns
 
@@ -67,14 +73,16 @@ caller's process                                 machine
  take machine/<name>/start.lock  (wait <= 600 s)
  worker answers now? (another process started it) --> get
  spec + sealed Linux bundle
- docker with no image? --> load bundle's sandbox-image.tar once
+ validate manifest protocol/architecture when supplied
+ docker with no image? --> inspect Engine content tag; import only if missing
  layerfs-platform start(spec, bundle) ------------> boot VM / container
-                                                   copy bundle once per
-                                                   hash, image archive,
+                                                   copy changed/missing
+                                                   bundle files,
                                                    start `layerfs worker`
            readiness wait (not a retry) <--------- worker answers secret
- home lock: write worker.json, lasting, state "running", drop op
- hello: worker of another build? --> Unavailable (worker stays recorded)
+ authenticated hello: compare protocol and bundle
+ home lock: write worker.json and lasting; running only after compatibility
+ incompatible hello? --> retain endpoint and failed state; Unavailable
  answer get(name)
 ```
 
@@ -93,6 +101,36 @@ Every other call on a stopped machine is refused `Unavailable`, naming
 `layerfs machine start` ([`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs)).
 See [workers](../../../control/routing/workers.md#lifecycle) and the
 [routing table](../../../control/routing/routing-table.md).
+
+## Artifact reuse
+
+The existing flat bundle and guest paths remain compatible. `bundle.json` now
+also records `protocol` and a `runtime` identity for the three binaries. Its
+existing `image` config digest identifies Sandbox content independently of runtime
+builds. Image archives have deterministic tar metadata so binary-only rebuilds
+leave their file digest unchanged.
+
+Docker owns the shared mapping in the Engine: `layerfs-cache/sandbox:<config-hex>`
+points to the actual ID returned by `docker load`. That ID can differ from the
+archive config digest. `image inspect` checks presence on the selected Engine;
+only a missing image is a cache miss. Engine failures are returned, not treated
+as a miss. A valid matching per-home record seeds the tag without another import.
+A private cache lock serializes imports for the same content across homes. These
+tags are reusable dependencies, not disposable per-machine test state.
+
+VM installation compares the host and guest manifests' per-file identities and
+checks file presence. It transfers changed or absent artifacts into `.install`,
+renames each file, and publishes the new manifest and `.sealed` only after all
+copies succeed. A runtime update preserves an identical Sandbox archive. Prepared
+Lima images supplied through the machine `os_image` option benefit from the
+same check; no warm pool is introduced and no guest private state is shared.
+
+An explicitly incompatible manifest protocol or architecture is refused before
+image import or VM boot. Legacy manifests lacking protocol metadata remain
+readable and retain the final worker handshake check; legacy manifests without
+file identities retain whole-folder installation through a staging directory,
+with publication only after the complete copy succeeds. This is compatibility support,
+not proof that an unlabelled worker is compatible before boot.
 
 ## Errors
 

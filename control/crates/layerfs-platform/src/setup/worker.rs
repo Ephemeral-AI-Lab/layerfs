@@ -65,15 +65,40 @@ pub(crate) fn prepare(spec: &Spec, guest: &Guest) -> Result<(), MachineError> {
     Ok(())
 }
 
-/// Step 2: the bundle, copied in once per hash (a changed bundle replaces
-/// the copy), then the machine's Sandbox image archive if it is not there.
+/// Step 2: install missing or changed bundle files by content identity, then
+/// the machine's custom Sandbox image if absent. Legacy bundles copy per hash.
 pub(crate) fn install(spec: &Spec, guest: &Guest, bundle: &Bundle) -> Result<(), MachineError> {
     let tools = &spec.tools;
     let marker = format!("{BUNDLE}/.sealed");
-    if guest.read_file(tools, &marker)?.as_deref().map(str::trim) != Some(bundle.hash.as_str()) {
-        guest.script(tools, "clearing the old bundle", "rm -rf \"$1\"", &[BUNDLE])?;
-        guest.copy_in(tools, &bundle.dir, None, BUNDLE)?;
-        guest.write_file(tools, &marker, &format!("{}\n", bundle.hash))?;
+    if !super::artifacts::install(spec, guest, bundle)?
+        && guest.read_file(tools, &marker)?.as_deref().map(str::trim) != Some(bundle.hash.as_str())
+    {
+        let stage = format!("{BUNDLE}.install");
+        guest.script(
+            tools,
+            "clearing an incomplete staged bundle",
+            "rm -rf \"$1\"",
+            &[&stage],
+        )?;
+        guest.copy_in(tools, &bundle.dir, None, &stage)?;
+        guest.write_file(
+            tools,
+            &format!("{stage}/.sealed"),
+            &format!("{}\n", bundle.hash),
+        )?;
+        guest.script(
+            tools,
+            "publishing the legacy bundle",
+            r#"set -eu
+backup="$1.previous"
+test ! -e "$backup" || { echo 'an earlier bundle publication needs inspection' >&2; exit 1; }
+if [ -e "$1" ]; then mv "$1" "$backup"; fi
+if mv "$2" "$1"; then rm -rf "$backup"; else
+  if [ -e "$backup" ]; then mv "$backup" "$1"; fi
+  exit 1
+fi"#,
+            &[BUNDLE, &stage],
+        )?;
     }
     if let Some(image) = &spec.image {
         let (Some(dir), Some(file)) = (image.parent(), image.file_name().and_then(|f| f.to_str()))
