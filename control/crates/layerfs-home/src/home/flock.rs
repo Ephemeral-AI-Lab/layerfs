@@ -25,6 +25,7 @@ pub fn try_lock(file: &File, exclusive: bool) -> std::io::Result<bool> {
 }
 
 /// Takes the exclusive lock, waiting while another owner holds it.
+#[cfg(unix)]
 #[allow(deprecated)]
 pub fn lock(file: &File) -> std::io::Result<()> {
     nix::fcntl::flock(file.as_raw_fd(), nix::fcntl::FlockArg::LockExclusive)

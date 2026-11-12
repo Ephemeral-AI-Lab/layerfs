@@ -13,6 +13,7 @@ pub mod events;
 pub mod helpers;
 pub mod home;
 pub mod json;
+/// The call log (#659): one line per public call against this home.
 pub mod logs;
 pub mod names;
 pub mod op;
