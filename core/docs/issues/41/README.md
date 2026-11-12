@@ -76,16 +76,41 @@ Deliver explicit LayerFS garbage collection for SQLite and PostgreSQL through so
 | `project.remove_file(...)` | Project + Branches | Close Sandboxes | Other projects |
 | `store.compact(name)` | Store + all projects | Exclusive access | Other Stores |
 
+## Decision ownership
+
+Where each decision or reconciliation entry is realised. The specification
+sections are §-numbered as in the GC spec; `R`/`N`/`Q` ids are that spec's
+reconciliation and net-new tables.
+
+| Item | What it decides | Contract / record | Implemented in | Verified in |
+|---|---|---|---|---|
+| **R1** | PostgreSQL Store replacement: E (two `ALTER SCHEMA RENAME`) by default, A' (pointer + versioned schema) if S11 requires reads up | #42 (§1.3 R1, §7.3, S11), 03-decision-record §1 | **#50** | #52 |
+| **R2** (= C8, replaces the `compact_intent` row) | Reader fence: `catalog_incarnation += 1` at install; every session/transaction entry checks `(catalog_id, incarnation)` → `StaleStore`; SQLite also `(dev, ino)`; `lfq1` across a generation → `StaleStore` | #42 (C8, generation arithmetic; no second generation field) | **#43** (the session-entry half; shared by both backends), `(dev, ino)` in #49 | #52 |
+| **Q1** (= C6) | Branch name reuse: none; terminal tombstone, `NameRetired` | #42 (Q1, C6), 03-decision-record §2 | **#44** | #52 |
+| **C3** | Per-object delete binds `(ObjectId, G)` | #42 (C3), 03-decision-record §3 | **#49**, **#50** (consumers of the signature) | #52 |
+| **N3** | Soft delete visibility: `removed_ms` / `deleted_ms`, partial unique indexes | #42 (schema change) | **#44** (`removed_ms`), **#45** (`deleted_ms`, migration) | #52 |
+| **C8b** | SQLite writer fence: incarnation check at admission plus install re-read | #42 (C8b) | **#49** | #52 |
+| **C9** | HistoryCatalog stays extensible: GC methods behind a default `Unsupported`, no new `HistoryError` variants | #42 (C9) | **#51** (trait), #49/#50 (overrides) | #52 |
+| **C10** | Admission matrix: which mounts each operation excludes | #42 (C10) | **#43** | #52 |
+| **Q3** | Rewrite step: transfer phases with one inserted `rewrite` | #42 (§7.1) | **#49** | #52 |
+| **Q5** | PostgreSQL reader behaviour | Superseded by C8/R2 — no separate decision | **#43** | #52 |
+| **D3** | PostgreSQL fence mechanism (advisory lock / `FOR UPDATE` / schema lock) | Pending product sign-off (01-overview) | **#50** | #52 |
+
+R2 is not a separate sub-issue: the spec folds it into C8 and assigns C8 to
+admission (#43). Its install-time bump is executed by whichever backend installs
+(#49 on SQLite, #50 on PostgreSQL), and its reader-facing refusal is what #52
+tests across a generation boundary.
+
 ## Related Resources
 
-- **Specification PR**: tokenaissance/layerfs#70
+- **Specification PR**: Ephemeral-AI-Lab/layerfs#658 (`core/docs/issues/41/`)
 - **Release Contract**: Ephemeral-AI-Lab/layerfs#511
 - **Architecture Diagrams**: https://app.excalidraw.com/s/9Zq6XgRe98z/
 - **Sub-Issues**: #42-#52
 
 ## References
 
-- See § 1-9 in complete specification (PR #70)
+- See the complete specification in Ephemeral-AI-Lab/layerfs#658
 - Three critical issues (C8b, N3, C9) explained in C8b-N3-C9-Resolution-Plan.md
 - Design decisions summary in RESOLUTION-SUMMARY.md
 
