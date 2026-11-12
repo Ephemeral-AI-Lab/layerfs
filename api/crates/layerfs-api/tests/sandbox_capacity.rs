@@ -1,17 +1,20 @@
-//! `sandbox.get`'s `daemon_capacity` (#540, #543): the daemon's
+//! `sandbox.get`'s daemon fields (#540, #543, #649): the
 //! `backend.daemon.connection_failures` read model, shown best-effort and
 //! bounded on the connection the Workspace list lent from this process's
-//! pool. Nothing runs: a stand-in daemon answers the Sandbox's Workspace list
-//! and its capacity model on the same connection, a second one answers the
-//! list and then says nothing, and a Sandbox whose machine or forward is
-//! already down is not dialed at all.
+//! pool, and the partial `down` counts a full-pool refusal carries. Nothing
+//! runs: a stand-in daemon answers the Sandbox's Workspace list and its
+//! capacity model on the same connection, a second one answers the list and
+//! then says nothing, a third refuses every connection with the
+//! pre-handshake capacity notice (or a legacy bare close), and a Sandbox
+//! whose machine or forward is already down is not dialed at all.
 #![cfg(unix)]
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_bridge::control::{
     AdmissionModel, Answer, Call, DaemonPhase, DaemonStatus, Reply, Request, RetainedModel,
-    SdkValue, OPERATION,
+    SdkRefusal, SdkValue, OPERATION,
 };
 use layerfs_bridge::duplex;
+use layerfs_bridge::duplex::admission::{self, AdmissionNotice, AdmissionReason};
 use std::net::{SocketAddr, TcpListener};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -281,6 +284,8 @@ fn a_running_sandbox_s_get_shows_its_daemon_capacity() {
     );
     assert_eq!(failures[0].get_int("generation"), Some(6));
     assert_eq!(failures[0].get_text("request"), Some("unmount"));
+    // a daemon that answered carries no down counts (#649)
+    assert!(got.get("down").is_none(), "{got:?}");
     // the Workspace list and the capacity read share the one pooled
     // connection (#543): a get takes no second control slot of its own
     assert_eq!(served.load(Ordering::SeqCst), 1, "{got:?}");
@@ -362,4 +367,107 @@ fn a_sandbox_with_no_id_is_never_dialed() {
     assert!(got.get("daemon_capacity").is_none(), "{got:?}");
     assert_eq!(served.load(Ordering::SeqCst), 0, "{got:?}");
     std::fs::remove_dir_all(home).unwrap();
+}
+
+/// A stand-in daemon that refuses every connection the way an accept loop
+/// does when its pool is full: with `notice` before any handshake, or, for a
+/// daemon that predates the notice, with a bare close (#540). It drains what
+/// the client sent and counts the connections it refused.
+fn refusing(notice: Option<AdmissionNotice>) -> (SocketAddr, Arc<AtomicUsize>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = listener.local_addr().unwrap();
+    let served = Arc::new(AtomicUsize::new(0));
+    let counted = served.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { return };
+            counted.fetch_add(1, Ordering::SeqCst);
+            let _ = stream.set_write_timeout(Some(Duration::from_millis(100)));
+            let _ = stream.set_read_timeout(Some(Duration::from_millis(50)));
+            if let Some(notice) = notice {
+                if admission::write(&mut stream, &notice).is_err() {
+                    continue;
+                }
+            }
+            let mut sink = [0u8; 512];
+            let _ = std::io::Read::read(&mut stream, &mut sink);
+        }
+    });
+    (endpoint, served)
+}
+
+#[test]
+fn a_full_daemon_pool_shows_the_partial_down_counts() {
+    let (endpoint, served) = refusing(Some(AdmissionNotice::new(
+        AdmissionReason::NoPoolSlot,
+        3,
+        0,
+        1,
+    )));
+    let home = tempdir("full-pool");
+    home::open(&home).unwrap();
+    home_records(&home, true);
+    sandbox_record(&home, endpoint, Some("s-1"), None);
+    let at = Instant::now();
+    let got = call(&home, "sandbox.get", &[("name", t("s1"))]).unwrap();
+    let elapsed = at.elapsed();
+    // This is the measured behaviour (#649): a full pool is not visible to
+    // the get before the whole admission window has passed.
+    assert!(
+        elapsed >= Duration::from_secs(55),
+        "the get answered before the admission window: {elapsed:?}"
+    );
+    assert!(served.load(Ordering::SeqCst) > 0, "{got:?}");
+    assert_eq!(got.get_text("state"), Some("running"), "{got:?}");
+    assert!(got.get_text("down_reason").is_some(), "{got:?}");
+    let down = got.get("down").unwrap_or_else(|| panic!("{got:?}"));
+    assert_eq!(down.get_text("code"), Some("Capacity"), "{down:?}");
+    assert_eq!(
+        down.get_text("resource"),
+        Some("daemon_control_slot"),
+        "{down:?}"
+    );
+    assert_eq!(down.get_int("pool_vacant"), Some(0), "{down:?}");
+    assert_eq!(down.get_int("reserved_vacant"), Some(1), "{down:?}");
+    assert_eq!(down.get_int("retained"), Some(3), "{down:?}");
+    // the notice is partial: it is never dressed up as the full model
+    assert!(got.get("daemon_capacity").is_none(), "{got:?}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_legacy_eof_has_no_down_counts() {
+    // a daemon that closes the connection without the capacity notice: the
+    // refusal says only what was observed, so the get shows down_reason and
+    // no `down` counts (#649)
+    let (endpoint, served) = refusing(None);
+    let home = tempdir("legacy-eof");
+    home::open(&home).unwrap();
+    home_records(&home, true);
+    sandbox_record(&home, endpoint, Some("s-1"), None);
+    let at = Instant::now();
+    let got = call(&home, "sandbox.get", &[("name", t("s1"))]).unwrap();
+    assert!(
+        at.elapsed() >= Duration::from_secs(55),
+        "a legacy EOF is retried for the admission window: {:?}",
+        at.elapsed()
+    );
+    assert!(served.load(Ordering::SeqCst) > 0, "{got:?}");
+    assert!(got.get_text("down_reason").is_some(), "{got:?}");
+    assert!(got.get("down").is_none(), "{got:?}");
+    assert!(got.get("daemon_capacity").is_none(), "{got:?}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_collapsed_remote_refusal_has_no_down_counts() {
+    // A refusal forwarded from a machine's worker is collapsed to
+    // `{phase}` by `values::refusal` (#547 slice 6): it carries no counts,
+    // so the get must omit `down` rather than fill zeros.
+    let refusal = SdkRefusal {
+        code: "Unavailable".to_owned(),
+        message: "the Sandbox's daemon ended this connection before it answered".to_owned(),
+        detail: SdkValue::map([("phase", SdkValue::text("receive"))]),
+    };
+    assert!(layerfs_sandbox::family::Down::of(&refusal).is_none());
 }

@@ -19,9 +19,11 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `sandbox.get`: its record with its derived `state`, one page of its
 /// `workspaces` (each with its `path`, `name` and `ws`), why its machine did
-/// not answer (`down_reason`), the daemon's `daemon_capacity` read model when
-/// the Sandbox answered it (#540), and `next_page_pos`. The library reads it
-/// best effort and bounded, so this layer only shows what it got.
+/// not answer (`down_reason`, with the partial `down` counts when the
+/// daemon's capacity notice carried them, #649), the daemon's
+/// `daemon_capacity` read model when the Sandbox answered it (#540), and
+/// `next_page_pos`. The library reads it best effort and bounded, so this
+/// layer only shows what it got.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let request = GetRequest {
         name: args.get_text("name").unwrap_or("").to_owned(),
@@ -36,6 +38,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         state,
         workspaces,
         down_reason,
+        down,
         next,
         daemon_capacity,
     } = get(home, events, &request)?;
@@ -49,6 +52,9 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let mut shown = with_field(shown, "workspaces", SdkValue::List(workspaces.collect()));
     if let Some(why) = down_reason {
         shown = with_field(shown, "down_reason", SdkValue::Text(why));
+    }
+    if let Some(down) = down {
+        shown = with_field(shown, "down", down.to_sdk());
     }
     if let Some(model) = daemon_capacity {
         shown = with_field(shown, "daemon_capacity", model.to_sdk());
