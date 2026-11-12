@@ -25,14 +25,16 @@ Deliver explicit LayerFS garbage collection for SQLite and PostgreSQL through so
 
 ## Key Constraints
 
-| Constraint | Description | Impact |
-|-----------|-------------|--------|
-| **C1** | Reachability = Store | GC scope boundary |
-| **C2** | Pinned object protection | Cross-project safety |
-| **C3** | Historical mount inclusion | Closure completeness |
-| **C8b** | Incarnation protocol | SQLite atomicity |
-| **C9** | HistoryCatalog binding | Immutable ID contract |
-| **C10** | Admission matrix | Mount validation |
+The constraints are defined once, as contracts **C1–C10** in
+`LayerFS-GC-spec.md` §5. This README does not restate them.
+
+**Correction:** an earlier version of this README carried a table that gave C1,
+C2 and C3 different meanings from the specification (it labelled C1
+"Reachability = Store", C2 "Pinned object protection", C3 "Historical mount
+inclusion"). In `LayerFS-GC-spec.md` **C1 is the root set and generation, C2 is
+the collectability decision, and C3 binds a per-object delete to
+`(ObjectId, G)`** — the meaning the #42 sign-off request uses. The stale table is
+removed; cite §5 rather than any local summary.
 
 ## Files in This Directory
 
