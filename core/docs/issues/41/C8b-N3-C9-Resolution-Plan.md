@@ -2,7 +2,7 @@
 
 ## Background
 
-Based on Chapter 5 "Contracts" of `LayerFS-GC-spec.md` and Chapter 4 "Open Questions" of `gc-42-assessment.md`, the three issues sit at different implementation layers:
+Based on Chapter 5 "Contracts" of `LayerFS-GC-spec.md` (and its §1.2 open questions), the three issues sit at different implementation layers:
 
 ---
 

@@ -328,7 +328,7 @@ implement around them without a choice.
 
 ### 5.1 PostgreSQL: rebuild-and-swap vs in-place row deletion
 
-The spec's §7.3 describes row deletion order —
+The spec's §7.3 (`LayerFS-GC-spec.md`) describes row deletion order —
 
 > "先删引用（`object_location` 等），后删 payload；中间态即 `backend_reusable`，单独上报"
 

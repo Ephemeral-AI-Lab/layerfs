@@ -2,7 +2,7 @@
 
 ## 📋 Problem Overview
 
-Three key design issues identified from `LayerFS-GC-spec.md` and `gc-42-assessment.md`:
+Three key design issues identified from `LayerFS-GC-spec.md`:
 
 | ID | Category | Issue | Impact | Status |
 |----|------|------|------|------|

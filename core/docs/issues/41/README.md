@@ -37,6 +37,9 @@ Deliver explicit LayerFS garbage collection for SQLite and PostgreSQL through so
 ## Files in This Directory
 
 - **README.md** - This file
+- **LayerFS-GC-spec.md** - The authoritative single-file specification (§1-§12):
+  decisions, contracts C1-C10, Mark, Sweep, operations, acceptance. Every other
+  document in this directory derives from it and cites its section numbers.
 - **01-overview-and-decisions.md** - Design decisions (D1-D14)
 - **02-operation-contracts.md** - Operation specifications
 - **03-decision-record.md** - R1 / Q1 / C3: scenarios, alternatives, decision basis;

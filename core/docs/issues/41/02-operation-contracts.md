@@ -17,7 +17,9 @@
 - `MountsActive` - Active mounts exist on Branch
 - `Busy` - Conflicting operations in progress
 
-See § 5.1 in LayerFS-GC-spec.md
+See `LayerFS-GC-spec.md` §5 C6 (terminal tombstone, name reuse) and §5 C10
+(branch-level exclusion); the call surface is §8, and §3 I5 keeps history and ids
+intact.
 
 ## project.delete(name)
 
@@ -36,7 +38,8 @@ See § 5.1 in LayerFS-GC-spec.md
 - `MountsActive` - Active mounts exist in project
 - `Busy` - Conflicting operations in progress
 
-See § 5.2 in LayerFS-GC-spec.md
+See `LayerFS-GC-spec.md` §5 C6 (shared and exclusive tombstones), §5 C10
+(project-level exclusion) and §8 (the Store stays addressable).
 
 ## project.remove_file(...)
 
@@ -56,7 +59,8 @@ See § 5.2 in LayerFS-GC-spec.md
 - `MountsActive` - Active mounts exist in project
 - `Busy` - Conflicting operations in progress
 
-See § 8 in LayerFS-GC-spec.md
+See `LayerFS-GC-spec.md` §3 I5 (visibility only, ids unchanged), §5 C9 (the
+catalog methods that keep an immutable id readable) and §9.3 (byte accounting).
 
 ## store.compact(name)
 
@@ -80,4 +84,5 @@ See § 8 in LayerFS-GC-spec.md
 - SQLite: Full support with 5-stage incarnation protocol
 - PostgreSQL: Full support, including remote servers (not stub)
 
-See § 7 in LayerFS-GC-spec.md
+See `LayerFS-GC-spec.md` §7 (Sweep), §7.2 for SQLite, §7.3 for PostgreSQL, and §8
+for the operation surface.
