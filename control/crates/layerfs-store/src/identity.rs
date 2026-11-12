@@ -215,6 +215,8 @@ pub fn make_empty(
             .create(global)
             .map_err(failed)?;
     }
+    layerfs_store_service::kernel_guard::check(destination)
+        .map_err(|reason| refused("Unsupported", reason.0))?;
     let (target, _) = layerfs_store_service::install::paths(destination).map_err(failed)?;
     layerfs_store_service::install::absent(&target)
         .map_err(|error| refused("Exists", format!("{}: {error}", target.display())))?;

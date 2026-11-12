@@ -14,7 +14,10 @@ pub fn create(home: &Path, name: &StoreName) -> Outcome {
         return Err(refused("Exists", format!("a Store named {name} exists")));
     }
     let directory = paths::store_dir(home, name);
-    home::private_dir(&directory)?;
+    let existed = directory.exists();
+    if let Some(parent) = directory.parent() {
+        home::private_dir(parent)?;
+    }
     let identity = crate::identity::Identity {
         kind: crate::identity::Kind::Sqlite,
         binding: layerfs_home::helpers::random()?.to_vec(),
@@ -26,7 +29,9 @@ pub fn create(home: &Path, name: &StoreName) -> Outcome {
         Ok(sealed) => sealed,
         Err(refusal) => {
             // nothing was published: this call's own directory goes
-            let _ = std::fs::remove_dir_all(&directory);
+            if !existed {
+                let _ = std::fs::remove_dir_all(&directory);
+            }
             return Err(refusal);
         }
     };

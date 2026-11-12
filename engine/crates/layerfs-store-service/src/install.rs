@@ -138,10 +138,11 @@ impl std::fmt::Display for LocalInstallFailure {
 
 /// Installs the sealed Store `source` (described by `manifest`) at
 /// `destination` in this process: the project volume's
-/// `global/store.sqlite`, its `global/` directory made owner-only. The
-/// destination's filesystem must pass the kernel guard, as every Store opener
-/// must, and this process must run as the daemons' user. Returns the
-/// installed manifest, which records this process's SQLite version.
+/// `global/store.sqlite`, its `global/` directory made owner-only (`0700`,
+/// created as such when missing). The destination's directory and filesystem
+/// must pass the kernel guard, as every Store opener must, and this process
+/// must run as the daemons' user. Returns the installed manifest, which
+/// records this process's SQLite version.
 pub fn install_local(
     source: &Path,
     manifest: &StoreManifest,
@@ -159,15 +160,24 @@ pub fn install_local(
         let directory = destination
             .parent()
             .ok_or("the Store destination has no directory")?;
-        crate::kernel_guard::check(directory).map_err(|reason| reason.0)?;
-        installer_user()?;
         let text = |error: io::Error| error.to_string();
-        if !directory.exists() {
-            use std::os::unix::fs::DirBuilderExt;
-            fs::DirBuilder::new()
-                .mode(0o700)
-                .create(directory)
-                .map_err(text)?;
+        let existed = directory.exists();
+        let outcome = (|| {
+            installer_user()?;
+            if !existed {
+                use std::os::unix::fs::DirBuilderExt;
+                fs::DirBuilder::new()
+                    .mode(0o700)
+                    .create(directory)
+                    .map_err(text)?;
+            }
+            crate::kernel_guard::check(destination).map_err(|reason| reason.0)
+        })();
+        if let Err(error) = outcome {
+            if !existed {
+                let _ = fs::remove_dir_all(directory);
+            }
+            return Err(error);
         }
         let (target, temporary) = paths(destination).map_err(text)?;
         let mut file = claim(&target, &temporary).map_err(text)?;

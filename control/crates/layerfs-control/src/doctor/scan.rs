@@ -1,8 +1,8 @@
 //! Every record of a layout 3 home, read once: whether it parses, whether
 //! an entity record has `"v": 1`, and the modes of the home's folders
-//! (0700, or 0701 where a namespaces Sandbox passes through) and record
-//! files (0600). A Store folder with projects and no Store record is
-//! reported here too.
+//! (0700, or 0701 where a namespaces Sandbox passes through; a Store's own
+//! folder is 0700 like the daemon's rule) and record files (0600). A Store
+//! folder with projects and no Store record is reported here too.
 use super::report::Findings;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{paths, read_record, RECORD_VERSION};
@@ -78,7 +78,7 @@ pub(super) fn scan(home: &Path, findings: &mut Findings) -> Result<Scanned> {
 /// One Store's folder: its record and its projects'.
 fn store(home: &Path, name: &str, scanned: &mut Scanned, findings: &mut Findings) -> Result<()> {
     let entity = ("store", name);
-    folder(&paths::store_dir(home, name), entity, findings);
+    store_folder(&paths::store_dir(home, name), entity, findings);
     let path = paths::store_record(home, name);
     let has_record = path.exists();
     if has_record {
@@ -271,6 +271,22 @@ fn folder(path: &Path, entity: (&str, &str), findings: &mut Findings) {
                 path.display()
             ),
             format!("`chmod g-rwx,o-rw {}`", path.display()),
+        );
+    }
+}
+
+/// A Store's own folder is held to the daemon's rule (kernel_guard): no
+/// group or other bits at all, not even pass-through, so a folder doctor
+/// calls fine is one the daemon opens.
+fn store_folder(path: &Path, entity: (&str, &str), findings: &mut Findings) {
+    if let Some(mode) = mode(path).filter(|mode| mode & 0o077 != 0) {
+        findings.error(
+            entity,
+            format!(
+                "{} has mode {mode:04o}; a Store's folder is 0700",
+                path.display()
+            ),
+            format!("`chmod 700 {}`", path.display()),
         );
     }
 }

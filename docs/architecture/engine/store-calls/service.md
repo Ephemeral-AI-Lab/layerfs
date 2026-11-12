@@ -77,9 +77,12 @@ Backend details are in [Store: Lifecycle](../store/lifecycle.md) and
 [Store: Backends](../store/backends.md).
 
 The kernel guard ([`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs))
-allows ext4, xfs and btrfs on Linux and apfs or hfs on macOS (for the native
-Sandbox, where the SDK and daemon share one macOS kernel). Every other platform
-is `Unsupported`.
+checks, without opening or creating anything, that the Store's own directory
+exists as a real `0700` directory owned by the current effective user (refusing
+a missing path, a symlink, wrong owner or `mode & 0o077 != 0` without modifying
+directory permissions), and allows ext4, xfs and btrfs on Linux and apfs or hfs
+on macOS (for the native Sandbox, where the SDK and daemon share one macOS
+kernel). Every other platform is `Unsupported`.
 
 ```text
 StoreService::bind(workspace, branch)          Store::bind_private

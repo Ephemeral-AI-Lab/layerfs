@@ -104,7 +104,7 @@ The summary is built in [`project/record.rs`](../../../../../control/crates/laye
 | Store kind | Platform of the Store's machine | Runs in |
 | --- | --- | --- |
 | PostgreSQL | any | caller's process (needs a build with the `postgresql` feature) |
-| sqlite | executes locally (`native` on Linux or macOS) | caller's process; the kernel guard admits the Store's directory only on Linux ext4, xfs or btrfs, or macOS apfs or hfs |
+| sqlite | executes locally (`native` on Linux or macOS) | caller's process; the kernel guard admits the Store's directory only when it is owned by this user and private (`0700`) on Linux ext4, xfs or btrfs, or macOS apfs or hfs |
 | sqlite | any other machine, and `native` on Windows | that machine's worker, on a copy of the folder |
 
 Init is a live add, not a seal: `ProjectApi::add_project` opens the
@@ -127,7 +127,7 @@ Store calls hide that Branch: they treat `main` as the line of Layers (see
 | `Exists` | the project's record, entry or LayerStack name exists | no | `project/family.rs`, `store/identity.rs` |
 | `Capacity` | worker route: the machine's free disk is below the copy plus headroom | no | `project/send.rs` `room` |
 | `Unavailable` | worker route: no worker recorded, or not reached; nothing sent | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
-| `Unsupported` | the kernel guard refuses the Store's filesystem; the Store has no acquisition tables; PostgreSQL in a build without `postgresql` | no | `store/identity.rs`, [`kernel_guard.rs`](../../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
+| `Unsupported` | the kernel guard refuses the Store's directory (non-private mode/owner/type or unsupported filesystem); the Store has no acquisition tables; PostgreSQL in a build without `postgresql` | no | `store/identity.rs`, [`kernel_guard.rs`](../../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | `NoStore` | no Store file at the Store's path | no | `store/identity.rs` |
 | `Failed` | deadline passed, read error, or any engine failure, **including an Init whose outcome is unknown** | **may be** | `store/identity.rs` `add_failure` |
 | `Unknown` | **worker route: a stage or the `project.init` answer was lost** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |

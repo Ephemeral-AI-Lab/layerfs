@@ -78,12 +78,14 @@ shown. The answer is the same shape as [store.get](get.md).
  StoreName::parse(name)
  home lock  ----------------------------------- waits up to 120 s
  store/<name>/record.json exists? --> Exists
- mkdir store/<name>/ (0700)
+ mkdir store/ (0700)
  identity: kind sqlite, random binding, random cursor key
- make_empty:  ProjectApi::create_store  -> store.sqlite.creating
+ make_empty:  kernel_guard::check(store/<name>/store.sqlite)
+                (a real 0700 directory of this user; mkdir 0700 when absent)
+              ProjectApi::create_store  -> store.sqlite.creating
               (Disposable profile, frozen default policy)
               chmod 0600; rename -> store/<name>/store.sqlite
-   failure:   remove store/<name>/ (nothing was published)
+   failure:   remove store/<name>/ (its own directory only; nothing was published)
  save_record + created_on_native; write record.json
 ```
 
@@ -103,6 +105,7 @@ create it and then [push](push.md) it. See the
 | `InvalidInput` | a bad Store name; a folder-scoped client | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `Exists` | a Store record of that name exists, or a file is already at the target | no | [`sqlite/create.rs`](../../../../../control/crates/layerfs-store/src/sqlite/create.rs), [`identity.rs`](../../../../../control/crates/layerfs-store/src/identity.rs) `make_empty` |
 | `Unavailable` | another process held the home lock or the Store's lock for 120 s | no | [`home/lock.rs`](../../../../../control/crates/layerfs-home/src/home/lock.rs) |
+| `Unsupported` | the kernel guard refuses `store/<name>/` (not on a local lock-carrying filesystem, or an existing directory is not owned by this user or has group/other access instead of mode `0700`) | no | [`identity.rs`](../../../../../control/crates/layerfs-store/src/identity.rs), [`kernel_guard.rs`](../../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | `Failed` | the empty Store could not be made or written (`Store create: …`), or the record write failed | no | [`identity.rs`](../../../../../control/crates/layerfs-store/src/identity.rs) |
 
 A failure before the record is written removes the call's own

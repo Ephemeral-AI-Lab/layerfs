@@ -68,6 +68,7 @@ A live owner's `op` is not a finding: the operation is still running.
 | each machine, Store, project, Sandbox record | it does not parse, or an entity record's `v` is not 1 | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `record` |
 | record file mode | not 0600 (group or others may read) | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `file_mode` |
 | folder mode | others may list or change it, or its group may use it; 0701 is allowed | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `folder` |
+| Store folder mode | any group or other bit at all: a Store's own folder is `0700`, as the daemon's rule (kernel guard) requires; 0701 is not allowed there | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `store_folder` |
 | Store folder | it has projects and no Store record | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `store` |
 | Sandbox folder | its record, `control.json` and Workspace records | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `sandbox` |
 | Workspace folder | each `workspace/<id>/` folder's mode, and each command record under its `exec/`; the doctor ends no command and removes no record | [`scan.rs`](../../../../control/crates/layerfs-control/src/doctor/scan.rs) `execs` |

@@ -180,14 +180,23 @@ fn fetch(
             .parent()
             .ok_or("the Store destination has no directory")?;
         // as install_local: the volume holding the Store's directory
-        kernel_guard::check(directory).map_err(|reason| reason.0)?;
-        installer_user()?;
-        if !directory.exists() {
-            use std::os::unix::fs::DirBuilderExt;
-            fs::DirBuilder::new()
-                .mode(0o700)
-                .create(directory)
-                .map_err(text)?;
+        let existed = directory.exists();
+        let outcome = (|| {
+            installer_user()?;
+            if !existed {
+                use std::os::unix::fs::DirBuilderExt;
+                fs::DirBuilder::new()
+                    .mode(0o700)
+                    .create(directory)
+                    .map_err(text)?;
+            }
+            kernel_guard::check(destination).map_err(|reason| reason.0)
+        })();
+        if let Err(error) = outcome {
+            if !existed {
+                let _ = fs::remove_dir_all(directory);
+            }
+            return Err(error);
         }
         let (target, _) = paths(destination).map_err(text)?;
         let cloning = binding.is_none();
