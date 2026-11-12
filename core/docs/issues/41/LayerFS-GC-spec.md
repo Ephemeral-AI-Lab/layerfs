@@ -330,92 +330,79 @@ retire     delete old copies the record no longer names
 
 ---
 
-## 13. Concepts borrowed from BrewFS
+## 13. Safety mechanisms
 
-BrewFS (`github.com/brewfs/brewfs`, pinned 2026-11-11 `#444`) supplies four
-*concepts*. Nothing is copied: not code, not parameter values (its docs and code
-disagree for the parameters; every value cited here is the code default). Each
-concept below states the goal, the BrewFS origin, the safety it buys, and where
-LayerFS implements it.
+Four mechanisms carry the correctness of the sweep. Each states the goal, the
+mechanism, the safety it guarantees, and where it is implemented.
 
 ### 13.1 Root generation + re-check before delete
 
 - **Goal.** A mark-sweep pass must never reclaim an object that became reachable
   *after* the reachability closure was computed. A concurrent `branch.fork` /
   `commit` must not lose the object it just started referencing.
-- **BrewFS origin.** G13's *root generation* and the *Deleting re-check*: mark
-  from a frozen generation and re-check it before the delete.
-- **Safety it buys.** No accidental deletion of a newly created root. A mismatch
-  abandons the round; it does not retry until the generation happens to match,
-  because retrying is how a re-check turns into a race.
-- **Implementation.** Contract C1: `rootGeneration` is monotonic and bumped by
+- **Mechanism.** The root set carries a monotonic `rootGeneration`. The closure is
+  computed from a frozen generation inside the exclusive window, and the
+  generation is re-read immediately before the delete; a mismatch invalidates the
+  whole round.
+- **Safety.** No accidental deletion of a newly created root. A mismatch abandons
+  the round; it does not retry until the generation happens to match, because
+  retrying is how a re-check turns into a race.
+- **Implementation.** Contract C1: `rootGeneration` is bumped by
   `branch.create/fork`, `commit`, `merge`, `branch.remove`, `project.delete`,
-  `project.remove_file`, and the install of `store.compact`. The closure is
-  computed inside the exclusive window from the frozen generation (no caching
-  across operations); the generation is re-read immediately before `install`;
-  a mismatch abandons the whole round.
-- **Difference from BrewFS.** BrewFS stores the generation as a compact-loop
-  detail; here it is a contract-level bump point list, so every operation that
-  changes the root set is forced to register.
+  `project.remove_file`, and the install of `store.compact`. No caching across
+  operations; the re-read happens just before `install`.
 
 ### 13.2 Two-phase deletion (record, then confirm)
 
 - **Goal.** A crash in the middle of a delete must never leave a half-deleted
   Store. The system must be able to tell "delete was intended but not confirmed"
   from "delete happened".
-- **BrewFS origin.** `record_uncommitted_slice` / `confirm_slice_committed`:
-  record the intent first, confirm after the physical delete.
-- **Safety it buys.** A crash before `install` leaves the old Store byte-identical
+- **Mechanism.** Record the intent first (the op record names the staged copy and
+  the generation), perform the delete only on the staged copy, and confirm with a
+  single `install`; the old copy is retired afterwards.
+- **Safety.** A crash before `install` leaves the old Store byte-identical
   (invariant I3: `install` is binary, all-old or all-new); there is no
   "half new, half old" state; an uncertain op is reported, not guessed at.
 - **Implementation.** Contract C7: no sidecar intent file. The intent is the op
   record plus the `Stage` copy — the op names the staged path and the generation,
-  and its failure detail carries at least `phase`, `authority`, `artifact`. The
-  delete happens only on the staged copy. `Install` is the confirmation point and
-  is the only irreversible step; `Retire` deletes the old copy afterwards. The new
-  `rewrite` phase is registered in `transfer/resolve.rs`'s "holds nothing" list so
-  it cannot leave a permanent `Unresolved`.
-- **Difference from BrewFS.** BrewFS's intent is a per-slice record; LayerFS's is
-  the op record plus the existing `transfer` (`Stage`/`Verify`/`Install`/`Retire`)
-  machinery, so the protocol is the one the Store already uses for push/pull and
-  not a second recovery protocol.
+  and its failure detail carries at least `phase`, `authority`, `artifact`.
+  `Install` is the only irreversible step; `Retire` deletes the old copy
+  afterwards. The new `rewrite` phase is registered in `transfer/resolve.rs`'s
+  "holds nothing" list so it cannot leave a permanent `Unresolved`.
 
-### 13.3 Lock self-healing (Drop + TTL)
+### 13.3 Lock self-healing
 
 - **Goal.** A holder that dies (kill -9, power loss) must not wedge the Store's
   exclusive lock forever.
-- **BrewFS origin.** The lock releases on `Drop` in the normal path and expires on
-  a TTL when the holder died (`LockTtlConfig`, code defaults 10/30/50/5/300).
-- **Safety it buys.** No permanent wedge; a second compact is refused `Busy` /
-  `InUse` instead of running concurrently; a crashed compact leaves a recoverable
-  op that `doctor` can report.
+- **Mechanism.** The lock releases on `Drop` in the normal path; a dead holder is
+  detected from its liveness (pid + kernel start time + boot), with a TTL as the
+  backstop.
+- **Safety.** No permanent wedge; a second compact is refused `Busy` / `InUse`
+  instead of running concurrently; a crashed compact leaves a recoverable op that
+  `doctor` can report.
 - **Implementation.** Contract S2 and §2: exclusive access reuses the Store lock
   (`record.rs::lock`) + the lease (`lease.rs`, `store/<name>/open/<pid>`) + the op
   record (`op.rs`, `Standing = Running / Unresolved / Stale`). The lease's liveness
   is judged from pid + kernel start time + boot, so a live holder is never
   misjudged as dead.
-- **Difference from BrewFS.** BrewFS's fallback is a fixed TTL; LayerFS's primary
-  judgement is liveness (pid/kernel-start/boot) and TTL is only the backstop, so
-  a slow-but-alive holder is not mistaken for a dead one.
 
-### 13.4 Closure / layer-set algebra
+### 13.4 Reachability closure
 
-- **Goal.** Decide which objects are still reachable. The roots are many
-  (project `main`, Branch heads, retained historical Commits, Layers, staged
-  copies of incomplete ops, pooled dependencies), references are transitive
-  (delta base -> earlier base -> ...), objects are shared across projects, and a
-  producer may already be soft-deleted while its objects are still referenced.
-- **BrewFS origin.** G13's *layer-set algebra*.
-- **Safety it buys.** Retained history never shrinks (I1: `Verify{heads}` plus
-  closure comparison); shared content, transitive delta bases and pooled inodes
-  stay alive even when the producer Branch/project was soft-deleted; a missing
-  dependency aborts the round instead of being skipped (skipping is how a live
-  object gets classified as dead).
+- **Goal.** Decide which objects are still reachable. The roots are many (project
+  `main`, Branch heads, retained historical Commits, Layers, staged copies of
+  incomplete ops, pooled dependencies), references are transitive (delta base ->
+  earlier base -> ...), objects are shared across projects, and a producer may
+  already be soft-deleted while its objects are still referenced.
+- **Mechanism.** Walk the retained roots with the existing content-closure
+  traversal, mark everything reached, and classify the rest as candidates subject
+  to the pinned set.
+- **Safety.** Retained history never shrinks (I1: `Verify{heads}` plus closure
+  comparison); shared content, transitive delta bases and pooled inodes stay alive
+  even when the producer Branch/project was soft-deleted; a missing dependency
+  aborts the round instead of being skipped (skipping is how a live object gets
+  classified as dead).
 - **Implementation.** Contracts C1/C2 and §6: the closure walks the retained roots
   with the existing `layerfs-content` `qualify` traversal (a second walker is
   forbidden) and `references`/`decode_references`; `collectable(o) := o ∉
   closure(Roots@G) ∧ o ∉ pinned`; the walk is bounded and keeps an indexed
   visited set; no second persistent database.
-- **Difference from BrewFS.** BrewFS defines its own layer model for the algebra;
-  LayerFS reuses the traversal and reference decoder it already has, so the GC
-  consumes the same reachability the rest of the product uses.
