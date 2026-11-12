@@ -39,9 +39,9 @@ Terms are in the [glossary](../glossary.md).
    check sha256s; open as Disposable --> store.sqlite (staged)
    heads; no -wal/-shm; hard link into place
  binding == existing Store's?
- read its projects
+ read its projects and each one's main Branch
  [home lock] re-check; hard link (new) | rename (replace)
- write the link and project records
+ write the link and the rebuilt project records
 ```
 
 | Step | Component |
@@ -82,9 +82,9 @@ not detected.
 | 1 | `backup.restore(store, bucket, file?)` restores to a sqlite Store on `native`. `file` is the argument, else the Store's link, else the Store's name. | [SDK: backup](../api/sdk/backup/README.md) | [`backup/restore.rs` (api)](../../../control/crates/layerfs-store/src/backup/restore.rs) |
 | 2 | An existing Store must be replaceable, checked under the home lock and the Store's lock: on `native`, no intent, this process's open copy closed, no Sandbox or other holder, its heads equal to the link's heads (unchanged since its last backup or restore), and no `-wal` or `-shm` beside it. | [Backups: backup and restore](../control/backups/backup-and-restore.md#restore) | same, `replaceable` |
 | 3 | Progress `check`, then `backup::load` on a thread of its own that reports to the call: progress `download` with the bytes received, `verify` while the bytes open, then `install` for the hard link into a private `store/.restore-<random>/` folder. Kernel guard on the folder; no Store at the target; the object exists and records `layerfs-binding`; manifest, every piece and the whole file match their sha256; the bytes open as a Disposable Store with that binding and the cursor key (the existing Store's, or a new one); closing leaves no sidecar; a hard link places it. | [Backups: backup and restore](../control/backups/backup-and-restore.md#restore), [Backups: pieces and manifest](../control/backups/pieces-and-manifest.md#sha256-manifest), [SDK: backup progress](../api/sdk/backup/README.md#progress), [Store: the Disposable profile](../engine/store/lifecycle.md#the-disposable-profile) | [`backup/restore.rs` (connect)](../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
-| 4 | The downloaded binding must be the existing Store's. Its projects are read on a connection of this call's own. | [Backups: backup and restore](../control/backups/backup-and-restore.md#heads) | [`backup/restore.rs` (api)](../../../control/crates/layerfs-store/src/backup/restore.rs) `projects_in` |
+| 4 | The downloaded binding must be the existing Store's. Its projects are read on a connection of this call's own, with each one's `main` Branch and that Branch's base root: the record `project.init` writes is rebuilt from them. | [Backups: backup and restore](../control/backups/backup-and-restore.md#restore) | [`backup/restore.rs` (api)](../../../control/crates/layerfs-store/src/backup/restore.rs) `projects_in` |
 | 5 | Progress `install`, under the home lock: a new Store is hard-linked into place (never over a Store that appeared meanwhile); a replaced Store is checked again and renamed over. | — | same |
-| 6 | The link (`op: restore`) and the project records are written; records of projects the Store no longer holds are removed. The staging folder is removed when the call ends. Its `lock` file is held (`flock`) until then; a restore killed before that leaves the folder, which the next restore removes when it can take that lock. | [Management: home and records](../control/management/home-and-records.md#records) | same, `write_projects` |
+| 6 | The link (`op: restore`) and the project records are written: each project's record carries its `manifest` and `installed` manifest (restored Store's binding, cursor key, file length and SQLite version), an existing complete record is kept, an incomplete one completed, and records of projects the Store no longer holds are removed. The staging folder is removed when the call ends. Its `lock` file is held (`flock`) until then; a restore killed before that leaves the folder, which the next restore removes when it can take that lock. | [Management: home and records](../control/management/home-and-records.md#records) | same, `write_projects` |
 
 The download and its checks run before the home lock; the lock covers only
 the re-checks, the install and the record writes.

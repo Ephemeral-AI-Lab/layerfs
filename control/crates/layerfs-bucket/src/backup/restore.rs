@@ -59,6 +59,9 @@ pub struct Loaded {
     pub pieces: u64,
     /// The installed Store's history heads digest, when it could be read.
     pub heads: Option<[u8; 32]>,
+    /// The SQLite version that wrote the remote copy, as its push recorded
+    /// it (`layerfs-sqlite`); `None` when the copy carries none.
+    pub sqlite: Option<String>,
 }
 
 /// A failed pull or load: its cause and the temporary file it left, if any.
@@ -142,6 +145,14 @@ pub fn load(
     cursor_key: [u8; 32],
 ) -> Result<Loaded, PullFailure> {
     fetch(driver, file, destination, None, cursor_key).map(|(fetched, _)| fetched)
+}
+
+/// The remote copy's recorded SQLite version, if push recorded one.
+fn remote_sqlite(metadata: &crate::bucket::Metadata) -> Option<String> {
+    metadata
+        .get(crate::backup::create::SQLITE_VERSION)
+        .filter(|version| !version.is_empty())
+        .cloned()
 }
 
 /// The remote copy's recorded binding, if push recorded one.
@@ -286,6 +297,7 @@ fn fetch(
                 sha256: moved.sha256,
                 pieces: moved.pieces,
                 heads: digest,
+                sqlite: remote_sqlite(&stat.metadata),
             },
             replaced,
         ))

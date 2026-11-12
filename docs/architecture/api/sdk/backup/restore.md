@@ -59,7 +59,7 @@ layerfs backup restore <store> <bucket> [<file>] [--progress]
 | `store`, `bucket`, `file` | text | what was restored, from where | [`backup/restore.rs`](../../../../../control/crates/layerfs-store/src/backup/restore.rs) |
 | `bytes`, `sha256` | int, text | the downloaded copy | `backup::load` |
 | `heads` | text or null | its heads digest | same |
-| `projects` | list of text | the projects the restored file holds; their records are rebuilt, and records of projects it lacks are removed | same, `write_projects` |
+| `projects` | list of text | the projects the restored file holds; each record is rebuilt as `project.init` writes it (its `manifest` and `installed`), and records of projects it lacks are removed | same, `projects_in`, `write_projects` |
 
 ## Where it runs
 
@@ -74,7 +74,7 @@ layerfs backup restore <store> <bucket> [<file>] [--progress]
    make store/.restore-<random>/, lock it
  download into it <------------------------------ pieces / manifest
    checked; binding must match an existing Store's
- read the file's projects (own connection, closed)
+ read the file's projects and each one's main Branch (own connection, closed)
  home lock (+ Store lock when replacing):
    new:      hard-link into store/<name>/store.sqlite, write record
    replace:  re-check binding and replaceable, rename over the file
@@ -94,6 +94,17 @@ is left alone.
 | an idle sqlite Store on `native`, unchanged | its file is replaced; its cursor key is kept; the backup's binding must be its own | same |
 | a Store on another machine | `Unsupported`: pull it first | same, `replaceable` |
 
+Each rebuilt record is the one `project.init` writes: the project's `main`
+Branch and its base root supply `manifest` and the `installed` manifest that
+`sandbox.create` reads, with the restored Store's binding, cursor key, file
+length and the SQLite version its push recorded (`layerfs-sqlite`, else the
+one that opens the copy here), and `created` set to the restore's time when
+the record has none. A record that already holds both manifests is kept
+unchanged, so a restore over an existing Store leaves its records as they
+were; one without them (written by an earlier restore of the same backup)
+is completed. A project whose Store holds no `main` Branch has no manifest
+to rebuild, and keeps the name and stack its listing gives.
+
 See the [routing table](../../../control/routing/routing-table.md).
 
 ## Errors
@@ -107,7 +118,7 @@ See the [routing table](../../../control/routing/routing-table.md).
 | `InUse` | a process holds the Store, a Sandbox of it is recorded, or its `-wal`/`-shm` exists | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle`, `replaceable` |
 | `Conflict` | the Store changed since its last backup or restore through this bucket, has no link, or was replaced during the download | no | same |
 | `Exists` | a Store of that name was made during the download | no | same |
-| `Failed` | the download or its checks failed (including an uncertain read); the backup's binding is another Store's; I/O | no | same |
+| `Failed` | the download or its checks failed (including an uncertain read); the backup's binding is another Store's; the restored Store's projects or their history cannot be read; I/O | no | same |
 
 A restore writes only after a complete, checked download, and the install
 is one link or rename under the home lock. No outcome is reported as

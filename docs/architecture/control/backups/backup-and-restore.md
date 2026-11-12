@@ -111,7 +111,8 @@ push never overwrites a file this home did not move.
    backup::load(driver, file, store/.restore-<random>/store.sqlite, cursor)
    |  1 store_object(file); kernel_guard on the directory; installer_user
    |  2 destination absent (load); no -wal/-shm beside it
-   |  3 stat: present; binding from layerfs-binding (else refused)
+   |  3 stat: present; binding from layerfs-binding, SQLite version
+   |      from layerfs-sqlite (both else refused/absent)
    |  4 download to <target>.pulling (0600, create_new): pieces::download
    |      manifest, each piece, whole file against sha256
    |  5 open as Disposable with the binding and cursor key; close
@@ -119,9 +120,9 @@ push never overwrites a file this home did not move.
    |  7 hard link into place; remove the temporary name
    v
    binding == existing Store's?  (else Failed)
-   read its projects
+   read its projects and each one's main Branch
    home lock: re-check replaceable; hard link (new) or rename (replace)
-   write the link and project records
+   write the link; rebuild the project records
 ```
 
 | # | Check | Refusal | Source |
@@ -139,6 +140,15 @@ One attempt: a failure keeps the temporary file it left and names it in
 home lock; the lock covers only the re-checks, the install and the record
 writes. Its staging folder `store/.restore-<random>/` is removed when the
 call ends.
+
+The restored Store's projects are read from it, and each one's record is
+rebuilt there: its `main` Branch and that Branch's base root supply
+`manifest` and the `installed` manifest, with the restored Store's binding,
+cursor key, file length and the SQLite version its push recorded
+(`layerfs-sqlite`; else the one that opens the copy here) — the record
+`project.init` writes. A record that already holds both manifests is kept
+unchanged, and one without them (a record an earlier restore of the same
+backup wrote) is completed, so a Sandbox of a restored project starts.
 
 ## Related
 
