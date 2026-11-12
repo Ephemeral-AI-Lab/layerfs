@@ -26,6 +26,8 @@ class AsyncProjectFamily:
         """every project in the home, or one Store's"""
     async def get(self, project: str) -> Result:
         """a project's record: its Store, kind and machine"""
+    async def stats(self, project: str, branch: str | None = None, commit: str | None = None) -> Result:
+        """entry counts of one pinned saved tree"""
     async def export(
         self,
         project: str,
@@ -92,6 +94,7 @@ class AsyncBranchFamily:
         to_commit: str | None = None,
         path_prefix: str | None = None,
         include_attribution: bool | None = None,
+        continuation: str | None = None,
     ) -> Result:
         """files that differ between two Branches' heads"""
 
@@ -182,6 +185,7 @@ class AsyncFileFamily:
         traversal: str | None = None,
         page: int | None = None,
         page_size: int | None = None,
+        continuation: str | None = None,
     ) -> Result:
         """saved changes to a literal path"""
     async def blame(
@@ -318,7 +322,7 @@ class AsyncMachineFamily:
         """a machine's record"""
     async def status(self, name: str) -> Result:
         """a machine's live state, free disk and tool version"""
-    async def start(self, name: str) -> Result:
+    async def start(self, name: str, *, on_progress: Callable[[Progress], object] = ...) -> Result:
         """start a stopped machine and its worker; a running one answers at once"""
     async def stop(self, name: str) -> Result:
         """stop a machine's worker and VM; its disks stay"""
@@ -331,6 +335,8 @@ class AsyncMachineFamily:
         memory: Size | None = None,
         disk: Size | None = None,
         image: str | None = None,
+        os_image: str | None = None,
+        on_progress: Callable[[Progress], object] = ...,
     ) -> Result:
         """create an enabled VM machine (apple-container, lima)"""
     async def remove(self, name: str) -> Result:
@@ -355,6 +361,8 @@ class AsyncStoreFamily:
         """a Store's record"""
     async def status(self, name: str) -> Result:
         """a Store's live state"""
+    async def stats(self, name: str) -> Result:
+        """Store-wide publication and allocation counters"""
     async def create(self, name: str) -> Result:
         """an empty sqlite Store on native"""
     async def connect(
@@ -366,6 +374,10 @@ class AsyncStoreFamily:
         synchronous_commit: str | None = None,
     ) -> Result:
         """attach a PostgreSQL database as a Store"""
+    async def attach(self, name: str, machine: str, *, url: str | None = None, password: str | None = None) -> Result:
+        """let a machine run Sandboxes of a PostgreSQL Store, after checking it reaches the server"""
+    async def detach(self, name: str, machine: str) -> Result:
+        """stop a machine running Sandboxes of a PostgreSQL Store"""
     async def push(self, name: str, machine: str, *, on_progress: Callable[[Progress], object] = ...) -> Result:
         """send a sqlite Store from native to a machine"""
     async def pull(self, name: str, *, on_progress: Callable[[Progress], object] = ...) -> Result:

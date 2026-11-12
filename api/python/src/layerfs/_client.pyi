@@ -22,6 +22,8 @@ class ProjectFamily:
         """every project in the home, or one Store's"""
     def get(self, project: str) -> Result:
         """a project's record: its Store, kind and machine"""
+    def stats(self, project: str, branch: str | None = None, commit: str | None = None) -> Result:
+        """entry counts of one pinned saved tree"""
     def export(
         self,
         project: str,
@@ -88,6 +90,7 @@ class BranchFamily:
         to_commit: str | None = None,
         path_prefix: str | None = None,
         include_attribution: bool | None = None,
+        continuation: str | None = None,
     ) -> Result:
         """files that differ between two Branches' heads"""
 
@@ -171,6 +174,7 @@ class FileFamily:
         traversal: str | None = None,
         page: int | None = None,
         page_size: int | None = None,
+        continuation: str | None = None,
     ) -> Result:
         """saved changes to a literal path"""
     def blame(
@@ -285,7 +289,7 @@ class MachineFamily:
         """a machine's record"""
     def status(self, name: str) -> Result:
         """a machine's live state, free disk and tool version"""
-    def start(self, name: str) -> Result:
+    def start(self, name: str, *, on_progress: Callable[[Progress], object] = ...) -> Result:
         """start a stopped machine and its worker; a running one answers at once"""
     def stop(self, name: str) -> Result:
         """stop a machine's worker and VM; its disks stay"""
@@ -298,6 +302,8 @@ class MachineFamily:
         memory: Size | None = None,
         disk: Size | None = None,
         image: str | None = None,
+        os_image: str | None = None,
+        on_progress: Callable[[Progress], object] = ...,
     ) -> Result:
         """create an enabled VM machine (apple-container, lima)"""
     def remove(self, name: str) -> Result:
@@ -322,6 +328,8 @@ class StoreFamily:
         """a Store's record"""
     def status(self, name: str) -> Result:
         """a Store's live state"""
+    def stats(self, name: str) -> Result:
+        """Store-wide publication and allocation counters"""
     def create(self, name: str) -> Result:
         """an empty sqlite Store on native"""
     def connect(
@@ -333,6 +341,10 @@ class StoreFamily:
         synchronous_commit: str | None = None,
     ) -> Result:
         """attach a PostgreSQL database as a Store"""
+    def attach(self, name: str, machine: str, *, url: str | None = None, password: str | None = None) -> Result:
+        """let a machine run Sandboxes of a PostgreSQL Store, after checking it reaches the server"""
+    def detach(self, name: str, machine: str) -> Result:
+        """stop a machine running Sandboxes of a PostgreSQL Store"""
     def push(self, name: str, machine: str, *, on_progress: Callable[[Progress], object] = ...) -> Result:
         """send a sqlite Store from native to a machine"""
     def pull(self, name: str, *, on_progress: Callable[[Progress], object] = ...) -> Result:

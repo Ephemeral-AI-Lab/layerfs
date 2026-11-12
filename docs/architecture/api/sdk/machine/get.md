@@ -45,7 +45,7 @@ None.
 
 ```text
 { name, platform, backend, supports: { sqlite, postgresql_sandbox, reason },
-  state, cpus, memory, disk, stores: [name], sandboxes: [name],
+  state, cpus, memory, disk, stores: [name], postgresql: [name], sandboxes: [name],
   image?, docker?, wsl?, daemon?, error?, ssh?, host?, vm_name? }
 ```
 

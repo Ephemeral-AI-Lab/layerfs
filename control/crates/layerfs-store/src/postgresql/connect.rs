@@ -96,7 +96,7 @@ fn query(rest: &str) -> Vec<(String, String)> {
 
 /// Refuses a URL that holds a password, in its user part or as any
 /// `password` (or `sslpassword`) parameter: a password is a reference.
-fn refuse_password(url: &str) -> Result<()> {
+pub fn refuse_password(url: &str) -> Result<()> {
     let (_, user, rest) = parts(url)?;
     let in_query = query(rest)
         .iter()
@@ -115,7 +115,7 @@ fn refuse_password(url: &str) -> Result<()> {
 /// `dbname` and `user` parameters; port 5432 and the database named as
 /// the user by default; the host in lower case. Every 2.0 Store is in the
 /// one schema, so this names the Store's data.
-fn target(url: &str) -> Result<(String, String, String)> {
+pub fn target(url: &str) -> Result<(String, String, String)> {
     let (_, user, rest) = parts(url)?;
     let path = rest.split(['?', '#']).next().unwrap_or("");
     let (authority, database) = path.split_once('/').unwrap_or((path, ""));
@@ -233,6 +233,15 @@ pub fn connect(home: &Path, request: &StoreConnect) -> Outcome {
     };
     let record = record.with("binding", SdkValue::Bytes(binding.clone()));
     let record = record.with("cursor", SdkValue::Bytes(fresh.cursor_key.to_vec()));
+    // `native` is attached with the Store's connection: this process dials
+    // as its Sandboxes do. Its check is recorded when it passes; a role
+    // that may not write leaves it unchecked (`store attach <name> native`
+    // checks it again and names what is missing)
+    let native = crate::record::Attachment {
+        checked: crate::postgresql::attach::check(&record, &probe).ok(),
+        ..Default::default()
+    };
+    let record = record.with_attachment("native", &native);
     let directory = paths::store_dir(home, name);
     // the projects the schema holds become this home's project records; a
     // schema that does not open is not connected
@@ -263,6 +272,10 @@ pub fn connect(home: &Path, request: &StoreConnect) -> Outcome {
         ("kind", SdkValue::text("postgresql")),
         ("schema", SdkValue::text(SCHEMA)),
         ("synchronous_commit", SdkValue::text(sync)),
+        (
+            "machines",
+            record.field("machines").cloned().unwrap_or_default(),
+        ),
         ("projects", SdkValue::List(projects)),
     ]))
 }
