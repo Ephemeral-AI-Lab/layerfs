@@ -38,7 +38,7 @@ the Workspace through ordinary file calls on the mount.
 | --- | --- | --- |
 | Identity | uid and gid non-zero, else `Protocol("nonroot command uid/gid")`. | [`types/execution.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/execution.rs) |
 | Arguments | At least one, first non-empty, no NUL. No shell is added by the runtime; `bash -c` comes from the API. | [`types/request.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/request.rs) |
-| Environment | `NAME=value`, not starting with `=`, no NUL. Nothing else of the runtime's environment reaches the command but `PATH`. | same; [`host_process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/exec.rs) |
+| Environment | `NAME=value`, not starting with `=`, no NUL. Nothing else of the runtime's environment reaches the command but `PATH`, and on `HostProcess` on macOS `RUSTUP_HOME`, `CARGO_HOME` and `GIT_CONFIG_GLOBAL` from the caller's environment or `HOME` (`~/.rustup`, `~/.cargo`, `~/.gitconfig` or XDG `git/config`) when present and not overridden by `request.environment`. | same; [`host_process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/exec.rs) |
 | Directory | Absolute, no NUL. | same |
 | Stdin | Both backends refuse it (`Unsupported`). | [`host_process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/exec.rs) |
 | Timeout | None. A command runs until it ends. | each `exec.rs` |
