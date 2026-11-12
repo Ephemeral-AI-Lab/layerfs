@@ -1,11 +1,13 @@
 //! Bounded real authenticated connection workers and retained original failures.
 use super::{
-    owner::{AdmissionClass, Finished, SlotClass, SlotTicket},
-    retained::RetainedFailure,
+    owner::{
+        disposition, recovery_request, AdmissionClass, Finished, SlotClass, SlotCounts, SlotTicket,
+    },
+    retained::{RetainedFailure, RetainedSnapshot},
     Application, ApplicationError, ConnectionFailure,
 };
 use layerfs_bridge::{
-    control::{Call, DaemonPhase, Reply, Request},
+    control::{Call, DaemonPhase, Reply, Request, RECLAIM},
     duplex::{
         self as transport,
         admission::{self as admission_notice, AdmissionNotice, AdmissionReason},
@@ -80,15 +82,12 @@ impl SlotGuard {
             return;
         }
         self.done = true;
-        // Build the bounded record before taking the state lock.
-        let prebuilt = result.as_ref().err().map(|failure| {
-            RetainedFailure::describe(
-                failure,
-                self.ticket.class,
-                self.ticket.generation,
-                &self.owner,
-            )
-        });
+        let now = Instant::now();
+        // Classify and build the bounded record before taking the state lock.
+        let classified = result
+            .as_ref()
+            .err()
+            .map(|failure| disposition(failure, self.ticket, &self.owner, now));
         // Poison recovery here only releases the slot and records; normal
         // admission still reports `Poisoned` rather than trusting corrupt state.
         let finished = {
@@ -97,9 +96,14 @@ impl SlotGuard {
                 .state
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            let finished = state
-                .slots
-                .finish(self.ticket, result, prebuilt, Instant::now());
+            let finished = state.slots.finish(self.ticket, result, classified);
+            let finished = match finished {
+                Finished::Retained(record) => {
+                    let recorded = state.retained.record(*record, now);
+                    Finished::Retained(Box::new(recorded))
+                }
+                other => other,
+            };
             self.application.changed.notify_all();
             finished
         };
@@ -144,29 +148,61 @@ impl Application {
         loop {
             let (mut stream, _) = listener.accept().map_err(ApplicationError::Io)?;
             let ticket = {
+                let idle_ttl = Duration::from_millis(u64::from(self.setup.limits.idle_ttl_ms));
                 let mut state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
-                let picked = state.slots.admit(AdmissionClass::ControlPool).or_else(|| {
-                    // Only while the one-time installer may still run: an
-                    // ordinary control never takes the reserved slot.
-                    if matches!(
-                        state.startup.phase,
-                        DaemonPhase::InstallPending | DaemonPhase::Installing
-                    ) {
-                        state.slots.admit(AdmissionClass::Install)
-                    } else {
-                        None
+                // In-flight expiry (#547 slice 5): a pool slot whose decoded
+                // request is still executing past `request_deadline` has an
+                // unknown effect; free it, close its socket and record
+                // `Expired` so the caller observes
+                // `Unavailable { outcome: unknown }` rather than a silent hang.
+                let expired = state.slots.reap_expired(Instant::now());
+                if !expired.is_empty() {
+                    drop(state);
+                    self.expire_in_flight(&expired);
+                    state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
+                }
+                let mut picked = state.slots.admit(AdmissionClass::ControlPool);
+                // Idle reclamation (#547 slice 4): a pool slot whose worker
+                // is parked in `receive()` past `idle_ttl` holds nothing in
+                // flight, so free it under admission pressure.
+                if picked.is_none() {
+                    let reaped = state.slots.reap_idle(Instant::now(), idle_ttl);
+                    if !reaped.is_empty() {
+                        drop(state);
+                        self.close_slot_fences(&reaped);
+                        for ticket in &reaped {
+                            let _ = writeln!(
+                                std::io::stderr().lock(),
+                                "layerfs-daemon: reclaimed idle control slot {}",
+                                ticket.index
+                            );
+                        }
+                        state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
+                        picked = state.slots.admit(AdmissionClass::ControlPool);
                     }
-                });
+                }
+                // Recovery class (#547 slice 3): the reserved slot admits one
+                // connection when the pool is full. During startup it is the
+                // installer; once ready it serves only the recovery set.
+                if picked.is_none() {
+                    picked = match state.startup.phase {
+                        DaemonPhase::InstallPending | DaemonPhase::Installing => {
+                            state.slots.admit(AdmissionClass::Install)
+                        }
+                        DaemonPhase::ControlReady => state.slots.admit(AdmissionClass::Recovery),
+                        _ => None,
+                    };
+                }
                 match picked {
                     Some(ticket) => ticket,
                     None => {
                         let counts = state.slots.counts();
-                        let retained = state.slots.visible();
-                        state.slots.reap(Instant::now());
+                        let retained = state.retained.len();
+                        state.retained.reap(Instant::now());
                         let reason = if state.startup.phase != DaemonPhase::ControlReady {
-                            AdmissionReason::Starting
+                            AdmissionReason::starting()
                         } else {
-                            AdmissionReason::NoPoolSlot
+                            AdmissionReason::no_pool_slot()
                         };
                         let notice = AdmissionNotice::new(
                             reason,
@@ -182,11 +218,10 @@ impl Application {
                     }
                 }
             };
-            let previous = self
-                .workers
-                .lock()
-                .map_err(|_| ApplicationError::Poisoned)?[ticket.index]
-                .take();
+            let previous = {
+                let mut state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
+                state.workers[ticket.index].take()
+            };
             if let Some(worker) = previous {
                 worker.join().map_err(|_| {
                     ApplicationError::Io(std::io::Error::other(
@@ -214,13 +249,15 @@ impl Application {
                         application.connection(stream, ticket)
                     }))
                     .unwrap_or_else(|payload| Err(panic_failure(ticket, payload)));
+                    application.clear_fence(ticket);
                     guard.finish(result);
                 });
             match worker {
                 Ok(worker) => {
-                    self.workers
+                    self.state
                         .lock()
-                        .map_err(|_| ApplicationError::Poisoned)?[ticket.index] = Some(worker)
+                        .map_err(|_| ApplicationError::Poisoned)?
+                        .workers[ticket.index] = Some(worker)
                 }
                 Err(_cause) => {
                     // Spawning dropped the closure, so the guard's `Drop`
@@ -242,6 +279,90 @@ impl Application {
             ticket.index
         )
     }
+
+    /// Stores the socket fence of one worker, keyed by its admission
+    /// generation, so the accept loop can close it to reclaim an idle
+    /// connection or expire an in-flight request (#547 slices 4-5).
+    fn set_fence(&self, ticket: SlotTicket, fence: transport::CloseHandle) {
+        if let Ok(mut fences) = self.fences.lock() {
+            if let Some(entry) = fences.get_mut(ticket.index) {
+                *entry = Some((ticket.generation, fence));
+            }
+        }
+    }
+
+    /// Removes one worker's socket fence. A stale worker that finished after
+    /// its slot was reclaimed or expired skips a newer worker's fence because
+    /// the generation no longer matches (#547 slice 5).
+    fn clear_fence(&self, ticket: SlotTicket) {
+        if let Ok(mut fences) = self.fences.lock() {
+            if let Some(entry) = fences.get_mut(ticket.index) {
+                if matches!(entry, Some((generation, _)) if *generation == ticket.generation) {
+                    *entry = None;
+                }
+            }
+        }
+    }
+
+    /// Closes the socket fence of each named worker generation, waking one
+    /// parked in `receive()` or a fence wait. A missing or stale fence (the
+    /// worker already ended or its slot was re-admitted) is skipped.
+    fn close_slot_fences(&self, tickets: &[SlotTicket]) {
+        let mut fences = self
+            .fences
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        for ticket in tickets {
+            if let Some(entry) = fences.get_mut(ticket.index) {
+                if matches!(entry, Some((generation, _)) if *generation == ticket.generation) {
+                    if let Some((_, fence)) = entry.take() {
+                        let _ = fence.close();
+                    }
+                }
+            }
+        }
+    }
+
+    /// Marks one worker's slot as parked in `receive()` (reapable).
+    fn mark_idle(&self, ticket: SlotTicket) {
+        if let Ok(mut state) = self.state.lock() {
+            state.slots.idle(ticket, Instant::now());
+        }
+    }
+
+    /// Marks one worker's slot as executing one decoded request with its
+    /// expiry deadline (#547 slice 5).
+    fn mark_inflight(&self, ticket: SlotTicket, started: Instant, deadline: Instant) {
+        if let Ok(mut state) = self.state.lock() {
+            state.slots.inflight(ticket, started, deadline);
+        }
+    }
+
+    /// Frees every slot whose in-flight request passed `request_deadline`
+    /// (#547 slice 5): closes its socket (waking a worker parked in socket
+    /// I/O; a worker parked elsewhere finishes stale when it returns) and
+    /// records one `Expired` retained failure each. The interrupted
+    /// operation's effect is unknown, so it is never released as clean.
+    fn expire_in_flight(&self, tickets: &[SlotTicket]) {
+        let now = Instant::now();
+        self.close_slot_fences(tickets);
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        for ticket in tickets {
+            // Detach the stuck worker: its eventual finish is stale, and the
+            // accept loop must never join a worker a Store/fence wait holds.
+            state.workers[ticket.index] = None;
+            let owner = self.owner_label(*ticket);
+            let recorded = state
+                .retained
+                .record(RetainedFailure::expired(*ticket, &owner), now);
+            let _ = writeln!(std::io::stderr().lock(), "{recorded}");
+        }
+        self.changed.notify_all();
+    }
+
     fn connection(&self, stream: TcpStream, ticket: SlotTicket) -> Result<(), ConnectionFailure> {
         let slot = ticket.index;
         let timeout = Some(Duration::from_millis(u64::from(
@@ -270,8 +391,27 @@ impl Application {
                     diagnostic_error: None,
                 },
             )?;
+        // Publish one socket fence so the accept loop can reclaim this slot
+        // when its worker parks in `receive()` past `idle_ttl` (#547).
+        let fence = connection
+            .close_handle()
+            .map_err(|cause| ConnectionFailure {
+                slot,
+                received: None,
+                original: None,
+                cause: ApplicationError::Channel(cause),
+                fence_error: None,
+                diagnostic_error: None,
+            })?;
+        self.set_fence(ticket, fence);
         let mut first = true;
         loop {
+            // An established connection parked for the next request is
+            // reapable: nothing is in flight. The first receive stays under
+            // the handshake deadline and is never idle.
+            if !first {
+                self.mark_idle(ticket);
+            }
             let request = {
                 let bytes = match connection.receive.receive() {
                     Ok(bytes) => bytes,
@@ -302,6 +442,13 @@ impl Application {
                     }
                 }
             };
+            // A request arrived: the slot is executing one decoded request
+            // under an explicit deadline (in-flight, #547 slice 5), not
+            // reapable as idle.
+            let started = Instant::now();
+            let deadline =
+                started + Duration::from_millis(u64::from(self.setup.limits.request_deadline_ms));
+            self.mark_inflight(ticket, started, deadline);
             if first {
                 if let Err(cause) = settings
                     .set_read_timeout(None)
@@ -332,9 +479,9 @@ impl Application {
                     let bodies = super::bodies::Bodies::of(&call.request, &mut connection.receive);
                     let (outcome, diagnostic_error, telemetry) =
                         if matches!(call.request, Request::Observed { .. }) {
-                            self.observed_control(&call, slot)
+                            self.observed_control(&call, slot, ticket.class)
                         } else {
-                            (self.control(&call, slot), None, None)
+                            (self.control(&call, ticket.class), None, None)
                         };
                     if let Err(cause) = bodies.finish() {
                         return Err(ConnectionFailure {
@@ -356,6 +503,12 @@ impl Application {
                                 _
                             ))
                         );
+                    // A recovery-class connection serves exactly one request
+                    // then closes (invariant 4), whatever that request's
+                    // outcome, unless it was already refused Capacity above.
+                    let recovery_served = ticket.class == SlotClass::Reserved
+                        && !matches!(call.request, Request::Hello(_) | Request::EndSession)
+                        && !reserved_refusal;
                     let ready = reported_ready(&outcome);
                     let committed = committed_token(&call.request);
                     let served = match crate::control::answer_call(
@@ -428,7 +581,7 @@ impl Application {
                         return Ok(());
                     }
                     drop(served);
-                    if reserved_refusal {
+                    if reserved_refusal || recovery_served {
                         connection.send.close().map_err(|cause| ConnectionFailure {
                             slot,
                             received: None,
@@ -446,9 +599,9 @@ impl Application {
     fn control(
         &self,
         call: &Call,
-        slot: usize,
+        class: SlotClass,
     ) -> Result<crate::control::Success, crate::control::Failure> {
-        self.control_operation(&call.request, slot)
+        self.control_operation(&call.request, class)
     }
     /// After the daemon reported ready (a `Hello` answered ControlReady was
     /// sent), opens one idle Store reader on a thread of its own, so the
@@ -494,7 +647,7 @@ impl Application {
     pub(super) fn control_operation(
         &self,
         request: &Request,
-        slot: usize,
+        class: SlotClass,
     ) -> Result<crate::control::Success, crate::control::Failure> {
         use crate::control::{Failure, Success};
         use layerfs_bridge::control::{ControlCode, DaemonPhase};
@@ -503,13 +656,11 @@ impl Application {
         }
         if let Request::Hello(request) = request {
             return self
-                .hello(*request, slot)
+                .hello(*request, class)
                 .map(|status| Success::reply(Reply::Hello(status)));
         }
         let state = self.state.lock().map_err(|_| Failure::Poisoned)?;
-        if slot == usize::from(self.setup.limits.connections)
-            && state.startup.phase != DaemonPhase::ControlReady
-        {
+        if class == SlotClass::Reserved && state.startup.phase != DaemonPhase::ControlReady {
             return Err(Failure::Rejected(
                 ControlCode::Capacity,
                 "reserved installer slot",
@@ -518,12 +669,27 @@ impl Application {
         let service = state.startup.service.clone();
         let phase = state.startup.phase;
         drop(state);
-        // Operator-visible retained failures live with the application, not
-        // with the Store control Service, so answer this one here.
+        // The recovery-class reserved slot (ControlReady) serves only the
+        // recovery operation set; anything else is refused Capacity and the
+        // connection is closed (#547 slice 3).
+        if class == SlotClass::Reserved && !recovery_request(request) {
+            return Err(Failure::Rejected(
+                ControlCode::Capacity,
+                "reserved recovery slot",
+            ));
+        }
+        // Operator-visible retained failures and the reclaim verb live with
+        // the application, not with the Store control Service, so answer
+        // these here (#540, #547 slice 5).
         if let Request::Sdk(call) = request {
-            if call.method == CONNECTION_FAILURES {
+            if call.method == layerfs_bridge::control::OPERATION {
                 return self
                     .connection_failures()
+                    .map(|value| Success::reply(Reply::Sdk(value)));
+            }
+            if call.method == RECLAIM {
+                return self
+                    .reclaim(call)
                     .map(|value| Success::reply(Reply::Sdk(value)));
             }
         }
@@ -540,52 +706,131 @@ impl Application {
         }
     }
 
+    /// `backend.daemon.reclaim { slot, generation }` (#547 slice 5): closes
+    /// the named worker's socket, records `Reclaimed`, and frees its slot. It
+    /// is generation-checked (a vacant slot or a newer worker answers
+    /// `Invalid`), one-shot, never restarts the daemon and never touches a
+    /// Workspace.
+    fn reclaim(
+        &self,
+        call: &layerfs_bridge::control::SdkCall,
+    ) -> Result<layerfs_bridge::control::SdkValue, crate::control::Failure> {
+        use crate::control::Failure;
+        use layerfs_bridge::control::{ControlCode, SdkValue};
+        let slot = match call
+            .args
+            .get_int("slot")
+            .and_then(|value| usize::try_from(value).ok())
+        {
+            Some(slot) => slot,
+            None => {
+                return Err(Failure::Rejected(
+                    ControlCode::Invalid,
+                    "reclaim names the slot to close",
+                ))
+            }
+        };
+        let generation = match call
+            .args
+            .get_int("generation")
+            .and_then(|value| u64::try_from(value).ok())
+        {
+            Some(generation) => generation,
+            None => {
+                return Err(Failure::Rejected(
+                    ControlCode::Invalid,
+                    "reclaim names the generation to close",
+                ))
+            }
+        };
+        // Free the named slot and detach its worker under one lock, so the
+        // accept loop can never join a worker this reclaim leaves running.
+        // Then close the socket and record `Reclaimed`.
+        let (ticket, owner) = {
+            let mut state = self.state.lock().map_err(|_| Failure::Poisoned)?;
+            match state.slots.reclaim(slot, generation) {
+                Some(ticket) => {
+                    state.workers[ticket.index] = None;
+                    (ticket, self.owner_label(ticket))
+                }
+                None => {
+                    return Err(Failure::Rejected(
+                        ControlCode::Invalid,
+                        "reclaim generation mismatch",
+                    ))
+                }
+            }
+        };
+        self.close_slot_fences(std::slice::from_ref(&ticket));
+        let now = Instant::now();
+        let recorded = {
+            let mut state = self.state.lock().map_err(|_| Failure::Poisoned)?;
+            let recorded = state
+                .retained
+                .record(RetainedFailure::reclaimed(ticket, &owner), now);
+            self.changed.notify_all();
+            recorded
+        };
+        let _ = writeln!(std::io::stderr().lock(), "{recorded}");
+        Ok(SdkValue::map([
+            ("outcome", SdkValue::text("reclaimed")),
+            ("slot", SdkValue::Int(slot as i64)),
+            ("generation", SdkValue::Int(generation as i64)),
+        ]))
+    }
+
     /// The operator read model of control admission and retained failures.
     fn connection_failures(
         &self,
     ) -> Result<layerfs_bridge::control::SdkValue, crate::control::Failure> {
         use crate::control::Failure;
-        use layerfs_bridge::control::{
-            AdmissionModel, CapacityModel, RetainedFailureModel, RetainedModel,
-        };
         let counts = self.connection_slots().map_err(|_| Failure::Poisoned)?;
         let snapshot = self
             .retained_connection_failures()
             .map_err(|_| Failure::Poisoned)?;
-        let failures = snapshot
-            .failures
-            .iter()
-            .map(|failure| RetainedFailureModel {
-                slot: failure.slot as i64,
-                class: failure.class.to_owned(),
-                generation: failure.generation as i64,
-                owner: failure.owner.clone(),
-                received_bytes: failure.received_bytes.map(|bytes| bytes as i64),
-                request: failure.request.map(str::to_owned),
-                reply_sent: failure.reply_sent,
-                cause: failure.cause.clone(),
-                fence_error: failure.fence_error.clone(),
-                diagnostic_error: failure.diagnostic_error.clone(),
-                age_ms: failure.age.as_millis() as i64,
-                expires_in_ms: failure.expires_in.as_millis() as i64,
-            });
-        Ok(CapacityModel {
-            admission: AdmissionModel {
-                pool_vacant: counts.pool_vacant as i64,
-                pool_running: counts.pool_running as i64,
-                reserved_vacant: counts.reserved_vacant as i64,
-                reserved_running: counts.reserved_running as i64,
-            },
-            retained: RetainedModel {
-                limit: snapshot.limit as i64,
-                ttl_ms: snapshot.ttl.as_millis() as i64,
-                count: snapshot.failures.len() as i64,
-                dropped: snapshot.dropped as i64,
-                recorded: snapshot.recorded as i64,
-                failures: failures.collect(),
-            },
-        }
-        .to_sdk())
+        Ok(capacity_report(counts, snapshot).to_sdk())
+    }
+}
+
+/// The daemon's control-capacity read model from its slot counts and its
+/// bounded retained-failure snapshot (#540). Pure: no lock and no store.
+fn capacity_report(
+    counts: SlotCounts,
+    snapshot: RetainedSnapshot,
+) -> layerfs_bridge::control::CapacityModel {
+    use layerfs_bridge::control::{AdmissionModel, RetainedFailureModel, RetainedModel};
+    let failures = snapshot
+        .failures
+        .iter()
+        .map(|failure| RetainedFailureModel {
+            slot: failure.slot as i64,
+            class: failure.class.to_owned(),
+            generation: failure.generation as i64,
+            owner: failure.owner.clone(),
+            received_bytes: failure.received_bytes.map(|bytes| bytes as i64),
+            request: failure.request.map(str::to_owned),
+            reply_sent: failure.reply_sent,
+            cause: failure.cause.clone(),
+            fence_error: failure.fence_error.clone(),
+            diagnostic_error: failure.diagnostic_error.clone(),
+            age_ms: failure.age.as_millis() as i64,
+            expires_in_ms: failure.expires_in.as_millis() as i64,
+        });
+    layerfs_bridge::control::CapacityModel {
+        admission: AdmissionModel {
+            pool_vacant: counts.pool_vacant as i64,
+            pool_running: counts.pool_running as i64,
+            reserved_vacant: counts.reserved_vacant as i64,
+            reserved_running: counts.reserved_running as i64,
+        },
+        retained: RetainedModel {
+            limit: snapshot.limit as i64,
+            ttl_ms: snapshot.ttl.as_millis() as i64,
+            count: snapshot.failures.len() as i64,
+            dropped: snapshot.dropped as i64,
+            recorded: snapshot.recorded as i64,
+            failures: failures.collect(),
+        },
     }
 }
 
@@ -605,7 +850,3 @@ fn reported_ready(outcome: &Result<crate::control::Success, crate::control::Fail
         Reply::Hello(status) if status.phase == layerfs_bridge::control::DaemonPhase::ControlReady
     ))
 }
-
-/// Operator/control method for the daemon's control admission and retained
-/// connection failures.
-pub(super) const CONNECTION_FAILURES: &str = layerfs_bridge::control::CAPACITY_OPERATION;

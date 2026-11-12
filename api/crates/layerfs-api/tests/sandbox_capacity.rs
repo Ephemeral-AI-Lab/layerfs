@@ -9,7 +9,7 @@
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_bridge::control::{
     AdmissionModel, Answer, Call, DaemonPhase, DaemonStatus, Reply, Request, RetainedModel,
-    SdkValue, CAPACITY_OPERATION,
+    SdkValue, OPERATION,
 };
 use layerfs_bridge::duplex;
 use std::net::{SocketAddr, TcpListener};
@@ -107,7 +107,7 @@ fn serve(stream: std::net::TcpStream, model: &SdkValue, stall: bool) {
             Request::Sdk(sdk) if sdk.method == "sandbox.list_workspaces" => {
                 Reply::Sdk(no_workspaces())
             }
-            Request::Sdk(sdk) if sdk.method == CAPACITY_OPERATION => {
+            Request::Sdk(sdk) if sdk.method == OPERATION => {
                 if stall {
                     // read but never answered: the read model's own fence, not
                     // a closed socket, ends its wait

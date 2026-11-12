@@ -6,7 +6,7 @@
 //! error.
 use layerfs_bridge::control::{
     AdmissionModel, Answer, Call, CapacityModel, DaemonPhase, DaemonStatus, Reply, Request,
-    RetainedModel, SdkRefusal, SdkValue, CAPACITY_OPERATION,
+    RetainedModel, SdkRefusal, SdkValue, OPERATION,
 };
 use layerfs_bridge::duplex;
 use layerfs_control::doctor::doctor;
@@ -727,7 +727,7 @@ fn capacity_daemon(reply: Reply) -> (SocketAddr, std::thread::JoinHandle<()>) {
         let Request::Sdk(sdk) = call.request else {
             panic!("expected the capacity read model");
         };
-        assert_eq!(sdk.method, CAPACITY_OPERATION);
+        assert_eq!(sdk.method, OPERATION);
         channel
             .send
             .send(&Answer { id, reply }.encode().unwrap())

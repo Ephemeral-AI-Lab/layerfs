@@ -17,6 +17,8 @@ mod failure;
 #[cfg(unix)]
 mod filesystem;
 #[cfg(unix)]
+#[doc(hidden)]
+pub mod internals;
 mod owner;
 #[cfg(unix)]
 mod retained;

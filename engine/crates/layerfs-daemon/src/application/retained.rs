@@ -13,9 +13,9 @@ use std::{
 };
 
 /// Most retained records kept at once. The oldest is dropped first.
-pub(super) const LIMIT: usize = 64;
+pub const LIMIT: usize = 64;
 /// How long a retained record stays operator-visible.
-pub(super) const TTL: Duration = Duration::from_secs(60 * 60);
+pub const TTL: Duration = Duration::from_secs(60 * 60);
 /// Most bytes a retained textual cause keeps.
 const CAUSE_BYTES: usize = 512;
 
@@ -54,8 +54,43 @@ pub struct RetainedFailure {
 }
 
 impl RetainedFailure {
+    /// The record for a slot whose in-flight request passed
+    /// `request_deadline` (#547 slice 5): its effect is unknown, so it is
+    /// recorded rather than released, with `reply_sent: false`.
+    pub fn expired(ticket: super::owner::SlotTicket, owner: &str) -> Self {
+        Self::phase(ticket, owner, "Expired")
+    }
+
+    /// The record for a slot an operator reclaimed by
+    /// `backend.daemon.reclaim` (#547 slice 5): its in-flight effect is
+    /// unknown and its worker's socket is closed.
+    pub fn reclaimed(ticket: super::owner::SlotTicket, owner: &str) -> Self {
+        Self::phase(ticket, owner, "Reclaimed")
+    }
+
+    /// The common shape of an `Expired` or `Reclaimed` record: no decoded
+    /// request, no reply sent, and a bounded textual deciding cause.
+    fn phase(ticket: super::owner::SlotTicket, owner: &str, cause: &str) -> Self {
+        Self {
+            slot: ticket.index,
+            class: ticket.class.as_str(),
+            generation: ticket.generation,
+            owner: owner.to_owned(),
+            received_bytes: None,
+            request: None,
+            reply_sent: false,
+            cause: cause.to_owned(),
+            fence_error: None,
+            diagnostic_error: None,
+            age: Duration::ZERO,
+            expires_in: TTL,
+            retained: 0,
+            limit: LIMIT,
+        }
+    }
+
     /// The bounded record for `failure`, built outside the state lock.
-    pub(super) fn describe(
+    pub fn describe(
         failure: &ConnectionFailure,
         class: super::owner::SlotClass,
         generation: u64,
@@ -129,7 +164,7 @@ struct Entry {
 /// A fixed-capacity, TTL-pruned ring of retained connection failures. Its
 /// capacity is reserved when it is built, so recording under the state lock
 /// never allocates.
-pub(super) struct RetainedFailures {
+pub struct RetainedFailures {
     entries: VecDeque<Entry>,
     dropped: u64,
     recorded: u64,
@@ -144,7 +179,7 @@ impl Default for RetainedFailures {
 }
 
 impl RetainedFailures {
-    pub(super) fn new(limit: usize, ttl: Duration) -> Self {
+    pub fn new(limit: usize, ttl: Duration) -> Self {
         let limit = limit.max(1);
         Self {
             entries: VecDeque::with_capacity(limit),
@@ -158,7 +193,7 @@ impl RetainedFailures {
     /// Records one already-described failure, prunes expired records and
     /// evicts the oldest beyond the limit. Returns the exact record that now
     /// is visible, with its store position filled in.
-    pub(super) fn record(&mut self, mut record: RetainedFailure, now: Instant) -> RetainedFailure {
+    pub fn record(&mut self, mut record: RetainedFailure, now: Instant) -> RetainedFailure {
         self.prune(now);
         while self.entries.len() >= self.limit {
             self.entries.pop_front();
@@ -177,7 +212,7 @@ impl RetainedFailures {
     }
 
     /// Drops records whose deadline passed; a stale record is never returned.
-    pub(super) fn prune(&mut self, now: Instant) {
+    pub fn prune(&mut self, now: Instant) {
         while let Some(front) = self.entries.front() {
             if now < front.deadline {
                 break;
@@ -188,12 +223,12 @@ impl RetainedFailures {
     }
 
     /// The lazy reaper: the accept loop calls it when it refuses admission.
-    pub(super) fn reap(&mut self, now: Instant) {
+    pub fn reap(&mut self, now: Instant) {
         self.prune(now);
     }
 
     /// A copy of the visible records, oldest first, with their ages.
-    pub(super) fn snapshot(&mut self, now: Instant) -> RetainedSnapshot {
+    pub fn snapshot(&mut self, now: Instant) -> RetainedSnapshot {
         self.prune(now);
         RetainedSnapshot {
             failures: self

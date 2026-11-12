@@ -6,7 +6,7 @@ use crate::{
     wire::{Reader, Writer},
 };
 use std::fmt;
-const MAGIC: &[u8] = b"LFSD\x08";
+const MAGIC: &[u8] = b"LFSD\x09";
 /// Explicit daemon startup resources; these are windows/admission, not file caps.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DaemonLimits {
@@ -15,6 +15,13 @@ pub struct DaemonLimits {
     /// Maximum blocking I/O wait during authentication and the first metadata record.
     /// Cleared before product operations; never applies to commands.
     pub handshake_ms: u32,
+    /// A control connection that stays parked in `receive()` (no operation in
+    /// flight) this long is reclaimable when admission is refused (#547 slice 4).
+    pub idle_ttl_ms: u32,
+    /// A decoded request whose execution is still in flight this long is
+    /// expired: its slot is freed, its socket is closed and the caller
+    /// observes `Unavailable { outcome: unknown }` (#547 slice 5).
+    pub request_deadline_ms: u32,
     /// Shared immutable cache allowance, separate from whole-process memory.
     pub cache_bytes: u64,
     /// Explicit simultaneously admitted Workspace count.
@@ -64,6 +71,8 @@ impl DaemonSetup {
         let l = self.limits;
         out.put(&l.connections.to_be_bytes())?;
         out.put(&l.handshake_ms.to_be_bytes())?;
+        out.put(&l.idle_ttl_ms.to_be_bytes())?;
+        out.put(&l.request_deadline_ms.to_be_bytes())?;
         out.put(&l.cache_bytes.to_be_bytes())?;
         for v in [l.namespaces, l.pager_kib] {
             out.put(&v.to_be_bytes())?;
@@ -89,6 +98,8 @@ impl DaemonSetup {
         let limits = DaemonLimits {
             connections: u16::from_be_bytes(input.array()?),
             handshake_ms: u32::from_be_bytes(input.array()?),
+            idle_ttl_ms: u32::from_be_bytes(input.array()?),
+            request_deadline_ms: u32::from_be_bytes(input.array()?),
             cache_bytes: u64::from_be_bytes(input.array()?),
             namespaces: u32::from_be_bytes(input.array()?),
             pager_kib: u32::from_be_bytes(input.array()?),
@@ -141,7 +152,13 @@ impl DaemonSetup {
             }
         }
         let l = self.limits;
-        if l.handshake_ms == 0 || l.connections == 0 || l.namespaces == 0 || l.pager_kib == 0 {
+        if l.handshake_ms == 0
+            || l.idle_ttl_ms == 0
+            || l.request_deadline_ms == 0
+            || l.connections == 0
+            || l.namespaces == 0
+            || l.pager_kib == 0
+        {
             return Err(ControlError("daemon resources"));
         }
         self.store.valid()
