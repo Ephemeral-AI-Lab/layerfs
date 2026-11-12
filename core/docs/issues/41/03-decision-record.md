@@ -132,8 +132,9 @@ transaction, no pointer state to recover, and no second placeholder.
 
 ### 2.1 Problem scenarios
 
-- **Two Branches, one `BranchId`.** `BranchId::named = blake3(stack ‖ name)`. A
-  recreated same-name Branch reproduces the id, and `CommitId::derive` hashes
+- **Two Branches, one `BranchId`.** `BranchId::named = blake3(stack ‖ name)`
+  (`contract/identity.rs:266-278`). A recreated same-name Branch reproduces the
+  id, and `CommitId::derive` (`contract/identity.rs:287-304`) hashes
   `meta.branch`, so old and new history collide on both ids.
 - **Old Commits re-attributed.** Every historical Commit that carries that
   `BranchId` now resolves to the new Branch — history silently changes owner.
@@ -168,8 +169,8 @@ and migrates every existing Store, while the benefit is a rare convenience.
 
 Two further facts point the same way:
 
-- The code already asserts the premise: `identity.rs:266` states that Branch
-  names are never reused. A keeps the existing premise; B rewrites it.
+- The code already asserts the premise: `contract/identity.rs:266-268` states that
+  Branch names are never reused. A keeps the existing premise; B rewrites it.
 - With A, the guard is local — a terminal marker and one check at create. With B,
   every consumer of `BranchId` must handle generations.
 
@@ -244,7 +245,7 @@ not a different trade-off but a known data-loss mode.
 | Decision | Settling level | Settling requirement | Options that fell out before the settling step |
 |---|---|---|---|
 | **R1** | L3 (availability) | Gate variable **S11**: is a read-available SLO required? — no → **E**; yes → **A'** | B (lock points per table), C (writability via triggers) |
-| **Q1** | L2 (migration cost) | **Zero migration** + the invariant already asserted at `identity.rs:266` → **A** | B is not rejected as wrong, only as too expensive for the benefit |
+| **Q1** | L2 (migration cost) | **Zero migration** + the invariant already asserted at `contract/identity.rs:266-268` → **A** | B is not rejected as wrong, only as too expensive for the benefit |
 | **C3** | L1 (correctness) | **ABA safety** — a stale intent must not delete a different object → **`delete(id, generation)`** | `delete(id)`, soft-mark, hash predicate, condition delete, batch |
 
 Two properties hold for all three, and they are the reason the results are stable
