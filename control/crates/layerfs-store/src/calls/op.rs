@@ -275,7 +275,8 @@ impl StoreOp<'_> {
                 .text("branch", &r.branch)
                 .opt("atCommit", r.at_commit.as_deref())
                 .int("page", r.page)
-                .int("pageSize", r.page_size),
+                .int("pageSize", r.page_size)
+                .boolean("includeStorage", r.include_storage),
             Self::BranchGetCommit(r) => args.text("branch", &r.branch).text("commit", &r.commit),
             Self::Revision(r) => args
                 .at(&r.branch, r.at_commit.as_deref())

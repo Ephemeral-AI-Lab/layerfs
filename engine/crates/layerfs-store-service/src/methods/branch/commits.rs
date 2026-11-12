@@ -53,7 +53,7 @@ pub fn commits(service: &StoreService, args: &SdkValue) -> Answer {
             next_page = Some(node);
             break;
         }
-        let record = saved::summary(&service.store, node)?;
+        let record = saved::summary(&service.store, node, args.get_bool("includeStorage"))?;
         // Serialized size bounds the actual reply, not an optimistic per-record estimate.
         bytes += saved::reply_cost(&record);
         if bytes > 44 * 1024 {

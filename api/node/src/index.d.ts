@@ -122,6 +122,7 @@ export interface BranchCommitsOptions extends CallOptions {
   page?: WholeNumber;
   page_size?: WholeNumber;
   at_commit?: string;
+  include_storage?: boolean;
 }
 
 /** Options of `branch.merge`; an unknown option is refused. */
