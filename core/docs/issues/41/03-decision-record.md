@@ -79,6 +79,28 @@ named for each one in §4.
 | L4 | Recoverable without a new state machine | ✓ | pointer must be recovered | ✓ | triggers to maintain |
 | L4 | Understandable and maintainable | ✓ | 3 moving parts | N tables | triggers |
 
+### 1.3a Mechanism in the code at `layerfs_v2_0_0`
+
+What a PostgreSQL Store actually depends on, and therefore what a swap must not break:
+
+| Fact | Where | Consequence for R1 |
+|---|---|---|
+| A Store is one named schema, `[a-z_][a-z0-9_]*`, at most 63 bytes, **required per call** (no default) | `control/crates/layerfs-store/src/postgresql/open.rs:37` `schema_of` | The name is supplied twice over: by the call and by the Store record |
+| The record keeps the name: `Kind::Postgresql { schema, synchronous_commit }` | `control/crates/layerfs-store/src/identity.rs:29,136,161` | A swap that *changes* the Store's name rewrites every Store record |
+| Every transaction pins the name in text: read `BEGIN … REPEATABLE READ READ ONLY; SET LOCAL search_path TO <schema>`, write `BEGIN … READ COMMITTED; SET LOCAL search_path TO <schema>; SET LOCAL synchronous_commit TO …` | `.../session/profile.rs:40,50` | An open session resolves table names through `search_path`, and its `search_path` is the schema *name* |
+| Six history statements additionally qualify it: `sql.replace("{s}", self.schema)` | `.../mechanics.rs:19`, `Transaction.schema` at `.../session/transaction.rs:47` | Those statements follow `self.schema`, not `search_path`; both must keep resolving |
+| A schema is created by one script: `CREATE SCHEMA {name}; SET LOCAL search_path TO {name}; {SCHEMA}{ACQUISITION}` — 19 tables, `SCHEMA_VERSION = 2` written to `store_policy` and `history_meta` | `.../schema.rs:101,116`, `TABLES`/`SCHEMA_VERSION` at `.../schema.rs:40,52` | The replacement schema is built by the same path, so it carries the same `schema_source` and `schema_definition` |
+| Writers serialize on one row: `store_lane … FOR UPDATE` on its own connection, `lock_timeout_ms` (default 30 s) reaching it fails `Busy`, never retried | `.../lane/lane.rs:22` `hold_lane`, `.../store/config.rs:62` | The swap has a single place to wait for in-flight writers, and a bounded wait |
+| Open verifies `catalog_incarnation` against the admitted authority | `.../schema.rs:129` `Checked`, `diagnostic/postgresql.rs:291` | The generation, not the name, is what tells a session that the bytes behind the name changed |
+
+**Correction to the spec text.** §7.3 says `self.schema` comes from `schema_of` "passed by the caller or defaulting to `layerfs`". At this revision there is no default: `schema_of(None)` refuses `InvalidInput` ("postgresql.schema is required"). The conclusion is unchanged and in fact stronger — the name is always explicit, always recorded, and always the same text after a swap.
+
+**Why the name must end where it started.** R1-E's two renames leave `layerfs` occupied by the new tables. Everything that remembered the name (the Store record, the call's `postgresql.schema`, each open session's `search_path`, the six `{s}` statements) keeps resolving, and nothing has to be rewritten. R1-A' changes that: the fixed schema would hold a pointer row and `self.schema` would be resolved at open, so the *recorded* name no longer identifies the data.
+
+**Why the fence is on the generation, not the name.** Re-pointing a name is exactly what MVCC does not protect: a reader that opened before the swap holds a snapshot, and `SET LOCAL search_path TO layerfs` resolves to *different relations* after the commit. That is why C8 bumps `catalog_incarnation` at install and why every session checks `(catalog_id, incarnation)` — the name is allowed to stay stable precisely because the generation is what refuses stale sessions (`StaleStore`). E is therefore only sound together with the exclusive window (C10/D3) and the reader fence; A' needs the same fence for a different reason, which is why §7.3 says it is required whatever swap is chosen.
+
+**What E costs, in the same terms.** Any session still open when the swap commits is reading through a name that now designates new relations; it must be drained or refused, and it cannot be allowed to complete a write. That is the read-unavailable window S11 prices, and it is a property of the *name*, not of the transaction.
+
 ### 1.4 Reasoning, and the basis for the decision
 
 The old design chose "versioned table names + pointer" because *"the schema name
