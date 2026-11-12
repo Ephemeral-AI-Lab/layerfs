@@ -9,8 +9,8 @@
 use layerfs_bridge::control::{Call, Reply, Request};
 use layerfs_bridge::duplex::{ChannelError, ChannelWork, PeerEndFailure, PeerEndPhase};
 use layerfs_daemon::application::internals::{
-    disposition, AdmissionClass, Finished, RetainedFailure, RetainedFailures, SlotClass, Slots,
-    LIMIT, RESERVED_SLOTS, TTL,
+    disposition, recovery_request, AdmissionClass, Finished, RetainedFailure, RetainedFailures,
+    SlotClass, Slots, LIMIT, RESERVED_SLOTS, TTL,
 };
 use layerfs_daemon::application::{ApplicationError, ConnectionFailure};
 use layerfs_daemon::control::{Served, Success};
@@ -301,4 +301,131 @@ fn guard_drop_releases_the_slot_and_records_once() {
         Finished::Stale
     ));
     assert_eq!(store.snapshot(now).failures.len(), 1);
+}
+
+/// A recovery-class admission takes the reserved slot, never a pool slot.
+#[test]
+fn recovery_admission_takes_the_reserved_slot() {
+    let mut slots = Slots::new(8 + RESERVED_SLOTS);
+    let reserved = slots.admit(AdmissionClass::Recovery).unwrap();
+    assert_eq!(reserved.class, SlotClass::Reserved);
+    assert_eq!(reserved.index, 8);
+    assert_eq!(slots.counts().reserved_running, 1);
+}
+
+/// An admitted slot starts Busy (handshake), becomes Idle before blocking in
+/// `receive()`, and returns to Busy when a request arrives.
+#[test]
+fn idle_and_busy_track_the_reapable_phase() {
+    let mut slots = Slots::new(1 + RESERVED_SLOTS);
+    let now = Instant::now();
+    let ttl = Duration::from_secs(1);
+    let ticket = slots.admit(AdmissionClass::ControlPool).unwrap();
+    // Busy: never reapable, even past the TTL.
+    assert!(slots
+        .reap_idle(now + ttl + Duration::from_secs(1), ttl)
+        .is_empty());
+    // Idle since `now`: reapable once `idle_ttl` has passed.
+    assert!(slots.idle(ticket, now));
+    assert_eq!(slots.reap_idle(now + ttl, ttl), vec![ticket.index]);
+    // A fresh worker is Busy again and cannot be reaped while idle is false.
+    let second = slots.admit(AdmissionClass::ControlPool).unwrap();
+    assert_eq!(second.index, ticket.index);
+    assert!(slots.idle(second, now));
+    assert!(slots.busy(second));
+    assert!(slots
+        .reap_idle(now + ttl + Duration::from_secs(1), ttl)
+        .is_empty());
+    // A stale ticket changes nothing.
+    slots.finish(second, Ok(()), None);
+    assert!(!slots.busy(second));
+    assert!(!slots.idle(second, now));
+}
+
+/// `reap_idle` frees only pool slots parked in `receive()` past `idle_ttl`;
+/// a busy slot, a recently-idle slot and the reserved slot stay put.
+#[test]
+fn reap_idle_frees_only_pool_slots_parked_past_ttl() {
+    let mut slots = Slots::new(3 + RESERVED_SLOTS);
+    let now = Instant::now();
+    let ttl = Duration::from_secs(5);
+    let early = slots.admit(AdmissionClass::ControlPool).unwrap();
+    // Never marked idle: it stays Busy and must survive the reap.
+    let _busy = slots.admit(AdmissionClass::ControlPool).unwrap();
+    let recent = slots.admit(AdmissionClass::ControlPool).unwrap();
+    let reserved = slots.admit(AdmissionClass::Recovery).unwrap();
+    assert!(slots.idle(early, now));
+    assert!(slots.idle(recent, now + ttl - Duration::from_millis(1)));
+    assert!(slots.idle(reserved, now));
+    let at = now + ttl;
+    assert_eq!(slots.reap_idle(at, ttl), vec![early.index]);
+    let counts = slots.counts();
+    assert_eq!(counts.pool_vacant, 1);
+    assert_eq!(counts.pool_running, 2);
+    // The reserved slot is never reclaimed by the idle reaper.
+    assert_eq!(counts.reserved_running, 1);
+}
+
+/// A reaped slot is immediately reusable; the woken worker's stale finish
+/// cannot free the newer worker (invariant 1).
+#[test]
+fn reaped_slot_readmits_and_the_old_ticket_finishes_stale() {
+    let mut slots = Slots::new(1 + RESERVED_SLOTS);
+    let now = Instant::now();
+    let ttl = Duration::from_secs(1);
+    let first = slots.admit(AdmissionClass::ControlPool).unwrap();
+    assert!(slots.idle(first, now));
+    assert_eq!(slots.reap_idle(now + ttl, ttl), vec![first.index]);
+    let second = slots.admit(AdmissionClass::ControlPool).unwrap();
+    assert_eq!(second.index, first.index);
+    assert!(second.generation > first.generation);
+    assert!(matches!(slots.finish(first, Ok(()), None), Finished::Stale));
+    assert_eq!(slots.counts().pool_running, 1);
+    slots.finish(second, Ok(()), None);
+    assert_eq!(slots.counts().pool_vacant, 1);
+}
+
+/// The recovery operation set: close (`Unmount`), workspace status
+/// (`Status`) and the operator read model — and nothing else (#547 slice 3).
+#[test]
+fn recovery_request_admits_only_the_recovery_set() {
+    use layerfs_bridge::control::{SdkCall, UnmountControl};
+    use layerfs_history::WorkspaceId;
+    let token = layerfs_bridge::control::WorkspaceToken {
+        workspace: WorkspaceId::from_authority([1; 32]).unwrap(),
+        namespace: 0,
+    };
+    assert!(recovery_request(&Request::Status(token)));
+    assert!(recovery_request(&Request::Unmount(UnmountControl {
+        token,
+        discard: false,
+    })));
+    assert!(recovery_request(&Request::Sdk(SdkCall {
+        method: layerfs_bridge::control::OPERATION.to_owned(),
+        args: layerfs_bridge::control::SdkValue::Null,
+    })));
+    // Everything else is refused.
+    assert!(!recovery_request(&Request::EndSession));
+    assert!(!recovery_request(&Request::Hello(
+        layerfs_bridge::control::HelloRequest {
+            expected_instance: None,
+            wait_for_store: false,
+        }
+    )));
+    assert!(!recovery_request(&Request::Sdk(SdkCall {
+        method: "sandbox.list_workspaces".to_owned(),
+        args: layerfs_bridge::control::SdkValue::Null,
+    })));
+    assert!(!recovery_request(&Request::MountNamed {
+        workspace: WorkspaceId::from_authority([2; 32]).unwrap(),
+        project: "project".to_owned(),
+        branch: "branch".to_owned(),
+    }));
+    assert!(!recovery_request(&Request::Commit(
+        layerfs_bridge::control::CommitControl {
+            token,
+            force: false,
+            message: None,
+        }
+    )));
 }
