@@ -22,6 +22,7 @@ mod close;
 mod create;
 #[doc(hidden)]
 pub mod deploy;
+mod destroy;
 #[doc(hidden)]
 pub mod direct;
 #[doc(hidden)]

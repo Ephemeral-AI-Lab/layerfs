@@ -5,7 +5,9 @@
 //! the terminal records before that directory can be reused.
 use crate::files as discovery;
 use crate::registry::SandboxState;
-use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
+use layerfs_bridge::control::{
+    AbortDisposition, DetachDisposition, SdkRefusal, SdkValue, TeardownStage, WorkspaceToken,
+};
 use layerfs_home::outcome::{failed, refused, Outcome};
 use std::{
     fs::{File, OpenOptions},
@@ -151,6 +153,27 @@ fn unmounts_in(
         Err(error) => Err(failed(error)),
     }
 }
+/// Whether a terminal unmount's daemon custody is a forced detach the kernel
+/// refused `EBUSY`: a later unmount or force may re-attempt that detach once
+/// the holder is gone. Any other retained custody is final.
+pub fn retryable(failure: &crate::OperationFailure) -> bool {
+    matches!(
+        &failure.cause,
+        crate::OperationCause::Retained(custody)
+            if custody.stage == TeardownStage::Detach
+                && !custody.detached
+                && custody.forced.as_ref().is_some_and(|facts| {
+                    facts.abort == AbortDisposition::Written
+                        && facts.detach == DetachDisposition::Busy
+                })
+    )
+}
+/// Whether a recorded terminal unmount may be re-attempted with its daemon
+/// instead of re-reported. A synthesized in-progress record has no
+/// `retryable` field and is never re-sent.
+pub fn retry(value: &SdkValue) -> bool {
+    value.get_bool("retryable")
+}
 pub fn check(state: &SandboxState, path: &str) -> Result<(), SdkRefusal> {
     if let Some(value) = find(state, path)? {
         if value.get_text("state") == Some("Unmounted") {
@@ -246,7 +269,15 @@ pub fn begin(
 }
 /// Publish while the Workspace lease prevents another terminal request.
 /// No Sandbox guard is needed to replace this attempt's own result file.
-pub fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result<(), SdkRefusal> {
+/// Publishes the terminal result; `retryable` records that the daemon's
+/// retained custody is a forced detach refused `EBUSY`, which a later
+/// unmount or force re-attempts.
+pub fn finish(
+    attempt: &Attempt,
+    path: &str,
+    outcome: &Outcome,
+    retryable: bool,
+) -> Result<(), SdkRefusal> {
     match outcome {
         Err(error) if matches!(error.code.as_str(), "Busy" | "Dirty") => {
             std::fs::remove_file(&attempt.path).map_err(failed)?;
@@ -261,17 +292,18 @@ pub fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result<(), Sd
                     error.detail.clone(),
                 ),
             };
-            layerfs_store::project::discovery::save(
-                &attempt.path,
-                SdkValue::map([
-                    ("state", SdkValue::text(state)),
-                    ("startedMs", SdkValue::Int(attempt.started)),
-                    ("path", SdkValue::text(path)),
-                    ("code", SdkValue::text(code)),
-                    ("message", SdkValue::text(message)),
-                    ("detail", detail),
-                ]),
-            )?;
+            let mut fields = vec![
+                ("state".to_owned(), SdkValue::text(state)),
+                ("startedMs".to_owned(), SdkValue::Int(attempt.started)),
+                ("path".to_owned(), SdkValue::text(path)),
+                ("code".to_owned(), SdkValue::text(code)),
+                ("message".to_owned(), SdkValue::text(message)),
+                ("detail".to_owned(), detail),
+            ];
+            if state == "Retained" {
+                fields.push(("retryable".to_owned(), SdkValue::Bool(retryable)));
+            }
+            layerfs_store::project::discovery::save(&attempt.path, SdkValue::Map(fields))?;
         }
     }
     Ok(())
