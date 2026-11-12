@@ -41,6 +41,8 @@ pub struct BranchCommits {
     pub page_size: Option<i64>,
     /// Full immutable starting identity.
     pub at_commit: Option<String>,
+    /// Include acknowledged Save allocation facts in compact summaries.
+    pub include_storage: Option<bool>,
 }
 
 /// One saved record admitted through its branch context.
