@@ -3,7 +3,7 @@
 > **Status:** candidate specification, may be merged into #42 as a whole. **This file is the only authoritative version.** In this directory the other documents derive from it and cite its section numbers.
 > **Scope:** the mechanism layer of #41: correctness of collection decisions, sweep recoverability, fences, reporting definitions, acceptance shape.
 > **Out of scope:** the policies already settled by #41 (admission matrix, logical/physical separation, no-retry). Where they conflict, the #41 owner policy wins.
-> **BrewFS reference:** `github.com/brewfs/brewfs`, pinned 2026-11-11 `#444`. **Every value cited from it is the code default** (`src/meta/config.rs`, `src/chunk/compact/gc.rs`); its `doc/architecture/compaction-gc.md` has already drifted and is not a source of parameters.
+> **Parameter discipline:** every external numeric value this spec cites is the **code default** of the system it came from, not its documentation; external docs drift and are not a source of parameters.
 
 ---
 
@@ -310,20 +310,18 @@ retire     delete old copies the record no longer names
 
 ## 11. Non-goals and parameter discipline
 
-- Automatic periodic collection (forbidden by #41). BrewFS's 600 s compaction / 3600 s GC loops are not borrowed.
-- BrewFS's fragmentation thresholds (code defaults `min_slice_count=3`, `min_fragment_ratio=0.1`, `sync_threshold=200`): those measure "slices inside the same chunk overwriting each other", and LayerFS objects are immutable, so "unreachable byte ratio" should be used instead.
+- Automatic periodic collection (forbidden by #41): no 600 s compaction / 3600 s GC loop is adopted.
+- Fragmentation thresholds (`min_slice_count`, `min_fragment_ratio`, `sync_threshold`) measure slices inside the same **mutable** chunk overwriting each other. LayerFS objects are immutable, so "unreachable byte ratio" is the equivalent measure.
 - light / heavy two-level compaction: LayerFS's "light" equivalent is logical removal, already an operation of its own.
 - `VACUUM FULL`-style whole-table reclamation (blocking, 2× space).
 - compact of remote object-storage copies (out of scope for #41).
 - Any power-loss durability promise (Disposable remains the only execution profile).
 
-> **Parameter discipline:** any BrewFS value cited must be pinned to the code. Its docs say 5 / 350 / 1h / 100 while the code says 3 / 200 / 600 s / 1000; `LockTtlConfig`(10/30/50/5/300) and `BlockGcConfig`(3600/3600/1000/3600) agree.
 
 ---
 
 ## 12. Evidence and verification record
 
-- **BrewFS-side evidence:** `src/chunk/compact/{gc.rs,compactor.rs,worker.rs}` (two-phase deletion, `record_uncommitted_slice`/`confirm_slice_committed`, lock Drop+TTL self-healing), `src/meta/config.rs` (`CompactConfig`/`LockTtlConfig` defaults), `doc/superpowers/plans/2026-10-10-packed-v3-temporary-handoff.md` (G13's root generation / Deleting re-check / layer-set algebra, and the still-open reader pins / mark-sweep / no accidental deletion).
 - **LayerFS-side evidence:** `control/crates/layerfs-store/src/{lease.rs,record.rs}`, `.../sqlite/transfer/{step,phases,resolve}.rs`, `control/crates/layerfs-home/src/op.rs`, `engine/crates/layerfs-persistence/src/{backend/sqlite/profile.rs,backend/sqlite/schema.rs,backend/sqlite/lifecycle/reclamation.rs,diagnostic/*}`, `engine/crates/layerfs-store-service/src/operator/{dispatch,store,files}.rs`, `core/crates/layerfs-content/src/filesystem/qualify/`, `core/crates/layerfs-history/src/contract/identity.rs`.
 - **Verification:** 33 passes in total (including 12 clean passes); the last two clean passes converged with no changes. The last three design-level changes were: remove the object-age grace, add the non-native refusal and the empty root set, and add the candidate row set.
 - **Still uncovered (needs code to answer):** the concrete SQL batches and transaction boundaries of `rewrite`; the boundary of the `resolve` list; the cross-machine failure semantics of `Retire`; the PG reader strategy (Q5); the commitment level of `store.compact` (Q6).
