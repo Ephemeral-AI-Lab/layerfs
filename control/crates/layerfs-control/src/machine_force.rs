@@ -8,7 +8,6 @@ use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_machine::platform::{self as adapters, Platform};
 use layerfs_machine::record::MachineRecord;
 use layerfs_machine::{machine_refusal as refusal, machine_spec};
-use layerfs_sandbox::host::{Deploy, Host, Message};
 use layerfs_sandbox::record::SandboxRecord;
 use layerfs_sandbox::{direct, files, reopen};
 use std::path::Path;
@@ -202,22 +201,7 @@ fn native_stop(home: &Path, sandbox: &SandboxRecord) -> Result<()> {
     if sandbox.machine_stopped() {
         return Ok(());
     }
-    let host = Host {
-        home: home.to_owned(),
-        store: String::new(),
-        project: String::new(),
-        sandbox: Some(sandbox.name().to_owned()),
-        store_record: None,
-        store_path: None,
-        deploy: Some(Deploy {
-            local_dir: Some(paths::run_root(home).display().to_string()),
-            container_prefix: Some(format!("lfs-{}-", &home_id(home)?[..8])),
-            ..Deploy::default()
-        }),
-        postgresql: None,
-        message: Message::Absent,
-        started: None,
-    };
+    let host = layerfs_sandbox::force::native_host(home, sandbox.name())?;
     let Some(daemon) = files::started(&sandbox.dir(home))? else {
         if sandbox.id().is_some() {
             return Err(refused(

@@ -61,9 +61,7 @@ esac
         ("address", t(&listener.local_addr().unwrap().to_string())),
         ("secret", t("aa")),
     ]);
-    for machine in ["vm"] {
-        write_record(&paths::worker_record(&home, machine), &worker).unwrap();
-    }
+    write_record(&paths::worker_record(&home, "vm"), &worker).unwrap();
     for (sandbox, machine) in [("one", "vm"), ("two", "vm")] {
         write_record(
             &paths::sandbox_record(&home, sandbox),
@@ -117,10 +115,8 @@ esac
         matches!(listener.accept(),Err(error) if error.kind()==std::io::ErrorKind::WouldBlock),
         "worker must never be contacted"
     );
-    for machine in ["vm"] {
-        assert!(!paths::worker_record(&home, machine).exists());
-        assert!(paths::machine_record(&home, machine).exists());
-    }
+    assert!(!paths::worker_record(&home, "vm").exists());
+    assert!(paths::machine_record(&home, "vm").exists());
     let sandbox = call(&home, "sandbox.get", &[("name", t("one"))]).unwrap();
     assert_eq!(sandbox.get_text("state"), Some("gone"));
     let logs = std::fs::read_to_string(root.join("calls")).unwrap();

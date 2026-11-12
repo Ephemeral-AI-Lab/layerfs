@@ -104,13 +104,21 @@ pub fn close(home: &Path, events: &mut Events<'_>, request: &CloseRequest) -> Re
             }
         }
     }
-    let closed = on_machine(
-        &home,
-        events,
-        &record,
-        Call::Close { force, held },
-        crate::dispatch::call,
-    );
+    let closed = if force && record.machine() == "native" {
+        // a forced close on `native` needs no Store or daemon discovery,
+        // even when active mounts or a broken Store would block the
+        // ordinary route
+        crate::force::native_host(&home, name)
+            .and_then(|host| crate::force::close(&host, held.as_deref().unwrap_or(&[])))
+    } else {
+        on_machine(
+            &home,
+            events,
+            &record,
+            Call::Close { force, held },
+            crate::dispatch::call,
+        )
+    };
     let _lock = home::lock::take(&home)?;
     // on `native` the Sandbox's own side removed the folder already
     let dir = record.dir(&home);

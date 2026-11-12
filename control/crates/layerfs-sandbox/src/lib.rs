@@ -32,6 +32,8 @@ pub mod exec;
 pub mod family;
 #[doc(hidden)]
 pub mod files;
+/// The forced close of a `native` Sandbox, from its own records alone.
+pub mod force;
 mod get;
 #[doc(hidden)]
 pub mod host;
