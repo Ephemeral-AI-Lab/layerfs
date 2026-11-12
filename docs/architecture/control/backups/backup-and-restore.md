@@ -111,7 +111,7 @@ push never overwrites a file this home did not move.
    backup::load(driver, file, store/.restore-<random>/store.sqlite, cursor)
    |  1 store_object(file); installer_user; make the directory 0700 when
    |      absent; kernel_guard on the Store file (a refusal removes the
-   |      directory this call made)
+   |      still-empty directory this call's own mkdir made)
    |  2 destination absent (load); no -wal/-shm beside it
    |  3 stat: present; binding from layerfs-binding (else refused)
    |  4 download to <target>.pulling (0600, create_new): pieces::download
@@ -128,7 +128,7 @@ push never overwrites a file this home did not move.
 
 | # | Check | Refusal | Source |
 | --- | --- | --- | --- |
-| 1 | The installer is the daemons' user; the destination's directory is made `0700` when absent; the Store's file passes the kernel guard (a real `0700` directory of this user on a local filesystem), which refuses a missing, symlinked, another owner's or non-private directory. A refusal removes only a directory this call made. | `PullFailure` cause | [`backup/restore.rs`](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
+| 1 | The installer is the daemons' user; the destination's directory is made `0700` when absent; the Store's file passes the kernel guard (a real `0700` directory of this user on a local filesystem), which refuses a missing, symlinked, another owner's or non-private directory. A refusal removes only a directory this call made: the guard's refusal, which happens before any Store file exists, removes this call's own directory with a non-recursive `remove_dir` and only while it is still empty; an installer-user or `mkdir` failure (including `AlreadyExists`, another caller's directory) removes nothing. | `PullFailure` cause | [`backup/restore.rs`](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
 | 2 | Load: no Store at the target. Pull: no `-wal` or `-shm` beside it (no opener holds it). | "a Store exists"; "the local Store … is open" | same |
 | 3 | The remote file exists and records `layerfs-binding`; a pull's expected binding matches. | "records no layerfs-binding; push it again"; "has another binding" | same |
 | 4 | Manifest, every piece and the whole file match their sha256. | `Integrity` | [`bucket/pieces.rs`](../../../../control/crates/layerfs-bucket/src/bucket/pieces.rs) |

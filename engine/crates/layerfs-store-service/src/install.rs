@@ -5,7 +5,9 @@
 //! initial Branch. The daemon does this for a Store streamed to it; Import
 //! does it in the SDK's process ([`install_local`]), so no Sandbox is started
 //! to install a Store. One attempt: a failure keeps whatever it left, named
-//! in its report, and nothing is deleted or tried again.
+//! in its report, and nothing is deleted or tried again, except that a guard
+//! refusal before any Store file exists reclaims only the empty directory
+//! that call's own `mkdir` made.
 use crate::bootstrap::{open_store_observed, OpenedStore};
 use crate::store::{checked_base, PortError};
 use layerfs_bridge::provision::{StoreManifest, StoreProfile};
@@ -136,6 +138,51 @@ impl std::fmt::Display for LocalInstallFailure {
     }
 }
 
+/// Makes the Store's directory owner-only (`0700`, created as such when it is
+/// absent), then checks the kernel guard for the Store file. A directory is
+/// this call's own only when this call's `mkdir` returned success: an
+/// installer-user or `mkdir` failure (`AlreadyExists`, when another caller
+/// made the directory first, included) removes nothing, and a guard refusal —
+/// which happens before any Store file exists — removes only that own
+/// directory, non-recursively, so it cannot take another caller's Store.
+pub fn prepare(destination: &Path) -> Result<(), String> {
+    installer_user()?;
+    prepare_between(destination, &|| {})
+}
+
+/// [`prepare`]'s directory and guard steps, without the installer check, with
+/// `between` run after the directory's absence is observed and before this
+/// call's `mkdir`. A regression test uses it to let another caller create the
+/// same directory first (#570 P1); production passes no step of its own.
+#[doc(hidden)]
+pub fn prepare_between(destination: &Path, between: &dyn Fn()) -> Result<(), String> {
+    let directory = destination
+        .parent()
+        .ok_or("the Store destination has no directory")?;
+    let mut made = false;
+    if !directory.exists() {
+        between();
+        use std::os::unix::fs::DirBuilderExt;
+        fs::DirBuilder::new()
+            .mode(0o700)
+            .create(directory)
+            .map_err(|error| error.to_string())?;
+        // the directory is this call's own only now that its mkdir succeeded
+        made = true;
+    }
+    match crate::kernel_guard::check(destination) {
+        Ok(_) => Ok(()),
+        Err(reason) => {
+            if made {
+                // no Store file exists yet: this call's own directory, and
+                // only while it still holds nothing
+                let _ = fs::remove_dir(directory);
+            }
+            Err(reason.0)
+        }
+    }
+}
+
 /// Installs the sealed Store `source` (described by `manifest`) at
 /// `destination` in this process: the project volume's
 /// `global/store.sqlite`, its `global/` directory made owner-only (`0700`,
@@ -157,28 +204,8 @@ pub fn install_local(
         if manifest.profile != StoreProfile::Disposable || manifest.daemon_sqlite.is_some() {
             return Err("a sealed, not yet installed, Disposable Store is required".to_owned());
         }
-        let directory = destination
-            .parent()
-            .ok_or("the Store destination has no directory")?;
         let text = |error: io::Error| error.to_string();
-        let existed = directory.exists();
-        let outcome = (|| {
-            installer_user()?;
-            if !existed {
-                use std::os::unix::fs::DirBuilderExt;
-                fs::DirBuilder::new()
-                    .mode(0o700)
-                    .create(directory)
-                    .map_err(text)?;
-            }
-            crate::kernel_guard::check(destination).map_err(|reason| reason.0)
-        })();
-        if let Err(error) = outcome {
-            if !existed {
-                let _ = fs::remove_dir_all(directory);
-            }
-            return Err(error);
-        }
+        prepare(destination)?;
         let (target, temporary) = paths(destination).map_err(text)?;
         let mut file = claim(&target, &temporary).map_err(text)?;
         left.temporary = Some(temporary.clone());

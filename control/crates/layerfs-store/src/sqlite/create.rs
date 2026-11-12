@@ -14,7 +14,6 @@ pub fn create(home: &Path, name: &StoreName) -> Outcome {
         return Err(refused("Exists", format!("a Store named {name} exists")));
     }
     let directory = paths::store_dir(home, name);
-    let existed = directory.exists();
     if let Some(parent) = directory.parent() {
         home::private_dir(parent)?;
     }
@@ -25,11 +24,13 @@ pub fn create(home: &Path, name: &StoreName) -> Outcome {
     };
     let file = paths::store_file(home, name);
     let policy = layerfs_storage::StoragePolicy::frozen_default();
-    let sealed = match crate::identity::make_empty(&directory, &file, &identity, policy) {
+    let (created, made) = crate::identity::make_empty(&directory, &file, &identity, policy);
+    let sealed = match created {
         Ok(sealed) => sealed,
         Err(refusal) => {
-            // nothing was published: this call's own directory goes
-            if !existed {
+            // nothing was published: the directory goes only when this call's
+            // own mkdir made it, never one another caller made meanwhile
+            if made == crate::identity::MadeDirectory::ThisCall {
                 let _ = std::fs::remove_dir_all(&directory);
             }
             return Err(refusal);

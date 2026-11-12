@@ -25,8 +25,7 @@ use crate::bucket::{progress, Driver};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_storage::ReservationBlocks;
 use layerfs_store_service::bootstrap::open_store_observed;
-use layerfs_store_service::install::{installer_user, paths};
-use layerfs_store_service::kernel_guard;
+use layerfs_store_service::install::{paths, prepare};
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -176,28 +175,10 @@ fn fetch(
     let result = (|| {
         let text = |error: io::Error| error.to_string();
         let object = store_object(name)?;
-        let directory = destination
-            .parent()
-            .ok_or("the Store destination has no directory")?;
-        // as install_local: the volume holding the Store's directory
-        let existed = directory.exists();
-        let outcome = (|| {
-            installer_user()?;
-            if !existed {
-                use std::os::unix::fs::DirBuilderExt;
-                fs::DirBuilder::new()
-                    .mode(0o700)
-                    .create(directory)
-                    .map_err(text)?;
-            }
-            kernel_guard::check(destination).map_err(|reason| reason.0)
-        })();
-        if let Err(error) = outcome {
-            if !existed {
-                let _ = fs::remove_dir_all(directory);
-            }
-            return Err(error);
-        }
+        // as install_local: the Store's own directory (`0700` when absent),
+        // the Store file guarded; a refusal reclaims only an empty directory
+        // this call made
+        prepare(destination)?;
         let (target, _) = paths(destination).map_err(text)?;
         let cloning = binding.is_none();
         if cloning && exists(&target).map_err(text)? {

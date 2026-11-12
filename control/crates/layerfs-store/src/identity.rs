@@ -200,13 +200,41 @@ pub fn sqlite_only(identity: &Identity, what: &str) -> Result<()> {
     }
 }
 
+/// Whether `make_empty`'s own `mkdir` made the Store's directory: the only
+/// ownership that lets its caller reclaim the directory when nothing was
+/// published. A directory another caller (or the user) made is never this
+/// call's to remove.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MadeDirectory {
+    /// This call's `mkdir` created it.
+    ThisCall,
+    /// It was already there.
+    AlreadyThere,
+}
+
 /// Creates and seals the empty Store at `<destination>.creating`, then
-/// renames it into place; a failure removes this call's own file.
+/// renames it into place; a failure removes this call's own temporary file.
+/// Also says whether this call's own `mkdir` made `global`, which is the only
+/// ownership that may reclaim the directory.
 pub fn make_empty(
     global: &Path,
     destination: &Path,
     identity: &Identity,
     policy: layerfs_storage::StoragePolicy,
+) -> (Result<SealedStore>, MadeDirectory) {
+    let mut made = MadeDirectory::AlreadyThere;
+    let result = create_empty(global, destination, identity, policy, &mut made);
+    (result, made)
+}
+
+/// [`make_empty`]'s steps; `made` records whether this call's own `mkdir`
+/// created `global`.
+fn create_empty(
+    global: &Path,
+    destination: &Path,
+    identity: &Identity,
+    policy: layerfs_storage::StoragePolicy,
+    made: &mut MadeDirectory,
 ) -> Result<SealedStore> {
     use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
     if !global.exists() {
@@ -214,6 +242,8 @@ pub fn make_empty(
             .mode(0o700)
             .create(global)
             .map_err(failed)?;
+        // the directory is this call's own only now that its mkdir succeeded
+        *made = MadeDirectory::ThisCall;
     }
     layerfs_store_service::kernel_guard::check(destination)
         .map_err(|reason| refused("Unsupported", reason.0))?;
