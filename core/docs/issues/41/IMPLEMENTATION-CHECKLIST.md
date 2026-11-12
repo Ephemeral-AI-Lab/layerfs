@@ -4,7 +4,13 @@
 
 This checklist tracks the implementation of all 10 sub-issues (#42-#52) for LayerFS Garbage Collection.
 
-**Foundation**: PR #658 contains complete design specification in `C8b-N3-C9-Resolution-Plan.md`
+**Foundation**: the authority is `LayerFS-GC-spec.md` (§1-§12) in this directory.
+`C8b-N3-C9-Resolution-Plan.md` gives implementation guidance for three of its
+items; `02-operation-contracts.md` gives the per-operation contracts;
+`03-decision-record.md` records R1/Q1/C3 and the open items.
+
+All paths under **Code Locations** are *proposed*, not verified against the tree —
+check the real seam before starting an issue.
 
 ---
 
@@ -13,26 +19,24 @@ This checklist tracks the implementation of all 10 sub-issues (#42-#52) for Laye
 **Goal**: Confirm all design decisions before implementation
 
 **Pre-Implementation**:
-- [ ] Read: `core/docs/issues/41/README.md` (overview)
-- [ ] Read: `core/docs/issues/41/01-overview-and-decisions.md` (D1-D14)
-- [ ] Review: All diagrams in Excalidraw collection
-- [ ] Understand: 6 pending decisions requiring product sign-off
+- Read `LayerFS-GC-spec.md` §1 (decisions) and §5 (contracts C1-C10)
+- Read `03-decision-record.md` §1-§3 for the reasoning behind R1, Q1, C3
+- Answer `LayerFS-GC-spec.md` §1.2 (Q1-Q6); Q1/Q2/Q4/Q5 carry recommendations
+- Sign off R1, Q1, C3 — the requests are linked from README's *Sign-off requests*
 
 **Tasks**:
-- [ ] D1: Store-level GC granularity - CONFIRM
-- [ ] D2: Logical-first approach - CONFIRM
-- [ ] D3: PostgreSQL fence strategy - **PENDING** (product)
-- [ ] D4: Exclusive access during compact - CONFIRM
-- [ ] D5: Cross-project safety - CONFIRM
-- [ ] D6: GC algorithm details - **PENDING** (product)
-- [ ] D7: Cross-project Pack protection - **PENDING** (product)
-- [ ] D8: Writer-exclusive fence - CONFIRM
-- [ ] D9: Name reuse with timestamp - CONFIRM
-- [ ] D10: Immutable ID protection - CONFIRM
-- [ ] D11: PostgreSQL remote required - CONFIRM
-- [ ] D12-D14: Other decisions - CONFIRM
+- [ ] Confirm the settled conclusions (`LayerFS-GC-spec.md` §1.1, S1-S11)
+- [ ] Q1 name reuse — recommended: forbid (A) · asked on #44
+- [ ] Q2 `remove_file` reclamation — recommended: measure first, then document
+- [ ] Q3 age threshold — out of this release
+- [ ] Q4 interrupted-copy retention — recommended: keep one, no auto-cleanup
+- [ ] Q5 PostgreSQL reader behaviour — superseded by C8/R2
+- [ ] Q6 `store.compact` commitment level — split into two levels (owner signs off)
+- [ ] R1 PostgreSQL replacement — recommended: E · asked on #50
+- [ ] C3 per-object delete — recommended: `delete(id, G)` · asked on #42
+- [ ] §5.1 open item — replacement+rename vs an in-place path (see 03 §5.1/§5.1a)
 
-**Acceptance**: All 11 confirmed, 6 pending have product approval
+**Acceptance**: §1.1 confirmed, every §1.2 question answered, R1/Q1/C3 signed
 
 **Status**: ⏳ Waiting for product decisions
 
@@ -43,7 +47,6 @@ This checklist tracks the implementation of all 10 sub-issues (#42-#52) for Laye
 ### Issue #43: Admission Enforcement
 
 **Pre-Implementation**:
-- [ ] Read: `02-operation-contracts.md` (§5 C10)
 - [ ] Understand: Admission matrix (branch/project/file/compact)
 - [ ] Know the four error codes: MountsActive, Busy, Conflict, Unsupported
 
@@ -70,7 +73,6 @@ This checklist tracks the implementation of all 10 sub-issues (#42-#52) for Laye
 ### Issue #48: Shared Data Reachability
 
 **Pre-Implementation**:
-- [ ] Read: `C8b-N3-C9-Resolution-Plan.md` (§6 Closure)
 - [ ] Understand: 3-step closure (Pinned → Historical → Cross-Project)
 - [ ] Understand: Pack sharing and delta-base protection
 
@@ -100,8 +102,6 @@ This checklist tracks the implementation of all 10 sub-issues (#42-#52) for Laye
 ### Issue #44: Branch Removal
 
 **Pre-Implementation**:
-- [ ] Read: `02-operation-contracts.md` (branch.remove)
-- [ ] Read: `C8b-N3-C9-Resolution-Plan.md` (N3 - removed_ms)
 - [ ] Understand: Soft delete via removed_ms timestamp
 
 **Key Requirements**:
@@ -130,8 +130,6 @@ This checklist tracks the implementation of all 10 sub-issues (#42-#52) for Laye
 ### Issue #45: Project Deletion
 
 **Pre-Implementation**:
-- [ ] Read: `02-operation-contracts.md` (project.delete)
-- [ ] Read: `C8b-N3-C9-Resolution-Plan.md` (N3 - deleted_ms)
 - [ ] Understand: Schema migration v3.5 → v3.6
 - [ ] Understand: Soft delete + Store remaining addressable
 
@@ -162,8 +160,6 @@ This checklist tracks the implementation of all 10 sub-issues (#42-#52) for Laye
 ### Issue #47: File Removal
 
 **Pre-Implementation**:
-- [ ] Read: `02-operation-contracts.md` (project.remove_file)
-- [ ] Read: `C8b-N3-C9-Resolution-Plan.md` (C9 - HistoryCatalog)
 - [ ] Understand: Immutable ID access protection
 
 **Key Requirements**:
@@ -193,7 +189,6 @@ This checklist tracks the implementation of all 10 sub-issues (#42-#52) for Laye
 ### Issue #49: SQLite Compaction
 
 **Pre-Implementation**:
-- [ ] Read: `C8b-N3-C9-Resolution-Plan.md` (C8b - SQLite Incarnation)
 - [ ] Understand: 5-stage incarnation protocol
 - [ ] Understand: Two-gate write fence (admission + install)
 - [ ] Understand: Writer-exclusive fence during Stage 3
@@ -229,13 +224,17 @@ This checklist tracks the implementation of all 10 sub-issues (#42-#52) for Laye
 ### Issue #50: PostgreSQL Compaction
 
 **Pre-Implementation**:
-- [ ] Read: `C8b-N3-C9-Resolution-Plan.md` (D3 - PostgreSQL fence)
 - [ ] Understand: PostgreSQL-specific compaction strategy
 - [ ] Understand: Remote server support (not stub)
 - [ ] Understand: Physical reclamation verification
 
 **Key Requirements**:
-- [ ] Implement PostgreSQL compaction
+- [ ] Implement the Store replacement R1 selects: E (two `ALTER SCHEMA RENAME` in
+      one transaction) by default, A' (pointer + versioned schema) only if S11
+      requires reads up
+- [ ] Bump `catalog_incarnation` at install and rely on the C8 reader fence
+- [ ] Resolve 03-decision-record §5.1 first: replacement+rename, or also an
+      in-place deletion path
 - [ ] Support remote PostgreSQL servers
 - [ ] Implement physical reclamation (pg_total_relation_size)
 - [ ] Test network partition recovery
@@ -262,8 +261,6 @@ This checklist tracks the implementation of all 10 sub-issues (#42-#52) for Laye
 ### Issue #51: API/SDK/CLI Exposure
 
 **Pre-Implementation**:
-- [ ] Read: `02-operation-contracts.md` (all 4 operations)
-- [ ] Read: `C8b-N3-C9-Resolution-Plan.md` (C9 - HistoryCatalog)
 - [ ] Understand: API contracts for all operations
 
 **Key Requirements**:

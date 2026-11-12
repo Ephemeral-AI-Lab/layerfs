@@ -14,15 +14,6 @@ Deliver explicit LayerFS garbage collection for SQLite and PostgreSQL through so
 - **`project.remove_file(...)`** - Logically remove a file/folder across history
 - **`store.compact(name)`** - Physically reclaim discarded storage
 
-## Core Design Principles
-
-1. **Logical-First**: All remove/delete are logical; only `store.compact()` performs physical reclamation
-2. **Exclusive Compaction**: `store.compact()` requires full Store isolation
-3. **Cross-Project Safety**: All shared content and delta bases remain protected
-4. **Immutable ID Protection**: Existing immutable IDs remain safe after file removal
-5. **PostgreSQL Remote**: Full compaction support required (not a stub)
-6. **Writer Fence**: SQLite incarnation uses atomic swap with writer exclusion
-
 ## Key Constraints
 
 The constraints are defined once, as contracts **C1–C10** in
@@ -42,21 +33,19 @@ removed; cite §5 rather than any local summary.
 - **LayerFS-GC-spec.md** - The authoritative single-file specification (§1-§12):
   decisions, contracts C1-C10, Mark, Sweep, operations, acceptance. Every other
   document in this directory derives from it and cites its section numbers.
-- **01-overview-and-decisions.md** - Design decisions (D1-D14)
 - **02-operation-contracts.md** - Operation specifications
 - **03-decision-record.md** - R1 / Q1 / C3: scenarios, alternatives, decision basis;
   §5 lists the open items the decisions exposed (PostgreSQL rebuild-and-swap vs
   in-place row deletion, and C3's scope), including §5.1a: the restored argument
   for why in-place deletion was ruled out in the first place
 - **C8b-N3-C9-Resolution-Plan.md** - Deep dive on three critical issues
-- **RESOLUTION-SUMMARY.md** - Quick reference for key decisions
-- **Full spec**: See pull request tokenaissance/layerfs#70
 
 ## Implementation Phases
 
 ### Phase 1: Design Finalization (#42)
-- Confirm all 11 committed decisions
-- Product sign-off on 6 pending decisions
+- Confirm the settled conclusions (`LayerFS-GC-spec.md` §1.1, S1-S11)
+- Answer the open questions (`LayerFS-GC-spec.md` §1.2, Q1-Q6)
+- Sign off R1 / Q1 / C3 (see *Sign-off requests* above)
 
 ### Phase 2: Infrastructure (#43, #48)
 - Admission enforcement
@@ -77,12 +66,8 @@ removed; cite §5 rather than any local summary.
 
 ## Admission & Mount Policy
 
-| Operation | No mounts within | Other restrictions | What may remain |
-|-----------|------------------|-------------------|-----------------|
-| `branch.remove(name)` | Selected Branch | Existing rules | Other Branches |
-| `project.delete(name)` | Project + Branches | Close Sandboxes | Other projects |
-| `project.remove_file(...)` | Project + Branches | Close Sandboxes | Other projects |
-| `store.compact(name)` | Store + all projects | Exclusive access | Other Stores |
+Which mounts each operation excludes is the admission matrix, **C10** in
+`LayerFS-GC-spec.md` §5 — see it there; this README does not restate it.
 
 ## Decision ownership
 
@@ -102,7 +87,7 @@ reconciliation and net-new tables.
 | **C10** | Admission matrix: which mounts each operation excludes | #42 (C10) | **#43** | #52 |
 | **Q3** | Rewrite step: transfer phases with one inserted `rewrite` | #42 (§7.1) | **#49** | #52 |
 | **Q5** | PostgreSQL reader behaviour | Superseded by C8/R2 — no separate decision | **#43** | #52 |
-| **D3** | PostgreSQL fence mechanism (advisory lock / `FOR UPDATE` / schema lock) | Pending product sign-off (01-overview) | **#50** | #52 |
+| **D3** | PostgreSQL fence mechanism (advisory lock / `FOR UPDATE` / schema lock) | Pending sign-off — see #50 | **#50** | #52 |
 
 ### Sign-off requests
 
@@ -131,14 +116,16 @@ tests across a generation boundary.
 
 - **Specification PR**: Ephemeral-AI-Lab/layerfs#658 (`core/docs/issues/41/`)
 - **Release Contract**: Ephemeral-AI-Lab/layerfs#511
-- **Architecture Diagrams**: https://app.excalidraw.com/s/9Zq6XgRe98z/
+- **Architecture diagrams** (collection https://app.excalidraw.com/s/9Zq6XgRe98z/):
+  - C8b writer-fence sequence: https://app.excalidraw.com/s/9Zq6XgRe98z/5fb5lT5yDKY
+  - N3 schema migration: https://app.excalidraw.com/s/9Zq6XgRe98z/1dZkWEGOgA7
+  - C9 HistoryCatalog architecture: https://app.excalidraw.com/s/9Zq6XgRe98z/8ZPm9UyP100
 - **Sub-Issues**: #42-#52
 
 ## References
 
 - See the complete specification in Ephemeral-AI-Lab/layerfs#658
 - Three critical issues (C8b, N3, C9) explained in C8b-N3-C9-Resolution-Plan.md
-- Design decisions summary in RESOLUTION-SUMMARY.md
 
 ---
 
