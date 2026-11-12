@@ -354,6 +354,37 @@ PostgreSQL deletes rows. Under (a) C3 binds only a future online sweep and is a
 forward-looking contract; under (b) it becomes a v2 deliverable. The C3 sign-off
 request carries this as its "scope question" box.
 
+### 5.1a Why in-place deletion was ruled out (restored)
+
+The superseded 1,604-line draft of the specification carried a section that the
+318-line version dropped when it kept the decision but not the argument. Restored
+here verbatim (its `§6.1` / `§6.3` are *that draft's* numbering, not this
+directory's):
+
+> **§2.5 Why in-place row deletion is not the plan (either backend)**
+>
+> A reachability-driven `DELETE` of unreachable rows, then `VACUUM FULL` (PG) or
+> `incremental_vacuum` (SQLite), does not survive the schema: `pack` refuses
+> `DELETE` and `UPDATE` by trigger on both backends (§6.1), so the biggest bytes
+> cannot be freed without disabling the trigger, which needs table ownership and
+> opens a window in which a concurrent writer can mutate an immutable row. It also
+> breaks the lock-free read invariant (§6.3). Rebuild-and-swap replaces it — one
+> algorithm, two swap primitives.
+
+Where those two old anchors now sit:
+
+| Old anchor | Current anchor | What it says |
+|---|---|---|
+| §6.1 (pack immutability) | §1.1 **S5**, §5 **C2**, §7.2 | candidates are `object_location` and `content_signature` rows; **`pack` is never a candidate** because it has immutability triggers on both ends |
+| §6.3 (lock-free reads) | code: `engine/crates/layerfs-persistence/src/backend/sqlite/session/transaction.rs:181-197` | `read_immutable` runs with no BEGIN/COMMIT, which is "safe only because every row such a body reads never changes once visible: `object_location` is insert-only … `pack` and `pack_unit` refuse UPDATE and DELETE by trigger" |
+
+Why the argument is decisive, in current terms:
+
+- `sql/postgresql/schema.sql:25-28` — `pack_immutable()` is `BEFORE UPDATE OR DELETE ON pack`. An in-place sweep cannot delete a pack row at all, and a pack is where the bytes are. Disabling the trigger needs table ownership and re-opens the window the trigger exists to close.
+- The lock-free read path is sound *because* those rows never change. An in-place `DELETE` of `object_location` rows would make two such reads able to observe an inconsistent pair — the reason `read_immutable` documents its own premise.
+
+Consequence for §5.1: if this argument is accepted, reading **(a) replacement + rename** is the only one that does not reopen pack immutability; reading **(b) an additional in-place path** is not a cheap option, it is a change to the immutability and lockdown contracts. Owner decides; the sign-off box on #42 already asks the question in that form.
+
 ### 5.2 What is *not* open
 
 - `pack` immutability on PostgreSQL is settled: the trigger refuses `UPDATE` and
