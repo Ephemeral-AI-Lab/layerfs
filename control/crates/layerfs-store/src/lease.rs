@@ -140,6 +140,18 @@ fn leases(home: &Path, store: &str) -> Result<Vec<(u32, PathBuf, bool)>, SdkRefu
     Ok(found)
 }
 
+/// Removes the stale lease at `path`: `false` when it is gone already. A
+/// holder drops its own lease without the Store's lock ([`Lease`]'s drop),
+/// so a lease read here can be gone by the time its holder is found ended:
+/// the holder dropped it and then ended, and nothing stale is left.
+fn remove_stale(path: &Path) -> Result<bool, SdkRefusal> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(failed(e)),
+    }
+}
+
 /// The processes holding Store `store`, other than this one; stale leases
 /// are removed and logged (O35). The caller holds the Store's lock.
 pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
@@ -149,7 +161,9 @@ pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
             live.push(pid);
             continue;
         }
-        std::fs::remove_file(path).map_err(failed)?;
+        if !remove_stale(&path)? {
+            continue;
+        }
         home::log_line(
             home,
             "leases.jsonl",
@@ -176,4 +190,22 @@ pub fn read_holders(home: &Path, store: &str) -> Result<(Vec<u32>, Vec<u32>), Sd
         }
     }
     Ok((live, stale))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::remove_stale;
+
+    #[test]
+    fn a_stale_lease_its_holder_already_dropped_is_not_a_failure() {
+        let dir = std::env::temp_dir().join(format!("lfs-lease-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let lease = dir.join("4242");
+        std::fs::write(&lease, "1 2 3\n").unwrap();
+        assert!(remove_stale(&lease).unwrap(), "a present stale lease is removed");
+        assert!(!lease.exists());
+        // read by `leases`, then dropped by its holder before the removal
+        assert!(!remove_stale(&lease).unwrap(), "a lease already gone is no refusal");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }
