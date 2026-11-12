@@ -317,7 +317,7 @@ pub fn workspaces(directory: &Path) -> Result<Vec<(PathBuf, WorkspaceRecord)>> {
     Ok(found)
 }
 /// A Workspace record's token: its id (64 hex digits) and namespace.
-fn token_of(value: &WorkspaceRecord) -> Result<layerfs_bridge::control::WorkspaceToken> {
+pub fn token_of(value: &WorkspaceRecord) -> Result<layerfs_bridge::control::WorkspaceToken> {
     let id = helpers::required(value.id(), "id")?;
     let bytes: Vec<u8> = (0..id.len())
         .step_by(2)
