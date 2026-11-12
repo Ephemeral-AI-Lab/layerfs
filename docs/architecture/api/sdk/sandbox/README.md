@@ -36,7 +36,7 @@ unique across the home.
 | --- | --- | --- | --- | --- |
 | [`create`](create.md) | `project` (Project), `name` (Name), `machine?` (Name) | `image` (Text) | the Sandbox record with `state`; `forward_failed` when a direct daemon forward did not open | its machine: here or `sandbox.host` in the worker |
 | [`list`](list.md) | `project?` (Project) | `page_size`, `page_pos` (Int) | `{ items: [record], next_page_pos }` | caller's process, home records only |
-| [`get`](get.md) | `name` (Name) | `page_size`, `page_pos` | the record with `state`, `workspaces`, `next_page_pos`, `down_reason` when its machine is down, `down` (partial capacity counts) when the refusal carried the daemon's notice, and `daemon_capacity` when its daemon answers the bounded capacity read | its machine or its daemon; starts nothing |
+| [`get`](get.md) | `name` (Name) | `page_size`, `page_pos` | the record with `state`, `workspaces`, `next_page_pos`, `down_reason` when its machine is down or its daemon's pool has no vacant control slot, `down` (partial capacity counts) when the refusal carried the daemon's notice on either route, and `daemon_capacity` when its daemon answers the bounded capacity read | its machine or its daemon; starts nothing |
 | [`close`](close.md) | `name` (Name) | `force` (Bool) | `{ kind: "Closed", sandbox, unknown, closed }`, or `{ closed, was_gone: true }`, or `{ closed, was, left? }` for a record with no id | its machine: here or `sandbox.host` in the worker |
 
 The record is `SandboxRecord::to_sdk`
@@ -56,7 +56,8 @@ When the Workspace list is refused at a full pool, `down` carries the
 partial counts from the daemon's pre-handshake capacity notice: `code`,
 `resource`, `pool_vacant`, `reserved_vacant` and `retained`, and no
 `daemon_capacity`, whose missing fields would read as zero
-(#649).
+(#649). A worker or local route meets that full pool as a refusal its own
+dial returned, so it answers the same `down` from the same notice.
 
 ## Arguments and options
 
