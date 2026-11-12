@@ -1,6 +1,6 @@
 # LayerFS GC Specification (single file)
 
-> **Status:** candidate specification, may be merged into #42 as a whole. **This file is the only authoritative version**; the other documents in this directory derive from it and cite its section numbers.
+> **Status:** candidate specification, may be merged into #42 as a whole. **This file is the only authoritative version.** In this directory the other documents derive from it and cite its section numbers.
 > **Scope:** the mechanism layer of #41: correctness of collection decisions, sweep recoverability, fences, reporting definitions, acceptance shape.
 > **Out of scope:** the policies already settled by #41 (admission matrix, logical/physical separation, no-retry). Where they conflict, the #41 owner policy wins.
 > **BrewFS reference:** `github.com/brewfs/brewfs`, pinned 2026-11-11 `#444`. **Every value cited from it is the code default** (`src/meta/config.rs`, `src/chunk/compact/gc.rs`); its `doc/architecture/compaction-gc.md` has already drifted and is not a source of parameters.
