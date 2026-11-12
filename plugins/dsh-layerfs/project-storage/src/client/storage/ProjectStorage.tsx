@@ -57,7 +57,20 @@ export function ProjectStorage({ api, t, project, tick, onOpenStore }: ProjectSt
     <div className={css.dashboard}>
       {building ? <Progress t={t} building={building} first={!s} /> : null}
       {view.error ? <Refusal error={view.error} labels={refusalLabels(t)} /> : null}
-      {s ? (
+      {s && s.saves === 0 ? (
+        <>
+          <section className={css.panel}>
+            <div className={css.panelHead}><h3>{t('psEmptyTitle')}</h3></div>
+            <p className={css.note}>{t('psEmptyBody')}</p>
+          </section>
+          <div className={css.facts}>
+            <Fact label={t('psMainLatest')} value={view.main ? exactBytes(view.main.logical) : '—'}
+              note={view.main ? t('psMainCounts', { files: exactCount(view.main.files), dirs: exactCount(view.main.directories) }) : t('psMainUnavailable')} />
+            <Fact label={t('psPublications')} value={exactCount(s.publications)} note={t('psPublicationsNote', { bytes: exactBytes(s.publicationLogical) })} />
+            <Fact label={t('psStore')} value={typeof view.store.file === 'number' ? exactBytes(view.store.file) : '—'} note={t('psStoreNote', { store: view.store.name })} />
+          </div>
+        </>
+      ) : s ? (
         <>
           <div className={css.hero}>
             <strong>{exactBytes(s.stored)}</strong>
