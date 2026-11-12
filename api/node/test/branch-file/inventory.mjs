@@ -11,10 +11,10 @@ const root = fileURLToPath(new URL("../../../../", import.meta.url));
 const command = process.env.LAYERFS_CLI ?? join(root, "target/debug/layerfs");
 const docs = join(root, "docs/architecture/api/sdk");
 
-test("the SDK index lists all 64 current calls, including branch/file additions", () => {
-  assert.equal(table.length, 64);
+test("the SDK index lists all 70 current calls, including branch/file additions", () => {
+  assert.equal(table.length, 70);
   const index = readFileSync(join(docs, "README.md"), "utf8");
-  assert.match(index, /64 calls in 9 families/);
+  assert.match(index, /70 calls in 10 families/);
   for (const spec of table) {
     assert.ok(existsSync(join(docs, spec.family, `${spec.call}.md`)), `${spec.family}.${spec.call} has a call page`);
     assert.ok(index.includes(`(${spec.family}/${spec.call}.md)`), `${spec.family}.${spec.call} appears in SDK inventory`);

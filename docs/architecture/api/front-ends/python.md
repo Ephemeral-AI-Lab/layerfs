@@ -37,7 +37,7 @@ api/crates/layerfs-python (cdylib "_native", PyO3 0.30, abi3-py310)
 
 ```text
 api/python/src/layerfs/
-  __init__.py   doctor(), close(), the nine families of the default client
+  __init__.py   doctor(), close(), the ten families of the default client
   _client.py    TABLE, FAMILIES, Client, client(), _bind (one call)
   aio.py        AsyncClient: the same calls as coroutines
   _values.py    encode / decode: JSON text, bytes as {"base64": ...}
@@ -66,9 +66,10 @@ decode(answer): refused -> raise LayerFSError ; else answer["value"]
 | Rule | Behaviour | Source |
 | --- | --- | --- |
 | Building | `TABLE = decode(_native.table())`; `Client(home, scope)` sets one `Family` attribute per family and one function per entry, with the entry's `help` as its docstring | `_client.py` |
-| Defaults | module-level `layerfs.project` … `layerfs.backup` belong to `Client()`: the library chooses the home (`LAYERFS_HOME`, else `~/.layerfs`) | [`__init__.py`](../../../../api/python/src/layerfs/__init__.py) |
+| Defaults | module-level `layerfs.project` … `layerfs.logs` belong to `Client()`: the library chooses the home (`LAYERFS_HOME`, else `~/.layerfs`) | [`__init__.py`](../../../../api/python/src/layerfs/__init__.py) |
 | Keywords | optional positionals and options may be keywords: `file.read(p, b, path, start_line=2)` | `_client.py` |
 | `stream=True` | without `stdout` / `stderr` functions, output goes to `sys.stdout` / `sys.stderr` (text to the text stream, bytes to its buffer) | `_client.py` `_streamed` |
+| `log_tag=` | every call takes `log_tag`, the tag of its call log line (#659); it is passed with the arguments and the library takes it out before checking. The binding names the client `python` (`Client::Python`) | `_client.py`, [`call.rs`](../../../../api/crates/layerfs-python/src/call.rs) |
 | Values | `bytes`, `bytearray`, `memoryview` → `{ base64 }`; a one-key `{ base64 }` map with base64 text back → `bytes` (any other map stays a `dict`) | [`_values.py`](../../../../api/python/src/layerfs/_values.py) |
 | Refused before any call | `encode` raises `LayerFSError("InvalidInput")` for NaN and Infinity, a lone surrogate (also in a home or scope), a map key that is not text and a type JSON has no form for (a set, an object, a cycle); before this, a lone surrogate raised `UnicodeEncodeError` and a non-JSON value `TypeError` | `_values.py` `encode`, `path_text` |
 | Integers | Python `int` is exact both ways. The library reads a number as a signed 64-bit integer: past that (`2**63`, `-2**63 - 1`) it refuses with `InvalidInput` "number out of range"; a fraction is refused "only whole numbers are accepted"; `True` is not a whole number. A call may be stricter than the parser: the line and page options refuse anything above 2^53 - 1 ("safe integer"), though `2**63 - 1` and `-2**63` reach the call as written | [`json.rs`](../../../../control/crates/layerfs-home/src/json.rs) |
@@ -142,7 +143,7 @@ tmpfs): point `TMPDIR` at one.
 
 | Test | Checks | Needs |
 | --- | --- | --- |
-| [`test_calls.py`](../../../../api/python/test/test_calls.py) `test_the_table` | nine families and 64 calls as functions; an unknown keyword is `InvalidInput` | the module |
+| [`test_calls.py`](../../../../api/python/test/test_calls.py) `test_the_table` | ten families and 70 calls as functions; an unknown keyword is `InvalidInput` | the module |
 | `test_every_call_is_refused_as_the_command_refuses_it` | every call gives the same refusal as the `layerfs` command | the command, else skipped |
 | `test_a_live_store_reads_the_same_both_ways` | a Store read through the package and the command gives the same JSON | the command, else skipped |
 | `test_aio_makes_the_same_calls_as_coroutines`, `test_aio_functions_run_on_the_loop_before_the_call_returns`, `test_a_cancelled_aio_call_stops_its_functions_and_the_call_runs_to_its_end` | the `aio` rules above | the module |

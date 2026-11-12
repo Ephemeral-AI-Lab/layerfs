@@ -7,7 +7,7 @@
 //   work   the families an agent works in (branch, commit, file, workspace)
 //          plus the read-only project and Sandbox calls named below
 //   admin  every other call: project create/remove, Sandbox create/close,
-//          and the machine, store and backup families
+//          and the machine, store, backup and logs families
 // The `admin` launch profile exposes the union, so `admin` adds the
 // administrative calls to the `work` set.
 
@@ -24,7 +24,7 @@ const WORK_CALLS = new Set(["project.list", "project.get", "project.export", "sa
 const ADMIN_CALLS = new Set(["project.init", "project.remove", "sandbox.create", "sandbox.close"]);
 
 /** Families whose every call belongs to the `admin` profile. */
-const ADMIN_FAMILIES = new Set(["machine", "store", "backup"]);
+const ADMIN_FAMILIES = new Set(["machine", "store", "backup", "logs"]);
 
 /** Why a family's calls sit where they do; one line per family, in the doc. */
 const WHY = {
@@ -37,6 +37,7 @@ const WHY = {
   machine: "machines hold Stores and workers; creating, changing and removing them is administration",
   store: "create, connect, transfer and remove Stores; administration",
   backup: "upload and restore a Store on a bucket; administration",
+  logs: "read and clear the home's call log; administration",
 };
 
 const nameOf = (spec) => `${spec.family}.${spec.call}`;

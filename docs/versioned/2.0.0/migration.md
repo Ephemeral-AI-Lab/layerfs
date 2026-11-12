@@ -199,7 +199,7 @@ is noted in [calls: errors](calls.md#errors-and-exit-codes).
 
 | Old | 2.0.0 | Status and reason |
 | --- | --- | --- |
-| `events.subscribe` / `poll` / `unsubscribe`, SSE and NDJSON streams (#521); the trace subscription of `@layerfs/backend` (1.1.0) | none | **Removed** (O26). Trace files were meant to be the feed, but `<home>/trace/` is written by nothing and `LAYERFS_TRACE` records only worker connections ([home and records](../../architecture/api/control/home-and-records.md#traces)) |
+| `events.subscribe` / `poll` / `unsubscribe`, SSE and NDJSON streams (#521); the trace subscription of `@layerfs/backend` (1.1.0) | none | **Removed** (O26). Trace files are the feed: `<home>/trace/calls.jsonl` holds one line per call, read with `logs.list` (#659); `LAYERFS_TRACE` records worker connections and step times ([home and records](../../architecture/control/management/home-and-records.md#traces)) |
 | job registry: `start_init` / `get_init` / `subscribe_init` | one `on_progress` stream on the call itself | **Removed** (O22). Another process cannot watch a call it did not start; `store status` shows a push or pull in progress |
 | progress of any call | `on_progress` on exactly five calls: `project.init`, `store.push`, `store.pull`, `backup.create`, `backup.restore`. The shell form is `--progress` (JSON lines on stderr) | **Changed.** Three payload shapes; events mark the **entry** of a phase, never completion. [Events](../../architecture/api/call-table/events.md) |
 | `exec` output | `stdout` / `stderr` functions, `stream: true`, `--stream` | **Changed.** Output is **buffered and delivered after the command ends**, never live; stdout then stderr, not interleaved; a stream over 1 MiB only as event pages (the answer has it `null`, with `stdout_bytes` and `streamed: true`), and dropped when there is no sink. All of this is **UNVERIFIED by run**: no Sandbox could be started here ([Events](../../architecture/api/call-table/events.md#what-was-run-and-not-run)) |
@@ -217,7 +217,7 @@ not the native call.
 | Old | 2.0.0 | Status and reason |
 | --- | --- | --- |
 | `client.results(after?)`, a ring of per-call results (#521) | none | **Not restored** (owner decision, [#31](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/31#issuecomment-6657201351)) |
-| the call trace and operator reads of `@layerfs/backend` | `LAYERFS_TRACE=<file>` appends one `worker.connection` line per connection to a machine's worker; nothing else is traced | **Removed** (O25, O26) |
+| the call trace and operator reads of `@layerfs/backend` | the home's call log: one line per call in `<home>/trace/calls.jsonl` (CLI words, outcome, time, client, the saved version, an optional tag), read with `logs.list` and cleared with `logs.reset`; `LAYERFS_TRACE=<file>` appends one `worker.connection` line per connection to a machine's worker | **Changed** (#659). No daemon telemetry, operator reads or argument values beyond the redacted words ([home and records](../../architecture/control/management/home-and-records.md#the-call-log)) |
 | a health check | `layerfs doctor [--text]`, `doctor({ home })` (Node), `layerfs.doctor(home)` (Python): outside the call table, reads the home, takes no lock, writes nothing, starts no machine | **New.** [Doctor](../../architecture/api/control/doctor.md), [calls](calls.md#layerfs-doctor) |
 | `close()` | `close()` closes idle Stores; the command does it after every call | **Changed** (section 2) |
 
