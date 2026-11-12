@@ -80,18 +80,20 @@ fn host_args(
 }
 
 /// A PostgreSQL Store's `postgresql` argument for a Sandbox on `machine`
-/// (#535 §7.4): the record's URL with its password, resolved here in the
-/// caller, with a loopback host rewritten to the machine's alias or refused
+/// (#535 §7.4): the URL the machine's attachment names, else the record's,
+/// with its password, resolved here in the caller, with a loopback host
+/// rewritten to the machine's alias or refused
 /// (`layerfs_machine::platform::reach`). It travels only in the one request that runs
 /// the call and is never written to a record.
 /// With it, what a failed reach check tells a user to check on that
-/// machine's platform, if anything.
-fn reached(
+/// machine's platform, if anything. `store.attach` builds its check's
+/// argument here too.
+pub fn reached(
     home: &Path,
     machine: &str,
     record: &StoreRecord,
 ) -> Result<(PgSelection, Option<&'static str>)> {
-    let url = layerfs_store::record::url(record)?;
+    let url = layerfs_store::record::url_on(record, machine)?;
     // a build without machines (the guest's) runs its own Sandboxes on the
     // machine it is, which shares its loopback
     #[cfg(feature = "machine")]

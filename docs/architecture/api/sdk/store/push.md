@@ -144,4 +144,4 @@ layerfs store push shop vm1 --progress
 
 ---
 
-← [store.connect](connect.md) · [Up: store](README.md) · [store.pull](pull.md) →
+← [store.detach](detach.md) · [Up: store](README.md) · [store.pull](pull.md) →

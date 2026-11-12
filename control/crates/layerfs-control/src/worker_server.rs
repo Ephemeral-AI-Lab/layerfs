@@ -9,7 +9,7 @@
 //! secret and closes, before it reads anything larger. A caller of another
 //! build sends nothing more and closes. Then a request `{ op, args }`, read with at most
 //! [`REQUEST_WAIT`] between bytes. `worker.ping` answers who it is;
-//! `store.call`, `store.file`, `sandbox.host`, `project.stage`,
+//! `store.call`, `store.file`, `store.reach`, `sandbox.host`, `project.stage`,
 //! `project.init`, `project.export` and `project.remove` run one operation on
 //! this machine,
 //! with `home` set to the worker's own root (the machine's data disk),
@@ -217,6 +217,9 @@ fn run(
         }
         "doctor.sandbox" => crate::doctor::diagnose_worker_sandbox(root, args),
         "store.diagnose" => crate::doctor::diagnose_store_in_worker(root, args, events),
+        // `store.attach`'s check of this machine's connection to a
+        // PostgreSQL Store: the caller sends the record and what it dials
+        "store.reach" => crate::store::reach_in_worker(&args),
         // one Store call, on the Store file under this worker's root (2.0)
         "store.call" => {
             let call = layerfs_store::call::CallFrame::decode(&args)?;
