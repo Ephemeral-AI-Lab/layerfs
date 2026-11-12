@@ -96,6 +96,20 @@ reconciliation and net-new tables.
 | **Q5** | PostgreSQL reader behaviour | Superseded by C8/R2 — no separate decision | **#43** | #52 |
 | **D3** | PostgreSQL fence mechanism (advisory lock / `FOR UPDATE` / schema lock) | Pending product sign-off (01-overview) | **#50** | #52 |
 
+### Sign-off requests
+
+The three reconciliation decisions are asked for approval in the issue that
+realises each one, with a short reasoning summary and a checkbox block:
+
+| Decision | Asked in | Comment |
+|---|---|---|
+| R1 | #50 (PostgreSQL GC) | <https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/50#issuecomment-6818137198> |
+| Q1 | #44 (Branch removal) | <https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/44#issuecomment-6818137920> |
+| C3 | #42 (contracts) | <https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/42#issuecomment-6818138560> |
+
+When an answer arrives, record it here and in `03-decision-record.md`; an
+unanswered decision keeps its implementation issue blocked.
+
 R2 is not a separate sub-issue: the spec folds it into C8 and assigns C8 to
 admission (#43). Its install-time bump is executed by whichever backend installs
 (#49 on SQLite, #50 on PostgreSQL), and its reader-facing refusal is what #52
