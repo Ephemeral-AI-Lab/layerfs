@@ -36,6 +36,11 @@
 | Q5 | Reader behavior when PG swaps tables | **Superseded by C8/R2**: readers go through the `(catalog_id, incarnation)` session check → `StaleStore`, and read the new generation after reconnecting; table names are not versioned | Small: session/transaction entry check (shared with SQLite) | Cross-generation reads (no crash, but wrong data) |
 | Q6 | Does `store.compact` promise "reclaim pages" or "reorganize data" | **Split into two levels**: `compact(name)` = delete references + `reclaim_space` (cheap, may return 0); `compact(name, reorg)` = replacement (2× space) | Medium: two entry points + two reporting definitions | With a single level, even small reclamation pays 2× space; page reclamation alone means the docs over-promise |
 
+> **Q6 is answered together with §5.1** of `03-decision-record.md`, because they
+> decide the same thing: §5.1's "in-place deletion path" *is* Q6's level 1 on
+> PostgreSQL. If PostgreSQL keeps no in-place path, the two-level promise collapses
+> to one level there, and the docs must say so instead of promising two.
+
 > Sign-off: adopt the Q1/Q2/Q4/Q5 recommendations directly (small cost, controlled risk); Q3 is explicitly out of this release; Q6 needs the owner to sign off on the "commitment level", because it decides the documentation wording and capacity planning.
 
 ### 1.3 Reconciliation with the old `gc-spec.md`
