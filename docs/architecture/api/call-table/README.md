@@ -37,15 +37,15 @@ for the front ends ([`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs)).
  (parse.rs)          (layerfs-node)        (layerfs-python)
      |                   |  JSON text          |  JSON text
      | SdkValue          v                     v
-     |               layerfs_api::call_json(home, scope, name, args)
+     |               layerfs_api::call_json(home, scope, name, args, client)
      |                   |   (calls/text.rs: parse, then answer as
      v                   v    {value} or {refused})
- layerfs_api::call / call_scoped(home, scope, name, args, events)
+ layerfs_api::call / call_scoped(home, scope, name, args, events, client)
      |
      v
  dispatcher  calls/dispatch.rs  (layerfs-api)
    find --> check --> scope.apply --> home --> scope.owns
-     |
+     |       (when it ends: one line in <home>/trace/calls.jsonl, #659)
      v
  Call.run  (layerfs-api/src/<family>/<call>.rs)
      |
@@ -58,6 +58,7 @@ for the front ends ([`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs)).
      +--> sqlite::family::<call> /       store.*  (remove, push, pull,
           postgresql::connect::connect             disconnect: control)
      +--> backup::family::<call>         backup.*  (restore: control)
+     +--> layerfs_home::logs::<call>     logs.*
      |
      v
  route: in process | machine's worker | Sandbox daemon
@@ -89,7 +90,7 @@ Details: [Table](table.md) for kinds, keys, scopes and checks;
 
 | Rule | Enforced by |
 | --- | --- |
-| Every front end uses the same table and dispatcher. | The CLI calls `layerfs_api::call_scoped` ([`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs)); Node and Python call `call_json`, which calls the same `call_scoped` ([`calls/text.rs`](../../../../api/crates/layerfs-api/src/calls/text.rs)); the guest worker serves host operations, not table calls. |
+| Every front end uses the same table and dispatcher. | The CLI calls `layerfs_api::call_scoped` ([`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs)); Node and Python call `call_json`, which calls the same `call_scoped` ([`calls/text.rs`](../../../../api/crates/layerfs-api/src/calls/text.rs)); the guest worker serves host operations, not table calls, so each call writes one call log line, from its caller (#659). |
 | A call's name and arguments match across JS, Python and the CLI. | All three build from `Call` values: Node `table`, Python `TABLE` from `table_json`; the CLI parser and help read `layerfs_api::calls()`. |
 | One file per call under its family, and nothing else in `src/`. | `the_source_is_one_file_per_call_under_its_family` in [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) |
 | A call runs once; the dispatcher retries nothing. | [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) |

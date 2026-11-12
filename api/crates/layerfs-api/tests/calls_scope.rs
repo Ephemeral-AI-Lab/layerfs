@@ -43,8 +43,15 @@ fn call(
     name: &str,
     args: &[(&str, SdkValue)],
 ) -> Result<SdkValue, (String, String)> {
-    layerfs_api::call_scoped(Some(home), scope, name, map(args), &mut |_| {})
-        .map_err(|r| (r.code, r.message))
+    layerfs_api::call_scoped(
+        Some(home),
+        scope,
+        name,
+        map(args),
+        &mut |_| {},
+        layerfs_api::Client::Rust,
+    )
+    .map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {

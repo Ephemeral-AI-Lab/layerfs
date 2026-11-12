@@ -739,6 +739,7 @@ fn destination_and_argument_refusals_have_no_side_effects() {
             ("destination", t(&valid_dest.display().to_string())),
         ]),
         &mut |_| {},
+        layerfs_api::Client::Rust,
     )
     .unwrap_err();
     assert_eq!(scoped_err.code, "InvalidInput");
