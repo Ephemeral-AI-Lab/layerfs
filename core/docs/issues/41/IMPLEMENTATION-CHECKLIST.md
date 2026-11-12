@@ -27,11 +27,15 @@ Legend: 🔲 not started · ⏳ blocked on a decision · ✅ done
 ### #42 — Design finalization (§1.1, §1.2, §5, §6)
 
 - [ ] Every settled conclusion (§1.1, S1–S11) confirmed
-- [ ] Every open question (§1.2, Q1–Q6) answered; Q3 is out of this release
+- [ ] Every open question (§1.2, Q1–Q6) answered; Q3 is out of this release;
+      **Q6 is answered with §5.1 as one item** (see the next bullet)
 - [ ] **R1** signed (asked on [#50](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/50))
 - [ ] **Q1** signed (asked on [#44](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/44))
 - [ ] **C3** signed (asked on [#42](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/42))
-- [ ] §5.1 open item resolved: replacement+rename, or also an in-place path (`03-decision-record.md` §5.1/§5.1a)
+- [ ] **Q6 + §5.1 resolved together**: two commitment levels on SQLite; on
+      PostgreSQL the cheap level exists only if an in-place path is kept, which the
+      C3 sign-off already rules against (`03-decision-record.md` §5.1, §5.1a, §5.3)
+      — <https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/42#issuecomment-6818138560>
 - [ ] Contracts C1–C10 frozen; the split between shared and exclusive project tombstones stated (C6)
 - [ ] The "which history queries must filter on visibility" list enumerated (C6, C9)
 
@@ -90,7 +94,9 @@ Legend: 🔲 not started · ⏳ blocked on a decision · ✅ done
 
 - [ ] Store replacement per R1: **E** (two `ALTER SCHEMA RENAME` in one transaction) by default; **A'** only if S11 requires reads up
 - [ ] `catalog_incarnation` bumped at install; the C8 reader fence refuses stale sessions
-- [ ] §5.1 resolved first: replacement+rename, or also an in-place deletion path
+- [ ] Q6 + §5.1 resolved first (one item): replacement+rename, and therefore no
+      cheap `compact(name)` level on PostgreSQL — say so in the docs rather than
+      promising two levels
 - [ ] `pack` rows never updated or deleted (the trigger forbids it); old data leaves with `DROP SCHEMA … CASCADE`
 - [ ] `physical_shrink` reported as the `pg_relation_size` / `pg_total_relation_size` delta
 - [ ] Remote servers supported (not `Unsupported`); network-partition recovery tested
