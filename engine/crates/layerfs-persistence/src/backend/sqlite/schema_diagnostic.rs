@@ -111,6 +111,9 @@ pub(crate) fn type_checks(
                 "INTEGER" => "integer",
                 "TEXT" => "text",
                 "BLOB" => "blob",
+                // A STRICT table's `ANY` column (the change log's keys)
+                // declares no storage class to check.
+                "ANY" => continue,
                 _ => return Err(BackendError::Integrity),
             };
             let non_null: i64 = column.get(3)?;

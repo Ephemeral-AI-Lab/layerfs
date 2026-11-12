@@ -38,6 +38,7 @@ The SQLite backend.
  lineage: layer_lineage, commit_lineage, absorbed, reach
  other:   scope_allocator, binding_hint_block, file_digest,
           merge_operation, merge_record
+ export:  change_state, change_log
  Init:    init_operation, init_entry, init_host_file   (versions 42-44)
 ```
 
@@ -60,6 +61,7 @@ The SQLite backend.
 | `layer_lineage`, `commit_lineage`, `absorbed`, `reach` | see file | Ancestry without walking history | [`lineage.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/lineage.sql) |
 | `merge_operation`, `merge_record` | `operation`; `(operation, kind, key)` | One merge's spilled build records | [`merge_scratch.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/merge_scratch.sql) |
 | `file_digest` | `(digest, length)` | Saved file root by content digest, chunked files only (length at or above `small_file_threshold_bytes`) | [`file_digest.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/file_digest.sql) |
+| `change_state`, `change_log` | `id=1`; `seq` | The export cursor, and the key of every row written to the logged tables since the Store was marked as an export base ([Change export](#change-export)) | [`change_log.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/change_log.sql), [`change_log_units.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/change_log_units.sql) |
 | `init_*` | operation-prefixed | Init's acquisition working state | [`acquisition/schema.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/acquisition/schema.sql) |
 
 Every table is `STRICT`; history keys are `WITHOUT ROWID` blobs whose first
@@ -160,6 +162,35 @@ The import algorithm is in [Project Init: Import](../project-init/import.md).
 | `reclaim_space(pages)` | `1..=RECLAMATION_PAGE_LIMIT` (512) pages by `incremental_vacuum`, one short write; only Stores created with `auto_vacuum=2` | [`reclamation.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/reclamation.rs) |
 | `seal` | Sole session; see [Lifecycle: Seal](lifecycle.md#seal) | [`seal.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/seal.rs) |
 | `snapshot` | Destination must not exist; a busy source is `Busy`; a failed copy may leave a file for the caller to remove | [`snapshot.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/snapshot.rs) |
+
+## Change export
+
+```text
+ closed Store              live Store (writers continue)       offline replica
+   mark_base(path)           export_changes(path, cursor,        apply_changes(
+   -> base cursor              bundle) -> next cursor              replica, bundle)
+   copy = replica              one read snapshot, no writer        one transaction
+```
+
+Triggers on every physical and history table except `merge_*` and `init_*`
+(19 tables in layouts 37–38, 18 without `pack_unit`) log each inserted,
+updated or deleted row's key into `change_log`, in the single writer's commit
+order; `pack` and `pack_unit` log inserts only. They log only while
+`change_state` holds its row, so a Store that was never marked logs nothing.
+
+| Function | What it does | Source |
+| --- | --- | --- |
+| `mark_base(path, token)` | Starts a chain on an offline Store: records a fresh state and the current sequence and turns logging on; a copy of the closed file is a replica at the returned cursor | [`base.rs`](../../../../engine/crates/layerfs-persistence/src/replication/base.rs) |
+| `export_changes(path, after, bundle)` | Writes every row changed after `after`, at its current value, and the deleted keys into a new bundle file (SQLite, the logged tables' exact definitions); written under a temporary name and linked into place | [`export.rs`](../../../../engine/crates/layerfs-persistence/src/replication/export.rs) |
+| `apply_changes(replica, bundle)` | Checks the bundle's meta, starting state, digest and ending state, then installs it in one transaction with foreign keys checked at commit; rows it installs are not logged on the replica | [`apply.rs`](../../../../engine/crates/layerfs-persistence/src/replication/apply.rs) |
+
+Each bundle's ending state derives from its starting state and its digest, so
+a bundle applies only to the state it was exported from, and two replicas that
+diverge never share a later state. The digest detects damage and misordering;
+it is not a signature. `mark_base` and `apply_changes` checkpoint after they
+commit and return `NotCheckpointed` when another reader blocks it. A Store
+written before these tables gains them at its first writable open, as it does
+the lineage, merge and digest tables.
 
 ## Related
 
