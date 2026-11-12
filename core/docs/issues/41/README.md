@@ -36,7 +36,8 @@ removed; cite §5 rather than any local summary.
 - **02-operation-contracts.md** - Operation specifications
 - **03-decision-record.md** - R1 / Q1 / C3: scenarios, alternatives, decision basis;
   §5 lists the open items the decisions exposed (PostgreSQL rebuild-and-swap vs
-  in-place row deletion, and C3's scope), including §5.1a: the restored argument
+  in-place row deletion, and C3's scope; §5.3 records that the C3 sign-off already
+  constrains the answer to a confirm-or-reopen), including §5.1a: the restored argument
   for why in-place deletion was ruled out in the first place
 - **C8b-N3-C9-Resolution-Plan.md** - Deep dive on three critical issues
 - **IMPLEMENTATION-CHECKLIST.md** - Per-issue acceptance criteria, dependencies and

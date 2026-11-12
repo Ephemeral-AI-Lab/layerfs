@@ -398,3 +398,19 @@ Consequence for §5.1: if this argument is accepted, reading **(a) replacement +
 
 Whichever way 5.1 goes, it lands in two places: this section (the decision), and
 the affected issue — #50 for the compact path, #42 for C3's scope.
+
+**The space of answers is already constrained**, and the constraint is on the
+record: the C3 sign-off asks the owner to confirm that C3 binds a future
+online/in-place sweep only, "since v2 replaces a whole file (SQLite) or a whole
+schema (PostgreSQL, R1-E) and never deletes object rows" — and to name the place
+if v2 needs per-row deletion somewhere:
+
+<https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/42#issuecomment-6818138560>
+
+So 5.1 is not an open design question today. It resolves one of two ways:
+
+- **confirmed** — nothing in v2 deletes object rows, so §7.3's delete-order bullet
+  and `backend_reusable` for PostgreSQL go, and reading (a) is what the spec says;
+- **reopened** — an owner names a v2 path that deletes rows; then reading (b) exists
+  and its cost is the one stated in 5.1a: the `pack` immutability trigger and the
+  lock-free read premise both have to be renegotiated.
