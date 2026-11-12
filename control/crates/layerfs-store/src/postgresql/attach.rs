@@ -34,6 +34,10 @@ pub fn postgresql_record(home: &Path, name: &str) -> Result<StoreRecord> {
     }
 }
 
+/// How [`check`] begins the refusal of a server that answered but holds
+/// another Store (or none): reached, so no reach hint applies.
+pub const ANOTHER_STORE: &str = "the PostgreSQL server holds another Store than";
+
 /// The check of one machine's connection, run on the side that dials it:
 /// the schema at `postgresql` must hold Store `record`'s binding, and the
 /// role must have every privilege a Sandbox's writes need there. Answers
@@ -53,15 +57,7 @@ pub fn check(record: &StoreRecord, postgresql: &PgSelection) -> Result<SdkValue>
                     E::Failed(_) => refused("Failed", error.to_string()),
                 }
             })?;
-        let another = || {
-            refused(
-                "Unavailable",
-                format!(
-                    "the PostgreSQL server holds another Store than {}",
-                    record.name()
-                ),
-            )
-        };
+        let another = || refused("Unavailable", format!("{ANOTHER_STORE} {}", record.name()));
         let denied = |first: &str| {
             refused(
                 "Denied",

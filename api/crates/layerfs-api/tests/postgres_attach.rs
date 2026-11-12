@@ -245,6 +245,8 @@ fn attach_checks_the_machine_s_connection_before_it_records_it() {
     .unwrap_err();
     assert_eq!(code, "Unavailable", "{message}");
     assert!(message.contains("holds another Store than pg"), "{message}");
+    // the server answered: no "cannot reach" and no reach hint
+    assert!(!message.contains("cannot reach"), "{message}");
     assert_eq!(record_text(&home, "pg"), before);
     // a role that may not write is refused naming what it lacks
     if let (Ok(limited), Ok(_)) = (
