@@ -694,3 +694,486 @@ let gc_ops: Arc<dyn HistoryCatalogGC> = catalog.clone();
   - 测试（Mock）← 不需要 GC
 
 **结果:** 8 个修改点 → 2 个修改点，新增 GC 方法成本从 Θ(n) 变为 O(1)
+
+---
+
+# C8b 深度设计指导：Write Fence 实现
+
+## 问题根本原因
+
+### 静默数据丢失的机制
+
+```
+Timeline:
+  T1: Writer A 打开 Store fd → generation = 5
+      writer_gen_at_acquire = 5
+
+  T2: Compact 执行
+      - 创建新 Store 文件
+      - 准备 rename 交换
+      - catalog_incarnation 从 5 → 6
+
+  T3: Rename 完成
+      - 旧 inode (dev=1, ino=100) 被 retire（可能删除或隐藏）
+      - 新 inode (dev=1, ino=101) 变成活跃
+
+  T4: Writer A 继续写入
+      - 在旧 fd 上执行 write()
+      - 旧 inode 已 retire，数据落入虚空
+      - 新 Store 无法观测这些写入 ❌ SILENT DATA LOSS
+      - 第二个 Writer B 的新 Store 看不到 A 的数据
+```
+
+### 为什么现有 inode 校验不够
+
+```rust
+// 现有的 install_check（两道关的第二关）
+pub fn install_check(dev: u64, ino: u64, expected: (u64, u64)) -> Result<()> {
+    let actual = get_inode();
+    if actual != expected {
+        Err(StoreError::Conflict("inode mismatch"))
+    }
+}
+```
+
+**问题:** 这个检查发生在 **install 完成后**，但 Writer A 可能在 install 前已经取得了 write lock（在旧代际）
+
+```
+install_check 检查点：
+  ├─ 检查新 inode 正确 ✅
+  └─ 但无法阻止旧代际的 write lock ❌
+```
+
+## 代际围栏（Incarnation Fence）解决方案
+
+### 核心机制
+
+```
+Store 追踪代际：
+  incarnation: u64  ← 每次 compact install 时递增
+
+Write 路径：
+  1. Writer 取得 write lock
+     - 记录当前 incarnation
+     - writer_gen_at_acquire = 5
+
+  2. Writer 执行写入
+     - 在 admission check 时验证
+     - if writer_gen_at_acquire < current_incarnation:
+         return Err(Conflict)
+     - 否则允许写入
+
+  3. Compact 执行
+     - incarnation 从 5 → 6
+     - 所有旧代际的 writer lock 失效
+
+  4. 旧代际的 write 被拒
+     - Conflict 错误返回给 writer
+     - 数据不落地，避免静默丢失 ✅
+```
+
+### 实现的两道关
+
+```
+Write 流程：
+
+第一关（admission）- C8b 新增
+  lock → is_valid_for_compact()
+       ├─ 读取当前 incarnation
+       └─ 校验 writer_gen_at_acquire vs current
+       
+第二关（install）- 现有，继续保留
+  swap → install_check()
+       └─ 校验新 inode 正确
+
+两道关都过才能写入 ✅
+```
+
+### 代码位置清单
+
+```
+需要改动的文件：
+
+1. store/identity.rs
+   - 添加 StoreGeneration 结构
+   - 保存 incarnation 和 inode
+
+2. store/sqlite/writer_admission.rs (新建)
+   - writer_admission_check() 逻辑
+   - 检查 writer_gen vs current_incarnation
+
+3. backend/sqlite/lifecycle/write_path.rs
+   - 修改 write 入口
+   - 调用 writer_admission_check()
+
+4. persistence/history/catalog.rs
+   - 在 compact install 时递增 incarnation
+   - incarnation += 1
+
+5. Tests
+   - concurrent_compact_and_write_test
+   - verify Conflict 被正确触发
+```
+
+## 实现顺序（5步）
+
+### Step 1: 定义 StoreGeneration 结构
+
+```rust
+// store/identity.rs
+
+pub struct StoreGeneration {
+    /// Current incarnation number
+    pub incarnation: u64,
+    
+    /// Current inode of Store file
+    pub file_inode: (u32, u64),  // (dev, ino)
+    
+    /// Last successful write generation
+    pub last_writer_generation: u64,
+    
+    /// Timestamp of last incarnation bump
+    pub bumped_at: SystemTime,
+}
+
+impl StoreGeneration {
+    pub fn new() -> Self {
+        Self {
+            incarnation: 1,
+            file_inode: (0, 0),
+            last_writer_generation: 1,
+            bumped_at: SystemTime::now(),
+        }
+    }
+}
+```
+
+### Step 2: 新建 writer_admission.rs
+
+```rust
+// store/sqlite/writer_admission.rs
+
+pub fn writer_admission_check(
+    store_id: &StoreId,
+    current_incarnation: u64,
+    writer_gen_at_acquire: u64,
+) -> Result<(), StoreError> {
+    if writer_gen_at_acquire < current_incarnation {
+        // Writer acquired at old incarnation
+        // Compact has bumped incarnation since then
+        return Err(StoreError::Conflict(format!(
+            "writer incarnation mismatch: acquired {}, current {}",
+            writer_gen_at_acquire, current_incarnation
+        )));
+    }
+    Ok(())
+}
+```
+
+### Step 3: 修改 write_path.rs
+
+```rust
+// backend/sqlite/lifecycle/write_path.rs
+
+pub fn execute_write(
+    store: &Store,
+    writer_gen: u64,
+    operation: WriteOp,
+) -> Result<()> {
+    // 第一关：admission check
+    writer_admission_check(
+        &store.id,
+        store.generation.incarnation,
+        writer_gen,
+    )?;
+    
+    // 写入操作
+    store.conn.execute(&operation.sql)?;
+    
+    // 第二关：install check 在 commit 时执行（现有）
+    Ok(())
+}
+```
+
+### Step 4: 修改 catalog.rs
+
+```rust
+// persistence/history/catalog.rs
+
+pub fn install_new_store(
+    new_inode: (u32, u64),
+) -> Result<()> {
+    // 第二关：install_check（现有）
+    install_check(new_inode)?;
+    
+    // 第一关增强：递增 incarnation
+    let generation = self.store.generation.clone();
+    generation.incarnation += 1;  // 5 → 6
+    generation.file_inode = new_inode;
+    generation.bumped_at = SystemTime::now();
+    
+    // 保存到 Store 元数据
+    self.store.set_generation(generation)?;
+    
+    Ok(())
+}
+```
+
+### Step 5: 编写并发测试
+
+```rust
+// tests/concurrent_compact_and_write_test.rs
+
+#[test]
+fn test_concurrent_compact_and_preswap_write() {
+    let store = Store::new_memory();
+    let writer_gen_at_acquire = store.generation.incarnation;
+    
+    // 启动 compact
+    let compact_thread = spawn(|| {
+        store.compact();  // incarnation 5 → 6
+    });
+    
+    // Writer 在 compact 进行中尝试写入
+    let write_result = spawn(move || {
+        // 这个 write 是在旧代际 5 取得的 lock
+        store.execute_write(writer_gen_at_acquire, operation)
+    });
+    
+    compact_thread.join().unwrap();
+    
+    // 预期：Conflict 错误
+    assert_eq!(write_result.join().unwrap().err(), 
+               Some(StoreError::Conflict(...)));
+}
+```
+
+## 验证清单
+
+- [ ] StoreGeneration 结构正确定义
+- [ ] writer_admission_check() 逻辑正确
+- [ ] write_path.rs 调用 admission check
+- [ ] catalog.rs 在 install 时递增 incarnation
+- [ ] 并发测试：compact + preswap write → Conflict ✅
+- [ ] 并发测试：compact + postswap write → 成功 ✅
+- [ ] 性能：admission check 不超过 1μs
+- [ ] 错误消息清晰，便于调试
+
+---
+
+# N3 深度设计指导：Schema 软删除
+
+## 问题根本原因
+
+### 无可见性列的限制
+
+```
+Current schema (v3.5):
+  layer_stack(id, stack_name, ...)
+  branch(id, branch_name, layer_stack_id, ...)
+  
+问题：
+  - 删除 Project → DELETE layer_stack row
+  - 但如果有外键引用，DELETE 失败 ❌
+  - 或删除后，Name 无法重用（唯一约束冲突）
+```
+
+### 软删除的需求
+
+```
+需求 1: Name 重用（N3）
+  问题：删除 project_A，后面想重新创建同名项目
+  当前：DELETE 后 name 可重用 ✓
+  但：如果 DELETE 失败（外键锁定），name 被永久占用 ✗
+
+需求 2: 保留历史
+  问题：Branch/Project 删除后，其历史仍需访问
+  当前：DELETE 后无法访问 ✗
+  目标：标记为 deleted，但保留行 ✓
+
+需求 3: GC 清理
+  问题：GC 需要区分「活跃」vs「已删」
+  当前：没有可见性标记 ✗
+  目标：added deleted_ms 列用于 GC ✓
+```
+
+## Schema 迁移方案（v3.5 → v3.6）
+
+### 新增的可见性列
+
+```sql
+-- 新增列（NULL = 活跃，非 NULL = 已删）
+ALTER TABLE layer_stack ADD COLUMN deleted_ms BIGINT DEFAULT NULL;
+ALTER TABLE branch ADD COLUMN removed_ms BIGINT DEFAULT NULL;
+
+-- 索引优化（部分索引，只包含活跃行）
+CREATE UNIQUE INDEX idx_stack_name_active 
+  ON layer_stack(name) WHERE deleted_ms IS NULL;
+
+CREATE UNIQUE INDEX idx_branch_name_active 
+  ON branch(branch_name, layer_stack_id) WHERE removed_ms IS NULL;
+```
+
+### 查询的隐式条件
+
+```rust
+// 所有查询自动过滤已删行
+
+fn list_projects(&mut self, stack_id: ...) -> Result<Vec<LayerStack>> {
+    self.conn.query("
+        SELECT * FROM layer_stack 
+        WHERE id = ? 
+          AND deleted_ms IS NULL  ← 自动过滤
+    ", ...)
+}
+
+fn list_branches(&mut self, stack_id: ...) -> Result<Vec<Branch>> {
+    self.conn.query("
+        SELECT * FROM branch 
+        WHERE layer_stack_id = ? 
+          AND removed_ms IS NULL  ← 自动过滤
+    ", ...)
+}
+```
+
+### 迁移流程
+
+```
+v3.5 Database:
+  layer_stack(id, name, ...)
+  branch(id, name, stack_id, ...)
+  
+On-open migration:
+  1. 检查 schema 版本
+  2. 如果 v3.5：
+     ├─ ALTER TABLE 添加 deleted_ms / removed_ms
+     ├─ 创建部分索引
+     ├─ 设置 schema_version = 3.6
+     └─ 提交
+
+  3. 后续连接自动使用新 schema ✓
+
+v3.6 Database:
+  layer_stack(id, name, ..., deleted_ms)
+  branch(id, name, stack_id, ..., removed_ms)
+```
+
+## 实现步骤（4步）
+
+### Step 1: 定义迁移脚本
+
+```rust
+// persistence/backend/sqlite/migrations.rs
+
+pub fn migrate_3_5_to_3_6(conn: &mut Connection) -> Result<()> {
+    conn.execute_batch("
+        -- 添加软删除列
+        ALTER TABLE layer_stack ADD COLUMN deleted_ms BIGINT DEFAULT NULL;
+        ALTER TABLE branch ADD COLUMN removed_ms BIGINT DEFAULT NULL;
+        
+        -- 创建部分索引（只包含活跃行）
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_stack_name_active 
+          ON layer_stack(name) WHERE deleted_ms IS NULL;
+        
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_branch_name_active 
+          ON branch(branch_name, layer_stack_id) WHERE removed_ms IS NULL;
+        
+        -- 更新 schema 版本
+        PRAGMA user_version = 3.6;
+    ")?;
+    
+    Ok(())
+}
+```
+
+### Step 2: 修改所有查询
+
+```rust
+// persistence/history/catalog.rs
+
+impl HistoryCatalog for SqliteCatalog {
+    fn list_projects(&mut self, stack_id: &LayerStackId) -> Result<Vec<LayerStack>> {
+        self.conn.query(
+            "SELECT * FROM layer_stack WHERE id = ? AND deleted_ms IS NULL",
+            [stack_id],
+        )
+    }
+    
+    fn list_branches(&mut self, stack_id: &LayerStackId) -> Result<Vec<Branch>> {
+        self.conn.query(
+            "SELECT * FROM branch WHERE layer_stack_id = ? AND removed_ms IS NULL",
+            [stack_id],
+        )
+    }
+}
+```
+
+### Step 3: 实现软删除操作
+
+```rust
+// persistence/history/catalog_gc.rs
+
+impl HistoryCatalogGC for SqliteCatalog {
+    fn mark_project_deleted(&mut self, stack_id: &LayerStackId, deleted_ms: i64) 
+        -> Result<()> {
+        // 软删除：标记 deleted_ms，而不是 DELETE
+        self.conn.execute(
+            "UPDATE layer_stack SET deleted_ms = ? WHERE id = ?",
+            (deleted_ms, stack_id),
+        )?;
+        Ok(())
+    }
+    
+    fn mark_branch_removed(&mut self, branch_id: &BranchId, removed_ms: i64) 
+        -> Result<()> {
+        self.conn.execute(
+            "UPDATE branch SET removed_ms = ? WHERE id = ?",
+            (removed_ms, branch_id),
+        )?;
+        Ok(())
+    }
+}
+```
+
+### Step 4: 验证名称重用
+
+```rust
+// tests/soft_delete_name_reuse_test.rs
+
+#[test]
+fn test_name_reuse_after_soft_delete() {
+    let mut catalog = SqliteCatalog::new_memory();
+    
+    // 1. 创建 project_A
+    let stack_a = catalog.create_project("project_A").unwrap();
+    
+    // 2. 软删除 project_A
+    let deleted_ms = current_timestamp_ms();
+    catalog.mark_project_deleted(&stack_a.id, deleted_ms).unwrap();
+    
+    // 3. 验证不再可见
+    let projects = catalog.list_projects().unwrap();
+    assert!(!projects.iter().any(|p| p.name == "project_A"));
+    
+    // 4. 重新创建同名项目 ✓
+    let stack_b = catalog.create_project("project_A").unwrap();
+    assert_ne!(stack_a.id, stack_b.id);
+    
+    // 5. 验证新项目可见，旧项目仍不可见
+    let projects = catalog.list_projects().unwrap();
+    assert_eq!(projects.len(), 1);
+    assert_eq!(projects[0].id, stack_b.id);
+}
+```
+
+## 验证清单
+
+- [ ] 迁移脚本正确创建列和索引
+- [ ] 所有查询添加 deleted_ms / removed_ms 过滤
+- [ ] 部分索引有效（EXPLAIN QUERY PLAN）
+- [ ] 软删除操作正确更新时间戳
+- [ ] 名称重用测试通过
+- [ ] 性能：软删除不超过 100ms
+- [ ] PostgreSQL 等效实现完成
+- [ ] 数据库升级不丢失现有数据
+
