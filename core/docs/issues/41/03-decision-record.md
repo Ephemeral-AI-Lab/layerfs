@@ -317,3 +317,52 @@ rather than a matter of taste:
 2. **The rejected option is kept with its condition.** A' is the answer if S11
    becomes a read-available SLO; B is the answer if name reuse becomes a
    requirement. Neither is adopted now, and neither is lost.
+
+---
+
+## 5. Open items this record surfaces
+
+Deciding R1, Q1 and C3 exposed places where the spec text still says two things
+at once. They are listed here rather than resolved silently, because #50 cannot
+implement around them without a choice.
+
+### 5.1 PostgreSQL: rebuild-and-swap vs in-place row deletion
+
+The spec's §7.3 describes row deletion order —
+
+> "先删引用（`object_location` 等），后删 payload；中间态即 `backend_reusable`，单独上报"
+
+— which is **in-place deletion**, while R1-E builds a replacement schema, copies
+retained rows and swaps names. The swap path never deletes an object row, so
+there is no "references first, payload second" intermediate state, and
+`backend_reusable` on PostgreSQL would be unobservable (it would have to report
+0, with `physical_shrink` carrying the whole story).
+
+Two coherent readings, one of which must be chosen:
+
+- **(a) PostgreSQL compacts by replacement + rename** (consistent with R1-E).
+  §7.3's delete-order bullet is removed, `backend_reusable` reports 0 for
+  PostgreSQL with the reason stated, and physical reclamation is measured as the
+  `pg_relation_size` / `pg_total_relation_size` delta after `DROP SCHEMA`.
+- **(b) PostgreSQL keeps an in-place deletion path** in addition. §7.3 stands,
+  but it is a second compact entry point with its own admission, its own
+  interruption semantics and its own report, distinct from the R1-E swap.
+
+Consequence for C3: §5 C3 names "（PostgreSQL、未来的在线 GC）", i.e. it assumes
+PostgreSQL deletes rows. Under (a) C3 binds only a future online sweep and is a
+forward-looking contract; under (b) it becomes a v2 deliverable. The C3 sign-off
+request carries this as its "scope question" box.
+
+### 5.2 What is *not* open
+
+- `pack` immutability on PostgreSQL is settled: the trigger refuses `UPDATE` and
+  `DELETE`, so reclamation cannot delete pack rows and "new tables + new
+  triggers" is the only legal path (`sql/postgresql/schema.sql:25-28`).
+- Physical reclamation is measured the same way under both readings —
+  `pg_relation_size` / `pg_total_relation_size` before and after — so the metric
+  does not depend on 5.1.
+
+### 5.3 Recording the answer
+
+Whichever way 5.1 goes, it lands in two places: this section (the decision), and
+the affected issue — #50 for the compact path, #42 for C3's scope.
