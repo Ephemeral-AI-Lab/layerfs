@@ -252,9 +252,14 @@ pub fn create(host: &Host, named: Option<&str>) -> Outcome {
 /// `sandbox.close(sandbox, { force })`: stops Sandbox `sandbox` now, under
 /// its folder's guard. Refused `NoSuchSandbox` when nothing is recorded,
 /// and, unless `force`, `MountsActive` while a Workspace is mounted in it.
-/// Forced (O31), it stops the Sandbox through its backend anyway and
-/// answers each Workspace it could not drain as `Unknown` (`unknown`: their
-/// paths): their uncommitted changes and processes end with the Sandbox.
+/// A Workspace whose forced unmount left Retained custody whose one detach
+/// the kernel refused `EBUSY` is re-attempted as a clean detach first; while
+/// its holder is still alive the close is refused `Busy` naming those
+/// Workspaces instead of deleting the Sandbox data plane (which is
+/// [`destroy`]'s explicit job). Forced (O31), it stops the Sandbox through
+/// its backend anyway and answers each Workspace it could not drain as
+/// `Unknown` (`unknown`: their paths): their uncommitted changes and
+/// processes end with the Sandbox.
 /// `held` names Workspaces the caller records (a Sandbox it reaches
 /// directly, #535 G4), counted as mounted.
 /// Stop, then delete, each attempted once: a failed stop is not followed by
@@ -286,13 +291,36 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     // its running commands (D-10): `Busy`, or with `force` cancelled first
     let unreached = &mut crate::exec::cancel::unreached;
     crate::exec::cancel::settle(&state.directory, &id, None, force, unreached)?;
-    let recoverable = crate::unmount_guard::check_all(&state)?;
+    let retained = crate::unmount_guard::check_all(&state)?;
+    let recoverable = retained
+        .iter()
+        .map(|entry| entry.path.clone())
+        .collect::<Vec<_>>();
     if !force {
         // A daemon that refuses all control connections must refuse this close
         // with its exact cause in bounded time, not hold the `op` intent while
         // the SDK's ordinary 60 s admission wait runs out. One shared deadline
         // bounds all Workspace probes; N Workspaces cannot multiply it.
         crate::files::refresh_except_within(&state, &recoverable, CLOSE_STATUS_WAIT)?;
+        // A Retained unmount whose forced detach the kernel refused `EBUSY` is
+        // re-attempted as a clean detach first; a holder still alive refuses the
+        // close rather than deleting the Sandbox data plane (`sandbox.destroy`
+        // is the explicit data-plane-only delete).
+        let still_held = crate::unmount_guard::retry_held(&state, &retained)?;
+        if !still_held.is_empty() {
+            let held = still_held.join(", ");
+            let count = still_held.len();
+            return Err(SdkRefusal {
+                code: "Busy".to_owned(),
+                message: format!(
+                    "Sandbox {id} still holds {count} Workspace(s) whose unmount a live holder refuses: {held}; wait for the holder to exit, then close again"
+                ),
+                detail: SdkValue::map([(
+                    "workspaces",
+                    SdkValue::List(still_held.into_iter().map(SdkValue::Text).collect()),
+                )]),
+            });
+        }
     }
     // `force` is the recovery path: it skips the daemon status probe and stops
     // the runtime anyway, reporting every Workspace it could not drain as
