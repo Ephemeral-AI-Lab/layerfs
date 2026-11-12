@@ -146,6 +146,7 @@ mod machines {
         let derived = MachineDerived {
             live: Some(("stopped".into(), Some("its probe did not answer".into()))),
             stores: vec!["shop".into()],
+            postgresql: vec!["team".into()],
             sandboxes: vec!["t1".into()],
         };
         let shown = record.to_sdk(View::List, &derived).unwrap();
@@ -161,6 +162,7 @@ mod machines {
                 "memory",
                 "disk",
                 "stores",
+                "postgresql",
                 "sandboxes",
                 "image",
                 "error"
@@ -171,6 +173,7 @@ mod machines {
         assert_eq!(shown.get_text("error"), Some("its probe did not answer"));
         assert_eq!(shown.get("cpus"), Some(&SdkValue::Int(2)));
         assert_eq!(print(shown.get("stores").unwrap()), r#"["shop"]"#);
+        assert_eq!(print(shown.get("postgresql").unwrap()), r#"["team"]"#);
         assert_eq!(print(shown.get("sandboxes").unwrap()), r#"["t1"]"#);
         assert_eq!(record.state(Some("missing")).unwrap(), "missing");
         assert_eq!(record.state(None).unwrap(), "running");
@@ -202,6 +205,7 @@ mod machines {
                 "memory",
                 "disk",
                 "stores",
+                "postgresql",
                 "sandboxes",
                 "docker"
             ]

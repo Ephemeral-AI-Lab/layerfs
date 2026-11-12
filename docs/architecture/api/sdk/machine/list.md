@@ -48,7 +48,7 @@ None. The machine calls take no paging: every machine is in one answer.
     { name, platform, backend,
       supports: { sqlite, postgresql_sandbox, reason },
       state, cpus, memory, disk,
-      stores: [name], sandboxes: [name],
+      stores: [name], postgresql: [name], sandboxes: [name],
       image?, docker?, wsl?, daemon?, error?,
       ssh?, host?, vm_name? }
 ] }
@@ -63,6 +63,7 @@ None. The machine calls take no paging: every machine is in one answer.
 | `state` | text | see the state table below |
 | `cpus`, `memory`, `disk` | int or null | the recorded size; bytes for `memory` and `disk`; null on a built-in machine |
 | `stores` | list | the sqlite Stores on this machine ([`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `stores_on`) |
+| `postgresql` | list | the PostgreSQL Stores attached to this machine ([store.attach](../store/attach.md); `postgresql_on`) |
 | `sandboxes` | list | the Sandboxes recorded on it (`sandboxes_on`) |
 | `image`, `docker`, `wsl`, `daemon` | various | present only when the record has them |
 | `error` | text | the probe's reason when the state is `unknown`; for a removed platform the removal (``platform `ssh` was removed in LayerFS 2.0``); else a failed create's error |

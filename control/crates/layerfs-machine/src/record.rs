@@ -201,6 +201,8 @@ pub struct MachineDerived {
     pub live: Option<(String, Option<String>)>,
     /// The sqlite Stores on it.
     pub stores: Vec<String>,
+    /// The PostgreSQL Stores attached to it.
+    pub postgresql: Vec<String>,
     /// The Sandboxes recorded on it.
     pub sandboxes: Vec<String>,
 }
@@ -253,7 +255,8 @@ impl MachineRecord {
 
     /// The machine as `machine.get`, each `machine.list` item, `start`,
     /// `stop`, `update` and `create` show it: name, platform, backend,
-    /// `supports`, state, size, Stores and Sandboxes, then the settings it
+    /// `supports`, state, size, sqlite Stores, the PostgreSQL Stores
+    /// attached to it and Sandboxes, then the settings it
     /// has (`image`, `docker`, `wsl`, `error`, and a removed platform's
     /// `ssh`, `host` or `vm_name`). A machine of a removed
     /// platform has backend `-`, supports nothing, state `unsupported` and
@@ -299,6 +302,7 @@ impl MachineRecord {
             ("memory", self.field("memory").cloned().unwrap_or_default()),
             ("disk", self.field("disk").cloned().unwrap_or_default()),
             ("stores", list(&derived.stores)),
+            ("postgresql", list(&derived.postgresql)),
             ("sandboxes", list(&derived.sandboxes)),
         ];
         for extra in ["image", "os_image", "docker", "wsl", "daemon", "error"] {

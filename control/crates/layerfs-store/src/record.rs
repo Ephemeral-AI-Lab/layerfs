@@ -46,6 +46,46 @@ pub struct PgServer {
     pub synchronous_commit: Option<String>,
 }
 
+/// One machine a PostgreSQL Store is attached to, its record's
+/// `machines.<machine>`: the URL (no password) and the password's reference
+/// that machine dials when they are not the Store's, and its last check
+/// that passed (`{ at, server_version, latency_ms }`). No `Debug`, as with
+/// every value that names a password reference.
+#[derive(Clone, Default, PartialEq)]
+pub struct Attachment {
+    /// The URL the machine dials, when not the Store's.
+    pub url: Option<String>,
+    /// The password's reference, when not the Store's.
+    pub password: Option<String>,
+    /// The last check that passed, as recorded.
+    pub checked: Option<SdkValue>,
+}
+
+impl Attachment {
+    fn from_record(value: &SdkValue) -> Self {
+        Self {
+            url: value.get_text("url").map(str::to_owned),
+            password: value.get_text("password").map(str::to_owned),
+            checked: value.get("checked").cloned(),
+        }
+    }
+
+    /// The attachment as its record holds it: only the fields it has.
+    pub fn to_record(&self) -> SdkValue {
+        let mut fields = Vec::new();
+        if let Some(url) = &self.url {
+            fields.push(("url".to_owned(), SdkValue::text(url)));
+        }
+        if let Some(password) = &self.password {
+            fields.push(("password".to_owned(), SdkValue::text(password)));
+        }
+        if let Some(checked) = &self.checked {
+            fields.push(("checked".to_owned(), checked.clone()));
+        }
+        SdkValue::Map(fields)
+    }
+}
+
 /// One Store, decided once from `store/<name>/record.json`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StoreRef {
@@ -299,6 +339,50 @@ impl StoreRecord {
             })
     }
 
+    /// The machines a PostgreSQL Store is attached to, in record order. A
+    /// record without `machines` (written before attachments) is attached
+    /// to `native` alone, with no check recorded.
+    pub fn attachments(&self) -> Vec<(String, Attachment)> {
+        match self.fields.get("machines") {
+            Some(SdkValue::Map(machines)) => machines
+                .iter()
+                .map(|(machine, value)| (machine.clone(), Attachment::from_record(value)))
+                .collect(),
+            _ => vec![("native".to_owned(), Attachment::default())],
+        }
+    }
+
+    /// The Store's attachment to `machine`, if it is attached there.
+    pub fn attachment(&self, machine: &str) -> Option<Attachment> {
+        let mut found = self.attachments().into_iter();
+        found.find(|(m, _)| m == machine).map(|(_, a)| a)
+    }
+
+    /// The record with its attachment to `machine` set to `attachment`.
+    pub fn with_attachment(self, machine: &str, attachment: &Attachment) -> Self {
+        let mut machines: Vec<(String, SdkValue)> = self
+            .attachments()
+            .into_iter()
+            .map(|(m, a)| (m, a.to_record()))
+            .collect();
+        match machines.iter_mut().find(|(m, _)| m == machine) {
+            Some(slot) => slot.1 = attachment.to_record(),
+            None => machines.push((machine.to_owned(), attachment.to_record())),
+        }
+        self.with("machines", SdkValue::Map(machines))
+    }
+
+    /// The record without an attachment to `machine`.
+    pub fn without_attachment(self, machine: &str) -> Self {
+        let machines = self
+            .attachments()
+            .into_iter()
+            .filter(|(m, _)| m != machine)
+            .map(|(m, a)| (m, a.to_record()))
+            .collect();
+        self.with("machines", SdkValue::Map(machines))
+    }
+
     fn raw_links(&self) -> &[(String, SdkValue)] {
         match self.fields.get("backups") {
             Some(SdkValue::Map(links)) => links,
@@ -379,6 +463,13 @@ impl StoreRecord {
         }
         out.retain(|(field, _)| field != "name");
         out.insert(0, ("name".to_owned(), SdkValue::text(&self.name)));
+        // a PostgreSQL record written before attachments shows the one it has
+        let postgresql = matches!(self.parsed, Ok(StoreRef::Postgres { .. }));
+        if postgresql && !out.iter().any(|(field, _)| field == "machines") {
+            let machines = self.attachments().into_iter();
+            let machines = machines.map(|(m, a)| (m, a.to_record())).collect();
+            out.push(("machines".to_owned(), SdkValue::Map(machines)));
+        }
         let names = derived.projects.iter().map(SdkValue::text).collect();
         out.push(("projects".to_owned(), SdkValue::List(names)));
         if let (View::List, Some(state)) = (view, derived.state) {
@@ -433,6 +524,10 @@ impl StoreRecord {
             ("schema", SdkValue::text(schema)),
             ("synchronous_commit", SdkValue::text(synchronous_commit)),
             ("created", SdkValue::Int(home::now_ms())),
+            (
+                "machines",
+                SdkValue::map([("native", SdkValue::Map(Vec::new()))]),
+            ),
         ]);
         let record = Self::from_record(name, fields);
         match password {
@@ -463,6 +558,24 @@ pub fn url(record: &StoreRecord) -> Result<String> {
         )
     })?;
     layerfs_home::secrets::with_password(url, record.text("password"))
+}
+
+/// The full URL machine `machine` dials for PostgreSQL Store `record`, its
+/// password resolved now: its attachment's URL and password reference
+/// where it has its own, else the Store's.
+pub fn url_on(record: &StoreRecord, machine: &str) -> Result<String> {
+    let attachment = record.attachment(machine).unwrap_or_default();
+    let url = match attachment.url.as_deref().or(record.text("url")) {
+        Some(url) => url,
+        None => {
+            return Err(refused(
+                "Failed",
+                format!("PostgreSQL Store {}'s record has no url", record.name()),
+            ))
+        }
+    };
+    let password = attachment.password.as_deref().or(record.text("password"));
+    layerfs_home::secrets::with_password(url, password)
 }
 
 /// Every Store record, by name.
