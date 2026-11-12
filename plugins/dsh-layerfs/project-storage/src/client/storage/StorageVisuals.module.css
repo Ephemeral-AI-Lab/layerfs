@@ -1,0 +1,560 @@
+/* A project's storage: the staged flow (LayerFS Connect's staged-flow part of
+   storage.css), the Store share, the growth line and the per-save bars. The
+   measurement tones are component-local custom properties rebound to theme
+   aliases; hover sits under (hover:hover) and every animation settles under
+   prefers-reduced-motion. */
+
+.nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard,
+.stagedFlow {
+  --storage-referenced: var(--dsw-alias-state-business-tertiary);
+  --storage-canonical: var(--dsw-alias-state-business-primary);
+  --storage-stored: var(--dsw-alias-state-done-primary);
+  --storage-metadata: var(--dsw-alias-state-warn-primary);
+  --storage-overhead: var(--dsw-alias-state-warn-primary);
+  --storage-free: var(--dsw-alias-border-l3);
+  --storage-canonical-ink: var(--dsw-alias-label-primary-bluish);
+  --storage-stored-ink: var(--dsw-alias-state-done-primary);
+  --storage-tint: color-mix(in srgb, var(--dsw-alias-state-business-primary) 5%, transparent);
+  --storage-stored-tint: color-mix(in srgb, var(--dsw-alias-state-done-primary) 6%, transparent);
+}
+
+.note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.note strong {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+.heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.dashboard :is(button, [role='button']):focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+/* ---------- headline ---------- */
+
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.hero strong {
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.hero span {
+  font-size: 13px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---------- panels ---------- */
+
+.panel {
+  min-width: 0;
+  padding: 20px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-base);
+}
+
+.panelHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.panelHead h3 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.panelHead > span {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+/* ---------- progress ---------- */
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--dsw-radius-lg);
+  background: var(--storage-tint);
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.progress > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--dsw-alias-border-l2);
+}
+
+.track > span {
+  display: block;
+  height: 100%;
+  background: var(--storage-canonical);
+  transition: width 400ms ease-out;
+}
+
+/* ---------- share of the Store ---------- */
+
+.share {
+  display: flex;
+  height: 12px;
+  margin: 14px 0 10px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--dsw-alias-border-l2);
+}
+
+.share > span {
+  height: 100%;
+  transform-origin: left;
+  animation: revealX 800ms ease-out both;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.legend i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 2px;
+}
+
+.legend b {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+/* ---------- facts ---------- */
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.fact {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.fact > span {
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.fact > strong {
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- growth line ---------- */
+
+.growth {
+  display: block;
+  width: 100%;
+  height: 96px;
+  margin-top: 14px;
+  overflow: visible;
+}
+
+.growthLine {
+  animation: draw 1200ms ease-out both;
+  animation-delay: 300ms;
+}
+
+.growthArea {
+  animation: fadeIn 900ms ease-out both;
+  animation-delay: 600ms;
+}
+
+@keyframes draw {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+.ends {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.ends b {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+/* ---------- per-save bars ---------- */
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.summary b {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+.bars {
+  display: flex;
+  height: 80px;
+  align-items: flex-end;
+  gap: 3px;
+  margin-top: 12px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.barSlot {
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  flex: 1;
+  align-items: flex-end;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: default;
+}
+
+.bar {
+  display: block;
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  background: var(--storage-stored);
+  opacity: 0.6;
+  transform-origin: bottom;
+  animation: barGrow 500ms ease-out both;
+  animation-delay: var(--storage-delay, 0ms);
+}
+
+.barSlot[aria-pressed='true'] .bar {
+  opacity: 1;
+}
+
+.bar[data-merge='true'] {
+  background: var(--storage-canonical);
+}
+
+@media (hover: hover) {
+  .barSlot:hover .bar {
+    opacity: 1;
+  }
+}
+
+@keyframes barGrow {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+.tip {
+  min-height: 18px;
+  margin-top: 8px;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- footer ---------- */
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+@keyframes revealX {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+/* ---------- the staged flow ---------- */
+
+.flowLabels {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+  text-align: center;
+}
+
+.flowLabels > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.flowLabels > div > span {
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.flowLabels i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  corner-shape: round;
+}
+
+.flowLabels strong {
+  font-size: 24px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.flowLabels small {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.flowSvg {
+  display: block;
+  width: 100%;
+  height: 132px;
+  margin-top: 14px;
+  overflow: visible;
+}
+
+.flowPillar {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: stageGrow 600ms ease-out both;
+  animation-delay: var(--storage-delay, 0ms);
+}
+
+.stageLabel {
+  animation: stageEnter 450ms ease-out both;
+  animation-delay: var(--storage-delay, 0ms);
+}
+
+.stageUnknown {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.flowBand {
+  transform-box: fill-box;
+  transform-origin: left;
+  animation: revealX 600ms ease-out both;
+  animation-delay: var(--storage-delay, 0ms);
+}
+
+.flowStroke {
+  opacity: 0;
+  stroke-dasharray: 0.06 0.14;
+  animation: flowTravel 1100ms linear 2;
+  animation-delay: var(--storage-delay, 0ms);
+}
+
+@keyframes stageGrow {
+  from {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+}
+
+@keyframes stageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes flowTravel {
+  0% {
+    stroke-dashoffset: 1;
+    opacity: 0;
+  }
+
+  20%,
+  80% {
+    opacity: 0.65;
+  }
+
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+.flowSteps {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--storage-stored-ink);
+  text-align: center;
+}
+
+.flowReplay {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.flowReplay button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .flowReplay button:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 600px) {
+  .panel {
+    padding: 16px;
+  }
+
+  .flowLabels {
+    gap: 8px;
+  }
+
+  .flowLabels strong {
+    font-size: 18px;
+  }
+
+  .flowLabels > div > span {
+    font-size: 11px;
+  }
+
+  .flowLabels small {
+    font-size: 10px;
+  }
+
+  .flowSteps {
+    margin-inline: 0 !important;
+    font-size: 11px;
+  }
+
+  .flowSvg {
+    height: 104px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stageLabel,
+  .flowPillar,
+  .flowBand,
+  .flowStroke,
+  .share > span,
+  .growthLine,
+  .growthArea,
+  .bar {
+    animation: none;
+  }
+
+  .track > span {
+    transition: none;
+  }
+}
