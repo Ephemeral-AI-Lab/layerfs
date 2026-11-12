@@ -5,7 +5,7 @@ implementation must do. **Authority**: [#511](https://github.com/Ephemeral-AI-La
 (release contract) and [#41](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/41).
 **Baseline**: `layerfs_v2_0_0`.
 
-| Id | Decision | Result | Where it lives |
+| Id | Decision | Result (recommended default) | Where it lives |
 |---|---|---|---|
 | R1 | How PostgreSQL replaces the Store during `store.compact` | **E** — two `ALTER SCHEMA RENAME` in one transaction (default); **A'** only if a read-available SLO is required | §1.3 R1, §7.3, S11 |
 | Q1 | May a Branch name be reused after `branch.remove` | **A** — no reuse: terminal tombstone, `NameRetired`, no migration | §1.2 Q1, C6 |
@@ -296,6 +296,11 @@ Two consequences worth recording:
    `remove(name)` has one possible target.
 
 ## 4. Summary — what each decision rests on
+
+**Recommended defaults**: **R1 = E** (exclusive window), **Q1 = A** (no name
+reuse), **C3 = `delete(id, G)`**. Each sign-off request marks its recommended
+box `[x]` so approval is one tick; the alternative box is separate and says
+what accepting it costs.
 
 | Decision | Settling level | Settling requirement | Options that fell out before the settling step |
 |---|---|---|---|
