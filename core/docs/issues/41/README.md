@@ -41,6 +41,7 @@ removed; cite §5 rather than any local summary.
 - **C8b-N3-C9-Resolution-Plan.md** - Deep dive on three critical issues
 - **IMPLEMENTATION-CHECKLIST.md** - Per-issue acceptance criteria, dependencies and
   the critical path (task detail lives in each issue's body)
+- **diagrams/*** - Six rendered architecture and sequence diagrams, embedded below
 
 ## Implementation Phases
 
@@ -70,6 +71,47 @@ removed; cite §5 rather than any local summary.
 
 Which mounts each operation excludes is the admission matrix, **C10** in
 `LayerFS-GC-spec.md` §5 — see it there; this README does not restate it.
+
+## Diagrams
+
+Rendered from the design set. Each caption names the issue the diagram belongs to;
+the images are stored in `diagrams/` beside this file.
+
+**1 · Documents → design gate → sub-issues** (#42)
+The five documents and the gate they feed: `#42` freezes C1-C10, then admission
+and reachability run in parallel.
+
+![Documents and sub-issues](diagrams/01-documents-and-sub-issues.png)
+
+**2 · One compact = one algorithm, two swap primitives** (#48)
+Mark, verify, install, retire over a single exclusive window; the fences sit on
+the timeline, not beside it.
+
+![Sweep sequence](diagrams/02-sweep-sequence.png)
+
+**3 · R1 = E: the swap is a schema rename** (#50)
+Build the replacement schema, copy retained rows, verify with the readers' own
+open check, rename both schemas in one transaction, bump the generation, drop the
+old schema. The name ends where it started, so nothing that remembered it changes.
+
+![R1-E swap sequence](diagrams/03-r1-e-swap-sequence.png)
+
+**4 · C8b: the writer fence has two gates, not one** (#49)
+A writer holding the old fd would write into the retired inode; the admission
+check and the install re-read are both required.
+
+![C8b writer fence](diagrams/04-c8b-writer-fence.png)
+
+**5 · R1 is decided by one requirement variable** (#50)
+L1 and L2 do not discriminate; L3 does, and L3 is governed by S11 alone.
+
+![R1 vs A' decision ladder](diagrams/05-r1-vs-a-prime-decision.png)
+
+**6 · Q1 and C3: same failure family, opposite mechanisms** (#44, cross-linked to #42)
+A name cannot recur, bytes necessarily do — which is why one decision forbids
+reuse and the other binds the intent to a generation.
+
+![Q1 vs C3](diagrams/06-q1-vs-c3.png)
 
 ## Decision ownership
 
@@ -118,10 +160,6 @@ tests across a generation boundary.
 
 - **Specification PR**: Ephemeral-AI-Lab/layerfs#658 (`core/docs/issues/41/`)
 - **Release Contract**: Ephemeral-AI-Lab/layerfs#511
-- **Architecture diagrams** (collection https://app.excalidraw.com/s/9Zq6XgRe98z/):
-  - C8b writer-fence sequence: https://app.excalidraw.com/s/9Zq6XgRe98z/5fb5lT5yDKY
-  - N3 schema migration: https://app.excalidraw.com/s/9Zq6XgRe98z/1dZkWEGOgA7
-  - C9 HistoryCatalog architecture: https://app.excalidraw.com/s/9Zq6XgRe98z/8ZPm9UyP100
 - **Sub-Issues**: #42-#52
 
 ## References
