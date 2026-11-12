@@ -15,10 +15,22 @@ pub(crate) const LINEAGE: &str = include_str!("../../../sql/sqlite/lineage.sql")
 pub(crate) const SCRATCH: &str = include_str!("../../../sql/sqlite/merge_scratch.sql");
 /// Whole-content file digests (#364); a Store written before them gains them at open.
 pub(crate) const DIGESTS: &str = include_str!("../../../sql/sqlite/file_digest.sql");
+/// Change log for incremental export; a Store written before it gains it at open.
+pub(crate) const CHANGES: &str = include_str!("../../../sql/sqlite/change_log.sql");
+/// Change log trigger for the group-row layouts' `pack_unit` table.
+pub(crate) const CHANGE_UNITS: &str = include_str!("../../../sql/sqlite/change_log_units.sql");
 const UNIT_INDEX: &str = include_str!("../../../sql/sqlite/objects_units_index.sql");
 const UNITS: &str = include_str!("../../../sql/sqlite/objects_units.sql");
 const ACQUISITION: &str = include_str!("../../../sql/sqlite/acquisition/schema.sql");
 type Selection = (crate::SqlitePackLayout, crate::SqliteAcquisitionSchema);
+/// The change log script for `layout`: its tables and every logging trigger.
+fn changes(layout: crate::SqlitePackLayout) -> String {
+    if layout.uses_units() {
+        format!("{CHANGES}{CHANGE_UNITS}")
+    } else {
+        CHANGES.to_owned()
+    }
+}
 pub(super) fn scripts((layout, acquisition): Selection) -> Vec<String> {
     let objects = match layout {
         crate::SqlitePackLayout::Monolithic => OBJECTS.to_owned(),
@@ -34,6 +46,7 @@ pub(super) fn scripts((layout, acquisition): Selection) -> Vec<String> {
         LINEAGE.to_owned(),
         SCRATCH.to_owned(),
         DIGESTS.to_owned(),
+        changes(layout),
     ];
     if acquisition == crate::SqliteAcquisitionSchema::Tables {
         scripts.push(ACQUISITION.to_owned());
@@ -42,6 +55,10 @@ pub(super) fn scripts((layout, acquisition): Selection) -> Vec<String> {
 }
 pub(crate) fn source(selection: Selection) -> String {
     scripts(selection).concat()
+}
+/// The recorded schema of a Store written before the change log existed.
+fn before_changes(selection: Selection) -> String {
+    source(selection).replacen(&changes(selection.0), "", 1)
 }
 pub(crate) fn definition(c: &Connection, w: &RefCell<SqlWork>) -> Result<String, BackendError> {
     let rows: Vec<Record> = query::run(
@@ -87,6 +104,8 @@ pub(crate) fn check(
         "absorbed",
         "binding_hint_block",
         "branch",
+        "change_log",
+        "change_state",
         "commit",
         "commit_lineage",
         "content_signature",
@@ -168,8 +187,8 @@ impl super::session::connection::Session {
                 return Ok(());
             };
             // The schema this migration records is the one before the
-            // lineage and merge tables; later migrations add those.
-            let current = source((self.layout, self.acquisition))
+            // lineage, merge, digest and change tables; later migrations add those.
+            let current = before_changes((self.layout, self.acquisition))
                 .replacen(DIGESTS, "", 1)
                 .replacen(SCRATCH, "", 1)
                 .replacen(LINEAGE, "", 1);
@@ -216,7 +235,7 @@ impl super::session::connection::Session {
             let Some(row) = rows.first() else {
                 return Ok(());
             };
-            let current = source((self.layout, self.acquisition))
+            let current = before_changes((self.layout, self.acquisition))
                 .replacen(DIGESTS, "", 1)
                 .replacen(SCRATCH, "", 1);
             if row.get::<String>(0)? != current.replacen(LINEAGE, "", 1)
@@ -253,7 +272,7 @@ impl super::session::connection::Session {
             let Some(row) = rows.first() else {
                 return Ok(());
             };
-            let current = source((self.layout, self.acquisition)).replacen(DIGESTS, "", 1);
+            let current = before_changes((self.layout, self.acquisition)).replacen(DIGESTS, "", 1);
             if row.get::<String>(0)? != current.replacen(SCRATCH, "", 1)
                 || row.get::<String>(1)? != definition(tx.connection, tx.work)?
             {
@@ -288,7 +307,7 @@ impl super::session::connection::Session {
             let Some(row) = rows.first() else {
                 return Ok(());
             };
-            let current = source((self.layout, self.acquisition));
+            let current = before_changes((self.layout, self.acquisition));
             if row.get::<String>(0)? != current.replacen(DIGESTS, "", 1)
                 || row.get::<String>(1)? != definition(tx.connection, tx.work)?
             {
@@ -299,6 +318,41 @@ impl super::session::connection::Session {
             tx.query(
                 "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
                 vec![Param::Text(current), Param::Text(definition)],
+            )?;
+            Ok(())
+        })
+    }
+    /// Adds the change log tables and triggers to a Store written before them
+    /// and records the current schema: an additive migration (REBUILD.md kind
+    /// 2) under the same conditions as [`Self::add_binding_hints`]. Logging
+    /// stays off until the Store is marked as an export base.
+    pub(crate) fn add_change_log(&self) -> Result<(), BackendError> {
+        self.run::<_, BackendError>(true, |tx| {
+            let present = tx.query(
+                "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='change_log'",
+                vec![],
+            )?;
+            if !present.is_empty() {
+                return Ok(());
+            }
+            let rows = tx.query(
+                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
+                vec![],
+            )?;
+            let Some(row) = rows.first() else {
+                return Ok(());
+            };
+            let selection = (self.layout, self.acquisition);
+            if row.get::<String>(0)? != before_changes(selection)
+                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
+            {
+                return Ok(());
+            }
+            tx.bootstrap(&changes(self.layout))?;
+            let definition = definition(tx.connection, tx.work)?;
+            tx.query(
+                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
+                vec![Param::Text(source(selection)), Param::Text(definition)],
             )?;
             Ok(())
         })
