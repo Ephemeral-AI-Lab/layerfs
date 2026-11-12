@@ -107,6 +107,10 @@ realises each one, with a short reasoning summary and a checkbox block:
 | Q1 | #44 (Branch removal) | <https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/44#issuecomment-6818137920> |
 | C3 | #42 (contracts) | <https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/42#issuecomment-6818138560> |
 
+R1 is independent. **Q1 and C3 are read together** — same failure family, opposite
+mechanisms (`03-decision-record.md` §3.6) — and each request links to the other,
+so a reviewer signs them knowing both.
+
 When an answer arrives, record it here and in `03-decision-record.md`; an
 unanswered decision keeps its implementation issue blocked.
 

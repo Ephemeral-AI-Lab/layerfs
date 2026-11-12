@@ -181,6 +181,13 @@ L1, and consistency with an invariant already documented in the code.
 name. **Upgrade path**: if name reuse ever becomes a requirement, B is the
 recorded option, and it is a format change taken deliberately — not a default.
 
+**Cross-reference — C3 (§3.6).** Option B is C3's mechanism applied to a name.
+Q1 and C3 are the same family of failure (an identifier outliving its referent)
+resolved in opposite directions, and each constrains the other: Q1 = A is what
+keeps `branch.remove(name)` safely name-only, and Q1 = B would drag C3's
+signature into the resource calls. Sign-off for C3 is requested on #42
+(comment 6818138560); read the two requests together.
+
 ---
 
 ## 3. C3 — Per-object delete signature
@@ -259,6 +266,9 @@ the unsafe form.
 is accepted without being weighed; there is no storage cost to weigh.
 
 ### 3.6 Relation to Q1 — same family, opposite mechanisms
+
+Sign-off for Q1 is requested on #44 (comment 6818137920); this section and that
+request should be read together.
 
 Both decisions exist because an identifier may outlive the thing it named, and
 both are the reason C6/I2 ("an immutable id never resolves to different
