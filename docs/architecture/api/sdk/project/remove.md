@@ -96,7 +96,7 @@ other daemons and SDK processes keep reading meanwhile. See the
 | `NoSuchStore`, `NoSuchProject` | a record is missing; `NoSuchProject` also when the Store holds no LayerStack of that name | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs), `store/identity.rs` |
 | `InUse` | a Sandbox of the project is recorded; `detail.related` lists each `{ kind: "sandbox", name }` | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) |
 | `Busy`, `Unresolved` | the Store's record holds another operation's intent | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
-| `Unsupported` | a PostgreSQL Store; or the kernel guard refuses the Store's filesystem when the Store is opened | no | `project/family.rs`, [`service.rs`](../../../../../control/crates/layerfs-store/src/service.rs) |
+| `Unsupported` | a PostgreSQL Store; or the kernel guard refuses the Store's directory when the Store is opened (non-private mode/owner/type — another user's directory or one with group/other access instead of `0700` — or unsupported filesystem) | no | `project/family.rs`, [`service.rs`](../../../../../control/crates/layerfs-store/src/service.rs) |
 | `Unavailable` | worker route: no worker recorded, or not reached | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs) |
 | `Failed` | **the Store write failed, its outcome included**: `remove_layerstack` errors are all `Failed` | **may be** | `store/identity.rs` `remove_project` |
 | `Unknown` | **worker route: the answer was lost** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
