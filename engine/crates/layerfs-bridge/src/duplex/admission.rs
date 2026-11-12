@@ -18,23 +18,34 @@ pub const VERSION: u8 = 1;
 /// Length of the body after the two-byte record header.
 pub const BODY_LEN: usize = 24;
 
-/// Why no connection was admitted.
+/// Why no connection was admitted. A newer daemon may add reasons, so this
+/// enum is non-exhaustive: a client matches it with a wildcard arm and never
+/// constructs it (use [`AdmissionReason::no_pool_slot`] or
+/// [`AdmissionReason::starting`]).
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AdmissionReason {
     /// Every pool slot was busy (or retained; the count is in `retained`).
     NoPoolSlot = 1,
     /// The daemon is still starting and admits no control yet.
     Starting = 2,
-    /// The reserved slot is in use and only pool capacity was requested.
-    ReservedBusy = 3,
 }
 
 impl AdmissionReason {
+    /// The `NoPoolSlot` reason: the pool is full.
+    pub fn no_pool_slot() -> Self {
+        Self::NoPoolSlot
+    }
+
+    /// The `Starting` reason: the daemon admits no control yet.
+    pub fn starting() -> Self {
+        Self::Starting
+    }
+
     fn of(byte: u8) -> Option<Self> {
         match byte {
             1 => Some(Self::NoPoolSlot),
             2 => Some(Self::Starting),
-            3 => Some(Self::ReservedBusy),
             _ => None,
         }
     }
@@ -44,7 +55,6 @@ impl AdmissionReason {
         match self {
             Self::NoPoolSlot => "no-pool-slot",
             Self::Starting => "starting",
-            Self::ReservedBusy => "reserved-busy",
         }
     }
 }
@@ -66,6 +76,7 @@ pub struct AdmissionNotice {
 
 impl AdmissionNotice {
     /// A notice with the current format version.
+    #[must_use]
     pub fn new(
         reason: AdmissionReason,
         retained: u8,
@@ -83,6 +94,7 @@ impl AdmissionNotice {
 }
 
 /// The exact 24-byte body of `notice`.
+#[must_use]
 pub fn encode(notice: &AdmissionNotice) -> [u8; BODY_LEN] {
     let mut body = [0u8; BODY_LEN];
     body[..16].copy_from_slice(MAGIC);
@@ -96,6 +108,7 @@ pub fn encode(notice: &AdmissionNotice) -> [u8; BODY_LEN] {
 
 /// The notice in `bytes`, or `None` when the record is anything else. A
 /// random record that is not exactly a valid notice is never accepted.
+#[must_use]
 pub fn classify(bytes: &[u8]) -> Option<AdmissionNotice> {
     if bytes.len() != BODY_LEN || &bytes[..16] != MAGIC {
         return None;

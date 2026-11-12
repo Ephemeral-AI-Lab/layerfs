@@ -91,8 +91,8 @@ from it and a test compares them.
 - sqlite Store calls run in a process on the Store's kernel (in process on
   `native`, else that machine's worker); PostgreSQL Store calls and bucket
   I/O run in the caller's process (#533 G2). A sqlite Store is on exactly one
-  machine; a PostgreSQL Store is usable from every machine the support
-  table allows, with no attach records (#535 G3).
+  machine; a PostgreSQL Store's Sandboxes run on the machines it is attached to
+  (`store.attach`, each checked from that machine; supersedes #535 G3).
 - Workers listen on loopback behind a secret; one attempt per call, no
   retry, no replay; an uncertain outcome is reported, never resent.
 - A PostgreSQL password is resolved only in the caller, travels only in one

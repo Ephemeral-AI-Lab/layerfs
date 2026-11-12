@@ -94,6 +94,8 @@ Front-end problems: none.
 | `store.status` | name | - | yes | yes | yes | yes | admin |
 | `store.create` | name | - | yes | yes | yes | yes | admin |
 | `store.connect` | name, url | password, synchronous_commit | yes | yes | yes | yes | admin |
+| `store.attach` | name, machine | url, password | yes | yes | yes | yes | admin |
+| `store.detach` | name, machine | - | yes | yes | yes | yes | admin |
 | `store.push` | name, machine | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `store.pull` | name | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `store.remove` | name | - | yes | yes | yes | yes | admin |
@@ -180,7 +182,7 @@ skip with the reason when a front end is absent, and a skipped front end is not 
 | What | Why |
 | --- | --- |
 | `Unknown` and `Unresolved` outcomes without replay | no real operation without a daemon, a fault or a second process produces one here; their shape and the "read before writing again" rule are in [Errors](errors.md) |
-| `sandbox.*`, `workspace.*`, `machine.*`, `store.connect/push/pull/disconnect`, `backup.*` | need a daemon, a mount, a machine, a bucket or another machine; the matrix checks only that they exist; that the command and the packages refuse every call alike for an unknown project or name is `api/node/test/shell.mjs` and `api/python/test/test_calls.py` |
+| `sandbox.*`, `workspace.*`, `machine.*`, `store.connect/attach/detach/push/pull/disconnect`, `backup.*` | need a daemon, a mount, a machine, a bucket or another machine; the matrix checks only that they exist; that the command and the packages refuse every call alike for an unknown project or name is `api/node/test/shell.mjs` and `api/python/test/test_calls.py` |
 | a result whole number beyond 2^53 | no call on a temp Store returns one; the decode side is covered by `api/node/test/values.mjs` and `api/python/test/test_values.py` |
 | binary or non-UTF-8 `workspace.exec` output, `bytes` events | needs a Workspace; events are [#37](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/37)'s |
 | folder scope across the front ends | [#33](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/33) |

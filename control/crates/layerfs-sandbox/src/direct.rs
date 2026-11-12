@@ -90,6 +90,13 @@ pub fn live(state: &SandboxState) -> Result<()> {
 /// The refusal of a forwarded Sandbox `id` whose daemon did not answer a
 /// new connection: `Unavailable`, naming the calls that say why. A busy
 /// daemon's `Busy` and a restarted one's `StaleSandbox` stay as they are.
+///
+/// A `Capacity` refusal keeps its structured `detail` (#649): the
+/// pre-handshake `LAYERFS-CAPACITY` notice is the only place the counts
+/// exist while the pool is full, and `sandbox.get` shows them as its
+/// partial `down` model. The surviving `Unavailable` detail carries the
+/// underlying `code` so the get can tell it from a refusal that never had
+/// counts.
 pub fn unanswered(id: &str, daemon: &DaemonRecord, refusal: SdkRefusal) -> SdkRefusal {
     if matches!(refusal.code.as_str(), "Busy" | "StaleSandbox") {
         return refusal;
@@ -97,14 +104,28 @@ pub fn unanswered(id: &str, daemon: &DaemonRecord, refusal: SdkRefusal) -> SdkRe
     let at = forward_of(daemon)
         .map(|a| a.to_string())
         .unwrap_or_default();
-    refused(
-        "Unavailable",
-        format!(
-            "Sandbox {id}'s daemon does not answer at {at}: {}; `layerfs sandbox get {id}` \
-             shows whether it runs, `layerfs sandbox close {id}` closes it",
-            refusal.message
-        ),
-    )
+    let message = format!(
+        "Sandbox {id}'s daemon does not answer at {at}: {}; `layerfs sandbox get {id}` \
+         shows whether it runs, `layerfs sandbox close {id}` closes it",
+        refusal.message
+    );
+    SdkRefusal {
+        code: "Unavailable".to_owned(),
+        message,
+        detail: down_detail(refusal.code.as_str(), refusal.detail),
+    }
+}
+
+/// The detail an unanswered get keeps from the refusal that made it
+/// (#649): a `Capacity` refusal's notice counts, tagged with the refusal
+/// code it came from. Every other refusal keeps nothing: a legacy EOF, a
+/// malformed record, or a remote refusal collapsed to `{phase}` has no
+/// counts, and inventing zeros would be false.
+fn down_detail(code: &str, detail: SdkValue) -> SdkValue {
+    match code {
+        "Capacity" => home::with_field(detail, "code", SdkValue::text("Capacity")),
+        _ => SdkValue::Null,
+    }
 }
 
 /// A worker's `sandbox.create` answer `out` for Sandbox `name` under its

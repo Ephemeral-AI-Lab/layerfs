@@ -411,15 +411,18 @@ $ layerfs machine status native
 See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals.
 
-### `store` (9)
+### `store` (12)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `list` | — | — | every Store, from the home's records, each with its `state` |
 | `get` | `name` | — | a Store's record |
 | `status` | `name` | — | a Store's live state |
+| `stats` | `name` | — | Store-wide publication and allocation counters |
 | `create` | `name` | — | an empty sqlite Store on `native` |
-| `connect` | `name`, `url` | `password`, `synchronous_commit` | attaches a PostgreSQL database as a Store |
+| `connect` | `name`, `url` | `password`, `synchronous_commit` | attaches a PostgreSQL database as a Store, attached to `native` |
+| `attach` | `name`, `machine` | `url`, `password` | lets a machine run Sandboxes of a PostgreSQL Store, after checking from that machine that it reaches the Store's database and may write it |
+| `detach` | `name`, `machine` | — | stops a machine running Sandboxes of a PostgreSQL Store; refused while one runs there |
 | `push` | `name`, `machine` | `on_progress` | sends a sqlite Store from `native` to a machine |
 | `pull` | `name` | `on_progress` | brings a sqlite Store from its machine to `native` |
 | `remove` | `name` | — | deletes a sqlite Store with every project in it |

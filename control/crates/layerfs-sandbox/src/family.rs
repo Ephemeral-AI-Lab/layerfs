@@ -19,7 +19,7 @@
 //! `route.rs`, and the `workspace` calls in `workspace/calls.rs`.
 pub use super::close::{close, CloseRequest, Closed};
 pub use super::create::{create, CreateRequest, Created};
-pub use super::get::{get, GetRequest, Got, ListedWorkspace};
+pub use super::get::{get, Down, GetRequest, Got, ListedWorkspace};
 pub use super::list::{list, ListRequest, Listed};
 use super::record::SandboxRecord;
 use layerfs_bridge::control::SdkRefusal;

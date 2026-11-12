@@ -6,7 +6,7 @@ use layerfs_bridge::duplex::admission::{
 
 #[test]
 fn encode_and_classify_round_trip() {
-    let notice = AdmissionNotice::new(AdmissionReason::NoPoolSlot, 8, 0, 1);
+    let notice = AdmissionNotice::new(AdmissionReason::no_pool_slot(), 8, 0, 1);
     let body = encode(&notice);
     assert_eq!(body.len(), BODY_LEN);
     assert_eq!(&body[..16], MAGIC);
@@ -17,13 +17,28 @@ fn encode_and_classify_round_trip() {
 fn garbage_is_not_a_notice() {
     assert_eq!(classify(&[0u8; BODY_LEN]), None);
     assert_eq!(classify(&[0u8; 23]), None);
-    let mut body = encode(&AdmissionNotice::new(AdmissionReason::NoPoolSlot, 1, 1, 1));
+    let mut body = encode(&AdmissionNotice::new(
+        AdmissionReason::no_pool_slot(),
+        1,
+        1,
+        1,
+    ));
     body[16] = 2;
     assert_eq!(classify(&body), None);
-    let mut body = encode(&AdmissionNotice::new(AdmissionReason::NoPoolSlot, 1, 1, 1));
+    let mut body = encode(&AdmissionNotice::new(
+        AdmissionReason::no_pool_slot(),
+        1,
+        1,
+        1,
+    ));
     body[17] = 0;
     assert_eq!(classify(&body), None);
-    let mut body = encode(&AdmissionNotice::new(AdmissionReason::NoPoolSlot, 1, 1, 1));
+    let mut body = encode(&AdmissionNotice::new(
+        AdmissionReason::no_pool_slot(),
+        1,
+        1,
+        1,
+    ));
     body[23] = 1;
     assert_eq!(classify(&body), None);
 }

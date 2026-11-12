@@ -135,6 +135,7 @@ export interface BranchDiffOptions {
   to_commit?: string;
   path_prefix?: string;
   include_attribution?: boolean;
+  continuation?: string;
 }
 
 /** Options of `commit.list`; an unknown option is refused. */
@@ -184,6 +185,7 @@ export interface FileRevisionOptions {
   traversal?: string;
   page?: WholeNumber;
   page_size?: WholeNumber;
+  continuation?: string;
 }
 
 /** Options of `file.blame`; an unknown option is refused. */
@@ -295,12 +297,19 @@ export interface WorkspaceUnmountOptions {
   force?: boolean;
 }
 
+/** Options of `machine.start`; an unknown option is refused. */
+export interface MachineStartOptions {
+  on_progress?: ProgressHandler;
+}
+
 /** Options of `machine.create`; an unknown option is refused. */
 export interface MachineCreateOptions {
   cpus?: WholeNumber;
   memory?: Size;
   disk?: Size;
   image?: string;
+  os_image?: string;
+  on_progress?: ProgressHandler;
 }
 
 /** Options of `machine.update`; an unknown option is refused. */
@@ -317,6 +326,12 @@ export interface MachineUpdateOptions {
 export interface StoreConnectOptions {
   password?: string;
   synchronous_commit?: string;
+}
+
+/** Options of `store.attach`; an unknown option is refused. */
+export interface StoreAttachOptions {
+  url?: string;
+  password?: string;
 }
 
 /** Options of `store.push`; an unknown option is refused. */
@@ -354,6 +369,8 @@ export interface ProjectFamily {
   list(store?: string | null, options?: ProjectListOptions): Promise<Result>;
   /** a project's record: its Store, kind and machine */
   get(project: string): Promise<Result>;
+  /** entry counts of one pinned saved tree */
+  stats(project: string, branch?: string | null, commit?: string | null): Promise<Result>;
   /** export a project's snapshot from its Store to a local folder */
   export(project: string, destination: string, options?: ProjectExportOptions): Promise<Result>;
   /** remove one project from its Store */
@@ -464,7 +481,7 @@ export interface MachineFamily {
   /** a machine's live state, free disk and tool version */
   status(name: string): Promise<Result>;
   /** start a stopped machine and its worker; a running one answers at once */
-  start(name: string): Promise<Result>;
+  start(name: string, options?: MachineStartOptions): Promise<Result>;
   /** stop a machine's worker and VM; its disks stay */
   stop(name: string): Promise<Result>;
   /** create an enabled VM machine (apple-container, lima) */
@@ -482,10 +499,16 @@ export interface StoreFamily {
   get(name: string): Promise<Result>;
   /** a Store's live state */
   status(name: string): Promise<Result>;
+  /** Store-wide publication and allocation counters */
+  stats(name: string): Promise<Result>;
   /** an empty sqlite Store on native */
   create(name: string): Promise<Result>;
   /** attach a PostgreSQL database as a Store */
   connect(name: string, url: string, options?: StoreConnectOptions): Promise<Result>;
+  /** let a machine run Sandboxes of a PostgreSQL Store, after checking it reaches the server */
+  attach(name: string, machine: string, options?: StoreAttachOptions): Promise<Result>;
+  /** stop a machine running Sandboxes of a PostgreSQL Store */
+  detach(name: string, machine: string): Promise<Result>;
   /** send a sqlite Store from native to a machine */
   push(name: string, machine: string, options?: StorePushOptions): Promise<Result>;
   /** bring a sqlite Store from its machine to native */

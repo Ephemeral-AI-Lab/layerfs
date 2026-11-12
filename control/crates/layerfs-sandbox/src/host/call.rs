@@ -42,7 +42,7 @@ pub const OPS: [(Op, &str); 10] = [
     (Op::SandboxCreate, "sandbox.create"),
     (Op::SandboxClose, "sandbox.close"),
     (Op::ListWorkspaces, "sandbox.list_workspaces"),
-    (Op::Capacity, layerfs_bridge::control::CAPACITY_OPERATION),
+    (Op::Capacity, layerfs_bridge::control::OPERATION),
     (Op::Mount, "workspace.mount"),
     (Op::Exec, "workspace.exec"),
     (Op::ExecCancel, "workspace.exec_cancel"),

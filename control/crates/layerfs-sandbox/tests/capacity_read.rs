@@ -8,7 +8,7 @@
 //! accepts, and counts what it saw.
 use layerfs_bridge::control::{
     AdmissionModel, Answer, Call, CapacityModel, DaemonPhase, DaemonStatus, Reply, Request,
-    RetainedModel, SdkValue, CAPACITY_OPERATION,
+    RetainedModel, SdkValue, OPERATION,
 };
 use layerfs_bridge::duplex;
 use layerfs_home::home::paths;
@@ -138,7 +138,7 @@ fn serve(stream: TcpStream, answer: Behavior, seen: &Seen) {
                 seen.ended.store(true, Ordering::SeqCst);
                 Reply::SessionEnded
             }
-            Request::Sdk(sdk) if sdk.method == CAPACITY_OPERATION => {
+            Request::Sdk(sdk) if sdk.method == OPERATION => {
                 seen.queries.fetch_add(1, Ordering::SeqCst);
                 if matches!(answer, Behavior::Trickle) {
                     if let Some(raw) = raw.as_mut() {
@@ -337,7 +337,7 @@ fn a_quarantined_connection_attempts_nothing() {
     lease.close_handle().unwrap().close().unwrap();
     // the call a pooled lease would make next: refused before sending, so it
     // is not an attempt whose effect is unknown
-    let error = operator::call(&mut lease, CAPACITY_OPERATION, SdkValue::Null).unwrap_err();
+    let error = operator::call(&mut lease, OPERATION, SdkValue::Null).unwrap_err();
     match error {
         SdkError::Operation(failure) => match failure.cause {
             OperationCause::Exchange(channel) => {
