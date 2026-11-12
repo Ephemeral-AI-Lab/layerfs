@@ -61,6 +61,36 @@ fn a_refused_guard_removes_only_the_empty_directory_this_call_made() {
     std::fs::remove_dir_all(&volume).unwrap();
 }
 
+/// A `mkdir` that fails claims nothing: the destination's directory name is
+/// already taken, by a dangling symbolic link here — `Path::exists` looks
+/// through the link and sees nothing, so the call reaches `mkdir`, which
+/// returns `AlreadyExists`. The call removes neither that name nor anything
+/// behind it, and creates no target of its own.
+#[test]
+fn a_mkdir_failure_claims_nothing() {
+    let volume = scratch(Path::new("/dev/shm"), "taken-name");
+    let directory = volume.join("global");
+    let absent_target = volume.join("link-target");
+    std::os::unix::fs::symlink(&absent_target, &directory).unwrap();
+    let destination = directory.join("store.sqlite");
+    let refused = install::prepare(&destination).unwrap_err();
+    if !daemons_user() {
+        // the installer-user check comes first: this call never reached its
+        // `mkdir`, and changes nothing
+        assert!(refused.contains("must run as user 0"), "{refused}");
+    } else {
+        assert!(refused.contains("File exists"), "{refused}");
+    }
+    let link = std::fs::symlink_metadata(&directory).unwrap();
+    assert!(link.file_type().is_symlink(), "the taken name stays");
+    assert_eq!(std::fs::read_link(&directory).unwrap(), absent_target);
+    assert!(
+        std::fs::symlink_metadata(&absent_target).is_err(),
+        "the call creates no directory of its own"
+    );
+    std::fs::remove_dir_all(&volume).unwrap();
+}
+
 /// A guard refusal never removes a directory this call did not make, nor the
 /// Store another caller put in it.
 #[test]
