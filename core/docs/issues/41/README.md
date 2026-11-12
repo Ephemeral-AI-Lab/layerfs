@@ -39,6 +39,7 @@ Deliver explicit LayerFS garbage collection for SQLite and PostgreSQL through so
 - **README.md** - This file
 - **01-overview-and-decisions.md** - Design decisions (D1-D14)
 - **02-operation-contracts.md** - Operation specifications
+- **03-decision-record.md** - R1 / Q1 / C3: scenarios, alternatives, decision basis
 - **C8b-N3-C9-Resolution-Plan.md** - Deep dive on three critical issues
 - **RESOLUTION-SUMMARY.md** - Quick reference for key decisions
 - **Full spec**: See pull request tokenaissance/layerfs#70

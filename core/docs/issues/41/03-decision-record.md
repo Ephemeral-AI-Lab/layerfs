@@ -1,0 +1,236 @@
+# Decision Record — R1, Q1, C3
+
+**Scope**: the three reconciliation decisions of Issue #41 that change what the
+implementation must do. **Authority**: [#511](https://github.com/Ephemeral-AI-Lab/layerfs/issues/511)
+(release contract) and [#41](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/41).
+**Baseline**: `layerfs_v2_0_0`.
+
+| Id | Decision | Result | Where it lives |
+|---|---|---|---|
+| R1 | How PostgreSQL replaces the Store during `store.compact` | **E** — two `ALTER SCHEMA RENAME` in one transaction (default); **A'** only if a read-available SLO is required | §1.3 R1, §7.3, S11 |
+| Q1 | May a Branch name be reused after `branch.remove` | **A** — no reuse: terminal tombstone, `NameRetired`, no migration | §1.2 Q1, C6 |
+| C3 | Signature of a per-object delete | **`delete(id, generation)`** — the intent is bound to `(ObjectId, G)` | §5 C3 |
+
+---
+
+## 0. How these decisions were made
+
+Same four steps for all three. The step that actually settles the decision is
+named for each one in §4.
+
+1. **Fix the requirement ladder.** Every requirement relevant to the decision is
+   placed on one level; a lower level never overrides a higher one.
+2. **Hard-gate eliminate on L1.** Any option that can violate a correctness or
+   safety property is removed, no matter how cheap or simple it is. This step is
+   decided by one question, not by a score.
+3. **Find the single binding requirement.** Among the survivors, the level that
+   actually discriminates is identified. Most design arguments are wasted on
+   levels where every candidate scores the same.
+4. **Cost against benefit, and keep an exit.** The cheapest option that clears
+   the gate wins; the rejected option is recorded with the condition under which
+   it becomes the right one.
+
+**Requirement levels**
+
+| Level | Name | Question it answers | Decides? |
+|---|---|---|---|
+| **L1** | Correctness / safety | Can this lose or corrupt retained data? | Hard gate — always decides |
+| **L2** | Resource / performance | Time, lock window, storage overhead, migration cost | Decides when L1 ties |
+| **L3** | Availability | Are reads/writes usable during the operation? | Decides when L1 ties and a SLO exists |
+| **L4** | Maintainability & usability | Code complexity, debuggability, user-visible semantics | Tiebreaker only |
+
+---
+
+## 1. R1 — PostgreSQL Store replacement
+
+### 1.1 Problem scenarios
+
+- **Not atomic → two schemas answering at once.** If the new tables are created
+  next to the old ones without a single switch, a client that opens between the
+  two statements reads a half-migrated Store. Two clients can then write to
+  different tables and both report success.
+- **Rename sequence interrupted → `layerfs` does not exist.** With
+  `ALTER SCHEMA layerfs RENAME TO layerfs_c_<n>_old` committed and the second
+  rename not, every connection fails on schema resolution.
+- **Reads blocked for the whole window.** Any exclusive lock held across the copy
+  makes unrelated readers wait for the copy, not for the switch.
+- **Writes landing in the retired schema.** A writer holding a session on the old
+  schema after the switch writes into a schema nobody reads. This is the
+  PostgreSQL analogue of C8b's pre-swap writer, and it is why the reader/session
+  fence (C8 / R2) is required whatever swap is chosen.
+
+### 1.2 Alternatives (§7.3)
+
+| Option | Mechanism | Why it can be rejected |
+|---|---|---|
+| **E** (default) | `BEGIN; ALTER SCHEMA layerfs RENAME TO layerfs_c_<n>_old; ALTER SCHEMA layerfs_c_<n> RENAME TO layerfs; COMMIT;` then `DROP SCHEMA …_old` | Reads unavailable for the switch window |
+| **A'** | Data in versioned schema `layerfs_c_<n>`; a pointer row in the fixed schema; `self.schema` resolved from the pointer at open; swap = one `UPDATE` + later `DROP SCHEMA` | Costs a second placeholder at open, a pointer that must be recovered, and multiple live schemas |
+| **B** | Paired `ALTER TABLE RENAME` in one transaction | Every table takes `ACCESS EXCLUSIVE`; needs a measured `lock_timeout`; N tables, N lock points |
+| **C** | View indirection | Writability needs triggers; last resort |
+
+### 1.3 Requirement ladder
+
+| Level | Requirement | E | A' | B | C |
+|---|---|---|---|---|---|
+| L1 | Atomic switch; retained data complete | ✓ transaction | ✓ one `UPDATE` | ✓ transaction | ✓ |
+| L1 | Reader/session fence (C8) present | required | required | required | required |
+| L2 | Lock held only for the switch, not the copy | ✓ | ✓ | per-table | ✓ |
+| L3 | Reads usable during compact | ✗ window | ✓ | ✗ | ✓ |
+| L4 | Recoverable without a new state machine | ✓ | pointer must be recovered | ✓ | triggers to maintain |
+| L4 | Understandable and maintainable | ✓ | 3 moving parts | N tables | triggers |
+
+### 1.4 Reasoning, and the basis for the decision
+
+The old design chose "versioned table names + pointer" because *"the schema name
+is fixed, so it cannot be renamed"*. **That reason is void.** `schema_of`
+(`open.rs:37`) accepts the schema from the caller, and after the two renames the
+name is `layerfs` again — every Store record and every `{s}` placeholder stays
+valid. So the name is not a constraint at all.
+
+With the false constraint removed, L1 ties between E and A', and L2 ties as well
+once the lock is held only across the switch. **The only discriminating level is
+L3**, and it is governed by one variable, S11:
+
+- **S11 = exclusive window (default)** → **E**. Reads are unavailable for a
+  window measured in the switch, not the copy. Cheapest correct design.
+- **S11 = read-available SLO (p99 ≤ 1.2× baseline)** → **A'**. Only A' keeps reads
+  usable; E cannot be tuned into it.
+
+**Decision basis**: a single gating requirement variable (S11 read-availability),
+not a technical impossibility. E is chosen *because S11 is exclusive*, and the
+record names A' as the option to take if S11 flips. B and C never compete: B
+multiplies lock points per table, C moves writability into triggers.
+
+**Cost accepted**: a read-unavailable window per compact, in exchange for one
+transaction, no pointer state to recover, and no second placeholder.
+
+---
+
+## 2. Q1 — Branch name reuse
+
+### 2.1 Problem scenarios
+
+- **Two Branches, one `BranchId`.** `BranchId::named = blake3(stack ‖ name)`. A
+  recreated same-name Branch reproduces the id, and `CommitId::derive` hashes
+  `meta.branch`, so old and new history collide on both ids.
+- **Old Commits re-attributed.** Every historical Commit that carries that
+  `BranchId` now resolves to the new Branch — history silently changes owner.
+- **External references become ambiguous.** Anything that stored the id (audit,
+  monitoring, a published Layer's `source_branch_id`) points at whichever Branch
+  holds the name now.
+
+### 2.2 Alternatives (§1.2 Q1, C6)
+
+| Option | Mechanism | Cost |
+|---|---|---|
+| **A** (chosen) | No reuse: terminal tombstone, same-name create returns `NameRetired` | One terminal marker + a check in create; **zero migration** |
+| **B** | `BranchId::named_v2(stack, name, generation)`; `generation` in the derivation | Identity version bump, a `generation` column, migration of existing rows, every `BranchId` computation touched |
+
+### 2.3 Requirement ladder
+
+| Level | Requirement | A | B |
+|---|---|---|---|
+| L1 | One `BranchId` identifies one Branch, forever | ✓ the name can never be handed out twice | ✓ generation disambiguates |
+| L1 | Historical `BranchId` keeps its owner | ✓ | ✓ |
+| L2 | No migration of existing Stores | ✓ zero | ✗ format change |
+| L2 | Name available again for a new Branch | ✗ | ✓ |
+| L4 | User-visible semantics | ✓ "removed names stay retired" | needs explaining |
+| L4 | Extension cost for future features | none | every new identity consumer inherits `generation` |
+
+### 2.4 Reasoning, and the basis for the decision
+
+L1 does not discriminate: A protects the identity invariant by construction, B by
+adding a dimension. **The discriminating level is L2, and it is settled by a hard
+constraint, not a preference**: selecting B changes the persisted identity format
+and migrates every existing Store, while the benefit is a rare convenience.
+
+Two further facts point the same way:
+
+- The code already asserts the premise: `identity.rs:266` states that Branch
+  names are never reused. A keeps the existing premise; B rewrites it.
+- With A, the guard is local — a terminal marker and one check at create. With B,
+  every consumer of `BranchId` must handle generations.
+
+**Decision basis**: constraint dominance on L2 (zero migration) on top of a tied
+L1, and consistency with an invariant already documented in the code.
+
+**Cost accepted**: a removed name is permanently unavailable; a user picks another
+name. **Upgrade path**: if name reuse ever becomes a requirement, B is the
+recorded option, and it is a format change taken deliberately — not a default.
+
+---
+
+## 3. C3 — Per-object delete signature
+
+### 3.1 Problem scenarios
+
+- **ABA deletion.** Garbage is identified at generation `G`, the delete executes
+  later; by then the object is gone and the same bytes were rewritten under the
+  same `ObjectId`. A delete keyed on the id alone removes the *new* object:
+  retained data disappears with no error.
+- **Ambiguous duplicate delete.** Two sweeps both decide to delete one object.
+  With `delete(id)` the second returns "0 rows", which is indistinguishable from
+  "the object was already collected", "the id was recycled", or "the intent was
+  stale".
+- **Unattributable loss.** When a delete is reported as failed or as a no-op,
+  nothing in the record says which generation the intent was formed on, so the
+  loss cannot be reconstructed after the fact.
+
+### 3.2 Alternatives (§5 C3)
+
+| Option | Mechanism | Verdict |
+|---|---|---|
+| **`delete(id, generation)`** (chosen) | Intent bound to `(ObjectId, G)`; delete applies only to that generation | ✓ |
+| `delete(id)` | Id only | ✗ violates L1 |
+| Soft-mark only (`set_deleted`) | Flag instead of removal | ✗ does not reclaim; GC's purpose is reclamation |
+| Content-hash predicate | Hash of payload | Replaces a cheap monotonic version with a payload scan |
+| Predicate/condition delete | Arbitrary condition | Pushes the ABA safety into caller-supplied predicates |
+| Batch delete | Ids list | Does not remove the per-row ABA problem, only amortizes calls |
+
+### 3.3 Requirement ladder
+
+| Level | Requirement | `delete(id)` | `delete(id, generation)` |
+|---|---|---|---|
+| L1 | A stale intent never deletes a different object (ABA) | ✗ | ✓ |
+| L1 | Duplicate intents resolve deterministically | ✗ indistinguishable | ✓ generation mismatch is explicit |
+| L1 | The record can attribute a deletion to an intent | ✗ | ✓ |
+| L2 | Applies to every backend and to future online GC | ✗ unsafe where ids are recycled | ✓ |
+| L2 | Storage overhead | — | 8 bytes per object |
+| L4 | Signature stays comprehensible | ✓ | ✓ with the generation documented |
+
+### 3.4 Reasoning, and the basis for the decision
+
+This decision has **no trade-off step**: `delete(id)` fails L1 the first time an
+`ObjectId` is reused after a sweep, and a single failure is retained data
+vanishing. Under the ladder an L1 failure ends the comparison regardless of how
+much cheaper or simpler the option is — so the decision is settled at step 2, not
+step 3.
+
+The signature is also the same everywhere: PostgreSQL and any future online sweep
+need it; SQLite's whole-file replacement does not apply per-row deletes at all, so
+the parameter is inert there and the ordering is covered by C1's install-before
+generation re-check rather than by per-row fencing.
+
+**Decision basis**: must-have correctness gate (ABA safety). The 8-byte cost and
+the extra argument are accepted without being weighed, because the alternative is
+not a different trade-off but a known data-loss mode.
+
+---
+
+## 4. Summary — what each decision rests on
+
+| Decision | Settling level | Settling requirement | Options that fell out before the settling step |
+|---|---|---|---|
+| **R1** | L3 (availability) | Gate variable **S11**: is a read-available SLO required? — no → **E**; yes → **A'** | B (lock points per table), C (writability via triggers) |
+| **Q1** | L2 (migration cost) | **Zero migration** + the invariant already asserted at `identity.rs:266` → **A** | B is not rejected as wrong, only as too expensive for the benefit |
+| **C3** | L1 (correctness) | **ABA safety** — a stale intent must not delete a different object → **`delete(id, generation)`** | `delete(id)`, soft-mark, hash predicate, condition delete, batch |
+
+Two properties hold for all three, and they are the reason the results are stable
+rather than a matter of taste:
+
+1. **The deciding step is named.** R1 is decided by a requirement variable, Q1 by a
+   cost constraint, C3 by a correctness gate. Whenever a future discussion
+   reopens one of them, the step to re-run is known.
+2. **The rejected option is kept with its condition.** A' is the answer if S11
+   becomes a read-available SLO; B is the answer if name reuse becomes a
+   requirement. Neither is adopted now, and neither is lost.
