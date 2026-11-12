@@ -417,6 +417,13 @@ out to a branch nobody remembers.
 
 Before any checkout is removed, inspect it: `git status` and `git log -1` first,
 preserve or push anything uncommitted or unpushed, and record what was rescued.
+Then check what points at it. A checkout can be referenced from outside the
+repository — a symlink in another project, a launcher registration, an editor
+workspace — and removing it breaks that reference silently, hours later, in a
+different tool. Measured the hard way on 2026-11-12: removing a checkout that
+another project symlinked as its source tree took that project's CLI down with
+`Cannot find module`; restoring the checkout was not enough, because the
+checkout's `node_modules` links had gone with it.
 
 ### Production LOC comparison for every commit
 
