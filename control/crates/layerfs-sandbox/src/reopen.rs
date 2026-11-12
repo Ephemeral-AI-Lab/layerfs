@@ -283,6 +283,29 @@ fn local_record(_: &Host, id: &str, _: &DaemonRecord) -> Result<Recorded> {
     ))
 }
 impl Recorded {
+    /// Stop an exact recorded runtime without endpoint admission or daemon RPC.
+    pub fn stop_now(self) -> Result<()> {
+        let mut owner = match self {
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            Self::Local {
+                directory,
+                id,
+                process,
+                port,
+                labels,
+            } => Box::new(Sandbox::HostProcess(
+                host_process::Sandbox::reopen_for_stop(directory, id, process, port, labels)
+                    .map_err(failed)?,
+            )),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(runtime, id, record) => match runtime.reopen(id, &record) {
+                Ok(owner) => Box::new(owner),
+                Err(error) if error.container_stopped() => return Ok(()),
+                Err(error) => return Err(failed(error)),
+            },
+        };
+        owner.stop(0).map_err(failed)
+    }
     /// The runtime, observed running once (it starts nothing).
     pub fn reopen(self) -> std::result::Result<Box<Sandbox>, Box<WireFailure>> {
         match self {

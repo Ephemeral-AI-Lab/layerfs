@@ -99,6 +99,7 @@ fn start(
 /// A wait for it, at most [`START_WAIT`], is not a retry.
 pub type StartLock = layerfs_home::home::entity_lock::EntityLock;
 
+/// Take the machine lifecycle lock before a start, create, remove or forced stop.
 pub fn start_lock(home: &Path, name: &str) -> Result<StartLock, SdkRefusal> {
     let path = layerfs_home::home::paths::machine_dir(home, name).join("start.lock");
     let held = format!("machine {name} was being started, made or removed by another process");

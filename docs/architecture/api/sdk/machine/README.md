@@ -48,7 +48,7 @@ state, cpus, memory, disk, stores, sandboxes, … }`
 | [`get`](get.md) | `name` (Name) | — | summary |
 | [`status`](status.md) | `name` | — | `{ name, platform, state, free_disk, tool_version, down_reason, stores, … , op? }` |
 | [`start`](start.md) | `name` | — | summary, once the worker answers its secret |
-| [`stop`](stop.md) | `name` | — | summary with `state: "stopped"` |
+| [`stop`](stop.md) | `name` | `force` (Bool) | summary with `state: "stopped"` (`native`: `ready`); force also reports stopped Sandboxes and unknown Workspace frontiers |
 | [`create`](create.md) | `name`, `platform` (Name) | `cpus` (Int), `memory`, `disk` (Size), `image` (Text) | summary |
 | [`remove`](remove.md) | `name` | — | `{ name, removed: true }`; a removed platform's record adds `note` |
 | [`update`](update.md) | `name` | `cpus` (Int), `memory` (Size), `image`, `docker`, `wsl`, `daemon` (Text) | summary |

@@ -103,6 +103,9 @@ impl Checkpointer {
 impl Drop for Checkpointer {
     /// Ends the thread after its current pass and closes its connection,
     /// before the session's own connection closes.
+    /// This connection is therefore never SQLite's last one: State still owns
+    /// the main connection. Do not reacquire its directory lane here; a
+    /// quarantined State may already retain it while this join completes.
     fn drop(&mut self) {
         self.wake.take();
         if let Some(thread) = self.thread.take() {

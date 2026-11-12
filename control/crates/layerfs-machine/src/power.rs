@@ -68,3 +68,17 @@ pub fn stop(home: &Path, name: &MachineName, related: Related) -> Outcome {
     }
     super::get::get(&home, name, related)
 }
+
+/// A provider-confirmed terminal state, without contacting its stopped worker.
+pub fn stopped_summary(home: &Path, name: &str, related: Related) -> Outcome {
+    let machine = super::record::MachineRecord::of(home, name)?;
+    super::list::summary(
+        home,
+        &machine,
+        Some((
+            if name == "native" { "ready" } else { "stopped" }.to_owned(),
+            None,
+        )),
+        related,
+    )
+}

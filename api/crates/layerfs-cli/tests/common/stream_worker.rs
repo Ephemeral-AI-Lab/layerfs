@@ -73,7 +73,7 @@ fn create(more: &SdkValue) -> SdkValue {
         SdkValue::map([
             ("sandbox", more.get("sandbox").cloned().unwrap_or_default()),
             ("name", t("lfs-x-t1")),
-            ("image", t("local")),
+            ("image", t(&format!("sha256:{}", "c".repeat(64)))),
             ("platform", t("docker")),
             ("runtime", t("namespaces")),
             ("route", t("fuse")),

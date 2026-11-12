@@ -30,7 +30,7 @@ impl Adapter for Native {
     fn start(&self, spec: &Spec, _bundle: &Bundle) -> Result<Option<Running>, MachineError> {
         start(spec)
     }
-    fn stop(&self, _spec: &Spec) -> Result<(), MachineError> {
+    fn stop(&self, _spec: &Spec, _force: bool) -> Result<(), MachineError> {
         Ok(())
     }
     fn provider_state(&self, _spec: &Spec) -> Result<crate::setup::State, MachineError> {

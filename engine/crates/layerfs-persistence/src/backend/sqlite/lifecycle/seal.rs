@@ -12,20 +12,17 @@ impl Session {
         }
         // The checkpoint thread ends and closes its connection first.
         drop(self.background.take());
-        let state = self
+        let mut state = self
             .state
             .into_inner()
             .map_err(|_| PersistenceError::Uncertain)?;
         if state.quarantined || !state.connection.is_autocommit() {
             return Err(PersistenceError::Uncertain);
         }
-        #[cfg(target_os = "linux")]
-        let state = {
-            let mut state = state;
+        if state.writer_hold.is_none() {
             state.writer_hold =
                 Some(crate::backend::sqlite::lane::writer_admission::Writer::acquire(&self.path)?);
-            state
-        };
+        }
         #[cfg(target_os = "macos")]
         let identity = super::seal_allocation::Identity::capture(&self.path)?;
         #[cfg(target_os = "macos")]
@@ -40,13 +37,14 @@ impl Session {
         if row.get::<i64>(0)? != 0 {
             return Err(PersistenceError::Busy);
         }
-        state
-            .connection
-            .close()
-            .map_err(|(_, error)| rows::error(error))?;
+        let connection = state.connection.take().ok_or(PersistenceError::Malformed)?;
+        if let Err((connection, error)) = connection.close() {
+            state.connection.restore(connection);
+            return Err(rows::error(error).into());
+        }
         // SQLite has checked-closed before advisory ownership is released.
         // Earlier error exits drop State.connection before its retained owner.
-        if let Some(writer) = state.writer_hold {
+        if let Some(writer) = state.writer_hold.take() {
             writer.release().map_err(|_| PersistenceError::Uncertain)?;
         }
         for suffix in ["-wal", "-shm", "-journal"] {

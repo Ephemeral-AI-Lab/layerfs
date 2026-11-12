@@ -1,0 +1,260 @@
+//! Explicit provider crash stop without a worker request, VM start or data deletion.
+use crate::inventory;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::{self, lock, paths};
+use layerfs_home::names::MachineName;
+use layerfs_home::op::Op;
+use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_machine::platform::{self as adapters, Platform};
+use layerfs_machine::record::MachineRecord;
+use layerfs_machine::{machine_refusal as refusal, machine_spec};
+use layerfs_sandbox::host::{Deploy, Host, Message};
+use layerfs_sandbox::record::SandboxRecord;
+use layerfs_sandbox::{direct, files, reopen};
+use std::path::Path;
+type Result<T> = std::result::Result<T, SdkRefusal>;
+
+pub(crate) fn stop(home: &Path, name: &MachineName) -> Outcome {
+    let home = home.to_path_buf();
+    let name = name.as_str();
+    force_record(&home, name)?;
+    let _start = layerfs_machine::force_stop_lock(&home, name)?;
+    let intent = Op::begin(
+        "machine.stop",
+        "force",
+        SdkValue::map([("force", SdkValue::Bool(true))]),
+    )?;
+    let (spec, hosted, sandboxes) = {
+        let _home = lock::take(&home)?;
+        let machine = force_record(&home, name)?;
+        let hosted = inventory::hosted_on(&home, name)?;
+        let sandboxes = inventory::sandboxes(&home)?
+            .into_iter()
+            .filter(|sandbox| {
+                sandbox.machine() == name || hosted.iter().any(|child| sandbox.machine() == child)
+            })
+            .collect::<Vec<_>>();
+        for sandbox in &sandboxes {
+            if sandbox
+                .op()
+                .is_some_and(|op| op.name() == "sandbox.create" && op.owner_alive())
+            {
+                return Err(refused(
+                    "Busy",
+                    format!(
+                        "Sandbox {} is still being created; no machine stop was attempted",
+                        sandbox.name()
+                    ),
+                ));
+            }
+        }
+        let spec = machine_spec(&home, &home_id(&home)?, &machine)?;
+        for child in &hosted {
+            force_record(&home, child)?;
+        }
+        for machine in std::iter::once(name).chain(hosted.iter().map(String::as_str)) {
+            update(&home, machine, |record| record.with_op(&intent))?;
+        }
+        (spec, hosted, sandboxes)
+    };
+    let mut unknown = Vec::new();
+    let mut stopped = Vec::new();
+    let mut native_attempt = None;
+    let attempted = (|| -> Result<()> {
+        if spec.kind == Platform::Native {
+            for sandbox in &sandboxes {
+                native_attempt = Some(sandbox);
+                native_stop(&home, sandbox)?;
+                mark(&home, sandbox, true)?;
+                stopped.push(sandbox.name().to_owned());
+                unknown.extend(workspaces(&home, sandbox)?);
+            }
+        } else {
+            adapters::stop_force(&spec).map_err(refusal)?;
+            for sandbox in &sandboxes {
+                mark(&home, sandbox, true)?;
+                stopped.push(sandbox.name().to_owned());
+                let observed = workspaces(&home, sandbox)?;
+                if observed.is_empty() {
+                    unknown.push(format!("{}:*", sandbox.name()));
+                } else {
+                    unknown.extend(observed);
+                }
+            }
+        }
+        Ok(())
+    })();
+    if let Err(mut error) = attempted {
+        let uncertain = error.code == "Unknown"
+            || !stopped.is_empty()
+            || native_attempt.is_some()
+            || (spec.kind != Platform::Native && error.code != "Unsupported");
+        {
+            let _home = lock::take(&home)?;
+            for machine in std::iter::once(name).chain(hosted.iter().map(String::as_str)) {
+                update(&home, machine, |record| {
+                    if uncertain {
+                        record.with_op(&intent.clone().as_uncertain())
+                    } else {
+                        record.without_op()
+                    }
+                })?;
+            }
+        }
+        // A multi-container provider stop may have completed only part of its work.
+        // Keep that uncertainty distinct from both a running or a confirmed gone runtime.
+        if spec.kind != Platform::Native && error.code != "Unsupported" {
+            for sandbox in &sandboxes {
+                if !stopped.iter().any(|name| name == sandbox.name()) {
+                    mark(&home, sandbox, false)?;
+                }
+            }
+        } else if let Some(sandbox) = native_attempt {
+            if !stopped.iter().any(|name| name == sandbox.name()) {
+                mark(&home, sandbox, false)?;
+            }
+        }
+        error.detail = home::with_field(
+            error.detail,
+            "stopped_sandboxes",
+            SdkValue::List(stopped.into_iter().map(SdkValue::Text).collect()),
+        );
+        error.detail = home::with_field(
+            error.detail,
+            "unknown",
+            SdkValue::List(unknown.into_iter().map(SdkValue::Text).collect()),
+        );
+        return Err(error);
+    }
+    {
+        let _home = lock::take(&home)?;
+        for machine in std::iter::once(name).chain(hosted.iter().map(String::as_str)) {
+            match std::fs::remove_file(paths::worker_record(&home, machine)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(failed(error)),
+            }
+            update(&home, machine, |record| {
+                record.without_op().with(
+                    "state",
+                    SdkValue::text(if machine == "native" {
+                        "ready"
+                    } else {
+                        "stopped"
+                    }),
+                )
+            })?;
+        }
+    }
+    // Do not call get(): a live probe could contact the worker we just stopped.
+    let mut out = layerfs_machine::stopped_summary(&home, name, crate::machine::RELATED)?;
+    for (key, value) in [
+        ("forced", SdkValue::Bool(true)),
+        (
+            "stopped_sandboxes",
+            SdkValue::List(stopped.into_iter().map(SdkValue::Text).collect()),
+        ),
+        (
+            "unknown",
+            SdkValue::List(unknown.into_iter().map(SdkValue::Text).collect()),
+        ),
+    ] {
+        out = home::with_field(out, key, value);
+    }
+    Ok(out)
+}
+
+/// A new explicit force call may reconcile its own previous unknown stop;
+/// it never silently retries, nor clears another kind of unresolved operation.
+fn force_record(home: &Path, name: &str) -> Result<MachineRecord> {
+    let record = MachineRecord::of(home, name)?;
+    if record
+        .op()
+        .is_some_and(|op| op.name() == "machine.stop" && op.uncertain())
+    {
+        return Ok(record);
+    }
+    record.not_held()?;
+    Ok(record)
+}
+
+/// Record an observed terminal fact, retaining runtime files and exact identity.
+fn mark(home: &Path, sandbox: &SandboxRecord, stopped: bool) -> Result<()> {
+    let _home = lock::take(home)?;
+    let _sandbox = layerfs_sandbox::record::lock(home, sandbox.name())?;
+    if let Some(now) = inventory::sandbox(home, sandbox.name())? {
+        if now.to_record().get("runtime_id") != sandbox.to_record().get("runtime_id") {
+            return Err(refused(
+                "Unknown",
+                "the Sandbox runtime identity changed during the stop; its new record was retained",
+            ));
+        }
+        now.with_machine_stop(stopped).write(home)?;
+    }
+    if stopped {
+        direct::release(home, sandbox);
+    }
+    Ok(())
+}
+
+/// Native is the host itself: stop only this home's recorded runtime processes.
+fn native_stop(home: &Path, sandbox: &SandboxRecord) -> Result<()> {
+    if sandbox.machine_stopped() {
+        return Ok(());
+    }
+    let host = Host {
+        home: home.to_owned(),
+        store: String::new(),
+        project: String::new(),
+        sandbox: Some(sandbox.name().to_owned()),
+        store_record: None,
+        store_path: None,
+        deploy: Some(Deploy {
+            local_dir: Some(paths::run_root(home).display().to_string()),
+            container_prefix: Some(format!("lfs-{}-", &home_id(home)?[..8])),
+            ..Deploy::default()
+        }),
+        postgresql: None,
+        message: Message::Absent,
+        started: None,
+    };
+    let Some(daemon) = files::started(&sandbox.dir(home))? else {
+        if sandbox.id().is_some() {
+            return Err(refused(
+                "Unavailable",
+                format!(
+                    "Sandbox {} has no recorded native runtime; its stop cannot be confirmed",
+                    sandbox.name()
+                ),
+            ));
+        }
+        return sandbox.free();
+    };
+    reopen::recorded(&host, sandbox.name(), &daemon)?.stop_now()
+}
+
+/// These are lost/unknown uncommitted frontiers, never manufactured commits.
+fn workspaces(home: &Path, sandbox: &SandboxRecord) -> Result<Vec<String>> {
+    let mut workspaces = Vec::new();
+    for (path, record) in files::workspaces(&sandbox.dir(home))? {
+        let fallback = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("unknown");
+        let value = record.name().or_else(|| record.path()).unwrap_or(fallback);
+        workspaces.push(format!("{}:{value}", sandbox.name()));
+    }
+    Ok(workspaces)
+}
+
+fn home_id(home: &Path) -> Result<String> {
+    Ok(home::opened(home)?.id)
+}
+
+fn update(
+    home: &Path,
+    name: &str,
+    change: impl FnOnce(MachineRecord) -> MachineRecord,
+) -> Result<()> {
+    change(MachineRecord::of(home, name)?).write(home)
+}

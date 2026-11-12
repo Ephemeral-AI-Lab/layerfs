@@ -18,8 +18,9 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
     bring_up(spec, bundle, port)
 }
 
-pub(crate) fn stop(spec: &Spec) -> Result<(), MachineError> {
-    if observe(spec)? == State::Running {
+pub(crate) fn stop(spec: &Spec, force: bool) -> Result<(), MachineError> {
+    let state = observe(spec)?;
+    if state == State::Running || (force && state == State::Failed) {
         checked(spec, CLI, &["stop", &spec.vm_name], CREATE)?;
     }
     Ok(())

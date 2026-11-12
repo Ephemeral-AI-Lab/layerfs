@@ -4,7 +4,7 @@ use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{location::PackInfo, port::*, Storage, StoragePolicy};
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::{
     io::{Read, Write},
     os::unix::net::{UnixListener, UnixStream},
@@ -26,7 +26,7 @@ fn config(path: &Path) -> PersistenceConfig {
 fn create(path: &Path) -> SqliteHandles {
     SqliteHandles::create(config(path), StoragePolicy::frozen_default(), &authority()).unwrap()
 }
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn open(path: &Path) -> SqliteHandles {
     SqliteHandles::open_writable(
         config(path),
@@ -130,12 +130,12 @@ fn shared_session_reservation_waits_for_an_ordinary_public_read_owner() {
     assert_eq!(after.rollbacks, before.rollbacks);
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 struct Held {
     child: Child,
     socket: UnixStream,
 }
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 impl Held {
     fn start(path: &Path, socket_path: &Path) -> Self {
         let listener = UnixListener::bind(socket_path).unwrap();
@@ -168,6 +168,8 @@ impl Held {
                 }
             }
         };
+        // Darwin inherits the listener's nonblocking flag on accepted sockets.
+        socket.set_nonblocking(false).unwrap();
         let mut held = Self { child, socket };
         held.socket
             .set_read_timeout(Some(Duration::from_secs(3)))
@@ -193,7 +195,7 @@ impl Held {
         }
     }
 }
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 impl Drop for Held {
     fn drop(&mut self) {
         let _ = self.child.kill();
@@ -202,7 +204,7 @@ impl Drop for Held {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn another_process_admission_precedes_the_single_sqlite_begin() {
     // Keep the owned AF_UNIX path below Darwin's sockaddr_un capacity.
     let temp = support::Temp::new("wa");
@@ -243,7 +245,68 @@ fn another_process_admission_precedes_the_single_sqlite_begin() {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn another_process_admission_precedes_read_only_connection_open() {
+    let temp = support::Temp::new("wa-open");
+    let path = temp.join("store.sqlite");
+    let original = create(&path);
+    let held = Held::start(&path, &temp.join("s"));
+    let (ready_tx, ready_rx) = mpsc::channel();
+    let (result_tx, result_rx) = mpsc::channel();
+    let opener = std::thread::spawn(move || {
+        ready_tx.send(()).unwrap();
+        let result = SqliteHandles::open_read_only(
+            config(&path),
+            &authority().binding_key,
+            authority().cursor_key,
+        )
+        .map(|handles| handles.profile().clone());
+        result_tx.send(result).unwrap();
+    });
+    ready_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    let premature = result_rx.recv_timeout(Duration::from_millis(100)).ok();
+    held.release();
+    let outcome = premature
+        .clone()
+        .unwrap_or_else(|| result_rx.recv_timeout(Duration::from_secs(3)).unwrap());
+    opener.join().unwrap();
+    assert!(
+        premature.is_none(),
+        "connection initialization bypassed its lifecycle owner"
+    );
+    assert_eq!(outcome.unwrap().busy_timeout, 0);
+    drop(original);
+}
+
+#[test]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn another_process_admission_precedes_last_connection_close() {
+    let temp = support::Temp::new("wa-close");
+    let path = temp.join("store.sqlite");
+    let handles = create(&path);
+    let held = Held::start(&path, &temp.join("s"));
+    let (ready_tx, ready_rx) = mpsc::channel();
+    let (result_tx, result_rx) = mpsc::channel();
+    let closer = std::thread::spawn(move || {
+        ready_tx.send(()).unwrap();
+        drop(handles);
+        result_tx.send(()).unwrap();
+    });
+    ready_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    let premature = result_rx.recv_timeout(Duration::from_millis(100)).ok();
+    held.release();
+    if premature.is_none() {
+        result_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+    }
+    closer.join().unwrap();
+    assert!(
+        premature.is_none(),
+        "last connection close bypassed its lifecycle owner"
+    );
+}
+
+#[test]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn two_opened_handles_admit_eight_distinct_reservations_without_conflict() {
     let temp = support::Temp::new("writer-admission-two-handles");
     let path = temp.join("store.sqlite");

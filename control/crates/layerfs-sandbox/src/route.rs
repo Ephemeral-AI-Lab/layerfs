@@ -248,6 +248,9 @@ fn host_op(
 ) -> Outcome {
     let home = home.to_path_buf();
     let machine = record.machine();
+    if let Some(machine) = layerfs_machine::record::MachineRecord::read(&home, machine)? {
+        machine.not_held()?;
+    }
     let project = record.project().unwrap_or("");
     let target = resolve::target(&home, project)?;
     let Asked {

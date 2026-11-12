@@ -149,7 +149,28 @@ pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
             live.push(pid);
             continue;
         }
-        std::fs::remove_file(path).map_err(failed)?;
+        match std::fs::remove_file(&path) {
+            Ok(()) => {}
+            // Its holder can drop the lease after the snapshot above. It is
+            // already released; no removal happened here to log.
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                let mut refusal = failed(&error);
+                refusal.detail = SdkValue::map([
+                    ("operation", SdkValue::text("remove_stale_lease")),
+                    ("store", SdkValue::text(store)),
+                    ("path", SdkValue::text(path.display().to_string())),
+                    (
+                        "os_error",
+                        error
+                            .raw_os_error()
+                            .map(|code| SdkValue::Int(i64::from(code)))
+                            .unwrap_or_default(),
+                    ),
+                ]);
+                return Err(refusal);
+            }
+        }
         home::log_line(
             home,
             "leases.jsonl",

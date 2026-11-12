@@ -145,7 +145,8 @@ pub struct SqlWork {
     pub connects: u64,
 }
 pub(crate) struct State {
-    pub(crate) connection: Connection,
+    pub(crate) connection: super::lifecycle::ConnectionSlot,
+    pub(crate) path: PathBuf,
     pub(crate) quarantined: bool,
     pub(crate) work: RefCell<SqlWork>,
     pub(crate) writer_hold: Option<crate::backend::sqlite::lane::writer_admission::Writer>,
@@ -205,6 +206,11 @@ impl Session {
         if !cfg!(any(target_os = "macos", target_os = "linux")) {
             return Err(BackendError::Integrity);
         }
+        // Opening/configuring WAL can initialize shared state before any
+        // transaction. The same short owner excludes another writer or last
+        // close, including on read-only and diagnostic opens. Declared before
+        // the connection so error exits close SQLite before releasing it.
+        let lifecycle = crate::backend::sqlite::lane::writer_admission::Writer::acquire(path)?;
         let flags = if writable {
             OpenFlags::SQLITE_OPEN_READ_WRITE
         } else {
@@ -314,13 +320,17 @@ impl Session {
         let background = (writable && selected == SqlitePersistenceProfile::Disposable)
             .then(|| super::background::Checkpointer::start(path))
             .transpose()?;
+        // Session::run takes its own writer ownership; never retain lifecycle
+        // ownership into those calls or acquire it again in background start.
+        drop(lifecycle);
         Ok(Self {
             diagnostic,
             background,
             admission: crate::backend::admission::Admission::default(),
             path: path.to_path_buf(),
             state: Mutex::new(State {
-                connection,
+                connection: super::lifecycle::ConnectionSlot::new(connection),
+                path: path.to_path_buf(),
                 quarantined: false,
                 work,
                 writer_hold: None,

@@ -6,7 +6,7 @@
 
 `machine.stop` stops a machine's worker and, where it has one, its VM, and
 records it `stopped`. Its disks and Stores stay. It is refused while
-Sandboxes run on the machine.
+Sandboxes run on the machine unless `force` is selected.
 
 | | |
 | --- | --- |
@@ -19,35 +19,58 @@ Sandboxes run on the machine.
 
 ```js
 // JavaScript
-await layerfs.machine.stop(name);
+await layerfs.machine.stop(name, { force: true });
 ```
 
 ```python
 # Python
-layerfs.machine.stop(name)
+layerfs.machine.stop(name, force=True)
 ```
 
 ```bash
 # CLI
-layerfs machine stop <name>
+layerfs machine stop <name> [--force]
 ```
 
 ## Arguments
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | an existing machine not held by an `op`, with no Sandbox recorded on it | [`power.rs`](../../../../../control/crates/layerfs-machine/src/power.rs) |
+| `name` | Name | an existing machine; without `force`, no Sandbox may be recorded on it | [`power.rs`](../../../../../control/crates/layerfs-machine/src/power.rs) |
 
 ## Options
 
-None.
+| Name | Kind | Default | Rule |
+| --- | --- | --- | --- |
+| `force` | Bool | false | stop while Sandboxes, mounted Workspaces or commands are active; their uncommitted state may be lost |
+
+Force stops the platform directly without starting the machine, contacting its
+worker, committing changes, unmounting Workspaces one by one, or deleting any
+registered machine, Sandbox, Store or disk. On `native` it terminates only this
+home’s recorded Sandbox runtimes and commands; the host stays running and its
+machine remains `ready`. On Docker, stopping this home’s worker container ends
+its namespaces Sandboxes; Docker Desktop and the Store volume remain. Lima uses
+`limactl stop --force`, including when the host agent reports a broken VM.
+
+The cross-entity orchestration lives in
+[`machine_force.rs`](../../../../../control/crates/layerfs-control/src/machine_force.rs).
+A provider failure or partial/uncertain outcome is reported; it is never replayed
+or converted into a successful close.
 
 ## Returns
 
 The machine's summary, as [`machine.get`](get.md) answers it after a live
-probe; normally `state: "stopped"` (`ready` for `native`).
+probe; normally `state: "stopped"` (`ready` for `native`). Forced stop returns
+the recorded summary without a worker probe, plus `forced: true`,
+`stopped_sandboxes: [name]` and `unknown: [workspace]`. `sandbox:*` means the
+worker-side uncommitted Workspace frontier could not be enumerated. These entries
+are not saved Commits. The retained Sandbox records are marked gone for explicit
+reclaim, with unknown custody retained if the stop could not be confirmed.
 
 ## Where it runs
+
+The sequence and table below describe normal Stop. Explicit force uses the
+provider-only path above and bypasses the normal active-Sandbox refusal.
 
 ```text
 caller's process                                   machine
@@ -79,7 +102,7 @@ All in the caller ([routing table](../../../control/routing/routing-table.md)).
 | --- | --- | --- | --- |
 | `InvalidInput`, `NotFound` | bad name; no such machine | no | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) `of` |
 | `Busy`, `Unresolved` | an `op` holds the machine | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
-| `InUse` | Sandboxes are recorded on it; `detail.related` lists `{kind: "sandbox", name}` | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_stop_machine` |
+| `InUse` | without `force`, Sandboxes are recorded on it; `detail.related` lists `{kind: "sandbox", name}` | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_stop_machine` |
 | `Unavailable` | `start.lock` held for 600 s; nothing changed | no | [`home/entity_lock.rs`](../../../../../control/crates/layerfs-home/src/home/entity_lock.rs) |
 | `Unavailable`, `Denied`, `Failed` | the provider or guest did not answer or refused; the stop failed once. `worker.json` and the record stay as they were | no | [`error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
 | `Unknown` | **a provider command timed out: the machine may be stopped while still recorded with its worker.** Read `machine status` first | **yes** | [`setup/tool.rs`](../../../../../control/crates/layerfs-platform/src/setup/tool.rs) |

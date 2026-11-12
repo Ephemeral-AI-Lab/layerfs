@@ -52,7 +52,7 @@ PostgreSQL runs them unchanged except the few it replaces in
 | `Busy` | `Busy` | `Busy` | Another writer held the lock; not retried. |
 | `Closed` | `Refused "Closed"` | `OwnershipUnavailable` | Store closed before this call's turn. |
 | `Rejected` | `Refused "Rejected"` | `OwnershipUnavailable` | PostgreSQL refused a new connection. |
-| `Cancelled` | `Refused "Cancelled"` | `OwnershipUnavailable` | A signal interrupted the Linux writer wait. |
+| `Cancelled` | `Refused "Cancelled"` | `OwnershipUnavailable` | A signal interrupted the SQLite writer wait. |
 | `ReadOnly` | `Refused "ReadOnly"` | `ContinuityUnavailable` | Write on a read-only session. |
 | `Capacity` | `Refused "Capacity"` | `Capacity("persistence")` | A bound or the disk margin was reached. |
 | `Integrity` | `Malformed` | `Integrity("persistence")` | Stored or supplied data broke a rule. |
@@ -97,8 +97,8 @@ it never queues behind a held lane.
  SQLite write: Session::run(true, body)           any process, one host
    1 admission.enter        in-process FIFO turn on this session
    2 state mutex            the connection
-   3 Writer::acquire        Linux: flock(LOCK_EX) on the Store's parent
-                            directory; macOS: none     (skipped if nested)
+   3 Writer::acquire        Linux/macOS: flock(LOCK_EX) on the Store's
+                            parent directory     (skipped if nested)
    4 BEGIN IMMEDIATE        SQLite's write lock; busy_timeout 0 -> Busy
    5 body; COMMIT           or ROLLBACK; Unknown -> quarantine
    6 finish_writer          release the flock
@@ -116,19 +116,39 @@ it never queues behind a held lane.
 | Rule | Enforced by |
 | --- | --- |
 | One write transaction at a time per session | `Admission` turn: [`admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/admission.rs) |
-| One writer across processes on one Linux host | Directory `flock`: [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs) |
+| One writer across processes on one Linux or macOS host | Directory `flock`: [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs) |
 | One writer in the SQLite file | `BEGIN IMMEDIATE` with `busy_timeout=0`: [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/transaction.rs) |
 | One writer across PostgreSQL clients | `store_lane` row `FOR UPDATE`: [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/profile.rs) |
 | No busy handler, no retry | `busy_timeout` reads back 0; `Busy` is returned as is |
 
 The lock is taken on a separate descriptor of the Store's directory, never on
 the main, WAL or SHM file: closing a main-file descriptor would drop SQLite's
-own POSIX locks. Several Store files in one directory share this lock. On
-macOS `flock` conflicts with SQLite's locks, so there is no cross-process
-writer wait: a second writer gets SQLite's `Busy`. Reads (`BEGIN`, or one
+own POSIX locks. Several Store files in one directory share this lock. Linux
+and macOS both use the directory descriptor, so neither takes an advisory
+lock on SQLite's own files. Reads (`BEGIN`, or one
 implicit snapshot) take the turn but never the directory lock or the lane.
 The publication lane holds steps 1 and 3 across several transactions; see
 [History publication](history-publication.md#the-publish-lane).
+
+SQLite connection lifecycle also takes this directory owner: before opening
+and applying/checking the profile (including the Disposable background
+connection), and around the last Session connection's close. WAL startup and
+last-close checkpoint/sidecar teardown can otherwise meet another process's
+writer before its ordinary transaction admission. This is a short lifecycle
+hold, not a hold over a Store call or the lifetime of an open Session. Read-only
+and diagnostic connection initialization uses the same hold; their subsequent
+reads remain independent of the writer lane.
+
+The background connection closes while the Session's main connection is still
+alive, so it is never the last connection. It must not reacquire the lane while
+the Session joins its thread: a quarantined Session can already retain that
+owner. The main connection closes before its retained/new lifecycle owner is
+released. If a destructor's single admission wait is interrupted or fails,
+it retains the connection until process exit instead of performing unadmitted
+teardown or retrying. Checked `seal` retains its explicit close/error result.
+Source: [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/connection.rs),
+[`lifecycle.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/lifecycle.rs),
+[`background.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/background.rs).
 
 ## Related
 

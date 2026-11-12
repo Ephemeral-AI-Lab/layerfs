@@ -31,6 +31,9 @@ pub fn call(
     message: Message,
 ) -> Outcome {
     let home = home.to_path_buf();
+    if let Some(machine) = layerfs_machine::record::MachineRecord::read(&home, record.machine())? {
+        machine.not_held()?;
+    }
     let target = resolve::target(&home, record.project().unwrap_or(""))?;
     let _lease = lease::hold(&home, &target.store)?;
     let host = host(&home, record, &target, message);
