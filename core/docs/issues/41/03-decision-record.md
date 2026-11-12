@@ -185,60 +185,105 @@ recorded option, and it is a format change taken deliberately — not a default.
 
 ## 3. C3 — Per-object delete signature
 
-### 3.1 Problem scenarios
+### 3.1 What the generation in `(ObjectId, G)` is, and is not
 
-- **ABA deletion.** Garbage is identified at generation `G`, the delete executes
-  later; by then the object is gone and the same bytes were rewritten under the
-  same `ObjectId`. A delete keyed on the id alone removes the *new* object:
-  retained data disappears with no error.
-- **Ambiguous duplicate delete.** Two sweeps both decide to delete one object.
-  With `delete(id)` the second returns "0 rows", which is indistinguishable from
-  "the object was already collected", "the id was recycled", or "the intent was
-  stale".
-- **Unattributable loss.** When a delete is reported as failed or as a no-op,
-  nothing in the record says which generation the intent was formed on, so the
-  loss cannot be reconstructed after the fact.
+`G` is **the Store generation** the intent was formed at — `rootGeneration` from
+C1, the same `catalog_incarnation` C8 bumps at install. It is **not** a
+per-object version column: C8 forbids a second generation field, and the
+contract says the *intent* carries `G` (§5 C3). Nothing is added to an object
+row.
 
-### 3.2 Alternatives (§5 C3)
+Why a version is needed at all is a property of how object ids are made:
+`ObjectId::for_bytes = blake3(OBJECT_DOMAIN ‖ canonical)`
+(`core/crates/layerfs-content/src/object/id.rs:22-29`). Identical bytes therefore
+produce the identical `ObjectId`, always. Recurrence of an id is not an allocator
+accident that could be switched off — it follows from content addressing.
+
+### 3.2 Problem scenarios
+
+- **ABA deletion.** Garbage is found unreachable at generation `G`; the intent is
+  queued. Before it runs, a Commit references those same bytes again, so the same
+  `ObjectId` is reachable once more. An intent keyed on the id alone deletes a
+  now-reachable object: retained data disappears with no error.
+- **Resumed intent after a restart.** The op record is replayed after a crash. If
+  it does not carry the generation it was formed at, it cannot tell "still the
+  same Store state" from "the Store has moved on and this object is live again".
+- **Unattributable loss.** When a delete is reported as a no-op, nothing in the
+  record says which generation the intent was formed on, so the loss cannot be
+  reconstructed afterwards.
+
+### 3.3 Alternatives (§5 C3)
 
 | Option | Mechanism | Verdict |
 |---|---|---|
-| **`delete(id, generation)`** (chosen) | Intent bound to `(ObjectId, G)`; delete applies only to that generation | ✓ |
+| **`delete(id, G)`** (chosen) | The intent carries the generation it was formed at; applied only while the Store is still at `G` | ✓ |
 | `delete(id)` | Id only | ✗ violates L1 |
-| Soft-mark only (`set_deleted`) | Flag instead of removal | ✗ does not reclaim; GC's purpose is reclamation |
-| Content-hash predicate | Hash of payload | Replaces a cheap monotonic version with a payload scan |
-| Predicate/condition delete | Arbitrary condition | Pushes the ABA safety into caller-supplied predicates |
-| Batch delete | Ids list | Does not remove the per-row ABA problem, only amortizes calls |
+| Soft-mark only (`set_deleted`) | Flag instead of removal | ✗ does not reclaim; reclamation is GC's purpose |
+| Content-hash predicate | Re-hash the payload | Same protection, bought with a payload scan instead of a stored scalar |
+| Predicate/condition delete | Arbitrary caller condition | Pushes the ABA reasoning into every caller |
+| Batch delete | List of ids | Amortizes calls; the per-intent staleness problem is unchanged |
+| Per-object `generation` column | A version on each row | ✗ forbidden by C8 (no second generation field); unnecessary, since `G` is one Store scalar |
 
-### 3.3 Requirement ladder
+### 3.4 Requirement ladder
 
-| Level | Requirement | `delete(id)` | `delete(id, generation)` |
+| Level | Requirement | `delete(id)` | `delete(id, G)` |
 |---|---|---|---|
-| L1 | A stale intent never deletes a different object (ABA) | ✗ | ✓ |
-| L1 | Duplicate intents resolve deterministically | ✗ indistinguishable | ✓ generation mismatch is explicit |
-| L1 | The record can attribute a deletion to an intent | ✗ | ✓ |
-| L2 | Applies to every backend and to future online GC | ✗ unsafe where ids are recycled | ✓ |
-| L2 | Storage overhead | — | 8 bytes per object |
+| L1 | A stale intent never acts on a now-reachable object (ABA) | ✗ | ✓ |
+| L1 | A resumed intent can prove which state it was formed in | ✗ | ✓ |
+| L1 | The record attributes a deletion to an intent | ✗ | ✓ |
+| L2 | Applies to every backend and to a future online sweep | ✗ | ✓ |
+| L2 | Storage overhead | — | **none**: `G` is already `catalog_incarnation` |
 | L4 | Signature stays comprehensible | ✓ | ✓ with the generation documented |
 
-### 3.4 Reasoning, and the basis for the decision
+### 3.5 Reasoning, and the basis for the decision
 
-This decision has **no trade-off step**: `delete(id)` fails L1 the first time an
-`ObjectId` is reused after a sweep, and a single failure is retained data
-vanishing. Under the ladder an L1 failure ends the comparison regardless of how
-much cheaper or simpler the option is — so the decision is settled at step 2, not
-step 3.
+This decision has **no trade-off step**: `delete(id)` fails L1 the first time
+content recurs after a sweep, and one failure is retained data vanishing. An L1
+failure ends the comparison regardless of how much simpler the option is, so the
+decision is settled at the gate (step 2), not by weighing options.
 
-The signature is also the same everywhere: PostgreSQL and any future online sweep
-need it; SQLite's whole-file replacement does not apply per-row deletes at all, so
-the parameter is inert there and the ordering is covered by C1's install-before
-generation re-check rather than by per-row fencing.
+What "bound to `G`" buys in practice: the sweep runs inside the exclusive window
+(C10) at one generation, so there are no concurrent sweeps to confuse; what the
+generation protects is the intent that outlives the window — a queued or resumed
+delete. C1 already says an instalment re-reads the generation and abandons the
+round if it moved; C3 is the same discipline applied to a single deletion, so
+that a replayed intent is dropped rather than applied to a Store that has moved
+on.
 
-**Decision basis**: must-have correctness gate (ABA safety). The 8-byte cost and
-the extra argument are accepted without being weighed, because the alternative is
-not a different trade-off but a known data-loss mode.
+Scope: SQLite's compact does not delete rows at all — it replaces the file, and
+ordering is covered by C1's install-before-generation re-check. The signature is
+still used uniformly so PostgreSQL and any future online sweep cannot drift to
+the unsafe form.
 
----
+**Decision basis**: must-have correctness gate (ABA safety). The extra argument
+is accepted without being weighed; there is no storage cost to weigh.
+
+### 3.6 Relation to Q1 — same family, opposite mechanisms
+
+Both decisions exist because an identifier may outlive the thing it named, and
+both are the reason C6/I2 ("an immutable id never resolves to different
+content") is stated as an invariant. They are not the same problem:
+
+| | **Q1** (Branch name) | **C3** (object delete) |
+|---|---|---|
+| Id derived from | `blake3(stack ‖ name)` — a **user-chosen, mutable** input | `blake3(OBJECT_DOMAIN ‖ canonical)` — **the bytes themselves** |
+| How identity goes wrong | **aliasing**: two different Branches, one id | **reachability flip**: one content id, unreachable → reachable again |
+| Consequence | history re-attributed; stale `BranchId` resolves to a different Branch | a stale delete removes a live object |
+| Fix chosen | **forbid reuse** — terminal tombstone, `NameRetired` | **permit recurrence, bind the intent to `G`** |
+| Why not the other fix | a version on `BranchId` costs a format change and a migration (Q1-B) | forbidding recurrence is impossible: content addressing reproduces the id for the same bytes, and a per-row version is forbidden by C8 |
+
+Two consequences worth recording:
+
+1. **One generation scalar, reused.** With Q1 = A the system has a single
+   generation concept — `catalog_incarnation` — serving the reader fence (C8) and
+   delete intents (C3). Q1 = B would add a second one to reason about, migrate
+   and validate.
+2. **Q1 = A is what keeps `branch.remove(name)` safely name-only.** #41 requires
+   the three resource operations to take only `name`. Under Q1 = B a stale
+   `remove(name)` could act on a recreated Branch — the C3 failure inside the
+   Branch namespace — and a generation argument would have to be pushed into the
+   resource calls, against #41. Under Q1 = A the name is never live twice, so
+   `remove(name)` has one possible target.
 
 ## 4. Summary — what each decision rests on
 
@@ -246,7 +291,7 @@ not a different trade-off but a known data-loss mode.
 |---|---|---|---|
 | **R1** | L3 (availability) | Gate variable **S11**: is a read-available SLO required? — no → **E**; yes → **A'** | B (lock points per table), C (writability via triggers) |
 | **Q1** | L2 (migration cost) | **Zero migration** + the invariant already asserted at `contract/identity.rs:266-268` → **A** | B is not rejected as wrong, only as too expensive for the benefit |
-| **C3** | L1 (correctness) | **ABA safety** — a stale intent must not delete a different object → **`delete(id, generation)`** | `delete(id)`, soft-mark, hash predicate, condition delete, batch |
+| **C3** | L1 (correctness) | **ABA safety** — a stale intent must not act on a now-reachable object; `G` is the existing Store generation → **`delete(id, G)`** | `delete(id)`, soft-mark, hash predicate, condition delete, batch, per-object version (forbidden by C8) |
 
 Two properties hold for all three, and they are the reason the results are stable
 rather than a matter of taste:
