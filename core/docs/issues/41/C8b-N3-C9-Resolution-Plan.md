@@ -558,3 +558,139 @@ impl From<HistoryError> for ApiError {
 | D6 | 时间戳精度（millisecond vs epoch） | 建议 nullable BIGINT ms | 产品 |
 | D7 | 删除源分支是否允许 | 建议允许（fork 保留所用） | 产品 |
 
+
+---
+
+# C9 深度重设计：用 CCP/CRP 原则指导
+
+## 问题根本原因分析
+
+### 症状
+- 每次添加 4 个 GC 方法
+- 同时改 8 个实现体：SQLite、PostgreSQL、6 个 Mock
+- 维护成本 = 8x
+
+### 根本原因
+**违反两个组件原则：**
+
+1. **违反 CCP (Common Closure Principle)**
+   - Trait 混合了「核心查询」和「GC 操作」
+   - 这两类因不同原因改变（业务逻辑 vs GC 实现）
+   - 结果：两个改变原因被迫修改同一个 trait
+
+2. **违反 CRP (Common Reuse Principle)**
+   - SQLite + PostgreSQL（生产）需要 GC 方法
+   - Mock（测试）不需要 GC 方法
+   - 结果：因使用场景不同，却强制 Mock stub GC
+
+## CCP/CRP 解决方案
+
+### Step 1: 分离 Trait（CCP）
+
+```rust
+// 核心 trait（稳定，改变少）
+pub trait HistoryCatalog {
+    fn list_projects(...) -> Result<...>;
+    fn get_project(...) -> Result<...>;
+    // ... 20+ 非 GC 方法（改变原因：业务逻辑）
+}
+
+// GC 扩展 trait（频繁改变，隔离）
+pub trait HistoryCatalogGC: HistoryCatalog {
+    fn mark_branch_removed(...) -> Result<()>;
+    fn mark_project_deleted(...) -> Result<()>;
+    fn remove_file_from_history(...) -> Result<()>;
+    fn get_retained_roots(...) -> Result<()>;
+}
+```
+
+**好处:**
+- ✅ 核心 trait 稳定，改动少
+- ✅ GC trait 改动不影响其他代码
+- ✅ 因不同原因改变的代码得到隔离
+
+### Step 2: 按使用场景组织（CRP）
+
+```
+core/crates/layerfs-history/src/
+├── contract/
+│   ├── catalog.rs              # HistoryCatalog
+│   └── catalog_gc.rs           # HistoryCatalogGC ← NEW
+│
+├── backend/sqlite/
+│   ├── catalog.rs              # impl HistoryCatalog
+│   └── catalog_gc.rs           # impl HistoryCatalogGC ← NEW
+│
+├── backend/postgresql/
+│   ├── catalog.rs              # impl HistoryCatalog
+│   └── catalog_gc.rs           # impl HistoryCatalogGC ← NEW
+│
+└── testing/
+    ├── mock_catalog.rs         # impl HistoryCatalog (NO GC)
+    ├── daemon_mock.rs          # impl HistoryCatalog (NO GC)
+    └── fixture_catalog.rs      # impl HistoryCatalog (NO GC)
+```
+
+**关键:** Mock 只实现 `HistoryCatalog`，自动获得 `HistoryCatalogGC` 的 `Unsupported` default impl
+
+### Step 3: 效果对比
+
+| 方案 | 修改点 | 代码量 | Review |
+|------|------|------|--------|
+| ❌ 当前 | 8 | 32 行 | 8 个 |
+| ✅ CCP/CRP | 2 | 8 行 | 2 个 |
+| **改进** | **-75%** | **-75%** | **-75%** |
+
+### Step 4: 对标 SOLID 原则
+
+| 原则 | 问题 | 解决 |
+|------|------|------|
+| **S** | Trait 两个改变原因 | 分成两个 trait |
+| **O** | 新方法强制改 8 个 | 开放扩展（新 trait）、关闭修改 |
+| **I** | 客户端被迫依赖 GC | 分离接口，只依赖需要的 |
+| **L** | Mock 被迫 stub GC | Mock 无需实现 HistoryCatalogGC |
+
+## 实现步骤
+
+### Phase 1: 添加 GC Trait
+
+1. 创建 `core/crates/layerfs-history/src/contract/catalog_gc.rs`
+2. 定义 `HistoryCatalogGC: HistoryCatalog` trait（4 个方法）
+3. 实现 default impl（返回 Unsupported）
+
+### Phase 2: SQLite & PostgreSQL impl
+
+1. 创建 `backend/sqlite/src/catalog_gc.rs`
+   - 实现 4 个 GC 方法
+
+2. 创建 `backend/postgresql/src/catalog_gc.rs`
+   - 实现 4 个 GC 方法
+
+### Phase 3: Mock（无需改动！）
+
+```rust
+impl HistoryCatalog for MockCatalog {
+    // 只有 20+ 核心方法
+    fn list_projects(...) -> Result<...> { /* ... */ }
+    // ...
+}
+
+// 自动获得 HistoryCatalogGC 的 default impl（Unsupported）
+// 如果测试需要 GC，使用真实 SQLite：
+let catalog = Arc::new(SqliteCatalog::memory());
+let gc_ops: Arc<dyn HistoryCatalogGC> = catalog.clone();
+```
+
+## 总结
+
+**C9 不是「禁止新增方法」，而是「用组件原则指导设计」：**
+
+- **CCP:** 分离因不同原因改变的代码
+  - 核心查询 ← 业务逻辑变化
+  - GC 操作 ← GC 实现迭代
+  
+- **CRP:** 按使用场景组织实现
+  - 生产（SQLite + PostgreSQL）← 需要 GC
+  - 测试（Mock）← 不需要 GC
+
+**结果:** 8 个修改点 → 2 个修改点，新增 GC 方法成本从 Θ(n) 变为 O(1)
