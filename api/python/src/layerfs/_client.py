@@ -1,6 +1,7 @@
-"""One client per home (and optional folder scope, O32): nine families
+"""One client per home (and optional folder scope, O32): ten families
 built from the library's call table. Each function takes its positionals
 in the table's order; optional positionals and options may be keywords.
+Any call also takes ``log_tag=``, the tag of its call log line (#659).
 Every call is one call into the library, made once."""
 
 import sys
@@ -11,10 +12,12 @@ from ._values import decode, encode, path_text
 
 #: The table: ``[{family, call, args, options, help}]``.
 TABLE = decode(_native.table())
-#: The nine families, in help order.
+#: The ten families, in help order.
 FAMILIES = list(dict.fromkeys(spec["family"] for spec in TABLE))
 
 _FUNCTION = "function"
+#: Passed with any call's arguments; the library takes it out before checking.
+_LOG_TAG = "log_tag"
 
 
 def _invalid(message):
@@ -83,6 +86,9 @@ def _bind(client, spec):
                         raise _invalid(f"{name}: {key} must be a function")
                     handlers[key] = value
                 elif value is not None:
+                    args[key] = value
+            elif key == _LOG_TAG:
+                if value is not None:
                     args[key] = value
             else:
                 raise _invalid(f'{name}: unknown option "{key}"')

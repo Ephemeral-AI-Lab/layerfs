@@ -35,6 +35,12 @@ export interface Scope {
   branch?: string;
 }
 
+/** What every call's options may carry: `log_tag`, an opaque tag (at most
+ * 128 bytes) for the call's line in the home's call log. */
+export interface CallOptions {
+  log_tag?: string;
+}
+
 export interface ClientOptions {
   /** Default `LAYERFS_HOME`, else `~/.layerfs`. */
   home?: string;
@@ -87,32 +93,32 @@ export interface DoctorReport {
 
 
 /** Options of `project.init`; an unknown option is refused. */
-export interface ProjectInitOptions {
+export interface ProjectInitOptions extends CallOptions {
   timeout?: WholeNumber;
   on_progress?: ProgressHandler;
 }
 
 /** Options of `project.list`; an unknown option is refused. */
-export interface ProjectListOptions {
+export interface ProjectListOptions extends CallOptions {
   page_size?: WholeNumber;
   page_pos?: WholeNumber;
 }
 
 /** Options of `project.export`; an unknown option is refused. */
-export interface ProjectExportOptions {
+export interface ProjectExportOptions extends CallOptions {
   branch?: string;
   on_progress?: ProgressHandler;
 }
 
 /** Options of `branch.list`; an unknown option is refused. */
-export interface BranchListOptions {
+export interface BranchListOptions extends CallOptions {
   page_size?: WholeNumber;
   page_pos?: WholeNumber;
   page?: WholeNumber;
 }
 
 /** Options of `branch.commits`; an unknown option is refused. */
-export interface BranchCommitsOptions {
+export interface BranchCommitsOptions extends CallOptions {
   page?: WholeNumber;
   page_size?: WholeNumber;
   at_commit?: string;
@@ -120,13 +126,13 @@ export interface BranchCommitsOptions {
 }
 
 /** Options of `branch.merge`; an unknown option is refused. */
-export interface BranchMergeOptions {
+export interface BranchMergeOptions extends CallOptions {
   message?: string;
   units?: Value;
 }
 
 /** Options of `branch.diff`; an unknown option is refused. */
-export interface BranchDiffOptions {
+export interface BranchDiffOptions extends CallOptions {
   paths_only?: boolean;
   page_size?: WholeNumber;
   page_pos?: WholeNumber;
@@ -140,13 +146,13 @@ export interface BranchDiffOptions {
 }
 
 /** Options of `commit.list`; an unknown option is refused. */
-export interface CommitListOptions {
+export interface CommitListOptions extends CallOptions {
   page_size?: WholeNumber;
   page_pos?: WholeNumber;
 }
 
 /** Options of `commit.diff`; an unknown option is refused. */
-export interface CommitDiffOptions {
+export interface CommitDiffOptions extends CallOptions {
   paths_only?: boolean;
   page_size?: WholeNumber;
   page_pos?: WholeNumber;
@@ -154,34 +160,34 @@ export interface CommitDiffOptions {
 }
 
 /** Options of `file.read`; an unknown option is refused. */
-export interface FileReadOptions {
+export interface FileReadOptions extends CallOptions {
   start_line?: WholeNumber;
   end_line?: WholeNumber;
 }
 
 /** Options of `file.list`; an unknown option is refused. */
-export interface FileListOptions {
+export interface FileListOptions extends CallOptions {
   page_size?: WholeNumber;
   page?: WholeNumber;
   page_pos?: WholeNumber;
 }
 
 /** Options of `file.glob`; an unknown option is refused. */
-export interface FileGlobOptions {
+export interface FileGlobOptions extends CallOptions {
   page_size?: WholeNumber;
   page?: WholeNumber;
   page_pos?: WholeNumber;
 }
 
 /** Options of `file.grep`; an unknown option is refused. */
-export interface FileGrepOptions {
+export interface FileGrepOptions extends CallOptions {
   page_size?: WholeNumber;
   page?: WholeNumber;
   page_pos?: WholeNumber;
 }
 
 /** Options of `file.revision`; an unknown option is refused. */
-export interface FileRevisionOptions {
+export interface FileRevisionOptions extends CallOptions {
   at_commit?: string;
   traversal?: string;
   page?: WholeNumber;
@@ -190,13 +196,13 @@ export interface FileRevisionOptions {
 }
 
 /** Options of `file.blame`; an unknown option is refused. */
-export interface FileBlameOptions {
+export interface FileBlameOptions extends CallOptions {
   from_line?: WholeNumber;
   line_count?: WholeNumber;
 }
 
 /** Options of `file.diff`; an unknown option is refused. */
-export interface FileDiffOptions {
+export interface FileDiffOptions extends CallOptions {
   left_commit?: string;
   right_commit?: string;
   include_attribution?: boolean;
@@ -206,73 +212,73 @@ export interface FileDiffOptions {
 }
 
 /** Options of `file.write`; an unknown option is refused. */
-export interface FileWriteOptions {
+export interface FileWriteOptions extends CallOptions {
   message?: string;
   mode?: WholeNumber;
 }
 
 /** Options of `file.edit`; an unknown option is refused. */
-export interface FileEditOptions {
+export interface FileEditOptions extends CallOptions {
   old?: string;
   new?: string;
   message?: string;
 }
 
 /** Options of `file.rm`; an unknown option is refused. */
-export interface FileRmOptions {
+export interface FileRmOptions extends CallOptions {
   message?: string;
 }
 
 /** Options of `file.mkdir`; an unknown option is refused. */
-export interface FileMkdirOptions {
+export interface FileMkdirOptions extends CallOptions {
   message?: string;
   mode?: WholeNumber;
 }
 
 /** Options of `file.mv`; an unknown option is refused. */
-export interface FileMvOptions {
+export interface FileMvOptions extends CallOptions {
   message?: string;
 }
 
 /** Options of `file.cp`; an unknown option is refused. */
-export interface FileCpOptions {
+export interface FileCpOptions extends CallOptions {
   message?: string;
 }
 
 /** Options of `file.apply`; an unknown option is refused. */
-export interface FileApplyOptions {
+export interface FileApplyOptions extends CallOptions {
   message?: string;
 }
 
 /** Options of `sandbox.create`; an unknown option is refused. */
-export interface SandboxCreateOptions {
+export interface SandboxCreateOptions extends CallOptions {
   image?: string;
 }
 
 /** Options of `sandbox.list`; an unknown option is refused. */
-export interface SandboxListOptions {
+export interface SandboxListOptions extends CallOptions {
   page_size?: WholeNumber;
   page_pos?: WholeNumber;
 }
 
 /** Options of `sandbox.get`; an unknown option is refused. */
-export interface SandboxGetOptions {
+export interface SandboxGetOptions extends CallOptions {
   page_size?: WholeNumber;
   page_pos?: WholeNumber;
 }
 
 /** Options of `sandbox.close`; an unknown option is refused. */
-export interface SandboxCloseOptions {
+export interface SandboxCloseOptions extends CallOptions {
   force?: boolean;
 }
 
 /** Options of `workspace.mount`; an unknown option is refused. */
-export interface WorkspaceMountOptions {
+export interface WorkspaceMountOptions extends CallOptions {
   name?: string;
 }
 
 /** Options of `workspace.exec`; an unknown option is refused. */
-export interface WorkspaceExecOptions {
+export interface WorkspaceExecOptions extends CallOptions {
   message?: string;
   stream?: boolean;
   stdout?: OutputHandler;
@@ -282,29 +288,29 @@ export interface WorkspaceExecOptions {
 }
 
 /** Options of `workspace.exec_cancel`; an unknown option is refused. */
-export interface WorkspaceExecCancelOptions {
+export interface WorkspaceExecCancelOptions extends CallOptions {
   grace_ms?: WholeNumber;
 }
 
 /** Options of `workspace.commit`; an unknown option is refused. */
-export interface WorkspaceCommitOptions {
+export interface WorkspaceCommitOptions extends CallOptions {
   message?: string;
   force?: boolean;
 }
 
 /** Options of `workspace.unmount`; an unknown option is refused. */
-export interface WorkspaceUnmountOptions {
+export interface WorkspaceUnmountOptions extends CallOptions {
   discard?: boolean;
   force?: boolean;
 }
 
 /** Options of `machine.start`; an unknown option is refused. */
-export interface MachineStartOptions {
+export interface MachineStartOptions extends CallOptions {
   on_progress?: ProgressHandler;
 }
 
 /** Options of `machine.create`; an unknown option is refused. */
-export interface MachineCreateOptions {
+export interface MachineCreateOptions extends CallOptions {
   cpus?: WholeNumber;
   memory?: Size;
   disk?: Size;
@@ -314,7 +320,7 @@ export interface MachineCreateOptions {
 }
 
 /** Options of `machine.update`; an unknown option is refused. */
-export interface MachineUpdateOptions {
+export interface MachineUpdateOptions extends CallOptions {
   cpus?: WholeNumber;
   memory?: Size;
   image?: string;
@@ -324,42 +330,54 @@ export interface MachineUpdateOptions {
 }
 
 /** Options of `store.connect`; an unknown option is refused. */
-export interface StoreConnectOptions {
+export interface StoreConnectOptions extends CallOptions {
   password?: string;
   synchronous_commit?: string;
 }
 
 /** Options of `store.attach`; an unknown option is refused. */
-export interface StoreAttachOptions {
+export interface StoreAttachOptions extends CallOptions {
   url?: string;
   password?: string;
 }
 
 /** Options of `store.push`; an unknown option is refused. */
-export interface StorePushOptions {
+export interface StorePushOptions extends CallOptions {
   on_progress?: ProgressHandler;
 }
 
 /** Options of `store.pull`; an unknown option is refused. */
-export interface StorePullOptions {
+export interface StorePullOptions extends CallOptions {
   on_progress?: ProgressHandler;
 }
 
 /** Options of `backup.connect`; an unknown option is refused. */
-export interface BackupConnectOptions {
+export interface BackupConnectOptions extends CallOptions {
   key?: string;
   region?: string;
   part_size?: Size;
 }
 
 /** Options of `backup.create`; an unknown option is refused. */
-export interface BackupCreateOptions {
+export interface BackupCreateOptions extends CallOptions {
   on_progress?: ProgressHandler;
 }
 
 /** Options of `backup.restore`; an unknown option is refused. */
-export interface BackupRestoreOptions {
+export interface BackupRestoreOptions extends CallOptions {
   on_progress?: ProgressHandler;
+}
+
+/** Options of `logs.list`; an unknown option is refused. */
+export interface LogsListOptions extends CallOptions {
+  op?: string;
+  project?: string;
+  client?: string;
+  tag?: string;
+  outcome?: string;
+  since?: WholeNumber;
+  cursor?: string;
+  limit?: WholeNumber;
 }
 
 export interface ProjectFamily {
@@ -369,30 +387,34 @@ export interface ProjectFamily {
   list(options: ProjectListOptions): Promise<Result>;
   list(store?: string | null, options?: ProjectListOptions): Promise<Result>;
   /** a project's record: its Store, kind and machine */
-  get(project: string): Promise<Result>;
+  get(project: string, options?: CallOptions): Promise<Result>;
   /** entry counts of one pinned saved tree */
-  stats(project: string, branch?: string | null, commit?: string | null): Promise<Result>;
+  stats(project: string, options: CallOptions): Promise<Result>;
+  stats(project: string, branch?: string | null, options: CallOptions): Promise<Result>;
+  stats(project: string, branch?: string | null, commit?: string | null, options?: CallOptions): Promise<Result>;
   /** export a project's snapshot from its Store to a local folder */
   export(project: string, destination: string, options?: ProjectExportOptions): Promise<Result>;
   /** remove one project from its Store */
-  remove(project: string): Promise<Result>;
+  remove(project: string, options?: CallOptions): Promise<Result>;
 }
 
 export interface BranchFamily {
   /** a project's Branches */
   list(project: string, options?: BranchListOptions): Promise<Result>;
   /** one Branch and its head Commit */
-  get(project: string, branch: string): Promise<Result>;
+  get(project: string, branch: string, options?: CallOptions): Promise<Result>;
   /** saved branch commits or main publications, newest first */
   commits(project: string, branch: string, options?: BranchCommitsOptions): Promise<Result>;
   /** one saved Commit or main publication */
-  get_commit(project: string, branch: string, commit: string): Promise<Result>;
+  get_commit(project: string, branch: string, commit: string, options?: CallOptions): Promise<Result>;
   /** a new Branch from another Branch's head or Commit */
-  fork(project: string, name: string, from_branch: string, from_commit?: string | null): Promise<Result>;
+  fork(project: string, name: string, from_branch: string, options: CallOptions): Promise<Result>;
+  fork(project: string, name: string, from_branch: string, from_commit?: string | null, options?: CallOptions): Promise<Result>;
   /** merge two Branches into a new one */
   merge(project: string, name: string, a: string, b: string, options?: BranchMergeOptions): Promise<Result>;
   /** a Branch's head or Commit as main's next Layer */
-  publish(project: string, branch: string, commit?: string | null): Promise<Result>;
+  publish(project: string, branch: string, options: CallOptions): Promise<Result>;
+  publish(project: string, branch: string, commit?: string | null, options?: CallOptions): Promise<Result>;
   /** files that differ between two Branches' heads */
   diff(project: string, from_branch: string, to_branch: string, options?: BranchDiffOptions): Promise<Result>;
 }
@@ -401,7 +423,7 @@ export interface CommitFamily {
   /** a Branch's Commits, newest first */
   list(project: string, branch: string, options?: CommitListOptions): Promise<Result>;
   /** one Commit of a Branch */
-  get(project: string, branch: string, commit: string): Promise<Result>;
+  get(project: string, branch: string, commit: string, options?: CallOptions): Promise<Result>;
   /** files that differ between two Commits */
   diff(project: string, from_commit: string, to_commit: string, options?: CommitDiffOptions): Promise<Result>;
 }
@@ -411,7 +433,8 @@ export interface FileFamily {
   read(project: string, branch: string, path: string, options: FileReadOptions): Promise<Result>;
   read(project: string, branch: string, path: string, commit?: string | null, options?: FileReadOptions): Promise<Result>;
   /** a path's kind, size and mode */
-  stat(project: string, branch: string, path: string, commit?: string | null): Promise<Result>;
+  stat(project: string, branch: string, path: string, options: CallOptions): Promise<Result>;
+  stat(project: string, branch: string, path: string, commit?: string | null, options?: CallOptions): Promise<Result>;
   /** a folder's entries */
   list(project: string, branch: string, path: string, options: FileListOptions): Promise<Result>;
   list(project: string, branch: string, path: string, commit?: string | null, options?: FileListOptions): Promise<Result>;
@@ -469,70 +492,78 @@ export interface WorkspaceFamily {
   /** end a Workspace */
   unmount(ws: string, options?: WorkspaceUnmountOptions): Promise<Result>;
   /** a Workspace's changes since its base */
-  status(ws: string): Promise<Result>;
+  status(ws: string, options?: CallOptions): Promise<Result>;
 }
 
 export interface MachineFamily {
   /** every machine, with what it supports */
-  list(): Promise<Result>;
+  list(options?: CallOptions): Promise<Result>;
   /** the platforms this host and build support, and what each is missing */
-  platforms(): Promise<Result>;
+  platforms(options?: CallOptions): Promise<Result>;
   /** a machine's record */
-  get(name: string): Promise<Result>;
+  get(name: string, options?: CallOptions): Promise<Result>;
   /** a machine's live state, free disk and tool version */
-  status(name: string): Promise<Result>;
+  status(name: string, options?: CallOptions): Promise<Result>;
   /** start a stopped machine and its worker; a running one answers at once */
   start(name: string, options?: MachineStartOptions): Promise<Result>;
   /** stop a machine's worker and VM; its disks stay */
-  stop(name: string): Promise<Result>;
+  stop(name: string, options?: CallOptions): Promise<Result>;
   /** create an enabled VM machine (apple-container, lima) */
   create(name: string, platform: string, options?: MachineCreateOptions): Promise<Result>;
   /** delete a VM machine and its disk; one of a removed platform is only forgotten */
-  remove(name: string): Promise<Result>;
+  remove(name: string, options?: CallOptions): Promise<Result>;
   /** resize a VM, or set a built-in machine's image, Docker socket and daemon */
   update(name: string, options?: MachineUpdateOptions): Promise<Result>;
 }
 
 export interface StoreFamily {
   /** every Store, from the home's records */
-  list(): Promise<Result>;
+  list(options?: CallOptions): Promise<Result>;
   /** a Store's record */
-  get(name: string): Promise<Result>;
+  get(name: string, options?: CallOptions): Promise<Result>;
   /** a Store's live state */
-  status(name: string): Promise<Result>;
+  status(name: string, options?: CallOptions): Promise<Result>;
   /** Store-wide publication and allocation counters */
-  stats(name: string): Promise<Result>;
+  stats(name: string, options?: CallOptions): Promise<Result>;
   /** an empty sqlite Store on native */
-  create(name: string): Promise<Result>;
+  create(name: string, options?: CallOptions): Promise<Result>;
   /** attach a PostgreSQL database as a Store */
   connect(name: string, url: string, options?: StoreConnectOptions): Promise<Result>;
   /** let a machine run Sandboxes of a PostgreSQL Store, after checking it reaches the server */
   attach(name: string, machine: string, options?: StoreAttachOptions): Promise<Result>;
   /** stop a machine running Sandboxes of a PostgreSQL Store */
-  detach(name: string, machine: string): Promise<Result>;
+  detach(name: string, machine: string, options?: CallOptions): Promise<Result>;
   /** send a sqlite Store from native to a machine */
   push(name: string, machine: string, options?: StorePushOptions): Promise<Result>;
   /** bring a sqlite Store from its machine to native */
   pull(name: string, options?: StorePullOptions): Promise<Result>;
   /** delete a sqlite Store with every project in it */
-  remove(name: string): Promise<Result>;
+  remove(name: string, options?: CallOptions): Promise<Result>;
   /** forget a PostgreSQL Store; its data stays */
-  disconnect(name: string): Promise<Result>;
+  disconnect(name: string, options?: CallOptions): Promise<Result>;
 }
 
 export interface BackupFamily {
   /** connect an r2 or MinIO bucket */
   connect(name: string, url: string, options?: BackupConnectOptions): Promise<Result>;
   /** forget a bucket and this home's links to it */
-  disconnect(name: string): Promise<Result>;
+  disconnect(name: string, options?: CallOptions): Promise<Result>;
   /** every Store file on the connected buckets */
-  list(bucket?: string | null): Promise<Result>;
+  list(options: CallOptions): Promise<Result>;
+  list(bucket?: string | null, options?: CallOptions): Promise<Result>;
   /** upload a sqlite Store to a bucket */
   create(store: string, bucket: string, options: BackupCreateOptions): Promise<Result>;
   create(store: string, bucket: string, file?: string | null, options?: BackupCreateOptions): Promise<Result>;
   /** download a backup as a sqlite Store on native */
   restore(store: string, bucket: string, options: BackupRestoreOptions): Promise<Result>;
   restore(store: string, bucket: string, file?: string | null, options?: BackupRestoreOptions): Promise<Result>;
+}
+
+export interface LogsFamily {
+  /** the calls made against this home, newest first */
+  list(options?: LogsListOptions): Promise<Result>;
+  /** clear this home's call log */
+  reset(options?: CallOptions): Promise<Result>;
 }
 
 export interface Client {
@@ -547,6 +578,7 @@ export interface Client {
   readonly machine: MachineFamily;
   readonly store: StoreFamily;
   readonly backup: BackupFamily;
+  readonly logs: LogsFamily;
 }
 
 /** The call table: one entry per call. */
@@ -570,6 +602,7 @@ export const workspace: WorkspaceFamily;
 export const machine: MachineFamily;
 export const store: StoreFamily;
 export const backup: BackupFamily;
+export const logs: LogsFamily;
 
 declare const layerfs: Client & {
   client: typeof client;

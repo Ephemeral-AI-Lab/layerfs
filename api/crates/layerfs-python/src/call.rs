@@ -35,7 +35,14 @@ pub fn call(
                 });
             }
         };
-        layerfs_api::call_json(home.as_deref(), scope.as_deref(), &name, &args, &mut send)
+        layerfs_api::call_json(
+            home.as_deref(),
+            scope.as_deref(),
+            &name,
+            &args,
+            &mut send,
+            layerfs_api::Client::Python,
+        )
     })
 }
 
