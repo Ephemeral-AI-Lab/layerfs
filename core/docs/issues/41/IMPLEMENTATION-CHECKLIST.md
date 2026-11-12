@@ -1,382 +1,139 @@
-# Implementation Checklist - GC Issue #41
+# Implementation Checklist — GC Issue #41
 
-## Overview
+Acceptance criteria and dependencies per sub-issue. **Task-level detail is not
+duplicated here**: it lives in each issue's body, with the contracts in
+`02-operation-contracts.md` and the guidance in `C8b-N3-C9-Resolution-Plan.md`.
+The authority for every criterion below is `LayerFS-GC-spec.md` (§ cited).
 
-This checklist tracks the implementation of all 10 sub-issues (#42-#52) for LayerFS Garbage Collection.
+Legend: 🔲 not started · ⏳ blocked on a decision · ✅ done
 
-**Foundation**: the authority is `LayerFS-GC-spec.md` (§1-§12) in this directory.
-`C8b-N3-C9-Resolution-Plan.md` gives implementation guidance for three of its
-items; `02-operation-contracts.md` gives the per-operation contracts;
-`03-decision-record.md` records R1/Q1/C3 and the open items.
+## Per-issue acceptance
 
-All paths under **Code Locations** are *proposed*, not verified against the tree —
-check the real seam before starting an issue.
-
----
-
-## Phase 1: Design Finalization (#42)
-
-**Goal**: Confirm all design decisions before implementation
-
-**Pre-Implementation**:
-- Read `LayerFS-GC-spec.md` §1 (decisions) and §5 (contracts C1-C10)
-- Read `03-decision-record.md` §1-§3 for the reasoning behind R1, Q1, C3
-- Answer `LayerFS-GC-spec.md` §1.2 (Q1-Q6); Q1/Q2/Q4/Q5 carry recommendations
-- Sign off R1, Q1, C3 — the requests are linked from README's *Sign-off requests*
-
-**Tasks**:
-- [ ] Confirm the settled conclusions (`LayerFS-GC-spec.md` §1.1, S1-S11)
-- [ ] Q1 name reuse — recommended: forbid (A) · asked on #44
-- [ ] Q2 `remove_file` reclamation — recommended: measure first, then document
-- [ ] Q3 age threshold — out of this release
-- [ ] Q4 interrupted-copy retention — recommended: keep one, no auto-cleanup
-- [ ] Q5 PostgreSQL reader behaviour — superseded by C8/R2
-- [ ] Q6 `store.compact` commitment level — split into two levels (owner signs off)
-- [ ] R1 PostgreSQL replacement — recommended: E · asked on #50
-- [ ] C3 per-object delete — recommended: `delete(id, G)` · asked on #42
-- [ ] §5.1 open item — replacement+rename vs an in-place path (see 03 §5.1/§5.1a)
-
-**Acceptance**: §1.1 confirmed, every §1.2 question answered, R1/Q1/C3 signed
-
-**Status**: ⏳ Waiting for product decisions
+| Phase | Issue | Deliverable | Depends on | Status |
+|---|---|---|---|---|
+| 1 | **#42** | Contracts frozen, decisions answered | — | ⏳ |
+| 2 | **#43** | Admission matrix enforced | #42 | 🔲 |
+| 2 | **#48** | Reachability closure | #42 | 🔲 |
+| 3 | **#44** | `branch.remove` | #42, #43, #48 | 🔲 |
+| 3 | **#45** | `project.delete` | #42, #43, #48 | 🔲 |
+| 3 | **#47** | `project.remove_file` | #42, #43, #48 | 🔲 |
+| 4 | **#49** | SQLite compact | #42, #43, #48 | 🔲 |
+| 4 | **#50** | PostgreSQL compact | #42, #43, #48 | 🔲 |
+| 5 | **#51** | API / SDK / CLI | #42–#50 | 🔲 |
+| 5 | **#52** | Acceptance suite | #42–#51 | 🔲 |
 
 ---
 
-## Phase 2a: Infrastructure (#43, #48)
+### #42 — Design finalization (§1.1, §1.2, §5, §6)
 
-### Issue #43: Admission Enforcement
+- [ ] Every settled conclusion (§1.1, S1–S11) confirmed
+- [ ] Every open question (§1.2, Q1–Q6) answered; Q3 is out of this release
+- [ ] **R1** signed (asked on [#50](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/50))
+- [ ] **Q1** signed (asked on [#44](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/44))
+- [ ] **C3** signed (asked on [#42](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/42))
+- [ ] §5.1 open item resolved: replacement+rename, or also an in-place path (`03-decision-record.md` §5.1/§5.1a)
+- [ ] Contracts C1–C10 frozen; the split between shared and exclusive project tombstones stated (C6)
+- [ ] The "which history queries must filter on visibility" list enumerated (C6, C9)
 
-**Pre-Implementation**:
-- [ ] Understand: Admission matrix (branch/project/file/compact)
-- [ ] Know the four error codes: MountsActive, Busy, Conflict, Unsupported
+### #43 — Admission enforcement (§5 C10, §2)
 
-**Key Requirements**:
-- [ ] Define admission matrix data structure
-- [ ] Implement atomic mount state check
-- [ ] Implement MountsActive error return
-- [ ] Implement Busy error for conflicting users
-- [ ] No implicit wait or automatic cleanup
+- [ ] The admission matrix is enforced on all four operations
+- [ ] Mounts and sessions left in place → `MountsActive`; another user's operation in flight → `Busy`
+- [ ] No implicit wait, no automatic cleanup, no retry
+- [ ] The reader half: every session/transaction entry checks `(catalog_id, incarnation)` → `StaleStore` (§5 C8, R2)
+- [ ] Tested on both backends
 
-**Acceptance**:
-- [ ] Admission matrix enforced on all 4 operations
-- [ ] Tests pass on SQLite backend
-- [ ] Tests pass on PostgreSQL backend
-- [ ] Mount violations return MountsActive
-- [ ] Conflicting users return Busy
+### #48 — Shared data reachability (§5 C1, C2, §6)
 
-**Code Locations**: `control/crates/layerfs-store/src/admission.rs` (new)
+- [ ] Closure computed at the frozen generation, inside the exclusive window; no caching across operations
+- [ ] Pinned set covers ops, staged copies, both Stores during install, unresolved artifacts
+- [ ] Cross-project sharing and transitive delta bases survive a compact
+- [ ] `pack` and catalog tables are never candidates
+- [ ] The decision lands as a receipt (G, roots fingerprint, closure size, collectable count), with estimates marked `estimate: true`
+- [ ] Tested on both backends
 
-**Status**: 🔲 Not Started
+### #44 — `branch.remove` (§5 C6, C9, C10)
 
----
+- [ ] `branch.remove(name)` sets the terminal marker; only that Branch's mounts and sessions are excluded
+- [ ] A same-name create is refused — **`NameRetired`**, not reused (Q1 option A)
+- [ ] Other Branches in the Store stay readable and writable
+- [ ] Immutable ids remain accessible after removal (C9)
+- [ ] Tested on both backends
 
-### Issue #48: Shared Data Reachability
+### #45 — `project.delete` (§5 C6, C10, §8)
 
-**Pre-Implementation**:
-- [ ] Understand: 3-step closure (Pinned → Historical → Cross-Project)
-- [ ] Understand: Pack sharing and delta-base protection
+- [ ] `project.delete(name)` sets the terminal marker on the project
+- [ ] The Store stays addressable afterwards (a later `store.compact` must find it)
+- [ ] Mounts and Sandboxes on the deleted project are refused
+- [ ] The deleted project's name is terminal (C6)
+- [ ] Schema migration for the visibility column is applied by the same change (N3)
+- [ ] Tested on both backends
 
-**Key Requirements**:
-- [ ] Implement reachability closure algorithm
-- [ ] Implement reference counting
-- [ ] Protect transitive delta bases
-- [ ] Test cross-project sharing scenarios
-- [ ] Verify pack sharing detection
+### #47 — `project.remove_file` (§3 I5, §5 C9, §9.3)
 
-**Acceptance**:
-- [ ] All shared data protected from GC
-- [ ] Reference counts accurate
-- [ ] Cross-project dependencies survive compact
-- [ ] Tests pass on SQLite and PostgreSQL
+- [ ] The call is a visibility operation: history and ids are not rewritten
+- [ ] History traversal hides the removed path; earlier Commits stay readable
+- [ ] Reclaimed bytes are reported and match the receipt; a 0 is explained (Q2)
+- [ ] Cross-project sharing is unaffected
+- [ ] Tested on both backends
 
-**Code Locations**: `persistence/src/reachability.rs` (new)
+### #49 — SQLite compact (§7.1, §7.2, §5 C8b)
 
-**Depends On**: #42 (design finalized)
+- [ ] Rebuild-and-swap reusing `transfer`, with only `rewrite` inserted
+- [ ] Writer fence: the pre-swap writer fails with `Conflict` instead of writing into the retired inode
+- [ ] An interrupted compact is recoverable; the Store always opens and `doctor`s
+- [ ] `physical_shrink` reported as the `page_count × page_size` delta, with `reclaimed_pages` separately (C5)
+- [ ] Concurrent compact + write has no silent-loss path
+- [ ] Non-native Stores are refused
 
-**Status**: 🔲 Not Started
+### #50 — PostgreSQL compact (§7.3, §5 C8, §5 C3)
 
----
+- [ ] Store replacement per R1: **E** (two `ALTER SCHEMA RENAME` in one transaction) by default; **A'** only if S11 requires reads up
+- [ ] `catalog_incarnation` bumped at install; the C8 reader fence refuses stale sessions
+- [ ] §5.1 resolved first: replacement+rename, or also an in-place deletion path
+- [ ] `pack` rows never updated or deleted (the trigger forbids it); old data leaves with `DROP SCHEMA … CASCADE`
+- [ ] `physical_shrink` reported as the `pg_relation_size` / `pg_total_relation_size` delta
+- [ ] Remote servers supported (not `Unsupported`); network-partition recovery tested
 
-## Phase 2b: Soft Removal (#44, #45, #47)
+### #51 — API / SDK / CLI (§8, §5 C9)
 
-### Issue #44: Branch Removal
+- [ ] The four calls take only the resource name; no `confirm` / `force` / `dryRun` / `stopSandboxes`
+- [ ] Progress read from `store.status`; no new `operation.get`
+- [ ] Refusals surface as the existing codes (`MountsActive`, `Busy`, `InUse`, `NameRetired`, `StaleStore`)
+- [ ] No new `HistoryError` variant; GC methods default to `Unsupported` (C9)
 
-**Pre-Implementation**:
-- [ ] Understand: Soft delete via removed_ms timestamp
+### #52 — Acceptance (§9)
 
-**Key Requirements**:
-- [ ] Mark Branch as removed (removed_ms timestamp) - N3
-- [ ] Prevent new mounts to removed Branch
-- [ ] Verify other Branches unaffected
-- [ ] Test publish/merge with removed Branch
-- [ ] Tests on SQLite and PostgreSQL
-
-**Acceptance**:
-- [ ] branch.remove() works correctly
-- [ ] Immutable IDs still accessible
-- [ ] Name can be reused
-- [ ] Tests pass on both backends
-
-**Code Locations**: 
-- `persistence/src/branch.rs` (mark_branch_removed)
-- `control/crates/layerfs-store/src/admission.rs` (branch.remove policy)
-
-**Depends On**: #42, #43, #48
-
-**Status**: 🔲 Not Started
-
----
-
-### Issue #45: Project Deletion
-
-**Pre-Implementation**:
-- [ ] Understand: Schema migration v3.5 → v3.6
-- [ ] Understand: Soft delete + Store remaining addressable
-
-**Key Requirements**:
-- [ ] Schema migration: Add deleted_ms column - N3
-- [ ] Mark project as deleted (deleted_ms timestamp)
-- [ ] Keep Store addressable for later compact
-- [ ] Verify Sandboxes cannot mount deleted project
-- [ ] Tests on SQLite and PostgreSQL
-
-**Acceptance**:
-- [ ] project.delete() works correctly
-- [ ] Store still addressable for compact
-- [ ] Name can be reused
-- [ ] Database migration succeeds
-- [ ] Tests pass on both backends
-
-**Code Locations**:
-- `persistence/backend/sqlite/migrations.rs` (v3.5 → v3.6)
-- `persistence/src/project.rs` (mark_project_deleted)
-
-**Depends On**: #42, #43, #48
-
-**Status**: 🔲 Not Started
+- [ ] `kill -9` crash injection per backend, per phase; every resume reaches a consistent state
+- [ ] No-accidental-deletion property tests (§9.2)
+- [ ] Contract tests (§9.3), including remove_file's byte accounting
+- [ ] A stale reader gets `StaleStore`, and reads the new generation after reconnecting
+- [ ] Physical shrink measured before/after on both backends
 
 ---
 
-### Issue #47: File Removal
-
-**Pre-Implementation**:
-- [ ] Understand: Immutable ID access protection
-
-**Key Requirements**:
-- [ ] Design immutable ID access contract (C9)
-- [ ] Implement logical file removal
-- [ ] Implement history traversal with removed files
-- [ ] Protect immutable IDs before/after removal
-- [ ] Tests on cross-project sharing
-
-**Acceptance**:
-- [ ] project.remove_file() works correctly
-- [ ] Immutable IDs remain accessible
-- [ ] History entries marked as removed
-- [ ] Cross-project sharing unaffected
-- [ ] Tests pass on both backends
-
-**Code Locations**: `persistence/src/history/remove_file.rs` (new)
-
-**Depends On**: #42, #43, #48
-
-**Status**: 🔲 Not Started
-
----
-
-## Phase 3: Physical Compaction (#49, #50)
-
-### Issue #49: SQLite Compaction
-
-**Pre-Implementation**:
-- [ ] Understand: 5-stage incarnation protocol
-- [ ] Understand: Two-gate write fence (admission + install)
-- [ ] Understand: Writer-exclusive fence during Stage 3
-
-**Key Requirements**:
-- [ ] Implement C8b: Incarnation mechanism
-- [ ] Stage 1: Mark discarded rows
-- [ ] Stage 2: Create new tables
-- [ ] Stage 3: Atomic swap with writer fence (CRITICAL)
-- [ ] Stage 4: Reader fence / grace period
-- [ ] Stage 5: Drop old tables
-- [ ] Recovery after interrupted compact
-
-**Acceptance**:
-- [ ] SQLite incarnation protocol works
-- [ ] Writer fence prevents silent data loss
-- [ ] Physical shrink verified (VACUUM ANALYZE)
-- [ ] Tests: concurrent compact + write → Conflict
-- [ ] Tests: mount failures, grace periods
-- [ ] No silent data loss scenarios
-
-**Code Locations**:
-- `backend/sqlite/src/catalog_gc.rs` (impl HistoryCatalogGC)
-- `store/identity.rs` (StoreGeneration)
-- `store/sqlite/writer_admission.rs` (writer fence)
-
-**Depends On**: #42, #43, #48, N3 schema
-
-**Status**: 🔲 Not Started
-
----
-
-### Issue #50: PostgreSQL Compaction
-
-**Pre-Implementation**:
-- [ ] Understand: PostgreSQL-specific compaction strategy
-- [ ] Understand: Remote server support (not stub)
-- [ ] Understand: Physical reclamation verification
-
-**Key Requirements**:
-- [ ] Implement the Store replacement R1 selects: E (two `ALTER SCHEMA RENAME` in
-      one transaction) by default, A' (pointer + versioned schema) only if S11
-      requires reads up
-- [ ] Bump `catalog_incarnation` at install and rely on the C8 reader fence
-- [ ] Resolve 03-decision-record §5.1 first: replacement+rename, or also an
-      in-place deletion path
-- [ ] Support remote PostgreSQL servers
-- [ ] Implement physical reclamation (pg_total_relation_size)
-- [ ] Test network partition recovery
-- [ ] Measure space reclamation before/after
-
-**Acceptance**:
-- [ ] PostgreSQL compaction works
-- [ ] Remote servers fully supported (not Unsupported)
-- [ ] Physical shrink verified (pg_total_relation_size)
-- [ ] Tests: remote server scenarios
-- [ ] Tests: network partition recovery
-- [ ] Space reclamation metrics accurate
-
-**Code Locations**: `backend/postgresql/src/catalog_gc.rs` (impl HistoryCatalogGC)
-
-**Depends On**: #42, #43, #48, N3 schema
-
-**Status**: 🔲 Not Started
-
----
-
-## Phase 4: Integration & Qualification (#51, #52)
-
-### Issue #51: API/SDK/CLI Exposure
-
-**Pre-Implementation**:
-- [ ] Understand: API contracts for all operations
-
-**Key Requirements**:
-- [ ] Add API endpoints (branch.remove, project.delete, etc.)
-- [ ] Add SDK methods
-- [ ] Add CLI commands
-- [ ] Implement C9: HistoryCatalogGC trait (4 GC methods)
-- [ ] Write user guides and best practices
-- [ ] Document error codes and recovery
-- [ ] Add code examples
-
-**Acceptance**:
-- [ ] All 4 operations exposed through API/SDK/CLI
-- [ ] HistoryCatalogGC trait properly designed (CCP/CRP)
-- [ ] Error handling clear and documented
-- [ ] Examples cover all scenarios
-- [ ] User guides complete
-
-**Code Locations**:
-- `contract/src/catalog_gc.rs` (HistoryCatalogGC trait) - NEW
-- `api/v1/gc_operations.rs` (API endpoints)
-- `sdk/gc_client.rs` (SDK methods)
-- `cli/commands/gc.rs` (CLI commands)
-
-**Depends On**: #42-#50 all complete
-
-**Status**: 🔲 Not Started
-
----
-
-### Issue #52: Acceptance Testing & Qualification
-
-**Pre-Implementation**:
-- [ ] Prepare crash injection framework
-- [ ] Prepare state machine validator
-- [ ] Prepare cross-project pack verifier
-- [ ] Prepare receipt byte consistency checker
-
-**Key Requirements**:
-- [ ] Integration tests (all operations together)
-- [ ] Crash recovery tests at 5 injection points
-- [ ] Cross-project sharing verification
-- [ ] Performance benchmarks
-- [ ] Load testing
-- [ ] Documentation validation
-
-**Crash Injection Points**:
-1. During Setup (discarded rows marked)
-2. During Create (new tables exist)
-3. During Swap (one of old/new active)
-4. During Fence (no new readers on old)
-5. During Drop (old data gone)
-
-**Verification**:
-- [ ] Discarded rows correctly marked
-- [ ] New tables created with correct schema
-- [ ] Swap is atomic (one version active)
-- [ ] Reader fence blocks old readers
-- [ ] Old data successfully dropped
-- [ ] Cross-project packs protected
-- [ ] Receipt bytes consistent
-- [ ] No silent data loss
-
-**Acceptance**:
-- [ ] All tests pass on SQLite
-- [ ] All tests pass on PostgreSQL
-- [ ] All crash scenarios handled
-- [ ] Performance meets targets
-- [ ] Load tests pass
-
-**Code Locations**: `tests/gc_qualification.rs` (new)
-
-**Depends On**: #42-#51 all complete
-
-**Status**: 🔲 Not Started
-
----
-
-## Critical Paths & Dependencies
+## Critical path
 
 ```
-#42 (Design)
-  ├─→ #43 (Admission)
-  │   ├─→ #44 (Branch RM)
-  │   ├─→ #45 (Project RM)
-  │   └─→ #47 (File RM)
-  │
-  ├─→ #48 (Reachability)
-  │   ├─→ #44, #45, #47
-  │   ├─→ #49 (SQLite)
-  │   └─→ #50 (PostgreSQL)
-  │
-  └─→ #51, #52 (API & Tests)
-      ├─→ #43-#50 all complete
-      └─→ Cross-platform verification
+#42 (contracts + R1/Q1/C3 signed)
+  ├─→ #43 (admission) ──┐
+  ├─→ #48 (reachability)┴─→ #44, #45, #47 ─→ #49, #50 ─→ #51 ─→ #52
 ```
 
-**Critical**: #42 must complete first (design decisions)
+`#42` gates everything: an unanswered §1.2 question or an unsigned R1/Q1/C3
+keeps the dependent issue blocked rather than half-built.
+
+## Review & sign-off
+
+| Phase | Reviewer | Status |
+|---|---|---|
+| #42 | Product + Architecture | ⏳ |
+| #43 | Architecture | 🔲 |
+| #44–#47 | Engineering Lead | 🔲 |
+| #49–#50 | Database Specialist | 🔲 |
+| #51 | API Lead | 🔲 |
+| #52 | QA Lead | 🔲 |
 
 ---
 
-## Review & Sign-Off
-
-| Phase | Reviewer | Status | Sign-Off |
-|-------|----------|--------|----------|
-| #42 | Product + Architecture | 🔲 | - |
-| #43 | Architecture | 🔲 | - |
-| #44-47 | Engineering Lead | 🔲 | - |
-| #49-50 | Database Specialist | 🔲 | - |
-| #51 | API Lead | 🔲 | - |
-| #52 | QA Lead | 🔲 | - |
-
----
-
-**Last Updated**: 2026-11-12  
-**Total Issues**: 10 (#42-#52)  
-**Estimated Duration**: 8-12 weeks (with team)  
 **Base PR**: Ephemeral-AI-Lab/layerfs#658
-

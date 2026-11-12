@@ -39,6 +39,8 @@ removed; cite §5 rather than any local summary.
   in-place row deletion, and C3's scope), including §5.1a: the restored argument
   for why in-place deletion was ruled out in the first place
 - **C8b-N3-C9-Resolution-Plan.md** - Deep dive on three critical issues
+- **IMPLEMENTATION-CHECKLIST.md** - Per-issue acceptance criteria, dependencies and
+  the critical path (task detail lives in each issue's body)
 
 ## Implementation Phases
 
