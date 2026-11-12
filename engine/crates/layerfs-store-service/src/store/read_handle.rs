@@ -128,6 +128,24 @@ impl ReadSession {
             })
         })
     }
+    /// Locator facts (and payload records when `records`) for one bounded
+    /// demand, without reconstructing any object.
+    pub fn describe(
+        &self,
+        ids: &[ObjectId],
+        records: bool,
+    ) -> Result<Vec<layerfs_storage::DescribedObject>, Arc<PortError>> {
+        self.attempt(|handle, cache, counts| {
+            counts.objects.fetch_add(1, Ordering::Relaxed);
+            counts
+                .object_ids
+                .fetch_add(ids.len() as u64, Ordering::Relaxed);
+            self.cached(cache, |cache| match cache {
+                Some(cache) => handle.storage.describe_kept(cache, ids, records),
+                None => handle.storage.reader()?.describe_objects(ids, records),
+            })
+        })
+    }
     /// [`Self::objects`] through a caller's caches; the lock is held for
     /// this one demand only.
     pub fn objects_with(

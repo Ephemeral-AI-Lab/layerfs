@@ -1,7 +1,7 @@
 //! The public method table: each JavaScript method name runs its method file
 //! once. Operator names are absent from this table.
 use crate::methods::args::{self, Answer};
-use crate::methods::{branch, file as fs, project, store};
+use crate::methods::{branch, file as fs, project, storage_report, store};
 use crate::StoreService;
 use layerfs_bridge::control::{SdkCall, SdkValue};
 
@@ -20,6 +20,7 @@ pub fn call(service: &StoreService, call: &SdkCall) -> Answer {
     }
     match call.method.as_str() {
         "store.stats" => store::stats(service),
+        "store.storage_report" => storage_report::report(service, args),
         "project.stats" => project::stats(service, args),
         "project.list_branches" => project::list_branches(service, args),
         "branch.fork" => branch::fork(service, args),

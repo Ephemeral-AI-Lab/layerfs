@@ -211,6 +211,7 @@ Its protocol is on [Workers](../../control/routing/workers.md).
 `store stats <name>` exposes [Store-wide counters](../sdk/store/stats.md) through the call table.
 
 `project stats <store>/<project> [<branch>] [<commit>]` reports [pinned saved-tree counts](../sdk/project/stats.md).
+`project storage-report <store>/<project>` and `store storage-report <name>` read their snapshot list as JSON from stdin or `--from <file>` and report [bounded canonical reuse](../sdk/store/storage_report.md).
 
 `file revision` and pinned `branch diff` accept `--continuation TOKEN`. Repeat
 the saved IDs and query options, omit `--page`, and read the returned next

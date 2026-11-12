@@ -28,6 +28,16 @@ class AsyncProjectFamily:
         """a project's record: its Store, kind and machine"""
     async def stats(self, project: str, branch: str | None = None, commit: str | None = None) -> Result:
         """entry counts of one pinned saved tree"""
+    async def storage_report(
+        self,
+        project: str,
+        snapshots: JSON,
+        *,
+        max_objects: int | None = None,
+        max_canonical_bytes: Size | None = None,
+        include_encoding: bool | None = None,
+    ) -> Result:
+        """bounded canonical reuse among one project's explicit immutable saved snapshots"""
     async def export(
         self,
         project: str,
@@ -364,6 +374,16 @@ class AsyncStoreFamily:
         """a Store's live state"""
     async def stats(self, name: str) -> Result:
         """Store-wide publication and allocation counters"""
+    async def storage_report(
+        self,
+        name: str,
+        snapshots: JSON,
+        *,
+        max_objects: int | None = None,
+        max_canonical_bytes: Size | None = None,
+        include_encoding: bool | None = None,
+    ) -> Result:
+        """bounded canonical sharing among explicit immutable saved snapshots"""
     async def create(self, name: str) -> Result:
         """an empty sqlite Store on native"""
     async def connect(

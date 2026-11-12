@@ -28,3 +28,44 @@ fn saved_history_calls_are_refused_before_dispatch_even_for_root_folder_scopes()
         }
     }
 }
+
+#[test]
+fn store_storage_report_does_not_widen_folder_scopes() {
+    let scope = Scope::parse(&SdkValue::map([
+        ("project", SdkValue::text("shop/api")),
+        ("folder", SdkValue::text("/")),
+    ]))
+    .unwrap();
+    let error = scope
+        .apply(
+            "store.storage_report",
+            SdkValue::map([
+                ("name", SdkValue::text("shop")),
+                ("snapshots", SdkValue::List(vec![])),
+            ]),
+        )
+        .unwrap_err();
+    assert_eq!(error.code, "InvalidInput");
+}
+
+#[test]
+fn project_storage_report_does_not_widen_folder_scopes() {
+    let scope = Scope::parse(&SdkValue::map([
+        ("project", SdkValue::text("shop/api")),
+        ("folder", SdkValue::text("/src")),
+    ]))
+    .unwrap();
+    assert_eq!(
+        scope
+            .apply(
+                "project.storage_report",
+                SdkValue::map([
+                    ("project", SdkValue::text("shop/api")),
+                    ("snapshots", SdkValue::List(vec![])),
+                ])
+            )
+            .unwrap_err()
+            .code,
+        "InvalidInput"
+    );
+}

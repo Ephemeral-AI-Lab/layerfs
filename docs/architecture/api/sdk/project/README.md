@@ -147,3 +147,4 @@ $ layerfs project list shop --page-size 20
 ← [API: SDK](../README.md) · [Up: SDK](../README.md) · [project.init](init.md) →
 
 - [stats](stats.md): namespace counts of one pinned saved tree.
+- [storage_report](storage_report.md): bounded canonical reuse among explicit saved snapshots.

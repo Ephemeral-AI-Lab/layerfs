@@ -185,6 +185,15 @@ impl StorePorts {
     }
 }
 impl StorePorts {
+    /// One bounded demand's locator facts and, when `records`, payload-record
+    /// widths, under this operation's custody.
+    pub fn describe(
+        &self,
+        ids: &[ObjectId],
+        records: bool,
+    ) -> Result<Vec<layerfs_storage::DescribedObject>, Arc<PortError>> {
+        self.attempt(|| self.reader()?.describe(ids, records))
+    }
     /// One object demand through caches the caller keeps across its demands,
     /// under this operation's custody (#352 F-035).
     pub fn objects_with(

@@ -164,4 +164,14 @@ statistics read as the operator, renames logical to `historyLogical`, and
 omits text ratios. The control call adds name/kind and makes PostgreSQL free
 null. No project is required; the standard Store lease and worker route apply.
 
+`store.storage_report` resolves each explicit `{project, branch, commit}` pin
+like `branch.get_commit`, then walks every object the pin's filesystem root
+reaches through `methods/storage_report.rs` and `store/storage_report.rs`,
+under one global object budget and one canonical-byte budget. Object roles and
+lengths come from the Store's locators (`layerfs_storage::Reader::describe_objects`);
+references are derived by admitting each authenticated object. With
+`includeEncoding` it also reads each selected WholeFile/Chunk object's own
+stored record width and direct base. `project.storage_report` is the same
+method with every pin in one project.
+
 `project.stats` resolves a Branch-qualified pin and walks its immutable tree through `read/tree_stats.rs`, bounded by the saved-read candidate budget. It returns explicit partial-count completeness on exhaustion; logical bytes remain the full pin's recorded total.

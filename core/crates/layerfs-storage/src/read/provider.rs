@@ -37,6 +37,26 @@ impl<'a> Reader<'a> {
             ids,
         )
     }
+    /// What the Store recorded for a bounded demand: role and canonical length
+    /// from each locator and, when `records`, each WholeFile/Chunk object's own
+    /// stored record width and direct base. Nothing is reconstructed; shared
+    /// framing and dependency records are not assigned to any object.
+    pub fn describe_objects(
+        &self,
+        ids: &[ObjectId],
+        records: bool,
+    ) -> StorageResult<Vec<super::DescribedObject>> {
+        let _serve = self
+            .after_save
+            .then(|| self.storage.source.serving_published());
+        let (_, state) = &mut *self.state.borrow_mut();
+        state.describe(
+            &self.storage.source,
+            &self.storage.capacities(),
+            ids,
+            records,
+        )
+    }
     /// Reads a bounded window of saved regular-file lengths in demand order.
     ///
     /// Whole-file length comes from acknowledged trusted Store metadata without
@@ -100,6 +120,16 @@ impl Storage {
         let mut workspace = Decoder::new()?;
         kept.0
             .read(&mut workspace, &self.source, &self.capacities(), ids)
+    }
+    /// [`Reader::describe_objects`] through kept caches.
+    pub fn describe_kept(
+        &self,
+        kept: &mut KeptReads,
+        ids: &[ObjectId],
+        records: bool,
+    ) -> StorageResult<Vec<super::DescribedObject>> {
+        kept.0
+            .describe(&self.source, &self.capacities(), ids, records)
     }
     /// [`Reader::file_lengths`] through kept caches and a fresh arena.
     pub fn lengths_kept(&self, kept: &mut KeptReads, ids: &[ObjectId]) -> StorageResult<Vec<u64>> {

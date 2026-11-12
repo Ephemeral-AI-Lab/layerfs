@@ -60,6 +60,8 @@ pub struct Change {
 pub enum StoreOp<'a> {
     /// Store-wide statistics (no project required).
     Statistics,
+    /// Explicit bounded immutable snapshot canonical sharing.
+    StorageReport(&'a crate::storage_report::StorageReport),
     /// Entry counts at one project pin.
     ProjectStats(&'a super::project::ProjectStats),
     /// `project.list_branches`: the Branch `name`, or one page.
@@ -235,6 +237,7 @@ impl StoreOp<'_> {
     pub fn method(&self) -> &'static str {
         match self {
             Self::Statistics => "store.stats",
+            Self::StorageReport(_) => "store.storage_report",
             Self::ProjectStats(_) => "project.stats",
             Self::ListBranches { .. } => "project.list_branches",
             Self::ListCommits { .. } => "branch.list_commits",
@@ -268,6 +271,12 @@ impl StoreOp<'_> {
         let mut args = Args::default();
         match self {
             Self::Statistics => &mut args,
+            Self::StorageReport(r) => args
+                .text("name", &r.name)
+                .json("snapshots", Some(&r.snapshots))
+                .int("maxObjects", r.max_objects)
+                .int("maxCanonicalBytes", r.max_canonical_bytes)
+                .boolean("includeEncoding", r.include_encoding),
             Self::ProjectStats(r) => args.at(&r.branch, r.commit.as_deref()),
             Self::ListBranches { name, page } => args.opt("name", *name).page(*page),
             Self::ListCommits { branch, page } => args.text("branch", branch).page(*page),

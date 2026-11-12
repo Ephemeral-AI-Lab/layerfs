@@ -22,7 +22,8 @@ layerfs branch commits shop/api main --page 1 --page-size 50
 ```
 
 Options are `page` (one-based, default 1), `page_size` (1..1000, default 50),
-`at_commit` (full immutable starting ID, absent resolves the branch head once).
+`at_commit` (full immutable starting ID, absent resolves the branch head once)
+and `include_storage` (boolean, default false).
 The response contains `branch`, typed `at_commit`, `items`, `page`, `page_size`,
 boolean `has_more`, and `scan:{complete,examined,reason}`. Each item has a full
 `ref:{id,kind,branch,root}` plus compact recorded metadata: `id`, `parent`,
@@ -30,6 +31,12 @@ boolean `has_more`, and `scan:{complete,examined,reason}`. Each item has a full
 `time_status`, `via`, `logical` where applicable. Messages are bounded to 128
 UTF-8 bytes with `message_truncated`; `details_omitted:true` directs clients to
 [branch.get_commit](get_commit.md) for full relationships and reports.
+
+With `include_storage: true` each item also carries the Save allocation facts
+its record acknowledged, `new_canonical`, `new_stored` and `new_metadata`, the
+same values `branch.get_commit` returns. Layers (main publications and Init)
+perform no Save, so theirs are null. Without the option the keys are absent.
+The option adds no record reads and keeps the reply budget.
 
 Side branches follow the persisted first-parent Commit chain. Merge second
 parents are linked metadata, not additional ordered rows. An empty side branch

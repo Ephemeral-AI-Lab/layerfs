@@ -95,6 +95,16 @@ impl ReadState {
         work.accumulate(self.prefetch_pool);
         work
     }
+    /// Locator facts, and payload records when asked, through these caches.
+    pub(crate) fn describe(
+        &mut self,
+        source: &Fetch,
+        capacities: &StorageCapacities,
+        ids: &[ObjectId],
+        records: bool,
+    ) -> StorageResult<Vec<super::DescribedObject>> {
+        super::representation::describe(&mut self.packs, source, capacities, ids, records)
+    }
     pub(crate) fn read(
         &mut self,
         workspace: &mut DecompressionWorkspace,

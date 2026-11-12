@@ -98,6 +98,13 @@ export interface ProjectListOptions {
   page_pos?: WholeNumber;
 }
 
+/** Options of `project.storage_report`; an unknown option is refused. */
+export interface ProjectStorageReportOptions {
+  max_objects?: WholeNumber;
+  max_canonical_bytes?: Size;
+  include_encoding?: boolean;
+}
+
 /** Options of `project.export`; an unknown option is refused. */
 export interface ProjectExportOptions {
   branch?: string;
@@ -323,6 +330,13 @@ export interface MachineUpdateOptions {
   daemon?: string;
 }
 
+/** Options of `store.storage_report`; an unknown option is refused. */
+export interface StoreStorageReportOptions {
+  max_objects?: WholeNumber;
+  max_canonical_bytes?: Size;
+  include_encoding?: boolean;
+}
+
 /** Options of `store.connect`; an unknown option is refused. */
 export interface StoreConnectOptions {
   password?: string;
@@ -372,6 +386,8 @@ export interface ProjectFamily {
   get(project: string): Promise<Result>;
   /** entry counts of one pinned saved tree */
   stats(project: string, branch?: string | null, commit?: string | null): Promise<Result>;
+  /** bounded canonical reuse among one project's explicit immutable saved snapshots */
+  storage_report(project: string, snapshots: Value, options?: ProjectStorageReportOptions): Promise<Result>;
   /** export a project's snapshot from its Store to a local folder */
   export(project: string, destination: string, options?: ProjectExportOptions): Promise<Result>;
   /** remove one project from its Store */
@@ -502,6 +518,8 @@ export interface StoreFamily {
   status(name: string): Promise<Result>;
   /** Store-wide publication and allocation counters */
   stats(name: string): Promise<Result>;
+  /** bounded canonical sharing among explicit immutable saved snapshots */
+  storage_report(name: string, snapshots: Value, options?: StoreStorageReportOptions): Promise<Result>;
   /** an empty sqlite Store on native */
   create(name: string): Promise<Result>;
   /** attach a PostgreSQL database as a Store */

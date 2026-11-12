@@ -38,6 +38,7 @@ pub mod service;
 pub mod sqlite;
 pub mod stats;
 mod status;
+pub mod storage_report;
 
 /// The Store connection reaper (not lifecycle, #535 D11), for its test.
 #[doc(hidden)]

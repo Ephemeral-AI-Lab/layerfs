@@ -16,6 +16,7 @@ pub mod read_service;
 pub mod recognizer;
 pub mod settle;
 pub mod statistics;
+pub(crate) mod storage_report;
 pub mod types;
 pub use bind::checked_base;
 pub use commit_merge::{Stale, StaleError, LANE_MERGE_PATHS};
