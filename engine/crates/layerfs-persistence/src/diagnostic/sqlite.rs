@@ -70,12 +70,12 @@ impl SqliteHandles {
                 return Err(BackendError::Integrity);
             }
             emit(observer,"store.identity",Outcome::Pass,"pinned catalog identity, binding and incarnation match admitted Store authority");
-            crate::backend::sqlite::schema::check(tx.connection,tx.work,(tx.layout(),self.storage.session.acquisition))?;
+            let logged=crate::backend::sqlite::schema::check(tx.connection,tx.work,(tx.layout(),self.storage.session.acquisition))?;
             let schema=tx.query("SELECT schema_source,schema_definition FROM history_meta WHERE id=1",vec![])?;
             let schema=schema.first().ok_or(BackendError::Integrity)?;
-            if schema.get::<String>(0)?!=crate::backend::sqlite::schema::source((tx.layout(),self.storage.session.acquisition))||schema.get::<String>(1)?!=crate::backend::sqlite::schema::definition(tx.connection,tx.work)?{return Err(BackendError::Integrity);}
+            if schema.get::<String>(0)?!=crate::backend::sqlite::schema::recorded_source((tx.layout(),self.storage.session.acquisition),logged)||schema.get::<String>(1)?!=crate::backend::sqlite::schema::definition(tx.connection,tx.work)?{return Err(BackendError::Integrity);}
             emit(observer,"store.schema",Outcome::Pass,format!("SQLite application ID, schema version {}, table set and frozen schema definition checked in audit view",tx.schema_version()));
-            for (table, sql) in crate::backend::sqlite::schema_diagnostic::type_checks(tx.layout(),self.storage.session.acquisition)? {
+            for (table, sql) in crate::backend::sqlite::schema_diagnostic::type_checks(tx.layout(),self.storage.session.acquisition,logged)? {
                 options.check()?;
                 emit(observer,"store.database.types.progress",Outcome::Pass,format!("checking declared storage classes in {table}"));
                 let invalid = tx.query(&sql,vec![])?;

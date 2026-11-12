@@ -12,6 +12,7 @@ layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
 layerfs-history = { path = "../../../core/crates/layerfs-history", default-features = false }
 layerfs-content = { path = "../../../core/crates/layerfs-content" }
 layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
+blake3 = { version = "=1.8.5", default-features = false }
 rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob"] }
 
 # PostgreSQL Store engine (#506), always built beside SQLite. Owner-authorized new
@@ -22,9 +23,6 @@ postgres-native-tls = "=0.5.3"
 native-tls = "=0.2.18"
 tokio = { version = "=1.54.1", features = ["rt", "net", "time"] }
 tokio-postgres = "=0.7.18"
-
-[dev-dependencies]
-blake3 = { version = "=1.8.5", default-features = false }
 
 [target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
 nix = { version = "=0.31.3", default-features = false, features = ["fs"] }

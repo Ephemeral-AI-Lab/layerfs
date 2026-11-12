@@ -15,10 +15,16 @@ pub(crate) const LINEAGE: &str = include_str!("../../../sql/sqlite/lineage.sql")
 pub(crate) const SCRATCH: &str = include_str!("../../../sql/sqlite/merge_scratch.sql");
 /// Whole-content file digests (#364); a Store written before them gains them at open.
 pub(crate) const DIGESTS: &str = include_str!("../../../sql/sqlite/file_digest.sql");
+/// The change log of a Store marked as an export base: added by
+/// `replication::mark_base` and dropped by `replication::unmark_base`, never at
+/// create or open, so a Store that was never marked keeps the schema above.
+const CHANGES: &str = include_str!("../../../sql/sqlite/change_log.sql");
+/// The change log trigger on the group-row layouts' `pack_unit` table.
+const CHANGE_UNITS: &str = include_str!("../../../sql/sqlite/change_log_units.sql");
 const UNIT_INDEX: &str = include_str!("../../../sql/sqlite/objects_units_index.sql");
 const UNITS: &str = include_str!("../../../sql/sqlite/objects_units.sql");
 const ACQUISITION: &str = include_str!("../../../sql/sqlite/acquisition/schema.sql");
-type Selection = (crate::SqlitePackLayout, crate::SqliteAcquisitionSchema);
+pub(crate) type Selection = (crate::SqlitePackLayout, crate::SqliteAcquisitionSchema);
 pub(super) fn scripts((layout, acquisition): Selection) -> Vec<String> {
     let objects = match layout {
         crate::SqlitePackLayout::Monolithic => OBJECTS.to_owned(),
@@ -43,6 +49,35 @@ pub(super) fn scripts((layout, acquisition): Selection) -> Vec<String> {
 pub(crate) fn source(selection: Selection) -> String {
     scripts(selection).concat()
 }
+/// The selection a stored `user_version` names, if any.
+pub(crate) fn selection(version: i64) -> Option<Selection> {
+    use crate::{SqliteAcquisitionSchema as Acquisition, SqlitePackLayout as Layout};
+    [
+        Layout::Monolithic,
+        Layout::GroupRows,
+        Layout::GroupRowsIndexed,
+    ]
+    .into_iter()
+    .flat_map(|layout| [Acquisition::Absent, Acquisition::Tables].map(|a| (layout, a)))
+    .find(|(layout, a)| layout.version() + a.version_offset() == version)
+}
+/// The change log script for `layout`: its two tables and every logging trigger.
+pub(crate) fn changes(layout: crate::SqlitePackLayout) -> String {
+    if layout.uses_units() {
+        format!("{CHANGES}{CHANGE_UNITS}")
+    } else {
+        CHANGES.to_owned()
+    }
+}
+/// The schema source a Store records: [`source`], followed by the change log
+/// while the Store is marked as an export base (`logged`).
+pub(crate) fn recorded_source(selection: Selection, logged: bool) -> String {
+    let mut recorded = source(selection);
+    if logged {
+        recorded.push_str(&changes(selection.0));
+    }
+    recorded
+}
 pub(crate) fn definition(c: &Connection, w: &RefCell<SqlWork>) -> Result<String, BackendError> {
     let rows: Vec<Record> = query::run(
         c,
@@ -60,11 +95,13 @@ pub(crate) fn definition(c: &Connection, w: &RefCell<SqlWork>) -> Result<String,
     }
     Ok(s)
 }
+/// Checks the Store's application id, version and exact table set, and returns
+/// whether it carries the change log of an export base (both of its tables).
 pub(crate) fn check(
     c: &Connection,
     w: &RefCell<SqlWork>,
     (layout, acquisition): Selection,
-) -> Result<(), BackendError> {
+) -> Result<bool, BackendError> {
     let app = query::run(c, "PRAGMA application_id", vec![], w)?
         .first()
         .ok_or(BackendError::Integrity)?
@@ -117,11 +154,17 @@ pub(crate) fn check(
             "sqlite_sequence",
         ]);
     }
+    let logged = actual
+        .iter()
+        .any(|name| name == "change_log" || name == "change_state");
+    if logged {
+        expected.extend(["change_log", "change_state"]);
+    }
     expected.sort_unstable();
     if actual != expected {
         return Err(BackendError::Integrity);
     }
-    Ok(())
+    Ok(logged)
 }
 
 impl super::session::connection::Session {
@@ -311,11 +354,11 @@ impl super::session::connection::Session {
         self.run::<_,BackendError>(false,|tx| {
    let selection=(self.layout,self.acquisition);
    if self.diagnostic { super::schema_diagnostic::check(tx,self.acquisition)?; }
-   check(tx.connection,tx.work,selection)?;
+   let logged=check(tx.connection,tx.work,selection)?;
    let rows=tx.query("SELECT catalog_id,catalog_incarnation,binding_key,identity_format,schema_version,schema_source,schema_definition FROM history_meta WHERE id=1",vec![])?;
    let r=rows.first().filter(|_|rows.len()==1).ok_or(BackendError::Integrity)?;
    let incarnation:i64=r.get(1)?;
-   if r.get::<Vec<u8>>(0)?!=catalog_id.as_slice() || r.get::<Vec<u8>>(2)?!=binding || incarnation<=0 || r.get::<i64>(3)?!=3 || r.get::<i64>(4)?!=self.schema_version() || r.get::<String>(5)?!=source(selection) || r.get::<String>(6)?!=definition(tx.connection,tx.work)? {return Err(BackendError::Integrity);}
+   if r.get::<Vec<u8>>(0)?!=catalog_id.as_slice() || r.get::<Vec<u8>>(2)?!=binding || incarnation<=0 || r.get::<i64>(3)?!=3 || r.get::<i64>(4)?!=self.schema_version() || r.get::<String>(5)?!=recorded_source(selection,logged) || r.get::<String>(6)?!=definition(tx.connection,tx.work)? {return Err(BackendError::Integrity);}
    let floor=tx.query("SELECT small_file_threshold_bytes FROM store_policy WHERE id=1",vec![])?;
    let floor=u64::try_from(floor.first().ok_or(BackendError::Integrity)?.get::<i64>(0)?).map_err(|_|BackendError::Integrity)?;
    Ok((incarnation as u64, floor))

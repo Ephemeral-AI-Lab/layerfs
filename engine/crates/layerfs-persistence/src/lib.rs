@@ -8,6 +8,7 @@ mod storage;
 mod store;
 pub(crate) use store::config;
 mod history;
+pub mod replication;
 pub use backend::postgresql::access::{access as postgresql_access, PostgresAccess};
 pub use backend::postgresql::status::{
     status as postgresql_status, PostgresStatus, PostgresStatusError,
