@@ -330,7 +330,8 @@ implement around them without a choice.
 
 The spec's §7.3 (`LayerFS-GC-spec.md`) describes row deletion order —
 
-> "先删引用（`object_location` 等），后删 payload；中间态即 `backend_reusable`，单独上报"
+> "Deletion order: delete references first (`object_location` etc.), then payload; the
+> intermediate state is `backend_reusable`, reported separately." — §7.3
 
 — which is **in-place deletion**, while R1-E builds a replacement schema, copies
 retained rows and swaps names. The swap path never deletes an object row, so
@@ -348,7 +349,7 @@ Two coherent readings, one of which must be chosen:
   but it is a second compact entry point with its own admission, its own
   interruption semantics and its own report, distinct from the R1-E swap.
 
-Consequence for C3: §5 C3 names "（PostgreSQL、未来的在线 GC）", i.e. it assumes
+Consequence for C3: §5 C3 names "(PostgreSQL, future online GC)", i.e. it assumes
 PostgreSQL deletes rows. Under (a) C3 binds only a future online sweep and is a
 forward-looking contract; under (b) it becomes a v2 deliverable. The C3 sign-off
 request carries this as its "scope question" box.
