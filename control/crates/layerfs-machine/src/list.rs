@@ -83,6 +83,7 @@ pub(super) fn summary(
     let derived = MachineDerived {
         live,
         stores: (related.stores_on)(home, record.name())?,
+        postgresql: (related.postgresql_on)(home, record.name())?,
         sandboxes: (related.sandboxes_on)(home, record.name())?,
     };
     record.to_sdk(View::Full, &derived)

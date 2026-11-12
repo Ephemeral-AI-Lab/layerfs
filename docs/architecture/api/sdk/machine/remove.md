@@ -93,7 +93,7 @@ need not be stopped first. See the
 | `InvalidInput` | a bad name; a built-in machine; a folder-scoped client | no | [`remove.rs`](../../../../../control/crates/layerfs-machine/src/remove.rs) |
 | `NotFound` | no machine of that name | no | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) |
 | `Busy` | a live process's create or remove holds it | no | same, `not_running` |
-| `InUse` | sqlite Stores, Sandboxes or old Firecracker records it hosted are on it (`detail.related`) | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_remove_machine` |
+| `InUse` | sqlite Stores, attached PostgreSQL Stores, Sandboxes or old Firecracker records it hosted are on it (`detail.related`) | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_remove_machine` |
 | `Unsupported` | a build without the `machine` feature | no | [`machine/create.rs` (api)](../../../../../api/crates/layerfs-api/src/machine/create.rs) |
 | `Unavailable`, `Failed` | the provider refused or failed; the record is put back | no | [`error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
 | `Unknown` | **the provider timed out or lost its answer** | **yes** | [`remove.rs`](../../../../../control/crates/layerfs-machine/src/remove.rs) |
@@ -120,7 +120,7 @@ layerfs machine remove vm1
 ## Related
 
 - Before: [store.pull](../store/pull.md) or [store.remove](../store/remove.md)
-  for its Stores, [sandbox.close](../sandbox/close.md) for its Sandboxes.
+  for its sqlite Stores, [store.detach](../store/detach.md) for attached PostgreSQL Stores, [sandbox.close](../sandbox/close.md) for its Sandboxes.
 - [Control: machines](../../../control/machines/README.md).
 
 ---

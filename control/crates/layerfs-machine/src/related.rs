@@ -15,6 +15,8 @@ type Check = fn(home: &Path, name: &str) -> Result<(), SdkRefusal>;
 pub struct Related {
     /// The Stores whose record names the machine.
     pub stores_on: Names,
+    /// The PostgreSQL Stores attached to the machine.
+    pub postgresql_on: Names,
     /// The Sandboxes whose record names the machine.
     pub sandboxes_on: Names,
     /// `machine.remove`: refused while the machine
