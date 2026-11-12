@@ -109,9 +109,10 @@ create it and then [push](push.md) it. See the
 | `Unsupported` | the kernel guard refuses `store/<name>/` (not on a local lock-carrying filesystem, or an existing directory is not owned by this user or has group/other access instead of mode `0700`) | no | [`identity.rs`](../../../../../control/crates/layerfs-store/src/identity.rs), [`kernel_guard.rs`](../../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | `Failed` | the empty Store could not be made or written (`Store create: …`), or the record write failed | no | [`identity.rs`](../../../../../control/crates/layerfs-store/src/identity.rs) |
 
-A failure before the record is written removes the `store/<name>/` folder
-only when this call's own `mkdir` made it; a folder that was already there
-(or that another caller made meanwhile) is never removed.
+A failure of `make_empty` removes the `store/<name>/` folder only when this
+call's own `mkdir` made it; a folder that was already there (or that another
+caller made meanwhile) is never removed. Once `make_empty` succeeded, a
+failure of `save_record` keeps the Store file and the folder.
 
 ## Examples
 

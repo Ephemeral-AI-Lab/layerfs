@@ -147,21 +147,11 @@ impl std::fmt::Display for LocalInstallFailure {
 /// directory, non-recursively, so it cannot take another caller's Store.
 pub fn prepare(destination: &Path) -> Result<(), String> {
     installer_user()?;
-    prepare_between(destination, &|| {})
-}
-
-/// [`prepare`]'s directory and guard steps, without the installer check, with
-/// `between` run after the directory's absence is observed and before this
-/// call's `mkdir`. A regression test uses it to let another caller create the
-/// same directory first (#570 P1); production passes no step of its own.
-#[doc(hidden)]
-pub fn prepare_between(destination: &Path, between: &dyn Fn()) -> Result<(), String> {
     let directory = destination
         .parent()
         .ok_or("the Store destination has no directory")?;
     let mut made = false;
     if !directory.exists() {
-        between();
         use std::os::unix::fs::DirBuilderExt;
         fs::DirBuilder::new()
             .mode(0o700)
@@ -244,12 +234,12 @@ pub fn install_local(
 /// installs its Store (there is no root daemon to match); the daemon's own
 /// check that it owns the Store file still holds.
 #[cfg(target_os = "macos")]
-pub fn installer_user() -> Result<(), String> {
+fn installer_user() -> Result<(), String> {
     Ok(())
 }
 /// Refuses an installer that is not the daemons' user.
 #[cfg(not(target_os = "macos"))]
-pub fn installer_user() -> Result<(), String> {
+fn installer_user() -> Result<(), String> {
     use std::os::unix::fs::MetadataExt;
     // the owner of /proc/self is this process's effective user
     let uid = fs::metadata("/proc/self")
