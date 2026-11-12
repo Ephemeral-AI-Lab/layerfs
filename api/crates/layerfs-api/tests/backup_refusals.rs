@@ -128,6 +128,69 @@ fn restore_over_a_store_with_a_running_sandbox_is_in_use() {
     }
 }
 
+/// `store/<name>` already there but not the daemon's private directory: the
+/// restore refuses it with `store.create`'s own code and remedy before it
+/// stages anything, writes nothing and leaves the user's directory as it was
+/// (#570 P1). The same folder held `0700`, and an absent one, pass the check
+/// and go on to the download.
+#[test]
+fn restore_refuses_a_store_folder_that_is_not_private() {
+    let home = tempdir("folder-mode");
+    home::open(&home).unwrap();
+    dead_bucket(&home);
+    let directory = paths::store_dir(&home, "open-dir");
+    let store = home.join("store");
+    let restore = || {
+        call(
+            &home,
+            "backup.restore",
+            &[("store", t("open-dir")), ("bucket", t("dead"))],
+        )
+        .unwrap_err()
+    };
+    let mode = |dir: &Path| std::fs::metadata(dir).unwrap().permissions().mode() & 0o7777;
+
+    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let (code, message) = restore();
+    assert_eq!(code, "Unsupported", "{message}");
+    assert!(
+        message.contains(&directory.display().to_string()),
+        "{message}"
+    );
+    assert!(
+        message.contains("0755") && message.contains("0700"),
+        "{message}"
+    );
+    assert!(
+        message.contains(&format!("chmod 700 {}", directory.display())),
+        "{message}"
+    );
+    // nothing was written: no staging folder, no Store file or record, and
+    // the user's own directory keeps its mode
+    let names: Vec<_> = std::fs::read_dir(&store)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names, vec!["open-dir"], "a refused restore stages nothing");
+    assert_eq!(mode(&directory), 0o755, "the folder's mode is not changed");
+    assert!(!paths::store_file(&home, "open-dir").exists());
+    assert!(!paths::store_record(&home, "open-dir").exists());
+
+    // the daemon's own private directory passes: the restore goes on to the
+    // download, which the dead bucket fails as usual
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let (code, message) = restore();
+    assert_ne!(code, "Unsupported", "{message}");
+
+    // and an absent folder is made `0700` by the install, as before
+    std::fs::remove_dir_all(&directory).unwrap();
+    let (code, message) = restore();
+    assert_ne!(code, "Unsupported", "{message}");
+    let _ = std::fs::remove_dir_all(home);
+}
+
 /// A restore killed mid-download leaves its folder; the next restore removes
 /// it, and keeps a folder whose restore still holds its lock and one with
 /// no lock file at all.

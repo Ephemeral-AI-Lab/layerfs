@@ -38,6 +38,15 @@ pub fn restore(
     let home = home.to_path_buf();
     let store = request.store.as_str();
     layerfs_home::names::StoreName::parse(store)?;
+    // the Store's own directory, before this call writes anything (its
+    // staging folder included): a restore installs into the folder a daemon
+    // opens, so an existing one must be the same private directory
+    // `store.create` and every opener require, refused with its own code and
+    // remedy (#570 P1). Absent: the install makes it `0700`, as before.
+    if paths::store_dir(&home, store).exists() {
+        layerfs_store_service::kernel_guard::check(&paths::store_file(&home, store))
+            .map_err(|reason| refused("Unsupported", reason.0))?;
+    }
     let bucket = request.bucket.as_str();
     let driver = BucketRecord::of(&home, bucket)?.driver()?;
     let existing = StoreRecord::read(&home, store)?;

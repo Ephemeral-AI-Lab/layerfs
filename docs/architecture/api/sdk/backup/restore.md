@@ -66,6 +66,8 @@ layerfs backup restore <store> <bucket> [<file>] [--progress]
 ```text
  caller process (native)                         bucket
  -----------------------
+ store/<name> already there? not the daemon's private 0700
+   directory --> Unsupported (store.create's refusal, chmod 700)
  existing Store? PostgreSQL --> InvalidInput
    locks: replaceable? (on native, no op, idle, heads == link's heads,
                         no -wal/-shm)                --> else refuse
@@ -102,7 +104,7 @@ See the [routing table](../../../control/routing/routing-table.md).
 | --- | --- | --- | --- |
 | `InvalidInput` | bad names; a PostgreSQL Store; a folder-scoped client | no | [`backup/restore.rs`](../../../../../control/crates/layerfs-store/src/backup/restore.rs) |
 | `NotFound` | no such bucket; the Store was removed during the download | no | same |
-| `Unsupported` | the Store to replace is not on `native` | no | same, `replaceable` |
+| `Unsupported` | the Store's folder already exists and is not the daemon's private directory (not a real `0700` directory of this user on a local filesystem; `store.create`'s own refusal, with its `chmod 700` remedy), checked before anything is written; or the Store to replace is not on `native` | no | same |
 | `Busy` / `Unresolved` | an operation runs on the Store / an earlier one is unresolved | no | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) `unblocked` |
 | `InUse` | a process holds the Store, a Sandbox of it is recorded, or its `-wal`/`-shm` exists | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle`, `replaceable` |
 | `Conflict` | the Store changed since its last backup or restore through this bucket, has no link, or was replaced during the download | no | same |

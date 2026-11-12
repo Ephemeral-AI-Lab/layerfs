@@ -261,6 +261,38 @@ fn backups_against_minio() {
     );
     assert_eq!(states(&home).len(), 2, "objects stayed");
 
+    // a Store folder already there at the daemon's own mode is restored into
+    // as before (#570 P1): its mode stays, and the Store it takes opens
+    let private = paths::store_dir(&home, "kept");
+    std::fs::create_dir_all(&private).unwrap();
+    std::fs::set_permissions(&private, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let kept = ok(
+        &home,
+        "backup.restore",
+        &[
+            ("store", t("kept")),
+            ("bucket", t("b1")),
+            ("file", t("shop")),
+        ],
+    );
+    assert_eq!(kept.get("projects"), Some(&SdkValue::List(vec![t("api")])));
+    assert!(paths::store_file(&home, "kept").is_file());
+    assert_eq!(
+        std::fs::metadata(&private).unwrap().permissions().mode() & 0o7777,
+        0o700,
+        "a Store's own folder stays 0700"
+    );
+    let read = ok(
+        &home,
+        "file.read",
+        &[
+            ("project", t("kept/api")),
+            ("branch", t("dev")),
+            ("path", t("/NEW")),
+        ],
+    );
+    assert_eq!(read.get_text("text"), Some("x"));
+
     for dir in [home, folder, root] {
         let _ = std::fs::remove_dir_all(dir);
     }

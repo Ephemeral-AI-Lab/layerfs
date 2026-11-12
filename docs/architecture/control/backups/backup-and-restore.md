@@ -107,6 +107,8 @@ push never overwrites a file this home did not move.
 
 ```text
  backup.restore(store, bucket, file?)               api/…/backup/restore.rs
+   store/<name> already there? refuse it unless it is the daemon's own
+      private 0700 directory (store.create's guard; before any write)
    existing Store? refuse PostgreSQL; replaceable? (lock; checked)
    backup::load(driver, file, store/.restore-<random>/store.sqlite, cursor)
    |  1 store_object(file); installer_user; make the directory 0700 when
@@ -128,6 +130,7 @@ push never overwrites a file this home did not move.
 
 | # | Check | Refusal | Source |
 | --- | --- | --- | --- |
+| 0 | The Store's own folder, when it exists, is the daemon's private directory: a real `0700` directory of this user on a local filesystem, checked with `store.create`'s own guard and refused with its `Unsupported` code and `chmod 700` remedy. It runs before the staging folder, so a refused restore writes nothing and leaves the folder's mode alone; an absent folder is made `0700` by the install (row 1). | `Unsupported` | [`backup/restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs) |
 | 1 | The installer is the daemons' user; the destination's directory is made `0700` when absent; the Store's file passes the kernel guard (a real `0700` directory of this user on a local filesystem), which refuses a missing, symlinked, another owner's or non-private directory. A refusal removes only a directory this call made: the guard's refusal, which happens before any Store file exists, removes this call's own directory with a non-recursive `remove_dir` and only while it is still empty; an installer-user or `mkdir` failure (including `AlreadyExists`, another caller's directory) removes nothing. | `PullFailure` cause | [`backup/restore.rs`](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
 | 2 | Load: no Store at the target. Pull: no `-wal` or `-shm` beside it (no opener holds it). | "a Store exists"; "the local Store … is open" | same |
 | 3 | The remote file exists and records `layerfs-binding`; a pull's expected binding matches. | "records no layerfs-binding; push it again"; "has another binding" | same |
