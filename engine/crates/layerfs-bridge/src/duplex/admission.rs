@@ -25,8 +25,6 @@ pub enum AdmissionReason {
     NoPoolSlot = 1,
     /// The daemon is still starting and admits no control yet.
     Starting = 2,
-    /// The reserved slot is in use and only pool capacity was requested.
-    ReservedBusy = 3,
 }
 
 impl AdmissionReason {
@@ -34,7 +32,6 @@ impl AdmissionReason {
         match byte {
             1 => Some(Self::NoPoolSlot),
             2 => Some(Self::Starting),
-            3 => Some(Self::ReservedBusy),
             _ => None,
         }
     }
@@ -44,7 +41,6 @@ impl AdmissionReason {
         match self {
             Self::NoPoolSlot => "no-pool-slot",
             Self::Starting => "starting",
-            Self::ReservedBusy => "reserved-busy",
         }
     }
 }

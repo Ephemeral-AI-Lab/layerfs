@@ -6,6 +6,8 @@ mod connection;
 mod diagnostics;
 mod failure;
 mod filesystem;
+#[doc(hidden)]
+pub mod internals;
 mod owner;
 mod retained;
 mod serve;

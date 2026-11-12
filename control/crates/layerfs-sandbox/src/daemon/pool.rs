@@ -108,7 +108,7 @@ fn not_admitted(refusal: &SdkRefusal) -> Option<(NotAdmitted, &'static str)> {
 /// precise form: it names the resource and the retained record count.
 fn notice_refusal(notice: AdmissionNotice) -> SdkRefusal {
     match notice.reason {
-        AdmissionReason::NoPoolSlot | AdmissionReason::ReservedBusy => SdkRefusal {
+        AdmissionReason::NoPoolSlot => SdkRefusal {
             code: "Capacity".to_owned(),
             message: format!(
                 "the Sandbox's daemon has no vacant control slot: {} pool slot(s) and {} reserved slot(s) are vacant, with {} retained failure record(s). The call was not admitted; retrying is safe",

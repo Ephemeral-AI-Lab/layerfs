@@ -13,9 +13,9 @@ use std::{
 };
 
 /// Most retained records kept at once. The oldest is dropped first.
-pub(super) const LIMIT: usize = 64;
+pub const LIMIT: usize = 64;
 /// How long a retained record stays operator-visible.
-pub(super) const TTL: Duration = Duration::from_secs(60 * 60);
+pub const TTL: Duration = Duration::from_secs(60 * 60);
 /// Most bytes a retained textual cause keeps.
 const CAUSE_BYTES: usize = 512;
 
@@ -55,7 +55,7 @@ pub struct RetainedFailure {
 
 impl RetainedFailure {
     /// The bounded record for `failure`, built outside the state lock.
-    pub(super) fn describe(
+    pub fn describe(
         failure: &ConnectionFailure,
         class: super::owner::SlotClass,
         generation: u64,
@@ -129,7 +129,7 @@ struct Entry {
 /// A fixed-capacity, TTL-pruned ring of retained connection failures. Its
 /// capacity is reserved when it is built, so recording under the state lock
 /// never allocates.
-pub(super) struct RetainedFailures {
+pub struct RetainedFailures {
     entries: VecDeque<Entry>,
     dropped: u64,
     recorded: u64,
@@ -144,7 +144,7 @@ impl Default for RetainedFailures {
 }
 
 impl RetainedFailures {
-    pub(super) fn new(limit: usize, ttl: Duration) -> Self {
+    pub fn new(limit: usize, ttl: Duration) -> Self {
         let limit = limit.max(1);
         Self {
             entries: VecDeque::with_capacity(limit),
@@ -158,7 +158,7 @@ impl RetainedFailures {
     /// Records one already-described failure, prunes expired records and
     /// evicts the oldest beyond the limit. Returns the exact record that now
     /// is visible, with its store position filled in.
-    pub(super) fn record(&mut self, mut record: RetainedFailure, now: Instant) -> RetainedFailure {
+    pub fn record(&mut self, mut record: RetainedFailure, now: Instant) -> RetainedFailure {
         self.prune(now);
         while self.entries.len() >= self.limit {
             self.entries.pop_front();
@@ -177,7 +177,7 @@ impl RetainedFailures {
     }
 
     /// Drops records whose deadline passed; a stale record is never returned.
-    pub(super) fn prune(&mut self, now: Instant) {
+    pub fn prune(&mut self, now: Instant) {
         while let Some(front) = self.entries.front() {
             if now < front.deadline {
                 break;
@@ -188,12 +188,12 @@ impl RetainedFailures {
     }
 
     /// The lazy reaper: the accept loop calls it when it refuses admission.
-    pub(super) fn reap(&mut self, now: Instant) {
+    pub fn reap(&mut self, now: Instant) {
         self.prune(now);
     }
 
     /// A copy of the visible records, oldest first, with their ages.
-    pub(super) fn snapshot(&mut self, now: Instant) -> RetainedSnapshot {
+    pub fn snapshot(&mut self, now: Instant) -> RetainedSnapshot {
         self.prune(now);
         RetainedSnapshot {
             failures: self

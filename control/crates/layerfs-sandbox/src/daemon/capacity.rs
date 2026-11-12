@@ -24,7 +24,7 @@ use std::time::{Duration, Instant};
 
 /// The daemon's operator read model of control admission and retained
 /// connection failures.
-pub const OPERATION: &str = layerfs_bridge::control::CAPACITY_OPERATION;
+pub const OPERATION: &str = layerfs_bridge::control::OPERATION;
 
 /// How long one daemon query may take: connecting, its Hello and its one
 /// exchange. Short on purpose: a reader must not stall behind a daemon that
