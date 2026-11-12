@@ -135,8 +135,12 @@ reconciliation and net-new tables.
 
 ### Sign-off requests
 
-The three reconciliation decisions are asked for approval in the issue that
-realises each one, with a short reasoning summary and a checkbox block:
+**The full product-decision inventory — all twelve items, with the issue that owns
+each — is the single entry point on
+[#42](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/42#issuecomment-6819532224).**
+Start there; the three reconciliation decisions below are asked for approval in
+the issue that realises each one, with a short reasoning summary and a checkbox
+block:
 
 | Decision | Recommended default | Asked in | Comment |
 |---|---|---|
