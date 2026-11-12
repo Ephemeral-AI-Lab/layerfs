@@ -10,7 +10,7 @@ use layerfs_bridge::control::{Call, Reply, Request};
 use layerfs_bridge::duplex::{ChannelError, ChannelWork, PeerEndFailure, PeerEndPhase};
 use layerfs_daemon::application::internals::{
     disposition, recovery_request, AdmissionClass, Finished, RetainedFailure, RetainedFailures,
-    SlotClass, Slots, LIMIT, RESERVED_SLOTS, TTL,
+    SlotClass, SlotTicket, Slots, LIMIT, RESERVED_SLOTS, TTL,
 };
 use layerfs_daemon::application::{ApplicationError, ConnectionFailure};
 use layerfs_daemon::control::{Served, Success};
@@ -327,7 +327,7 @@ fn idle_and_busy_track_the_reapable_phase() {
         .is_empty());
     // Idle since `now`: reapable once `idle_ttl` has passed.
     assert!(slots.idle(ticket, now));
-    assert_eq!(slots.reap_idle(now + ttl, ttl), vec![ticket.index]);
+    assert_eq!(slots.reap_idle(now + ttl, ttl), vec![ticket]);
     // A fresh worker is Busy again and cannot be reaped while idle is false.
     let second = slots.admit(AdmissionClass::ControlPool).unwrap();
     assert_eq!(second.index, ticket.index);
@@ -358,7 +358,7 @@ fn reap_idle_frees_only_pool_slots_parked_past_ttl() {
     assert!(slots.idle(recent, now + ttl - Duration::from_millis(1)));
     assert!(slots.idle(reserved, now));
     let at = now + ttl;
-    assert_eq!(slots.reap_idle(at, ttl), vec![early.index]);
+    assert_eq!(slots.reap_idle(at, ttl), vec![early]);
     let counts = slots.counts();
     assert_eq!(counts.pool_vacant, 1);
     assert_eq!(counts.pool_running, 2);
@@ -375,7 +375,7 @@ fn reaped_slot_readmits_and_the_old_ticket_finishes_stale() {
     let ttl = Duration::from_secs(1);
     let first = slots.admit(AdmissionClass::ControlPool).unwrap();
     assert!(slots.idle(first, now));
-    assert_eq!(slots.reap_idle(now + ttl, ttl), vec![first.index]);
+    assert_eq!(slots.reap_idle(now + ttl, ttl), vec![first]);
     let second = slots.admit(AdmissionClass::ControlPool).unwrap();
     assert_eq!(second.index, first.index);
     assert!(second.generation > first.generation);
@@ -426,6 +426,114 @@ fn recovery_request_admits_only_the_recovery_set() {
             token,
             force: false,
             message: None,
+        }
+    )));
+}
+
+/// A slot marked in-flight past its deadline is expired; the reserved slot is
+/// never expired automatically (install is one-time, recovery closes after
+/// one request) (#547 slice 5).
+#[test]
+fn inflight_slots_expire_only_past_their_deadline() {
+    let mut slots = Slots::new(3 + RESERVED_SLOTS);
+    let now = Instant::now();
+    let early = slots.admit(AdmissionClass::ControlPool).unwrap();
+    let late = slots.admit(AdmissionClass::ControlPool).unwrap();
+    let reserved = slots.admit(AdmissionClass::Recovery).unwrap();
+    assert!(slots.inflight(early, now, now + Duration::from_secs(5)));
+    assert!(slots.inflight(late, now, now + Duration::from_secs(20)));
+    assert!(slots.inflight(reserved, now, now + Duration::from_secs(5)));
+    // Before any deadline, nothing expires.
+    assert!(slots.reap_expired(now + Duration::from_secs(1)).is_empty());
+    // At 5 s only `early` expired, with its exact ticket.
+    let expired = slots.reap_expired(now + Duration::from_secs(5));
+    assert_eq!(expired.len(), 1);
+    assert_eq!(expired[0], early);
+    // At 20 s `late` expires too; the reserved slot still stays.
+    let expired = slots.reap_expired(now + Duration::from_secs(20));
+    assert_eq!(expired.len(), 1);
+    assert_eq!(expired[0], late);
+    let counts = slots.counts();
+    assert_eq!(counts.pool_vacant, 3);
+    assert_eq!(counts.pool_running, 0);
+    assert_eq!(counts.reserved_running, 1);
+}
+
+/// A reaped in-flight slot is immediately reusable; the woken worker's stale
+/// finish cannot free the newer worker (invariant 1, #547 slice 5).
+#[test]
+fn expired_slot_readmits_and_the_old_ticket_finishes_stale() {
+    let mut slots = Slots::new(1 + RESERVED_SLOTS);
+    let now = Instant::now();
+    let first = slots.admit(AdmissionClass::ControlPool).unwrap();
+    assert!(slots.inflight(first, now, now + Duration::from_secs(1)));
+    assert_eq!(
+        slots.reap_expired(now + Duration::from_secs(1)),
+        vec![first]
+    );
+    let second = slots.admit(AdmissionClass::ControlPool).unwrap();
+    assert_eq!(second.index, first.index);
+    assert!(second.generation > first.generation);
+    assert!(matches!(slots.finish(first, Ok(()), None), Finished::Stale));
+    assert_eq!(slots.counts().pool_running, 1);
+    slots.finish(second, Ok(()), None);
+    assert_eq!(slots.counts().pool_vacant, 1);
+}
+
+/// Reclaim frees exactly the named generation, on any class, and is one-shot
+/// (#547 slice 5).
+#[test]
+fn reclaim_frees_the_matching_generation_only() {
+    let mut slots = Slots::new(2 + RESERVED_SLOTS);
+    let now = Instant::now();
+    let first = slots.admit(AdmissionClass::ControlPool).unwrap();
+    assert!(slots.inflight(first, now, now + Duration::from_secs(60)));
+    // A wrong generation changes nothing.
+    assert!(slots.reclaim(first.index, first.generation + 1).is_none());
+    assert_eq!(slots.counts().pool_running, 1);
+    // The right generation frees the slot and returns its exact ticket.
+    let ticket = slots.reclaim(first.index, first.generation).unwrap();
+    assert_eq!(ticket, first);
+    assert_eq!(slots.counts().pool_vacant, 2);
+    // One-shot: the same generation no longer matches.
+    assert!(slots.reclaim(first.index, first.generation).is_none());
+    // The reserved slot is reclaimable too.
+    let reserved = slots.admit(AdmissionClass::Recovery).unwrap();
+    assert!(slots.reclaim(reserved.index, reserved.generation).is_some());
+    assert_eq!(slots.counts().reserved_vacant, 1);
+}
+
+/// `Expired` and `Reclaimed` records carry their deciding cause, the slot and
+/// generation, and never claim a reply was sent (#547 slice 5).
+#[test]
+fn expired_and_reclaimed_records_name_their_disposition() {
+    let ticket = SlotTicket {
+        index: 2,
+        generation: 7,
+        class: SlotClass::Pool,
+    };
+    let expired = RetainedFailure::expired(ticket, OWNER);
+    assert_eq!(expired.slot, 2);
+    assert_eq!(expired.class, "pool");
+    assert_eq!(expired.generation, 7);
+    assert!(!expired.reply_sent);
+    assert_eq!(expired.cause, "Expired");
+    assert!(expired.received_bytes.is_none());
+    assert!(expired.request.is_none());
+    let reclaimed = RetainedFailure::reclaimed(ticket, OWNER);
+    assert_eq!(reclaimed.slot, 2);
+    assert!(!reclaimed.reply_sent);
+    assert_eq!(reclaimed.cause, "Reclaimed");
+}
+
+/// `recovery_request` admits reclaim alongside the operator read model
+/// (#547 slice 5).
+#[test]
+fn recovery_request_admits_reclaim() {
+    assert!(recovery_request(&Request::Sdk(
+        layerfs_bridge::control::SdkCall {
+            method: layerfs_bridge::control::RECLAIM.to_owned(),
+            args: layerfs_bridge::control::SdkValue::Null,
         }
     )));
 }

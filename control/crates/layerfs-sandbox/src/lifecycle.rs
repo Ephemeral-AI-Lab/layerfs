@@ -49,6 +49,11 @@ pub const DAEMON_CONNECTIONS: u16 = 8;
 /// connection is likely abandoned, short enough that recovery stays bounded.
 pub const IDLE_TTL_MS: u32 = 60_000;
 
+/// A decoded request still in flight this long is expired (#547 slice 5):
+/// long enough that a 64 MiB Commit finishes normally, short enough that a
+/// fence/Store/diagnostic wait cannot hold a pool slot forever.
+pub const REQUEST_DEADLINE_MS: u32 = 300_000;
+
 pub fn setup(
     private: [u8; 32],
     peer: [u8; 32],
@@ -68,6 +73,7 @@ pub fn setup(
             connections: DAEMON_CONNECTIONS,
             handshake_ms: 2000,
             idle_ttl_ms: IDLE_TTL_MS,
+            request_deadline_ms: REQUEST_DEADLINE_MS,
             // The daemon's shared immutable-object cache: a fixed bound, the
             // daemon's own default. 64 KiB held too few directory and inode
             // pages for lookups in a large directory to stay resident

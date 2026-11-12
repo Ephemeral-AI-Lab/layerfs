@@ -51,61 +51,53 @@ pub const ADMISSION_WAIT: Duration = Duration::from_secs(60);
 /// before it ends, and its `Busy` refusal is not retried.
 pub const LEND_WAIT: Duration = ADMISSION_WAIT;
 
-/// Why an open ended before the daemon's Hello reply. Every one means the
-/// call was not admitted and nothing was attempted, so opening again is
-/// safe; they name different observable causes (#540).
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum NotAdmitted {
-    /// The daemon had no vacant pool slot. `retained` is exact when the
-    /// advisory capacity notice arrived, and unknown when only EOF was seen.
-    NoVacantSlot { retained: Option<u8> },
-    /// The connection itself failed before Hello (`BrokenPipe`,
-    /// `ConnectionReset`).
-    ConnectionFailed,
+/// The exact refusal for a failed open that never reached the Hello reply,
+/// typed from the channel error rather than from refusal message text (#547
+/// slice 6). Nothing was attempted, so every one is safe to retry; they name
+/// different observable causes.
+fn opening_refusal(error: ChannelError) -> SdkRefusal {
+    match error {
+        // The daemon closed the connection before the handshake completed and
+        // sent no notice: the reason it did not admit this call is unknown, so
+        // the refusal says what was observed, never a guess at "no vacant
+        // slot" (#547 slice 6).
+        ChannelError::Io(io) if io.kind() == std::io::ErrorKind::UnexpectedEof => SdkRefusal {
+            code: "Unknown".to_owned(),
+            message: "the Sandbox's daemon closed the connection before it was admitted; the reason is unknown and the call was not admitted. Retrying is safe"
+                .to_owned(),
+            detail: SdkValue::map([
+                ("observed", SdkValue::text("UnexpectedEof")),
+                ("retryable", SdkValue::Bool(true)),
+                ("retry_after", SdkValue::Int(500)),
+            ]),
+        },
+        // Dialing the daemon directly, its handshake write can meet the closed
+        // socket first: the connection itself failed, not admission.
+        ChannelError::Io(io)
+            if matches!(
+                io.kind(),
+                std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::BrokenPipe
+            ) =>
+        {
+            let kind = io.kind().to_string();
+            SdkRefusal {
+                code: "Unavailable".to_owned(),
+                message: format!(
+                    "the connection to the Sandbox's daemon failed before it was admitted ({kind}); nothing was attempted. Retrying is safe"
+                ),
+                detail: SdkValue::map([
+                    ("observed", SdkValue::text(kind)),
+                    ("retryable", SdkValue::Bool(true)),
+                    ("retry_after", SdkValue::Int(500)),
+                ]),
+            }
+        }
+        other => failed(other),
+    }
 }
 
-impl NotAdmitted {
-    fn code(self) -> &'static str {
-        match self {
-            Self::NoVacantSlot { .. } => "Capacity",
-            Self::ConnectionFailed => "Unavailable",
-        }
-    }
-
-    fn admission(self) -> &'static str {
-        match self {
-            Self::NoVacantSlot { .. } => "no-vacant-slot",
-            Self::ConnectionFailed => "connection-failed",
-        }
-    }
-}
-
-/// Classify a failed open that never reached the Hello reply. Through a port
-/// proxy the client reads the end (`UnexpectedEof`, a clean close by the
-/// daemon's accept loop); dialing the daemon directly, its handshake write can
-/// meet the closed socket first (`BrokenPipe`, `ConnectionReset`). The old
-/// message claimed "other processes hold all 8 connections"; that is not
-/// knowledge the client has (#540).
-fn not_admitted(refusal: &SdkRefusal) -> Option<(NotAdmitted, &'static str)> {
-    if refusal.code != "Failed" {
-        return None;
-    }
-    if refusal.message.contains("UnexpectedEof") {
-        return Some((
-            NotAdmitted::NoVacantSlot { retained: None },
-            "UnexpectedEof",
-        ));
-    }
-    for kind in ["BrokenPipe", "ConnectionReset"] {
-        if refusal.message.contains(kind) {
-            return Some((NotAdmitted::ConnectionFailed, kind));
-        }
-    }
-    None
-}
-
-/// The exact refusal for a decoded advisory capacity notice. This is the
-/// precise form: it names the resource and the retained record count.
+/// The exact refusal for a decoded advisory capacity notice: it names the
+/// resource, the vacant slots and how long to wait (#540, #547 slice 6).
 fn notice_refusal(notice: AdmissionNotice) -> SdkRefusal {
     match notice.reason {
         AdmissionReason::NoPoolSlot => SdkRefusal {
@@ -123,6 +115,12 @@ fn notice_refusal(notice: AdmissionNotice) -> SdkRefusal {
                     SdkValue::Int(i64::from(notice.reserved_vacant)),
                 ),
                 ("retryable", SdkValue::Bool(true)),
+                // An idle pool slot becomes reclaimable after the daemon's
+                // `idle_ttl`, so retry after that, not sooner.
+                (
+                    "retry_after",
+                    SdkValue::Int(i64::from(crate::lifecycle::IDLE_TTL_MS)),
+                ),
                 ("admission", SdkValue::text(notice.reason.as_str())),
             ]),
         },
@@ -134,58 +132,34 @@ fn notice_refusal(notice: AdmissionNotice) -> SdkRefusal {
                 ("resource", SdkValue::Null),
                 ("retained", SdkValue::Null),
                 ("retryable", SdkValue::Bool(true)),
+                ("retry_after", SdkValue::Int(500)),
                 ("admission", SdkValue::text("starting")),
             ]),
         },
-    }
-}
-
-/// The exact refusal after `wait`: what the client observed, not a guess at
-/// what another process is doing.
-fn admission_refusal(wait: Duration, admission: NotAdmitted, kind: &str) -> SdkRefusal {
-    let message = match admission {
-        NotAdmitted::NoVacantSlot { retained } => format!(
-            "the Sandbox's daemon admitted no control connection for {}s: it closed the connection before Hello ({kind}), which it does when it has no vacant control slot{}. The call was not admitted; retrying is safe",
-            wait.as_secs(),
-            retained.map_or(String::new(), |count| format!(
-                " (it reported {count} retained failure record(s))"
-            ))
-        ),
-        NotAdmitted::ConnectionFailed => format!(
-            "the connection to the Sandbox's daemon failed before Hello for {}s ({kind}): the call was not admitted; retrying is safe",
-            wait.as_secs()
-        ),
-    };
-    let retained = match admission {
-        NotAdmitted::NoVacantSlot { retained } => {
-            retained.map_or(SdkValue::Null, |count| SdkValue::Int(i64::from(count)))
-        }
-        _ => SdkValue::Null,
-    };
-    SdkRefusal {
-        code: admission.code().to_owned(),
-        message,
-        detail: SdkValue::map([
-            (
-                "resource",
-                match admission {
-                    NotAdmitted::NoVacantSlot { .. } => SdkValue::text("daemon_control_slot"),
-                    _ => SdkValue::Null,
-                },
+        // A newer daemon's reason this client does not know: report what was
+        // observed, never guess (#547 slice 6 version skew).
+        other => SdkRefusal {
+            code: "Unknown".to_owned(),
+            message: format!(
+                "the Sandbox's daemon refused admission with a reason this client does not know ({:?}); the call was not admitted. Retrying is safe",
+                other
             ),
-            ("retained", retained),
-            ("retryable", SdkValue::Bool(true)),
-            ("admission", SdkValue::text(admission.admission())),
-            ("observed", SdkValue::text(kind)),
-        ]),
+            detail: SdkValue::map([
+                ("observed", SdkValue::text(other.as_str())),
+                ("retryable", SdkValue::Bool(true)),
+                ("retry_after", SdkValue::Int(500)),
+            ]),
+        },
     }
 }
 
 /// Whether this refusal says nothing was attempted and a later open may
 /// succeed. Only these exact refusals are retried.
 fn retryable(refusal: &SdkRefusal) -> bool {
-    matches!(refusal.code.as_str(), "Capacity" | "Unavailable")
-        && refusal.detail.get_bool("retryable")
+    matches!(
+        refusal.code.as_str(),
+        "Capacity" | "Unavailable" | "Unknown"
+    ) && refusal.detail.get_bool("retryable")
 }
 
 impl Dial {
@@ -224,7 +198,7 @@ impl Dial {
         let connection = match initiate_observed(stream, &self.secret, self.peer).result {
             Ok(connection) => connection,
             Err(ChannelError::Admission(notice)) => return Err(notice_refusal(notice)),
-            Err(error) => return Err(failed(error)),
+            Err(error) => return Err(opening_refusal(error)),
         };
         // the waits stay: the caller makes exactly one call and drops it
         let mut control = Control::new(connection);
@@ -249,17 +223,12 @@ impl Dial {
         loop {
             match self.open() {
                 Err(refusal) => {
-                    let legacy = not_admitted(&refusal);
-                    let may_retry = retryable(&refusal) || legacy.is_some();
-                    if may_retry && started.elapsed() < wait {
+                    if retryable(&refusal) && started.elapsed() < wait {
                         std::thread::sleep(pause);
                         pause = (pause * 2).min(Duration::from_millis(500));
                         continue;
                     }
-                    if let Some((admission, kind)) = legacy {
-                        return Err(admission_refusal(wait, admission, kind));
-                    }
-                    // A notice-based or transport refusal is already exact.
+                    // The refusal is already typed and exact (#547 slice 6).
                     return Err(refusal);
                 }
                 other => return other,
@@ -280,7 +249,7 @@ impl Dial {
         let connection = match initiate_observed(stream, &self.secret, self.peer).result {
             Ok(connection) => connection,
             Err(ChannelError::Admission(notice)) => return Err(notice_refusal(notice)),
-            Err(error) => return Err(failed(error)),
+            Err(error) => return Err(opening_refusal(error)),
         };
         connection.clear_io_waits().map_err(failed)?;
         let mut control = Control::new(connection);
