@@ -1,8 +1,9 @@
 //! Companion bodies: READ, WRITE and SETATTR, and the spill that moves a body
 //! from memory to the export's scratch directory.
 //!
-//! One edit of a companion runs at a time, under that companion's own
-//! [`Companion::editing`] gate: it applies to the resident bytes under the
+//! One edit of a companion runs at a time, under that companion's own edit
+//! gate (`Companion::editing` in the parent module): it applies to the resident
+//! bytes under the
 //! companion lock or to the spilled file outside it, and records the length
 //! its own bytes leave, so a truncate and a write of the same companion can
 //! never leave a length its file does not have and no round has to decide
