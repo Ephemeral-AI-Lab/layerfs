@@ -73,7 +73,7 @@
 | Structure/content audit | `persistence/diagnostic/` (`sqlite_structure(path)`, `SqliteHandles::diagnose`), `control/.../diagnostic.rs::sqlite(path, identity, …)` | Check before install |
 | Page reclamation | `backend/sqlite/lifecycle/reclamation.rs` (512 pages per call, requires `auto_vacuum=2`) | Returns pages already on the freelist; it frees no pack bytes, because no pack row is deleted in the live Store |
 | Metering | `backend.store.project.get_storage`, `backend.store.fs.get_storage`, `backend.store.project.list_overwritten` | The three definitions and the Q2 measurement |
-| Bounded traversal | `core/crates/layerfs-content/src/filesystem/qualify/` | Traversal skeleton for mark |
+| Bounded traversal | `core/crates/layerfs-content/src/diagnostic/scan.rs` (the reference walk) | Mark must **not** reuse `qualify`: it skips file mappings, symlink targets and attribute trees and ignores delta bases (`qualify/walk.rs:38`); `FinalizedObject::admit(..).references()` + `ChainBases::base_of` is the walk `diagnostic/scan.rs` already does |
 | Operations surface | `store.*` (create/connect/list/status/push/pull/remove), `backup.*`, `doctor`, `project.export` | No parallel machinery |
 
 **Counterexample:** `filesystem/references/` is a reference-effect reducer (bounded ordering, checked release, custody), **not an object-graph refcount**, and cannot serve as GC's counter.
@@ -199,7 +199,7 @@ For per-object/per-row deletion (PostgreSQL, future online GC), the delete inten
 ```
 GC(Roots@G):
   pinned  = op/staged copies ∪ in-flight installs ∪ Unresolved-op artifacts
-  closure = walk(Roots@G)        // reuse qualify, no new walker
+  closure = walk(Roots@G)        // FinalizedObject::admit().references() + ChainBases::base_of; base-only then full
   candidates = all_objects − closure − pinned
   dead_packs = packs (and pack units) holding no object outside candidates
   receipt = (G, fingerprint(Roots), |closure|, |candidates|, |dead_packs|, bytes…)
@@ -283,6 +283,23 @@ retire     delete old copies the record no longer names
 - An orphan file with no op reports `OrphanArtifact` and is not deleted.
 
 ---
+
+### 7.2a Code-level corrections from the #155 source review
+
+Each is a place where this spec did not match the tree. Adopting them changes no contract.
+
+| # | Spec said | Code requires |
+|---|---|---|
+| 1 | mark reuses `qualify` | `FinalizedObject::admit(..).references()` + `ChainBases::base_of` (see §6) |
+| 2 | delta bases not mentioned | bases live inside pack records (`encoding/delta/record.rs:9-11`); tree pages, inode leaves and chunks are deltas, so the closure follows base edges with two visit levels |
+| 3 | `file_digest` not mentioned | keep only rows whose root is retained — a Save reuses a recorded root without checking it exists, so an orphan row later fails `MissingDependency` |
+| 4 | retained roots by `commit.branch_id` | it can be NULL, and a removed Branch's Commits stay live through `layer.source_commit_id`: use a recursive history closure |
+| 5 | compact is a `rewrite` phase of the transfer pipeline | transfer's `Install` refuses an existing Store file and `Retire` deletes it: compact is its own module, reusing only `Snapshot`'s idle/WAL check |
+| 6 | build the file with `journal_mode=OFF` | `SQLITE_DBCONFIG_DEFENSIVE` (`session/connection.rs:220`) forbids it: one rollback-journal transaction, file built from `schema::scripts` |
+| 7 | copy `store_totals` | copying `commit`/`layer` re-fires `add_logical` (`history.sql:162-167`): do not copy `logical`; let the triggers rebuild it and assert equality; recompute `canonical`/`stored`/`metadata` |
+| 8 | drop dead `pack_unit` rows | the reader needs a complete contiguous unit set (`objects/units_read.rs:55-75`): never leave a dangling unit |
+| 9 | finished init/merge scratch rows could be cleared | leftovers mean unfinished work: refuse `Busy` while they exist; clear through the existing recovery path |
+| 10 | the entry check runs on every transaction | autocommit `Immutable`/`Statement` have no `BEGIN`: the shared advisory lock and the incarnation read are two statements in one simple-query message (#42 item 12b) |
 
 ## 8. Operations surface
 
@@ -437,7 +454,10 @@ mechanism, the safety it guarantees, and where it is implemented.
   aborts the round instead of being skipped (skipping is how a live object gets
   classified as dead).
 - **Implementation.** Contracts C1/C2 and §6: the closure walks the retained roots
-  with the existing `layerfs-content` `qualify` traversal (a second walker is
-  forbidden) and `references`/`decode_references`; `collectable(o) := o ∉
+  with `FinalizedObject::admit(..).references()` plus `ChainBases::base_of`, the same
+  walk `diagnostic/scan.rs` performs — **not `qualify`**, which skips file mappings,
+  symlink targets and attribute trees and ignores delta bases. A new *walker* is still
+  forbidden; this is the existing reference walk. Delta-base edges are part of the
+  closure, and an object seen only as a base is upgraded if later reached fully; `collectable(o) := o ∉
   closure(Roots@G) ∧ o ∉ pinned`; the walk is bounded and keeps an indexed
   visited set; no second persistent database.
