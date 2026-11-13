@@ -392,7 +392,9 @@ remain binding; moving them out of this file does not weaken them.
   scope and command. `format.yml` reports formatting drift after a push;
   nothing runs before one.
 - Update affected source architecture/API documentation with implementation
-  changes. Keep proposal, research, implemented and measured claims distinct.
+  changes, in the same commit, as the
+  [architecture doc update policy](docs/policy/architecture-doc-update.md)
+  sets out. Keep proposal, research, implemented and measured claims distinct.
 
 ### Production LOC comparison for every commit
 

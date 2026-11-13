@@ -120,4 +120,4 @@ docs/architecture/
 | Demonstrations point at code that runs | An existing test or example, its exact command and its platform. |
 | Current source only | No history, receipts, run logs or open decisions on these pages. Why a decision was made belongs in its issue or pull request; Git history keeps earlier documents. |
 | Flows link, they do not repeat | A flow is steps and links into topics; internals live in the topic. |
-| Pages change with the source | A change that alters a boundary, format, algorithm or named limit updates its topic in the same commit. |
+| Pages change with the source | A change that alters a boundary, format, algorithm or named limit updates its topic in the same commit; the [update policy](../policy/architecture-doc-update.md) lists every trigger and the checks. |
