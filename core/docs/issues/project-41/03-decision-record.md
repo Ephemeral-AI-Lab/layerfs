@@ -1,6 +1,8 @@
 # Decision Record — R1, Q1, C3
 
-**Scope**: the three reconciliation decisions of Issue #41 that change what the
+> **Status:** Proposal; target LayerFS 2.0.0; not a released contract.
+
+**Scope**: the three reconciliation decisions of Issue layerfs-project#41 that change what the
 implementation must do. **Authority**: [#511](https://github.com/Ephemeral-AI-Lab/layerfs/issues/511)
 (release contract) and [#41](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/41).
 **Baseline**: `layerfs_v2_0_0`.
@@ -185,7 +187,7 @@ recorded option, and it is a format change taken deliberately — not a default.
 Q1 and C3 are the same family of failure (an identifier outliving its referent)
 resolved in opposite directions, and each constrains the other: Q1 = A is what
 keeps `branch.remove(name)` safely name-only, and Q1 = B would drag C3's
-signature into the resource calls. Sign-off for C3 is requested on #42
+signature into the resource calls. Sign-off for C3 is requested on layerfs-project#42
 (comment 6818138560); read the two requests together.
 
 ---
@@ -194,8 +196,9 @@ signature into the resource calls. Sign-off for C3 is requested on #42
 
 ### 3.1 What the generation in `(ObjectId, G)` is, and is not
 
-`G` is **the Store generation** the intent was formed at — `rootGeneration` from
-C1, the same `catalog_incarnation` C8 bumps at install. It is **not** a
+`G` is **the Store generation** the intent was formed at:
+`history_meta.catalog_incarnation`, the generation C1 freezes for the closure and
+C8 bumps at install. There is no separate root or commit counter. It is **not** a
 per-object version column: C8 forbids a second generation field, and the
 contract says the *intent* carries `G` (§5 C3). Nothing is added to an object
 row.
@@ -252,13 +255,14 @@ decision is settled at the gate (step 2), not by weighing options.
 What "bound to `G`" buys in practice: the sweep runs inside the exclusive window
 (C10) at one generation, so there are no concurrent sweeps to confuse; what the
 generation protects is the intent that outlives the window — a queued or resumed
-delete. C1 already says an instalment re-reads the generation and abandons the
-round if it moved; C3 is the same discipline applied to a single deletion, so
+delete. C1 already re-checks `catalog_incarnation` and `Verify{heads}` before
+install and abandons the round if either moved; C3 is the same discipline applied to a single deletion, so
 that a replayed intent is dropped rather than applied to a Store that has moved
 on.
 
-Scope: SQLite's compact does not delete rows at all — it replaces the file, and
-ordering is covered by C1's install-before-generation re-check. The signature is
+Scope: SQLite's compact does not delete rows at all — it builds a fresh file that
+receives only retained rows and replaces the old one, and the install is covered
+by C1's pre-install re-check. The signature is
 still used uniformly so PostgreSQL and any future online sweep cannot drift to
 the unsafe form.
 
@@ -267,7 +271,7 @@ is accepted without being weighed; there is no storage cost to weigh.
 
 ### 3.6 Relation to Q1 — same family, opposite mechanisms
 
-Sign-off for Q1 is requested on #44 (comment 6818137920); this section and that
+Sign-off for Q1 is requested on layerfs-project#44 (comment 6818137920); this section and that
 request should be read together.
 
 Both decisions exist because an identifier may outlive the thing it named, and
@@ -288,11 +292,11 @@ Two consequences worth recording:
    generation concept — `catalog_incarnation` — serving the reader fence (C8) and
    delete intents (C3). Q1 = B would add a second one to reason about, migrate
    and validate.
-2. **Q1 = A is what keeps `branch.remove(name)` safely name-only.** #41 requires
+2. **Q1 = A is what keeps `branch.remove(name)` safely name-only.** layerfs-project#41 requires
    the three resource operations to take only `name`. Under Q1 = B a stale
    `remove(name)` could act on a recreated Branch — the C3 failure inside the
    Branch namespace — and a generation argument would have to be pushed into the
-   resource calls, against #41. Under Q1 = A the name is never live twice, so
+   resource calls, against layerfs-project#41. Under Q1 = A the name is never live twice, so
    `remove(name)` has one possible target.
 
 ## 4. Summary — what each decision rests on
@@ -323,7 +327,7 @@ rather than a matter of taste:
 ## 5. Open items this record surfaces
 
 Deciding R1, Q1 and C3 exposed places where the spec text still says two things
-at once. They are listed here rather than resolved silently, because #50 cannot
+at once. They are listed here rather than resolved silently, because layerfs-project#50 cannot
 implement around them without a choice.
 
 ### 5.1 PostgreSQL: rebuild-and-swap vs in-place row deletion
@@ -375,7 +379,7 @@ Where those two old anchors now sit:
 
 | Old anchor | Current anchor | What it says |
 |---|---|---|
-| §6.1 (pack immutability) | §1.1 **S5**, §5 **C2**, §7.2 | candidates are `object_location` and `content_signature` rows; **`pack` is never a candidate** because it has immutability triggers on both ends |
+| §6.1 (pack immutability) | §1.1 **S5**, §3 **I2**, §5 **C2**, §7.2 | published `pack` / `pack_unit` rows stay immutable **in the live Store** (triggers on both ends); a wholly dead pack is reclaimed only by not copying it into the fresh staged Store |
 | §6.3 (lock-free reads) | code: `engine/crates/layerfs-persistence/src/backend/sqlite/session/transaction.rs:181-197` | `read_immutable` runs with no BEGIN/COMMIT, which is "safe only because every row such a body reads never changes once visible: `object_location` is insert-only … `pack` and `pack_unit` refuse UPDATE and DELETE by trigger" |
 
 Why the argument is decisive, in current terms:
@@ -383,7 +387,7 @@ Why the argument is decisive, in current terms:
 - `sql/postgresql/schema.sql:25-28` — `pack_immutable()` is `BEFORE UPDATE OR DELETE ON pack`. An in-place sweep cannot delete a pack row at all, and a pack is where the bytes are. Disabling the trigger needs table ownership and re-opens the window the trigger exists to close.
 - The lock-free read path is sound *because* those rows never change. An in-place `DELETE` of `object_location` rows would make two such reads able to observe an inconsistent pair — the reason `read_immutable` documents its own premise.
 
-Consequence for §5.1: if this argument is accepted, reading **(a) replacement + rename** is the only one that does not reopen pack immutability; reading **(b) an additional in-place path** is not a cheap option, it is a change to the immutability and lockdown contracts. Owner decides; the sign-off box on #42 already asks the question in that form.
+Consequence for §5.1: if this argument is accepted, reading **(a) replacement + rename** is the only one that does not reopen pack immutability; reading **(b) an additional in-place path** is not a cheap option, it is a change to the immutability and lockdown contracts. Owner decides; the sign-off box on layerfs-project#42 already asks the question in that form.
 
 ### 5.2 What is *not* open
 
@@ -397,7 +401,7 @@ Consequence for §5.1: if this argument is accepted, reading **(a) replacement +
 ### 5.3 Recording the answer
 
 Whichever way 5.1 goes, it lands in two places: this section (the decision), and
-the affected issue — #50 for the compact path, #42 for C3's scope.
+the affected issue — layerfs-project#50 for the compact path, layerfs-project#42 for C3's scope.
 
 **The space of answers is already constrained**, and the constraint is on the
 record: the C3 sign-off asks the owner to confirm that C3 binds a future

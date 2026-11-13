@@ -1,5 +1,9 @@
 # Operation Contracts
 
+> **Status:** Proposal; target LayerFS 2.0.0; not a released contract.
+
+Derived from `LayerFS-GC-spec.md`, which is authoritative where they differ.
+
 ## branch.remove(name)
 
 **Purpose**: Soft-remove a Branch from visibility
@@ -67,12 +71,20 @@ catalog methods that keep an immutable id readable) and §9.3 (byte accounting).
 **Purpose**: Physically reclaim discarded storage space
 
 **Contract**:
-- Physically deletes logically-removed data
+- Physically reclaims logically-removed data by building a fresh staged Store
+  that receives only retained rows: packs (and pack units) with at least one
+  live object, their `object_location` rows, live `inode_value_block` rows and
+  the catalog/history tables. A wholly dead pack is not copied (level 1)
+- With `reorg` (level 2), live objects of partially dead packs are repacked into
+  new packs; object ids are unchanged, only their locations change
+- Published packs are never updated or deleted in the live Store; no row is
+  deleted in place
 - Requires exclusive access to entire Store
 - No concurrent operations allowed
 - Protects all shared content and dependencies
 - Reports physical bytes reclaimed separately from logical deletion
-- Works on SQLite and PostgreSQL (including remote servers)
+- Works on PostgreSQL (including remote servers) and on SQLite Stores on the
+  `native` machine; a non-native SQLite Store is refused `Unsupported`
 
 **Admission**: Exclusive access - no mounts or operations on any project in Store
 
@@ -81,7 +93,8 @@ catalog methods that keep an immutable id readable) and §9.3 (byte accounting).
 - `Busy` - Other operations in progress
 
 **Backend Support**:
-- SQLite: Full support with 5-stage incarnation protocol
+- SQLite: `native` Stores; the `transfer` phases with one inserted `rewrite`
+  (spec §7.1), `catalog_incarnation += 1` at install, and the C8b writer fence
 - PostgreSQL: Full support, including remote servers (not stub)
 
 See `LayerFS-GC-spec.md` §7 (Sweep), §7.2 for SQLite, §7.3 for PostgreSQL, and §8

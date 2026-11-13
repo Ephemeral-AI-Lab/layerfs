@@ -1,8 +1,10 @@
 # LayerFS GC Specification (single file)
 
-> **Status:** candidate specification, may be merged into #42 as a whole. **This file is the only authoritative version.** In this directory the other documents derive from it and cite its section numbers.
-> **Scope:** the mechanism layer of #41: correctness of collection decisions, sweep recoverability, fences, reporting definitions, acceptance shape.
-> **Out of scope:** the policies already settled by #41 (admission matrix, logical/physical separation, no-retry). Where they conflict, the #41 owner policy wins.
+> **Status:** Proposal; target LayerFS 2.0.0; not a released contract.
+
+> **Authority:** may be merged into layerfs-project#42 as a whole. **This file is the only authoritative version.** In this directory the other documents derive from it and cite its section numbers.
+> **Scope:** the mechanism layer of layerfs-project#41: correctness of collection decisions, sweep recoverability, fences, reporting definitions, acceptance shape.
+> **Out of scope:** the policies already settled by layerfs-project#41 (admission matrix, logical/physical separation, no-retry). Where they conflict, the layerfs-project#41 owner policy wins.
 > **Parameter discipline:** every external numeric value this spec cites is the **code default** of the system it came from, not its documentation; external docs drift and are not a source of parameters.
 
 ---
@@ -13,19 +15,19 @@
 
 | # | Decision | Rationale / Basis | Where it lands |
 |---|---|---|---|
-| S1 | Reachability granularity = **Store** (all LayerStacks inside one Store) | The #41 matrix states verbatim "Selected Store, all projects/Branches/historical mounts"; one Store may contain several projects | §5, C1 |
+| S1 | Reachability granularity = **Store** (all LayerStacks inside one Store) | The layerfs-project#41 matrix states verbatim "Selected Store, all projects/Branches/historical mounts"; one Store may contain several projects | §5, C1 |
 | S2 | Exclusivity = **reuse Store lock + lease + op record** | `store push/pull/remove` already use the same set; lease decides liveness by pid+kernel start+boot | C8, §7.1 |
 | S3 | Intent = **`Stage` copy + op record**, no sidecar | `sqlite/transfer` already has `Stage/Verify{bytes,sha256,heads}/Install/Retire` and `resolve` | C7, §7.1 |
 | S4 | **No object age**; deletion depends only on closure and pinned | `object_location`/`pack` have no time column; compact is an exclusive window, so the closure is computed then | C2, C4 |
-| S5 | Candidates = **`object_location` rows + `content_signature` dependent rows**; `pack` is never a candidate | `pack` has immutability triggers on both ends | C2, §7.2 |
-| S6 | A SQLite Store that is not **native** **refuses** compact | `StoreRef::Sqlite{machine}`; #49 states remote SQLite is out of scope | §7.2 |
-| S7 | Three reporting definitions + peak temporary space + residue; estimates must be marked `estimate`; capped results must report the cap | #41's three definitions + `operator/files.rs` "never silently reports a total" | C5 |
+| S5 | Reclamation unit = **the pack**. Published `pack` / `pack_unit` rows stay immutable *in the live Store*; `rewrite` builds the staged copy as a **fresh Store that receives only retained rows** (packs and pack units holding at least one live object, their `object_location` rows, live `inode_value_block` rows, catalog/history tables), so a wholly dead pack is simply not copied and no trigger fires. `content_signature` is a dedupe hint ring, not a reclamation source | Payload bytes live in `pack.body` / `pack_unit.body`, both guarded by `BEFORE UPDATE/DELETE` triggers; `object_location` maps an object to `(pack_id, group_number, record_number)`, so one pack holds many objects and deleting location rows alone frees almost nothing | C2, §7.2 |
+| S6 | A SQLite Store that is not **native** **refuses** compact; the workaround (pull home, compact, push back) costs two full transfers | `StoreRef::Sqlite{machine}`; layerfs-project#49 states remote SQLite is out of scope; compact inside the machine's worker is an open item (§7.2) | §7.2 |
+| S7 | Three reporting definitions + peak temporary space + residue; estimates must be marked `estimate`; capped results must report the cap | layerfs-project#41's three definitions + `operator/files.rs` "never silently reports a total" | C5 |
 | S8 | Reader fence = **session-level `(catalog_id, incarnation)` check → `StaleStore`** | incarnation is checked only at open; under WAL no lock blocks a reader | C8 |
 | S9 | install is binary, `heads` must match before and after | transfer's `Verify{heads}`; I1 | I1, I3 |
-| S10 | Logical deletion does not rewrite history or change IDs | CommitId is content-derived; #41's "immutable IDs must not silently resolve" | I5 |
+| S10 | Logical deletion does not rewrite history or change IDs | CommitId is content-derived; layerfs-project#41's "immutable IDs must not silently resolve" | I5 |
 | S11 | Read availability during compact = **exclusive by default** (reads unavailable); if a "reads available" SLO is required (p99 ≤ 1.2× baseline), PG takes A' (pointer + versioned schema) | Decides whether R1 = E or A'; consistent with C10's exclusive admission | §1.3 R1, §7.3 |
 
-### 1.2 Still open for #42 (with recommendation + cost + cost of choosing wrong)
+### 1.2 Still open for layerfs-project#42 (with recommendation + cost + cost of choosing wrong)
 
 | # | Question | Recommendation (preferred option) | Effort/Cost | Cost of choosing wrong |
 |---|---|---|---|---|
@@ -34,12 +36,14 @@
 | Q3 | How to set an age threshold when online collection is introduced | Not in this spec; when the time comes, add timestamp columns first, then measure the longest Commit / longest in-flight handle | Medium: add timestamp columns + migration + threshold contract | Without timestamps an age threshold cannot be implemented; forcing it deletes in-flight writes |
 | Q4 | Retention cap for interrupted copies | Do not clean automatically; keep at most one, require manual action beyond that | Small: `doctor` report + runbook | Residue accumulates and consumes disk; automatic cleanup violates "no guessed cleanup" |
 | Q5 | Reader behavior when PG swaps tables | **Superseded by C8/R2**: readers go through the `(catalog_id, incarnation)` session check → `StaleStore`, and read the new generation after reconnecting; table names are not versioned | Small: session/transaction entry check (shared with SQLite) | Cross-generation reads (no crash, but wrong data) |
-| Q6 | Does `store.compact` promise "reclaim pages" or "reorganize data" | **Split into two levels**: `compact(name)` = delete references + `reclaim_space` (cheap, may return 0); `compact(name, reorg)` = replacement (2× space) | Medium: two entry points + two reporting definitions | With a single level, even small reclamation pays 2× space; page reclamation alone means the docs over-promise |
+| Q6 | Does `store.compact` promise "drop dead packs" or "reorganize data" | **Split into two levels**, both built as a fresh staged Store (§7.1): `compact(name)` = level 1, copy only retained rows, so **wholly dead packs are dropped** (may return 0 when every pack still holds a live object); `compact(name, reorg)` = level 2, additionally **repack live objects out of partially dead packs** into new packs (object ids unchanged, `object_location` changes) | Medium: two entry points + two reporting definitions | Level 1 alone leaves dead objects that share a pack with a live one; promising "all discarded bytes are reclaimed" without level 2 over-promises |
 
-> **Q6 is answered together with §5.1** of `03-decision-record.md`, because they
-> decide the same thing: §5.1's "in-place deletion path" *is* Q6's level 1 on
-> PostgreSQL. If PostgreSQL keeps no in-place path, the two-level promise collapses
-> to one level there, and the docs must say so instead of promising two.
+> **Q6 is answered together with §5.1** of `03-decision-record.md`. Neither level
+> deletes rows in place: level 1 is the replacement copy without wholly dead packs,
+> which is what R1-E's "copy retained rows" already does on PostgreSQL, and level 2
+> adds repacking to that copy. Both levels therefore exist on PostgreSQL under
+> §5.1 reading (a); reading (b) would add a separate in-place entry point with its
+> own report, and the docs must then say which level it is.
 
 > Sign-off: adopt the Q1/Q2/Q4/Q5 recommendations directly (small cost, controlled risk); Q3 is explicitly out of this release; Q6 needs the owner to sign off on the "commitment level", because it decides the documentation wording and capacity planning.
 
@@ -49,10 +53,10 @@
 |---|---|---|---|
 | R1 | PG: two `ALTER SCHEMA RENAME` in one txn (old design) | **Decided by S11**: exclusive window → **E** (two `ALTER SCHEMA RENAME`, still ending at `layerfs`, so both the record and `{s}` stay valid); read-available window → **A'** (pointer + versioned schema, `self.schema` resolved from the pointer at open). "Versioned table names" (A) is no longer adopted: it needs a second placeholder and buys nothing under the exclusive window | **The old R1 rationale is void**: `open.rs:37 schema_of` accepts the schema passed in by the caller, and the two renames still end at `layerfs`, so "the schema name is fixed, therefore it cannot be renamed" does not hold. The real deciding factor is the read-availability SLO (S11), not the name. |
 | R2 | Reader fence = a new `compact_intent` row | `catalog_incarnation += 1` + every session/transaction entry checks `(catalog_id, incarnation)` → `StaleStore`; SQLite additionally `(dev, ino)`; `lfq1` across generations → `StaleStore` | **Adopt this spec**. More complete, and reuses the existing `history_meta` without adding a second generation field. |
-| R3 | SQLite writer fence = `Replaced` inode check (the old spec found "it does not exist in the code", P0-level new work) | This spec records it as C8b: re-read the generation before install + a write handle on the old generation must fail (reuse `Conflict`) | **Merged**: keep the old spec's P0 analysis as C8b. |
+| R3 | SQLite writer fence = `Replaced` inode check (the old spec found "it does not exist in the code", P0-level new work) | This spec records it as C8b: at the start of every write transaction, compare the Store path's `(dev, ino)` with the open file's `fstat`; a mismatch fails with `Conflict` | **Merged**: keep the old spec's P0 analysis as C8b. |
 | R4 | rebuild into fresh container (build a new container → verify with a real open → atomic swap → retire) | Reuse transfer's `Stage/Verify/Install/Retire`, inserting only a `rewrite` phase | **Adopt this spec**. Do not rebuild the mechanism, since `transfer` already exists. |
 
-**Extra findings kept from the old spec:** the 8 HistoryCatalog impls (see C9); `project.remove` deletes the project directory in two places, `remove.rs:62` and `family.rs:354` (#45 must change it to a soft delete and must not delete the home dir; `resolve.rs::target` needs a `ProjectRecord`); the only current producer of `MountsActive` is `sandbox.close`, so the Branch-level check is new code.
+**Extra findings kept from the old spec:** the 8 HistoryCatalog impls (see C9); `project.remove` deletes the project directory in two places, `remove.rs:62` and `family.rs:354` (layerfs-project#45 must change it to a soft delete and must not delete the home dir; `resolve.rs::target` needs a `ProjectRecord`); the only current producer of `MountsActive` is `sandbox.close`, so the Branch-level check is new code.
 
 
 ---
@@ -67,7 +71,7 @@
 | Copy-verify-install | `control/crates/layerfs-store/src/sqlite/transfer/{step,phases,resolve}.rs` | `StoreStep`: `Stat/Snapshot/Stage/Unstage/Read/Write/Verify/Install/Retire/Remove` |
 | Store identity and generation | `history_meta(catalog_id, catalog_incarnation, binding_key, identity_format=3)` | `catalog_incarnation` is the generation |
 | Structure/content audit | `persistence/diagnostic/` (`sqlite_structure(path)`, `SqliteHandles::diagnose`), `control/.../diagnostic.rs::sqlite(path, identity, …)` | Check before install |
-| Page reclamation | `backend/sqlite/lifecycle/reclamation.rs` (512 pages per call, requires `auto_vacuum=2`) | The cheap half of physical reclamation |
+| Page reclamation | `backend/sqlite/lifecycle/reclamation.rs` (512 pages per call, requires `auto_vacuum=2`) | Returns pages already on the freelist; it frees no pack bytes, because no pack row is deleted in the live Store |
 | Metering | `backend.store.project.get_storage`, `backend.store.fs.get_storage`, `backend.store.project.list_overwritten` | The three definitions and the Q2 measurement |
 | Bounded traversal | `core/crates/layerfs-content/src/filesystem/qualify/` | Traversal skeleton for mark |
 | Operations surface | `store.*` (create/connect/list/status/push/pull/remove), `backup.*`, `doctor`, `project.export` | No parallel machinery |
@@ -81,11 +85,11 @@
 | # | Invariant | Guarantee |
 |---|---|---|
 | I1 | Retained history does not shrink: the heads of live roots match before and after | `Verify{heads}` + closure comparison |
-| I2 | A published `pack` is immutable and never deleted | Triggers on both ends (`pack_immutable_*` / `pack_immutable()`) |
+| I2 | A published `pack` / `pack_unit` is immutable and never deleted **in the live Store**; compact drops a dead pack only by not copying it into the fresh staged Store | Triggers on both ends (`pack_immutable_*`, `pack_unit_immutable_*` / `pack_immutable()`) |
 | I3 | install is binary: either the old Store as it was, or the new Store fully in effect | A single `Install` (rename) + op phase |
 | I4 | Readers do not cross generations | Session-level generation check → `StaleStore` |
 | I5 | Logical deletion does not rewrite history or change IDs | `remove_file` is visibility only; CommitId is content-derived |
-| I6 | No automatic collection | #41; this spec defines no periodic job |
+| I6 | No automatic collection | layerfs-project#41; this spec defines no periodic job |
 
 ---
 
@@ -93,35 +97,38 @@
 
 | # | Item | Nature |
 |---|---|---|
-| N1 | Reachability closure + generation re-check before install | The only new mechanism |
+| N1 | Reachability closure + `catalog_incarnation` / `Verify{heads}` re-check before install | The only new mechanism |
 | N2 | transfer's `rewrite` step + `resolve` registration | The only new code |
-| N3 | Representation of logical deletion (`branch`/`layer_stack` have no visibility column) | Schema change, belongs to #42 |
-| N4 | Reader-side session-level generation check + `lfq1` mismatch mapped to `StaleStore` | Small change that decides whether #50 is feasible |
+| N3 | Representation of logical deletion (`branch`/`layer_stack` have no visibility column) | Schema change, belongs to layerfs-project#42 |
+| N4 | Reader-side session-level generation check + `lfq1` mismatch mapped to `StaleStore` | Small change that decides whether layerfs-project#50 is feasible |
 
 ---
 
 ## 5. Contracts
 
-The following 8 items are frozen before implementation; changes need owner approval.
+The following 11 items (C1–C10 and C8b) are frozen before implementation; changes need owner approval.
 
 ### C1 Root set and generation (S1)
-- `rootGeneration` increases monotonically; it must bump on: `branch.create/fork`, `commit`, `merge`, `branch.remove`, `project.delete`, `project.remove_file`, and the install of `store.compact`.
+- The generation `G` is the Store generation, `history_meta.catalog_incarnation`; no per-root or per-commit counter is added (C8 forbids a second generation field). It is bumped by the install of `store.compact` (C8).
+- Under C10 `store.compact` holds the whole Store exclusively, so no `commit`, `fork`, `merge`, `branch.remove`, `project.delete` or `project.remove_file` can run between mark and install; the roots cannot move inside the window.
 - The root set covers all content of the selected Store: every live project's `main` and published Layers + every live Branch's head + retained historical Commit roots + staged copies of incomplete ops + pooled dependencies.
 - The closure must be computed inside the exclusive window, starting from the frozen generation; caching across operations is forbidden.
-- The generation must be re-read before install; if it does not match, abandon the whole round, with no retry.
+- Before install, re-check with the existing facilities: `catalog_incarnation` must still equal `G`, and `Verify{heads}` must match the heads recorded at `snapshot`. A mismatch abandons the whole round, with no retry.
 
 ### C2 Collectability decision (S4, S5)
 ```
 collectable(o) := o ∉ closure(Roots@G) ∧ o ∉ pinned
 ```
 - No object age is introduced: neither `object_location` nor `pack` has a time column (`sql/sqlite/metadata.sql`, `sql/sqlite/objects.sql`); the exclusive window already eliminates "in-flight writes misjudged".
-- Candidates are concrete rows: `object_location` + `content_signature`; `pack` is never a candidate; catalog tables such as `history_meta`/`store_policy`/`scope_allocator` are never candidates either.
+- The unit that frees bytes is the pack: payload lives in `pack.body` and, in the units layout, `pack_unit.body`. A pack is **retained** when at least one object it holds (`object_location.pack_id`) is not collectable; a pack with no such object is **dead** and is not copied into the staged Store (level 1). With `reorg` (level 2), live objects of partially dead packs are repacked into new packs. Catalog tables such as `history_meta`/`store_policy`/`scope_allocator` are always copied.
+- Published `pack` / `pack_unit` rows are never updated or deleted in the live Store (I2); the staged Store is fresh, so their triggers never fire.
+- `content_signature` is an 8192-slot ring of dedupe hints that reference `object_location`. It is not a reclamation source: entries naming an object that is not copied are cleared in the staged Store.
 - The empty root set is legal (after the sole project is soft-deleted): the closure is empty and all objects are collectable, but compact must still produce a Store that can be opened and `doctor`ed.
 - `pinned` contains at least: objects referenced by ops and staged copies, both Stores during install, artifacts under an `Unresolved` op name.
 - The decision must land as a receipt (G, Roots fingerprint, closure size, collectable count, the three definitions).
 
 ### C3 Death decision bound to `(ObjectId, generation)`
-For per-object/per-row deletion (PostgreSQL, future online GC), the delete intent must be bound to `(ObjectId, G)`; ABA (same bytes written again after a delete) must not apply an old intent. Whole-file replacement in SQLite is covered by C1's re-check.
+For per-object/per-row deletion (PostgreSQL, future online GC), the delete intent must be bound to `(ObjectId, G)`, where `G` is `catalog_incarnation` at the time the intent was formed; ABA (same bytes written again after a delete) must not apply an old intent. Whole-file replacement in SQLite is covered by C1's re-check.
 
 ### C4 No object age (S4)
 - Object age must not be a deletion condition.
@@ -132,9 +139,11 @@ For per-object/per-row deletion (PostgreSQL, future online GC), the delete inten
 ### C5 The three byte definitions (S7)
 | Definition | SQLite | PostgreSQL |
 |---|---|---|
-| `logical_discarded` | Sum of content lengths of unreachable objects/rows | Sum of row payloads |
-| `backend_reusable` | `freelist_count × page_size` | `n_dead_tup` estimate + reusable pages |
-| `physical_shrink` | Difference of `page_count × page_size` from the old file; `reclaimed_pages` reported separately | Difference of `pg_relation_size` / `pg_total_relation_size` |
+| `logical_discarded` | Sum of `canonical_length` of collectable objects | Sum of row payloads |
+| `backend_reusable` | `freelist_count × page_size` of the old file (pages SQLite could reuse without a copy; compact does not create them) | `n_dead_tup` estimate + reusable pages (an in-place path only; 0 under replacement, see `03-decision-record.md` §5.1) |
+| `physical_shrink` | Old file's `page_count × page_size` minus the installed file's. It comes from packs not copied: report `dropped_packs` and their `pack.length` / `pack_unit.length` sum separately, and with `reorg` the bytes freed by repacking | Difference of `pg_relation_size` / `pg_total_relation_size` between the old and new schema, with `dropped_packs` reported the same way |
+
+- `logical_discarded` and `physical_shrink` differ by design: a collectable object in a retained pack is discarded but not freed until `reorg`.
 
 - Available sources: a `commit` row already carries `logical`/`new_canonical`/`new_stored`/`new_metadata`/`created_ms`.
 - Must also report: peak temporary space, elapsed time, residue (enumerable).
@@ -143,8 +152,8 @@ For per-object/per-row deletion (PostgreSQL, future online GC), the delete inten
 ### C6 Name reuse and terminal state (Q1)
 - `BranchId::named = blake3(stack ‖ name)`, and the comment relies on "names are never reused" (`core/crates/layerfs-history/src/contract/identity.rs:266`); once `branch.remove` lands, that premise fails.
 - Recommended A: forbid reuse + terminal tombstone, a same-name create returns `NameRetired`; zero migration. Alternative B: incarnation participates in the derivation, requiring migration.
-- `branch`/`layer_stack`/`layer` currently have no visibility column (`persistence/sql/sqlite/history.sql`); adding a column means every history query carries that dimension, adding a table avoids it. #42 must list "which queries must filter".
-- The split between shared / exclusive project tombstones is decided by #42; this spec requires only "terminal state + decidable generation".
+- `branch`/`layer_stack`/`layer` currently have no visibility column (`persistence/sql/sqlite/history.sql`); adding a column means every history query carries that dimension, adding a table avoids it. layerfs-project#42 must list "which queries must filter".
+- The split between shared / exclusive project tombstones is decided by layerfs-project#42; this spec requires only "terminal state + decidable generation".
 
 ### C7 Intent = `Stage` copy + op record (S3)
 - A new sidecar intent file is forbidden.
@@ -162,20 +171,23 @@ For per-object/per-row deletion (PostgreSQL, future online GC), the delete inten
 
 ### C8b SQLite writer fence (pre-swap writer)
 - The `(dev, ino)` install check alone is not enough: after the rename, a pre-swap writer's old fd can still write into the retired inode, and the new Store never sees it: silent data loss.
-- SQLite must therefore have a writer fence: re-read the generation before install, and any write handle acquired on the old generation must fail after install (reuse `Conflict`, do not add a rejection code). Without this invariant, `store.compact` could only run with no concurrent writers, which pushes the mutual-exclusion burden onto the caller.
-- That fence is **new code** (v2.0.0 has no evidence of anything like `Replaced`), a P0-level implementation item for #49.
+- SQLite must therefore have a writer fence: any write attempted through a handle opened on the replaced file must fail after install (reuse `Conflict`, do not add a rejection code). Without this invariant, `store.compact` could only run with no concurrent writers, which pushes the mutual-exclusion burden onto the caller.
+- Comparing incarnations cannot be that fence: an old-fd writer reads `catalog_incarnation` from the retired file, where it never changes, so it always sees its own generation.
+- **The fence:** at the start of every write transaction, compare the Store path's current `(dev, ino)` (`stat` of the path) with the open file's `(dev, ino)` (`fstat` of the connection's fd); a mismatch returns `Conflict` before anything is written. No new generation field or struct is added; `history_meta` stays the only identity record (C8).
+- The check runs after the write lock is taken (`BEGIN IMMEDIATE`), and compact holds the old file's write lock from `snapshot` through the rename, so a check cannot pass and then be overtaken by the swap. The file identity comes from SQLite's own fd, never from a second fd on the main file (closing one drops the process's POSIX locks on it).
+- That fence is **new code** (v2.0.0 has no evidence of anything like `Replaced`), a P0-level implementation item for layerfs-project#49.
 
-### C9 HistoryCatalog constraints (hard constraints for #42)
+### C9 HistoryCatalog constraints (hard constraints for layerfs-project#42)
 - `HistoryCatalog` = 32 methods (22 required + 10 default), with 8 implementations (1 real + 6 daemon test doubles + 1 memory).
 - New GC methods (remove_branch / soft_delete_project / remove_file / retained_roots / compact-related queries) must have a default `Unsupported` body, or all 8 impls must change at once.
 - Do not add `HistoryError` variants: both mapping points use the `_ => "Failed"` wildcard, so a new variant degrades silently to `Failed`.
 
-### C10 Admission scope per operation (#43)
+### C10 Admission scope per operation (layerfs-project#43)
 - `branch.remove`: excludes only mounts/sessions of that Branch; other Branches/projects in the Store stay readable and writable.
 - `project.delete`: excludes all mounts/sessions of that project (across Branches and historical Commits); other projects in a shared Store stay active; even for the sole project the Store must stay addressable.
 - `store.compact`: excludes the entire Store (mounts, SDK sessions, reads, saves, merge/publication, incomplete transfers).
 - Rejection matrix: `MountsActive` (mounts/sessions exist), `Busy` (another op is running), `InUse` (a lease is live).
-- `project.remove` is currently a hard delete (`remove_layerstack`); #45 must change it to a soft delete; `project.remove` returning `Unsupported` on PG must be fixed as well.
+- `project.remove` is currently a hard delete (`remove_layerstack`); layerfs-project#45 must change it to a soft delete; `project.remove` returning `Unsupported` on PG must be fixed as well.
 
 
 
@@ -188,13 +200,14 @@ GC(Roots@G):
   pinned  = op/staged copies ∪ in-flight installs ∪ Unresolved-op artifacts
   closure = walk(Roots@G)        // reuse qualify, no new walker
   candidates = all_objects − closure − pinned
-  receipt = (G, fingerprint(Roots), |closure|, |candidates|, bytes…)
-  if rootGeneration ≠ G: abort, no writes
+  dead_packs = packs (and pack units) holding no object outside candidates
+  receipt = (G, fingerprint(Roots), |closure|, |candidates|, |dead_packs|, bytes…)
+  before install: if catalog_incarnation ≠ G or Verify{heads} fails: abort, no writes
 ```
 
 - Bounded window + indexed visited state; a second persistent database is forbidden.
 - Must be able to report three classes of anomaly: missing dependency, corrupt dependency, cross-project shared pack. A missing dependency must abort, never be skipped.
-- For multiple roots, use the lowest generation `G_min` as a conservative lower bound; roots with `generation > G_min` must be recomputed before install.
+- All roots are read at the one Store generation `G`; under C10's exclusive window they cannot move before install, so no per-root generation is kept.
 
 ---
 
@@ -205,28 +218,28 @@ GC(Roots@G):
 check      outside the lock: files and disks on both sides, resolve leftover copies
            inside the lock: record.unblocked(), collect leases, write op (args name source/target)
 snapshot   bytes, sha256, heads of an idle Store
-stage      create a consistent snapshot copy beside the Store
-rewrite    delete unreachable rows on the copy + reclaim        ← the only addition
-verify     bytes / sha256 / heads
+stage      create the staged copy beside the Store as a fresh, empty Store
+rewrite    copy only retained rows from the idle Store into it           ← the only addition
+verify     heads equal the snapshot's; bytes / sha256 of the staged file as written
 install    rename the verified copy into place
 retire     delete old copies the record no longer names
 ```
 - `uncertain` follows the existing rules: `Unknown`, or the `record` phase, is uncertain; a definite failure of `send/verify/install` keeps the copy, records the op with a definite result, and lets doctor report it.
 - install is the only irreversible point; "half new, half old" is forbidden.
 
-### 7.2 SQLite (#49)
-0. **Run on the local machine only**: a non-`native` Store (`Placement::Machine(m)` / `Unknown`) must refuse with `Unsupported`; the docs say "`store.pull` home first, then compact".
+### 7.2 SQLite (layerfs-project#49)
+0. **Run on the local machine only**: a non-`native` Store (`Placement::Machine(m)` / `Unknown`) must refuse with `Unsupported`; the docs say "`store.pull` home first, then compact, then `store.push` back". That workaround costs **two full transfers** of the Store. **Open item:** run compact inside the machine's worker instead; off Linux every SQLite Store not on `native` is already opened by that machine's worker (`core/docs/issues/533/DECISIONS.md`, "H §7.7 route table"), on the same kernel as the Store, so compact there would need no transfer.
 1. Pass the old Store through `doctor`/`diagnose` first, then enter `check`.
-2. `rewrite` deletes unreachable rows on the staged copy and recomputes totals, preserving immutable encodings and IDs; only when `reorg` (Q6) is selected is data re-encoded.
+2. `rewrite` creates the staged copy as a **fresh Store** (same schema script) and inserts only retained rows: retained `pack` / `pack_unit` rows, the `object_location` rows of live objects, live `inode_value_block` rows, `content_signature` entries that still name a copied object, and the catalog/history tables; it then recomputes totals. Dead packs are not copied, so nothing is deleted and the immutability triggers never fire. Encodings and object IDs are preserved. With `reorg` (Q6 level 2), live objects of partially dead packs are written into new packs; their ids are unchanged and only their `object_location` rows change.
 3. Verification has two layers: `sqlite_structure(path, …)` (any path, read-only) → once it can be opened as a Store, `SqliteHandles::diagnose(options, …)`. The CLI's `doctor store integrity <store>` only accepts a registered Store and **cannot** be used on a copy; a copy goes through `control/.../diagnostic.rs::sqlite(path, identity, …)`.
-4. On top of diagnostic, add only two assertions: closure consistency, and conservation of row counts and object counts.
-5. install reuses `StoreStep::Install`, checking `(catalog_id, catalog_incarnation, dev, ino)`.
+4. On top of diagnostic, add only two assertions: closure consistency, and that the copy's object, pack and row counts equal the retained counts recorded by mark.
+5. install reuses `StoreStep::Install`, checking `(catalog_id, catalog_incarnation, dev, ino)`. WAL files are named after the path, not the inode: before the rename, every connection on the old file is checkpointed and closed and no `-wal`/`-shm` content remains beside it (transfer's `steps.rs` already checkpoints a leftover `-wal`), and the staged Store is installed fully checkpointed, so no opener of the new file can replay the old file's log. layerfs-project#49 confirms this in its crash-injection cases.
 6. The old copy is deleted by `StoreStep::Retire`.
 7. Insufficient disk reports `Capacity`; on failure keep the op and the staged copy, and do not clean up on your own.
-8. **Deletion order is decided by the FK graph**: `content_signature.object_id → object_location.object_id`, `object_location.pack_id → pack.pack_id` (`sql/sqlite/metadata.sql:12-29`), constraints IMMEDIATE (not DEFERRABLE), `foreign_keys=ON`. Delete in the order `content_signature` → `object_location`; `pack` is untouched. An incomplete delete is refused by the engine and rolled back (a safety property), but dependent rows must be cleared first.
-9. Division of labor with `reclaim_space`: first check `auto_vacuum=2`; the reclaimable case uses it to produce `backend_reusable`, and the non-reclaimable case has replacement as its only path.
+8. **Insertion order is decided by the FK graph**: `pack_unit.pack_id → pack.pack_id`, `object_location.pack_id → pack.pack_id`, `content_signature.object_id → object_location.object_id` (`sql/sqlite/objects*.sql`, `sql/sqlite/metadata.sql`), constraints IMMEDIATE, `foreign_keys=ON`. Insert `pack` → `pack_unit` → `object_location` → `content_signature` into the staged Store. In-place deletion in the live Store stays ruled out (`03-decision-record.md` §5.1a).
+9. `reclaim_space` is not part of compact: the fresh staged Store has no free pages to return. It only reports the old file's `backend_reusable`.
 
-### 7.3 PostgreSQL (#50)
+### 7.3 PostgreSQL (layerfs-project#50)
 - **Scope**: remote PostgreSQL Stores are in scope (including remote servers); out of scope are remote SQLite and remote object-storage copies.
 - A Store is one schema; `{s}` is replaced by `self.schema` at `backend/postgresql/mechanics.rs:21`, and `self.schema` comes from `schema_of` (`open.rs:37`, passed by the caller or defaulting to `layerfs`).
 - **The swap method is decided by S11**:
@@ -235,7 +248,7 @@ retire     delete old copies the record no longer names
   - **B (alternative)**: paired `ALTER TABLE RENAME` in the same transaction (ACCESS EXCLUSIVE per table, `lock_timeout` must be verified).
   - **C, view indirection**: writability needs triggers; the last alternative.
 - Whichever is chosen, the reader fence (C8/R2) is required.
-- `pack` has immutability triggers on the PG side too, so deleting rows of the old table is forbidden; reclamation must be "new table + new triggers".
+- `pack` has immutability triggers on the PG side too, so deleting rows of the old table is forbidden; reclamation is "new schema + new triggers": the replacement schema receives only retained packs and rows, exactly as on SQLite (§7.2 step 2), and dead packs leave with `DROP SCHEMA … CASCADE`.
 - Deletion order: delete references first (`object_location` etc.), then payload; the intermediate state is `backend_reusable`, reported separately.
   > **[UNRESOLVED — owner decision pending]** This bullet describes *in-place row
   > deletion*, which R1-E does not perform: the swap path copies retained rows into a
@@ -256,14 +269,14 @@ retire     delete old copies the record no longer names
 ## 8. Operations surface
 
 - Method: `store.compact(name)` registers an op, and progress is read from `store.status`; `operation.get` must not be added.
-- All four operations take only a resource identifier: `branch.remove(name)`, `project.delete(name)`, `store.compact(name)`, `project.remove_file(project, path)`, and they jointly forbid `confirm`/`force`/`dryRun`/`stopSandboxes`/Store or volume options (#41 verbatim). Implementations do no implicit unmount, no waiting, no retry; an unclean environment returns `MountsActive`/`Busy`/`InUse`.
+- All four operations take only a resource identifier: `branch.remove(name)`, `project.delete(name)`, `store.compact(name)`, `project.remove_file(project, path)`, and they jointly forbid `confirm`/`force`/`dryRun`/`stopSandboxes`/Store or volume options (layerfs-project#41 verbatim). Implementations do no implicit unmount, no waiting, no retry; an unclean environment returns `MountsActive`/`Busy`/`InUse`.
 - Backend route: `backend.store.compact` (following the `backend.store.*` naming family); CLI `store compact`.
 - Rejection codes: reuse `Busy`/`InUse`/`MountsActive`/`NoSuchStore`/`Unsupported`/`NotFound`; add `StaleStore`/`NameRetired`/`OrphanArtifact`/`Capacity` (cf. `StaleSandbox`). `Unresolved`/`Stale` are op states, not return codes.
 - Documentation must place side by side: `store.remove` (delete the Store and all its projects) and `project.delete` (soft delete, Store still addressable).
 
 ---
 
-## 9. Acceptance (#52)
+## 9. Acceptance (layerfs-project#52)
 
 ### 9.1 Crash injection (`kill -9` per backend, per phase)
 | Phase | Assertion |
@@ -291,30 +304,30 @@ retire     delete old copies the record no longer names
 
 ---
 
-## 10. Mapping to #41 subtasks
+## 10. Mapping to layerfs-project#41 subtasks
 
 | Subtask | Delivered by this spec | Section |
 |---|---|---|
-| #42 contracts | C1–C8, generation arithmetic, Q1–Q6, history filter list | §1.2, §5, §6 |
-| #43 admission | Reuse Store lock + lease + op; TOCTOU re-check; Branch/project/Store three-level exclusion matrix (C10) | §2, C8, C10, §7.1 |
-| #44 branch.remove | Terminal tombstone + generation (Q1) | C6 |
-| #45 project.delete | Soft delete + Store addressability | §8 |
-| #47 remove_file | View-layer hiding + reclamation definition (Q2) | §8, §9.3 |
-| #48 reachability | Frozen roots + bounded traversal + abort on missing dependency | §6 |
-| #49 SQLite compact | Reuse transfer + `rewrite` + FK order + refuse non-native | §7.1–7.2 |
-| #50 PostgreSQL GC | Swap method decided by S11 (E default / A' read-available); generation + real size metrics | §7.3 |
-| #51 API/SDK/CLI | Reuse op and `store.status` | §8 |
-| #52 acceptance | All of §9 | §9 |
+| layerfs-project#42 contracts | C1–C10 and C8b, generation arithmetic, Q1–Q6, history filter list | §1.2, §5, §6 |
+| layerfs-project#43 admission | Reuse Store lock + lease + op; TOCTOU re-check; Branch/project/Store three-level exclusion matrix (C10) | §2, C8, C10, §7.1 |
+| layerfs-project#44 branch.remove | Terminal tombstone + generation (Q1) | C6 |
+| layerfs-project#45 project.delete | Soft delete + Store addressability | §8 |
+| layerfs-project#47 remove_file | View-layer hiding + reclamation definition (Q2) | §8, §9.3 |
+| layerfs-project#48 reachability | Frozen roots + bounded traversal + abort on missing dependency | §6 |
+| layerfs-project#49 SQLite compact | Reuse transfer + `rewrite` + FK order + refuse non-native | §7.1–7.2 |
+| layerfs-project#50 PostgreSQL GC | Swap method decided by S11 (E default / A' read-available); generation + real size metrics | §7.3 |
+| layerfs-project#51 API/SDK/CLI | Reuse op and `store.status` | §8 |
+| layerfs-project#52 acceptance | All of §9 | §9 |
 
 ---
 
 ## 11. Non-goals and parameter discipline
 
-- Automatic periodic collection (forbidden by #41): no 600 s compaction / 3600 s GC loop is adopted.
+- Automatic periodic collection (forbidden by layerfs-project#41): no 600 s compaction / 3600 s GC loop is adopted.
 - Fragmentation thresholds (`min_slice_count`, `min_fragment_ratio`, `sync_threshold`) measure slices inside the same **mutable** chunk overwriting each other. LayerFS objects are immutable, so "unreachable byte ratio" is the equivalent measure.
 - light / heavy two-level compaction: LayerFS's "light" equivalent is logical removal, already an operation of its own.
 - `VACUUM FULL`-style whole-table reclamation (blocking, 2× space).
-- compact of remote object-storage copies (out of scope for #41).
+- compact of remote object-storage copies (out of scope for layerfs-project#41).
 - Any power-loss durability promise (Disposable remains the only execution profile).
 
 
@@ -323,7 +336,6 @@ retire     delete old copies the record no longer names
 ## 12. Evidence and verification record
 
 - **LayerFS-side evidence:** `control/crates/layerfs-store/src/{lease.rs,record.rs}`, `.../sqlite/transfer/{step,phases,resolve}.rs`, `control/crates/layerfs-home/src/op.rs`, `engine/crates/layerfs-persistence/src/{backend/sqlite/profile.rs,backend/sqlite/schema.rs,backend/sqlite/lifecycle/reclamation.rs,diagnostic/*}`, `engine/crates/layerfs-store-service/src/operator/{dispatch,store,files}.rs`, `core/crates/layerfs-content/src/filesystem/qualify/`, `core/crates/layerfs-history/src/contract/identity.rs`.
-- **Verification:** 33 passes in total (including 12 clean passes); the last two clean passes converged with no changes. The last three design-level changes were: remove the object-age grace, add the non-native refusal and the empty root set, and add the candidate row set.
 - **Still uncovered (needs code to answer):** the concrete SQL batches and transaction boundaries of `rewrite`; the boundary of the `resolve` list; the cross-machine failure semantics of `Retire`; the PG reader strategy (Q5); the commitment level of `store.compact` (Q6).
 
 ---
@@ -333,22 +345,23 @@ retire     delete old copies the record no longer names
 Four mechanisms carry the correctness of the sweep. Each states the goal, the
 mechanism, the safety it guarantees, and where it is implemented.
 
-### 13.1 Root generation + re-check before delete
+### 13.1 Store generation + re-check before install
 
-- **Goal.** A mark-sweep pass must never reclaim an object that became reachable
-  *after* the reachability closure was computed. A concurrent `branch.fork` /
-  `commit` must not lose the object it just started referencing.
-- **Mechanism.** The root set carries a monotonic `rootGeneration`. The closure is
-  computed from a frozen generation inside the exclusive window, and the
-  generation is re-read immediately before the delete; a mismatch invalidates the
+- **Goal.** A mark-sweep pass must never drop an object that became reachable
+  *after* the reachability closure was computed. A `branch.fork` / `commit` must
+  not lose the object it just started referencing.
+- **Mechanism.** C10 makes `store.compact` exclusive over the whole Store, so no
+  `commit`, `fork` or `merge` can run between mark and install. The closure is
+  computed at the Store generation `G = catalog_incarnation`, and immediately
+  before install the existing checks run again: `catalog_incarnation` must still
+  be `G` and `Verify{heads}` must match the snapshot; a mismatch invalidates the
   whole round.
-- **Safety.** No accidental deletion of a newly created root. A mismatch abandons
+- **Safety.** No accidental loss of a newly created root. A mismatch abandons
   the round; it does not retry until the generation happens to match, because
   retrying is how a re-check turns into a race.
-- **Implementation.** Contract C1: `rootGeneration` is bumped by
-  `branch.create/fork`, `commit`, `merge`, `branch.remove`, `project.delete`,
-  `project.remove_file`, and the install of `store.compact`. No caching across
-  operations; the re-read happens just before `install`.
+- **Implementation.** Contract C1: no new counter; `catalog_incarnation` is bumped
+  by the install of `store.compact` (C8). No caching across operations; the
+  re-check happens just before `install`.
 
 ### 13.2 Two-phase deletion (record, then confirm)
 
@@ -370,11 +383,13 @@ mechanism, the safety it guarantees, and where it is implemented.
 
 ### 13.3 Lock self-healing
 
-- **Goal.** A holder that dies (kill -9, power loss) must not wedge the Store's
-  exclusive lock forever.
+- **Goal.** A holder that dies (kill -9, or a host reboot) must not wedge the
+  Store's exclusive lock forever.
 - **Mechanism.** The lock releases on `Drop` in the normal path; a dead holder is
-  detected from its liveness (pid + kernel start time + boot), with a TTL as the
-  backstop.
+  detected from its liveness alone (pid + kernel start time + boot id): a lease
+  whose process is not alive is stale. There is no expiry timer. After a reboot the boot
+  id differs, so every lease from before it is stale. This is a liveness rule,
+  not a durability promise (§11).
 - **Safety.** No permanent wedge; a second compact is refused `Busy` / `InUse`
   instead of running concurrently; a crashed compact leaves a recoverable op that
   `doctor` can report.
@@ -393,7 +408,8 @@ mechanism, the safety it guarantees, and where it is implemented.
   already be soft-deleted while its objects are still referenced.
 - **Mechanism.** Walk the retained roots with the existing content-closure
   traversal, mark everything reached, and classify the rest as candidates subject
-  to the pinned set.
+  to the pinned set; a pack none of whose objects was reached is not copied into
+  the staged Store.
 - **Safety.** Retained history never shrinks (I1: `Verify{heads}` plus closure
   comparison); shared content, transitive delta bases and pooled inodes stay alive
   even when the producer Branch/project was soft-deleted; a missing dependency
