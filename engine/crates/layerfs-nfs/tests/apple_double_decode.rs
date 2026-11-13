@@ -575,6 +575,67 @@ fn a_companion_without_a_main_file_takes_a_slot_and_is_reclaimed() {
 }
 
 #[test]
+fn a_spilled_body_renamed_off_its_inode_takes_its_slot() {
+    let base = temp("spilled-rename");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    rig.companion_spill_dir = Some(base.join("spill-rename"));
+    rig.companion_resident_bytes = 512 * 1024;
+    rig.companions_held = 4;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    // A whole image with an attribute larger than the decoded-entry bound is
+    // kept as written, takes no slot, and fits the resident budget.
+    c.touch(&root, b"m", 0o644).unwrap();
+    let ad = c.touch(&root, b"._m", 0o644).unwrap();
+    let whole = image(
+        [0x5a; 32],
+        &[
+            (b"com.apple.provenance", pattern(40, 40)),
+            (b"user.bulk", pattern(41, 200 * 1024)),
+        ],
+    );
+    c.write(&ad.handle, 0, &whole).unwrap();
+    assert_eq!(
+        (
+            server.held().companions_decoded,
+            server.held().companions_slotted
+        ),
+        (0, 0),
+        "a whole image takes no slot even when it is kept as written"
+    );
+
+    // Another companion's larger body evicts it to disk, still whole.
+    c.touch(&root, b"other", 0o644).unwrap();
+    let other = c.touch(&root, b"._other", 0o644).unwrap();
+    let stored = pattern(42, 400 * 1024);
+    c.write(&other.handle, 0, &stored).unwrap();
+    assert_eq!(server.held().companion_bytes, stored.len());
+    assert_eq!(server.held().companions_slotted, 1, "only ._other takes a slot");
+
+    // RENAME onto a name whose main file the export never saw: the body stops
+    // being an inode's companion, so it may not keep a whole image's
+    // exemption from the index bound, even on disk.
+    c.rename(&root, b"._m", &root, b"._gone").unwrap();
+    let held = server.held();
+    assert_eq!(
+        (held.companions_decoded, held.companions_slotted),
+        (0, 2),
+        "a spilled body renamed off its inode takes its slot"
+    );
+    assert_eq!(c.read_all(&ad.handle, 256 * 1024), whole);
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn a_rename_keeps_the_other_names_of_the_inode_companion() {
     let base = temp("aliases");
     let tree = base.join("tree");

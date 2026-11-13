@@ -941,11 +941,101 @@ fn open_fds() -> Option<usize> {
         .map(|entries| entries.flatten().count())
 }
 
+#[test]
+fn a_spilled_companion_keeps_its_length_and_bytes_together() {
+    let base = temp("appledouble-spilled-race");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    rig.companion_spill_dir = Some(base.join("spill-race"));
+    // Smaller than the body below, which therefore lives on disk.
+    rig.companion_resident_bytes = 1024;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let mut other = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    let name = b"._raced".as_slice();
+    let made = c.touch(&root, b"raced", 0o644).unwrap();
+    let ad = c.touch(&root, name, 0o644).unwrap();
+    let payload = pattern(29, 2048);
+    c.write(&ad.handle, 0, &payload).unwrap();
+    assert_eq!(made.handle, c.lookup(&root, b"raced").unwrap().0);
+    assert_eq!(server.held().companion_bytes, 0, "the body spilled");
+
+    // A truncate and a write of this companion start together, round after
+    // round: each runs to completion under the companion's own gate, so the
+    // length a reply reports is always the length its file holds, and a read
+    // never asks for bytes the file does not have (NFS3ERR_IO).
+    for round in 0..64 {
+        let start = std::sync::Barrier::new(2);
+        let empty = Set {
+            size: Some(0),
+            ..Set::default()
+        };
+        let (a, b) = std::thread::scope(|scope| {
+            let a = scope.spawn(|| {
+                start.wait();
+                c.setattr(&ad.handle, empty, None)
+            });
+            let b = scope.spawn(|| {
+                start.wait();
+                other.write(&ad.handle, 0, &payload)
+            });
+            (a.join().unwrap(), b.join().unwrap())
+        });
+        a.unwrap();
+        b.unwrap();
+        let size = c.getattr(&ad.handle).unwrap().size as usize;
+        assert!(
+            size == 0 || size == payload.len(),
+            "round {round}: length {size} of a truncate or a write"
+        );
+        assert_eq!(
+            c.read_all(&ad.handle, 4096).len(),
+            size,
+            "round {round}: the bytes served match the length"
+        );
+    }
+
+    drop((c, other));
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+/// Set in the child process [`run_alone`] starts, so it runs the body of the one
+/// test it was started for.
+const FD_LIMIT_CHILD: &str = "LAYERFS_NFS_FD_LIMIT_CHILD";
+
+/// Re-runs one test of this binary in its own process, so a change of
+/// process-wide state (a soft `RLIMIT_NOFILE`, the descriptors this process
+/// holds) can neither reach nor be reached by the tests running in parallel in
+/// this one. `name` is selected with `--exact`, so exactly that test runs.
+fn run_alone(marker: &str, name: &str) {
+    let exe = std::env::current_exe().expect("the test binary's own path");
+    let status = std::process::Command::new(exe)
+        .arg("--exact")
+        .arg(name)
+        .arg("--test-threads=1")
+        .env(marker, "1")
+        .status()
+        .expect("the test binary starts again");
+    assert!(status.success(), "{name} failed in its own process");
+}
+
 /// The export opens a spilled body by path for one operation and closes it
 /// again, so companions far outnumbering the process's own file limit all
 /// read and write: a descriptor per spilled body would end in `EMFILE` here.
 #[test]
 fn spilled_companions_outnumber_the_open_file_limit() {
+    // The soft limit is process-wide and the descriptor count is the whole
+    // process's: both are set and asserted in a process running this test
+    // alone, never next to the tests this binary runs in parallel.
+    if std::env::var_os(FD_LIMIT_CHILD).is_none() {
+        run_alone(FD_LIMIT_CHILD, "spilled_companions_outnumber_the_open_file_limit");
+        return;
+    }
     let base = temp("appledouble-fd");
     let tree = base.join("tree");
     source(&tree);
@@ -959,8 +1049,7 @@ fn spilled_companions_outnumber_the_open_file_limit() {
     let root = c.mnt("/");
 
     // Four times as many companions as the process may hold open at once.
-    // Lowering the soft limit while this binary runs its tests in threads
-    // leaves every one of them more than enough descriptors.
+    // This process runs no other test: the limit and the count are its own.
     let (soft, hard) = nofile_limits();
     let limit = soft.min(hard).min(512);
     let count = limit as usize * 4;
