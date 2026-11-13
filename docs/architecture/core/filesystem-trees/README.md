@@ -1,178 +1,182 @@
 # Filesystem trees
 
-[Architecture](../../README.md) › [Core](../README.md) › Filesystem trees
-
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Directories as canonical objects: entries, attributes, symlinks, hard links, ordering and validation.
+A complete namespace as canonical objects: one inode table and one directory
+tree per directory, with attributes, symlinks and hard links.
 
 | | |
 | --- | --- |
 | Layer | [Core](../README.md) |
 | Crates | `layerfs-content` |
-| Source | [`core/crates/layerfs-content/src/filesystem`](../../../../core/crates/layerfs-content/src/filesystem) |
+| Source | [`filesystem/`](../../../../core/crates/layerfs-content/src/filesystem) |
 | Uses | [Objects](../objects/README.md), [Files](../files/README.md) |
-| Used by | [Compare and merge](../compare-and-merge/README.md), [Engine: Project Init](../../engine/project-init/README.md), [Engine: Workspace](../../engine/workspace/README.md) |
-| Flows | [Project Init](../../flows/init.md), [A Commit](../../flows/commit.md) |
+| Used by | [Compare and merge](../compare-and-merge/README.md), [Engine: Project Init](../../engine/project-init/README.md), [Engine: Commit](../../engine/commit/README.md), [Engine: Workspace](../../engine/workspace/README.md), [Engine: Store calls](../../engine/store-calls/README.md) |
+| Flows | [Project Init](../../flows/init.md), [A Commit](../../flows/commit.md), [Fork and merge](../../flows/merge.md) |
 
-## Topics
-
-| Topic | What it covers |
-| --- | --- |
-| [Representation](representation.md) | Directories, inodes and rows in canonical order. |
-| [Attributes and links](attributes-and-links.md) | Kept attributes, symlinks, hard links and references. |
-| [Updates](updates.md) | Updating an existing tree. |
-| [Validation](validation.md) | Validation, qualification and limits of a tree. |
-
-## The picture
+## Picture
 
 ```text
- caller (Project Init, Workspace Commit, merge)
-   |  sorted final bindings + typed inode values + new serials
-   v
- +------------------------------------------------------------+
- | Updates      validate --> directories --> references -->   |
- |              inodes --> root.encode         (update.rs)    |
- |     |  checks          |  pages            |  counts       |
- |     v                  v                   v               |
- | Validation       Representation     Attributes and links   |
- | (topology,       (directory and     (aliases, derived      |
- |  cycles, limits)  inode B+trees)     counts, attributes,   |
- |                                       symlink targets)     |
- +------------------------------------------------------------+
-   |  FinalizedObject (pages, root)     ^  read_canonical(id)
-   v                                    |
- caller's FinalizedConsumer        caller's AuthenticatedObjects
+ FilesystemRoot (LFS6FSR) -----> inode table: B+tree keyed by serial
+   profile, scope, root serial     (LFS6INT) leaf row: serial -> InodeValue
+                                        | content_root, by kind
+          +-----------------------------+------------------------+
+          v                             v                        v
+  Directory: B+tree of           RegularFile: file      Symlink: target
+  name -> serial (LFS6NSP)       root (Files)           object (LFS4LNK)
+
+ caller (Project Init, Commit, merge): sorted bindings + inode values
+   --> update: validate --> directories --> references --> inodes --> root
+   reads via caller's AuthenticatedObjects; pages to caller's consumer
 ```
 
-A filesystem operation never opens a store. It reads canonical bytes from the
-caller's authenticated provider and hands every finished page to the caller's
-consumer through one [`FilesystemObjects`](../../../../core/crates/layerfs-content/src/filesystem/objects.rs) value.
+An operation never opens a store: one
+[`FilesystemObjects`](../../../../core/crates/layerfs-content/src/filesystem/objects.rs)
+value carries the caller's provider and consumer.
 
 ## What it does
 
+### Directories and inodes
+
 ```text
- FilesystemRoot (LFS6FSR) ---> inode table: B+tree keyed by serial (LFS6INT)
-   profile, scope,               leaf row: serial -> 73-byte InodeValue
-   root serial                       |
-                                     | content_root, by kind
-           +-------------------------+-------------------------+
-           v                         v                         v
-   Directory: B+tree of      RegularFile: file root     Symlink: target
-   name -> serial (LFS6NSP)  (see Files)                object (LFS4LNK)
+ inode leaf rows                                directory "/"  (LFS6NSP)
+ 1  Directory   count 0  -> dir tree of "/"     ".git" -> 5 | "src" -> 2
+ 2  Directory   count 1  -> dir tree of "src"   directory "src"
+ 3  RegularFile count 2  -> file root           "a.rs" -> 3 | "b.rs" -> 3
+ 4  Symlink     count 1  -> LFS4LNK target
+ resolve("src/a.rs"): root serial -> "/" lookup "src" -> 2
+                      -> lookup "a.rs" -> 3 -> RegularFile value
 ```
 
-| Question | Answer | Source |
+| Behaviour | Detail | Source |
 | --- | --- | --- |
-| What is stored | One root object, one inode table per root, one directory B+tree per directory inode, one symlink target object per symlink, and file roots from [Files](../files/README.md). | [`root.rs`](../../../../core/crates/layerfs-content/src/filesystem/root.rs), [`sorted/format.rs`](../../../../core/crates/layerfs-content/src/filesystem/sorted/format.rs) |
-| Which inode kinds exist | `RegularFile`, `Directory` and `Symlink`; any other kind code is refused on decode. | [`inode_leaf.rs`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs) |
-| What filters the namespace | Nothing. The tree stores whatever bindings the caller supplies, including `.git`, ignored files and dependencies. Git ignore rules are not read anywhere in this module. | [`input.rs`](../../../../core/crates/layerfs-content/src/filesystem/input.rs) |
-| How a hard link is stored | Two names bind the same inode serial; the operation derives `namespace_ref_count` from retained bindings. | [`references/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/reduce.rs) |
-| Which attributes are kept | Portable `mode` (permission bits, plus sticky for directories) and `mtime` (seconds and nanoseconds). No uid, gid, atime, ctime or extended attributes are kept by any production writer. | [`attributes/portable.rs`](../../../../core/crates/layerfs-content/src/filesystem/attributes/portable.rs) |
-| How a tree changes | Callers pass final bindings and values; a sorted B+tree merge rewrites only the pages a change reaches. | [`update.rs`](../../../../core/crates/layerfs-content/src/filesystem/update.rs), [`sorted/merge.rs`](../../../../core/crates/layerfs-content/src/filesystem/sorted/merge.rs) |
+| Names bind serials | A name never points at an object; it points at a serial, and the serial's row says what the inode is. Serials belong to the scope stored in the root; two scopes are not comparable | [`identity.rs`](../../../../core/crates/layerfs-content/src/filesystem/identity.rs) |
+| Inode value | 73 bytes: kind, `namespace_ref_count`, `content_root`, metadata ([Objects: Inode leaves](../objects/README.md#inode-leaves)) | [`inode_leaf.rs`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs) |
+| Inode kinds | `RegularFile`, `Directory`, `Symlink`; any other kind code is refused | same |
+| No filter | Every supplied binding is stored, including `.git`, ignored files and dependencies; no ignore rule is read | [`input.rs`](../../../../core/crates/layerfs-content/src/filesystem/input.rs) |
+| Byte order | Names compare as raw bytes (`PathName::cmp`), so uppercase sorts first; serials as `u64`; attributes by domain then key | [`path.rs`](../../../../core/crates/layerfs-content/src/filesystem/path.rs) |
+| Resolution | `FilesystemRead` loads the checked root once and resolves one component at a time; never the whole inode table. An unbound name is `PathNotFound`. Lookups of several names share ancestor reads; a provider may keep decoded pages in a bounded LRU | [`read.rs`](../../../../core/crates/layerfs-content/src/filesystem/read.rs), [`decoded.rs`](../../../../core/crates/layerfs-content/src/filesystem/decoded.rs) |
+| Listing | Paged by entry count and bytes; resumes after the last delivered name | [`directory/read.rs`](../../../../core/crates/layerfs-content/src/filesystem/directory/read.rs) |
 
-Terms such as *inode*, *serial* and *scope* are defined in the
-[glossary](../../glossary.md) and in [Representation](representation.md).
+### Pages and the root
+
+```text
+ page = LFSO envelope 13 + node header 31 + rows
+ header: magic 8 | ver u16 = 1 | role | level | flags = 0 | count u16
+         | subtree count u64 | subtree bytes u64
+ FilesystemRoot value (116 B): "LFS6FSR\0" | ver 1 | role 6 | flags 0
+         | profile ID 32 | scope ID 32 | root serial u64 | inode table ID 32
+```
+
+| Page | Magic, role | Row | Fill (non-root) | Source |
+| --- | --- | --- | --- | --- |
+| Directory leaf | `LFS6NSP`, 1 | name len u16, name, serial u64 | ≥ 3,277 canonical bytes (2/5 of 8,192) | [`sorted/format.rs`](../../../../core/crates/layerfs-content/src/filesystem/sorted/format.rs) |
+| Directory branch | `LFS6NSP`, 2 | name len, last name of child, child ID | same | same |
+| Inode leaf | `LFS6INT`, 7 | serial u64, `InodeValue` (81 B) | 50 to 100 rows | [`inode/codec.rs`](../../../../core/crates/layerfs-content/src/filesystem/inode/codec.rs) |
+| Inode branch | `LFS6INT`, 8 | serial u64, child ID (40 B) | 64 to 127 children | same |
+| Attribute leaf / branch | `LFS4MET`, 9 / 10 | `37 + domain + key` / `36 + domain + key` bytes | ≥ 3,277 bytes | [`attributes/codec.rs`](../../../../core/crates/layerfs-content/src/filesystem/attributes/codec.rs) |
+
+Page sizes are exact arithmetic (`44 + sum of row widths`); nothing is
+encoded to test a fit. Root pages are exempt from the fill rule. An empty
+directory is one empty leaf; an empty inode page is never valid. `profile` is
+the ID of the frozen `layerfs/namespace-profile/scoped-inline/v1` description;
+`scope` is `scope_for_seed(seed)`, the ID of `layerfs/inode-scope/v1\0` plus a
+32-byte seed ([`root.rs`](../../../../core/crates/layerfs-content/src/filesystem/root.rs)).
+
+One sorted B+tree engine mutates every page format through the `Format` trait.
+A merge reads only the children its changes reach, the neighbour an underfull
+page joins, and the other children of a branch that splits or joins, at most
+256 per batch; every unread child keeps its ID
+([`sorted/page.rs`](../../../../core/crates/layerfs-content/src/filesystem/sorted/page.rs)).
+
+### Attributes
+
+| Kept attribute | Grammar | Source |
+| --- | --- | --- |
+| `portable/mode` | 4 bytes; files `0o777` bits, directories `0o1777` (sticky allowed), symlinks exactly `0o777` | [`attributes/portable.rs`](../../../../core/crates/layerfs-content/src/filesystem/attributes/portable.rs) |
+| `portable/mtime` | seconds `i64`, nanoseconds `u32` below 10^9 | same |
+| Other domains | domain 1–64 bytes UTF-8, key ≤ 255, value 1–32,768 bytes, opaque; `portable` accepts only `mode` and `mtime` | [`attributes/keys.rs`](../../../../core/crates/layerfs-content/src/filesystem/attributes/keys.rs) |
+
+Two forms of `metadata_root`: **inline** (kind bit `0x80`: mode and mtime
+inside the inode value, no tree) and **root** (an attribute-tree ID whose rows
+point at extent-only file values). Project Init writes inline
+([`import/namespace.rs`](../../../../engine/crates/layerfs-project/src/import/namespace.rs));
+Commit writes inline unless the stored tree has keys beyond the portable two,
+then patches that tree with sorted `Set`/`Remove` requests
+([`construction/namespace/inodes.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/inodes.rs),
+[`attributes/patch.rs`](../../../../core/crates/layerfs-content/src/filesystem/attributes/patch.rs)).
+Owner, group, atime, ctime and device numbers are not kept; no production
+caller writes a non-portable key, and FUSE answers extended-attribute calls
+with `ENOSYS` ([`request/callbacks.rs`](../../../../engine/crates/layerfs-fuse/src/request/callbacks.rs)).
+
+### Symlinks and hard links
+
+```text
+ symlink value: "LFS4LNK\0" | ver 1 | role 5 | flags 0 | len u16 | target
+ directory "a": "x" -> 3      directory "b": "y" -> 3
+ inode 3: RegularFile, namespace_ref_count 2
+ add binding -> +1   remove binding -> -1   0 -> row removed
+```
+
+| Case | Result | Source |
+| --- | --- | --- |
+| Symlink target | opaque bytes ≤ 4,096, no NUL; never resolved, normalized or UTF-8-checked; broken and absolute targets stored as given | [`symlink.rs`](../../../../core/crates/layerfs-content/src/filesystem/symlink.rs) |
+| Two names, one serial | one inode, one content root, count 2 (regular files and symlinks only) | [`references/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/reduce.rs) |
+| Count of a new inode | the bindings this operation retained; the supplied count is ignored | [`references/record.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/record.rs) |
+| Count of an existing inode | stored count plus the signed effect the merge observed; aliases off the changed paths are not read | [`references/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/reduce.rs) |
+| A move | addition observed before removal, so a count never passes through 0 | `observe` in [`update.rs`](../../../../core/crates/layerfs-content/src/filesystem/update.rs) |
+| A directory reaches 0 | its entries lose one reference each, a page at a time, stopping at an inode that still has an alias | [`references/release.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/release.rs) |
+
+Equal bytes in two files do not make a hard link: a link is a shared serial.
+Directory parentage stays singular. Older binaries may reject a tree with a
+multiply bound symlink; keep CLI, daemon, worker and bundle builds matched.
 
 ## Invariants
 
-| Rule | Where it is enforced |
+| Rule | Enforced by |
 | --- | --- |
-| A tree is complete: no ignore rule or path filter exists in construction. | [`update.rs`](../../../../core/crates/layerfs-content/src/filesystem/update.rs) applies every supplied row; the native scan is [Project Init](../../engine/project-init/README.md)'s |
-| Rows in every page are strictly ascending by key (name bytes, serial or attribute key); a duplicate or unsorted row is refused, not normalized. | `reject_unordered` and the encoders in [`sorted/format.rs`](../../../../core/crates/layerfs-content/src/filesystem/sorted/format.rs); [`DirectoryUpdate::check`](../../../../core/crates/layerfs-content/src/filesystem/input.rs) |
-| Only the frozen profile `scoped-inline/v1` is accepted; any other profile fails before mutation. | [`FilesystemRoot::decode`](../../../../core/crates/layerfs-content/src/filesystem/root.rs) |
-| Serial 0 and serials above `i64::MAX` are refused; Content never allocates serials. | [`InodeIdentity::new`](../../../../core/crates/layerfs-content/src/filesystem/identity.rs) |
-| The root inode is a directory with count 0; every other directory and symlink has count exactly 1; a regular file has count at least 1. | [`InodeValue::validate`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs) |
-| Every final count is derived from retained bindings, never trusted from the caller. | [`references/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/reduce.rs), [`references/record.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/record.rs) |
-| The result has no directory cycle and no unreachable new directory. | [`validate/cycles.rs`](../../../../core/crates/layerfs-content/src/filesystem/validate/cycles.rs) |
-| An unchanged subtree keeps its identity and is not read. | [`sorted/page.rs`](../../../../core/crates/layerfs-content/src/filesystem/sorted/page.rs), [`sorted/merge.rs`](../../../../core/crates/layerfs-content/src/filesystem/sorted/merge.rs) |
-| A failed operation emits no root object and releases its ordering backing once. | `run_state` in [`update.rs`](../../../../core/crates/layerfs-content/src/filesystem/update.rs) |
+| A tree is complete: no ignore rule or path filter in construction | [`update.rs`](../../../../core/crates/layerfs-content/src/filesystem/update.rs) applies every supplied row |
+| Rows are strictly ascending; a duplicate or unsorted row is refused, never normalized | encoders and `reject_unordered` in [`sorted/format.rs`](../../../../core/crates/layerfs-content/src/filesystem/sorted/format.rs); `DirectoryUpdate::check` in [`input.rs`](../../../../core/crates/layerfs-content/src/filesystem/input.rs) |
+| Only the profile `scoped-inline/v1` is accepted, before any mutation | `FilesystemRoot::decode` in [`root.rs`](../../../../core/crates/layerfs-content/src/filesystem/root.rs) |
+| Serials are 1 to `i64::MAX`; Content never allocates them | `InodeIdentity::new` in [`identity.rs`](../../../../core/crates/layerfs-content/src/filesystem/identity.rs) |
+| Root is a directory with count 0; other directories have count 1; files and symlinks ≥ 1 | `InodeValue::validate` in [`inode_leaf.rs`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs) |
+| Every final count is derived from retained bindings | [`references/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/reduce.rs) |
+| No directory cycle and no unreachable new directory | [`validate/cycles.rs`](../../../../core/crates/layerfs-content/src/filesystem/validate/cycles.rs) |
+| An unchanged subtree keeps its ID and is not read | [`sorted/merge.rs`](../../../../core/crates/layerfs-content/src/filesystem/sorted/merge.rs) |
+| A failed operation emits no root and releases its ordering backing once | `run_state` in [`update.rs`](../../../../core/crates/layerfs-content/src/filesystem/update.rs) |
 
-Equal input rows give equal page bytes and therefore equal IDs. Identity also
-depends on the scope and on the serials the caller allocated, so two trees with
-the same names but different serials have different roots. Whether two different
-update histories that reach the same final rows always produce the same page
-partition is not established from source.
+Equal input rows give equal pages and IDs; identity also depends on scope and
+serials. Whether two update histories reaching the same rows always give the
+same page partition is not established from source.
 
 ## Limits and failures
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| Name component | 1 to 255 bytes, UTF-8, no NUL, `/` or `\`, not `.` or `..`; else `InvalidPath`, `InvalidUtf8` or `PathLimitExceeded` | [`path.rs`](../../../../core/crates/layerfs-content/src/filesystem/path.rs) |
-| Path | at most 4,096 bytes and 256 components | [`limits.rs`](../../../../core/crates/layerfs-content/src/filesystem/limits.rs) |
-| Tree page | at most 8,192 canonical bytes; level at most 31 | [`limits.rs`](../../../../core/crates/layerfs-content/src/filesystem/limits.rs) |
-| Symlink target | at most 4,096 bytes, no NUL | [`symlink.rs`](../../../../core/crates/layerfs-content/src/filesystem/symlink.rs) |
-| Inode serial | 1 to `i64::MAX` | [`identity.rs`](../../../../core/crates/layerfs-content/src/filesystem/identity.rs) |
-| Operation scratch for unfinished pages | 4 MiB (`MAXIMUM_OPERATION_SCRATCH_BYTES`); a reservation that does not fit fails | [`sorted/budget.rs`](../../../../core/crates/layerfs-content/src/filesystem/sorted/budget.rs) |
-| Resident input rows without a backing | refused with `ObjectLimitExceeded` above `ordering_bytes / 16` rows | [`input.rs`](../../../../core/crates/layerfs-content/src/filesystem/input.rs), [`validate.rs`](../../../../core/crates/layerfs-content/src/filesystem/validate.rs) |
+| Name component | 1–255 bytes, UTF-8, no NUL, `/` or `\`, not `.` or `..`; `InvalidPath`, `InvalidUtf8`, `PathLimitExceeded` | [`path.rs`](../../../../core/crates/layerfs-content/src/filesystem/path.rs) |
+| Path | 4,096 bytes, 256 components | [`limits.rs`](../../../../core/crates/layerfs-content/src/filesystem/limits.rs) |
+| Tree page, level | 8,192 bytes, 31 | same |
+| Entries per directory, inodes per tree | no cap: they grow as pages | [Validation](validation.md) |
 | Foreign profile or scope | `UnsupportedProfile`, `ScopeMismatch` | [`root.rs`](../../../../core/crates/layerfs-content/src/filesystem/root.rs), [`validate.rs`](../../../../core/crates/layerfs-content/src/filesystem/validate.rs) |
 | Malformed page | `UnsupportedFraming`, `TrailingBytes`, `LengthMismatch`, `NonCanonicalOrdering`, `InvalidRecord` | [`sorted/format.rs`](../../../../core/crates/layerfs-content/src/filesystem/sorted/format.rs) |
 
-Huge directories are B+trees of bounded pages, not resident lists. Listing is
-paged by entry count and bytes and resumes after the last delivered name
-([`directory/read.rs`](../../../../core/crates/layerfs-content/src/filesystem/directory/read.rs)). Huge updates stream their rows
-through replayable cursors ([`rows/mod.rs`](../../../../core/crates/layerfs-content/src/filesystem/rows/mod.rs)) and keep reference
-state in caller-owned records or spilled runs ([`references/runs.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/runs.rs)).
-All limits are in [Validation](validation.md#limits).
+Every named limit is in [Validation](validation.md#limitsrs).
 
 ## Demonstration
 
-All four run on any platform with no Docker, root, feature or environment
-variable. The commands are written from source and were not run while writing
-this page.
+No Docker, root, feature or environment variable; any platform. Each test
+command gets a wall timeout of at most 120 s.
 
-| Test or example | Crate | Shows |
-| --- | --- | --- |
-| [`filesystem_codec.rs`](../../../../core/crates/layerfs-content/tests/filesystem_codec.rs) | `layerfs-content` | Every tree grammar (inode, directory, attribute pages, root, symlink) encodes to sealed golden bytes and refuses malformed variants. |
-| [`filesystem_hardlinks.rs`](../../../../core/crates/layerfs-content/tests/filesystem_hardlinks.rs) | `layerfs-content` | Aliases in several directories reach one derived count; moves never drop a count to zero. |
-| [`filesystem_ordering.rs`](../../../../core/crates/layerfs-content/tests/filesystem_ordering.rs) | `layerfs-content` | The reference reducer's ordering rows, spills, tiers and checked cleanup. |
-| [`filesystem_primitives_candidate.rs`](../../../../core/crates/layerfs-content/examples/filesystem_primitives_candidate.rs) | `layerfs-content` | The sorted directory merge, inode merge and root encoding over a generated tree, printing identities and page partition. |
+| Test or example | Command | Platform | Shows |
+| --- | --- | --- | --- |
+| [`filesystem_codec.rs`](../../../../core/crates/layerfs-content/tests/filesystem_codec.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test filesystem_codec` | any | Every tree grammar matches sealed fixtures under `tests/fixtures/filesystem/`; wrong roles, flags, trailing bytes and an over-full leaf are refused |
+| [`filesystem_hardlinks.rs`](../../../../core/crates/layerfs-content/tests/filesystem_hardlinks.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test filesystem_hardlinks` | any | Aliases across directories reach one derived count; moves never drop it to zero |
+| [`filesystem_updates.rs`](../../../../core/crates/layerfs-content/tests/filesystem_updates.rs) | `cargo +1.85.1 test --locked -p layerfs-content --test filesystem_updates` | any | Restating a binding keeps the root ID; content-only changes touch only the inode table |
+| [`filesystem_primitives_candidate.rs`](../../../../core/crates/layerfs-content/examples/filesystem_primitives_candidate.rs) | `cargo +1.85.1 run --locked -p layerfs-content --example filesystem_primitives_candidate -- --files 2000 --changes 200` | any | Sorted directory and inode merges over a generated tree, printing IDs and page partition (timings diagnostic) |
 
-**`filesystem_codec`** builds pages from fixed inputs, compares them with the
-fixtures under `tests/fixtures/filesystem/`, and checks that wrong roles, flags,
-trailing bytes and an over-full directory leaf are refused.
+## Pages
 
-    cargo +1.85.1 test --locked -p layerfs-content --test filesystem_codec
-
-**`filesystem_hardlinks`** builds a small tree and then updates it:
-
-```text
- /            a/x --+                 a/x --+
- +- a/            +--> file (count 2)       +--> file (count 3)
- +- b/  b/y ------+       add c/z -->  b/y -+
-                                       c/z -+
-```
-
-It checks the count after adding, moving and removing aliases, that a regular
-file keeps at least one binding, and that a declared new inode cannot lose one.
-
-    cargo +1.85.1 test --locked -p layerfs-content --test filesystem_hardlinks
-
-**`filesystem_ordering`** drives `build_filesystem` and `update_filesystem`
-with a recording backing under the system temporary directory. It checks the
-96-byte record grammar, that crossing the pending ceiling only moves rows into
-runs, that growth is reserved before it happens and that every backing failure
-fails the operation without a root.
-
-    cargo +1.85.1 test --locked -p layerfs-content --test filesystem_ordering
-
-**`filesystem_primitives_candidate`** takes `--files` (default 2,000),
-`--changes` (default 200) and `--samples` (default 1) and prints the base and
-updated identities, the page partition and timings. Its timings are diagnostic
-only.
-
-    cargo +1.85.1 run --locked -p layerfs-content --example filesystem_primitives_candidate -- --files 2000 --changes 200
-
-## Earlier material
-
-Folded into these pages. Matched by title, so check each one before relying on it.
-
-- [`core/docs/architecture/04-filesystem.md`](../../../../core/docs/architecture/04-filesystem.md) — covered in [Representation](representation.md), [Updates](updates.md) and [Validation](validation.md).
-- [`core/docs/architecture/12-attributes.md`](../../../../core/docs/architecture/12-attributes.md) — covered in [Attributes and links](attributes-and-links.md#attributes).
-- [`core/docs/architecture/30-namespace-operations.md`](../../../../core/docs/architecture/30-namespace-operations.md) — historical only; Workspace operations belong to [Engine: Workspace](../../engine/workspace/README.md).
-- [`core/docs/architecture/39-native-import-links.md`](../../../../core/docs/architecture/39-native-import-links.md) — the target grammar is covered in [Attributes and links](attributes-and-links.md#symlinks); native acquisition belongs to [Engine: Project Init](../../engine/project-init/README.md).
-- [`core/docs/architecture/41-native-regular-aliases.md`](../../../../core/docs/architecture/41-native-regular-aliases.md) — the stored form is covered in [Attributes and links](attributes-and-links.md#hard-links); native alias grouping belongs to [Engine: Project Init](../../engine/project-init/README.md).
-
----
-
-← [Files: Reads and views](../files/reads-and-views.md) · [Up: Core](../README.md) · [Filesystem trees: Representation](representation.md) →
+| Page | What it covers |
+| --- | --- |
+| [Updates](updates.md) | `update.rs`, input and backed state, the reference reducer, statistics. |
+| [Validation](validation.md) | `validate/`, `qualify/` and every named limit. |

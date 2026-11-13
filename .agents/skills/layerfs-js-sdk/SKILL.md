@@ -11,7 +11,7 @@ description: Use when building, editing, testing or inspecting a project through
 > call table (one file per call, `api/crates/layerfs-api/src/<family>/<call>.rs`), the package
 > (`api/node/src/index.js`, [api/README.md](../../../api/README.md)), the
 > command (`api/crates/layerfs-cli/src`) and
-> [the decisions log](../../../core/docs/issues/533/DECISIONS.md). File,
+> [the decisions log](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/DECISIONS.md). File,
 > Branch, Commit, project and Store results below were captured on macOS from
 > the built `layerfs` command and the Node package in a private home on
 > 2026-11-02. Sandbox and Workspace calls were **not run** in this pass; their

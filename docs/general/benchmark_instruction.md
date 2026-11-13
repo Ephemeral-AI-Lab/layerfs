@@ -5,8 +5,8 @@
 How an agent runs one optimization iteration against the mounted product
 (cluster two: FUSE, daemon, Workspace, overlay) and which numbers every
 iteration must report. It was written from the R7 run
-([ledger](../../core/docs/issues/307/checks/r7-optimization-20261009/LEDGER.md),
-[second handoff](../../core/docs/issues/307/HANDOFF-R7-BEAT-A2-20261009-2.md)).
+([ledger](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/checks/r7-optimization-20261009/LEDGER.md),
+[second handoff](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/HANDOFF-R7-BEAT-A2-20261009-2.md)).
 
 This document adds no rule and lifts none, with one exception stated where
 it applies: the owner's direction of 2026-10-09 to rank the opportunities and

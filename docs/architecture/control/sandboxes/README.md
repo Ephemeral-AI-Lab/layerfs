@@ -1,138 +1,120 @@
 # Sandboxes
 
-[Architecture](../../README.md) › [Control](../README.md) › Sandboxes
-
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-How a Sandbox runs on a machine's kernel: the native and namespaces backends, commands and streams.
+How a Sandbox is started, reached, used and closed: one `layerfs-daemon` on a
+machine's kernel, the commands run beside it, and the caller-side channel that
+carries its Workspace calls.
 
 | | |
 | --- | --- |
 | Layer | [Control](../README.md) |
-| Crates | `layerfs-sandbox-backend` |
-| Source | [`control/crates/layerfs-sandbox-backend/src/backend`](../../../../control/crates/layerfs-sandbox-backend/src/backend), [`control/crates/layerfs-sandbox-backend/src/local`](../../../../control/crates/layerfs-sandbox-backend/src/local), [`control/crates/layerfs-sandbox-backend/src/runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs) |
-| Uses | [Engine: Daemon](../../engine/daemon/README.md) |
-| Used by | [Machines](../machines/README.md), [Control: Management](../management/README.md) |
-| Flows | [A Workspace session](../../flows/workspace.md) |
+| Crates | `layerfs-sandbox`, `layerfs-sandbox-backend` |
+| Source | [`layerfs-sandbox/src`](../../../../control/crates/layerfs-sandbox/src), [`layerfs-sandbox-backend/src`](../../../../control/crates/layerfs-sandbox-backend/src) |
+| Uses | [Engine: Bridge](../../engine/bridge/README.md) (wire records), [Engine: Daemon](../../engine/daemon/README.md) (the process started), [Machines](../machines/README.md) (worker route, a platform's backend), [Stores and projects](../stores-and-projects/README.md) (resolve, lease, open Store), [Home](../home/README.md) (records, locks, secrets) |
+| Used by | [API: `sandbox` calls](../../api/sdk/sandbox.md), [API: `workspace` calls](../../api/sdk/workspace.md), [Machines: workers and reach](../machines/workers-and-reach.md) (a worker runs `sandbox.host`), [Doctor](../doctor/README.md) |
+| Flows | [A call](../../flows/call.md), [A Workspace session](../../flows/workspace.md) |
 
-## Topics
+A Sandbox is one daemon a backend started, plus the commands run in it. The
+daemon serves the Workspaces' files and supervises no command; the Sandbox
+runtime owns command launch, streams, exit status and cancel
+([glossary](../../glossary.md)). Which process serves each call is the single
+"Where each call runs" table in [Control](../README.md).
 
-| Topic | What it covers |
-| --- | --- |
-| [Backends](backends.md) | The sealed BackendAdapter and the backend kinds. |
-| [Docker machine Sandboxes](docker.md) | The `docker` machine runs namespaces Sandboxes in its worker container; the docker backend was retired (D-8). |
-| [Native and namespaces](native-and-namespaces.md) | Local-process Sandboxes: native and namespaces. |
-| [Commands and streams](commands-and-streams.md) | Running a command and returning its streams and status. |
-| [Adding a backend](adding-a-backend.md) | The recipe for a new Sandbox backend. |
-
-## The picture
+## Picture
 
 ```text
- API control (sandbox.create, workspace.exec)  -- in the caller, or in the
-        |                                         machine's worker
+ caller (API control)                         machine's worker
+   sandbox.* / workspace.*                    (op "sandbox.host")
+        |                                            ^
+        v                                            |
+ route.rs: Executor::Local ------or------ Executor::Worker
+        |   (both sides run the same host code below)
         v
- Runtime (enum: the deployment's backend)      runtime.rs
-   |  launch / launch_with_binds / reopen / reopen_stopped
-   v
- Sandbox (enum: the launched owner)            runtime.rs
-   |  endpoint  run  track  inspect  log_tail  stop  delete
-   |
-   +-- HostProcess -- local/ : one daemon process on this kernel (macOS)
-   +-- Namespaces --- local/ + layerfs-sandbox-helper : daemon in its own
-                       mount/PID/IPC namespaces and cgroup (Linux: VMs,
-                       Linux native, the docker machine's worker)
-
- adapter(Backend) -> &dyn BackendAdapter      backend/adapter.rs
-   stored_name  description  capabilities     (what is fixed per backend)
+ lifecycle.rs, launch/, reopen.rs, close.rs      exec/: run, record, cancel
+        |                                            |
+ ======= layerfs-sandbox-backend ====================|=================
+        v                                            v
+ Runtime --launch_with_binds--> Sandbox --run_in--> bash -c <command>
+   HostProcess (macOS)            endpoint            as uid:gid, in its
+   Namespaces  (Linux)            stop, delete        own process group
+        |                                             or cgroup; streams
+        v                                             -> output Spool
+ layerfs-daemon on 127.0.0.1:<port>
+        ^
+        | daemon/: Controls pool (<= 6 per process), one exchange each
+ Workspace calls: mount, commit, unmount, status   (direct.rs: from the
+                                                    home, when forwarded)
 ```
-
-A Sandbox is one `layerfs-daemon` started by a backend, plus the commands
-run in it. The daemon serves the Workspaces; the Sandbox runtime owns the
-commands (see [glossary](../../glossary.md)).
 
 ## What it does
 
-| Call | What the Sandbox side does | Source |
+| Behaviour | Detail | Source |
 | --- | --- | --- |
-| `sandbox.create` | `Runtime::launch_with_binds` starts one daemon once with its private 0600 setup, waits for its `LAYERFS_DAEMON_LISTEN <addr>` line, and returns the owner. A failure after an effect returns the owner in `LaunchFailure::instance` for one stop and delete. | [`runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs) |
-| `workspace.exec` | API control builds an `ExecRequest` (`bash -c <command>`, the command identity, `HOME=<scratch>`, the Workspace directory, no stdin) and calls `Sandbox::run`, which streams stdout and stderr to sinks and returns `ExecExit`. The daemon is not involved. | [`runtime.rs`](../../../../control/crates/layerfs-sandbox/src/runtime.rs), [`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs) |
-| `sandbox.close` | `stop`, then `delete`, each attempted once. | [`runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs) |
-| reopen | `Runtime::reopen` checks the recorded identity (pid + start time + boot) and starts nothing. | [`runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs) |
-
-Which backend a machine uses is fixed by its platform:
-
-| Platform | Backend | Source |
-| --- | --- | --- |
-| `native` on macOS | `HostProcess` (stored `"native"`) | [`native/profile.rs`](../../../../control/crates/layerfs-platform/src/platforms/native/profile.rs) |
-| `native` on Linux; every VM and `ssh` guest; `docker` (in its worker container, D-8) | `Namespaces` | same; [`docker/profile.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/profile.rs); `namespaces` in [`platform.rs`](../../../../control/crates/layerfs-platform/src/platform.rs) |
+| Choose the backend | `deploy.sandbox` (`LAYERFS_SANDBOX`) is `native` (macOS) or `namespaces` (Linux). Unset or `docker` names the retired docker backend and is refused; `native` on Linux and `namespaces` off Linux are refused; all before any effect. | [`runtime.rs`](../../../../control/crates/layerfs-sandbox/src/runtime.rs) `backend` |
+| `sandbox.create` | Under the Sandbox folder's guard: a started record is `Exists` (a retired docker record is forgotten first). Builds a fresh `DaemonSetup` (listen `127.0.0.1:0`, keys, kernel route, overlay template, mount home, command identity, limits), launches once and waits up to 30 s for the daemon's listen line. A sqlite Store's directory is bound in; a PostgreSQL Store's server is reach-checked first. | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `create`, `setup`; [`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs); [`launch/provider.rs`](../../../../control/crates/layerfs-sandbox/src/launch/provider.rs); [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `reach_check` |
+| Command identity | Linux: uid 501, gid 20. macOS: the caller's own uid and gid. | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `setup`, [`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) |
+| Launch on the kernel | `Runtime::launch_with_binds` starts the daemon once in a private directory and returns the owner; a failure after an effect returns it in `LaunchFailure::instance` for one stop and one delete. | [`runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs), [Backends](backends.md) |
+| Reopen | A later call reopens the Sandbox by its recorded runtime (`native` or `namespaces`); `Runtime::reopen` checks the recorded process identity and starts nothing. A daemon found gone or stopped is `NoSuchSandbox`, with every Workspace it held lost. | [`reopen.rs`](../../../../control/crates/layerfs-sandbox/src/reopen.rs), [`registry.rs`](../../../../control/crates/layerfs-sandbox/src/registry.rs) `sandbox_live` |
+| Route a host operation | One of ten operations (`OPS`) runs in this process or is sent once to the machine's worker as `sandbox.host`; nothing starts a stopped machine. | [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs), [`host/call.rs`](../../../../control/crates/layerfs-sandbox/src/host/call.rs), [Daemon channel and exec](daemon-channel-and-exec.md#routers-and-host-the-host-operation) |
+| Workspace calls | Mount (bind, then attach), Commit, unmount and status go to the daemon over a pooled authenticated connection, one exchange each. | [`daemon/`](../../../../control/crates/layerfs-sandbox/src/daemon), [Daemon channel and exec](daemon-channel-and-exec.md#daemon-the-control-channel) |
+| `workspace.exec` | Runs `bash -c <command>` through `Sandbox::run_in` in the Workspace directory, `HOME` the Sandbox scratch directory; keeps an exec record while it runs; output inline up to 1 MiB per stream, else spooled. The daemon is not involved. | [`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs), [Daemon channel and exec](daemon-channel-and-exec.md#exec-commands-and-cancel) |
+| `workspace.exec_cancel` | Marks the record under the Sandbox lock, then signals once: SIGTERM, the grace (5000 ms default), SIGKILL. | [`exec/cancel.rs`](../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs), [`stop.rs`](../../../../control/crates/layerfs-sandbox-backend/src/stop.rs) |
+| `sandbox.close` | Settles running commands (`Busy`, or each cancelled with `force`); refuses `MountsActive` while a Workspace is mounted, unless `force`; then `stop(5)` and `delete`, each attempted once. | [`close.rs`](../../../../control/crates/layerfs-sandbox/src/close.rs), [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
+| Direct route | A Sandbox whose daemon port its machine forwards to this host (`lima`'s `ssh -L`) keeps its keys in the home's `control.json` (0600); its Workspace calls dial the daemon from the home, while exec still goes through the worker. | [`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs) |
+| `sandbox.get` capacity | Reads the daemon's `backend.daemon.connection_failures` on a lent connection, bounded to 2 s and fenced at that deadline. | [`daemon/capacity.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/capacity.rs), [`get.rs`](../../../../control/crates/layerfs-sandbox/src/get.rs) |
+| Retired docker records | A record whose `backend` or `runtime` is `docker`, or a started docker-machine record with no `runtime`: every call but `sandbox.close` is `Unsupported`, naming `docker rm -f <container>`; `sandbox.close` forgets it. | [`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) `retired_container`, [`reopen.rs`](../../../../control/crates/layerfs-sandbox/src/reopen.rs) `retired`, [`close.rs`](../../../../control/crates/layerfs-sandbox/src/close.rs) `forget` |
 
 ## Invariants
 
 | Rule | Enforced by |
 | --- | --- |
-| The `host_process` backend is stored and shown as `"native"`. | `HostProcessBackend::stored_name` ([`host_process/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/adapter.rs)); checked by `stored_names_parse_back_and_do_not_follow_the_rust_names` ([`runtime_enum.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/runtime_enum.rs)) |
-| Sandbox, not the daemon, owns command launch, streams and exit status. | `Sandbox::run` in [`runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs); API `exec` "the daemon is not involved" ([`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs)) |
-| One attempt per operation; no resend, adoption or implicit cleanup. | Each owner's `*_attempted` flags (`host_process/sandbox.rs`, `namespaces/sandbox.rs`); `WireFailure` keeps what was sent ([`types/failure.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/failure.rs)) |
+| The Sandbox runtime, not the daemon, launches commands and owns their streams, exit status and cancel. | `Sandbox::run_in` ([`runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs)); [`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs) sends nothing to the daemon |
+| One attempt per operation: no resend, rebind, re-attach, adoption or implicit cleanup. | `*_attempted` flags ([`host_process/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/sandbox.rs), [`namespaces/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/sandbox.rs)); `Control::call` ([`daemon/channel.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/channel.rs)) |
+| A failed or fenced connection is never lent again. | `Lease::drop` ([`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs)) |
 | Commands run as a nonroot identity. | `CommandIdentity::check` refuses uid or gid 0 ([`types/execution.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/execution.rs)) |
-| A record is reopened only by the backend that wrote it. | `SandboxRecord` variants; each provider refuses another's record ([`types/options.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/options.rs)) |
-| No command can create a user namespace. | namespaces: every command runs under a seccomp filter that refuses one ([`local/os/linux/seccomp.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/os/linux/seccomp.rs)); the host must offer that filter's actions or have `user.max_user_namespaces=0` ([`namespaces/host.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/host.rs)) |
-| Debug output never shows the daemon setup or command arguments. | `LaunchRequest` and `ExecRequest` `Debug` print counts only ([`types/options.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/options.rs), [`types/request.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/request.rs)) |
+| A record is reopened only by the backend that wrote it. | `SandboxRecord` variants; each provider refuses another's record before any effect ([`types/options.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/options.rs)) |
+| No namespaces command can create a user namespace. | Seccomp filter ([`local/os/linux/seccomp.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/os/linux/seccomp.rs)); host check ([`namespaces/host.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/host.rs)) |
+| Debug output never shows the daemon setup or command arguments. | `LaunchRequest` and `ExecRequest` `Debug` ([`types/options.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/options.rs), [`types/request.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/request.rs)) |
+| Stored names do not follow Rust names: `HostProcess` is `"native"`. | `HostProcessBackend::stored_name` ([`host_process/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/adapter.rs)) |
+| Deleting a Sandbox never touches the shared Store. | `delete` removes only the Sandbox's directory, cgroup and private root ([`namespaces/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/sandbox.rs), [`host_process/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/sandbox.rs)) |
+| A cancel that arrives before its command runs never answers `ended` for a command that then runs. | `Running::spawned` refuses as interrupted ([`exec/record.rs`](../../../../control/crates/layerfs-sandbox/src/exec/record.rs)) |
 
 ## Limits and failures
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| Backends per host | `HostProcess` launches on macOS only; `Namespaces` on Linux only. A platform without a backend is refused by the [support matrix](../support-matrix/README.md). | [`runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs), [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs) |
+| Backend per host | `HostProcess` launches on macOS only, `Namespaces` on Linux only; Windows has no backend. | [`runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs), [`native/profile.rs`](../../../../control/crates/layerfs-platform/src/platforms/native/profile.rs) |
 | Daemon setup size | 1 to 8192 bytes, else `Protocol`. | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs) |
-| Startup wait | Caller's `startup_timeout`; must be non-zero. | same |
-| Binds | Only `Namespaces` takes binds; HostProcess refuses a non-empty list `Unsupported` before any effect. | `launch_with_binds` in [`runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs) |
-| Stop | Native: SIGTERM, wait `<s>`, SIGKILL, then every named process group. Namespaces: `cgroup.kill`, wait at least 5 s. | [Commands and streams](commands-and-streams.md#keep-alive-and-stop) |
-| Delete before a known stop | Refused ("known stop required"). | each `sandbox.rs` |
-| Old docker records | A Sandbox recorded under the retired docker backend: every call `Unsupported` (recreate it), except `sandbox.close`, which forgets it. | [Docker machine Sandboxes](docker.md#sandboxes-recorded-under-the-docker-backend) |
+| Startup wait | 30 s (`STARTUP`), then `TimedOut`; a daemon that exits first is `Protocol`. | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs), [`local/listener.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/listener.rs) |
+| Binds | Only `Namespaces` binds; `HostProcess` refuses a non-empty list `Unsupported`. | `launch_with_binds` ([`runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs)) |
+| Namespaces host | Root, user namespaces blocked, cgroup v2 with `cgroup.kill`, `/dev/fuse`, a runtime root that can hold an overlay upper, the helper executable; else `Unsupported`. | [`namespaces/host.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/host.rs), [`namespaces/provider.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/provider.rs) |
+| Workspaces per Sandbox | 16 (`WORKSPACES`); a mount into a full one is `Capacity`. | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
+| Control connections | 6 per process (`CONNECTIONS`) of the daemon's 8; no free one in 60 s is `Busy`, "nothing was attempted". | [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
+| Lost daemon reply | `Unavailable` with `outcome: "unknown"`, `retryable: false`. | `refusal` ([`daemon/values.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/values.rs)) |
+| Exec id | 1 to 64 of `A-Za-z0-9._-`, not starting with `.` or `-`, else `InvalidInput`; a live duplicate is `Exists`. | [`exec/id.rs`](../../../../control/crates/layerfs-sandbox/src/exec/id.rs), [`exec/record.rs`](../../../../control/crates/layerfs-sandbox/src/exec/record.rs) |
+| Exec output | 1 MiB per stream inline, then spooled to a file; no total cap, nothing cut. | [`output.rs`](../../../../control/crates/layerfs-sandbox/src/output.rs) |
+| Exec duration | No timeout; a command runs until it ends or is cancelled. | [`host_process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/exec.rs), [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs) |
+| Stop and delete | A second `stop`, and `delete` before a known stop, are refused. | [Backends](backends.md#stop-and-delete) |
+| Unmount or close with live commands | `Busy` (`detail.execs`); with `force` each is cancelled first; one not confirmed is `Unknown`. | `settle` ([`exec/cancel.rs`](../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs)) |
 
 ## Demonstration
 
-The commands were not run while writing this page.
+| Test or example | Command | Platform | Shows |
+| --- | --- | --- | --- |
+| [`conformance.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/conformance.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox-backend --test conformance` | Unix, no root | Over `Backend::ALL`: stored names round-trip; each mount driver serves its `SUPPORT.json` rows' kernel route; bind refusal or carriage; runtimes refuse other backends' options and records; the lifecycle this host can run. |
+| [`runtime_enum.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/runtime_enum.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox-backend --test runtime_enum` | Unix | Stored names `["native", "namespaces"]`, capabilities, bind refusal. |
+| [`native_provider.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/native_provider.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox-backend --test native_provider` | macOS | Native launch with a stub daemon; a partial launch keeps its owner; a record reopens the exact process. |
+| [`stop_handle.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/stop_handle.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox-backend --test stop_handle` | Linux, macOS | A cancel ends a command's process group, SIGTERM within the grace and SIGKILL after; a cancel before the handle ends it as it starts. |
+| [`namespaces_lifecycle.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/namespaces_lifecycle.rs) | `cargo +1.85.1 build --locked -p layerfs-sandbox-backend --bin layerfs-sandbox-helper`, then `cargo +1.85.1 test --locked -p layerfs-sandbox-backend --test namespaces_lifecycle` | Linux with root, `/dev/fuse`, cgroup v2 and `user.max_user_namespaces=0`; otherwise each test reports why and returns (not proof) | Own namespaces and cgroup; two Sandboxes on one Store cannot see each other; reopen by record; close leaves nothing behind. |
+| [`namespaces_userns.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/namespaces_userns.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox-backend --test namespaces_userns` | Linux, no root | Under the filter `unshare(CLONE_NEWUSER)` answers `EPERM` and `clone3` `ENOSYS`, while a threaded command still runs. |
+| [`exec_start_race.rs`](../../../../control/crates/layerfs-sandbox/tests/exec_start_race.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox --test exec_start_race` | Unix | A cancel before the command runs answers `cancelled` and the owner ends the command at spawn. |
+| [`pool_admission.rs`](../../../../control/crates/layerfs-sandbox/tests/pool_admission.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox --test pool_admission` | Unix | A full daemon answers the next connection with a capacity notice before the handshake: `Capacity`, nothing sent. |
+| [`retired_docker.rs`](../../../../control/crates/layerfs-sandbox/tests/retired_docker.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox --test retired_docker` | Linux, macOS | A docker-backend record is refused `Unsupported` and `sandbox.close` forgets it, touching nothing it names. |
 
-| Test or example | Crate | Shows |
-| --- | --- | --- |
-| [`native_provider.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/native_provider.rs) | `layerfs-sandbox-backend` | A native launch through `Runtime` with a stub daemon script; a partial launch keeps its owner; a record reopens the exact process. |
-| [`namespaces_lifecycle.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/namespaces_lifecycle.rs) | `layerfs-sandbox-backend` | A Sandbox is its own namespaces and cgroup; two on one Store cannot see each other; a record reopens the exact Sandbox; a running command ends with its Sandbox; close leaves nothing behind. |
-| [`namespaces_userns.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/namespaces_userns.rs) | `layerfs-sandbox-backend` | A command run under the filter runs under one more seccomp filter, `unshare(CLONE_NEWUSER)` answers `EPERM` and `clone3` answers `ENOSYS`, while the command itself (a threaded test harness) still runs; needs no root or Sandbox. |
+## Pages
 
-- `native_provider`: macOS only (`#![cfg(target_os = "macos")]`); writes a
-  stub daemon under the temp directory.
-  `cargo +1.85.1 test --locked -p layerfs-sandbox-backend --test native_provider`
-- `namespaces_lifecycle`: Linux only; needs root, `/dev/fuse`, cgroup v2 and
-  either `user.max_user_namespaces=0` or the seccomp filter's actions, else
-  each test reports why and returns
-  (not proof). Build the helper first:
-  `cargo +1.85.1 build --locked -p layerfs-sandbox-backend --bin layerfs-sandbox-helper`, then
-  `cargo +1.85.1 test --locked -p layerfs-sandbox-backend --test namespaces_lifecycle`.
-  `LAYERFS_H38_KEEP` keeps the scratch folder.
-- `namespaces_userns`: Linux only; runs its own test binary again as the
-  filtered command.
-  `cargo +1.85.1 test --locked -p layerfs-sandbox-backend --test namespaces_userns`
-
-The cross-backend kit is
-[`conformance.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/conformance.rs):
-`cargo +1.85.1 test --locked -p layerfs-sandbox-backend --test conformance` (Unix,
-no root).
-
-## Earlier material
-
-Folded into these pages. Matched by title, so check each one before relying on it.
-
-- [`control/crates/layerfs-sandbox-backend/PROVIDERS.md`](../../../../control/crates/layerfs-sandbox-backend/PROVIDERS.md):
-  covered in [Backends](backends.md) and [Adding a backend](adding-a-backend.md).
-  Some names there are older than the source (`NativeMacosProvider`,
-  `MacosNative`, `native/` folder); the source has `HostProcessProvider`,
-  `Runtime::HostProcess` and `backend/host_process/`.
-- [`core/docs/architecture/72-owned-sandbox-lifecycle.md`](../../../../core/docs/architecture/72-owned-sandbox-lifecycle.md):
-  the Docker owner lifecycle it describes was retired with the docker
-  backend (D-8, [Docker machine Sandboxes](docker.md)); historical for its
-  R1 proof scope.
-
----
-
-← [Network: Credentials](../network/credentials.md) · [Up: Control](../README.md) · [Sandboxes: Backends](backends.md) →
+| Page | What it covers |
+| --- | --- |
+| [Daemon channel and exec](daemon-channel-and-exec.md) | The caller side of `layerfs-sandbox`: the daemon control pool and Workspace calls, exec records and cancel, the host operation's route and the direct route. |
+| [Backends](backends.md) | `layerfs-sandbox-backend`: the sealed adapter, `Runtime` and `Sandbox`, the native and namespaces backends, stop handles, the docker machine, and adding a backend. |

@@ -12,12 +12,12 @@ host is touched, so remove a microsandbox VM yourself with
 `msb remove --force <vm>` and `msb volume remove <vm>-data`, and a
 firecracker microVM's files from its Lima host (the note names them). See
 [machines](machines-and-stores.md#removed-platforms-firecracker-microsandbox-and-ssh)
-and [removed platforms](../../architecture/control/support-matrix/disabled-platforms.md).
+and [removed platforms](../../architecture/control/machines/platforms.md#removed-platforms-platform_policyrs).
 
 Part of the [2.0.0 manual](README.md). This page lists what is not built,
 what the code refuses as `Unsupported`, and what was not verified on branch
 `issue533-v2`. Sources: the "Implementation choices" of
-[DECISIONS.md](../../../core/docs/issues/533/DECISIONS.md), the refusals in
+[DECISIONS.md](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/DECISIONS.md), the refusals in
 `engine/crates/layerfs-api/src/`, the step commits' checks, and the runs
 for this manual.
 
@@ -32,7 +32,7 @@ for this manual.
   Windows were `NOT_RUN`. Step 19 passes only when the twelve cells pass on
   all seven machine kinds (owner direction, 2026-11-02; Firecracker,
   Microsandbox and SSH were removed afterwards, on 2026-11-08). See
-  [TERMINAL-PASS.md](../../../core/docs/issues/533/TERMINAL-PASS.md) for
+  [TERMINAL-PASS.md](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/TERMINAL-PASS.md) for
   the latest pass.
 - The workspace's Cargo version is `2.0.0` (since `085376a7a8`), as is
   the Python wheel; the Node package is `2.0.0-rc.1` for its first npm
@@ -123,7 +123,7 @@ step commits.
   again on macOS with the release CLI, and ran the sqlite smoke and
   `workspace exec-cancel` (on Lima also stale and unreachable forwarded
   records); PostgreSQL Sandboxes on them were not run in that pass
-  ([receipt](../../../core/docs/issues/project-113/receipts/fb02aa0666/machines-live/RESULTS.md)). On macOS the `docker` machine's
+  ([receipt](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/project-113/receipts/fb02aa0666/machines-live/RESULTS.md)). On macOS the `docker` machine's
   worker did run (a private test bundle, `LAYERFS_BUNDLE`): `store move` (now `store push`) to
   `docker`, its Sandboxes and the twelve cells passed; see the terminal pass.
   That run used the retired docker backend: the `docker` machine running
@@ -166,7 +166,7 @@ step commits.
   deleted in step 14. The behaviours they guarded (#463 discovery reclaim,
   #508 admission and connection wait) are not re-covered on the 2.0 entry
   point. Step 14 also deleted the four 1.1.0 packages' 63 test files
-  (listed in [HANDOFF.md](../../../core/docs/issues/533/HANDOFF.md)).
+  (listed in [HANDOFF.md](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/HANDOFF.md)).
 
 ## Observed in the runs for this manual
 

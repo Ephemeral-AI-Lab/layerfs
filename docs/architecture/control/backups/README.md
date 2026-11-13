@@ -1,128 +1,151 @@
 # Backups
 
-[Architecture](../../README.md) › [Control](../README.md) › Backups
-
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Whole-Store backup to a bucket and restore, over bucket drivers that know nothing about Stores.
+Whole sqlite Store backup to a bucket and restore from it, over bucket drivers
+that know nothing about Stores.
 
 | | |
 | --- | --- |
 | Layer | [Control](../README.md) |
-| Crates | `layerfs-bucket` |
-| Source | [`control/crates/layerfs-bucket/src/backup`](../../../../control/crates/layerfs-bucket/src/backup), [`control/crates/layerfs-bucket/src/bucket`](../../../../control/crates/layerfs-bucket/src/bucket); the calls in [`backup`](../../../../control/crates/layerfs-store/src/backup) |
-| Uses | [Engine: Store](../../engine/store/README.md), [Engine: Store calls](../../engine/store-calls/README.md) |
-| Used by | [Control: Management](../management/README.md) |
-| Flows | [Backup and restore](../../flows/backup.md) |
+| Crates | `layerfs-store` (the `backup` calls), `layerfs-bucket` |
+| Source | [`layerfs-store/src/backup`](../../../../control/crates/layerfs-store/src/backup), [`layerfs-bucket/src/backup`](../../../../control/crates/layerfs-bucket/src/backup), [`layerfs-bucket/src/bucket`](../../../../control/crates/layerfs-bucket/src/bucket) |
+| Uses | [Engine: Store](../../engine/store/README.md), [Engine: Store, SQLite](../../engine/store/sqlite.md), [Stores and projects](../stores-and-projects/README.md), [Home](../home/README.md), [Machines: workers and reach](../machines/workers-and-reach.md) |
+| Used by | [SDK: backup](../../api/sdk/backup.md), [Doctor](../doctor/README.md) (bucket diagnostics) |
+| Flows | [Flows](../../flows/README.md): backup and restore |
 
-## Topics
-
-| Topic | What it covers |
-| --- | --- |
-| [Buckets](buckets.md) | Bucket drivers and providers. |
-| [Pieces and manifest](pieces-and-manifest.md) | How a backup is split and checked. |
-| [Backup and restore](backup-and-restore.md) | Whole-Store backup and restore. |
-
-## The picture
+## Picture
 
 ```text
- caller process (holds the bucket key; every bucket request runs here)
-+---------------------------------------------------------------------+
-| backup/  (knows Stores)              bucket/  (knows only files)    |
-|  create  snapshot of a live Store     pieces::upload / download     |
-|   (Store's machine stages it) ------>  sha256, whole or pieces +    |
-|  restore load: download, verify,       manifest, progress           |
-|   open as a Disposable Store <------   Driver (sealed trait)        |
-|  copies  stat / list Store files        |  local_folder  (tests)    |
-|  heads   history heads digest           |  minio --+                |
-|  link    remotes, last transfer         |  r2 -----+-> s3_api       |
-+-----------------------------------------|---------------------------+
-                                          v  each request sent once
-                    bucket:  <prefix>/<file>/store.sqlite
-                             [<prefix>/<file>/store.sqlite.piece-000000 …]
+ caller process: holds the bucket key; every bucket request is sent from here
++----------------------------------------------------------------------------+
+| layerfs-store backup/       layerfs-bucket backup/   layerfs-bucket bucket/ |
+|  connect, disconnect        copies: check, list --->  Driver (sealed)       |
+|  list (states) ---------->  heads digest              pieces: whole, or     |
+|  create: stage on the Store's machine (store.file)    pieces + manifest     |
+|    [worker: 8 MiB reads into this process] -------->  upload                |
+|  restore: install, <------- load: download, verify,   download              |
+|    records                  open Disposable, link        |                  |
++----------------------------------------------------------|-----------------+
+                                                           v once per request
+     local_folder (tests)  |  minio --+--> s3_api: SigV4 over HTTP/1.1
+                              r2 -----+
+     bucket: <prefix>/<file>/store.sqlite  [ .piece-000000 ... ]
 ```
 
-`bucket/` holds files by name and nothing else; `backup/` turns a Store
-into one such file and back. Terms: [glossary](../../glossary.md).
+`layerfs-bucket/src/bucket` holds files by name and nothing else; its drivers,
+pieces and manifest are on [Buckets](buckets.md). `layerfs-bucket/src/backup`
+turns a Store file into one bucket file and back; `layerfs-store/src/backup`
+is the `backup` call family, its records and its locks. Where each call runs
+is in the [control layer table](../README.md).
 
 ## What it does
 
-| Call | Copies | When | Source |
-| --- | --- | --- | --- |
-| `backup.create` | One consistent snapshot of a live sqlite Store, every project in it, as `<file>/store.sqlite` with its sha256, size, layout, SQLite version, history heads, binding and `layerfs-exported-from`. | Checked against the expected copy before the snapshot and again before the upload. | [`backup/create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs), [`bucket/pieces.rs`](../../../../control/crates/layerfs-bucket/src/bucket/pieces.rs) |
-| `backup.restore` | Downloads the file, verifies every piece and the whole file, opens it as a Disposable Store, then installs it as a sqlite Store on `native`. | New Store: hard link. Replacing: only an idle Store unchanged since its last transfer through that bucket. | [`backup/restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs), [`backup/restore.rs`](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
-| `backup.list` | Stats and lists Store files without downloading. | Read live. | [`backup/copies.rs`](../../../../control/crates/layerfs-bucket/src/backup/copies.rs) |
+The unit is a whole sqlite Store with every project in it, held as the object
+`<prefix>/<file>/store.sqlite` (`store_object(file)`). `file` defaults to the
+Store's name and need not equal it. LayerFS never opens SQLite over the network.
+A PostgreSQL Store is not backed up here.
 
-| Provider | Feature | Transport | Source |
-| --- | --- | --- | --- |
-| `local_folder` | `local_folder` (default) | files under a directory | [`local_folder/folder.rs`](../../../../control/crates/layerfs-bucket/src/bucket/local_folder/folder.rs) |
-| MinIO | `minio` (default, enables `s3_api`) | S3 API, `http://`, or `https://` with `tls` | [`minio/provider.rs`](../../../../control/crates/layerfs-bucket/src/bucket/minio/provider.rs) |
-| Cloudflare R2 | `s3_api`; needs `tls` to connect | S3 API over `https://` | [`r2/provider.rs`](../../../../control/crates/layerfs-bucket/src/bucket/r2/provider.rs) |
+| Behaviour | Detail | Source |
+| --- | --- | --- |
+| `backup.connect(name, url, { key, region, part_size })` | URL `http(s)://host:port/<bucket>/<prefix>` (MinIO) or `r2://<account>/<bucket>/<prefix>[?jurisdiction=eu\|fedramp]` (R2). Defaults: key `env:LAYERFS_BUCKET_<NAME>` (upper case, `-` and `.` become `_`), region `us-east-1` (R2 always `auto`), part size 64 MiB. One listing proves the bucket answers with that key, then `backup/<name>/record.json` is written under the home lock. | [`family.rs`](../../../../control/crates/layerfs-store/src/backup/family.rs), [`record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) |
+| `backup.disconnect(name)` | Removes the bucket record and every Store's link to it; answers `{ disconnected, unlinked }`. The objects stay. | [`family.rs`](../../../../control/crates/layerfs-store/src/backup/family.rs) |
+| `backup.list(bucket?)` | One listing per bucket. Each copy gets one item per linked Store: `current`, `store_changed` (Store heads differ from the link's), `bucket_changed` (copy sha256 differs from the link's last), `both_changed`, `unknown` with `reason` (Store not on `native`, PostgreSQL, or a link or listing without heads or sha256), `unlinked`, or `missing` (linked, gone from the bucket). | [`list.rs`](../../../../control/crates/layerfs-store/src/backup/list.rs) |
+| `backup.create(store, bucket, file?)` | Steps below. Answers `{ store, bucket, file, object, bytes, pieces, sha256, heads }`. | [`create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) |
+| `backup.restore(store, bucket, file?)` | Steps below. `file` is the argument, else the Store's link, else the Store's name. Answers `{ store, bucket, file, bytes, sha256, heads, projects }`. | [`restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs) |
+| Store link | The Store record's `backups.<bucket>`: `file`, `heads`, `last { op, at, bytes, sha256 }`, written after each create (`op: create`) and restore (`op: restore`). Holds no secret. | [`record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) |
+| Heads digest | sha256 of the sorted `layerfs_persistence::read_heads` lines, each followed by `\n`, read on a connection of its own. It changes exactly when the history a restore would bring changes. | [`heads.rs`](../../../../control/crates/layerfs-bucket/src/backup/heads.rs) |
+| Copies | `check(driver, file)`: one stat, `Absent` or `Present(Copy { file, bytes, modified, sha256, heads })`. `list_stores(driver)`: one listing, every `<file>/store.sqlite` in name order, plus at most 64 stats where the listing lacks metadata; a pieced copy with unread metadata counts its pieces' sizes. | [`copies.rs`](../../../../control/crates/layerfs-bucket/src/backup/copies.rs) |
+| Progress | `{ phase, done, total, pieces }`. Create: `check`, `snapshot`, `send` (worker only), `check`, `hash`, `upload`. Restore: `check`, `download`, `verify`, `install`. Byte counts at most every 250 ms plus each phase's exact last count; the transfer runs on a thread of its own. | [`progress.rs`](../../../../control/crates/layerfs-store/src/backup/progress.rs) |
+| Library `push` and `pull` | The same sequences in one process (`push` adds a `statvfs` room check and a 16 MiB manifest bound). Only tests call them; the calls above use the stage step, `pieces::upload` and `load`. | [`create.rs`](../../../../control/crates/layerfs-bucket/src/backup/create.rs), [`restore.rs`](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
+| Legacy link files | `remotes` and `remote-state/<store>` (`Remotes`, `Transfer`, `link::expected`), 0600 text in the home, read only by the home migration from 1.1.0. `Provider` (MinIO, R2, local folder) builds every driver. | [`link.rs`](../../../../control/crates/layerfs-bucket/src/backup/link.rs), [`v110.rs`](../../../../control/crates/layerfs-control/src/migrate/v110.rs) |
 
-A PostgreSQL Store is not backed up here: `backup.create` refuses it
-`InvalidInput`, "back it up with PostgreSQL's tools".
+### `backup.create`
+
+| # | Step | Source |
+| --- | --- | --- |
+| 1 | Read the bucket and Store records; refuse PostgreSQL and a record with an unfinished operation. `expected`: the link's last sha256 when the link names this `file`, else the object must be absent. Hold the Store's lease and `store/<s>/backup.lock` (`flock`, no wait). | [`create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) |
+| 2 | `check`: one stat. The object must match `expected`, and its `layerfs-exported-from` must name this home. | same, `check` |
+| 3 | Stage (`snapshot`) on the Store's machine (in process on `native`, else the worker's `store.file` step): remove any old `<store>.backup`, copy the live Store with `VACUUM INTO` in one read transaction, answer `{ bytes, sha256, heads, sqlite }`. | [`steps.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) |
+| 4 | Worker only (`send`): read the copy in 8 MiB steps into `store/<s>/backup.staging` and compare its sha256 with the worker's. | [`create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs), `fetch_staged` |
+| 5 | Metadata: `layerfs-sqlite`, `layerfs-binding` (hex; not a secret; the cursor key never leaves its holder), `layerfs-exported-from` (`<home id>/<machine>`), `layerfs-heads` when readable. | same; [`create.rs` (bucket)](../../../../control/crates/layerfs-bucket/src/backup/create.rs) |
+| 6 | `check` again, then `pieces::upload` (`hash`, `upload`). | [`pieces.rs`](../../../../control/crates/layerfs-bucket/src/bucket/pieces.rs) |
+| 7 | Remove the staged copies (`unstage`) whatever happened; on success save the link. | [`create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) |
+
+### `backup.restore`
+
+| # | Step | Source |
+| --- | --- | --- |
+| 1 | Existing Store: refuse PostgreSQL; under the home lock and the Store's lock check `replaceable`: on `native`, no unfinished operation, this process's open copy closed, no other lease holder or running Sandbox (`store_idle`), heads equal to the link's, no `-wal` or `-shm`. Then hold its lease. A new Store gets a fresh cursor key. | [`restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
+| 2 | Make `store/.restore-<random>/` with a held `lock` file; first remove older restore folders whose lock can be taken (killed restores). | same, `Staging`, `sweep` |
+| 3 | `load` into it: kernel guard on the folder, installer is the daemons' user, no Store at the target, no sidecars; stat the object and take `layerfs-binding`; download to `<target>.pulling` (0600, create-new) through `pieces::download`. | [`restore.rs` (bucket)](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
+| 4 | `verify`: open the bytes as a Disposable Store with that binding and cursor key, close, read heads, require no `-wal`/`-shm` left; `install`: hard link into place. | same |
+| 5 | The binding must be the existing Store's. Read the Store's projects on a connection of the call's own. | [`restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs), `projects_in` |
+| 6 | Home lock: a new Store is hard-linked (never over one that appeared); an existing one is re-checked and renamed over. Write the link and project records; remove records of projects the Store no longer holds. The staging folder goes when the call ends. | same, `write_projects` |
+
+The download and its checks run before the home lock; the lock covers only
+the re-checks, the install and the record writes. A restore opens the bytes
+with the Disposable profile (WAL, `synchronous=OFF`), the only permitted Store
+profile; Durable execution is `NOT_RUN — disabled by owner until explicit
+reauthorization`.
 
 ## Invariants
 
 | Rule | Enforced by |
 | --- | --- |
-| Each bucket request is attempted once. A sent request with an unknown outcome is `Uncertain` and never resent. | [`bucket/error.rs`](../../../../control/crates/layerfs-bucket/src/bucket/error.rs), [`s3_api/http.rs`](../../../../control/crates/layerfs-bucket/src/bucket/s3_api/http.rs) |
-| A kept connection is checked before any byte is written, so taking one is not a resend. | [`s3_api/connection.rs`](../../../../control/crates/layerfs-bucket/src/bucket/s3_api/connection.rs) |
-| A restore checks the manifest, every piece and the whole file against their sha256 before the bytes are used. | `pieces::download` ([`pieces.rs`](../../../../control/crates/layerfs-bucket/src/bucket/pieces.rs)) |
-| A restored file must open as a Disposable Store with its binding and leave no `-wal`/`-shm`. | `fetch` ([`restore.rs`](../../../../control/crates/layerfs-bucket/src/backup/restore.rs)) |
-| A manifest goes up only after all its pieces. | `pieces::upload` |
-| Settings and records hold credential references, never secrets; `Credentials` `Debug` is redacted. | [`credentials.rs`](../../../../control/crates/layerfs-bucket/src/bucket/credentials.rs) |
-| Only this crate's providers implement `Driver` (sealed). | `sealed::Sealed` ([`driver.rs`](../../../../control/crates/layerfs-bucket/src/bucket/driver.rs)) |
-| Bucket I/O runs in the caller's process; a worker never sees the key. | [control guide](../../../../control/AGENTS.md); [`backup/create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) |
+| Every bucket request is sent from the caller's process; a worker stages and serves bytes but never sees the key. | [`create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) |
+| Records hold credential references, never secrets; the key is resolved on each call, so a changed key needs no reconnect. | [`record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs), [`credentials.rs`](../../../../control/crates/layerfs-bucket/src/bucket/credentials.rs) |
+| Each request is attempted once; an unknown outcome is reported, never resent. | [`error.rs`](../../../../control/crates/layerfs-bucket/src/bucket/error.rs) |
+| A create overwrites only the copy this home last moved through the link, or nothing; a copy another home wrote is never overwritten. Not compare-and-swap: a write between the check and the upload is not detected. | `check` in [`create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) |
+| One create of a Store at a time per home (`backup.lock`). | `Creating` in [`create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) |
+| Restored bytes pass every sha256 check and open as a Disposable Store with the right binding before they are installed. | `fetch` in [`restore.rs` (bucket)](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
+| A restore replaces only an idle Store on `native` unchanged since its last transfer through that bucket; a new Store never replaces one that appeared meanwhile. | `replaceable` in [`restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs) |
+| Disconnect deletes no object; the only deletes are stale pieces beyond a new upload's count. | [`family.rs`](../../../../control/crates/layerfs-store/src/backup/family.rs), [`pieces.rs`](../../../../control/crates/layerfs-bucket/src/bucket/pieces.rs) |
 
 ## Limits and failures
 
+Bucket errors map to call refusals: `Uncertain` is `Unknown`, `Invalid` is
+`InvalidInput`, every other driver error is `Failed` with its text
+(`remote_error` in [`record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs)).
+
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| One object / one request / piece size | MinIO 50 TiB / 5 TiB / 5 TiB; R2 4.995 TiB / 4.995 GiB / 4.995 TiB | [Buckets](buckets.md#limits) |
-| Multipart part size | 5 MiB to 5 GiB, at most 10,000 parts; raised to whole MiB when needed | [`s3_api/multipart.rs`](../../../../control/crates/layerfs-bucket/src/bucket/s3_api/multipart.rs) |
-| Listing pages | At most 10,000 pages of up to 1,000 names, then refused | `MAX_LIST_PAGES` in [`driver.rs`](../../../../control/crates/layerfs-bucket/src/bucket/driver.rs) |
-| Stats per Store listing | 64 (`MAX_LIST_STATS`); copies beyond show no sha256 or heads | [`copies.rs`](../../../../control/crates/layerfs-bucket/src/backup/copies.rs) |
-| Manifest | At most 16 MiB (`MAX_MANIFEST`) | [`pieces.rs`](../../../../control/crates/layerfs-bucket/src/bucket/pieces.rs) |
-| Fails before a byte is sent | `Unavailable` | [`s3_api/http.rs`](../../../../control/crates/layerfs-bucket/src/bucket/s3_api/http.rs) |
-| Fails after a byte is sent | `Uncertain`, not resent | same |
-| A multipart upload fails | aborted; if the abort fails too, `PartsLeft { upload }` names the parts that may remain | [`multipart.rs`](../../../../control/crates/layerfs-bucket/src/bucket/s3_api/multipart.rs) |
-| A piece upload fails part-way | the pieces sent so far stay; the name still holds the previous file or manifest, and a previous manifest whose pieces were overwritten fails its sha256 check on download | [`pieces.rs`](../../../../control/crates/layerfs-bucket/src/bucket/pieces.rs) |
-| Not atomic across requests | no compare-and-swap; a download racing an upload fails its sha256 check | [`backup/mod.rs`](../../../../control/crates/layerfs-bucket/src/backup/mod.rs) |
+| Bucket file name | 1 to 128 of `[A-Za-z0-9._-]`, not starting with `.`; else `InvalidInput` | `store_object` in [`link.rs`](../../../../control/crates/layerfs-bucket/src/backup/link.rs) |
+| No such bucket or Store | `NotFound` | [`record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) |
+| Connect a name already connected | `Exists` | [`family.rs`](../../../../control/crates/layerfs-store/src/backup/family.rs) |
+| PostgreSQL Store | `InvalidInput` ("back it up with PostgreSQL's tools") | [`create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs), [`restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs) |
+| Store record holds an unfinished operation | `Busy` or `Unresolved` | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) |
+| Create: another create of the Store runs | `Busy`; nothing changed | [`create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) |
+| Create: object written by another home | `Exists`; back up to another file | same, `check` |
+| Create: object is not the copy this home last moved | `Conflict`; nothing uploaded | same |
+| Create: snapshot fails | `Failed` "snapshot: …" | [`steps.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) |
+| Create: fetched worker copy differs | `Failed` "the staged copy is not the snapshot the worker made" | [`create.rs`](../../../../control/crates/layerfs-store/src/backup/create.rs) |
+| Create: a request's answer is lost | `Unknown`; the object may or may not be replaced; not resent | [`record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) |
+| Restore over a Store not on `native` | `Unsupported`; move it there first | `replaceable` in [`restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs) |
+| Restore over a changed Store | `Conflict`; back it up first or restore under a new name | same |
+| Restore over an open Store (lease holder, Sandbox, `-wal`/`-shm`) | `InUse` | same; [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
+| Restore: any load check (missing object, no binding, sha256, open) | `Failed` naming the check, e.g. "no Store `<file>` on the remote: remote file missing"; the staging folder is removed | [`restore.rs` (bucket)](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
+| Restore: another binding | `Failed` "… has another binding" | [`restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs) |
+| Restore: a Store appeared, vanished or was replaced during the download | `Exists`, `NotFound`, `Conflict` | same |
+| Stats per listing | 64 (`MAX_LIST_STATS`); further copies show no sha256 or heads (`unknown`) | [`copies.rs`](../../../../control/crates/layerfs-bucket/src/backup/copies.rs) |
+| Local space | Create: the snapshot beside the Store, plus a second copy in the caller for a worker's Store. Restore: one copy in the staging folder | [`steps.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs), [`restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs) |
+| Left by a killed call | `<store>.backup`: removed by the next create's stage. `store/.restore-*/`: removed by the next restore. Incomplete multipart uploads: removed with the provider's tools | same |
+| Object, request, part and manifest limits | per provider | [Buckets](buckets.md) |
 
 ## Demonstration
 
-The commands were not run while writing this page.
+| Test or example | Command | Platform | Shows |
+| --- | --- | --- | --- |
+| [`folder_pieces.rs`](../../../../control/crates/layerfs-bucket/tests/folder_pieces.rs) | `cargo +1.85.1 test --locked -p layerfs-bucket --test folder_pieces` | any | Folder driver (whole, ranged, stat, delete); a file over `max_file` goes up as pieces with a manifest and is verified; manifest refusals; reserved metadata keys refused. |
+| [`copies.rs`](../../../../control/crates/layerfs-bucket/tests/copies.rs) | `cargo +1.85.1 test --locked -p layerfs-bucket --test copies` | any | One stat tells a copy's size, sha256 and heads; one listing finds every Store copy, pieced ones at whole size. |
+| [`outcomes.rs`](../../../../control/crates/layerfs-bucket/tests/outcomes.rs), [`keep_alive.rs`](../../../../control/crates/layerfs-bucket/tests/keep_alive.rs) | `cargo +1.85.1 test --locked -p layerfs-bucket --test outcomes --test keep_alive` | any (local fake server) | A lost completion stays `Uncertain`; a lost part with a lost abort is `PartsLeft`; a 403 sent before the body is read is definite; a closed kept connection is not reused and nothing is resent. |
+| [`minio.rs`](../../../../control/crates/layerfs-bucket/tests/minio.rs) | `control/crates/layerfs-bucket/tests/minio_service.sh start NAME`, eval its exports, then `cargo +1.85.1 test --locked -p layerfs-bucket --test minio -- --ignored` | Docker host | The S3 driver against MinIO: PUT, ranged GET, HEAD, DELETE, multipart, aborted failures. `part_sizes_and_config_refusals` runs without MinIO. |
+| [`backup_refusals.rs`](../../../../api/crates/layerfs-api/tests/backup_refusals.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test backup_refusals` | Linux | Restore over a Store with a running Sandbox is `InUse` before any request; a second create is `Busy`; the next restore removes a killed restore's folder. |
+| [`backup_family.rs`](../../../../api/crates/layerfs-api/tests/backup_family.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test backup_family` with the `minio_service.sh` exports | Linux, MinIO | connect, create, list states, restore `Conflict`, restore as a new Store, a Store behind a worker, concurrent restores, foreign copies, disconnect keeping objects. Prints NOT_RUN and passes without the exports. |
+| [`backup_progress.rs`](../../../../api/crates/layerfs-api/tests/backup_progress.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test backup_progress` with the exports | Linux, MinIO | Create and restore send their phases in order, ending on the bytes moved. |
 
-| Test or example | Crate | Shows |
-| --- | --- | --- |
-| [`minio.rs`](../../../../control/crates/layerfs-bucket/tests/minio.rs) | `layerfs-bucket` | Against a running MinIO server: single PUT, ranged GET, HEAD, DELETE; multipart above the part size; a refused part aborts and leaves no parts; a failed abort reports `PartsLeft`; a lost part reply is `Uncertain`, not resent; a file over the limit goes up as pieces; listing and last-modified. |
-| [`copies.rs`](../../../../control/crates/layerfs-bucket/tests/copies.rs) | `layerfs-bucket` | One stat tells a copy's size, sha256 and heads; one listing finds every Store copy, pieced ones at their whole size, and skips other files. |
-| [`folder_pieces.rs`](../../../../control/crates/layerfs-bucket/tests/folder_pieces.rs) | `layerfs-bucket` | The folder driver (whole, ranged, stat, delete); whole-file round trip; pieces with a manifest, verified; manifest round trip and refusals; reserved metadata keys refused. |
+## Pages
 
-- `minio`: `part_sizes_and_config_refusals` runs anywhere. The others are
-  `#[ignore = "needs MinIO: tests/minio_service.sh"]`: start one with
-  `control/crates/layerfs-bucket/tests/minio_service.sh start NAME`,
-  eval its `LAYERFS_REMOTE_*` exports, then
-  `cargo +1.85.1 test --locked -p layerfs-bucket --test minio -- --ignored`.
-  With `--features tls` and an `https://` MinIO the same tests run over TLS,
-  except the fault-injection ones.
-- `copies`: a `LocalFolder` with a 1000-byte object limit under
-  `CARGO_TARGET_TMPDIR`; any host.
-  `cargo +1.85.1 test --locked -p layerfs-bucket --test copies`
-- `folder_pieces`: same setup.
-  `cargo +1.85.1 test --locked -p layerfs-bucket --test folder_pieces`
-
-## Earlier material
-
-Folded into these pages. Matched by title, so check each one before relying on it.
-
-- [`docs/versioned/2.0.0/backups.md`](../../../versioned/2.0.0/backups.md):
-  the user contract of the `backup` calls stays there; the bucket layer,
-  pieces and the checks are covered in [Buckets](buckets.md),
-  [Pieces and manifest](pieces-and-manifest.md) and
-  [Backup and restore](backup-and-restore.md).
-
----
-
-← [Sandboxes: Adding a backend](../sandboxes/adding-a-backend.md) · [Up: Control](../README.md) · [Backups: Buckets](buckets.md) →
+| Page | What it covers |
+| --- | --- |
+| [Buckets](buckets.md) | The driver contract, pieces and manifest, progress, credentials, the local folder, MinIO, R2 and S3 API drivers, and the tested providers. |

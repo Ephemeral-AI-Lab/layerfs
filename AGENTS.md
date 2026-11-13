@@ -13,16 +13,19 @@ reference implementation that lived under root `crates/` was retired on
 2026-10-10 (R9c) and is absent at HEAD. It was never a dependency, source
 include or fallback for core, and must not return as a second product. Its last
 source is at local tag `reference-v0.1.6-final` (`d296981ac`, `crates` tree `498dd1917812`);
-see the [R9c record](core/docs/issues/307/R9C-COMPLETION-20261010.md).
-Historical evidence, receipts and verdicts are retained unchanged. The
+see the [R9c record](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/R9C-COMPLETION-20261010.md).
+Historical evidence, receipts and verdicts are retained unchanged in Git
+history: `core/docs/` (issue records, numbered papers, receipts) was removed
+by #671 and stays readable at commit `af2ad92bce`. Link it there by pinned
+URL; do not restore it to the tree. The
 retirement is a legacy retirement in the source-size comparison, not a
 simplification.
 
 | Workstream | Current scope | Entry point |
 | --- | --- | --- |
 | Cluster one | Core Content/Storage/History/Telemetry algorithms; Engine Persistence and Project Init | [Cluster-one handbook](docs/general/cluster_one_handbook.md), [CAS/CDC/delta handbook](docs/general/cas_cdc_deltaencoding_handbook.md) |
-| Cluster two | Engine Workspace/FUSE/daemon/Sandbox; API execution and Commit/runtime integration | [Current design index](core/docs/issues/303/README.md) and its seven primary contracts |
-| Legacy reference | v0.1.6, retired from `main` by R9c; read at the recovery tag only | [R9c record](core/docs/issues/307/R9C-COMPLETION-20261010.md) |
+| Cluster two | Engine Workspace/FUSE/daemon/Sandbox; API execution and Commit/runtime integration | [Architecture guide](docs/architecture/README.md): engine and control topics and the [flows](docs/architecture/flows/README.md) |
+| Legacy reference | v0.1.6, retired from `main` by R9c; read at the recovery tag only | [R9c record](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/R9C-COMPLETION-20261010.md) |
 
 **The LayerFS UI is the dsh LayerFS plugin** (owner, 2026-10-19): the LayerFS tab in
 DeepSeek Harness. It lives in its own repository,
@@ -57,7 +60,7 @@ claim that the Durable API has been removed. Each Workspace's daemon overlay
 remains a separate MEMORY/OFF/EXCLUSIVE database file.
 Disposable's COMMIT does not checkpoint (`wal_autocheckpoint=0`); its writing
 session's own thread checkpoints the WAL off the commit path (owner approval,
-2026-11-07; [lifecycle](docs/architecture/engine/store/lifecycle.md#background-checkpoint)).
+2026-11-07; [SQLite checkpoints](docs/architecture/engine/store/sqlite.md#checkpoints)).
 
 ## LayerFS mental model
 
@@ -141,8 +144,8 @@ session's own thread checkpoints the WAL off the commit path (owner approval,
   status, unmount) go to the daemon. Do not revive `layerfs-server` or build a
   host/server adapter in the data path; the host-mediated SDK runtime is
   retired, not extended. See the
-  [integration contract](core/docs/issues/303/06-cluster-one-integration.md)
-  and [direct Store access](core/docs/issues/352/DIRECT_STORE.md).
+  [integration contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/06-cluster-one-integration.md)
+  and [direct Store access](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/352/DIRECT_STORE.md).
   **Exception (owner, 2026-10-20, revised the same day): dsh Live on macOS
   only.** The dsh-layerfs plugin may give macOS processes a ported SDK with
   the SDK's API whose calls run in one long-lived worker per LayerFS box: a
@@ -200,8 +203,8 @@ session's own thread checkpoints the WAL off the commit path (owner approval,
   elsewhere it is refused with the table's reason. The password is resolved only in the
   caller and travels only in one worker request and the Sandbox's private
   daemon setup file. This supersedes #533 O3/G13 ("VMs and ssh later").
-  See [#533](core/docs/issues/533/README.md), [#535](core/docs/issues/535/README.md)
-  and the [proposal](core/docs/proposals/host-platform-connections.md).
+  See [#533](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/README.md), [#535](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/535/README.md)
+  and the [proposal](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/proposals/host-platform-connections.md).
 - **Removed platforms (owner, 2026-11-08; supersedes the layerfs-project#7
   restriction of 2026-11-06): Firecracker, Microsandbox and SSH machines are
   removed.** Their code is gone and no platform is disabled with its code
@@ -211,7 +214,7 @@ session's own thread checkpoints the WAL off the commit path (owner approval,
   feature flag brings one back; that requires a later explicit owner
   decision and source change. Historical evidence is unchanged. Native,
   Docker, Lima and Apple Container retain their existing support rules. See
-  the [restriction contract](docs/architecture/control/support-matrix/disabled-platforms.md).
+  the [restriction contract](docs/architecture/control/machines/platforms.md#removed-platforms-platform_policyrs).
 - **One global database, one writer, short holds (owner decision 2026-10-18).**
   All committed state lives in one SQLite Store file; no sharding, second
   database, concurrent-writer engine or objects outside it. Writes go one at a
@@ -224,8 +227,8 @@ session's own thread checkpoints the WAL off the commit path (owner approval,
   concurrent Commits are expected to be uncommon; optimize the uncontended
   Commit and keep contention correct and bounded. Work that grows with tree
   size, history or Branch count inside the lane is a defect. See the
-  [Store concurrency model](core/docs/architecture/83-store-concurrency-model.md)
-  and the [global SQLite Store](core/docs/architecture/84-global-sqlite-store.md)
+  [Store concurrency model](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/83-store-concurrency-model.md)
+  and the [global SQLite Store](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/84-global-sqlite-store.md)
   design reference.
   Immutable objects support reuse/distribution; authority, reference closure,
   mutable history, durability and safe GC still require exact contracts.
@@ -234,13 +237,14 @@ session's own thread checkpoints the WAL off the commit path (owner approval,
 
 ## Read the current contract for the task
 
-Before cluster-two implementation/integration, read both root handbooks and the
-[current design index](core/docs/issues/303/README.md), then the relevant primary
-operation, [engine](core/docs/issues/303/daemon-sqlite.md),
-[FUSE](core/docs/issues/303/fuse.md) and
-[runtime integration](core/docs/issues/303/06-cluster-one-integration.md) contracts.
-The [optimization investigation](core/docs/issues/303/fuse-optimization-investigation.md)
-is research; it does not silently select new algorithms, profiles or capabilities.
+Before implementation or integration, read both root handbooks and the
+[architecture guide](docs/architecture/README.md): the layer page and every
+topic the change touches (for cluster two: [Workspace](docs/architecture/engine/workspace/README.md),
+[Overlay](docs/architecture/engine/overlay/README.md), [Commit](docs/architecture/engine/commit/README.md),
+[Kernel routes](docs/architecture/engine/kernel-routes/README.md), [Daemon](docs/architecture/engine/daemon/README.md)
+and [Bridge](docs/architecture/engine/bridge/README.md)). The former #303 contracts and the
+[optimization investigation](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/fuse-optimization-investigation.md)
+are archived research; they do not silently select new algorithms, profiles or capabilities.
 
 Completed/superseded Stage 0–6 prompts are historical references, not default
 routing. Preserve canonical compatibility and evidence, but do not resume old
@@ -250,6 +254,8 @@ that work. Do not choose authority by issue number alone.
 For documentation/release work, read the
 [documentation policy](docs/general/documentation-policy.md) and
 [release policy](docs/general/release-policy.md).
+For opening, reviewing or triaging a pull request or issue, read the
+[code review and triage policy](docs/policy/code-review.md).
 For measurements, read the [agent measurement workflow](docs/general/agent-measurement-policy.md),
 [benchmark rules](docs/general/benchmark_rules.md),
 [report template](docs/general/benchmark_agent_report.md) and owning harness/family contract.
@@ -317,7 +323,7 @@ remain binding; moving them out of this file does not weaken them.
    A Commit's one producer runs on its own thread and hands objects through
    one bounded queue to the calling thread, which keeps the one Save and
    publishes (owner approval, 2026-11-07); see
-   [Commit construction](docs/architecture/engine/commit/construction.md#one-producer).
+   [Commit construction](docs/architecture/engine/commit/construction.md).
    No other helper/lane to pass a gate; FUSE dispatch is a separate concern.
 9. Measure both speed and storage. Reject about 50% speed loss for about 5%
    storage benefit; report raw deltas and preserve frozen-gate failures.
@@ -362,7 +368,8 @@ remain binding; moving them out of this file does not weaken them.
   Keep or move a test only when it still checks surviving behaviour cheaply;
   where a deleted test guarded a fix or contract that still holds, cover that
   behaviour with a test on the new code. List deleted tests in the commit
-  message and the fix record. Never weaken a surviving test's assertion to
+  message and the fix record (the pull request or issue; `core/docs/issues/`
+  no longer holds records). Never weaken a surviving test's assertion to
   make it pass.
 - **No test command runs longer than 2 minutes.** Give every test invocation an
   explicit wall timeout of at most 120 s and stop it when it expires; never
@@ -387,7 +394,9 @@ remain binding; moving them out of this file does not weaken them.
   scope and command. `format.yml` reports formatting drift after a push;
   nothing runs before one.
 - Update affected source architecture/API documentation with implementation
-  changes. Keep proposal, research, implemented and measured claims distinct.
+  changes, in the same commit, as the
+  [architecture doc update policy](docs/policy/architecture-doc-update.md)
+  sets out. Keep proposal, research, implemented and measured claims distinct.
 
 ### Production LOC comparison for every commit
 
