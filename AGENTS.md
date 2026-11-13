@@ -425,6 +425,34 @@ another project symlinked as its source tree took that project's CLI down with
 `Cannot find module`; restoring the checkout was not enough, because the
 checkout's `node_modules` links had gone with it.
 
+### Destructive cleanup: check what depends on it first
+
+Bulk deletion is the one operation that turns a local convenience into a lost
+artifact, because the thing removed is usually the thing nothing references. Two
+checks before `docker image prune -a`, `docker volume prune -a`, `cargo clean`
+across checkouts, or any `rm -rf` sweep:
+
+- **What depends on it.** An image, a checkout or a directory can be pinned by a
+  decision record, a launcher registration, a sealed bundle, or a symlink from
+  another project. `docker image prune -a` deletes by definition the images no
+  container references — which is exactly the set that includes deliberately kept,
+  local-only images that cannot be pulled back.
+- **What the owner decided.** `core/docs/issues/*/DECISIONS.md` records which
+  images, profiles and artifacts are held on purpose. Read the one that names the
+  thing before deleting it.
+
+Measured cost of skipping both, 2026-11-12: `docker image prune -a` removed the
+O36 default Sandbox image (`layerfs-352-runtime:node24-https-apt-20261024`,
+`sha256:afa1ef9c…`), which is local-only by decision and referenced by no
+container. It had to be rebuilt from `dsh/tools/runtime/Dockerfile`, which
+produced a different digest; every pin to the old one has to be re-pinned, and the
+record now carries the correction and the guard. Bare `docker image prune`
+(dangling only) never had this problem.
+
+When a cleanup does remove something named in a record, amend that record in the
+same change: what was removed, why it was removable, how it was restored, and the
+new digest if it differs.
+
 ### Production LOC comparison for every commit
 
 Every Git commit must record **production source lines of code before, after,
