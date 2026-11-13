@@ -254,6 +254,8 @@ that work. Do not choose authority by issue number alone.
 For documentation/release work, read the
 [documentation policy](docs/general/documentation-policy.md) and
 [release policy](docs/general/release-policy.md).
+For opening, reviewing or triaging a pull request or issue, read the
+[code review and triage policy](docs/policy/code-review.md).
 For measurements, read the [agent measurement workflow](docs/general/agent-measurement-policy.md),
 [benchmark rules](docs/general/benchmark_rules.md),
 [report template](docs/general/benchmark_agent_report.md) and owning harness/family contract.
