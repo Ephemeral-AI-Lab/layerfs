@@ -45,11 +45,11 @@ This is an owner-approved exception to the 0.1.x patch-line promise in the
 
 | Evidence | Where | Result |
 | --- | --- | --- |
-| SDK standard acceptance: 26 VERIFICATION cases plus S328 and XPROCESS, run live | [PHASE5](../../../core/docs/issues/327/PHASE5-20261015.md) | PASS, except B7 (NOT_RUN) and A9 (historical FAIL, still open) |
-| Live UI stories (tour, conflicts, merge, agents) and a fresh browser check | [PHASE5](../../../core/docs/issues/327/PHASE5-20261015.md) | PASS |
-| Publication counter speed/storage screen | [Counter screen](../../../core/docs/issues/327/COUNTER-SCREEN-20261015.md) | v5 PASS (+1.34% operation time, identical allocation). It is a component diagnostic, not a release benchmark claim |
+| SDK standard acceptance: 26 VERIFICATION cases plus S328 and XPROCESS, run live | [PHASE5](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/327/PHASE5-20261015.md) | PASS, except B7 (NOT_RUN) and A9 (historical FAIL, still open) |
+| Live UI stories (tour, conflicts, merge, agents) and a fresh browser check | [PHASE5](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/327/PHASE5-20261015.md) | PASS |
+| Publication counter speed/storage screen | [Counter screen](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/327/COUNTER-SCREEN-20261015.md) | v5 PASS (+1.34% operation time, identical allocation). It is a component diagnostic, not a release benchmark claim |
 | Review fixes `c9770e086` (Commit dependency refusal, empty totals update) and `e4968959b` (UI player freeze) | Commit messages on `main` | All `layerfs-persistence` tests pass (100). All `layerfs-daemon` tests pass except two that need setup from other campaigns. Clippy `-D warnings`, fmt and the boundary scan pass. S328 and the merge, conflicts and tour stories pass live |
-| Earlier phases | [PHASE2](../../../core/docs/issues/327/PHASE2.md), [PHASE3](../../../core/docs/issues/327/PHASE3.md), [PHASE4](../../../core/docs/issues/327/PHASE4-20261015.md), [DECISIONS](../../../core/docs/issues/327/DECISIONS-20261015.md) | As recorded |
+| Earlier phases | [PHASE2](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/327/PHASE2.md), [PHASE3](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/327/PHASE3.md), [PHASE4](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/327/PHASE4-20261015.md), [DECISIONS](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/327/DECISIONS-20261015.md) | As recorded |
 
 ## Waivers
 

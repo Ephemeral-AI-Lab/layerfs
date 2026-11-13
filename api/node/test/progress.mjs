@@ -5,7 +5,7 @@
 // and what a throwing handler does. Local Init needs no machine, daemon or
 // bucket. The worker half needs the repository's debug build
 // (target/debug/layerfs) and is skipped without it.
-// The page that states this: docs/architecture/api/call-table/events.md.
+// The page that states this: docs/architecture/api/calls/errors-and-events.md.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";

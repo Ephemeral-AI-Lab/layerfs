@@ -1,4 +1,0 @@
-# Preserve captured telemetry and command output byte for byte.
-*.log -text -whitespace
-*.stderr -text -whitespace
-*.stdout -text -whitespace

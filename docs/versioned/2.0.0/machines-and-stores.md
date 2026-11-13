@@ -6,7 +6,7 @@ Part of the [2.0.0 manual](README.md). Sources:
 `engine/crates/layerfs-api/src/machine/`, `src/family/` and `src/store/`,
 and `engine/crates/layerfs-sandbox/src/machine/` on branch `issue533-v2`,
 with the owner decisions in
-[DECISIONS.md](../../../core/docs/issues/533/DECISIONS.md).
+[DECISIONS.md](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/DECISIONS.md).
 
 Storage is separate from compute (D1). A **machine** is one kernel where
 Sandboxes run. A **Store** holds projects and their history. A **backup** is
@@ -16,7 +16,7 @@ a copy of a sqlite Store in a bucket.
 
 Firecracker, Microsandbox and SSH machines were removed in 2.0; see
 [removed platforms](#removed-platforms-firecracker-microsandbox-and-ssh) and
-the [contract](../../architecture/control/support-matrix/disabled-platforms.md).
+the [contract](../../architecture/control/machines/platforms.md#removed-platforms-platform_policyrs).
 
 | Kind | How many | Made by | Sandboxes run as | Tool |
 | --- | --- | --- | --- | --- |
@@ -83,7 +83,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   Stores, and one worker.
 - `image` is the image its Sandboxes run in. The default Sandbox image (owner
   decision O36) is LayerFS's runtime image
-  `layerfs-352-runtime:node24-https-apt-20261024` (config digest
+  `layerfs-352-runtime:node24-https-apt-20261024` (image digest
   `sha256:afa1ef9c…f38e`: Node 24, Rust 1.85.1, the SQLite headers,
   Chromium and Selenium), sealed into the bundle as `sandbox-image.tar`.
   `--image` (and `machine update native --image`) chooses another. On
