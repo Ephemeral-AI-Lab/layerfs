@@ -259,7 +259,9 @@ impl OwnerClient {
     }
     /// Drains the Workspace's ready maintenance on this thread, one bounded
     /// step per hold of its lock, as the end of a job does. A failed step is
-    /// retained as the maintenance failure; it is not returned here.
+    /// retained as the maintenance failure; it is not returned here. While a
+    /// terminal unmount holds the Workspace (`hold_maintenance`), neither this
+    /// nor the end of a job runs a step.
     pub fn reclaim(&self, route: Route) -> Result<(), OwnerError> {
         match self.roster() {
             Some(pool) => pool.client(route.namespace())?.reclaim(route),
@@ -461,7 +463,11 @@ impl OwnerClient {
         };
         loop {
             let mut state = shared.state.lock().unwrap_or_else(|e| e.into_inner());
-            if state.stopping || state.failure.is_some() || state.maintenance_error.is_some() {
+            if state.stopping
+                || state.held != 0
+                || state.failure.is_some()
+                || state.maintenance_error.is_some()
+            {
                 return;
             }
             let Some(db) = state.db.as_deref() else {

@@ -24,6 +24,12 @@ impl Service {
     /// Refuses uncommitted changes with their paths unless `discard`.
     pub(crate) fn unmount(&self, control: UnmountControl) -> Result<Success, Failure> {
         let token = control.token;
+        // The reclamation a Commit left queued goes with the Workspace's file:
+        // none of this unmount's jobs, nor the kernel's FORGETs and reply
+        // attempts meanwhile, drain it (#679). A refused unmount drops the
+        // hold and the next job drains as before. Without a hold (no live
+        // owner for the route) the unmount runs as it would otherwise.
+        let _hold = self.hold_maintenance(token);
         if !control.discard {
             if let Some(report) = self.dirty(token)? {
                 return Ok(Success::reply(Reply::Dirty(Box::new(report))));
@@ -39,6 +45,19 @@ impl Service {
             }
         };
         self.close(token, &workspace, None)
+    }
+    fn hold_maintenance(
+        &self,
+        token: WorkspaceToken,
+    ) -> Option<layerfs_store_service::MaintenanceHold> {
+        let route = {
+            let entries = self.entries.lock().ok()?;
+            super::registry::bound(&entries, token)
+                .ok()?
+                .workspace
+                .route()
+        };
+        self.owner.hold_maintenance(route).ok()
     }
     /// One short registry step: no effect unless the entry is idle and its
     /// kernel half is either absent or a serving connection with no request.

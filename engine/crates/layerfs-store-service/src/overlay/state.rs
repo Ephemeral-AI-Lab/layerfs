@@ -18,6 +18,9 @@ pub struct State {
     /// waiting for earlier base sources: their frontiers stay finite.
     pub captures_waiting: u32,
     pub installs_waiting: u32,
+    /// Live maintenance holds (`hold.rs`): while any is taken, no step of
+    /// queued maintenance runs.
+    pub held: u32,
 }
 pub struct Shared {
     pub namespace: i64,
@@ -41,6 +44,7 @@ impl Shared {
                 backing: None,
                 captures_waiting: 0,
                 installs_waiting: 0,
+                held: 0,
             }),
             changed: Condvar::new(),
         }
