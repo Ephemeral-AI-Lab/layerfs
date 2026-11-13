@@ -51,7 +51,7 @@ PROGRESS = [
 # or change product files. The package, _client and aio are loaded from source.
 PACKAGE = "_lp53b_export"
 native = types.ModuleType(f"{PACKAGE}._native")
-FAMILIES = ["branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup"]
+FAMILIES = ["branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs"]
 native.table = lambda: json.dumps([SPEC] + [
     {"family": family, "call": "list", "args": [], "options": [], "help": "stub"}
     for family in FAMILIES

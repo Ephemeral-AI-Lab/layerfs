@@ -18,6 +18,7 @@ pub mod calls;
 mod commit;
 mod doctor;
 mod file;
+mod logs;
 mod machine;
 mod project;
 mod sandbox;
@@ -30,7 +31,8 @@ use layerfs_home::outcome::Outcome;
 use std::path::Path;
 
 pub use calls::{
-    home, json, keys, size, Arg, Call, CallRef, Calls, Context, Families, Family, Kind, Run, Scope,
+    home, json, keys, size, Arg, Call, CallRef, Calls, Client, Context, Families, Family, Kind,
+    Run, Scope,
 };
 pub use layerfs_home::names;
 /// The home (`layerfs-home`), with opening and converting it
@@ -69,7 +71,7 @@ pub use layerfs_sandbox::{
     BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
 };
 
-/// The nine families, in the order help lists them: 64 calls, the same
+/// The ten families, in the order help lists them: 70 calls, the same
 /// from the `layerfs` binary, Node and Python.
 pub fn families() -> Families {
     &[
@@ -109,6 +111,10 @@ pub fn families() -> Families {
             name: "backup",
             list: backup::calls,
         },
+        Family {
+            name: "logs",
+            list: logs::calls,
+        },
     ]
 }
 
@@ -128,8 +134,8 @@ pub fn table_json() -> String {
     machinery::table_json(families())
 }
 
-/// Runs the call `name` (`family.call`) once with named `args`; see
-/// [`calls::call`].
+/// Runs the call `name` (`family.call`) once with named `args`, logged as
+/// a direct library call (`client` `rust`); see [`calls::call`].
 pub fn call(
     home: Option<&Path>,
     name: &str,
@@ -139,15 +145,16 @@ pub fn call(
     machinery::call(families(), home, name, args, events)
 }
 
-/// [`call`] for a client with a folder scope (O32).
+/// [`call`] for a front end (`client`) with a folder scope (O32).
 pub fn call_scoped(
     home: Option<&Path>,
     scope: Option<&Scope>,
     name: &str,
     args: SdkValue,
     events: &mut dyn FnMut(SdkValue),
+    client: Client,
 ) -> Outcome {
-    machinery::call_scoped(families(), home, scope, name, args, events)
+    machinery::call_scoped(families(), home, scope, name, args, events, client)
 }
 
 /// [`call`] with JSON text on both sides, for the Node and Python bindings.
@@ -157,6 +164,7 @@ pub fn call_json(
     name: &str,
     args: &str,
     events: &mut dyn FnMut(String),
+    client: Client,
 ) -> String {
-    machinery::call_json(families(), home, scope, name, args, events)
+    machinery::call_json(families(), home, scope, name, args, events, client)
 }

@@ -18,8 +18,8 @@ use layerfs_content::{
 };
 use layerfs_history::{
     AddLayerOutcome, AddLayerRequest, BranchId, BranchMergeRequest, CommitHistoryRequest,
-    CommitMeta, CommitVia, ForkRequest, ForkSource, LayerId, LayerStackRecord, MergeCommit,
-    MergeHead, MergeSide, NodeId, MAXIMUM_PAGE_RECORDS,
+    CommitMeta, CommitVia, ForkRequest, ForkSource, LayerHistoryRequest, LayerId, LayerStackRecord,
+    MergeCommit, MergeHead, MergeSide, NodeId, MAXIMUM_PAGE_RECORDS,
 };
 use layerfs_workspace::InodeSerials;
 use std::sync::Arc;
@@ -287,6 +287,74 @@ pub fn list_commits(
             }
             spent += cost;
             items.push(commit_value(&record, Some(branch.name.as_str())));
+        }
+        match page.continuation {
+            Some(next) => cursor = Some(next),
+            None => break,
+        }
+    }
+    let next = args::next_page(pos, items.len(), more);
+    Ok(SdkValue::map([
+        ("items", SdkValue::List(items)),
+        ("hasMore", SdkValue::Bool(!matches!(next, SdkValue::Null))),
+        ("nextPagePos", next),
+    ]))
+}
+
+/// Serialized size one listed Layer reserves against the reply budget.
+const LAYER_ITEM_COST: usize = 512;
+
+/// The project's published Layers, newest first: one page of `limit` from
+/// `pos`. `commit.list` on main walks the publication chain (S §3.3: on
+/// main, a Layer id is accepted wherever a Commit is). Source Branch names
+/// come from one bounded Branches page of the same catalog, resolving only
+/// the identities outside it, as the operator's inspect does.
+pub fn list_layers(store: &Arc<Store>, stack: &LayerStackRecord, limit: usize, pos: u64) -> Answer {
+    let catalog = store.history();
+    let names: std::collections::BTreeMap<BranchId, String> = catalog
+        .branches(
+            stack.id,
+            &layerfs_history::Page {
+                cursor: None,
+                limit: MAXIMUM_PAGE_RECORDS,
+            },
+        )
+        .map_err(history)?
+        .records
+        .into_iter()
+        .map(|branch| (branch.id, branch.name.as_str().to_owned()))
+        .collect();
+    let (mut cursor, mut seen, mut items, mut spent, mut more) = (None, 0u64, Vec::new(), 0, false);
+    'pages: loop {
+        let page = catalog
+            .layer_history(&LayerHistoryRequest {
+                stack: stack.id,
+                start: Some(stack.head_layer),
+                cursor,
+                limit: MAXIMUM_PAGE_RECORDS,
+            })
+            .map_err(history)?;
+        for record in page.records {
+            if seen < pos {
+                seen += 1;
+                continue;
+            }
+            if items.len() == limit || spent + LAYER_ITEM_COST > crate::read::reads::REPLY_BUDGET {
+                more = true;
+                break 'pages;
+            }
+            spent += LAYER_ITEM_COST;
+            let source_branch = match record.source_branch {
+                Some(id) => match names.get(&id) {
+                    Some(name) => Some(name.clone()),
+                    None => catalog
+                        .branch(id)
+                        .map_err(history)?
+                        .map(|branch| branch.name.as_str().to_owned()),
+                },
+                None => None,
+            };
+            items.push(layer_value(&record, source_branch.as_deref()));
         }
         match page.continuation {
             Some(next) => cursor = Some(next),

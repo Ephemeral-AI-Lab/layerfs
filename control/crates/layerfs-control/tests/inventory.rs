@@ -121,6 +121,42 @@ fn relationships_are_read_from_the_records() {
     let _ = std::fs::remove_dir_all(&home);
 }
 
+/// A PostgreSQL Store is attached where its record's `machines` names (a
+/// record without them, to `native` alone); `store.detach` is refused while
+/// a Sandbox of the Store is recorded on that machine, and a machine with
+/// a PostgreSQL Store attached is not removed.
+#[test]
+fn postgresql_attachments_are_read_from_the_store_records() {
+    let home = home();
+    assert_eq!(inventory::postgresql_on(&home, "native").unwrap(), ["pg"]);
+    assert!(inventory::postgresql_on(&home, "dev").unwrap().is_empty());
+    record(
+        &paths::store_record(&home, "team"),
+        r#"{"kind":"postgresql","machines":{"dev":{"url":"postgresql://lfs_dev@10.0.0.5/team"}}}"#,
+    );
+    assert_eq!(inventory::postgresql_on(&home, "dev").unwrap(), ["team"]);
+    assert_eq!(inventory::postgresql_on(&home, "native").unwrap(), ["pg"]);
+    record(
+        &paths::sandbox_record(&home, "t"),
+        r#"{"v":1,"name":"t","project":"team/api","machine":"dev"}"#,
+    );
+    let refusal = inventory::store_idle_on(&home, "team", "dev").unwrap_err();
+    assert_eq!(refusal.code, "InUse", "{}", refusal.message);
+    assert_eq!(
+        refusal.message,
+        "Store team has Sandboxes on machine dev: t; close them first"
+    );
+    assert!(inventory::store_idle_on(&home, "team", "native").is_ok());
+    assert!(inventory::store_idle_on(&home, "pg", "dev").is_ok());
+    let refusal = inventory::can_remove_machine(&home, "dev").unwrap_err();
+    assert!(
+        refusal.message.contains("Stores [shop, team]"),
+        "{}",
+        refusal.message
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}
+
 #[test]
 fn the_checks_refuse_in_use_with_the_same_texts() {
     let home = home();

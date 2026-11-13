@@ -128,14 +128,21 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
     let home = tempdir("refusals");
     home::open(&home).unwrap();
     ok(&home, "machine.list", &[]);
-    // a PostgreSQL Store and a sqlite Store on native, written as records:
-    // the refusals come before any connection
+    // a PostgreSQL Store attached to native and dev, and a sqlite Store on
+    // native, written as records: the refusals come before any connection
     home::write_record(
         &paths::store_record(&home, "pg"),
         &SdkValue::map([
             ("name", t("pg")),
             ("kind", t("postgresql")),
             ("url", t("postgres://u@127.0.0.1:1/db")),
+            (
+                "machines",
+                SdkValue::map([
+                    ("native", SdkValue::Map(Vec::new())),
+                    ("dev", SdkValue::Map(Vec::new())),
+                ]),
+            ),
         ]),
     )
     .unwrap();
@@ -194,6 +201,22 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
             assert_eq!(code, "Unsupported", "{message}");
             assert!(message.ends_with(reason), "{message}");
         }
+    }
+    // a machine the PostgreSQL Store is not attached to is refused naming
+    // the attach, before any reach or startup
+    if layerfs_platform::sandbox_allowed(
+        layerfs_platform::Platform::Docker,
+        layerfs_platform::HostOs::current(),
+        layerfs_platform::StoreKind::Postgresql,
+    )
+    .is_ok()
+    {
+        let (code, message) = create("docker");
+        assert_eq!(code, "Unsupported", "{message}");
+        assert_eq!(
+            message,
+            "PostgreSQL Store pg is not attached to machine docker; `layerfs store attach pg docker`"
+        );
     }
     // an ssh machine left by an older home: its platform was removed in
     // 2.0, refused before any reach or startup
@@ -355,6 +378,13 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
         let outcome = std::panic::catch_unwind(|| {
             // only `machine.start` starts a machine (D11)
             ok(&home, "machine.start", &[("name", t("docker"))]);
+            // docker runs the Store's Sandboxes once it is attached, its
+            // connection checked from the worker container
+            ok(
+                &home,
+                "store.attach",
+                &[("name", t("pg")), ("machine", t("docker"))],
+            );
             ok(
                 &home,
                 "sandbox.create",

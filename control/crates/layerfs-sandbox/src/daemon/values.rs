@@ -24,6 +24,23 @@ pub fn refusal(failure: &OperationFailure) -> Option<SdkRefusal> {
             message: refused.detail.clone(),
             detail: SdkValue::map([("phase", SdkValue::text(refused.phase.as_str()))]),
         }),
+        // The request was sent but no reply arrived (the daemon reclaimed or
+        // expired the worker, or it died mid-operation): its effect is
+        // unknown, so the caller observes `Unavailable { outcome: unknown }`
+        // rather than a silent failure (#547 slice 5).
+        OperationCause::Exchange(exchange)
+            if exchange.phase == crate::daemon::internal::ControlPhase::Receive =>
+        {
+            Some(SdkRefusal {
+                code: "Unavailable".to_owned(),
+                message: "the Sandbox's daemon ended this connection before it answered; the operation's outcome is unknown"
+                    .to_owned(),
+                detail: SdkValue::map([
+                    ("outcome", SdkValue::text("unknown")),
+                    ("retryable", SdkValue::Bool(false)),
+                ]),
+            })
+        }
         _ => None,
     }
 }

@@ -33,7 +33,7 @@ side of the channel is in [Engine: Daemon](../../engine/daemon/README.md).
  |                                                              |
  | lend(): idle one --> else open one more (if open < limit)    |
  |         --> else wait for a free one, <= 60 s --> Busy       |
- | drop(Lease): failed Control --> closed, open -= 1            |
+ | drop(Lease): quarantined Control --> closed, open -= 1       |
  |              healthy Control --> back to idle                |
  +--------------------------------------------------------------+
         |
@@ -43,7 +43,7 @@ side of the channel is in [Engine: Daemon](../../engine/daemon/README.md).
 
 | Part | What it is | Source |
 | --- | --- | --- |
-| `Control` | one sequential authenticated connection; numbers its calls; once an exchange fails it is quarantined and refuses every later call before sending | [`daemon/channel.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/channel.rs) |
+| `Control` | one sequential authenticated connection; numbers its calls; once an exchange fails, or an applied fence (`close_handle`, `daemon/fence.rs`) closes its channel, it is quarantined and refuses every later call before sending | [`daemon/channel.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/channel.rs) |
 | `Dial` | how to open another connection to the same daemon instance: endpoint, secret, peer key, instance | [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
 | `Controls` | the Sandbox's pool: up to `CONNECTIONS` (6) per process; the daemon admits `DAEMON_CONNECTIONS` (8), leaving the rest to other processes | `daemon/pool.rs`, [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
 | `Lease` | one connection lent for one call's exchanges, returned on drop | `daemon/pool.rs` |
@@ -82,7 +82,7 @@ opening a connection sends only Hello, so it attempts no operation.
 | `workspace.commit` | `Commit` | `values::commit`: Committed, Merged (with `merged`), or `Conflict` | [`daemon/workspace/commit.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/workspace/commit.rs), [`daemon/values.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
 | `workspace.unmount` | `Unmount{token, discard}`, or `ForceUnmount` with `force` | `values::unmounted` (`Dirty` refusal) or `force_unmounted` | [`daemon/workspace/unmount.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/workspace/unmount.rs) |
 | `workspace.status` | `Status(token)`; the Branch head is read separately on the Store's route | `values::status` | [`daemon/workspace/status.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/workspace/status.rs) |
-| `sandbox.get` Workspace list | SDK method `sandbox.list_workspaces`, the one daemon backend method sent | `sandbox/dispatch.rs` | [`daemon/operator.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/operator.rs) |
+| `sandbox.get` | SDK method `sandbox.list_workspaces`, then, on the same pooled connection and for a running Sandbox its machine still reaches, `backend.daemon.connection_failures` (`daemon_capacity`, bounded to 2 s: admission and the exchange share one deadline, fenced by [`daemon/fence.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/fence.rs); a window admission used up refuses the read, and a connection the fence ends is not lent again); a full pool's pre-handshake `LAYERFS-CAPACITY` notice survives the failed open as the partial `down` counts (#649) | `sandbox/dispatch.rs` (both through `daemon/operator.rs`) | [`daemon/operator.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/operator.rs), [`daemon/capacity.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/capacity.rs) |
 | `workspace.exec` | none on this channel: `bash -c` runs through the Sandbox's runtime | — | [`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs) |
 
 `Locate` and `Cleanup` are read-only observations for a caller whose

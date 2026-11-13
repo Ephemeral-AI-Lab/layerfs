@@ -29,6 +29,50 @@ fn history(f: &Fixture, branch: &str, page: i64, at: Option<&str>) -> SdkValue {
     f.call("branch.commits", args)
 }
 #[test]
+fn compact_history_preserves_save_allocations_and_layers_have_no_save_cost() {
+    let f = fixture("saved-allocation-summary");
+    let storage_history = |branch: &str| {
+        f.call(
+            "branch.commits",
+            vec![
+                ("branch", text(branch)),
+                ("pageSize", SdkValue::Int(10)),
+                ("includeStorage", SdkValue::Bool(true)),
+            ],
+        )
+    };
+    for field in ["newCanonical", "newStored", "newMetadata"] {
+        assert_eq!(
+            items(&storage_history("main"))[0].get(field),
+            Some(&SdkValue::Null)
+        );
+    }
+    f.fork("work");
+    f.apply("work", vec![write("/a", "new content\n")]);
+    let saved = storage_history("work");
+    let summary = &items(&saved)[0];
+    let detail = f.call(
+        "branch.get_commit",
+        vec![
+            ("branch", text("work")),
+            ("commit", text(summary.get_text("id").unwrap())),
+        ],
+    );
+    for field in ["newCanonical", "newStored", "newMetadata"] {
+        assert!(summary.get_int(field).is_some());
+        assert_eq!(summary.get(field), detail.get(field));
+    }
+    assert!(summary.get_int("newStored").unwrap() >= summary.get_int("newMetadata").unwrap());
+    f.call("branch.publish", vec![("branch", text("work"))]);
+    for field in ["newCanonical", "newStored", "newMetadata"] {
+        assert_eq!(
+            items(&storage_history("main"))[0].get(field),
+            Some(&SdkValue::Null)
+        );
+    }
+    f.cleanup();
+}
+#[test]
 fn publication_details_keep_source_and_parent_distinct_and_pages_pinned() {
     let f = fixture("saved-publications");
     let init = history(&f, "main", 1, None);
@@ -396,5 +440,69 @@ fn requested_directory_attribution_remains_unknown_on_metadata_changes() {
         Some("unavailable")
     );
     assert!(!result.get("coverage").unwrap().get_bool("complete"));
+    f.cleanup();
+}
+
+/// `commit.list` on main pages the stack's published Layers, newest first,
+/// as Layers with their source Branch and Commit (#611).
+#[test]
+fn commit_list_on_main_pages_published_layers() {
+    let f = fixture("main-commit-list");
+    f.fork("work");
+    f.apply("work", vec![write("/a", "one\n")]);
+    let first = f.call("branch.list_commits", vec![("branch", text("work"))]);
+    let first_commit = items(&first)[0].get_text("id").unwrap().to_owned();
+    f.call("branch.publish", vec![("branch", text("work"))]);
+    f.apply("work", vec![write("/a", "two\n")]);
+    let second = f.call("branch.list_commits", vec![("branch", text("work"))]);
+    let second_commit = items(&second)[0].get_text("id").unwrap().to_owned();
+    f.call("branch.publish", vec![("branch", text("work"))]);
+
+    let whole = f.call("branch.list_commits", vec![("branch", text("main"))]);
+    assert_eq!(items(&whole).len(), 3);
+
+    let page = f.call(
+        "branch.list_commits",
+        vec![("branch", text("main")), ("pageSize", SdkValue::Int(1))],
+    );
+    assert_eq!(items(&page).len(), 1);
+    assert_eq!(page.get("hasMore"), Some(&SdkValue::Bool(true)));
+    assert_eq!(page.get("nextPagePos"), Some(&SdkValue::Int(1)));
+    let newest = &items(&page)[0];
+    assert_eq!(
+        newest.get_text("sourceCommit"),
+        Some(second_commit.as_str())
+    );
+    assert_eq!(newest.get_text("sourceBranch"), Some("work"));
+
+    let page = f.call(
+        "branch.list_commits",
+        vec![
+            ("branch", text("main")),
+            ("pageSize", SdkValue::Int(1)),
+            ("pagePos", SdkValue::Int(1)),
+        ],
+    );
+    let middle = &items(&page)[0];
+    assert_eq!(middle.get_text("sourceCommit"), Some(first_commit.as_str()));
+    let SdkValue::Text(parent) = newest.get("parent").unwrap() else {
+        panic!("the newest Layer names its parent")
+    };
+    assert_eq!(middle.get_text("id"), Some(parent.as_str()));
+
+    let page = f.call(
+        "branch.list_commits",
+        vec![
+            ("branch", text("main")),
+            ("pageSize", SdkValue::Int(1)),
+            ("pagePos", SdkValue::Int(2)),
+        ],
+    );
+    let genesis = &items(&page)[0];
+    assert_eq!(genesis.get("parent"), Some(&SdkValue::Null));
+    assert_eq!(genesis.get("sourceBranch"), Some(&SdkValue::Null));
+    assert_eq!(genesis.get("sourceCommit"), Some(&SdkValue::Null));
+    assert_eq!(page.get("hasMore"), Some(&SdkValue::Bool(false)));
+    assert_eq!(page.get("nextPagePos"), Some(&SdkValue::Null));
     f.cleanup();
 }

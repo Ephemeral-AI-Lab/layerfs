@@ -27,6 +27,10 @@ pub const STARTUP: Duration = Duration::from_secs(30);
 /// A failed create's report keeps its daemon's last log lines, up to this many bytes.
 pub const LOG_LINES: u16 = 20;
 pub const LOG_BYTES: usize = 2048;
+/// How long an explicit close waits for the daemon's Workspace status before
+/// it returns the exact admission refusal. The close's `op` intent must not
+/// be held for the whole admission wait (#540).
+const CLOSE_STATUS_WAIT: Duration = Duration::from_secs(2);
 
 pub fn operation(failure: Box<OperationFailure>) -> SdkRefusal {
     values::refusal(&failure).unwrap_or_else(|| failed(failure))
@@ -39,6 +43,16 @@ pub const WORKSPACES: u32 = 16;
 /// Control connections a Sandbox's daemon admits: [`crate::daemon::pool::CONNECTIONS`]
 /// for this process and the rest for others (#352 F-017).
 pub const DAEMON_CONNECTIONS: u16 = 8;
+
+/// A control connection parked in `receive()` this long is reclaimable when
+/// admission is refused (#547 slice 4): long enough that an idle pool
+/// connection is likely abandoned, short enough that recovery stays bounded.
+pub const IDLE_TTL_MS: u32 = 60_000;
+
+/// A decoded request still in flight this long is expired (#547 slice 5):
+/// long enough that a 64 MiB Commit finishes normally, short enough that a
+/// fence/Store/diagnostic wait cannot hold a pool slot forever.
+pub const REQUEST_DEADLINE_MS: u32 = 300_000;
 
 pub fn setup(
     private: [u8; 32],
@@ -58,6 +72,8 @@ pub fn setup(
         limits: DaemonLimits {
             connections: DAEMON_CONNECTIONS,
             handshake_ms: 2000,
+            idle_ttl_ms: IDLE_TTL_MS,
+            request_deadline_ms: REQUEST_DEADLINE_MS,
             // The daemon's shared immutable-object cache: a fixed bound, the
             // daemon's own default. 64 KiB held too few directory and inode
             // pages for lookups in a large directory to stay resident
@@ -271,7 +287,16 @@ pub fn close(host: &Host, force: bool, held: &[String]) -> Outcome {
     let unreached = &mut crate::exec::cancel::unreached;
     crate::exec::cancel::settle(&state.directory, &id, None, force, unreached)?;
     let recoverable = crate::unmount_guard::check_all(&state)?;
-    crate::files::refresh_except(&state, &recoverable)?;
+    if !force {
+        // A daemon that refuses all control connections must refuse this close
+        // with its exact cause in bounded time, not hold the `op` intent while
+        // the SDK's ordinary 60 s admission wait runs out. One shared deadline
+        // bounds all Workspace probes; N Workspaces cannot multiply it.
+        crate::files::refresh_except_within(&state, &recoverable, CLOSE_STATUS_WAIT)?;
+    }
+    // `force` is the recovery path: it skips the daemon status probe and stops
+    // the runtime anyway, reporting every Workspace it could not drain as
+    // `unknown` below. It is still never blocked by the daemon it stops.
     // Explicit close can take over an orphaned/retained unmount, but must
     // still refuse every unrelated live Workspace. Stop detaches before
     // killing the daemon; Delete independently checks physical detach.

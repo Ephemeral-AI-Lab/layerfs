@@ -95,6 +95,21 @@ pub fn trace_dir(home: &Path) -> PathBuf {
     home.join("trace")
 }
 
+/// `trace/calls.jsonl`: the call log, one line per call (#659).
+pub fn calls_file(home: &Path) -> PathBuf {
+    trace_dir(home).join("calls.jsonl")
+}
+
+/// `trace/calls.1.jsonl`: the call log's one rotated file (#659).
+pub fn calls_rotated(home: &Path) -> PathBuf {
+    trace_dir(home).join("calls.1.jsonl")
+}
+
+/// `trace/calls.lock`: rotation and reset of the call log take it (#659).
+pub fn calls_lock(home: &Path) -> PathBuf {
+    trace_dir(home).join("calls.lock")
+}
+
 /// The names of the folders under `dir` (sorted); none when it is absent.
 pub fn names(dir: &Path) -> std::io::Result<Vec<String>> {
     let mut names = Vec::new();

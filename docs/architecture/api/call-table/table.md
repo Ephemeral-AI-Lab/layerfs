@@ -14,7 +14,7 @@
 ## layerfs.table
 
 ```text
- layerfs-api/src/lib.rs   families() -> &[Family; 9]
+ layerfs-api/src/lib.rs   families() -> &[Family; 10]
    Family { name: "file", list: file::calls }
         |
         v
@@ -41,7 +41,7 @@ The table is code: one file per call under its family folder in
 the `run` function that hands it to `layerfs-control`
 ([`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs),
 [`table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs)).
-There are 66 calls in nine families, including
+There are 70 calls in ten families, including
 [`project.export`](../sdk/project/export.md). `layerfs.table` is the JSON form front
 ends build their functions from (`table_json`); `layerfs doctor` and
 `layerfs worker` sit outside it.
@@ -55,8 +55,9 @@ ends build their functions from (`table_json`); `layerfs doctor` and
 | [sandbox](../sdk/sandbox/README.md) | create, list, get, close | 4 |
 | [workspace](../sdk/workspace/README.md) | mount, exec, exec_cancel, commit, unmount, status | 6 |
 | [machine](../sdk/machine/README.md) | list, platforms, get, status, start, stop, create, remove, update | 9 |
-| [store](../sdk/store/README.md) | list, get, status, stats, create, connect, push, pull, remove, disconnect | 10 |
+| [store](../sdk/store/README.md) | list, get, status, stats, create, connect, attach, detach, push, pull, remove, disconnect | 12 |
 | [backup](../sdk/backup/README.md) | connect, disconnect, list, create, restore | 5 |
+| [logs](../sdk/logs/README.md) | list, reset | 2 |
 
 `project.export(project: Project, destination: Text, { branch: Name = "main",
 on_progress: Function })` adds one project-level call. It accepts no `commit`
@@ -152,9 +153,11 @@ confine the process `workspace.exec` starts.
 ## Checks
 
 ```text
- call_scoped(families, home?, scope?, name, args, events)
+ call_scoped(families, home?, scope?, name, args, events, client)
+   0 take log_tag out of args      the line's tag, else LAYERFS_LOGS_TAG
    1 find(name)                    no call named ... (InvalidInput)
    2 check(spec, args)             names, required, kinds; sizes -> bytes
+     render argv                   the call log's words, before the scope
    3 scope.apply                   (when scoped)
    4 home(explicit | LAYERFS_HOME | $HOME/.layerfs), must be absolute
    5 migrate::open                 refusals noted by note_failure
@@ -162,6 +165,7 @@ confine the process `workspace.exec` starts.
    7 scope.owns                    (when scoped)
    8 (spec.run)(Context{home, events}, args)
    9 keys::snake(value)
+  10 append one call log line      not for `logs.*`, not with LAYERFS_LOGS=0
 ```
 
 | Check | Refusal | Source |
@@ -177,6 +181,17 @@ with a `Context` that holds the home and the one event stream: progress
 (`{progress}`), worker events, and command output (`{stream, bytes}`)
 ([`events.rs`](../../../../control/crates/layerfs-home/src/events.rs)).
 Nothing in the dispatcher retries.
+
+Every call made through `call_scoped` (and `call_json`, which calls it)
+ends with one line in the home's call log (#659): `client` is the front end
+that passed it (`Client::Cli`, `Node`, `Python`; `layerfs_api::call` passes
+`Rust`), and `argv` is rendered from the call's entry and its checked
+arguments before `scope.apply`, with free text, credentials, content and
+JSON as byte counts ([`render.rs`](../../../../api/crates/layerfs-api/src/calls/render.rs)).
+A call refused before its arguments are checked logs `[family, call]`. A
+top-level `log_tag` argument is taken out before the check (no entry
+declares it) and tags the line. The line is written after the outcome and
+never changes it; see [Home and records: the call log](../../control/management/home-and-records.md#the-call-log).
 
 ## Help text
 

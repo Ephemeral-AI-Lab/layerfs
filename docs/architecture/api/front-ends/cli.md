@@ -196,6 +196,18 @@ the secret) and, for tests, `LAYERFS_WORKER_ROOT` (default
 `/layerfs/data`), then serves until ended; a missing setting exits 125.
 Its protocol is on [Workers](../../control/routing/workers.md).
 
+## Call log
+
+Each table call the command makes appends one line to the home's call log
+with `client: "cli"` (`Client::Cli`, [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs));
+a wrong command line (exit 2) calls nothing and writes nothing, and so do
+`help`, `--version`, `worker`, `import-env` and `doctor`. The command has
+no flag for the tag: `LAYERFS_LOGS_TAG=<tag>` sets it for the process, and
+`LAYERFS_LOGS=0` turns the log off. `layerfs logs list` and
+`layerfs logs reset` read and clear it
+([SDK: logs](../sdk/logs/README.md),
+[Home and records: the call log](../../control/management/home-and-records.md#the-call-log)).
+
 ## Related
 
 - [Front ends](README.md): the three front ends side by side.

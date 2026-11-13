@@ -51,6 +51,37 @@ pub fn stores_on(home: &Path, machine: &str) -> Result<Vec<String>> {
     Ok(on)
 }
 
+/// The PostgreSQL Stores attached to machine `machine`, sorted by name.
+pub fn postgresql_on(home: &Path, machine: &str) -> Result<Vec<String>> {
+    let mut on = Vec::new();
+    for store in stores(home)? {
+        if let StoreRef::Postgres { .. } = store.store_ref()? {
+            if store.attachment(machine).is_some() {
+                on.push(store.name().to_owned());
+            }
+        }
+    }
+    Ok(on)
+}
+
+/// `store.detach`: refused `InUse` while a Sandbox of Store `store` is
+/// recorded on machine `machine`; `detail.related` lists them.
+pub fn store_idle_on(home: &Path, store: &str, machine: &str) -> Result<()> {
+    let on = sandboxes(home)?.into_iter().filter(|sandbox| {
+        let project = sandbox.project().unwrap_or("");
+        sandbox.machine() == machine && project.split_once('/').map(|(s, _)| s) == Some(store)
+    });
+    let names: Vec<String> = on.map(|sandbox| sandbox.name().to_owned()).collect();
+    if names.is_empty() {
+        return Ok(());
+    }
+    let message = format!(
+        "Store {store} has Sandboxes on machine {machine}: {}; close them first",
+        names.join(", ")
+    );
+    Err(in_use(message, related("sandbox", &names)))
+}
+
 /// The Sandboxes whose record names machine `machine`.
 pub fn sandboxes_on(home: &Path, machine: &str) -> Result<Vec<String>> {
     let on = sandboxes(home)?.into_iter();
@@ -84,12 +115,16 @@ pub fn sandboxes_of_project(home: &Path, project: &str) -> Result<Vec<String>> {
     Ok(of.map(|sandbox| sandbox.name().to_owned()).collect())
 }
 
-/// `machine.remove`: refused `InUse` while the machine holds Stores,
+/// `machine.remove`: refused `InUse` while the machine holds Stores (or
+/// PostgreSQL Stores are attached to it),
 /// Sandboxes or old Firecracker records it hosted (removing it would delete
 /// their microVMs' disks; forgetting those records first lets it go);
 /// `detail.related` lists them (#536 §10b).
 pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
-    let stores = stores_on(home, name)?;
+    // a PostgreSQL Store attached to it is detached first, as a sqlite
+    // Store on it is pulled first
+    let mut stores = stores_on(home, name)?;
+    stores.extend(postgresql_on(home, name)?);
     let sandboxes = sandboxes_on(home, name)?;
     let hosted = hosted_on(home, name)?;
     if stores.is_empty() && sandboxes.is_empty() && hosted.is_empty() {

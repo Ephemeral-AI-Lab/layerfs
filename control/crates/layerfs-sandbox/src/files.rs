@@ -229,10 +229,29 @@ fn recorded_identity(value: &DaemonRecord) -> CommandIdentity {
 pub fn refresh(state: &SandboxState) -> Result<()> {
     refresh_except(state, &[])
 }
+/// [`refresh`], waiting at most `wait` in total for all status probes. An
+/// unmount uses a short bound so a refusing daemon returns its exact refusal
+/// instead of blocking behind the folder guard (#540).
+pub fn refresh_within(state: &SandboxState, wait: std::time::Duration) -> Result<()> {
+    refresh_except_within(state, &[], wait)
+}
 /// Explicit Sandbox close may dispose retained unmounts without asking their
 /// daemon for a Ready receipt that no longer exists. Other records still
 /// undergo the ordinary refresh and MountsActive admission.
 pub fn refresh_except(state: &SandboxState, retained: &[String]) -> Result<()> {
+    refresh_except_within(state, retained, crate::daemon::pool::ADMISSION_WAIT)
+}
+/// [`refresh_except`], waiting at most `wait` in total for all Workspace
+/// status probes. One deadline is shared by every Workspace, so N records
+/// cannot multiply the wait (#540). An explicit close uses a short wait so its
+/// `op` intent is not held for the whole admission wait while the daemon
+/// refuses connections.
+pub fn refresh_except_within(
+    state: &SandboxState,
+    retained: &[String],
+    wait: std::time::Duration,
+) -> Result<()> {
+    let deadline = std::time::Instant::now() + wait;
     let mut mounts = std::collections::BTreeMap::new();
     for (_, value) in workspaces(&state.directory)? {
         let path = helpers::required(value.path(), "path")?;
@@ -240,13 +259,18 @@ pub fn refresh_except(state: &SandboxState, retained: &[String]) -> Result<()> {
             continue;
         }
         let token = token_of(&value)?;
-        let status =
-            match workspace(&mut *crate::daemon::trace::control(&state.controls)?).status(token) {
-                Ok(status) => status,
-                // Unmounted by the daemon; its owner removes the record next.
-                Err(failure) if absent(&failure) => continue,
-                Err(failure) => return Err(failed(failure)),
-            };
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        let status = match workspace(&mut *crate::daemon::trace::control_within(
+            &state.controls,
+            remaining,
+        )?)
+        .status(token)
+        {
+            Ok(status) => status,
+            // Unmounted by the daemon; its owner removes the record next.
+            Err(failure) if absent(&failure) => continue,
+            Err(failure) => return Err(failed(failure)),
+        };
         let ready = status
             .kernel
             .and_then(|k| k.ready)
