@@ -56,6 +56,9 @@ use std::{
     },
 };
 
+mod released;
+pub use released::Released;
+
 /// Implicit file descriptors kept open at once.
 pub const FILES_HELD: usize = 1024;
 /// Implicit directory descriptors (enumerations) kept open at once.
@@ -110,6 +113,11 @@ pub(crate) struct Table {
     /// A second name does not retire the first; unlink/rename remove known
     /// vanished names, and retiring a serial removes all its keys.
     pub by_name: HashMap<Named, u64>,
+    /// Serial -> the names it is reached by besides [`Table::names`]: the
+    /// hard-link aliases it was also observed under. Every key of
+    /// [`Table::by_name`] is one of the two, so dropping one record removes
+    /// exactly its own keys instead of scanning the whole index.
+    pub aliases: HashMap<u64, Vec<Named>>,
     /// Serial -> last use, for the collection order.
     pub used: HashMap<u64, u64>,
     /// Serials marked for a cache refresh, and when (see [`crate::refresh`]).
@@ -129,6 +137,55 @@ impl Table {
     /// Serials kept alive by a silly name.
     pub fn pinned(&self, serial: u64) -> bool {
         self.silly.values().any(|held| *held == serial)
+    }
+    /// Records that `serial` is reached as `named`.
+    pub(crate) fn bind_name(&mut self, named: Named, serial: u64) {
+        self.by_name.insert(named, serial);
+    }
+    /// Remembers that `serial` is also reached as `named`, a name beyond its
+    /// remembered one, so dropping the serial needs no scan of `by_name`.
+    pub(crate) fn remember_alias(&mut self, serial: u64, named: &Named) {
+        let aliases = self.aliases.entry(serial).or_default();
+        if !aliases.iter().any(|alias| alias == named) {
+            aliases.push(named.clone());
+        }
+    }
+    /// Drops `named`, which `serial` no longer holds. Returns whether it did.
+    pub(crate) fn unbind_name(&mut self, named: &Named, serial: u64) -> bool {
+        if self.by_name.get(named) != Some(&serial) {
+            return false;
+        }
+        self.by_name.remove(named);
+        self.drop_alias(serial, named);
+        true
+    }
+    /// Drops `named` whatever serial holds it, and its alias record.
+    pub(crate) fn unbind_any(&mut self, named: &Named) -> Option<u64> {
+        let serial = self.by_name.remove(named)?;
+        self.drop_alias(serial, named);
+        Some(serial)
+    }
+    fn drop_alias(&mut self, serial: u64, named: &Named) {
+        let Some(aliases) = self.aliases.get_mut(&serial) else {
+            return;
+        };
+        aliases.retain(|alias| alias != named);
+        if aliases.is_empty() {
+            self.aliases.remove(&serial);
+        }
+    }
+    /// Drops every key `serial` holds: its remembered name and its aliases.
+    pub(crate) fn unbind_serial(&mut self, serial: u64) {
+        if let Some(named) = self.names.remove(&serial) {
+            if self.by_name.get(&named) == Some(&serial) {
+                self.by_name.remove(&named);
+            }
+        }
+        for named in self.aliases.remove(&serial).unwrap_or_default() {
+            if self.by_name.get(&named) == Some(&serial) {
+                self.by_name.remove(&named);
+            }
+        }
     }
 }
 /// One opened file as READ and WRITE need it.
@@ -300,16 +357,12 @@ impl Kernel {
             Err(status) => return Err(status),
         }
         let mut table = self.table();
-        if table
+        let remembered = table
             .names
             .get(&serial)
-            .is_some_and(|(p, n)| *p == parent && *n == name)
-        {
-            if let Some(old) = table.names.remove(&serial) {
-                if table.by_name.get(&old) == Some(&serial) {
-                    table.by_name.remove(&old);
-                }
-            }
+            .is_some_and(|(p, n)| *p == parent && *n == name);
+        if remembered {
+            table.unbind_serial(serial);
         }
         self.unresolved.fetch_add(1, Ordering::Relaxed);
         Err(Status::Stale)
@@ -425,8 +478,29 @@ impl Kernel {
                 table.used.insert(stat.serial, tick);
                 if table.names.len() < NAMES_HELD || table.names.contains_key(&stat.serial) {
                     let named = (parent, name.to_vec());
-                    table.names.insert(stat.serial, named.clone());
-                    table.by_name.insert(named, stat.serial);
+                    if let Some(old) = table.names.insert(stat.serial, named.clone()) {
+                        if old != named {
+                            if stat.namespace_refs <= 1 {
+                                // The inode has one name: every other name the
+                                // index held for it is one it no longer has.
+                                // (Its old keys stay a moment in a state whose
+                                // nlink the engine last reported higher.)
+                                table.unbind_name(&old, stat.serial);
+                                for alias in table.aliases.remove(&stat.serial).unwrap_or_default()
+                                {
+                                    if table.by_name.get(&alias) == Some(&stat.serial) {
+                                        table.by_name.remove(&alias);
+                                    }
+                                }
+                            } else {
+                                // A hard link: the old name still reaches the
+                                // inode, so it stays, remembered per serial so
+                                // that retiring the serial drops no other name.
+                                table.remember_alias(stat.serial, &old);
+                            }
+                        }
+                    }
+                    table.bind_name(named, stat.serial);
                 }
             }
             let extra = root || !table.lookups.insert(stat.serial);
@@ -454,12 +528,16 @@ impl Kernel {
         let mut table = self.table();
         let named = (to, new_name.to_vec());
         let moved = (from, name.to_vec());
-        if table.by_name.get(&moved) == Some(&serial) {
-            table.by_name.remove(&moved);
-        }
-        if let Some(slot) = table.names.get_mut(&serial) {
-            *slot = named.clone();
-            table.by_name.insert(named, serial);
+        table.unbind_name(&moved, serial);
+        let remembered = match table.names.get_mut(&serial) {
+            Some(slot) => {
+                *slot = named.clone();
+                true
+            }
+            None => false,
+        };
+        if remembered {
+            table.bind_name(named, serial);
         }
     }
     pub(crate) fn forget(&self, serial: u64, count: u64) {
@@ -487,8 +565,7 @@ impl Kernel {
             let mut table = self.table();
             table.parents.remove(&serial);
             table.directory_stats.remove(&serial);
-            table.names.remove(&serial);
-            table.by_name.retain(|_, held| *held != serial);
+            table.unbind_serial(serial);
             table.used.remove(&serial);
             table.verifiers.retain(|_, entry| entry.1 != serial);
             let directories: Vec<u64> = table
@@ -776,58 +853,6 @@ impl Kernel {
             drop(wait(services.close_directory(self.mount, serial, handle)));
         }
     }
-    /// Gives back everything the synthetic kernel holds: descriptors first,
-    /// then lookup references. Run once, before the engine mount is revoked.
-    /// Retained mutation failures keep their custody and are only counted.
-    pub fn release(&self) -> Released {
-        let table = std::mem::take(&mut *self.table());
-        let companions = self.companions_release();
-        let released = self.holdings(&table, companions);
-        for (serial, held) in table.files {
-            self.close_file(serial, held.handle);
-        }
-        for (handle, (serial, _)) in table.directories {
-            self.close_directory(serial, handle);
-        }
-        for serial in table.lookups {
-            self.forget(serial, 1);
-        }
-        released
-    }
-    fn retained_count(&self) -> usize {
-        self.retained
-            .lock()
-            .unwrap_or_else(|poison| poison.into_inner())
-            .len()
-    }
-    /// Current holdings, for diagnostics.
-    pub fn held(&self) -> Released {
-        let table = self.table();
-        let companions = self.companions_held();
-        self.holdings(&table, companions)
-    }
-    /// What this export holds now, as [`Released`] reports it.
-    fn holdings(&self, table: &Table, companions: crate::apple_double::Holding) -> Released {
-        let count = |counter: &AtomicU64| counter.load(Ordering::Relaxed);
-        Released {
-            companions: companions.held,
-            companion_bytes: companions.resident_bytes,
-            companions_slotted: companions.slotted,
-            companions_decoded: companions.decoded,
-            companion_decoded_bytes: companions.decoded_bytes,
-            files: table.files.len(),
-            directories: table.directories.len(),
-            lookups: table.lookups.len(),
-            silly: table.silly.len(),
-            retained: self.retained_count(),
-            silly_renamed: count(&self.silly_renamed),
-            names_refused: count(&self.names_refused),
-            names_detached: count(&self.names_detached),
-            collected: count(&self.collected),
-            resolved: count(&self.resolved),
-            unresolved: count(&self.unresolved),
-        }
-    }
     /// Closes every implicit file descriptor that no silly name needs, so
     /// nothing the export opened is held across a Commit. Returns how many.
     pub fn close_files(&self) -> usize {
@@ -902,41 +927,6 @@ fn collectable(table: &mut Table, keep: usize) -> Vec<u64> {
         table.used.remove(serial);
     }
     candidates.into_iter().map(|(_, serial)| serial).collect()
-}
-/// What [`Kernel::release`] gave back.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct Released {
-    pub files: usize,
-    pub directories: usize,
-    pub lookups: usize,
-    /// Silly names whose inode was kept alive until release.
-    pub silly: usize,
-    /// Failed mutations still holding engine custody.
-    pub retained: usize,
-    /// Client silly renames served as unlinks, over the export's life.
-    pub silly_renamed: u64,
-    /// Creations refused for their AppleDouble name, over the export's life.
-    pub names_refused: u64,
-    /// AppleDouble companions held in the export's index (see
-    /// [`crate::apple_double`]), whole images included.
-    pub companions: usize,
-    /// Companion payload bytes currently resident in memory.
-    pub companion_bytes: usize,
-    /// Of the companions held, those taking a slot of the index bound: all but
-    /// the ones holding a whole image.
-    pub companions_slotted: usize,
-    /// Of the companions held, those kept decoded, and the bytes counted for
-    /// them.
-    pub companions_decoded: usize,
-    pub companion_decoded_bytes: usize,
-    /// AppleDouble companions created, over the export's life.
-    pub names_detached: u64,
-    /// References collected beyond the bound, over the export's life.
-    pub collected: u64,
-    /// SqliteHandles of collected serials resolved again by their name.
-    pub resolved: u64,
-    /// SqliteHandles of collected serials whose name no longer reaches them.
-    pub unresolved: u64,
 }
 fn oldest(entries: impl Iterator<Item = (u64, u64)>) -> Option<u64> {
     entries.min_by_key(|(_, tick)| *tick).map(|(key, _)| key)

@@ -464,7 +464,7 @@ impl Kernel {
     /// job itself retired skips the release jobs.
     fn finish_unlink(&self, parent: u64, name: &[u8], retire: Retire, detached: Option<ViewStat>) {
         self.companion_drop_for(parent, name);
-        self.table().by_name.remove(&(parent, name.to_vec()));
+        self.table().unbind_any(&(parent, name.to_vec()));
         let Some(target) = detached else {
             return;
         };
