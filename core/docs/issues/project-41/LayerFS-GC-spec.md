@@ -99,7 +99,7 @@
 |---|---|---|
 | N1 | Reachability closure + `catalog_incarnation` / `Verify{heads}` re-check before install | The only new mechanism |
 | N2 | transfer's `rewrite` step + `resolve` registration | The only new code |
-| N3 | Representation of logical deletion (`branch`/`layer_stack` have no visibility column) | Schema change, belongs to layerfs-project#42 |
+| N3 | Representation of logical deletion (`branch`/`layer_stack` have no visibility column) | Schema change, belongs to layerfs-project#42 — **decided 2026-11-13: an additive migration under the same schema identity (no version step), with 1.0 Stores converted offline** |
 | N4 | Reader-side session-level generation check + `lfq1` mismatch mapped to `StaleStore` | Small change that decides whether layerfs-project#50 is feasible |
 
 ---

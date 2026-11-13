@@ -28,13 +28,14 @@ Legend: 🔲 not started · ⏳ blocked on a decision · ✅ done
 
 ### layerfs-project#42 — Design finalization (§1.1, §1.2, §5, §6)
 
-- [ ] Every settled conclusion (§1.1, S1–S11) confirmed
-- [ ] Every open question (§1.2, Q1–Q6) answered; Q3 is out of this release;
+- [ ] Every settled conclusion (§1.1, S1–S11) confirmed  
+      — S11 already decided (exclusive → R1 = E); N3 decided as an additive migration with no version step
+- [x] Every open question (§1.2, Q1–Q6) answered or excluded; Q3 is out of this release; **S11 and Q6 are decided (2026-11-13): exclusive window → R1 = E with the unavailability measured under #52, and level 2 ships**; still open here: Q2 and the Q1/C3 confirmations;
       **Q6 is answered with §5.1 as one item** (see the next bullet)
 - [ ] **R1** signed (asked on [#50](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/50))
 - [ ] **Q1** signed (asked on [#44](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/44))
 - [ ] **C3** signed (asked on [#42](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/42))
-- [ ] **Q6 + §5.1 resolved together**: both levels are replacement copies on
+- [x] **Q6 + §5.1 resolved together (decided 2026-11-13 — level 2 ships)**: both levels are replacement copies on
       both backends (level 1 drops wholly dead packs, level 2 also repacks
       partially dead ones), so neither needs an in-place path; on PostgreSQL an
       in-place path (§5.1 reading (b)) exists only if the owner names one, which
