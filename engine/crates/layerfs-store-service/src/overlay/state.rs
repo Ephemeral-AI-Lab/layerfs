@@ -2,7 +2,7 @@
 use super::{backing::Backing, owner::OwnerError};
 use crate::{JobWork, OwnerWork, ServiceClass};
 use layerfs_overlay::{Overlay, OverlayError};
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::Instant;
 
@@ -29,6 +29,9 @@ pub struct Shared {
     /// queued maintenance runs. Outside the lock, so a hold lands while a
     /// drain loop keeps retaking it and stops that loop at its next step.
     pub held: AtomicU32,
+    /// Foreground jobs and reply attempts waiting for the lock: a drain loop
+    /// lets them in before its next step (`OwnerClient::maintain`).
+    pub waiting: AtomicU32,
 }
 impl Shared {
     pub fn new(namespace: i64) -> Self {
@@ -49,6 +52,7 @@ impl Shared {
             }),
             changed: Condvar::new(),
             held: AtomicU32::new(0),
+            waiting: AtomicU32::new(0),
         }
     }
 }
@@ -102,6 +106,20 @@ impl State {
             self.work.allocation_foreground.accumulate(work.allocation);
             self.work.payload_foreground.accumulate(work.payload);
         }
+    }
+}
+impl Shared {
+    /// Takes the lock as a foreground caller, counted in `waiting` while it
+    /// waits, so a running drain loop yields to it at its next step. The last
+    /// waiter in wakes the drain: it may go on to wait on `changed` itself (a
+    /// frontier or readiness wait) without the notification a job's end gives.
+    pub fn foreground<T>(&self, lock: impl FnOnce() -> T) -> T {
+        self.waiting.fetch_add(1, Ordering::AcqRel);
+        let locked = lock();
+        if self.waiting.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.changed.notify_all();
+        }
+        locked
     }
 }
 pub fn elapsed(start: Instant) -> u64 {

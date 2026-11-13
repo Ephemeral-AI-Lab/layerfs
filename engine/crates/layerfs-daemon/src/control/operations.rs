@@ -367,10 +367,10 @@ impl Service {
             binding.epoch = binding.epoch.saturating_add(1);
         }
     }
-    /// After a Commit's answer, drains on this thread the overlay
-    /// reclamation its releases left queued: one bounded step per hold of
-    /// the Workspace lock, so requests interleave with it and unmount stops
-    /// it. A Workspace no longer bound has nothing to drain here. A failed
+    /// After a Commit's answer, drains on the calling thread (the daemon
+    /// application's `layerfs-reclaim` thread) the overlay reclamation its
+    /// releases left queued: one bounded step per hold of the Workspace lock, yielding to
+    /// waiting jobs, so requests interleave with it and unmount stops it. A Workspace no longer bound has nothing to drain here. A failed
     /// step is retained as the maintenance failure that refuses new mounts.
     /// An unmount that leaves its Workspace bound calls it too (#679).
     pub fn reclaim_after_commit(&self, token: WorkspaceToken) {
