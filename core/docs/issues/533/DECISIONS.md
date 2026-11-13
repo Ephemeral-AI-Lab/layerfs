@@ -101,6 +101,29 @@ the image every step-19 cell ran in.
 - Not done for a release (HANDOFF, open items): publishing the image under
   a registry name pinned by digest, so the O16 fetch can get it.
 
+- **2026-11-12: the local image was removed and rebuilt, which changes its
+  digest.** A disk cleanup ran `docker image prune -a` on the OrbStack engine.
+  Nothing referenced this image (it has no container of its own), so the prune
+  removed it, and because it is local-only — the open item above — it could not
+  be pulled back. It was rebuilt from `dsh/tools/runtime/Dockerfile` with
+  `docker build -t layerfs-352-runtime:node24-https-apt-20261024 tools/runtime`.
+  The rebuilt image's config digest is
+  `sha256:9982446b2c13e5a32d5d51529008d1e22e5bebb120ff2f97f27fa6f6487d021f`,
+  so `sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e`
+  no longer names an existing local image. Contents check out against this
+  decision: Node v24.21.0, `cargo`/`rustc` 1.85.1 with `rustfmt` and `clippy`,
+  `/usr/include/sqlite3.h`, `/usr/sbin/poweroff`, Chromium and Selenium present;
+  the one drift is Chromium `156.0.8078.79` where the decision recorded
+  `156.0.8078.47`, because the rebuild takes the current Debian package. Image
+  size is 2.71 GB as before.
+- **Consequence:** anything that pinned `afa1ef9c…` — the sealed bundle's
+  `saved_from`, a launcher registration's `sandbox` image — must be re-pinned or
+  rebuilt, and a `sandbox-image.tar` sealed before this date no longer matches
+  the local image.
+- **Do not run `docker image prune -a` on a machine holding this image.** It is
+  unreferenced by design, so `-a` is exactly the flag that deletes it. Bare
+  `docker image prune` (dangling only) is safe.
+
 ## Consequences of the answers for the call count
 
 With O13, O14, O24 and O11 accepted, the surface is S's 54 calls with `fs`
