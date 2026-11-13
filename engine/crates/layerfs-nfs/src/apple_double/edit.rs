@@ -16,9 +16,7 @@
 //! each operation opens its file by path and closes it again.
 use super::{edited_len, record, Body, Companions, DECODED_ENTRY_BYTES, FILE_BYTES};
 use crate::{
-    apple_double_spill::{
-        create_spilled, io_status, spill_path, touch, unlink_paths, Edit, Room,
-    },
+    apple_double_spill::{create_spilled, io_status, spill_path, touch, unlink_paths, Edit, Room},
     attributes::Status,
     change::{Sattr, Tickets, Wcc},
     kernel::Kernel,
@@ -316,7 +314,9 @@ impl Kernel {
             (dir, bytes, size, file.used)
         };
         let temp = create_spilled(&dir, serial, &bytes, size as u64)?;
-        let adopted = self.companions().adopt_spilled(serial, Some(used), &temp, size);
+        let adopted = self
+            .companions()
+            .adopt_spilled(serial, Some(used), &temp, size);
         if matches!(adopted, Ok(true)) {
             return Ok(true);
         }
