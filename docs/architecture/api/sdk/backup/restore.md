@@ -78,6 +78,8 @@ layerfs backup restore <store> <bucket> [<file>] [--progress]
    checked; binding must match an existing Store's
  read the file's projects (own connection, closed)
  home lock (+ Store lock when replacing):
+   store/<name> checked again: it may have appeared or lost its
+     privacy during the download --> Unsupported, nothing installed
    new:      hard-link into store/<name>/store.sqlite, write record
    replace:  re-check binding and replaceable, rename over the file
  write the link; rebuild project records
@@ -104,7 +106,7 @@ See the [routing table](../../../control/routing/routing-table.md).
 | --- | --- | --- | --- |
 | `InvalidInput` | bad names; a PostgreSQL Store; a folder-scoped client | no | [`backup/restore.rs`](../../../../../control/crates/layerfs-store/src/backup/restore.rs) |
 | `NotFound` | no such bucket; the Store was removed during the download | no | same |
-| `Unsupported` | the Store's folder already exists and is not the daemon's private directory (not a real `0700` directory of this user on a local filesystem; `store.create`'s own refusal, with its `chmod 700` remedy), checked before anything is written; or the Store to replace is not on `native` | no | same |
+| `Unsupported` | the Store's folder already exists and is not the daemon's private directory (not a real `0700` directory of this user on a local filesystem; `store.create`'s own refusal, with its `chmod 700` remedy), checked before anything is written and again under the home lock before the install, so a folder that appeared or lost its privacy during the download is refused too; or the Store to replace is not on `native` | no | same |
 | `Busy` / `Unresolved` | an operation runs on the Store / an earlier one is unresolved | no | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) `unblocked` |
 | `InUse` | a process holds the Store, a Sandbox of it is recorded, or its `-wal`/`-shm` exists | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle`, `replaceable` |
 | `Conflict` | the Store changed since its last backup or restore through this bucket, has no link, or was replaced during the download | no | same |

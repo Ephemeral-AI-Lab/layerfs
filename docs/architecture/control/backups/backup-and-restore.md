@@ -124,13 +124,15 @@ push never overwrites a file this home did not move.
    v
    binding == existing Store's?  (else Failed)
    read its projects
-   home lock: re-check replaceable; hard link (new) or rename (replace)
+   home lock: the target's folder checked again (it may have appeared or
+      lost its privacy during the download); re-check replaceable; hard
+      link (new) or rename (replace)
    write the link and project records
 ```
 
 | # | Check | Refusal | Source |
 | --- | --- | --- | --- |
-| 0 | The Store's own folder, when it exists, is the daemon's private directory: a real `0700` directory of this user on a local filesystem, checked with `store.create`'s own guard and refused with its `Unsupported` code and `chmod 700` remedy. It runs before the staging folder, so a refused restore writes nothing and leaves the folder's mode alone; an absent folder is made `0700` by the install (row 1). | `Unsupported` | [`backup/restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs) |
+| 0 | The Store's own folder, when it exists, is the daemon's private directory: a real `0700` directory of this user on a local filesystem, checked with `store.create`'s own guard and refused with its `Unsupported` code and `chmod 700` remedy. It runs before the staging folder, so a refused restore writes nothing and leaves the folder's mode alone; an absent folder is made `0700` by the install (row 1). **It runs again under the home lock, after the download and before the install** (the restore's `install` step): the download is a long window in which `store/<name>` can appear or be changed to a non-private mode, and `home::private_dir` keeps an existing folder's mode, so the first check alone would admit a folder the daemon, `branch.fork` and `sandbox.create` then refuse. The staged Store is dropped with the staging folder either way. | `Unsupported` | [`backup/restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs) |
 | 1 | The installer is the daemons' user; the destination's directory is made `0700` when absent; the Store's file passes the kernel guard (a real `0700` directory of this user on a local filesystem), which refuses a missing, symlinked, another owner's or non-private directory. A refusal removes only a directory this call made: the guard's refusal, which happens before any Store file exists, removes this call's own directory with a non-recursive `remove_dir` and only while it is still empty; an installer-user or `mkdir` failure (including `AlreadyExists`, another caller's directory) removes nothing. | `PullFailure` cause | [`backup/restore.rs`](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
 | 2 | Load: no Store at the target. Pull: no `-wal` or `-shm` beside it (no opener holds it). | "a Store exists"; "the local Store … is open" | same |
 | 3 | The remote file exists and records `layerfs-binding`; a pull's expected binding matches. | "records no layerfs-binding; push it again"; "has another binding" | same |

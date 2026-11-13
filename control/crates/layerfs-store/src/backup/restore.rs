@@ -112,45 +112,15 @@ pub fn restore(
     let found = projects_in(&home, store, &record, &staged)?;
     shown.phase(events, "install");
     let _lock = home::lock::take(&home)?;
-    // a Store replaced here is checked and replaced under its lock, which
-    // the link below takes again
-    let store_lock = match &existing {
-        Some(_) => Some(crate::record::lock(&home, store)?),
-        None => None,
-    };
-    let destination = paths::store_file(&home, store);
-    let now = StoreRecord::read(&home, store)?;
-    match (&existing, now) {
-        (None, None) if !destination.exists() => {
-            home::private_dir(&paths::store_dir(&home, store))?;
-            // a link never replaces a Store that appeared meanwhile
-            std::fs::hard_link(&staged, &destination).map_err(failed)?;
-            record.write(&home)?;
-        }
-        (None, _) => {
-            return Err(refused(
-                "Exists",
-                format!("a Store named {store} was made while this restore downloaded"),
-            ));
-        }
-        (Some(_), None) => {
-            return Err(refused(
-                "NotFound",
-                format!("Store {store} was removed while this restore downloaded"),
-            ));
-        }
-        (Some(_), Some(now)) => {
-            if now.field("binding") != record.field("binding") {
-                return Err(refused(
-                    "Conflict",
-                    format!("Store {store} was replaced while this restore downloaded"),
-                ));
-            }
-            replaceable(&home, store, bucket, &now, related)?;
-            std::fs::rename(&staged, &destination).map_err(failed)?;
-        }
-    }
-    drop(store_lock);
+    install(
+        &home,
+        store,
+        bucket,
+        existing.as_ref(),
+        &record,
+        &staged,
+        related,
+    )?;
     write_link(
         &home,
         store,
@@ -173,6 +143,70 @@ pub fn restore(
         ("heads", loaded.heads.as_ref().map(hex).unwrap_or_default()),
         ("projects", projects),
     ]))
+}
+
+/// Installs the downloaded Store `staged` as `store` (under the home lock):
+/// a new Store where `existing` is `None`, else it replaces the Store that
+/// record names.
+///
+/// The target's folder is checked again first: the download is a long
+/// window, in which `store/<name>` can appear or lose its privacy after the
+/// restore's own first check, and `home::private_dir` keeps an existing
+/// folder's mode. This is `store.create`'s guard, its code and its remedy
+/// (#570 P1).
+pub fn install(
+    home: &Path,
+    store: &str,
+    bucket: &str,
+    existing: Option<&StoreRecord>,
+    record: &StoreRecord,
+    staged: &Path,
+    related: Related,
+) -> Result<()> {
+    if paths::store_dir(home, store).exists() {
+        layerfs_store_service::kernel_guard::check(&paths::store_file(home, store))
+            .map_err(|reason| refused("Unsupported", reason.0))?;
+    }
+    // a Store replaced here is checked and replaced under its lock, which
+    // the link below takes again
+    let store_lock = match &existing {
+        Some(_) => Some(crate::record::lock(home, store)?),
+        None => None,
+    };
+    let destination = paths::store_file(home, store);
+    let now = StoreRecord::read(home, store)?;
+    match (&existing, now) {
+        (None, None) if !destination.exists() => {
+            home::private_dir(&paths::store_dir(home, store))?;
+            // a link never replaces a Store that appeared meanwhile
+            std::fs::hard_link(staged, &destination).map_err(failed)?;
+            record.write(home)?;
+        }
+        (None, _) => {
+            return Err(refused(
+                "Exists",
+                format!("a Store named {store} was made while this restore downloaded"),
+            ));
+        }
+        (Some(_), None) => {
+            return Err(refused(
+                "NotFound",
+                format!("Store {store} was removed while this restore downloaded"),
+            ));
+        }
+        (Some(_), Some(now)) => {
+            if now.field("binding") != record.field("binding") {
+                return Err(refused(
+                    "Conflict",
+                    format!("Store {store} was replaced while this restore downloaded"),
+                ));
+            }
+            replaceable(home, store, bucket, &now, related)?;
+            std::fs::rename(staged, &destination).map_err(failed)?;
+        }
+    }
+    drop(store_lock);
+    Ok(())
 }
 
 /// A restore's own download folder, `store/.restore-<random>/` (hidden from
