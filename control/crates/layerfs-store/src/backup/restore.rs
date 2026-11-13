@@ -2,15 +2,15 @@
 use super::family::{hex, write_link};
 use super::progress::Shown;
 use super::record::{BucketRecord, StoreLink};
+use super::restored::{records, Found, Main, Restored};
+use crate::identity::{Identity, Kind};
 use crate::lease;
-use crate::project::record::ProjectRecord;
 use crate::record::{StoreKind, StoreRecord};
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
 use layerfs_bucket::backup as remote;
 use layerfs_bucket::bucket::pieces;
-use layerfs_history::{BranchSnapshot, HistoryName, NamedSnapshot};
+use layerfs_history::{HistoryName, NamedSnapshot};
 use layerfs_home::events::Events;
 use layerfs_home::home::flock::{try_lock, unlock};
 use layerfs_home::home::{self, paths};
@@ -30,7 +30,8 @@ pub type BackupRestore = super::create::BackupCreate;
 /// (`Conflict` otherwise; `InUse` while a process holds it or a Sandbox of
 /// its projects runs). The download, its checks and the read of its
 /// projects happen before the home lock; the lock covers the re-checks, the
-/// install and the record writes only.
+/// planning of each project's record, the install and the record writes
+/// only.
 pub fn restore(
     home: &Path,
     events: &mut Events<'_>,
@@ -103,8 +104,30 @@ pub fn restore(
         _ => StoreRecord::restored(store, &loaded.binding, &cursor),
     };
     let found = projects_in(&home, store, &record, &staged)?;
+    // the restored Store's own authority and the file it is installed as, as
+    // `project.init` records them; the staged file becomes the installed one
+    let restored = Restored {
+        identity: Identity {
+            kind: Kind::Sqlite,
+            binding: match &identity {
+                Some(identity) => identity.binding.clone(),
+                None => loaded.binding.clone(),
+            },
+            cursor_key: cursor,
+        },
+        file: staged.clone(),
+        sqlite: loaded
+            .sqlite
+            .clone()
+            .unwrap_or_else(|| found.sqlite.clone()),
+    };
+    // what each project's record becomes is decided under the home lock the
+    // record writes take, and before the install: a record that cannot be
+    // rebuilt refuses the restore with the Store not yet installed, rather
+    // than installing one and leaving a record short
     shown.phase(events, "install");
     let _lock = home::lock::take(&home)?;
+    let projects = records(&home, store, &restored, &found.projects)?;
     // a Store replaced here is checked and replaced under its lock, which
     // the link below takes again
     let store_lock = match &existing {
@@ -156,22 +179,7 @@ pub fn restore(
             loaded.heads.as_ref(),
         ),
     )?;
-    let Listing {
-        projects: held,
-        sqlite: opened,
-    } = found;
-    let restored = Restored {
-        binding: match &identity {
-            Some(identity) => identity.binding.clone(),
-            None => loaded.binding.clone(),
-        },
-        cursor_key: cursor,
-        // the Store file this home now holds, as a daemon opens it
-        bytes: std::fs::metadata(&destination).map_err(failed)?.len(),
-        // the version its push recorded; else the one that opens it here
-        sqlite: loaded.sqlite.clone().unwrap_or(opened),
-    };
-    let projects = write_projects(&home, store, &restored, &held)?;
+    let projects = projects.write(&home)?;
     Ok(SdkValue::map([
         ("store", SdkValue::text(store)),
         ("bucket", SdkValue::text(bucket)),
@@ -294,55 +302,6 @@ struct Listing {
     sqlite: String,
 }
 
-/// One project a restored Store holds.
-struct Found {
-    name: String,
-    /// Its stack, as a listing gives it.
-    stack: SdkValue,
-    /// Its `main` Branch, absent for a Store that holds no such Branch.
-    main: Option<Box<BranchSnapshot>>,
-}
-
-/// What a restored project's record is built from: the restored Store's
-/// own authority, file and SQLite version, which `project.init` also
-/// records when it writes the same record.
-struct Restored {
-    binding: Vec<u8>,
-    cursor_key: [u8; 32],
-    bytes: u64,
-    sqlite: String,
-}
-
-impl Found {
-    /// The record `project.init` writes for this project, from the restored
-    /// Store's own history: its `manifest` and the `installed` manifest a
-    /// Sandbox needs. `None` when the project has no `main` Branch to name.
-    fn rebuilt(&self, store: &str, restored: &Restored) -> Option<ProjectRecord> {
-        let main = self.main.as_ref()?;
-        let manifest = StoreManifest {
-            provider: ProviderKind::Sqlite,
-            locator: crate::project::init::LOCATOR.to_owned(),
-            profile: StoreProfile::Disposable,
-            binding: restored.binding.clone(),
-            cursor_key: restored.cursor_key,
-            stack: main.branch.stack.to_bytes(),
-            branch: main.branch.id.to_bytes(),
-            root: main.base_root.to_bytes(),
-            bytes: restored.bytes,
-            host_sqlite: restored.sqlite.clone(),
-            daemon_sqlite: None,
-        };
-        // as Init installs in place: the same file, so the same SQLite
-        let mut installed = manifest.clone();
-        installed.daemon_sqlite = Some(restored.sqlite.clone());
-        let fields = SdkValue::map([
-            ("manifest", SdkValue::Bytes(manifest.encode().ok()?)),
-            ("installed", SdkValue::Bytes(installed.encode().ok()?)),
-        ]);
-        Some(ProjectRecord::from_record(store, &self.name, fields))
-    }
-}
-
 /// [`Listing`] of the Store file `file`: read on a connection of this
 /// call's own that is closed before this returns.
 fn projects_in(home: &Path, store: &str, record: &StoreRecord, file: &Path) -> Result<Listing> {
@@ -363,7 +322,11 @@ fn projects_in(home: &Path, store: &str, record: &StoreRecord, file: &Path) -> R
                 let mut found = Vec::new();
                 for stack in layerfs_project::store::projects(history)? {
                     let snapshot = match history.branch_snapshot_named(&stack.name, &main)? {
-                        NamedSnapshot::Found(snapshot) => Some(snapshot),
+                        NamedSnapshot::Found(snapshot) => Some(Main {
+                            stack: snapshot.branch.stack,
+                            branch: snapshot.branch.id,
+                            root: snapshot.base_root.to_bytes(),
+                        }),
                         NamedSnapshot::NoStack | NamedSnapshot::NoBranch => None,
                     };
                     found.push(Found {
@@ -380,69 +343,4 @@ fn projects_in(home: &Path, store: &str, record: &StoreRecord, file: &Path) -> R
             sqlite: service.opened.sqlite_version.clone(),
         })
     })
-}
-
-/// True when `record` holds what `discovery::project` reads: a `manifest`
-/// and an `installed` manifest, each of which decodes.
-fn complete(record: &ProjectRecord) -> bool {
-    let decodes = |name: &str| match record.to_record().get(name) {
-        Some(SdkValue::Bytes(bytes)) => StoreManifest::decode(bytes).is_ok(),
-        _ => false,
-    };
-    decodes("manifest") && decodes("installed")
-}
-
-/// The project records of a restored Store, rebuilt from what it holds:
-/// one complete record per project (as `project.init` writes it), a record
-/// whose project the Store lacks removed, and an existing complete record
-/// kept as it is. Under the home lock, after [`replaceable`] found no
-/// Sandbox of the Store.
-fn write_projects(
-    home: &Path,
-    store: &str,
-    restored: &Restored,
-    found: &[Found],
-) -> Result<SdkValue> {
-    let mut names = Vec::new();
-    for project in found {
-        let existing = ProjectRecord::read(home, store, &project.name)?;
-        if !existing.as_ref().is_some_and(complete) {
-            write_project(home, store, restored, project, existing)?;
-        }
-        names.push(SdkValue::text(&project.name));
-    }
-    for old in paths::names(&paths::store_dir(home, store).join("project")).map_err(failed)? {
-        if !names.contains(&SdkValue::text(&old)) {
-            std::fs::remove_dir_all(paths::project_dir(home, store, &old)).map_err(failed)?;
-        }
-    }
-    Ok(SdkValue::List(names))
-}
-
-/// Writes one project's record: the complete one [`Found::rebuilt`] makes,
-/// keeping what an existing record already holds (`created`, the name and
-/// stack a listing gave it), or the listing's own when the Store's history
-/// gives no `main` Branch to name.
-fn write_project(
-    home: &Path,
-    store: &str,
-    restored: &Restored,
-    project: &Found,
-    existing: Option<ProjectRecord>,
-) -> Result<()> {
-    let Some(rebuilt) = project.rebuilt(store, restored) else {
-        return match existing {
-            Some(_) => Ok(()),
-            None => ProjectRecord::found(store, &project.name, project.stack.clone()).write(home),
-        };
-    };
-    let mut record = match existing {
-        Some(old) => old.with_fields_of(&rebuilt),
-        None => rebuilt,
-    };
-    // the record's own time: a restored project's is when it was restored
-    if record.created().is_none() {
-        record = record.created_now();
-    }
-    record.write(home)
 }

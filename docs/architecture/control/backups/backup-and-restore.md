@@ -121,8 +121,9 @@ push never overwrites a file this home did not move.
    v
    binding == existing Store's?  (else Failed)
    read its projects and each one's main Branch
+   plan each project's record (its manifests must encode)
    home lock: re-check replaceable; hard link (new) or rename (replace)
-   write the link; rebuild the project records
+   write the link; write the planned project records
 ```
 
 | # | Check | Refusal | Source |
@@ -137,9 +138,9 @@ push never overwrites a file this home did not move.
 
 One attempt: a failure keeps the temporary file it left and names it in
 `PullFailure::left`. The API runs the download and its checks before the
-home lock; the lock covers only the re-checks, the install and the record
-writes. Its staging folder `store/.restore-<random>/` is removed when the
-call ends.
+home lock; the lock covers only the re-checks, the planning of each
+project's record, the install and the record writes. Its staging folder
+`store/.restore-<random>/` is removed when the call ends.
 
 The restored Store's projects are read from it, and each one's record is
 rebuilt there: its `main` Branch and that Branch's base root supply
@@ -148,7 +149,10 @@ cursor key, file length and the SQLite version its push recorded
 (`layerfs-sqlite`; else the one that opens the copy here) — the record
 `project.init` writes. A record that already holds both manifests is kept
 unchanged, and one without them (a record an earlier restore of the same
-backup wrote) is completed, so a Sandbox of a restored project starts.
+backup wrote) is completed, so a Sandbox of a restored project starts. The
+records are planned before the install: a manifest that does not encode (a
+`layerfs-sqlite` version the manifest bounds refuse) fails the restore with
+nothing installed.
 
 ## Related
 

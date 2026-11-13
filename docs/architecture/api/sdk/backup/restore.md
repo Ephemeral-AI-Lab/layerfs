@@ -59,7 +59,7 @@ layerfs backup restore <store> <bucket> [<file>] [--progress]
 | `store`, `bucket`, `file` | text | what was restored, from where | [`backup/restore.rs`](../../../../../control/crates/layerfs-store/src/backup/restore.rs) |
 | `bytes`, `sha256` | int, text | the downloaded copy | `backup::load` |
 | `heads` | text or null | its heads digest | same |
-| `projects` | list of text | the projects the restored file holds; each record is rebuilt as `project.init` writes it (its `manifest` and `installed`), and records of projects it lacks are removed | same, `projects_in`, `write_projects` |
+| `projects` | list of text | the projects the restored file holds; each record is rebuilt as `project.init` writes it (its `manifest` and `installed`), and records of projects it lacks are removed | same, `projects_in`, [`backup/restored.rs`](../../../../../control/crates/layerfs-store/src/backup/restored.rs) `records` |
 
 ## Where it runs
 
@@ -75,10 +75,11 @@ layerfs backup restore <store> <bucket> [<file>] [--progress]
  download into it <------------------------------ pieces / manifest
    checked; binding must match an existing Store's
  read the file's projects and each one's main Branch (own connection, closed)
+ plan each project's record (its manifests must encode)
  home lock (+ Store lock when replacing):
    new:      hard-link into store/<name>/store.sqlite, write record
    replace:  re-check binding and replaceable, rename over the file
- write the link; rebuild project records
+ write the link; write the planned project records
  staging folder removed in every case
 ```
 
@@ -103,7 +104,10 @@ the record has none. A record that already holds both manifests is kept
 unchanged, so a restore over an existing Store leaves its records as they
 were; one without them (written by an earlier restore of the same backup)
 is completed. A project whose Store holds no `main` Branch has no manifest
-to rebuild, and keeps the name and stack its listing gives.
+to rebuild, and keeps the name and stack its listing gives. A rebuilt
+manifest that does not encode (a backup whose `layerfs-sqlite` version a
+manifest cannot hold) refuses the restore with the project and the field
+named, before the Store is installed, so no record is written without it.
 
 See the [routing table](../../../control/routing/routing-table.md).
 
@@ -118,15 +122,19 @@ See the [routing table](../../../control/routing/routing-table.md).
 | `InUse` | a process holds the Store, a Sandbox of it is recorded, or its `-wal`/`-shm` exists | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle`, `replaceable` |
 | `Conflict` | the Store changed since its last backup or restore through this bucket, has no link, or was replaced during the download | no | same |
 | `Exists` | a Store of that name was made during the download | no | same |
-| `Failed` | the download or its checks failed (including an uncertain read); the backup's binding is another Store's; the restored Store's projects or their history cannot be read; I/O | no | same |
+| `Failed` | the download or its checks failed (including an uncertain read); the backup's binding is another Store's; the restored Store's projects or their history cannot be read; a rebuilt manifest does not encode; I/O | no | same |
 
 A restore writes only after a complete, checked download, and the install
-is one link or rename under the home lock. No outcome is reported as
+is one link or rename under the home lock. Its project records are planned
+before the install (so a manifest that cannot be encoded refuses it with
+nothing installed) and written after the link. No outcome is reported as
 `Unknown`. A failure before the install leaves the old Store (or no Store)
-as it was; a failure after it (writing the link or the project records)
-leaves the restored file in place without its new link, so a second
-restore over it is refused `Conflict`; read [store.get](../store/get.md)
-before acting again.
+as it was; one at the install leaves the staging folder's file uninstalled.
+After the install, a failure writing the link leaves the restored file
+without a link, so a second restore over it is refused `Conflict`; a
+failure writing the records leaves the restored file and its link in place
+with the records already written, so a second restore of the same backup
+completes them; read [store.get](../store/get.md) before acting again.
 
 ## Examples
 
