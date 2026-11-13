@@ -118,15 +118,15 @@ readiness wait, not a retry ([`import/batch.rs`](../../../../engine/crates/layer
 ### Seal and install
 
 ```text
- SqliteHandles::seal                     install_file  -->  daemon
-   sole session (else Busy)                manifest      Request, Claim
-   take the writer lane (Linux and macOS)  <= 65,519 B   Transfer
-   wal_checkpoint(TRUNCATE) (busy -> Busy) per record
-   close; no -wal/-shm/-journal remains    "LFSF\x01"    Publish (rename)
-   release the writer lane                 Open, check binding
+ SqliteHandles::seal                        install_file  -->  daemon
+   sole session (else Busy)                 manifest      Request, Claim
+   take the writer lane (Linux and macOS)   <= 65,519 B   Transfer
+   wal_checkpoint(TRUNCATE) (busy -> Busy)  per record
+   close; no -wal/-shm/-journal remains     "LFSF\x01"    Publish (rename)
+   release the writer lane                  Open, check binding
    macOS: release unused allocation
-   --> SealedStore{path, profile, ..}      <-- Installed(manifest + daemon
-                                               SQLite version)
+   --> SealedStore{path, profile, ..}       <-- Installed(manifest + daemon
+                                                 SQLite version)
 ```
 
 | Rule | Source |
