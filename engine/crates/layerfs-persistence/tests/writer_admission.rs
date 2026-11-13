@@ -220,38 +220,76 @@ impl Children {
         self.0.push((what, child));
     }
     /// Waits for every child, `seconds` for the group as a whole; the 60 s
-    /// ceiling stays under the per-invocation test limit.
+    /// ceiling stays under the per-invocation test limit. Any child failure or
+    /// timeout stops the entire group (`kill` + `wait`) and attaches every
+    /// child's stderr to the failure panic.
     fn wait_all(mut self, seconds: u64) {
         let deadline = Instant::now() + Duration::from_secs(seconds);
+        let mut early_failure = false;
         let mut late = Vec::new();
-        for (what, child) in self.0.iter_mut() {
-            while child.try_wait().unwrap().is_none() {
-                if Instant::now() >= deadline {
-                    late.push(what.clone());
-                    break;
+        loop {
+            let mut any_running = false;
+            for (what, child) in self.0.iter_mut() {
+                match child.try_wait().unwrap() {
+                    Some(status) if !status.success() => {
+                        early_failure = true;
+                    }
+                    Some(_) => {}
+                    None => {
+                        any_running = true;
+                        if Instant::now() >= deadline {
+                            late.push(what.clone());
+                        }
+                    }
                 }
-                std::thread::sleep(Duration::from_millis(1));
             }
+            if early_failure || !late.is_empty() || !any_running {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
         }
-        if !late.is_empty() {
+        if early_failure || !late.is_empty() {
             self.stop();
         }
-        let mut failed = Vec::new();
-        for (what, child) in std::mem::take(&mut self.0) {
-            let output = child.wait_with_output().unwrap();
-            if !output.status.success() {
-                failed.push(format!(
-                    "{what}: {}\n{}",
-                    output.status,
-                    String::from_utf8_lossy(&output.stderr).trim_end()
-                ));
-            }
-        }
+        let details = self.collect_details();
         assert!(
             late.is_empty(),
-            "the group's deadline passed with {late:?} still running"
+            "the group's deadline passed with {late:?} still running\n{}",
+            details
+                .iter()
+                .map(|(line, _)| line.as_str())
+                .collect::<Vec<_>>()
+                .join("\n")
         );
-        assert!(failed.is_empty(), "opener failed:\n{}", failed.join("\n"));
+        assert!(
+            !early_failure && details.iter().all(|(_, ok)| *ok),
+            "opener failed:\n{}",
+            details
+                .into_iter()
+                .map(|(line, _)| line)
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
+    fn collect_details(&mut self) -> Vec<(String, bool)> {
+        let mut details = Vec::new();
+        for (what, child) in std::mem::take(&mut self.0) {
+            let output = child.wait_with_output().unwrap();
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let line = format!("{what}: {}\n{}", output.status, stderr.trim_end());
+            details.push((line, output.status.success()));
+        }
+        details
+    }
+    /// Stops every child and panics with `reason` plus each child's stderr.
+    fn abort(mut self, reason: impl std::fmt::Display) -> ! {
+        self.stop();
+        let details = self
+            .collect_details()
+            .into_iter()
+            .map(|(line, _)| line)
+            .collect::<Vec<_>>();
+        panic!("{reason}\n{}", details.join("\n"));
     }
     /// Stops every child of the group, exited or not.
     fn stop(&mut self) {
@@ -690,6 +728,8 @@ fn concurrent_open_child() {
         UnixStream::connect(std::env::var_os("LAYERFS_ADMISSION_OPEN_SOCK").unwrap()).unwrap();
     sock.set_read_timeout(Some(Duration::from_secs(30)))
         .unwrap();
+    sock.set_write_timeout(Some(Duration::from_secs(10)))
+        .unwrap();
     sock.write_all(b"R").unwrap();
     let mut go = [0u8; 1];
     sock.read_exact(&mut go).unwrap();
@@ -726,7 +766,7 @@ fn three_processes_open_and_reserve_concurrently() {
         children.push(format!("opener-{id}"), child);
     }
     let mut sockets = Vec::new();
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(10);
     while sockets.len() < 3 {
         match listener.accept() {
             Ok((mut stream, _)) => {
@@ -740,18 +780,24 @@ fn three_processes_open_and_reserve_concurrently() {
                     .set_write_timeout(Some(Duration::from_secs(10)))
                     .unwrap();
                 let mut ready = [0u8; 1];
-                stream.read_exact(&mut ready).unwrap();
-                assert_eq!(&ready, b"R");
+                if let Err(e) = stream.read_exact(&mut ready) {
+                    children.abort(format!("barrier read: {e}"));
+                }
+                if &ready != b"R" {
+                    children.abort(format!("unexpected barrier byte: {ready:?}"));
+                }
                 sockets.push(stream);
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline => {
                 std::thread::sleep(Duration::from_millis(1));
             }
-            Err(e) => panic!("barrier accept: {e}"),
+            Err(e) => children.abort(format!("barrier accept: {e}")),
         }
     }
     for mut stream in sockets {
-        stream.write_all(b"G").unwrap();
+        if let Err(e) = stream.write_all(b"G") {
+            children.abort(format!("barrier write: {e}"));
+        }
     }
     children.wait_all(60);
     let handles = open(&path);
