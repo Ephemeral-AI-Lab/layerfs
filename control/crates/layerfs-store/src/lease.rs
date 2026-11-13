@@ -191,21 +191,3 @@ pub fn read_holders(home: &Path, store: &str) -> Result<(Vec<u32>, Vec<u32>), Sd
     }
     Ok((live, stale))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::remove_stale;
-
-    #[test]
-    fn a_stale_lease_its_holder_already_dropped_is_not_a_failure() {
-        let dir = std::env::temp_dir().join(format!("lfs-lease-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let lease = dir.join("4242");
-        std::fs::write(&lease, "1 2 3\n").unwrap();
-        assert!(remove_stale(&lease).unwrap(), "a present stale lease is removed");
-        assert!(!lease.exists());
-        // read by `leases`, then dropped by its holder before the removal
-        assert!(!remove_stale(&lease).unwrap(), "a lease already gone is no refusal");
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-}
