@@ -208,7 +208,7 @@ CLI     layerfs workspace unmount <ws> [--discard] [--force]
 | Option | Effect |
 | --- | --- |
 | `discard` | drop uncommitted changes instead of refusing `Dirty` |
-| `force` | cancel each running command first (5000 ms grace), then one abort write ends the connection, also after a normal unmount stalled; uncommitted changes are dropped |
+| `force` | cancel each running command first (5000 ms grace), then one abort write ends the connection (also after a normal unmount stalled); on the native NFS route one forced client unmount takes its place and also finishes an entry kept at `Detach` when a normal unmount's helper failed or timed out while the client mount stayed; uncommitted changes are dropped |
 
 ```text
 normal: { kind: "Unmounted" }
@@ -218,8 +218,13 @@ either may add cleanup_error (daemon succeeded; a local record stayed)
 
 The machine writes `workspace/<id>.unmount` before it calls the daemon and
 records the outcome after, so a repeated unmount answers what the first one
-established without dialling again; a Workspace the daemon no longer knows
-answers `Unmounted`
+established without dialling again. The exception is a completed `Failed`
+record that was not itself forced: `force` may replace it with a forced
+attempt (the daemon's guard remains the real gate, and `Busy`, `Dirty`, or
+an unsent call restores the earlier record); an in-progress, `Unknown`,
+already-forced, or pre-`forced` record (no `forced` field) keeps its answer
+and is not forceable. A Workspace the daemon no longer knows answers
+`Unmounted`
 ([`unmount_guard.rs`](../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs)).
 
 | Error | When |
