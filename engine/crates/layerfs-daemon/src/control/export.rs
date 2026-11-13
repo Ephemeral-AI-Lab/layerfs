@@ -19,9 +19,14 @@
 //!   every reference and descriptor given back), revokes the engine mount
 //!   and runs the one logical Close. A step that is not established keeps
 //!   the export and its engine mount in the entry, as FUSE custody is kept.
-//! - ForceUnmount runs the forced helper once, then the same teardown.
+//!   A helper that failed or ran out of time is judged by the host's mount
+//!   table, never by the mount itself: only a mount Attach saw listed there
+//!   can be known gone (`export_helper::listed`).
+//! - ForceUnmount runs the forced helper once, then the same teardown. It is
+//!   also how an export kept at Detach for a mount still listed is finished.
+//!   A helper that outlives its KILL goes to the bounded retained queue.
 use super::{
-    export_helper::{mounted_under, Helpers, Ran},
+    export_helper::{listed, mounted_under, Helpers, Ran},
     kernel::{bounded, Kernel},
     registry::{bound_mut, idle},
     Failure, Service, Success,
@@ -141,8 +146,17 @@ pub struct ExportServingConfig {
     pub refuse_apple_double: bool,
     /// Lookup references one export keeps before collecting.
     pub lookups_held: usize,
+    /// How long one client helper may run before it is killed and reported
+    /// as unknown. Production value [`HELPER_WAIT`].
     pub helper_wait: std::time::Duration,
+    /// The post-KILL window in which the helper's own exit is still observed
+    /// synchronously; past it the child goes to the retained queue. Zero
+    /// skips the window, which bounded tests use to reach the retained path
+    /// at once. Production value [`REAP_WAIT`].
     pub reap_wait: std::time::Duration,
+    /// Test hook, `None` in production: a file read line by line in place of
+    /// the host's mount table, so a test states which mounts exist without
+    /// mounting anything.
     pub mount_table: Option<PathBuf>,
 }
 impl ExportServingConfig {
@@ -176,19 +190,25 @@ impl ExportServing {
     pub fn config(&self) -> &ExportServingConfig {
         &self.config
     }
+    /// Test and diagnostic accessor: the helper exits the bounded reaper has
+    /// observed since the daemon started (newest last, at most 64 kept).
+    /// Production code reports a retained child inside its own refusal text
+    /// instead; nothing in the daemon reads this.
     pub fn reaped_helpers(&self) -> Vec<(u32, String)> {
         self.helpers.reaped()
     }
     fn directory(&self, token: WorkspaceToken) -> PathBuf {
         self.config.mounts.join(token.namespace.to_string())
     }
+    /// Whether the host's table still lists this mount. The table comes from
+    /// the home the daemon owns, never from the mount itself: see [`listed`].
     fn is_mounted(&self, directory: &str) -> std::io::Result<bool> {
-        let target = std::path::Path::new(directory);
-        let real = target.canonicalize().ok();
         let points = mounted_under(&self.config.mounts, self.config.mount_table.as_deref())?;
-        Ok(points
-            .iter()
-            .any(|p| p == target || real.as_deref().is_some_and(|r| p == r)))
+        Ok(listed(
+            &points,
+            &self.config.mounts,
+            std::path::Path::new(directory),
+        ))
     }
     /// At startup, before any Attach: every mount the host still has at or
     /// under the mount home is one a daemon that ended without unmounting

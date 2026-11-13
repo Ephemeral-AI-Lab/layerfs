@@ -525,3 +525,107 @@ fn canonical_mount_paths_and_unreadable_table_preserve_detach_safety() {
         .expect("bounded test timed out");
     worker.join().unwrap();
 }
+
+/// The mount home is a symbolic link (macOS `/var`, `/tmp` are
+/// `/private/...`), so the host's table prints the resolved point. A still
+/// mounted Workspace must stay `Retained(Detach)` even when the mount
+/// directory itself cannot be resolved: that lookup would go through the
+/// mount, which is exactly what a wedged client makes fail.
+#[test]
+fn a_listed_canonical_mount_stays_retained_when_the_mount_point_does_not_resolve() {
+    let (send, receive) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let base = base("canon-listed");
+        drop(fs::remove_dir_all(&base));
+        fs::create_dir_all(base.join("src")).unwrap();
+        fs::create_dir_all(base.join("real_mounts")).unwrap();
+        let link_mounts = base.join("link_mounts");
+        std::os::unix::fs::symlink(base.join("real_mounts"), &link_mounts).unwrap();
+        fs::write(base.join("src/file"), b"fixture").unwrap();
+        let table = base.join("mount.table");
+        let rig = rig::Rig::new(
+            &base.join("src"),
+            &base.join("work"),
+            Duration::from_secs(5),
+        );
+        let mut config = ExportServingConfig::new(
+            link_mounts,
+            501,
+            20,
+            Mounter {
+                // The host prints the resolved path, as `mount` does on macOS.
+                mount: Helper(vec![
+                    "sh".into(),
+                    "-c".into(),
+                    format!("cd '{{dir}}' && pwd -P > {}", table.display()),
+                ]),
+                unmount: Helper(vec!["sh".into(), "-c".into(), "exit 1".into()]),
+                force: Helper::words("true").unwrap(),
+                flush: None,
+            },
+        );
+        config.mount_table = Some(table.clone());
+        let export = Arc::new(ExportServing::start(config));
+        let service = rig.service(export);
+        let token = match service
+            .execute_control(&Request::Mount {
+                workspace: WorkspaceId::from_authority([37; 32]).unwrap(),
+                branch: rig.branch,
+            })
+            .unwrap()
+            .reply
+        {
+            Reply::Bound { token, .. } => token,
+            other => panic!("{other:?}"),
+        };
+        let ready = match service
+            .execute_control(&Request::Attach(token))
+            .unwrap()
+            .reply
+        {
+            Reply::Ready(ready) => *ready,
+            other => panic!("{other:?}"),
+        };
+        let name = ready.directory.rsplit('/').next().unwrap().to_owned();
+        let canonical = base.canonicalize().unwrap().join("real_mounts").join(&name);
+        let listed = || fs::read_to_string(&table).unwrap().trim().to_owned();
+        assert_eq!(
+            listed(),
+            canonical.display().to_string(),
+            "the table lists the resolved point, never the configured home"
+        );
+
+        // The mount point stops resolving (a wedged mount answers EIO here).
+        fs::remove_dir(&ready.directory).unwrap();
+        std::os::unix::fs::symlink(base.join("gone"), &ready.directory).unwrap();
+
+        // The table still lists it, so the mount is not gone: keep custody.
+        let err = service
+            .execute_control(&Request::Unmount(UnmountControl {
+                token,
+                discard: true,
+            }))
+            .unwrap_err();
+        match &err {
+            Failure::Retained(custody) => {
+                assert_eq!(custody.stage, TeardownStage::Detach);
+                assert!(!custody.detached);
+            }
+            other => panic!("expected Retained, got {other:?}"),
+        }
+        assert_eq!(
+            listed(),
+            canonical.display().to_string(),
+            "an unresolved mount point must not be read as a removed mount"
+        );
+
+        drop(service);
+        drop(rig);
+        fs::remove_dir_all(base).unwrap();
+        let _ = send.send(());
+    });
+    receive
+        .recv_timeout(Duration::from_secs(10))
+        .expect("bounded test timed out");
+    worker.join().unwrap();
+}

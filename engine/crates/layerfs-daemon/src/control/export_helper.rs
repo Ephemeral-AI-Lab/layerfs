@@ -165,6 +165,23 @@ impl Helpers {
     }
 }
 
+/// Whether the host's table still lists `directory`: the path as configured,
+/// or the same name below the canonical mount home (`/var` and `/tmp` are
+/// `/private/var` and `/private/tmp` on macOS, which is what the table
+/// prints). Only the home is resolved. Resolving the mount directory itself
+/// would look the path up through the mount: against a wedged NFS client that
+/// lookup can block with no bound, and it fails (EIO, ETIMEDOUT) exactly while
+/// the mount is in trouble, which would read as "not mounted".
+pub(super) fn listed(points: &[PathBuf], home: &Path, directory: &Path) -> bool {
+    if points.iter().any(|point| point == directory) {
+        return true;
+    }
+    let (Some(name), Ok(real)) = (directory.file_name(), home.canonicalize()) else {
+        return false;
+    };
+    points.iter().any(|point| point == &real.join(name))
+}
+
 /// Mount points at or under `home`, deepest first, from `table` or the host's
 /// mount table (`mount` on macOS, `/proc/self/mountinfo` on Linux).
 pub(super) fn mounted_under(home: &Path, table: Option<&Path>) -> io::Result<Vec<PathBuf>> {
