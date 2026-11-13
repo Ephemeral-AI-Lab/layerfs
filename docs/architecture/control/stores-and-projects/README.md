@@ -100,7 +100,7 @@ refusal names the clearing call: a new `store push <s> <m>` or `store pull
 | The Store lock is taken after the home lock, never before, and never held across a worker call or byte transfer | [`record.rs`](../../../../control/crates/layerfs-store/src/record.rs) `lock` |
 | No call starts a machine: a worker not recorded or not answering is `Unavailable`, naming `layerfs machine start` | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
 | A guest never reads the home: the caller sends the Store's record with each call; the worker finds the file under its own root by name | [`call.rs`](../../../../control/crates/layerfs-store/src/call.rs), [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
-| Direct Store access only where every opener shares one kernel and a local filesystem: Linux ext4, xfs, btrfs; macOS apfs, hfs; else every Store call is `Unsupported` with its reason, no fallback | [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs), [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
+| Direct Store access only where the Store's own directory is a real `0700` directory owned by this user and every opener shares one kernel and a local filesystem: Linux ext4, xfs, btrfs; macOS apfs, hfs; else every Store call is `Unsupported` with its reason, no fallback | [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs), [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | One attempt per call; nothing is resent | [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs), [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
 | Store records are created with `profile: disposable` (Disposable/WAL/synchronous=OFF, the only permitted profile); Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [`record.rs`](../../../../control/crates/layerfs-store/src/record.rs) `created_on_native`, `restored` |
 
@@ -113,7 +113,7 @@ refusal names the clearing call: a new `store push <s> <m>` or `store pull
 | Store lock held | `Unavailable` after 120 s | [Home](../home/README.md#locks-and-leases) |
 | Leased or used by a Sandbox (push, pull, remove, disconnect, restore) | `InUse`, `detail.related` lists `{kind: "lease", name: <pid>}` and `{kind: "sandbox", name}` | [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle` |
 | Open-Store idle close | 60 s (`IDLE`); a Store with a call running is never closed (`close` refuses `InUse`) | [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs) |
-| Store kernel guard | `Unsupported`, naming the filesystem | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
+| Store kernel guard | `Unsupported`, naming the directory requirement (`0700` owned by this user, not missing/symlink) or filesystem | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | Store file missing | `NoStore` | [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs) |
 
 ## Demonstration

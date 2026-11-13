@@ -150,6 +150,11 @@ CLI     layerfs backup restore <store> <bucket> [<file>] [--progress]
 ```
 
 `file` defaults to the file the Store's link names, else the Store's name.
+If `store/<name>` already exists, it runs `store.create`'s kernel guard
+before staging anything and again under the home lock before the install
+(`backup::restore::install`), refusing `Unsupported` (with `chmod 700`) if
+the folder is not a real `0700` directory of this user on a local
+filesystem.
 Phases: `check`, `download` (bytes, pieces), `verify` (the bytes open as the
 Store), `install`. `projects` lists the projects the restored file holds;
 their records are rebuilt and records of projects it lacks are removed. It
@@ -162,7 +167,7 @@ is `Conflict`: read `store.get` first
 
 | Error | When |
 | --- | --- |
-| `Unsupported` | the Store to replace is not on `native` |
+| `Unsupported` | `store/<name>` already exists and is not the daemon's private `0700` directory (checked before staging and again under the home lock before the install); or the Store to replace is not on `native` |
 | `InUse` | a process holds the Store, a Sandbox of it is recorded, or its `-wal`/`-shm` exists |
 | `Conflict` | the Store changed since its last transfer through this bucket, has no link, or was replaced during the download |
 | `Exists` | a Store of that name was made during the download |
