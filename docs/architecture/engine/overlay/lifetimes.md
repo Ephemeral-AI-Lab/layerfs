@@ -112,8 +112,9 @@ job ends: maintenance_pending()      unlock, then OwnerClient::maintain()
   read under the lock ------yes----> on the same caller thread:
                                      loop: lock, db.maintain(cursor),
                                            record step, unlock
-                                     until a step returns None, fails
-                                     or the Workspace is stopping
+                                     until a step returns None, fails,
+                                     the Workspace is stopping or a
+                                     maintenance hold is live
 ```
 
 | Rule | Value or effect | Source |
@@ -125,6 +126,8 @@ job ends: maintenance_pending()      unlock, then OwnerClient::maintain()
 | Inline release | A job that drops an orphan's last reference may finish one step's page itself | [`maintenance/orphan.rs`](../../../../engine/crates/layerfs-overlay/src/maintenance/orphan.rs) |
 | Deferred jobs | A Commit's two releases (`release_captured_reader`, `release_operation_deferred`) and terminal `close` leave what they ready queued | [`lifetime_operations.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/lifetime_operations.rs) |
 | After a Commit's answer | The daemon's connection thread drains the same loop through `reclaim_after_commit` before reading the next call; otherwise the Workspace's next job drains it | [`connection.rs`](../../../../engine/crates/layerfs-daemon/src/application/connection.rs), [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
+| Terminal unmount (#679) | The daemon's `unmount` takes a maintenance hold for the whole call: a counter on `Shared` outside the lock, so it lands while a drain loop keeps retaking the lock. While any hold is live no step runs, so neither the end of a job, a reply attempt nor `reclaim_after_commit` drains, and close deletes the queue with the file. An unmount that leaves the Workspace bound (a refusal, or a failure before Close) drains the queue itself after dropping the hold | [`hold.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/hold.rs), [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs) `maintain`, [`unmount.rs`](../../../../engine/crates/layerfs-daemon/src/control/unmount.rs) |
+| A failed Commit's fold | `resolve_failed` sets `consolidating` and queues `FOLD`; until it runs, the active dirty counts are 0. The dirty check, like Commit's up-to-date check, counts `consolidating` as a change, and names no paths for it (`truncated`) | [`composition.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/composition.rs), [`dirty.rs`](../../../../engine/crates/layerfs-daemon/src/control/dirty.rs) |
 
 Deferring changes when reclamation runs, not what is queued: the overlay
 file holds the same rows at any point, and terminal close deletes whatever

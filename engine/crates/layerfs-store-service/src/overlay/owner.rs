@@ -464,7 +464,7 @@ impl OwnerClient {
         loop {
             let mut state = shared.state.lock().unwrap_or_else(|e| e.into_inner());
             if state.stopping
-                || state.held != 0
+                || shared.held.load(std::sync::atomic::Ordering::Acquire) != 0
                 || state.failure.is_some()
                 || state.maintenance_error.is_some()
             {

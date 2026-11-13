@@ -49,9 +49,9 @@ fn fixture(label: &str) -> Fixture {
     Fixture { sdk, service }
 }
 
-/// Mounts Workspace `id` on the lane, writes a new `SIZE`-byte file through
-/// the daemon's operation and commits it through control.
-fn committed(fixture: &Fixture, id: u8) -> WorkspaceToken {
+/// Mounts Workspace `id` on the lane and writes a new `SIZE`-byte file
+/// `/new<id>.bin` through the daemon's operation, without committing.
+fn written(fixture: &Fixture, id: u8) -> WorkspaceToken {
     let bound = fixture
         .service
         .execute_control(&Request::Mount {
@@ -108,6 +108,12 @@ fn committed(fixture: &Fixture, id: u8) -> WorkspaceToken {
             .release_base_source(route, source)
             .unwrap();
     }
+    token
+}
+
+/// `written`, then committed through control.
+fn committed(fixture: &Fixture, id: u8) -> WorkspaceToken {
+    let token = written(fixture, id);
     let done = fixture
         .service
         .execute_control(&Request::Commit(CommitControl {
@@ -188,5 +194,59 @@ fn a_released_hold_leaves_the_queue_to_the_next_job() {
         .unwrap();
     assert_eq!(closed.reply, Reply::Unmounted(token));
     drop(closed);
+    fixture.cleanup();
+}
+
+fn unmount(fixture: &Fixture, token: WorkspaceToken, discard: bool) -> Reply {
+    fixture
+        .service
+        .execute_control(&Request::Unmount(UnmountControl { token, discard }))
+        .unwrap()
+        .reply
+}
+
+/// A Commit that failed while an unmount held the Workspace leaves its capture
+/// folding back (`consolidating`) with the fold queued: the active counts are
+/// 0, yet the changes are there. The checked unmount refuses it, and the
+/// refusal drains the queue, so the fold does not wait for a later job.
+#[test]
+fn a_failed_commits_folding_capture_refuses_and_the_refusal_folds_it() {
+    let fixture = fixture("unmount-folding");
+    let token = written(&fixture, 83);
+    let operation = fixture.service.operation(token).unwrap();
+    let route = operation.workspace().route();
+    let roster = fixture.sdk.owner.client();
+    // The interleaving behind the review finding: another unmount's hold is
+    // live while the failed Commit resolves its capture.
+    let other = roster.hold_maintenance(route).unwrap();
+    let capture = operation.overlay().capture(route).unwrap();
+    operation.overlay().resolve_failed(route, capture).unwrap();
+    let state = operation.overlay().state(route).unwrap();
+    assert!(state.consolidating.is_some(), "{state:?}");
+    assert_eq!((state.dirty_inodes, state.dirty_directory_entries), (0, 0));
+    let Reply::Dirty(report) = unmount(&fixture, token, false) else {
+        panic!("a folding capture was closed as clean");
+    };
+    assert!(report.truncated, "{report:?}");
+    drop(other);
+    // Still folding: the refused unmount held it. Its refusal drains the
+    // queue once its own hold is gone.
+    let before = fixture.maintenance();
+    assert!(matches!(unmount(&fixture, token, false), Reply::Dirty(_)));
+    assert!(
+        fixture.maintenance().0 > before.0,
+        "the refusal ran no step"
+    );
+    let state = operation.overlay().state(route).unwrap();
+    assert!(state.consolidating.is_none(), "{state:?}");
+    assert!(state.dirty_inodes > 0, "{state:?}");
+    // Folded: the report names the path again.
+    let Reply::Dirty(report) = unmount(&fixture, token, false) else {
+        panic!("the folded change was closed as clean");
+    };
+    assert_eq!(report.paths, vec!["/new83.bin".to_owned()]);
+    assert!(!report.truncated, "{report:?}");
+    drop(operation);
+    assert_eq!(unmount(&fixture, token, true), Reply::Unmounted(token));
     fixture.cleanup();
 }

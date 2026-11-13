@@ -4,13 +4,15 @@
 //! overlay file, which terminal close deletes as a whole. While a hold is
 //! taken, no job of the Workspace drains that queue at its end, a reply
 //! attempt does not either, and `reclaim` runs no further step: the unmount
-//! pays only for its own work. Dropping the hold changes nothing else; when
-//! the unmount was refused, the next job drains the queue as before.
+//! pays only for its own work. Dropping the hold runs nothing; an unmount
+//! that leaves its Workspace bound (a refusal) drains the queue itself after
+//! dropping it (`layerfs-daemon` `control/unmount.rs`).
 use super::state::Shared;
 use crate::{OwnerClient, OwnerError};
 use layerfs_overlay::OverlayError;
 use layerfs_workspace::Route;
-use std::sync::Weak;
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, Weak};
 
 /// Held while it lives. It keeps no connection alive: a Workspace retired
 /// meanwhile is released as it would be without it.
@@ -29,18 +31,18 @@ impl OwnerClient {
         if shared.route.get() != Some(&route) {
             return Err(OwnerError::Overlay(OverlayError::Stale));
         }
-        let mut state = shared.state.lock().map_err(|_| OwnerError::Stopped)?;
-        state.held = state.held.saturating_add(1);
+        // No lock: a drain loop retakes the Workspace lock step after step,
+        // and the hold must land while it runs.
+        shared.held.fetch_add(1, Ordering::AcqRel);
         Ok(MaintenanceHold {
-            shared: std::sync::Arc::downgrade(shared),
+            shared: Arc::downgrade(shared),
         })
     }
 }
 impl Drop for MaintenanceHold {
     fn drop(&mut self) {
         if let Some(shared) = self.shared.upgrade() {
-            let mut state = shared.state.lock().unwrap_or_else(|e| e.into_inner());
-            state.held = state.held.saturating_sub(1);
+            shared.held.fetch_sub(1, Ordering::AcqRel);
         }
     }
 }

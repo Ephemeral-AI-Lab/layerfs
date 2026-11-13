@@ -372,6 +372,7 @@ impl Service {
     /// the Workspace lock, so requests interleave with it and unmount stops
     /// it. A Workspace no longer bound has nothing to drain here. A failed
     /// step is retained as the maintenance failure that refuses new mounts.
+    /// An unmount that leaves its Workspace bound calls it too (#679).
     pub fn reclaim_after_commit(&self, token: WorkspaceToken) {
         let workspace = match self.entries.lock() {
             Ok(entries) => match super::registry::bound(&entries, token) {

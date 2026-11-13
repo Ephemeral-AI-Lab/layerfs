@@ -2,6 +2,7 @@
 use super::{backing::Backing, owner::OwnerError};
 use crate::{JobWork, OwnerWork, ServiceClass};
 use layerfs_overlay::{Overlay, OverlayError};
+use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::Instant;
 
@@ -18,15 +19,16 @@ pub struct State {
     /// waiting for earlier base sources: their frontiers stay finite.
     pub captures_waiting: u32,
     pub installs_waiting: u32,
-    /// Live maintenance holds (`hold.rs`): while any is taken, no step of
-    /// queued maintenance runs.
-    pub held: u32,
 }
 pub struct Shared {
     pub namespace: i64,
     pub route: OnceLock<layerfs_workspace::Route>,
     pub state: Mutex<State>,
     pub changed: Condvar,
+    /// Live maintenance holds (`hold.rs`): while any is taken, no step of
+    /// queued maintenance runs. Outside the lock, so a hold lands while a
+    /// drain loop keeps retaking it and stops that loop at its next step.
+    pub held: AtomicU32,
 }
 impl Shared {
     pub fn new(namespace: i64) -> Self {
@@ -44,9 +46,9 @@ impl Shared {
                 backing: None,
                 captures_waiting: 0,
                 installs_waiting: 0,
-                held: 0,
             }),
             changed: Condvar::new(),
+            held: AtomicU32::new(0),
         }
     }
 }
