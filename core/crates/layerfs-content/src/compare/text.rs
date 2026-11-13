@@ -158,6 +158,53 @@ fn unique_anchors(x: &[&str], y: &[&str]) -> Vec<(usize, usize)> {
     run
 }
 
+/// Whether [`diff_lines`] falls back to a removed-then-added block anywhere:
+/// `false` only when every line match is a true LCS or a unique-anchor match
+/// whose gaps all resolve within the shared budget. Store-side blame and diff
+/// coverage disclose this as `comparisonCoarse` without running the diff twice.
+pub fn diff_exact(x: &[&str], y: &[&str]) -> bool {
+    if cells(x.len(), y.len()) <= MAXIMUM_DIFF_CELLS {
+        return true;
+    }
+    let mut budget = MAXIMUM_DIFF_CELLS;
+    trimmed_exact(x, y, &mut budget, true)
+}
+
+/// The exactness of [`trimmed_diff`]'s decision, without building the diff.
+fn trimmed_exact(x: &[&str], y: &[&str], budget: &mut usize, anchor: bool) -> bool {
+    let prefix = x.iter().zip(y).take_while(|(a, b)| a == b).count();
+    let suffix = x[prefix..]
+        .iter()
+        .rev()
+        .zip(y[prefix..].iter().rev())
+        .take_while(|(a, b)| a == b)
+        .count();
+    let (mx, my) = (&x[prefix..x.len() - suffix], &y[prefix..y.len() - suffix]);
+    let both = !mx.is_empty() && !my.is_empty();
+    let need = cells(mx.len(), my.len());
+    if both && need <= *budget {
+        *budget -= need;
+        return true;
+    }
+    if both && anchor {
+        anchored_exact(mx, my, budget)
+    } else {
+        !both
+    }
+}
+
+/// The exactness of [`anchored_diff`]'s gaps, sharing one table budget.
+fn anchored_exact(x: &[&str], y: &[&str], budget: &mut usize) -> bool {
+    let (mut i, mut j) = (0, 0);
+    for (ai, aj) in unique_anchors(x, y).into_iter().chain([(x.len(), y.len())]) {
+        if !trimmed_exact(&x[i..ai], &y[j..aj], budget, false) {
+            return false;
+        }
+        (i, j) = (ai + 1, aj + 1);
+    }
+    true
+}
+
 /// The simulator's longest-common-subsequence walk, line for line.
 fn table_diff(x: &[&str], y: &[&str]) -> Vec<DiffLine> {
     let (m, n) = (x.len(), y.len());

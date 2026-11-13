@@ -4,13 +4,13 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The `layerfs` command, the Node addon and the Python module: one call each, over the call table.
+The `layerfs` command, the Node addon, the Python module and the MCP server: one call each, over the call table.
 
 | | |
 | --- | --- |
 | Layer | [API](../README.md) |
 | Crates | `layerfs-cli`, `layerfs-node`, `layerfs-python` |
-| Source | [`api/crates/layerfs-cli/src`](../../../../api/crates/layerfs-cli/src), [`api/crates/layerfs-node/src`](../../../../api/crates/layerfs-node/src), [`api/crates/layerfs-python/src`](../../../../api/crates/layerfs-python/src), [`api/node`](../../../../api/node), [`api/python`](../../../../api/python) |
+| Source | [`api/crates/layerfs-cli/src`](../../../../api/crates/layerfs-cli/src), [`api/crates/layerfs-node/src`](../../../../api/crates/layerfs-node/src), [`api/crates/layerfs-python/src`](../../../../api/crates/layerfs-python/src), [`api/node`](../../../../api/node), [`api/python`](../../../../api/python), [`api/mcp`](../../../../api/mcp) |
 | Uses | [Call table](../call-table/README.md) |
 | Used by | — |
 | Flows | [A call, end to end](../../flows/call.md) |
@@ -22,6 +22,7 @@ The `layerfs` command, the Node addon and the Python module: one call each, over
 | [CLI](cli.md) | The `layerfs` command. |
 | [Node](node.md) | The Node package and its native addon. |
 | [Python](python.md) | The Python package through PyO3. |
+| [MCP](mcp.md) | The private `@layerfs/mcp` stdio server: one generated tool per call, `work` and `admin` profiles. |
 
 ## The picture
 

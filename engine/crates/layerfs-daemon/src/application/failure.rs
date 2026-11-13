@@ -41,6 +41,8 @@ pub enum ApplicationError {
     RetainedControl(Box<Served>),
     /// Original install result retained after application publication synchronization failed.
     InstallPublication(Box<Result<InstalledStore, Box<InstallFailure>>>),
+    /// A connection worker panicked or was dropped before it could finish.
+    Worker(String),
     /// Actual application state synchronization failed; ownership remains held.
     Poisoned,
 }
@@ -62,6 +64,7 @@ impl fmt::Display for ApplicationError {
             Self::InstallPublication(_) => {
                 f.write_str("original install result retained; application publication poisoned")
             }
+            Self::Worker(message) => write!(f, "connection worker: {message}"),
             Self::Poisoned => f.write_str("application state poisoned; original custody retained"),
         }
     }
@@ -69,7 +72,8 @@ impl fmt::Display for ApplicationError {
 impl std::error::Error for ApplicationError {}
 /// Original failed connection admission/dispatch result and input custody.
 pub struct ConnectionFailure {
-    /// Exact admitted slot identity; never recycled while this custody remains.
+    /// Exact admitted slot identity at the failure; the slot is released once
+    /// this result is recorded, so a later connection may occupy it.
     pub slot: usize,
     /// Original malformed metadata bytes only; successful requests own decoded fields.
     pub received: Option<Vec<u8>>,

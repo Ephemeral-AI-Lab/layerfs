@@ -35,7 +35,7 @@ else:
     # Load the real aio module with private import stubs, without pretending a
     # native binding is available or exercising native calls against a mock.
     layerfs = None
-    families = ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup"]
+    families = ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs"]
     package = types.ModuleType("_layerfs_aio_unit")
     package.__path__ = []
     dependencies = {
@@ -316,12 +316,31 @@ class Calls(unittest.TestCase):
             self.assertEqual(from_shell["status"], 0, f"{name}: {from_shell.get('refused')}")
             self.assertEqual(from_shell["value"], from_python["value"], name)
 
+    def test_the_call_log_names_python_and_takes_log_tag(self):
+        home = temp("logs")
+        lfs = layerfs.client(home=home)
+        lfs.store.create("shop")
+        lfs.store.list(log_tag="dsh:s1:r1")
+        with self.assertRaises(layerfs.LayerFSError):
+            lfs.store.get("nope", log_tag="dsh:s1:r2")
+        page = lfs.logs.list(tag="dsh:s1:")
+        self.assertFalse(page["has_more"])
+        self.assertEqual(
+            [(line["client"], line["argv"], line["outcome"], line["tag"]) for line in page["lines"]],
+            [
+                ("python", ["store", "get", "nope"], "NotFound", "dsh:s1:r2"),
+                ("python", ["store", "list"], "ok", "dsh:s1:r1"),
+            ],
+        )
+        self.assertEqual(lfs.logs.reset(), {"kind": "Reset", "removed": 3})
+        shutil.rmtree(home)
+
     def test_the_table(self):
         self.assertEqual(
             layerfs.FAMILIES,
-            ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup"],
+            ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs"],
         )
-        self.assertEqual(len(layerfs.TABLE), 64)
+        self.assertEqual(len(layerfs.TABLE), 70)
         for spec in layerfs.TABLE:
             self.assertTrue(callable(getattr(getattr(layerfs, spec["family"]), spec["call"])))
         with self.assertRaises(layerfs.LayerFSError) as caught:
@@ -333,6 +352,9 @@ class Calls(unittest.TestCase):
         home = temp("refused")
         lfs = layerfs.client(home=home)
         for spec in layerfs.TABLE:
+            # the shell's reset already cleared what the Python one would count
+            if f"{spec['family']}.{spec['call']}" == "logs.reset":
+                continue
             args = [a for a in spec["args"] if not a["optional"]]
             positionals = [REFUSING[a["kind"]] for a in args]
             words, data = [spec["family"], spec["call"]], b""

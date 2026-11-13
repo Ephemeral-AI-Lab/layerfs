@@ -16,12 +16,29 @@ class ProjectFamily:
         *,
         timeout: int | None = None,
         on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
     ) -> Result:
         """import a host folder as a new project into an existing Store"""
-    def list(self, store: str | None = None, *, page_size: int | None = None, page_pos: int | None = None) -> Result:
+    def list(
+        self,
+        store: str | None = None,
+        *,
+        page_size: int | None = None,
+        page_pos: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """every project in the home, or one Store's"""
-    def get(self, project: str) -> Result:
+    def get(self, project: str, *, log_tag: str | None = None) -> Result:
         """a project's record: its Store, kind and machine"""
+    def stats(
+        self,
+        project: str,
+        branch: str | None = None,
+        commit: str | None = None,
+        *,
+        log_tag: str | None = None,
+    ) -> Result:
+        """entry counts of one pinned saved tree"""
     def export(
         self,
         project: str,
@@ -29,9 +46,10 @@ class ProjectFamily:
         *,
         branch: str | None = None,
         on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
     ) -> Result:
         """export a project's snapshot from its Store to a local folder"""
-    def remove(self, project: str) -> Result:
+    def remove(self, project: str, *, log_tag: str | None = None) -> Result:
         """remove one project from its Store"""
 
 class BranchFamily:
@@ -42,9 +60,10 @@ class BranchFamily:
         page_size: int | None = None,
         page_pos: int | None = None,
         page: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """a project's Branches"""
-    def get(self, project: str, branch: str) -> Result:
+    def get(self, project: str, branch: str, *, log_tag: str | None = None) -> Result:
         """one Branch and its head Commit"""
     def commits(
         self,
@@ -54,11 +73,21 @@ class BranchFamily:
         page: int | None = None,
         page_size: int | None = None,
         at_commit: str | None = None,
+        include_storage: bool | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """saved branch commits or main publications, newest first"""
-    def get_commit(self, project: str, branch: str, commit: str) -> Result:
+    def get_commit(self, project: str, branch: str, commit: str, *, log_tag: str | None = None) -> Result:
         """one saved Commit or main publication"""
-    def fork(self, project: str, name: str, from_branch: str, from_commit: str | None = None) -> Result:
+    def fork(
+        self,
+        project: str,
+        name: str,
+        from_branch: str,
+        from_commit: str | None = None,
+        *,
+        log_tag: str | None = None,
+    ) -> Result:
         """a new Branch from another Branch's head or Commit"""
     def merge(
         self,
@@ -69,9 +98,10 @@ class BranchFamily:
         *,
         message: str | None = None,
         units: JSON | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """merge two Branches into a new one"""
-    def publish(self, project: str, branch: str, commit: str | None = None) -> Result:
+    def publish(self, project: str, branch: str, commit: str | None = None, *, log_tag: str | None = None) -> Result:
         """a Branch's head or Commit as main's next Layer"""
     def diff(
         self,
@@ -88,13 +118,23 @@ class BranchFamily:
         to_commit: str | None = None,
         path_prefix: str | None = None,
         include_attribution: bool | None = None,
+        continuation: str | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """files that differ between two Branches' heads"""
 
 class CommitFamily:
-    def list(self, project: str, branch: str, *, page_size: int | None = None, page_pos: int | None = None) -> Result:
+    def list(
+        self,
+        project: str,
+        branch: str,
+        *,
+        page_size: int | None = None,
+        page_pos: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """a Branch's Commits, newest first"""
-    def get(self, project: str, branch: str, commit: str) -> Result:
+    def get(self, project: str, branch: str, commit: str, *, log_tag: str | None = None) -> Result:
         """one Commit of a Branch"""
     def diff(
         self,
@@ -106,6 +146,7 @@ class CommitFamily:
         page_size: int | None = None,
         page_pos: int | None = None,
         cursor: str | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """files that differ between two Commits"""
 
@@ -119,9 +160,18 @@ class FileFamily:
         *,
         start_line: int | None = None,
         end_line: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """read a file"""
-    def stat(self, project: str, branch: str, path: str, commit: str | None = None) -> Result:
+    def stat(
+        self,
+        project: str,
+        branch: str,
+        path: str,
+        commit: str | None = None,
+        *,
+        log_tag: str | None = None,
+    ) -> Result:
         """a path's kind, size and mode"""
     def list(
         self,
@@ -133,6 +183,7 @@ class FileFamily:
         page_size: int | None = None,
         page: int | None = None,
         page_pos: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """a folder's entries"""
     def glob(
@@ -146,6 +197,7 @@ class FileFamily:
         page_size: int | None = None,
         page: int | None = None,
         page_pos: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """paths under `path` matching a glob"""
     def grep(
@@ -159,6 +211,7 @@ class FileFamily:
         page_size: int | None = None,
         page: int | None = None,
         page_pos: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """lines under `path` matching a regular expression"""
     def revision(
@@ -171,6 +224,8 @@ class FileFamily:
         traversal: str | None = None,
         page: int | None = None,
         page_size: int | None = None,
+        continuation: str | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """saved changes to a literal path"""
     def blame(
@@ -182,6 +237,7 @@ class FileFamily:
         *,
         from_line: int | None = None,
         line_count: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """the Commit of each line"""
     def diff(
@@ -198,6 +254,7 @@ class FileFamily:
         allow_missing: bool | None = None,
         page: int | None = None,
         page_size: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """the difference between two files"""
     def write(
@@ -209,6 +266,7 @@ class FileFamily:
         *,
         message: str | None = None,
         mode: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """write a file; one Commit"""
     def edit(
@@ -220,9 +278,18 @@ class FileFamily:
         old: str | None = None,
         new: str | None = None,
         message: str | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """replace one unique text in a file; one Commit"""
-    def rm(self, project: str, branch: str, path: str, *, message: str | None = None) -> Result:
+    def rm(
+        self,
+        project: str,
+        branch: str,
+        path: str,
+        *,
+        message: str | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """remove a path; one Commit"""
     def mkdir(
         self,
@@ -232,27 +299,76 @@ class FileFamily:
         *,
         message: str | None = None,
         mode: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """make a folder; one Commit"""
-    def mv(self, project: str, branch: str, from_path: str, to_path: str, *, message: str | None = None) -> Result:
+    def mv(
+        self,
+        project: str,
+        branch: str,
+        from_path: str,
+        to_path: str,
+        *,
+        message: str | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """move a path; one Commit"""
-    def cp(self, project: str, branch: str, from_path: str, to_path: str, *, message: str | None = None) -> Result:
+    def cp(
+        self,
+        project: str,
+        branch: str,
+        from_path: str,
+        to_path: str,
+        *,
+        message: str | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """copy a path; one Commit"""
-    def apply(self, project: str, branch: str, changes: JSON, *, message: str | None = None) -> Result:
+    def apply(
+        self,
+        project: str,
+        branch: str,
+        changes: JSON,
+        *,
+        message: str | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """apply a list of changes; one Commit"""
 
 class SandboxFamily:
-    def create(self, project: str, name: str, machine: str | None = None, *, image: str | None = None) -> Result:
+    def create(
+        self,
+        project: str,
+        name: str,
+        machine: str | None = None,
+        *,
+        image: str | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """start a named Sandbox of a project on a machine (default: its sqlite Store's, or native)"""
-    def list(self, project: str | None = None, *, page_size: int | None = None, page_pos: int | None = None) -> Result:
+    def list(
+        self,
+        project: str | None = None,
+        *,
+        page_size: int | None = None,
+        page_pos: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """every Sandbox in the home, or one project's"""
-    def get(self, name: str, *, page_size: int | None = None, page_pos: int | None = None) -> Result:
+    def get(
+        self,
+        name: str,
+        *,
+        page_size: int | None = None,
+        page_pos: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """a Sandbox and its Workspaces"""
-    def close(self, name: str, *, force: bool | None = None) -> Result:
+    def close(self, name: str, *, force: bool | None = None, log_tag: str | None = None) -> Result:
         """stop a Sandbox"""
 
 class WorkspaceFamily:
-    def mount(self, sandbox: str, branch: str, *, name: str | None = None) -> Result:
+    def mount(self, sandbox: str, branch: str, *, name: str | None = None, log_tag: str | None = None) -> Result:
         """mount a Branch in a Sandbox"""
     def exec(
         self,
@@ -265,29 +381,50 @@ class WorkspaceFamily:
         stderr: Callable[[Output], object] = ...,
         exec_id: str | None = None,
         on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
     ) -> Result:
         """run one bash command in a Workspace"""
-    def exec_cancel(self, ws: str, exec_id: str, *, grace_ms: int | None = None) -> Result:
+    def exec_cancel(self, ws: str, exec_id: str, *, grace_ms: int | None = None, log_tag: str | None = None) -> Result:
         """end a running command: SIGTERM, then SIGKILL after grace_ms"""
-    def commit(self, ws: str, *, message: str | None = None, force: bool | None = None) -> Result:
+    def commit(
+        self,
+        ws: str,
+        *,
+        message: str | None = None,
+        force: bool | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """commit a Workspace's changes to its Branch"""
-    def unmount(self, ws: str, *, discard: bool | None = None, force: bool | None = None) -> Result:
+    def unmount(
+        self,
+        ws: str,
+        *,
+        discard: bool | None = None,
+        force: bool | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """end a Workspace"""
-    def status(self, ws: str) -> Result:
+    def status(self, ws: str, *, log_tag: str | None = None) -> Result:
         """a Workspace's changes since its base"""
 
 class MachineFamily:
-    def list(self) -> Result:
+    def list(self, *, log_tag: str | None = None) -> Result:
         """every machine, with what it supports"""
-    def platforms(self) -> Result:
+    def platforms(self, *, log_tag: str | None = None) -> Result:
         """the platforms this host and build support, and what each is missing"""
-    def get(self, name: str) -> Result:
+    def get(self, name: str, *, log_tag: str | None = None) -> Result:
         """a machine's record"""
-    def status(self, name: str) -> Result:
+    def status(self, name: str, *, log_tag: str | None = None) -> Result:
         """a machine's live state, free disk and tool version"""
-    def start(self, name: str) -> Result:
+    def start(
+        self,
+        name: str,
+        *,
+        on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
+    ) -> Result:
         """start a stopped machine and its worker; a running one answers at once"""
-    def stop(self, name: str) -> Result:
+    def stop(self, name: str, *, log_tag: str | None = None) -> Result:
         """stop a machine's worker and VM; its disks stay"""
     def create(
         self,
@@ -298,9 +435,12 @@ class MachineFamily:
         memory: Size | None = None,
         disk: Size | None = None,
         image: str | None = None,
+        os_image: str | None = None,
+        on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
     ) -> Result:
         """create an enabled VM machine (apple-container, lima)"""
-    def remove(self, name: str) -> Result:
+    def remove(self, name: str, *, log_tag: str | None = None) -> Result:
         """delete a VM machine and its disk; one of a removed platform is only forgotten"""
     def update(
         self,
@@ -312,17 +452,20 @@ class MachineFamily:
         docker: str | None = None,
         wsl: str | None = None,
         daemon: str | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """resize a VM, or set a built-in machine's image, Docker socket and daemon"""
 
 class StoreFamily:
-    def list(self) -> Result:
+    def list(self, *, log_tag: str | None = None) -> Result:
         """every Store, from the home's records"""
-    def get(self, name: str) -> Result:
+    def get(self, name: str, *, log_tag: str | None = None) -> Result:
         """a Store's record"""
-    def status(self, name: str) -> Result:
+    def status(self, name: str, *, log_tag: str | None = None) -> Result:
         """a Store's live state"""
-    def create(self, name: str) -> Result:
+    def stats(self, name: str, *, log_tag: str | None = None) -> Result:
+        """Store-wide publication and allocation counters"""
+    def create(self, name: str, *, log_tag: str | None = None) -> Result:
         """an empty sqlite Store on native"""
     def connect(
         self,
@@ -331,15 +474,35 @@ class StoreFamily:
         *,
         password: str | None = None,
         synchronous_commit: str | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """attach a PostgreSQL database as a Store"""
-    def push(self, name: str, machine: str, *, on_progress: Callable[[Progress], object] = ...) -> Result:
+    def attach(
+        self,
+        name: str,
+        machine: str,
+        *,
+        url: str | None = None,
+        password: str | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """let a machine run Sandboxes of a PostgreSQL Store, after checking it reaches the server"""
+    def detach(self, name: str, machine: str, *, log_tag: str | None = None) -> Result:
+        """stop a machine running Sandboxes of a PostgreSQL Store"""
+    def push(
+        self,
+        name: str,
+        machine: str,
+        *,
+        on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
+    ) -> Result:
         """send a sqlite Store from native to a machine"""
-    def pull(self, name: str, *, on_progress: Callable[[Progress], object] = ...) -> Result:
+    def pull(self, name: str, *, on_progress: Callable[[Progress], object] = ..., log_tag: str | None = None) -> Result:
         """bring a sqlite Store from its machine to native"""
-    def remove(self, name: str) -> Result:
+    def remove(self, name: str, *, log_tag: str | None = None) -> Result:
         """delete a sqlite Store with every project in it"""
-    def disconnect(self, name: str) -> Result:
+    def disconnect(self, name: str, *, log_tag: str | None = None) -> Result:
         """forget a PostgreSQL Store; its data stays"""
 
 class BackupFamily:
@@ -351,11 +514,12 @@ class BackupFamily:
         key: str | None = None,
         region: str | None = None,
         part_size: Size | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """connect an r2 or MinIO bucket"""
-    def disconnect(self, name: str) -> Result:
+    def disconnect(self, name: str, *, log_tag: str | None = None) -> Result:
         """forget a bucket and this home's links to it"""
-    def list(self, bucket: str | None = None) -> Result:
+    def list(self, bucket: str | None = None, *, log_tag: str | None = None) -> Result:
         """every Store file on the connected buckets"""
     def create(
         self,
@@ -364,6 +528,7 @@ class BackupFamily:
         file: str | None = None,
         *,
         on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
     ) -> Result:
         """upload a sqlite Store to a bucket"""
     def restore(
@@ -373,8 +538,27 @@ class BackupFamily:
         file: str | None = None,
         *,
         on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
     ) -> Result:
         """download a backup as a sqlite Store on native"""
+
+class LogsFamily:
+    def list(
+        self,
+        *,
+        op: str | None = None,
+        project: str | None = None,
+        client: str | None = None,
+        tag: str | None = None,
+        outcome: str | None = None,
+        since: int | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """the calls made against this home, newest first"""
+    def reset(self, *, log_tag: str | None = None) -> Result:
+        """clear this home's call log"""
 
 class Client:
     home: str | None
@@ -388,6 +572,7 @@ class Client:
     machine: MachineFamily
     store: StoreFamily
     backup: BackupFamily
+    logs: LogsFamily
     def __init__(self, home: str | PathLike[str] | None = None, scope: Scope | Mapping[str, str | None] | None = None) -> None: ...
 
 def client(home: str | PathLike[str] | None = None, scope: Scope | Mapping[str, str | None] | None = None) -> Client: ...

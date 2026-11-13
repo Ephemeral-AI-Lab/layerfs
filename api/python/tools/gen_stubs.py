@@ -59,11 +59,12 @@ def method(spec, asynchronous):
         assert arg["optional"] or not seen_optional, f"{spec['family']}.{spec['call']}: required after optional"
         seen_optional = seen_optional or arg["optional"]
         params.append(f"{arg['name']}: {annotation(arg)}" + (" | None = None" if arg["optional"] else ""))
-    if spec["options"]:
-        params.append("*")
-        for opt in spec["options"]:
-            default = " = ..." if opt["kind"] == "function" else " | None = None"
-            params.append(f"{opt['name']}: {annotation(opt)}{default}")
+    params.append("*")
+    for opt in spec["options"]:
+        default = " = ..." if opt["kind"] == "function" else " | None = None"
+        params.append(f"{opt['name']}: {annotation(opt)}{default}")
+    # every call takes the tag of its call log line (#659)
+    params.append("log_tag: str | None = None")
     keyword = "async def" if asynchronous else "def"
     head = f"    {keyword} {spec['call']}({', '.join(params)}) -> Result:"
     if len(head) > LINE:

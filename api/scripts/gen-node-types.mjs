@@ -75,6 +75,12 @@ export interface Scope {
   branch?: string;
 }
 
+/** What every call's options may carry: \`log_tag\`, an opaque tag (at most
+ * 128 bytes) for the call's line in the home's call log. */
+export interface CallOptions {
+  log_tag?: string;
+}
+
 export interface ClientOptions {
   /** Default \`LAYERFS_HOME\`, else \`~/.layerfs\`. */
   home?: string;
@@ -129,7 +135,7 @@ export interface DoctorReport {
   for (const spec of table) {
     if (spec.options.length === 0) continue;
     out.push(`/** Options of \`${spec.family}.${spec.call}\`; an unknown option is refused. */
-export interface ${pascal(spec.family)}${pascal(spec.call)}Options {
+export interface ${pascal(spec.family)}${pascal(spec.call)}Options extends CallOptions {
 ${spec.options.map((opt) => option(spec, opt)).join("\n")}
 }
 `);
@@ -139,8 +145,8 @@ ${spec.options.map((opt) => option(spec, opt)).join("\n")}
       const params = spec.args.map((arg) => argument(spec, arg));
       const signature = (list) => `  ${spec.call}(${list.join(", ")}): Promise<Result>;`;
       const signatures = [];
-      if (spec.options.length > 0) {
-        const type = `${pascal(spec.family)}${pascal(spec.call)}Options`;
+      {
+        const type = spec.options.length > 0 ? `${pascal(spec.family)}${pascal(spec.call)}Options` : "CallOptions";
         params.push(`options?: ${type}`);
         // the binding takes a plain object in a text, name or number slot as the
         // options (index.js, `bind`): so the options may follow the required
