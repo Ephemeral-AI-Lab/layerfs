@@ -79,7 +79,7 @@ S: [layerfs-sdk-cli.md](../../proposals/layerfs-sdk-cli.md).
 
 The owner's decision, relayed by the parent session: "Keep runtime image".
 2.0's default Sandbox image is the current runtime image,
-`layerfs-352-runtime:node24-https-apt-20261024`, config digest
+`layerfs-352-runtime:node24-https-apt-20261024`, image digest
 `sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e`,
 the image every step-19 cell ran in.
 
@@ -101,25 +101,26 @@ the image every step-19 cell ran in.
 - Not done for a release (HANDOFF, open items): publishing the image under
   a registry name pinned by digest, so the O16 fetch can get it.
 
-- **2026-11-12: the local image was removed and rebuilt, which changes its
-  digest.** A disk cleanup ran `docker image prune -a` on the OrbStack engine.
-  Nothing referenced this image (it has no container of its own), so the prune
-  removed it, and because it is local-only — the open item above — it could not
-  be pulled back. It was rebuilt from `dsh/tools/runtime/Dockerfile` with
-  `docker build -t layerfs-352-runtime:node24-https-apt-20261024 tools/runtime`.
-  The rebuilt image's config digest is
-  `sha256:9982446b2c13e5a32d5d51529008d1e22e5bebb120ff2f97f27fa6f6487d021f`,
-  so `sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e`
-  no longer names an existing local image. Contents check out against this
-  decision: Node v24.21.0, `cargo`/`rustc` 1.85.1 with `rustfmt` and `clippy`,
-  `/usr/include/sqlite3.h`, `/usr/sbin/poweroff`, Chromium and Selenium present;
-  the one drift is Chromium `156.0.8078.79` where the decision recorded
-  `156.0.8078.47`, because the rebuild takes the current Debian package. Image
-  size is 2.71 GB as before.
-- **Consequence:** anything that pinned `afa1ef9c…` — the sealed bundle's
-  `saved_from`, a launcher registration's `sandbox` image — must be re-pinned or
-  rebuilt, and a `sandbox-image.tar` sealed before this date no longer matches
-  the local image.
+- **Digest kind (corrected 2026-11-13).** `sha256:afa1ef9c…` is the image
+  digest Docker's containerd image store reports as both `DIGEST` and
+  `IMAGE ID` (#527 PLATFORM-PASS calls it the index digest), not the config
+  digest. Docker reports its size as 954.7 MB (`.Size` 954,731,901 bytes);
+  the unpacked size `docker images` shows is larger.
+- **2026-11-12: one machine lost its copy; the decided image is unchanged.**
+  A disk cleanup ran `docker image prune -a` on a contributor's OrbStack
+  engine. Nothing referenced the image (it has no container of its own), so
+  the prune removed it there, and because it is local-only (the open item
+  above) it could not be pulled back. A rebuild there produced a different
+  image, `sha256:9982446b2c13e5a32d5d51529008d1e22e5bebb120ff2f97f27fa6f6487d021f`,
+  with Chromium `156.0.8078.79` instead of `.47`, because the Dockerfile takes
+  the current Debian packages. That rebuild is **not** the O36 image. The owner's
+  machine still holds `afa1ef9c…` (Docker Desktop, checked 2026-11-13: created
+  2026-10-23, 954.7 MB), so O36 and every pin to `afa1ef9c…` stand.
+- **Restoring a lost copy:** copy the decided image from a machine that holds
+  it (`docker save layerfs-352-runtime:node24-https-apt-20261024` there, then
+  `docker load` on the machine that lost it) and confirm `docker images
+  --digests` shows `afa1ef9c…`. Do not rebuild it: a rebuild is a new image
+  and would need its own owner decision and re-pinning.
 - **Do not run `docker image prune -a` on a machine holding this image.** It is
   unreferenced by design, so `-a` is exactly the flag that deletes it. Bare
   `docker image prune` (dangling only) is safe.
