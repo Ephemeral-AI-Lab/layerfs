@@ -236,15 +236,12 @@ fn create_empty(
     policy: layerfs_storage::StoragePolicy,
     made: &mut MadeDirectory,
 ) -> Result<SealedStore> {
-    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-    if !global.exists() {
-        std::fs::DirBuilder::new()
-            .mode(0o700)
-            .create(global)
-            .map_err(failed)?;
-        // the directory is this call's own only now that its mkdir succeeded
-        *made = MadeDirectory::ThisCall;
-    }
+    use std::os::unix::fs::PermissionsExt;
+    // the one ownership rule an install uses too: this call's own `mkdir`
+    *made = match layerfs_store_service::install::make_private_directory(global).map_err(failed)? {
+        layerfs_store_service::install::Made::ThisCall => MadeDirectory::ThisCall,
+        layerfs_store_service::install::Made::AlreadyThere => MadeDirectory::AlreadyThere,
+    };
     layerfs_store_service::kernel_guard::check(destination)
         .map_err(|reason| refused("Unsupported", reason.0))?;
     let (target, _) = layerfs_store_service::install::paths(destination).map_err(failed)?;

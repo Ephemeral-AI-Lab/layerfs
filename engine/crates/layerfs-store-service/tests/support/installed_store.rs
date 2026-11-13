@@ -45,7 +45,7 @@ impl Fixture {
     ) -> Self {
         let directory =
             std::env::temp_dir().join(format!("layerfs-installed-{}-{label}", std::process::id()));
-        std::fs::create_dir(&directory).unwrap();
+        private_directory(&directory);
         let source = directory.join("source");
         std::fs::create_dir(&source).unwrap();
         let count = build(&source);
@@ -116,7 +116,7 @@ impl Fixture {
     pub fn cloned(label: &str, store: &std::path::Path, count: usize) -> Self {
         let directory =
             std::env::temp_dir().join(format!("layerfs-installed-{}-{label}", std::process::id()));
-        std::fs::create_dir(&directory).unwrap();
+        private_directory(&directory);
         let installed = directory.join("store.sqlite");
         std::fs::copy(store, &installed).unwrap();
         Self {
@@ -132,6 +132,14 @@ impl Fixture {
         std::fs::remove_dir_all(self.directory).unwrap();
     }
 }
+/// The fixture's own Store folder: private as every folder a daemon opens,
+/// because `kernel_guard` refuses group or other access and an open through
+/// `StoreService::open_direct` reaches the Store itself.
+fn private_directory(path: &std::path::Path) {
+    use std::os::unix::fs::DirBuilderExt;
+    std::fs::DirBuilder::new().mode(0o700).create(path).unwrap();
+}
+
 pub fn bytes(n: usize) -> Vec<u8> {
     format!("complete installed file {n:06}\n").into_bytes()
 }

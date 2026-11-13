@@ -9,10 +9,12 @@
 //! branches need the daemons' user (uid 0), as an install runs in production.
 //! Run elsewhere, each case asserts what the same call does at this privilege
 //! level: the check refuses before the directory or the guard is touched, so
-//! the call creates nothing and removes nothing. `layerfs-store`'s
-//! `create_directory` test drives the guard and the same ownership rule
-//! through `store.create`, which has no installer-user check, so those run
-//! unprivileged.
+//! the call creates nothing and removes nothing. The claim step itself is
+//! [`install::make_private_directory`], one function shared with
+//! `store.create`'s `make_empty`; it has no installer-user check, so the test
+//! below drives both of its branches and its failed `mkdir` unprivileged,
+//! and `layerfs-store`'s `create_directory` test drives the same step and the
+//! guard through `store.create`.
 #![cfg(target_os = "linux")]
 use layerfs_store_service::install;
 use std::path::{Path, PathBuf};
@@ -33,6 +35,60 @@ fn scratch(parent: &Path, label: &str) -> PathBuf {
         .create(&directory)
         .unwrap();
     directory
+}
+
+/// The claim step on its own, as any user: an absent directory is made
+/// `0700` and belongs to this call, one that is already there keeps its mode
+/// and belongs to no one, and a `mkdir` that fails on a taken name claims
+/// nothing. `prepare` acts on exactly this answer, and `store.create`'s
+/// `make_empty` uses the same step.
+#[test]
+fn the_directory_claim_creates_0700_and_marks_only_its_own_mkdir() {
+    use std::os::unix::fs::PermissionsExt;
+    let volume = scratch(&std::env::temp_dir(), "claim");
+    let made = volume.join("made");
+    assert_eq!(
+        install::make_private_directory(&made).unwrap(),
+        install::Made::ThisCall
+    );
+    let mode = std::fs::symlink_metadata(&made)
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o7777;
+    assert_eq!(mode, 0o700, "this call's own directory is private");
+    std::fs::set_permissions(&made, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(
+        install::make_private_directory(&made).unwrap(),
+        install::Made::AlreadyThere
+    );
+    let mode = std::fs::symlink_metadata(&made)
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o7777;
+    assert_eq!(
+        mode, 0o755,
+        "a directory this call did not make keeps its mode"
+    );
+    // a taken name: `Path::exists` looks through the dangling link and sees
+    // nothing, so the step reaches `mkdir`, which claims no directory
+    let taken = volume.join("taken");
+    std::os::unix::fs::symlink(volume.join("absent-target"), &taken).unwrap();
+    let refused = install::make_private_directory(&taken).unwrap_err();
+    assert_eq!(
+        refused.kind(),
+        std::io::ErrorKind::AlreadyExists,
+        "{refused}"
+    );
+    assert!(
+        std::fs::symlink_metadata(&taken)
+            .unwrap()
+            .file_type()
+            .is_symlink(),
+        "the taken name stays"
+    );
+    std::fs::remove_dir_all(&volume).unwrap();
 }
 
 /// A guard refusal happens before any Store file exists: it reclaims the

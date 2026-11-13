@@ -43,6 +43,11 @@ the Workspace through ordinary file calls on the mount.
 | Stdin | Both backends refuse it (`Unsupported`). | [`host_process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/exec.rs) |
 | Timeout | None. A command runs until it ends. | each `exec.rs` |
 
+The macOS `HostProcess` homes are the caller's own, writable ones, not copies:
+a command there (`cargo install`, `rustup update`, a git write) changes the
+host's toolchain, installed binaries and global Git configuration, as the
+same command run by the user would.
+
 ## Streams
 
 ```text

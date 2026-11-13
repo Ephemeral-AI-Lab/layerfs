@@ -138,6 +138,32 @@ impl std::fmt::Display for LocalInstallFailure {
     }
 }
 
+/// Whether this call's own `mkdir` made the Store's directory: the only
+/// ownership that lets a caller reclaim that directory when nothing was
+/// published. A directory another caller, or the user, made is never this
+/// call's to remove.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Made {
+    /// This call's `mkdir` created it.
+    ThisCall,
+    /// It was already there; it is not this call's to remove.
+    AlreadyThere,
+}
+
+/// Makes the Store's directory owner-only (`0700`) when it is absent and says
+/// whether this call's own `mkdir` made it. One ownership rule for the Store's
+/// directory, shared by an install and `store.create` (`make_empty`): a
+/// `mkdir` that fails — `AlreadyExists`, when another caller made the
+/// directory first, included — claims nothing.
+pub fn make_private_directory(directory: &Path) -> io::Result<Made> {
+    use std::os::unix::fs::DirBuilderExt;
+    if directory.exists() {
+        return Ok(Made::AlreadyThere);
+    }
+    fs::DirBuilder::new().mode(0o700).create(directory)?;
+    Ok(Made::ThisCall)
+}
+
 /// Makes the Store's directory owner-only (`0700`, created as such when it is
 /// absent), then checks the kernel guard for the Store file. A directory is
 /// this call's own only when this call's `mkdir` returned success: an
@@ -150,16 +176,8 @@ pub fn prepare(destination: &Path) -> Result<(), String> {
     let directory = destination
         .parent()
         .ok_or("the Store destination has no directory")?;
-    let mut made = false;
-    if !directory.exists() {
-        use std::os::unix::fs::DirBuilderExt;
-        fs::DirBuilder::new()
-            .mode(0o700)
-            .create(directory)
-            .map_err(|error| error.to_string())?;
-        // the directory is this call's own only now that its mkdir succeeded
-        made = true;
-    }
+    let made =
+        make_private_directory(directory).map_err(|error| error.to_string())? == Made::ThisCall;
     match crate::kernel_guard::check(destination) {
         Ok(_) => Ok(()),
         Err(reason) => {
