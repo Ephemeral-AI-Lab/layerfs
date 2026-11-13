@@ -34,7 +34,7 @@
 | Q1 | Name reuse: forbid reuse (tombstone), or derive with incarnation | **A: forbid reuse** + terminal tombstone + `NameRetired`, zero migration | Small: one terminal marker + check at create; no incarnation column | Reusing an old name shares a `BranchId` with old history (`blake3(stack‖name)`), so old Commits' Branch attribution goes wrong |
 | Q2 | How much `remove_file` can actually reclaim | **0, by construction** (decided 2026-11-13, layerfs-project#42 item 3): I5 makes it a **visibility operation**, C6 records it as a *shared* tombstone, and the closure walks retained roots — history among them — so the objects stay reachable and no pack can become dead at either level. Measuring is kept only to publish the number and to catch a regression that drops references | Small: one regression case + docs; no mechanism change | Users plan capacity on "deleting saves space", and it does not |
 | Q3 | How to set an age threshold when online collection is introduced | Not in this spec; when the time comes, add timestamp columns first, then measure the longest Commit / longest in-flight handle | Medium: add timestamp columns + migration + threshold contract | Without timestamps an age threshold cannot be implemented; forcing it deletes in-flight writes |
-| Q4 | Retention cap for interrupted copies | Do not clean automatically; keep at most one, require manual action beyond that | Small: `doctor` report + runbook | Residue accumulates and consumes disk; automatic cleanup violates "no guessed cleanup" |
+| Q4 | Retention cap for interrupted copies | **Decided 2026-11-13 (layerfs-project#42 item 4): cap = 1, and it is enforced by refusal, not by cleanup.** While an unjudgeable leftover exists, `store.compact` is refused **`OrphanArtifact`** naming `phase`, `artifact` and both paths. `check` retires only what it can *judge* (`transfer/resolve.rs::leftover`); an `Unresolved` leftover is cleared only by record authority (`doctor` + runbook), never by compact and never by a time window. `doctor` enumerates the machine side through the worker, and an unreachable machine reports **`unknown`, never `clean`** | Small: `doctor` report + runbook + one new code | Residue accumulates and consumes disk (and pins objects, distorting byte accounting); automatic cleanup violates "no guessed cleanup" |
 | Q5 | Reader behavior when PG swaps tables | **Superseded by C8/R2**: readers go through the `(catalog_id, incarnation)` session check → `StaleStore`, and read the new generation after reconnecting; table names are not versioned | Small: session/transaction entry check (shared with SQLite) | Cross-generation reads (no crash, but wrong data) |
 | Q6 | Does `store.compact` promise "drop dead packs" or "reorganize data" | **Split into two levels**, both built as a fresh staged Store (§7.1): `compact(name)` = level 1, copy only retained rows, so **wholly dead packs are dropped** (may return 0 when every pack still holds a live object); `compact(name, reorg)` = level 2, additionally **repack live objects out of partially dead packs** into new packs (object ids unchanged, `object_location` changes) | Medium: two entry points + two reporting definitions | Level 1 alone leaves dead objects that share a pack with a live one; promising "all discarded bytes are reclaimed" without level 2 over-promises |
 
@@ -217,6 +217,9 @@ GC(Roots@G):
 ### 7.1 Sequence (reuse transfer, insert only `rewrite`)
 ```
 check      outside the lock: files and disks on both sides, resolve leftover copies
+           - judgeable leftover (the record names it and its state can be decided): retire it here
+           - unjudgeable leftover (op `Unresolved`): refuse `OrphanArtifact`; only doctor + runbook clear it
+           - a machine that cannot be reached reports `unknown`, never `clean`
            inside the lock: record.unblocked(), collect leases, write op (args name source/target)
 snapshot   bytes, sha256, heads of an idle Store
 stage      create the staged copy beside the Store as a fresh, empty Store
@@ -272,7 +275,7 @@ retire     delete old copies the record no longer names
 - Method: `store.compact(name)` registers an op, and progress is read from `store.status`; `operation.get` must not be added.
 - All four operations take only a resource identifier: `branch.remove(name)`, `project.delete(name)`, `store.compact(name)`, `project.remove_file(project, path)`, and they jointly forbid `confirm`/`force`/`dryRun`/`stopSandboxes`/Store or volume options (layerfs-project#41 verbatim). Implementations do no implicit unmount, no waiting, no retry; an unclean environment returns `MountsActive`/`Busy`/`InUse`.
 - Backend route: `backend.store.compact` (following the `backend.store.*` naming family); CLI `store compact`.
-- Rejection codes: reuse `Busy`/`InUse`/`MountsActive`/`NoSuchStore`/`Unsupported`/`NotFound`; add `StaleStore`/`NameRetired`/`OrphanArtifact`/`Capacity` (cf. `StaleSandbox`). `Unresolved`/`Stale` are op states, not return codes.
+- Rejection codes: reuse `Busy`/`InUse`/`MountsActive`/`NoSuchStore`/`Unsupported`/`NotFound`; add `StaleStore`/`NameRetired`/`OrphanArtifact` (a leftover staged copy/schema that no record can judge — Q4)/`Capacity` (cf. `StaleSandbox`). `Unresolved`/`Stale` are op states, not return codes.
 - Documentation must place side by side: `store.remove` (delete the Store and all its projects) and `project.delete` (soft delete, Store still addressable).
 
 ---

@@ -92,6 +92,8 @@ Legend: 🔲 not started · ⏳ blocked on a decision · ✅ done
 - [ ] Rebuild-and-swap reusing `transfer`, with only `rewrite` inserted
       — and it runs **where the Store lives**: `place::plan` → that machine's worker, no pull/push (decided 2026-11-13); add the cross-machine interruption case: the staged copy is a fresh Store that receives only retained rows, so dead packs are not copied and no row is deleted in the live Store (the `pack` / `pack_unit` triggers never fire)
 - [ ] `reorg` repacks live objects out of partially dead packs; object ids unchanged
+- [ ] Residue: `check` retires only judgeable leftovers; an `Unresolved` one refuses `OrphanArtifact` (naming phase, artifact, both paths) and is cleared only by `doctor` + runbook (Q4 decided 2026-11-13)
+- [ ] `doctor` enumerates machine-side residue through the worker; an unreachable machine reports `unknown`, never `clean`
 - [ ] Writer fence: at every write-transaction start the Store path's `(dev, ino)` is compared with the open file's `fstat`; a pre-swap writer fails with `Conflict` instead of writing into the retired inode
 - [ ] An interrupted compact is recoverable; the Store always opens and `doctor`s
 - [ ] `physical_shrink` reported as the `page_count × page_size` delta, with dropped packs and their bytes separately (C5)
