@@ -44,7 +44,7 @@ layerfs workspace unmount <ws> [--discard] [--force]
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
 | `discard` | Bool | false | drop uncommitted changes instead of refusing `Dirty` | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
-| `force` | Bool | false | each running command is cancelled first ([workspace.exec_cancel](exec_cancel.md), 5000 ms grace); one abort write ends the connection, also after a normal unmount stalled at Join; uncommitted changes are dropped | same, [`exec/cancel.rs`](../../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) `settle` |
+| `force` | Bool | false | each running command is cancelled first ([workspace.exec_cancel](exec_cancel.md), 5000 ms grace); one abort write ends the connection, also after a normal unmount stalled at Join; on the native NFS route one forced client unmount takes its place, and also finishes an entry kept at Detach when a normal unmount's helper failed or ran out of time while the client mount stayed; uncommitted changes are dropped | same, [`exec/cancel.rs`](../../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) `settle`, [`force.rs`](../../../../../engine/crates/layerfs-daemon/src/control/force.rs) |
 
 ## Returns
 
@@ -85,7 +85,13 @@ A Workspace the daemon no longer knows (`Missing`) answers `Unmounted`.
 ```
 
 The recorded outcome makes a repeated unmount answer what the first one
-established, without dialling the daemon again. The daemon's kernel probe
+established, without dialling the daemon again. One completed record is the
+exception: a `Failed` unmount that was not itself forced, which a `force`
+call may replace with a forced attempt (the daemon's own guard still decides
+whether that force may proceed). A record that is still in progress, one of
+an unknown outcome, and one that a force already produced are answered as
+they stand; a record written before `forced` was recorded (no such field) is
+answered as it stands too, and is not forceable. The daemon's kernel probe
 answers `Busy` while a process still holds the mount. See the
 [routing table](../../../control/routing/routing-table.md),
 [Engine: daemon](../../../engine/daemon/README.md) and the
@@ -107,7 +113,9 @@ answers `Busy` while a process still holds the mount. See the
 **After an uncertain unmount**, call `workspace.unmount` again: a recorded
 outcome is answered as it was, and a Workspace already gone is
 `NotMounted` or `Unmounted`. [sandbox.get](../sandbox/get.md) lists what is
-still mounted. A stalled normal unmount can be ended with `force`.
+still mounted. A stalled normal unmount can be ended with `force`, and so can
+an unmount kept `Retained` at detach on the native NFS route while the client
+mount stays ([engine: forced teardown](../../../engine/daemon/forced-teardown.md)).
 
 ## Examples
 

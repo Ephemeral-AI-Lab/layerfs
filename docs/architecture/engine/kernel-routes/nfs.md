@@ -207,10 +207,21 @@ it starts with `._` and has at least one more byte.
    bind 127.0.0.1:0 -> Server::start(...)        port P
    helper: mount_nfs -o vers=3,tcp,port=P,mountport=P,... 127.0.0.1:/ <dir>
      client --MOUNT MNT "/"--> root handle + AUTH_UNIX
+   read the host's mount table once -> tracked: is <dir> listed?
  daemon Commit:   flush helper (sync(2) by default), close_files, Commit
- daemon Unmount:  unmount helper (busy is reversible), Server::stop,
+ daemon Unmount:  unmount helper (busy is reversible); a failure or deadline
+                  is settled by the mount table (see below); Server::stop,
                   revoke the engine mount, Close
+ daemon ForceUnmount: one forced client unmount (umount -f, or umount -f -l
+                  on Linux), then the same teardown
 ```
+
+| Rule | Source |
+| --- | --- |
+| Attach reads the host's mount table once, after the mount helper returned, so a later failed or timed-out unmount helper can be judged. The cost is one `/sbin/mount` run (macOS) or one `/proc/self/mountinfo` read (Linux) per Attach; unmount timing is unaffected. | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) `Exported::tracked`, [`export_helper.rs`](../../../../engine/crates/layerfs-daemon/src/control/export_helper.rs) `mounted_under` |
+| The mount point itself is never resolved when the table is read or compared: that lookup goes through the mount. The comparison is the path as configured, plus the same name below the canonical mount home. | [`export_helper.rs`](../../../../engine/crates/layerfs-daemon/src/control/export_helper.rs) `listed` |
+| A failed or timed-out unmount helper completes teardown only when Attach saw the mount listed and the table no longer lists it; a still listed mount, or an unreadable table, keeps `Retained(Detach)` and the export serving. | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) `detached_export` |
+| A helper that outlives its `KILL` and the post-KILL window is reaped in the background by the shared retained queue; nothing waits for it and it is not signalled twice. | [`process/retained.rs`](../../../../engine/crates/layerfs-bridge/src/process/retained.rs), [`export_helper.rs`](../../../../engine/crates/layerfs-daemon/src/control/export_helper.rs) |
 
 | MOUNT procedure | Answer | Source |
 | --- | --- | --- |
@@ -225,7 +236,8 @@ The client mount options are the daemon's `Mounter::host`. On macOS:
 elsewhere `vers=3,proto=tcp,port={port},mountport={port},mountproto=tcp,nolock,actimeo=60`
 ([`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs)).
 Helper deadlines and teardown belong to the
-[daemon](../daemon/README.md).
+[daemon](../daemon/README.md); the forced route is
+[forced teardown](../daemon/forced-teardown.md#native-nfs-route).
 
 ## Related
 

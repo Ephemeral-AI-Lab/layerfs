@@ -86,11 +86,11 @@ differs.
 
 | Step | NFS route | Source |
 | --- | --- | --- |
-| Attach | Serve the engine mount as one loopback NFSv3 export on a fresh port; the host client mounts it with the mount helper; Ready only after the helper reports the mount. An NFS receipt has `abi_major == 0` and `mount_id` = the port | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
+| Attach | Serve the engine mount as one loopback NFSv3 export on a fresh port; the host client mounts it with the mount helper; Ready only after the helper reports the mount, and the host's mount table is read once to record whether the mount is listed. An NFS receipt has `abi_major == 0` and `mount_id` = the port | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 | Commit | Flush first (flush helper, or `sync(2)`), close the export's descriptors, run the unchanged Commit; after an install of another root, close them again | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs), [`invalidate.rs`](../../../../engine/crates/layerfs-daemon/src/control/invalidate.rs) |
-| Unmount | Helper unmount (busy is reversible), stop the export, revoke, Close | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
-| ForceUnmount | Force helper once, then the same teardown | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
-| Helper run | One attempt, at most `HELPER_WAIT` (60 s), then killed and reported | [`export_helper.rs`](../../../../engine/crates/layerfs-daemon/src/control/export_helper.rs) |
+| Unmount | Helper unmount (busy is reversible), stop the export, revoke, Close. A failed or timed-out helper is settled by the mount table: a mount listed at Attach and gone now completes the teardown, a still listed one (or an unreadable table) keeps `Retained(Detach)` | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
+| ForceUnmount | Force helper once, then the same teardown; also finishes an export kept at `Detach` whose client mount stayed | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
+| Helper run | One attempt, at most `HELPER_WAIT` (60 s), then killed and reported; a child still unreaped past `REAP_WAIT` goes to the bounded retained queue | [`export_helper.rs`](../../../../engine/crates/layerfs-daemon/src/control/export_helper.rs), [`process/retained.rs`](../../../../engine/crates/layerfs-bridge/src/process/retained.rs) |
 
 Kernel states `Exported`, `ExportLeaving` and `ExportKept` mirror `Ready`,
 `Leaving` and `Retained`. Details: [Kernel routes: NFS](../kernel-routes/nfs.md).

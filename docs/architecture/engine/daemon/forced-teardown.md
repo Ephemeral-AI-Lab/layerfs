@@ -20,7 +20,8 @@ process. Each step is made once.
 ```text
 registry lock: guard (in this order; a refusal changes nothing)
   1 ExportKept / Retained custody -> Retained (except a forceable
-    normal unmount stalled at Join, which is admitted)
+    normal unmount stalled at Join, or a forceable export kept at
+    Detach, which are admitted)
   2 Committing | Attaching | Closing   -> Busy   (force:admission)
   3 no serving connection              -> Invalid / Unknown / Busy
   4 Commit knowledge: Idle -> Absent; LocalFailure + published ->
@@ -52,10 +53,55 @@ reply ForceUnmounted { token, ForcedOutcome { facts, work, cleanup } }
 | --- | --- |
 | The abort write uses the connection's own control, bound from the daemon's `fusectl` tree at Attach. Without it, Force is refused before any effect. | [`force.rs`](../../../../engine/crates/layerfs-daemon/src/control/force.rs), [`application/filesystem.rs`](../../../../engine/crates/layerfs-daemon/src/application/filesystem.rs) |
 | A normal unmount stalled at `Join` with its abort control unused is forced from its retained session; its plain detach counts as the one detach. | [`force.rs`](../../../../engine/crates/layerfs-daemon/src/control/force.rs), [`serving.rs`](../../../../engine/crates/layerfs-daemon/src/control/serving.rs) `Kept::forceable` |
+| An export kept at `Detach` whose export and receipt are still held, and whose forced facts are unset, is forced by the one forced client unmount. | [`force.rs`](../../../../engine/crates/layerfs-daemon/src/control/force.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) `ExportKept::forceable` |
 | `relinquish_unknown` allows local disposal of stopped unknown Commit custody; the receipt keeps it `Unknown`. | [`force.rs`](../../../../engine/crates/layerfs-daemon/src/control/force.rs), [`control_request.rs`](../../../../engine/crates/layerfs-bridge/src/control_request.rs) |
 | On the NFS route the force helper is the abort; the same teardown follows. | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 | Outside Linux without NFS, the guard runs and the call is refused (`kernel serving requires Linux`). | [`force.rs`](../../../../engine/crates/layerfs-daemon/src/control/force.rs) |
 | No daemon-wide graceful drain exists. | [engine guide](../../../../engine/AGENTS.md) |
+
+## Native NFS route
+
+An export-owning entry reaches `ForceUnmounted` through the same guard, with
+the forced client unmount standing in for the abort write. Nothing about
+the client mount is repeated: one `umount -f` (macOS), or one
+`umount -f -l` (Linux, in the daemon's container).
+
+```text
+registry lock: guard; take the export out of the entry (Kernel::ExportLeaving)
+-----------------------------------------------------------------
+force helper, once        -- Busy/Interrupted, mount still listed --> facts.detach
+                                                                     Failed, Retained(Detach)
+then the normal teardown: Server::stop, kernel_revoke, remove the directory,
+the one Close, observe_cleanup, depart
+```
+
+Normal `Unmount` reaches `Retained(Detach)` only when the helper's failure or
+deadline cannot be settled, and it keeps that custody in two shapes:
+
+| Shape | Meaning | Source |
+| --- | --- | --- |
+| Attach never saw the mount listed | The client may or may not hold it; nothing may be revoked through it | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) `Exported::tracked` |
+| The mount is still listed, or the table cannot be read | Conservative custody; the export keeps serving | same, `detached_export` |
+
+The mount is only known gone when Attach saw it listed (`tracked`) and the
+host's table no longer has it; teardown then completes as a normal unmount
+and the reply is `Unmounted`. The table is the host's (`mount` on macOS,
+`/proc/self/mountinfo` on Linux), read once. The mount point itself is never
+resolved: that lookup goes through the mount, so against a wedged client it
+can block with no bound and it fails exactly while the mount is in trouble,
+which would read as "not mounted". The check therefore compares the path as
+configured and the same name below the canonical mount home.
+
+A helper that outlives its `KILL` and the post-KILL window enters a bounded
+retained queue, whose one background thread reaps it and records the exit;
+nothing waits for it and nothing signals it twice. The same custody serves
+the macOS driver's `umount -f` ([`process/retained.rs`](../../../../engine/crates/layerfs-bridge/src/process/retained.rs)).
+
+For tests only, `ExportServingConfig` carries a substitute mount table
+(`mount_table`) and a zero post-KILL window (`reap_wait`, with the bounded
+`helper_wait`), and `ExportServing::reaped_helpers` reports the exits observed
+so far. Production wiring sets none of them, and no daemon path reads the
+report.
 
 ## Cleanup
 
