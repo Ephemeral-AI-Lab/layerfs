@@ -63,6 +63,7 @@ except the statements PostgreSQL replaces
 | Storage publication | `publish` validates a batch without SQL, then writes packs, locations, value blocks, the released ordinal tail and signatures in one short write. | [`publication.rs`](../../../../engine/crates/layerfs-persistence/src/storage/publication.rs) |
 | The publish lane | `publish_lane()` holds one admission turn plus the cross-process writer (SQLite) or the `store_lane` row (PostgreSQL) across several short transactions, so a Commit's head check, merge step and publish run as one step. | [`sqlite/lane/lane.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/lane.rs), [`postgresql/lane/lane.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/lane/lane.rs) |
 | Diagnosis | Read-only audits over one pinned snapshot; see [Diagnostics](diagnostics.md). | [`diagnostic/`](../../../../engine/crates/layerfs-persistence/src/diagnostic) |
+| Reclamation | What may be dropped and how a sweep is fenced; see [Garbage collection](gc/README.md). | [`lifecycle/reclamation.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/reclamation.rs) |
 
 ### History calls
 
