@@ -120,6 +120,21 @@ impl Read for Scripted {
         Ok(taken)
     }
 }
+/// A stream that counts the reads it serves, as the socket-level counter a
+/// read-count diagnostic uses does.
+struct Counted<'a> {
+    bytes: &'a [u8],
+    reads: &'a mut usize,
+}
+impl Read for Counted<'_> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        *self.reads += 1;
+        let taken = buffer.len().min(self.bytes.len());
+        buffer[..taken].copy_from_slice(&self.bytes[..taken]);
+        self.bytes = &self.bytes[taken..];
+        Ok(taken)
+    }
+}
 /// A record of `length` bytes of one pattern, framed as one last fragment.
 fn framed(length: usize, seed: u32) -> (Vec<u8>, Vec<u8>) {
     let body = pattern(seed, length);
@@ -212,6 +227,108 @@ fn a_record_of_two_reads_is_two_records_from_one_buffer() {
     assert_eq!(records.read(&mut stream).unwrap(), Some(one_body));
     assert_eq!(records.read(&mut stream).unwrap(), Some(two_body));
     assert_eq!(records.read(&mut stream).unwrap(), None);
+}
+
+#[test]
+fn a_record_that_ends_at_the_read_ahead_is_framed_whole() {
+    // `4 + length == READ_AHEAD` is the last body the read-ahead covers: 8188
+    // bytes of body fill the 8 KiB exactly, so the record is buffered, never
+    // read past the read-ahead, and the next record keeps its own bytes.
+    let (wire, body) = framed(AHEAD - 4, 14);
+    assert_eq!(wire.len(), AHEAD);
+    for step in [1, 3, 4, AHEAD - 4, AHEAD] {
+        let mut stream = Pieces { bytes: &wire, step };
+        let mut records = Records::new();
+        assert_eq!(
+            records.read(&mut stream).unwrap(),
+            Some(body.clone()),
+            "a body of {} bytes in pieces of {step}",
+            AHEAD - 4
+        );
+        assert_eq!(records.read(&mut stream).unwrap(), None, "{step}");
+    }
+    // The same record after a small one: its bytes follow the small record's
+    // left-over prefix in the buffer and in the stream.
+    let (small, small_body) = framed(64, 15);
+    let mut pair = small.clone();
+    pair.extend_from_slice(&wire);
+    for step in [1, 3, AHEAD] {
+        let mut stream = Pieces { bytes: &pair, step };
+        let mut records = Records::new();
+        assert_eq!(records.read(&mut stream).unwrap(), Some(small_body.clone()));
+        assert_eq!(
+            records.read(&mut stream).unwrap(),
+            Some(body.clone()),
+            "after a small record, in pieces of {step}"
+        );
+        assert_eq!(records.read(&mut stream).unwrap(), None, "{step}");
+    }
+}
+
+#[test]
+fn a_whole_call_costs_one_read() {
+    // What the two `read_exact` calls per record could not reach. The counts
+    // are the case's own, reproducible on any platform: the socket-level
+    // figures in the commit that added `Records` came from a macOS mount.
+    let (one, one_body) = framed(150, 16);
+    let mut reads = 0;
+    let mut records = Records::new();
+    assert_eq!(
+        records
+            .read(&mut Counted {
+                bytes: &one,
+                reads: &mut reads,
+            })
+            .unwrap(),
+        Some(one_body.clone())
+    );
+    assert_eq!(reads, 1, "a call that arrived in one piece");
+    // Two records in one segment: the second is framed from what the first
+    // read left, so neither record pays a read of its own.
+    let (two, two_body) = framed(9, 17);
+    let mut together = one.clone();
+    together.extend_from_slice(&two);
+    let mut reads = 0;
+    {
+        let mut stream = Counted {
+            bytes: &together,
+            reads: &mut reads,
+        };
+        let mut records = Records::new();
+        assert_eq!(records.read(&mut stream).unwrap(), Some(one_body));
+        assert_eq!(records.read(&mut stream).unwrap(), Some(two_body));
+    }
+    assert_eq!(reads, 1, "two records from one read");
+    // A body that fills the read-ahead exactly is still one read: it is
+    // buffered, not given the own-buffer path a larger record takes.
+    let (full, full_body) = framed(AHEAD - 4, 18);
+    let mut reads = 0;
+    let mut records = Records::new();
+    assert_eq!(
+        records
+            .read(&mut Counted {
+                bytes: &full,
+                reads: &mut reads,
+            })
+            .unwrap(),
+        Some(full_body)
+    );
+    assert_eq!(reads, 1, "a body of {}", AHEAD - 4);
+    // Past the read-ahead: the buffered prefix, then one exact read for the
+    // rest. The record is never copied twice to be framed.
+    let (large, large_body) = framed(2 * AHEAD + 11, 19);
+    let mut reads = 0;
+    let mut records = Records::new();
+    assert_eq!(
+        records
+            .read(&mut Counted {
+                bytes: &large,
+                reads: &mut reads,
+            })
+            .unwrap(),
+        Some(large_body)
+    );
+    assert_eq!(reads, 2, "a body past the read-ahead");
 }
 
 #[test]
