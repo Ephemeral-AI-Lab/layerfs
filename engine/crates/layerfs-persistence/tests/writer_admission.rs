@@ -202,6 +202,26 @@ impl Drop for Held {
     }
 }
 
+/// Waits for a spawned test child to exit, bounded, then returns its output.
+/// A lane deadlock has to fail this test instead of hanging it, so the wait
+/// carries the same kind of deadline as `Held::release`; the 60 s ceiling also
+/// stays under the per-invocation test limit.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn wait_bounded(mut child: Child, what: &str) -> std::process::Output {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while child.try_wait().unwrap().is_none() {
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("{what}: the child did not exit before its deadline");
+        }
+        std::thread::yield_now();
+    }
+    // The child has exited already: the cached status returns at once and the
+    // pipes reach EOF, so collecting the output cannot wait on a live child.
+    child.wait_with_output().unwrap()
+}
+
 #[test]
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn another_process_admission_precedes_the_single_sqlite_begin() {
@@ -674,11 +694,11 @@ fn three_processes_open_and_reserve_concurrently() {
     for mut stream in sockets {
         stream.write_all(b"G").unwrap();
     }
-    for child in children {
-        let output = child.wait_with_output().unwrap();
+    for (id, child) in children.into_iter().enumerate() {
+        let output = wait_bounded(child, &format!("opener-{id}"));
         assert!(
             output.status.success(),
-            "{}",
+            "opener-{id}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
     }

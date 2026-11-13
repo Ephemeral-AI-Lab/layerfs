@@ -16,6 +16,18 @@ use std::{
 
 pub const BINDING: &[u8] = b"daemon-installed-store";
 pub const CURSOR: [u8; 32] = [43; 32];
+/// Creates a Store's own directory owner-only (`0700`): the kernel guard
+/// refuses a Store whose directory grants any group/other bit (#663), and the
+/// daemon installs every Store that way.
+fn private_directory(path: &std::path::Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        std::fs::DirBuilder::new().mode(0o700).create(path).unwrap();
+    }
+    #[cfg(not(unix))]
+    std::fs::create_dir(path).unwrap();
+}
 pub struct Fixture {
     pub directory: PathBuf,
     pub config: PersistenceConfig,
@@ -45,7 +57,7 @@ impl Fixture {
     ) -> Self {
         let directory =
             std::env::temp_dir().join(format!("layerfs-installed-{}-{label}", std::process::id()));
-        std::fs::create_dir(&directory).unwrap();
+        private_directory(&directory);
         let source = directory.join("source");
         std::fs::create_dir(&source).unwrap();
         let count = build(&source);
@@ -116,7 +128,7 @@ impl Fixture {
     pub fn cloned(label: &str, store: &std::path::Path, count: usize) -> Self {
         let directory =
             std::env::temp_dir().join(format!("layerfs-installed-{}-{label}", std::process::id()));
-        std::fs::create_dir(&directory).unwrap();
+        private_directory(&directory);
         let installed = directory.join("store.sqlite");
         std::fs::copy(store, &installed).unwrap();
         Self {

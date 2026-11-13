@@ -142,6 +142,26 @@ fn open_concurrent_child() {
     service.close().unwrap();
 }
 
+/// Waits for a spawned test child to exit, bounded, then returns its output.
+/// A lane deadlock has to fail this test instead of hanging it, so the wait
+/// carries the same kind of deadline as the barrier accept above; the 60 s
+/// ceiling also stays under the per-invocation test limit.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn wait_bounded(mut child: std::process::Child, what: &str) -> std::process::Output {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while child.try_wait().unwrap().is_none() {
+        if std::time::Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("{what}: the child did not exit before its deadline");
+        }
+        std::thread::yield_now();
+    }
+    // The child has exited already: the cached status returns at once and the
+    // pipes reach EOF, so collecting the output cannot wait on a live child.
+    child.wait_with_output().unwrap()
+}
+
 /// Three processes open the same Store directly and each commits twenty times
 /// at once: opening waits on the directory lane instead of failing, and no
 /// Commit is lost or doubled.
@@ -201,7 +221,7 @@ fn three_processes_open_direct_and_commit_concurrently() {
     }
     let mut failures = Vec::new();
     for (id, child) in children.into_iter().enumerate() {
-        let output = child.wait_with_output().unwrap();
+        let output = wait_bounded(child, &format!("agent-{id}"));
         if !output.status.success() {
             failures.push(format!(
                 "agent-{id}: {}",
