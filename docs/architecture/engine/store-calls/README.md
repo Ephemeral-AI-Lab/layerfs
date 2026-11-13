@@ -62,10 +62,17 @@ StoreService::open_direct(store, binding, cursor_key, template)
   2 store.is_file()                         -> Missing
   3 open_store_observed(sqlite, Disposable, CALLS=64, cache 64 KiB)
        writer session + read-only control reader
-                                            -> Failed("Store open: ..")
+                                            -> Busy("Store open: ..") /
+                                               Failed("Store open: ..")
   4 Owner::start(template, pager 4096 KiB, namespaces 64)
                                             -> Failed("overlay template: ..")
 ```
+
+A writable `Session::connect` takes the Store directory's writer lane, so two
+openers queue instead of meeting SQLite's `Busy`; a `Busy` open therefore
+means a writer that bypasses the lane (an uncoordinated raw SQLite process)
+held the lock, and it is a definite refusal that changed nothing: the caller
+may repeat the call. Any other open failure stays `Failed`.
 
 | Field or constant | Meaning | Source |
 | --- | --- | --- |

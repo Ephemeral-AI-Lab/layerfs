@@ -83,8 +83,8 @@ SQL work to the calling thread's counters
  SQLite write: Session::run(true, body)
    1 admission.enter        in-process FIFO turn on this session
    2 state mutex            the connection
-   3 Writer::acquire        Linux: flock(LOCK_EX) on the Store's parent
-                            directory; macOS: none     (skipped if nested)
+   3 Writer::acquire        flock(LOCK_EX) on the Store's parent directory
+                            (Linux and macOS)          (skipped if nested)
    4 BEGIN IMMEDIATE        busy_timeout 0 -> Busy
    5 body; COMMIT           or ROLLBACK; Unknown -> quarantine
    6 release the flock; drop the turn
@@ -123,7 +123,7 @@ quarantines the session and keeps the lock
  StoreFile::checkpoint()  (idle: last caller in the process released it)
    read-only? Refused "ReadOnly"   -wal empty? Ok(true), no SQL
    this thread holds the lane? Ok(false)
-   Linux writer lane, one try; held elsewhere? Ok(false)
+   writer lane (Linux and macOS), one try; held elsewhere? Ok(false)
    wait for a running PASSIVE pass; wal_checkpoint(TRUNCATE) once
    busy (a reader in the log)? Ok(false)      else Ok(true): -wal is 0 B
 ```
@@ -132,7 +132,7 @@ quarantines the session and keeps the lock
 | --- | --- |
 | A pass that cannot copy every frame leaves them valid; the next wake, the idle checkpoint or the last close copies them. Each wake is a new pass, never a retry. | [`background.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/background.rs) |
 | A PASSIVE checkpoint takes no lock a writer needs, so it adds no `Busy`. | same |
-| The idle TRUNCATE takes the writer lane first, because it holds SQLite's WAL write lock; `Ok(false)` is never retried. The Store stays open. | [`checkpoint.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/checkpoint.rs) |
+| The idle TRUNCATE takes the writer lane first, because it holds SQLite's WAL write lock; `Ok(false)` is never retried. The Store stays open. Every host that opens a SQLite Store takes this lane, so a writer waits for it or the checkpoint is left, and only a writer that bypasses the lane meets exact `Busy`. | [`checkpoint.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/checkpoint.rs) |
 | Control's open-Store cache calls it when the last call or Sandbox on a Store returns. | [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs) |
 
 ## Lifecycle
@@ -143,11 +143,12 @@ quarantines the session and keeps the lock
      own READ_ONLY connection                  storage still shared? Busy
      VACUUM INTO destination                   read-only? Refused "ReadOnly"
      reopen copy, journal_mode=wal             quarantined / open tx? Uncertain
-     wal_checkpoint(TRUNCATE), close           Linux: take the writer lock
+     wal_checkpoint(TRUNCATE), close           take the writer lock (both OSes)
      no sidecar                                wal_checkpoint(TRUNCATE) or Busy
           \                                    close; sidecar left? Refused
-           \                                   macOS: release extents past EOF
+           \                                   release the writer lock
             +-------> SealedStore <-----------+
+                                               macOS: release extents past EOF
 ```
 
 | Operation | Bound or rule | Source |

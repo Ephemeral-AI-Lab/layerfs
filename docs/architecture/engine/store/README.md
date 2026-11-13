@@ -157,7 +157,7 @@ A PostgreSQL Store has no profile; its write setting is `synchronous_commit`.
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
 | Platform for SQLite | macOS or Linux; elsewhere `BackendUnavailable` | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs) |
-| Direct opening for Store calls | Linux, Store directory on ext4, xfs or btrfs; else `Unsupported`, no fallback | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
+| Direct opening for Store calls | Linux on ext4, xfs or btrfs, macOS on apfs or hfs (one shared kernel); else `Unsupported`, no fallback | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | Cross-process writers (Linux and macOS) | Directory `flock` on the Store's parent directory; an uncoordinated raw SQLite writer still gets SQLite `Busy` | [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs) |
 | PostgreSQL without the feature | `BackendUnavailable` | [`selection.rs`](../../../../engine/crates/layerfs-persistence/src/store/selection.rs) |
 | PostgreSQL lane wait | `lock_timeout_ms`, default 30,000; then `Busy` | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs) |
