@@ -52,6 +52,9 @@ pub struct Attempt {
     path: PathBuf,
     started: i64,
     forced: bool,
+    /// The record this attempt replaced, put back when the attempt has no
+    /// effect of its own (see [`restore`]).
+    prior: Option<SdkValue>,
 }
 fn result(value: &SdkValue) -> Outcome {
     if value.get_text("state") == Some("Unmounted") {
@@ -229,6 +232,13 @@ pub fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal> {
     Ok(recoverable)
 }
 pub fn forceable(value: &SdkValue) -> bool {
+    // A completed `Failed` record, forced or not, is the one shape a force
+    // may replace: the daemon's own guard is the real gate on whether force
+    // may proceed, and a refusal answers with the record it holds. A record
+    // that is still `Unmounting` (its caller ended without publishing),
+    // `Unknown` or already `forced` keeps its answer. A record written before
+    // this rule (no `forced` field) is answered as it stands and is not
+    // forceable.
     value.get_text("state") == Some("Retained")
         && value.get("forced") == Some(&SdkValue::Bool(false))
         && value.get_text("code") == Some("Failed")
@@ -240,11 +250,17 @@ pub fn begin(
     path: &str,
     forced: bool,
 ) -> Result<Attempt, SdkRefusal> {
-    let path_record = record(state, token);
+    begin_at(record(state, token), path, forced)
+}
+/// [`begin`] at the record file `path_record` (a Workspace's
+/// `workspace/<id>.unmount`), holding its lease and replacing the record it
+/// found with this attempt's `Unmounting` record.
+pub fn begin_at(path_record: PathBuf, path: &str, forced: bool) -> Result<Attempt, SdkRefusal> {
     let file = lease(&path_record.with_extension("unmount-lock"), true)?
         .ok_or_else(|| refused("Busy", "Workspace is Unmounting"))?;
     let attempt = Attempt {
         _lease: file,
+        prior: observed(&path_record)?,
         path: path_record,
         started: millis(),
         forced,
@@ -260,13 +276,22 @@ pub fn begin(
     )?;
     Ok(attempt)
 }
+/// Undo this attempt's own record: what it replaced comes back, or the file
+/// goes when there was none. A forced attempt admitted over an earlier record
+/// that answers `Busy` or `Dirty` changed nothing, so the earlier record —
+/// possibly one that says "do not resend" — must not be lost with it. A call
+/// that sent nothing is the same case.
+fn restore(attempt: &Attempt) -> Result<(), SdkRefusal> {
+    match &attempt.prior {
+        Some(prior) => layerfs_store::project::discovery::save(&attempt.path, prior.clone()),
+        None => std::fs::remove_file(&attempt.path).map_err(failed),
+    }
+}
 /// Publish while the Workspace lease prevents another terminal request.
 /// No Sandbox guard is needed to replace this attempt's own result file.
 pub fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result<(), SdkRefusal> {
     match outcome {
-        Err(error) if matches!(error.code.as_str(), "Busy" | "Dirty") => {
-            std::fs::remove_file(&attempt.path).map_err(failed)?;
-        }
+        Err(error) if matches!(error.code.as_str(), "Busy" | "Dirty") => restore(attempt)?,
         _ => {
             let (state, code, message, detail) = match outcome {
                 Ok(_) => ("Unmounted", "", "", SdkValue::Null),
@@ -294,7 +319,7 @@ pub fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result<(), Sd
     Ok(())
 }
 pub fn cancel(attempt: &Attempt) -> Result<(), SdkRefusal> {
-    std::fs::remove_file(&attempt.path).map_err(failed)
+    restore(attempt)
 }
 pub fn cleanup_failure(mut outcome: Outcome, error: SdkRefusal) -> Outcome {
     // Do not replace a known daemon success with a cleanup Busy/Failed.
