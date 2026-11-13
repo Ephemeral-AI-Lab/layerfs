@@ -1,6 +1,7 @@
 //! The native macOS client must not send atime updates the export ignores,
-//! and the default export flush syncs the export directory volume (falling
-//! back to `sync(2)` if the directory is missing).
+//! and a Commit with the default export flush (the export volume's own
+//! `sync_volume_np` on macOS, `sync(2)` elsewhere) never fails on the flush
+//! itself, even when the export's directory is gone.
 #![cfg(target_os = "macos")]
 #[allow(dead_code)]
 #[path = "support/client.rs"]
@@ -35,7 +36,17 @@ fn host_mount_disables_access_time_updates() {
 }
 
 #[test]
-fn default_flush_syncs_volume_and_falls_back_when_directory_is_missing() {
+fn default_flush_commits_with_the_export_volume_and_without_it() {
+    // What this observes, and what it cannot: the Workspace is driven through
+    // this test's own NFS RPC client, so the host's mount client holds no
+    // writeback for either flush to push and neither syscall leaves a trace
+    // here. The two Commits below therefore check the contract that is
+    // observable - a flush that succeeds (`sync_volume_np` of the live
+    // directory) and one that fails (`ENOENT` after the directory is removed,
+    // which falls back to `sync(2)`) both leave the Commit to run and
+    // succeed. The flush calls themselves are covered where they live:
+    // `sync_volume_wait`'s `Ok`/error by `layerfs-bridge`'s
+    // `process_identity` test, and the fallback branch by `flush_default`.
     let base = std::env::temp_dir().join(format!("layerfs-nfs-mounter-{}", std::process::id()));
     let source = base.join("src");
     let work = base.join("work");
@@ -84,7 +95,8 @@ fn default_flush_syncs_volume_and_falls_back_when_directory_is_missing() {
     let mut nfs = Client::connect(SocketAddr::from((Ipv4Addr::LOCALHOST, port)), 501, 20);
     let root = nfs.mnt("/");
 
-    // 1. Existing directory: `sync_volume_wait` succeeds (`Ok(())`).
+    // 1. Live export directory: the default flush is the volume's own
+    // `sync_volume_np`, which succeeds; the Commit runs.
     let f1 = nfs.touch(&root, b"one.txt", 0o644).unwrap();
     nfs.write_all(&f1.handle, 0, b"first\n", 6);
     assert!(Path::new(&ready.directory).is_dir());
@@ -101,8 +113,9 @@ fn default_flush_syncs_volume_and_falls_back_when_directory_is_missing() {
         other => panic!("{other:?}"),
     }
 
-    // 2. Missing directory: `sync_volume_wait` returns `Err(NotFound)` and
-    // `flush_export` falls back to `sync(2)` rather than failing or skipping.
+    // 2. Missing export directory: `sync_volume_np` answers `ENOENT` and
+    // `flush_default` falls back to `sync(2)` instead of failing or skipping
+    // the client writeback; the Commit still runs and succeeds.
     let f2 = nfs.touch(&root, b"two.txt", 0o644).unwrap();
     nfs.write_all(&f2.handle, 0, b"second\n", 7);
     fs::remove_dir_all(&ready.directory).unwrap();
