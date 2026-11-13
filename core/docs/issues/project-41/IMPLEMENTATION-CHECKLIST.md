@@ -96,7 +96,7 @@ Legend: 🔲 not started · ⏳ blocked on a decision · ✅ done
 - [ ] An interrupted compact is recoverable; the Store always opens and `doctor`s
 - [ ] `physical_shrink` reported as the `page_count × page_size` delta, with dropped packs and their bytes separately (C5)
 - [ ] Concurrent compact + write has no silent-loss path
-- [ ] Non-native Stores are refused; the pull/compact/push workaround (two full transfers) is documented, and compact inside the machine's worker stays an open item (§7.2)
+- [ ] Non-native Stores compact **where they live** (their machine's worker, `place::plan`), with no pull/push; the cross-machine interruption case (staged copy on the machine, op record in the caller's home) is covered — decided 2026-11-13, no `Unsupported` refusal
 
 ### layerfs-project#50 — PostgreSQL compact (§7.3, §5 C8, §5 C3)
 

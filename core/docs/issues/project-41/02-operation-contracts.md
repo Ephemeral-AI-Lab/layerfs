@@ -83,8 +83,10 @@ catalog methods that keep an immutable id readable) and §9.3 (byte accounting).
 - No concurrent operations allowed
 - Protects all shared content and dependencies
 - Reports physical bytes reclaimed separately from logical deletion
-- Works on PostgreSQL (including remote servers) and on SQLite Stores on the
-  `native` machine; a non-native SQLite Store is refused `Unsupported`
+- Works on PostgreSQL (including remote servers) and on every SQLite Store,
+  **where it lives**: `place::plan` routes a non-native Store to its machine's
+  worker, so compact runs there and transfers nothing (decided 2026-11-13,
+  layerfs-project#42 item 5 — the earlier `Unsupported` refusal is superseded)
 
 **Admission**: Exclusive access - no mounts or operations on any project in Store
 
