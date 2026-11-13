@@ -1,34 +1,47 @@
 # <Topic>
 
-[Architecture](../../README.md) › [<Layer>](../README.md) › [<Component>](README.md) › <Topic>
-
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-One sentence: what this topic covers.
-
-**How to present:** ASCII diagrams first, then tables, then prose. Put each
-diagram in a ```` ```text ```` block, keep it within 80 columns, and use prose only
-for what a diagram or table cannot say.
+One sentence: what this topic is for.
 
 | | |
 | --- | --- |
-| Component | [<Component>](README.md) |
-| Source | links to the files this topic describes |
+| Layer | [<Layer>](../README.md) |
+| Crates | `layerfs-…` |
+| Source | links to the folders this topic covers |
+| Uses | topics this one calls |
+| Used by | topics that call this one |
+| Flows | flows that pass through it |
 
-## <Subtopic>
+## Picture
 
 ```text
-ASCII diagram of the structure or sequence
+One ASCII diagram, at most 80 columns: the parts and how data moves between them.
 ```
 
-| Field, step or case | Meaning | Source |
+## What it does
+
+| Behaviour | Detail | Source |
 | --- | --- | --- |
 
-Prose only for what the diagram and table do not say.
+## Invariants
 
-## Related
+| Rule | Enforced by |
+| --- | --- |
 
-Links to the topics and components this one depends on.
+## Limits and failures
 
----
-← Previous · Up · Next →
+| Limit or failure | Value or error | Source |
+| --- | --- | --- |
+
+## Demonstration
+
+| Test or example | Command | Platform | Shows |
+| --- | --- | --- | --- |
+
+## Pages
+
+Only when the topic has extra pages.
+
+| Page | What it covers |
+| --- | --- |

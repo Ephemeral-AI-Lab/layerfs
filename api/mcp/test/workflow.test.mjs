@@ -116,7 +116,7 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
     const work = await connect({ home: box.home, profile: "work" });
     const workList = await work.client.listTools();
     assert.equal(workList.tools.length, calls("work"));
-    assert.equal(workList.tools.length, 34);
+    assert.equal(workList.tools.length, 38);
     const workNames = new Set(workList.tools.map((tool) => tool.name));
     for (const name of names("work")) assert.ok(workNames.has(name), `${name} is missing from work`);
     for (const name of names("admin").filter((name) => !names("work").includes(name))) {

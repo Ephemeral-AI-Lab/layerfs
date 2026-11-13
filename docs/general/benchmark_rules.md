@@ -43,7 +43,7 @@ records the owner's serverless direction, not completed integrated qualification
   never relabelled or removed.
 
 This alignment implements owner ruling O-1/K28–K33 in the
-[cluster-two design](../../core/docs/issues/303/README.md). Read the
+[cluster-two design](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/README.md). Read the
 [cluster-one handbook](cluster_one_handbook.md) for implemented APIs and
 source pins. Placement policy alone does not admit a sample: registration,
 correctness, source custody, cache enforcement and the owning gates still apply.

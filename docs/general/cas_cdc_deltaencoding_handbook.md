@@ -3,7 +3,7 @@
 > Status: Current general guide.
 
 Current source links follow the responsibility-folder relocation after
-`32bd3bec0`; [organization evidence](../../core/docs/issues/307/SOURCE-ORGANIZATION-RECEIPT.md)
+`32bd3bec0`; [organization evidence](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/SOURCE-ORGANIZATION-RECEIPT.md)
 records preserved canonical/profile behavior. Existing measurement and mechanism
 source pins remain unchanged.
 
@@ -19,7 +19,7 @@ S5 addition after `f5558fc22`, 2026-10-05: the public `construct_runs` API
 accepts explicit logical zeros and preserves the frozen CDC/canonical profile.
 The all-zero chunk period is 32 KiB; complete zero chunks and mapping subtrees
 are reused without scanning their logical length. Bounded edge/threshold work
-remains. [Payload streams](../../core/docs/architecture/31-payload-streams.md) records
+remains. [Payload streams](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/31-payload-streams.md) records
 root equality/work proofs and the unimplemented sparse localized-edit/Commit
 integration. Earlier numerical receipts retain their identities and verdicts.
 

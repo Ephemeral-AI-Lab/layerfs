@@ -1,4 +1,4 @@
-// docs/architecture/api/call-table/coverage.md holds a matrix generated from the four front ends'
+// docs/architecture/api/calls/coverage.md holds a matrix generated from the four front ends'
 // own call lists (api/scripts/gen-coverage.mjs): this fails when the committed block is not what
 // they give now, or when a front end lacks a call or disagrees with the Node table (#32). MCP's
 // column is derived from the generated tool list and the profile buckets of api/mcp.

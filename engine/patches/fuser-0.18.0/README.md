@@ -43,7 +43,7 @@ Third-party source, including the corrected time.rs, is excluded from first-part
 production LOC by the repository counter. It remains visible as a
 dependency correction; it is not a first-party source-size reduction.
 
-The [qualification record](../../../core/docs/issues/307/FUSER-REGISTRY-PATCH-20261006.md)
+The [qualification record](records/FUSER-REGISTRY-PATCH-20261006.md)
 separates parser/reply correctness, actual mounted behavior, Linux timestamp
 boundary canonicalization and the still-incomplete S8 product milestone. Retire
 this patch only after an explicitly selected corrected release passes the owning
@@ -51,7 +51,7 @@ qualification; do not silently switch sources or weaken the timestamp contract.
 
 ## Receive-loop lifecycle extension, 2026-10-08
 
-The owner [authorized this narrow extension](../../../core/docs/issues/307/FUSER-LIFECYCLE-DECISION-20261008.md)
+The owner [authorized this narrow extension](records/FUSER-LIFECYCLE-DECISION-20261008.md)
 after inspection showed that the original public API could not report all-loop
 startup or preserve all joins through its early error paths. The additive
 `Session::into_runner()` API provides a `SessionRunner`, a `SessionMonitor` and
@@ -79,7 +79,7 @@ and one native mount/Ready/detach/join. Full LayerFS R2–R5 remains unfinished.
 
 ## Receive buffer sized by the negotiated max_write, 2026-10-14
 
-The owner [authorized this delta](../../../core/docs/issues/321/FUSER-RECEIVE-BUFFER-DECISION-20261014.md)
+The owner [authorized this delta](records/FUSER-RECEIVE-BUFFER-DECISION-20261014.md)
 after the dense-rewrite peak investigation. Each receive loop allocated fuser's
 16 MiB + 4 KiB maximum although LayerFS negotiates a 128 KiB `max_write`. glibc
 made those buffers resident from the second mount on: about 32 MiB per
@@ -96,3 +96,11 @@ allocates that size. The handshake buffer stays at fuser's maximum.
 
 No file is added, so the package still has 86 files. Reconstruction applies
 this patch after `session-lifecycle.patch`.
+
+## Decision records
+
+The owner decisions and qualification records for these patches live in
+[`records/`](records/). Each provenance file's `authorization` field names the
+record's original path under `core/docs/issues/` (removed by #671); the record
+itself was moved here unchanged, and the provenance files and their pinned
+checksums were left as they were.

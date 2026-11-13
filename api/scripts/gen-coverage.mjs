@@ -1,4 +1,4 @@
-// Generates the call-by-front-end matrix of docs/architecture/api/call-table/coverage.md
+// Generates the call-by-front-end matrix of docs/architecture/api/calls/coverage.md
 // from the four front ends' own call lists:
 //   Node    the package's `table` and its bound functions
 //   Python  `layerfs.TABLE`, the sync functions and the `layerfs.aio` coroutines
@@ -18,7 +18,7 @@ import { bucketOf, tools as toolsOfProfile } from "../mcp/src/profiles.js";
 import { toolFor, toolsOf } from "../mcp/src/tools.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
-export const document = join(root, "docs/architecture/api/call-table/coverage.md");
+export const document = join(root, "docs/architecture/api/calls/coverage.md");
 const BEGIN = "<!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->";
 const END = "<!-- END GENERATED -->";
 

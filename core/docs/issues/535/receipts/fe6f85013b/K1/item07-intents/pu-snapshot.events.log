@@ -1,4 +1,0 @@
-1793691166.402762 begin push pu-snapshot docker point=snapshot pid=41012
-1793691166.403737 progress {"phase": "check", "done": null, "total": null}
-1793691166.413894 progress {"phase": "snapshot", "done": null, "total": null}
-1793691166.413971 SIGKILL at progress snapshot

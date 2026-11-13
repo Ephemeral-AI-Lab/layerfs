@@ -1,6 +1,0 @@
-1793691311.063587 begin pull pl-send-mid - point=send-mid pid=43107
-1793691311.064897 progress {"phase": "check", "done": null, "total": null}
-1793691311.071615 progress {"phase": "snapshot", "done": null, "total": null}
-1793691311.413907 progress {"phase": "send", "done": 0, "total": 24502272}
-1793691314.863416 progress {"phase": "send", "done": 8388608, "total": 24502272}
-1793691314.863830 SIGKILL at send-mid
