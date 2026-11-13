@@ -86,7 +86,7 @@ In **one Store schema change**:
 
 Partial unique indexes (restricted to rows whose `removed_ms` / `deleted_ms` is null) are **not** used: they would free the name, and a recreated Branch would reproduce `BranchId::named = blake3(stack ‖ name)` and take over the old history (spec §5 C6, `03-decision-record.md` §2).
 
-The version step for this change is decided by layerfs-project#42. At `layerfs_v2_0_0` the Store records `store_policy.schema_version` (`CHECK(schema_version=1)`) and `history_meta.identity_format = 3`; this plan does not invent a version number.
+The version step for this change is decided by layerfs-project#42 — **and it was decided on 2026-11-13: no step.** The columns land as an additive migration under the same schema identity (`REBUILD.md kind 2`), and 1.0 Stores are converted offline by `tools/store_blocks.py migrate`. At `layerfs_v2_0_0` the Store records `store_policy.schema_version` (`CHECK(schema_version=1)`) and `history_meta.identity_format = 3`; this plan does not invent a version number.
 
 ### Implementation path
 
@@ -94,7 +94,7 @@ The version step for this change is decided by layerfs-project#42. At `layerfs_v
 
 **SQLite** (`sql/sqlite/history.sql`):
 ```sql
--- Store schema change (version step decided by layerfs-project#42)
+-- Store schema change (additive migration, same version - decided 2026-11-13)
 ALTER TABLE layer_stack ADD COLUMN deleted_ms INTEGER DEFAULT NULL;
 ALTER TABLE branch ADD COLUMN removed_ms INTEGER DEFAULT NULL;
 
@@ -656,7 +656,7 @@ Requirement 3: GC tells active from removed
   Goal: a deleted_ms / removed_ms column.
 ```
 
-## Schema change (version step decided by layerfs-project#42)
+## Schema change (additive migration, same version - decided 2026-11-13)
 
 ### New visibility columns
 
@@ -725,7 +725,7 @@ pub fn migrate_add_visibility(conn: &mut Connection) -> Result<()> {
         ALTER TABLE layer_stack ADD COLUMN deleted_ms INTEGER DEFAULT NULL;
         ALTER TABLE branch ADD COLUMN removed_ms INTEGER DEFAULT NULL;
     ")?;
-    // record the version step decided by layerfs-project#42
+    // same version: the recorded schema_source/schema_definition change, the number does not
     Ok(())
 }
 ```

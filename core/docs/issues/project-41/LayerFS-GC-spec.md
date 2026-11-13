@@ -152,8 +152,9 @@ For per-object/per-row deletion (PostgreSQL, future online GC), the delete inten
 ### C6 Name reuse and terminal state (Q1)
 - `BranchId::named = blake3(stack ‖ name)`, and the comment relies on "names are never reused" (`core/crates/layerfs-history/src/contract/identity.rs:266`); once `branch.remove` lands, that premise fails.
 - Recommended A: forbid reuse + terminal tombstone, a same-name create returns `NameRetired`; zero migration. Alternative B: incarnation participates in the derivation, requiring migration.
-- `branch`/`layer_stack`/`layer` currently have no visibility column (`persistence/sql/sqlite/history.sql`); adding a column means every history query carries that dimension, adding a table avoids it. layerfs-project#42 must list "which queries must filter".
+- `branch`/`layer_stack`/`layer` currently have no visibility column (`persistence/sql/sqlite/history.sql`); adding a column means every history query carries that dimension, adding a table avoids it — **the column was chosen (2026-11-13), so the list of queries that must filter on visibility is a deliverable of layerfs-project#42**. layerfs-project#42 must list "which queries must filter".
 - The split between shared / exclusive project tombstones is decided by layerfs-project#42; this spec requires only "terminal state + decidable generation".
+- **Decided (owner, 2026-11-13, layerfs-project#42 item 7):** the tombstone is a **column** on the retired row, and `project.delete` is **exclusive** while `project.remove_file` is **shared**. "Exclusive" is not "deleted now" — it only removes that history from the root set at mark time, so reclamation still happens only in an explicit `store.compact`.
 
 ### C7 Intent = `Stage` copy + op record (S3)
 - A new sidecar intent file is forbidden.

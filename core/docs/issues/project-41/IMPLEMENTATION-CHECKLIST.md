@@ -40,7 +40,8 @@ Legend: 🔲 not started · ⏳ blocked on a decision · ✅ done
       in-place path (§5.1 reading (b)) exists only if the owner names one, which
       the C3 sign-off already argues against (`03-decision-record.md` §5.1, §5.1a, §5.3)
       — <https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/42#issuecomment-6818138560>
-- [ ] Contracts C1–C10 and C8b frozen; the split between shared and exclusive project tombstones stated (C6)
+- [x] Contracts C1–C10 and C8b frozen; the split between shared and exclusive project tombstones stated (C6)
+      — decided 2026-11-13: dedicated columns (`branch.removed_ms`, `layer_stack.deleted_ms`), `project.delete` exclusive, `project.remove_file` shared; the visibility-query list is a deliverable
 - [ ] The "which history queries must filter on visibility" list enumerated (C6, C9)
 
 ### layerfs-project#43 — Admission enforcement (§5 C10, §2)
