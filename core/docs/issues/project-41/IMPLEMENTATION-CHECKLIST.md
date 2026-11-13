@@ -100,7 +100,7 @@ Legend: 🔲 not started · ⏳ blocked on a decision · ✅ done
 - [ ] Concurrent compact + write has no silent-loss path
 - [ ] Non-native Stores compact **where they live** (their machine's worker, `place::plan`), with no pull/push; the cross-machine interruption case (staged copy on the machine, op record in the caller's home) is covered — decided 2026-11-13, no `Unsupported` refusal
 
-### layerfs-project#50 — PostgreSQL compact (§7.3, §5 C8, §5 C3)
+### layerfs-project#50 — PostgreSQL compact (§7.3, §5 C8, §5 C3) — three-table swap
 
 - [ ] Store replacement per R1: **E** (two `ALTER SCHEMA RENAME` in one transaction) by default; **A'** only if S11 requires reads up
 - [ ] `catalog_incarnation` bumped at install; the C8 reader fence refuses stale sessions

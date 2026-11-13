@@ -25,7 +25,7 @@
 | S8 | Reader fence = **session-level `(catalog_id, incarnation)` check → `StaleStore`** | incarnation is checked only at open; under WAL no lock blocks a reader | C8 |
 | S9 | install is binary, `heads` must match before and after | transfer's `Verify{heads}`; I1 | I1, I3 |
 | S10 | Logical deletion does not rewrite history or change IDs | CommitId is content-derived; layerfs-project#41's "immutable IDs must not silently resolve" | I5 |
-| S11 | Read availability during compact = **exclusive by default** (reads unavailable); if a "reads available" SLO is required (p99 ≤ 1.2× baseline), PG takes A' (pointer + versioned schema) | Decides whether R1 = E or A'; consistent with C10's exclusive admission | §1.3 R1, §7.3 |
+| S11 | Read availability during compact = **exclusive by default** (reads unavailable); if a "reads available" SLO is required (p99 ≤ 1.2× baseline), PG takes A' (pointer + versioned schema) | Decides the window, not the swap mechanism: inside the exclusive window PostgreSQL swaps **three tables** (2026-11-13, item 1 revised) | §1.3 R1, §7.3 |
 
 ### 1.2 Still open for layerfs-project#42 (with recommendation + cost + cost of choosing wrong)
 
@@ -247,17 +247,31 @@ retire     delete old copies the record no longer names
 - **Scope**: remote PostgreSQL Stores are in scope (including remote servers); out of scope are remote SQLite and remote object-storage copies.
 - A Store is one schema; `{s}` is replaced by `self.schema` at `backend/postgresql/mechanics.rs:21`, and `self.schema` comes from `schema_of` (`open.rs:37`), which **requires** the schema on every call: `schema_of(None)` refuses `InvalidInput("postgresql.schema is required")` — there is no `layerfs` default.
 - **The swap method is decided by S11**:
-  - **E (default, exclusive window)**: `BEGIN; ALTER SCHEMA layerfs RENAME TO layerfs_c_<n>_old; ALTER SCHEMA layerfs_c_<n> RENAME TO layerfs; COMMIT;` followed by `DROP SCHEMA layerfs_c_<n>_old`. The final name is still `layerfs`, so every record and `{s}` is unchanged; one namespace lock.
+  - **Three-table swap (2026-11-13, item 1 revised; replaces the whole-schema rename)**:
+    one transaction, inside the exclusive window —
+    `LOCK TABLE pack, object_location, content_signature IN ACCESS EXCLUSIVE MODE NOWAIT`;
+    re-check `catalog_id`, `incarnation == G` and the heads;
+    `INSERT … SELECT` the live rows into scratch tables in a **short-named** schema (`c<8hex>_<n>`);
+    rebuild the pack foreign key and the prefix structures;
+    `DROP TABLE` the three old tables; `ALTER TABLE scratch.… SET SCHEMA <store>`;
+    `catalog_incarnation += 1`; recompute `store_totals`; `COMMIT`; then drop the empty scratch schema.
+    Why not the whole-schema rename: copying `commit`/`layer` re-fires `add_logical`
+    (`schema.sql:182-185`) and double-counts `logical`; copying `init_operation` needs
+    `OVERRIDING SYSTEM VALUE` and reissues operation ids (`acquisition.sql:2`); new objects
+    have new OIDs, so every GRANT is lost; and `schema + "_c_<n>_old"` can exceed PostgreSQL's
+    63-byte identifier limit. Only `object_location.pack_id` references `pack`, so three tables
+    cover all payload and history/acquisition are never touched.
   - **A' (read-available window)**: data lives in the versioned schema `layerfs_c_<n>`; the fixed schema holds only a pointer row; `self.schema` is resolved from the pointer at open; swap = one UPDATE of the pointer row, then `DROP SCHEMA` of the old generation. "Versioned table names" (A) is not adopted, because it would add a second placeholder to every SQL statement.
   - **B (alternative)**: paired `ALTER TABLE RENAME` in the same transaction (ACCESS EXCLUSIVE per table, `lock_timeout` must be verified).
   - **C, view indirection**: writability needs triggers; the last alternative.
 - Whichever is chosen, the reader fence (C8/R2) is required.
 - `pack` has immutability triggers on the PG side too, so deleting rows of the old table is forbidden; reclamation is "new schema + new triggers": the replacement schema receives only retained packs and rows, exactly as on SQLite (§7.2 step 2), and dead packs leave with `DROP SCHEMA … CASCADE`.
-> **[CLOSED 2026-11-13 — owner chose (a)]** Reading (b), an additional in-place path
-> with its own deletion order ("references first, payload second"), was **not** adopted.
-> The replacement schema receives only retained rows and the old one leaves with
-> `DROP SCHEMA … CASCADE`, so **no object row is ever deleted** and the
-> `backend_reusable` intermediate state does not arise on this path. Consequence for
+> **[CLOSED 2026-11-13 — owner chose (a), then revised the mechanism]** Reading (b), an
+> additional in-place path with its own deletion order ("references first, payload second"),
+> was **not** adopted. Reading (a) is now the **three-table swap** above: live rows are
+> inserted into scratch tables and the old tables are dropped in the same transaction, so
+> **no object row is ever deleted one at a time** and the `backend_reusable` intermediate
+> state does not arise. Consequence for
 > layerfs-project#42 item 9: C3 (`delete(id, G)`) has **no caller in 2.0.0** and is a
 > forward-looking contract for a future online sweep (`03-decision-record.md` §5.1).
 - Reader fence: the lane blocks only writers; readers uniformly go through C8's `(catalog_id, incarnation)` session check → `StaleStore` (Q5 is superseded by C8/R2 and is no longer chosen separately).
