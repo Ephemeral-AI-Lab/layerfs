@@ -111,17 +111,20 @@ built addon).
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
-61 calls: 34 in `work`, 27 in `admin` only; `--profile admin` lists all 61.
+70 calls: 38 in `work`, 32 in `admin` only; `--profile admin` lists all 70.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
 | `project.init` | admin | admin | import a host folder into a Store; administration |
-| `project.list` | work | work, admin | read a project's record or export one (work); importing and removing a project are administration |
-| `project.get` | work | work, admin | read a project's record or export one (work); importing and removing a project are administration |
+| `project.list` | work | work, admin | read a project's record or its entry counts, or export one (work); importing and removing a project are administration |
+| `project.get` | work | work, admin | read a project's record or its entry counts, or export one (work); importing and removing a project are administration |
+| `project.stats` | work | work, admin | read a project's record or its entry counts, or export one (work); importing and removing a project are administration |
 | `project.export` | work | work, admin | export a Branch snapshot to a local folder under a launch-time --export-root; a folder scope refuses it |
 | `project.remove` | admin | admin | remove a project from its Store; administration |
 | `branch.list` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
 | `branch.get` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
+| `branch.commits` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
+| `branch.get_commit` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
 | `branch.fork` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
 | `branch.merge` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
 | `branch.publish` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
@@ -134,6 +137,7 @@ built addon).
 | `file.list` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
 | `file.glob` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
 | `file.grep` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
+| `file.revision` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
 | `file.blame` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
 | `file.diff` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
 | `file.write` | work | work, admin | read and change files in a Branch; each write is one explicit Commit |
@@ -165,8 +169,11 @@ built addon).
 | `store.list` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.get` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.status` | admin | admin | create, connect, transfer and remove Stores; administration |
+| `store.stats` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.create` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.connect` | admin | admin | create, connect, transfer and remove Stores; administration |
+| `store.attach` | admin | admin | create, connect, transfer and remove Stores; administration |
+| `store.detach` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.push` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.pull` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.remove` | admin | admin | create, connect, transfer and remove Stores; administration |
@@ -176,6 +183,8 @@ built addon).
 | `backup.list` | admin | admin | upload and restore a Store on a bucket; administration |
 | `backup.create` | admin | admin | upload and restore a Store on a bucket; administration |
 | `backup.restore` | admin | admin | upload and restore a Store on a bucket; administration |
+| `logs.list` | admin | admin | read and clear the home's call log; administration |
+| `logs.reset` | admin | admin | read and clear the home's call log; administration |
 
 <!-- END GENERATED -->
 
