@@ -471,10 +471,10 @@ fn a_window_that_shows_facts_reads_it_in_batches() {
     assert_eq!((small.2, large.2), (0, 0), "no single length demand");
     // The window's object batches do not grow with the names it lists: an
     // inode tree level whose pages are resident costs no demand, and the rest
-    // come one batch per level, not one read per name. (Measured: one batch at
-    // both sizes, because the visits before the window read the tree's upper
-    // level into the same cache and only its leaf level was left — this is not
-    // a fully cold window's count.) This fixture
+    // come one batch per level, not one read per name. (What the count is
+    // here depends on the levels the visits before the window left unread: in
+    // this fixture they read the tree's upper level into the same cache, so
+    // this is not a fully cold window's count.) This fixture
     // keeps every metadata root inline and builds its subdirectory's child
     // count during construction, so neither costs a demand here; a tree whose
     // metadata roots are objects, or a subdirectory counted by a scan, pays
