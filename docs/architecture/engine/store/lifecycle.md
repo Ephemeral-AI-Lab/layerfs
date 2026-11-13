@@ -111,8 +111,9 @@ SqliteHandles::seal(self)
     take the directory writer lock (Linux and macOS)
     macOS: capture file identity; clear SQLITE_FCNTL_PERSIST_WAL
     PRAGMA wal_checkpoint(TRUNCATE) -- not complete -----------> Busy
-    close the connection, then release the writer lock
+    close the connection
     a -wal, -shm or -journal sidecar left? --------------------> Refused
+    release the writer lock
     macOS: release unused extents past EOF (seal_allocation)
   -> SealedStore { path, profile, sqlite_version, bytes }
 ```

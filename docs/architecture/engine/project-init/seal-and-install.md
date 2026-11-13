@@ -27,8 +27,9 @@ live Store instead, and what each route leaves when its outcome is unknown.
        take the cross-process writer hold (Linux and macOS)
        macOS: capture file identity; disable persistent WAL
        PRAGMA wal_checkpoint(TRUNCATE) ------- busy != 0 --> Busy
-       close connection; release writer hold
+       close connection
        -wal, -shm, -journal must be absent --- else Refused
+       release writer hold
        macOS: release unused allocation past the logical end
      --> SealedStore { path, profile, sqlite_version, bytes }
 ```
