@@ -412,7 +412,7 @@ fn window_fixture(files: u64) -> common::Fixture {
         bytes: Vec::new(),
     }
 }
-/// One cold window over `files` inherited names, as a reply that shows each
+/// One READDIRPLUS window over `files` inherited names, as a reply that shows each
 /// entry's facts reads it: (object batches, length batches, single length
 /// demands, entries listed).
 fn window_reads(files: u64) -> (u64, u64, u64, usize) {
@@ -424,8 +424,9 @@ fn window_reads(files: u64) -> (u64, u64, u64, usize) {
     );
     let mount = b.overlay.create_kernel_mount(1).unwrap();
     let directory = open(&b, mount, 1, 1);
-    // Nothing of the base is resident: the window's names come from the
-    // Store, and so do the facts this reply shows.
+    // The cache starts empty, so the window's names and facts come from the
+    // Store; the OPENDIR and reading visit below fill the inode table's upper
+    // level into the same cache before the window's own reads are counted.
     let window = visit_with(&b, directory, 2, None, true).unwrap();
     assert!(window.listing.is_none() && window.needs_base(true));
     let store = &b.fixture.store;
