@@ -87,7 +87,7 @@ differs.
 | Step | NFS route | Source |
 | --- | --- | --- |
 | Attach | Serve the engine mount as one loopback NFSv3 export on a fresh port; the host client mounts it with the mount helper; Ready only after the helper reports the mount. An NFS receipt has `abi_major == 0` and `mount_id` = the port | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
-| Commit | Flush first (flush helper, or `sync(2)`), close the export's descriptors, run the unchanged Commit; after an install of another root, close them again | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs), [`invalidate.rs`](../../../../engine/crates/layerfs-daemon/src/control/invalidate.rs) |
+| Commit | Flush first (flush helper, or the export volume's own flush: `sync_volume_np(<dir>, SYNC_VOLUME_WAIT)` on macOS, `sync(2)` elsewhere), close the export's descriptors, run the unchanged Commit; after an install of another root, close them again | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs), [`invalidate.rs`](../../../../engine/crates/layerfs-daemon/src/control/invalidate.rs) |
 | Unmount | Helper unmount (busy is reversible), stop the export, revoke, Close | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 | ForceUnmount | Force helper once, then the same teardown | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 | Helper run | One attempt, at most `HELPER_WAIT` (60 s), then killed and reported | [`export_helper.rs`](../../../../engine/crates/layerfs-daemon/src/control/export_helper.rs) |

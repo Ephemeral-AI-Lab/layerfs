@@ -10,8 +10,9 @@
 //! - Ready carries the same receipt record; an NFS receipt is recognized by
 //!   `abi_major == 0`, and its `mount_id` is the export's TCP port.
 //! - Commit first has the client write back what it buffered (the flush
-//!   helper, `sync(2)` by default) and closes the export's implicit file
-//!   descriptors, then runs the unchanged Commit. A Commit that installed
+//!   helper, else the export volume's own flush: `sync_volume_np(...,
+//!   SYNC_VOLUME_WAIT)` on macOS, `sync(2)` elsewhere) and closes the
+//!   export's implicit file descriptors, then runs the unchanged Commit. A Commit that installed
 //!   another root closes the export's descriptors again; the client
 //!   revalidates attributes on its own schedule (close-to-open, `actimeo`).
 //! - Unmount asks the helper to unmount (a busy answer is reversible and the

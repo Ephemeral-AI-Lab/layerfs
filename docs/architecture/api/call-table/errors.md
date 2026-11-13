@@ -46,7 +46,7 @@ Store engine's refusals that pass through Store calls.
 | `NoSuchPath`, `IsDirectory`, `NotDirectory`, `NotFile`, `NotEmpty`, `Binary` | path refusals of the `file` calls | `write/mutation.rs`, [`store-service read/`](../../../../engine/crates/layerfs-store-service/src/read) |
 | `Exists`, `NameTaken`, `ReservedName` | a name is taken or reserved; a database already connected | [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs), [`history/branch.rs`](../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `InUse` | held: running Sandboxes, processes with the Store open, Stores on a machine | [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs), `inventory.rs` |
-| `Busy` | another operation runs on the entity (`detail {entity, phase, op}`), or no daemon connection came free | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs), [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
+| `Busy` | another operation runs on the entity (`detail {entity, phase, op}`), no daemon connection came free, or a Store's writable open met SQLite's busy lock before any effect (the open wrote nothing; the caller may repeat the call) | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs), [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs), [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) |
 | `Unresolved` | an earlier operation on the entity ended with its outcome unknown and its process is gone | `layerfs-home` `op.rs` |
 | `Conflict`, `HeadMoved` | a merge or Commit conflict, or the Branch head moved; for `backup.restore`, the Store changed since its last backup | [`daemon/values.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/values.rs), `history/lookup.rs` |
 | `Dirty`, `MountsActive` | unmount with uncommitted changes; `sandbox.close` while Workspaces are mounted | `daemon/values.rs`, [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
@@ -94,7 +94,7 @@ The 2.0.0 manual keeps a reader's version of this table in
 | `Unresolved` | an earlier `Unknown` on this entity stands; this call did nothing | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) `blocks` |
 | daemon `Unknown` | a Workspace operation's outcome is uncertain at the daemon | [`control_types.rs`](../../../../engine/crates/layerfs-bridge/src/control_types.rs) `ControlCode::Unknown` |
 | `Failed` after a daemon exchange with `attempted: true` | uncertain, though the code is `Failed`: a lost daemon reply is not mapped to `Unknown` | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `operation` |
-| `Busy` | known: nothing was attempted | `layerfs-home` `op.rs`, `daemon/pool.rs` |
+| `Busy` | known: nothing was attempted, including a `Busy` Store open (the open changed nothing) | `layerfs-home` `op.rs`, `daemon/pool.rs`, [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs) |
 | `Unavailable`, `Denied`, `TooLarge` from a worker | known: the request was not sent | `worker/client.rs` (`Unreached`) |
 
 Intent sources: [`sqlite/family.rs`](../../../../control/crates/layerfs-store/src/sqlite/family.rs),
