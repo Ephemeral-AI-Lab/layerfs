@@ -50,6 +50,17 @@ impl OwnerClient {
     pub fn state(&self, route: Route) -> Result<layerfs_overlay::WorkspaceState, OwnerError> {
         self.call(route, ServiceClass::General, None, move |db| db.state())
     }
+    /// `state` for an observation (the daemon's control Status): it leaves
+    /// queued maintenance to `reclaim` or a later job. A Sandbox probes the
+    /// Status of every Workspace before most calls, an unmount's included, so
+    /// a draining probe right after a Commit ran that Commit's whole
+    /// reclamation in the caller's call (#679).
+    pub fn observe_state(
+        &self,
+        route: Route,
+    ) -> Result<layerfs_overlay::WorkspaceState, OwnerError> {
+        self.call_deferred(route, move |db| db.state())
+    }
     /// One window of the active generation's changed inodes.
     pub fn active_inodes(
         &self,
