@@ -51,9 +51,10 @@ named for each one in §4.
   next to the old ones without a single switch, a client that opens between the
   two statements reads a half-migrated Store. Two clients can then write to
   different tables and both report success.
-- **Rename sequence interrupted → `layerfs` does not exist.** With
-  `ALTER SCHEMA layerfs RENAME TO layerfs_c_<n>_old` committed and the second
-  rename not, every connection fails on schema resolution.
+- **Swap interrupted → nothing moved.** The three-table swap runs in one transaction: a crash
+  before `COMMIT` rolls back, so `layerfs` still holds the old three tables and the scratch schema
+  holds a discarded copy. The earlier risk — a committed first rename making `layerfs` disappear —
+  no longer exists, because nothing is renamed.
 - **Reads blocked for the whole window.** Any exclusive lock held across the copy
   makes unrelated readers wait for the copy, not for the switch.
 - **Writes landing in the retired schema.** A writer holding a session on the old
@@ -65,7 +66,7 @@ named for each one in §4.
 
 | Option | Mechanism | Why it can be rejected |
 |---|---|---|
-| **E** (default) | `BEGIN; ALTER SCHEMA layerfs RENAME TO layerfs_c_<n>_old; ALTER SCHEMA layerfs_c_<n> RENAME TO layerfs; COMMIT;` then `DROP SCHEMA …_old` | Reads unavailable for the switch window |
+| **Three-table swap** (chosen 2026-11-13, replaces the whole-schema rename) | `LOCK` the three tables `ACCESS EXCLUSIVE NOWAIT`; `INSERT … SELECT` live rows into scratch tables; rebuild the pack FK; `DROP TABLE` the old three; `SET SCHEMA` the new three; bump the incarnation; `COMMIT`; drop the empty scratch schema | Replaces E: a whole-schema copy re-fires `add_logical` (double-counting), needs `OVERRIDING SYSTEM VALUE` for `init_operation` and would reissue operation ids, loses every GRANT, and can exceed the 63-byte identifier limit | Reads unavailable for the switch window |
 | **A'** | Data in versioned schema `layerfs_c_<n>`; a pointer row in the fixed schema; `self.schema` resolved from the pointer at open; swap = one `UPDATE` + later `DROP SCHEMA` | Costs a second placeholder at open, a pointer that must be recovered, and multiple live schemas |
 | **B** | Paired `ALTER TABLE RENAME` in one transaction | Every table takes `ACCESS EXCLUSIVE`; needs a measured `lock_timeout`; N tables, N lock points |
 | **C** | View indirection | Writability needs triggers; last resort |
