@@ -83,7 +83,7 @@ Legend: 🔲 not started · ⏳ blocked on a decision · ✅ done
 
 - [ ] The call is a visibility operation: history and ids are not rewritten
 - [ ] History traversal hides the removed path; earlier Commits stay readable
-- [ ] Reclaimed bytes are reported and match the receipt; a 0 is explained (Q2)
+- [x] Reclaimed bytes are **0 by construction** (Q2 decided 2026-11-13): I5 visibility-only + C6 shared tombstone keep the objects in the closure; the test asserts `dropped_packs == 0` and the receipt explains it, which is the regression guard against dropping references
 - [ ] Cross-project sharing is unaffected
 - [ ] Tested on both backends
 
