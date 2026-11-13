@@ -3,8 +3,8 @@
 //! `revoke_kernel_mount` cannot see it; what keeps `Revoke` and Close behind
 //! it is the kernel's busy answer while its caller lives and the lane's
 //! drain predicate afterwards
-//! ([kernel read custody](../../../docs/architecture/73-kernel-read-custody.md),
-//! [forced teardown](../../../docs/architecture/80-forced-teardown.md)).
+//! ([kernel read custody](../../../../docs/architecture/engine/kernel-routes/README.md),
+//! [forced teardown](../../../../docs/architecture/engine/daemon/control-calls.md)).
 //!
 //! Staging, hook-free. The Store is composed from the public pieces
 //! `open_store` composes, with each read session's pack persistence port

@@ -48,21 +48,21 @@ product mental model or campaign-specific benchmark procedures.
   physical reservation and headroom were removed by #321: no space is reserved
   ahead of use, and a full device rolls the write back as no space);
   native/runtime/integrated exits remain
-  unfinished. See [S6 audit](../core/docs/issues/307/S6-EXIT-AUDIT.md). Its relocated
+  unfinished. See [S6 audit](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/S6-EXIT-AUDIT.md). Its relocated
   predecessor `layerfs-workspace-legacy` was removed by R7-retire.
   Since #321 the daemon holds one overlay file and connection per mounted
   Workspace, each behind its own lock, with the calling thread running each
   short job; the fair SQL owner thread, its queue, credits and shared memory
-  budget are removed. See the [terminology guide](../core/docs/architecture/64-overlay-terminology.md)
-  and the [#321 record](../core/docs/issues/321/CHECKLIST.md).
+  budget are removed. See the [terminology guide](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/64-overlay-terminology.md)
+  and the [#321 record](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/321/CHECKLIST.md).
   Daemon also exposes a direct global Store adapter with a
   mount-time reader per Workspace, exact quarantine and read-only bind snapshots,
   one immutable cache shared across Workspaces, bounded root
   binding and operation-owned exact failures. Concrete opening stays outside
   the provider-independent adapter; see the
-  [direct Store boundary](../core/docs/architecture/61-direct-store-adapter.md).
+  [direct Store boundary](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/61-direct-store-adapter.md).
   The host-mediated SDK/upstream transport is retired; see
-  [the retirement record](../core/docs/issues/307/PRE-S8-F12-20261007.md).
+  [the retirement record](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/PRE-S8-F12-20261007.md).
   Workspace calls return typed values directly and count SQL/payload/allocation
   work under the same lock. Exact attempted failures retain their cause and
   backing; before-effect refusals retain their original input. Overlay/Daemon
@@ -82,11 +82,11 @@ product mental model or campaign-specific benchmark procedures.
   reference reduction/release uses fixed rows, sealed membership passes and
   guarded FIFO/cursor transitions. Captured namespace normalization is the
   `CapturedNamespace` producer
-  ([captured namespace construction](../core/docs/architecture/78-captured-namespace-construction.md));
+  ([captured namespace construction](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/78-captured-namespace-construction.md));
   the product Commit constructor calls it
-  ([product Commit](../core/docs/architecture/79-product-commit.md)). The Store
+  ([product Commit](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/79-product-commit.md)). The Store
   half of Commit is implemented with exact original failure/unknown custody;
-  see [Store Commit](../core/docs/architecture/65-store-commit-composition.md).
+  see [Store Commit](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/65-store-commit-composition.md).
   The external E01 example records original startup work, diagnostics and Stop
   without creating a Workspace route. It supplies diagnostic receipt consistency,
   not E1/E2 performance admission. Its relocated predecessor was removed by
@@ -94,14 +94,14 @@ product mental model or campaign-specific benchmark procedures.
   Pre-S8 direct-operation accounting now has actual registered macOS/Linux engine
   and Store-half Commit runs, independent family/count validation, and supported
   phase observations. Numerical latency/residency and exact continuous peaks
-  remain unqualified; see the [accounting scope](../core/docs/issues/307/PRE-S8-F14-20261007.md).
+  remain unqualified; see the [accounting scope](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/PRE-S8-F14-20261007.md).
   SDK creates/imports the initial Store, publishes the first Branch and consumes
   seal, returning a closed file plus explicit provider/locator/profile metadata.
   It retains no Store handle or data service. Native install now streams the
   sealed file once, opens it in the daemon and returns both actual SQLite versions;
-  see [F5 handoff](../core/docs/issues/307/PRE-S8-F5-20261007.md). Authenticated mount
+  see [F5 handoff](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/PRE-S8-F5-20261007.md). Authenticated mount
   binding, Store-half Commit, status, terminal close, fork and history now compose
-  the direct ports; see [native control](../core/docs/architecture/68-native-workspace-control.md).
+  the direct ports; see [native control](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/68-native-workspace-control.md).
   The prior client/runtime, daemon upstream, Bridge logical data framing and
   excluded API-core are retired. Historical receipts keep their original topology
   and verdicts. R7-retire (2026-10-10)
@@ -111,7 +111,7 @@ product mental model or campaign-specific benchmark procedures.
   `layerfs-workspace-legacy`. The root workspace lists the active
   members across core, engine and api; the boundary guard refuses the return of a removed directory or
   package name, and each source is recoverable from the commit named in the
-  [R7-retire record](../core/docs/issues/307/R7-RETIRE-COMPLETION-20261010.md).
+  [R7-retire record](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/R7-RETIRE-COMPLETION-20261010.md).
   Pinned read-only SDK views (303/08 O-10) are deferred, not dropped: no
   implementation is in the tree, and a kept feature needs a new design on the
   SQLite overlay. Do not restore the predecessor code to supply them.
@@ -130,43 +130,43 @@ product mental model or campaign-specific benchmark procedures.
   Its predecessor `layerfs-fuse-legacy` was removed by R7-retire; the last
   commit holding that source is `15e33e22c`. The daemon
   composes Attach/Locate/Ready and reversible normal unmount; see
-  [native request service](../core/docs/architecture/75-native-request-service.md) and
-  [native mount session](../core/docs/architecture/76-native-mount-session.md).
+  [native request service](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/75-native-request-service.md) and
+  [native mount session](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/76-native-mount-session.md).
   Ordinary native mutation is served through the existing Workspace plan and
   one publishing Overlay job, with no notification and no writeback cache; see
-  [native mutation and kernel coherence](../core/docs/architecture/77-native-mutation-coherence.md).
+  [native mutation and kernel coherence](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/77-native-mutation-coherence.md).
   A control Commit runs the captured namespace producer through the unchanged
   driver, and takes the Workspace's overlay lock for each of its jobs; the mounted
   proofs and their limits are in the
-  [R5 record](../core/docs/issues/307/R5-COMPLETION-20261009.md). Forced unmount of one
+  [R5 record](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/R5-COMPLETION-20261009.md). Forced unmount of one
   Workspace is implemented as `ForceUnmount`: a before-effect guard, one abort
   write on the connection's own control, the terminal fence, the local drain,
   one plain detach, then Revoke and Close; see
-  [forced teardown](../core/docs/architecture/80-forced-teardown.md). It is refused where
+  [forced teardown](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/80-forced-teardown.md). It is refused where
   no abort control is bound, which includes the current Sandbox topology, and a
   stop after an effect is `Retained` with no way back. No daemon-wide graceful
   drain exists and none is planned. Source acquisitions have their own owner
   slots, and a failed cold read ends its own request with `EIO` while the
   mount keeps serving; the concurrency, teardown and failure-scope proofs and
-  their limits are in the [R6 record](../core/docs/issues/307/R6-COMPLETION-20261009.md).
+  their limits are in the [R6 record](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/R6-COMPLETION-20261009.md).
   A create that leaves fewer unconsumed inode serials than the daemon's
   configured low-water makes one early reservation; every deployment and
   harness sets 0 today, which makes none. A new Mount is refused `Capacity` at
   `mount:debt` while maintenance is stopped. Both, the proofs added around
   them and the rows still open are in the
-  [R8b record](../core/docs/issues/307/R8B-COMPLETION-20261010.md). R8b closed not
+  [R8b record](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/R8B-COMPLETION-20261010.md). R8b closed not
   qualified and R9b without removal. R8c then closed qualified on function,
   counts and resources at the owner-rescoped scope, with the deployed
-  low-water at 256 ([R8c record](../core/docs/issues/307/R8C-COMPLETION-20261010.md)),
+  low-water at 256 ([R8c record](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/R8C-COMPLETION-20261010.md)),
   and R9c retired the root reference
-  ([R9c record](../core/docs/issues/307/R9C-COMPLETION-20261010.md)).
+  ([R9c record](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/R9C-COMPLETION-20261010.md)).
   Add members only with real product boundaries and implementation.
 - Cluster-one work starts with the [handbook](../docs/general/cluster_one_handbook.md) and
   [CAS/CDC/delta guide](../docs/general/cas_cdc_deltaencoding_handbook.md). Use public contracts,
   source pins and limitations; preserve canonical compatibility.
-- Cluster-two work starts with the [current design index](../core/docs/issues/303/README.md)
-  and relevant primary operation/engine/FUSE contracts plus
-  [runtime integration](../core/docs/issues/303/06-cluster-one-integration.md).
+- Cluster-two work starts with the [architecture guide](../docs/architecture/README.md):
+  the engine topics it touches, the [flows](../docs/architecture/flows/README.md) and
+  [Where each call runs](../docs/architecture/control/README.md#where-each-call-runs).
   Required corrections are real engineering scope; research candidates are not
   implemented features or excuses for accumulated workload caps.
 - Closed Stage 0–6 handoffs and prior server/backend plans are historical.
@@ -185,7 +185,7 @@ tables, copied from a closed empty template at mount and deleted at terminal
 unmount. The naming
 change authorizes no physical table redesign; generic temporary buffers and
 historical receipts retain their distinct terms. See the
-[terminology guide](../core/docs/architecture/64-overlay-terminology.md).
+[terminology guide](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/64-overlay-terminology.md).
 The #320 product sweep (2026-10-14, schema 37) removes accounting triggers,
 Workspace/allocator SQL rows and generic caller-minted leases. Workspace
 lifecycle/frontier/dirty/base-reader counters are one journaled runtime value,
@@ -193,18 +193,18 @@ restored only after known whole-job rollback; unknown outcomes retain custody.
 Commit runs/readers/base pins are journaled owner maps; captured generation
 holds use a count index. Daemon-bound routing is checked once per call; Overlay
 accepts no Route and stores no namespace. Cleanup debt remains SQL-backed after
-the [memory-placement review](../core/docs/issues/320/CLEANUP-MEMORY-DESIGN-20261014.md).
+the [memory-placement review](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/320/CLEANUP-MEMORY-DESIGN-20261014.md).
 Resources computes row/length totals on demand and
 retains exact owner counts from memory. See the current
-[runtime state](../core/docs/architecture/64-overlay-terminology.md#runtime-workspace-state-and-remembered-sql-custody).
+[runtime state](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/64-overlay-terminology.md#runtime-workspace-state-and-remembered-sql-custody).
 
 Schema17 adds native mount/source/lookup/read associations, atomic Workspace
 read observations and bounded revoked-lookup retirement. Schema18 adds native
 file associations over the existing OpenFile owner and atomic open decisions; see
-[native read custody](../core/docs/architecture/73-native-read-custody.md). This component
+[native read custody](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/73-native-read-custody.md). This component
 does not establish Ready, kernel service or full drain. Schema19 adds native
 directory ownership, exact name-boundary cookies, retained parent updates and
-bounded live cleanup; see [directory custody](../core/docs/architecture/74-native-directory-custody.md).
+bounded live cleanup; see [directory custody](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/74-native-directory-custody.md).
 
 `docs/architecture/` describes product source, not release qualification.
 A source change to boundaries, canonical/physical format, algorithm or named
@@ -215,7 +215,7 @@ Keep implementation description separate from target proposal and research.
 Public content/storage/history/persistence contracts govern integrated callers.
 Stable capture/input, Store-derived policy, backpressure, Save completion and
 atomic history publication are separate obligations. Branch Commit overwrites the
-head and keeps its captured parent; see the [owner supersession](../core/docs/issues/307/BRANCH-OVERWRITE-DECISION-20261007.md). Immutable objects do
+head and keeps its captured parent; see the [owner supersession](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/BRANCH-OVERWRITE-DECISION-20261007.md). Immutable objects do
 not replace authority, reference closure, mutable history or safe GC.
 
 Project's native import consumes SQLite-backed acquisition through its
@@ -228,7 +228,7 @@ Persistence; the exact allowlist still bounds those edges, and Project still
 cannot use a third-party database driver directly. Canonical construction stays
 in Content, encoding/packing in Storage and database writes in Persistence.
 The port and its provider remain the existing indexed acquisition algorithm.
-See the [S7/S9 remaining plan](../core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md).
+See the [S7/S9 remaining plan](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md).
 
 ### Filesystem access and execution ownership
 
@@ -277,13 +277,13 @@ parking/resumption, kernel handlers/replies and coherence. Daemon assembles one
 shared Fuse service with its existing SQL/Store services, retaining registry,
 overall Ready/unmount and Commit composition. Dependency is daemon -> fuse ->
 workspace, never Fuse -> daemon. Request dispatch/read ports, mount/Ready and
-per-Workspace normal drain are implemented ([R2 record](../core/docs/issues/307/R2-COMPLETION-20261008.md)),
-as is ordinary native mutation ([R3 record](../core/docs/issues/307/R3-COMPLETION-20261008.md));
+per-Workspace normal drain are implemented ([R2 record](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/R2-COMPLETION-20261008.md)),
+as is ordinary native mutation ([R3 record](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/R3-COMPLETION-20261008.md));
 as is the captured namespace producer with its bounded validation
-([R4 record](../core/docs/issues/307/R4-COMPLETION-20261008.md)), which the Commit
+([R4 record](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/R4-COMPLETION-20261008.md)), which the Commit
 driver reaches through the product constructor
-([product Commit](../core/docs/architecture/79-product-commit.md)). See the
-[reviewed ownership](../core/docs/issues/307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md).
+([product Commit](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/79-product-commit.md)). See the
+[reviewed ownership](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md).
 Moving blocking OwnerClient calls behind a port does not establish deferred service.
 
 ### Shared construction and completion boundaries
@@ -324,11 +324,11 @@ The product constructor `BoundWorkspace::commit_captured` runs it inside that
 driver: it acquires the captured reader and one operation owner, hands the
 driver the original cause on failure, and releases both owners only after the
 driver's outcome is known, keeping them with the failure when it is not
-([product Commit](../core/docs/architecture/79-product-commit.md)). A control Commit
+([product Commit](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/79-product-commit.md)). A control Commit
 uses it; `Service::execute` still takes a caller's constructor for driver tests.
 See [captured-file construction](crates/layerfs-workspace/src/construction/captured/owner.rs),
 [the shared Save sink](../core/crates/layerfs-storage/src/save/operation.rs) and
-[Store Commit composition](../core/docs/architecture/65-store-commit-composition.md).
+[Store Commit composition](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/65-store-commit-composition.md).
 
 Keep completion boundaries explicit: `Save::finish()` completes object storage;
 Init then initializes history, while Commit calls `commit_branch` against its
@@ -336,7 +336,7 @@ expected head before local base installation. SDK Init subsequently calls `Sqlit
 checkpoint, close and hand off one Store file. The macOS allocation correction
 runs only at this sole-owner Store seal; it is not a Content/pack format change
 or live-daemon maintenance. Linux daemons keep their shared Store open. The
-[seal proof](../core/docs/issues/307/SEAL-ALLOCATION-STRIDE1-20261007.md) retains its exact
+[seal proof](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/SEAL-ALLOCATION-STRIDE1-20261007.md) retains its exact
 platform and benchmark scope; it does not qualify daemon allocation or S10.
 
 ## Optimization and performance debugging
@@ -440,8 +440,8 @@ fixtures, examples and tools do not contribute to production LOC.
   existing safe nix API, preserving the original file's bytes and identity.
   This narrow seal-only correction does not restore per-pack preallocation or
   the allocation owner, and is never invoked on a live shared daemon Store; see
-  the [seal boundary](../core/docs/architecture/60-shared-store-foundation.md).
-  See the [foundation checkpoint](../core/docs/issues/307/PRE-S8-F1-F4-20261007.md).
+  the [seal boundary](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/60-shared-store-foundation.md).
+  See the [foundation checkpoint](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/PRE-S8-F1-F4-20261007.md).
 - Target (owner direction 2026-10-07): the same Store opened directly by every
   Linux daemon from a shared volume, several writer processes, no host in the
   data path, using only Disposable/WAL/OFF. A contended
@@ -459,8 +459,8 @@ fixtures, examples and tools do not contribute to production LOC.
   macOS writers queue instead of meeting SQLite's Busy; only a writer that
   bypasses the lane (an uncoordinated raw SQLite process) retains the exact
   Busy refusal. Follow the
-  [integration contract](../core/docs/issues/303/06-cluster-one-integration.md) and its
-  [deepest-file plan](../core/docs/issues/307/SERVERLESS-STORE-PLAN-20261007.md); do not
+  [integration contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/06-cluster-one-integration.md) and its
+  [deepest-file plan](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/SERVERLESS-STORE-PLAN-20261007.md); do not
   extend the host-mediated SDK runtime, Bridge data codec or daemon upstream.
 - Store concurrency (owner decision 2026-10-18): one global database and one
   writer at a time are the design, not a limitation to engineer around. Keep
@@ -468,7 +468,7 @@ fixtures, examples and tools do not contribute to production LOC.
   runs inside the lane (only head check, merge and publish) instead of adding
   writers or databases. Judge speed on uncontended calls; contention must stay
   correct, bounded and exact. See the
-  [Store concurrency model](../core/docs/architecture/83-store-concurrency-model.md).
+  [Store concurrency model](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/83-store-concurrency-model.md).
 - The daemon overlay is a separate owner/profile from global persistence:
   one local database file per mounted Workspace, opened MEMORY/OFF/EXCLUSIVE by
   one connection behind that Workspace's lock. Workspaces share no overlay
@@ -550,7 +550,7 @@ cache states and budgets are evidence contracts, not product runtime limits.
 ### Fuser provenance and authorized-patch checks
 
 Additional owner authorization 2026-10-14: "you are allowed to modify fuser with
-patch". The [receive-buffer decision](../core/docs/issues/321/FUSER-RECEIVE-BUFFER-DECISION-20261014.md)
+patch". The [receive-buffer decision](patches/fuser-0.18.0/records/FUSER-RECEIVE-BUFFER-DECISION-20261014.md)
 records the scope. Receive loops read into the `max_write + 4096` bytes
 negotiated at INIT instead of fuser's 16 MiB + 4 KiB maximum. The delta is in
 `read_buf.rs`, `session.rs` and `session/lifecycle.rs`, applied after the
@@ -558,7 +558,7 @@ lifecycle patch. `receive-buffer.patch` and `receive-buffer-provenance.json`
 pin it, and the focused check verifies it. The earlier records stay unchanged.
 
 Additional owner authorization2026-10-08: the [scoped receive-loop lifecycle
-extension](../core/docs/issues/307/FUSER-LIFECYCLE-DECISION-20261008.md) may extend the
+extension](patches/fuser-0.18.0/records/FUSER-LIFECYCLE-DECISION-20261008.md) may extend the
 pinned fuser0.18.0 package beyond time.rs to establish loop entry/exit, retained
 startup/join ownership and the proposed explicit lifecycle API. This narrowly
 supersedes the timestamp-only file restriction below. Preserve the original
@@ -578,7 +578,7 @@ The original archive checksum, all85 published file hashes, exact diff and patch
 time.rs hash are pinned in `patches/fuser-0.18.0/provenance.json` and checked by the
 focused guard. A patched Cargo.lock entry has no registry checksum; the explicit
 provenance record authenticates its modified bytes. See
-[the authorized patch record](../core/docs/issues/307/FUSER-REGISTRY-PATCH-20261006.md).
+[the authorized patch record](patches/fuser-0.18.0/records/FUSER-REGISTRY-PATCH-20261006.md).
 Native qualification and the complete S8 contract remain separate requirements.
 
 Subsequent owner direction2026-10-06: "docker verification is enough". Existing
@@ -601,7 +601,7 @@ verifies package files without modifying
 them. Run scoped self-tests when changing the check. It is not an aggregate
 pre-push/CI wrapper or a timestamp-capability proof. Current evidence and the
 historically rejected unmodified Git candidate are in
-[the fuser verification record](../core/docs/issues/307/FUSER-OFFICIAL-CANDIDATE-20261006.md).
+[the fuser verification record](patches/fuser-0.18.0/records/FUSER-OFFICIAL-CANDIDATE-20261006.md).
 
 ### Authorized Persistence seal file control
 
@@ -614,7 +614,7 @@ ownership, and on a live-Store snapshot's own new destination connection (#506).
 No other Persistence module may contain unsafe Rust; the guard and its tests
 enforce the exact path. This does not authorize third-party patches, dependency
 changes, manual sidecar deletion or other FFI. See the
-[decision and diagnostic](../core/docs/issues/307/SEAL-PERSIST-WAL-DECISION-20261007.md).
+[decision and diagnostic](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/SEAL-PERSIST-WAL-DECISION-20261007.md).
 
 ### Bridge process identity file
 

@@ -1,7 +1,7 @@
 //! FP-2, the flag half (R8b track T-G; also R2-STEP-2): the negotiated
 //! profile of one real kernel mount compared, flag by flag and limit by
 //! limit, with specification section 8.1
-//! (`core/docs/issues/307/S8-SPECIFICATION-20261008.md`).
+//! (`core/docs/issues/307/S8-SPECIFICATION-20261008.md`, archived at af2ad92bce).
 //!
 //! What is compared, explicitly:
 //!

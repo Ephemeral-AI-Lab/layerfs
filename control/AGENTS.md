@@ -44,8 +44,8 @@ behalf of the engine:
   backed up to a bucket (`src/backup/` and `src/bucket/<provider>/`).
 
 See the [control README](README.md) for the layout and how to read
-`SUPPORT.json`, [#535](../core/docs/issues/535/README.md) for the drivers'
-design and the [compute plane 2.0 spec](../core/docs/proposals/compute-plane-2.0.md)
+`SUPPORT.json`, [#535](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/535/README.md) for the drivers'
+design and the [compute plane 2.0 spec](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/proposals/compute-plane-2.0.md)
 §6 for the split.
 
 ## Dependencies

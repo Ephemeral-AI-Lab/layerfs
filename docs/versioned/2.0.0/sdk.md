@@ -130,7 +130,7 @@ asyncio.run(main())
 
 ## Export a project snapshot
 
-See [`project.export`](../../architecture/api/sdk/project/export.md)
+See [`project.export`](../../architecture/api/sdk/project.md#projectexport)
 for destination validation, fidelity, routing, refusal codes and result fields.
 The table has 61 calls, five in the `project` family.
 

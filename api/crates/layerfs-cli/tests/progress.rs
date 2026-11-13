@@ -4,7 +4,7 @@
 //! not fail the call; a call that declares no `on_progress` has no
 //! `--progress`. Init into a Store on this host needs no machine, daemon or
 //! bucket, and reports `check`, `install` and `record` with null counts.
-//! The page that states this: docs/architecture/api/call-table/events.md.
+//! The page that states this: docs/architecture/api/calls/errors-and-events.md.
 use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
