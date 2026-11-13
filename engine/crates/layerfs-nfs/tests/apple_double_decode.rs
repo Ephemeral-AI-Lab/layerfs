@@ -614,7 +614,11 @@ fn a_spilled_body_renamed_off_its_inode_takes_its_slot() {
     let stored = pattern(42, 400 * 1024);
     c.write(&other.handle, 0, &stored).unwrap();
     assert_eq!(server.held().companion_bytes, stored.len());
-    assert_eq!(server.held().companions_slotted, 1, "only ._other takes a slot");
+    assert_eq!(
+        server.held().companions_slotted,
+        1,
+        "only ._other takes a slot"
+    );
 
     // RENAME onto a name whose main file the export never saw: the body stops
     // being an inode's companion, so it may not keep a whole image's
@@ -627,6 +631,81 @@ fn a_spilled_body_renamed_off_its_inode_takes_its_slot() {
         "a spilled body renamed off its inode takes its slot"
     );
     assert_eq!(c.read_all(&ad.handle, 256 * 1024), whole);
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn whole_images_take_no_slot_and_the_bound_reclaims_only_slots() {
+    let base = temp("whole-images-bound");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    rig.companions_held = 2;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    // Two companions that decode into whole images: neither takes a slot, so a
+    // full table may hold any number of them.
+    let mut whole = Vec::new();
+    for (main, seed) in [(b"a".as_slice(), 1u32), (b"b".as_slice(), 2u32)] {
+        let data = c.touch(&root, main, 0o644).unwrap();
+        c.write(&data.handle, 0, b"data").unwrap();
+        let mut name = b"._".to_vec();
+        name.extend_from_slice(main);
+        let ad = c.touch(&root, &name, 0o644).unwrap();
+        let bytes = image([seed as u8; 32], &[(b"user.small", pattern(seed, 16))]);
+        c.write(&ad.handle, 0, &bytes).unwrap();
+        whole.push((ad.handle, bytes));
+    }
+    let held = server.held();
+    assert_eq!(
+        (
+            held.companions,
+            held.companions_decoded,
+            held.companions_slotted
+        ),
+        (2, 2, 0),
+        "whole images take no slot"
+    );
+
+    // Both slots go to companions whose main file the export knows, so there is
+    // no orphan to reclaim: the bound refuses instead of touching a whole image.
+    for index in 0..2 {
+        let main = format!("live-{index}");
+        let companion = format!("._live-{index}");
+        c.touch(&root, main.as_bytes(), 0o644).unwrap();
+        let ad = c.touch(&root, companion.as_bytes(), 0o644).unwrap();
+        c.write(&ad.handle, 0, &[b'L'; 64]).unwrap();
+    }
+    c.touch(&root, b"next", 0o644).unwrap();
+    assert_eq!(c.touch(&root, b"._next", 0o644).map(|_| ()), Err(NOSPC));
+    let held = server.held();
+    assert_eq!(
+        (
+            held.companions,
+            held.companions_decoded,
+            held.companions_slotted,
+            held.names_refused
+        ),
+        (4, 2, 2, 1),
+        "the refusal kept both whole images and both slots"
+    );
+    for (handle, bytes) in &whole {
+        assert_eq!(c.read_all(handle, 4096), *bytes);
+    }
+
+    // Freeing a slot, not a whole image, lets the next companion in.
+    c.remove(&root, b"._live-0").unwrap();
+    c.touch(&root, b"._next", 0o644).unwrap();
+    assert_eq!(server.held().companions_slotted, 2);
+    assert_eq!(server.held().companions, 4);
+    assert_eq!(server.held().companions_decoded, 2);
 
     drop(c);
     let released = server.stop();

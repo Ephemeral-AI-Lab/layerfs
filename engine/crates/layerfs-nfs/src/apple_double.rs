@@ -52,13 +52,10 @@ use crate::{
 use layerfs_content::{filesystem::attributes::PortableMetadata, object::inode_leaf::InodeKind};
 use layerfs_workspace::ViewStat;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
-    sync::{
-        atomic::Ordering,
-        Arc, Mutex,
-    },
+    sync::{atomic::Ordering, Arc, Mutex},
     time::{Duration, Instant},
 };
 
@@ -148,7 +145,10 @@ pub(crate) struct Companions {
     /// Main inode serial -> the companion holding its FinderInfo and
     /// attributes.
     inodes: HashMap<u64, u64>,
-    slotted: usize,
+    /// The serials taking a slot of the index bound, so reclamation walks the
+    /// slots rather than every companion: a whole image takes none, so its
+    /// number is bounded by the decoded bytes alone and not by [`HELD`].
+    slots: HashSet<u64>,
     resident_bytes: usize,
     decoded: usize,
     decoded_bytes: usize,
@@ -165,7 +165,7 @@ impl Default for Companions {
             files: HashMap::new(),
             names: HashMap::new(),
             inodes: HashMap::new(),
-            slotted: 0,
+            slots: HashSet::new(),
             resident_bytes: 0,
             decoded: 0,
             decoded_bytes: 0,
@@ -199,7 +199,9 @@ impl Companions {
     }
     /// Adds `file` to the index and to the slot and byte counts.
     fn attach(&mut self, serial: u64, file: Companion) {
-        self.slotted += usize::from(file.slotted());
+        if file.slotted() {
+            self.slots.insert(serial);
+        }
         self.resident_bytes += file.resident_len();
         self.decoded += usize::from(matches!(file.body, Body::Decoded(_)));
         self.decoded_bytes += file.decoded_cost();
@@ -209,7 +211,7 @@ impl Companions {
     /// the caller to unindex.
     fn detach(&mut self, serial: u64) -> Option<Companion> {
         let file = self.files.remove(&serial)?;
-        self.slotted -= usize::from(file.slotted());
+        self.slots.remove(&serial);
         self.resident_bytes -= file.resident_len();
         self.decoded -= usize::from(matches!(file.body, Body::Decoded(_)));
         self.decoded_bytes -= file.decoded_cost();
@@ -376,7 +378,7 @@ impl Companions {
     fn holding(&self) -> Holding {
         Holding {
             held: self.files.len(),
-            slotted: self.slotted,
+            slotted: self.slots.len(),
             resident_bytes: self.resident_bytes,
             decoded: self.decoded,
             decoded_bytes: self.decoded_bytes,
@@ -441,10 +443,10 @@ impl Kernel {
         let table = self.table();
         let companions = self.companions();
         companions
-            .files
+            .slots
             .iter()
-            .filter(|(_, file)| file.slotted())
-            .filter_map(|(serial, file)| {
+            .filter_map(|serial| {
+                let file = companions.files.get(serial)?;
                 let live = match file.inode {
                     Some(inode) => {
                         table.names.contains_key(&inode) || table.aliases.contains_key(&inode)
@@ -475,6 +477,34 @@ impl Kernel {
         companions.use_serial(serial);
         Some(stat)
     }
+    /// CREATE of an already-held companion name: UNCHECKED applies its size,
+    /// as an open with truncation would; GUARDED and EXCLUSIVE find it taken.
+    fn companion_open(
+        &self,
+        serial: u64,
+        how: How,
+        directory: Wcc,
+        mut companions: std::sync::MutexGuard<'_, Companions>,
+        tickets: &mut Tickets,
+    ) -> Result<(ViewStat, Wcc), Status> {
+        let stat = Companions::stat(serial, &companions.files[&serial]);
+        companions.use_serial(serial);
+        drop(companions);
+        let How::Unchecked(sattr) = how else {
+            return Err(Status::Exist);
+        };
+        match sattr.size {
+            Some(size) => {
+                let sized = Sattr {
+                    size: Some(size),
+                    ..Sattr::default()
+                };
+                let (stat, _) = self.companion_setattr(stat.serial, sized, None, tickets)?;
+                Ok((stat, directory))
+            }
+            None => Ok((stat, directory)),
+        }
+    }
     /// CREATE of an AppleDouble name.
     pub(crate) fn companion_create(
         &self,
@@ -487,38 +517,28 @@ impl Kernel {
         if parent != self.root() && !self.table().parents.contains_key(&parent) {
             return Err(Status::NotDir);
         }
-        let main = self.main_of(parent, name);
-        let mut companions = self.companions();
         let named = (parent, name.to_vec());
+        let mut main = self.main_of(parent, name);
+        let mut companions = self.companions();
         if let Some(serial) = companions.resolve(&named, main) {
-            let stat = Companions::stat(serial, &companions.files[&serial]);
-            companions.use_serial(serial);
-            drop(companions);
-            // Opened again: UNCHECKED applies its size, as an open with
-            // truncation would; GUARDED and EXCLUSIVE find it taken.
-            let How::Unchecked(sattr) = how else {
-                return Err(Status::Exist);
-            };
-            return match sattr.size {
-                Some(size) => {
-                    let sized = Sattr {
-                        size: Some(size),
-                        ..Sattr::default()
-                    };
-                    let (stat, _) = self.companion_setattr(stat.serial, sized, None, tickets)?;
-                    Ok((stat, directory))
-                }
-                None => Ok((stat, directory)),
-            };
+            return self.companion_open(serial, how, directory, companions, tickets);
         }
         // At the index bound, reclaim the companions no name reaches any more
         // first: found under the kernel table and the companion index, one
         // entry at a time, so nothing here copies the namespace.
         let mut reclaimed = Vec::new();
-        if companions.slotted >= companions.held_limit {
+        if companions.slots.len() >= companions.held_limit {
             drop(companions);
             let orphans = self.orphans();
+            // The reclaim held no companion lock, so another CREATE of this
+            // name may have inserted it meanwhile and the main file may have
+            // changed: both are read again, and the name is inserted under the
+            // lock this call now holds without releasing it again.
+            main = self.main_of(parent, name);
             companions = self.companions();
+            if let Some(serial) = companions.resolve(&named, main) {
+                return self.companion_open(serial, how, directory, companions, tickets);
+            }
             for (serial, inode) in orphans {
                 let still_orphan = companions
                     .files
@@ -529,8 +549,8 @@ impl Kernel {
                 }
             }
         }
-        if companions.slotted >= companions.held_limit {
-            let held = companions.slotted;
+        if companions.slots.len() >= companions.held_limit {
+            let held = companions.slots.len();
             let limit = companions.held_limit;
             let log = companions
                 .last_refusal_log

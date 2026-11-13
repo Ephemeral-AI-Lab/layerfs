@@ -529,14 +529,17 @@ impl Kernel {
         let named = (to, new_name.to_vec());
         let moved = (from, name.to_vec());
         table.unbind_name(&moved, serial);
-        let remembered = match table.names.get_mut(&serial) {
-            Some(slot) => {
-                *slot = named.clone();
-                true
+        let previous = table
+            .names
+            .get_mut(&serial)
+            .map(|slot| std::mem::replace(slot, named.clone()));
+        if let Some(previous) = previous {
+            // The name the inode was last recalled by did not move and is still
+            // one of its names: overwriting the remembered name keeps it only
+            // as an alias, which is what retiring the serial reads.
+            if previous != moved && previous != named {
+                table.remember_alias(serial, &previous);
             }
-            None => false,
-        };
-        if remembered {
             table.bind_name(named, serial);
         }
     }

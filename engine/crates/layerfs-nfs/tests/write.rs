@@ -850,6 +850,126 @@ fn two_guarded_creates_of_one_companion_name_leave_one_entry() {
 }
 
 #[test]
+fn a_guarded_create_reclaims_the_last_slot_for_one_entry_only() {
+    let base = temp("appledouble-create-race-bound");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    rig.companions_held = 3;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let mut other = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    c.touch(&root, b"dup", 0o644).unwrap();
+    // Two slots belong to live main files, which reclamation must keep.
+    for index in 0..2 {
+        let main = format!("live-{index}");
+        let companion = format!("._live-{index}");
+        c.touch(&root, main.as_bytes(), 0o644).unwrap();
+        let made = c.touch(&root, companion.as_bytes(), 0o644).unwrap();
+        c.write(&made.handle, 0, &[b'L'; 64]).unwrap();
+    }
+    assert_eq!(server.held().companions_slotted, 2);
+    // Every round fills the last slot with a companion whose main file does not
+    // exist, so both creates below are over the bound and one of them has to
+    // reclaim that orphan while it holds no companion lock.
+    for round in 0..256 {
+        let orphan = format!("._orphan-{round}");
+        let made = c.touch(&root, orphan.as_bytes(), 0o644).unwrap();
+        c.write(&made.handle, 0, &[b'O'; 64]).unwrap();
+        assert_eq!(server.held().companions_slotted, 3, "round {round}");
+        let start = std::sync::Barrier::new(2);
+        let (a, b) = std::thread::scope(|scope| {
+            let a = scope.spawn(|| {
+                start.wait();
+                c.create(&root, b"._dup", How::Guarded(Set::default()))
+            });
+            let b = scope.spawn(|| {
+                start.wait();
+                other.create(&root, b"._dup", How::Guarded(Set::default()))
+            });
+            (a.join().unwrap(), b.join().unwrap())
+        });
+        let mut statuses = [
+            a.as_ref().map(|_| OK).unwrap_or_else(|status| *status),
+            b.as_ref().map(|_| OK).unwrap_or_else(|status| *status),
+        ];
+        statuses.sort();
+        assert_eq!(statuses, [OK, EXIST], "round {round}");
+        // The two live pairs and the one name: the loser inserted no second
+        // serial for a name that is already taken.
+        assert_eq!(server.held().companions_slotted, 3, "round {round}");
+        assert_eq!(server.held().companions, 3, "round {round}");
+        assert_eq!(c.getattr(&made.handle), Err(STALE), "round {round}");
+        c.remove(&root, b"._dup").unwrap();
+        assert_eq!(server.held().companions_slotted, 2, "round {round}");
+    }
+    assert_eq!(server.held().names_refused, 0);
+    drop((c, other));
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_renamed_hard_link_alias_keeps_the_inodes_recalled_name_bound() {
+    let base = temp("appledouble-rename-alias");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    // Two exports of one mount: the second one moves a name the first one does
+    // not observe, as another client of the same Workspace would.
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let second = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let mut them = Client::connect(second.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    let their_root = them.mnt("/");
+
+    // One inode, three names: the export recalls it by `p` and holds `q` as an
+    // alias of it.
+    let main = c.touch(&root, b"p", 0o644).unwrap();
+    c.link(&main.handle, &root, b"q").unwrap();
+    assert_eq!(c.lookup(&root, b"p").unwrap().0, main.handle);
+    // RENAME of `q` to `r` keeps `p` as the recalled name; the next RENAME moves
+    // `p` itself, which is an alias, so `r` stops being the recalled name and
+    // is still one of the inode's names.
+    c.rename(&root, b"q", &root, b"r").unwrap();
+    c.rename(&root, b"p", &root, b"s").unwrap();
+
+    // The other export moves and then removes `r`; this export removes `s`,
+    // which is the inode's last name: it retires the inode, and `r` must leave
+    // the name index with it.
+    them.rename(&their_root, b"r", &their_root, b"t").unwrap();
+    them.remove(&their_root, b"t").unwrap();
+    c.remove(&root, b"s").unwrap();
+
+    // A `._r` companion created while `r` is gone belongs to no inode.
+    c.touch(&root, b"._r", 0o644).unwrap();
+    let companion = c.lookup(&root, b"._r").unwrap().0;
+    let payload = b"a companion of no inode";
+    c.write(&companion, 0, payload).unwrap();
+
+    // A new file takes the name `r`; the companion is still reachable by name.
+    them.touch(&their_root, b"r", 0o644).unwrap();
+    let (fresh, _) = c.lookup(&root, b"r").unwrap();
+    assert_ne!(fresh, main.handle);
+    let (found, _) = c
+        .lookup(&root, b"._r")
+        .expect("the companion still belongs to no inode");
+    assert_eq!(found, companion);
+    assert_eq!(c.read_all(&found, 64), payload);
+
+    drop((c, them));
+    let released = server.stop();
+    second.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn a_companion_survives_reclaim_after_its_main_file_gains_a_second_name() {
     let base = temp("appledouble-hardlink-reclaim");
     let tree = base.join("tree");
@@ -1033,7 +1153,10 @@ fn spilled_companions_outnumber_the_open_file_limit() {
     // process's: both are set and asserted in a process running this test
     // alone, never next to the tests this binary runs in parallel.
     if std::env::var_os(FD_LIMIT_CHILD).is_none() {
-        run_alone(FD_LIMIT_CHILD, "spilled_companions_outnumber_the_open_file_limit");
+        run_alone(
+            FD_LIMIT_CHILD,
+            "spilled_companions_outnumber_the_open_file_limit",
+        );
         return;
     }
     let base = temp("appledouble-fd");

@@ -256,27 +256,34 @@ encode back to exactly the bytes the client wrote, are in
 the spill helpers are in
 [`apple_double_spill.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_spill.rs).
 
-CREATE checks an existing companion name, checks the entry limit, reclaims
-orphans and inserts a new serial under one companion-lock hold, so concurrent
-GUARDED creates of one name yield one serial and one `NFS3ERR_EXIST`. An
-existing name is still usable when the table is full. `Table::by_name` keeps
+CREATE checks an existing companion name and the entry limit under the
+companion lock; over the limit it releases that lock to reclaim orphans, then
+reads the name and its main file again before it inserts under the lock it holds
+once more, so concurrent GUARDED creates of one name yield one serial and one
+`NFS3ERR_EXIST`, whether or not either of them reclaimed. An existing name is
+still usable when the table is full. `Table::by_name` keeps
 every observed main-file name, including all seen hard-link aliases, rather
 than only the latest name of an inode. Each serial's recalled name is in
 `Table::names` and its other names, its hard-link aliases, in `Table::aliases`
 (serial to names), so unlink, rename and the retirement of an inode drop exactly
-that serial's keys without scanning the index. A name that changes while the
-engine reports one link (nlink 1) is the inode's only name, so the previous key
+that serial's keys without scanning the index. A rename that moves one of an
+inode's other names keeps the name it was last recalled by as an alias too, so
+the retirement still drops every key the serial holds. A name that changes
+while the engine reports one link (nlink 1) is the inode's only name, so the
+previous key
 is stale and leaves at once; only a hard-linked inode keeps its extra names,
 which is why reclamation keeps a companion when a second name for its main file
 was observed. The index remains an observation cache: retained names can delay
 reclamation. Its existing `Table::names` admission bound is unchanged; a
 separate bound on `by_name` (alias keys) remains future work. Reclamation itself
-never copies the namespace: under the kernel table lock it walks the companion
-index, whose size is the `HELD` bound, and asks, for each companion taking a
-slot, whether its main inode still holds a name (or, for a companion whose main
-file the export never saw, whether its main name is still in `by_name`), then
-drops the orphans it found under the companion lock again. The companion entry
-limit stays 65,536; NOSPC
+never copies the namespace: under the kernel table lock it walks the companions
+that take a slot (`Companions::slots`, at most the `HELD` bound) and never the
+whole index, so the companions holding a whole image - which take no slot and
+whose number the decoded bytes, not `HELD`, bound - add nothing to the walk. For
+each of them it asks whether its main inode still holds a name (or, for a
+companion whose main file the export never saw, whether its main name is still in
+`by_name`), then drops the orphans it found under the companion lock again. The
+companion entry limit stays 65,536; NOSPC
 reports exhaustion of this export resource, not a permission failure or a
 per-user quota. The first full-table refusal logs immediately, with later logs
 at least 60 seconds apart; every refusal still increments `names_refused`.
