@@ -89,7 +89,8 @@ Legend: 🔲 not started · ⏳ blocked on a decision · ✅ done
 
 ### layerfs-project#49 — SQLite compact (§7.1, §7.2, §5 C8b)
 
-- [ ] Rebuild-and-swap reusing `transfer`, with only `rewrite` inserted: the staged copy is a fresh Store that receives only retained rows, so dead packs are not copied and no row is deleted in the live Store (the `pack` / `pack_unit` triggers never fire)
+- [ ] Rebuild-and-swap reusing `transfer`, with only `rewrite` inserted
+      — and it runs **where the Store lives**: `place::plan` → that machine's worker, no pull/push (decided 2026-11-13); add the cross-machine interruption case: the staged copy is a fresh Store that receives only retained rows, so dead packs are not copied and no row is deleted in the live Store (the `pack` / `pack_unit` triggers never fire)
 - [ ] `reorg` repacks live objects out of partially dead packs; object ids unchanged
 - [ ] Writer fence: at every write-transaction start the Store path's `(dev, ino)` is compared with the open file's `fstat`; a pre-swap writer fails with `Conflict` instead of writing into the retired inode
 - [ ] An interrupted compact is recoverable; the Store always opens and `doctor`s
