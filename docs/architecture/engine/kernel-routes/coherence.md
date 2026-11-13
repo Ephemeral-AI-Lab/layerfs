@@ -105,13 +105,13 @@ holds.
 
 ```text
  FUSE                                   NFS
- write(2) -> WRITE request             write(2) -> client page cache
-          -> published by its owner job-> WRITE (FILE_SYNC answer:
-          -> reply -> write(2) returns each window published)
- msync / mapped store -> WRITE         Commit: flush helper, else the export
-   with FUSE_WRITE_CACHE (cached=true) volume's own flush (sync_volume_np
- FLUSH/FSYNC/FSYNCDIR -> ENOSYS once   on macOS, sync(2) elsewhere), then
-                                       close_files, then Commit
+ write(2) -> WRITE request              write(2) -> client page cache
+          -> published by its owner job -> WRITE (FILE_SYNC answer:
+          -> reply -> write(2) returns     each window published)
+ msync / mapped store -> WRITE          Commit: flush helper, else the export
+   with FUSE_WRITE_CACHE (cached=true)    volume's own flush (sync_volume_np
+ FLUSH/FSYNC/FSYNCDIR -> ENOSYS once      on macOS, sync(2) elsewhere), then
+                                          close_files, then Commit
 ```
 
 | Rule | Source |

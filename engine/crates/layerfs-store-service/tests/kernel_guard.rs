@@ -71,7 +71,7 @@ fn open_direct_reports_busy_when_locked_and_failed_when_corrupt() {
     sql.execute_batch("ROLLBACK").unwrap();
     drop(sql);
 
-    let corrupt = fixture.directory.join("corrupt.sqlite");
+    let corrupt = fixture.store_directory().join("corrupt.sqlite");
     std::fs::write(&corrupt, b"not a valid sqlite store").unwrap();
     let failed =
         StoreService::open_direct(&corrupt, installed::BINDING, installed::CURSOR, &template);
@@ -97,6 +97,8 @@ fn open_concurrent_child() {
         std::path::PathBuf::from(std::env::var_os("LAYERFS_OPEN_CONCURRENT_TPL").unwrap());
     let mut sock =
         UnixStream::connect(std::env::var_os("LAYERFS_OPEN_CONCURRENT_SOCK").unwrap()).unwrap();
+    sock.set_read_timeout(Some(std::time::Duration::from_secs(30)))
+        .unwrap();
     sock.write_all(b"R").unwrap();
     let mut go = [0u8; 1];
     sock.read_exact(&mut go).unwrap();
@@ -142,24 +144,77 @@ fn open_concurrent_child() {
     service.close().unwrap();
 }
 
-/// Waits for a spawned test child to exit, bounded, then returns its output.
-/// A lane deadlock has to fail this test instead of hanging it, so the wait
-/// carries the same kind of deadline as the barrier accept above; the 60 s
-/// ceiling also stays under the per-invocation test limit.
+/// The test children of one concurrency case, owned as one group: the wait
+/// carries a single deadline for the whole set, a child that outlives it or
+/// exits unsuccessfully fails the case, and dropping the group while any child
+/// still runs stops it. A lane deadlock therefore fails the case instead of
+/// hanging it or leaving a live child that holds the Store, and the failure
+/// names the child that hung together with what the group wrote to stderr.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-fn wait_bounded(mut child: std::process::Child, what: &str) -> std::process::Output {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
-    while child.try_wait().unwrap().is_none() {
-        if std::time::Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
-            panic!("{what}: the child did not exit before its deadline");
-        }
-        std::thread::yield_now();
+struct Children(Vec<(String, std::process::Child)>);
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+impl Children {
+    fn new() -> Self {
+        Self(Vec::new())
     }
-    // The child has exited already: the cached status returns at once and the
-    // pipes reach EOF, so collecting the output cannot wait on a live child.
-    child.wait_with_output().unwrap()
+    fn push(&mut self, what: String, child: std::process::Child) {
+        self.0.push((what, child));
+    }
+    /// Waits for every child, `seconds` for the group as a whole; the 60 s
+    /// ceiling stays under the per-invocation test limit.
+    fn wait_all(mut self, seconds: u64) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
+        let mut late = Vec::new();
+        for (what, child) in self.0.iter_mut() {
+            while child.try_wait().unwrap().is_none() {
+                if std::time::Instant::now() >= deadline {
+                    late.push(what.clone());
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        }
+        if !late.is_empty() {
+            self.stop();
+        }
+        let mut failed = Vec::new();
+        for (what, child) in std::mem::take(&mut self.0) {
+            let output = child.wait_with_output().unwrap();
+            if !output.status.success() {
+                failed.push(format!(
+                    "{what}: {}\n{}",
+                    output.status,
+                    String::from_utf8_lossy(&output.stderr).trim_end()
+                ));
+            }
+        }
+        assert!(
+            late.is_empty(),
+            "the group's deadline passed with {late:?} still running"
+        );
+        assert!(
+            failed.is_empty(),
+            "concurrent open_direct + 20 commits failed:\n{}",
+            failed.join("\n")
+        );
+    }
+    /// Stops every child of the group, exited or not.
+    fn stop(&mut self) {
+        for (_, child) in self.0.iter_mut() {
+            let _ = child.kill();
+        }
+        for (_, child) in self.0.iter_mut() {
+            let _ = child.wait();
+        }
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+impl Drop for Children {
+    fn drop(&mut self) {
+        self.stop();
+    }
 }
 
 /// Three processes open the same Store directly and each commits twenty times
@@ -181,7 +236,7 @@ fn three_processes_open_direct_and_commit_concurrently() {
     listener.set_nonblocking(true).unwrap();
 
     let exe = std::env::current_exe().unwrap();
-    let mut children = Vec::new();
+    let mut children = Children::new();
     for id in 0..3 {
         let overlay_dir = fixture.directory.join(format!("overlay-{id}"));
         std::fs::create_dir(&overlay_dir).unwrap();
@@ -197,7 +252,7 @@ fn three_processes_open_direct_and_commit_concurrently() {
             .stderr(Stdio::piped())
             .spawn()
             .unwrap();
-        children.push(child);
+        children.push(format!("agent-{id}"), child);
     }
     let mut sockets = Vec::new();
     let deadline = Instant::now() + Duration::from_secs(10);
@@ -205,13 +260,21 @@ fn three_processes_open_direct_and_commit_concurrently() {
         match listener.accept() {
             Ok((mut stream, _)) => {
                 stream.set_nonblocking(false).unwrap();
+                // The handshake itself is bounded too: a child that connects
+                // and never writes `R` must fail the case, not wait forever.
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(10)))
+                    .unwrap();
+                stream
+                    .set_write_timeout(Some(Duration::from_secs(10)))
+                    .unwrap();
                 let mut ready = [0u8; 1];
                 stream.read_exact(&mut ready).unwrap();
                 assert_eq!(&ready, b"R");
                 sockets.push(stream);
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline => {
-                std::thread::yield_now();
+                std::thread::sleep(Duration::from_millis(1));
             }
             Err(e) => panic!("barrier accept: {e}"),
         }
@@ -219,21 +282,7 @@ fn three_processes_open_direct_and_commit_concurrently() {
     for mut stream in sockets {
         stream.write_all(b"G").unwrap();
     }
-    let mut failures = Vec::new();
-    for (id, child) in children.into_iter().enumerate() {
-        let output = wait_bounded(child, &format!("agent-{id}"));
-        if !output.status.success() {
-            failures.push(format!(
-                "agent-{id}: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ));
-        }
-    }
-    assert!(
-        failures.is_empty(),
-        "concurrent open_direct + 20 commits failed:\n{}",
-        failures.join("\n")
-    );
+    children.wait_all(60);
     let verify_dir = fixture.directory.join("overlay-verify");
     std::fs::create_dir(&verify_dir).unwrap();
     let service = StoreService::open_direct(

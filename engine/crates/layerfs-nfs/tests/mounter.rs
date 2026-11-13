@@ -46,7 +46,9 @@ fn default_flush_commits_with_the_export_volume_and_without_it() {
     // which falls back to `sync(2)`) both leave the Commit to run and
     // succeed. The flush calls themselves are covered where they live:
     // `sync_volume_wait`'s `Ok`/error by `layerfs-bridge`'s
-    // `process_identity` test, and the fallback branch by `flush_default`.
+    // `process_identity` test. The `ENOENT` to `sync(2)` fallback inside
+    // `flush_default` has no test of its own, so all this test observes of it
+    // is its outcome: the Commit still runs.
     let base = std::env::temp_dir().join(format!("layerfs-nfs-mounter-{}", std::process::id()));
     let source = base.join("src");
     let work = base.join("work");

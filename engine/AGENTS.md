@@ -454,8 +454,11 @@ fixtures, examples and tools do not contribute to production LOC.
   separate main/WAL/SHM descriptor for advisory ownership: closing a main-file
   descriptor can cancel SQLite's own process POSIX locks. This admission does
   not gate whole Saves or Commits or replay
-  a failed SQL attempt. macOS has Session admission only; separate macOS writers
-  and uncoordinated raw SQLite writers retain exact Busy refusal. Follow the
+  a failed SQL attempt. macOS holds the same parent-directory lane as Linux,
+  over the same short writer jobs and its writable opens (#647), so separate
+  macOS writers queue instead of meeting SQLite's Busy; only a writer that
+  bypasses the lane (an uncoordinated raw SQLite process) retains the exact
+  Busy refusal. Follow the
   [integration contract](../core/docs/issues/303/06-cluster-one-integration.md) and its
   [deepest-file plan](../core/docs/issues/307/SERVERLESS-STORE-PLAN-20261007.md); do not
   extend the host-mediated SDK runtime, Bridge data codec or daemon upstream.
