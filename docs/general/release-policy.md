@@ -18,6 +18,9 @@ A release candidate is eligible only when:
 - every published benchmark links to reproducible raw evidence and identifies
   the exact source;
 - the release tag resolves to the reviewed source tree.
+- no S1 issue (data loss, corruption, wrong content or a security breach;
+  see the [code review and triage policy](../policy/code-review.md#issue-priority))
+  is open against the release. An S1 is never waived.
 
 ## Version meaning
 

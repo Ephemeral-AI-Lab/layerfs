@@ -80,6 +80,7 @@
 - [Release policy](general/release-policy.md)
 - [Publishing the `layerfs` Node package to npm](general/npm-release.md): release build, tarball checks, the first prerelease, verification and rollback
 - [Documentation policy](general/documentation-policy.md)
+- [Code review and triage policy](policy/code-review.md): PR tiers P0–P3, gate risks, evidence, issue priority and labels
 - [Development workspace cleanup](general/cleanup.md): ownership checks, verified recovery, evidence retention, and disk-space reporting
 - [Parallel worktree development](general/parallel-worktrees.md): private Cargo resources, prepared dependencies, pinned SDK builds, and per-run Docker E2E state
 - [Plugin listings](plugins/README.md): how a plugin built on LayerFS is listed in `plugins/<plugin-id>/`, with the template to copy and the checker
