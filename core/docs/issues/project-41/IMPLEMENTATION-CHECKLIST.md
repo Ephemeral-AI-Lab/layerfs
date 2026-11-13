@@ -65,7 +65,7 @@ Legend: 🔲 not started · ⏳ blocked on a decision · ✅ done
 ### layerfs-project#44 — `branch.remove` (§5 C6, C9, C10)
 
 - [ ] `branch.remove(name)` sets the terminal marker; only that Branch's mounts and sessions are excluded
-- [ ] A same-name create is refused — **`NameRetired`**, not reused (Q1 option A)
+- [ ] A same-name create is refused — **`NameRetired`** when the holder is retired, **`NameTaken`** when it is live; never `Integrity` (Q1 = A, decided 2026-11-13)
 - [ ] Other Branches in the Store stay readable and writable
 - [ ] Immutable ids remain accessible after removal (C9)
 - [ ] Tested on both backends
@@ -115,7 +115,7 @@ Legend: 🔲 not started · ⏳ blocked on a decision · ✅ done
 
 - [ ] The four calls take only the resource name; no `confirm` / `force` / `dryRun` / `stopSandboxes`
 - [ ] Progress read from `store.status`; no new `operation.get`
-- [ ] Refusals surface as the existing codes (`MountsActive`, `Busy`, `InUse`, `NameRetired`, `StaleStore`)
+- [ ] Refusals surface as the documented codes (`MountsActive`, `Busy`, `InUse`, `NameTaken`, `NameRetired`, `StaleStore`)
 - [ ] No new `HistoryError` variant; GC methods default to `Unsupported` (C9)
 
 ### layerfs-project#52 — Acceptance (§9)

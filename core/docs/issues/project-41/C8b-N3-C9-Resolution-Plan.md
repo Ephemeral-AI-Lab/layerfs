@@ -82,7 +82,7 @@ In **one Store schema change**:
 1. Add a `deleted_ms` column to `layer_stack` (nullable timestamp)
 2. Add a `removed_ms` column to `branch` (nullable timestamp)
 3. **Keep the unique indexes full**: `layer_stack_names ON layer_stack(name)` and `branch_names ON branch(layer_stack_id, name)` stay as they are. A removed row keeps its name, so the name is never handed out again (Q1 = A: terminal tombstone).
-4. A create whose name is held by a removed row returns **`NameRetired`**; a create whose name is held by a live row keeps its existing refusal.
+4. A create whose name is held by a removed row returns **`NameRetired`**; one held by a live row returns **`NameTaken`** — decided 2026-11-13, so neither case leaks out as `Integrity` from the unique index.
 
 Partial unique indexes (restricted to rows whose `removed_ms` / `deleted_ms` is null) are **not** used: they would free the name, and a recreated Branch would reproduce `BranchId::named = blake3(stack ‖ name)` and take over the old history (spec §5 C6, `03-decision-record.md` §2).
 
@@ -139,9 +139,9 @@ SELECT *, (deleted_ms IS NOT NULL) AS is_deleted FROM layer_stack ...
 SELECT removed_ms FROM branch WHERE layer_stack_id = ? AND name = ?;
 -- no row                    → create
 -- row, removed_ms NOT NULL  → NameRetired
--- row, removed_ms IS NULL   → the existing duplicate-name refusal
+-- row, removed_ms IS NULL   → NameTaken
 ```
-The same rule applies to `layer_stack.name` and `deleted_ms`. The full unique index is the backstop; the explicit check makes the refusal `NameRetired` rather than a constraint failure.
+The same rule applies to `layer_stack.name` and `deleted_ms`. The full unique index is the backstop; the explicit checks make the refusal `NameRetired` / `NameTaken` rather than a constraint failure.
 
 #### Step 3: Turn delete operations into UPDATE
 
@@ -211,7 +211,7 @@ pub fn migrate_add_visibility(conn: &mut Connection) -> Result<()> {
 1. Change `sql/sqlite/history.sql` and `sql/postgresql/schema.sql`
 2. Create `persistence/history/migrate.rs` and implement the migration logic
 3. Change `persistence/history/catalog.rs` to add the visibility condition to every query
-4. Add the create-time `NameRetired` check for Branch and project names
+4. Add the create-time `NameRetired` / `NameTaken` checks for Branch and project names
 5. Change `project/remove.rs` and `branch/remove.rs` to use UPDATE
 6. Change `api/project/remove.rs` and `api/branch/remove.rs` to `delete` semantics
 7. Migration test: old database → new schema, verify visibility is correct and removed names stay retired
