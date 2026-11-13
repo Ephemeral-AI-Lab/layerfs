@@ -128,7 +128,7 @@ collectable(o) := o ∉ closure(Roots@G) ∧ o ∉ pinned
 - The decision must land as a receipt (G, Roots fingerprint, closure size, collectable count, the three definitions).
 
 ### C3 Death decision bound to `(ObjectId, generation)`
-For per-object/per-row deletion (PostgreSQL, future online GC), the delete intent must be bound to `(ObjectId, G)`, where `G` is `catalog_incarnation` at the time the intent was formed; ABA (same bytes written again after a delete) must not apply an old intent. Whole-file replacement in SQLite is covered by C1's re-check.
+For per-object/per-row deletion (PostgreSQL, future online GC), the delete intent must be bound to `(ObjectId, G)` — **scope decided 2026-11-13 (layerfs-project#42 item 9): forward-looking; 2.0.0 has no such caller**, because the replacement path deletes nothing (§7.2 step 2)., where `G` is `catalog_incarnation` at the time the intent was formed; ABA (same bytes written again after a delete) must not apply an old intent. Whole-file replacement in SQLite is covered by C1's re-check.
 
 ### C4 No object age (S4)
 - Object age must not be a deletion condition.
@@ -253,13 +253,13 @@ retire     delete old copies the record no longer names
   - **C, view indirection**: writability needs triggers; the last alternative.
 - Whichever is chosen, the reader fence (C8/R2) is required.
 - `pack` has immutability triggers on the PG side too, so deleting rows of the old table is forbidden; reclamation is "new schema + new triggers": the replacement schema receives only retained packs and rows, exactly as on SQLite (§7.2 step 2), and dead packs leave with `DROP SCHEMA … CASCADE`.
-- Deletion order: delete references first (`object_location` etc.), then payload; the intermediate state is `backend_reusable`, reported separately.
-  > **[UNRESOLVED — owner decision pending]** This bullet describes *in-place row
-  > deletion*, which R1-E does not perform: the swap path copies retained rows into a
-  > replacement schema and renames it, so no object row is ever deleted and there is no
-  > "references first, payload second" intermediate state. Choose between (a) replacement
-  > plus rename, and (b) an additional in-place path; `03-decision-record.md` §5.1 records
-  > both and what each does to C3's scope.
+> **[CLOSED 2026-11-13 — owner chose (a)]** Reading (b), an additional in-place path
+> with its own deletion order ("references first, payload second"), was **not** adopted.
+> The replacement schema receives only retained rows and the old one leaves with
+> `DROP SCHEMA … CASCADE`, so **no object row is ever deleted** and the
+> `backend_reusable` intermediate state does not arise on this path. Consequence for
+> layerfs-project#42 item 9: C3 (`delete(id, G)`) has **no caller in 2.0.0** and is a
+> forward-looking contract for a future online sweep (`03-decision-record.md` §5.1).
 - Reader fence: the lane blocks only writers; readers uniformly go through C8's `(catalog_id, incarnation)` session check → `StaleStore` (Q5 is superseded by C8/R2 and is no longer chosen separately).
 - Reclamation metric: the delta of `pg_relation_size` / `pg_total_relation_size`; `autovacuum` stays enabled but is not counted.
 
@@ -367,14 +367,17 @@ mechanism, the safety it guarantees, and where it is implemented.
   by the install of `store.compact` (C8). No caching across operations; the
   re-check happens just before `install`.
 
-### 13.2 Two-phase deletion (record, then confirm)
+### 13.2 Two-phase replacement (record, then confirm)
 
-- **Goal.** A crash in the middle of a delete must never leave a half-deleted
-  Store. The system must be able to tell "delete was intended but not confirmed"
-  from "delete happened".
+- **Goal.** A crash in the middle of a compaction must never leave a half-old,
+  half-new Store, and the system must be able to tell "replacement intended but not
+  confirmed" from "replacement happened".
 - **Mechanism.** Record the intent first (the op record names the staged copy and
-  the generation), perform the delete only on the staged copy, and confirm with a
-  single `install`; the old copy is retired afterwards.
+  the generation), build the staged copy by **copying only retained rows** — under
+  the replacement path there is **no delete step at all** (§7.2 step 2: "nothing is
+  deleted and the immutability triggers never fire") — then confirm with a single
+  `install`; the old copy is retired afterwards. C3's `delete(id, G)` would apply
+  only to a path that actually deletes objects, which 2.0.0 does not have.
 - **Safety.** A crash before `install` leaves the old Store byte-identical
   (invariant I3: `install` is binary, all-old or all-new); there is no
   "half new, half old" state; an uncertain op is reported, not guessed at.
