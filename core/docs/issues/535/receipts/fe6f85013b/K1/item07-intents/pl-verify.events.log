@@ -1,9 +1,0 @@
-1793691330.972450 begin pull pl-verify - point=verify pid=43468
-1793691330.973136 progress {"phase": "check", "done": null, "total": null}
-1793691330.978987 progress {"phase": "snapshot", "done": null, "total": null}
-1793691331.280416 progress {"phase": "send", "done": 0, "total": 24473600}
-1793691334.724642 progress {"phase": "send", "done": 8388608, "total": 24473600}
-1793691338.187907 progress {"phase": "send", "done": 16777216, "total": 24473600}
-1793691341.332554 progress {"phase": "send", "done": 24473600, "total": 24473600}
-1793691341.332672 progress {"phase": "verify", "done": null, "total": null}
-1793691341.332729 SIGKILL at progress verify

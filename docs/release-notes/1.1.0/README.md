@@ -21,8 +21,8 @@ breaks, why the version is 1.1.0 and the residual risk.
 ## What 1.1.0 is
 
 The work of issue [#428](https://github.com/Ephemeral-AI-Lab/layerfs/issues/428)
-(the [design](../../../core/docs/issues/428/README.md) and its
-[change list](../../../core/docs/issues/428/CHANGES.md)) and the fixes merged
+(the [design](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/428/README.md) and its
+[change list](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/428/CHANGES.md)) and the fixes merged
 since v1.0.0. How to use it is in the
 [JavaScript packages wiki](../../../api/README.md) and its guides for
 [`@layerfs/agent`](../../../api/how-to-use/agent.md),
@@ -134,7 +134,7 @@ number does not hide the break.
   earlier are refused, as in 1.0.0.
 - **Project records.** The addon's record code (`registry.rs`) is byte-for-byte
   the 1.0.0 code. The LayerFS home layout (`LAYERFS_HOME/<project>/`) is as in
-  1.0.0; the [home proposal](../../../core/docs/issues/428/layerfs-home.md)
+  1.0.0; the [home proposal](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/428/layerfs-home.md)
   (`~/.layerfs`) is not part of this release.
 - **Version matching.** `@layerfs/agent`, `@layerfs/backend`,
   `@layerfs/runtime`, `@layerfs/cli`, the native addon, the daemon and the
@@ -211,4 +211,4 @@ The owner decided these on 2026-10-24, for 1.1.0 only:
 
 Unchanged from 1.0.0: no restart recovery, deferred zombie reaping and the
 existing replaced-inode FUSE policy, Disposable only. Open #428 items are in the
-[change list](../../../core/docs/issues/428/CHANGES.md#open-items).
+[change list](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/428/CHANGES.md#open-items).

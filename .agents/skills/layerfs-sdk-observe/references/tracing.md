@@ -32,7 +32,7 @@ caller's (`log_tag` argument, else `LAYERFS_LOGS_TAG`). Read it with
 `layerfs logs list` (filters `--op`, `--project`, `--client`, `--tag`,
 `--outcome`, `--since`; newest first; `--cursor` pages) and clear it with
 `layerfs logs reset`. It rotates once to `calls.1.jsonl` past 16 MiB. See
-[Home and records: the call log](../../../../docs/architecture/control/management/home-and-records.md#the-call-log).
+[Home: traces and the call log](../../../../docs/architecture/control/home/README.md#traces-and-the-call-log).
 
 ```bash
 # slowest calls in the home's log

@@ -1,162 +1,182 @@
 # Front ends
 
-[Architecture](../../README.md) › [API](../README.md) › Front ends
-
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The `layerfs` command, the Node addon, the Python module and the MCP server: one call each, over the call table.
+The `layerfs` command, the Node and Python bindings and the MCP server: each turns its own input into one call of the table, makes it once, and shows the answer, refusal and events in its own form.
 
 | | |
 | --- | --- |
 | Layer | [API](../README.md) |
-| Crates | `layerfs-cli`, `layerfs-node`, `layerfs-python` |
-| Source | [`api/crates/layerfs-cli/src`](../../../../api/crates/layerfs-cli/src), [`api/crates/layerfs-node/src`](../../../../api/crates/layerfs-node/src), [`api/crates/layerfs-python/src`](../../../../api/crates/layerfs-python/src), [`api/node`](../../../../api/node), [`api/python`](../../../../api/python), [`api/mcp`](../../../../api/mcp) |
-| Uses | [Call table](../call-table/README.md) |
-| Used by | — |
+| Crates | `layerfs-cli`, `layerfs-node`, `layerfs-python`; packages `@layerfs/cli`, `@layerfs/node`, `layerfs` (Python), `@layerfs/mcp` |
+| Source | [`api/crates/layerfs-cli/src`](../../../../api/crates/layerfs-cli/src), [`api/cli`](../../../../api/cli), [`api/scripts`](../../../../api/scripts); bindings and MCP on their pages |
+| Uses | [Calls](../calls/README.md) |
+| Used by | shells, programs, MCP clients |
 | Flows | [A call, end to end](../../flows/call.md) |
 
-## Topics
-
-| Topic | What it covers |
-| --- | --- |
-| [CLI](cli.md) | The `layerfs` command. |
-| [Node](node.md) | The Node package and its native addon. |
-| [Python](python.md) | The Python package through PyO3. |
-| [MCP](mcp.md) | The private `@layerfs/mcp` stdio server: one generated tool per call, `work` and `admin` profiles. |
-
-## The picture
+## Picture
 
 ```text
   shell words           JS function call         Python function call
        |                      |                         |
+  layerfs-cli          api/node index.js         api/python _client.py
+  parse.rs, run.rs     bind(): split args        _bind(): split args
+       |               layerfs-node (napi)       layerfs-python (pyo3)
+       | SdkValue             | JSON text               | JSON text
        v                      v                         v
-+--------------+     +-----------------+       +------------------+
-| CLI          |     | Node package    |       | Python package   |
-| parse.rs     |     | index.js bind() |       | _client.py _bind |
-| run.rs one() |     +-----------------+       +------------------+
-+--------------+        | JSON text               | JSON text
-       |                v                         v
-       |         +-----------------+       +------------------+
-       |         | layerfs-node    |       | layerfs-python   |
-       |         | call.rs (napi)  |       | call.rs (PyO3)   |
-       |         +-----------------+       +------------------+
-       | SdkValue       | call_json               | call_json
-       v                v                         v
-+----------------------------------------------------------------+
-| layerfs-api: call_scoped / call_json  (one call, made once)    |
-|   find -> check -> scope -> home -> family run -> snake keys   |
-+----------------------------------------------------------------+
-       |                |                         |
-       v events         v events (JSON)           v events (JSON)
-  stderr / stdout   on_progress, stdout,     on_progress, stdout,
-                    stderr functions         stderr functions
+  call_scoped          call_json                 call_json   (layerfs-api)
+       |                      |                         |
+  stdout JSON / exit   value | LayerFSError      value | LayerFSError
+  --progress --stream  on_progress, stdout,      on_progress, stdout,
+  --events             stderr functions          stderr functions
+
+  MCP server (api/mcp) ---> Node binding, one tool per call
 ```
 
 Every front end builds its functions or sub-commands from the same table
-([`layerfs_api::families`](../../../../api/crates/layerfs-api/src/lib.rs),
-or its JSON form `table_json`) and makes exactly one library call per
-function call. Functions given as options never cross into the library:
-the front end keeps them and feeds them the call's events. The steps
-inside the library are on [Table](../call-table/table.md).
+([`layerfs_api::families`](../../../../api/crates/layerfs-api/src/lib.rs), or
+its JSON form `table_json`) and makes exactly one library call per function
+call. Functions given as options stay in the front end, which feeds them the
+call's events.
 
 ## What it does
 
 | Front end | Turns its input into | Library entry | Answer | Source |
 | --- | --- | --- | --- | --- |
-| `layerfs` command | positionals in table order, then `--options`; content and JSON positionals from stdin or `--from` | `layerfs_api::call_scoped` | one JSON line on stdout, or the refusal as JSON on stderr | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs), [`parse.rs`](../../../../api/crates/layerfs-cli/src/parse.rs) |
-| Node `layerfs` | positionals in table order, then an options object | `native.call` → `layerfs_api::call_json` | a resolved value, or a thrown `LayerFSError` | [`index.js`](../../../../api/node/src/index.js), [`call.rs`](../../../../api/crates/layerfs-node/src/call.rs) |
-| Python `layerfs` | positionals in table order; optional positionals and options as keywords | `_native.call` → `layerfs_api::call_json` | a dict, or a raised `LayerFSError`; `layerfs.aio` as coroutines | [`_client.py`](../../../../api/python/src/layerfs/_client.py), [`call.rs`](../../../../api/crates/layerfs-python/src/call.rs) |
+| `layerfs` command | positionals in table order, then `--options`; content and JSON positionals from stdin or `--from` | `call_scoped` | one JSON line on stdout; a refusal as JSON on stderr, exit 125 | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs), [`parse.rs`](../../../../api/crates/layerfs-cli/src/parse.rs) |
+| Node | positionals, then an options object | `call_json` | a resolved value, or a thrown `LayerFSError` | [bindings](bindings.md#layerfs-node) |
+| Python | positionals; optional positionals and options as keywords; `layerfs.aio` as coroutines | `call_json` | a value, or a raised `LayerFSError` | [bindings](bindings.md#layerfs-python) |
+| MCP | one tool per call in a launch profile | the Node binding | a JSON text block, or `isError` | [MCP](mcp.md) |
 
-| Event | Shape | CLI | Node and Python |
-| --- | --- | --- | --- |
-| progress (`project.init`, `workspace.exec` (its exec id), `store.push`, `store.pull`, `backup.create`, `backup.restore`) | `{ progress: … }` | `--progress`: one JSON line per event on stderr | the `on_progress` function |
-| exec output (`workspace.exec`) | `{ stream, bytes }` | `--stream`: bytes to stdout or stderr | the `stdout` and `stderr` functions; `stream: true` without them writes to the process's own streams |
+Entries outside the table: `doctor` in every front end (report-only,
+[Doctor](../../control/doctor/README.md)); `close` in Node and Python
+(`close_idle(0)`: close this process's idle Stores and drop their leases; the
+CLI does it after every call); in the CLI only, `worker`, `import-env`,
+`help` and `--version`.
 
-Events come from the call's one event stream
-([`Context`](../../../../api/crates/layerfs-api/src/calls/context.rs)).
-`workspace.exec` sends its output after the command ends: an inline stream
-as one event ([`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs)),
-a stream over 1 MiB as 1 MiB pages from the host's spool, with the result
-marked `streamed` ([`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) `drain`).
+### The layerfs command
 
-Entries outside the table: `doctor` in every front end (report-only, see
-[Doctor](../../control/management/doctor.md)); `close` in Node and Python, which runs
-`close_idle(0)` to close this process's idle Stores and drop their leases
-(the CLI does the same after every call); and, in the CLI only, `worker`,
-`import-env`, `help` and `--version`.
+```text
+layerfs <family> <call> <positionals...> [--options] [switches]
+  none | help | -h | --help  -> help::print                 (exit 0 or 2)
+  --version [--json]         -> version / capabilities      (no home)
+  help --json                -> {calls, commands, switches} (no home)
+  worker                     -> worker::main                (outside table)
+  import-env                 -> home::import_env            (outside table)
+  doctor [target ...]        -> doctor::main                (outside table)
+  <family> <call>            -> find -> parse -> Scope::parse
+                                -> call_scoped once -> close_idle(0)
+                                -> print result or refusal
+```
+
+Every word must be UTF-8 ([`main.rs`](../../../../api/crates/layerfs-cli/src/main.rs));
+one that is not is exit 2 before anything runs.
+[`parse.rs`](../../../../api/crates/layerfs-cli/src/parse.rs) reads one call's
+words against its entry:
+
+| Word | Becomes |
+| --- | --- |
+| a word not starting with `-` (or `-` itself) | the next positional, in table order; the count must lie between the required and the total, else exit 2 |
+| `--` | every later word is a positional |
+| `--<name> <value>`, `--<name>=<value>` | option `<name>` with `-` read as `_`, parsed by its kind (`Int`, `Bool` `true`/`false`, `Json`, `Size` such as `8G`, else text) |
+| `--<bool-option>` alone | `true`; `--force=false` gives false |
+| `--<text-argument>-from <file>` | that optional `Text` option read from the file |
+| `-m <text>` | the `message` option; exit 2 when the call has none |
+| content or JSON positional | read from stdin, or `--from <file>`; text when UTF-8, else bytes (JSON must be UTF-8); not counted on the line |
+| any other `--x` | exit 2, listing the call's options |
+
+Values are only shaped here; the library checks them again
+([`check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs)). An
+unknown call suggests the closest one in its family
+([`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs)).
+
+| Switch | Calls | Effect |
+| --- | --- | --- |
+| `--text` | all | readable output: a result's `text` field as is, a list of records as an aligned table, else `key  value` lines; timestamps (`created`, `modified`, `at`) as UTC dates and byte fields in binary units ([`output.rs`](../../../../api/crates/layerfs-cli/src/output.rs)) |
+| `--progress` | the nine with `on_progress` | a status line on a terminal stderr, else one JSON line per event on stderr; `LAYERFS_PROGRESS_JSON` forces JSON lines |
+| `--stream` | `workspace exec` | output events to stdout and stderr; no result JSON; exit with the command's `exit_code` (1 when it does not fit 0 to 255, 0 when there is none) |
+| `--events` | `workspace exec` | framed NDJSON on stdout, then one `{result}` or `{refusal}` ([`framed.rs`](../../../../api/crates/layerfs-cli/src/framed.rs)); exclusive with `--stream` and `--text` |
+| `--scope <folder>`, `--scope-project`, `--scope-branch` | all | a folder scope; `--scope` needs `--scope-project`; a bad scope is a refusal (125), the flags alone are exit 2 |
+
+`layerfs help [<family> [<call>]]` and `layerfs <family> <call> -h` print
+usage lines built from the entry ([`help.rs`](../../../../api/crates/layerfs-cli/src/help.rs)):
+`<name>` required, `[<name>]` optional, `[--name <name>]` per option (`[--name]`
+for a `Bool`, `[--progress]` for `on_progress`). The banner
+([`banner.rs`](../../../../api/crates/layerfs-cli/src/banner.rs)) prints only
+when stdout is a terminal; `NO_COLOR` turns colour off. `--version --json`
+gives `{ version, commit, dirty, features }` and `help --json` gives
+`{ calls, commands, switches }` with `calls` exactly `table_json`
+([`capabilities.rs`](../../../../api/crates/layerfs-cli/src/capabilities.rs)).
+
+`layerfs worker` serves a machine's worker
+([`worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs)): it reads
+`LAYERFS_WORKER_LISTEN`, `LAYERFS_WORKER_SECRET` (a file holding the secret)
+and, for tests, `LAYERFS_WORKER_ROOT` (default `/layerfs/data`); a missing
+setting exits 125. The protocol is in
+[workers and reach](../../control/machines/workers-and-reach.md).
+
+Each table call appends one call-log line with `client: "cli"`;
+`LAYERFS_LOGS_TAG` sets its tag and `LAYERFS_LOGS=0` turns the log off
+([`dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs)).
+A wrong command line, `help`, `--version`, `worker`, `import-env` and `doctor`
+write none.
 
 ## Invariants
 
 | Rule | Enforced by |
 | --- | --- |
-| Front ends add no behaviour of their own beyond argument and output shape. | Each function is built from the table and calls `call_json` or `call_scoped` once: [`index.js`](../../../../api/node/src/index.js) `bind`, [`_client.py`](../../../../api/python/src/layerfs/_client.py) `_bind`, [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) `one` |
-| No call, argument or result name is written in a front end. | [`api/AGENTS.md`](../../../../api/AGENTS.md): change the entry in `layerfs-api/src/<family>/<call>.rs` |
-| Nothing is retried in a front end. | [`layerfs-node/src/lib.rs`](../../../../api/crates/layerfs-node/src/lib.rs), [`calls/text.rs`](../../../../api/crates/layerfs-api/src/calls/text.rs) |
-| Argument checks are the library's, so a wrong call is refused the same way everywhere. | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs); compared in `shell.mjs` and `test_calls.py` |
-| Functions (`on_progress`, `stdout`, `stderr`) stay in the front end. | `check` refuses a `Function` argument as unknown ([`check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs)) |
-| Result keys are snake_case in every front end. | [`calls/keys.rs`](../../../../api/crates/layerfs-api/src/calls/keys.rs) |
-| Bytes cross a language boundary as `{ "base64": … }`. | [`values.js`](../../../../api/node/src/values.js), [`_values.py`](../../../../api/python/src/layerfs/_values.py) |
-| LayerFS reads `LAYERFS_*` settings only and names no plugin. | `LAYERFS_HOME` in [`dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home`; `LAYERFS_WORKER_*` in [`worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
+| Front ends add no behaviour beyond argument and output shape: each function is built from the table and calls the library once | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs), [`index.js`](../../../../api/node/src/index.js) `bind`, [`_client.py`](../../../../api/python/src/layerfs/_client.py) `_bind`; the [coverage matrix](../calls/coverage.md) |
+| No call, argument or result name is written in a front end | [api guide](../../../../api/AGENTS.md); generated types and stubs |
+| Nothing is retried in a front end | [`calls/text.rs`](../../../../api/crates/layerfs-api/src/calls/text.rs), [`framed.rs`](../../../../api/crates/layerfs-cli/src/framed.rs) |
+| A wrong call is refused the same way everywhere: the checks are the library's | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs); compared by `shell.mjs` and `test_calls.py` |
+| Functions (`on_progress`, `stdout`, `stderr`) never cross into the library | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs) |
+| LayerFS reads `LAYERFS_*` settings only and names no plugin | [`dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home`, [`worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
+| The CLI closes the Stores a call opened before it exits, so a sqlite Store leaves no write-ahead log | `close_idle(Duration::ZERO)` in [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) |
 
 ## Limits and failures
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| CLI command line wrong | exit 2, nothing called | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) `USAGE` |
-| Call refused or failed | exit 125 and `{"code","message","detail"}` on stderr | [`output.rs`](../../../../api/crates/layerfs-cli/src/output.rs) |
-| Node or Python: unknown option, too many positionals | `LayerFSError("InvalidInput")` before the native call | [`index.js`](../../../../api/node/src/index.js), [`_client.py`](../../../../api/python/src/layerfs/_client.py) |
-| Node addon host | macOS or Linux only; `build-native.mjs` refuses other platforms and a set `CARGO_BUILD_TARGET` | [`build-native.mjs`](../../../../api/scripts/build-native.mjs) |
-| Python | 3.10 or later (abi3), built by maturin | [`pyproject.toml`](../../../../api/python/pyproject.toml), [`Cargo.toml`](../../../../api/crates/layerfs-python/Cargo.toml) |
-| Cargo features | Node: `machine` always on, `postgresql` and `tls` off by default. Python and CLI: `machine` by default, `postgresql` and `tls` off. Guest worker: `--no-default-features --features postgresql` | the three `Cargo.toml` files, [`tools/linux_bundle.py`](../../../../tools/linux_bundle.py) |
-| Event delivery | every event reaches its function before the call settles; a function that throws does not stop the call | [`index.js`](../../../../api/node/src/index.js), [`call.rs`](../../../../api/crates/layerfs-python/src/call.rs) |
-| Python `aio` cancel | stops the functions; the native call runs to its end and its outcome is dropped | [`aio.py`](../../../../api/python/src/layerfs/aio.py) |
+| CLI exit codes | 0 result; 2 wrong command line (`layerfs: <message>` on stderr), nothing called; 125 refusal (`{"code","message","detail"}` on stderr) | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) `USAGE`, `REFUSED` |
+| stdout cannot be written after the call | 125; the call was made and its effects stay; nothing is repeated | [`output.rs`](../../../../api/crates/layerfs-cli/src/output.rs), [`framed.rs`](../../../../api/crates/layerfs-cli/src/framed.rs) |
+| stderr cannot be written | the line is lost; the exit stays the outcome's | [`output.rs`](../../../../api/crates/layerfs-cli/src/output.rs) `diagnostic` |
+| `--stream`: a command exiting 2 or 125 | same exit as a usage error or refusal; stderr tells them apart | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) |
+| Cargo features | Node: `machine` always, `postgresql`/`tls` opt-in; Python and CLI: `machine` by default; without `postgresql`/`tls` such a call is `Unsupported` | the three crates' `Cargo.toml` |
+| Durable Stores | `NOT_RUN — disabled by owner until explicit reauthorization`; every build runs Disposable/WAL only | [store family](../sdk/store.md) |
 
-Error codes are listed in [Errors](../call-table/errors.md#error-kinds).
+## Packaging and release
+
+| Artifact | Built by | Contents | Platform |
+| --- | --- | --- | --- |
+| `@layerfs/cli` 2.0.0-rc.1 ([`api/cli`](../../../../api/cli/package.json)) | `cargo +1.85.1 build --release --locked -p layerfs-cli`, copy to `api/cli/bin/layerfs`, `npm pack` (`prepack` refuses without the binary) | `bin/layerfs`, `LICENSE`, `README.md`, `package.json` | `os` linux, `cpu` x64, `libc` glibc; Node 22 or later |
+| CLI tarball | [`build-cli-dist.mjs`](../../../../api/scripts/build-cli-dist.mjs) `<output-dir>`: release build with paths remapped, then `layerfs-<version>-x86_64-unknown-linux-gnu.tar.gz` and `SHA256SUMS` | `layerfs`, `LICENSE`, `README.md` | runs on linux x64 only; the Cargo target must stay in the worktree |
+| `@layerfs/node` 2.0.0-rc.1 ([`api/node`](../../../../api/node/package.json)) | [`build-native.mjs`](../../../../api/scripts/build-native.mjs) (release by default), `npm pack` in `api/node` (`prepack` refuses without `layerfs.node`) | `src/` (with `index.d.ts`), `layerfs.node`, `LICENSE`, `README.md`, `package.json` | linux, x64, glibc; Node 22 or later |
+| `layerfs` Python 2.0.0 ([`pyproject.toml`](../../../../api/python/pyproject.toml)) | `cd api/python && maturin build --locked` | `layerfs` with `_native` (abi3), stubs, `LICENSE` | Python 3.10 or later; not on PyPI |
+| `@layerfs/mcp` 2.0.0 | not packed | | private |
+
+Both npm packages publish under the `rc` tag with public access
+(`npm publish --tag rc --access public`); npm also sets `latest` on a
+package's first publish. npm checks the libc family, not its version: a glibc
+older than the one the binary was built against installs and then fails to
+load. Publishing, logging in and rollback are the owner's steps; no token or
+`.npmrc` belongs in the repository, a command line or a log. A published
+version is never reused: roll back by `npm deprecate`, by moving a dist-tag,
+or by `npm unpublish` within npm's policy.
 
 ## Demonstration
 
-Commands are written from source and were not run while writing this page.
-Give each a wall limit of at most 120 s.
+Build first (`--no-run`), then each under a 120 s wall limit.
 
-| Test or example | Crate | Shows |
-| --- | --- | --- |
-| [`stream.rs`](../../../../api/crates/layerfs-cli/tests/stream.rs) | `layerfs-cli` | `workspace exec --stream` passes output through and exits with the command's code |
-| [`doctor.rs`](../../../../api/crates/layerfs-cli/tests/doctor.rs) | `layerfs-cli` | `layerfs doctor` reports, exits 0 and makes no home |
-| [`test`](../../../../api/node/test) | `layerfs` (npm package) | the table as functions, library checks, events, `close`, `doctor`, same JSON as the command |
-| [`test`](../../../../api/python/test) | `layerfs` (Python package) | the same for Python, plus `aio` |
+| Test or example | Command | Platform | Shows |
+| --- | --- | --- | --- |
+| [`exit_codes.rs`](../../../../api/crates/layerfs-cli/tests/exit_codes.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test exit_codes` | Unix | 0, 2 and 125 as above |
+| [`stream.rs`](../../../../api/crates/layerfs-cli/tests/stream.rs), [`stream_framed.rs`](../../../../api/crates/layerfs-cli/tests/stream_framed.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test stream --test stream_framed` | Unix; the live half needs `LAYERFS_DAEMON`, else `NOT_RUN` | `--stream` passes output and the command's exit; `--events` frames |
+| [`progress.rs`](../../../../api/crates/layerfs-cli/tests/progress.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test progress` | Unix | progress lines on stderr; refusal before any event; closed stderr |
+| [`capabilities.rs`](../../../../api/crates/layerfs-cli/tests/capabilities.rs) | `cargo +1.85.1 test --locked -p layerfs-cli --test capabilities` | Unix | `--version --json`, `help --json` without a home |
+| [`package.mjs`](../../../../api/cli/test/package.mjs) | `node --test api/cli/test/package.mjs` | any | the CLI package's licence, platform fields and file list |
 
-- **`stream.rs`**: a refusal with `--stream` is still exit 125. With a
-  native daemon it makes a Store, Init, a Branch, a Sandbox on `native` and
-  a Workspace, then checks that `exit 3` exits 3 with stdout and stderr
-  passed through, `true` exits 0, and without `--stream` the exit is 0 with
-  `"exit_code":4` in the JSON. Command:
-  `cargo +1.85.1 test --locked -p layerfs-cli --test stream`. Needs Unix;
-  the live half needs `LAYERFS_DAEMON` (a daemon binary), else it prints
-  `NOT_RUN` and passes.
-- **`doctor.rs`**: `layerfs doctor` on a missing home prints
-  `{"ok":true,"findings":[]}` and does not create it; a Store record that
-  is not JSON gives `1 error(s), 0 warning(s)` and its fix with `--text`;
-  `doctor --all` is exit 2. Command:
-  `cargo +1.85.1 test --locked -p layerfs-cli --test doctor`, built first
-  with `--no-run` (the cold build takes over a minute and would hit the
-  100 s limit). Needs Unix.
-- **Node tests**: `calls.mjs`, `shell.mjs`, `events.mjs`, `close.mjs`,
-  `doctor.mjs`; see [Node](node.md#native-addon-build). Command:
-  `perl -e 'alarm 100; exec @ARGV' npm --prefix api/node test`
-  (`node --test test/*.mjs`). Needs the addon built first.
-- **Python tests**: `test_calls.py`, `test_doctor.py`; see
-  [Python](python.md#package). Command:
-  `perl -e 'alarm 100; exec @ARGV' python3 api/python/test/test_calls.py`.
-  Needs the module built and copied beside the package.
+## Pages
 
-## Earlier material
-
-Folded into these pages. Matched by title, so check each one before relying on it.
-
-- [`api/README.md`](../../../../api/README.md): covered in [Node](node.md) and [CLI](cli.md).
-- [`api/python/README.md`](../../../../api/python/README.md): covered in [Python](python.md).
-- [`docs/versioned/2.0.0/sdk.md`](../../../versioned/2.0.0/sdk.md): the user manual for the packages; its design points are covered in [Node](node.md) and [Python](python.md).
-
----
-
-← [backup.restore](../sdk/backup/restore.md) · [Up: API](../README.md) · [Front ends: CLI](cli.md) →
+| Page | What it covers |
+| --- | --- |
+| [bindings](bindings.md) | `layerfs-node` with `api/node`, and `layerfs-python` with `api/python`: loading, values, events, types, tests |
+| [mcp](mcp.md) | the private stdio MCP server: launch, export allowlist, profiles, schemas |

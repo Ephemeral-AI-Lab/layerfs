@@ -1,4 +1,0 @@
-1793691527.545302 begin push iso docker point=snapshot pid=46733
-1793691527.566629 progress {"phase": "check", "done": null, "total": null}
-1793691527.602058 progress {"phase": "snapshot", "done": null, "total": null}
-1793691527.602154 SIGKILL at progress snapshot

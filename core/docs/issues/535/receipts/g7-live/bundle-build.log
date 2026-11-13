@@ -1,4 +1,0 @@
-daemon: built in 19.9 s (/Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-verify-417967c19d8d/builds/bundle-daemon-79ec97e557854757a4789da05312f8f7)
-worker: built in 17.9 s (/Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-verify-417967c19d8d/builds/bundle-worker-641a830a41e04240ad0e8573148d2dec)
-helper: built in 4.8 s (/Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-verify-417967c19d8d/builds/bundle-helper-e9a08a2a3a174250a54ef6b7112fb404)
-worker: built in 24.5 s (/Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-verify-417967c19d8d/builds/bundle-worker-fa4efb04778d44019e1d559bc4dde865)

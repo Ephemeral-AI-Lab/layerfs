@@ -7,7 +7,7 @@
 
 Navigation links were updated on 2026-10-06 for the responsibility-folder moves.
 The source-review claims retain their original pin above; current continuation
-scope is in the [S7–S9 handoff](../../core/docs/issues/307/HANDOFF-S7-S9.md).
+scope is in the [S7–S9 handoff](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/HANDOFF-S7-S9.md).
 
 Issue [#321](https://github.com/Ephemeral-AI-Lab/layerfs/issues/321) update, 2026-10-14
 (local branch `issue321-workspace-overlay`): every mounted Workspace now has its
@@ -18,7 +18,7 @@ row prefixes, the owner thread, its queues, admission credits and the common
 memory budget described below at this guide's source pin are removed.
 Workspaces share only committed immutable content and the global Store. The
 implemented description is the
-[owner guide](../../core/docs/architecture/21-daemon-owner.md#issue-321-final-model-one-lock-per-workspace-2026-10-14).
+[owner guide](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/21-daemon-owner.md#issue-321-final-model-one-lock-per-workspace-2026-10-14).
 Nothing below describes current source: there is no queue, scheduler, class
 rotation or credit. What remains is that a later mutation waits behind a
 waiting Capture and a later source acquisition behind a waiting known install.
@@ -29,11 +29,11 @@ its intended native integration without treating concurrency, fairness, throughp
 and total memory qualification as equivalent. Concurrent staged S3 source changes
 are outside this review.
 
-The [daemon contract](../../core/docs/issues/303/daemon-sqlite.md),
-[FUSE scheduling contract](../../core/docs/issues/303/fuse.md#3-callback-ownership-and-scheduling),
-[runtime integration contract](../../core/docs/issues/303/06-cluster-one-integration.md)
+The [daemon contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/daemon-sqlite.md),
+[FUSE scheduling contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/fuse.md#3-callback-ownership-and-scheduling),
+[runtime integration contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/06-cluster-one-integration.md)
 and [implementation tracker #307](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307)
-own the requirements. The [S2 exit audit](../../core/docs/issues/307/S2-EXIT-AUDIT.md)
+own the requirements. The [S2 exit audit](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/S2-EXIT-AUDIT.md)
 records completed generation/service evidence. This document selects no new
 connection topology, algorithm, resource allowance or performance campaign.
 
@@ -250,8 +250,8 @@ tests and 21 Linux ARM64 overlay/daemon tests. This guide reuses that record at
 its original scope and runs no tests or measurements.
 
 The public [daemon tests](../../core/crates/layerfs-daemon/tests/owner.rs),
-[S2 audit](../../core/docs/issues/307/S2-EXIT-AUDIT.md) and
-[terminal cleanup guide](../../core/docs/architecture/25-terminal-reclaim.md)
+[S2 audit](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/S2-EXIT-AUDIT.md) and
+[terminal cleanup guide](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/25-terminal-reclaim.md)
 provide the source/evidence trail. Those scoped proofs do not establish full
 mounted concurrency, sustained throughput or whole-system resource acceptance.
 

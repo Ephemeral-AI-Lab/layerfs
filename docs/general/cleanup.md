@@ -135,7 +135,7 @@ Bulk pruning commands select by "unreferenced", which is not "disposable".
 `docker image prune -a` removes every image no container uses, and that set
 includes images kept on purpose that cannot be pulled back, such as the local-only
 default Sandbox image of
-[#533 O36](../../core/docs/issues/533/DECISIONS.md#o36-default-sandbox-image-owner-decision-2026-11-02).
+[#533 O36](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/DECISIONS.md#o36-default-sandbox-image-owner-decision-2026-11-02).
 Before `docker image prune -a`, `docker volume prune -a`, a `cargo clean` across
 checkouts, or an `rm -rf` sweep, check what depends on each selected item
 (decision records, launcher registrations, sealed bundles, symlinks) and keep
