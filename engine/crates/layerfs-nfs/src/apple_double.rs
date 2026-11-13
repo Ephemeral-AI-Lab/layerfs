@@ -145,9 +145,10 @@ pub(crate) struct Companions {
     /// Main inode serial -> the companion holding its FinderInfo and
     /// attributes.
     inodes: HashMap<u64, u64>,
-    /// The serials taking a slot of the index bound, so reclamation walks the
-    /// slots rather than every companion: a whole image takes none, so its
-    /// number is bounded by the decoded bytes alone and not by [`HELD`].
+    /// The serials taking a slot of the index bound, so reclamation walks only
+    /// the [`HELD`]-bounded slots rather than every companion: a whole image
+    /// takes no slot (whether decoded within [`DECODED_BYTES`] or kept as
+    /// written bytes above it), so whole images add nothing to the walk.
     slots: HashSet<u64>,
     resident_bytes: usize,
     decoded: usize,
