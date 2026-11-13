@@ -136,6 +136,16 @@ pub(crate) struct OpenFile {
     pub size: u64,
 }
 
+/// One kernel read's answer, as this export uses it.
+struct Answer {
+    stat: ViewStat,
+    /// The directory a LOOKUP named the inode in: the same visit read it, so
+    /// the reply's directory attributes cost no second owner job.
+    parent: Option<ViewStat>,
+    file: Option<u64>,
+    directory: Option<u64>,
+}
+
 /// One kernel mount served over NFS: its ports and its synthetic kernel state.
 pub struct Kernel {
     services: Arc<dyn MountServices>,
@@ -287,9 +297,9 @@ impl Kernel {
                 )
             });
         match found {
-            Ok((stat, _, _)) => {
-                self.entry_taken(&stat, parent, &name);
-                if stat.serial == serial {
+            Ok(answer) => {
+                self.entry_taken(&answer.stat, parent, &name);
+                if answer.stat.serial == serial {
                     self.resolved.fetch_add(1, Ordering::Relaxed);
                     return Ok(());
                 }
@@ -321,18 +331,17 @@ impl Kernel {
         protected: u64,
         handle: Option<u64>,
         operation: KernelReadOperation,
-    ) -> Result<(ViewStat, Option<u64>, Option<u64>), Status> {
+    ) -> Result<Answer, Status> {
         let (services, request) = self.request()?;
         let found = wait(KernelRead::prepare(
             services, self.mount, request, protected, handle, operation,
         ))
         .map_err(read_failure)?;
-        let answer = found.value().map(|value| {
-            (
-                value.stat.clone(),
-                value.file.map(|file| file.owner_id()),
-                value.directory.map(|directory| directory.owner_id()),
-            )
+        let answer = found.value().map(|value| Answer {
+            stat: value.stat.clone(),
+            parent: value.parent.clone(),
+            file: value.file.map(|file| file.owner_id()),
+            directory: value.directory.map(|directory| directory.owner_id()),
         });
         wait(found.dispose()).map_err(read_failure)?;
         answer.map_err(refusal)
@@ -354,7 +363,7 @@ impl Kernel {
         };
         let stat = self
             .observe(serial, handle, KernelReadOperation::Getattr { serial })
-            .map(|(stat, _, _)| stat)
+            .map(|answer| answer.stat)
             .map_err(|status| {
                 if status == Status::NoEnt {
                     Status::Stale
@@ -366,11 +375,17 @@ impl Kernel {
         Ok(stat)
     }
     /// LOOKUP of `name` in directory `parent`, including `.`, `..` and the
-    /// export's own silly names.
-    pub fn lookup(&self, parent: u64, name: &[u8]) -> Result<ViewStat, Status> {
+    /// export's own silly names. One owner job answers both the entry and,
+    /// when the name resolved, the directory itself: the same job had to read
+    /// the directory's row to resolve it, so the reply's directory attributes
+    /// cost nothing more. The second half is `None` for `.`, `..`, a silly
+    /// name and every failure, whose answers carry the facts
+    /// [`Kernel::directory_wcc`] holds instead of a fresh GETATTR: a deliberate
+    /// change, and RFC 1813 makes those attributes optional.
+    pub fn lookup(&self, parent: u64, name: &[u8]) -> Result<(ViewStat, Option<ViewStat>), Status> {
         match name {
             b"" => return Err(Status::NoEnt),
-            b"." => return self.getattr(parent),
+            b"." => return self.getattr(parent).map(|stat| (stat, None)),
             b".." => {
                 let up = if parent == self.root() {
                     parent
@@ -379,13 +394,13 @@ impl Kernel {
                     known.ok_or(Status::NoEnt)?
                 };
                 self.held_reference(up)?;
-                return self.getattr(up);
+                return self.getattr(up).map(|stat| (stat, None));
             }
             _ if name.len() > 255 => return Err(Status::NameTooLong),
             _ => {}
         }
         if let Some(stat) = self.companion_named(parent, name) {
-            return Ok(stat);
+            return Ok((stat, self.directory_wcc(parent).0));
         }
         if self.refuses_apple_double() && crate::names::apple_double(name) {
             if parent != self.root() && !self.table().parents.contains_key(&parent) {
@@ -395,17 +410,20 @@ impl Kernel {
         }
         let silly = self.table().silly.get(&(parent, name.to_vec())).copied();
         if let Some(serial) = silly {
-            return self.getattr(serial);
+            return self.getattr(serial).map(|stat| (stat, None));
         }
         let path = PathName::from_bytes(name).map_err(|_| Status::Inval)?;
-        let (stat, _, _) = self.observe(
+        let answer = self.observe(
             parent,
             None,
             KernelReadOperation::Lookup { parent, name: path },
         )?;
+        if let Some(directory) = &answer.parent {
+            self.observed(directory);
+        }
         // The deciding visit took one engine reference; keep exactly one.
-        self.entry_taken(&stat, parent, name);
-        Ok(stat)
+        self.entry_taken(&answer.stat, parent, name);
+        Ok((answer.stat, answer.parent))
     }
     /// A visit or mutation that decided `stat` as the entry `name` of
     /// `parent` took one engine lookup reference on it: the export keeps
@@ -611,9 +629,9 @@ impl Kernel {
             }
         }
         let operation = KernelReadOperation::Open { serial, writable };
-        let (stat, file, _) = self.observe(serial, None, operation)?;
-        let handle = file.ok_or(Status::ServerFault)?;
-        Ok(self.file_taken(serial, handle, &stat, writable))
+        let answer = self.observe(serial, None, operation)?;
+        let handle = answer.file.ok_or(Status::ServerFault)?;
+        Ok(self.file_taken(serial, handle, &answer.stat, writable))
     }
     /// Records an open file descriptor (from `OPEN` or `CREATE`), evicting
     /// the oldest unpinned descriptor when the bound is reached.
@@ -730,9 +748,11 @@ impl Kernel {
         if crate::apple_double::companion(serial) {
             return Err(Status::NotDir);
         }
-        let (_, _, directory) =
-            self.observe(serial, None, KernelReadOperation::Opendir { serial })?;
-        let handle = directory.ok_or(Status::ServerFault)?;
+        let answer = self.observe(serial, None, KernelReadOperation::Opendir { serial })?;
+        let handle = answer.directory.ok_or(Status::ServerFault)?;
+        // The visit read the directory's own row: remember it, so a LOOKUP in
+        // this directory answers its `dir_attributes` from memory.
+        self.observed(&answer.stat);
         let evicted = {
             let mut table = self.table();
             let tick = table.tick();

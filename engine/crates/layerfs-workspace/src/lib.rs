@@ -55,12 +55,13 @@ pub use operations::file::recognize::{
 };
 pub use operations::kernel_data::{KernelDataVisit, KernelWindow};
 pub use operations::kernel_directory::{
-    KernelDirectoryBatch, KernelDirectoryEntry, KernelDirectoryListing, KernelDirectoryVisit,
-    KernelDirectoryWindow,
+    KernelDirectoryBatch, KernelDirectoryEntry, KernelDirectoryListing, KernelDirectoryRead,
+    KernelDirectoryVisit, KernelDirectoryWindow,
 };
 pub use operations::kernel_mutation::KernelMutationOutcome;
 pub use operations::kernel_read::{
-    KernelReadDecision, KernelReadFailure, KernelReadOperation, KernelReadOutcome, KernelReadValue,
+    Decided, KernelReadDecision, KernelReadFailure, KernelReadOperation, KernelReadOutcome,
+    KernelReadValue,
 };
 pub use operations::kernel_visit::{
     KernelInput, KernelMutationVisit, KernelReadVisit, KernelVisitRequest,

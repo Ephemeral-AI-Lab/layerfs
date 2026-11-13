@@ -67,7 +67,8 @@ it holds.
   LOOKUP / GETATTR / OPEN / OPENDIR       KernelRead::prepare
     loop:
       observe_visit(facts) ---- owner job, records no request source
-        Value(inode)  -> answer (OPEN/OPENDIR wrote a descriptor)
+        Value(Decided) -> answer (OPEN/OPENDIR wrote a descriptor;
+                          a LOOKUP also carries the directory it named)
         Refused(r)    -> refusal
         Needs(n)      -> drop receipt; base(); facts.supply(n); repeat
 

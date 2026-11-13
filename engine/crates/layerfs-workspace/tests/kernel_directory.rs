@@ -4,14 +4,16 @@ mod harness;
 use harness::{create, mkdir, path, rename, rmdir, unlink, Bench, T1, T2};
 use layerfs_content::{
     filesystem::{
-        update_filesystem, DirectoryUpdate, FilesystemInput, FilesystemObjects, FilesystemResources,
+        attributes::PortableMetadata, build_filesystem, scope_for_seed, update_filesystem,
+        DirectoryUpdate, FilesystemInput, FilesystemObjects, FilesystemResources, InodeUpdate,
     },
-    object::inode_leaf::InodeKind,
+    object::inode_leaf::{InodeKind, InodeMetadata, InodeValue},
+    ObjectId,
 };
 use layerfs_overlay::{KernelDirectory, KernelMount, OverlayError, PAGE_ROWS};
 use layerfs_workspace::{
-    CanonicalCache, CanonicalClient, KernelDirectoryBatch, KernelDirectoryWindow,
-    KernelReadDecision, KernelReadOperation, VisitFacts,
+    CanonicalCache, CanonicalClient, KernelDirectoryBatch, KernelDirectoryRead,
+    KernelDirectoryWindow, KernelReadDecision, KernelReadOperation, VisitFacts,
 };
 use std::sync::Arc;
 /// A memory-only client over a cache that holds nothing.
@@ -70,6 +72,16 @@ fn visit(
     offset: u64,
     after: Option<Vec<u8>>,
 ) -> Result<KernelDirectoryWindow, OverlayError> {
+    visit_with(b, directory, offset, after, false)
+}
+/// The same, for a reply that shows each entry's facts (READDIRPLUS).
+fn visit_with(
+    b: &Bench,
+    directory: KernelDirectory,
+    offset: u64,
+    after: Option<Vec<u8>>,
+    attributes: bool,
+) -> Result<KernelDirectoryWindow, OverlayError> {
     let visit = b
         .workspace
         .kernel_directory_visit(
@@ -77,8 +89,11 @@ fn visit(
             directory.mount(),
             directory.serial(),
             directory.owner_id(),
-            offset,
-            after,
+            KernelDirectoryRead {
+                offset,
+                after,
+                attributes,
+            },
         )
         .unwrap();
     let before = b.demand();
@@ -311,6 +326,209 @@ fn next_directory_read_observes_parent_moved_by_the_atomic_namespace_job() {
     let after = visit(&b, directory, 0, None).unwrap();
     assert_eq!(after.page.parent(), Some(7));
     assert_eq!(visit(&b, directory, 2, None).unwrap().page.parent(), None);
+    b.overlay
+        .close_kernel_directory(directory.mount(), directory.serial(), directory.owner_id())
+        .unwrap();
+    b.overlay.revoke_kernel_mount(mount).unwrap();
+}
+/// A root holding `files` inherited regular files, each with its own content,
+/// and one inherited subdirectory with a file of its own: a window whose
+/// names, kinds, lengths and child-directory count all come from the base.
+fn window_fixture(files: u64) -> common::Fixture {
+    let store = common::Store::default();
+    let scope = scope_for_seed([21; 32]);
+    let directory = InodeMetadata::Inline(PortableMetadata {
+        mode: 0o755,
+        mtime_seconds: 7,
+        mtime_nanoseconds: 3,
+    });
+    let regular = InodeMetadata::Inline(PortableMetadata {
+        mode: 0o644,
+        mtime_seconds: 7,
+        mtime_nanoseconds: 3,
+    });
+    let mut inodes = Vec::new();
+    for serial in 1..=2 {
+        inodes.push(InodeUpdate {
+            serial,
+            value: InodeValue {
+                kind: InodeKind::Directory,
+                content_root: ObjectId::for_bytes(&[serial as u8; 8]),
+                metadata_root: directory,
+                namespace_ref_count: 0,
+            },
+        });
+    }
+    let mut changes = Vec::new();
+    for n in 0..files {
+        let root = common::file(&store, format!("file {n} of the window").as_bytes());
+        inodes.push(InodeUpdate {
+            serial: 3 + n,
+            value: InodeValue {
+                kind: InodeKind::RegularFile,
+                content_root: root,
+                metadata_root: regular,
+                namespace_ref_count: 0,
+            },
+        });
+        changes.push((common::name(&format!("f{n:04}")), Some(3 + n)));
+    }
+    // Names bind in byte order: the subdirectory follows the files.
+    changes.push((common::name("sub"), Some(2)));
+    let inner = common::file(&store, b"the subdirectory's only name");
+    inodes.push(InodeUpdate {
+        serial: 3 + files,
+        value: InodeValue {
+            kind: InodeKind::RegularFile,
+            content_root: inner,
+            metadata_root: regular,
+            namespace_ref_count: 0,
+        },
+    });
+    let directories = vec![
+        DirectoryUpdate { parent: 1, changes },
+        DirectoryUpdate {
+            parent: 2,
+            changes: vec![(common::name("only"), Some(3 + files))],
+        },
+    ];
+    let new: Vec<u64> = (1..=3 + files).collect();
+    let mut sink = store.clone();
+    let mut objects = FilesystemObjects::new(&store, &mut sink);
+    let input = FilesystemInput {
+        base: None,
+        scope,
+        root_serial: 1,
+        directories: &directories,
+        inodes: &inodes,
+        new_inodes: &new,
+        resources: FilesystemResources::default(),
+    };
+    let root = build_filesystem(&mut objects, &input, None).unwrap().root;
+    common::Fixture {
+        store,
+        root,
+        scope,
+        bytes: Vec::new(),
+    }
+}
+/// One cold window over `files` inherited names, as a reply that shows each
+/// entry's facts reads it: (object batches, length batches, single length
+/// demands, entries listed).
+fn window_reads(files: u64) -> (u64, u64, u64, usize) {
+    use std::sync::atomic::Ordering;
+    let b = Bench::over(
+        &format!("kernel-directory-facts-{files}"),
+        window_fixture(files),
+        4 << 20,
+    );
+    let mount = b.overlay.create_kernel_mount(1).unwrap();
+    let directory = open(&b, mount, 1, 1);
+    // Nothing of the base is resident: the window's names come from the
+    // Store, and so do the facts this reply shows.
+    let window = visit_with(&b, directory, 2, None, true).unwrap();
+    assert!(window.listing.is_none() && window.needs_base(true));
+    let store = &b.fixture.store;
+    let before = (
+        store.batches.load(Ordering::Relaxed),
+        store.length_batches.load(Ordering::Relaxed),
+        store.length_demands.load(Ordering::Relaxed),
+    );
+    let base = b.workspace.base().unwrap();
+    let listed = window.finish_with(Some(&base), true).unwrap();
+    let after = (
+        store.batches.load(Ordering::Relaxed),
+        store.length_batches.load(Ordering::Relaxed),
+        store.length_demands.load(Ordering::Relaxed),
+    );
+    // Every inherited name, the subdirectory included, carries its facts.
+    for entry in &listed.entries {
+        assert!(entry.stat.is_some(), "facts of {:?}", entry.name);
+    }
+    let sub = listed
+        .entries
+        .iter()
+        .find(|entry| entry.name == b"sub")
+        .expect("the subdirectory");
+    let sub = sub.stat.as_ref().unwrap();
+    assert_eq!((sub.kind, sub.subdirs), (InodeKind::Directory, 0));
+    assert_eq!(listed.entries.len() as u64, files + 1);
+    (
+        after.0 - before.0,
+        after.1 - before.1,
+        after.2 - before.2,
+        listed.entries.len(),
+    )
+}
+#[test]
+fn a_window_that_shows_facts_reads_it_in_batches() {
+    let small = window_reads(8);
+    let large = window_reads(200);
+    assert_eq!((small.3, large.3), (9, 201), "every inherited name");
+    // One length demand for the whole window, and it is a batch: no entry
+    // asks the provider for its own length.
+    assert_eq!((small.1, large.1), (1, 1), "one batch length demand");
+    assert_eq!((small.2, large.2), (0, 0), "no single length demand");
+    // The window's object batches do not grow with the names it lists: the
+    // inherited serials come from one batch inode demand, not one read per
+    // name. (Measured: one batch for the window at both sizes.) This fixture
+    // keeps every metadata root inline and builds its subdirectory's child
+    // count during construction, so neither costs a demand here; a tree whose
+    // metadata roots are objects, or a subdirectory counted by a scan, pays
+    // one read per entry that needs it, as before.
+    assert_eq!(
+        small.0, large.0,
+        "the same object batches for 8 and 200 names"
+    );
+    assert!(large.0 < 3, "{} object batches", large.0);
+}
+#[test]
+fn a_local_window_shows_its_rows_without_a_store_reader() {
+    use std::sync::atomic::Ordering;
+    let b = Bench::new("kernel-directory-local-facts");
+    let made = b.applied(mkdir(1, "all-local"), T1).unwrap().serial;
+    let mount = b.overlay.create_kernel_mount(1).unwrap();
+    // The kernel's own first LOOKUP of the name records the directory's
+    // parent, which its OPENDIR reads.
+    let lookup = b
+        .workspace
+        .kernel_read_visit(
+            empty(),
+            mount,
+            1,
+            None,
+            KernelReadOperation::Lookup {
+                parent: 1,
+                name: common::name("all-local"),
+            },
+            Arc::new(VisitFacts::default()),
+        )
+        .unwrap();
+    assert!(lookup.perform(&b.overlay).result.is_ok());
+    let directory = open(&b, mount, 2, made);
+    b.applied(create(made, "one"), T1);
+    b.applied(create(made, "two"), T2);
+    let store = &b.fixture.store;
+    let before = (
+        store.batches.load(Ordering::Relaxed),
+        store.length_demands.load(Ordering::Relaxed),
+    );
+    // Every name of this window is a local row the visit already read: the
+    // reply shows all their facts, and the request takes no Store reader.
+    let window = visit_with(&b, directory, 2, None, true).unwrap();
+    assert!(window.listing.is_some());
+    assert!(!window.needs_base(true), "memory answered every fact");
+    let listed = window.finish_with(None, true).unwrap();
+    assert_eq!(listed.entries.len(), 2);
+    assert!(listed.entries.iter().all(|entry| entry.stat.is_some()));
+    assert_eq!(
+        (
+            store.batches.load(Ordering::Relaxed),
+            store.length_demands.load(Ordering::Relaxed)
+        ),
+        before,
+        "a local window reads nothing"
+    );
     b.overlay
         .close_kernel_directory(directory.mount(), directory.serial(), directory.owner_id())
         .unwrap();

@@ -9,6 +9,9 @@ mod client;
 #[path = "support/rig.rs"]
 mod rig;
 #[allow(dead_code)]
+#[path = "support/spy.rs"]
+mod spy;
+#[allow(dead_code)]
 #[path = "support/tree.rs"]
 mod tree;
 use client::{Attr, Client, BADHANDLE, BAD_COOKIE, NOENT, ROFS, STALE};
@@ -19,6 +22,7 @@ use std::{
     net::TcpListener,
     os::unix::fs::{MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
+    sync::{atomic::Ordering, Arc},
     time::Duration,
 };
 use tree::{oracle, walk, Node};
@@ -371,6 +375,175 @@ fn cookies_refusals_and_stale_handles() {
     let released_again = server.stop();
     assert!(released.lookups > 0);
     let (_, outstanding) = rig.stop(released_again);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_lookup_spends_one_owner_visit() {
+    let base = temp("lookup");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let watch = Arc::new(spy::Watch::default());
+    let services = Arc::new(spy::Spy {
+        inner: Arc::new(layerfs_daemon::Mounted(rig.bound.clone())),
+        watch: watch.clone(),
+    });
+    let server = rig.export_services(
+        TcpListener::bind("127.0.0.1:0").unwrap(),
+        services,
+        UID,
+        GID,
+        false,
+    );
+    let mut client = Client::connect(server.local_addr(), UID, GID);
+    let root = client.mnt("/");
+
+    // RFC 1813 answers the entry's attributes and its directory's: the one
+    // visit that resolved the name had to read the directory's row too. The
+    // names are looked up once first, so the visit below is the steady state
+    // and not the mount's first read of a base name.
+    client.lookup(&root, b"src").unwrap();
+    assert_eq!(client.lookup(&root, b"absent").map(|_| ()), Err(NOENT));
+    let root_attr: Attr = client.getattr(&root).unwrap();
+
+    let visits = watch.visits.load(Ordering::Acquire);
+    let (status, found, directory) = client.lookup_with_directory(&root, b"src");
+    assert_eq!(status, 0);
+    let (_, src_attr) = found.clone().expect("the directory's own name");
+    assert_eq!(
+        watch.visits.load(Ordering::Acquire) - visits,
+        1,
+        "one owner visit for a LOOKUP and its directory"
+    );
+    assert_eq!(
+        directory,
+        Some(root_attr.clone()),
+        "the directory it was named in"
+    );
+
+    // A missing name is one visit as well, and answers the directory facts
+    // the export already published for it.
+    let visits = watch.visits.load(Ordering::Acquire);
+    let (status, found, directory) = client.lookup_with_directory(&root, b"absent");
+    assert_eq!((status, found), (NOENT, None));
+    assert_eq!(
+        watch.visits.load(Ordering::Acquire) - visits,
+        1,
+        "one owner visit for a failing LOOKUP"
+    );
+    assert_eq!(directory, Some(root_attr));
+
+    // The name resolved to the same inode a later LOOKUP reports, and the
+    // directory half of the reply is the directory's own facts.
+    let (_, again) = client.lookup(&root, b"src").unwrap();
+    assert_eq!(again.fileid, src_attr.fileid, "the same inode");
+    drop(client);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_listing_spends_one_owner_visit_and_reads_its_window_in_batches() {
+    let base = temp("listing");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let watch = Arc::new(spy::Watch::default());
+    let services = Arc::new(spy::Spy {
+        inner: Arc::new(layerfs_daemon::Mounted(rig.bound.clone())),
+        watch: watch.clone(),
+    });
+    let server = rig.export_services(
+        TcpListener::bind("127.0.0.1:0").unwrap(),
+        services,
+        UID,
+        GID,
+        false,
+    );
+    let mut client = Client::connect(server.local_addr(), UID, GID);
+    let root = client.mnt("/");
+    let (many, _) = client.lookup(&root, b"many").unwrap();
+
+    // A directory of 700 inherited names over several replies: one OPENDIR
+    // visit for the whole enumeration, at most one Store reader per reply,
+    // and never one per listed name — the window's names, kinds and facts
+    // are read in batches outside the owner.
+    let (visits, bases) = (
+        watch.visits.load(Ordering::Acquire),
+        watch.bases.load(Ordering::Acquire),
+    );
+    let (entries, calls) = client.list(&many, 64 * 1024, true);
+    assert!(calls > 1, "a budget spreads one directory over replies");
+    assert_eq!(entries.len(), MANY + 2, "every name, once");
+    for entry in entries
+        .iter()
+        .filter(|entry| entry.name != b"." && entry.name != b"..")
+    {
+        // Every inherited name arrives with both optional fields, so the
+        // client needs no LOOKUP per name on a cold tree.
+        assert!(
+            entry.attr.is_some(),
+            "READDIRPLUS attributes: {:?}",
+            entry.name
+        );
+        assert!(
+            entry.handle.is_some(),
+            "READDIRPLUS handle: {:?}",
+            entry.name
+        );
+    }
+    assert_eq!(
+        watch.visits.load(Ordering::Acquire) - visits,
+        1,
+        "one owner visit for the whole enumeration"
+    );
+    assert!(
+        watch.bases.load(Ordering::Acquire) - bases <= calls,
+        "at most one Store reader per reply, never one per name"
+    );
+    // Each handed-out handle holds one reference, and an identical reply
+    // reuses the published offsets instead of taking more.
+    let held = server.held().lookups;
+    assert_eq!(held, 1 + MANY, "the directory and one reference per entry");
+    let (again, _) = client.list(&many, 64 * 1024, true);
+    assert_eq!(again.len(), entries.len(), "the same names again");
+    assert_eq!(
+        server.held().lookups,
+        held,
+        "no second reference for a listed name"
+    );
+
+    // A directory this export created is answered from the rows its visit
+    // already read: its listing takes no Store reader at all.
+    client.mkdir(&root, b"local", 0o755).unwrap();
+    let (local, _) = client.lookup(&root, b"local").unwrap();
+    client.touch(&local, b"a", 0o644).unwrap();
+    let bases = watch.bases.load(Ordering::Acquire);
+    let (entries, _, _) = client
+        .readdir(&local, 0, 0, 4096, true)
+        .map(|(entries, _, eof)| (entries, eof, ()))
+        .unwrap();
+    let created = entries
+        .iter()
+        .find(|entry| entry.name == b"a")
+        .expect("the created name");
+    assert!(
+        created.attr.is_some() && created.handle.is_some(),
+        "a local row carries its facts and its handle"
+    );
+    assert_eq!(
+        watch.bases.load(Ordering::Acquire),
+        bases,
+        "a local listing takes no Store reader"
+    );
+
+    drop(client);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
     assert_eq!(outstanding, 0);
     fs::remove_dir_all(base).unwrap();
 }

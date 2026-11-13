@@ -189,11 +189,12 @@ impl Custody {
             let receipt = receipt?;
             let original = receipt.get().clone();
             let needs = match (&original.result, &original.decision) {
-                (Ok(None), Some(KernelReadDecision::Value(inode))) => {
-                    let stat = inode.clone().into();
+                (Ok(None), Some(KernelReadDecision::Value(decided))) => {
+                    let stat = decided.inode.clone().into();
                     self.receipt = Some(receipt);
                     return Ok(Ok(KernelReadValue {
                         stat,
+                        parent: decided.parent.clone().map(Into::into),
                         file: original.open_candidate,
                         directory: original.directory_candidate,
                         original,

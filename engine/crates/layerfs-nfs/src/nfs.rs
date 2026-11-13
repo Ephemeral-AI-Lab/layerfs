@@ -107,15 +107,32 @@ pub fn call(
         3 => {
             let parent = handle(kernel, arguments).map_err(garbage)?;
             let name = arguments.opaque(NAME_LIMIT).map_err(garbage)?;
-            // Both answers carry the directory's attributes (RFC 1813
-            // LOOKUP3resok and LOOKUP3resfail), so the client keeps its
-            // cached view of the directory without a GETATTR of its own.
-            let directory = parent
-                .as_ref()
-                .ok()
-                .and_then(|parent| kernel.getattr(*parent).ok());
-            match parent.and_then(|parent| kernel.lookup(parent, name)) {
-                Ok(stat) => {
+            // One owner job answers the entry and the directory it was named
+            // in (RFC 1813 LOOKUP3resok's `obj_attributes` and
+            // `dir_attributes`, and the failure's). The job had to read the
+            // directory's own row to resolve the name, so its attributes cost
+            // no second job. Deliberate change from the route before this: a
+            // failure (`NFS3ERR_NOENT` included), `.`, `..` and a silly name
+            // answer the directory facts this export last published or
+            // observed for it, and none when it never saw the directory,
+            // where each of them used to make a fresh GETATTR of the parent.
+            // RFC 1813 keeps those attributes optional, so both are legal;
+            // the answer is now at most one observation old.
+            let (parent, found) = match parent {
+                Ok(parent) => (parent, kernel.lookup(parent, name)),
+                Err(status) => {
+                    out.u32(status.code());
+                    post_op_maybe(kernel.identity(), out, None);
+                    return Ok(());
+                }
+            };
+            let directory = match &found {
+                Ok((_, directory)) => directory.clone(),
+                Err(_) => None,
+            }
+            .or_else(|| kernel.directory_wcc(parent).0);
+            match found {
+                Ok((stat, _)) => {
                     out.u32(Status::Ok.code());
                     out.opaque(&kernel.encode(stat.serial));
                     kernel.identity().post_op(out, &stat);
@@ -188,8 +205,10 @@ pub fn call(
             let verifier = arguments.fixed(8).map_err(garbage)?;
             let mut budget = arguments.u32().map_err(garbage)?;
             if plus {
-                // dircount bounds the names alone; maxcount the whole reply.
-                let _dircount = budget;
+                // A READDIRPLUS request carries the entries' own count
+                // (`dircount`) before the reply's (`maxcount`). Only the
+                // reply's bounds what this export sends: the client sized its
+                // buffer by it, and names alone are never what fills a reply.
                 budget = arguments.u32().map_err(garbage)?;
             }
             let mut word = [0; 8];

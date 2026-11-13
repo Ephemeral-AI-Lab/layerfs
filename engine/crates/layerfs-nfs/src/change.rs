@@ -261,7 +261,7 @@ impl Kernel {
     /// The entry a name binds now, or none.
     fn existing(&self, parent: u64, name: &[u8]) -> Result<Option<ViewStat>, Status> {
         match self.lookup(parent, name) {
-            Ok(stat) => Ok(Some(stat)),
+            Ok((stat, _)) => Ok(Some(stat)),
             Err(Status::NoEnt) => Ok(None),
             Err(status) => Err(status),
         }

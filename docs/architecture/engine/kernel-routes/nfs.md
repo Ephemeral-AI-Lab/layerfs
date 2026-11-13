@@ -122,7 +122,7 @@ itself ([`attributes.rs`](../../../../engine/crates/layerfs-nfs/src/attributes.r
 ## Directories
 
 ```text
- READDIR / READDIRPLUS (handle, cookie, cookieverf, budget)
+ READDIR / READDIRPLUS (handle, cookie, cookieverf, maxcount)
    cookie 0 -----> open_directory: fresh descriptor; verifier = its id
    cookie > 0 ---> directory(serial, verifier) still open?
                      no -> NFS3ERR_BAD_COOKIE (client lists from 0)
@@ -137,8 +137,12 @@ itself ([`attributes.rs`](../../../../engine/crates/layerfs-nfs/src/attributes.r
 | --- | --- |
 | The NFS cookie is the engine's kernel offset on one implicit directory descriptor named by `cookieverf`. | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs) |
 | An offset a rewind retired is `NFS3ERR_BAD_COOKIE`. | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs) |
-| A READDIRPLUS entry carries the facts its listing already read (a local inode's current row, or an inherited inode's immutable base stat) and the handle of its serial, so the client needs no LOOKUP per name. | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs), [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs) |
+| A READDIRPLUS entry carries the facts its window read — a local inode's current row, or an inherited inode's immutable base stat — and the handle of its serial, so the client needs no LOOKUP per name. Both are optional in RFC 1813 and this export sends both for every named entry whose offsets the reply publishes. | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs), [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs) |
+| A cold window's facts cost two demands whatever its size: its inherited serials in one batch inode demand (`lookup_many`) and its ordinary file lengths in one batch length demand (`provide_lengths`). The entries memory already answers — a local row, or an inherited inode whose value, metadata, length and child-directory count are resident — cost the request no Store reader at all. | [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs), [`client.rs`](../../../../engine/crates/layerfs-workspace/src/base/client.rs) |
+| Those two batches are not everything an entry costs, and this route changes none of the rest: an inherited inode whose metadata is not inline reports one portable-metadata demand per distinct metadata root, a listed subdirectory one listing of that subdirectory for its child-directory count, and a symlink entry one read of its target. A window of only ordinary files with inline metadata therefore costs exactly the two batches; a window naming those entries costs more, growing with them and not with the names. | [`kernel_directory.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_directory.rs), [`view.rs`](../../../../engine/crates/layerfs-workspace/src/base/view.rs), [`links.rs`](../../../../engine/crates/layerfs-workspace/src/base/links.rs) |
 | Every handle a READDIRPLUS reply hands out takes its one kernel lookup reference in the publishing visit that makes its offset valid; a reply reusing an already published offset range hands out none. | [`kernel_cookie.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/kernel_cookie.rs) |
+| READDIR has one count, which bounds the whole reply. READDIRPLUS sends the entries' own count (`dircount`) before it; only `maxcount` bounds this reply, the count the client sized its buffer by. | [`nfs.rs`](../../../../engine/crates/layerfs-nfs/src/nfs.rs), [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs) |
+| A reply's `dir_attributes` are the facts of the listed directory this window read, or the ones the export last observed for it (its OPENDIR visit read them): either way the reply costs no extra read. | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs), [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
 | `.` and `..` carry no attributes: both name an object whose handle the client already holds. | [`directory.rs`](../../../../engine/crates/layerfs-nfs/src/directory.rs) |
 | `..` comes from the parent recorded when a directory was looked up, created, moved or listed; the engine resolves names only downward. | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
 | Silly names and AppleDouble companions are never listed. | [`names.rs`](../../../../engine/crates/layerfs-nfs/src/names.rs), [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
@@ -175,6 +179,14 @@ itself ([`attributes.rs`](../../../../engine/crates/layerfs-nfs/src/attributes.r
 
 Refresh after an install is covered in
 [Coherence: Invalidation](coherence.md#invalidation).
+
+## LOOKUP and GETATTR
+
+| Rule | Source |
+| --- | --- |
+| One owner visit answers a LOOKUP: the job that resolves a name has already read the directory's own row, so the reply's `dir_attributes` cost no second visit. | [`nfs.rs`](../../../../engine/crates/layerfs-nfs/src/nfs.rs), [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs), [`kernel_read.rs`](../../../../engine/crates/layerfs-workspace/src/operations/kernel_read.rs) |
+| Deliberate change from this route's base: a LOOKUP that fails (`NFS3ERR_NOENT`), and `.`, `..` and the export's silly names, answer the directory facts this export last published or observed for it, or no `dir_attributes` when it has never seen the directory, where they used to make a fresh GETATTR of the parent. RFC 1813 makes the failure's attributes optional, so both answers are legal; the cost is that those attributes are at most one observation old, the gain that no LOOKUP spends a second job. | [`nfs.rs`](../../../../engine/crates/layerfs-nfs/src/nfs.rs), [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
+| An export remembers the facts it last published for a directory (a LOOKUP, a GETATTR, a listing's OPENDIR) and answers later `dir_attributes` and `wcc_data` from them, so a name-only question costs no read. | [`kernel.rs`](../../../../engine/crates/layerfs-nfs/src/kernel.rs) |
 
 ## AppleDouble files
 

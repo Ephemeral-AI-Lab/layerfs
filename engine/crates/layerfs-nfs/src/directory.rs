@@ -12,10 +12,11 @@
 //! directory's end, so the same reply says so; any other reply's next call
 //! resumes after the last accepted cookie.
 //!
-//! A READDIRPLUS entry carries the attributes the listing already read — the
-//! local inode row of the name, or the inherited inode's own immutable facts
-//! — and the handle of the entry's serial. Both are optional in RFC 1813;
-//! here they are present for every named entry whose offsets this request
+//! A READDIRPLUS entry carries the attributes the listing read — the local
+//! inode row of the name, or the inherited inode's immutable facts, read for
+//! the whole window in one batch demand each for inodes and file lengths —
+//! and the handle of the entry's serial. Both are optional in RFC 1813; here
+//! they are present for every named entry whose offsets this request
 //! publishes, and the publishing visit takes one kernel lookup reference per
 //! handed-out handle in that same job, so nothing is looked up twice and no
 //! entry is left without the reference its handle presents.
@@ -210,6 +211,10 @@ pub fn list(kernel: &Kernel, request: Listing) -> Result<Vec<u8>, Status> {
             (at_end, directory)
         }
     };
+    // An inherited directory has no local row in this window: its attributes
+    // are the facts this export last observed or published for it (its
+    // OPENDIR read them), so the reply carries them without a read of its own.
+    let directory = directory.or_else(|| kernel.directory_wcc(request.serial).0);
     finish(entries, directory.as_ref(), handle, eof)
 }
 

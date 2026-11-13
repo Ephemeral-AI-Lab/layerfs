@@ -93,7 +93,7 @@ fn observe(
     assert!(outcome.directory_candidate.is_none());
     match outcome.decision {
         Some(KernelReadDecision::Needs(needs)) => Seen::Needs(needs),
-        Some(KernelReadDecision::Value(inode)) => Seen::Value(inode),
+        Some(KernelReadDecision::Value(decided)) => Seen::Value(decided.inode),
         Some(KernelReadDecision::Refused(refusal)) => Seen::Refused(refusal),
         other => panic!("undecided read visit: {other:?}"),
     }
@@ -127,7 +127,7 @@ fn open(
     assert!(outcome.directory_candidate.is_none());
     let seen = match outcome.decision {
         Some(KernelReadDecision::Needs(needs)) => Seen::Needs(needs),
-        Some(KernelReadDecision::Value(inode)) => Seen::Value(inode),
+        Some(KernelReadDecision::Value(decided)) => Seen::Value(decided.inode),
         Some(KernelReadDecision::Refused(refusal)) => Seen::Refused(refusal),
         other => panic!("undecided open visit: {other:?}"),
     };
@@ -962,7 +962,7 @@ fn a_visit_through_a_read_only_descriptor_is_refused_and_changes_nothing() {
         .perform(&b.overlay);
     assert!(matches!(
         stat.decision,
-        Some(KernelReadDecision::Value(ref inode)) if inode.serial == serial
+        Some(KernelReadDecision::Value(ref decided)) if decided.inode.serial == serial
     ));
     b.overlay
         .kernel_close_file(mount, serial, file.owner_id())
