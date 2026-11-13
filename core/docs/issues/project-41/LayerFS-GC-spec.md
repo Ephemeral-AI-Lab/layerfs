@@ -289,7 +289,7 @@ retire     delete old copies the record no longer names
 | `rewrite` | Same as above; the old Store was not touched by a single byte |
 | after `verify`, before `install` | No half-new/half-old state; no automatic install |
 | `install` (once before and once after the rename) | Either entirely old or entirely new |
-| first open after install | The generation bump takes effect; old sessions receive `StaleStore` |
+| first open after install | The generation bump takes effect; a session that was opened before the install **outside admission** receives `StaleStore` |
 
 ### 9.2 No-accidental-deletion property tests
 - Random DAG: `fork / commit / merge / publish / branch.remove / project.delete`.
@@ -301,7 +301,7 @@ retire     delete old copies the record no longer names
 - A second concurrent compact returns `Busy`, and produces no second op or second staged copy.
 - Empty root set: after deleting the only project, compact still produces a Store that can be opened, `doctor`ed, and addressed.
 - After `remove_file`, the bytes reclaimed agree with the receipt's explanation (0 must be explained).
-- Concurrent readers during a PG table swap receive `StaleStore`; after reconnecting they read the complete new generation.
+- A connection that **bypassed admission** (a direct `psql`, a leftover process) receives `StaleStore` after the swap; reconnecting reads the complete new generation. Through the API there is no reader to observe, because C10 excludes sessions and reads for the whole operation.
 - Run diagnostic once before and once after replacement/swapping; items such as `store.identity` Pass and no new Fail appears.
 - A remote client is rejected with `MountsActive` during compact.
 - Every injection ends with proof that no staged / target / op / schema residue remains.
