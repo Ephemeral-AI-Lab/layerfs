@@ -11,13 +11,26 @@ const root = fileURLToPath(new URL("../../../../", import.meta.url));
 const command = process.env.LAYERFS_CLI ?? join(root, "target/debug/layerfs");
 const docs = join(root, "docs/architecture/api/sdk");
 
-test("the SDK index lists all 70 current calls, including branch/file additions", () => {
+test("the SDK pages name all 70 current calls, one `### family.call` heading each", () => {
   assert.equal(table.length, 70);
+  const families = [...new Set(table.map((spec) => spec.family))];
+  assert.equal(families.length, 10);
   const index = readFileSync(join(docs, "README.md"), "utf8");
-  assert.match(index, /70 calls in 10 families/);
-  for (const spec of table) {
-    assert.ok(existsSync(join(docs, spec.family, `${spec.call}.md`)), `${spec.family}.${spec.call} has a call page`);
-    assert.ok(index.includes(`(${spec.family}/${spec.call}.md)`), `${spec.family}.${spec.call} appears in SDK inventory`);
+  assert.ok(index.includes(`**${table.length} calls in ${families.length} families**`), "the SDK index states the count once");
+  for (const family of families) {
+    const page = join(docs, `${family}.md`);
+    assert.ok(existsSync(page), `${family} has a family page`);
+    const text = readFileSync(page, "utf8");
+    const headings = text.split("\n").filter((line) => line.startsWith(`### ${family}.`)).map((line) => line.slice(4).trim());
+    const calls = table.filter((spec) => spec.family === family).map((spec) => `${spec.family}.${spec.call}`);
+    for (const name of calls) {
+      assert.equal(headings.filter((heading) => heading === name).length, 1, `${name} has exactly one heading in ${family}.md`);
+    }
+    assert.deepEqual(headings.filter((heading) => !calls.includes(heading)), [], `${family}.md heads no call outside the table`);
+    for (const name of calls) {
+      const anchor = `${family}.md#${name.replace(".", "")}`;
+      assert.ok(index.includes(`(${anchor})`), `${name} appears in the SDK index as ${anchor}`);
+    }
   }
 });
 

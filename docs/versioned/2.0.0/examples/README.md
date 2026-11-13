@@ -97,7 +97,7 @@ Exit 0. Notes on what it shows:
 
 - `project.init` printed three phase events for a small local project. Events
   mark the entry of a phase; the result is the only completion
-  ([Events](../../../architecture/api/call-table/events.md)).
+  ([Events](../../../architecture/api/calls/errors-and-events.md#progress-events)).
 - `main` is read-only for writes: it changes only through `branch.publish`.
   The example forks Branches instead.
 - `commit.list merged` lists the Commits of the Branch `merged`: the merge
@@ -131,7 +131,7 @@ Exit 0. `python_async_flow.py` (the same calls as coroutines through
 `layerfs.aio`) printed the same fifteen lines, byte for byte (compared with
 `diff`), and exited 0. Cancelling an `aio` coroutine stops its callbacks and
 not the native call; read the state again after a cancel
-([Python](../../../architecture/api/front-ends/python.md#package)).
+([Python](../../../architecture/api/front-ends/bindings.md#layerfs-python)).
 
 ## CLI
 
@@ -278,7 +278,7 @@ Exit 0. What it shows beyond the packages:
 ## The Workspace route (NOT RUN)
 
 This is the documented route, written from the call table
-([workspace family](../../../architecture/api/sdk/workspace/README.md)). **It
+([workspace family](../../../architecture/api/sdk/workspace.md)). **It
 was not run.** A Workspace needs a Sandbox, and a Sandbox needs the LayerFS
 daemon and the sealed Linux bundle. With the installed command in a
 Disposable home on this host:
@@ -291,7 +291,7 @@ $ layerfs sandbox create shop/site tests native
 
 An earlier run on this host with a built daemon was refused at
 `unsupported runtime capability: user namespaces are not blocked`
-([Events: what was run](../../../architecture/api/call-table/events.md#what-was-run-and-not-run)).
+(Events: what was run).
 Nothing below is claimed to work.
 
 ```console
@@ -326,5 +326,5 @@ layerfs.sandbox.close("tests")
 ```
 
 `exec` output arrives after the command ends, never live, and its delivery is
-unverified ([Events](../../../architecture/api/call-table/events.md#workspaceexec-output)).
+unverified ([Events](../../../architecture/api/calls/errors-and-events.md#workspaceexec-output)).
 There is no implicit Commit and no implicit unmount.

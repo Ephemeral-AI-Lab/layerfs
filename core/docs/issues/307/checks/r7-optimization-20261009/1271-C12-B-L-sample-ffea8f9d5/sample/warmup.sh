@@ -1,1 +1,0 @@
-{ git init -q; for i in $(seq 1 100); do echo $i > f$i; done; git add -A; git -c user.email=a@b -c user.name=a commit -qm init; } >/dev/null

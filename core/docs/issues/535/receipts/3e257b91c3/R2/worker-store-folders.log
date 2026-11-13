@@ -1,5 +1,0 @@
-# 2026-11-03T09:26:32Z after the D1 runs (d1a, d1a2 / d1m pushed, Inited through the worker, pulled back) and cells C01, C12 on each machine
-$ container exec <lfs535r2a> find /layerfs/data/store -maxdepth 3
-/layerfs/data/store
-$ msb exec <lfs535r2m> -- find /layerfs/data/store -maxdepth 3
-/layerfs/data/store

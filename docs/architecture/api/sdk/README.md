@@ -1,44 +1,33 @@
 # SDK
 
-[Architecture](../../README.md) › [API](../README.md) › SDK
-
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Every call a program can make, one family per folder and one page per call:
-70 calls in 10 families. The same call has the same name and
-arguments in JavaScript, Python and the `layerfs` command.
+Every call a program can make: **70 calls in 10 families**, the same names and arguments in JavaScript, Python and the `layerfs` command, one page per family.
 
 | | |
 | --- | --- |
 | Layer | [API](../README.md) |
-| Crates | `layerfs-api`, `layerfs-control` |
-| Source | [`api/crates/layerfs-api/src`](../../../../api/crates/layerfs-api/src) |
-| Uses | [Call table](../call-table/README.md), [Management](../../control/management/README.md), [Routing and workers](../../control/routing/README.md) |
+| Crates | `layerfs-api` |
+| Source | [`api/crates/layerfs-api/src`](../../../../api/crates/layerfs-api/src), one folder per family, one file per call (`<family>/<call>.rs`) |
+| Uses | [Calls](../calls/README.md), [Control](../../control/README.md), [Store calls](../../engine/store-calls/README.md) |
 | Used by | [Front ends](../front-ends/README.md) |
+| Flows | [A call, end to end](../../flows/call.md) |
 
-## Families
+The count is `layerfs_api::calls()`: ten `Family` entries in
+[`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families`, each
+listing its calls in its `mod.rs`. The guard
+[`inventory.mjs`](../../../../api/node/test/branch-file/inventory.mjs) checks
+the count line above and one `### family.call` heading per call against the
+built table.
 
-| Family | Calls | Pages |
-| --- | --- | --- |
-| [`project`](project/README.md) | 6 | [`init`](project/init.md), [`list`](project/list.md), [`get`](project/get.md), [`stats`](project/stats.md), [`export`](project/export.md), [`remove`](project/remove.md) |
-| [`branch`](branch/README.md) | 8 | [`list`](branch/list.md), [`get`](branch/get.md), [`fork`](branch/fork.md), [`merge`](branch/merge.md), [`publish`](branch/publish.md), [`diff`](branch/diff.md), [`commits`](branch/commits.md), [`get_commit`](branch/get_commit.md) |
-| [`commit`](commit/README.md) | 3 | [`list`](commit/list.md), [`get`](commit/get.md), [`diff`](commit/diff.md) |
-| [`file`](file/README.md) | 15 | [`read`](file/read.md), [`stat`](file/stat.md), [`list`](file/list.md), [`glob`](file/glob.md), [`grep`](file/grep.md), [`blame`](file/blame.md), [`diff`](file/diff.md), [`write`](file/write.md), [`edit`](file/edit.md), [`rm`](file/rm.md), [`mkdir`](file/mkdir.md), [`mv`](file/mv.md), [`cp`](file/cp.md), [`apply`](file/apply.md), [`revision`](file/revision.md) |
-| [`sandbox`](sandbox/README.md) | 4 | [`create`](sandbox/create.md), [`list`](sandbox/list.md), [`get`](sandbox/get.md), [`close`](sandbox/close.md) |
-| [`workspace`](workspace/README.md) | 6 | [`mount`](workspace/mount.md), [`exec`](workspace/exec.md), [`exec_cancel`](workspace/exec_cancel.md), [`commit`](workspace/commit.md), [`unmount`](workspace/unmount.md), [`status`](workspace/status.md) |
-| [`machine`](machine/README.md) | 9 | [`list`](machine/list.md), [`platforms`](machine/platforms.md), [`get`](machine/get.md), [`status`](machine/status.md), [`start`](machine/start.md), [`stop`](machine/stop.md), [`create`](machine/create.md), [`remove`](machine/remove.md), [`update`](machine/update.md) |
-| [`store`](store/README.md) | 12 | [`list`](store/list.md), [`get`](store/get.md), [`status`](store/status.md), [`stats`](store/stats.md), [`create`](store/create.md), [`connect`](store/connect.md), [`attach`](store/attach.md), [`detach`](store/detach.md), [`push`](store/push.md), [`pull`](store/pull.md), [`remove`](store/remove.md), [`disconnect`](store/disconnect.md) |
-| [`backup`](backup/README.md) | 5 | [`connect`](backup/connect.md), [`disconnect`](backup/disconnect.md), [`list`](backup/list.md), [`create`](backup/create.md), [`restore`](backup/restore.md) |
-| [`logs`](logs/README.md) | 2 | [`list`](logs/list.md), [`reset`](logs/reset.md) |
-
-## The picture
+## Picture
 
 ```text
  1. where things live                   2. what is kept
  +---------------------------+          +-------------------------------+
  | machine  list platforms   |  holds   | store  create (sqlite, native)|
  |          create remove    |--------->|        connect (PostgreSQL)   |
- |          start stop update |  sqlite  |        push pull remove       |
+ |          start stop update|  sqlite  |        push pull remove       |
  +---------------------------+  Stores  +-------------------------------+
       | runs Sandboxes                        | holds projects
       v                                       v
@@ -50,132 +39,84 @@ arguments in JavaScript, Python and the `layerfs` command.
       v                                       v
  +---------------------------+  commits +-------------------------------+
  | workspace mount exec      |--------->| branch  fork merge publish    |
- |           commit unmount  |  to its  |         list get diff         |
- |           status          |  Branch  | commit  list get diff         |
- +---------------------------+          | file    read ... write apply  |
-                                        +-------------------------------+
- backup: connect a bucket; create / restore a sqlite Store file
+ |           commit unmount  |  to its  | commit  list get diff         |
+ |           status          |  Branch  | file    read ... write apply  |
+ +---------------------------+          +-------------------------------+
+ backup: buckets <-> sqlite Store files      logs: the home's call log
 ```
+
+## What it does
+
+| Family | Calls, in help order | Runs by default | Source |
+| --- | --- | --- | --- |
+| [`project`](project.md) | [`init`](project.md#projectinit), [`list`](project.md#projectlist), [`get`](project.md#projectget), [`stats`](project.md#projectstats), [`export`](project.md#projectexport), [`remove`](project.md#projectremove) | `list`, `get`: home records; the rest where the Store's calls run | [`project/`](../../../../api/crates/layerfs-api/src/project) |
+| [`branch`](branch.md) | [`list`](branch.md#branchlist), [`get`](branch.md#branchget), [`commits`](branch.md#branchcommits), [`get_commit`](branch.md#branchget_commit), [`fork`](branch.md#branchfork), [`merge`](branch.md#branchmerge), [`publish`](branch.md#branchpublish), [`diff`](branch.md#branchdiff) | where the Store's calls run | [`branch/`](../../../../api/crates/layerfs-api/src/branch) |
+| [`commit`](commit.md) | [`list`](commit.md#commitlist), [`get`](commit.md#commitget), [`diff`](commit.md#commitdiff) | where the Store's calls run | [`commit/`](../../../../api/crates/layerfs-api/src/commit) |
+| [`file`](file.md) | [`read`](file.md#fileread), [`stat`](file.md#filestat), [`list`](file.md#filelist), [`glob`](file.md#fileglob), [`grep`](file.md#filegrep), [`revision`](file.md#filerevision), [`blame`](file.md#fileblame), [`diff`](file.md#filediff), [`write`](file.md#filewrite), [`edit`](file.md#fileedit), [`rm`](file.md#filerm), [`mkdir`](file.md#filemkdir), [`mv`](file.md#filemv), [`cp`](file.md#filecp), [`apply`](file.md#fileapply) | where the Store's calls run | [`file/`](../../../../api/crates/layerfs-api/src/file) |
+| [`sandbox`](sandbox.md) | [`create`](sandbox.md#sandboxcreate), [`list`](sandbox.md#sandboxlist), [`get`](sandbox.md#sandboxget), [`close`](sandbox.md#sandboxclose) | records here; start and stop on the Sandbox's machine | [`sandbox/`](../../../../api/crates/layerfs-api/src/sandbox) |
+| [`workspace`](workspace.md) | [`mount`](workspace.md#workspacemount), [`exec`](workspace.md#workspaceexec), [`exec_cancel`](workspace.md#workspaceexec_cancel), [`commit`](workspace.md#workspacecommit), [`unmount`](workspace.md#workspaceunmount), [`status`](workspace.md#workspacestatus) | the Sandbox's daemon; `exec` and `exec_cancel` in the Sandbox's runtime | [`workspace/`](../../../../api/crates/layerfs-api/src/workspace) |
+| [`machine`](machine.md) | [`list`](machine.md#machinelist), [`platforms`](machine.md#machineplatforms), [`get`](machine.md#machineget), [`status`](machine.md#machinestatus), [`start`](machine.md#machinestart), [`stop`](machine.md#machinestop), [`create`](machine.md#machinecreate), [`remove`](machine.md#machineremove), [`update`](machine.md#machineupdate) | the caller's process, through the platform adapter | [`machine/`](../../../../api/crates/layerfs-api/src/machine) |
+| [`store`](store.md) | [`list`](store.md#storelist), [`get`](store.md#storeget), [`status`](store.md#storestatus), [`stats`](store.md#storestats), [`create`](store.md#storecreate), [`connect`](store.md#storeconnect), [`attach`](store.md#storeattach), [`detach`](store.md#storedetach), [`push`](store.md#storepush), [`pull`](store.md#storepull), [`remove`](store.md#storeremove), [`disconnect`](store.md#storedisconnect) | the caller's process; sqlite file steps in the Store machine's worker | [`store/`](../../../../api/crates/layerfs-api/src/store) |
+| [`backup`](backup.md) | [`connect`](backup.md#backupconnect), [`disconnect`](backup.md#backupdisconnect), [`list`](backup.md#backuplist), [`create`](backup.md#backupcreate), [`restore`](backup.md#backuprestore) | the caller's process; `create` stages on the Store's machine | [`backup/`](../../../../api/crates/layerfs-api/src/backup) |
+| [`logs`](logs.md) | [`list`](logs.md#logslist), [`reset`](logs.md#logsreset) | the caller's process, home files only | [`logs/`](../../../../api/crates/layerfs-api/src/logs) |
+
+"Where the Store's calls run" is the caller's process for a PostgreSQL Store
+and for a sqlite Store on a locally executing machine (`native`, except on
+Windows), else the Store machine's worker; no daemon serves a Store call. The
+full per-call routing is the single table in [Control](../../control/README.md).
+Calling conventions (names, options, answers, paging, scope) are stated once
+in the [API layer page](../README.md#calling-conventions).
 
 | To get | You first need | Made by |
 | --- | --- | --- |
-| a sqlite Store | nothing (`native` is built in) | [store.create](store/create.md) |
-| a project | a Store | [project.init](project/init.md) |
-| a Branch to work on | a project (`main` is its published line) | [branch.fork](branch/fork.md) |
-| a Sandbox | a project and a machine | [sandbox.create](sandbox/create.md) |
-| a Workspace | a running Sandbox and a Branch other than `main` | [workspace.mount](workspace/mount.md) |
-| a Commit | a Workspace, or a Branch for a `file` write | [workspace.commit](workspace/commit.md), [file.write](file/write.md) |
-| a new `main` Layer | a Branch with a Commit | [branch.publish](branch/publish.md) |
-| a VM or container machine | the platform's tool and the sealed bundle | [machine.create](machine/create.md) |
-| a backup | a sqlite Store and a connected bucket | [backup.create](backup/create.md) |
+| a sqlite Store | nothing (`native` is built in) | [`store.create`](store.md#storecreate) |
+| a project | a Store | [`project.init`](project.md#projectinit) |
+| a Branch to work on | a project (`main` is its published line) | [`branch.fork`](branch.md#branchfork) |
+| a Sandbox | a project and a machine | [`sandbox.create`](sandbox.md#sandboxcreate) |
+| a Workspace | a running Sandbox and a Branch other than `main` | [`workspace.mount`](workspace.md#workspacemount) |
+| a Commit | a Workspace, or a Branch for a `file` write | [`workspace.commit`](workspace.md#workspacecommit), [`file.write`](file.md#filewrite) |
+| a new `main` Layer | a Branch with a Commit | [`branch.publish`](branch.md#branchpublish) |
+| a VM machine | the platform's tool and the sealed bundle | [`machine.create`](machine.md#machinecreate) |
+| a backup | a sqlite Store and a connected bucket | [`backup.create`](backup.md#backupcreate) |
 
-## Calling the SDK
+## Invariants
 
-```text
- JavaScript                 Python                    shell
- import layerfs from        import layerfs            layerfs <family> <call>
-   "layerfs"                (layerfs.aio: coroutines)   <positionals>
- await layerfs.f.c(a, b,    layerfs.f.c(a, b,           --options
-   { opt })                   opt=...)
-        \                          |                          /
-         +---------- one library call, made once -----------+
-                     layerfs_api: check -> scope -> run
-```
-
-| | JavaScript | Python | CLI |
-| --- | --- | --- | --- |
-| Install / import | `import layerfs from "@layerfs/node"` ([`index.js`](../../../../api/node/src/index.js)) | `import layerfs` ([`__init__.py`](../../../../api/python/src/layerfs/__init__.py)) | the `layerfs` command ([`layerfs-cli`](../../../../api/crates/layerfs-cli/src)) |
-| Default client | the module's families: `layerfs.store.list()` | the module's families: `layerfs.store.list()` | every command |
-| Another home or a scope | `layerfs.client({ home, scope })` | `layerfs.client(home=..., scope=...)` | `LAYERFS_HOME` |
-| Home default | `LAYERFS_HOME`, else `~/.layerfs` | same | same |
-| Positionals | in table order; an optional one may be left off | in table order; optional ones also as keywords | in table order |
-| Options | a trailing object `{ page_size: 10 }` | keywords `page_size=10` | `--page-size 10`; a Bool is a flag (`--paths-only`) |
-| Names | snake_case, the table's own | snake_case | `-` for `_` |
-| Content / JSON positionals | string, `Uint8Array`/`Buffer`, object | `str`, `bytes`, dict/list | stdin, or `--from FILE` |
-| Sizes | `8589934592` or `"8G"` | same | `8G` |
-| Whole numbers | exact: a `bigint` is sent as written; a result is a `number` when a safe integer, else a `bigint`; an unsafe `number`, `NaN`, `Map`, `Set` or lone surrogate is refused before the call ([Node](../front-ends/node.md#values)) | `int` | — |
-| Bytes | `Buffer` / `Uint8Array` ↔ `{ "base64": … }`; a one-key map with that key is read as bytes | `bytes` | — |
-| Types | `index.d.ts`, generated from the table; results are loose (`Result`) | — | — |
-| Answer | a Promise of a plain object | a dict (a coroutine in `layerfs.aio`) | one JSON line on stdout |
-| Progress | `on_progress: (e) => …` | `on_progress=fn` | `--progress` (JSON lines on stderr) |
-| Exec output | `stdout`, `stderr` functions, or `stream: true` | the same | `--stream` |
-| Outside the table | `layerfs.doctor()`, `layerfs.close()` | `layerfs.doctor()`, `layerfs.close()` | `layerfs doctor` |
-
-A folder scope `{ project, folder, branch? }` binds a client to one project:
-it allows only the `file` calls, `branch` list, get, fork, merge and
-publish, and the `workspace` calls; paths must lie under `folder` and
-Branch names become `<branch>.<name>`. A scope guards the arguments of a
-call, not processes or the filesystem: `workspace.exec` under a scope only
-prefixes the command with `cd '.<folder>' &&`, and the command can still
-reach anywhere in the mounted tree. `branch` is optional in the option but
-every `file` and `branch` call needs it (without it they are refused, see
-[Scopes](../call-table/table.md#scopes)); a Commit id is not confined to the
-namespace; the Branch of a Workspace is not checked. These gaps wait for an
-owner decision and are listed under
-[Scopes](../call-table/table.md#scopes)
-([`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs)).
-Every function is generated from the call table
-([`calls/table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs));
-see [Front ends](../front-ends/README.md).
-
-## Answers and errors
-
-```text
- success:  a map, keys in snake_case, often with kind:
-           { kind: "Committed" | "UpToDate" | "Forked" | "Merged" |
-                   "Added" | "Mounted" | "exit:<n>" | "ok" | ..., ... }
-           lists page with  items, has_more, next_page_pos (next_cursor)
- refusal:  { code, message, detail }
-           JS: throws LayerFSError   Python: raises LayerFSError
-           CLI: JSON on stderr, exit 125
-```
-
-| Outcome | Codes | What to do | Calls |
-| --- | --- | --- | --- |
-| certain refusal, nothing changed | `InvalidInput`, `NotFound`, `NoSuch*`, `Exists`, `NameTaken`, `InUse`, `Busy`, `Capacity`, `Unsupported`, `Unavailable`, … | fix the cause, call again | all |
-| refused, but the call made something to look at | `Conflict` (markers written by `workspace.commit`), `Dirty` | read `detail` | workspace, branch.merge, file writes |
-| **uncertain** | **`Unknown`**: a worker's answer was lost, or the operation itself reported an unknown outcome | read the state first, then decide; never just repeat a write | Store calls, machine, store, backup, workspace |
-| **maybe uncertain** | **`Failed` with `attempted: true`** from a Sandbox daemon exchange | read the Workspace and Branch first | workspace calls |
-| an earlier uncertain operation still holds the entity | `Unresolved`; `Unknown` phase `admission` for a Workspace Commit | read its status; clear it with the call the message names | store, machine, sandbox, workspace |
-
-| After an uncertain | Read before acting again |
+| Rule | Enforced by |
 | --- | --- |
-| `file.*` write, `workspace.commit` | [commit.list](commit/list.md), [branch.get](branch/get.md), [workspace.status](workspace/status.md) |
-| `branch.fork`, `merge`, `publish` | [branch.get](branch/get.md) |
-| `workspace.mount`, `unmount`, `exec` | [sandbox.get](sandbox/get.md), [workspace.status](workspace/status.md) |
-| `store.push`, `pull`, `remove` | [store.status](store/status.md) |
-| `machine.create`, `remove` | [machine.status](machine/status.md) |
-| `backup.create` | [backup.list](backup/list.md) |
+| One file per call under its family, and the family's `mod.rs` lists them in help order | `the_source_is_one_file_per_call_under_its_family` in [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) |
+| Every front end exposes exactly the table's calls with the table's arguments | the generated [coverage matrix](../calls/coverage.md), checked by [`coverage.mjs`](../../../../api/node/test/coverage.mjs) |
+| These pages name every call once, under `### family.call`, and state the count above | [`inventory.mjs`](../../../../api/node/test/branch-file/inventory.mjs) |
+| A call runs once; nothing retries or replays it | [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) |
+| Nothing but `machine.start` starts a stopped machine | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
 
-A lost reply never undoes a published change, and nothing is resent for
-the caller. See [Errors](../call-table/errors.md), in particular
-[uncertain outcomes](../call-table/errors.md#uncertain-outcomes).
+## Limits and failures
 
-## Where calls run
+| Limit or failure | Value or error | Source |
+| --- | --- | --- |
+| Refusals before any effect | `InvalidInput` (unknown call or argument, wrong kind, out of scope) | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs) |
+| New work on a removed platform | `Unsupported`, before the home is opened | [`calls/platform_policy.rs`](../../../../api/crates/layerfs-api/src/calls/platform_policy.rs) |
+| Uncertain outcomes | `Unknown`; `Failed` with `attempted`; `Unresolved` on later calls | [Errors and events](../calls/errors-and-events.md#uncertain-outcomes) |
+| Each family's own codes | under each call and in "Family errors" | the family pages |
 
-| Family | In the caller's process | In the machine's worker | In the Sandbox daemon |
+## Demonstration
+
+| Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| `machine` | every call (records, provider CLIs) | — (the worker is what `start` starts) | — |
-| `store` | records, locks, PostgreSQL, sqlite on `native` | `store.file` steps for sqlite on another machine | — |
-| `project` | records; Init/remove for local sqlite; Init for PostgreSQL; export reads both and always writes on the caller’s host | Init/remove and export reader for sqlite on another machine | — |
-| `branch`, `commit`, `file` | PostgreSQL; sqlite on `native` | sqlite on another machine (`store.call`) | — (no daemon serves Store calls) |
-| `sandbox` | records; `create`/`close` on `native` | `sandbox.host` on other machines | the daemon it starts and ends |
-| `workspace` | records, `ws` parsing | `sandbox.host` (exec runs the command here) | mount, commit, unmount, status |
-| `backup` | records, bucket I/O, restore | the snapshot (`stage`, `read`) of a sqlite Store on another machine | — |
+| [`inventory.mjs`](../../../../api/node/test/branch-file/inventory.mjs) | `perl -e 'alarm 120; exec @ARGV' node --test api/node/test/branch-file/inventory.mjs` | macOS or Linux, with the built addon (`npm --prefix api run build:native`) and `target/debug/layerfs` | the count line and one heading per call match the built table; branch and file CLI help exposes every option |
+| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host | 70 calls in ten families; one source file per call; unknown calls and arguments refused before any effect |
+| [`file-history.mjs`](../../../../api/node/examples/file-history.mjs) | `node api/node/examples/file-history.mjs` | macOS or Linux, with the built addon | a Store, Init, file writes and history reads |
 
-A stopped machine is never started by a call other than
-[machine.start](machine/start.md): its calls are `Unavailable`. A
-PostgreSQL Store's calls always run in the caller's process, and its
-password reference is resolved only there. See the
-[routing table](../../control/routing/routing-table.md),
-[workers](../../control/routing/workers.md) and the
-[daemon channel](../../control/routing/daemon-channel.md).
+## Pages
 
-## How to read a call page
-
-Each call page has the same sections: signature, arguments, options, returns,
-where it runs, errors, examples and related calls.
-
----
-
-← [Call table: Errors](../call-table/errors.md) · [Up: API](../README.md) · [SDK: project](project/README.md) →
+| Page | What it covers |
+| --- | --- |
+| [project](project.md) | Init, project records, stats, export, remove |
+| [branch](branch.md) | Branches, saved history, fork, merge, publish, diff; the saved-query rules |
+| [commit](commit.md) | a Branch's Commits and saved comparisons |
+| [file](file.md) | reads at a saved version; one-Commit writes |
+| [sandbox](sandbox.md) | Sandboxes: create, list, get, close |
+| [workspace](workspace.md) | mount, exec, cancel, commit, status, unmount |
+| [machine](machine.md) | built-in and VM machines |
+| [store](store.md) | sqlite and PostgreSQL Stores |
+| [backup](backup.md) | buckets and Store backups |
+| [logs](logs.md) | the home's call log |

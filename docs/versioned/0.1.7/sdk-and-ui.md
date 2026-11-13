@@ -5,7 +5,7 @@
 > [`v0.1.7`](https://github.com/Ephemeral-AI-Lab/layerfs/releases/tag/v0.1.7).
 > Method details and limits are in the [SDK reference](sdk-reference.md). The
 > acceptance record is
-> [PHASE5](../../../core/docs/issues/327/PHASE5-20261015.md).
+> [PHASE5](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/327/PHASE5-20261015.md).
 
 The JavaScript SDK, `@layerfs/sdk`, is the way programs use LayerFS: Branches of
 a project's files, Commits, and Sandboxes whose Workspaces run ordinary commands.
@@ -43,7 +43,7 @@ You need Docker, Node 20 or later, the host Rust toolchain `+1.85.1`, and the
 pinned images.
 
 1. **Build the Linux daemon** inside the pinned build image. The command is in
-   [PHASE5, "Exact Linux build"](../../../core/docs/issues/327/PHASE5-20261015.md).
+   [PHASE5, "Exact Linux build"](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/327/PHASE5-20261015.md).
    It writes `core/target/cluster2-linux/release/layerfs-daemon`.
 2. **Build the host addon:**
    ```bash

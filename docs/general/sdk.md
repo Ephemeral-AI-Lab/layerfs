@@ -16,7 +16,7 @@
 > JavaScript method; each reads its arguments and calls the layerfs-store-service
 > engine directly. The daemon routes described below for fork, branches and
 > commits (typed History requests over Control) are retired. Current layout:
-> [the SDK call channel](../../core/docs/architecture/82-sdk-call-channel.md).
+> [the SDK call channel](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/82-sdk-call-channel.md).
 
 The SDK provides three groups with eleven operation methods, plus their existing
 constructors. A Project is a sealed initial Store and its history. A Sandbox owns
