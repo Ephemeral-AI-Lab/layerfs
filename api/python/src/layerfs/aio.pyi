@@ -14,6 +14,7 @@ class AsyncProjectFamily:
         *,
         timeout: int | None = None,
         on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
     ) -> Result:
         """import a host folder as a new project into an existing Store"""
     async def list(
@@ -22,11 +23,19 @@ class AsyncProjectFamily:
         *,
         page_size: int | None = None,
         page_pos: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """every project in the home, or one Store's"""
-    async def get(self, project: str) -> Result:
+    async def get(self, project: str, *, log_tag: str | None = None) -> Result:
         """a project's record: its Store, kind and machine"""
-    async def stats(self, project: str, branch: str | None = None, commit: str | None = None) -> Result:
+    async def stats(
+        self,
+        project: str,
+        branch: str | None = None,
+        commit: str | None = None,
+        *,
+        log_tag: str | None = None,
+    ) -> Result:
         """entry counts of one pinned saved tree"""
     async def export(
         self,
@@ -35,9 +44,10 @@ class AsyncProjectFamily:
         *,
         branch: str | None = None,
         on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
     ) -> Result:
         """export a project's snapshot from its Store to a local folder"""
-    async def remove(self, project: str) -> Result:
+    async def remove(self, project: str, *, log_tag: str | None = None) -> Result:
         """remove one project from its Store"""
 
 class AsyncBranchFamily:
@@ -48,9 +58,10 @@ class AsyncBranchFamily:
         page_size: int | None = None,
         page_pos: int | None = None,
         page: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """a project's Branches"""
-    async def get(self, project: str, branch: str) -> Result:
+    async def get(self, project: str, branch: str, *, log_tag: str | None = None) -> Result:
         """one Branch and its head Commit"""
     async def commits(
         self,
@@ -60,11 +71,21 @@ class AsyncBranchFamily:
         page: int | None = None,
         page_size: int | None = None,
         at_commit: str | None = None,
+        include_storage: bool | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """saved branch commits or main publications, newest first"""
-    async def get_commit(self, project: str, branch: str, commit: str) -> Result:
+    async def get_commit(self, project: str, branch: str, commit: str, *, log_tag: str | None = None) -> Result:
         """one saved Commit or main publication"""
-    async def fork(self, project: str, name: str, from_branch: str, from_commit: str | None = None) -> Result:
+    async def fork(
+        self,
+        project: str,
+        name: str,
+        from_branch: str,
+        from_commit: str | None = None,
+        *,
+        log_tag: str | None = None,
+    ) -> Result:
         """a new Branch from another Branch's head or Commit"""
     async def merge(
         self,
@@ -75,9 +96,17 @@ class AsyncBranchFamily:
         *,
         message: str | None = None,
         units: JSON | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """merge two Branches into a new one"""
-    async def publish(self, project: str, branch: str, commit: str | None = None) -> Result:
+    async def publish(
+        self,
+        project: str,
+        branch: str,
+        commit: str | None = None,
+        *,
+        log_tag: str | None = None,
+    ) -> Result:
         """a Branch's head or Commit as main's next Layer"""
     async def diff(
         self,
@@ -95,6 +124,7 @@ class AsyncBranchFamily:
         path_prefix: str | None = None,
         include_attribution: bool | None = None,
         continuation: str | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """files that differ between two Branches' heads"""
 
@@ -106,9 +136,10 @@ class AsyncCommitFamily:
         *,
         page_size: int | None = None,
         page_pos: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """a Branch's Commits, newest first"""
-    async def get(self, project: str, branch: str, commit: str) -> Result:
+    async def get(self, project: str, branch: str, commit: str, *, log_tag: str | None = None) -> Result:
         """one Commit of a Branch"""
     async def diff(
         self,
@@ -120,6 +151,7 @@ class AsyncCommitFamily:
         page_size: int | None = None,
         page_pos: int | None = None,
         cursor: str | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """files that differ between two Commits"""
 
@@ -133,9 +165,18 @@ class AsyncFileFamily:
         *,
         start_line: int | None = None,
         end_line: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """read a file"""
-    async def stat(self, project: str, branch: str, path: str, commit: str | None = None) -> Result:
+    async def stat(
+        self,
+        project: str,
+        branch: str,
+        path: str,
+        commit: str | None = None,
+        *,
+        log_tag: str | None = None,
+    ) -> Result:
         """a path's kind, size and mode"""
     async def list(
         self,
@@ -147,6 +188,7 @@ class AsyncFileFamily:
         page_size: int | None = None,
         page: int | None = None,
         page_pos: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """a folder's entries"""
     async def glob(
@@ -160,6 +202,7 @@ class AsyncFileFamily:
         page_size: int | None = None,
         page: int | None = None,
         page_pos: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """paths under `path` matching a glob"""
     async def grep(
@@ -173,6 +216,7 @@ class AsyncFileFamily:
         page_size: int | None = None,
         page: int | None = None,
         page_pos: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """lines under `path` matching a regular expression"""
     async def revision(
@@ -186,6 +230,7 @@ class AsyncFileFamily:
         page: int | None = None,
         page_size: int | None = None,
         continuation: str | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """saved changes to a literal path"""
     async def blame(
@@ -197,6 +242,7 @@ class AsyncFileFamily:
         *,
         from_line: int | None = None,
         line_count: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """the Commit of each line"""
     async def diff(
@@ -213,6 +259,7 @@ class AsyncFileFamily:
         allow_missing: bool | None = None,
         page: int | None = None,
         page_size: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """the difference between two files"""
     async def write(
@@ -224,6 +271,7 @@ class AsyncFileFamily:
         *,
         message: str | None = None,
         mode: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """write a file; one Commit"""
     async def edit(
@@ -235,9 +283,18 @@ class AsyncFileFamily:
         old: str | None = None,
         new: str | None = None,
         message: str | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """replace one unique text in a file; one Commit"""
-    async def rm(self, project: str, branch: str, path: str, *, message: str | None = None) -> Result:
+    async def rm(
+        self,
+        project: str,
+        branch: str,
+        path: str,
+        *,
+        message: str | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """remove a path; one Commit"""
     async def mkdir(
         self,
@@ -247,6 +304,7 @@ class AsyncFileFamily:
         *,
         message: str | None = None,
         mode: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """make a folder; one Commit"""
     async def mv(
@@ -257,6 +315,7 @@ class AsyncFileFamily:
         to_path: str,
         *,
         message: str | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """move a path; one Commit"""
     async def cp(
@@ -267,13 +326,30 @@ class AsyncFileFamily:
         to_path: str,
         *,
         message: str | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """copy a path; one Commit"""
-    async def apply(self, project: str, branch: str, changes: JSON, *, message: str | None = None) -> Result:
+    async def apply(
+        self,
+        project: str,
+        branch: str,
+        changes: JSON,
+        *,
+        message: str | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """apply a list of changes; one Commit"""
 
 class AsyncSandboxFamily:
-    async def create(self, project: str, name: str, machine: str | None = None, *, image: str | None = None) -> Result:
+    async def create(
+        self,
+        project: str,
+        name: str,
+        machine: str | None = None,
+        *,
+        image: str | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """start a named Sandbox of a project on a machine (default: its sqlite Store's, or native)"""
     async def list(
         self,
@@ -281,15 +357,23 @@ class AsyncSandboxFamily:
         *,
         page_size: int | None = None,
         page_pos: int | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """every Sandbox in the home, or one project's"""
-    async def get(self, name: str, *, page_size: int | None = None, page_pos: int | None = None) -> Result:
+    async def get(
+        self,
+        name: str,
+        *,
+        page_size: int | None = None,
+        page_pos: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """a Sandbox and its Workspaces"""
-    async def close(self, name: str, *, force: bool | None = None) -> Result:
+    async def close(self, name: str, *, force: bool | None = None, log_tag: str | None = None) -> Result:
         """stop a Sandbox"""
 
 class AsyncWorkspaceFamily:
-    async def mount(self, sandbox: str, branch: str, *, name: str | None = None) -> Result:
+    async def mount(self, sandbox: str, branch: str, *, name: str | None = None, log_tag: str | None = None) -> Result:
         """mount a Branch in a Sandbox"""
     async def exec(
         self,
@@ -302,29 +386,57 @@ class AsyncWorkspaceFamily:
         stderr: Callable[[Output], object] = ...,
         exec_id: str | None = None,
         on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
     ) -> Result:
         """run one bash command in a Workspace"""
-    async def exec_cancel(self, ws: str, exec_id: str, *, grace_ms: int | None = None) -> Result:
+    async def exec_cancel(
+        self,
+        ws: str,
+        exec_id: str,
+        *,
+        grace_ms: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """end a running command: SIGTERM, then SIGKILL after grace_ms"""
-    async def commit(self, ws: str, *, message: str | None = None, force: bool | None = None) -> Result:
+    async def commit(
+        self,
+        ws: str,
+        *,
+        message: str | None = None,
+        force: bool | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """commit a Workspace's changes to its Branch"""
-    async def unmount(self, ws: str, *, discard: bool | None = None, force: bool | None = None) -> Result:
+    async def unmount(
+        self,
+        ws: str,
+        *,
+        discard: bool | None = None,
+        force: bool | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """end a Workspace"""
-    async def status(self, ws: str) -> Result:
+    async def status(self, ws: str, *, log_tag: str | None = None) -> Result:
         """a Workspace's changes since its base"""
 
 class AsyncMachineFamily:
-    async def list(self) -> Result:
+    async def list(self, *, log_tag: str | None = None) -> Result:
         """every machine, with what it supports"""
-    async def platforms(self) -> Result:
+    async def platforms(self, *, log_tag: str | None = None) -> Result:
         """the platforms this host and build support, and what each is missing"""
-    async def get(self, name: str) -> Result:
+    async def get(self, name: str, *, log_tag: str | None = None) -> Result:
         """a machine's record"""
-    async def status(self, name: str) -> Result:
+    async def status(self, name: str, *, log_tag: str | None = None) -> Result:
         """a machine's live state, free disk and tool version"""
-    async def start(self, name: str, *, on_progress: Callable[[Progress], object] = ...) -> Result:
+    async def start(
+        self,
+        name: str,
+        *,
+        on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
+    ) -> Result:
         """start a stopped machine and its worker; a running one answers at once"""
-    async def stop(self, name: str) -> Result:
+    async def stop(self, name: str, *, log_tag: str | None = None) -> Result:
         """stop a machine's worker and VM; its disks stay"""
     async def create(
         self,
@@ -337,9 +449,10 @@ class AsyncMachineFamily:
         image: str | None = None,
         os_image: str | None = None,
         on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
     ) -> Result:
         """create an enabled VM machine (apple-container, lima)"""
-    async def remove(self, name: str) -> Result:
+    async def remove(self, name: str, *, log_tag: str | None = None) -> Result:
         """delete a VM machine and its disk; one of a removed platform is only forgotten"""
     async def update(
         self,
@@ -351,19 +464,20 @@ class AsyncMachineFamily:
         docker: str | None = None,
         wsl: str | None = None,
         daemon: str | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """resize a VM, or set a built-in machine's image, Docker socket and daemon"""
 
 class AsyncStoreFamily:
-    async def list(self) -> Result:
+    async def list(self, *, log_tag: str | None = None) -> Result:
         """every Store, from the home's records"""
-    async def get(self, name: str) -> Result:
+    async def get(self, name: str, *, log_tag: str | None = None) -> Result:
         """a Store's record"""
-    async def status(self, name: str) -> Result:
+    async def status(self, name: str, *, log_tag: str | None = None) -> Result:
         """a Store's live state"""
-    async def stats(self, name: str) -> Result:
+    async def stats(self, name: str, *, log_tag: str | None = None) -> Result:
         """Store-wide publication and allocation counters"""
-    async def create(self, name: str) -> Result:
+    async def create(self, name: str, *, log_tag: str | None = None) -> Result:
         """an empty sqlite Store on native"""
     async def connect(
         self,
@@ -372,19 +486,41 @@ class AsyncStoreFamily:
         *,
         password: str | None = None,
         synchronous_commit: str | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """attach a PostgreSQL database as a Store"""
-    async def attach(self, name: str, machine: str, *, url: str | None = None, password: str | None = None) -> Result:
+    async def attach(
+        self,
+        name: str,
+        machine: str,
+        *,
+        url: str | None = None,
+        password: str | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
         """let a machine run Sandboxes of a PostgreSQL Store, after checking it reaches the server"""
-    async def detach(self, name: str, machine: str) -> Result:
+    async def detach(self, name: str, machine: str, *, log_tag: str | None = None) -> Result:
         """stop a machine running Sandboxes of a PostgreSQL Store"""
-    async def push(self, name: str, machine: str, *, on_progress: Callable[[Progress], object] = ...) -> Result:
+    async def push(
+        self,
+        name: str,
+        machine: str,
+        *,
+        on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
+    ) -> Result:
         """send a sqlite Store from native to a machine"""
-    async def pull(self, name: str, *, on_progress: Callable[[Progress], object] = ...) -> Result:
+    async def pull(
+        self,
+        name: str,
+        *,
+        on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
+    ) -> Result:
         """bring a sqlite Store from its machine to native"""
-    async def remove(self, name: str) -> Result:
+    async def remove(self, name: str, *, log_tag: str | None = None) -> Result:
         """delete a sqlite Store with every project in it"""
-    async def disconnect(self, name: str) -> Result:
+    async def disconnect(self, name: str, *, log_tag: str | None = None) -> Result:
         """forget a PostgreSQL Store; its data stays"""
 
 class AsyncBackupFamily:
@@ -396,11 +532,12 @@ class AsyncBackupFamily:
         key: str | None = None,
         region: str | None = None,
         part_size: Size | None = None,
+        log_tag: str | None = None,
     ) -> Result:
         """connect an r2 or MinIO bucket"""
-    async def disconnect(self, name: str) -> Result:
+    async def disconnect(self, name: str, *, log_tag: str | None = None) -> Result:
         """forget a bucket and this home's links to it"""
-    async def list(self, bucket: str | None = None) -> Result:
+    async def list(self, bucket: str | None = None, *, log_tag: str | None = None) -> Result:
         """every Store file on the connected buckets"""
     async def create(
         self,
@@ -409,6 +546,7 @@ class AsyncBackupFamily:
         file: str | None = None,
         *,
         on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
     ) -> Result:
         """upload a sqlite Store to a bucket"""
     async def restore(
@@ -418,8 +556,27 @@ class AsyncBackupFamily:
         file: str | None = None,
         *,
         on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
     ) -> Result:
         """download a backup as a sqlite Store on native"""
+
+class AsyncLogsFamily:
+    async def list(
+        self,
+        *,
+        op: str | None = None,
+        project: str | None = None,
+        client: str | None = None,
+        tag: str | None = None,
+        outcome: str | None = None,
+        since: int | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """the calls made against this home, newest first"""
+    async def reset(self, *, log_tag: str | None = None) -> Result:
+        """clear this home's call log"""
 
 class AsyncClient:
     project: AsyncProjectFamily
@@ -431,6 +588,7 @@ class AsyncClient:
     machine: AsyncMachineFamily
     store: AsyncStoreFamily
     backup: AsyncBackupFamily
+    logs: AsyncLogsFamily
     def __init__(self, home: str | PathLike[str] | None = None, scope: Scope | Mapping[str, str | None] | None = None) -> None: ...
 
 def client(home: str | PathLike[str] | None = None, scope: Scope | Mapping[str, str | None] | None = None) -> AsyncClient: ...
@@ -444,5 +602,6 @@ workspace: AsyncWorkspaceFamily
 machine: AsyncMachineFamily
 store: AsyncStoreFamily
 backup: AsyncBackupFamily
+logs: AsyncLogsFamily
 
-__all__ = ['AsyncClient', 'LayerFSError', 'client', 'project', 'branch', 'commit', 'file', 'sandbox', 'workspace', 'machine', 'store', 'backup']
+__all__ = ['AsyncClient', 'LayerFSError', 'client', 'project', 'branch', 'commit', 'file', 'sandbox', 'workspace', 'machine', 'store', 'backup', 'logs']

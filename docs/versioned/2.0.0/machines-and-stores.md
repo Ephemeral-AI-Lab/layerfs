@@ -83,7 +83,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   Stores, and one worker.
 - `image` is the image its Sandboxes run in. The default Sandbox image (owner
   decision O36) is LayerFS's runtime image
-  `layerfs-352-runtime:node24-https-apt-20261024` (config digest
+  `layerfs-352-runtime:node24-https-apt-20261024` (image digest
   `sha256:afa1ef9c…f38e`: Node 24, Rust 1.85.1, the SQLite headers,
   Chromium and Selenium), sealed into the bundle as `sandbox-image.tar`.
   `--image` (and `machine update native --image`) chooses another. On

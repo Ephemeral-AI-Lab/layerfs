@@ -2,7 +2,7 @@
 use crate::calls::{
     table::{
         a, call, opt, Call,
-        Kind::{Int, Name, Project, Text},
+        Kind::{Bool, Int, Name, Project, Text},
     },
     Context,
 };
@@ -18,6 +18,7 @@ pub(crate) const CALL: Call = call(
         opt("page", Int),
         opt("page_size", Int),
         opt("at_commit", Text),
+        opt("include_storage", Bool),
     ],
     "saved branch commits or main publications, newest first",
     run,
@@ -29,6 +30,9 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         page: args.get_int("page"),
         page_size: args.get_int("page_size"),
         at_commit: args.get_text("at_commit").map(str::to_owned),
+        include_storage: args
+            .get("include_storage")
+            .map(|_| args.get_bool("include_storage")),
     };
     let (home, events) = context.parts();
     commits(home, events, &request)

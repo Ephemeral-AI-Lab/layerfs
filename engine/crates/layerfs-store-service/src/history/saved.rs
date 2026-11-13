@@ -226,7 +226,7 @@ pub fn reply_cost(value: &SdkValue) -> usize {
 }
 
 /// Compact listing metadata; full relationships and optional reports use get_commit.
-pub fn summary(store: &Arc<Store>, node: NodeId) -> Result<SdkValue> {
+pub fn summary(store: &Arc<Store>, node: NodeId, include_storage: bool) -> Result<SdkValue> {
     let full = record(store, node)?;
     let keys = [
         "id",
@@ -249,6 +249,12 @@ pub fn summary(store: &Arc<Store>, node: NodeId) -> Result<SdkValue> {
                 .map(|value| ((*key).to_owned(), value.clone()))
         })
         .collect();
+    // Layers do not perform a Save: absent allocation facts stay unavailable.
+    if include_storage {
+        for key in ["newCanonical", "newStored", "newMetadata"] {
+            fields.push((key.to_owned(), full.get(key).cloned().unwrap_or_default()));
+        }
+    }
     let message = full.get_text("message");
     let clipped = message.is_some_and(|s| s.len() > 128);
     let message = message
