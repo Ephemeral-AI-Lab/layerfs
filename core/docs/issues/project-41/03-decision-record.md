@@ -3,7 +3,7 @@
 > **Status:** Proposal; target LayerFS 2.0.0; not a released contract.
 
 **Scope**: the three reconciliation decisions of Issue layerfs-project#41 that change what the
-implementation must do. **Authority**: [#511](https://github.com/Ephemeral-AI-Lab/layerfs/issues/511)
+implementation must do. **Authority**: [#511](https://github.com/Ephemeral-AI-Lab/layerfs/issues/511) (closed; its decisions remain the release contract, and nothing here supersedes them)
 (release contract) and [#41](https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/41).
 **Baseline**: `layerfs_v2_0_0`.
 

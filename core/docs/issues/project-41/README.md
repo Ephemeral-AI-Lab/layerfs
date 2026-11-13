@@ -7,7 +7,7 @@ refer to [layerfs-project](https://github.com/Ephemeral-AI-Lab/layerfs-project/i
 this repository's own #41 is an unrelated issue.
 
 **Release Target**: LayerFS 2.0.0  
-**Release Contract**: Ephemeral-AI-Lab/layerfs#511  
+**Release Contract**: Ephemeral-AI-Lab/layerfs#511 (closed; the decisions remain the contract)  
 **Project Tracking**: Ephemeral-AI-Lab/layerfs-project#41
 
 ## Overview
@@ -153,7 +153,7 @@ tests across a generation boundary.
 ## Related Resources
 
 - **Specification PR**: Ephemeral-AI-Lab/layerfs#658 (`core/docs/issues/project-41/`)
-- **Release Contract**: Ephemeral-AI-Lab/layerfs#511
+- **Release Contract**: Ephemeral-AI-Lab/layerfs#511 (closed; the decisions remain the contract)
 - **Sub-Issues**: layerfs-project#42-#52
 
 ## References
