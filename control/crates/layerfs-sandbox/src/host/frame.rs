@@ -81,6 +81,8 @@ fn fields(call: &Call, sent: &Message, sandbox: Option<&str>) -> Vec<(&'static s
         Call::ListWorkspaces { path } | Call::Status { path } => {
             fields.extend(path.as_deref().map(|p| ("path", text(p))))
         }
+        // a bounded operator read: it sends no field of its own
+        Call::Capacity => {}
         Call::Mount { branch, name } => {
             fields.push(("branch", opt(branch)));
             fields.extend(name.as_deref().map(|n| ("name", text(n))));
@@ -248,6 +250,7 @@ fn call(op: Op, more: &SdkValue) -> Call {
             },
         },
         Op::ListWorkspaces => Call::ListWorkspaces { path: text("path") },
+        Op::Capacity => Call::Capacity,
         Op::Mount => Call::Mount {
             branch: text("branch"),
             name: text("name"),

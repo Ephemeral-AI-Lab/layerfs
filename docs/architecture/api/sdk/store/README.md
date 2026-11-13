@@ -19,18 +19,21 @@ The `store` calls.
      sqlite              |                 PostgreSQL
      ------              |                 ----------
      create (on native)  |                 connect (url, password ref)
-        |                |                    |
-        v                |                    |
-     push --> on <machine> --> pull           |  project.init, branch.*,
-        |     (back to native)                |  file.*, Sandboxes ...
+        |                |                    |  attached to native
+        v                |                    v
+     push --> on <machine> --> pull        attach <machine> [url, password]
+        |     (back to native)             detach <machine>
+        |                                     |  project.init, branch.*, file.*,
+        |                                     |  Sandboxes on attached machines
         v                                     v
      remove (file + projects)              disconnect (data stays)
 ```
 
-Nine calls, in help order
+Twelve calls, in help order
 ([`store/mod.rs`](../../../../../api/crates/layerfs-api/src/store/mod.rs)).
 `connect` and `disconnect` run `layerfs_store::postgresql::connect`
-(PostgreSQL); the others run `layerfs_store::sqlite::family` (sqlite, and
+and `attach` and `detach` `layerfs_control::store` over
+`layerfs_store::postgresql::attach` (PostgreSQL); the others run `layerfs_store::sqlite::family` (sqlite, and
 the reads of both kinds); `remove`, `push`, `pull` and `disconnect` go
 through `layerfs_control::store` for their in-use check.
 A Store is the one database file or schema that holds every project's
@@ -42,7 +45,9 @@ history ([glossary](../../../glossary.md)).
 | [`get`](get.md) | `name` (Name) | — | the Store's record with `projects`; never the cursor key |
 | [`status`](status.md) | `name` | — | `{ name, kind, state, holders, op, down_reason }` plus `machine` and `file` (sqlite) or `server` (PostgreSQL) |
 | [`create`](create.md) | `name` | — | the new record: `machine: "native"`, `profile: "disposable"`, `created`, `sqlite`, `projects` |
-| [`connect`](connect.md) | `name`, `url` (Text) | `password`, `synchronous_commit` (Text) | `{ name, kind: "postgresql", schema, synchronous_commit, projects }` |
+| [`connect`](connect.md) | `name`, `url` (Text) | `password`, `synchronous_commit` (Text) | `{ name, kind: "postgresql", schema, synchronous_commit, machines, projects }` |
+| [`attach`](attach.md) | `name`, `machine` (Name) | `url`, `password` (Text) | the Store as `get` shows it, with `machines` |
+| [`detach`](detach.md) | `name`, `machine` (Name) | — | the Store as `get` shows it, with `machines` |
 | [`push`](push.md) | `name`, `machine` (Name) | `on_progress` (Function) | `{ store, from, to, bytes, heads }` |
 | [`pull`](pull.md) | `name` | `on_progress` | `{ store, from, to, bytes, heads }` |
 | [`remove`](remove.md) | `name` | — | `{ removed: name }` |

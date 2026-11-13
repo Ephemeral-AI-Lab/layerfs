@@ -12,6 +12,7 @@ use std::path::Path;
 /// What a machine holds, read from the Store and Sandbox records.
 pub const RELATED: Related = Related {
     stores_on: inventory::stores_on,
+    postgresql_on: inventory::postgresql_on,
     sandboxes_on: inventory::sandboxes_on,
     can_remove: inventory::can_remove_machine,
     can_stop: inventory::can_stop_machine,

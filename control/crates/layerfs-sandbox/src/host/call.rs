@@ -19,6 +19,9 @@ pub enum Op {
     SandboxClose,
     /// `sandbox.list_workspaces`: its daemon's Workspace list.
     ListWorkspaces,
+    /// `backend.daemon.connection_failures`: its daemon's control-capacity
+    /// read model (#540), a bounded operator read.
+    Capacity,
     /// `workspace.mount`.
     Mount,
     /// `workspace.exec`.
@@ -35,10 +38,11 @@ pub enum Op {
 
 /// Every host operation and the name a request carries (`op`). A
 /// machine's worker runs exactly these.
-pub const OPS: [(Op, &str); 9] = [
+pub const OPS: [(Op, &str); 10] = [
     (Op::SandboxCreate, "sandbox.create"),
     (Op::SandboxClose, "sandbox.close"),
     (Op::ListWorkspaces, "sandbox.list_workspaces"),
+    (Op::Capacity, layerfs_bridge::control::OPERATION),
     (Op::Mount, "workspace.mount"),
     (Op::Exec, "workspace.exec"),
     (Op::ExecCancel, "workspace.exec_cancel"),
@@ -100,6 +104,9 @@ pub enum Call {
     },
     /// `sandbox.list_workspaces`, with the Workspace `path` it may name.
     ListWorkspaces { path: Option<String> },
+    /// `backend.daemon.connection_failures`: its daemon's control-capacity
+    /// read model (#540).
+    Capacity,
     /// `workspace.mount(branch, { name })`.
     Mount {
         branch: Option<String>,
@@ -149,6 +156,7 @@ impl Call {
             Self::Create { .. } => Op::SandboxCreate,
             Self::Close { .. } => Op::SandboxClose,
             Self::ListWorkspaces { .. } => Op::ListWorkspaces,
+            Self::Capacity => Op::Capacity,
             Self::Mount { .. } => Op::Mount,
             Self::Exec { .. } => Op::Exec,
             Self::ExecCancel { .. } => Op::ExecCancel,

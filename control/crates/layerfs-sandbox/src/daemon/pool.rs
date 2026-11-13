@@ -5,15 +5,20 @@
 //! every call wait for the one before it, a 1 ms read behind a whole Commit. A
 //! Sandbox keeps up to [`CONNECTIONS`] connections and opens one only when
 //! every open one is busy. Each exchange runs whole on one connection, sent
-//! once. A connection whose exchange failed is quarantined by its `Control`
-//! and is closed rather than reused; the failed call is never sent again.
+//! once. A connection whose exchange failed, or whose channel an application
+//! fence (`daemon::fence`) shut down, is quarantined by its `Control` and is
+//! closed rather than reused; the failed call is never sent again.
 //! When the daemon admits no more connections, the Sandbox keeps the ones it
 //! has and callers take turns on them, each waiting at most [`LEND_WAIT`]
 //! before it is refused `Busy`. Opening a connection is not an attempt
 //! of any operation: nothing is sent before the connection is ready.
+use crate::daemon::fence::Fence;
 use crate::internal::Control;
-use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkRefusal};
-use layerfs_bridge::duplex::initiate_observed;
+use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkRefusal, SdkValue};
+use layerfs_bridge::duplex::{
+    admission::{AdmissionNotice, AdmissionReason},
+    initiate_observed, ChannelError,
+};
 use layerfs_home::outcome::{failed, refused};
 use std::net::SocketAddr;
 use std::ops::{Deref, DerefMut};
@@ -46,26 +51,169 @@ pub const ADMISSION_WAIT: Duration = Duration::from_secs(60);
 /// before it ends, and its `Busy` refusal is not retried.
 pub const LEND_WAIT: Duration = ADMISSION_WAIT;
 
-/// Whether a failed open is the daemon closing a connection it did not admit:
-/// the stream ended before the Hello reply. Through a port proxy the client
-/// reads the end (`UnexpectedEof`); dialing the daemon directly, its handshake
-/// write can meet the closed socket first (`BrokenPipe`, `ConnectionReset`).
-/// Nothing but Hello was sent, so no operation was attempted and opening
-/// again is safe.
-fn not_admitted(refusal: &SdkRefusal) -> bool {
-    refusal.code == "Failed"
-        && ["UnexpectedEof", "BrokenPipe", "ConnectionReset"]
-            .iter()
-            .any(|kind| refusal.message.contains(kind))
+/// The exact refusal for a failed open that never reached the Hello reply,
+/// typed from the channel error rather than from refusal message text (#547
+/// slice 6). Nothing was attempted, so every one is safe to retry; they name
+/// different observable causes.
+fn opening_refusal(error: ChannelError) -> SdkRefusal {
+    match error {
+        // The daemon closed the connection before the handshake completed and
+        // sent no notice: the reason it did not admit this call is unknown, so
+        // the refusal says what was observed, never a guess at "no vacant
+        // slot" (#547 slice 6).
+        ChannelError::Io(io) if io.kind() == std::io::ErrorKind::UnexpectedEof => SdkRefusal {
+            code: "Unknown".to_owned(),
+            message: "the Sandbox's daemon closed the connection before it was admitted; the reason is unknown and the call was not admitted. Retrying is safe"
+                .to_owned(),
+            detail: SdkValue::map([
+                ("observed", SdkValue::text("UnexpectedEof")),
+                ("retryable", SdkValue::Bool(true)),
+                ("retry_after", SdkValue::Int(500)),
+            ]),
+        },
+        // Dialing the daemon directly, its handshake write can meet the closed
+        // socket first: the connection itself failed, not admission.
+        ChannelError::Io(io)
+            if matches!(
+                io.kind(),
+                std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::BrokenPipe
+            ) =>
+        {
+            let kind = io.kind().to_string();
+            SdkRefusal {
+                code: "Unavailable".to_owned(),
+                message: format!(
+                    "the connection to the Sandbox's daemon failed before it was admitted ({kind}); nothing was attempted. Retrying is safe"
+                ),
+                detail: SdkValue::map([
+                    ("observed", SdkValue::text(kind)),
+                    ("retryable", SdkValue::Bool(true)),
+                    ("retry_after", SdkValue::Int(500)),
+                ]),
+            }
+        }
+        other => failed(other),
+    }
+}
+
+/// The exact refusal for a decoded advisory capacity notice: it names the
+/// resource, the vacant slots and how long to wait (#540, #547 slice 6).
+fn notice_refusal(notice: AdmissionNotice) -> SdkRefusal {
+    match notice.reason {
+        AdmissionReason::NoPoolSlot => SdkRefusal {
+            code: "Capacity".to_owned(),
+            message: format!(
+                "the Sandbox's daemon has no vacant control slot: {} pool slot(s) and {} reserved slot(s) are vacant, with {} retained failure record(s). The call was not admitted; retrying is safe",
+                notice.pool_vacant, notice.reserved_vacant, notice.retained
+            ),
+            detail: SdkValue::map([
+                ("resource", SdkValue::text("daemon_control_slot")),
+                ("retained", SdkValue::Int(i64::from(notice.retained))),
+                ("pool_vacant", SdkValue::Int(i64::from(notice.pool_vacant))),
+                (
+                    "reserved_vacant",
+                    SdkValue::Int(i64::from(notice.reserved_vacant)),
+                ),
+                ("retryable", SdkValue::Bool(true)),
+                // An idle pool slot becomes reclaimable after the daemon's
+                // `idle_ttl`, so retry after that, not sooner.
+                (
+                    "retry_after",
+                    SdkValue::Int(i64::from(crate::lifecycle::IDLE_TTL_MS)),
+                ),
+                ("admission", SdkValue::text(notice.reason.as_str())),
+            ]),
+        },
+        AdmissionReason::Starting => SdkRefusal {
+            code: "Unavailable".to_owned(),
+            message: "the Sandbox's daemon is still starting and admits no control connection yet. The call was not admitted; retrying is safe"
+                .to_owned(),
+            detail: SdkValue::map([
+                ("resource", SdkValue::Null),
+                ("retained", SdkValue::Null),
+                ("retryable", SdkValue::Bool(true)),
+                ("retry_after", SdkValue::Int(500)),
+                ("admission", SdkValue::text("starting")),
+            ]),
+        },
+        // A newer daemon's reason this client does not know: report what was
+        // observed, never guess (#547 slice 6 version skew).
+        other => SdkRefusal {
+            code: "Unknown".to_owned(),
+            message: format!(
+                "the Sandbox's daemon refused admission with a reason this client does not know ({:?}); the call was not admitted. Retrying is safe",
+                other
+            ),
+            detail: SdkValue::map([
+                ("observed", SdkValue::text(other.as_str())),
+                ("retryable", SdkValue::Bool(true)),
+                ("retry_after", SdkValue::Int(500)),
+            ]),
+        },
+    }
+}
+
+/// Whether this refusal says nothing was attempted and a later open may
+/// succeed. Only these exact refusals are retried.
+fn retryable(refusal: &SdkRefusal) -> bool {
+    matches!(
+        refusal.code.as_str(),
+        "Capacity" | "Unavailable" | "Unknown"
+    ) && refusal.detail.get_bool("retryable")
 }
 
 impl Dial {
     /// The first connection a process opens to a Sandbox. While the daemon
-    /// admits no more connections (other processes hold all of them), waits
-    /// for one to be released, up to [`ADMISSION_WAIT`], instead of failing
-    /// the caller's operation with a bare `UnexpectedEof`.
+    /// refuses admission, waits for one to be released, up to
+    /// [`ADMISSION_WAIT`], instead of failing the caller's operation with a
+    /// bare `UnexpectedEof`. Its final refusal names what the client actually
+    /// observed: no vacant control slot, or a failed connection (#540).
     pub fn open_waiting(&self) -> Result<Control, SdkRefusal> {
         self.open_admitted(ADMISSION_WAIT)
+    }
+
+    /// [`Dial::open_within`], with the fence that ends this connection at
+    /// the same deadline: connecting, the handshake and its Hello must finish
+    /// inside that time, and a daemon that trickles any of them is shut down
+    /// at `deadline` rather than kept waiting. The connection keeps those I/O
+    /// waits for the one bounded call made on it. Nothing is retried and no
+    /// admission wait applies: a daemon that refuses or does not answer is
+    /// reported as it came.
+    pub fn open_within(&self, within: Duration) -> Result<(Control, Fence), SdkRefusal> {
+        let deadline = Instant::now() + within;
+        let remaining = || {
+            deadline
+                .saturating_duration_since(Instant::now())
+                .max(Duration::from_millis(1))
+        };
+        let stream =
+            std::net::TcpStream::connect_timeout(&self.endpoint, remaining()).map_err(failed)?;
+        stream.set_read_timeout(Some(remaining())).map_err(failed)?;
+        stream
+            .set_write_timeout(Some(remaining()))
+            .map_err(failed)?;
+        // armed before the handshake: a trickling far side cannot outlive the
+        // deadline this open promised, and neither can the one call made on it
+        let fence = Fence::on(stream.try_clone().map_err(failed)?, deadline);
+        let connection = match initiate_observed(stream, &self.secret, self.peer).result {
+            Ok(connection) => connection,
+            Err(ChannelError::Admission(notice)) => return Err(notice_refusal(notice)),
+            Err(error) => return Err(opening_refusal(error)),
+        };
+        // the waits stay: the caller makes exactly one call and drops it
+        let mut control = Control::new(connection);
+        let hello = control
+            .call(Request::Hello(HelloRequest {
+                expected_instance: Some(self.instance),
+                wait_for_store: false,
+            }))
+            .map_err(failed)?;
+        match hello {
+            Reply::Hello(status) if status.phase == DaemonPhase::ControlReady => {
+                Ok((control, fence))
+            }
+            _ => Err(refused("StaleSandbox", "saved daemon is not ControlReady")),
+        }
     }
 
     /// [`Dial::open_waiting`], waiting at most `wait`.
@@ -74,19 +222,14 @@ impl Dial {
         let mut pause = Duration::from_millis(20);
         loop {
             match self.open() {
-                Err(refusal) if not_admitted(&refusal) && started.elapsed() < wait => {
-                    std::thread::sleep(pause);
-                    pause = (pause * 2).min(Duration::from_millis(500));
-                }
-                Err(refusal) if not_admitted(&refusal) => {
-                    return Err(refused(
-                        "Busy",
-                        format!(
-                            "the Sandbox's daemon admitted no connection for {}s: other processes hold all {} of its connections",
-                            wait.as_secs(),
-                            crate::lifecycle::DAEMON_CONNECTIONS
-                        ),
-                    ))
+                Err(refusal) => {
+                    if retryable(&refusal) && started.elapsed() < wait {
+                        std::thread::sleep(pause);
+                        pause = (pause * 2).min(Duration::from_millis(500));
+                        continue;
+                    }
+                    // The refusal is already typed and exact (#547 slice 6).
+                    return Err(refusal);
                 }
                 other => return other,
             }
@@ -103,9 +246,11 @@ impl Dial {
         stream
             .set_write_timeout(Some(Duration::from_secs(10)))
             .map_err(failed)?;
-        let connection = initiate_observed(stream, &self.secret, self.peer)
-            .result
-            .map_err(failed)?;
+        let connection = match initiate_observed(stream, &self.secret, self.peer).result {
+            Ok(connection) => connection,
+            Err(ChannelError::Admission(notice)) => return Err(notice_refusal(notice)),
+            Err(error) => return Err(opening_refusal(error)),
+        };
         connection.clear_io_waits().map_err(failed)?;
         let mut control = Control::new(connection);
         match control
@@ -159,6 +304,14 @@ impl Controls {
 
     /// A connection for one call, and how long the call waited for it.
     pub fn lend(&self) -> Result<(Lease<'_>, Duration), SdkRefusal> {
+        self.lend_within(LEND_WAIT)
+    }
+
+    /// [`Controls::lend`], waiting at most `wait` for admission and for an
+    /// in-use connection. A caller that must not hold an operation intent
+    /// while a daemon refuses connections (an explicit close) uses a short
+    /// wait and reports the exact refusal (#540).
+    pub fn lend_within(&self, wait: Duration) -> Result<(Lease<'_>, Duration), SdkRefusal> {
         let started = Instant::now();
         let poisoned = || refused("Failed", "binding state poisoned");
         let mut pool = self.pool.lock().map_err(|_| poisoned())?;
@@ -172,7 +325,7 @@ impl Controls {
                 let only = pool.open == 1;
                 drop(pool);
                 let opened = if only {
-                    self.dial.open_waiting()
+                    self.dial.open_admitted(wait)
                 } else {
                     self.dial.open()
                 };
@@ -190,14 +343,14 @@ impl Controls {
                     }
                 }
             }
-            let remaining = LEND_WAIT.saturating_sub(started.elapsed());
+            let remaining = wait.saturating_sub(started.elapsed());
             if remaining.is_zero() {
                 return Err(refused(
                     "Busy",
                     format!(
                         "all {} of this process's connections to the Sandbox stayed in use for {}s; nothing was attempted",
                         pool.open,
-                        LEND_WAIT.as_secs()
+                        wait.as_secs()
                     ),
                 ));
             }
@@ -228,7 +381,8 @@ impl Drop for Lease<'_> {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if control.is_failed() {
-            // Quarantined: closed, and a later call may open another.
+            // Quarantined: its own failure or its channel's fence ended it,
+            // and a later call may open another.
             pool.open -= 1;
             drop(control);
         } else {

@@ -1,7 +1,7 @@
 //! One attempted authenticated control exchange, retaining the original unknown.
 use layerfs_bridge::{
     control::{Answer, Call, ControlError, Reply, Request, SdkValue},
-    duplex::{ChannelError, ChannelWork, Connection},
+    duplex::{ChannelError, ChannelWork, CloseHandle, Connection},
 };
 use std::fmt;
 /// One sequential control connection. Concurrent callers may use separate channels.
@@ -74,10 +74,13 @@ impl Control {
     pub fn take_telemetry(&mut self) -> Vec<SdkValue> {
         std::mem::take(&mut self.telemetry)
     }
-    /// True once an exchange on this connection failed: it is quarantined,
-    /// and every later call on it is refused before sending.
+    /// True once this connection cannot carry another call: an exchange
+    /// failed on it, its session ended, or an application fence
+    /// ([`Control::close_handle`]) shut its channel down. The pool closes it
+    /// instead of lending it again, and a later call is refused before
+    /// sending, so a quarantined connection is never reported as an attempt.
     pub fn is_failed(&self) -> bool {
-        self.failed
+        self.failed || self.connection.is_quarantined()
     }
     /// Sends once and awaits the original reply once. Typed remote refusals are
     /// replies; failed delivery retains an unknown, never replays the command.
@@ -118,7 +121,10 @@ impl Control {
         let mut attempted = false;
         let mut received = None;
         let result = (|| {
-            if self.failed {
+            if self.is_failed() {
+                // a fence or an ended session may have quarantined the channel
+                // after this owner's last call: nothing is sent on it
+                self.failed = true;
                 return Err(ControlCause::Channel(ChannelError::Quarantined));
             }
             let record = call.encode().map_err(ControlCause::Protocol)?;
@@ -219,7 +225,7 @@ impl Control {
         manifest: &layerfs_bridge::provision::StoreManifest,
     ) -> Result<layerfs_project::store::Installed, Box<layerfs_project::store::InstallFailure>>
     {
-        if self.failed {
+        if self.is_failed() {
             return Err(Box::new(layerfs_project::store::InstallFailure {
                 source: store.path.clone(),
                 manifest: manifest.clone(),
@@ -242,6 +248,12 @@ impl Control {
     }
     pub fn clear_io_waits(&self) -> Result<(), ChannelError> {
         self.connection.clear_io_waits()
+    }
+    /// A clone of this channel's socket for an application-owned fence
+    /// (`daemon::fence`): it carries no send or replay capability, and
+    /// shutting it down quarantines the channel.
+    pub fn close_handle(&self) -> Result<CloseHandle, ChannelError> {
+        self.connection.close_handle()
     }
     /// Actual cumulative duplex send/receive work for this connection.
     pub fn channel_work(&self) -> (ChannelWork, ChannelWork) {

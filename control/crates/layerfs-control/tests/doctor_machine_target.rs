@@ -106,6 +106,7 @@ fn machine_target_reports_dependencies_and_preserves_home() {
         "fail",
     );
     MachineRecord::built_in("native").write(&f.home).unwrap();
+    #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
     let native = f.report("native", Duration::from_secs(1));
     #[cfg(target_os = "macos")]
     outcome(&native, "machine.provider", "pass");

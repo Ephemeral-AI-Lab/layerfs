@@ -16,6 +16,7 @@ from ._client import (
     MachineFamily,
     StoreFamily,
     BackupFamily,
+    LogsFamily,
 )
 from ._errors import LayerFSError as LayerFSError
 from ._values import (
@@ -41,5 +42,6 @@ workspace: WorkspaceFamily
 machine: MachineFamily
 store: StoreFamily
 backup: BackupFamily
+logs: LogsFamily
 
-__all__ = ['FAMILIES', 'TABLE', 'Client', 'LayerFSError', 'backup', 'branch', 'client', 'close', 'commit', 'doctor', 'file', 'machine', 'project', 'sandbox', 'store', 'workspace']
+__all__ = ['FAMILIES', 'TABLE', 'Client', 'LayerFSError', 'backup', 'branch', 'client', 'close', 'commit', 'doctor', 'file', 'logs', 'machine', 'project', 'sandbox', 'store', 'workspace']

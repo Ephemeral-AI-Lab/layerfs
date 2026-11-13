@@ -54,6 +54,7 @@ lfs.file.read(p, b, path, {..})
 | Checks before the call | options not an object, too many positionals, an unknown option, a function option that is not a function: `LayerFSError("InvalidInput")` | `bind` |
 | `null` / `undefined` | a positional or option with either is left out, so the library sees it as absent | `bind` |
 | `stream: true` | without `stdout` / `stderr` functions, output goes to `process.stdout` / `process.stderr` | `bind` |
+| `log_tag` | any call's options may carry `log_tag`, the tag of its call log line (#659); it is passed with the arguments and the library takes it out before checking. The binding names the client `node` (`Client::Node`) | `bind`, [`call.rs`](../../../../api/crates/layerfs-node/src/call.rs) |
 | Event order | `call.rs` counts each event it queued; the package resolves only after it has delivered that many | [`call.rs`](../../../../api/crates/layerfs-node/src/call.rs), `bind` |
 | A throwing function | caught; reported with `process.emitWarning(…, "LayerFSHandlerWarning")`; the call goes on | `bind` |
 | Values | `Uint8Array` / `Buffer` → `{ base64 }`; `bigint` → its exact digits; whole numbers back as `number` (safe integers) or `bigint`; `{ base64 }` back → `Buffer`; see [Values](#values) | [`values.js`](../../../../api/node/src/values.js) |
@@ -101,9 +102,10 @@ interface with each call's positionals typed by kind (`project`, `name`,
 `text` → `string`; `int` → `number | bigint`; `size` → `number | bigint |
 string`; `content` → `string | Uint8Array`; `json` → `Value`; an optional
 positional also takes `null`), then an options object of the call's own
-options; `on_progress`, `stdout` and `stderr` are typed where a call declares
+options, extending `CallOptions` (`log_tag`), which every call takes;
+`on_progress`, `stdout` and `stderr` are typed where a call declares
 them. `Client`, `Scope`, `LayerFSError`, `doctor`, `close`, `table` and the
-nine family exports are declared. The table has no result schema, so every
+ten family exports are declared. The table has no result schema, so every
 call answers `Promise<Result>`, a map of snake_case keys to the loose `Value`
 type (JSON plus `bigint` and `Buffer`); the call's SDK page lists the keys.
 The file references `@types/node` for `Buffer`. Do not edit it by hand;
@@ -150,7 +152,7 @@ missing). Run one file at a time under a wall limit, for example
 
 | Test | Sets up | Checks | Needs |
 | --- | --- | --- | --- |
-| [`calls.mjs`](../../../../api/node/test/calls.mjs) | temporary homes, a folder with `README.md` | nine families and 60 functions; every call with a required argument is refused `InvalidInput` "is required"; empty lists; built-in machines `docker`, `native`; a Store, Init with progress, file and Branch calls, bytes, a folder scope | the addon |
+| [`calls.mjs`](../../../../api/node/test/calls.mjs) | temporary homes, a folder with `README.md` | ten families and 70 functions; every call with a required argument is refused `InvalidInput` "is required"; empty lists; built-in machines `docker`, `native`; a Store, Init with progress, file and Branch calls, bytes, a folder scope; the call log's `client: "node"` and `log_tag` | the addon |
 | [`shell.mjs`](../../../../api/node/test/shell.mjs) | the `layerfs` debug binary beside the package | every call refused the same by the command and the package; exit 2 for a wrong line; a live Store read both ways; `--progress` lines | addon and command |
 | [`events.mjs`](../../../../api/node/test/events.mjs) | a `layerfs worker` started on loopback | a throwing `on_progress` does not stop a `store.push`, and every event arrives before the call settles; exec output through functions and `stream: true` | command; the exec half needs `LAYERFS_DAEMON`, else skipped `NOT_RUN` |
 | [`close.mjs`](../../../../api/node/test/close.mjs) | a Store and Init | `close()` drops this process's leases; a later call opens the Store again | the addon |

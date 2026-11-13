@@ -14,9 +14,9 @@ const temp = (tag) => {
   return dir;
 };
 
-test("the table: nine families, 64 calls, each a function", () => {
-  assert.deepEqual(families, ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup"]);
-  assert.equal(table.length, 64);
+test("the table: ten families, 70 calls, each a function", () => {
+  assert.deepEqual(families, ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs"]);
+  assert.equal(table.length, 70);
   for (const spec of table) assert.equal(typeof layerfs[spec.family][spec.call], "function", `${spec.family}.${spec.call}`);
 });
 
@@ -76,4 +76,22 @@ test("a Store, an Init with progress, files, Branches and a folder scope", async
   await assert.rejects(client({ home, scope: { project: "shop/api", folder: "web" } }).file.stat("shop/api", "main", "/web"), /canonical/);
   rmSync(home, { recursive: true, force: true });
   rmSync(folder, { recursive: true, force: true });
+});
+
+test("the call log names the client node and takes log_tag with any call (#659)", async () => {
+  const home = temp("logs");
+  const lfs = client({ home });
+  await lfs.store.create("shop");
+  await lfs.store.list({ log_tag: "dsh:s1:r1" });
+  await assert.rejects(lfs.store.get("nope", { log_tag: "dsh:s1:r2" }), LayerFSError);
+  const page = await lfs.logs.list({ tag: "dsh:s1:" });
+  assert.equal(page.has_more, false);
+  assert.deepEqual(page.lines.map((l) => [l.client, l.argv, l.outcome, l.tag]), [
+    ["node", ["store", "get", "nope"], "NotFound", "dsh:s1:r2"],
+    ["node", ["store", "list"], "ok", "dsh:s1:r1"],
+  ]);
+  const reset = await lfs.logs.reset();
+  assert.deepEqual(reset, { kind: "Reset", removed: 3 });
+  assert.deepEqual((await lfs.logs.list()).lines, []);
+  rmSync(home, { recursive: true, force: true });
 });

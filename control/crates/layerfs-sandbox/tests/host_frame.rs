@@ -74,6 +74,7 @@ fn a_frame_reads_back_to_its_request() {
             held: None,
         },
         Call::ListWorkspaces { path: None },
+        Call::Capacity,
         Call::Mount {
             branch: Some("dev".to_owned()),
             name: Some("w2".to_owned()),
