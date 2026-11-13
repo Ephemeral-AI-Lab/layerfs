@@ -332,31 +332,33 @@ implement around them without a choice.
 
 ### 5.1 PostgreSQL: rebuild-and-swap vs in-place row deletion
 
-The spec's §7.3 (`LayerFS-GC-spec.md`) describes row deletion order —
+The spec's §7.3 used to describe row deletion order —
 
 > "Deletion order: delete references first (`object_location` etc.), then payload; the
-> intermediate state is `backend_reusable`, reported separately." — §7.3
+> intermediate state is `backend_reusable`, reported separately."
 
 — which is **in-place deletion**, while R1-E builds a replacement schema, copies
-retained rows and swaps names. The swap path never deletes an object row, so
-there is no "references first, payload second" intermediate state, and
-`backend_reusable` on PostgreSQL would be unobservable (it would have to report
-0, with `physical_shrink` carrying the whole story).
+retained rows and swaps names. **That passage is gone as of 2026-11-13:** §7.3 now
+carries a CLOSED marker instead, because the swap path never deletes an object row,
+so there is no "references first, payload second" intermediate state and
+`backend_reusable` on PostgreSQL is unobservable (it reports 0, with
+`physical_shrink` carrying the whole story).
 
-Two coherent readings, one of which must be chosen:
+Two coherent readings were put to the owner, and **(a) was chosen**:
 
 - **(a) PostgreSQL compacts by replacement + rename** (consistent with R1-E).
   §7.3's delete-order bullet is removed, `backend_reusable` reports 0 for
   PostgreSQL with the reason stated, and physical reclamation is measured as the
   `pg_relation_size` / `pg_total_relation_size` delta after `DROP SCHEMA`.
-- **(b) PostgreSQL keeps an in-place deletion path** in addition. §7.3 stands,
+- **(b) PostgreSQL keeps an in-place deletion path** in addition — **not adopted (2026-11-13)**. §7.3 stands,
   but it is a second compact entry point with its own admission, its own
   interruption semantics and its own report, distinct from the R1-E swap.
 
-Consequence for C3: §5 C3 names "(PostgreSQL, future online GC)", i.e. it assumes
-PostgreSQL deletes rows. Under (a) C3 binds only a future online sweep and is a
-forward-looking contract; under (b) it becomes a v2 deliverable. The C3 sign-off
-request carries this as its "scope question" box.
+Consequence for C3, and it is settled: §5 C3 names "(PostgreSQL, future online GC)",
+and under the chosen reading (a) it binds only a future online sweep — a
+**forward-looking contract with no caller in 2.0.0** (decided 2026-11-13,
+layerfs-project#42 item 9). Under the unadopted (b) it would have become a v2
+deliverable.
 
 ### 5.1a Why in-place deletion was ruled out (restored)
 
