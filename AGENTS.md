@@ -328,8 +328,6 @@ remain binding; moving them out of this file does not weaken them.
   [the cleanup script](docs/general/cleanup.md) are optional local tools. Disk
   thresholds, check cadence and standing cleanup authorization depend on the
   machine; they belong in the user's own agent instructions, not in this file.
-  See [Run a task in a LayerFS workspace](#run-a-task-in-a-layerfs-workspace-not-in-a-fresh-worktree)
-  for when a checkout is materialized at all.
 - Independent E2E runs own their writable Stores, SDK homes, containers and
   traces. Preserve a test's intentional multi-daemon shared Store.
 - Preserve unrelated work. Build the current core implementation, not legacy
@@ -390,68 +388,6 @@ remain binding; moving them out of this file does not weaken them.
   nothing runs before one.
 - Update affected source architecture/API documentation with implementation
   changes. Keep proposal, research, implemented and measured claims distinct.
-
-### Run a task in a LayerFS workspace, not in a fresh worktree
-
-A task's working copy belongs in a **LayerFS workspace**: fork a Branch, then
-`workspace mount` -> `exec` -> `commit` -> `unmount`. The Branch carries the
-task's identity and history; the workspace is disposable, and unmounting it ends
-the task's footprint. That is the product's own mechanism, so using it is also
-the cheapest way to find out what is wrong with it.
-
-A bare `git worktree add` does the same job at a per-task cost. Every checkout
-materializes its own `target/`, so the build cache is paid per task rather than
-per repository. Measured on the owner's machine on 2026-11-12: **28 checkouts of
-this repository held 95 GB of `target/` between them**, 5-18 GB each, while their
-sources plus `.git` came to about 5 GB in total. Removing 23 checkouts and their
-build caches recovered 92.8 GB; one of them was 18 GB on its own. None of that
-space was repository content.
-
-Where a host-side checkout is genuinely required (Docker E2E that must run from a
-real directory), create it through [tools/worktree.py](tools/worktree.py) so the
-launcher assigns its reusable build resources, and release it under the
-[cleanup policy](docs/general/cleanup.md) once the task's pull request is merged
-or closed. An unregistered worktree is what duplicates a `target/` and then gets
-forgotten: it survives its pull request, still holding the cache, still checked
-out to a branch nobody remembers.
-
-Before any checkout is removed, inspect it: `git status` and `git log -1` first,
-preserve or push anything uncommitted or unpushed, and record what was rescued.
-Then check what points at it. A checkout can be referenced from outside the
-repository — a symlink in another project, a launcher registration, an editor
-workspace — and removing it breaks that reference silently, hours later, in a
-different tool. Measured the hard way on 2026-11-12: removing a checkout that
-another project symlinked as its source tree took that project's CLI down with
-`Cannot find module`; restoring the checkout was not enough, because the
-checkout's `node_modules` links had gone with it.
-
-### Destructive cleanup: check what depends on it first
-
-Bulk deletion is the one operation that turns a local convenience into a lost
-artifact, because the thing removed is usually the thing nothing references. Two
-checks before `docker image prune -a`, `docker volume prune -a`, `cargo clean`
-across checkouts, or any `rm -rf` sweep:
-
-- **What depends on it.** An image, a checkout or a directory can be pinned by a
-  decision record, a launcher registration, a sealed bundle, or a symlink from
-  another project. `docker image prune -a` deletes by definition the images no
-  container references — which is exactly the set that includes deliberately kept,
-  local-only images that cannot be pulled back.
-- **What the owner decided.** `core/docs/issues/*/DECISIONS.md` records which
-  images, profiles and artifacts are held on purpose. Read the one that names the
-  thing before deleting it.
-
-Measured cost of skipping both, 2026-11-12: `docker image prune -a` removed the
-O36 default Sandbox image (`layerfs-352-runtime:node24-https-apt-20261024`,
-`sha256:afa1ef9c…`), which is local-only by decision and referenced by no
-container. It had to be rebuilt from `dsh/tools/runtime/Dockerfile`, which
-produced a different digest; every pin to the old one has to be re-pinned, and the
-record now carries the correction and the guard. Bare `docker image prune`
-(dangling only) never had this problem.
-
-When a cleanup does remove something named in a record, amend that record in the
-same change: what was removed, why it was removable, how it was restored, and the
-new digest if it differs.
 
 ### Production LOC comparison for every commit
 
