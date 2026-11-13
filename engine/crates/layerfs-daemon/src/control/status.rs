@@ -49,7 +49,7 @@ impl Service {
         };
         let observed = self.job(
             workspace.route(),
-            |job_client: &crate::OwnerClient, job_route| job_client.state(job_route),
+            |job_client: &crate::OwnerClient, job_route| job_client.observe_state(job_route),
         );
         let (local, observation_failure) = match observed {
             Ok(state) => (

@@ -1,8 +1,9 @@
 //! A terminal unmount does not run the reclamation a Commit left queued
 //! (#679): those rows live in the Workspace's own overlay file, which close
-//! deletes as a whole. Before the fix the unmount's dirty check was the first
-//! job after the Commit and drained the whole queue before answering. A
-//! maintenance hold that ends gives the queue back to the next job.
+//! deletes as a whole. Before the fix the Sandbox's Status probe, or else the
+//! unmount's dirty check, was the first job after the Commit and drained the
+//! whole queue before answering. A maintenance hold that ends gives the queue
+//! back to the next job.
 //! Counted from the owner's maintenance totals; nothing is timed.
 #[path = "../../layerfs-store-service/tests/support/installed_store.rs"]
 #[allow(dead_code)]
@@ -135,6 +136,24 @@ fn an_unmount_after_a_commit_runs_none_of_its_reclamation() {
     let fixture = fixture("unmount-reclaim");
     let token = committed(&fixture, 81);
     let answered = fixture.maintenance();
+    // A Sandbox probes every Workspace's Status before it sends the unmount:
+    // an observation, which leaves the queue to `reclaim`.
+    let status = fixture
+        .service
+        .execute_control(&Request::Status(token))
+        .unwrap();
+    assert!(
+        matches!(status.reply, Reply::Status(_)),
+        "{:?}",
+        status.reply
+    );
+    assert!(status.observation_failure.is_none());
+    drop(status);
+    assert_eq!(
+        fixture.maintenance(),
+        answered,
+        "the Status probe ran queued reclamation (jobs, rows)"
+    );
     // The checked unmount: its dirty check is the first job after the Commit.
     let closed = fixture
         .service

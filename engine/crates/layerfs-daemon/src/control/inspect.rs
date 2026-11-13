@@ -43,7 +43,10 @@ impl Service {
             .into_iter()
             .map(|(workspace, binding, state, kernel)| {
                 let route = workspace.route();
-                let observed = self.job(route, |client, route| client.state(route)).ok();
+                // An observation: it leaves queued maintenance queued (#679).
+                let observed = self
+                    .job(route, |client, route| client.observe_state(route))
+                    .ok();
                 let pending = matches!(workspace.pending_conflicts(), Ok(Some(_)));
                 WorkspaceView {
                     workspace: layerfs_store_service::history::lookup::hex(
