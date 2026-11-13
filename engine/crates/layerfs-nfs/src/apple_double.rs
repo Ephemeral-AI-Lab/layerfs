@@ -44,25 +44,25 @@
 //! live companions still remain does `CREATE` answer `NFS3ERR_NOSPC`.
 use crate::{
     apple_double_codec::Image,
-    apple_double_spill::{
-        create_spilled, io_status, now, spill_path, touch, unlink_paths, Edit, Room,
-    },
+    apple_double_spill::{io_status, now, spill_path, touch, unlink_paths, Edit},
     attributes::Status,
     change::{How, Sattr, Tickets, Wcc},
     kernel::Kernel,
 };
 use layerfs_content::{filesystem::attributes::PortableMetadata, object::inode_leaf::InodeKind};
-use layerfs_mount_ports::operations::write::Stamp;
 use layerfs_workspace::ViewStat;
 use std::{
-    collections::{HashMap, HashSet},
-    fs::{self, File, OpenOptions},
-    io,
-    os::unix::fs::FileExt,
+    collections::HashMap,
+    fs,
     path::{Path, PathBuf},
-    sync::atomic::Ordering,
+    sync::{
+        atomic::Ordering,
+        Arc, Mutex,
+    },
     time::{Duration, Instant},
 };
+
+mod edit;
 
 /// The first serial of the export's own companions, far above any serial the
 /// engine allocates.
@@ -104,6 +104,11 @@ struct Companion {
     body: Body,
     metadata: PortableMetadata,
     used: u64,
+    /// One edit of this companion at a time: its body's bytes, its length and
+    /// its spilled file change together, so a truncate and a write can never
+    /// leave a length its file does not have, and no round has to decide
+    /// again on a body another call changed under it.
+    editing: Arc<Mutex<()>>,
 }
 impl Companion {
     fn resident_len(&self) -> usize {
@@ -281,20 +286,25 @@ impl Companions {
     /// parses back to the same bytes and the decoded budget takes it. A
     /// companion whose main file the export does not know is never a whole
     /// image: it keeps the client's bytes as written and a slot of the index
-    /// bound. `file` must be detached from the index.
+    /// bound, so that bound and orphan reclamation still reach it. `file` must
+    /// be detached from the index.
     fn classify(&self, file: &mut Companion) {
         if file.inode.is_none() {
-            let decoded = match &file.body {
-                Body::Decoded(image) => Some(image.encode()),
-                Body::Resident(_) | Body::Spilled => None,
-            };
-            if let Some(bytes) = decoded {
-                file.body = Body::Resident(bytes);
+            // Only a decoded body has to become bytes again; a body on disk
+            // keeps its file and takes a slot.
+            if let Body::Decoded(image) = &file.body {
+                file.body = Body::Resident(image.encode());
             }
             file.whole = false;
             return;
         }
-        file.whole = matches!(file.body, Body::Decoded(_));
+        // A body on disk cannot be decoded here (that reads its file under
+        // this lock): it keeps the class the write that spilled it left it.
+        file.whole = match &file.body {
+            Body::Decoded(_) => true,
+            Body::Spilled => file.whole,
+            Body::Resident(_) => false,
+        };
         let Body::Resident(bytes) = &file.body else {
             return;
         };
@@ -317,14 +327,16 @@ impl Companions {
     }
     /// Renames the temporary file `temp`, which holds `serial`'s body of `len`
     /// bytes, to the companion's own name in the spill directory and switches
-    /// the companion to it, when nothing touched it since `used` was read and
-    /// its body is still in memory (resident or decoded). A body another call
-    /// changed or already spilled stays: `Ok(false)` then, and `temp` is the
-    /// caller's to unlink.
+    /// the companion to it. With `used`, the tick the snapshot was read at,
+    /// only a companion nothing touched since and whose body is still in memory
+    /// (resident or decoded) takes it: a body another call changed or already
+    /// spilled stays, `Ok(false)` then, and `temp` is the caller's to unlink.
+    /// `None` is an edit's own body written out while it holds the companion's
+    /// edit gate, so no other edit can have changed it.
     fn adopt_spilled(
         &mut self,
         serial: u64,
-        used: u64,
+        used: Option<u64>,
         temp: &Path,
         len: usize,
     ) -> Result<bool, Status> {
@@ -336,8 +348,10 @@ impl Companions {
         let Some(file) = self.files.get_mut(&serial) else {
             return Err(Status::Stale);
         };
-        if !spill_applies(used, file.used, !matches!(file.body, Body::Spilled)) {
-            return Ok(false);
+        if let Some(used) = used {
+            if !spill_applies(used, file.used, !matches!(file.body, Body::Spilled)) {
+                return Ok(false);
+            }
         }
         fs::rename(temp, path).map_err(|e| io_status(&e))?;
         let mut file = self.detach(serial).ok_or(Status::Stale)?;
@@ -358,33 +372,6 @@ impl Companions {
             })
             .min_by_key(|(_, file)| file.used)
             .map(|(serial, _)| *serial)
-    }
-    /// Reclaims companions whose main inode is not in `live_serials`, or whose
-    /// main file `(parent, name)` is not in `live_names` when the export never
-    /// knew its inode. Returns any spilled file paths to unlink outside the
-    /// lock.
-    fn reclaim_orphans(
-        &mut self,
-        live_names: &HashSet<Named>,
-        live_serials: &HashSet<u64>,
-    ) -> Vec<PathBuf> {
-        let orphans: Vec<u64> = self
-            .files
-            .iter()
-            .filter(|(_, file)| match file.inode {
-                Some(inode) => !live_serials.contains(&inode),
-                None => {
-                    let (parent, ref name) = file.named;
-                    name.strip_prefix(b"._")
-                        .is_some_and(|main| !live_names.contains(&(parent, main.to_vec())))
-                }
-            })
-            .map(|(serial, _)| *serial)
-            .collect();
-        orphans
-            .into_iter()
-            .filter_map(|serial| self.take_serial(serial))
-            .collect()
     }
     fn holding(&self) -> Holding {
         Holding {
@@ -445,71 +432,30 @@ impl Kernel {
         let main = name.strip_prefix(b"._").filter(|main| !main.is_empty())?;
         self.table().by_name.get(&(parent, main.to_vec())).copied()
     }
-    /// Spills the least recently used resident companions to disk (outside the
-    /// companion lock) until adding `need` bytes stays within `resident_budget`.
-    /// Returns `true` if `need` fits in resident memory afterwards.
-    fn spill_for(&self, target: u64, need: usize) -> Result<bool, Status> {
-        loop {
-            let victim = {
-                let companions = self.companions();
-                let fits = companions.resident_bytes + need <= companions.resident_budget;
-                if fits {
-                    return Ok(true);
-                }
-                companions.oldest_resident(Some(target))
-            };
-            let Some(victim) = victim else {
-                return Ok(false);
-            };
-            // A victim another call changed meanwhile leaves the next round to
-            // pick again; only a disk failure ends the loop.
-            let _ = self.spill_one(victim, None)?;
-        }
-    }
-    /// Writes `serial`'s body out to the spill directory and switches it to
-    /// that file, keeping at least `keep` bytes (all of them when `None`),
-    /// with the disk I/O outside the companion lock. `Ok(false)` when another
-    /// call changed the companion, or already spilled it, while the file was
-    /// written: that temporary file is dropped and the caller decides again on
-    /// the body it now finds.
-    fn spill_one(&self, serial: u64, keep: Option<usize>) -> Result<bool, Status> {
-        let (dir, bytes, size, used) = {
-            let companions = self.companions();
-            let file = companions.files.get(&serial).ok_or(Status::Stale)?;
-            let bytes = match &file.body {
-                Body::Resident(bytes) => bytes.clone(),
-                Body::Decoded(image) => image.encode(),
-                Body::Spilled => return Ok(true),
-            };
-            let dir = companions.spill_dir.clone().ok_or(Status::NoSpc)?;
-            let size = keep.unwrap_or(0).max(bytes.len());
-            (dir, bytes, size, file.used)
-        };
-        let temp = create_spilled(&dir, serial, &bytes, size as u64)?;
-        let adopted = self.companions().adopt_spilled(serial, used, &temp, size);
-        if matches!(adopted, Ok(true)) {
-            return Ok(true);
-        }
-        unlink_paths([temp]);
-        adopted.map(|_| false)
-    }
-    /// The spill directory's file of `serial`, opened for one operation and
-    /// closed again when the returned descriptor drops: the export holds no
-    /// descriptor per spilled companion. A file or directory that is gone
-    /// means the companion itself is gone.
-    fn spill_file(&self, serial: u64, write: bool) -> Result<File, Status> {
-        let dir = {
-            let companions = self.companions();
-            companions.spill_dir.clone().ok_or(Status::Stale)?
-        };
-        OpenOptions::new()
-            .read(true)
-            .write(write)
-            .open(spill_path(&dir, serial))
-            .map_err(|e| match e.kind() {
-                io::ErrorKind::NotFound => Status::Stale,
-                _ => io_status(&e),
+    /// The companions no name reaches any more: one whose main inode holds no
+    /// name in the kernel table, and one whose main file the export never
+    /// observed and does not know now. Taken under the kernel table lock and,
+    /// inside it, the companion lock, so nothing here copies the namespace;
+    /// the caller drops them by serial under the companion lock again.
+    fn orphans(&self) -> Vec<(u64, Option<u64>)> {
+        let table = self.table();
+        let companions = self.companions();
+        companions
+            .files
+            .iter()
+            .filter(|(_, file)| file.slotted())
+            .filter_map(|(serial, file)| {
+                let live = match file.inode {
+                    Some(inode) => {
+                        table.names.contains_key(&inode) || table.aliases.contains_key(&inode)
+                    }
+                    None => file.named.1.strip_prefix(b"._").is_some_and(|main| {
+                        table.by_name.contains_key(&(file.named.0, main.to_vec()))
+                    }),
+                };
+                (!live).then_some((*serial, file.inode))
             })
+            .collect()
     }
     /// GETATTR of a companion serial.
     pub(crate) fn companion_stat(&self, serial: u64) -> Result<ViewStat, Status> {
@@ -543,23 +489,6 @@ impl Kernel {
         }
         let main = self.main_of(parent, name);
         let mut companions = self.companions();
-        // Never acquire the kernel table under the companion lock. If the
-        // index bound is reached, snapshot the live names and inodes first,
-        // then recheck everything under one lock.
-        let live = if companions.slotted >= companions.held_limit {
-            drop(companions);
-            let live = {
-                let table = self.table();
-                (
-                    table.by_name.keys().cloned().collect::<HashSet<_>>(),
-                    table.by_name.values().copied().collect::<HashSet<_>>(),
-                )
-            };
-            companions = self.companions();
-            Some(live)
-        } else {
-            None
-        };
         let named = (parent, name.to_vec());
         if let Some(serial) = companions.resolve(&named, main) {
             let stat = Companions::stat(serial, &companions.files[&serial]);
@@ -582,10 +511,24 @@ impl Kernel {
                 None => Ok((stat, directory)),
             };
         }
-        let reclaimed = match (&live, companions.slotted >= companions.held_limit) {
-            (Some((names, serials)), true) => companions.reclaim_orphans(names, serials),
-            _ => Vec::new(),
-        };
+        // At the index bound, reclaim the companions no name reaches any more
+        // first: found under the kernel table and the companion index, one
+        // entry at a time, so nothing here copies the namespace.
+        let mut reclaimed = Vec::new();
+        if companions.slotted >= companions.held_limit {
+            drop(companions);
+            let orphans = self.orphans();
+            companions = self.companions();
+            for (serial, inode) in orphans {
+                let still_orphan = companions
+                    .files
+                    .get(&serial)
+                    .is_some_and(|file| file.inode == inode && file.slotted());
+                if still_orphan {
+                    reclaimed.extend(companions.take_serial(serial));
+                }
+            }
+        }
         if companions.slotted >= companions.held_limit {
             let held = companions.slotted;
             let limit = companions.held_limit;
@@ -624,6 +567,7 @@ impl Kernel {
             body: Body::Resident(Vec::new()),
             metadata,
             used,
+            editing: Arc::new(Mutex::new(())),
         };
         let stat = Companions::stat(serial, &file);
         companions.index(serial, &file);
@@ -721,231 +665,17 @@ impl Kernel {
             file.named = target;
             file.inode = to_main;
             file.used = tick;
-            // A client may write a companion under another name first.
-            if matches!(file.body, Body::Resident(_) | Body::Decoded(_)) {
-                companions.classify(&mut file);
-            }
+            // A client may write a companion under another name first, and a
+            // name it moves onto may belong to another main inode, or to
+            // none: the body is classified again under the destination, so
+            // one whose main file is unknown takes its slot and none keeps a
+            // whole image's exemption.
+            companions.classify(&mut file);
             companions.index(serial, &file);
             companions.attach(serial, file);
         }
         unlink_paths(replaced_path);
         Some(Ok(()))
-    }
-    /// READ of a companion, at most `count` bytes from `offset`, appended to
-    /// `out`; `eof` when the reply reaches the companion's end.
-    pub(crate) fn companion_read(
-        &self,
-        serial: u64,
-        offset: u64,
-        count: u32,
-        out: &mut Vec<u8>,
-    ) -> Result<bool, Status> {
-        let (spilled, length, start, end) = {
-            let mut companions = self.companions();
-            let file = companions.files.get(&serial).ok_or(Status::Stale)?;
-            let length = file.len as u64;
-            let start = offset.min(length) as usize;
-            let end = offset.saturating_add(u64::from(count)).min(length) as usize;
-            let spilled = match &file.body {
-                Body::Resident(bytes) => {
-                    // A body and its length are recorded under one lock; clamp
-                    // anyway so no reply slices past the bytes it holds.
-                    let stop = end.min(bytes.len());
-                    out.extend_from_slice(bytes.get(start..stop).unwrap_or_default());
-                    false
-                }
-                Body::Decoded(image) => {
-                    // The image the client wrote, synthesized again.
-                    let bytes = image.encode();
-                    let stop = end.min(bytes.len());
-                    out.extend_from_slice(bytes.get(start..stop).unwrap_or_default());
-                    false
-                }
-                Body::Spilled => true,
-            };
-            companions.use_serial(serial);
-            (spilled, length, start, end)
-        };
-        if spilled {
-            let mut buf = vec![0u8; end - start];
-            self.spill_file(serial, false)?
-                .read_exact_at(&mut buf, start as u64)
-                .map_err(|e| io_status(&e))?;
-            out.extend_from_slice(&buf);
-        }
-        Ok(end as u64 >= length)
-    }
-    /// WRITE to a companion: all of it or nothing.
-    pub(crate) fn companion_write(
-        &self,
-        serial: u64,
-        offset: u64,
-        data: &[u8],
-    ) -> Result<(u32, Wcc), Status> {
-        let end = offset.checked_add(data.len() as u64).ok_or(Status::FBig)?;
-        if end > FILE_BYTES {
-            return Err(Status::FBig);
-        }
-        let before = self.companion_stat(serial)?;
-        let after = self.edit_companion(
-            serial,
-            Edit::Write {
-                offset: offset as usize,
-                data,
-            },
-        )?;
-        Ok((data.len() as u32, (Some(before), Some(after))))
-    }
-    /// Applies `edit` to `serial` and answers its stat afterwards: in the
-    /// resident body while the budget holds it, else in its spilled file
-    /// outside the companion lock.
-    fn edit_companion(&self, serial: u64, edit: Edit<'_>) -> Result<ViewStat, Status> {
-        let target = edit.target_len();
-        // A round ends in the body, or in another call having changed this
-        // companion while its body was written out, which decides again.
-        for _ in 0..3 {
-            let spilled = match self.edit_resident(serial, target, &edit)? {
-                Room::Resident(stat) => return Ok(stat),
-                Room::Spilled => true,
-                Room::Grow(need) => {
-                    if self.spill_for(serial, need)? {
-                        continue;
-                    }
-                    self.spill_one(serial, Some(target))?
-                }
-            };
-            if spilled {
-                edit.disk(&self.spill_file(serial, true)?)?;
-                return self.record_edit(serial, &edit);
-            }
-        }
-        // Only other calls changing this companion in every round get here.
-        Err(Status::Io)
-    }
-    /// Applies `edit` to `serial`'s body in memory while the budget holds it
-    /// (a decoded body is encoded first), recording its length, recency and
-    /// time and deciding again whether it is a whole image, under the same
-    /// lock, so no other call ever sees a body and a length that disagree.
-    fn edit_resident(&self, serial: u64, target: usize, edit: &Edit<'_>) -> Result<Room, Status> {
-        let mut companions = self.companions();
-        let avail = companions
-            .resident_budget
-            .saturating_sub(companions.resident_bytes);
-        let file = companions.files.get(&serial).ok_or(Status::Stale)?;
-        let need = match &file.body {
-            Body::Spilled => return Ok(Room::Spilled),
-            Body::Resident(bytes) => target.saturating_sub(bytes.len()),
-            Body::Decoded(image) => edited_len(edit, image.len()),
-        };
-        if need > avail {
-            // The body does not fit the resident budget, but the edit may
-            // complete a whole image, whose decoded form costs its attributes
-            // and no body budget. Only a body small enough to decode is tried.
-            if target > DECODED_ENTRY_BYTES + crate::apple_double_codec::IMAGE_UNIT {
-                return Ok(Room::Grow(need));
-            }
-            let mut bytes = match &file.body {
-                Body::Resident(bytes) => bytes.clone(),
-                Body::Decoded(image) => image.encode(),
-                Body::Spilled => return Ok(Room::Spilled),
-            };
-            let len = edited_len(edit, file.len);
-            edit.memory(&mut bytes);
-            if companions.keep_decoded(serial, &bytes, len) {
-                let stat = companions
-                    .files
-                    .get(&serial)
-                    .map(|file| Companions::stat(serial, file));
-                if let Some(stat) = stat {
-                    return Ok(Room::Resident(stat));
-                }
-            }
-            return Ok(Room::Grow(need));
-        }
-        let tick = companions.tick();
-        let mut file = companions.detach(serial).ok_or(Status::Stale)?;
-        let mut bytes = match std::mem::replace(&mut file.body, Body::Spilled) {
-            Body::Resident(bytes) => bytes,
-            Body::Decoded(image) => image.encode(),
-            Body::Spilled => {
-                companions.attach(serial, file);
-                return Ok(Room::Spilled);
-            }
-        };
-        edit.memory(&mut bytes);
-        file.body = Body::Resident(bytes);
-        record(edit, &mut file);
-        touch(&mut file.metadata);
-        file.used = tick;
-        companions.classify(&mut file);
-        let stat = Companions::stat(serial, &file);
-        companions.attach(serial, file);
-        Ok(Room::Resident(stat))
-    }
-    /// Records an edit applied to `serial`'s spilled file and answers its
-    /// stat. A body changed on disk is no longer known to be a whole image.
-    fn record_edit(&self, serial: u64, edit: &Edit<'_>) -> Result<ViewStat, Status> {
-        let mut companions = self.companions();
-        let tick = companions.tick();
-        let mut file = companions.detach(serial).ok_or(Status::Stale)?;
-        record(edit, &mut file);
-        file.used = tick;
-        file.whole = false;
-        touch(&mut file.metadata);
-        let stat = Companions::stat(serial, &file);
-        companions.attach(serial, file);
-        Ok(stat)
-    }
-    /// SETATTR of a companion: mode, size and modification time; the
-    /// owner is the export's identity, as for every inode.
-    pub(crate) fn companion_setattr(
-        &self,
-        serial: u64,
-        sattr: Sattr,
-        guard: Option<(u32, u32)>,
-        _tickets: &mut Tickets,
-    ) -> Result<(ViewStat, Wcc), Status> {
-        let identity = self.identity();
-        if sattr.uid.is_some_and(|uid| uid != identity.uid)
-            || sattr.gid.is_some_and(|gid| gid != identity.gid)
-        {
-            return Err(Status::Perm);
-        }
-        let before = {
-            let companions = self.companions();
-            let file = companions.files.get(&serial).ok_or(Status::Stale)?;
-            let before = Companions::stat(serial, file);
-            if let Some(expected) = guard {
-                if crate::attributes::ctime(&before) != expected {
-                    return Err(Status::NotSync);
-                }
-            }
-            before
-        };
-        if let Some(size) = sattr.size {
-            if size > FILE_BYTES {
-                return Err(Status::FBig);
-            }
-            self.edit_companion(serial, Edit::Size(size as usize))?;
-        }
-        let mut companions = self.companions();
-        let tick = companions.tick();
-        let file = companions.files.get_mut(&serial).ok_or(Status::Stale)?;
-        file.used = tick;
-        if let Some(mode) = sattr.mode {
-            file.metadata.mode = mode & 0o777;
-        }
-        match sattr.mtime {
-            Some(Stamp::At(time)) => {
-                file.metadata.mtime_seconds = time.seconds;
-                file.metadata.mtime_nanoseconds = time.nanoseconds;
-            }
-            Some(Stamp::Processing) => touch(&mut file.metadata),
-            None if sattr.size.is_some() => touch(&mut file.metadata),
-            None => {}
-        }
-        let after = Companions::stat(serial, file);
-        Ok((after.clone(), (Some(before), Some(after))))
     }
     /// Drops every companion and removes the export's spill directory; returns
     /// what the index held.

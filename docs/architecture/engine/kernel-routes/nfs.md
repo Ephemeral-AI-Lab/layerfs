@@ -233,7 +233,12 @@ a body that becomes one of those being written back out as the client's own
 bytes. A companion that is a whole image takes no slot of `HELD`, which is what
 keeps a large tree's attribute copies from exhausting the index bound; the bound,
 its `NFS3ERR_NOSPC`, its rate-limited log and orphan reclamation remain the
-fallback for everything that is not a whole image. No attribute is dropped:
+fallback for everything that is not a whole image. RENAME of a companion
+classifies its body again under the destination: one moved onto a name whose
+main file the export does not know is never a whole image and takes its slot, so
+no move bypasses the index bound; a body on disk keeps the class the write that
+spilled it left it, since decoding it would read its file under the companion
+lock. No attribute is dropped:
 `com.apple.provenance`, `com.apple.quarantine`, `com.apple.FinderInfo` and user
 attributes are all kept, and nothing here reaches the Store or a Commit.
 
@@ -256,12 +261,22 @@ orphans and inserts a new serial under one companion-lock hold, so concurrent
 GUARDED creates of one name yield one serial and one `NFS3ERR_EXIST`. An
 existing name is still usable when the table is full. `Table::by_name` keeps
 every observed main-file name, including all seen hard-link aliases, rather
-than only the latest name of an inode. Unlink and rename remove known vanished
-names; retiring an inode removes all keys for its serial. Reclamation therefore
-keeps a companion when a second name for its main file was observed. The index
-remains an observation cache: retained names can delay reclamation. Its existing
-`Table::names` admission bound is unchanged; a separate bound on `by_name`
-(alias keys) remains future work. The companion entry limit stays 65,536; NOSPC
+than only the latest name of an inode. Each serial's recalled name is in
+`Table::names` and its other names, its hard-link aliases, in `Table::aliases`
+(serial to names), so unlink, rename and the retirement of an inode drop exactly
+that serial's keys without scanning the index. A name that changes while the
+engine reports one link (nlink 1) is the inode's only name, so the previous key
+is stale and leaves at once; only a hard-linked inode keeps its extra names,
+which is why reclamation keeps a companion when a second name for its main file
+was observed. The index remains an observation cache: retained names can delay
+reclamation. Its existing `Table::names` admission bound is unchanged; a
+separate bound on `by_name` (alias keys) remains future work. Reclamation itself
+never copies the namespace: under the kernel table lock it walks the companion
+index, whose size is the `HELD` bound, and asks, for each companion taking a
+slot, whether its main inode still holds a name (or, for a companion whose main
+file the export never saw, whether its main name is still in `by_name`), then
+drops the orphans it found under the companion lock again. The companion entry
+limit stays 65,536; NOSPC
 reports exhaustion of this export resource, not a permission failure or a
 per-user quota. The first full-table refusal logs immediately, with later logs
 at least 60 seconds apart; every refusal still increments `names_refused`.
@@ -278,9 +293,16 @@ kept for a spilled body: READ, WRITE and SETATTR open `<serial>` for their own
 `pread`/`pwrite`/`set_len` and close it again, so descriptors grow with
 concurrent operations and not with the number of spilled companions, and a
 companion count above the process's own `RLIMIT_NOFILE` still reads and writes.
-An edit records a body's bytes, length, recency tick and time under one lock, so
-no call sees a resident body and a length that disagree, and a reply never
-slices past the bytes it holds. The scratch directory is created `0700` and each
+An edit of one companion runs alone under that companion's own gate, whether it
+changes the resident bytes or the spilled file, and records the body's length
+together with the bytes its own edit left: a truncate and a write of the same
+companion therefore never leave a length the file does not have. A write that
+does not fit the resident budget spills the least recently touched bodies first;
+the rounds are bounded by the index, and a body that still does not fit is
+written out itself (the spilling edit holds the companion's gate, so the file it
+writes is the body it then edits) and edited in its file, which needs no body
+budget, so no edit is answered `NFS3ERR_IO` for contention. A reply never slices
+past the bytes it holds. The scratch directory is created `0700` and each
 spilled file `0600`, set explicitly rather than left to the process umask, so a
 caller embedding this crate without the daemon's `umask(0o077)` still keeps
 companion bytes to its own user. The daemon's startup `reclaim` removes whatever
