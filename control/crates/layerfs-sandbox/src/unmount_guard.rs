@@ -232,10 +232,9 @@ pub fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal> {
     Ok(recoverable)
 }
 pub fn forceable(value: &SdkValue) -> bool {
-    // A completed `Failed` record, forced or not, is the one shape a force
-    // may replace: the daemon's own guard is the real gate on whether force
-    // may proceed, and a refusal answers with the record it holds. A record
-    // that is still `Unmounting` (its caller ended without publishing),
+    // A completed `Failed` record is the one shape a force may replace: the
+    // daemon's own guard is the real gate on whether force may proceed, and a
+    // refusal answers with the record it holds. A record that is still `Unmounting` (its caller ended without publishing),
     // `Unknown` or already `forced` keeps its answer. A record written before
     // this rule (no `forced` field) is answered as it stands and is not
     // forceable.

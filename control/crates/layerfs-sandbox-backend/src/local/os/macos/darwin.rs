@@ -108,7 +108,10 @@ pub(crate) fn force_unmount(point: &Path) -> io::Result<()> {
                 }
             };
             let disposition = match reaped {
-                Some(status) => format!("exit reaped ({status})"),
+                Some(status) => {
+                    RETAINED.record(pid, status);
+                    format!("exit reaped ({status})")
+                }
                 None => {
                     RETAINED.retain(child);
                     "exit not observed after 5s; child custody retained (possible kernel wait)"
