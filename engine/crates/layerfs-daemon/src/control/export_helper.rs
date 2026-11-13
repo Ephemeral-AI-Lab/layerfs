@@ -1,13 +1,11 @@
 //! One bounded NFS client helper attempt, including post-KILL observation.
+use layerfs_bridge::process::Retained;
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use std::{
     io::{self, Read},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -49,9 +47,7 @@ pub(super) enum Ran {
 /// A bounded background reaper reaps their exits and records their status.
 #[derive(Debug, Default)]
 pub(super) struct Helpers {
-    held: Mutex<Vec<Child>>,
-    reaped: Mutex<Vec<(u32, String)>>,
-    reaping: AtomicBool,
+    retained: Retained,
     pub helper_wait: Duration,
     pub reap_wait: Duration,
 }
@@ -64,53 +60,13 @@ impl Helpers {
         })
     }
     pub fn reap(&self) -> bool {
-        let mut held = self.held.lock().unwrap_or_else(|e| e.into_inner());
-        let mut reaped = self.reaped.lock().unwrap_or_else(|e| e.into_inner());
-        held.retain_mut(|child| match child.try_wait() {
-            Ok(Some(s)) => {
-                reaped.push((child.id(), s.to_string()));
-                false
-            }
-            Ok(None) => true,
-            Err(e) => {
-                reaped.push((child.id(), format!("wait error: {e}")));
-                false
-            }
-        });
-        let excess = reaped.len().saturating_sub(64);
-        reaped.drain(..excess);
-        held.is_empty()
+        self.retained.reap()
     }
     pub fn reaped(&self) -> Vec<(u32, String)> {
-        self.reap();
-        self.reaped
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.retained.exits()
     }
     fn retain(self: &Arc<Self>, child: Child) {
-        self.held
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(child);
-        if !self.reaping.swap(true, Ordering::AcqRel) {
-            let queue = self.clone();
-            if std::thread::Builder::new()
-                .name("layerfs-helper-reap".into())
-                .spawn(move || loop {
-                    if queue.reap() {
-                        queue.reaping.store(false, Ordering::Release);
-                        if queue.reap() || queue.reaping.swap(true, Ordering::AcqRel) {
-                            break;
-                        }
-                    }
-                    std::thread::sleep(Duration::from_millis(20));
-                })
-                .is_err()
-            {
-                self.reaping.store(false, Ordering::Release);
-            }
-        }
+        self.retained.retain(child)
     }
     pub fn run(self: &Arc<Self>, helper: &Helper, port: u16, directory: &str) -> Ran {
         self.reap();
@@ -181,10 +137,7 @@ impl Helpers {
                 let pid = child.id();
                 let disposition = match reaped {
                     Some(status) => {
-                        self.reaped
-                            .lock()
-                            .unwrap_or_else(|e| e.into_inner())
-                            .push((pid, status.to_string()));
+                        self.retained.record(pid, status);
                         format!("exit reaped ({status})")
                     }
                     None => {

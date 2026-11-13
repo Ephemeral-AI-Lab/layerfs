@@ -3,15 +3,13 @@
 //! run with a fixed path and the C locale, read once; nothing is retried.
 //! The process facts (`proc_pidinfo`, `sysctl`) are `layerfs_bridge::process`
 //! (layerfs-project#112), below the drivers and the home.
+use layerfs_bridge::process::Retained;
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use std::{
     io::{self, Read},
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Mutex,
-    },
+    process::{Command, Stdio},
+    sync::LazyLock,
     time::{Duration, Instant},
 };
 
@@ -51,18 +49,14 @@ fn mount_point(line: &str) -> Option<PathBuf> {
     Some(PathBuf::from(point))
 }
 
-static RETAINED: Mutex<Vec<Child>> = Mutex::new(Vec::new());
-static REAPING: AtomicBool = AtomicBool::new(false);
-
-fn reap_retained() -> bool {
-    let mut held = RETAINED.lock().unwrap_or_else(|error| error.into_inner());
-    held.retain_mut(|child| !matches!(child.try_wait(), Ok(Some(_)) | Err(_)));
-    held.is_empty()
-}
+/// Children a `umount` KILL did not release. Their exits are reaped by the
+/// shared retained queue ([`layerfs_bridge::process::Retained`]), never by a
+/// second wait here.
+static RETAINED: LazyLock<Retained> = LazyLock::new(Retained::default);
 
 /// Forces the mount at `point` off once; a point no longer mounted is done.
 pub(crate) fn force_unmount(point: &Path) -> io::Result<()> {
-    reap_retained();
+    RETAINED.reap();
     let mut child = Command::new(UMOUNT)
         .arg("-f")
         .arg(point)
@@ -116,26 +110,7 @@ pub(crate) fn force_unmount(point: &Path) -> io::Result<()> {
             let disposition = match reaped {
                 Some(status) => format!("exit reaped ({status})"),
                 None => {
-                    RETAINED
-                        .lock()
-                        .unwrap_or_else(|error| error.into_inner())
-                        .push(child);
-                    if !REAPING.swap(true, Ordering::AcqRel)
-                        && std::thread::Builder::new()
-                            .name("layerfs-darwin-reap".into())
-                            .spawn(|| loop {
-                                if reap_retained() {
-                                    REAPING.store(false, Ordering::Release);
-                                    if reap_retained() || REAPING.swap(true, Ordering::AcqRel) {
-                                        break;
-                                    }
-                                }
-                                std::thread::sleep(Duration::from_millis(20));
-                            })
-                            .is_err()
-                    {
-                        REAPING.store(false, Ordering::Release);
-                    }
+                    RETAINED.retain(child);
                     "exit not observed after 5s; child custody retained (possible kernel wait)"
                         .into()
                 }
