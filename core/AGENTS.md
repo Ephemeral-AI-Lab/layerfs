@@ -21,8 +21,8 @@ Start with the [cluster-one handbook](../docs/general/cluster_one_handbook.md)
 and [CAS/CDC/delta guide](../docs/general/cas_cdc_deltaencoding_handbook.md).
 Preserve canonical compatibility, public ports, source pins and limitations.
 For Workspace integration also read the
-[current design index](docs/issues/303/README.md) and the relevant primary
-contracts. Research and old Stage handoffs do not select new algorithms or
+[architecture guide](../docs/architecture/README.md) and the relevant engine
+topics. Research and old Stage handoffs do not select new algorithms or
 reopen a closed campaign.
 
 ## Construction and completion boundaries

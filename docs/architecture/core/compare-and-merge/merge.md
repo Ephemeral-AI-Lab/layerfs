@@ -1,15 +1,12 @@
 # Merge
 
-[Architecture](../../README.md) › [Core](../README.md) › [Compare and merge](README.md) › Merge
-
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Merging two lines of history into one tree.
+Merging two lines of history into one tree, within [Compare and merge](README.md).
 
 | | |
 | --- | --- |
-| Component | [Compare and merge](README.md) |
-| Source | [`core/crates/layerfs-content/src/merge`](../../../../core/crates/layerfs-content/src/merge) |
+| Source | [`merge/`](../../../../core/crates/layerfs-content/src/merge) |
 
 ## Merge decisions
 
@@ -104,7 +101,7 @@ at the new path. Two record-driven parts handle structure.
 | Moved directory | A directory both sides moved to different places, or moved inside itself, is a `type` conflict and `from`'s move is cancelled. | [`places.rs`](../../../../core/crates/layerfs-content/src/merge/places.rs) `moved` |
 
 Paths are named only where a rule needs one, from `BindingHints` when given,
-else by breadth-first `locate` ([Compare](compare.md#named-and-sorted-comparison)).
+else by breadth-first `locate` ([Compare and merge](README.md#naming-changed-inodes)).
 
 ## Metadata
 
@@ -215,17 +212,11 @@ The engine wires units in [`history/units.rs`](../../../../engine/crates/layerfs
 
 ## Related
 
-- [Compare](compare.md): the comparisons a merge is built on.
+- [Compare and merge](README.md): the comparisons a merge is built on.
 - [Filesystem trees: Updates](../filesystem-trees/updates.md): the backed
   update that builds the merged root.
-- [Files: Construction](../files/construction.md): `construct_bytes` for
-  merged and marker files.
-- [Engine: Commit, publish and merge](../../engine/commit/publish-and-merge.md)
-  and [Engine: Store calls, Branches](../../engine/store-calls/branches.md):
-  the callers.
+- [Files](../files/README.md#construction): `construct_bytes` for merged and
+  marker files.
+- [Engine: Commit](../../engine/commit/README.md) and
+  [Engine: Store calls](../../engine/store-calls/README.md): the callers.
 - [Fork and merge](../../flows/merge.md): the flow across layers.
-- [Glossary](../../glossary.md)
-
----
-
-← [Compare and merge: Compare](compare.md) · [Up: Compare and merge](README.md) · [Core: Physical storage](../physical-storage/README.md) →

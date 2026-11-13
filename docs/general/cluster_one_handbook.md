@@ -3,7 +3,7 @@
 > Status: Current general guide.
 
 Source organization after `32bd3bec0`, 2026-10-05: current source links use the
-owner-selected responsibility folders. [Organization receipt](../../core/docs/issues/307/SOURCE-ORGANIZATION-RECEIPT.md)
+owner-selected responsibility folders. [Organization receipt](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/SOURCE-ORGANIZATION-RECEIPT.md)
 records unchanged APIs/canonical behavior and scoped checks. Earlier product and
 benchmark source pins below retain their original evidence identity.
 
@@ -23,7 +23,7 @@ API documentation correction 2026-10-05, verified at design/source checkpoint
 S5 API addition after `f5558fc22`, 2026-10-05: `construct_runs` accepts a bounded
 `FileRuns` source (`FileRun::Data`, `Zero`, `End`) and returns `RunConstruction`.
 Explicit holes preserve the fresh streamed canonical root while complete zero
-subtrees are reused logarithmically; [implementation and evidence](../../core/docs/architecture/31-payload-streams.md)
+subtrees are reused logarithmically; [implementation and evidence](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/31-payload-streams.md)
 are separately pinned from the older handbook/benchmark source. Storage/Save
 completion rules stay the same. Backed localized editing remains P3/S10.
 
@@ -113,7 +113,7 @@ Sources: [workspace](../../Cargo.toml),
 [content public surface](../../core/crates/layerfs-content/src/lib.rs),
 [storage public surface](../../core/crates/layerfs-storage/src/lib.rs),
 [history contract](../../core/crates/layerfs-history/src/contract/catalog.rs),
-[SQLite implementation round](../../core/docs/issues/302/SQLITE-IMPLEMENTATION-ROUND.md).
+[SQLite implementation round](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/302/SQLITE-IMPLEMENTATION-ROUND.md).
 
 ## 2. Data model: know which root you hold
 
@@ -360,7 +360,7 @@ Save begins with one combined pack/value id reservation. Startup
 Large operations make explicitly counted new block reservations; a refused or
 unknown attempt is never replayed. These windows impose no total Save cap.
 Each producer owns separate Storage/Save state; no unused pack tail is shared
-across Saves. See [allocation semantics](../../core/docs/architecture/63-save-reservation-blocks.md).
+across Saves. See [allocation semantics](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/63-save-reservation-blocks.md).
 
 ### 4.3 Saved candidate to logical Commit
 
@@ -448,8 +448,8 @@ owner-gated implicit snapshot; two-pass path reads keep their explicit transacti
 `dispose` can remove the empty operation record in its final bounded cleanup job.
 Existing adapters derive bindings from entries and report whether explicit release
 remains. The schema, Durable guarantees and cleanup-before-publication rule remain.
-The [work reduction selection](../../core/docs/issues/307/SPACE-AND-SCALING-PLAN-20261006.md#owner-selected-work-reduction-checkpoint)
-and [lifecycle review](../../core/docs/issues/307/A1-ACQUISITION-CONTRACT.md#owner-selected-work-reduction-and-lifecycle-review)
+The [work reduction selection](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/SPACE-AND-SCALING-PLAN-20261006.md#owner-selected-work-reduction-checkpoint)
+and [lifecycle review](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/A1-ACQUISITION-CONTRACT.md#owner-selected-work-reduction-and-lifecycle-review)
 distinguish implemented access changes from compact-schema/publication proposals.
 
 ## 5. Streaming workflow and large-load behavior
@@ -682,7 +682,7 @@ on a shared WAL file is a provisioning fact and cannot be detected at open.
 
 Opening supports schemas1–3 and acquisition variants4–6 without migration.
 Retired PayloadSegments schemas7/10 remain refused; the historical
-[withdrawal](../../core/docs/issues/307/MONOLITHIC-RESTORATION-20261006.md) is unchanged.
+[withdrawal](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/MONOLITHIC-RESTORATION-20261006.md) is unchanged.
 All writes take one `BEGIN IMMEDIATE` with busy timeout zero. A contended begin
 returns typed `PersistenceError::Busy`, `StorageError::Busy` or
 `HistoryError::Busy`, before write effects, with no retry or quarantine. Unknown
@@ -706,7 +706,7 @@ retry. This common Persistence seal applies to all callers/layouts that seal a
 Store, including Project Init and the offline history construction driver.
 It does not run on the live Linux daemon's shared Store. Per-pack preallocation,
 the old allocation owner and public checkpoint remain retired. See the
-[source boundary](../../core/docs/architecture/60-shared-store-foundation.md) and
+[source boundary](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/60-shared-store-foundation.md) and
 [stride1-only plan](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/0.1.7/macos-seal-allocation-stride1-20261007.md).
 
 Owner supersession2026-10-07 selects WAL throughout Init and Commit. The
@@ -715,7 +715,7 @@ withdrawn. The198720291ns Disposable1000 host Init observation is accepted as
 the baseline for its exact measured scope, while its original1.10× comparison
 against retained155291459ns MEMORY evidence remains FAIL (+27.966%). This is
 not a new matched pair or proof that all of the difference was caused by WAL.
-[Decision, identities and limits](../../core/docs/issues/307/PRE-S8-WAL-BASELINE-DECISION-20261007.md)
+[Decision, identities and limits](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/PRE-S8-WAL-BASELINE-DECISION-20261007.md)
 retain the regression, storage delta and independent proof. No second timing
 run or claim about daemon Commit speed accompanies this choice. Overlapping
 producers own separate Storage/Save state over the same Store; Commit does not
@@ -728,7 +728,7 @@ checkpoint/reclamation. Shared Stores must be in a named VM volume or on a local
 container filesystem, never a host-share bind mount. Each daemon's overlay is a
 separate MEMORY/OFF database and receives no global-Store profile change.
 
-The [foundation checkpoint](../../core/docs/issues/307/PRE-S8-F1-F4-20261007.md) owns
+The [foundation checkpoint](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/PRE-S8-F1-F4-20261007.md) owns
 functional evidence and remaining integration work. Durable builds but new Durable
 execution is NOT_RUN — deferred by owner for Disposable-only development. All
 historical timing/storage failures below retain their original mechanisms,
@@ -774,7 +774,7 @@ Init uses Monolithic layout and four construction workers. Proof checks every
 path/kind/directory metadata and deterministic selected full file metadata/content;
 it is not an exhaustive reread of every payload byte. Roots match references.
 
-Evidence: [full Init report](../../core/docs/issues/302/SQLITE-SHARED-ALLOCATION-20261005.md),
+Evidence: [full Init report](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/302/SQLITE-SHARED-ALLOCATION-20261005.md),
 [compact receipts](https://github.com/Ephemeral-AI-Lab/layerfs/tree/792715f00a2dbfcf0cb8435ae84862cce972dc90/core/docs/issues/302/checks/shared-allocation1).
 
 ### 9.2 History stride 10 → 3 → 1
@@ -826,8 +826,8 @@ cursor/cache improvements. Native Init writes a fresh namespace and exercises a
 different write-heavy Monolithic path. Durable history competitiveness therefore
 does not imply Durable Init has passed its speed gate.
 
-Evidence: [opportunity-loop results](../../core/docs/issues/302/SQLITE-OPPORTUNITY-LOOP-20261005.md),
-[owner closure results](../../core/docs/issues/302/SQLITE-OWNER-CLOSURE-RESULTS-20261005.md).
+Evidence: [opportunity-loop results](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/302/SQLITE-OPPORTUNITY-LOOP-20261005.md),
+[owner closure results](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/302/SQLITE-OWNER-CLOSURE-RESULTS-20261005.md).
 
 ### 9.3 Rejected follow-up and remaining qualification
 
@@ -839,7 +839,7 @@ at `8cbeadef0`; the other seven experimental Init cells are NOT_RUN. This failed
 experiment must not replace the retained family or be hidden as a successful
 optimization.
 
-[Durable write-cause report](../../core/docs/issues/302/SQLITE-DURABLE-WRITE-CAUSE-20261005.md)
+[Durable write-cause report](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/302/SQLITE-DURABLE-WRITE-CAUSE-20261005.md)
 contains the evidence and withdrawal. Issue #302 is closed / NOT_PLANNED; closure
 is not a claim that Durable Init satisfies its retained speed ceiling or that
 PostgreSQL/MinIO integration is complete.
@@ -867,7 +867,7 @@ with its actual identity/status rather than editing historical receipts. Follow
 ### Restored Monolithic regression checkpoint, 2026-10-06
 
 The live S7/S9 product is restored to9b74ac035 behavior at7878bbbb4; the
-payload experiment is withdrawn. The [full eight-case same-profile comparison](../../core/docs/issues/307/CLUSTER-ONE-END-REGRESSION-RESULTS-20261006.md)
+payload experiment is withdrawn. The [full eight-case same-profile comparison](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/CLUSTER-ONE-END-REGRESSION-RESULTS-20261006.md)
 uses original197d2fb7d public Project observations as cluster-one-end controls,
 not the earlier Service rows in the historical table above. Five latency screens
 pass; all eight strict allocation comparisons and joint gates fail. Correctness,
@@ -884,7 +884,7 @@ is retained, including all gate failures. The prospective final source uses
 space-scaling-v2 cases with identical inputs, cold state,30/19s caps and gates.
 
 
-The final measured [space/scaling checkpoint](../../core/docs/issues/307/SPACE-AND-SCALING-RESULTS-20261006.md) retains zero free-page
+The final measured [space/scaling checkpoint](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/SPACE-AND-SCALING-RESULTS-20261006.md) retains zero free-page
 debt and empty acquisition tables in all final Stores. Three of eight latency
 screens pass; zero strict allocation/joint screens pass. Matched public-reference
 counts attribute essentially all extra VM work to acquisition, with immutable

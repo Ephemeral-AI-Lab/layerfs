@@ -1,9 +1,0 @@
-1793691177.065927 begin push pu-verify docker point=verify pid=41215
-1793691177.066824 progress {"phase": "check", "done": null, "total": null}
-1793691177.076136 progress {"phase": "snapshot", "done": null, "total": null}
-1793691177.477900 progress {"phase": "send", "done": 0, "total": 24473600}
-1793691181.588019 progress {"phase": "send", "done": 8388608, "total": 24473600}
-1793691185.102672 progress {"phase": "send", "done": 16777216, "total": 24473600}
-1793691188.350583 progress {"phase": "send", "done": 24473600, "total": 24473600}
-1793691188.351572 progress {"phase": "verify", "done": null, "total": null}
-1793691188.351656 SIGKILL at progress verify
