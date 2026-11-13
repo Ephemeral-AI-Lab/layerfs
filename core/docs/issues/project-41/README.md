@@ -93,6 +93,16 @@ discussed.
 Diagram labels write issue numbers as bare `#N`; they mean
 `layerfs-project#N`. Every image is rendered on Comic Shanns.
 
+**Two images are newer than the copy in Git history.** Diagram 2 (the sweep) and
+diagram 4 (the C8b fence) were re-rendered after the review fix changed what they
+depict: the sweep now shows `stage` creating a fresh empty Store, `rewrite`
+copying only retained rows, `dead_packs` in the receipt, and a checkpoint before
+the rename; the fence now compares `stat(path)` with `fstat(fd)` as `(dev, ino)`
+instead of generation gates. The current pair is `02-sweep-sequence-v2.png` and
+`04-c8b-writer-fence-v2.png` on the release above, attached to
+`layerfs-project#48` and `layerfs-project#49`. The same-named files inside the
+`c877d9d958ed20b85534b8687c53cd80f383eae0` snapshot are the **pre-fix** versions.
+
 ## Decision ownership
 
 Where each decision or reconciliation entry is realised. The specification
