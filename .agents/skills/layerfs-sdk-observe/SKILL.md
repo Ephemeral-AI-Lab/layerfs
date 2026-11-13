@@ -10,7 +10,7 @@ description: Use when observing, measuring or troubleshooting a LayerFS 2.0 run 
 > not for an agent doing the work; that is the
 > [`layerfs-js-sdk`](../layerfs-js-sdk/SKILL.md) skill. 1.1.0's
 > `@layerfs/backend` package is deleted; its 14 calls were dropped from 2.0's
-> surface (O25 in [the decisions log](../../../core/docs/issues/533/DECISIONS.md)).
+> surface (O25 in [the decisions log](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/DECISIONS.md)).
 > Results quoted here were captured from the built `layerfs` command in a
 > private home on 2026-11-02, unless marked "from source".
 

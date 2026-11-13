@@ -306,7 +306,7 @@ test("contract: the command reads content from --from and a text option from --N
   assert.equal(spawnSync(command, ["file", "stat", P, "agent", "/never.bin"], { env }).status, 125);
 });
 
-test("contract: Unknown and Unresolved outcomes are NOT RUN", { skip: "no real operation without a daemon, a fault or a second process produces one; see call-table/coverage.md" }, () => {});
+test("contract: Unknown and Unresolved outcomes are NOT RUN", { skip: "no real operation without a daemon, a fault or a second process produces one; see docs/architecture/api/calls/coverage.md" }, () => {});
 
 test("contract: homes are removed", () => {
   for (const ctx of Object.values(homes)) {

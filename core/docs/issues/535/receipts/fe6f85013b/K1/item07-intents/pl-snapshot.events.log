@@ -1,4 +1,0 @@
-1793691277.443890 begin pull pl-snapshot - point=snapshot pid=42583
-1793691277.465531 progress {"phase": "check", "done": null, "total": null}
-1793691277.536695 progress {"phase": "snapshot", "done": null, "total": null}
-1793691277.536790 SIGKILL at progress snapshot

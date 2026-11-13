@@ -4,7 +4,7 @@ events arrive while the call runs, before it returns and not after, on the
 calling thread (sync) or the event loop's thread (aio); and what a raising
 function does. Init into a Store on this host needs no machine, daemon or
 bucket. The page that states this:
-docs/architecture/api/call-table/events.md.
+docs/architecture/api/calls/errors-and-events.md.
 
 Build first, as test_calls.py says: cargo build -p layerfs-python, then copy
 target/debug/lib_native.(dylib|so) to src/layerfs/_native.abi3.so.

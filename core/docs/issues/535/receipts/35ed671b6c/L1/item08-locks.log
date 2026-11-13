@@ -1,3 +1,0 @@
-PASS native: two processes creating Sandboxes of different projects do not wait on each other — solo 0.045s; concurrent durations [0.045, 0.044]s; starts differ 0.4 ms; overlap 0.044s
-PASS docker: two processes creating Sandboxes of different projects do not wait on each other — solo 2.407s; concurrent durations [3.577, 3.572]s; starts differ 0.1 ms; overlap 3.572s
-PASS two processes pushing the same Store: one pushes, the other is refused Busy — answers ['Busy', 'ok']; refusal store push, check: Store l5 is busy: store.push (op-e3b68bd63b3e906f, phase snapshot) runs in process 55051; starts differ 0.9 ms

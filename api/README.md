@@ -1,32 +1,34 @@
-# The `layerfs` JavaScript package
+# LayerFS API packages
 
-> **Status:** Current implementation guide for LayerFS 2.0 (issue #533); not a
-> release receipt. It replaces 1.1.0's four packages (`@layerfs/agent`,
-> `@layerfs/cli`, `@layerfs/backend` and `@layerfs/runtime`), which were
-> removed in #533 step 14. Their last source is in the 1.1.0 release tag.
+> **Status:** Current implementation guide for LayerFS 2.0.0. The calling
+> conventions, every call and the front ends are documented in
+> [docs/architecture/api](../docs/architecture/api/README.md).
 
-`api/` holds the JavaScript package `layerfs` (in [`node/`](node)), the script
-that builds its native addon, and the private stdio MCP server [`mcp/`](mcp)
-(`@layerfs/mcp`: one generated tool per call, `work` and `admin` profiles). The
-`layerfs` package is the library's call table as ten families of functions:
+`api/` holds the JavaScript package `@layerfs/node` (in [`node/`](node)), the
+CLI package `@layerfs/cli` (in [`cli/`](cli)), the Python package (in
+[`python/`](python/README.md)), the scripts that build and generate them, and
+the private stdio MCP server [`mcp/`](mcp) (`@layerfs/mcp`: one generated tool
+per call, `work` and `admin` profiles). The design is in
+[docs/architecture/api](../docs/architecture/api/README.md). The package is the
+library's call table as ten families of functions, 70 calls in all:
 
 | Family | Calls |
 | --- | --- |
-| `project` | `init`, `list`, `get`, `export`, `remove` |
-| `branch` | `list`, `get`, `fork`, `merge`, `publish`, `diff` |
-| `commit` | `list`, `get`, `diff` |
-| `file` | `read`, `stat`, `list`, `glob`, `grep`, `blame`, `diff`, `write`, `edit`, `rm`, `mkdir`, `mv`, `cp`, `apply` |
-| `sandbox` | `create`, `list`, `get`, `close` |
-| `workspace` | `mount`, `exec`, `commit`, `unmount`, `status` |
-| `machine` | `list`, `get`, `status`, `create`, `connect`, `remove`, `disconnect`, `update` |
-| `store` | `list`, `get`, `status`, `create`, `connect`, `move`, `remove`, `disconnect` |
-| `backup` | `connect`, `disconnect`, `list`, `create`, `restore` |
-| `logs` | `list`, `reset` (the home's call log, #659) |
+| [`project`](../docs/architecture/api/sdk/project.md) | `init`, `list`, `get`, `stats`, `export`, `remove` |
+| [`branch`](../docs/architecture/api/sdk/branch.md) | `list`, `get`, `commits`, `get_commit`, `fork`, `merge`, `publish`, `diff` |
+| [`commit`](../docs/architecture/api/sdk/commit.md) | `list`, `get`, `diff` |
+| [`file`](../docs/architecture/api/sdk/file.md) | `read`, `stat`, `list`, `glob`, `grep`, `revision`, `blame`, `diff`, `write`, `edit`, `rm`, `mkdir`, `mv`, `cp`, `apply` |
+| [`sandbox`](../docs/architecture/api/sdk/sandbox.md) | `create`, `list`, `get`, `close` |
+| [`workspace`](../docs/architecture/api/sdk/workspace.md) | `mount`, `exec`, `exec_cancel`, `commit`, `unmount`, `status` |
+| [`machine`](../docs/architecture/api/sdk/machine.md) | `list`, `platforms`, `get`, `status`, `start`, `stop`, `create`, `remove`, `update` |
+| [`store`](../docs/architecture/api/sdk/store.md) | `list`, `get`, `status`, `stats`, `create`, `connect`, `attach`, `detach`, `push`, `pull`, `remove`, `disconnect` |
+| [`backup`](../docs/architecture/api/sdk/backup.md) | `connect`, `disconnect`, `list`, `create`, `restore` |
+| [`logs`](../docs/architecture/api/sdk/logs.md) | `list`, `reset` |
 
 `layerfs.table` lists every call with its arguments and options; it is the
 source for the list above, for the `layerfs` command (`layerfs help`) and for
-the Python package in [`python/`](python/README.md), which has the same
-families.
+the Python package, which has the same families. Each call's arguments,
+answer and errors are in the [SDK reference](../docs/architecture/api/sdk/README.md).
 
 ```js
 import layerfs from "@layerfs/node";
@@ -69,8 +71,9 @@ error that says how to build it. `npm --prefix api run gen:types` regenerates
 ### Package and install
 
 Each artifact is for the OS, CPU and C library it was built on (a Linux build
-needs at least the glibc of its build host). None is published; install the
-files you build, here into `$OUT`:
+needs at least the glibc of its build host). Install the files you build, here
+into `$OUT`; publishing is in
+[front ends: packaging and release](../docs/architecture/api/front-ends/README.md#packaging-and-release):
 
 ```bash
 npm --prefix api run build:native                           # node/layerfs.node
@@ -85,14 +88,14 @@ cargo +1.85.1 build --release --locked -p layerfs-cli       # target/release/lay
 
 `npm pack` fails when `node/layerfs.node` is missing, so a tarball never lacks
 its addon. `node/package.json` declares `os: ["linux"]`, `cpu: ["x64"]` and
-`libc: ["glibc"]`, and the one addon needs glibc >= 2.39, so npm refuses another
-host with `EBADPLATFORM` instead of installing a package that cannot load.
+`libc: ["glibc"]`, so npm refuses another platform with `EBADPLATFORM`; npm
+cannot check the glibc version, so an older glibc installs and fails to load.
 macOS, Windows, Linux arm64 and musl need a per-platform prebuild scheme that
 is not built; [`node/README.md`](node/README.md) is the npm page. The default
 addon, wheel and command have no PostgreSQL and no TLS:
 a call that needs them is refused `Unsupported` ("this LayerFS build has no
-PostgreSQL engine"). Both are opt-in at build time and need the OpenSSL
-development files (`libssl-dev`) on the build host:
+PostgreSQL engine"). Both are opt-in at build time (`tls` uses the system's
+TLS library through `native-tls`):
 
 ```bash
 npm --prefix api run build:native -- --features postgresql     # or tls, or postgresql,tls
@@ -100,10 +103,6 @@ npm --prefix api run build:native -- --features postgresql     # or tls, or post
 cargo +1.85.1 build --release --locked -p layerfs-cli --features postgresql
 ```
 
-For such a wheel `maturin` copies `libssl`, `libcrypto` and `libzstd` into it
-and needs `patchelf`; the addon and the command load them from the system.
-The runs behind these steps are in
-[artifact-qualification-2.0.0.md](../docs/general/artifact-qualification-2.0.0.md).
 
 Disposable/WAL/synchronous=OFF only. Durable execution is NOT_RUN — disabled by
 owner until explicit reauthorization. One attempted operation; no retry or replay.
@@ -111,12 +110,13 @@ owner until explicit reauthorization. One attempted operation; no retry or repla
 ## Tests
 
 ```bash
-perl -e 'alarm 100; exec @ARGV' node --test api/node/test/calls.mjs
+perl -e 'alarm 120; exec @ARGV' node --test api/node/test/calls.mjs
 ```
 
 They run over the real addon (build it first) in a private temporary home:
 the table, every call refused with `InvalidInput` when its arguments are
 missing, and one live flow (a Store, Init, files, bytes and a folder scope).
 
-Every test command runs under a wall limit of at most 120 s (here 100 s;
-macOS has no `timeout`, so `perl`'s `alarm` ends it).
+Every test command runs under a wall limit of at most 120 s (macOS has no
+`timeout`, so `perl`'s `alarm` ends it). The other test files are listed in
+[bindings](../docs/architecture/api/front-ends/bindings.md).

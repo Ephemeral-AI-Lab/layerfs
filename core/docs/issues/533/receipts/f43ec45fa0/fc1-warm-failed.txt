@@ -1,6 +1,0 @@
-# Warm-up move of a throwaway Store to fc1 on the new bundle (c8baa5a9), fch without huge pages after its idle-stop reboot; one attempt, not retried.
-$ layerfs store move warmfc2 fc1   # 12:15:17
-(the start of the reply, with its code, was cut by the logging: only its last 200 bytes were kept)
-…","message":"store move, check: writing /layerfs/bundle/.sealed in the guest failed (exit 255): Connection timed out during banner exchange","detail":{"missing":[],"vm_exists":false,"phase":"check"}}
- out 375 s
-# Afterwards: the microVM ran (no worker), its /layerfs/bundle held the whole new bundle without .sealed; 46 MB free in the guest, 85 MB on fch; HugePages_Total 0. Stopped by hand (kill -TERM of its firecracker process), 1,100 huge pages set, then newbundle-fc1-C01 PASS (store.move 31.7 s, huge_pages 2M, .sealed written).
