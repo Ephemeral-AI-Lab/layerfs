@@ -64,7 +64,7 @@ The owner approves a PR, at any tier, when it:
 
 Path sets find most gate risks. A gate risk that the paths miss, such as a
 control change that alters who holds a Store, is added by hand by the author
-or the reviewer, with the `owner-review` label.
+or the reviewer on the `Tier:` line (`gate: yes: <risk>`).
 
 ### De-escalation
 
@@ -88,10 +88,10 @@ The first line of the PR body records the tier the author claims:
 Tier: P1 (engine/crates/layerfs-fuse) ; risks: risk:kernel ; gate: no ; de-escalated: none
 ```
 
-The `tier:P0`–`tier:P3` label is the **path floor**: the tier the paths give,
-before any de-escalation. It only ever rises as the PR changes. When the `Tier:` line
-claims a lower tier through a de-escalation code, the reviewer confirms it in
-the review record. When the author and the reviewer disagree, the higher tier
+The risk sets (`risk:format`, `risk:store` and the others under
+[Path sets](#path-sets)) are names in this policy, not GitHub labels; the
+`Tier:` line names the ones a PR hits. The PR's `P0`–`P3` label carries the
+tier after de-escalation, which the reviewer confirms in the review record. When the author and the reviewer disagree, the higher tier
 applies.
 
 ## Who approves
@@ -247,40 +247,60 @@ never a public issue.
 
 ## Labels
 
-| Label | Colour | Description | Set by |
-| --- | --- | --- | --- |
-| `tier:P0` | `#B31D28` | PR path floor: core source or a Store format | author, from paths |
-| `tier:P1` | `#E36209` | PR path floor: engine, records, Store custody, wire, kernel, deletion, security, deps | author |
-| `tier:P2` | `#F9C513` | PR path floor: control, CI, policy and contract docs | author |
-| `tier:P3` | `#BFD4F2` | PR path floor: api, docs, plugins, local tools | author |
-| `prio:P0` | `#B60205` | Issue: S1 data loss, corruption or security | triage (issues) |
-| `prio:P1` | `#D93F0B` | Issue: major, S2 on an exposed path | triage |
-| `prio:P2` | `#FBCA04` | Issue: minor, or major off the common path | triage |
-| `prio:P3` | `#C5DEF5` | Issue: cosmetic or rare | triage |
-| `layer:core` | `#0B3D91` | core/crates | author (PRs); issue form |
-| `layer:engine` | `#1F6FEB` | engine/crates, vendor or patches | author; issue form |
-| `layer:control` | `#54AEFF` | control/crates or SUPPORT.json | author; issue form |
-| `layer:api` | `#B6E3FF` | api/: Rust crates, Node, Python, MCP, CLI | author; issue form |
-| `risk:format` | `#8B0000` | Persistent format: codecs, packs, SQL schema, records, fixtures | author; reviewer |
-| `risk:store` | `#A0522D` | Store custody: open, lease, publish, install, backup, restore | author; reviewer |
-| `risk:wire` | `#BF8700` | Bridge, worker, host or CLI framing and handshakes | author; reviewer |
-| `risk:kernel` | `#7D4E00` | FUSE, NFS, mount ports or the patched fuser | author |
-| `risk:delete` | `#6F42C1` | Code that deletes data: GC, cleanup, removal, retention | author; reviewer |
-| `risk:security` | `#D1242F` | Secrets, credentials, worker auth, isolation, unsafe and FFI | author; reviewer |
-| `risk:deps` | `#CC317C` | Lockfiles, build flags, vendor, patches, dependency hunks | author |
-| `owner-review` | `#000000` | A gate risk: the owner approves | author; reviewer |
+Each PR and issue carries one priority, one or more topics and one type. The
+author sets them and the reviewer or triager corrects them. They are set by
+hand until a report-only workflow is approved (nothing else runs on PRs into
+`layerfs_v2_0_0`).
 
-Labels are set by hand from the [path sets](#path-sets) at first: the author
-sets `tier:`, `layer:` and `risk:` labels and `owner-review`, and the reviewer
-corrects them. A report-only workflow that sets them, and lists the risky
-lines, may follow once the sets have settled; it needs the owner's approval
-because nothing else runs on PRs into `layerfs_v2_0_0`.
+**Priority: exactly one.** On a PR it is the tier; on an issue it is the
+priority from the severity and urgency table. Search separates the two:
+`is:pr label:P0` is the P0 review queue, `is:issue label:P0` the P0 bug queue.
 
-Existing labels stay as they are, including `bug`, `enhancement`,
-`new feature`, `hold` (do not merge), `release`, `documentation`, `plugin`,
-the version labels and the topic labels such as `postgresql` and
-`garbage collection`. Severity and urgency stay in the issue form and the
-triage comment; they are not labels.
+| Label | Colour | Description |
+| --- | --- | --- |
+| `P0` | `#B60205` | PR: core source or a Store format. Issue: data loss, corruption or a security breach |
+| `P1` | `#D93F0B` | PR: engine, records, Store custody, wire, kernel, deletion, security, deps. Issue: major |
+| `P2` | `#FBCA04` | PR: control, CI, policy and contract docs. Issue: minor |
+| `P3` | `#C5DEF5` | PR: api, docs, plugins, local tools. Issue: cosmetic or rare |
+
+**Topic: one per architecture topic touched.** A topic label names the
+[architecture topic](../architecture/README.md#every-topic) that owns a
+changed file (by the topic's Source row), so it also says which page may need
+updating. A PR or issue that touches several topics, in one layer or across
+layers, carries each of them; its priority is the highest. Topics share one
+colour per layer. A PR that touches no product code (docs only, tools, CI,
+plugins) carries no topic label; its type says what it is.
+
+| Layer (colour) | Topic labels |
+| --- | --- |
+| core (`#0B3D91`) | `core/objects`, `core/files`, `core/trees`, `core/merge`, `core/storage`, `core/history`, `core/telemetry` |
+| engine (`#1F6FEB`) | `engine/store`, `engine/store-calls`, `engine/project-init`, `engine/overlay`, `engine/workspace`, `engine/commit`, `engine/kernel-routes`, `engine/bridge`, `engine/daemon` |
+| control (`#54AEFF`) | `control/home`, `control/machines`, `control/stores`, `control/sandboxes`, `control/backups`, `control/doctor` |
+| api (`#B6E3FF`) | `api/calls`, `api/sdk`, `api/front-ends` |
+
+Each label's description is the topic's one-line summary from the topic
+table. `core/trees` is the Filesystem trees topic, `core/merge` Compare and
+merge, `core/storage` Physical storage and `control/stores` Stores and
+projects; the rest match their topic names. A new topic gets a label in the
+commit that adds it to the topic table.
+
+**Type: exactly one.** No type label means none fits.
+
+| Label | Colour | Description |
+| --- | --- | --- |
+| `bug` | `#D73A4A` | Something LayerFS does wrong, or its fix |
+| `new feature` | `#1F883D` | A new user-facing capability |
+| `optimization` | `#8250DF` | Faster or smaller, same behaviour |
+| `refactor` | `#C2E0C6` | Structure changes, same behaviour and speed |
+| `docs` | `#0075CA` | Documentation only |
+| `setting` | `#6E7781` | Build, CI, tooling, dependencies or repository configuration |
+
+`bug` and `new feature` already exist. `docs` replaces `documentation` (a
+rename keeps its history); `enhancement` and `document` duplicate
+`new feature` and `docs` and are retired. Version labels (`v2.0.0` and the
+rest), `hold` (do not merge), `release`, `plugin` and the existing
+cross-cutting labels such as `postgresql` and `garbage collection` stay.
+Severity and urgency stay in the issue form and the triage comment.
 
 ## Path sets
 
