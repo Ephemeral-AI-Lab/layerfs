@@ -101,7 +101,7 @@ Timing trees themselves are described in [Core: Telemetry](../core/telemetry/REA
 | 9b | Request larger than a frame | `TooLarge`; nothing was sent |
 | 9b | Connection lost after the request was sent | `Unknown`: the call may have run; it is not resent |
 | 9a | Kernel guard refuses the Store's filesystem; Store file missing; a writable open meets SQLite's busy lock before any effect (another process holds the Store outside the lane) | `Unsupported`; `NoStore`; `Busy` |
-| 10 | SQLite busy (no cross-process wait on macOS), PostgreSQL `lock_timeout` | `Busy` |
+| 10 | SQLite busy (a writer that bypasses the directory lane), PostgreSQL `lock_timeout` | `Busy` |
 | 10 | The engine cannot tell whether a write happened | `Unknown`; a file write keeps its private Workspace |
 | 10 | Any other engine refusal | its stable code (`NoSuchBranch`, `HeadMoved`, `Conflict`, …), see [Call table: errors](../api/call-table/errors.md) |
 
