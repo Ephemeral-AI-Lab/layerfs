@@ -7,7 +7,7 @@
 
 Navigation links were updated on 2026-10-06 for the responsibility-folder moves.
 The source-review claims retain their original pin above; current continuation
-scope is in the [S7–S9 handoff](../../core/docs/issues/307/HANDOFF-S7-S9.md).
+scope is in the [S7–S9 handoff](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/HANDOFF-S7-S9.md).
 
 This guide explains the cluster-two ownership and read-path design. Its central
 ASCII diagram is preserved exactly from the owner-requested side conversation.
@@ -15,11 +15,11 @@ The diagram describes the integrated target; complete FUSE/runtime wiring and
 effective filesystem semantics remain implementation work at the reviewed source.
 It is not a release, performance or memory qualification claim.
 
-The [cluster-two design](../../core/docs/issues/303/README.md),
-[architecture and ownership](../../core/docs/issues/303/01-architecture.md),
-[daemon contract](../../core/docs/issues/303/daemon-sqlite.md),
-[FUSE contract](../../core/docs/issues/303/fuse.md) and
-[runtime integration contract](../../core/docs/issues/303/06-cluster-one-integration.md)
+The [cluster-two design](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/README.md),
+[architecture and ownership](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/01-architecture.md),
+[daemon contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/daemon-sqlite.md),
+[FUSE contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/fuse.md) and
+[runtime integration contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/06-cluster-one-integration.md)
 remain authoritative. [Tracker #307](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307)
 owns implementation and milestone evidence. This guide adds explanation, not a
 new backend, cache algorithm or milestone-completion claim.
@@ -218,7 +218,7 @@ promise.
 The main diagram follows base-object acquisition. Cheap owning file-length or
 attribute facts have separate bounded runtime calls and immutable cache keys;
 the cache-miss arrow does not prohibit those calls or control/history traffic.
-[The file-length guide](../../core/docs/architecture/24-file-lengths.md) describes
+[The file-length guide](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/24-file-lengths.md) describes
 the implemented owning API and its remaining daemon/stat integration.
 
 ## 5. Cache reuse and different Workspace branches

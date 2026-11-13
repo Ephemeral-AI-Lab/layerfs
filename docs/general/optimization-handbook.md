@@ -13,11 +13,11 @@ the [measurement workflow](agent-measurement-policy.md) and
 this handbook and one of those disagree, they govern.
 
 Numbers quoted here are counts from functional receipts in the
-[R4](../../core/docs/issues/307/R4-COMPLETION-20261008.md),
-[R5](../../core/docs/issues/307/R5-COMPLETION-20261009.md) and
-[R6](../../core/docs/issues/307/R6-COMPLETION-20261009.md) records, or context
+[R4](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/R4-COMPLETION-20261008.md),
+[R5](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/R5-COMPLETION-20261009.md) and
+[R6](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/R6-COMPLETION-20261009.md) records, or context
 from the #305 experiment as summarized in the
-[proof plan](../../core/docs/issues/307/S8-PROOF-PLAN-20261008.md). Experiment
+[proof plan](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/S8-PROOF-PLAN-20261008.md). Experiment
 numbers are not comparison arms.
 
 ## 1. The one idea
@@ -235,7 +235,7 @@ Counts are normal but time is spent waiting.
   dependency that caused it. A wait is never turned into a retry.
 - **Limits today.** Per namespace: 16 ordinary, 16 Source and 2 Lifecycle
   slots. Per mount: 16 admitted and 2 received.
-  See [the owner](../../core/docs/architecture/21-daemon-owner.md) and
+  See [the owner](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/21-daemon-owner.md) and
   [queue scheduling](workspace-queue-scheduling.md).
 - **Proofs.** `owner`, `install_slots`, `admission_future`,
   `mounted_concurrency`, `mounted_parking`, `finite_service`.
@@ -530,20 +530,20 @@ production LOC comparison.
 - Rules: [optimization guide](optimization-guide.md),
   [measurement workflow](agent-measurement-policy.md),
   [benchmark rules](benchmark_rules.md).
-- Design: [FUSE contract](../../core/docs/issues/303/fuse.md),
-  [FUSE optimization investigation](../../core/docs/issues/303/fuse-optimization-investigation.md)
-  (research), [engine](../../core/docs/issues/303/daemon-sqlite.md),
+- Design: [FUSE contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/fuse.md),
+  [FUSE optimization investigation](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/fuse-optimization-investigation.md)
+  (research), [engine](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/daemon-sqlite.md),
   [cache design](sandbox-cache-design.md).
-- Architecture: [owner](../../core/docs/architecture/21-daemon-owner.md),
-  [request service](../../core/docs/architecture/75-native-request-service.md),
-  [mount session](../../core/docs/architecture/76-native-mount-session.md),
-  [mutation coherence](../../core/docs/architecture/77-native-mutation-coherence.md),
-  [namespace construction](../../core/docs/architecture/78-captured-namespace-construction.md),
-  [product Commit](../../core/docs/architecture/79-product-commit.md),
-  [Store Commit](../../core/docs/architecture/65-store-commit-composition.md),
-  [forced teardown](../../core/docs/architecture/80-forced-teardown.md).
+- Architecture: [owner](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/21-daemon-owner.md),
+  [request service](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/75-native-request-service.md),
+  [mount session](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/76-native-mount-session.md),
+  [mutation coherence](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/77-native-mutation-coherence.md),
+  [namespace construction](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/78-captured-namespace-construction.md),
+  [product Commit](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/79-product-commit.md),
+  [Store Commit](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/65-store-commit-composition.md),
+  [forced teardown](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/80-forced-teardown.md).
 - Scenario matrix, cache classes and owner rulings:
-  [proof plan](../../core/docs/issues/307/S8-PROOF-PLAN-20261008.md).
+  [proof plan](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/S8-PROOF-PLAN-20261008.md).
 - Priorities and component candidates: issues
   [#314](https://github.com/Ephemeral-AI-Lab/layerfs/issues/314) and
   [#313](https://github.com/Ephemeral-AI-Lab/layerfs/issues/313).

@@ -10,11 +10,11 @@ or API dependencies, including tests, and no rusqlite dependency.
 Build membership is defined by the [root workspace manifest](../Cargo.toml).
 See the [core guide](AGENTS.md), [engine guide](../engine/AGENTS.md),
 [API guide](../api/AGENTS.md), [cluster-one handbook](../docs/general/cluster_one_handbook.md)
-and [current operation contracts](docs/issues/303/README.md).
+and [current operation contracts](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/README.md).
 
 The two workstreams remain unchanged. Store ownership, Project Store Init,
 Workspace/Overlay, daemon/FUSE, Bridge and Sandbox composition live in engine;
 SDK-facing Rust, binding and JavaScript code live in API. This source relocation
 changes no public behavior, format or dependency version. The
-[#463 implementation record](docs/issues/463/IMPLEMENTATION.md) records verification,
+[#463 implementation record](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/463/IMPLEMENTATION.md) records verification,
 the retained FP-21 failure exception and branch coordination.

@@ -1,9 +1,0 @@
-1793696187.375992 begin push pu-install docker point=install pid=29924
-1793696187.376695 progress {"phase": "check", "done": null, "total": null}
-1793696187.383543 progress {"phase": "snapshot", "done": null, "total": null}
-1793696187.571266 progress {"phase": "send", "done": 0, "total": 12943360}
-1793696191.549224 progress {"phase": "send", "done": 8388608, "total": 12943360}
-1793696193.425825 progress {"phase": "send", "done": 12943360, "total": 12943360}
-1793696193.429287 progress {"phase": "verify", "done": null, "total": null}
-1793696193.594687 progress {"phase": "install", "done": null, "total": null}
-1793696193.594794 SIGKILL at progress install

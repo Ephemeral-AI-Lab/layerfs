@@ -1,4 +1,0 @@
-START ssh pg-loop C01 07:35:21
-C01 lfs535k2s postgresql FAIL sandbox.create: Unsupported the ssh machine lfs535k2s cannot reach the PostgreSQL Store's server: an ssh machine cannot reach the caller's loopback timed exec - ms
-END ssh pg-loop C01 rc=1 07:35:21
-QUEUE DONE ssh pg-loop

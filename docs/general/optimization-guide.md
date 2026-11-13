@@ -8,7 +8,7 @@
 Read [root instructions](../../AGENTS.md), [core instructions](../../core/AGENTS.md),
 the [cluster-one handbook](cluster_one_handbook.md),
 [CAS/CDC/delta contracts](cas_cdc_deltaencoding_handbook.md) and the
-[cluster-two design](../../core/docs/issues/303/README.md) for the owning contract.
+[cluster-two design](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/README.md) for the owning contract.
 Both workstreams implement in `core/`; root `crates/` is the v0.1.6 reference
 until cluster two completes. Historical plans and experiments do not select a new
 algorithm, dependency, persistence profile or performance gate.
@@ -338,8 +338,8 @@ named flag implements an unavailable transport/callback.
 
 References: [kernel FUSE controls](https://www.kernel.org/doc/html/v6.12/filesystems/fuse.html),
 [I/O modes](https://www.kernel.org/doc/html/v6.12/filesystems/fuse-io.html),
-[primary FUSE contract](../../core/docs/issues/303/fuse.md) and
-[source-qualified request investigation](../../core/docs/issues/303/fuse-investigation/01-kernel-and-request-path.md).
+[primary FUSE contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/fuse.md) and
+[source-qualified request investigation](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/fuse-investigation/01-kernel-and-request-path.md).
 Linux v6.12 is a mechanism reference, not an assumed deployment identity.
 
 ## 6. Workloads, lifetime and resource amplification
@@ -402,7 +402,7 @@ this record does not replace a frozen benchmark contract or receipt. A quadratic
 finding, hidden global scan, unsupported plan or unbounded retained structure
 blocks optimization acceptance until corrected; a small timing win cannot waive it.
 
-Supporting research: [combined investigation](../../core/docs/issues/303/fuse-optimization-investigation.md),
-[mutation engine](../../core/docs/issues/303/fuse-investigation/02-mutation-engine.md)
-and [lifecycle](../../core/docs/issues/303/fuse-investigation/03-per-call-lifecycle.md).
+Supporting research: [combined investigation](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/fuse-optimization-investigation.md),
+[mutation engine](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/fuse-investigation/02-mutation-engine.md)
+and [lifecycle](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/fuse-investigation/03-per-call-lifecycle.md).
 Their proposed algorithms and historical observations retain their qualifications.

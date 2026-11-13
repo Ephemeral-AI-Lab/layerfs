@@ -1,9 +1,0 @@
-$ cargo +1.85.1 test -p layerfs-api --features postgresql,machine --test postgres_connect -- --nocapture   # product 6837bcfce2, postgres:17-bookworm (17.11) lfs533-pg2, database lfs_conn, 2026-11-02T03:44:51Z
-    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
-     Running tests/postgres_connect.rs (target/debug/deps/postgres_connect-68c678517640300c)
-
-running 1 test
-test connect_read_and_disconnect ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
-

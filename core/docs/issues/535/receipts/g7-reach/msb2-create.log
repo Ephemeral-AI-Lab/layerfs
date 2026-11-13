@@ -1,6 +1,0 @@
-+(eval):1> T 150 /Users/yifanxu/.microsandbox/bin/msb create --name g7probe-msb2 --cpus 2 --memory 1024M --net public,host -p 127.0.0.1:55453:7070 --label 'layerfs.role=g7probe' debian:trixie-slim
-+T:0> perl -e 'alarm shift; exec @ARGV' 150 /Users/yifanxu/.microsandbox/bin/msb create --name g7probe-msb2 --cpus 2 --memory 1024M --net public,host -p 127.0.0.1:55453:7070 --label 'layerfs.role=g7probe' debian:trixie-slim
-+(eval):1> T 30 /Users/yifanxu/.microsandbox/bin/msb copy /private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/g7-receipt/probe.sh g7probe-msb2:/tmp/probe.sh
-+T:0> perl -e 'alarm shift; exec @ARGV' 30 /Users/yifanxu/.microsandbox/bin/msb copy /private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/g7-receipt/probe.sh g7probe-msb2:/tmp/probe.sh
-+(eval):1> T 30 /Users/yifanxu/.microsandbox/bin/msb copy /private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/g7-receipt/pgstart.sh g7probe-msb2:/tmp/pgstart.sh
-+T:0> perl -e 'alarm shift; exec @ARGV' 30 /Users/yifanxu/.microsandbox/bin/msb copy /private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/g7-receipt/pgstart.sh g7probe-msb2:/tmp/pgstart.sh

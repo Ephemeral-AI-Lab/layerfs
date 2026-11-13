@@ -3,7 +3,7 @@
 > **Status:** Proposal; target LayerFS 2.0.0; not a released contract.
 
 This manual describes what is implemented on branch `issue533-v2`
-([#533](../../../core/docs/issues/533/README.md)). It is not a release
+([#533](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/README.md)). It is not a release
 receipt: nothing here is tagged, published to npm, PyPI or crates.io, or
 covered by a terminal pass. Each page says what was run, what was not run
 and what is not built.
@@ -65,13 +65,13 @@ The code wins over every document below where they differ.
 - [The call table](../../../api/crates/layerfs-api/src/), one file per call
   under its family (`<family>/<call>.rs`): the 61 calls, their arguments and
   options.
-- [The #533 work order](../../../core/docs/issues/533/README.md) and
-  [its decisions log](../../../core/docs/issues/533/DECISIONS.md): owner
+- [The #533 work order](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/README.md) and
+  [its decisions log](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/DECISIONS.md): owner
   decisions and the implementation choices taken on this branch.
 - The two design proposals:
-  [the `layerfs` command and SDK](../../../core/docs/proposals/layerfs-sdk-cli.md)
+  [the `layerfs` command and SDK](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/proposals/layerfs-sdk-cli.md)
   (called S) and
-  [one control center for every platform](../../../core/docs/proposals/host-platform-connections.md)
+  [one control center for every platform](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/proposals/host-platform-connections.md)
   (called H). The family named `fs` in S is `file` in the code (O13).
 - [The JavaScript package guide](../../../api/README.md) and
   [the Python package guide](../../../api/python/README.md).

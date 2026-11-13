@@ -102,7 +102,7 @@ Sandbox names (H §7.6).
   (`detail.related` lists each as `{kind: "sandbox", name}`), and is
   `Unsupported` for a PostgreSQL Store.
 
-`project export` ([reference](../../architecture/api/sdk/project/export.md)) exports a committed Branch snapshot. `destination` is an absolute path
+`project export` ([reference](../../architecture/api/sdk/project.md#projectexport)) exports a committed Branch snapshot. `destination` is an absolute path
 on the caller’s host, even for a worker Store. It must be absent or an empty
 real directory, outside the home, with an existing parent. A nonempty destination
 is `NotEmpty`; files and symlinks are refused. Same-parent staging is published
