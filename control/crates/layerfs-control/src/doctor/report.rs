@@ -109,6 +109,7 @@ pub fn doctor(home: &Path) -> Outcome {
         Ok(Layout::Current(_)) => {
             let scanned = super::scan::scan(home, &mut findings)?;
             super::checks::check(home, &scanned, &mut findings)?;
+            super::capacity::check(home, &scanned, &mut findings);
             super::workers::check(home, &scanned, &mut findings);
         }
     }

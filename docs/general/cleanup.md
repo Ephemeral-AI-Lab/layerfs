@@ -113,12 +113,35 @@ changed during archival, preserve the new state before proceeding. Use Git's
 worktree removal and pruning facilities for registered worktrees; prune stale
 registrations only after confirming their working directories are gone.
 
+Then check what points at the worktree from outside the repository: a symlink
+from another project (for example one that uses the checkout as its source
+tree), a launcher registration, an editor workspace. Removing a referenced
+checkout breaks the reference silently, later and in another tool; restoring
+the checkout afterwards may not repair it when the reference also depended on
+generated content inside it, such as `node_modules` links. Resolve or record
+each reference before removal.
+
+A worktree created for one pull request is a removal candidate once that pull
+request is merged or closed; until then it is current work.
+
 ## 5. Remove identified runtime and temporary resources
 
 Use exact container, image, volume, and path identifiers from the inventory.
 Reinspect current processes and consumers before acting. Protect newly created
 resources even if they resemble an older selected run. Do not stop another
 owner's current execution or unlink an active measurement lock.
+
+Bulk pruning commands select by "unreferenced", which is not "disposable".
+`docker image prune -a` removes every image no container uses, and that set
+includes images kept on purpose that cannot be pulled back, such as the local-only
+default Sandbox image of
+[#533 O36](../../core/docs/issues/533/DECISIONS.md#o36-default-sandbox-image-owner-decision-2026-11-02).
+Before `docker image prune -a`, `docker volume prune -a`, a `cargo clean` across
+checkouts, or an `rm -rf` sweep, check what depends on each selected item
+(decision records, launcher registrations, sealed bundles, symlinks) and keep
+what a record holds on purpose. Bare `docker image prune` removes dangling
+images only. When a cleanup does remove something a record names, amend that
+record in the same change: what was removed, why, and how it was restored.
 
 For retired private mutable state selected for recovery, stop its owning daemon
 before copying the complete volume. Verify the stopped-state backup before

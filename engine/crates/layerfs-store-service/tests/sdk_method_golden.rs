@@ -412,6 +412,14 @@ fn public_methods_answer_as_recorded() {
     );
     s.call("branch.list_commits", vec![("branch", t("main"))]);
     s.call(
+        "branch.list_commits",
+        vec![
+            ("branch", t("main")),
+            ("pageSize", SdkValue::Int(1)),
+            ("pagePos", SdkValue::Int(1)),
+        ],
+    );
+    s.call(
         "branch.diff_branches",
         vec![("from", t("main")), ("to", t("feat"))],
     );
@@ -451,6 +459,10 @@ fn public_methods_answer_as_recorded() {
     s.call(
         "branch.diff_commits",
         vec![("from", t(&ids[1])), ("to", t(&ids[0]))],
+    );
+    s.call(
+        "branch.diff_commits",
+        vec![("from", t(&ids[1][..12])), ("to", t(&ids[0]))],
     );
     s.call(
         "fs.read",

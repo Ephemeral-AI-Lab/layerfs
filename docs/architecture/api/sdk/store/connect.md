@@ -61,6 +61,7 @@ need not start with `LAYERFS_`.
    kind: "postgresql",
    schema: "layerfs",
    synchronous_commit,
+   machines: { native: { checked? } }   native attached with the Store's connection
    projects: [name]      projects the schema already held
  }
 ```
@@ -71,6 +72,7 @@ need not start with `LAYERFS_`.
 | `kind` | text | always `postgresql` | same |
 | `schema` | text | always `layerfs` (`SCHEMA`), the one schema of a 2.0 PostgreSQL Store | same |
 | `synchronous_commit` | text | as given, or `off` | same |
+| `machines` | map | `native`, attached with the Store's own connection; `checked` (`at`, `server_version`, `latency_ms`) when [store.attach](attach.md)'s check passed, absent when the role may not write (attach `native` again to see what it lacks) | [`postgresql/attach.rs`](../../../../../control/crates/layerfs-store/src/postgresql/attach.rs) `check` |
 | `projects` | list of text | each project read from the schema, now a project record | [`identity.rs`](../../../../../control/crates/layerfs-store/src/identity.rs) `list_projects` |
 
 [store.get](get.md) shows the full record afterwards (`url`, `created`,
@@ -145,4 +147,4 @@ layerfs store connect pg postgresql://app@db:5432/app --password env:PGPASSWORD
 
 ---
 
-← [store.create](create.md) · [Up: store](README.md) · [store.push](push.md) →
+← [store.create](create.md) · [Up: store](README.md) · [store.attach](attach.md) →

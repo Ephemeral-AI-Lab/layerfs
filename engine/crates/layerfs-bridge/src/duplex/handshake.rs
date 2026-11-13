@@ -91,6 +91,11 @@ fn handshake(
         work.crypto_output_bytes += n as u64;
         io::write_record(&mut stream, &output[..n], work)?;
         io::read_record(&mut stream, 256, &mut input, work)?;
+        // A daemon that could not admit this connection writes a fixed
+        // advisory notice instead of a Noise message; never treat it as one.
+        if let Some(notice) = super::admission::classify(&input) {
+            return Err(ChannelError::Admission(notice));
+        }
         work.crypto_attempts += 1;
         work.crypto_input_bytes += input.len() as u64;
         let read = state.read_message(&input, &mut payload)?;

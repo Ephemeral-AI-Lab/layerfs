@@ -41,7 +41,10 @@ Layout 3, from [`home/paths.rs`](../../../../control/crates/layerfs-home/src/hom
     workspace/<id>.unmount  an unmount's outcome
   backup/<bucket>/record.json  provider, url, prefix, key reference
   log/                      *.jsonl logs, conversion reports
-  trace/                    1.1.0 traces/ after conversion only
+  trace/                    the call log; 1.1.0 traces/ after conversion
+    calls.jsonl             one line per public call (0600; trace/ is 0700)
+    calls.1.jsonl           the one rotated file, past 16 MiB
+    calls.lock              rotation and reset take turns (flock)
 ```
 
 | Entity | Identity | Children | Source |
@@ -160,9 +163,50 @@ a password that is not a reference is `InvalidInput`.
 | --- | --- | --- |
 | `LAYERFS_TRACE` file | each connection to a machine's worker appends `{at, event: "worker.connection", op, worker, sent, ms}`; unset, nothing is written | [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs) `connection` |
 | SDK trace scope | a call's `observe` argument (32 bytes hex) makes its daemon exchanges traced observations; at most 64 telemetry values per call are kept | [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs) |
-| `<home>/trace/` | holds 1.1.0's `traces/` after a conversion; this build writes nothing there | [`migrate/v110.rs`](../../../../control/crates/layerfs-control/src/migrate/v110.rs) |
+| `<home>/trace/calls.jsonl` | the call log (#659): every public call appends one line when it ends; see below | [`logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs) |
+| `<home>/trace/` (other files) | 1.1.0's `traces/` after a conversion | [`migrate/v110.rs`](../../../../control/crates/layerfs-control/src/migrate/v110.rs) |
 
 A trace that cannot be written changes no outcome.
+
+### The call log
+
+Every call that goes through the dispatcher (`calls::dispatch::call_scoped`:
+the `layerfs` command, Node, Python and direct `layerfs_api::call`) appends
+one JSON line to `<home>/trace/calls.jsonl` when it ends, in completion
+order. A running call has no line yet; a killed process writes none. Worker
+requests, the parts a call sends internally, commands outside the table
+(`help`, `--version`, `worker`, `import-env`, `doctor`), usage errors and the
+`logs` calls write no line. `LAYERFS_LOGS=0` turns it off for the process;
+`LAYERFS_TRACE` and `LAYERFS_TRACE_STEP` are independent of it.
+
+```json
+{"v":1,"at":1793000004120,"ms":212,"client":"node","argv":["file","write","demo/app","main","/index.ts","<5321 bytes>"],"outcome":"ok","kind":"Committed","commit":"<66 hex>","tag":"dsh:s_4d2a:a91e"}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `v` | line format, `1` |
+| `at`, `ms` | wall-clock start (ms since the epoch) and duration on a monotonic clock |
+| `client` | `cli`, `node`, `python` or `rust` (direct library calls) |
+| `argv` | the CLI words that would make the same call, rendered from the call table and the checked arguments before a folder scope rewrites them ([render.rs](../../../../api/crates/layerfs-api/src/calls/render.rs)); a call refused before its arguments were checked logs `[family, call]` only |
+| `outcome` | `"ok"` or the refusal code; refusal messages and `detail` are never logged |
+| `kind`, `commit`, `layer` | the result's `kind`, and the Commit or Layer a saving call saved or names (`file` writes, `workspace.commit`, `branch.fork`, `merge`, `publish`); no other result value |
+| `tag` | the caller's tag: a per-call `log_tag` argument, else `LAYERFS_LOGS_TAG`; at most 128 bytes and no control characters, else dropped |
+
+Values are cut to 200 characters; Content and Json arguments, and the Text
+arguments `command`, `message`, `old`, `new`, `password` and `url`, are
+logged as `<N bytes>`; functions are left out.
+
+A line is opened with `O_APPEND`, written with one `write` and closed, so a
+long-lived process never writes into a rotated or reset file. Nothing is
+written in a folder that has no `layerfs.json` yet. Past 16 MiB, the writer
+that gets a non-blocking `flock` on `calls.lock` renames the file to
+`calls.1.jsonl`, replacing an older one; `logs.reset` takes the same lock,
+waiting, truncates `calls.jsonl` in place, removes `calls.1.jsonl` and
+answers `{kind: "Reset", removed}`. `logs.list` reads both files newest
+first, filtered and paged; after a rotation or reset its cursor is stale
+(`InvalidInput`), and a torn line is counted in `skipped`
+([SDK: logs](../../api/sdk/logs/list.md)).
 
 ## Migration
 

@@ -83,7 +83,7 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   Stores, and one worker.
 - `image` is the image its Sandboxes run in. The default Sandbox image (owner
   decision O36) is LayerFS's runtime image
-  `layerfs-352-runtime:node24-https-apt-20261024` (config digest
+  `layerfs-352-runtime:node24-https-apt-20261024` (image digest
   `sha256:afa1ef9c…f38e`: Node 24, Rust 1.85.1, the SQLite headers,
   Chromium and Selenium), sealed into the bundle as `sandbox-image.tar`.
   `--image` (and `machine update native --image`) chooses another. On
@@ -430,14 +430,46 @@ layerfs project init pg-main/load ./load
   under the Store's lease.
 - PostgreSQL needs a build with the `postgresql` feature; without it these
   calls are `Unsupported`.
-- A PostgreSQL Store's Sandboxes run on every machine: `native` (macOS
-  and Linux), `docker`, `lima` and `apple-container` (the daemon and the worker are built with `postgresql`),
-  started where the machine starts Sandboxes. The caller
-  resolves the password and rewrites a loopback host for the machine
-  (`docker`: `host.docker.internal`, given to the worker container on a
-  Linux Engine as its `host-gateway`); the URL
-  travels only in that one request. `sandbox create` first checks, from
-  the machine, that the server answers with the Store's schema binding.
+- A PostgreSQL Store's Sandboxes run on the machines it is attached to.
+  `store connect` attaches `native` with the Store's own connection and
+  records its check (`machines.native.checked`) when the role may write;
+  `store attach <store> <machine>` attaches another machine, or attaches
+  one again with a new connection:
+
+  ```bash
+  # not run
+  layerfs store attach pg-main docker
+  layerfs store attach pg-main build-vm --url "postgresql://lfs@10.0.0.5/layerfs" --password file:/run/secrets/pg-vm
+  layerfs store detach pg-main docker
+  ```
+
+  Without `--url` and `--password` the machine dials the Store's URL and
+  password (its loopback host rewritten as below); with either, its own.
+  The check runs from the machine (in this process for `native`, else in
+  the machine's worker, which must be from a bundle with `store.reach`):
+  the server answers, the database holds the `layerfs` schema with the
+  Store's binding (another one is `Unavailable` "holds another Store"),
+  and the role may use the schema, make temporary tables and read and
+  write every LayerFS table and sequence (else `Denied`, naming the first
+  privilege missing). A refused check records nothing; a passed one
+  records the attachment with `checked: {at, server_version,
+  latency_ms}`. The record keeps the URL without a password and the
+  password as a reference, as `store connect` does. The platforms are
+  `native` (macOS and Linux), `docker`, `lima` and `apple-container`; an
+  attach to a machine the support table refuses is `Unsupported` with its
+  reason. `store detach` is `InUse` while a Sandbox of the Store is
+  recorded on that machine. `sandbox create` on a machine the Store is not
+  attached to is `Unsupported`, naming the `store attach` that fixes it;
+  `machine remove` is `InUse` while a PostgreSQL Store is attached to the
+  machine. `machine list` and `machine get` show a machine's attached
+  PostgreSQL Stores as `postgresql`.
+- A Sandbox starts where the machine starts Sandboxes (the daemon and the
+  worker are built with `postgresql`). The caller resolves the password and
+  rewrites a loopback host for the machine (`docker`:
+  `host.docker.internal`, given to the worker container on a Linux Engine
+  as its `host-gateway`); the URL travels only in that one request.
+  `sandbox create` checks again, from the machine, that the server
+  answers with the Store's schema binding.
   The server always runs off the machine (on this host or elsewhere);
   nothing installs PostgreSQL in a machine (D12). The VM platforms'
   rewrites, each proven by a live run (#535 `receipts/g7-live/`):

@@ -108,6 +108,8 @@ fn native_create(
         limits: DaemonLimits {
             connections: 2,
             handshake_ms: 1000,
+            idle_ttl_ms: 60_000,
+            request_deadline_ms: 60_000,
             cache_bytes: 65536,
             namespaces: 2,
             pager_kib: 1024,
