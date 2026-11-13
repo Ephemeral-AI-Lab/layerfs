@@ -12,6 +12,7 @@ here is supporting context.
 - [FUSE Exec redesign specification (#49)](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/0.1.3/fuse-exec-rewrite-spec.md)
 - [FUSE Exec redesign requirements checklist](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/0.1.3/fuse-exec-redesign-requirements.md)
 
+- [Garbage collection design (issue #41)](gc/README.md) — design, not implemented
 - [AgentFS adjacent-product study](agent-fs/README.md)
 - [AI-native filesystem vision](vision/README.md)
 - [Historical V2 replacement work](history/v2-replacement/README.md)
