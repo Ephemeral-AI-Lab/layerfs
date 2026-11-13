@@ -14,7 +14,8 @@
 //!
 //! A READDIRPLUS entry carries the attributes the listing read — the local
 //! inode row of the name, or the inherited inode's immutable facts, read for
-//! the whole window in one batch demand each for inodes and file lengths —
+//! the window in one batch demand for file lengths and one inode batch per
+//! level of the inode tree the cache does not already answer —
 //! and the handle of the entry's serial. Both are optional in RFC 1813; here
 //! they are present for every named entry whose offsets this request
 //! publishes, and the publishing visit takes one kernel lookup reference per

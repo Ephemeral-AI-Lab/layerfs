@@ -1,7 +1,10 @@
-//! LP73 Ask 1-B on a PostgreSQL Store: a cold READDIRPLUS window reads its
-//! inherited facts in batches — one batch inode demand and one batch length
-//! demand for the whole window, whatever its size — as a SQLite Store does,
-//! and answers the facts a per-name LOOKUP answers.
+//! LP73 Ask 1-B on a PostgreSQL Store: a READDIRPLUS window reads its
+//! inherited facts in batches — one batch length demand for the window and
+//! one batch inode demand for each level of the inode tree the cache does not
+//! already answer — as a SQLite Store does, and answers the facts a per-name
+//! LOOKUP answers. What it counts is a partly warm window: the visits before
+//! it read the inode table's upper level into the same cache, so its batches
+//! are not a fresh mount's first window's.
 //!
 //! The window is driven through the product's mount path, not a fixture store:
 //! a Workspace bound on the Store, OPENDIR, the reading visit, and the window's
@@ -118,14 +121,14 @@ impl Fact {
     }
 }
 
-/// What one cold READDIRPLUS window answered and what it cost.
+/// What one READDIRPLUS window answered and what it cost.
 struct Measured {
     counts: Counts,
     facts: Vec<Fact>,
     exhausted: bool,
 }
 
-/// One cold READDIRPLUS window of `branch`'s root, driven as a mount drives
+/// One READDIRPLUS window of `branch`'s root, driven as a mount drives
 /// it: OPENDIR, the reading visit, one Store reader for the window's facts,
 /// and the reply's offsets published and then reused.
 fn measure(
@@ -153,8 +156,10 @@ fn measure(
     let base = workspace.base().unwrap();
     let root = base.root().root_inode().serial();
     let mount = jobs.kernel_mount(route, root).unwrap();
-    // Nothing of the base is resident: this is the cold window a fresh mount
-    // serves, the arm whose facts the request must read from the Store.
+    // The cache starts empty, so every fact this window shows is the Store's
+    // to read. The OPENDIR below and the facts it supplies fill it with the
+    // inode table's upper level, so the window that follows is not a fresh
+    // mount's first one.
     let resident = Arc::new(CanonicalClient::resident(Arc::new(CanonicalCache::new(
         1 << 20,
     ))));
@@ -212,11 +217,12 @@ fn measure(
     drop(reply);
     assert!(
         window.needs_base(true),
-        "{tag}: a cold window leaves its facts to the Store"
+        "{tag}: the window leaves its facts to the Store"
     );
 
     // The window's facts, outside the owner, over the Workspace's reader: one
-    // batch inode demand and one batch length demand for the whole window.
+    // batch length demand for the window and one batch inode demand per tree
+    // level the OPENDIR left unread.
     let before = service.store.work();
     let batch = window.finish_with(Some(&base), true).unwrap();
     let after = service.store.work();
@@ -476,7 +482,7 @@ fn pg_branch(stack: LayerStackId) -> BranchId {
     BranchId::named(stack, &HistoryName::new(BRANCH_NAME).unwrap())
 }
 
-/// One cold READDIRPLUS window over an Init'd PostgreSQL Store's root.
+/// One READDIRPLUS window over an Init'd PostgreSQL Store's root.
 fn postgres_window(url: &str, files: usize, tag: &str, stack: [u8; 16]) -> Measured {
     let fixture = Postgres::new(tag, url, files, stack);
     let (owner, service) = fixture.open();
@@ -540,8 +546,12 @@ fn a_postgresql_window_reads_its_facts_in_batches() {
         );
     }
     // The window's object demands and length demands do not grow with the
-    // names it lists: one batch inode demand carries the whole window's
-    // inherited serials and one batch length demand its ordinary files. This
+    // names it lists: one batch length demand carries the window's ordinary
+    // files, and one batch inode demand carries its inherited serials for each
+    // tree level the cache does not already hold, so the names add no batch
+    // while a deeper tree adds one. Here the visits before the window read the
+    // tree's upper level into the same cache, leaving one level: these are not
+    // a fully cold window's counts. This
     // tree's metadata roots are inline and its subdirectory's child count was
     // built with the Commit, so no entry here costs a read of its own; an
     // entry whose metadata root is an object, a subdirectory counted by a scan

@@ -5,8 +5,10 @@
 //! cache holds them; otherwise the request merges them outside the owner
 //! over one Store reader, at the base root the visit named. A reply that
 //! shows each entry's facts (READDIRPLUS) takes them from the same memory
-//! first, and reads what is left in one batch inode demand and one batch
-//! length demand for the whole window, whatever its size. What those batches
+//! first, and reads what is left in one batch length demand for the window
+//! and one batch inode demand for each level of the inode tree the cache does
+//! not already answer, so those counts follow the tree's depth and not the
+//! number of names. What those batches
 //! do not cover is per entry and unchanged here: a non-inline metadata root,
 //! a listed subdirectory's child-directory count, and a symlink's target are
 //! still read once for each entry that needs them. The request then fills its
@@ -236,9 +238,11 @@ impl KernelDirectoryWindow {
     }
     /// The same for a reply that also shows what each accepted entry is, as
     /// READDIRPLUS does. The reading visit already said what memory held; the
-    /// names it left undecided are read here in one batch inode demand and
-    /// one batch length demand for the whole window, so the number of names
-    /// adds no demand. Those two batches are not the whole cost of an entry:
+    /// names it left undecided are read here in one batch length demand for
+    /// the window and one batch inode demand for each level of the inode tree
+    /// the cache does not already answer, so the number of names adds no
+    /// demand while a deeper tree adds one. Those batches are not the whole
+    /// cost of an entry:
     /// [`base_facts`] still reads an inherited inode's non-inline metadata
     /// root, a listed subdirectory's child-directory count and a symlink's
     /// target once per entry that needs them, as the base route always did.
@@ -314,9 +318,11 @@ impl KernelDirectoryWindow {
     }
 }
 /// Fills the facts a reply shows for the entries that still lack them: the
-/// window's inherited serials in one batch inode demand, and the lengths of
-/// its regular files in one batch length demand, so listing more names costs
-/// no more of either. A local serial's facts are its current row. What
+/// window's inherited serials in one batch inode demand for each level of the
+/// inode tree the cache does not already answer, and the lengths of its
+/// regular files in one batch length demand, so listing more names costs no
+/// more of either while a deeper tree costs one more inode batch per level. A
+/// local serial's facts are its current row. What
 /// [`base_facts`] still reads once per entry is not batched here.
 fn facts(
     base: &BaseView,
@@ -342,8 +348,9 @@ fn facts(
     }
     Ok(())
 }
-/// The base value of every inherited serial in one batch inode demand, after
-/// one length demand has remembered the window's ordinary file lengths.
+/// The base values of the window's inherited serials, in one batch inode
+/// demand for each level of the inode tree the cache does not already answer,
+/// after one length demand remembered the window's ordinary file lengths.
 fn inherited_values(
     base: &BaseView,
     serials: &[u64],
