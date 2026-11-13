@@ -85,14 +85,14 @@ A Workspace the daemon no longer knows (`Missing`) answers `Unmounted`.
 ```
 
 The recorded outcome makes a repeated unmount answer what the first one
-established, without dialling the daemon again. One completed record is the
-exception: a `Failed` unmount that was not itself forced, which a `force`
-call may replace with a forced attempt (the daemon's own guard still decides
-whether that force may proceed). A record that is still in progress, one of
-an unknown outcome, and one that a force already produced are answered as
-they stand; a record written before `forced` was recorded (no such field) is
-answered as it stands too, and is not forceable. The daemon's kernel probe
-answers `Busy` while a process still holds the mount. See the
+established, without dialling the daemon again. The exception is a completed
+`Failed` record that was not itself forced: a `force` call may replace it
+with a forced attempt, and the daemon's own guard still decides whether that
+force may proceed. A record that is still in progress, one of an unknown
+outcome, and one a force already produced are answered as they stand; so is a
+record written before `forced` was stored (no such field), which is therefore
+not forceable. The daemon's kernel probe answers `Busy` while a process still
+holds the mount. See the
 [routing table](../../../control/routing/routing-table.md),
 [Engine: daemon](../../../engine/daemon/README.md) and the
 [engine teardown pages](../../../engine/kernel-routes/README.md).

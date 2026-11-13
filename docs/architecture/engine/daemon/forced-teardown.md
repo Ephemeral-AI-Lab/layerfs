@@ -68,9 +68,11 @@ the client mount is repeated: one `umount -f` (macOS), or one
 
 ```text
 registry lock: guard; take the export out of the entry (Kernel::ExportLeaving)
------------------------------------------------------------------
-force helper, once        -- Busy/Interrupted, mount still listed --> facts.detach
-                                                                     Failed, Retained(Detach)
+------------------------------------------------------------------
+one force helper run
+  Done, or the mount is no longer listed -> facts.detach = Detached
+  the mount is still listed --------------> facts.detach = Failed,
+                                             Retained(Detach), facts kept
 then the normal teardown: Server::stop, kernel_revoke, remove the directory,
 the one Close, observe_cleanup, depart
 ```
