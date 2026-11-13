@@ -75,11 +75,11 @@ layerfs backup restore <store> <bucket> [<file>] [--progress]
  download into it <------------------------------ pieces / manifest
    checked; binding must match an existing Store's
  read the file's projects and each one's main Branch (own connection, closed)
- plan each project's record (its manifests must encode)
  home lock (+ Store lock when replacing):
+   plan each project's record (its manifests must encode)
    new:      hard-link into store/<name>/store.sqlite, write record
    replace:  re-check binding and replaceable, rename over the file
- write the link; write the planned project records
+   write the link; write the planned project records
  staging folder removed in every case
 ```
 

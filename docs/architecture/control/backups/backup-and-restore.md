@@ -121,9 +121,10 @@ push never overwrites a file this home did not move.
    v
    binding == existing Store's?  (else Failed)
    read its projects and each one's main Branch
-   plan each project's record (its manifests must encode)
-   home lock: re-check replaceable; hard link (new) or rename (replace)
-   write the link; write the planned project records
+   home lock (+ Store lock when replacing):
+     plan each project's record (its manifests must encode)
+     re-check replaceable; hard link (new) or rename (replace)
+     write the link; write the planned project records
 ```
 
 | # | Check | Refusal | Source |
