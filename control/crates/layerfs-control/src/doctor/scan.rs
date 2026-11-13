@@ -58,6 +58,7 @@ fn store_names(dir: &Path) -> Result<Vec<String>> {
             }
         }
     }
+    names.sort();
     Ok(names)
 }
 
@@ -102,7 +103,9 @@ pub(super) fn scan(home: &Path, findings: &mut Findings) -> Result<Scanned> {
 /// One Store's folder: its record and its projects'.
 fn store(home: &Path, name: &str, scanned: &mut Scanned, findings: &mut Findings) -> Result<()> {
     let entity = ("store", name);
-    store_folder(&paths::store_dir(home, name), entity, findings);
+    if store_folder(&paths::store_dir(home, name), entity, findings) {
+        return Ok(());
+    }
     let path = paths::store_record(home, name);
     let has_record = path.exists();
     if has_record {
@@ -329,10 +332,11 @@ fn folder(path: &Path, entity: (&str, &str), findings: &mut Findings) {
 
 /// A Store's own folder is held to the daemon's rule (kernel_guard): no
 /// group or other bits at all, not even pass-through, so a folder doctor
-/// calls fine is one the daemon opens.
-fn store_folder(path: &Path, entity: (&str, &str), findings: &mut Findings) {
+/// calls fine is one the daemon opens. Returns whether `path` is a symlink
+/// (already reported, so the caller stops descending into this entry).
+fn store_folder(path: &Path, entity: (&str, &str), findings: &mut Findings) -> bool {
     if link(path, entity, findings) {
-        return;
+        return true;
     }
     if let Some(mode) = mode(path).filter(|mode| mode & 0o077 != 0) {
         findings.error(
@@ -344,6 +348,7 @@ fn store_folder(path: &Path, entity: (&str, &str), findings: &mut Findings) {
             format!("`chmod 700 {}`", path.display()),
         );
     }
+    false
 }
 
 /// A record file others or its group may read is an error.
