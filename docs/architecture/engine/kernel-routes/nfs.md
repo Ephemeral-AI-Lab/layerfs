@@ -314,6 +314,13 @@ elsewhere `vers=3,proto=tcp,port={port},mountport={port},mountproto=tcp,nolock,a
 Helper deadlines and teardown belong to the
 [daemon](../daemon/README.md).
 
+## Known limitations
+
+On macOS over NFSv3, creating a file still incurs extra `._` AppleDouble
+companion round-trips (about 5–6 RPCs per file) because the system auto-tags new
+files with `com.apple.provenance`; there is currently no server-side fix that
+preserves xattr semantics.
+
 ## Related
 
 - [Ports](ports.md): the operations the export drives.
