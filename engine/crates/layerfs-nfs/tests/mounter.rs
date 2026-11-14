@@ -1,7 +1,7 @@
 //! The native macOS client must not send atime updates the export ignores,
 //! and a Commit with the default export flush (the export volume's own
-//! `sync_volume_np` on macOS, `sync(2)` elsewhere) never fails on the flush
-//! itself, even when the export's directory is gone.
+//! `sync_volume_np` on macOS) runs when that flush succeeds and is refused,
+//! with nothing committed, when it fails.
 #![cfg(target_os = "macos")]
 #[allow(dead_code)]
 #[path = "support/client.rs"]
@@ -10,8 +10,8 @@ mod client;
 #[path = "support/rig.rs"]
 mod rig;
 use client::Client;
-use layerfs_bridge::control::{CommitControl, Reply, Request, UnmountControl};
-use layerfs_daemon::control::{ExportServing, ExportServingConfig, Helper, Mounter};
+use layerfs_bridge::control::{CommitControl, ControlCode, Reply, Request, UnmountControl};
+use layerfs_daemon::control::{ExportServing, ExportServingConfig, Failure, Helper, Mounter};
 use layerfs_history::WorkspaceId;
 use std::{
     fs,
@@ -36,19 +36,16 @@ fn host_mount_disables_access_time_updates() {
 }
 
 #[test]
-fn default_flush_commits_with_the_export_volume_and_without_it() {
+fn default_flush_commits_with_the_export_volume_and_refuses_without_it() {
     // What this observes, and what it cannot: the Workspace is driven through
     // this test's own NFS RPC client, so the host's mount client holds no
-    // writeback for either flush to push and neither syscall leaves a trace
-    // here. The two Commits below therefore check the contract that is
-    // observable - a flush that succeeds (`sync_volume_np` of the live
-    // directory) and one that fails (`ENOENT` after the directory is removed,
-    // which falls back to `sync(2)`) both leave the Commit to run and
-    // succeed. The flush calls themselves are covered where they live:
-    // `sync_volume_wait`'s `Ok`/error by `layerfs-bridge`'s
-    // `process_identity` test. The `ENOENT` to `sync(2)` fallback inside
-    // `flush_default` has no test of its own, so all this test observes of it
-    // is its outcome: the Commit still runs.
+    // writeback for the flush to push and the syscall leaves no trace here.
+    // The two Commits below therefore check the contract that is observable:
+    // a flush that succeeds (`sync_volume_np` of the live directory) lets
+    // the Commit run, and one that fails (`ENOENT` after the directory is
+    // removed) refuses it as `Failed` at `commit:flush`, before it runs, and
+    // leaves the Workspace idle. `sync_volume_wait`'s `Ok`/error is covered
+    // where it lives, by `layerfs-bridge`'s `process_identity` test.
     let base = std::env::temp_dir().join(format!("layerfs-nfs-mounter-{}", std::process::id()));
     let source = base.join("src");
     let work = base.join("work");
@@ -115,24 +112,32 @@ fn default_flush_commits_with_the_export_volume_and_without_it() {
         other => panic!("{other:?}"),
     }
 
-    // 2. Missing export directory: `sync_volume_np` answers `ENOENT` and
-    // `flush_default` falls back to `sync(2)` instead of failing or skipping
-    // the client writeback; the Commit still runs and succeeds.
+    // 2. Missing export directory: `sync_volume_np` answers `ENOENT`; the
+    // Commit is refused before it runs instead of skipping the writeback.
     let f2 = nfs.touch(&root, b"two.txt", 0o644).unwrap();
     nfs.write_all(&f2.handle, 0, b"second\n", 7);
     fs::remove_dir_all(&ready.directory).unwrap();
     assert!(!Path::new(&ready.directory).exists());
-    match service
-        .execute_control(&Request::Commit(CommitControl {
-            token,
-            force: false,
-            message: Some("second".into()),
-        }))
-        .unwrap()
-        .reply
-    {
-        Reply::Committed(_) => {}
-        other => panic!("{other:?}"),
+    match service.execute_control(&Request::Commit(CommitControl {
+        token,
+        force: false,
+        message: Some("second".into()),
+    })) {
+        Err(Failure::Kernel(failure)) => {
+            assert_eq!(
+                (failure.code, failure.phase),
+                (ControlCode::Failed, "commit:flush"),
+                "{}",
+                failure.detail
+            );
+            assert!(
+                failure.detail.contains("sync_volume_np"),
+                "{}",
+                failure.detail
+            );
+        }
+        Ok(outcome) => panic!("the Commit ran without its flush: {:?}", outcome.reply),
+        Err(other) => panic!("{other:?}"),
     }
 
     fs::create_dir_all(&ready.directory).unwrap();

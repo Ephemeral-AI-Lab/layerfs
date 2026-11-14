@@ -79,7 +79,7 @@ pub struct Mounter {
     pub unmount: Helper,
     pub force: Helper,
     /// Writes back what the client buffered before a Commit; `sync_volume_np`
-    /// of the export directory on macOS (falling back to `sync(2)`) or
+    /// of the export directory on macOS (its failure refuses the Commit) or
     /// `sync(2)` elsewhere when absent.
     pub flush: Option<Helper>,
 }
@@ -585,7 +585,11 @@ impl Service {
             return Ok(());
         };
         match &serving.config.mounter.flush {
-            None => flush_default(std::path::Path::new(&directory)),
+            None => {
+                if let Err(detail) = flush_default(std::path::Path::new(&directory)) {
+                    return Err(kernel_failure(ControlCode::Failed, "commit:flush", detail));
+                }
+            }
             Some(helper) => {
                 match serving
                     .helpers
@@ -935,18 +939,17 @@ pub(super) fn take(kernel: &mut Kernel, phase: MountPhase) -> Result<Exported, F
     Ok(*exported)
 }
 
+/// The export volume's own flush on macOS. A failed `sync_volume_np` refuses
+/// the Commit, as a failed flush helper does: `sync(2)` may return before the
+/// writes are flushed, so it cannot stand in for the waited flush.
 #[cfg(target_os = "macos")]
-fn flush_default(directory: &std::path::Path) {
-    if let Err(error) = layerfs_bridge::process::sync_volume_wait(directory) {
-        eprintln!(
-            "layerfs-daemon: warn: sync_volume_np({}) failed ({error}); falling back to sync()",
-            directory.display()
-        );
-        nix::unistd::sync();
-    }
+fn flush_default(directory: &std::path::Path) -> Result<(), String> {
+    layerfs_bridge::process::sync_volume_wait(directory)
+        .map_err(|error| format!("sync_volume_np({}): {error}", directory.display()))
 }
 
 #[cfg(not(target_os = "macos"))]
-fn flush_default(_directory: &std::path::Path) {
+fn flush_default(_directory: &std::path::Path) -> Result<(), String> {
     nix::unistd::sync();
+    Ok(())
 }
