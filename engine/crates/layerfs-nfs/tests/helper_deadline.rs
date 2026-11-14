@@ -425,6 +425,132 @@ fn timed_out_helper_when_mount_already_gone_completes_teardown() {
 }
 
 #[test]
+fn a_lazily_detached_force_helper_never_completes_teardown() {
+    // `umount -f -l` detaches lazily: the mount leaves the host's table while
+    // the kernel still holds its superblock. A vanished entry is therefore no
+    // proof that the client's mount ended, and Force must keep the custody.
+    let (send, receive) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let base = base("lazy-force");
+        drop(fs::remove_dir_all(&base));
+        fs::create_dir_all(base.join("src")).unwrap();
+        fs::create_dir_all(base.join("mounts")).unwrap();
+        fs::write(base.join("src/file"), b"fixture").unwrap();
+        let table = base.join("mount.table");
+        let rig = rig::Rig::new(
+            &base.join("src"),
+            &base.join("work"),
+            Duration::from_secs(5),
+        );
+        let mut config = ExportServingConfig::new(
+            base.join("mounts"),
+            501,
+            20,
+            Mounter {
+                mount: Helper(vec![
+                    "sh".into(),
+                    "-c".into(),
+                    format!("echo '{{dir}}' > {}", table.display()),
+                ]),
+                unmount: Helper(vec!["sh".into(), "-c".into(), "exit 1".into()]),
+                // `-l` is what the Linux force helper (`umount -f -l`) passes:
+                // the helper fails, yet the entry is gone from the table.
+                force: Helper(vec![
+                    "sh".into(),
+                    "-c".into(),
+                    format!("rm -f {}; exit 1", table.display()),
+                    "-l".into(),
+                ]),
+                flush: None,
+            },
+        );
+        config.mount_table = Some(table.clone());
+        let export = Arc::new(ExportServing::start(config));
+        let service = rig.service(export);
+        let token = match service
+            .execute_control(&Request::Mount {
+                workspace: WorkspaceId::from_authority([38; 32]).unwrap(),
+                branch: rig.branch,
+            })
+            .unwrap()
+            .reply
+        {
+            Reply::Bound { token, .. } => token,
+            other => panic!("{other:?}"),
+        };
+        let ready = match service
+            .execute_control(&Request::Attach(token))
+            .unwrap()
+            .reply
+        {
+            Reply::Ready(ready) => *ready,
+            other => panic!("{other:?}"),
+        };
+
+        // The plain helper fails while the table still lists the mount.
+        let err = service
+            .execute_control(&Request::Unmount(UnmountControl {
+                token,
+                discard: true,
+            }))
+            .unwrap_err();
+        match &err {
+            Failure::Retained(custody) => {
+                assert_eq!(custody.stage, TeardownStage::Detach);
+                assert!(!custody.detached);
+            }
+            other => panic!("expected Retained, got {other:?}"),
+        }
+
+        // The forced helper fails too, and the entry is gone from the table:
+        // a lazy detach, so the mount is not known gone.
+        let err = service
+            .execute_control(&Request::ForceUnmount {
+                token,
+                relinquish_unknown: false,
+            })
+            .unwrap_err();
+        match &err {
+            Failure::Retained(custody) => {
+                assert_eq!(custody.stage, TeardownStage::Detach);
+                assert!(!custody.detached);
+                assert_eq!(
+                    custody.forced.as_ref().map(|facts| facts.detach),
+                    Some(DetachDisposition::Failed)
+                );
+            }
+            other => panic!("expected Retained, got {other:?}"),
+        }
+        assert!(Path::new(&ready.directory).exists());
+        match service.execute_control(&Request::Status(token)) {
+            Ok(done) => match done.reply {
+                Reply::Status(status) => assert_eq!(
+                    status.kernel.map(|kernel| kernel.phase),
+                    Some(MountPhase::Retained)
+                ),
+                other => panic!("{other:?}"),
+            },
+            Err(error) => panic!("{error:?}"),
+        }
+        assert!(
+            service.retained_export(token).unwrap().is_some(),
+            "the export stays in custody"
+        );
+        assert!(service.export_released(token).is_none());
+        assert!(!table.exists(), "the lazy helper removed the table entry");
+
+        drop(service);
+        drop(rig);
+        fs::remove_dir_all(base).unwrap();
+        let _ = send.send(());
+    });
+    receive
+        .recv_timeout(Duration::from_secs(10))
+        .expect("bounded test timed out");
+    worker.join().unwrap();
+}
+
+#[test]
 fn canonical_mount_paths_and_unreadable_table_preserve_detach_safety() {
     let (send, receive) = mpsc::channel();
     let worker = std::thread::spawn(move || {

@@ -21,8 +21,9 @@
 //!   and runs the one logical Close. A step that is not established keeps
 //!   the export and its engine mount in the entry, as FUSE custody is kept.
 //!   A helper that failed or ran out of time is judged by the host's mount
-//!   table, never by the mount itself: only a mount Attach saw listed there
-//!   can be known gone (`export_helper::listed`).
+//!   table, never by the mount itself: only a mount Attach saw listed there,
+//!   and only an ordinary (not lazy) helper, can be known gone
+//!   (`export_helper::listed`, `Helper::lazy`).
 //! - ForceUnmount runs the forced helper once, then the same teardown. It is
 //!   also how an export kept at Detach for a mount still listed is finished.
 //!   A helper that outlives its KILL goes to the bounded retained queue.
@@ -706,7 +707,7 @@ impl Service {
                     format!("client reported the mount busy; no terminal effect: {detail}"),
                 ));
             }
-            Ran::Failed(_) | Ran::Interrupted(_) if self.detached_export(&exported) => {}
+            Ran::Failed(_) | Ran::Interrupted(_) if self.detached_export(&exported, helper.as_ref()) => {}
             Ran::Failed(detail) | Ran::Interrupted(detail) => {
                 return Err(self.keep_export(
                     token,
@@ -720,8 +721,14 @@ impl Service {
         self.teardown_export(token, &workspace, exported, None)?;
         self.close(token, &workspace, None)
     }
-    fn detached_export(&self, exported: &Exported) -> bool {
-        exported.tracked
+    /// Whether a failed or timed-out helper proves the client mount is gone:
+    /// Attach saw the mount listed (`tracked`), the helper cannot detach
+    /// lazily, and the host's table does not list it now. A lazy detach
+    /// (`umount -l`, the Linux force helper) removes the table entry while the
+    /// kernel still holds the superblock, so it is never proof.
+    fn detached_export(&self, exported: &Exported, helper: Option<&Helper>) -> bool {
+        !helper.is_some_and(Helper::lazy)
+            && exported.tracked
             && (self.export.as_ref())
                 .is_some_and(|s| matches!(s.is_mounted(&exported.ready.directory), Ok(false)))
     }
@@ -892,7 +899,7 @@ impl Service {
         match ran {
             Ran::Done => {}
             Ran::Busy(_) | Ran::Failed(_) | Ran::Interrupted(_)
-                if self.detached_export(&exported) => {}
+                if self.detached_export(&exported, helper.as_ref()) => {}
             Ran::Busy(detail) | Ran::Failed(detail) | Ran::Interrupted(detail) => {
                 facts.detach = DetachDisposition::Failed;
                 return Err(self.keep_export(

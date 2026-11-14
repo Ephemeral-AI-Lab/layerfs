@@ -24,6 +24,18 @@ impl Helper {
         let words: Vec<String> = line.split_whitespace().map(str::to_owned).collect();
         (!words.is_empty()).then_some(Self(words))
     }
+    /// Whether this helper can detach lazily: `-l`/`--lazy` (also inside a
+    /// combined word such as `-fl`) asks the kernel to drop the mount from the
+    /// host's table before its superblock goes. The table then cannot witness
+    /// that the client's mount ended, so a vanished entry proves nothing.
+    pub fn lazy(&self) -> bool {
+        self.0.iter().any(|word| {
+            word == "--lazy"
+                || (word.starts_with('-')
+                    && !word.starts_with("--")
+                    && word.contains('l'))
+        })
+    }
     fn command(&self, port: u16, directory: &str) -> Option<Command> {
         let mut words = self.0.iter().map(|word| {
             word.replace("{port}", &port.to_string())
