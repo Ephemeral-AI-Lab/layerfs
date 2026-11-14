@@ -152,11 +152,21 @@ CLI     layerfs backup restore <store> <bucket> [<file>] [--progress]
 `file` defaults to the file the Store's link names, else the Store's name.
 Phases: `check`, `download` (bytes, pieces), `verify` (the bytes open as the
 Store), `install`. `projects` lists the projects the restored file holds;
-their records are rebuilt and records of projects it lacks are removed. It
-writes only after a complete, checked download, and the install is one link
-or rename under the home lock; no outcome is reported `Unknown`. A failure
-after the install leaves the file without its new link, so a second restore
-is `Conflict`: read `store.get` first
+each project's record is rebuilt as `project.init` writes it (carrying its
+`manifest` and `installed` manifest when the project has a `main` Branch;
+existing complete records are kept and incomplete ones completed), and
+records of projects it lacks are removed
+([`backup/restored.rs`](../../../../control/crates/layerfs-store/src/backup/restored.rs)).
+Records are planned and their manifests encoded under the home lock before
+the install, so a manifest that does not encode refuses the restore with
+nothing installed; planning and writing project records hold only the home
+lock, while replacing an existing Store and writing the link each take the
+Store lock separately. It writes only after a complete, checked download,
+and the install is one link or rename under the home lock; no outcome is
+reported `Unknown`. A failure after the install writing the link leaves the
+file without its new link, so a second restore is `Conflict`; a failure
+writing the project records leaves the file and its link in place, so a
+second restore of the same backup completes them: read `store.get` first
 ([`backup.rs`](../../../../control/crates/layerfs-control/src/backup.rs),
 [`backup/restore.rs`](../../../../control/crates/layerfs-store/src/backup/restore.rs)).
 
@@ -166,7 +176,7 @@ is `Conflict`: read `store.get` first
 | `InUse` | a process holds the Store, a Sandbox of it is recorded, or its `-wal`/`-shm` exists |
 | `Conflict` | the Store changed since its last transfer through this bucket, has no link, or was replaced during the download |
 | `Exists` | a Store of that name was made during the download |
-| `Failed` | the download or its checks failed (an uncertain read included); the backup's binding is another Store's |
+| `Failed` | the download or its checks failed (an uncertain read included); the backup's binding is another Store's; the restored Store's projects or their history cannot be read; a rebuilt manifest does not encode |
 
 ## Progress
 
