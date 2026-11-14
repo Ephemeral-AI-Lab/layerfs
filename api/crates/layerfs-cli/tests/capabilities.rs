@@ -34,6 +34,10 @@ fn version_identifies_source_and_features_without_a_home() {
         features.contains(&SdkValue::text("machine")),
         cfg!(feature = "machine")
     );
+    assert_eq!(
+        features.contains(&SdkValue::text("sandbox-runtime")),
+        layerfs_bridge::sandbox_runtime::LOADER.is_some()
+    );
     assert!(!home.exists());
 }
 
