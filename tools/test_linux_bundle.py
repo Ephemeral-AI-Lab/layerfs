@@ -16,6 +16,30 @@ import linux_bundle as bundle
 from cleanup_state import Refused
 
 CONFIG = b'{"architecture":"arm64","os":"linux"}'
+LDD = """\tlinux-vdso.so.1 (0x0000ffff925ed000)
+\tlibssl.so.3 => /lib/aarch64-linux-gnu/libssl.so.3 (0x0000ffff91a00000)
+\tlibc.so.6 => /lib/aarch64-linux-gnu/libc.so.6 (0x0000ffff91310000)
+\t/lib/ld-linux-aarch64.so.1 (0x0000ffff925a0000)
+"""
+LIBRARIES = ("libssl.so.3", "libc.so.6", "ld-linux-aarch64.so.1")
+
+
+def elf(interpreter=None):
+    """A minimal 64-bit little-endian ELF header with one program header: a
+    `PT_INTERP` naming `interpreter`, else a `PT_LOAD` (a static executable)."""
+    head = bytearray(64)
+    head[:6] = b"\x7fELF\x02\x01"
+    head[32:40] = (64).to_bytes(8, "little")
+    head[54:56] = (56).to_bytes(2, "little")
+    head[56:58] = (1).to_bytes(2, "little")
+    entry = bytearray(56)
+    path = (interpreter or "").encode() + b"\0"
+    entry[0:4] = (3 if interpreter else 1).to_bytes(4, "little")
+    entry[8:16] = (120).to_bytes(8, "little")
+    entry[32:40] = len(path).to_bytes(8, "little")
+    return bytes(head + entry + path)
+
+
 CONFIG_HEX = hashlib.sha256(CONFIG).hexdigest()
 
 
@@ -79,7 +103,11 @@ class LinuxBundleTests(unittest.TestCase):
         protocol.write_text("pub const PROTOCOL: i64 = 3;\n")
         patches = [
             patch.object(bundle, "inputs", lambda record: dict(self.source)),
-            patch.object(bundle, "docker_build", lambda record, command, extra=(): ["docker-run", *extra, *command]),
+            patch.object(
+                bundle,
+                "docker_build",
+                lambda record, command, extra=(), network="none": ["docker-run", *extra, *command],
+            ),
             patch.object(bundle, "execute", self.execute),
             patch.object(bundle, "arch", lambda image: "aarch64"),
         ]
@@ -87,10 +115,36 @@ class LinuxBundleTests(unittest.TestCase):
             p.start()
             self.addCleanup(p.stop)
 
+        self.ldd = LDD
+        self.copied = LIBRARIES
+
+    def fetched(self):
+        """What the `runtime` step leaves in the registration's state."""
+        out = bundle.runtime_dir(self.record)
+        out.mkdir(parents=True)
+        files = {}
+        for name in bundle.STATIC:
+            (out / name).write_bytes(elf())
+            files[name] = hashlib.sha256(elf()).hexdigest()
+        (out / "bash-static.copyright").write_text("GPL-3+")
+        packages = {"bash-static": {"version": "5.2", "deb": "d1"}, "busybox-static": {"version": "1.35", "deb": "d2"}}
+        (out / "runtime.json").write_text(json.dumps({"packages": packages, "files": files}))
+
     def execute(self, command, cwd, env=None, timeout=None, log=None):
         self.commands.append((command, timeout))
         if command[:1] == ["docker-run"] and "sh" in command:
             export = Path(command[command.index("--mount") + 1].split("src=")[1].split(",")[0])
+            if bundle.COLLECT in command:
+                for directory in ("runtime/lib", "runtime/bin", "licenses"):
+                    (export / directory).mkdir(parents=True, exist_ok=True)
+                for name in self.copied:
+                    (export / "runtime/lib" / name).write_bytes(name.encode())
+                (export / "runtime/bin/getent").write_bytes(b"getent")
+                (export / "licenses/libc6.copyright").write_text("LGPL-2.1+")
+                (export / ".ldd").write_text(self.ldd)
+                (export / ".glibc").write_text("2.36\n")
+                (export / ".owners").write_text("libc6\n")
+                return
             for name in bundle.BINARIES:
                 (export / name).write_bytes(name.encode())
         if command[:2] == ["docker", "save"]:
@@ -132,17 +186,38 @@ class LinuxBundleTests(unittest.TestCase):
         dest = self.root / "cache"
         for step in ("daemon", "worker", "helper"):
             bundle.build(self.record, step, "debug", 120)
+        self.fetched()
         old = dest / "9.8.7/linux-aarch64"
         old.mkdir(parents=True)
         (old / "stale").write_text("x")
         final = bundle.seal(self.record, "debug", None, dest, 120)
         self.assertEqual(final, old)
         names = sorted(p.name for p in final.iterdir())
-        self.assertEqual(names, sorted([*bundle.BINARIES, bundle.ARCHIVE, "bundle.json"]))
+        self.assertEqual(names, sorted([*bundle.BINARIES, bundle.ARCHIVE, "bundle.json", "licenses", "runtime"]))
         manifest = json.loads((final / "bundle.json").read_text())
         files = {n: hashlib.sha256(n.encode()).hexdigest() for n in bundle.BINARIES}
         files[bundle.ARCHIVE] = hashlib.sha256((final / bundle.ARCHIVE).read_bytes()).hexdigest()
+        layer = {f"runtime/lib/{n}": hashlib.sha256(n.encode()).hexdigest() for n in LIBRARIES}
+        layer["runtime/bin/getent"] = hashlib.sha256(b"getent").hexdigest()
+        for name in bundle.STATIC:
+            layer[f"runtime/bin/{name}"] = hashlib.sha256(elf()).hexdigest()
+        files.update(layer)
+        files["licenses/libc6.copyright"] = hashlib.sha256(b"LGPL-2.1+").hexdigest()
+        files["licenses/bash-static.copyright"] = hashlib.sha256(b"GPL-3+").hexdigest()
         self.assertEqual(manifest["files"], files)
+        # R5: the runtime layer, its own hash, loader and glibc
+        self.assertEqual(
+            manifest["sandbox_runtime"],
+            {
+                "hash": bundle.bundle_hash(layer),
+                "loader": "lib/ld-linux-aarch64.so.1",
+                "glibc": "2.36",
+                "packages": {"bash-static": "5.2", "busybox-static": "1.35"},
+            },
+        )
+        self.assertEqual((final / "runtime/bin/bash").stat().st_mode & 0o777, 0o755)
+        self.assertEqual((final / "runtime/lib/libc.so.6").stat().st_mode & 0o777, 0o644)
+        self.assertEqual(sorted(p.name for p in final.iterdir() if p.name.startswith(".")), [])
         self.assertEqual(manifest["protocol"], 3)
         self.assertEqual(manifest["runtime"], bundle.bundle_hash({n: files[n] for n in bundle.BINARIES}))
         # the namespaces backend's shape: uncompressed layers, config named by its digest
@@ -161,6 +236,32 @@ class LinuxBundleTests(unittest.TestCase):
         self.assertEqual((final / bundle.ARCHIVE).stat().st_mode & 0o777, 0o644)
         save = [c for c, _ in self.commands if c[:2] == ["docker", "save"]]
         self.assertEqual(save[0][-1], "sha256:s")
+
+    def test_seal_refuses_a_runtime_layer_missing_a_library(self):
+        dest = self.root / "cache"
+        for step in ("daemon", "worker", "helper"):
+            bundle.build(self.record, step, "debug", 120)
+        with self.assertRaisesRegex(Refused, "linux_bundle.py runtime"):
+            bundle.seal(self.record, "debug", None, dest, 120)
+        self.fetched()
+        self.copied = ("libc.so.6", "ld-linux-aarch64.so.1")
+        with self.assertRaisesRegex(Refused, "libssl.so.3"):
+            bundle.seal(self.record, "debug", None, dest, 120)
+        self.copied = LIBRARIES
+        self.ldd = LDD + "\tlibmissing.so.1 => not found\n"
+        with self.assertRaisesRegex(Refused, "libmissing"):
+            bundle.seal(self.record, "debug", None, dest, 120)
+        self.assertEqual(list((dest / "9.8.7").iterdir()), [], "nothing placed")
+
+    def test_the_interpreter_tells_a_static_executable(self):
+        static, dynamic, text = self.root / "static", self.root / "dynamic", self.root / "text"
+        static.write_bytes(elf())
+        dynamic.write_bytes(elf("/lib/ld-linux-aarch64.so.1"))
+        text.write_text("#!/bin/sh\n")
+        self.assertIs(bundle.interpreter(static), False)
+        self.assertEqual(bundle.interpreter(dynamic), "/lib/ld-linux-aarch64.so.1")
+        with self.assertRaises(Refused):
+            bundle.interpreter(text)
 
     def test_a_failed_seal_leaves_no_partial_folder(self):
         dest = self.root / "cache"
