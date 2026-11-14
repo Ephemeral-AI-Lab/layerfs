@@ -15,6 +15,7 @@
 //! [`write_json`](crate::timer::TimingReport::write_json).
 
 mod bounded_json;
+pub mod copies;
 mod format;
 mod json;
 mod limits;

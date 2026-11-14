@@ -47,8 +47,27 @@ impl KernelData {
         let operation = KernelReadOperation::Data { serial };
         let mut custody = Custody::unowned(services, mount, request, serial, handle, operation);
         custody.data_input = Some(input);
-        match custody.window(input).await {
+        match custody.window(input, None).await {
             Ok(answer) => Ok(answer),
+            Err(reason) => Err(ReadFailure::new(reason, custody)),
+        }
+    }
+    /// Prototype (copies experiment, `join`): [`Self::read`] appending the
+    /// window to `into`, so a split READ is emitted into its one reply.
+    pub async fn read_into(
+        services: Arc<dyn RequestServices>,
+        mount: KernelMount,
+        request: u64,
+        serial: u64,
+        handle: Option<u64>,
+        input: ReadDataInput,
+        into: &mut Vec<u8>,
+    ) -> Result<Result<(), Refusal>, ReadFailure> {
+        let operation = KernelReadOperation::Data { serial };
+        let mut custody = Custody::unowned(services, mount, request, serial, handle, operation);
+        custody.data_input = Some(input);
+        match custody.window(input, Some(into)).await {
+            Ok(answer) => Ok(answer.map(|_| ())),
             Err(reason) => Err(ReadFailure::new(reason, custody)),
         }
     }
@@ -57,6 +76,7 @@ impl Custody {
     async fn window(
         &self,
         input: ReadDataInput,
+        into: Option<&mut Vec<u8>>,
     ) -> Result<Result<KernelData, Refusal>, ServiceError> {
         let (offset, length, link) = match input {
             ReadDataInput::File { offset, length } => (offset, length, false),
@@ -75,7 +95,15 @@ impl Custody {
             layerfs_telemetry::timer::stages::Stage::ReadVisit,
             started,
         );
-        if visit.get().whole(link).is_some() {
+        if let Some(whole) = visit.get().whole(link) {
+            if let Some(into) = into {
+                layerfs_telemetry::timer::copies::copied(
+                    layerfs_telemetry::timer::copies::Site::Join,
+                    whole.len(),
+                );
+                into.extend_from_slice(whole);
+                return Ok(Ok(KernelData(Bytes::Owned(Vec::new()))));
+            }
             return Ok(Ok(KernelData(Bytes::Visit(visit))));
         }
         // The request's own copy: the job and its receipt are gone before any
@@ -96,7 +124,12 @@ impl Custody {
         };
         let answer = layerfs_telemetry::timer::stages::time(
             layerfs_telemetry::timer::stages::Stage::Finish,
-            || window.finish(base.as_ref(), serial, offset, length, link),
+            || match into {
+                Some(into) => window
+                    .finish_into(base.as_ref(), serial, offset, length, link, into)
+                    .map(|answer| answer.map(|()| Vec::new())),
+                None => window.finish(base.as_ref(), serial, offset, length, link),
+            },
         );
         drop(base); // Return the actual reader before the reply.
         match answer {

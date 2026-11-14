@@ -43,7 +43,7 @@ mod probe {
     use layerfs_project::{init, InitRequest};
     use layerfs_storage::{Storage, StoragePolicy};
     use layerfs_store_service::bootstrap::{open_store_observed, OpenedStore};
-    use layerfs_telemetry::timer::{stages, Timing};
+    use layerfs_telemetry::timer::{copies, stages, Timing};
     use std::{
         fs::{self, File, OpenOptions},
         io::{Read, Write},
@@ -279,6 +279,34 @@ mod probe {
             .collect();
         format!("{{{}}}", rows.join(","))
     }
+    /// The object cache's charge, entries, hits, misses, evictions and
+    /// authenticated bytes.
+    fn cache_state(opened: &OpenedStore) -> String {
+        let w = opened.store.cache_work().unwrap();
+        format!(
+            "{{\"charged\":{},\"objects\":{},\"hits\":{},\"misses\":{},\"evictions\":{},\"authenticated\":{}}}",
+            w.charged_cache_bytes,
+            w.cached_objects,
+            w.cache_hits,
+            w.cache_misses,
+            w.evictions,
+            w.authenticated_bytes
+        )
+    }
+    fn copy_delta(before: &([u64; copies::SITES], [u64; copies::SITES])) -> String {
+        let after = copies::snapshot();
+        let rows: Vec<String> = (0..copies::SITES)
+            .map(|i| {
+                format!(
+                    "\"{}\":[{},{}]",
+                    copies::SITE_NAMES[i],
+                    after.0[i] - before.0[i],
+                    after.1[i] - before.1[i]
+                )
+            })
+            .collect();
+        format!("{{{}}}", rows.join(","))
+    }
     /// Raises the mount's bdi readahead to the window; returns (before, after) KiB.
     fn readahead(directory: &str, window: u32) -> (String, String) {
         let dev = fs::metadata(directory).unwrap().dev();
@@ -378,6 +406,8 @@ mod probe {
         let store_resident = resident(&copy);
         let path = Path::new(&ready.directory).join("rand");
         let (stage0, work0, sql0) = (stages::snapshot(), opened.store.work(), readers(&opened));
+        let copies0 = copies::snapshot();
+        let cache0 = cache_state(&opened);
         let rss = resident_reset();
         let started = Instant::now();
         let mut file = File::open(&path).unwrap();
@@ -395,15 +425,18 @@ mod probe {
         let hwm = status_kb("VmHWM:");
         let (work1, sql1) = (opened.store.work(), readers(&opened));
         let split = stage_delta(&stage0);
+        let copied = copy_delta(&copies0);
+        let cache1 = cache_state(&opened);
         assert_eq!((total, sum), (BIG, expected), "cold read bytes");
         let receipt = unmount(&harness, &ready);
         println!(
-            "PROBE {{\"phase\":\"cold_read\",\"profile\":{profile},\"read_ahead_kb\":[\"{ra_before}\",\"{ra_after}\"],\"store_resident_before\":{store_resident},\"bytes\":{total},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"object_batches\":{},\"object_ids\":{},\"statements\":{},\"returned_rows\":{},\"stages\":{split},\"kernel\":{}}}",
+            "PROBE {{\"phase\":\"cold_read\",\"profile\":{profile},\"read_ahead_kb\":[\"{ra_before}\",\"{ra_after}\"],\"store_resident_before\":{store_resident},\"bytes\":{total},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"object_batches\":{},\"object_ids\":{},\"statements\":{},\"returned_rows\":{},\"stages\":{split},\"copies\":{copied},\"copy_switches\":\"{:?}\",\"cache\":[{cache0},{cache1}],\"kernel\":{}}}",
             total as f64 / seconds / 1e6,
             work1.object_batches - work0.object_batches,
             work1.object_ids - work0.object_ids,
             sql1.statements - sql0.statements,
             sql1.returned_rows - sql0.returned_rows,
+            copies::switches(),
             opcodes(&receipt)
         );
 

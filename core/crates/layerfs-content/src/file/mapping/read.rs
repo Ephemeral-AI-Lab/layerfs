@@ -249,7 +249,7 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
         }
         let values = self
             .reader
-            .read_canonical_batch_scoped(&self.distinct, self.scope.child("mapping.payload"))?;
+            .read_shared_batch_scoped(&self.distinct, self.scope.child("mapping.payload"))?;
         if values.len() != self.distinct.len() {
             return Err(ContentError::BatchCardinality {
                 requested: self.distinct.len(),
@@ -304,6 +304,10 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
                 .get(start..end)
                 .ok_or(ContentError::InvalidRecord("extent outside payload"))?;
             self.sink.write_all(slice).map_err(|_| ContentError::Io)?;
+            layerfs_telemetry::timer::copies::copied(
+                layerfs_telemetry::timer::copies::Site::Emit,
+                slice.len(),
+            );
             self.counters.payload_bytes_read = self
                 .counters
                 .payload_bytes_read
