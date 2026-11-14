@@ -253,6 +253,7 @@ export interface FileApplyOptions extends CallOptions {
 /** Options of `sandbox.create`; an unknown option is refused. */
 export interface SandboxCreateOptions extends CallOptions {
   image?: string;
+  on_progress?: ProgressHandler;
 }
 
 /** Options of `sandbox.list`; an unknown option is refused. */
@@ -302,6 +303,16 @@ export interface WorkspaceCommitOptions extends CallOptions {
 export interface WorkspaceUnmountOptions extends CallOptions {
   discard?: boolean;
   force?: boolean;
+}
+
+/** Options of `machine.load`; an unknown option is refused. */
+export interface MachineLoadOptions extends CallOptions {
+  on_progress?: ProgressHandler;
+}
+
+/** Options of `machine.prune`; an unknown option is refused. */
+export interface MachinePruneOptions extends CallOptions {
+  unused?: boolean;
 }
 
 /** Options of `machine.start`; an unknown option is refused. */
@@ -502,6 +513,13 @@ export interface MachineFamily {
   platforms(options?: CallOptions): Promise<Result>;
   /** a machine's record */
   get(name: string, options?: CallOptions): Promise<Result>;
+  /** the Sandbox images a machine holds, and the host's Docker images it can copy */
+  images(name: string, options?: CallOptions): Promise<Result>;
+  /** copy an image from the host's Docker to a machine without creating a Sandbox */
+  load(name: string, image: string, options?: MachineLoadOptions): Promise<Result>;
+  /** remove a Sandbox image from a machine, or every unused one */
+  prune(name: string, options: MachinePruneOptions): Promise<Result>;
+  prune(name: string, image?: string | null, options?: MachinePruneOptions): Promise<Result>;
   /** a machine's live state, free disk and tool version */
   status(name: string, options?: CallOptions): Promise<Result>;
   /** start a stopped machine and its worker; a running one answers at once */

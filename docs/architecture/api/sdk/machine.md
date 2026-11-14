@@ -13,7 +13,8 @@ The `machine` calls: list, inspect, create, start, stop, update and remove the m
 ## Calls
 
 ```text
- reads (start nothing):  list   platforms   get   status
+ reads (start nothing):  list   platforms   get   status   images
+ Sandbox images:         load (copy from the host's Docker)   prune
 
  built in: native, docker ---------------------- update (image, docker,
                                                   wsl, daemon)
@@ -31,6 +32,9 @@ The `machine` calls: list, inspect, create, start, stop, update and remove the m
 | [`machine.list`](#machinelist) | `{ machines: [summary] }` |
 | [`machine.platforms`](#machineplatforms) | `{ host, platforms: [row] }` |
 | [`machine.get`](#machineget) | summary |
+| [`machine.images`](#machineimages) | `{ machine, mode, architecture, default, free, images, docker, available }` |
+| [`machine.load`](#machineload) | `{ id, refs, size, reused }` |
+| [`machine.prune`](#machineprune) | `{ removed: [id], freed }` |
 | [`machine.status`](#machinestatus) | `{ name, platform, state, free_disk, tool_version, down_reason, stores, op? }` |
 | [`machine.start`](#machinestart) | summary, once the worker answers |
 | [`machine.stop`](#machinestop) | summary, `state: "stopped"` |
@@ -139,6 +143,94 @@ A machine held by an `op` is not probed (its state comes from the record);
 `get` never clears an `op`. A failed probe is `state: "unknown"`, not an
 error. Errors: `InvalidInput` (not a machine name), `NotFound`, `Failed` (no
 known platform).
+
+### machine.images
+
+The Sandbox images a machine holds and the host's Docker images it could
+copy, read without starting it
+([`images.rs`](../../../../control/crates/layerfs-sandbox/src/images.rs),
+[`docker.rs`](../../../../control/crates/layerfs-sandbox/src/docker.rs)).
+
+```text
+JS      await layerfs.machine.images(name)
+Python  layerfs.machine.images(name)
+CLI     layerfs machine images <name>
+```
+
+```text
+{ machine, mode: "images" | "host", architecture, default, free,
+  images: [{ id, refs, size, architecture, source, sandboxes, last_used }],
+  docker: null | { available: true }
+        | { available: false, reason: "not-installed" | "not-running" | "error", message },
+  available: [{ id, refs, size, os, architecture, usable, reason?, need, fits }] }
+```
+
+`images` are the unpacked images with their sidecars
+(`machines/native/run/images/<hex>.2.json`: `source: "imported"` for one
+copied from Docker) and what the archives its Sandboxes read still hold
+(`bundle`, `machine`), unpacked or not. `id` is the Docker image Id for an
+imported image and the config digest for an archive's. `sandboxes` counts
+the Sandbox records on this machine naming that `id`; `last_used` is the
+last create's time (RFC 3339) or null. `default` is the record's image, else
+the archive's only one. `free` is the image cache's free bytes. `available`
+lists the host's tagged Docker images (one `docker image ls`, one batched
+`docker image inspect`, 10 s each) through the `docker` machine's socket,
+else Docker's default context, minus any whose id or refs `images` already
+has (the bundle's image in Docker, `layerfs-cache/sandbox:<hex>`, included).
+A row for another OS or architecture is `usable: false` with `reason {kind:
+"os" | "arch", value}`; `need` is `2 × size × 1.05` and `fits` is
+`need <= free` (true when `free` is unknown). A Docker failure fills
+`docker.available: false` and never fails the call. macOS `native` answers
+`mode: "host"`, `docker: null` and no rows. Errors: `NotFound`,
+`Unavailable` `{what: "machine"}` when its worker does not answer.
+
+### machine.load
+
+Copies an image to a machine as `sandbox.create`'s `image` does, without a
+Sandbox ([`image_load.rs`](../../../../control/crates/layerfs-sandbox/src/image_load.rs)).
+
+```text
+JS      await layerfs.machine.load(name, image, { on_progress })
+Python  layerfs.machine.load(name, image, *, on_progress=None)
+CLI     layerfs machine load <name> <image> [--progress]
+```
+
+`image` is a digest, Docker image Id or Docker reference. The machine is
+asked first: an image it holds is `reused: true` and needs neither Docker nor
+a byte sent. Otherwise `docker image inspect` resolves it; the host keeps an
+export container `layerfs-export-<hex>` (removed once the machine publishes
+the image), streams `docker export` without the init layer's files
+(`.dockerenv`, `etc/hosts`, `etc/hostname`, `etc/resolv.conf`, `etc/mtab`,
+`dev/*`) and device or FIFO entries in 1 MiB `image.artifact` frames to
+`.recv-<hex>.part`, and the machine checks its size and sha256, unpacks it
+once into `<hex>.2/`, writes the sidecar and deletes the staged tar. A staged
+tar left by a stopped copy is resumed when its bytes hash as this export's
+prefix, else restarted; one still growing (under 30 s old) is another
+caller's copy, which this one waits for. Progress: `inspect`, `export`,
+`send` (`done`, `total`), `unpack`. Errors: `Unsupported` `{reason: "host"}`
+(macOS `native`), `{reason: "arch" | "os", value}`; `InvalidInput` (Docker
+has no such image); `Unavailable` `{what: "docker" | "machine"}`; `NoSpace`
+`{need, free}`.
+
+### machine.prune
+
+Removes one unpacked image, or with `unused` every one no Sandbox uses
+except the machine's default
+([`images.rs`](../../../../control/crates/layerfs-sandbox/src/images.rs)).
+
+```text
+JS      await layerfs.machine.prune(name, image?, { unused })
+Python  layerfs.machine.prune(name, image=None, *, unused=None)
+CLI     layerfs machine prune <name> [<image>] [--unused]
+```
+
+An image is in use while a Sandbox directory's `config/helper.spec`
+`lower=` names it, or while a create holds its lock between its unpack and
+its spec: a named one is refused `InUse` (`detail.count`), `unused` skips
+it. Naming the default removes it; the next create unpacks it again from
+its archive. `freed` is the free bytes after minus before. Errors:
+`InvalidInput` (neither an image nor `unused`, or not an id), `NotFound`
+(not unpacked here), `InUse`, `Unsupported` `{reason: "host"}`.
 
 ### machine.status
 
