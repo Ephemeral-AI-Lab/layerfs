@@ -72,7 +72,7 @@
 | Structure/content audit | `persistence/diagnostic/` (`sqlite_structure(path)`, `SqliteHandles::diagnose`), `control/.../diagnostic.rs::sqlite(path, identity, …)` | Check before install |
 | Page reclamation | `backend/sqlite/lifecycle/reclamation.rs` (512 pages per call, requires `auto_vacuum=2`) | Returns pages already on the freelist; it frees no pack bytes, because no pack row is deleted in the live Store |
 | Metering | `backend.store.project.get_storage`, `backend.store.fs.get_storage`, `backend.store.project.list_overwritten` | The three definitions and the Q2 measurement |
-| Bounded traversal | `core/crates/layerfs-content/src/diagnostic/scan.rs` (the reference walk) | Mark must **not** reuse `qualify`: it skips file mappings, symlink targets and attribute trees and ignores delta bases (`qualify/walk.rs:38`); `FinalizedObject::admit(..).references()` + `ChainBases::base_of` is the walk `diagnostic/scan.rs` already does |
+| Bounded traversal | `engine/crates/layerfs-persistence/src/diagnostic/scan.rs` (the reference walk) | Mark must **not** reuse `qualify`: it skips file mappings, symlink targets and attribute trees and ignores delta bases (`qualify/walk.rs:38`); `FinalizedObject::admit(..).references()` + `ChainBases::base_of` is the walk `diagnostic/scan.rs` already does |
 | Operations surface | `store.*` (create/connect/list/status/push/pull/remove), `backup.*`, `doctor`, `project.export` | No parallel machinery |
 
 **Counterexample:** `filesystem/references/` is a reference-effect reducer (bounded ordering, checked release, custody), **not an object-graph refcount**, and cannot serve as GC's counter.
