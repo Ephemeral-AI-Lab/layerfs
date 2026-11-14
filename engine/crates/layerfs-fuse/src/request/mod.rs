@@ -5,6 +5,7 @@ mod directory;
 mod failure;
 mod inline;
 mod mutate;
+mod passthrough;
 mod reply;
 mod state;
 mod terminal;

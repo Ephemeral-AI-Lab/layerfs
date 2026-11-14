@@ -62,7 +62,19 @@ pub(crate) fn negotiate(config: &mut KernelConfig) -> io::Result<Negotiation> {
             "required kernel capability absent",
         ));
     }
-    let selected = defaults | (offered & InitFlags::FUSE_MAX_PAGES);
+    let mut selected = defaults | (offered & InitFlags::FUSE_MAX_PAGES);
+    // Prototype (experiment `passthrough`): with the decoded-file cache and
+    // `LAYERFS_PROBE_PASSTHROUGH=1`, request kernel passthrough with a stack
+    // depth of 1 (backing files on a non-stacked filesystem). A kernel
+    // without it leaves the profile unchanged.
+    if layerfs_mount_ports::decoded::passthrough()
+        && config
+            .add_capabilities(InitFlags::FUSE_PASSTHROUGH)
+            .and_then(|()| config.set_max_stack_depth(1).map(drop).map_err(|_| offered))
+            .is_ok()
+    {
+        selected |= InitFlags::FUSE_PASSTHROUGH;
+    }
     let refused = |_| io::Error::new(io::ErrorKind::Unsupported, "kernel profile limit refused");
     let window = window();
     let background = background();

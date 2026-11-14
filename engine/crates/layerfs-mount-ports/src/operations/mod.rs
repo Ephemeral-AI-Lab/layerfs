@@ -16,4 +16,4 @@ pub use lookup::{KernelRead, ReadFailure};
 pub use mutation::{
     Declined, KernelMutation, MutationFailure, MutationInput, MutationRequest, Published,
 };
-pub use read::{KernelData, ReadDataInput};
+pub use read::{unchanged_open, unchanged_root, KernelData, ReadDataInput};

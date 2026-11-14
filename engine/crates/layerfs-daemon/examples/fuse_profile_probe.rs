@@ -302,6 +302,204 @@ mod probe {
     fn unmount(harness: &Harness, ready: &ReadyMount) -> String {
         format!("{:?}", harness.unmount(ready).kernel)
     }
+    /// Prototype (experiment `passthrough`): the decoded-file cache counters
+    /// since `before`, as JSON.
+    fn decoded_delta(before: &[u64; 10]) -> String {
+        let after = layerfs_mount_ports::decoded::snapshot();
+        let rows: Vec<String> = (0..10)
+            .map(|i| {
+                format!(
+                    "\"{}\":{}",
+                    layerfs_mount_ports::decoded::NAMES[i],
+                    after[i] - before[i]
+                )
+            })
+            .collect();
+        format!("{{{}}}", rows.join(","))
+    }
+    /// The plain files of the decoded-file cache.
+    fn cached_files(dir: &Path) -> Vec<std::path::PathBuf> {
+        let mut files: Vec<_> = fs::read_dir(dir)
+            .map(|entries| entries.filter_map(|e| Some(e.ok()?.path())).collect())
+            .unwrap_or_default();
+        files.sort();
+        files
+    }
+    /// (files, logical bytes, allocated bytes, resident bytes) of the cache.
+    fn cache_usage(dir: &Path) -> (usize, u64, u64, u64) {
+        let files = cached_files(dir);
+        let (mut logical, mut allocated, mut resident_bytes) = (0, 0, 0);
+        for file in &files {
+            let meta = fs::metadata(file).unwrap();
+            logical += meta.len();
+            allocated += meta.blocks() * 512;
+            resident_bytes += resident(file);
+        }
+        (files.len(), logical, allocated, resident_bytes)
+    }
+    /// Reads a whole file in `BUFFER` reads: (bytes, fold, seconds).
+    fn read_all(path: &Path) -> (u64, u64, f64) {
+        let mut buffer = vec![0; BUFFER];
+        let started = Instant::now();
+        let mut file = File::open(path).unwrap();
+        let (mut total, mut sum) = (0_u64, 0);
+        loop {
+            let n = file.read(&mut buffer).unwrap();
+            if n == 0 {
+                break;
+            }
+            sum = fold(sum, &buffer[..n]);
+            total += n as u64;
+        }
+        drop(file);
+        (total, sum, started.elapsed().as_secs_f64())
+    }
+    /// One re-read of `rand` on a fresh mount; `cold` evicts the Store and
+    /// every cached file first and records their residency.
+    #[allow(clippy::too_many_arguments)]
+    fn reread(
+        harness: &Harness,
+        opened: &OpenedStore,
+        copy: &Path,
+        decoded: &Path,
+        tag: u8,
+        phase: &str,
+        cold: bool,
+        expected: u64,
+    ) {
+        let ready = harness.mount(tag);
+        if cold {
+            evict(copy);
+            for file in cached_files(decoded) {
+                evict(&file);
+            }
+        }
+        let store_resident = resident(copy);
+        let (files, logical, allocated, cache_resident) = cache_usage(decoded);
+        let path = Path::new(&ready.directory).join("rand");
+        let (stage0, work0, dec0) = (
+            stages::snapshot(),
+            opened.store.work(),
+            layerfs_mount_ports::decoded::snapshot(),
+        );
+        let rss = resident_reset();
+        let (total, sum, seconds) = read_all(&path);
+        let hwm = status_kb("VmHWM:");
+        let work1 = opened.store.work();
+        let split = stage_delta(&stage0);
+        let dec = decoded_delta(&dec0);
+        let correct = (total, sum) == (BIG, expected);
+        let receipt = unmount(harness, &ready);
+        println!(
+            "PROBE {{\"phase\":\"{phase}\",\"cold\":{cold},\"store_resident_before\":{store_resident},\"cache_files\":{files},\"cache_bytes\":{logical},\"cache_allocated\":{allocated},\"cache_resident_before\":{cache_resident},\"bytes\":{total},\"correct\":{correct},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"object_ids\":{},\"decoded\":{dec},\"stages\":{split},\"kernel\":{}}}",
+            total as f64 / seconds / 1e6,
+            work1.object_ids - work0.object_ids,
+            opcodes(&receipt)
+        );
+        assert!(correct, "{phase} bytes");
+    }
+    /// Coherence of the cache and passthrough with a Workspace that writes
+    /// the cached file, on one mount, then a second Workspace's view.
+    fn coherence(harness: &Harness) {
+        let mut expected = vec![0; BUFFER];
+        Stream::new(0x9E37_79B9_7F4A_7C15).fill(&mut expected);
+        let mut pattern = vec![0; 4096];
+        Stream::new(17).fill(&mut pattern);
+        let classify = |bytes: &[u8]| {
+            if bytes == pattern.as_slice() {
+                "new"
+            } else if bytes == &expected[..4096] {
+                "base"
+            } else {
+                "other"
+            }
+        };
+        let dec0 = layerfs_mount_ports::decoded::snapshot();
+        let ready = harness.mount(8);
+        let path = Path::new(&ready.directory).join("rand");
+        let reader = File::open(&path).unwrap();
+        let mut first = vec![0; BUFFER];
+        reader.read_exact_at(&mut first, 0).unwrap();
+        let reader_ok = first == expected;
+        let writer = OpenOptions::new().write(true).open(&path);
+        let writer_open = match &writer {
+            Ok(_) => "ok".to_owned(),
+            Err(error) => format!("{error}"),
+        };
+        let mut reader_after_write = "not_written";
+        if let Ok(writer) = &writer {
+            writer.write_all_at(&pattern, 0).unwrap();
+            let mut page = vec![0; 4096];
+            reader.read_exact_at(&mut page, 0).unwrap();
+            reader_after_write = classify(&page);
+        }
+        let wrote_first = writer.is_ok();
+        drop(writer);
+        drop(reader);
+        let mut writer_retry = "not_needed".to_owned();
+        if !wrote_first {
+            match OpenOptions::new().write(true).open(&path) {
+                Ok(writer) => {
+                    writer.write_all_at(&pattern, 0).unwrap();
+                    writer_retry = "ok".into();
+                }
+                Err(error) => writer_retry = format!("{error}"),
+            }
+        }
+        let fresh = File::open(&path).unwrap();
+        let mut page = vec![0; BUFFER];
+        fresh.read_exact_at(&mut page, 0).unwrap();
+        let fresh_head = classify(&page[..4096]);
+        let fresh_tail_base = page[4096..] == expected[4096..];
+        drop(fresh);
+        let receipt = unmount(harness, &ready);
+        // A second Workspace still sees the committed bytes.
+        let other = harness.mount(9);
+        let other_file = File::open(Path::new(&other.directory).join("rand")).unwrap();
+        let mut page = vec![0; 4096];
+        other_file.read_exact_at(&mut page, 0).unwrap();
+        let other_head = classify(&page);
+        drop(other_file);
+        let other_receipt = unmount(harness, &other);
+        let coherent = reader_ok
+            && fresh_head == "new"
+            && fresh_tail_base
+            && other_head == "base"
+            && reader_after_write != "other";
+        println!(
+            "PROBE {{\"phase\":\"coherence\",\"reader_ok\":{reader_ok},\"writer_open\":\"{writer_open}\",\"reader_after_write\":\"{reader_after_write}\",\"writer_retry\":\"{writer_retry}\",\"fresh_head\":\"{fresh_head}\",\"fresh_tail_base\":{fresh_tail_base},\"other_workspace_head\":\"{other_head}\",\"coherent\":{coherent},\"decoded\":{},\"kernel\":{},\"other_kernel\":{}}}",
+            decoded_delta(&dec0),
+            opcodes(&receipt),
+            opcodes(&other_receipt)
+        );
+
+        // A change that needs no open: truncate by path while a reader is
+        // open. POSIX: the reader then reads nothing past the new end.
+        let dec0 = layerfs_mount_ports::decoded::snapshot();
+        let ready = harness.mount(10);
+        let path = Path::new(&ready.directory).join("rand");
+        let reader = File::open(&path).unwrap();
+        let mut page = vec![0; 4096];
+        reader.read_exact_at(&mut page, 8192).unwrap();
+        let truncated = match nix::unistd::truncate(&path, 4096) {
+            Ok(()) => "ok".to_owned(),
+            Err(error) => format!("{error}"),
+        };
+        let length_after = fs::metadata(&path).map(|m| m.len()).unwrap_or(u64::MAX);
+        let reader_past_end = reader.read_at(&mut page, 8192).map_or(-1, |n| n as i64);
+        let reader_stale = reader_past_end > 0 && page == expected[8192..12288];
+        drop(reader);
+        let fresh = File::open(&path).unwrap();
+        let fresh_past_end = fresh.read_at(&mut page, 8192).map_or(-1, |n| n as i64);
+        drop(fresh);
+        let receipt = unmount(harness, &ready);
+        println!(
+            "PROBE {{\"phase\":\"coherence_truncate\",\"truncate\":\"{truncated}\",\"length_after\":{length_after},\"reader_past_end\":{reader_past_end},\"reader_stale_base\":{reader_stale},\"fresh_past_end\":{fresh_past_end},\"posix\":{},\"decoded\":{},\"kernel\":{}}}",
+            reader_past_end == 0 && fresh_past_end == 0,
+            decoded_delta(&dec0),
+            opcodes(&receipt)
+        );
+    }
 
     fn run(dir: &Path, work: &Path) {
         let window: u32 = std::env::var("LAYERFS_PROBE_FUSE_WINDOW")
@@ -319,6 +517,16 @@ mod probe {
             .parse()
             .unwrap();
         let load = fs::read_to_string("/proc/loadavg").unwrap();
+        // Prototype (experiment `passthrough`): the decoded-file cache lives
+        // under this daemon's work directory; set before the daemon starts.
+        let decoded = work.join("decoded");
+        std::env::set_var("LAYERFS_PROBE_DECODED_DIR", &decoded);
+        println!(
+            "PROBE {{\"phase\":\"switches\",\"read\":\"{}\",\"decoded\":\"{}\",\"passthrough\":\"{}\"}}",
+            std::env::var("LAYERFS_PROBE_READ").unwrap_or_default(),
+            std::env::var("LAYERFS_PROBE_DECODED").unwrap_or_default(),
+            std::env::var("LAYERFS_PROBE_PASSTHROUGH").unwrap_or_default(),
+        );
         println!(
             "PROBE {{\"phase\":\"setup\",\"window\":{window},\"background\":\"{}\",\"loadavg\":\"{}\"}}",
             std::env::var("LAYERFS_PROBE_FUSE_BACKGROUND").unwrap_or_else(|_| "1".into()),
@@ -378,6 +586,7 @@ mod probe {
         let store_resident = resident(&copy);
         let path = Path::new(&ready.directory).join("rand");
         let (stage0, work0, sql0) = (stages::snapshot(), opened.store.work(), readers(&opened));
+        let dec0 = layerfs_mount_ports::decoded::snapshot();
         let rss = resident_reset();
         let started = Instant::now();
         let mut file = File::open(&path).unwrap();
@@ -395,10 +604,12 @@ mod probe {
         let hwm = status_kb("VmHWM:");
         let (work1, sql1) = (opened.store.work(), readers(&opened));
         let split = stage_delta(&stage0);
+        let dec = decoded_delta(&dec0);
         assert_eq!((total, sum), (BIG, expected), "cold read bytes");
         let receipt = unmount(&harness, &ready);
+        let (files, logical, allocated, _) = cache_usage(&decoded);
         println!(
-            "PROBE {{\"phase\":\"cold_read\",\"profile\":{profile},\"read_ahead_kb\":[\"{ra_before}\",\"{ra_after}\"],\"store_resident_before\":{store_resident},\"bytes\":{total},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"object_batches\":{},\"object_ids\":{},\"statements\":{},\"returned_rows\":{},\"stages\":{split},\"kernel\":{}}}",
+            "PROBE {{\"phase\":\"cold_read\",\"decoded\":{dec},\"cache_files\":{files},\"cache_bytes\":{logical},\"cache_allocated\":{allocated},\"profile\":{profile},\"read_ahead_kb\":[\"{ra_before}\",\"{ra_after}\"],\"store_resident_before\":{store_resident},\"bytes\":{total},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"object_batches\":{},\"object_ids\":{},\"statements\":{},\"returned_rows\":{},\"stages\":{split},\"kernel\":{}}}",
             total as f64 / seconds / 1e6,
             work1.object_batches - work0.object_batches,
             work1.object_ids - work0.object_ids,
@@ -406,6 +617,30 @@ mod probe {
             sql1.returned_rows - sql0.returned_rows,
             opcodes(&receipt)
         );
+
+        // 1b. Prototype (experiment `passthrough`): the per-tool-call re-read
+        // on a fresh mount, cold (Store and cached files evicted) then warm.
+        reread(
+            &harness,
+            &opened,
+            &copy,
+            &decoded,
+            6,
+            "reread_cold",
+            true,
+            expected,
+        );
+        reread(
+            &harness,
+            &opened,
+            &copy,
+            &decoded,
+            7,
+            "reread_warm",
+            false,
+            expected,
+        );
+        coherence(&harness);
 
         // 2. Sequential write of a new 256 MiB file, 1 MiB writes.
         let mut pool = vec![0; 32 * 1024 * 1024];

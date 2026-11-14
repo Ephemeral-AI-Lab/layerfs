@@ -1,0 +1,10 @@
+276fb2dd6ad09fd98b59b7972a7ab72621a5f2e68404d2c1edd2e879af6d5bfd  /target/release/examples/fuse_profile_probe
+PROBE {"phase":"switches","read":"async,noverify","decoded":"1073741824","passthrough":"1"}
+PROBE {"phase":"setup","window":131072,"background":"1","loadavg":"3.98 3.32 2.01 2/542 12"}
+PROBE {"phase":"native_cold_read","resident_before":0,"bytes":524288000,"seconds":0.2495,"mb_s":2101.0}
+PROBE {"phase":"cold_read","decoded":{"hit_windows":0,"hit_bytes":0,"hit_ns":0,"miss_windows":4000,"fill_windows":4000,"fill_bytes":524288000,"fill_ns":120016091,"fills_complete":1,"fills_abandoned":0,"passthrough_opens":0},"cache_files":1,"cache_bytes":524288000,"cache_allocated":524288000,"profile":{"max_write":131072,"max_readahead":131072,"max_background":1,"congestion":1,"loops":2},"read_ahead_kb":["128","128"],"store_resident_before":0,"bytes":524288000,"seconds":1.3850,"mb_s":378.6,"rss_before_kb":14500,"vm_hwm_kb":104716,"object_batches":134,"object_ids":27214,"statements":2428,"returned_rows":29508,"stages":{"read_visit":[4000,29736639],"base_admit":[4000,458922],"finish":[4000,818725946],"read_ahead":[63,1368322248],"client_demand":[20189,802081647],"store_demand":[134,1302913913],"locate":[134,145509505],"pack_read":[2294,654429366],"pack_hash":[2268,218888570],"zstd":[26,536958],"object_hash":[27215,365112690],"reply":[4000,87819440]},"kernel":{"opcodes":{"lookup":[1,1033708],"getattr":[1,226167],"open":[1,73333],"read":[4000,1069675525],"flush":[1,4875],"release":[1,26708]},"served":4004,"inline":0,"refused":1,"largest_read":131072,"largest_write":0,"served_ns":1067753732}}
+
+thread 'main' panicked at engine/crates/layerfs-daemon/examples/fuse_profile_probe.rs:344:41:
+called `Result::unwrap()` on an `Err` value: Os { code: 5, kind: Uncategorized, message: "Input/output error" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+EXIT=101

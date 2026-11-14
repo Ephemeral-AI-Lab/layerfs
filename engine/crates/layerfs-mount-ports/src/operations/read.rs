@@ -82,6 +82,16 @@ impl Custody {
         // provider wait.
         let window = KernelWindow::clone(visit.get());
         drop(visit);
+        // Prototype (decoded-file cache): a window of an unchanged base
+        // regular file, by its content root, from the plain cached file.
+        let cache = crate::decoded::get();
+        let unchanged = cache.and(unchanged_root(&window, link));
+        if let (Some(cache), Some(root)) = (cache, unchanged) {
+            if let Some(data) = cache.read(root, offset, length) {
+                return Ok(Ok(KernelData(Bytes::Owned(data))));
+            }
+        }
+        let remembered = window.length;
         let base = if window.inherits(offset, link) {
             // Provider reads never run on the loop that received the request.
             let started = std::time::Instant::now();
@@ -98,10 +108,38 @@ impl Custody {
             layerfs_telemetry::timer::stages::Stage::Finish,
             || window.finish(base.as_ref(), serial, offset, length, link),
         );
+        if let (Some(cache), Some(root), Ok(Ok(data))) = (cache, unchanged, &answer) {
+            let length = remembered.or_else(|| {
+                let content = base.as_ref()?.content(root).ok()?;
+                Some(content.length())
+            });
+            if let Some(length) = length {
+                cache.fill(root, length, offset, data);
+            }
+        }
         drop(base); // Return the actual reader before the reply.
         match answer {
             Ok(answer) => Ok(answer.map(|data| KernelData(Bytes::Owned(data)))),
             Err(error) => Err(self.services.failed_base_read(error.into())),
         }
     }
+}
+/// Prototype (decoded-file cache): the content root of a file window the
+/// visit found with no local row, over a base regular file.
+pub fn unchanged_root(window: &KernelWindow, link: bool) -> Option<[u8; 32]> {
+    let value = window.base.filter(|_| !link && window.local.is_none())?;
+    (value.kind == layerfs_content::object::inode_leaf::InodeKind::RegularFile)
+        .then(|| value.content_root.to_bytes())
+}
+/// Prototype (FUSE passthrough of cached files): before an OPEN is decided,
+/// one read-only visit under the kernel's lookup reference names the content
+/// root every byte of the file comes from, when it has no local row. Any
+/// failure answers None.
+pub async fn unchanged_open(
+    services: &Arc<dyn RequestServices>,
+    mount: KernelMount,
+    serial: u64,
+) -> Option<[u8; 32]> {
+    let visit = services.read_visit(mount, serial, None, 0, 1).await.ok()?;
+    unchanged_root(visit.get(), false)
 }
