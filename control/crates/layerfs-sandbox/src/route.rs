@@ -274,7 +274,7 @@ fn host_op(
         Some(text) => Some(text),
         _ => record
             .image()
-            .filter(|image| op != Op::SandboxCreate && crate::image_artifact::digest(image))
+            .filter(|image| op != Op::SandboxCreate && image_digest(image))
             .map(str::to_owned),
     };
     let kind = target.store_ref.kind();
@@ -291,9 +291,11 @@ fn host_op(
     // the image a create names: none on macOS native (R0), else resolved
     // and copied to the machine when it does not hold it yet (R1)
     let image = match (op, image) {
+        #[cfg(unix)]
         (Op::SandboxCreate, Some(_)) if crate::images::host_mode(&executor) => {
             return Err(crate::images::host_only(machine))
         }
+        #[cfg(unix)]
         (Op::SandboxCreate, Some(named)) => {
             let archive = deploy::choose(&home, machine, None)?.archive;
             let docker = crate::docker::Docker::of(&home)?;
@@ -512,8 +514,30 @@ pub fn in_worker(
 /// `last_used`). A sidecar that cannot be written does not fail the create.
 fn touched(side: &Side<'_>, choice: &deploy::Choice, out: &SdkValue) {
     if let Some(image) = out.get_text("image") {
-        let _ = crate::image_artifact::touch(side, choice.archive.as_deref(), image);
+        let _ = image_touch(side, choice.archive.as_deref(), image);
     }
+}
+
+/// The image faces behind the unix Docker module: Windows keeps none (the
+/// Sandbox runtime is its own port, #454) and answers neutrally.
+#[cfg(unix)]
+fn image_digest(image: &str) -> bool {
+    crate::image_artifact::digest(image)
+}
+
+#[cfg(unix)]
+fn image_touch(side: &Side<'_>, archive: Option<&str>, image: &str) -> Result<()> {
+    crate::image_artifact::touch(side, archive, image)
+}
+
+#[cfg(windows)]
+fn image_digest(_image: &str) -> bool {
+    false
+}
+
+#[cfg(windows)]
+fn image_touch(_side: &Side<'_>, _archive: Option<&str>, _image: &str) -> Result<()> {
+    Ok(())
 }
 
 /// Runs `call` (an exec whose record its caller keeps) with `runner` on a

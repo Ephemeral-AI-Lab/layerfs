@@ -27,6 +27,7 @@ pub mod direct;
 #[doc(hidden)]
 pub mod dispatch;
 #[doc(hidden)]
+#[cfg(unix)]
 pub mod docker;
 #[doc(hidden)]
 pub mod exec;
@@ -40,12 +41,15 @@ mod get;
 #[doc(hidden)]
 pub mod host;
 #[doc(hidden)]
+#[cfg(unix)]
 pub mod image_artifact;
 #[doc(hidden)]
+#[cfg(unix)]
 pub mod image_load;
 #[doc(hidden)]
 pub mod image_tar;
 #[doc(hidden)]
+#[cfg(unix)]
 pub mod images;
 #[doc(hidden)]
 pub mod launch;
