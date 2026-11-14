@@ -2,7 +2,7 @@
 //!
 //! [`Kernel::release`] runs once, before the engine mount is revoked; [`Kernel::held`]
 //! reports the same counts while the export serves, for diagnostics.
-use super::Kernel;
+use super::{Kernel, Table};
 use std::sync::atomic::Ordering;
 
 impl Kernel {
@@ -12,20 +12,7 @@ impl Kernel {
     pub fn release(&self) -> Released {
         let table = std::mem::take(&mut *self.table());
         let companions = self.companions_release();
-        let released = Released {
-            companions,
-            files: table.files.len(),
-            directories: table.directories.len(),
-            lookups: table.lookups.len(),
-            silly: table.silly.len(),
-            retained: self.retained_count(),
-            silly_renamed: self.silly_renamed.load(Ordering::Relaxed),
-            names_refused: self.names_refused.load(Ordering::Relaxed),
-            names_detached: self.names_detached.load(Ordering::Relaxed),
-            collected: self.collected.load(Ordering::Relaxed),
-            resolved: self.resolved.load(Ordering::Relaxed),
-            unresolved: self.unresolved.load(Ordering::Relaxed),
-        };
+        let released = self.holdings(&table, companions);
         for (serial, held) in table.files {
             self.close_file(serial, held.handle);
         }
@@ -48,8 +35,16 @@ impl Kernel {
     /// Current holdings, for diagnostics.
     pub fn held(&self) -> Released {
         let table = self.table();
+        let companions = self.companions_held();
+        self.holdings(&table, companions)
+    }
+
+    /// What this export holds now, as [`Released`] reports it.
+    fn holdings(&self, table: &Table, companions: crate::apple_double::Holding) -> Released {
         Released {
-            companions: self.companions_held(),
+            companions: companions.held,
+            companions_decoded: companions.decoded,
+            companion_decoded_bytes: companions.decoded_bytes,
             files: table.files.len(),
             directories: table.directories.len(),
             lookups: table.lookups.len(),
@@ -79,8 +74,13 @@ pub struct Released {
     pub silly_renamed: u64,
     /// Creations refused for their AppleDouble name, over the export's life.
     pub names_refused: u64,
-    /// AppleDouble companions held in memory (see [`crate::apple_double`]).
+    /// AppleDouble companions held in the export's index (see
+    /// [`crate::apple_double`]).
     pub companions: usize,
+    /// Of the companions held, those kept decoded, and the bytes counted for
+    /// them.
+    pub companions_decoded: usize,
+    pub companion_decoded_bytes: usize,
     /// AppleDouble companions created, over the export's life.
     pub names_detached: u64,
     /// References collected beyond the bound, over the export's life.
