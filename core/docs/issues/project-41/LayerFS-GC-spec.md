@@ -283,6 +283,16 @@ retire     delete old copies the record no longer names
 
 ---
 
+#### One contradiction this revision leaves open, deliberately
+
+The light path deletes `object_location` rows **in the live Store**, which is exactly the
+per-row deletion C3's `delete(id, G)` was written for — while C3 (item 9) is recorded as a
+forward-looking contract with no caller in 2.0.0. Both statements are in this spec right now:
+§7.2 step 2 says nothing is deleted, while the Q6 row's light path deletes locators. **This is
+an open question for the owner, not a resolved design:** either the light path deletes rows and
+C3 becomes a 2.0.0 deliverable (item 9 reopened), or the light path only vacuums/reports and
+frees effectively nothing, and the receipt must say so.
+
 ### 7.2a Code-level corrections from the #155 source review
 
 Each is a place where this spec did not match the tree. Adopting them changes no contract.

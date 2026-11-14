@@ -21,7 +21,7 @@ Deliver explicit LayerFS garbage collection for SQLite and PostgreSQL through so
 - **`project.remove_file(...)`** - Logically remove a file/folder across history
 - **`store.compact(name)`** - Physically reclaim discarded storage: build a fresh
   Store that receives only retained rows, so wholly dead packs are not copied;
-  `reorg` additionally repacks live objects out of partially dead packs
+  one call picks its own path (no copy / light / rebuild); nothing repacks, and `keptWaste` reports what stays in partially dead packs
   (`LayerFS-GC-spec.md` §1.2 Q6, §7.1, §7.2)
 
 ## Key Constraints
