@@ -186,7 +186,8 @@ reaches the Workspace or a Commit; everything is dropped with the export.
  Attach:   bind 127.0.0.1:0 -> Server::start -> port P
            helper mount_nfs -o vers=3,tcp,port=P,mountport=P,... <dir>
            client MOUNT MNT "/" -> root handle, AUTH_UNIX
- Commit:   flush helper (sync(2) by default), close_files, Commit
+ Commit:   flush helper (else the export volume's own flush: sync_volume_np
+           on macOS, sync(2) elsewhere), close_files, Commit
  Unmount:  unmount helper (busy is reversible), Server::stop,
            revoke the engine mount, Close
 ```

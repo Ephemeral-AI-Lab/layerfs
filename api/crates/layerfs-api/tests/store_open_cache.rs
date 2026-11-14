@@ -2,8 +2,8 @@
 //! open copy holds a lease under its root and is closed by the steps that
 //! read, replace or delete the file, so a Store is pulled back at once after a
 //! write and a Store that returns is never served from a stale handle; and
-//! (Linux, where a writer waits on its Store directory's lock) a call that
-//! is running keeps its Store open against a push or remove.
+//! (where a writer waits on its Store directory's lock, Linux and macOS) a
+//! call that is running keeps its Store open against a push or remove.
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::net::TcpListener;
@@ -156,9 +156,9 @@ fn a_worker_closes_its_open_copy_so_a_store_is_pulled_at_once_and_returns_fresh(
     let _ = std::fs::remove_dir_all(folder);
 }
 
-/// A write waits for the Store directory's writer lock (Linux): holding it
-/// here keeps one call running for as long as this test wants.
-#[cfg(target_os = "linux")]
+/// A write waits for the Store directory's writer lock (Linux and macOS):
+/// holding it here keeps one call running for as long as this test wants.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn a_running_call_keeps_its_store_open_against_a_push_or_remove() {
     use nix::fcntl::{Flock, FlockArg};

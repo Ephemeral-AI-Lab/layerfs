@@ -129,7 +129,7 @@ own write transaction, which the one writer already orders.
 | Rule | Enforced by |
 | --- | --- |
 | One global database per Store; no sharding or second database | One `Session` per open; the exact table set is checked at open: [`sqlite/schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/schema.rs), [`postgresql/schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
-| One writer at a time: FIFO admission per session, then a cross-process lock (Linux directory `flock`, or the `store_lane` row) | [`admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/admission.rs), [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs), [`postgresql/session/profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/profile.rs) |
+| One writer at a time: FIFO admission per session, then a cross-process lock (a directory `flock` on Linux and macOS, or the `store_lane` row) | [`admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/admission.rs), [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs), [`postgresql/session/profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/profile.rs) |
 | Waiting for a turn is readiness, never a retry; the queue has no time limit and a holder that unwinds releases its turn | [`admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/admission.rs) |
 | Short holds: only head check, merge step and publish run under the lane | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
 | Reads never take the lane or the cross-process lock | [`sqlite/session/transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/transaction.rs), [`read_service.rs`](../../../../engine/crates/layerfs-store-service/src/store/read_service.rs) |
@@ -157,8 +157,8 @@ A PostgreSQL Store has no profile; its write setting is `synchronous_commit`.
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
 | Platform for SQLite | macOS or Linux; elsewhere `BackendUnavailable` | [`open.rs`](../../../../engine/crates/layerfs-persistence/src/store/open.rs) |
-| Direct opening for Store calls | Linux, Store directory on ext4, xfs or btrfs; else `Unsupported`, no fallback | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
-| macOS cross-process writers | No directory lock; a second writer gets SQLite `Busy` | [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs) |
+| Direct opening for Store calls | Linux on ext4, xfs or btrfs, macOS on apfs or hfs (one shared kernel); else `Unsupported`, no fallback | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
+| Cross-process writers (Linux and macOS) | Directory `flock` on the Store's parent directory; an uncoordinated raw SQLite writer still gets SQLite `Busy` | [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs) |
 | PostgreSQL without the feature | `BackendUnavailable` | [`selection.rs`](../../../../engine/crates/layerfs-persistence/src/store/selection.rs) |
 | PostgreSQL lane wait | `lock_timeout_ms`, default 30,000; then `Busy` | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs) |
 | Rows per publication or `reserve` | `TRANSACTION_ROW_LIMIT` 8,191 | [`publication.rs`](../../../../engine/crates/layerfs-persistence/src/storage/publication.rs) |
@@ -175,7 +175,7 @@ A PostgreSQL Store has no profile; its write setting is `synchronous_commit`.
 | `Busy` | `Busy` | `Busy` | Another writer held the lock |
 | `Closed` | `Refused "Closed"` | `OwnershipUnavailable` | Store closed before this call's turn |
 | `Rejected` | `Refused "Rejected"` | `OwnershipUnavailable` | PostgreSQL refused a new connection |
-| `Cancelled` | `Refused "Cancelled"` | `OwnershipUnavailable` | A signal interrupted the Linux writer wait |
+| `Cancelled` | `Refused "Cancelled"` | `OwnershipUnavailable` | A signal interrupted the writer wait (Linux and macOS) |
 | `ReadOnly` | `Refused "ReadOnly"` | `ContinuityUnavailable` | Write on a read-only session |
 | `Capacity` | `Refused "Capacity"` | `Capacity("persistence")` | A bound or the disk margin was reached |
 | `Integrity` | `Malformed` | `Integrity("persistence")` | Stored or supplied data broke a rule |
@@ -190,7 +190,7 @@ Source: [`records.rs`](../../../../engine/crates/layerfs-persistence/src/backend
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
 | [`heads.rs`](../../../../engine/crates/layerfs-persistence/tests/heads.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test heads` | macOS, Linux (no-sidecar check Linux only) | Project, fork and Commit change the heads exactly; a snapshot has the same heads |
-| [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/tests/writer_admission.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test writer_admission` | macOS, Linux (cross-process cases Linux only) | FIFO order, `Closed` on close, writers queued behind the lane, self re-entry refused, directory lock hand-over and `Cancelled` |
+| [`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/tests/writer_admission.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test writer_admission` | macOS, Linux (`Cancelled` Linux only) | FIFO order, `Closed` on close, writers queued behind the lane, self re-entry refused, the directory lock across processes and concurrent opens, its hand-over, and `Cancelled` |
 | [`diagnostics_during_lane.rs`](../../../../engine/crates/layerfs-persistence/tests/diagnostics_during_lane.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test diagnostics_during_lane` | any | Counter reads return while another thread holds the lane |
 | [`layerstack_removal.rs`](../../../../engine/crates/layerfs-persistence/tests/layerstack_removal.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test layerstack_removal` | macOS, Linux; also PostgreSQL when `LAYERFS_TEST_POSTGRES_URL` is set | Removing one of two projects leaves the other whole, frees the name and takes its logical bytes out of the totals |
 | [`binding_hint_blocks.rs`](../../../../engine/crates/layerfs-persistence/tests/binding_hint_blocks.rs) | `cargo +1.85.1 test --locked -p layerfs-persistence --test binding_hint_blocks` | macOS, Linux | Hints merge across blocks without repeats |
