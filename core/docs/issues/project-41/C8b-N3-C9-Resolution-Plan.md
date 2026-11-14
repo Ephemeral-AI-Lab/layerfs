@@ -81,34 +81,47 @@ The `branch` and `layer_stack` tables have no visibility column, so soft deletio
 
 ### Specification decision (spec §4 N3, §5 C6, §1.2 Q1)
 In **one Store schema change**:
-1. Add a `deleted_ms` column to `layer_stack` (nullable timestamp)
-2. Add a `removed_ms` column to `branch` (nullable timestamp)
+1. Add a `layer_stack_retired(layer_stack_id, deleted_ms)` marker table
+2. Add a `branch_retired(branch_id, removed_ms)` marker table
 3. **Keep the unique indexes full**: `layer_stack_names ON layer_stack(name)` and `branch_names ON branch(layer_stack_id, name)` stay as they are. A removed row keeps its name, so the name is never handed out again (Q1 = A: terminal tombstone).
 4. A create whose name is held by a removed row returns **`NameRetired`**; one held by a live row returns **`NameTaken`** — decided 2026-11-13, so neither case leaks out as `Integrity` from the unique index.
 
-Partial unique indexes (restricted to rows whose `removed_ms` / `deleted_ms` is null) are **not** used: they would free the name, and a recreated Branch would reproduce `BranchId::named = blake3(stack ‖ name)` and take over the old history (spec §5 C6, `03-decision-record.md` §2).
+Partial unique indexes (restricted to rows with no marker row) are **not** used: they would free the name, and a recreated Branch would reproduce `BranchId::named = blake3(stack ‖ name)` and take over the old history (spec §5 C6, `03-decision-record.md` §2).
 
 The version step for this change is decided by layerfs-project#42 — **and it was decided on 2026-11-13: no step.** The columns land as an additive migration under the same schema identity (`REBUILD.md kind 2`), and 1.0 Stores are converted offline by `tools/store_blocks.py migrate`. At `layerfs_v2_0_0` the Store records `store_policy.schema_version` (`CHECK(schema_version=1)`) and `history_meta.identity_format = 3`; this plan does not invent a version number.
 
 ### Implementation path
 
-#### Step 1: Schema change (both backends together)
+#### Step 1: Marker tables (both backends together)
 
 **SQLite** (`sql/sqlite/history.sql`):
 ```sql
--- Store schema change (additive migration, same version - decided 2026-11-13)
-ALTER TABLE layer_stack ADD COLUMN deleted_ms INTEGER DEFAULT NULL;
-ALTER TABLE branch ADD COLUMN removed_ms INTEGER DEFAULT NULL;
+-- additive migration, same version (decided 2026-11-13; revised per #155 R-9)
+CREATE TABLE layer_stack_retired (
+  layer_stack_id BLOB PRIMARY KEY,
+  deleted_ms     INTEGER NOT NULL
+);
+CREATE TABLE branch_retired (
+  branch_id  BLOB PRIMARY KEY,
+  removed_ms INTEGER NOT NULL
+);
 
 -- layer_stack_names and branch_names are unchanged: full unique indexes
 ```
 
 **PostgreSQL** (`sql/postgresql/schema.sql`):
 ```sql
-ALTER TABLE layer_stack ADD COLUMN deleted_ms BIGINT DEFAULT NULL;
-ALTER TABLE branch ADD COLUMN removed_ms BIGINT DEFAULT NULL;
+CREATE TABLE layer_stack_retired (
+  layer_stack_id bytea PRIMARY KEY,
+  deleted_ms     bigint NOT NULL
+);
+CREATE TABLE branch_retired (
+  branch_id  bytea PRIMARY KEY,
+  removed_ms bigint NOT NULL
+);
 
 -- layer_stack_names and branch_names are unchanged: full unique indexes
+-- marker tables are catalog tables: the three-table swap does not touch them
 ```
 
 #### Step 2: Rework the visibility queries
@@ -120,32 +133,40 @@ SELECT * FROM layer_stack WHERE name = ?
 
 **New query** (soft delete mode):
 ```sql
-SELECT * FROM layer_stack WHERE name = ? AND deleted_ms IS NULL
-
--- or a shared macro
-#define VISIBLE_STACK "AND deleted_ms IS NULL"
-SELECT * FROM layer_stack WHERE name = ? VISIBLE_STACK
+SELECT s.* FROM layer_stack s
+ WHERE s.name = ?
+   AND NOT EXISTS (SELECT 1 FROM layer_stack_retired r
+                    WHERE r.layer_stack_id = s.layer_stack_id)
 ```
 
 **When listing all items**:
 ```sql
 -- list active items only
-SELECT * FROM layer_stack WHERE deleted_ms IS NULL ORDER BY ...
+SELECT s.* FROM layer_stack s
+ WHERE NOT EXISTS (SELECT 1 FROM layer_stack_retired r
+                    WHERE r.layer_stack_id = s.layer_stack_id)
+ ORDER BY ...
 
--- optional for the admin UI: include deleted items
-SELECT *, (deleted_ms IS NOT NULL) AS is_deleted FROM layer_stack ...
+-- optional for the admin UI: include retired items
+SELECT s.*, (r.layer_stack_id IS NOT NULL) AS is_deleted
+  FROM layer_stack s
+  LEFT JOIN layer_stack_retired r ON r.layer_stack_id = s.layer_stack_id
 ```
 
-**At create** (the name check runs on every row, removed or not):
+**At create** (existence decides, the marker decides which refusal):
 ```sql
-SELECT removed_ms FROM branch WHERE layer_stack_id = ? AND name = ?;
--- no row                    → create
--- row, removed_ms NOT NULL  → NameRetired
--- row, removed_ms IS NULL   → NameTaken
+SELECT b.branch_id,
+       (r.branch_id IS NOT NULL) AS retired
+  FROM branch b
+  LEFT JOIN branch_retired r ON r.branch_id = b.branch_id
+ WHERE b.layer_stack_id = ? AND b.name = ?;
+-- no row          → create
+-- row, retired=1  → NameRetired
+-- row, retired=0  → NameTaken
 ```
-The same rule applies to `layer_stack.name` and `deleted_ms`. The full unique index is the backstop; the explicit checks make the refusal `NameRetired` / `NameTaken` rather than a constraint failure.
+The same rule applies to `layer_stack.name` and `layer_stack_retired`. The full unique index is the backstop; the explicit checks make the refusal `NameRetired` / `NameTaken` rather than a constraint failure.
 
-#### Step 3: Turn delete operations into UPDATE
+#### Step 3: Turn delete operations into marker inserts
 
 **Original code** (`project/remove.rs`, `branch/remove.rs`):
 ```rust
@@ -157,11 +178,11 @@ DELETE FROM layer_stack WHERE id = ?
 **New code**:
 ```rust
 // new mode: record the deletion time; the row and its name stay
-UPDATE layer_stack SET deleted_ms = ? 
-  WHERE id = ? AND deleted_ms IS NULL;
+INSERT INTO layer_stack_retired(layer_stack_id, deleted_ms)
+  VALUES (?, ?);
 
-UPDATE branch SET removed_ms = ? 
-  WHERE id = ? AND removed_ms IS NULL;
+INSERT INTO branch_retired(branch_id, removed_ms)
+  VALUES (?, ?);
 ```
 
 #### Step 4: Catalog constraints (the counterexample to C9)
@@ -175,14 +196,14 @@ impl HistoryCatalog for SqliteCatalog {
         // visibility condition included automatically
         self.conn.query("
             SELECT * FROM layer_stack 
-            WHERE id = ? AND deleted_ms IS NULL
+            WHERE id = ? AND NOT EXISTS (SELECT 1 FROM layer_stack_retired r WHERE r.layer_stack_id = s.layer_stack_id)
         ", ...)
     }
 
     fn list_branches(&mut self, stack_id: &LayerStackId) -> Result<Vec<Branch>> {
         self.conn.query("
             SELECT * FROM branch 
-            WHERE layer_stack_id = ? AND removed_ms IS NULL
+            WHERE layer_stack_id = ? AND NOT EXISTS (SELECT 1 FROM branch_retired r WHERE r.branch_id = b.branch_id)
         ", ...)
     }
 }
@@ -197,8 +218,14 @@ An on-open migration is needed:
 pub fn migrate_add_visibility(conn: &mut Connection) -> Result<()> {
     // 1. add the columns; indexes are unchanged
     conn.execute_batch("
-        ALTER TABLE layer_stack ADD COLUMN deleted_ms INTEGER DEFAULT NULL;
-        ALTER TABLE branch ADD COLUMN removed_ms INTEGER DEFAULT NULL;
+        CREATE TABLE layer_stack_retired (
+          layer_stack_id BLOB PRIMARY KEY,
+          deleted_ms     INTEGER NOT NULL
+        );
+        CREATE TABLE branch_retired (
+          branch_id  BLOB PRIMARY KEY,
+          removed_ms INTEGER NOT NULL
+        );
     ")?;
 
     // 2. record the version step layerfs-project#42 decides
@@ -330,7 +357,7 @@ impl HistoryCatalog for SqliteCatalog {
         removed_ms: i64,
     ) -> Result<()> {
         self.conn.execute(
-            "UPDATE branch SET removed_ms = ? WHERE id = ?",
+            "INSERT INTO branch_retired(branch_id, removed_ms) VALUES (?, ?)",
             params![removed_ms, branch_id.to_bytes()],
         )?;
         Ok(())
@@ -342,7 +369,7 @@ impl HistoryCatalog for SqliteCatalog {
         deleted_ms: i64,
     ) -> Result<()> {
         self.conn.execute(
-            "UPDATE layer_stack SET deleted_ms = ? WHERE id = ?",
+            "INSERT INTO layer_stack_retired(layer_stack_id, deleted_ms) VALUES (?, ?)",
             params![deleted_ms, stack_id.to_bytes()],
         )?;
         Ok(())
@@ -355,7 +382,7 @@ impl HistoryCatalog for SqliteCatalog {
         let mut stmt = self.conn.prepare(
             "SELECT id, root_id FROM layer 
              WHERE layer_stack_id IN (
-                 SELECT id FROM layer_stack WHERE deleted_ms IS NULL
+                 SELECT s.layer_stack_id FROM layer_stack s WHERE NOT EXISTS (SELECT 1 FROM layer_stack_retired r WHERE r.layer_stack_id = s.layer_stack_id)
              )"
         )?;
         // ...populate roots.layers...
@@ -364,7 +391,7 @@ impl HistoryCatalog for SqliteCatalog {
         let mut stmt = self.conn.prepare(
             "SELECT id, root_id FROM commit 
              WHERE branch_id IN (
-                 SELECT id FROM branch WHERE removed_ms IS NULL
+                 SELECT b.branch_id FROM branch b WHERE NOT EXISTS (SELECT 1 FROM branch_retired r WHERE r.branch_id = b.branch_id)
              )"
         )?;
         // ...populate roots.commits...
@@ -655,7 +682,7 @@ Requirement 2: removed names stay retired (spec §1.2 Q1 = A, §5 C6)
 
 Requirement 3: GC tells active from removed
   Listing and the reachability root set must distinguish live rows.
-  Goal: a deleted_ms / removed_ms column.
+  Goal: a marker row in `branch_retired` / `layer_stack_retired`.
 ```
 
 ## Schema change (additive migration, same version - decided 2026-11-13)
@@ -664,8 +691,14 @@ Requirement 3: GC tells active from removed
 
 ```sql
 -- new columns (NULL = active, non-NULL = removed)
-ALTER TABLE layer_stack ADD COLUMN deleted_ms INTEGER DEFAULT NULL;
-ALTER TABLE branch ADD COLUMN removed_ms INTEGER DEFAULT NULL;
+CREATE TABLE layer_stack_retired (
+  layer_stack_id BLOB PRIMARY KEY,
+  deleted_ms     INTEGER NOT NULL
+);
+CREATE TABLE branch_retired (
+  branch_id  BLOB PRIMARY KEY,
+  removed_ms INTEGER NOT NULL
+);
 
 -- indexes: unchanged. layer_stack_names and branch_names stay full unique
 -- indexes, so a removed row keeps holding its name.
@@ -680,7 +713,7 @@ fn list_projects(&mut self, stack_id: ...) -> Result<Vec<LayerStack>> {
     self.conn.query("
         SELECT * FROM layer_stack 
         WHERE id = ? 
-          AND deleted_ms IS NULL  ← filtered automatically
+          AND NOT EXISTS (SELECT 1 FROM layer_stack_retired r WHERE r.layer_stack_id = s.layer_stack_id)  ← filtered automatically
     ", ...)
 }
 
@@ -688,7 +721,7 @@ fn list_branches(&mut self, stack_id: ...) -> Result<Vec<Branch>> {
     self.conn.query("
         SELECT * FROM branch 
         WHERE layer_stack_id = ? 
-          AND removed_ms IS NULL  ← filtered automatically
+          AND NOT EXISTS (SELECT 1 FROM branch_retired r WHERE r.branch_id = b.branch_id)  ← filtered automatically
     ", ...)
 }
 ```
@@ -706,7 +739,7 @@ Existing Store:
 On-open migration (Store schema change):
   1. check the recorded schema version
   2. if it predates the change:
-     ├─ ALTER TABLE to add deleted_ms / removed_ms
+     ├─ CREATE TABLE branch_retired / layer_stack_retired
      ├─ leave layer_stack_names / branch_names as they are
      ├─ record the version step layerfs-project#42 decides
      └─ commit
@@ -724,8 +757,14 @@ On-open migration (Store schema change):
 pub fn migrate_add_visibility(conn: &mut Connection) -> Result<()> {
     conn.execute_batch("
         -- add the soft delete columns; indexes are unchanged
-        ALTER TABLE layer_stack ADD COLUMN deleted_ms INTEGER DEFAULT NULL;
-        ALTER TABLE branch ADD COLUMN removed_ms INTEGER DEFAULT NULL;
+        CREATE TABLE layer_stack_retired (
+          layer_stack_id BLOB PRIMARY KEY,
+          deleted_ms     INTEGER NOT NULL
+        );
+        CREATE TABLE branch_retired (
+          branch_id  BLOB PRIMARY KEY,
+          removed_ms INTEGER NOT NULL
+        );
     ")?;
     // same version: the recorded schema_source/schema_definition change, the number does not
     Ok(())
@@ -740,14 +779,14 @@ pub fn migrate_add_visibility(conn: &mut Connection) -> Result<()> {
 impl HistoryCatalog for SqliteCatalog {
     fn list_projects(&mut self, stack_id: &LayerStackId) -> Result<Vec<LayerStack>> {
         self.conn.query(
-            "SELECT * FROM layer_stack WHERE id = ? AND deleted_ms IS NULL",
+            "SELECT * FROM layer_stack WHERE id = ? AND NOT EXISTS (SELECT 1 FROM layer_stack_retired r WHERE r.layer_stack_id = s.layer_stack_id)",
             [stack_id],
         )
     }
     
     fn list_branches(&mut self, stack_id: &LayerStackId) -> Result<Vec<Branch>> {
         self.conn.query(
-            "SELECT * FROM branch WHERE layer_stack_id = ? AND removed_ms IS NULL",
+            "SELECT * FROM branch WHERE layer_stack_id = ? AND NOT EXISTS (SELECT 1 FROM branch_retired r WHERE r.branch_id = b.branch_id)",
             [stack_id],
         )
     }
@@ -765,7 +804,7 @@ impl HistoryCatalog for SqliteCatalog {
         -> Result<()> {
         // soft delete: mark deleted_ms instead of DELETE; the name stays held
         self.conn.execute(
-            "UPDATE layer_stack SET deleted_ms = ? WHERE id = ?",
+            "INSERT INTO layer_stack_retired(layer_stack_id, deleted_ms) VALUES (?, ?)",
             (deleted_ms, stack_id),
         )?;
         Ok(())
@@ -774,7 +813,7 @@ impl HistoryCatalog for SqliteCatalog {
     fn mark_branch_removed(&mut self, branch_id: &BranchId, removed_ms: i64) 
         -> Result<()> {
         self.conn.execute(
-            "UPDATE branch SET removed_ms = ? WHERE id = ?",
+            "INSERT INTO branch_retired(branch_id, removed_ms) VALUES (?, ?)",
             (removed_ms, branch_id),
         )?;
         Ok(())
@@ -816,7 +855,7 @@ The same test runs for Branches: `branch.remove` then a same-name create →
 ## Verification checklist
 
 - [ ] migration adds the columns; `layer_stack_names` and `branch_names` stay full unique indexes
-- [ ] every listing adds the deleted_ms / removed_ms filter; the create-time name check does not
+- [ ] every listing adds the anti-join against the marker tables; the create-time name check does not
 - [ ] soft delete operations update the timestamps correctly
 - [ ] a removed project or Branch name is refused `NameRetired` on create
 - [ ] removed rows still resolve by immutable id
