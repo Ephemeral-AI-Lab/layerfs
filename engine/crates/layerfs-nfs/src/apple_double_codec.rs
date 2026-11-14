@@ -14,6 +14,8 @@
 //! client wrote: no attribute, value or byte the layout carries is dropped.
 //! Each attribute entry keeps the alignment padding the client left after its
 //! name, because the client does not clear the bytes a shorter name replaced.
+//! [`Image::encode_range`] gives back any window of the image, so a READ serves
+//! the bytes it asked for without laying out the whole image first.
 //!
 //! Anything else - a resource fork with data, still another layout, a
 //! half-written image - yields `None` and is stored as the client wrote it.
@@ -184,42 +186,65 @@ impl Image {
     }
     /// The image these fields describe, as the client lays one out.
     pub fn encode(&self) -> Vec<u8> {
-        let mut out = vec![0u8; self.len];
+        self.encode_range(0, self.len)
+    }
+    /// The bytes of the encoded image in `[start, end)`, both clamped to its
+    /// length: a READ of one window pays for that window, not for the whole
+    /// image, and gives back the same bytes [`Self::encode`] would.
+    pub fn encode_range(&self, start: usize, end: usize) -> Vec<u8> {
+        let start = start.min(self.len);
+        let end = end.max(start).min(self.len);
+        let mut out = vec![0u8; end - start];
         let fork_at = self.len - self.fork.len();
         let data_start = self.data_start();
-        put32(&mut out, 0, MAGIC);
-        put32(&mut out, 4, VERSION);
-        out[8..24].copy_from_slice(FILLER);
-        put16(&mut out, 24, 2);
-        put32(&mut out, 26, FINDER_TAG);
-        put32(&mut out, 30, FINDER_AT as u32);
-        put32(&mut out, 34, (fork_at - FINDER_AT) as u32);
-        put32(&mut out, 38, FORK_TAG);
-        put32(&mut out, 42, fork_at as u32);
-        put32(&mut out, 46, self.fork.len() as u32);
-        out[FINDER_AT..FINDER_AT + FINDER_INFO].copy_from_slice(&self.finder);
-        put32(&mut out, ATTR_AT, ATTR_MAGIC);
-        put32(&mut out, ATTR_AT + 4, self.tag);
-        put32(&mut out, ATTR_AT + 8, fork_at as u32);
-        put32(&mut out, ATTR_AT + 12, data_start as u32);
-        put32(&mut out, ATTR_AT + 16, self.data_len() as u32);
-        put16(&mut out, ATTR_AT + 34, self.attrs.len() as u16);
+        // The fixed part of the image, whose offsets are absolute and known
+        // without walking the entries.
+        let mut head = [0u8; ENTRIES_AT];
+        put32(&mut head, 0, MAGIC);
+        put32(&mut head, 4, VERSION);
+        head[8..24].copy_from_slice(FILLER);
+        put16(&mut head, 24, 2);
+        put32(&mut head, 26, FINDER_TAG);
+        put32(&mut head, 30, FINDER_AT as u32);
+        put32(&mut head, 34, (fork_at - FINDER_AT) as u32);
+        put32(&mut head, 38, FORK_TAG);
+        put32(&mut head, 42, fork_at as u32);
+        put32(&mut head, 46, self.fork.len() as u32);
+        head[FINDER_AT..FINDER_AT + FINDER_INFO].copy_from_slice(&self.finder);
+        put32(&mut head, ATTR_AT, ATTR_MAGIC);
+        put32(&mut head, ATTR_AT + 4, self.tag);
+        put32(&mut head, ATTR_AT + 8, fork_at as u32);
+        put32(&mut head, ATTR_AT + 12, data_start as u32);
+        put32(&mut head, ATTR_AT + 16, self.data_len() as u32);
+        put16(&mut head, ATTR_AT + 34, self.attrs.len() as u16);
+        emit(&mut out, start, 0, &head);
         let (mut entry, mut value_at) = (ENTRIES_AT, data_start);
         for attr in &self.attrs {
-            put32(&mut out, entry, value_at as u32);
-            put32(&mut out, entry + 4, attr.value.len() as u32);
-            out[entry + 10] = (attr.name.len() + 1) as u8;
+            // Entries and values only grow, and the fork sits past both: once
+            // neither of this one's is in the window, no later one is either.
+            if entry >= end && value_at >= end {
+                break;
+            }
+            let name_len = attr.name.len() + 1;
+            emit(&mut out, start, entry, &(value_at as u32).to_be_bytes());
+            emit(
+                &mut out,
+                start,
+                entry + 4,
+                &(attr.value.len() as u32).to_be_bytes(),
+            );
+            emit(&mut out, start, entry + 10, &[name_len as u8]);
             let name_at = entry + ENTRY_FIXED;
             let name_end = name_at + attr.name.len();
-            out[name_at..name_end].copy_from_slice(&attr.name);
-            let next = entry + entry_len(attr.name.len() + 1);
-            out[name_end + 1..next].copy_from_slice(&attr.pad[..next - name_end - 1]);
-            out[value_at..value_at + attr.value.len()].copy_from_slice(&attr.value);
+            emit(&mut out, start, name_at, &attr.name);
+            let next = entry + entry_len(name_len);
+            emit(&mut out, start, name_end + 1, &attr.pad[..next - name_end - 1]);
+            emit(&mut out, start, value_at, &attr.value);
             entry = next;
             value_at += attr.value.len();
         }
         if self.fork == Fork::Blank {
-            out[fork_at..].copy_from_slice(&blank_fork());
+            emit(&mut out, start, fork_at, &blank_fork());
         }
         out
     }
@@ -327,6 +352,15 @@ fn blank_fork() -> [u8; BLANK_FORK] {
     put16(&mut fork, 284, 0xffff);
     fork[16..16 + BLANK_FORK_TAG.len()].copy_from_slice(BLANK_FORK_TAG);
     fork
+}
+/// Copies the `bytes` that sit at `at` in the image into `out`, which holds
+/// the image from `start` to its end.
+fn emit(out: &mut [u8], start: usize, at: usize, bytes: &[u8]) {
+    let from = at.max(start);
+    let until = (at + bytes.len()).min(start + out.len());
+    if from < until {
+        out[from - start..until - start].copy_from_slice(&bytes[from - at..until - at]);
+    }
 }
 fn put32(out: &mut [u8], at: usize, value: u32) {
     out[at..at + 4].copy_from_slice(&value.to_be_bytes());

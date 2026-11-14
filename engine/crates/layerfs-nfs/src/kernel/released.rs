@@ -44,7 +44,6 @@ impl Kernel {
             companion_bytes: companions.resident_bytes,
             companions_slotted: companions.slotted,
             companions_decoded: companions.decoded,
-            companion_decoded_bytes: companions.decoded_bytes,
             files: table.files.len(),
             directories: table.directories.len(),
             lookups: table.lookups.len(),
@@ -77,15 +76,15 @@ pub struct Released {
     /// AppleDouble companions held in the export's index (see
     /// [`crate::apple_double`]), whole images included.
     pub companions: usize,
-    /// Companion payload bytes currently resident in memory.
+    /// Companion body bytes currently counted against the export's resident
+    /// budget: a body kept as written at its length, a decoded one at what its
+    /// attributes are counted as.
     pub companion_bytes: usize,
     /// Of the companions held, those taking a slot of the index bound: all but
     /// the ones holding a whole image.
     pub companions_slotted: usize,
-    /// Of the companions held, those kept decoded, and the bytes counted for
-    /// them.
+    /// Of the companions held, those kept decoded.
     pub companions_decoded: usize,
-    pub companion_decoded_bytes: usize,
     /// AppleDouble companions created, over the export's life.
     pub names_detached: u64,
     /// References collected beyond the bound, over the export's life.

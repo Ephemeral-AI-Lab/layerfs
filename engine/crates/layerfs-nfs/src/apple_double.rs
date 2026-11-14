@@ -24,9 +24,9 @@
 //! `._` name. Whenever a write leaves such a companion holding a whole
 //! AppleDouble image the client laid out itself (see
 //! [`crate::apple_double_codec`]), it is decoded: a small one keeps only its
-//! FinderInfo and attributes in memory (at most [`DECODED_BYTES`] in all, each
-//! at most [`DECODED_ENTRY_BYTES`]), and every read synthesizes the same bytes
-//! again. Such a whole image takes no slot of the index bound. Any other body
+//! FinderInfo and attributes in memory (each at most [`DECODED_ENTRY_BYTES`]
+//! counted), and every read synthesizes the same bytes again. Such a whole
+//! image takes no slot of the index bound. Any other body
 //! (a resource fork, another layout, a half-written image, or a companion whose
 //! main file is unknown) is kept as the client wrote it and takes a slot: the
 //! index bound, the refusal, its rate-limited log and orphan reclamation stay
@@ -34,9 +34,11 @@
 //!
 //! Every companion keeps its index entry in memory (at most [`HELD`] of them
 //! not holding a whole image, each companion at most [`FILE_BYTES`]). Bodies up
-//! to [`RESIDENT_BYTES`] in all stay in memory; when a write or resize crosses
-//! that budget, the least recently touched resident bodies are spilled to the
-//! export's own scratch directory (see [`crate::apple_double_spill`]). Removing
+//! to [`RESIDENT_BYTES`] in all stay in memory, a body kept as written counted
+//! at its length and a decoded one as [`Image::cost`], so a decoded image is
+//! never memory the budget cannot see; when a write or resize crosses that
+//! budget, the least recently touched bodies are spilled to the export's own
+//! scratch directory (see [`crate::apple_double_spill`]). Removing
 //! or replacing a main file drops its paired `._<name>` companion, or only that
 //! name when the companion is its inode's, which goes with the inode's last
 //! name. When [`HELD`] is reached, orphan companions whose main inode or main
@@ -44,7 +46,7 @@
 //! live companions still remain does `CREATE` answer `NFS3ERR_NOSPC`.
 use crate::{
     apple_double_codec::Image,
-    apple_double_spill::{io_status, now, spill_path, touch, unlink_paths, Edit},
+    apple_double_spill::{now, spill_path, touch, unlink_paths, Edit},
     attributes::Status,
     change::{How, Sattr, Tickets, Wcc},
     kernel::Kernel,
@@ -52,9 +54,9 @@ use crate::{
 use layerfs_content::{filesystem::attributes::PortableMetadata, object::inode_leaf::InodeKind};
 use layerfs_workspace::ViewStat;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{atomic::Ordering, Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -68,12 +70,12 @@ pub const SERIALS: u64 = 1 << 62;
 pub const HELD: usize = 65_536;
 /// Largest companion kept.
 pub const FILE_BYTES: u64 = 1 << 20;
-/// Companion payload bytes kept resident in memory before spilling to disk.
+/// Companion body bytes kept resident in memory before spilling to disk: a
+/// body kept as written counts its length, a decoded one [`Image::cost`].
 pub const RESIDENT_BYTES: usize = 32 << 20;
-/// Bytes counted for all decoded companions (see [`Image::cost`]).
-pub const DECODED_BYTES: usize = 512 << 20;
-/// Bytes counted for one decoded companion; a larger whole image keeps its
-/// bytes as written.
+/// Most bytes counted for one decoded companion, [`Image::cost`]; a whole
+/// image costing more keeps its bytes as written, so one companion cannot take
+/// the whole budget.
 pub const DECODED_ENTRY_BYTES: usize = 128 << 10;
 
 /// A name in one directory: (directory serial, name bytes).
@@ -108,22 +110,31 @@ struct Companion {
     editing: Arc<Mutex<()>>,
 }
 impl Companion {
-    fn resident_len(&self) -> usize {
+    /// The bytes it takes of [`RESIDENT_BYTES`]: its body as written, or what
+    /// its decoded form is counted as.
+    fn resident_cost(&self) -> usize {
         match &self.body {
             Body::Resident(bytes) => bytes.len(),
-            Body::Spilled | Body::Decoded(_) => 0,
-        }
-    }
-    fn decoded_cost(&self) -> usize {
-        match &self.body {
+            Body::Spilled => 0,
             Body::Decoded(image) => image.cost(),
-            Body::Resident(_) | Body::Spilled => 0,
         }
     }
     /// Whether it takes a slot of the index bound.
     fn slotted(&self) -> bool {
         !self.whole
     }
+}
+
+/// What [`Companions::keep_decoded`] made of an edited body.
+pub(crate) enum Decoded {
+    /// The companion holds the body's decoded form.
+    Kept,
+    /// The body decodes, but the resident budget needs this many more bytes
+    /// before the decoded form fits.
+    Room(usize),
+    /// Not a body the export decodes: not a whole image, too large to decode,
+    /// or no main inode.
+    Unchanged,
 }
 
 /// What an export's companion index holds (see [`crate::kernel::Released`]).
@@ -133,7 +144,6 @@ pub(crate) struct Holding {
     pub slotted: usize,
     pub resident_bytes: usize,
     pub decoded: usize,
-    pub decoded_bytes: usize,
 }
 
 /// The companions of one export.
@@ -147,12 +157,15 @@ pub(crate) struct Companions {
     inodes: HashMap<u64, u64>,
     /// The serials taking a slot of the index bound, so reclamation walks only
     /// the [`HELD`]-bounded slots rather than every companion: a whole image
-    /// takes no slot (whether decoded within [`DECODED_BYTES`] or kept as
-    /// written bytes above it), so whole images add nothing to the walk.
+    /// takes no slot, whether it is decoded or kept as written bytes, so whole
+    /// images add nothing to the walk.
     slots: HashSet<u64>,
+    /// Every companion holding memory, oldest use first: (used tick, serial).
+    /// One tick is one touch and no serial takes two ticks, so the keys are
+    /// unique and the oldest entry is the first one.
+    by_use: BTreeSet<(u64, u64)>,
     resident_bytes: usize,
     decoded: usize,
-    decoded_bytes: usize,
     spill_dir: Option<PathBuf>,
     resident_budget: usize,
     held_limit: usize,
@@ -167,9 +180,9 @@ impl Default for Companions {
             names: HashMap::new(),
             inodes: HashMap::new(),
             slots: HashSet::new(),
+            by_use: BTreeSet::new(),
             resident_bytes: 0,
             decoded: 0,
-            decoded_bytes: 0,
             spill_dir: None,
             resident_budget: RESIDENT_BYTES,
             held_limit: HELD,
@@ -182,10 +195,22 @@ impl Companions {
         self.tick += 1;
         self.tick
     }
+    /// Marks `serial` as used now, which is the order eviction follows. Only a
+    /// companion holding memory is in the order: a spilled body has nothing to
+    /// give back.
     fn use_serial(&mut self, serial: u64) {
         let tick = self.tick();
-        if let Some(file) = self.files.get_mut(&serial) {
-            file.used = tick;
+        self.set_used(serial, tick);
+    }
+    /// Moves `serial`'s index entry to `used`.
+    fn set_used(&mut self, serial: u64, used: u64) {
+        let Some(file) = self.files.get_mut(&serial) else {
+            return;
+        };
+        let old = std::mem::replace(&mut file.used, used);
+        self.by_use.remove(&(old, serial));
+        if file.resident_cost() > 0 {
+            self.by_use.insert((used, serial));
         }
     }
     fn stat(serial: u64, file: &Companion) -> ViewStat {
@@ -198,14 +223,17 @@ impl Companions {
             subdirs: 0,
         }
     }
-    /// Adds `file` to the index and to the slot and byte counts.
+    /// Adds `file` to the index, the slot and byte counts and the eviction
+    /// order.
     fn attach(&mut self, serial: u64, file: Companion) {
         if file.slotted() {
             self.slots.insert(serial);
         }
-        self.resident_bytes += file.resident_len();
+        if file.resident_cost() > 0 {
+            self.by_use.insert((file.used, serial));
+        }
+        self.resident_bytes += file.resident_cost();
         self.decoded += usize::from(matches!(file.body, Body::Decoded(_)));
-        self.decoded_bytes += file.decoded_cost();
         self.files.insert(serial, file);
     }
     /// Takes `serial` out of the index and the counts; its name keys stay for
@@ -213,9 +241,9 @@ impl Companions {
     fn detach(&mut self, serial: u64) -> Option<Companion> {
         let file = self.files.remove(&serial)?;
         self.slots.remove(&serial);
-        self.resident_bytes -= file.resident_len();
+        self.by_use.remove(&(file.used, serial));
+        self.resident_bytes -= file.resident_cost();
         self.decoded -= usize::from(matches!(file.body, Body::Decoded(_)));
-        self.decoded_bytes -= file.decoded_cost();
         Some(file)
     }
     /// Makes `file`'s name and main inode find `serial`.
@@ -249,32 +277,38 @@ impl Companions {
         main.and_then(|main| self.inodes.get(&main).copied())
     }
     /// Replaces `serial`'s body by the decoded form of `bytes`, the caller's
-    /// edited body of `len` bytes, when the decoded budget takes it and the
-    /// export knows the companion's main inode. The decoded form costs its
-    /// attributes rather than its image, so a body that decodes needs no
-    /// resident budget at all.
-    fn keep_decoded(&mut self, serial: u64, bytes: &[u8], len: usize) -> bool {
+    /// edited body of `len` bytes, while the resident budget takes it and the
+    /// export knows the companion's main inode. The decoded form is counted as
+    /// its attributes rather than its image, so a body that decodes usually
+    /// needs much less room than its bytes, and the caller is told the room it
+    /// would need instead of spilling a body that fits after one eviction.
+    fn keep_decoded(&mut self, serial: u64, bytes: &[u8], len: usize) -> Decoded {
         // Only an inode's companion is decoded: one whose main file the export
         // never saw keeps the client's bytes as written and a slot of the
         // index bound, so that bound and orphan reclamation still reach it.
-        let inode = self.files.get(&serial).and_then(|file| file.inode);
+        let Some(file) = self.files.get(&serial) else {
+            return Decoded::Unchanged;
+        };
+        let (inode, before) = (file.inode, file.resident_cost());
         if inode.is_none() {
-            return false;
+            return Decoded::Unchanged;
         }
         let Some(image) = Image::compact(bytes) else {
-            return false;
+            return Decoded::Unchanged;
         };
         if image.cost() > DECODED_ENTRY_BYTES {
-            return false;
+            return Decoded::Unchanged;
         }
         let cost = image.cost();
         let tick = self.tick();
         let Some(mut file) = self.detach(serial) else {
-            return false;
+            return Decoded::Unchanged;
         };
-        if self.decoded_bytes + cost > DECODED_BYTES {
+        if self.resident_bytes + cost > self.resident_budget {
             self.attach(serial, file);
-            return false;
+            // The body decodes, so the room to ask for is what the decoded
+            // form adds to the count, not the length of the bytes edited.
+            return Decoded::Room(cost.saturating_sub(before));
         }
         file.len = len;
         file.body = Body::Decoded(image);
@@ -282,11 +316,11 @@ impl Companions {
         file.used = tick;
         touch(&mut file.metadata);
         self.attach(serial, file);
-        true
+        Decoded::Kept
     }
     /// Decides whether `file`'s body is a whole image: a decoded body of an
     /// inode's companion always is; a resident body of one is decoded when it
-    /// parses back to the same bytes and the decoded budget takes it. A
+    /// parses back to the same bytes and [`DECODED_ENTRY_BYTES`] takes it. A
     /// companion whose main file the export does not know is never a whole
     /// image: it keeps the client's bytes as written and a slot of the index
     /// bound, so that bound and orphan reclamation still reach it. `file` must
@@ -315,8 +349,7 @@ impl Companions {
             return;
         };
         file.whole = true;
-        let cost = image.cost();
-        if cost <= DECODED_ENTRY_BYTES && self.decoded_bytes + cost <= DECODED_BYTES {
+        if image.cost() <= DECODED_ENTRY_BYTES {
             file.body = Body::Decoded(image);
         }
     }
@@ -328,53 +361,56 @@ impl Companions {
             Body::Spilled => (self.spill_dir.as_ref()).map(|dir| spill_path(dir, serial)),
         }
     }
-    /// Renames the temporary file `temp`, which holds `serial`'s body of `len`
-    /// bytes, to the companion's own name in the spill directory and switches
-    /// the companion to it. With `used`, the tick the snapshot was read at,
-    /// only a companion nothing touched since and whose body is still in memory
-    /// (resident or decoded) takes it: a body another call changed or already
-    /// spilled stays, `Ok(false)` then, and `temp` is the caller's to unlink.
-    /// `None` is an edit's own body written out while it holds the companion's
-    /// edit gate, so no other edit can have changed it.
-    fn adopt_spilled(
-        &mut self,
-        serial: u64,
-        used: Option<u64>,
-        temp: &Path,
-        len: usize,
-    ) -> Result<bool, Status> {
-        let path = self
-            .spill_dir
-            .as_ref()
-            .map(|dir| spill_path(dir, serial))
-            .ok_or(Status::NoSpc)?;
-        let Some(file) = self.files.get_mut(&serial) else {
-            return Err(Status::Stale);
-        };
+    /// Where a body a spill wrote out replaces its companion: the companion's
+    /// own file, or `None` when another call changed the body since the
+    /// snapshot (`used` is the tick read then, and only a body still in memory
+    /// can be replaced). The caller renames its file to that path itself,
+    /// outside this lock, and then commits the body with
+    /// [`Self::commit_spilled`].
+    fn spill_target(&self, serial: u64, used: Option<u64>) -> Result<Option<PathBuf>, Status> {
+        let file = self.files.get(&serial).ok_or(Status::Stale)?;
         if let Some(used) = used {
             if !spill_applies(used, file.used, !matches!(file.body, Body::Spilled)) {
-                return Ok(false);
+                return Ok(None);
             }
         }
-        fs::rename(temp, path).map_err(|e| io_status(&e))?;
-        let mut file = self.detach(serial).ok_or(Status::Stale)?;
+        let dir = self.spill_dir.as_ref().ok_or(Status::NoSpc)?;
+        Ok(Some(spill_path(dir, serial)))
+    }
+    /// Commits the body whose bytes now sit at the companion's spill file: it
+    /// holds them on disk from now on, `len` bytes of them, which were the
+    /// whole body the file was written from. `false` when the companion is gone
+    /// or already holds a file, and the file just renamed into place is the
+    /// caller's to drop.
+    ///
+    /// The caller holds the companion's edit gate and no other call writes this
+    /// companion's file, so a body that changed between the snapshot and here
+    /// cannot be the body this file was written from.
+    fn commit_spilled(&mut self, serial: u64, len: usize) -> bool {
+        let Some(mut file) = self.detach(serial) else {
+            return false;
+        };
+        if matches!(file.body, Body::Spilled) {
+            self.attach(serial, file);
+            return false;
+        }
         file.body = Body::Spilled;
         // A body written out whole is still a whole image; a shorter file
         // than the companion had described is not.
         file.whole &= len <= file.len;
         file.len = file.len.max(len);
         self.attach(serial, file);
-        Ok(true)
+        true
     }
-    fn oldest_resident(&self, skip: Option<u64>) -> Option<u64> {
-        self.files
+    /// The least recently used companion holding memory, a body kept as
+    /// written or a decoded one: the budget counts both, so both are evicted.
+    /// The companions the caller will not take are passed over, one step into
+    /// the eviction order rather than a walk of every companion.
+    fn oldest_resident(&self, skip: &BTreeSet<u64>) -> Option<u64> {
+        self.by_use
             .iter()
-            .filter(|(serial, file)| {
-                Some(**serial) != skip
-                    && matches!(file.body, Body::Resident(ref b) if !b.is_empty())
-            })
-            .min_by_key(|(_, file)| file.used)
-            .map(|(serial, _)| *serial)
+            .find(|(_, serial)| !skip.contains(serial))
+            .map(|(_, serial)| *serial)
     }
     fn holding(&self) -> Holding {
         Holding {
@@ -382,7 +418,6 @@ impl Companions {
             slotted: self.slots.len(),
             resident_bytes: self.resident_bytes,
             decoded: self.decoded,
-            decoded_bytes: self.decoded_bytes,
         }
     }
 }
@@ -712,12 +747,11 @@ impl Kernel {
         let holding = held.holding();
         if holding.held > 0 {
             eprintln!(
-                "layerfs-nfs: AppleDouble companions released: export={:?} held={} slotted={} decoded={} decoded_bytes={} resident_bytes={}",
+                "layerfs-nfs: AppleDouble companions released: export={:?} held={} slotted={} decoded={} resident_bytes={}",
                 self.mount(),
                 holding.held,
                 holding.slotted,
                 holding.decoded,
-                holding.decoded_bytes,
                 holding.resident_bytes
             );
         }

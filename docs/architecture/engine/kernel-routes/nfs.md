@@ -179,9 +179,8 @@ the export.
 | --- | --- | --- | --- |
 | `HELD` | 65,536 slotted companion entries | Reclaim orphan slotted companions; if still at the bound, CREATE answers `NFS3ERR_NOSPC`, increments `names_refused` and logs at most once per 60 s per export | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 | `FILE_BYTES` | 1 MiB per companion | WRITE / SETATTR `NFS3ERR_FBIG` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
-| `RESIDENT_BYTES` | 32 MiB resident bodies in all | Spill least recently touched resident bodies to `companion_spill_dir` (`<mounts>/.appledouble/<namespace>/<serial>`); host disk I/O errors map to `NFS3ERR_NOSPC` (`ENOSPC`/`EDQUOT`), `NFS3ERR_FBIG` (`EFBIG`), `NFS3ERR_ACCES` (`EACCES`), `NFS3ERR_PERM` (`EPERM`), `NFS3ERR_ROFS` (`EROFS`) or `NFS3ERR_IO` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs), [`apple_double_spill.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_spill.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
-| `DECODED_BYTES` | 512 MiB over decoded companions | Further whole images keep their bytes as written and still take no `HELD` slot | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
-| `DECODED_ENTRY_BYTES` | 128 KiB per decoded companion | Larger whole images keep their bytes as written and still take no `HELD` slot | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| `RESIDENT_BYTES` | 32 MiB of companion bodies in all: a body kept as written at its length, a decoded one as `Image::cost` | Spill the least recently touched bodies, decoded ones included, to `companion_spill_dir` (`<mounts>/.appledouble/<namespace>/<serial>`); host disk I/O errors map to `NFS3ERR_NOSPC` (`ENOSPC`/`EDQUOT`), `NFS3ERR_FBIG` (`EFBIG`), `NFS3ERR_ACCES` (`EACCES`), `NFS3ERR_PERM` (`EPERM`), `NFS3ERR_ROFS` (`EROFS`) or `NFS3ERR_IO` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs), [`apple_double_spill.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_spill.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
+| `DECODED_ENTRY_BYTES` | 128 KiB counted for one decoded companion | A whole image costing more keeps its bytes as written and still takes no `HELD` slot | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 
 A companion whose main inode the export knows belongs to that inode rather than
 to one name: hard links share it, main-file RENAME keeps it under the new name
@@ -189,10 +188,11 @@ and existing aliases, and only the inode's last name (or its silly rename)
 drops it. When a write leaves an inode-bound companion holding a complete
 AppleDouble image that encodes back to the exact bytes written
 ([`apple_double_codec.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_codec.rs)),
-it is marked whole and takes no `HELD` slot (decoded in memory within
-`DECODED_BYTES` / `DECODED_ENTRY_BYTES`, or kept as written bytes above them);
-partial writes, resource forks, other layouts and unknown-main companions stay
-as written bytes and occupy a slot. `companion_rename` re-classifies under the
+it is marked whole and takes no `HELD` slot: decoded in memory (counted as
+`Image::cost` against `RESIDENT_BYTES`, at most `DECODED_ENTRY_BYTES` each), or
+kept as written bytes, which take the same budget at their length; partial
+writes, resource forks, other layouts and unknown-main companions stay as
+written bytes and occupy a slot. `companion_rename` re-classifies under the
 destination so moving onto an unknown main name takes a slot (a spilled body
 keeps its prior class).
 
@@ -206,14 +206,25 @@ the lock and re-reads the companion name and main file before inserting, so
 concurrent GUARDED creates of one name yield one serial and one
 `NFS3ERR_EXIST`.
 
-Resident bodies exceeding `RESIDENT_BYTES` spill outside the companion lock to
-`<serial>.<n>.tmp` (`create_new`, dir `0700`, file `0600`) and are adopted by
-rename to `<serial>` only if unchanged (`used` tick); spilled bodies are opened
-by path per `pread`/`pwrite`/`set_len` and never held open. One edit per
-companion runs under `Companion::editing` ([`edit.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/edit.rs)),
-recording length and bytes together and spilling its own body after bounded
-eviction rounds (`SPILL_ROUNDS`) rather than failing with `NFS3ERR_IO`.
-`ExportServing::reclaim` and release delete `<mounts>/.appledouble`.
+Bodies kept as written and decoded bodies alike, exceeding `RESIDENT_BYTES`
+together, are written to `<serial>.<n>.tmp` (`create_new`, dir `0700`, file
+`0600`) and renamed to `<serial>`, all of it outside the companion lock; the
+body is committed as spilled under the lock afterwards, so a reader reads the
+body in memory until its file is whole. One writer per companion is the edit
+gate (`Companion::editing`): an edit holds it, and an eviction takes it with
+`try_lock`, skipping a companion someone is editing. A rename is dropped when
+the body changed since the snapshot (`used` tick), and a spilled body is opened
+by path per `pread`/`pwrite`/`set_len` and never held open; a `pread` shorter
+than the length the lock saw is a short read, not `NFS3ERR_IO`.
+
+One edit per companion runs under that gate
+([`edit.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/edit.rs)),
+recording length and bytes together and spilling its own body rather than
+failing with `NFS3ERR_IO`. Eviction follows `Companions::by_use`, the
+`(used tick, serial)` order kept on attach, detach and every use: the victim is
+the first entry (O(log n) per round, no walk of the index), and the rounds end
+when no companion holding memory is left. `ExportServing::reclaim` and release
+delete `<mounts>/.appledouble`.
 
 ## Mount (`mount.rs`, daemon `export.rs`)
 

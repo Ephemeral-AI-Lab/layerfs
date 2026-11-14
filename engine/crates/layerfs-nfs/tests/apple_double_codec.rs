@@ -56,6 +56,59 @@ fn first_name_end(name_len: usize) -> usize {
 }
 
 #[test]
+fn any_window_of_the_image_encodes_to_that_window() {
+    // An image the client would write and decode: attributes whose names end
+    // on every alignment, values of several sizes, a padding byte the client
+    // left behind and its own empty resource fork.
+    let attrs: &[(&[u8], Vec<u8>)] = &[
+        (b"user.a", pattern(11, 1)),
+        (b"com.example.long-name", pattern(12, 300)),
+        (b"user.c", pattern(13, 0)),
+        (b"com.apple.provenance", pattern(14, 40)),
+        (b"user.tail", pattern(15, 1000)),
+    ];
+    let mut bytes = image([0x5a; 32], 0x0123_4567, attrs).encode();
+    bytes[first_name_end(b"user.a".len()) + 1] = 0x3d;
+    let built = Image::compact(&bytes).expect("the image decodes");
+    assert_eq!(built.encode(), bytes, "the whole image is unchanged");
+    let len = bytes.len();
+    let window = |start: usize, end: usize| {
+        let start = start.min(len);
+        let end = end.max(start).min(len);
+        bytes[start..end].to_vec()
+    };
+    // Every window, in and past the image, byte for byte the same as the
+    // whole encoding: the header, each entry's offset, length and name, the
+    // padding after a name, each value, and the fork.
+    for start in (0..=len + 1).step_by(37) {
+        assert_eq!(built.encode_range(start, len + 1), window(start, len + 1));
+        for end in (start..=len + 1).step_by(41) {
+            assert_eq!(
+                built.encode_range(start, end),
+                window(start, end),
+                "window {start}..{end} of {len} bytes"
+            );
+        }
+    }
+    // An empty window, and a window that starts past the image.
+    assert_eq!(built.encode_range(0, 0), Vec::<u8>::new());
+    assert_eq!(built.encode_range(len / 2, len / 2), Vec::<u8>::new());
+    assert_eq!(built.encode_range(len + 10, len + 20), Vec::<u8>::new());
+    assert_eq!(built.encode_range(7, 3), Vec::<u8>::new());
+    assert_eq!(built.encode_range(0, len + 10), bytes);
+    assert_eq!(built.encode_range(len - 1, len + 10), bytes[len - 1..].to_vec());
+    // The fork's own bytes are not all zero: a window inside it is served
+    // from the fork, not from the zeroed layout.
+    let fork_at = get32(&bytes, FORK_AT) as usize;
+    assert!(bytes[fork_at..].iter().any(|byte| *byte != 0));
+    assert_eq!(
+        built.encode_range(fork_at, len),
+        bytes[fork_at..].to_vec(),
+        "the empty resource fork is part of the window"
+    );
+}
+
+#[test]
 fn values_of_every_size_round_trip() {
     for size in [0, 1, 4096, 64 * 1024, 100 * 1024] {
         let value = pattern(3, size);
