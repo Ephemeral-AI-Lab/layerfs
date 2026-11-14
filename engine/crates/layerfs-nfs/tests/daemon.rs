@@ -136,8 +136,18 @@ fn workspace_control_over_the_nfs_route() {
 
     // Mount + Attach: Ready with an NFS receipt; the helper mounted it.
     let token = bind(&service, 31, rig.branch);
+    let spill_dir = mounts
+        .join(".appledouble")
+        .join(token.namespace.to_string());
+    fs::create_dir_all(&spill_dir).unwrap();
+    let stale_spill = spill_dir.join("stale-from-crashed-daemon");
+    fs::write(&stale_spill, b"stale").unwrap();
     assert_eq!(phase(&service, token), MountPhase::Unattached);
     let ready = attach(&service, token);
+    assert!(
+        !stale_spill.exists(),
+        "Attach cleans any leftover companion spill directory"
+    );
     assert_eq!(ready.receipt.abi_major, 0);
     assert_eq!(
         ready.directory,
@@ -242,6 +252,7 @@ fn workspace_control_over_the_nfs_route() {
         Reply::Unmounted(token)
     );
     assert!(!Path::new(&ready.directory).exists());
+    assert!(!spill_dir.exists());
     let released = service.export_released(token).unwrap();
     assert_eq!(released.lookups, held.lookups);
     assert_eq!(released.retained, 0);
@@ -289,4 +300,40 @@ fn workspace_control_over_the_nfs_route() {
         fs::remove_dir_all(path).unwrap();
     }
     fs::remove_file(&log).unwrap();
+}
+
+/// A daemon that ended without unmounting leaves the companions' scratch
+/// directories behind. Its successor clears them before serving anything, and
+/// touches nothing else under the mount home.
+#[test]
+fn startup_reclaim_clears_leftover_companion_spill_directories() {
+    let mounts = temp("reclaim-mounts");
+    let log = temp("reclaim-helpers.log");
+    drop(fs::remove_dir_all(&mounts));
+    drop(fs::remove_file(&log));
+    fs::create_dir_all(mounts.join(".appledouble/7")).unwrap();
+    fs::write(mounts.join(".appledouble/7/stale"), b"stale").unwrap();
+    fs::create_dir_all(mounts.join("kept")).unwrap();
+    fs::write(mounts.join("kept/note"), b"keep").unwrap();
+    let export = ExportServing::start(ExportServingConfig::new(
+        mounts.clone(),
+        UID,
+        GID,
+        Mounter {
+            mount: recording("mount", &log, None),
+            unmount: recording("unmount", &log, None),
+            force: recording("force", &log, None),
+            flush: None,
+        },
+    ));
+    let lines = export.reclaim();
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(
+        lines[0].starts_with("removed leftovers under "),
+        "{lines:?}"
+    );
+    assert!(!mounts.join(".appledouble").exists());
+    assert_eq!(fs::read(mounts.join("kept/note")).unwrap(), b"keep");
+    drop(fs::remove_dir_all(&mounts));
+    drop(fs::remove_file(&log));
 }
