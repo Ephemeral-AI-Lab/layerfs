@@ -227,7 +227,9 @@ together, are written to `<serial>.<n>.tmp` (`create_new`, dir `0700`, file
 body is committed as spilled under the lock afterwards, so a reader reads the
 body in memory until its file is whole. One writer per companion is the edit
 gate (`Companion::editing`): an edit holds it, and an eviction takes it with
-`try_lock`, skipping a companion someone is editing. A rename is dropped when
+`try_lock`, skipping a companion someone is editing, one another call removed
+and one whose file cannot be written out; only a call that finds no room and
+then cannot write out its own body answers its own error. A rename is dropped when
 the body changed since the snapshot (`used` tick), and a spilled body is opened
 by path per `pread`/`pwrite`/`set_len` and never held open; a `pread` shorter
 than the length the lock saw is a short read, not `NFS3ERR_IO`.
@@ -235,7 +237,9 @@ than the length the lock saw is a short read, not `NFS3ERR_IO`.
 One edit per companion runs under that gate
 ([`edit.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/edit.rs)),
 recording length and bytes together and spilling its own body rather than
-failing with `NFS3ERR_IO`. Eviction follows `Companions::by_use`, the
+failing with `NFS3ERR_IO`. A file operation that fails after the spill put the
+length the companion had back, so a refused write reports neither bytes nor the
+longer file the spill made for it. Eviction follows `Companions::by_use`, the
 `(used tick, serial)` order kept on attach, detach and every use: the victim is
 the first entry (O(log n) per round, no walk of the index), and the rounds end
 when no companion holding memory is left. `ExportServing::reclaim` and release

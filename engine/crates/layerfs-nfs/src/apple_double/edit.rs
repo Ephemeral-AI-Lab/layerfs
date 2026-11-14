@@ -35,6 +35,18 @@ use std::{
     path::Path,
 };
 
+/// One `pread` of `buf` at `offset`: a short read is the answer, and a read a
+/// signal interrupted is asked again, since no bytes of it moved.
+fn read_window(file: &File, buf: &mut [u8], offset: u64) -> Result<usize, Status> {
+    loop {
+        match file.read_at(buf, offset) {
+            Ok(read) => return Ok(read),
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+            Err(e) => return Err(io_status(&e)),
+        }
+    }
+}
+
 impl Kernel {
     /// READ of a companion, at most `count` bytes from `offset`, appended to
     /// `out`; `eof` when the reply reaches the companion's end.
@@ -76,10 +88,7 @@ impl Kernel {
             // call may have truncated the file since, and the bytes the file
             // still holds are the reply - a short read, not an I/O error.
             let mut buf = vec![0u8; end - start];
-            let read = self
-                .spill_file(serial, false)?
-                .read_at(&mut buf, start as u64)
-                .map_err(|e| io_status(&e))?;
+            let read = read_window(&self.spill_file(serial, false)?, &mut buf, start as u64)?;
             buf.truncate(read);
             out.extend_from_slice(&buf);
         }
@@ -221,9 +230,32 @@ impl Kernel {
         if !self.companions().admits(Some(serial), true) {
             return Ok(Edited::NoSlot);
         }
-        self.spill_gated(serial, target)?;
-        edit.disk(&self.spill_file(serial, true)?)?;
+        // A failed file operation leaves the length the companion had: the
+        // spill may have grown its file to the length this edit wanted, and a
+        // refused edit must not report it.
+        let before = self
+            .companions()
+            .files
+            .get(&serial)
+            .map(|file| file.len)
+            .ok_or(Status::Stale)?;
+        let written = self.spill_gated(serial, target).and_then(|()| {
+            let file = self.spill_file(serial, true)?;
+            edit.disk(&file)
+        });
+        if let Err(status) = written {
+            self.restore_len(serial, before);
+            return Err(status);
+        }
         self.record_edit(serial, edit).map(Edited::Done)
+    }
+    /// Puts back the length `serial` had before an edit whose file operation
+    /// failed.
+    fn restore_len(&self, serial: u64, len: usize) {
+        let mut companions = self.companions();
+        if let Some(file) = companions.files.get_mut(&serial) {
+            file.len = len;
+        }
     }
     /// Applies `edit` to `serial`'s body in memory while the budget holds it
     /// (a decoded body is encoded first), recording its length, recency and
@@ -329,6 +361,12 @@ impl Kernel {
     /// meanwhile has moved to the newest end of the order, so it is not picked
     /// twice, and the caller then writes out its own body, which needs no
     /// budget at all.
+    ///
+    /// A victim that cannot be written out is no failure of this call: one
+    /// another call removed has nothing left to give back, and one whose file
+    /// cannot be written keeps its body in memory, so the round passes over it
+    /// and looks at the body after it. Only a call that finds no room and then
+    /// cannot write out its own body reports that error, and it is its own.
     fn spill_for(&self, target: u64, need: usize) -> Result<bool, Status> {
         let mut skip = BTreeSet::from([target]);
         loop {
@@ -342,10 +380,11 @@ impl Kernel {
             let Some(victim) = victim else {
                 return Ok(false);
             };
-            if !self.spill_one(victim, None)? {
-                // The body changed under the file written from it, or the
-                // companion's own edit holds it: this call does not pick it
-                // again, and the next round looks at the body after it.
+            if self.spill_one(victim, None) != Ok(true) {
+                // The body changed under the file written from it, the
+                // companion's own edit holds it, or its file could not be
+                // written: this call does not pick it again, and the next
+                // round looks at the body after it.
                 skip.insert(victim);
             }
         }
@@ -365,9 +404,13 @@ impl Kernel {
             }
         };
         // One writer of a companion's file at a time: an edit of this companion
-        // is writing to it, and a spill may not wait for another call's I/O.
-        let Ok(_editing) = gate.try_lock() else {
-            return Ok(false);
+        // is writing to it, and a spill may not wait for another call's I/O. A
+        // gate poisoned by a panic is taken anyway, as every other holder of it
+        // does, so one panicked edit does not make its body undevictable.
+        let _editing = match gate.try_lock() {
+            Ok(editing) => editing,
+            Err(std::sync::TryLockError::Poisoned(poison)) => poison.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return Ok(false),
         };
         let (dir, bytes, size, used) = {
             let companions = self.companions();
