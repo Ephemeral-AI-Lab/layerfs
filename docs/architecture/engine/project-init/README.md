@@ -118,19 +118,20 @@ readiness wait, not a retry ([`import/batch.rs`](../../../../engine/crates/layer
 ### Seal and install
 
 ```text
- SqliteHandles::seal                     install_file  -->  daemon
-   sole session (else Busy)                manifest      Request, Claim
-   wal_checkpoint(TRUNCATE) (busy -> Busy) <= 65,519 B   Transfer
-   close; no -wal/-shm/-journal remains    per record
-   macOS: release unused allocation        "LFSF\x01"    Publish (rename)
-   --> SealedStore{path, profile, ..}                    Open, check binding
-                                           <-- Installed(manifest + daemon
-                                               SQLite version)
+ SqliteHandles::seal                        install_file  -->  daemon
+   sole session (else Busy)                 manifest      Request, Claim
+   take the writer lane (Linux and macOS)   <= 65,519 B   Transfer
+   wal_checkpoint(TRUNCATE) (busy -> Busy)  per record
+   close; no -wal/-shm/-journal remains     "LFSF\x01"    Publish (rename)
+   release the writer lane                  Open, check binding
+   macOS: release unused allocation
+   --> SealedStore{path, profile, ..}       <-- Installed(manifest + daemon
+                                                 SQLite version)
 ```
 
 | Rule | Source |
 | --- | --- |
-| Seal consumes the sole session after `Save::finish` and publication; it is never called on a live daemon's shared Store. `initialize` then builds a `StoreManifest` and returns a `SealedProject`. | [`store/seal.rs`](../../../../engine/crates/layerfs-persistence/src/store/seal.rs), [`store/init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs) |
+| Seal consumes the sole session after `Save::finish` and publication; it is never called on a live daemon's shared Store. `initialize` then builds a `StoreManifest` and returns a `SealedProject`. The lane is held across the checkpoint, the close and the sidecar check, so an opener waiting for the lane cannot create a `-wal` in the gap and turn a sealed Store into `Refused`. | [`store/seal.rs`](../../../../engine/crates/layerfs-persistence/src/store/seal.rs), [`store/init.rs`](../../../../engine/crates/layerfs-project/src/store/init.rs) |
 | Install checks Disposable, file kind and length against the manifest, streams `MAX_PLAINTEXT_BYTES` records from one fixed buffer, then the finish marker; it never opens the file as a database. A reply manifest that differs from the sent one plus the daemon's SQLite version is a protocol mismatch. | [`store/install.rs`](../../../../engine/crates/layerfs-project/src/store/install.rs), [`control.rs`](../../../../engine/crates/layerfs-bridge/src/control.rs) |
 | On a failure after the request was attempted the caller closes its send side (the fence), unless the failure was a channel error. | [`store/install.rs`](../../../../engine/crates/layerfs-project/src/store/install.rs) |
 

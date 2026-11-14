@@ -160,7 +160,7 @@ fn a_reader_in_the_log_leaves_it_for_the_last_close() {
     assert_eq!(wal_bytes(&path), 0);
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn another_process_writer_lane_leaves_it_without_waiting() {
     use nix::fcntl::{Flock, FlockArg};

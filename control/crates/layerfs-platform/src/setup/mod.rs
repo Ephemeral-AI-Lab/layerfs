@@ -10,5 +10,5 @@ pub(crate) mod worker;
 pub(crate) use calls::with_worker;
 pub use calls::{
     cached_image, copy_in, copy_out, create, forward, forward_close, load_image, provider_within,
-    reach, remove, start, status, status_within, stop, State, Status,
+    reach, remove, start, status, status_within, stop, stop_force, State, Status,
 };

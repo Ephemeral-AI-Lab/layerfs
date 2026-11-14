@@ -31,7 +31,7 @@ pub use platform::{ExecutorKind, HostOs, How, KernelRoute, Platform, Profile, Ro
 pub use probe::{native_missing, probe, Probe};
 pub use setup::{
     cached_image, copy_in, copy_out, create, forward, forward_close, load_image, provider_within,
-    reach, remove, start, status, status_within, stop, State, Status,
+    reach, remove, start, status, status_within, stop, stop_force, State, Status,
 };
 pub use spec::{
     parse_size, Bundle, Endpoint, Forward, Lasting, Running, Spec, Tools, BUNDLE, DATA, IMAGE,

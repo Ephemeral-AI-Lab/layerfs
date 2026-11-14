@@ -37,7 +37,7 @@ The `machine` calls: list, inspect, create, start, stop, update and remove the m
 | [`machine.prune`](#machineprune) | `{ removed: [id], freed }` |
 | [`machine.status`](#machinestatus) | `{ name, platform, state, free_disk, tool_version, down_reason, stores, op? }` |
 | [`machine.start`](#machinestart) | summary, once the worker answers |
-| [`machine.stop`](#machinestop) | summary, `state: "stopped"` |
+| [`machine.stop`](#machinestop) | summary, `state: "stopped"`; with `force`, also `forced`, `stopped_sandboxes`, `unknown` |
 | [`machine.create`](#machinecreate) | summary, `state: "running"` |
 | [`machine.remove`](#machineremove) | `{ name, removed: true, note? }` |
 | [`machine.update`](#machineupdate) | summary |
@@ -313,18 +313,46 @@ Stops a machine's worker and, where it has one, its VM; disks and Stores
 stay.
 
 ```text
-JS      await layerfs.machine.stop(name)
-Python  layerfs.machine.stop(name)
-CLI     layerfs machine stop <name>
+JS      await layerfs.machine.stop(name, { force })
+Python  layerfs.machine.stop(name, *, force=None)
+CLI     layerfs machine stop <name> [--force]
 ```
 
 `native` stops nothing; `docker` ends its worker container only; `lima` and
 `apple-container` end the worker and VM. `worker.json` is deleted and the
 state recorded `stopped`. Nothing stops a machine because it is unused.
-Errors: `InUse` while Sandboxes are recorded on it (`detail.related`,
-`can_stop_machine`); `Unavailable` (`start.lock` held 600 s, or the provider did
-not answer: records stay as they were); `Unknown` (a provider command timed out:
-the machine may be stopped while still recorded with its worker).
+Errors: `InUse` while Sandboxes are recorded on it and `force` is not set
+(`detail.related`, `can_stop_machine`); `InvalidInput` on `docker` when the
+container named for the machine is not a LayerFS worker (its role label), which
+is left alone; `Unavailable` (`start.lock` held 600 s,
+or the provider did not answer: records stay as they were); `Unknown` (a
+provider command timed out: the machine may be stopped while still recorded
+with its worker).
+
+`force` (Bool, default false) stops the machine while Sandboxes, mounted
+Workspaces or commands are active; their uncommitted state may be lost. It goes
+straight to the provider: it does not start the machine, call its worker,
+commit, unmount Workspaces one by one, or delete any machine, Sandbox, Store or
+disk record. On `native` it ends only this home's recorded Sandbox runtimes and
+commands, without opening the Store or calling the daemon, and the machine
+stays `ready`. On `docker`, ending the worker container ends its Sandboxes; the
+Store volume stays. `lima` uses `limactl stop --force`, also when the host
+agent reports a broken VM. It returns the recorded summary without a worker
+probe, plus `forced: true`, `stopped_sandboxes: [name]` and
+`unknown: [workspace]` (`sandbox:*` when a worker-side Workspace frontier could
+not be listed; these are not saved Commits). Stopped Sandboxes are recorded
+`gone` for explicit reclaim, or `unresolved` when the stop could not be
+confirmed. A Sandbox that never started is neither stopped nor listed. On `native` a Sandbox is uncertain only once its stop has been
+sent: a refusal before that (no recorded runtime, or a recorded process
+identity that no longer matches) leaves that Sandbox as it was, and the stop
+goes on to the next one. The call then answers the first such refusal, with
+`detail.refused_sandboxes`, `stopped_sandboxes` and `unknown`, and leaves no op
+on `native`. If recording the outcome fails, the stop's own refusal is still
+answered, with `detail.custody_errors`. A later forced stop may settle an
+uncertain stop this process left, or one whose process has ended; one a live
+process still holds is `Busy`. A provider failure or uncertain outcome is
+reported, never replayed or turned into success
+([`machine_force.rs`](../../../../control/crates/layerfs-control/src/machine_force.rs)).
 
 ### machine.create
 

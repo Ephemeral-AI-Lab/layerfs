@@ -61,7 +61,8 @@ fn digest(file: &Path, progress: Option<&mut dyn FnMut(u64, u64)>) -> Outcome {
     ]))
 }
 
-/// Checkpoints and closes a crashed opener's leftover `-wal` beside `file`,
+/// Checkpoints and closes a leftover `-wal` beside `file` (a crashed opener's,
+/// or one whose close could not wait for the writer lane),
 /// through the same `seal` a graceful close takes (#86): a Store whose last
 /// opener was killed keeps its committed frames in the log, which blocks a
 /// snapshot until one opener folds them in. Nothing runs while no live

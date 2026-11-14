@@ -79,3 +79,8 @@ pub fn load(home: &Path, events: &mut Events<'_>, name: &MachineName, image: &st
 pub fn prune(home: &Path, name: &MachineName, image: Option<&str>, unused: bool) -> Outcome {
     layerfs_sandbox::images::prune(home, name, image, unused)
 }
+
+/// Explicit crash stop of a machine and this home's Sandboxes, preserving data.
+pub fn stop_force(home: &Path, name: &MachineName) -> Outcome {
+    crate::machine_force::stop(home, name)
+}
