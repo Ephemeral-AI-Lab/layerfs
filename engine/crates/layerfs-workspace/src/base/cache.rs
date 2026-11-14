@@ -5,7 +5,7 @@ use layerfs_content::policy::WHOLE_FILE_CANONICAL_OVERHEAD;
 use layerfs_content::{ContentError, ContentResult, FinalizedObject, ObjectId, ObjectRole};
 use std::{
     collections::{BTreeMap, VecDeque},
-    sync::Mutex,
+    sync::{Condvar, Mutex},
 };
 
 pub(crate) struct State {
@@ -15,6 +15,9 @@ pub(crate) struct State {
     pub(crate) work: crate::ClientWork,
     /// Sequential read streams its clients follow, for read-ahead.
     pub(crate) streams: crate::base::client::Streams,
+    /// Prototype (FUSE profile probe, `single`): objects some demand is
+    /// fetching now; another demand for them waits for [`CanonicalCache::landed`].
+    pub(crate) inflight: std::collections::BTreeSet<ObjectId>,
 }
 
 /// One bounded immutable cache allowance shared by operation-scoped providers.
@@ -24,6 +27,8 @@ pub(crate) struct State {
 /// to one declared authorization context; an object ID does not grant access.
 pub struct CanonicalCache {
     pub(crate) state: Mutex<State>,
+    /// Prototype (FUSE profile probe): signalled when an in-flight fetch ends.
+    pub(crate) landed: Condvar,
     /// Decoded pages of objects this cache's clients authenticated, within
     /// their own fixed budget (#364).
     pub(crate) decoded: layerfs_content::filesystem::decoded::DecodedPages,
@@ -44,7 +49,9 @@ impl CanonicalCache {
                 counts: Default::default(),
                 streams: Default::default(),
                 work: crate::ClientWork::default(),
+                inflight: Default::default(),
             }),
+            landed: Condvar::new(),
             decoded: layerfs_content::filesystem::decoded::DecodedPages::new(decoded),
         }
     }

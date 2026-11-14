@@ -361,6 +361,9 @@ impl BaseRead {
     /// [`CanonicalClient::read_ahead`]); those bytes are not written. A
     /// failure there fails this read like any other Store failure.
     pub fn emit(&self, sink: &mut dyn Write) -> ContentResult<()> {
+        if crate::base::client::probe().ahead {
+            return self.emit_ahead(sink);
+        }
         if self.start < self.end {
             if let Ok(Some(state)) = self.file.file_state() {
                 if let Some(ahead) = self.client.read_through(
@@ -381,5 +384,46 @@ impl BaseRead {
                 .read_range(self.client.as_ref(), self.start..self.end, sink, scope)
         })
         .0
+    }
+    /// Prototype (FUSE profile probe, `async`): the window is read on
+    /// demand, then the next read-ahead window, if due, is fetched on its own
+    /// thread while the reader goes on; demands for objects it is fetching
+    /// wait for it (`single`). Its failure fails nothing: those objects are
+    /// then read on demand.
+    fn emit_ahead(&self, sink: &mut dyn Write) -> ContentResult<()> {
+        let result = Timing::disabled("base.read", |scope| {
+            self.file
+                .read_range(self.client.as_ref(), self.start..self.end, sink, scope)
+        })
+        .0;
+        if self.start < self.end {
+            if let Ok(Some(state)) = self.file.file_state() {
+                let root = self.file.root();
+                if let Some(ahead) =
+                    self.client
+                        .read_next(root, self.start, self.end, self.file.logical_len())
+                {
+                    let Some(client) = self.client.forked() else {
+                        self.client.ahead_done(root);
+                        return result;
+                    };
+                    let spawned = std::thread::Builder::new()
+                        .name("layerfs-read-ahead".into())
+                        .spawn(move || {
+                            if let Err(error) = layerfs_telemetry::timer::stages::time(
+                                layerfs_telemetry::timer::stages::Stage::ReadAhead,
+                                || client.read_ahead(state, ahead),
+                            ) {
+                                eprintln!("PROBE_AHEAD_FAILED {error:?}");
+                            }
+                            client.ahead_done(root);
+                        });
+                    if spawned.is_err() {
+                        self.client.ahead_done(root);
+                    }
+                }
+            }
+        }
+        result
     }
 }

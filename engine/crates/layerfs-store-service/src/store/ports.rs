@@ -125,11 +125,13 @@ impl StorePorts {
         })
     }
     pub fn client(self: &Arc<Self>) -> Arc<CanonicalClient> {
-        Arc::new(CanonicalClient::with_cache(
-            self.clone(),
-            Some(self.clone()),
-            self.store.cache.clone(),
-        ))
+        let ports = self.clone();
+        Arc::new(
+            CanonicalClient::with_cache(self.clone(), Some(self.clone()), self.store.cache.clone())
+                .with_fresh(Arc::new(move || {
+                    ports.fresh() as Arc<dyn layerfs_content::AuthenticatedObjects + Send + Sync>
+                })),
+        )
     }
     /// The first exact failure; poison is itself an explicit refusal.
     pub fn failure(&self) -> Result<Option<Arc<PortError>>, PortError> {

@@ -43,6 +43,51 @@ const AHEAD_IDS: usize = {
 /// is cut at the first page past them.
 const AHEAD_PAGES: usize = READ_NAVIGATION_WAVE;
 
+/// Prototype switches (FUSE profile probe, not a product contract), from
+/// `LAYERFS_PROBE_READ`, a comma list: `noverify` skips the client's BLAKE3
+/// re-check of objects the in-process Store already authenticated; `single`
+/// makes a demand for objects another demand is fetching wait for that
+/// fetch; `async` runs read-ahead on its own thread ahead of the reader
+/// (implies `single`). Unset, none applies.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct Probe {
+    pub(crate) noverify: bool,
+    pub(crate) single: bool,
+    pub(crate) ahead: bool,
+}
+pub(crate) fn probe() -> Probe {
+    static PROBE: std::sync::OnceLock<Probe> = std::sync::OnceLock::new();
+    *PROBE.get_or_init(|| {
+        let value = std::env::var("LAYERFS_PROBE_READ").unwrap_or_default();
+        let has = |name: &str| value.split(',').any(|part| part.trim() == name);
+        let ahead = has("async");
+        Probe {
+            noverify: has("noverify"),
+            single: has("single") || ahead,
+            ahead,
+        }
+    })
+}
+/// Prototype: the ids a demand marked in flight, released (and waiters
+/// woken) when it ends, whatever its outcome.
+struct Flight<'c> {
+    cache: &'c CanonicalCache,
+    ids: Vec<ObjectId>,
+}
+impl Drop for Flight<'_> {
+    fn drop(&mut self) {
+        if self.ids.is_empty() {
+            return;
+        }
+        if let Ok(mut state) = self.cache.state.lock() {
+            for id in &self.ids {
+                state.inflight.remove(id);
+            }
+        }
+        self.cache.landed.notify_all();
+    }
+}
+
 /// One mapping page a read-ahead walk reaches: its identity, whether it is
 /// the root, where it starts and the summary its parent recorded.
 struct Page {
@@ -70,7 +115,7 @@ struct Ahead {
 /// windows are followed, so every followed stream's two windows fit the
 /// allowance together; another read takes the least recently read slot.
 #[derive(Default)]
-pub(crate) struct Streams(Vec<Ahead>);
+pub(crate) struct Streams(Vec<Ahead>, Vec<ObjectId>);
 impl Streams {
     /// Records a read of `start..end` of `root` and returns how far its
     /// stream had fetched when it continues one.
@@ -88,6 +133,13 @@ impl Streams {
         let excess = self.0.len().saturating_sub(most.max(1));
         self.0.drain(..excess);
         until
+    }
+    /// Prototype (`async`): whether a background read-ahead of `root` runs.
+    fn busy(&self, root: ObjectId) -> bool {
+        self.1.contains(&root)
+    }
+    pub(crate) fn finish(&mut self, root: ObjectId) {
+        self.1.retain(|busy| *busy != root);
     }
     /// The latest read's stream has fetched up to `until`.
     fn fetched(&mut self, until: u64) {
@@ -141,7 +193,12 @@ pub struct CanonicalClient {
     lengths: Option<Arc<dyn crate::FileLengths + Send + Sync>>,
     /// Answers only from the cache: no upstream demand is ever made.
     resident: bool,
+    /// Prototype (FUSE profile probe, `async`): a fresh demand custody over
+    /// the same reader, for a read-ahead that runs beside this operation.
+    fresh: Option<Fresh>,
 }
+/// See [`CanonicalClient::with_fresh`].
+pub type Fresh = Arc<dyn Fn() -> Arc<dyn AuthenticatedObjects + Send + Sync> + Send + Sync>;
 /// The upstream of a memory-only client. It is never asked.
 struct NoUpstream;
 impl AuthenticatedObjects for NoUpstream {
@@ -163,6 +220,7 @@ impl CanonicalClient {
             cache,
             lengths: None,
             resident: true,
+            fresh: None,
         }
     }
     /// Selects a cache allowance. A large object can bypass cache without refusal.
@@ -198,7 +256,24 @@ impl CanonicalClient {
             cache,
             lengths,
             resident: false,
+            fresh: None,
         }
+    }
+    /// Prototype (FUSE profile probe): how to make a fresh demand custody.
+    pub fn with_fresh(mut self, fresh: Fresh) -> Self {
+        self.fresh = Some(fresh);
+        self
+    }
+    /// Prototype (`async`): a client over a fresh custody and the same cache.
+    pub(crate) fn forked(&self) -> Option<Arc<Self>> {
+        let fresh = self.fresh.as_ref()?;
+        Some(Arc::new(Self {
+            source: fresh(),
+            cache: self.cache.clone(),
+            lengths: None,
+            resident: false,
+            fresh: Some(fresh.clone()),
+        }))
     }
     /// The length provider's own answer, asked every time: nothing is
     /// remembered and nothing remembered is used. Commit construction checks
@@ -287,6 +362,47 @@ impl CanonicalClient {
         // At most one window of the read itself: a larger read fetches the
         // rest of its own range on demand.
         Some(until.max(start).max(end.saturating_sub(READ_AHEAD))..through)
+    }
+    /// Prototype (`async`): the range a background read-ahead should fetch
+    /// for a read of `start..end` that continues a stream: from what the
+    /// stream already fetched to one window past it, once the reader is
+    /// within one window of that frontier and no read-ahead of this content
+    /// runs. The read's own window is read on demand as usual.
+    pub(crate) fn read_next(
+        &self,
+        root: ObjectId,
+        start: u64,
+        end: u64,
+        length: u64,
+    ) -> Option<Range<u64>> {
+        if self.resident {
+            return None;
+        }
+        let mut state = self.state().ok()?;
+        let capacity = state.cache.capacity();
+        if capacity < READ_AHEAD_CACHE {
+            return None;
+        }
+        let until = state
+            .streams
+            .follow(root, start, end, capacity / READ_AHEAD_CACHE)?;
+        if state.streams.busy(root) || until >= end.saturating_add(READ_AHEAD) {
+            return None;
+        }
+        let from = until.max(end);
+        let through = from.saturating_add(READ_AHEAD).min(length);
+        if from >= through {
+            return None;
+        }
+        state.streams.fetched(through);
+        state.streams.1.push(root);
+        Some(from..through)
+    }
+    /// Prototype (`async`): the background read-ahead of `root` ended.
+    pub(crate) fn ahead_done(&self, root: ObjectId) {
+        if let Ok(mut state) = self.state() {
+            state.streams.finish(root);
+        }
     }
     /// Places the chunks of `range` of chunked content `state` that the
     /// cache lacks in the cache, demanded in one upstream batch. The mapping
@@ -385,13 +501,23 @@ impl CanonicalClient {
     /// Demands the `ids` the cache lacks in one upstream batch and caches
     /// them, checked as any demanded object is; a failed batch caches none.
     fn fetch_ahead(&self, ids: &[ObjectId]) -> ContentResult<()> {
+        let probe = probe();
+        let mut flight = Flight {
+            cache: &self.cache,
+            ids: Vec::new(),
+        };
         let wanted: Vec<ObjectId> = {
             let mut state = self.state()?;
             let wanted: Vec<ObjectId> = ids
                 .iter()
                 .copied()
                 .filter(|id| !state.cache.within(*id, usize::MAX))
+                .filter(|id| !probe.single || !state.inflight.contains(id))
                 .collect();
+            if probe.single {
+                state.inflight.extend(wanted.iter().copied());
+                flight.ids = wanted.clone();
+            }
             if !wanted.is_empty() {
                 state.work.cache_misses =
                     state.work.cache_misses.saturating_add(wanted.len() as u64);
@@ -428,7 +554,7 @@ impl CanonicalClient {
                     actual: bytes as u64,
                 });
             }
-            if ObjectId::for_bytes(value) != *id {
+            if !probe.noverify && ObjectId::for_bytes(value) != *id {
                 return Err(ContentError::IdentityMismatch);
             }
         }
@@ -520,6 +646,11 @@ impl AuthenticatedObjects for CanonicalClient {
                 actual: ids.len() as u64,
             });
         }
+        let probe = probe();
+        let mut flight = Flight {
+            cache: &self.cache,
+            ids: Vec::new(),
+        };
         let mut values = vec![None; ids.len()];
         let mut misses = Vec::new();
         let mut cached_bytes = 0;
@@ -544,6 +675,43 @@ impl AuthenticatedObjects for CanonicalClient {
                     state.work.cache_misses = state.work.cache_misses.saturating_add(1);
                 }
             }
+            if probe.single && !misses.is_empty() {
+                // Wait for objects another demand is fetching, then take
+                // what landed; the rest this demand fetches itself.
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+                while misses.iter().any(|(_, id)| state.inflight.contains(id)) {
+                    let left = deadline.saturating_duration_since(std::time::Instant::now());
+                    if left.is_zero() {
+                        break;
+                    }
+                    state = self
+                        .cache
+                        .landed
+                        .wait_timeout(state, left)
+                        .map_err(|_| ContentError::ProviderFailure {
+                            what: "base cache owner",
+                        })?
+                        .0;
+                }
+                let mut rest = Vec::with_capacity(misses.len());
+                for (index, id) in misses {
+                    match state.cache.get(id, DEMAND_BYTES - cached_bytes)? {
+                        Some(value) => {
+                            cached_bytes += value.len();
+                            values[index] = Some(value);
+                        }
+                        None => rest.push((index, id)),
+                    }
+                }
+                misses = rest;
+                let mine: Vec<ObjectId> = misses
+                    .iter()
+                    .map(|(_, id)| *id)
+                    .filter(|id| !state.inflight.contains(id))
+                    .collect();
+                state.inflight.extend(mine.iter().copied());
+                flight.ids = mine;
+            }
             if !misses.is_empty() {
                 state.work.upstream_batches = state.work.upstream_batches.saturating_add(1);
             }
@@ -565,7 +733,7 @@ impl AuthenticatedObjects for CanonicalClient {
                         actual: value.len(),
                     });
                 }
-                if ObjectId::for_bytes(&value) != *id {
+                if !probe.noverify && ObjectId::for_bytes(&value) != *id {
                     return Err(ContentError::IdentityMismatch);
                 }
                 values[*index] = Some(value);

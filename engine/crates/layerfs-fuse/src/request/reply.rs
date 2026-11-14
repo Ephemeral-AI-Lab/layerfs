@@ -246,7 +246,20 @@ async fn windows(
                     break;
                 }
             }
-            Ok(Err(_)) | Err(_) if !data.is_empty() => break,
+            Ok(Err(reason)) if !data.is_empty() => {
+                eprintln!(
+                    "PROBE_SHORT_READ at {} refusal {reason:?}",
+                    offset + data.len() as u64
+                );
+                break;
+            }
+            Err(error) if !data.is_empty() => {
+                eprintln!(
+                    "PROBE_SHORT_READ at {} failure {error:?} / {error}",
+                    offset + data.len() as u64
+                );
+                break;
+            }
             Ok(Err(reason)) => {
                 reply.error(refusal(reason));
                 return RequestDisposition::Complete;
