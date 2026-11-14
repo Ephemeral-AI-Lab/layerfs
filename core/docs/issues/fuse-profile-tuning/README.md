@@ -12,6 +12,19 @@
 
 ## Answer
 
+- **Final ([§7](#7-round-4-lanes-v2-small-files-write-cpu-and-the-final-combined-run)):
+  the recommended set (safe3) needs no owner decision, integrity change or
+  Store format change.** Measured against today's profile, on the same binary
+  and in the same batch:
+  - Cold read: 203 → 1,112 MB/s (5.5×).
+  - Re-read on a fresh mount: 219 → 1,002 MB/s (4.6×).
+  - 20,000 small files: 2,374 → 829 ms with 8 threads (2.9×), and
+    4,697 → 3,069 ms with 1 thread.
+  - `ls -l` 4.4× faster, `find` 7× faster.
+  - Sequential write: 1.6×.
+  - Peak memory: +38 MB.
+  - 4 KiB random write is unchanged.
+
 - **Round 3 ([§6](#6-experiments-and-the-combined-round-round-3)): the cold
   read goes from 215 to 937 MB/s (4.35×) with no integrity or format
   change.** The changes are Store read lanes, asynchronous single-flight
@@ -597,6 +610,123 @@ Store evicted. The decoded-file cache and passthrough were off in every arm.
    - The FUSE reply copy
    - The per-file request chain of small-file reads, which no experiment has
      measured yet
+
+## 7. Round 4: lanes v2, small files, write CPU, and the final combined run
+
+Three more experiments ran on the round-3 tree (`c8cf56ab0e`). Each one used
+the round-3 **safe** set as its control.
+
+| Experiment | Result against the safe set, same batch | Owner decision? |
+| --- | --- | --- |
+| [lanes2](experiments/lanes2.md) | 6 lanes, 2 windows, a fixed pool of 5: cold read 924–953 → 1,226–1,276 MB/s (+31–34%), CPU +1–3%. Shared packs refuted: the duplicate pack reads were page-cache hits. | Lanes against PostgreSQL connections |
+| [smallread](experiments/smallread.md) | 20,000 files, 155.5 MB: 1 thread 3,330 → 2,332 ms, 8 threads 1,339 → 787 ms | `push` (page cache filled at OPEN) |
+| [write2](experiments/write2.md) | `digestpar` costs 5–17% CPU per MB and is 21–23% slower with four Workspaces; `digestidle` fixes that; `reldefer` makes the GETATTR after a create 31 → 14 µs | A second core per write |
+
+### Final combined run
+
+**Setup:**
+
+- **Binary:** merged probe `5e65b3c559bc…c22c1d`, tree `fd164d7d35`.
+- **Fixture:** a fresh one with the 500 MiB file, 2,000 small files and the
+  20,000-file tree.
+- **Samples:** one per arm, all in one window. BLAKE3 was 13.2–13.9 µs per
+  call. Host 1-minute load was 5.0–6.9.
+- **Residency:** 0 bytes of the Store before every cold read and every tree
+  phase. The large-file arms (`g-*`) do not run the tree phases; `h-*-tree`
+  arms run only those.
+- **Correctness:** every arm exited 0 and every byte check matched. In every
+  large-file arm the coherence phases passed, `coherence_small` included.
+- **Receipts:** `receipts/round4-combined/`.
+
+**Switch sets:**
+
+- **safe** is round 3's.
+- **safe2:**
+  - `READ_SESSIONS=6`, `READ_WINDOWS=2`, `READ_POOL=5`
+  - `WRITE=noresume,digestpar,digestidle,reldefer`
+  - `SMALL=lengths,eager,parts`
+  - `FUSE_LOOPS=4`
+- **safe3:** safe2 plus `spin`.
+- **full2:** safe2 plus three owner-decision items: `nopacksha`, split locate
+  and `push`.
+
+| Arm | Cold read MB/s | Re-read cold | CPU s, cold read | `VmHWM` KB, cold read | Seq write | 4 Workspaces seq write | `ls -l` ms | `find` ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| base (today) | 203.0 | 219.3 | 2.20 | 121,660 | 578.2 | 1,761.3 | 133 | 127 |
+| safe (round 3) | 860.7 | 889.6 | 1.82 | 131,264 | 921.8 | 1,718.7 | 31 | 16 |
+| safe2 | 1,103.1 | 970.7 | 1.94 | 163,284 | 871.0 | 2,368.4 | 31 | 18 |
+| **safe3** | **1,111.8** | 1,001.5 | 2.02 | 159,508 | 904.0 | 2,309.9 | 30 | 18 |
+| full2 | 1,119.5 | 1,007.1 | 1.70 | 152,776 | 879.8 | 2,505.6 | 29 | 17 |
+
+The 20,000-file tree, each phase on a fresh mount with the Store evicted:
+
+| Arm | 1 thread ms | 8 threads ms | `stat` ms | `VmHWM` KB, 8 threads |
+| --- | ---: | ---: | ---: | ---: |
+| native ext4 | 1,512 | 319 | — | — |
+| base | 4,697 | 2,374 | 1,329 | 98,420 |
+| safe | 3,638 | 1,327 | 418 | 111,076 |
+| safe2 | 3,090 | 1,199 | 437 | 205,632 |
+| **safe3** (whole probe) | **3,069** | **829** | 446 | — |
+| full2 (`push`) | 2,381 | 1,296 | 426 | 193,336 |
+| smallread's own best (safe + `SMALL`, 4 loops) | 2,979 | 815 | 470 | 171,596 |
+
+**Finding: `spin` is still needed for concurrent reads.**
+
+- safe2 dropped `spin` because `reldefer` replaces it for creates. Its
+  8-thread tree read was 1,199 ms, against 815 ms for smallread's own
+  settings.
+- Diagnosis arms, all on the same binary and batch, 8-thread tree read:
+  - with `spin`: 786–815 ms whatever the pool, lane, window or
+    `digestidle` setting (`h-sr-pool3`, `h-sr-s6w2`, `h-sr-idle`)
+  - without `spin`: 1,174–1,199 ms, with or without `reldefer`
+    (`h-sr-wnew`, `h-sr-reldefer`, `h-sr-nospin`)
+- With 8 readers the RELEASE callbacks total 371 ms with `spin` and
+  887–894 ms without it. `reldefer` shortens only the RELEASE of written
+  files; read-only closes still wait on the Workspace lock.
+- So the final set keeps `spin`. Its CPU cost under 8 concurrent readers was
+  not measured.
+
+**Answer for the whole investigation:**
+
+| | Today (base) | Recommended without owner decisions (safe3) | Factor |
+| --- | ---: | ---: | ---: |
+| Cold read, 500 MiB | 203 MB/s | 1,112 MB/s | 5.5× |
+| Re-read on a fresh mount | 219 MB/s | 1,002 MB/s | 4.6× |
+| 20,000 small files, 1 / 8 threads | 4,697 / 2,374 ms | 3,069 / 829 ms | 1.5× / 2.9× |
+| `ls -l` / `find`, 2,000 entries | 133 / 127 ms | 30 / 18 ms | 4.4× / 7× |
+| Sequential write, 1 / 4 Workspaces | 578 / 1,761 MB/s | 904 / 2,310 MB/s | 1.6× / 1.3× |
+| 4 KiB random write | 67.9 MB/s | 64.4 MB/s | unchanged (kernel round trip) |
+| `VmHWM`, cold read | 122 MB | 160 MB | +38 MB |
+
+**safe3 for product work**, in order of gain:
+
+1. Store read lanes (6) with 2 read-ahead windows on a per-Workspace pool
+   (N−1 threads), plus asynchronous single-flight read-ahead.
+2. 512 KiB requests with 4 in flight; the READ/WRITE splitting becomes product
+   code.
+3. READDIRPLUS with one-reply windows; batched lengths; sibling prefetch.
+   Configurable receive loops (4).
+4. One-shot BLAKE3, the `move`/`share` copies, `noresume`, `reldefer`,
+   bounded `spin`.
+5. The append digest on an idle-only helper (`digestpar,digestidle`), if the
+   owner accepts a second core per write.
+
+What the owner-decision items add on top of safe3:
+
+| Item | Gain | Notes |
+| --- | --- | --- |
+| No pack SHA-256 on read, split locate | +1% here | Once the lanes are wide, neither is the limit any more |
+| 16 KiB pages | +7% in round 3 | |
+| `push` | 1-thread tree read −22% | No gain with 8 threads; races not tested |
+| Decoded-file cache | 2.8× on re-reads | |
+| Passthrough | native speed on re-reads | Not coherent |
+
+**What is left:**
+
+- **4 KiB random write:** bounded by one kernel round trip per WRITE.
+- **Small files:** about 150 µs per file of request chain with one thread.
+- **Cold read:** about 1.1 GB/s against 2.8 GB/s native. The limit is the
+  FUSE reply copy and Store lane CPU.
 
 ## Checks and gaps
 
