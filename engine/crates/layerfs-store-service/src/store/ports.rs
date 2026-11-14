@@ -130,7 +130,9 @@ impl StorePorts {
             CanonicalClient::with_cache(self.clone(), Some(self.clone()), self.store.cache.clone())
                 .with_fresh(Arc::new(move || {
                     ports.fresh() as Arc<dyn layerfs_content::AuthenticatedObjects + Send + Sync>
-                })),
+                }))
+                // Prototype (lanes2 probe, `LAYERFS_PROBE_READ_POOL`).
+                .with_pool(self.reader.as_ref().ok().and_then(|reader| reader.pool())),
         )
     }
     /// The first exact failure; poison is itself an explicit refusal.

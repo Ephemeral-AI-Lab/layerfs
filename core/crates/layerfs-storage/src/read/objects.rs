@@ -102,6 +102,23 @@ impl ReadState {
         capacities: &StorageCapacities,
         ids: &[ObjectId],
     ) -> StorageResult<Vec<Vec<u8>>> {
+        self.read_deferring(workspace, source, capacities, ids, false)
+            .map(|(out, _)| out)
+    }
+    /// Prototype (lanes2 probe, `defer`): [`Self::read`], except that with
+    /// `defer` the BLAKE3 check of each requested object of the ordinary
+    /// lane against its identity is left to the caller: the second vector
+    /// marks those positions. Every dependency is still checked here, and so
+    /// is every pooled or program object. The caller must check each marked
+    /// object before any consumer sees it.
+    pub(crate) fn read_deferring(
+        &mut self,
+        workspace: &mut DecompressionWorkspace,
+        source: &Fetch,
+        capacities: &StorageCapacities,
+        ids: &[ObjectId],
+        defer: bool,
+    ) -> StorageResult<(Vec<Vec<u8>>, Vec<bool>)> {
         if ids.len() > capacities.read_objects {
             return Err(StorageError::CapacityExceeded {
                 what: "storage.read_objects",
@@ -141,6 +158,10 @@ impl ReadState {
             (row.pack_id, row.group_number, row.record_number)
         });
         let mut out = vec![Vec::new(); ids.len()];
+        let mut deferred = vec![false; ids.len()];
+        if let (Some(first), Some(last)) = (order.first(), order.last()) {
+            source.set_edges(roots[*first].pack_id, roots[*last].pack_id);
+        }
         // A demand whose packs pass the pack cache's bound is served one
         // cohort of packs at a time, each within the bound, so a pack it
         // acquires stays cached until its objects are resolved (#97).
@@ -195,7 +216,7 @@ impl ReadState {
                             }),
                         )?;
                     }
-                    let (canonical, _) = Resolver::new(
+                    let mut resolver = Resolver::new(
                         source,
                         i64::MAX,
                         capacities,
@@ -207,13 +228,15 @@ impl ReadState {
                         workspace,
                         &mut counters,
                     )
-                    .resolve_at(root)?;
+                    .deferring(defer);
+                    let (canonical, _) = resolver.resolve_at(root)?;
+                    deferred[position] = resolver.deferred();
                     out[position] = canonical;
                 }
                 from = next;
             }
             start = end;
         }
-        Ok(out)
+        Ok((out, deferred))
     }
 }

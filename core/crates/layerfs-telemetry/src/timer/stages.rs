@@ -128,9 +128,18 @@ pub enum Stage {
     CapturedAsked,
     /// Prototype (experiment `write2`): captured digests found.
     CapturedFound,
+    /// Prototype (lanes2): one split read-ahead window, first part start to
+    /// last part end.
+    WindowFetch,
+    /// Prototype (lanes2): per part, the time from its end to its window's
+    /// last part end (lane idle at the window barrier).
+    PartIdle,
+    /// Prototype (lanes2, `defer`): the identity checks a read session makes
+    /// after its lane is released, per demand.
+    DeferredHash,
 }
 /// Number of [`Stage`]s.
-pub const STAGES: usize = Stage::CapturedFound as usize + 1;
+pub const STAGES: usize = Stage::DeferredHash as usize + 1;
 /// Names of the [`Stage`]s, in order.
 pub const STAGE_NAMES: [&str; STAGES] = [
     "read_visit",
@@ -190,6 +199,9 @@ pub const STAGE_NAMES: [&str; STAGES] = [
     "digest_flush",
     "captured_asked",
     "captured_found",
+    "window_fetch",
+    "part_idle",
+    "deferred_hash",
 ];
 
 const ZERO: AtomicU64 = AtomicU64::new(0);

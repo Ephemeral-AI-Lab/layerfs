@@ -94,6 +94,10 @@ pub struct Resolver<'a> {
     workspace: &'a mut DecompressionWorkspace,
     counters: &'a mut ChainCounters,
     packs_read: u64,
+    /// Prototype (lanes2 probe, `defer`): leave the requested object's own
+    /// identity check to the caller, and whether this resolution did.
+    defer_root: bool,
+    deferred: bool,
 }
 
 impl<'a> Resolver<'a> {
@@ -116,7 +120,25 @@ impl<'a> Resolver<'a> {
             workspace,
             counters,
             packs_read: 0,
+            defer_root: false,
+            deferred: false,
         }
+    }
+
+    /// Prototype (lanes2 probe, `defer`): with `defer`, the requested
+    /// object of an ordinary-lane chain is returned without its BLAKE3
+    /// check, and [`Self::deferred`] says so; its caller must make that
+    /// check before the bytes reach any consumer. Its dependencies, and
+    /// pooled and program objects, are checked here as before.
+    pub fn deferring(mut self, defer: bool) -> Self {
+        self.defer_root = defer;
+        self
+    }
+
+    /// Prototype (lanes2 probe): whether the latest resolution left the
+    /// requested object's identity check to its caller.
+    pub const fn deferred(&self) -> bool {
+        self.deferred
     }
 
     /// Pack bodies this resolver fetched from storage.
@@ -171,6 +193,7 @@ impl<'a> Resolver<'a> {
     ) -> StorageResult<(Vec<u8>, ObjectId)> {
         *self.counters = ChainCounters::default();
         self.packs_read = 0;
+        self.deferred = false;
         if root.pack_id > self.ceiling {
             return Err(StorageError::VisibilityCeiling {
                 pack_id: root.pack_id,
@@ -287,7 +310,11 @@ impl<'a> Resolver<'a> {
             // The one hash of these bytes: it authenticates the record against
             // the locator that named it, and it is handed back to the caller
             // instead of being recomputed over the same bytes.
+            let defer = self.defer_root && position + 1 == chain.len();
             let verified = if crate::port::read_probe().noresolve {
+                location.object_id
+            } else if defer {
+                self.deferred = true;
                 location.object_id
             } else {
                 ObjectId::for_bytes(&decoded)

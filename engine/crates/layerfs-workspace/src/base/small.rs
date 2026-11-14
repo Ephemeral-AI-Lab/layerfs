@@ -268,7 +268,7 @@ impl CanonicalClient {
     /// that each land on their own.
     fn spawn_fetch(&self, wanted: Window) {
         let parts = if small().parts {
-            probe().sessions.min(wanted.len()).max(1)
+            probe().parts.min(wanted.len()).max(1)
         } else {
             1
         };
@@ -280,7 +280,7 @@ impl CanonicalClient {
                 self.release(&ids, bytes);
                 continue;
             };
-            let split = if parts == 1 { probe().sessions } else { 1 };
+            let split = if parts == 1 { probe().parts } else { 1 };
             let spawned = std::thread::Builder::new()
                 .name("layerfs-sibling".into())
                 .spawn({

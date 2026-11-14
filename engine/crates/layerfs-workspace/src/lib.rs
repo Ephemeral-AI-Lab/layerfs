@@ -32,7 +32,7 @@ pub(crate) use operations::file::write;
 
 /// Prototype (experiment `smallread`): small-file read switches and counters.
 pub use base::small as small_probe;
-pub use base::{BaseContent, BaseRead, BaseStat, BaseView, DIRECTORY_COUNT_CAPACITY};
+pub use base::{BaseContent, BaseRead, BaseStat, BaseView, FetchPool, DIRECTORY_COUNT_CAPACITY};
 pub use cache::{CanonicalCache, ConstructedObjects};
 pub use client::{CanonicalClient, ClientWork};
 pub use construction::{

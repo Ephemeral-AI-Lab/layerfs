@@ -6,7 +6,7 @@ use layerfs_storage::{Diagnostics, KeptReads, ReadCache, Storage};
 use std::{
     sync::{
         atomic::{AtomicU64, AtomicUsize, Ordering},
-        Arc, Mutex, MutexGuard, OnceLock, TryLockError,
+        Arc, Condvar, Mutex, MutexGuard, OnceLock, TryLockError,
     },
     time::Instant,
 };
@@ -67,6 +67,34 @@ pub(super) fn probe_sessions() -> usize {
             .unwrap_or(1)
     })
 }
+/// Prototype (lanes2 probe, #684; not a product contract): switches from
+/// `LAYERFS_PROBE_LANES`, a comma list. `sharepacks`: the lanes share whole
+/// edge pack bodies (`layerfs_storage::SharedPacks`); `edgewhole`: with
+/// `sharepacks`, a demand's edge packs are read whole. `defer`: a lane's
+/// demand returns without the BLAKE3 check of its requested objects, and
+/// the session checks each one after the lane is released, before it
+/// returns them. `anylane`: a demand that finds every lane busy takes the
+/// first one freed, not the next one in turn. Unset, none applies.
+#[derive(Clone, Copy, Default)]
+pub(super) struct LanesProbe {
+    pub sharepacks: bool,
+    pub edgewhole: bool,
+    pub defer: bool,
+    pub anylane: bool,
+}
+pub(super) fn probe_lanes() -> LanesProbe {
+    static PROBE: OnceLock<LanesProbe> = OnceLock::new();
+    *PROBE.get_or_init(|| {
+        let value = std::env::var("LAYERFS_PROBE_LANES").unwrap_or_default();
+        let has = |name: &str| value.split(',').any(|part| part.trim() == name);
+        LanesProbe {
+            sharepacks: has("sharepacks"),
+            edgewhole: has("edgewhole"),
+            defer: has("defer"),
+            anylane: has("anylane"),
+        }
+    })
+}
 pub(super) struct ReadSession {
     pub index: usize,
     state: Mutex<State>,
@@ -80,6 +108,13 @@ pub(super) struct ReadSession {
     failure: OnceLock<Arc<PortError>>,
     pub requests: AtomicU64,
     pub wait_ns: AtomicU64,
+    /// Prototype (lanes2 probe, `anylane`): signalled when a lane is freed.
+    free: Mutex<()>,
+    freed: Condvar,
+    /// Prototype (lanes2 probe, `pool`): this Workspace's fixed fetch pool.
+    pool: OnceLock<Option<Arc<layerfs_workspace::FetchPool>>>,
+    /// Prototype (lanes2 probe, `sharepacks`): the lanes' shared bodies.
+    pub shared: Option<Arc<layerfs_storage::SharedPacks>>,
 }
 impl ReadSession {
     pub fn new(index: usize, reader: StoreReader, counts: Arc<Counts>) -> Self {
@@ -95,7 +130,22 @@ impl ReadSession {
             failure: OnceLock::new(),
             requests: AtomicU64::new(0),
             wait_ns: AtomicU64::new(0),
+            free: Mutex::new(()),
+            freed: Condvar::new(),
+            pool: OnceLock::new(),
+            shared: None,
         }
+    }
+    /// Prototype (lanes2 probe, `pool`): this Workspace's fixed fetch pool,
+    /// started at its first use when `LAYERFS_PROBE_READ_POOL` asks for one.
+    /// Session 0, the Store's control reader, has none.
+    pub fn pool(&self) -> Option<Arc<layerfs_workspace::FetchPool>> {
+        if self.index == 0 {
+            return None;
+        }
+        self.pool
+            .get_or_init(layerfs_workspace::FetchPool::from_env)
+            .clone()
     }
     /// Prototype (parallel-store probe): adds further readers as lanes.
     pub fn with_lanes(mut self, readers: Vec<StoreReader>) -> Self {
@@ -108,6 +158,17 @@ impl ReadSession {
                 })
             })
             .collect();
+        // Prototype (lanes2 probe, `sharepacks`).
+        let probe = probe_lanes();
+        if probe.sharepacks && !self.lanes.is_empty() {
+            let shared = Arc::new(layerfs_storage::SharedPacks::new(probe.edgewhole));
+            for lane in std::iter::once(&mut self.state).chain(&mut self.lanes) {
+                if let Some(reader) = lane.get_mut().ok().and_then(|state| state.reader.as_ref()) {
+                    reader.storage.share_packs(shared.clone());
+                }
+            }
+            self.shared = Some(shared);
+        }
         self
     }
     fn poisoned(&self) -> Arc<PortError> {
@@ -131,6 +192,22 @@ impl ReadSession {
                 Err(TryLockError::Poisoned(_)) => return Err(self.poisoned()),
             }
         }
+        if probe_lanes().anylane {
+            // Prototype (lanes2 probe, `anylane`): wait for the first lane
+            // freed. A lane is released before `free` is taken to signal it,
+            // and this scan holds `free`, so no release is missed.
+            let mut free = self.free.lock().map_err(|_| self.poisoned())?;
+            loop {
+                for lane in std::iter::once(&self.state).chain(&self.lanes) {
+                    match lane.try_lock() {
+                        Ok(state) => return Ok(state),
+                        Err(TryLockError::WouldBlock) => {}
+                        Err(TryLockError::Poisoned(_)) => return Err(self.poisoned()),
+                    }
+                }
+                free = self.freed.wait(free).map_err(|_| self.poisoned())?;
+            }
+        }
         let turn = self.turn.fetch_add(1, Ordering::Relaxed) % (self.lanes.len() + 1);
         match turn {
             0 => self.lock(),
@@ -139,6 +216,17 @@ impl ReadSession {
     }
 
     fn attempt<T>(
+        &self,
+        call: impl FnOnce(&StoreReader, &mut Option<KeptReads>, &Counts) -> Result<T, PortError>,
+    ) -> Result<T, Arc<PortError>> {
+        let result = self.attempt_held(call);
+        if !self.lanes.is_empty() && probe_lanes().anylane {
+            drop(self.free.lock());
+            self.freed.notify_one();
+        }
+        result
+    }
+    fn attempt_held<T>(
         &self,
         call: impl FnOnce(&StoreReader, &mut Option<KeptReads>, &Counts) -> Result<T, PortError>,
     ) -> Result<T, Arc<PortError>> {
@@ -175,6 +263,9 @@ impl ReadSession {
             layerfs_telemetry::timer::stages::Stage::StoreDemand,
         );
         let _busy = layerfs_telemetry::timer::stages::busy::Demand::enter();
+        if self.index != 0 && probe_lanes().defer {
+            return self.objects_deferred(ids);
+        }
         self.attempt(|handle, cache, counts| {
             counts.objects.fetch_add(1, Ordering::Relaxed);
             counts
@@ -185,6 +276,39 @@ impl ReadSession {
                 None => handle.storage.reader()?.read_objects(ids),
             })
         })
+    }
+    /// Prototype (lanes2 probe, `defer`): [`Self::objects`] with the
+    /// BLAKE3 check of the requested objects made after the lane is
+    /// released. Every object the resolver left unchecked is checked here
+    /// against the identity it was requested by, before it is returned; a
+    /// mismatch fails the demand as the resolver's check would.
+    fn objects_deferred(&self, ids: &[ObjectId]) -> Result<Vec<Vec<u8>>, Arc<PortError>> {
+        let (values, deferred) = self.attempt(|handle, cache, counts| {
+            counts.objects.fetch_add(1, Ordering::Relaxed);
+            counts
+                .object_ids
+                .fetch_add(ids.len() as u64, Ordering::Relaxed);
+            self.cached(cache, |cache| match cache {
+                Some(cache) => handle.storage.read_kept_deferred(cache, ids),
+                None => unreachable_control(),
+            })
+        })?;
+        if values.len() != ids.len() || deferred.len() != ids.len() {
+            return Err(Arc::new(PortError::Storage(
+                layerfs_storage::StorageError::Integrity("deferred demand cardinality"),
+            )));
+        }
+        let _hash = layerfs_telemetry::timer::stages::Timer::start(
+            layerfs_telemetry::timer::stages::Stage::DeferredHash,
+        );
+        for ((value, id), deferred) in values.iter().zip(ids).zip(&deferred) {
+            if *deferred && ObjectId::for_bytes(value) != *id {
+                return Err(Arc::new(PortError::Storage(
+                    layerfs_storage::StorageError::Integrity("dependency identity"),
+                )));
+            }
+        }
+        Ok(values)
     }
     /// [`Self::objects`] through a caller's caches; the lock is held for
     /// this one demand only.
@@ -313,6 +437,12 @@ impl ReadSession {
             .as_ref()
             .map(|r| r.storage.diagnostics())
     }
+}
+/// Session 0 never defers (`objects` routes it to the ordinary demand).
+fn unreachable_control<T>() -> layerfs_storage::StorageResult<T> {
+    Err(layerfs_storage::StorageError::Integrity(
+        "deferred demand on the control reader",
+    ))
 }
 fn uncertain(error: &PortError) -> bool {
     match error {

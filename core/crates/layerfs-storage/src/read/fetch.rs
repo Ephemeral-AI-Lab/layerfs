@@ -83,6 +83,10 @@ pub(crate) struct Fetch {
     /// Set while a reader that continues the latest Save reads.
     serve_published: Cell<bool>,
     counters: Cell<Diagnostics>,
+    /// Prototype (lanes2 probe): whole bodies this reader's sibling lanes
+    /// share, and the current demand's first and last pack.
+    shared: std::cell::OnceCell<Arc<super::SharedPacks>>,
+    edges: Cell<(i64, i64)>,
 }
 impl Fetch {
     pub(crate) fn new(metadata: Arc<dyn PackPersistence>) -> Self {
@@ -95,6 +99,50 @@ impl Fetch {
             published: RefCell::new(Published::default()),
             serve_published: Cell::new(false),
             counters: Cell::new(Diagnostics::default()),
+            shared: std::cell::OnceCell::new(),
+            edges: Cell::new((0, 0)),
+        }
+    }
+    /// Prototype (lanes2 probe): shares whole edge bodies with sibling lanes.
+    pub(crate) fn share(&self, shared: Arc<super::SharedPacks>) {
+        let _ = self.shared.set(shared);
+    }
+    /// Prototype (lanes2 probe): the current demand's first and last pack.
+    pub(crate) fn set_edges(&self, first: i64, last: i64) {
+        self.edges.set((first, last));
+    }
+    fn is_edge(&self, id: i64) -> bool {
+        let (first, last) = self.edges.get();
+        self.shared.get().is_some() && (id == first || id == last)
+    }
+    /// Prototype (lanes2 probe): a whole body a sibling lane read, validated
+    /// as a fetched one would be; its SHA-256 key was checked when that lane
+    /// read it.
+    fn shared_body(&self, id: i64) -> StorageResult<Option<(PackInfo, Vec<u8>)>> {
+        let Some(found) = self.shared.get().and_then(|shared| shared.get(id)) else {
+            return Ok(None);
+        };
+        let (info, body) = found;
+        validate_frame(info, &body)?;
+        self.remember_pack(info)?;
+        self.note(|c| c.pack_hits += 1);
+        layerfs_telemetry::timer::copies::copied(
+            layerfs_telemetry::timer::copies::Site::Pack,
+            body.len(),
+        );
+        Ok(Some((info, body.as_ref().clone())))
+    }
+    /// Prototype (lanes2 probe): keeps a checked whole edge body for siblings.
+    fn keep_shared(&self, info: PackInfo, body: &[u8]) {
+        if !self.is_edge(info.pack_id) {
+            return;
+        }
+        if let Some(shared) = self.shared.get() {
+            layerfs_telemetry::timer::copies::copied(
+                layerfs_telemetry::timer::copies::Site::Pack,
+                body.len(),
+            );
+            shared.keep(info, body);
         }
     }
     pub(crate) fn note(&self, change: impl FnOnce(&mut Diagnostics)) {
@@ -318,7 +366,10 @@ impl Fetch {
         for id in ids {
             match self.published_body(*id)? {
                 Some((info, body)) => packs.insert(info.pack_id, body)?,
-                None => fetched.push(*id),
+                None => match self.shared_body(*id)? {
+                    Some((info, body)) => packs.insert(info.pack_id, body)?,
+                    None => fetched.push(*id),
+                },
             }
         }
         let ids = fetched.as_slice();
@@ -349,6 +400,7 @@ impl Fetch {
             }
             validate_frame(info, &body)?;
             self.remember_pack(info)?;
+            self.keep_shared(info, &body);
             self.note(|c| c.pack_read_bytes += body.len() as u64);
             layerfs_telemetry::timer::copies::copied(
                 layerfs_telemetry::timer::copies::Site::Pack,
@@ -471,14 +523,23 @@ impl Source for Fetch {
                 body,
             });
         }
+        if let Some((info, body)) = self.shared_body(id)? {
+            return Ok(crate::encoding::PackAcquisition::Whole {
+                info: Some(info),
+                body,
+            });
+        }
         self.note(|c| {
             c.read_pack_selections += 1;
             c.pack_misses += 1;
         });
+        // Prototype (lanes2 probe, `edgewhole`): an edge pack is read whole.
+        let edge_whole =
+            self.is_edge(id) && self.shared.get().is_some_and(|shared| shared.edge_whole());
         let mut plan = super::units::GroupPlan::new(
             id,
             groups,
-            whole_for_reuse,
+            whole_for_reuse || edge_whole,
             self.metadata.whole_pack_bytes(),
         );
         let reply = layerfs_telemetry::timer::stages::time(
@@ -516,6 +577,7 @@ impl Source for Fetch {
                 }
                 self.remember_pack(info)?;
                 validate_frame(info, &body)?;
+                self.keep_shared(info, &body);
                 layerfs_telemetry::timer::copies::copied(
                     layerfs_telemetry::timer::copies::Site::Pack,
                     body.len(),
