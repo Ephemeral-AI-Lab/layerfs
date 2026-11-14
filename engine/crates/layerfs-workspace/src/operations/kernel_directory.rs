@@ -178,13 +178,20 @@ impl KernelDirectoryVisit {
         let listing = (self.resident.identity().0.to_bytes() == page.source().root())
             .then(|| listing(&self.resident, &page).ok())
             .flatten()
-            .map(|mut listing| {
+            .map(|Kinds { listing, values }| {
+                let mut listing = listing;
                 // A reply that shows facts takes the local rows this window
-                // already read and whatever else memory answers, so only the
-                // names memory left undecided take the one Store read.
+                // already read and whatever else memory answers, from the base
+                // values the kinds came from: no inode is read twice here, so
+                // only the names memory left undecided take the one Store read.
                 if self.attributes {
                     for entry in &mut listing.entries {
-                        entry.stat = memory_stat(&self.resident, &page, entry.serial);
+                        entry.stat = memory_stat(
+                            &self.resident,
+                            &page,
+                            entry.serial,
+                            values.get(&entry.serial),
+                        );
                     }
                 }
                 listing
@@ -276,7 +283,7 @@ impl KernelDirectoryWindow {
             // Names and kinds only: a re-sent reply that publishes fewer
             // names than this window lists reads no fact of one it will not
             // send. `facts` reads what the truncated reply does send.
-            (_, Some(base)) => listing(base, &page)?,
+            (_, Some(base)) => listing(base, &page)?.listing,
             (_, None) => {
                 return Err(
                     ContentError::InvalidRecord("kernel directory window without its base").into(),
@@ -422,15 +429,19 @@ const fn kind_of(kind: layerfs_overlay::InodeKind) -> InodeKind {
     }
 }
 /// The facts of one entry as far as memory alone answers them: a local row,
-/// or an inherited inode whose value, metadata, length and child-directory
-/// count this daemon's caches already hold. Anything else is absent here, and
-/// the request's one Store read supplies it.
-fn memory_stat(base: &BaseView, page: &KernelDirectoryPage, serial: u64) -> Option<ViewStat> {
+/// or an inherited inode whose value this window's listing already read, with
+/// the metadata, length and child-directory count this daemon's caches hold.
+/// Anything else is absent here, and the request's one Store read supplies it.
+fn memory_stat(
+    base: &BaseView,
+    page: &KernelDirectoryPage,
+    serial: u64,
+    value: Option<&InodeValue>,
+) -> Option<ViewStat> {
     if let Some(row) = local_row(page, serial) {
         return Some(ViewStat::from(row.clone()));
     }
-    let value = base.inode(serial).ok()?.value;
-    base_facts(base, serial, value).ok()
+    base_facts(base, serial, *value?).ok()
 }
 /// One window's listed names over `base`, before their kinds and facts.
 struct MergedNames {
@@ -478,12 +489,20 @@ fn merge(base: &BaseView, page: &KernelDirectoryPage) -> WorkspaceResult<MergedN
         visited: listing.visited,
     })
 }
-/// The same window with the facts a reply shows for every entry: a local
-/// row, or an inherited inode read in one batch demand for the whole window.
-fn listing(base: &BaseView, page: &KernelDirectoryPage) -> WorkspaceResult<KernelDirectoryListing> {
+/// One window's merged names over `base` with their kinds, and the base
+/// values those inherited kinds came from: a reply that shows facts takes them
+/// from here, so no inode this listing read is read again.
+struct Kinds {
+    listing: KernelDirectoryListing,
+    /// Base values of the inherited names, by serial.
+    values: BTreeMap<u64, InodeValue>,
+}
+/// One window's merged names over `base` with their kinds: a local row answers
+/// its own kind, and the window's inherited serials come in one batch inode
+/// demand for each level of the inode tree the cache does not already answer.
+/// Kinds alone cost no length demand, which belongs to a reply's facts.
+fn listing(base: &BaseView, page: &KernelDirectoryPage) -> WorkspaceResult<Kinds> {
     let merged = merge(base, page)?;
-    // The window's inherited serials come in one batch inode demand for each
-    // level the cache does not already answer: kinds alone cost no length.
     let inherited: Vec<u64> = merged
         .names
         .iter()
@@ -492,13 +511,13 @@ fn listing(base: &BaseView, page: &KernelDirectoryPage) -> WorkspaceResult<Kerne
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect();
-    let found = inode_values(base, &inherited)?;
+    let values = inode_values(base, &inherited)?;
     let mut entries = Vec::with_capacity(merged.names.len());
     for (name, serial) in merged.names {
         let kind = match local_row(page, serial) {
             Some(row) => kind_of(row.kind),
             None => {
-                let value = *found.get(&serial).ok_or(ContentError::PathNotFound)?;
+                let value = *values.get(&serial).ok_or(ContentError::PathNotFound)?;
                 value.kind
             }
         };
@@ -509,9 +528,12 @@ fn listing(base: &BaseView, page: &KernelDirectoryPage) -> WorkspaceResult<Kerne
             stat: None,
         });
     }
-    Ok(KernelDirectoryListing {
-        entries,
-        continuation: merged.continuation,
-        visited: merged.visited,
+    Ok(Kinds {
+        listing: KernelDirectoryListing {
+            entries,
+            continuation: merged.continuation,
+            visited: merged.visited,
+        },
+        values,
     })
 }
