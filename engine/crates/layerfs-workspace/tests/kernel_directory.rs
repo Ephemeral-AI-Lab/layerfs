@@ -331,6 +331,49 @@ fn next_directory_read_observes_parent_moved_by_the_atomic_namespace_job() {
         .unwrap();
     b.overlay.revoke_kernel_mount(mount).unwrap();
 }
+#[test]
+fn a_re_sent_reply_reads_no_fact_of_a_name_it_does_not_send() {
+    let b = Bench::over("kernel-directory-resend", window_fixture(8), 4 << 20);
+    let mount = b.overlay.create_kernel_mount(1).unwrap();
+    let directory = open(&b, mount, 1, 1);
+    let first = batch(&b, visit(&b, directory, 2, None).unwrap());
+    assert_eq!(first.entries.len(), 9, "eight names and the subdirectory");
+    // Publish only the first two names, as a reply with a smaller budget does:
+    // a later reply at the same offset reuses that range and sends no name
+    // beyond it.
+    let names: Vec<_> = first
+        .entries
+        .iter()
+        .map(|entry| entry.name.clone())
+        .collect();
+    let offer = first.publish.as_ref().expect("a fresh reply to publish");
+    b.overlay
+        .publish_kernel_cookies(offer, &names[..2])
+        .unwrap();
+    assert_eq!(
+        b.cache.diagnostics().unwrap().file_lengths,
+        0,
+        "a plain listing reads no length"
+    );
+    // Only the two names this reply sends have their facts read: seven names
+    // of the same window are read nothing, so only two lengths are demanded
+    // and remembered.
+    let window = visit_with(&b, directory, 2, None, true).unwrap();
+    let listed = window
+        .finish_with(Some(&b.workspace.base().unwrap()), true)
+        .unwrap();
+    assert_eq!(listed.entries.len(), 2);
+    assert!(listed.entries.iter().all(|entry| entry.stat.is_some()));
+    assert_eq!(
+        b.cache.diagnostics().unwrap().file_lengths,
+        2,
+        "two names sent, two lengths read"
+    );
+    b.overlay
+        .close_kernel_directory(directory.mount(), directory.serial(), directory.owner_id())
+        .unwrap();
+    b.overlay.revoke_kernel_mount(mount).unwrap();
+}
 /// A root holding `files` inherited regular files, each with its own content,
 /// and one inherited subdirectory with a file of its own: a window whose
 /// names, kinds, lengths and child-directory count all come from the base.

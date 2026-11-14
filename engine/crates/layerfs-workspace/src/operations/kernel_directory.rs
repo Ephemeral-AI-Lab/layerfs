@@ -5,10 +5,12 @@
 //! cache holds them; otherwise the request merges them outside the owner
 //! over one Store reader, at the base root the visit named. A reply that
 //! shows each entry's facts (READDIRPLUS) takes them from the same memory
-//! first, and reads what is left in one batch length demand for the window
-//! and one batch inode demand for each level of the inode tree the cache does
-//! not already answer, so those counts follow the tree's depth and not the
-//! number of names. What those batches
+//! first; what is left is read outside the owner once the reply's published
+//! names are known: one batch length demand and one batch inode demand for
+//! each level of the inode tree the cache does not already answer, for the
+//! names that reply sends and not for the rest of the window, so those counts
+//! follow the tree's depth and the reply's size and not the number of listed
+//! names. What those batches
 //! do not cover is per entry and unchanged here: a non-inline metadata root,
 //! a listed subdirectory's child-directory count, and a symlink's target are
 //! still read once for each entry that needs them. The request then fills its
@@ -237,11 +239,13 @@ impl KernelDirectoryWindow {
         self.finish_with(base, false)
     }
     /// The same for a reply that also shows what each accepted entry is, as
-    /// READDIRPLUS does. The reading visit already said what memory held; the
-    /// names it left undecided are read here in one batch length demand for
-    /// the window and one batch inode demand for each level of the inode tree
-    /// the cache does not already answer, so the number of names adds no
-    /// demand while a deeper tree adds one. Those batches are not the whole
+    /// READDIRPLUS does. Names and kinds come first — from memory in the
+    /// reading visit, else here in one batch inode demand for each level of the
+    /// inode tree the cache does not already answer — and the offer then
+    /// truncates that window to the names this reply publishes, so only those
+    /// names' facts are read: one batch length demand for them and the same
+    /// per-level batches. A re-sent reply therefore reads nothing for a name it
+    /// will not send. Those batches are not the whole
     /// cost of an entry:
     /// [`base_facts`] still reads an inherited inode's non-inline metadata
     /// root, a listed subdirectory's child-directory count and a symlink's
@@ -269,7 +273,9 @@ impl KernelDirectoryWindow {
         };
         let listing = match (merged, base.as_deref()) {
             (Some(listing), _) => listing,
-            (_, Some(base)) if attributes => listing_with_facts(base, &page)?,
+            // Names and kinds only: a re-sent reply that publishes fewer
+            // names than this window lists reads no fact of one it will not
+            // send. `facts` reads what the truncated reply does send.
             (_, Some(base)) => listing(base, &page)?,
             (_, None) => {
                 return Err(
@@ -349,12 +355,8 @@ fn facts(
     Ok(())
 }
 /// The base values of the window's inherited serials, in one batch inode
-/// demand for each level of the inode tree the cache does not already answer,
-/// after one length demand remembered the window's ordinary file lengths.
-fn inherited_values(
-    base: &BaseView,
-    serials: &[u64],
-) -> WorkspaceResult<BTreeMap<u64, InodeValue>> {
+/// demand for each level of the inode tree the cache does not already answer.
+fn inode_values(base: &BaseView, serials: &[u64]) -> WorkspaceResult<BTreeMap<u64, InodeValue>> {
     if serials.is_empty() {
         return Ok(BTreeMap::new());
     }
@@ -364,22 +366,31 @@ fn inherited_values(
         serials,
         &mut InodeReadWork::default(),
     )?;
-    // Every ordinary file's length, from the one demand this window makes.
-    let roots: Vec<ObjectId> = values
-        .iter()
-        .flatten()
-        .filter(|value| value.kind == InodeKind::RegularFile)
-        .map(|value| value.content_root)
-        .collect();
-    if !roots.is_empty() {
-        base.client().provide_lengths(&roots)?;
-    }
     Ok(serials
         .iter()
         .copied()
         .zip(values)
         .filter_map(|(serial, value)| Some((serial, value?)))
         .collect())
+}
+/// The base values of the window's inherited serials, in one batch inode
+/// demand for each level of the inode tree the cache does not already answer,
+/// after one length demand remembered the window's ordinary file lengths.
+fn inherited_values(
+    base: &BaseView,
+    serials: &[u64],
+) -> WorkspaceResult<BTreeMap<u64, InodeValue>> {
+    let values = inode_values(base, serials)?;
+    // Every ordinary file's length, from the one demand this window makes.
+    let roots: Vec<ObjectId> = values
+        .values()
+        .filter(|value| value.kind == InodeKind::RegularFile)
+        .map(|value| value.content_root)
+        .collect();
+    if !roots.is_empty() {
+        base.client().provide_lengths(&roots)?;
+    }
+    Ok(values)
 }
 /// The facts of one inherited name: its base inode, the metadata every
 /// attribute carries, its content length and, for a directory, the count its
@@ -469,11 +480,10 @@ fn merge(base: &BaseView, page: &KernelDirectoryPage) -> WorkspaceResult<MergedN
 }
 /// The same window with the facts a reply shows for every entry: a local
 /// row, or an inherited inode read in one batch demand for the whole window.
-fn listing_with_facts(
-    base: &BaseView,
-    page: &KernelDirectoryPage,
-) -> WorkspaceResult<KernelDirectoryListing> {
+fn listing(base: &BaseView, page: &KernelDirectoryPage) -> WorkspaceResult<KernelDirectoryListing> {
     let merged = merge(base, page)?;
+    // The window's inherited serials come in one batch inode demand for each
+    // level the cache does not already answer: kinds alone cost no length.
     let inherited: Vec<u64> = merged
         .names
         .iter()
@@ -482,38 +492,15 @@ fn listing_with_facts(
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect();
-    let found = inherited_values(base, &inherited)?;
-    let mut entries = Vec::with_capacity(merged.names.len());
-    for (name, serial) in merged.names {
-        let (kind, stat) = match local_row(page, serial) {
-            Some(row) => (kind_of(row.kind), ViewStat::from(row.clone())),
-            None => {
-                let value = *found.get(&serial).ok_or(ContentError::PathNotFound)?;
-                (value.kind, base_facts(base, serial, value)?)
-            }
-        };
-        entries.push(KernelDirectoryEntry {
-            name,
-            serial,
-            kind,
-            stat: Some(stat),
-        });
-    }
-    Ok(KernelDirectoryListing {
-        entries,
-        continuation: merged.continuation,
-        visited: merged.visited,
-    })
-}
-/// One window's merged names over `base` with their kinds, read from memory
-/// alone: a local row, or an inherited inode the canonical cache answers.
-fn listing(base: &BaseView, page: &KernelDirectoryPage) -> WorkspaceResult<KernelDirectoryListing> {
-    let merged = merge(base, page)?;
+    let found = inode_values(base, &inherited)?;
     let mut entries = Vec::with_capacity(merged.names.len());
     for (name, serial) in merged.names {
         let kind = match local_row(page, serial) {
             Some(row) => kind_of(row.kind),
-            None => base.inode(serial)?.value.kind,
+            None => {
+                let value = *found.get(&serial).ok_or(ContentError::PathNotFound)?;
+                value.kind
+            }
         };
         entries.push(KernelDirectoryEntry {
             name,
