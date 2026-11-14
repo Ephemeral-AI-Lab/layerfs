@@ -125,6 +125,13 @@ impl Sandbox {
         if let Some(file) = &traced {
             command.arg("--trace").arg(file);
         }
+        // a Sandbox started with the bundle's runtime layer (R5): its `bin`
+        // ends the command's PATH, so an image with no `bash` still runs one
+        if self.paths.runtime.is_dir() {
+            command
+                .arg("--runtime")
+                .arg(layerfs_bridge::sandbox_runtime::GUEST);
+        }
         command
             .arg("--uid")
             .arg(request.identity.uid.to_string())
