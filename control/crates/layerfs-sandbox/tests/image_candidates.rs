@@ -24,7 +24,12 @@ fn candidates_are_deduped_and_judged() {
     let scratch = Scratch::new("candidates");
     let standin = Standin::new(&scratch.base.join("standin"));
     let bundle = id('b');
-    standin.image(&id('1'), &["postgres:17", "pg:latest"], ("linux", "arm64"), 1000);
+    standin.image(
+        &id('1'),
+        &["postgres:17", "pg:latest"],
+        ("linux", "arm64"),
+        1000,
+    );
     standin.image(&id('2'), &["x86/tool:1"], ("linux", "amd64"), 10);
     standin.image(&id('3'), &["win/app:1"], ("windows", "arm64"), 10);
     standin.image(&id('4'), &["held:1"], ("linux", "arm64"), 10);
@@ -53,10 +58,19 @@ fn candidates_are_deduped_and_judged() {
     assert_eq!(need(1000), 2100);
     let x86 = row(&rows, &id('2')).unwrap();
     assert!(!x86.get_bool("usable"));
-    assert_eq!(x86.get("reason").and_then(|r| r.get_text("kind")), Some("arch"));
-    assert_eq!(x86.get("reason").and_then(|r| r.get_text("value")), Some("amd64"));
+    assert_eq!(
+        x86.get("reason").and_then(|r| r.get_text("kind")),
+        Some("arch")
+    );
+    assert_eq!(
+        x86.get("reason").and_then(|r| r.get_text("value")),
+        Some("amd64")
+    );
     let win = row(&rows, &id('3')).unwrap();
-    assert_eq!(win.get("reason").and_then(|r| r.get_text("kind")), Some("os"));
+    assert_eq!(
+        win.get("reason").and_then(|r| r.get_text("kind")),
+        Some("os")
+    );
     assert!(!row(&rows, &id('7')).unwrap().get_bool("fits"));
     for gone in ['4', '5', '6'] {
         assert!(row(&rows, &id(gone)).is_none(), "{gone}");
@@ -83,5 +97,8 @@ fn a_docker_failure_never_fails_the_listing() {
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
     let (docker, _) = candidates(&Docker::at(Some(script), None), "arm64", None, &[]);
     assert_eq!(docker.get_text("reason"), Some("not-running"));
-    assert!(docker.get_text("message").unwrap().contains("Cannot connect"));
+    assert!(docker
+        .get_text("message")
+        .unwrap()
+        .contains("Cannot connect"));
 }

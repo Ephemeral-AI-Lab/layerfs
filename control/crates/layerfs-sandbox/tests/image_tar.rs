@@ -69,7 +69,13 @@ fn a_pax_named_entry_is_decided_by_its_long_name() {
 
 #[test]
 fn which_paths_are_dropped() {
-    for path in [".dockerenv", "./etc/hosts", "/etc/resolv.conf", "dev/shm", "dev/pts/0"] {
+    for path in [
+        ".dockerenv",
+        "./etc/hosts",
+        "/etc/resolv.conf",
+        "dev/shm",
+        "dev/pts/0",
+    ] {
         assert!(dropped(path, b'0'), "{path}");
     }
     for path in ["dev", "dev/", "etc/hosts.allow", "usr/dev/x", "etc"] {

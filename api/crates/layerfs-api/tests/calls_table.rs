@@ -414,8 +414,14 @@ fn native_machine_images_reports_host_userland_without_a_bundle() {
     assert!(events.is_empty());
     // no image on macOS native: a load or prune is refused, naming why
     for (call, args) in [
-        ("machine.load", map(&[("name", t("native")), ("image", t("alpine:3"))])),
-        ("machine.prune", map(&[("name", t("native")), ("unused", SdkValue::Bool(true))])),
+        (
+            "machine.load",
+            map(&[("name", t("native")), ("image", t("alpine:3"))]),
+        ),
+        (
+            "machine.prune",
+            map(&[("name", t("native")), ("unused", SdkValue::Bool(true))]),
+        ),
     ] {
         let home = tempdir();
         let error = layerfs_api::call(Some(&home), call, args, &mut |_| {}).unwrap_err();

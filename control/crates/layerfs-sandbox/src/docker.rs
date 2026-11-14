@@ -127,23 +127,30 @@ impl Docker {
                 Err(e) => return Err(Failure::Error(format!("docker: {e}"))),
             }
         };
-        let (out, err) = (out.join().unwrap_or_default(), err.join().unwrap_or_default());
+        let (out, err) = (
+            out.join().unwrap_or_default(),
+            err.join().unwrap_or_default(),
+        );
         if status.success() {
             return Ok(out);
         }
         let message = err.trim().to_owned();
         let lower = message.to_lowercase();
-        Err(if lower.contains("no such image") || lower.contains("no such object") {
-            // a batched inspect answers the images it found
-            if !out.trim().is_empty() {
-                return Ok(out);
-            }
-            Failure::Missing(message)
-        } else if lower.contains("cannot connect") || lower.contains("is the docker daemon running") {
-            Failure::NotRunning(message)
-        } else {
-            Failure::Error(message)
-        })
+        Err(
+            if lower.contains("no such image") || lower.contains("no such object") {
+                // a batched inspect answers the images it found
+                if !out.trim().is_empty() {
+                    return Ok(out);
+                }
+                Failure::Missing(message)
+            } else if lower.contains("cannot connect")
+                || lower.contains("is the docker daemon running")
+            {
+                Failure::NotRunning(message)
+            } else {
+                Failure::Error(message)
+            },
+        )
     }
 
     /// `docker image inspect` of each of `references`, in one call.
@@ -234,7 +241,12 @@ impl Inspected {
             .get_text("Id")
             .filter(|id| crate::image_artifact::digest(id))?;
         let config = value.get("Config");
-        let field = |name: &str| config.and_then(|c| c.get(name)).cloned().unwrap_or(SdkValue::Null);
+        let field = |name: &str| {
+            config
+                .and_then(|c| c.get(name))
+                .cloned()
+                .unwrap_or(SdkValue::Null)
+        };
         Some(Self {
             id: id.to_owned(),
             refs: crate::image_artifact::texts(value.get("RepoTags"))
@@ -315,7 +327,10 @@ pub fn candidates(
                 ),
                 ("size".to_owned(), SdkValue::Int(image.size as i64)),
                 ("os".to_owned(), SdkValue::text(&image.os)),
-                ("architecture".to_owned(), SdkValue::text(&image.architecture)),
+                (
+                    "architecture".to_owned(),
+                    SdkValue::text(&image.architecture),
+                ),
                 ("usable".to_owned(), SdkValue::Bool(reason.is_none())),
                 ("need".to_owned(), SdkValue::Int(need as i64)),
                 (
@@ -326,7 +341,10 @@ pub fn candidates(
             if let Some((kind, value)) = reason {
                 fields.push((
                     "reason".to_owned(),
-                    SdkValue::map([("kind", SdkValue::text(kind)), ("value", SdkValue::Text(value))]),
+                    SdkValue::map([
+                        ("kind", SdkValue::text(kind)),
+                        ("value", SdkValue::Text(value)),
+                    ]),
                 ));
             }
             SdkValue::Map(fields)

@@ -122,7 +122,10 @@ fn request(machine: &str, choice: &Choice) -> SdkValue {
         ("machine", SdkValue::text(machine)),
         (
             "archive",
-            choice.archive.clone().map_or(SdkValue::Null, SdkValue::Text),
+            choice
+                .archive
+                .clone()
+                .map_or(SdkValue::Null, SdkValue::Text),
         ),
         (
             "image",

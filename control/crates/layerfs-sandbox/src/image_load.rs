@@ -87,7 +87,8 @@ impl Loaded {
             ),
             (
                 "size",
-                self.size.map_or(SdkValue::Null, |n| SdkValue::Int(n as i64)),
+                self.size
+                    .map_or(SdkValue::Null, |n| SdkValue::Int(n as i64)),
             ),
             ("reused", SdkValue::Bool(self.reused)),
         ])
@@ -120,11 +121,13 @@ pub fn load(
     }
     phase(events, "inspect", None);
     let held = |probe: &SdkValue| probe.get_bool("present");
+    // the size the machine's sidecar records, as `machine.images` lists it
+    let kept = |probe: &SdkValue| probe.get_int("size").map(|n| n.max(0) as u64);
     // 1. the machine holds that Id already: Docker is not needed
     if cache::digest(image) {
         let probe = target.probe(Some(image), None, archive)?;
         if held(&probe) {
-            return Ok(reused(image, Vec::new(), None));
+            return Ok(reused(image, Vec::new(), kept(&probe)));
         }
     }
     // 2. Docker's answer; 3. without Docker, a cached image of that ref
@@ -136,7 +139,7 @@ pub fn load(
             if !cache::digest(image) {
                 let probe = target.probe(None, Some(image), archive)?;
                 if let (true, Some(id)) = (held(&probe), probe.get_text("id")) {
-                    return Ok(reused(id, vec![image.to_owned()], None));
+                    return Ok(reused(id, vec![image.to_owned()], kept(&probe)));
                 }
             }
             return Err(failure.refusal(image));
@@ -175,7 +178,8 @@ pub fn load(
         probe = target.probe(Some(id), None, archive)?;
     }
     if held(&probe) {
-        return Ok(reused(id, refs.clone(), Some(inspected.size)));
+        let size = kept(&probe).or(Some(inspected.size));
+        return Ok(reused(id, refs.clone(), size));
     }
     let hex = &id["sha256:".len()..];
     let container = format!("layerfs-export-{hex}");
@@ -184,7 +188,14 @@ pub fn load(
     created(docker, &container, id)?;
     let unpacked = docker
         .read(
-            &["container", "inspect", "--size", "--format", "{{.SizeRootFs}}", &container],
+            &[
+                "container",
+                "inspect",
+                "--size",
+                "--format",
+                "{{.SizeRootFs}}",
+                &container,
+            ],
             docker::READ,
         )
         .ok()
@@ -207,7 +218,15 @@ pub fn load(
     }
     let staged = probe.get_int("offset").unwrap_or(0).max(0) as u64;
     let prefix = probe.get_text("prefix_sha256").map(str::to_owned);
-    let (sent, sha256) = match send(docker, events, target, &container, id, (staged, prefix), unpacked)? {
+    let (sent, sha256) = match send(
+        docker,
+        events,
+        target,
+        &container,
+        id,
+        (staged, prefix),
+        unpacked,
+    )? {
         Some(done) => done,
         // the staged bytes are not this export's prefix: start over
         None => send(docker, events, target, &container, id, (0, None), unpacked)?
@@ -248,7 +267,10 @@ fn reused(id: &str, refs: Vec<String>, size: Option<u64>) -> Loaded {
 /// (so a retry exports identical bytes), else a new one. Nothing runs in it.
 fn created(docker: &Docker, name: &str, id: &str) -> Result<()> {
     if docker
-        .read(&["container", "inspect", "--format", "{{.Id}}", name], docker::READ)
+        .read(
+            &["container", "inspect", "--format", "{{.Id}}", name],
+            docker::READ,
+        )
         .is_ok()
     {
         return Ok(());
@@ -374,9 +396,13 @@ fn send(
     }
     let status = child.wait().map_err(failed)?;
     if !status.success() {
-        return Err(refused("Failed", format!("docker export {container} failed")));
+        return Err(refused(
+            "Failed",
+            format!("docker export {container} failed"),
+        ));
     }
-    phase(events, "send", Some((offset, total.map(|t| t.max(offset)))));
+    // the last event is exact: `total` was an estimate (`SizeRootFs`)
+    phase(events, "send", Some((offset, total.map(|_| offset))));
     Ok(Some((
         offset,
         layerfs_bridge::sdk_values::hex(&whole.finalize()),
@@ -415,7 +441,9 @@ pub fn machine_load(
     let archive = choice.archive.as_deref();
     let loaded = match &mut executor {
         Executor::Local => load(&docker, events, &mut Target::Local(home), archive, image)?,
-        Executor::Worker(worker) => load(&docker, events, &mut Target::Worker(worker), archive, image)?,
+        Executor::Worker(worker) => {
+            load(&docker, events, &mut Target::Worker(worker), archive, image)?
+        }
     };
     Ok(loaded.to_value())
 }

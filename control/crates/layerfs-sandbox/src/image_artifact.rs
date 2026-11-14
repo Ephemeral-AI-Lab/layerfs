@@ -115,7 +115,8 @@ impl Sidecar {
             ),
             (
                 "size",
-                self.size.map_or(SdkValue::Null, |n| SdkValue::Int(n as i64)),
+                self.size
+                    .map_or(SdkValue::Null, |n| SdkValue::Int(n as i64)),
             ),
             ("architecture", opt_text(&self.architecture)),
             ("source", SdkValue::text(&self.source)),
@@ -241,7 +242,12 @@ pub fn from_archive(
                 .then(|| fs::metadata(&path).ok().map(|m| m.len()))
                 .flatten(),
             architecture: entry.architecture,
-            source: if archive.is_some() { "machine" } else { "bundle" }.to_owned(),
+            source: if archive.is_some() {
+                "machine"
+            } else {
+                "bundle"
+            }
+            .to_owned(),
             config: SdkValue::Null,
             last_used: None,
         }))
@@ -341,6 +347,10 @@ fn probe(side: &Side<'_>, cache: &Path, id: Option<&str>, args: &SdkValue) -> Ou
             .is_some_and(|entries| entries.iter().any(|e| e.digest.as_str() == id));
     out.push(("id".to_owned(), SdkValue::text(&id)));
     out.push(("present".to_owned(), SdkValue::Bool(present)));
+    // the size `machine.images` lists, so a reused load answers the same
+    if let Some(size) = Sidecar::read(cache, hex)?.and_then(|sidecar| sidecar.size) {
+        out.push(("size".to_owned(), SdkValue::Int(size as i64)));
+    }
     let staged = part(cache, hex);
     if let Ok(meta) = fs::symlink_metadata(&staged) {
         if meta.file_type().is_file() {

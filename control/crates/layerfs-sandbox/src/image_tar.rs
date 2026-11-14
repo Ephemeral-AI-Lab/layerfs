@@ -27,7 +27,9 @@ pub fn dropped(path: &str, flag: u8) -> bool {
     let path = path.trim_end_matches('/');
     matches!(flag, b'3' | b'4' | b'6')
         || INIT_FILES.contains(&path)
-        || path.strip_prefix("dev/").is_some_and(|rest| !rest.is_empty())
+        || path
+            .strip_prefix("dev/")
+            .is_some_and(|rest| !rest.is_empty())
 }
 
 /// A reader of `input` (a tar stream) that yields the same tar without the

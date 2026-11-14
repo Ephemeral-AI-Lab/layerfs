@@ -13,10 +13,21 @@ fn parsed(call: &str, words: &[&str]) -> layerfs_cli::parse::Parsed {
 #[test]
 fn a_digest_and_a_reference_are_both_text() {
     let digest = format!("sha256:{}", "a".repeat(64));
-    for image in [digest.as_str(), "postgres:17-bookworm", "ghcr.io/org/app@sha256:abc"] {
+    for image in [
+        digest.as_str(),
+        "postgres:17-bookworm",
+        "ghcr.io/org/app@sha256:abc",
+    ] {
         let p = parsed(
             "sandbox.create",
-            &["store/project", "dev", "docker", "--image", image, "--progress"],
+            &[
+                "store/project",
+                "dev",
+                "docker",
+                "--image",
+                image,
+                "--progress",
+            ],
         );
         assert_eq!(p.args.get_text("image"), Some(image));
         assert!(p.switches.progress);

@@ -21,13 +21,13 @@ pub use daemon::workspace::{
 mod close;
 mod create;
 #[doc(hidden)]
-pub mod docker;
-#[doc(hidden)]
 pub mod deploy;
 #[doc(hidden)]
 pub mod direct;
 #[doc(hidden)]
 pub mod dispatch;
+#[doc(hidden)]
+pub mod docker;
 #[doc(hidden)]
 pub mod exec;
 #[doc(hidden)]

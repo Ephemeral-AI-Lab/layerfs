@@ -46,7 +46,11 @@ struct Run {
     phases: Vec<SdkValue>,
 }
 
-fn run(standin: &Standin, home: &Path, image: &str) -> (Result<Loaded, layerfs_bridge::control::SdkRefusal>, Run) {
+fn run(
+    standin: &Standin,
+    home: &Path,
+    image: &str,
+) -> (Result<Loaded, layerfs_bridge::control::SdkRefusal>, Run) {
     let mut phases = Vec::new();
     let mut sink = |event: SdkValue| {
         if let Some(p) = event.get("progress") {
@@ -54,7 +58,13 @@ fn run(standin: &Standin, home: &Path, image: &str) -> (Result<Loaded, layerfs_b
         }
     };
     let mut events = Events::new(&mut sink);
-    let out = load(&standin.docker(), &mut events, &mut Target::Local(home), None, image);
+    let out = load(
+        &standin.docker(),
+        &mut events,
+        &mut Target::Local(home),
+        None,
+        image,
+    );
     (out, Run { phases })
 }
 
@@ -84,14 +94,29 @@ fn a_reference_is_copied_once_then_reused_with_nothing_sent() {
     assert_eq!(first.id, ID);
     assert!(!first.reused);
     assert_eq!(first.size, Some(filtered(&export()).len() as u64));
-    assert!(!named(&run1, "send").is_empty());
+    let sends = named(&run1, "send");
+    let last = sends.last().expect("send events");
+    assert_eq!(
+        last.get_int("done"),
+        first.size.map(|n| n as i64),
+        "the last send is exact"
+    );
+    if let Some(total) = last.get_int("total") {
+        assert_eq!(Some(total), last.get_int("done"));
+    }
     assert_eq!(named(&run1, "unpack").len(), 1);
     let dir = cache::cache(&home);
     let root = dir.join(format!("{HEX}.2"));
-    assert_eq!(fs::read(root.join("etc/os-release")).unwrap(), b"ID=debian\n");
+    assert_eq!(
+        fs::read(root.join("etc/os-release")).unwrap(),
+        b"ID=debian\n"
+    );
     assert!(!root.join(".dockerenv").exists());
     assert!(!root.join("etc/hostname").exists());
-    assert!(!dir.join(format!(".recv-{HEX}.part")).exists(), "the staged tar is deleted");
+    assert!(
+        !dir.join(format!(".recv-{HEX}.part")).exists(),
+        "the staged tar is deleted"
+    );
     let sidecar = Sidecar::read(&dir, HEX).unwrap().unwrap();
     assert_eq!(sidecar.refs, vec!["demo/pg:17".to_owned()]);
     assert_eq!(sidecar.source, "imported");
@@ -103,21 +128,37 @@ fn a_reference_is_copied_once_then_reused_with_nothing_sent() {
         let again = again.unwrap();
         assert!(again.reused, "{image}");
         assert!(named(&run, "send").is_empty(), "{image}");
+        assert_eq!(
+            again.size, first.size,
+            "a reused load answers the sidecar's size: {image}"
+        );
     }
     assert_eq!(standin.exports(), 1);
     // without Docker, a cached image is still found by its ref
     let mut phases = Vec::new();
     let mut sink = |e: SdkValue| phases.push(e);
     let none = layerfs_sandbox::docker::Docker::at(None, None);
-    let found = load(&none, &mut Events::new(&mut sink), &mut Target::Local(&home), None, "demo/pg:17").unwrap();
+    let found = load(
+        &none,
+        &mut Events::new(&mut sink),
+        &mut Target::Local(&home),
+        None,
+        "demo/pg:17",
+    )
+    .unwrap();
     assert!(found.reused);
     assert_eq!(found.id, ID);
+    assert_eq!(found.size, first.size);
 }
 
 #[test]
 fn refusals_carry_their_detail() {
     let (_scratch, standin, home) = setup("copy-refusals");
-    let other = if architecture() == "arm64" { "amd64" } else { "arm64" };
+    let other = if architecture() == "arm64" {
+        "amd64"
+    } else {
+        "arm64"
+    };
     let wrong = "sha256:2222222222222222222222222222222222222222222222222222222222222222";
     standin.image(wrong, &["demo/x86:1"], ("linux", other), 10);
     let error = run(&standin, &home, "demo/x86:1").0.unwrap_err();
@@ -128,7 +169,14 @@ fn refusals_carry_their_detail() {
     assert_eq!(error.code, "InvalidInput", "{}", error.message);
     let none = layerfs_sandbox::docker::Docker::at(None, None);
     let mut sink = |_| {};
-    let error = load(&none, &mut Events::new(&mut sink), &mut Target::Local(&home), None, "demo/pg:17").unwrap_err();
+    let error = load(
+        &none,
+        &mut Events::new(&mut sink),
+        &mut Target::Local(&home),
+        None,
+        "demo/pg:17",
+    )
+    .unwrap_err();
     assert_eq!(error.code, "Unavailable");
     assert_eq!(error.detail.get_text("what"), Some("docker"));
     // larger than twice what the machine has free
@@ -165,7 +213,10 @@ fn a_staged_prefix_is_resumed_and_a_mismatched_one_restarted() {
         let first = named(&run, "send")[0].get_int("done").unwrap();
         assert_eq!(first, if matching { 1024 } else { 0 }, "{name}");
         let root = cache::cache(&home).join(format!("{HEX}.2"));
-        assert_eq!(fs::read(root.join("usr/bin/psql")).unwrap(), vec![7u8; 3000]);
+        assert_eq!(
+            fs::read(root.join("usr/bin/psql")).unwrap(),
+            vec![7u8; 3000]
+        );
         assert_eq!(standin.exports(), if matching { 1 } else { 2 }, "{name}");
     }
 }
@@ -193,7 +244,10 @@ fn frames_out_of_order_are_refused_and_publish_checks_the_bytes() {
         ("sha256", SdkValue::text("00")),
     ]));
     assert_eq!(wrong.unwrap_err().code, "InvalidInput");
-    assert!(dir.join(format!(".recv-{HEX}.part")).exists(), "kept for a resume");
+    assert!(
+        dir.join(format!(".recv-{HEX}.part")).exists(),
+        "kept for a resume"
+    );
 }
 
 #[test]
@@ -230,7 +284,12 @@ fn sidecars_round_trip() {
     assert_eq!(cache::utc(1_794_649_800_000), "2026-11-14T09:50:00Z");
 }
 
-fn prune(root: &Path, target: Option<&str>, unused: bool, default: Option<&str>) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+fn prune(
+    root: &Path,
+    target: Option<&str>,
+    unused: bool,
+    default: Option<&str>,
+) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
     images::prune_in_worker(
         root,
         SdkValue::map([
@@ -255,7 +314,10 @@ fn prune_refuses_an_image_in_use_and_keeps_the_default() {
     fs::create_dir_all(&sandbox).unwrap();
     fs::write(
         sandbox.join("helper.spec"),
-        format!("root=/x\nlower={}\n", dir.join(format!("{HEX}.2")).display()),
+        format!(
+            "root=/x\nlower={}\n",
+            dir.join(format!("{HEX}.2")).display()
+        ),
     )
     .unwrap();
     let error = prune(&root, Some(ID), false, None).unwrap_err();
@@ -266,7 +328,10 @@ fn prune_refuses_an_image_in_use_and_keeps_the_default() {
     let tar = root.join("flat.tar");
     fs::write(&tar, filtered(&export())).unwrap();
     let (_, hold) = rootfs::ensure_held(&tar, &image, &dir).unwrap();
-    assert_eq!(prune(&root, Some(second), false, None).unwrap_err().code, "InUse");
+    assert_eq!(
+        prune(&root, Some(second), false, None).unwrap_err().code,
+        "InUse"
+    );
     let out = prune(&root, None, true, Some(second)).unwrap();
     assert_eq!(out.get("removed"), Some(&SdkValue::List(Vec::new())));
     drop(hold);
@@ -275,12 +340,28 @@ fn prune_refuses_an_image_in_use_and_keeps_the_default() {
     assert_eq!(out.get("removed"), Some(&SdkValue::List(Vec::new())));
     // naming it removes it, sidecar too
     let out = prune(&root, Some(second), false, Some(second)).unwrap();
-    assert_eq!(out.get("removed"), Some(&SdkValue::List(vec![SdkValue::text(second)])));
-    assert!(!dir.join("3333333333333333333333333333333333333333333333333333333333333333.2").exists());
-    assert!(Sidecar::read(&dir, "3333333333333333333333333333333333333333333333333333333333333333").unwrap().is_none());
-    assert_eq!(prune(&root, Some(second), false, None).unwrap_err().code, "NotFound");
+    assert_eq!(
+        out.get("removed"),
+        Some(&SdkValue::List(vec![SdkValue::text(second)]))
+    );
+    assert!(!dir
+        .join("3333333333333333333333333333333333333333333333333333333333333333.2")
+        .exists());
+    assert!(Sidecar::read(
+        &dir,
+        "3333333333333333333333333333333333333333333333333333333333333333"
+    )
+    .unwrap()
+    .is_none());
+    assert_eq!(
+        prune(&root, Some(second), false, None).unwrap_err().code,
+        "NotFound"
+    );
     // once no Sandbox uses it, --unused removes the first
     fs::remove_dir_all(dir.parent().unwrap().join("lfs-test-sb1")).unwrap();
     let out = prune(&root, None, true, None).unwrap();
-    assert_eq!(out.get("removed"), Some(&SdkValue::List(vec![SdkValue::text(ID)])));
+    assert_eq!(
+        out.get("removed"),
+        Some(&SdkValue::List(vec![SdkValue::text(ID)]))
+    );
 }

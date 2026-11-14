@@ -53,10 +53,9 @@ fn worker() -> SocketAddr {
             }
             let answer = match op {
                 // the machine holds the named image already: nothing is copied
-                Some("image.artifact") => SdkValue::map([(
-                    "value",
-                    SdkValue::map([("present", SdkValue::Bool(true))]),
-                )]),
+                Some("image.artifact") => {
+                    SdkValue::map([("value", SdkValue::map([("present", SdkValue::Bool(true))]))])
+                }
                 Some("workspace.exec") => exec(more.get_text("command").unwrap_or("")),
                 _ => create(&more),
             };
