@@ -41,9 +41,14 @@ fn read_with<T>(
     if id <= 0 {
         return Err(PersistenceError::Malformed);
     }
-    let descriptors = tx.query(
-        "SELECT pack_id,domain,digest,length FROM pack WHERE pack_id=?1",
-        vec![Param::I64(id)],
+    let descriptors = layerfs_telemetry::timer::stages::time(
+        layerfs_telemetry::timer::stages::Stage::PackDescriptor,
+        || {
+            tx.query(
+                "SELECT pack_id,domain,digest,length FROM pack WHERE pack_id=?1",
+                vec![Param::I64(id)],
+            )
+        },
     )?;
     let descriptor = info(descriptors.first().ok_or(PersistenceError::Missing)?, 0)?;
     if descriptors.len() != 1 || descriptor.pack_id != id {

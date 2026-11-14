@@ -239,6 +239,9 @@ impl Session {
             connection.execute_batch("PRAGMA query_only=ON; PRAGMA cache_size=-2048; PRAGMA mmap_size=0; PRAGMA temp_store=FILE").map_err(rows::error)?;
         } else {
             profile::apply(&connection, create, selected, creation_acquisition, &work)?;
+            if !writable {
+                profile::apply_reader(&connection, &work)?;
+            }
         }
         let (layout, acquisition) = if create {
             (creation_layout, creation_acquisition)
@@ -322,7 +325,7 @@ impl Session {
                 .map_err(rows::error)? as usize,
         };
         if !diagnostic {
-            profile::check(&profile)?;
+            profile::check(&profile, !writable)?;
         }
         if let Some(writer) = writer {
             writer.release().map_err(|_| BackendError::Unknown)?;

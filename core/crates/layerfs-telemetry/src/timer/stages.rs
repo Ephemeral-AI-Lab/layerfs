@@ -33,9 +33,13 @@ pub enum Stage {
     ObjectHash,
     /// The reply handed to the kernel (copy into the FUSE device).
     Reply,
+    /// Prototype: the locate SQL statements alone, inside Locate.
+    LocateSql,
+    /// Prototype: the pack descriptor statement of one pack read, inside PackRead.
+    PackDescriptor,
 }
 /// Number of [`Stage`]s.
-pub const STAGES: usize = Stage::Reply as usize + 1;
+pub const STAGES: usize = Stage::PackDescriptor as usize + 1;
 /// Names of the [`Stage`]s, in order.
 pub const STAGE_NAMES: [&str; STAGES] = [
     "read_visit",
@@ -50,6 +54,8 @@ pub const STAGE_NAMES: [&str; STAGES] = [
     "zstd",
     "object_hash",
     "reply",
+    "locate_sql",
+    "pack_descriptor",
 ];
 
 const ZERO: AtomicU64 = AtomicU64::new(0);
