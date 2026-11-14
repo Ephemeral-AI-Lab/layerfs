@@ -8,6 +8,7 @@
 > tree by #671; read it at `1c1fa4dbc0^`). Kernel write-back stayed off and
 > fuser was not patched. Each arm is one sample; times are diagnostic (see the
 > cache contract), counts are exact.
+> Tracking issue: [Ephemeral-AI-Lab/layerfs#684](https://github.com/Ephemeral-AI-Lab/layerfs/issues/684).
 
 ## Answer
 
