@@ -46,14 +46,16 @@ impl Drop for State {
             // A read-only or diagnostic connection cannot checkpoint or remove
             // the WAL and SHM files, so its close takes no lane.
             (None, None) => None,
-            // A writable close makes one non-blocking attempt: it never waits,
-            // not even behind a writer another session keeps after an
-            // uncertain write. Without the lane it closes with SQLite's
-            // checkpoint-on-close turned off, so it takes no exclusive lock
-            // and leaves the WAL and SHM files for the lane's next holder.
-            (None, Some(path)) => match Writer::try_acquire(path) {
-                Ok(Some(writer)) => Some(writer),
-                Ok(None) | Err(_) => {
+            // A writable close waits for the lane like any write: its close
+            // may be SQLite's last, which checkpoints and removes the WAL and
+            // SHM files that a pull's verify and a restore's in-use check
+            // rely on. If the wait itself fails (interrupted, or the Store's
+            // directory cannot be opened), the close turns SQLite's
+            // checkpoint-on-close off first, so it takes no exclusive lock and
+            // removes nothing; there is no second attempt at the lane.
+            (None, Some(path)) => match Writer::acquire(path) {
+                Ok(writer) => Some(writer),
+                Err(_) => {
                     let quiet = self
                         .connection
                         .set_db_config(DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, true);

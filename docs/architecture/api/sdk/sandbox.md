@@ -154,7 +154,8 @@ mounts and processes, and answers every recorded or held Workspace as
 `unknown` ([`force.rs`](../../../../control/crates/layerfs-sandbox/src/force.rs)).
 It does not settle commands one by one or check mounts first: the runtime's
 stop ends them. It is `Busy` while a live process holds `native` (a forced
-`machine.stop`, for one), but not for an intent an ended process left. If the
+`machine.stop`, for one), but not for an unresolved intent, whether an ended
+process or this one left it. If the
 runtime stopped and a later step (delete, folder removal) failed, the refusal
 carries `detail.runtime_stopped: true` and the record is marked stopped.
 

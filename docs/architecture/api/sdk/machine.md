@@ -242,7 +242,7 @@ probe, plus `forced: true`, `stopped_sandboxes: [name]` and
 `unknown: [workspace]` (`sandbox:*` when a worker-side Workspace frontier could
 not be listed; these are not saved Commits). Stopped Sandboxes are recorded
 `gone` for explicit reclaim, or `unresolved` when the stop could not be
-confirmed. On `native` a Sandbox is uncertain only once its stop has been
+confirmed. A Sandbox that never started is neither stopped nor listed. On `native` a Sandbox is uncertain only once its stop has been
 sent: a refusal before that (no recorded runtime, or a recorded process
 identity that no longer matches) leaves that Sandbox as it was, and the stop
 goes on to the next one. The call then answers the first such refusal, with

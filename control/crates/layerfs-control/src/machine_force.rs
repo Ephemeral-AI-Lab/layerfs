@@ -75,9 +75,14 @@ pub(crate) fn stop(home: &Path, name: &MachineName) -> Outcome {
                         continue;
                     }
                 };
-                if let Some(mut runtime) = runtime {
-                    native_attempt = Some(sandbox);
-                    runtime.stop(0).map_err(failed)?;
+                match runtime {
+                    // Nothing ever ran: nothing is stopped or recorded.
+                    Native::NeverStarted => continue,
+                    Native::Stopped => {}
+                    Native::Stop(mut runtime) => {
+                        native_attempt = Some(sandbox);
+                        runtime.stop(0).map_err(failed)?;
+                    }
                 }
                 mark(&home, sandbox, true)?;
                 native_attempt = None;
@@ -242,12 +247,19 @@ fn mark(home: &Path, sandbox: &SandboxRecord, stopped: bool) -> Result<()> {
 /// Native is the host itself: only this home's recorded runtime processes
 /// stop. The Sandbox's recorded native runtime, reopened for a stop without
 /// sending anything; `None` when there is nothing left to stop.
-fn native_runtime(
-    home: &Path,
-    sandbox: &SandboxRecord,
-) -> Result<Option<Box<layerfs_sandbox_backend::Sandbox>>> {
+/// What a forced stop finds for one native Sandbox.
+enum Native {
+    /// Its recorded runtime, reopened for the stop; nothing sent yet.
+    Stop(Box<layerfs_sandbox_backend::Sandbox>),
+    /// Its runtime is already stopped.
+    Stopped,
+    /// It never started (no id and no runtime record).
+    NeverStarted,
+}
+
+fn native_runtime(home: &Path, sandbox: &SandboxRecord) -> Result<Native> {
     if sandbox.machine_stopped() {
-        return Ok(None);
+        return Ok(Native::Stopped);
     }
     let host = layerfs_sandbox::force::native_host(home, sandbox.name())?;
     let Some(daemon) = files::started(&sandbox.dir(home))? else {
@@ -261,9 +273,14 @@ fn native_runtime(
             ));
         }
         sandbox.free()?;
-        return Ok(None);
+        return Ok(Native::NeverStarted);
     };
-    reopen::recorded(&host, sandbox.name(), &daemon)?.for_stop()
+    Ok(
+        match reopen::recorded(&host, sandbox.name(), &daemon)?.for_stop()? {
+            Some(runtime) => Native::Stop(runtime),
+            None => Native::Stopped,
+        },
+    )
 }
 
 /// These are lost/unknown uncommitted frontiers, never manufactured commits.

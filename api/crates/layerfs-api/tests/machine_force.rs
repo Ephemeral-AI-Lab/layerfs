@@ -199,10 +199,16 @@ fn native_force_stop_refused_before_any_signal_leaves_no_uncertain_op() {
     std::fs::create_dir_all(&home).unwrap();
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
     home::open(&home).unwrap();
-    // A started Sandbox whose runtime record is missing: the stop is refused
-    // before anything is signalled, so nothing about it is uncertain, and the
-    // stop goes on to the next Sandbox (one never started, so nothing runs).
-    for (name, id) in [("a-lost", Some("a-lost")), ("b-idle", None)] {
+    // a-lost: started, but its runtime record is missing, so its stop is
+    // refused before anything is signalled and nothing about it is uncertain.
+    // b-done: already stopped with its machine; the stop goes on to it.
+    // c-new: never started, so nothing is stopped or recorded for it.
+    let sandboxes = [
+        ("a-lost", Some("a-lost"), false),
+        ("b-done", Some("b-done"), true),
+        ("c-new", None, false),
+    ];
+    for (name, id, stopped) in sandboxes {
         let mut fields = vec![
             ("name", t(name)),
             ("machine", t("native")),
@@ -210,6 +216,9 @@ fn native_force_stop_refused_before_any_signal_leaves_no_uncertain_op() {
         ];
         if let Some(id) = id {
             fields.push(("id", t(id)));
+        }
+        if stopped {
+            fields.push(("machine_stopped", SdkValue::Bool(true)));
         }
         let record = SdkValue::Map(
             fields
@@ -232,7 +241,7 @@ fn native_force_stop_refused_before_any_signal_leaves_no_uncertain_op() {
     );
     assert_eq!(
         refused.detail.get("stopped_sandboxes"),
-        Some(&SdkValue::List(vec![t("b-idle")]))
+        Some(&SdkValue::List(vec![t("b-done")]))
     );
     let op = read_record(&paths::machine_record(&home, "native"))
         .unwrap()
@@ -241,14 +250,16 @@ fn native_force_stop_refused_before_any_signal_leaves_no_uncertain_op() {
         op.is_none(),
         "a refusal before any signal left an op on native: {op:?}"
     );
-    let sandbox = read_record(&paths::sandbox_record(&home, "a-lost"))
-        .unwrap()
-        .unwrap();
-    for field in ["machine_stopped", "machine_stop_unknown"] {
-        assert!(
-            sandbox.get(field).is_none(),
-            "an unsignalled Sandbox was marked {field}: {sandbox:?}"
-        );
+    for name in ["a-lost", "c-new"] {
+        let sandbox = read_record(&paths::sandbox_record(&home, name))
+            .unwrap()
+            .unwrap();
+        for field in ["machine_stopped", "machine_stop_unknown"] {
+            assert!(
+                sandbox.get(field).is_none(),
+                "an unsignalled Sandbox was marked {field}: {sandbox:?}"
+            );
+        }
     }
     std::fs::remove_dir_all(root).unwrap();
 }

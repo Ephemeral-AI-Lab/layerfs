@@ -34,12 +34,15 @@ pub fn native_host(home: &Path, sandbox: &str) -> Result<Host, SdkRefusal> {
 pub const RUNTIME_STOPPED: &str = "runtime_stopped";
 
 /// Refuses while a live process holds `native` (a forced `machine.stop` in
-/// progress, for one); an unresolved intent left by an ended process does not
-/// stop a forced close.
+/// progress, for one). An unresolved intent does not stop a forced close,
+/// whether an ended process left it or this process did.
 pub fn native_free(home: &Path) -> Result<(), SdkRefusal> {
-    match layerfs_machine::record::MachineRecord::read(home, "native")? {
-        Some(machine) => machine.not_running(),
-        None => Ok(()),
+    let Some(machine) = layerfs_machine::record::MachineRecord::read(home, "native")? else {
+        return Ok(());
+    };
+    match machine.op() {
+        Some(op) if op.mine() && op.uncertain() => Ok(()),
+        _ => machine.not_running(),
     }
 }
 

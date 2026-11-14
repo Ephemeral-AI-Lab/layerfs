@@ -354,7 +354,10 @@ fn another_process_admission_precedes_the_single_sqlite_begin() {
 
 #[test]
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-fn writable_last_close_without_the_lane_neither_waits_nor_tears_down_the_wal() {
+fn writable_last_close_waits_for_the_lane_then_removes_the_wal() {
+    // A pull's verify and a restore's in-use check rely on the last close
+    // folding the WAL in: a writable close waits for a held lane instead of
+    // leaving the WAL behind.
     let temp = support::Temp::new("wa-close");
     let path = temp.join("store.sqlite");
     let wal = temp.join("store.sqlite-wal");
@@ -366,18 +369,19 @@ fn writable_last_close_without_the_lane_neither_waits_nor_tears_down_the_wal() {
         drop(handles);
         result_tx.send(()).unwrap();
     });
-    let closed = result_rx.recv_timeout(Duration::from_secs(2)).ok();
+    let premature = result_rx.recv_timeout(Duration::from_millis(200)).ok();
     let wal_kept = wal.exists();
     held.release();
-    if closed.is_none() {
+    if premature.is_none() {
         result_rx.recv_timeout(Duration::from_secs(3)).unwrap();
     }
     closer.join().unwrap();
-    assert!(closed.is_some(), "a writable close waited for the lane");
-    assert!(wal_kept, "a close without the lane removed the WAL");
-    // With the lane free, the last close checkpoints and removes it.
-    drop(open(&path));
-    assert!(!wal.exists(), "an admitted last close left the WAL");
+    assert!(
+        premature.is_none(),
+        "a writable close bypassed the held lane"
+    );
+    assert!(wal_kept, "the WAL went before the close was admitted");
+    assert!(!wal.exists(), "the admitted last close left the WAL");
 }
 
 #[test]

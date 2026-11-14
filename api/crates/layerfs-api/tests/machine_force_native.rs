@@ -188,9 +188,10 @@ fn identity_case(home: &Path) {
         &mut |_| {},
     )
     .unwrap_err();
-    assert!(
-        format!("{:?}", refused.detail).contains("moved"),
-        "refused_sandboxes names it: {refused:?}"
+    assert_eq!(
+        refused.detail.get("refused_sandboxes"),
+        Some(&SdkValue::List(vec![t("moved")])),
+        "{refused:?}"
     );
     assert!(
         other.0.try_wait().unwrap().is_none(),
