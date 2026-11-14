@@ -41,9 +41,11 @@
 //! not holding a whole image, each companion at most [`FILE_BYTES`]). Bodies up
 //! to [`RESIDENT_BYTES`] in all stay in memory, a body kept as written counted
 //! at its length and a decoded one as [`Image::cost`], so a decoded image is
-//! never memory the budget cannot see; when a write or resize crosses that
-//! budget, the least recently touched bodies are spilled to the export's own
-//! scratch directory (see [`crate::apple_double_spill`]). Removing
+//! memory the budget sees. An edit that leaves a body whole decodes it as it
+//! records it rather than asking for room first, so the pool may stand one
+//! decoded body over until the next write or resize needs room; that one then
+//! spills the least recently touched bodies, decoded ones included, to the
+//! export's own scratch directory (see [`crate::apple_double_spill`]). Removing
 //! or replacing a main file drops its paired `._<name>` companion, or only that
 //! name when the companion is its inode's, which goes with the inode's last
 //! name. When [`HELD`] is reached, orphan companions whose main inode or main
@@ -81,9 +83,11 @@ pub const FILE_BYTES: u64 = 1 << 20;
 /// Companion body bytes kept resident in memory before spilling to disk: a
 /// body kept as written counts its length, a decoded one [`Image::cost`].
 pub const RESIDENT_BYTES: usize = 32 << 20;
-/// Most bytes counted for one decoded companion, [`Image::cost`]; a whole
-/// image costing more keeps its bytes as written, so one companion cannot take
-/// the whole budget.
+/// Most bytes counted for one decoded companion, [`Image::cost`]: a cap on
+/// what one decoded body is charged to [`RESIDENT_BYTES`], not on what a
+/// companion may store. A whole image costing more keeps its bytes as written
+/// and is charged at their length, so one companion cannot take the whole
+/// budget.
 pub const DECODED_ENTRY_BYTES: usize = 128 << 10;
 
 /// A name in one directory: (directory serial, name bytes).
