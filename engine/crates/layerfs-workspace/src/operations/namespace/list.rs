@@ -35,6 +35,18 @@ impl SourceView {
         after: Option<&[u8]>,
         local: DirectoryEntryWindow,
     ) -> WorkspaceResult<ViewListing> {
+        self.list_from_window_rows(parent, after, local, PAGE_ROWS)
+    }
+    /// Prototype (READDIRPLUS experiment): the same window, visiting at most
+    /// `rows` (at most `PAGE_ROWS`) keys of the base and the local pages.
+    pub fn list_from_window_rows(
+        &self,
+        parent: u64,
+        after: Option<&[u8]>,
+        local: DirectoryEntryWindow,
+        rows: usize,
+    ) -> WorkspaceResult<ViewListing> {
+        let rows = rows.clamp(1, PAGE_ROWS);
         if after.is_some_and(|key| key.len() > 255) {
             return Err(ContentError::PathLimitExceeded.into());
         }
@@ -43,7 +55,7 @@ impl SourceView {
         }
         let base = if self.inherits(parent, local.parent_inode.as_ref())? {
             self.base
-                .list_after_bytes(parent, after, PAGE_ROWS, PAGE_ROWS * 264)?
+                .list_after_bytes(parent, after, rows, rows * 264)?
         } else {
             layerfs_content::filesystem::DirectoryListing {
                 entries: Vec::new(),
@@ -69,7 +81,7 @@ impl SourceView {
         let mut entries = Vec::new();
         let mut visited = 0;
         let mut last = None;
-        while visited < PAGE_ROWS {
+        while visited < rows {
             let key = [
                 base.entries.get(b).map(|(name, _)| name.as_bytes()),
                 local.active.get(a).map(|row| row.name.as_slice()),

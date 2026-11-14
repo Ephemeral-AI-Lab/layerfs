@@ -171,6 +171,20 @@ pub trait RequestServices: Send + Sync {
         offset: u64,
         after: Option<Vec<u8>>,
     ) -> ServiceFuture<'_, ServiceReply<Arc<KernelDirectoryWindow>>>;
+    /// Prototype (READDIRPLUS experiment): the same visit over a window of
+    /// at most `rows` keys. By default the full window.
+    fn directory_visit_rows(
+        &self,
+        mount: KernelMount,
+        serial: u64,
+        handle: u64,
+        offset: u64,
+        after: Option<Vec<u8>>,
+        rows: usize,
+    ) -> ServiceFuture<'_, ServiceReply<Arc<KernelDirectoryWindow>>> {
+        let _ = rows;
+        self.directory_visit(mount, serial, handle, offset, after)
+    }
     /// READDIR's publishing visit, before the reply is sent: exactly the
     /// names the reply buffer accepted become valid offsets, in one
     /// transaction behind the fence on the still open descriptor.

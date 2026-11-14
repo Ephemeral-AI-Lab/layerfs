@@ -39,6 +39,8 @@ pub struct KernelDirectoryVisit {
     offset: u64,
     after: Option<Vec<u8>>,
     resident: BaseView,
+    /// Prototype (READDIRPLUS experiment): keys the window visits.
+    rows: usize,
 }
 /// What the reading visit found, as plain values its request owns.
 #[derive(Clone, Debug)]
@@ -111,10 +113,17 @@ impl Workspace {
             offset,
             after,
             resident: base.with_client(resident),
+            rows: PAGE_ROWS,
         })
     }
 }
 impl KernelDirectoryVisit {
+    /// Prototype (READDIRPLUS experiment): a window of at most `rows` keys,
+    /// for a reply that can take no more than that.
+    pub fn with_rows(mut self, rows: usize) -> Self {
+        self.rows = rows.clamp(1, PAGE_ROWS);
+        self
+    }
     pub const fn mount(&self) -> KernelMount {
         self.mount
     }
@@ -144,7 +153,7 @@ impl KernelDirectoryVisit {
             });
         }
         let listing = (self.resident.identity().0.to_bytes() == page.source().root())
-            .then(|| listing(&self.resident, &page).ok())
+            .then(|| listing(&self.resident, &page, self.rows).ok())
             .flatten();
         let offer = match &listing {
             Some(listing) if listing.entries.is_empty() => None,
@@ -193,6 +202,18 @@ impl KernelDirectoryWindow {
         base: Option<&BaseView>,
         attributes: bool,
     ) -> WorkspaceResult<KernelDirectoryBatch> {
+        self.finish_limited(base, attributes, None)
+    }
+    /// Prototype (READDIRPLUS experiment): as [`Self::finish_with`], but
+    /// with `facts` set only the first `facts` entries carry facts, and the
+    /// names the reading visit merged from memory are kept instead of being
+    /// listed again from the authoritative base (the same root).
+    pub fn finish_limited(
+        self,
+        base: Option<&BaseView>,
+        attributes: bool,
+        facts: Option<usize>,
+    ) -> WorkspaceResult<KernelDirectoryBatch> {
         let Self {
             page,
             listing: merged,
@@ -206,8 +227,8 @@ impl KernelDirectoryWindow {
             _ => None,
         };
         let listing = match (merged, base.as_deref()) {
-            (Some(listing), _) if !attributes => listing,
-            (_, Some(base)) => listing(base, &page)?,
+            (Some(listing), _) if !attributes || facts.is_some() => listing,
+            (_, Some(base)) => listing(base, &page, facts.unwrap_or(PAGE_ROWS))?,
             (_, None) => {
                 return Err(
                     ContentError::InvalidRecord("kernel directory window without its base").into(),
@@ -243,7 +264,16 @@ impl KernelDirectoryWindow {
         let (directory, entries) = match base.as_deref() {
             Some(base) if attributes => (
                 directory.or_else(|| base_stat(base, page.directory().serial()).ok()),
-                facts(base, &page, entries)?,
+                match facts {
+                    Some(limit) if limit < entries.len() => {
+                        let mut entries = entries;
+                        let rest = entries.split_off(limit);
+                        let mut entries = with_facts(base, &page, entries)?;
+                        entries.extend(rest);
+                        entries
+                    }
+                    _ => with_facts(base, &page, entries)?,
+                },
             ),
             _ => (None, entries),
         };
@@ -260,7 +290,7 @@ impl KernelDirectoryWindow {
 }
 /// One listing's entries with the facts a reply shows for each: a local
 /// serial's current row, or an inherited one's immutable base inode.
-fn facts(
+fn with_facts(
     base: &BaseView,
     page: &KernelDirectoryPage,
     entries: Vec<KernelDirectoryEntry>,
@@ -284,7 +314,11 @@ fn facts(
 /// One window's merged names over `base`, which must be the page's own base
 /// root. This issues no SQL and acquires no kernel lookup reference. An
 /// empty result with a continuation needs another window of the same request.
-fn listing(base: &BaseView, page: &KernelDirectoryPage) -> WorkspaceResult<KernelDirectoryListing> {
+fn listing(
+    base: &BaseView,
+    page: &KernelDirectoryPage,
+    rows: usize,
+) -> WorkspaceResult<KernelDirectoryListing> {
     let view = SourceView {
         base: base.clone(),
         source: page.source(),
@@ -313,8 +347,12 @@ fn listing(base: &BaseView, page: &KernelDirectoryPage) -> WorkspaceResult<Kerne
             });
         }
     }
-    let listing =
-        view.list_from_window(page.local.parent, page.after.as_deref(), page.local.clone())?;
+    let listing = view.list_from_window_rows(
+        page.local.parent,
+        page.after.as_deref(),
+        page.local.clone(),
+        rows,
+    )?;
     let mut entries = Vec::with_capacity(listing.entries.len());
     for (name, serial) in listing.entries {
         let kind = match page

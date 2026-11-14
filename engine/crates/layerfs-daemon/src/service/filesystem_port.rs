@@ -107,6 +107,25 @@ impl RequestServices for FilesystemPort {
         offset: u64,
         after: Option<Vec<u8>>,
     ) -> ServiceFuture<'_, ServiceReply<Arc<KernelDirectoryWindow>>> {
+        self.directory_visit_rows(
+            mount,
+            serial,
+            handle,
+            offset,
+            after,
+            layerfs_overlay::PAGE_ROWS,
+        )
+    }
+    /// Prototype (READDIRPLUS experiment): a window of at most `rows` keys.
+    fn directory_visit_rows(
+        &self,
+        mount: KernelMount,
+        serial: u64,
+        handle: u64,
+        offset: u64,
+        after: Option<Vec<u8>>,
+        rows: usize,
+    ) -> ServiceFuture<'_, ServiceReply<Arc<KernelDirectoryWindow>>> {
         // A stopped mount refuses before anything about the request is read.
         if let Err(fenced) = self.fenced(true) {
             return Box::pin(async move { Err(fenced) });
@@ -119,7 +138,7 @@ impl RequestServices for FilesystemPort {
             offset,
             after,
         );
-        match visit {
+        match visit.map(|visit| visit.with_rows(rows)) {
             Ok(visit) => self.call(
                 move |job_client: &crate::OwnerClient, route| {
                     job_client.kernel_directory_visit(route, visit)

@@ -235,7 +235,7 @@ fn missing() -> FileAttr {
         flags: 0,
     }
 }
-async fn dispose(answer: KernelRead) -> RequestDisposition {
+pub(super) async fn dispose(answer: KernelRead) -> RequestDisposition {
     match answer.dispose().await {
         Ok(()) => RequestDisposition::Complete,
         Err(error) => RequestDisposition::Retained(Box::new(error)),

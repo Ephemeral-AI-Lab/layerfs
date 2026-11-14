@@ -4,5 +4,5 @@ pub(crate) mod syscalls;
 
 pub(crate) use profile::negotiate;
 pub use profile::Negotiation;
-pub use profile::{background, window};
+pub use profile::{background, listing, window, Listing};
 pub use syscalls::{control_root, AbortWrite, MountEntry, CONTROL};

@@ -53,6 +53,29 @@ pub fn background() -> u16 {
             .unwrap_or(1)
     })
 }
+/// Prototype (READDIRPLUS experiment, not a product contract): which
+/// directory listing the kernel is asked for, from `LAYERFS_PROBE_READDIRPLUS`.
+/// `plain` requests `FUSE_DO_READDIRPLUS`: every listing is READDIRPLUS.
+/// `auto` adds `FUSE_READDIRPLUS_AUTO`: the kernel asks for attributes only
+/// for the first window and after a LOOKUP or GETATTR in the directory.
+/// Unset or anything else: READDIR only, as selected today.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Listing {
+    Names,
+    Plus,
+    Auto,
+}
+/// See [`Listing`].
+pub fn listing() -> Listing {
+    static LISTING: std::sync::OnceLock<Listing> = std::sync::OnceLock::new();
+    *LISTING.get_or_init(
+        || match std::env::var("LAYERFS_PROBE_READDIRPLUS").as_deref() {
+            Ok("plain") => Listing::Plus,
+            Ok("auto") => Listing::Auto,
+            _ => Listing::Names,
+        },
+    )
+}
 pub(crate) fn negotiate(config: &mut KernelConfig) -> io::Result<Negotiation> {
     let offered = config.capabilities();
     let defaults = InitFlags::FUSE_ASYNC_READ | InitFlags::FUSE_BIG_WRITES;
@@ -74,6 +97,17 @@ pub(crate) fn negotiate(config: &mut KernelConfig) -> io::Result<Negotiation> {
             .is_ok()
     {
         selected |= InitFlags::FUSE_PASSTHROUGH;
+    }
+    let plus = match listing() {
+        Listing::Names => InitFlags::empty(),
+        Listing::Plus => InitFlags::FUSE_DO_READDIRPLUS,
+        Listing::Auto => InitFlags::FUSE_DO_READDIRPLUS | InitFlags::FUSE_READDIRPLUS_AUTO,
+    };
+    if !plus.is_empty() {
+        config.add_capabilities(plus).map_err(|_| {
+            io::Error::new(io::ErrorKind::Unsupported, "READDIRPLUS capability absent")
+        })?;
+        selected |= plus;
     }
     let refused = |_| io::Error::new(io::ErrorKind::Unsupported, "kernel profile limit refused");
     let window = window();

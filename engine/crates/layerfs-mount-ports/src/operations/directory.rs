@@ -23,6 +23,9 @@ pub struct DirectoryStream {
     /// The reply shows every entry's facts, as READDIRPLUS does: the listing
     /// then reads them from the authoritative base, outside the owner.
     attributes: bool,
+    /// Prototype (READDIRPLUS experiment): at most this many entries of a
+    /// window carry facts, the most a reply can take.
+    facts: Option<usize>,
     ended: bool,
 }
 pub struct DirectoryBatch {
@@ -154,6 +157,25 @@ impl DirectoryStream {
         offset: u64,
         attributes: bool,
     ) -> Result<Self, DirectoryFailure> {
+        Self::prepare_limited(
+            services, mount, request, serial, handle, offset, attributes, None,
+        )
+        .await
+    }
+    /// Prototype (READDIRPLUS experiment): as [`Self::prepare`]; with
+    /// `facts`, every window visits at most that many keys and at most that
+    /// many entries carry facts, the most one reply can take.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn prepare_limited(
+        services: Arc<dyn RequestServices>,
+        mount: KernelMount,
+        request: u64,
+        serial: u64,
+        handle: u64,
+        offset: u64,
+        attributes: bool,
+        facts: Option<usize>,
+    ) -> Result<Self, DirectoryFailure> {
         let mut stream = Self {
             services,
             mount,
@@ -164,6 +186,7 @@ impl DirectoryStream {
             parent: None,
             window: None,
             attributes,
+            facts,
             ended: false,
         };
         match stream.visit(None).await {
@@ -181,10 +204,25 @@ impl DirectoryStream {
     }
     async fn visit(&mut self, after: Option<Vec<u8>>) -> Result<(), ServiceError> {
         let started = std::time::Instant::now();
-        let reply = self
-            .services
-            .directory_visit(self.mount, self.serial, self.handle, self.offset, after)
-            .await;
+        let reply = match self.facts {
+            Some(rows) => {
+                self.services
+                    .directory_visit_rows(
+                        self.mount,
+                        self.serial,
+                        self.handle,
+                        self.offset,
+                        after,
+                        rows,
+                    )
+                    .await
+            }
+            None => {
+                self.services
+                    .directory_visit(self.mount, self.serial, self.handle, self.offset, after)
+                    .await
+            }
+        };
         crate::phase::charge(crate::phase::Phase::DirectoryVisit, started);
         let reply = reply?;
         // The request's own copy: the job and its receipt are gone before any
@@ -233,7 +271,7 @@ impl DirectoryStream {
             } else {
                 None
             };
-            let batch = window.finish_with(base.as_ref(), self.attributes);
+            let batch = window.finish_limited(base.as_ref(), self.attributes, self.facts);
             drop(base); // Return the actual reader before another SQL job.
             crate::phase::charge(crate::phase::Phase::DirectoryFinish, started);
             let batch = match batch {
