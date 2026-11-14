@@ -109,8 +109,15 @@ pub(crate) struct Table {
     /// Serial -> the name it was last reached by, kept after its reference
     /// is collected so a later handle can be resolved again.
     pub names: HashMap<u64, Named>,
-    /// (directory, name) -> serial last seen under that name.
+    /// Every observed (directory, name) -> serial, including hard-link aliases.
+    /// A second name does not retire the first; unlink/rename remove known
+    /// vanished names, and retiring a serial removes all its keys.
     pub by_name: HashMap<Named, u64>,
+    /// Serial -> the names it is reached by besides [`Table::names`]: the
+    /// hard-link aliases it was also observed under. Every key of
+    /// [`Table::by_name`] is one of the two, so dropping one record removes
+    /// exactly its own keys instead of scanning the whole index.
+    pub aliases: HashMap<u64, Vec<Named>>,
     /// Serial -> last use, for the collection order.
     pub used: HashMap<u64, u64>,
     /// Serials marked for a cache refresh, and when (see [`crate::refresh`]).
@@ -130,6 +137,55 @@ impl Table {
     /// Serials kept alive by a silly name.
     pub fn pinned(&self, serial: u64) -> bool {
         self.silly.values().any(|held| *held == serial)
+    }
+    /// Records that `serial` is reached as `named`.
+    pub(crate) fn bind_name(&mut self, named: Named, serial: u64) {
+        self.by_name.insert(named, serial);
+    }
+    /// Remembers that `serial` is also reached as `named`, a name beyond its
+    /// remembered one, so dropping the serial needs no scan of `by_name`.
+    pub(crate) fn remember_alias(&mut self, serial: u64, named: &Named) {
+        let aliases = self.aliases.entry(serial).or_default();
+        if !aliases.iter().any(|alias| alias == named) {
+            aliases.push(named.clone());
+        }
+    }
+    /// Drops `named`, which `serial` no longer holds. Returns whether it did.
+    pub(crate) fn unbind_name(&mut self, named: &Named, serial: u64) -> bool {
+        if self.by_name.get(named) != Some(&serial) {
+            return false;
+        }
+        self.by_name.remove(named);
+        self.drop_alias(serial, named);
+        true
+    }
+    /// Drops `named` whatever serial holds it, and its alias record.
+    pub(crate) fn unbind_any(&mut self, named: &Named) -> Option<u64> {
+        let serial = self.by_name.remove(named)?;
+        self.drop_alias(serial, named);
+        Some(serial)
+    }
+    fn drop_alias(&mut self, serial: u64, named: &Named) {
+        let Some(aliases) = self.aliases.get_mut(&serial) else {
+            return;
+        };
+        aliases.retain(|alias| alias != named);
+        if aliases.is_empty() {
+            self.aliases.remove(&serial);
+        }
+    }
+    /// Drops every key `serial` holds: its remembered name and its aliases.
+    pub(crate) fn unbind_serial(&mut self, serial: u64) {
+        if let Some(named) = self.names.remove(&serial) {
+            if self.by_name.get(&named) == Some(&serial) {
+                self.by_name.remove(&named);
+            }
+        }
+        for named in self.aliases.remove(&serial).unwrap_or_default() {
+            if self.by_name.get(&named) == Some(&serial) {
+                self.by_name.remove(&named);
+            }
+        }
     }
 }
 /// One opened file as READ and WRITE need it.
@@ -301,16 +357,12 @@ impl Kernel {
             Err(status) => return Err(status),
         }
         let mut table = self.table();
-        if table
+        let remembered = table
             .names
             .get(&serial)
-            .is_some_and(|(p, n)| *p == parent && *n == name)
-        {
-            if let Some(old) = table.names.remove(&serial) {
-                if table.by_name.get(&old) == Some(&serial) {
-                    table.by_name.remove(&old);
-                }
-            }
+            .is_some_and(|(p, n)| *p == parent && *n == name);
+        if remembered {
+            table.unbind_serial(serial);
         }
         self.unresolved.fetch_add(1, Ordering::Relaxed);
         Err(Status::Stale)
@@ -427,11 +479,28 @@ impl Kernel {
                 if table.names.len() < NAMES_HELD || table.names.contains_key(&stat.serial) {
                     let named = (parent, name.to_vec());
                     if let Some(old) = table.names.insert(stat.serial, named.clone()) {
-                        if table.by_name.get(&old) == Some(&stat.serial) {
-                            table.by_name.remove(&old);
+                        if old != named {
+                            if stat.namespace_refs <= 1 {
+                                // The inode has one name: every other name the
+                                // index held for it is one it no longer has.
+                                // (Its old keys stay a moment in a state whose
+                                // nlink the engine last reported higher.)
+                                table.unbind_name(&old, stat.serial);
+                                for alias in table.aliases.remove(&stat.serial).unwrap_or_default()
+                                {
+                                    if table.by_name.get(&alias) == Some(&stat.serial) {
+                                        table.by_name.remove(&alias);
+                                    }
+                                }
+                            } else {
+                                // A hard link: the old name still reaches the
+                                // inode, so it stays, remembered per serial so
+                                // that retiring the serial drops no other name.
+                                table.remember_alias(stat.serial, &old);
+                            }
                         }
                     }
-                    table.by_name.insert(named, stat.serial);
+                    table.bind_name(named, stat.serial);
                 }
             }
             let extra = root || !table.lookups.insert(stat.serial);
@@ -452,16 +521,26 @@ impl Kernel {
         }
         self.observed(stat);
     }
-    /// Records that `serial` is now reached as `name` in `parent` (RENAME).
-    pub(crate) fn renamed(&self, serial: u64, parent: u64, name: &[u8]) {
+    /// Records that `serial` is now reached as `new_name` in `to` rather than as
+    /// `name` in `from` (RENAME). Only the name that moved leaves the index:
+    /// other names of the inode, its hard links, stay reachable as they were.
+    pub(crate) fn renamed(&self, serial: u64, from: u64, name: &[u8], to: u64, new_name: &[u8]) {
         let mut table = self.table();
-        let named = (parent, name.to_vec());
-        if let Some(slot) = table.names.get_mut(&serial) {
-            let old = std::mem::replace(slot, named.clone());
-            if table.by_name.get(&old) == Some(&serial) {
-                table.by_name.remove(&old);
+        let named = (to, new_name.to_vec());
+        let moved = (from, name.to_vec());
+        table.unbind_name(&moved, serial);
+        let previous = table
+            .names
+            .get_mut(&serial)
+            .map(|slot| std::mem::replace(slot, named.clone()));
+        if let Some(previous) = previous {
+            // The name the inode was last recalled by did not move and is still
+            // one of its names: overwriting the remembered name keeps it only
+            // as an alias, which is what retiring the serial reads.
+            if previous != moved && previous != named {
+                table.remember_alias(serial, &previous);
             }
-            table.by_name.insert(named, serial);
+            table.bind_name(named, serial);
         }
     }
     pub(crate) fn forget(&self, serial: u64, count: u64) {
@@ -489,11 +568,7 @@ impl Kernel {
             let mut table = self.table();
             table.parents.remove(&serial);
             table.directory_stats.remove(&serial);
-            if let Some(old) = table.names.remove(&serial) {
-                if table.by_name.get(&old) == Some(&serial) {
-                    table.by_name.remove(&old);
-                }
-            }
+            table.unbind_serial(serial);
             table.used.remove(&serial);
             table.verifiers.retain(|_, entry| entry.1 != serial);
             let directories: Vec<u64> = table
@@ -524,6 +599,8 @@ impl Kernel {
         if held && !retired_in_job {
             self.forget(serial, 1);
         }
+        // An inode's last name is gone: so is its AppleDouble companion.
+        self.companion_drop_inode(serial);
     }
     /// Records the parent of a directory seen in a listing or moved by RENAME.
     pub fn saw_directory(&self, serial: u64, parent: u64) {

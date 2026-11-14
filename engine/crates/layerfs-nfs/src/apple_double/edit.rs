@@ -249,13 +249,14 @@ impl Kernel {
         Ok(Room::Resident(stat))
     }
     /// Records an edit applied to `serial`'s spilled file and answers its
-    /// stat.
+    /// stat. A body changed on disk is no longer known to be a whole image.
     fn record_edit(&self, serial: u64, edit: &Edit<'_>) -> Result<ViewStat, Status> {
         let mut companions = self.companions();
         let tick = companions.tick();
         let mut file = companions.detach(serial).ok_or(Status::Stale)?;
         record(edit, &mut file);
         file.used = tick;
+        file.whole = false;
         touch(&mut file.metadata);
         let stat = Companions::stat(serial, &file);
         companions.attach(serial, file);
