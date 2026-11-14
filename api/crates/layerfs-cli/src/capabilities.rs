@@ -18,6 +18,13 @@ pub fn version() -> ExitCode {
         ("machine", cfg!(feature = "machine")),
         ("postgresql", cfg!(feature = "postgresql")),
         ("tls", cfg!(feature = "tls")),
+        // R5: a namespaces Sandbox runs its daemon through the bundle's
+        // runtime layer (its loader and libraries, a static bash), so an
+        // image with another libc or no shell starts and runs commands
+        (
+            "sandbox-runtime",
+            layerfs_bridge::sandbox_runtime::LOADER.is_some(),
+        ),
     ];
     output::result(
         &SdkValue::map([

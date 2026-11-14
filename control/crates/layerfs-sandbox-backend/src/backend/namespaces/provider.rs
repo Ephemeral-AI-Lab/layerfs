@@ -21,6 +21,8 @@ use std::{
 
 /// The helper executable, installed beside the daemon it starts.
 const HELPER: &str = "layerfs-sandbox-helper";
+/// The bundle's runtime layer, a directory beside the daemon.
+const RUNTIME: &str = "runtime";
 /// Names the helper explicitly, when it is not beside the daemon.
 const HELPER_ENVIRONMENT: &str = "LAYERFS_SANDBOX_HELPER";
 
@@ -78,6 +80,7 @@ impl NamespaceProvider {
             binds,
             image,
             archive,
+            runtime: runtime(&request.daemon_executable),
         };
         create::create(&self.local, &helper, &request, &options).map_err(|failure| {
             let CreateFailure {
@@ -178,6 +181,15 @@ impl NamespaceProvider {
         let lower = crate::HelperSpec::parse(&spec)?.lower;
         rootfs::lookup(record.image(), &rootfs::cache(root), &lower)
     }
+}
+
+/// The bundle's runtime layer (R5): `runtime/` beside the daemon, as
+/// `tools/linux_bundle.py` seals it, when it holds this architecture's
+/// loader. A bundle without one starts its daemon on the image's own
+/// loader and libraries, as before.
+fn runtime(daemon: &Path) -> Option<PathBuf> {
+    let runtime = daemon.parent()?.join(RUNTIME);
+    layerfs_bridge::sandbox_runtime::holds(&runtime).then_some(runtime)
 }
 
 /// A launch refused before any effect.

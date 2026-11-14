@@ -3,9 +3,19 @@
 `<cache>/layerfs/bundle/<version>/linux-<arch>/` (`<cache>` is XDG_CACHE_HOME or
 ~/.cache) holds what every VM, ssh host and `docker` on macOS runs: the guest
 `layerfs` (its worker, without the host-only machine layer), `layerfs-daemon`
-(with PostgreSQL), `layerfs-sandbox-helper` and `sandbox-image.tar` (the Sandbox
-image). `bundle.json` names each file's sha256, the image's config digest and the
-bundle hash a machine compares before copying the bundle in again.
+(with PostgreSQL), `layerfs-sandbox-helper`, `sandbox-image.tar` (the Sandbox
+image) and `runtime/`, the Sandbox runtime layer (R5). `bundle.json` names each
+file's sha256, the image's config digest and the bundle hash a machine compares
+before copying the bundle in again.
+
+The runtime layer is what the daemon needs inside any image's root: `runtime/lib/`
+holds the dynamic loader and every library `ldd layerfs-daemon` lists, copied out of
+the build image the daemon was built in, so the ABIs match; `runtime/bin/` holds
+that image's glibc `getent` and Debian's static `bash` and `busybox`
+(`bash-static`, `busybox-static`, from the build image's own Debian release).
+`seal` refuses when `ldd` lists a library it did not copy. `bundle.json` names it
+in `sandbox_runtime` (its hash, loader and glibc version), and `licenses/` holds
+the Debian copyright files of every package it came from.
 
 The namespaces backend reads a docker-archive with uncompressed layers, named by
 its config digest (#527). Docker with the containerd store saves gzip layers, so
@@ -19,7 +29,12 @@ most), so no build runs long:
     python3 tools/linux_bundle.py daemon --resources R
     python3 tools/linux_bundle.py worker --resources R
     python3 tools/linux_bundle.py helper --resources R
+    python3 tools/linux_bundle.py runtime --resources R
     python3 tools/linux_bundle.py seal --resources R
+
+`runtime` is the one step with network: it downloads the two static packages with
+the build image's apt (over https, signatures checked by apt) into the
+registration's state, once; it does not depend on the source.
 
 Each build step records the source inputs it built. `seal` refuses unless all three
 built the inputs the tree has now; it exports the binaries, saves the image, writes
@@ -69,6 +84,12 @@ STEPS = {
     "helper": ["-p", "layerfs-sandbox-backend", "--bin", "layerfs-sandbox-helper"],
 }
 ARCHES = {"arm64": "aarch64", "aarch64": "aarch64", "amd64": "x86_64", "x86_64": "x86_64"}
+# the Sandbox runtime layer (R5): the loader each architecture's glibc names as its
+# binaries' interpreter, and the static programs (Debian package, path in it)
+RUNTIME = "runtime"
+LOADERS = {"aarch64": "ld-linux-aarch64.so.1", "x86_64": "ld-linux-x86-64.so.2"}
+STATIC = {"bash": ("bash-static", "bin/bash-static"), "busybox": ("busybox-static", "bin/busybox")}
+LICENSES = "licenses"
 LIMIT = 300
 
 
@@ -151,6 +172,176 @@ def build(record, step, profile, timeout):
     print(f"{step}: built in {seconds} s ({receipt})")
 
 
+def runtime_dir(record):
+    return Path(record["state"]) / "linux-bundle" / RUNTIME
+
+
+FETCH = r"""set -eu
+uid=$1; gid=$2; shift 2
+# apt over https: the signatures are checked either way, and https passes proxies
+for f in /etc/apt/sources.list.d/*.sources /etc/apt/sources.list; do
+  if [ -f "$f" ]; then sed -i 's,http://deb.debian.org,https://deb.debian.org,g' "$f"; fi
+done
+apt-get -o Acquire::Retries=3 -qq update
+mkdir -p /out/debs /out/x
+cd /out/debs
+apt-get -o Acquire::Retries=3 -qq download "$@"
+for deb in *.deb; do
+  printf '%s %s %s\n' "$(dpkg-deb -f "$deb" Package)" "$(dpkg-deb -f "$deb" Version)" \
+    "$(sha256sum "$deb" | cut -d' ' -f1)"
+  dpkg-deb -x "$deb" /out/x
+done > /out/packages
+chown -R "$uid:$gid" /out
+"""
+
+
+def fetch_runtime(record, timeout):
+    """Downloads the runtime layer's static programs with the build image's apt
+    into the registration's state: `<state>/linux-bundle/runtime/{bash,busybox}`
+    and `runtime.json` naming each package's version and .deb sha256."""
+    out = runtime_dir(record)
+    stage = out.with_name("." + RUNTIME + ".partial-" + uuid.uuid4().hex)
+    stage.mkdir(mode=0o700, parents=True)
+    try:
+        receipt = operation(record, "bundle-runtime")
+        packages = [package for package, _ in STATIC.values()]
+        command = ["sh", "-c", FETCH, "sh", str(os.getuid()), str(os.getgid()), *packages]
+        fetch = docker_build(record, command, ["--mount", f"type=bind,src={stage},dst=/out"], network="bridge")
+        execute(fetch, record["worktree"], timeout=timeout, log=receipt / "output.log")
+        versions = {}
+        for line in (stage / "packages").read_text().splitlines():
+            package, version, sha = line.split()
+            versions[package] = {"version": version, "deb": sha}
+        meta = {"image": record["images"]["build"], "packages": versions, "files": {}, "at": timestamp()}
+        for name, (package, path) in STATIC.items():
+            if package not in versions:
+                raise Refused(f"apt did not download {package}")
+            source = stage / "x" / path
+            if interpreter(source) is not False:
+                raise Refused(f"{package}'s {path} is not a static executable")
+            shutil.copyfile(source, stage / name)
+            (stage / name).chmod(0o755)
+            meta["files"][name] = digest(stage / name)
+        for package, _ in STATIC.values():
+            notice = stage / "x/usr/share/doc" / package / "copyright"
+            if notice.is_file():
+                shutil.copyfile(notice, stage / (package + ".copyright"))
+        shutil.rmtree(stage / "x")
+        shutil.rmtree(stage / "debs")
+        (stage / "packages").unlink()
+        write(stage / "runtime.json", meta)
+        place(stage, out)
+    except BaseException:
+        shutil.rmtree(stage, ignore_errors=True)
+        raise
+    write(receipt / "receipt.json", {"status": "fetched", **meta})
+    named = ", ".join(package + " " + value["version"] for package, value in versions.items())
+    print(f"runtime: {named} ({out})")
+
+
+def interpreter(path):
+    """An ELF executable's `PT_INTERP` (its loader) as text, `False` for a static
+    one; refuses a file that is not a 64-bit little-endian ELF."""
+    with Path(path).open("rb") as elf:
+        head = elf.read(64)
+        if head[:4] != b"\x7fELF" or head[4] != 2 or head[5] != 1:
+            raise Refused(f"{path} is not a 64-bit little-endian ELF file")
+        phoff = int.from_bytes(head[32:40], "little")
+        size, count = int.from_bytes(head[54:56], "little"), int.from_bytes(head[56:58], "little")
+        for index in range(count):
+            elf.seek(phoff + index * size)
+            entry = elf.read(size)
+            if int.from_bytes(entry[0:4], "little") == 3:  # PT_INTERP
+                offset, length = int.from_bytes(entry[8:16], "little"), int.from_bytes(entry[32:40], "little")
+                elf.seek(offset)
+                return elf.read(length).rstrip(b"\0").decode()
+    return False
+
+
+# Runs in the build image, offline, beside the binaries' export: copies the loader and
+# every library `ldd` lists for the daemon and `getent` (by the name `ldd` gives, the
+# file it resolves to), `getent` itself and the copyright files of the packages that
+# own them, and leaves `ldd`'s own output for `runtime_layer` to check.
+COLLECT = r"""set -eu
+p=$1; u=$2; g=$3
+lib=/export/runtime/lib; bin=/export/runtime/bin
+mkdir -p "$lib" "$bin" /export/licenses
+{ ldd "/work/target/$p/layerfs-daemon"; ldd /usr/bin/getent; } > /export/.ldd
+awk '$2 == "=>" && $3 ~ /^\// { print $1, $3 } $1 ~ /^\// { n = split($1, a, "/"); print a[n], $1 }' /export/.ldd |
+  sort -u | while read -r name path; do
+    real=$(readlink -f "$path"); cp "$real" "$lib/$name"
+    { dpkg -S "$path" 2>/dev/null || dpkg -S "$real" 2>/dev/null || true; } | cut -d: -f1 >> /export/.owners
+  done
+cp /usr/bin/getent "$bin/getent"
+dpkg -S "$(readlink -f /usr/bin/getent)" | cut -d: -f1 >> /export/.owners
+for pkg in $(sort -u /export/.owners); do
+  cp "/usr/share/doc/$pkg/copyright" "/export/licenses/$pkg.copyright"
+done
+getconf GNU_LIBC_VERSION | cut -d' ' -f2 > /export/.glibc
+chown -R "$u:$g" /export/runtime /export/licenses /export/.ldd /export/.glibc /export/.owners
+"""
+
+
+def runtime_layer(stage, arch_name, fetched):
+    """Completes and checks the runtime layer `COLLECT` started in `stage`: adds the
+    static programs from `fetched` (the `runtime` step's folder) and their copyright
+    files, refuses a library `ldd` listed that was not copied (or one it did not
+    find), and answers bundle.json's `sandbox_runtime` and the files to list."""
+    meta = fetched / "runtime.json"
+    if not meta.is_file():
+        raise Refused("fetch the runtime layer's static programs first: python3 tools/linux_bundle.py runtime")
+    fetched_record = json.loads(meta.read_text())
+    lib, bin_ = stage / RUNTIME / "lib", stage / RUNTIME / "bin"
+    loader = LOADERS.get(arch_name)
+    if loader is None:
+        raise Refused(f"no Sandbox runtime layer for {arch_name}")
+    listed = (stage / ".ldd").read_text()
+    for line in listed.splitlines():
+        words = line.split()
+        if not words or words[0].startswith("linux-vdso") or words[0].startswith("linux-gate"):
+            continue
+        if "not found" in line:
+            raise Refused(f"ldd found no library for {words[0]}")
+        name = Path(words[0]).name if words[0].startswith("/") else words[0]
+        if not (lib / name).is_file():
+            raise Refused(f"ldd lists {name}, which the runtime layer did not copy")
+    if not (lib / loader).is_file():
+        raise Refused(f"the runtime layer has no loader {loader}")
+    for name in STATIC:
+        source = fetched / name
+        if digest(source) != fetched_record["files"][name]:
+            raise Refused(f"the fetched {name} does not match its record; fetch it again")
+        shutil.copyfile(source, bin_ / name)
+    for package, _ in STATIC.values():
+        notice = fetched / (package + ".copyright")
+        if notice.is_file():
+            shutil.copyfile(notice, stage / LICENSES / (package + ".copyright"))
+    for path in lib.iterdir():
+        # the loader runs as a program: it starts the daemon and `getent`
+        path.chmod(0o755 if path.name == loader else 0o644)
+    for path in bin_.iterdir():
+        path.chmod(0o755)
+    for path in (stage / LICENSES).iterdir():
+        path.chmod(0o644)
+    glibc = (stage / ".glibc").read_text().strip()
+    for scratch in (".ldd", ".glibc", ".owners"):
+        (stage / scratch).unlink(missing_ok=True)
+    files = {
+        p.relative_to(stage).as_posix(): digest(p)
+        for top in (RUNTIME, LICENSES)
+        for p in sorted((stage / top).rglob("*"))
+        if p.is_file()
+    }
+    layer = {f: h for f, h in files.items() if f.startswith(RUNTIME + "/")}
+    sandbox_runtime = {
+        "hash": bundle_hash(layer),
+        "loader": f"lib/{loader}",
+        "glibc": glibc,
+        "packages": {p: v["version"] for p, v in fetched_record["packages"].items()},
+    }
+    return sandbox_runtime, files
+
+
 def bundle_hash(files):
     return hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
 
@@ -192,6 +383,12 @@ def seal(record, profile, image, dest, timeout):
                 ["--mount", f"type=bind,src={stage},dst=/export"],
             )
             execute(export, record["worktree"], timeout=timeout, log=receipt / "export.log")
+            collect = docker_build(
+                record,
+                ["sh", "-c", COLLECT, "sh", profile, str(os.getuid()), str(os.getgid())],
+                ["--mount", f"type=bind,src={stage},dst=/export"],
+            )
+            execute(collect, record["worktree"], timeout=timeout, log=receipt / "runtime.log")
             saved = stage / ".saved.tar"
             save = ["docker", "save", "-o", str(saved), image]
             execute(save, record["worktree"], timeout=timeout, log=receipt / "save.log")
@@ -199,7 +396,9 @@ def seal(record, profile, image, dest, timeout):
         saved.unlink()
         # a guest and the docker worker read it as root through a mount
         (stage / ARCHIVE).chmod(0o644)
+        sandbox_runtime, layer = runtime_layer(stage, name.removeprefix("linux-"), runtime_dir(record))
         files = {f: digest(stage / f) for f in (*BINARIES, ARCHIVE)}
+        files.update(layer)
         manifest = {
             "hash": bundle_hash(files),
             "version": version(record["worktree"]),
@@ -208,6 +407,7 @@ def seal(record, profile, image, dest, timeout):
             "image": config,
             "protocol": protocol(record["worktree"]),
             "runtime": bundle_hash({f: files[f] for f in BINARIES}),
+            "sandbox_runtime": sandbox_runtime,
             "saved_from": image,
             "source": {"head": now["head"], "sha256": now["sha256"]},
             "toolchain": TOOLCHAIN,
@@ -274,7 +474,7 @@ def docker_archive(saved, out, scratch):
 
 def main(argv=None):
     cli = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    cli.add_argument("step", choices=[*STEPS, "seal"])
+    cli.add_argument("step", choices=[*STEPS, RUNTIME, "seal"])
     cli.add_argument("--resources", required=True, help="the worktree's resources.json from tools/worktree.py")
     cli.add_argument("--profile", choices=["debug", "release"], default="debug")
     cli.add_argument("--image", help="the Sandbox image to save (default: the registration's sandbox image)")
@@ -287,6 +487,8 @@ def main(argv=None):
         record = load(args.resources)
         if args.step == "seal":
             seal(record, args.profile, args.image, args.dest or cache_root(), args.timeout)
+        elif args.step == RUNTIME:
+            fetch_runtime(record, args.timeout)
         else:
             build(record, args.step, args.profile, args.timeout)
     except Refused as error:

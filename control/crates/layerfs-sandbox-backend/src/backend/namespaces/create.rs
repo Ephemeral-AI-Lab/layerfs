@@ -37,6 +37,9 @@ pub(crate) struct Options {
     /// docker-archive in the bundle that holds it.
     pub(crate) image: Image,
     pub(crate) archive: PathBuf,
+    /// The bundle's runtime layer beside the daemon (R5), when it has one:
+    /// copied into the Sandbox and named in its spec.
+    pub(crate) runtime: Option<PathBuf>,
 }
 
 /// A failed start. `sandbox` holds what it made (its directory, cgroup and,
@@ -238,8 +241,8 @@ fn check_bind(paths: &Paths, bind: &Bind) -> Result<(), RuntimeError> {
     Ok(())
 }
 
-/// The Sandbox's own directories and files, its copied daemon and helper, its
-/// init spec and the empty log; returns the log file. Its overlay's writable layer
+/// The Sandbox's own directories and files, its copied daemon, helper and
+/// runtime layer, its init spec and the empty log; returns the log file. Its overlay's writable layer
 /// and work directory are made here, empty: the init stage mounts them with
 /// the image underneath.
 fn prepare(
@@ -278,6 +281,9 @@ fn prepare(
     fs::set_permissions(&paths.bin, Permissions::from_mode(0o755))?;
     fs::copy(helper, &paths.helper)?;
     fs::set_permissions(&paths.helper, Permissions::from_mode(0o755))?;
+    if let Some(runtime) = &options.runtime {
+        copy_runtime(runtime, &paths.runtime)?;
+    }
     let spec = HelperSpec {
         root: paths.root.clone(),
         sandbox: paths.local.directory.clone(),
@@ -288,7 +294,42 @@ fn prepare(
         upper: paths.upper.clone(),
         work: paths.work.clone(),
         binds: options.binds.clone(),
+        runtime: options.runtime.as_ref().map(|_| paths.runtime.clone()),
     };
     private(&paths.spec)?.write_all(&spec.encode()?)?;
     Ok(private(&paths.local.log)?)
+}
+
+/// Copies the runtime layer at `source` (`lib/` and `bin/`, regular files
+/// only, as `tools/linux_bundle.py` seals it) to `target`, root-owned: the
+/// libraries 0644, the loader and the programs 0755, the directories 0755.
+/// Anything else in it (a link, a device, a deeper directory) is refused.
+fn copy_runtime(source: &Path, target: &Path) -> Result<(), RuntimeError> {
+    let refuse = || RuntimeError::Protocol("the bundle's runtime layer holds an unexpected entry");
+    fs::DirBuilder::new().mode(0o755).create(target)?;
+    for (directory, mode) in [("lib", 0o644), ("bin", 0o755)] {
+        let into = target.join(directory);
+        fs::DirBuilder::new().mode(0o755).create(&into)?;
+        for entry in fs::read_dir(source.join(directory))? {
+            let entry = entry?;
+            if !entry.file_type()?.is_file() {
+                return Err(refuse());
+            }
+            let file = into.join(entry.file_name());
+            fs::copy(entry.path(), &file)?;
+            let loader = layerfs_bridge::sandbox_runtime::LOADER;
+            let mode = match loader.is_some_and(|loader| entry.file_name() == loader) {
+                true => 0o755,
+                false => mode,
+            };
+            fs::set_permissions(&file, Permissions::from_mode(mode))?;
+        }
+    }
+    for entry in fs::read_dir(source)? {
+        let name = entry?.file_name();
+        if name != "lib" && name != "bin" {
+            return Err(refuse());
+        }
+    }
+    Ok(())
 }
