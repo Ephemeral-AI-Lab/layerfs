@@ -18,15 +18,16 @@
 //!
 //! Whenever a write leaves a companion holding a whole AppleDouble image the
 //! client laid out itself (see [`crate::apple_double_codec`]), it is decoded: a
-//! small one keeps only its FinderInfo and attributes in memory (at most
-//! [`DECODED_BYTES`] in all, each at most [`DECODED_ENTRY_BYTES`]), and every
-//! read synthesizes the same bytes again. Any other body (a resource fork,
-//! another layout, a half-written image) is kept as the client wrote it.
+//! small one keeps only its FinderInfo and attributes in memory (each at most
+//! [`DECODED_ENTRY_BYTES`] counted), and every read synthesizes the same bytes
+//! again. Any other body (a resource fork, another layout, a half-written
+//! image) is kept as the client wrote it.
 //!
 //! The memory is bounded: [`HELD`] companions of at most [`FILE_BYTES`] each,
-//! [`RESIDENT_BYTES`] of written bodies and [`DECODED_BYTES`] of decoded ones
-//! counted as [`Image::cost`]. Bodies up to that budget stay in memory; when a
-//! write or resize crosses it, the least recently touched resident bodies are
+//! and [`RESIDENT_BYTES`] of bodies in all, a body kept as written counted at
+//! its length and a decoded one as [`Image::cost`], so a decoded image is never
+//! memory the budget cannot see. Bodies up to that budget stay in memory; when
+//! a write or resize crosses it, the least recently touched resident bodies are
 //! spilled to the export's own scratch directory (see
 //! [`crate::apple_double_spill`]), and a body that still does not fit is
 //! written out itself. Everything is dropped when the export is released,
@@ -56,12 +57,12 @@ pub const SERIALS: u64 = 1 << 62;
 pub const HELD: usize = 4096;
 /// Largest companion kept.
 pub const FILE_BYTES: u64 = 1 << 20;
-/// Companion payload bytes kept resident in memory before spilling to disk.
+/// Companion body bytes kept resident in memory before spilling to disk: a
+/// body kept as written counts its length, a decoded one [`Image::cost`].
 pub const RESIDENT_BYTES: usize = 32 << 20;
-/// Bytes counted for all decoded companions (see [`Image::cost`]).
-pub const DECODED_BYTES: usize = 512 << 20;
-/// Bytes counted for one decoded companion; a larger whole image keeps its
-/// bytes as written.
+/// Most bytes counted for one decoded companion, [`Image::cost`]; a whole
+/// image costing more keeps its bytes as written, so one companion cannot take
+/// the whole budget.
 pub const DECODED_ENTRY_BYTES: usize = 128 << 10;
 
 /// A name in one directory: (directory serial, name bytes).
@@ -91,16 +92,13 @@ struct Companion {
     editing: Arc<Mutex<()>>,
 }
 impl Companion {
-    fn resident_len(&self) -> usize {
+    /// The bytes it takes of [`RESIDENT_BYTES`]: its body as written, or what
+    /// its decoded form is counted as.
+    fn resident_cost(&self) -> usize {
         match &self.body {
             Body::Resident(bytes) => bytes.len(),
-            Body::Spilled | Body::Decoded(_) => 0,
-        }
-    }
-    fn decoded_cost(&self) -> usize {
-        match &self.body {
+            Body::Spilled => 0,
             Body::Decoded(image) => image.cost(),
-            Body::Resident(_) | Body::Spilled => 0,
         }
     }
 }
@@ -111,7 +109,6 @@ pub(crate) struct Holding {
     pub held: usize,
     pub resident_bytes: usize,
     pub decoded: usize,
-    pub decoded_bytes: usize,
 }
 
 /// The companions of one export.
@@ -122,7 +119,6 @@ pub(crate) struct Companions {
     names: HashMap<Named, u64>,
     resident_bytes: usize,
     decoded: usize,
-    decoded_bytes: usize,
     spill_dir: Option<PathBuf>,
     resident_budget: usize,
 }
@@ -135,7 +131,6 @@ impl Default for Companions {
             names: HashMap::new(),
             resident_bytes: 0,
             decoded: 0,
-            decoded_bytes: 0,
             spill_dir: None,
             resident_budget: RESIDENT_BYTES,
         }
@@ -164,24 +159,22 @@ impl Companions {
     }
     /// Adds `file` to the index and to the byte counts.
     fn attach(&mut self, serial: u64, file: Companion) {
-        self.resident_bytes += file.resident_len();
+        self.resident_bytes += file.resident_cost();
         self.decoded += usize::from(matches!(file.body, Body::Decoded(_)));
-        self.decoded_bytes += file.decoded_cost();
         self.files.insert(serial, file);
     }
     /// Takes `serial` out of the index and the counts; its name key stays for
     /// the caller to unindex.
     fn detach(&mut self, serial: u64) -> Option<Companion> {
         let file = self.files.remove(&serial)?;
-        self.resident_bytes -= file.resident_len();
+        self.resident_bytes -= file.resident_cost();
         self.decoded -= usize::from(matches!(file.body, Body::Decoded(_)));
-        self.decoded_bytes -= file.decoded_cost();
         Some(file)
     }
     /// Replaces `serial`'s body by the decoded form of `bytes`, the caller's
-    /// edited body of `len` bytes, when the decoded budget takes it. The
-    /// decoded form costs its attributes rather than its image, so a body that
-    /// decodes needs no resident budget at all.
+    /// edited body of `len` bytes, while the resident budget takes it. The
+    /// decoded form is counted as its attributes rather than its image, so a
+    /// body that decodes usually needs much less room than its bytes.
     fn keep_decoded(&mut self, serial: u64, bytes: &[u8], len: usize) -> bool {
         let Some(image) = Image::compact(bytes) else {
             return false;
@@ -194,7 +187,7 @@ impl Companions {
         let Some(mut file) = self.detach(serial) else {
             return false;
         };
-        if self.decoded_bytes + cost > DECODED_BYTES {
+        if self.resident_bytes + cost > self.resident_budget {
             self.attach(serial, file);
             return false;
         }
@@ -206,7 +199,7 @@ impl Companions {
         true
     }
     /// Decides whether `file`'s body is a whole image: a resident one is
-    /// decoded when it parses back to the same bytes and the decoded budget
+    /// decoded when it parses back to the same bytes and [`DECODED_ENTRY_BYTES`]
     /// takes it. `file` must be detached from the index.
     fn classify(&self, file: &mut Companion) {
         // A body on disk cannot be decoded here (that reads its file under
@@ -217,8 +210,7 @@ impl Companions {
         let Some(image) = Image::compact(bytes) else {
             return;
         };
-        let cost = image.cost();
-        if cost <= DECODED_ENTRY_BYTES && self.decoded_bytes + cost <= DECODED_BYTES {
+        if image.cost() <= DECODED_ENTRY_BYTES {
             file.body = Body::Decoded(image);
         }
     }
@@ -282,7 +274,6 @@ impl Companions {
             held: self.files.len(),
             resident_bytes: self.resident_bytes,
             decoded: self.decoded,
-            decoded_bytes: self.decoded_bytes,
         }
     }
 }
@@ -470,11 +461,10 @@ impl Kernel {
         let holding = held.holding();
         if holding.held > 0 {
             eprintln!(
-                "layerfs-nfs: AppleDouble companions released: export={:?} held={} decoded={} decoded_bytes={} resident_bytes={}",
+                "layerfs-nfs: AppleDouble companions released: export={:?} held={} decoded={} resident_bytes={}",
                 self.mount(),
                 holding.held,
                 holding.decoded,
-                holding.decoded_bytes,
                 holding.resident_bytes
             );
         }

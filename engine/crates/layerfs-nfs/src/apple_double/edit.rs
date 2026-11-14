@@ -60,10 +60,10 @@ impl Kernel {
                     false
                 }
                 Body::Decoded(image) => {
-                    // The image the client wrote, synthesized again.
-                    let bytes = image.encode();
-                    let stop = end.min(bytes.len());
-                    out.extend_from_slice(bytes.get(start..stop).unwrap_or_default());
+                    // The image the client wrote, synthesized again over the
+                    // window this reply asks for rather than in full.
+                    let stop = end.min(image.len());
+                    out.extend_from_slice(&image.encode_range(start, stop));
                     false
                 }
                 Body::Spilled => true,
