@@ -1,0 +1,39 @@
+% Localized edit on a file's extent tree: path copying with slices. Input by appendix.tex.
+\begin{tikzpicture}[font=\scriptsize,
+  pg/.style={draw, rounded corners=1.5pt, minimum width=1.05cm, minimum height=0.48cm, inner sep=1pt, fill=gray!12},
+  nw/.style={pg, fill=orange!45, very thick},
+  ch/.style={draw, minimum height=0.42cm, inner sep=1pt, fill=gray!12},
+  chn/.style={ch, fill=orange!45},
+  e/.style={-{Stealth[length=3pt]}},
+  en/.style={-{Stealth[length=3pt]}, orange!70!black, thick}]
+% old version (gray) and new version (orange) share every page off the edit path
+\node[pg] (s0) at (3.2,3.2) {FileState$_0$};
+\node[nw] (s1) at (8.6,3.2) {FileState$_1$};
+\node[pg] (r0) at (3.2,2.3) {root$_0$};
+\node[nw] (r1) at (8.6,2.3) {root$_1$};
+\node[pg] (b1) at (1.4,1.25) {branch $B_1$};
+\node[pg] (b2) at (5.0,1.25) {branch $B_2$};
+\node[nw] (b2n) at (9.4,1.25) {branch $B_2'$};
+\foreach \i/\x in {1/0.2,2/1.9,3/3.6,4/5.6}{\node[pg] (l\i) at (\x,0.2) {leaf $L_\i$};}
+\node[nw] (l3n) at (9.4,0.2) {leaf $L_3'$};
+\draw[e] (s0) -- (r0); \draw[e] (r0) -- (b1); \draw[e] (r0) -- (b2);
+\draw[e] (b1) -- (l1); \draw[e] (b1) -- (l2); \draw[e] (b2) -- (l3); \draw[e] (b2) -- (l4);
+\draw[en] (s1) -- (r1); \draw[en] (r1) -- (b2n); \draw[en] (b2n) -- (l3n);
+\draw[en] (r1.west) .. controls (6.5,2.2) and (3.0,1.9) .. (b1.north east);
+\draw[en] (b2n.south west) .. controls (8.0,0.6) and (7.0,0.6) .. (l4.north east);
+% chunks under L3 and L3'
+\node[ch, minimum width=1.4cm] (k5) at (2.8,-0.95) {$c_5$};
+\node[ch, minimum width=1.8cm] (k6) at (4.45,-0.95) {$c_6$};
+\draw[e] (l3) -- (k5); \draw[e] (l3) -- (k6);
+\node[chn, minimum width=0.55cm] (n) at (9.4,-0.95) {$n$};
+\draw[en] (l3n.south) -- (n);
+\draw[en] (l3n.west) to[out=185,in=50] (k6.north east);
+% leaf entries
+\node[draw, fill=white, anchor=north west, align=left, font=\scriptsize] at (6.7,-1.45) {
+$L_3$:\; $(c_5, 0, |c_5|)\;\; (c_6, 0, |c_6|)$\\
+$L_3'$:\; $(c_5, 0, |c_5|)\;\; (c_6, 0, a)\;\; (n, 0, 100)\;\; (c_6, a{+}100, |c_6|{-}a{-}100)$};
+\draw[decorate, decoration={brace, amplitude=3pt, mirror}] (3.55,-1.25) -- (5.35,-1.25)
+  node[midway, below=3pt, font=\scriptsize, align=center] {100\,B overwrite at offset $a$\\$c_6$ becomes two slices; not re-chunked};
+% legend
+\node[anchor=north west, align=left, font=\scriptsize] at (-1.3,-1.3) {gray: shared with version 0\\orange: new in this Commit};
+\end{tikzpicture}

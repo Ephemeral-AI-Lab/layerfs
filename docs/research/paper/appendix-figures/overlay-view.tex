@@ -1,0 +1,56 @@
+% Layered view of one file and the generation counters. Input by appendix.tex.
+\begin{tikzpicture}[font=\scriptsize, x=1cm, y=1cm,
+  cell/.style={draw, fill=orange!55, minimum height=0.42cm, inner sep=0},
+  ref/.style={draw, pattern=north east lines, pattern color=blue!60, minimum height=0.42cm},
+  ext/.style={draw, fill=gray!18, minimum height=0.42cm, inner sep=0},
+  lbl/.style={anchor=east, align=right, font=\scriptsize},
+  ar/.style={-{Stealth[length=4pt]}, thick}]
+% ---------------- panel (a)
+\node[font=\scriptsize\bfseries, anchor=west] at (-2.6,3.55) {(a) One file seen through the overlay};
+% base file: committed extents (chunk slices)
+\node[lbl] at (-0.15,0) {base file\\(committed root)};
+\foreach \a/\b/\n in {0/1.6/c1, 1.6/2.9/c2, 2.9/4.7/c3, 4.7/5.9/c4, 5.9/7.6/c5, 7.6/9.0/c6}{
+  \draw[fill=gray!18] (\a,-0.21) rectangle (\b,0.21); \node at ({(\a+\b)/2},0) {\n};}
+% captured generation g
+\node[lbl] at (-0.15,1.1) {generation $g$\\(captured)};
+\draw[dotted] (0,0.89) rectangle (9.0,1.31);
+\draw[fill=orange!55] (2.0,0.89) rectangle (2.25,1.31);
+\draw[pattern=north east lines, pattern color=blue!60] (5.0,0.89) rectangle (6.6,1.31);
+\node[font=\scriptsize, above] at (5.8,1.31) {reference piece};
+\node[font=\scriptsize, above] at (2.12,1.31) {cell};
+% active generation g+1, after a truncate and re-extension
+\node[lbl] at (-0.15,2.2) {generation $g{+}1$\\(active)};
+\draw[dotted] (0,1.99) rectangle (8.2,2.41);
+\draw[fill=orange!55] (3.3,1.99) rectangle (4.1,2.41);
+\node[font=\scriptsize, above] at (3.7,2.41) {32\,KiB run};
+\draw[very thick, red!70!black] (7.0,1.85) -- (7.0,2.55);
+\node[font=\scriptsize, red!70!black, above] at (7.0,2.55) {cutoff};
+\fill[white] (7.0,1.99) rectangle (8.2,2.41);
+\draw[dotted] (7.0,1.99) rectangle (8.2,2.41);
+\node[font=\scriptsize] at (7.6,2.2) {zeros};
+% composed view
+\node[lbl] at (-0.15,-1.2) {what READ\\returns};
+\foreach \a/\b/\c in {0/2.0/gray!18, 2.0/2.25/orange!55, 2.25/3.3/gray!18, 3.3/4.1/orange!55, 4.1/5.0/gray!18, 7.0/8.2/white}{
+  \draw[fill=\c] (\a,-1.41) rectangle (\b,-0.99);}
+\draw[pattern=north east lines, pattern color=blue!60] (5.0,-1.41) rectangle (6.6,-0.99);
+\draw[fill=gray!18] (6.6,-1.41) rectangle (7.0,-0.99);
+\node[font=\scriptsize] at (7.6,-1.2) {zeros};
+\draw[decorate, decoration={brace, amplitude=3pt, mirror}] (0,-1.5) -- (8.2,-1.5)
+  node[midway, below=3pt, font=\scriptsize, align=center] {one job under the \ws{} lock decides orange and zero bytes;\\gray and hatched bytes are read from the Store after it is released};
+\draw[ar] (9.45,2.3) -- node[right, align=left, font=\scriptsize] {newest\\first} (9.45,0.0);
+% ---------------- panel (b)
+\begin{scope}[xshift=10.5cm]
+\node[font=\scriptsize\bfseries, anchor=west] at (-0.3,3.55) {(b) Generation counters};
+\draw[->] (0,2.4) -- (5.0,2.4) node[right] {gen};
+\foreach \x/\t in {0.8/installed, 2.3/captured, 3.8/active}{
+  \draw (\x,2.3) -- (\x,2.5); \node[above, font=\scriptsize] at (\x,2.5) {\t};}
+\node[align=left, anchor=north west, text width=5.2cm] at (-0.3,2.0) {
+\textbf{Visible rows}: $\mathit{installed} < \mathit{gen} \leq \mathit{active}$.\\[2pt]
+\textbf{Capture} (Commit start): seal \emph{active} as \emph{captured};
+new writes go to $\mathit{active}{+}1$. No row is copied.\\[2pt]
+\textbf{Construct}: read only the sealed generation, in pages of $\leq$1,024 rows.\\[2pt]
+\textbf{Install} (after publish): base root $\gets$ new root;
+$\mathit{installed} \gets \mathit{captured}$ in one SQL step.\\[2pt]
+\textbf{Reclaim}: rows at or below the floor are deleted after the reply, in small steps.};
+\end{scope}
+\end{tikzpicture}

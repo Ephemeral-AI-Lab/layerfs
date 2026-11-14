@@ -1,0 +1,190 @@
+% Input by appendix.tex. Numbers: notes/E-evaluation.md, notes/appendix/P-pipeline.md.
+\section{Time and Storage Analysis}
+\label{app:analysis}
+
+This appendix derives the time and storage cost of each operation from the structures
+in Appendices~\ref{app:objects}--\ref{app:algorithms} and checks each bound against
+measurements. Measurements come from the evaluation's campaigns
+(Section~\ref{sec:eval}). Each is one sample unless noted; storage bytes are exact and
+times are wall clock.
+
+\paragraph{Notation.} A tree has $N$ inodes. A file has length $F$ and $C \approx
+F/\bar{c}$ chunks, with measured mean chunk size $\bar{c} \approx 19$\,KB. Pages hold at
+most $P = 8$\,KiB. The mapping tree of a file has height $h_F = \lceil \log_{64} C \rceil$
+or less (3 for 500\,MiB), the inode table $h_N = O(\log_{50} N)$, and a directory with $D$
+entries $h_D = O(\log D)$. A Commit captures a set $\Delta$ of changed inodes; changed
+file $i$ received $w_i$ written bytes in $e_i$ separate edit runs. $T$ is the whole-file
+cutoff (128\,KiB). $H$ is history length and $B$ the number of Branches.
+
+\subsection{Time}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.15\linewidth} p{0.30\linewidth} p{0.17\linewidth} p{0.28\linewidth}}
+\toprule
+Operation & Cost & Grows with & Measured (median) \\
+\midrule
+Mount & Template copy $+$ one root object & nothing & 17--43\,ms across machines \\
+WRITE $w$ & $O(w + \log R)$ overlay rows; no Store I/O & $w$ & -- \\
+READ $w$, cold & $O(w + h_F + h_N)$ pages; $\leq$ cap$+1$ records and $\leq 4T$ decoded per object & $w$; $\log F$, $\log N$ & 158\,MB/s large file; flat across history ($<$1\%) \\
+Capture & Generation flip & nothing & -- \\
+Commit, construction & $O\big(\sum_{i\in\Delta}(w_i + e_i h_F P) + |\Delta| h_N P\big)$ & changes only & 100\,B edit: 24.4 / 24.5 / 28.1\,ms at 10 / 100 / 500\,MiB \\
+Commit, lane & 2 head reads, $\leq$1,024-inode merge, one transaction & nothing ($N$, $H$, $B$) & no-change Commit 15--21\,ms \\
+Commit, new data & $O(w)$ chunking, hashing, zstd, packing & $w$ & 500\,MiB: 1.36\,s ($\approx$385\,MB/s) \\
+Fork & One Branch row & nothing & -- \\
+Merge & Pages whose child ids differ, windows of 256 serials; $\leq$1\,MiB byte compare per text file & changed serials & -- \\
+Unmount & Drain, close, delete overlay file & open state & 14--31\,ms \\
+\bottomrule
+\end{tabular}
+\caption{Time per operation. Mount, Commit and unmount times are CLI calls including
+process launch and routing, which costs 26--54\,ms alone; the Commit times are cold.}
+\label{tab:time}
+\end{table}
+
+\paragraph{File size does not enter a Commit.} A localized edit touches one
+root-to-boundary path per edit boundary, so its construction cost is $O(w + e\,h_F P)$,
+and $h_F$ grows by one level per 64--128$\times$ growth in $F$. A 50$\times$ increase in
+file size (10 to 500\,MiB) raised the cold Commit of a 100\,B overwrite from 24.4 to
+28.1\,ms; a copy-up overlay grew from 191 to 604\,ms over the same range, and its time is
+$\Theta(F)$. In a unit test the same three-extent overwrite read 3 mapping pages on an
+8\,MB file and 4 on a 24\,MB file.
+
+\paragraph{Tree size, history and Branch count do not enter the lane.} The publication
+lane holds two head reads, a merge bounded to 1,024 inodes, and one transaction that
+inserts a Commit and advances one Branch head. None of these reads the tree beyond the
+bounded merge, walks history or enumerates Branches. Work that does grow---capture of
+large changes, construction, compression, pack writes, and a full merge when the head
+has moved---runs before the lane, so concurrent Commits overlap in all of it
+(Figure~\ref{fig:twocommits}).
+
+\paragraph{Reads are bounded by structure, not history.} A cold read of $w$ bytes costs
+$O(w)$ plus one root-to-leaf path in the inode table and in the file's mapping tree. Each
+stored object resolves a delta chain of at most 16 (whole file) or 8 (chunk) records,
+decoding at most $4T = 512$\,KiB and reading at most $2T = 256$\,KiB encoded; a chain
+that would exceed these bounds is re-based onto its root when written. Reads of a 65\,MB
+tree and of a 500\,MiB file were within 1\% of each other before and after 40 and 5
+Commits of history. Large-file reads are slow in absolute terms (158\,MB/s cold against
+943\,MB/s for ovnfs) because each 128\,KiB FUSE request is a round trip with one
+background request outstanding; that is a kernel-route cost, not a history cost.
+
+\paragraph{Per-call overhead.} For per-tool-call \ws{}s, the cost added to each call is
+mount, Commit and unmount. On a Docker machine with a SQLite Store the clean tiny-workload
+row measured 19.2, 16.0 and 16.8\,ms, about 52\,ms in all with process launch included.
+Sandbox creation is separate and amortized over many calls: 0.39\,s median on Docker,
+44--68\,ms natively on macOS and in Apple containers. File calls that need no process
+pay neither, because they run in the SDK's process (Section~\ref{sec:filecalls}).
+
+\paragraph{Where time is lost.} New data is written twice, once into the overlay and
+again into the Store, so a 500\,MiB random write committed in 1.36\,s against 1.0\,s for
+a copy-up overlay. FUSE publication of every \texttt{write(2)} makes write bandwidth a
+small fraction of a kernel overlay's (Appendix~\ref{app:modal}). Large files saved under
+a new inode are re-chunked in full at Commit.
+
+\subsection{Storage}
+
+\begin{figure}[h]
+\centering
+\resizebox{\linewidth}{!}{\input{appendix-figures/charts}}
+\caption{Measured time and storage. (a) Cold Commit time of a 100\,B overwrite is flat in file size for \sys{} and grows with it for a copy-up overlay. (b) Store growth per Commit for large-file edits (log scale; DEL500 truncates 500\,MiB). (c) Logical snapshot bytes over stored bytes across workloads; tiny files are the one case where the Store is larger than the data.}
+\label{fig:charts}
+\end{figure}
+
+\paragraph{Cost of one change.} Store growth from a Commit is new payload plus new
+metadata plus pack and locator overhead. Unchanged files, chunks, pages and subtrees
+cost nothing, because identities are content hashes and updates rewrite only paths to
+changes.
+\begin{itemize}[leftmargin=*,nosep]
+\item \emph{Payload.} A localized edit of $w$ bytes in a chunked file creates between
+$\lceil w/32\,\mathrm{KiB}\rceil$ and $\lceil w/8\,\mathrm{KiB}\rceil + 1$ new chunks,
+because only the replacement is chunked and boundary chunks become slices of existing
+chunks. Payload is therefore at most $w$ plus per-record framing (or a smaller delta),
+independent of $F$. A 100\,B random overwrite stored 153\,B of payload at 10, 100 and
+500\,MiB. A small file ($< T$) is rewritten whole, so its payload is a delta against
+the previous version, bounded by its compressed size.
+\item \emph{Metadata.} A changed file rewrites at most $h_F$ mapping pages, a 93\,B file
+state, $h_N$ inode-table pages and a 116\,B root; a name change also rewrites $h_D$
+directory pages. Canonically this is $O((h_F + h_N + h_D)P)$, 17--26\,KB for a
+mid-file overwrite of a large file. Each rewritten page is stored as a COPY/INSERT
+program against the page it replaces, so 3.7--5.7\,KB is stored. Across mixed histories
+a least-squares fit gives 414\,B per edit, 526\,B per append, 464\,B per rename,
+1,111\,B per delete and 1,360\,B per new file.
+\item \emph{Store overhead.} SQLite pages, locators and indexes add 1--20\% over the
+stored records (1.01--1.20\X{}; PostgreSQL 1.05--1.39\X{}). Per object the floor is
+about 200\,B, which dominates only for tiny files.
+\end{itemize}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.32\linewidth} p{0.20\linewidth} p{0.38\linewidth}}
+\toprule
+Change & Cost bound & Measured \\
+\midrule
+100\,B overwrite of a 500\,MiB file & $O(w + h_F P)$ & 7.4\,KB growth per Commit (copy-up overlay: 524.3\,MB) \\
+16\,KiB append to a 5\,MiB file & $O(w)$ & 18.4\,KB per Commit (613\,KB) \\
+Truncate 500\,MiB off a 1,000\,MiB file & $O(h_F P)$ & 8.2\,KB (524.3\,MB) \\
+Remove a 500\,MiB file & $O(h_N P)$ & 24.6\,KB; frees nothing \\
+Copy a 50\,MB tree 10 times & $O(\text{metadata})$ & 15.9\,KB per copy Commit, 0 payload \\
+Fork a Branch & one row; first Commit pays its paths & 5.4\,KB per identical Branch \\
+Second project in a shared Store & $O(\text{metadata})$ for shared content & 220\,KB per Init (first: 23.6\,MB) \\
+Commit in a 65\,MB tree (5 mixed ops) & $O(\sum$ changes$)$ & 5.9\,KB growth per Commit over 500 Commits \\
+\bottomrule
+\end{tabular}
+\caption{Store growth per change. Copy-up figures are ovnfs on the same host.}
+\label{tab:storagechange}
+\end{table}
+
+\paragraph{Cost of a history.} Store size after $k$ Commits is the initial tree plus
+the sum of per-change costs; it does not grow with the size of each snapshot. Over 500
+Commits on a 65\,MB tree (32.5\,GB of logical snapshots) the Store reached 26.5\,MB:
+23.6\,MB of initial tree plus 5.9\,KB per Commit, a ratio of 1,226\X{} between logical
+and stored bytes. Table~\ref{tab:ksnap} compares the growth of $k$ snapshots in which
+each snapshot changes $m$ files of size $F$ by $w$ bytes. Copy-up overlays and
+whole-file snapshot images grow with $F$; block copy-on-write grows with the touched
+blocks, but has no cross-file deduplication or deltas; \sys{} grows with $w$ plus a
+logarithmic path. A fully repacked Git pack is the tightest point of reference---1.10 to
+1.31\X{} smaller on the measured histories, because one global repack deltas across all
+versions---but Git keeps no live mountable view and must repack to reach that size.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.30\linewidth} p{0.27\linewidth} p{0.33\linewidth}}
+\toprule
+System & Growth for $k$ snapshots & Measured point \\
+\midrule
+Copy-up overlay; whole-file snapshot images & $k\,m\,F$ & 100\,B edits to 100\,MiB file: 1.15\,GB after 10 \\
+Block copy-on-write (Btrfs, ImageFS-blk) & $k\,m\,\lceil w/b\rceil b$ $+$ metadata & 4\,KiB change to 512\,MiB file: about 36\,KiB (Btrfs; recovered report) \\
+Git after full repack & $\approx k\,m\,\delta(w)$, after repack & 1.10--1.31\X{} smaller than \sys{} \\
+\sys{} & $k\,(m(w + c\,h_F P') + h_N P')$ & same 10 edits: 106.3\,MB, of which 104.9\,MB is the initial file \\
+\bottomrule
+\end{tabular}
+\caption{Growth over $k$ snapshots. $b$ is the block size, $\delta(w)$ a delta of $w$
+bytes, and $P'$ the stored size of a page program.}
+\label{tab:ksnap}
+\end{table}
+
+\paragraph{Trade-offs taken.} Several storage choices were made, or refused, on their
+time cost, following the rule that a large speed loss is not traded for a small storage
+gain (Table~\ref{tab:tradeoffs}).
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.30\linewidth} p{0.30\linewidth} p{0.30\linewidth}}
+\toprule
+Choice & Time effect & Storage effect \\
+\midrule
+Re-base at the chain bound & $+$22.5\% mean decode; max 520,575\,B $\leq$ 4$T$ budget & Edit Commit payload 290\,KB $\rightarrow$ 120\,KB \\
+Losing-base back-off & 500\,MiB append: 26,966 $\rightarrow$ 22 trials, 7.9 $\rightarrow$ 5.5\,s & Identical bytes \\
+Win saving $<$1/8 counts as loss & 100\,MiB log append 1,540 $\rightarrow$ 977\,ms & $+$1.04\% stored \\
+zstd-3, not zstd-6 (refused) & zstd-6 costs 2.6\X{} compression CPU & zstd-6 would save 4.4\% \\
+Per-object records, no group compression (refused) & Group: decode 256\,KiB to serve 2\,KB & Group would save 22\% \\
+Per-chunk frames & Random-access reads & Text 1.25\X{} larger than whole-file zstd \\
+No garbage collection or repack & No background work & Deleted data is retained \\
+\bottomrule
+\end{tabular}
+\caption{Speed and storage trade-offs, from the design records.}
+\label{tab:tradeoffs}
+\end{table}

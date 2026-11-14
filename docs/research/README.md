@@ -13,6 +13,7 @@ here is supporting context.
 - [FUSE Exec redesign requirements checklist](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/0.1.3/fuse-exec-redesign-requirements.md)
 
 - [AgentFS adjacent-product study](agent-fs/README.md)
+- [Paper draft and outline (2026-11-14)](paper/README.md)
 - [AI-native filesystem vision](vision/README.md)
 - [Historical V2 replacement work](history/v2-replacement/README.md)
 - [Historical V3 engineering work](history/v3/README.md)

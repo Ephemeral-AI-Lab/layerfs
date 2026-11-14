@@ -1,0 +1,1664 @@
+% LayerFS paper draft.
+% Status: Research; informative and not a product contract.
+% Build: latexmk -pdf layerfs.tex
+\documentclass[letterpaper,twocolumn,10pt]{article}
+\usepackage[margin=0.75in,columnsep=0.33in]{geometry}
+\usepackage{mathptmx}
+\usepackage[T1]{fontenc}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{balance}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,shapes.geometric,calc,decorations.pathreplacing}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usepackage[hidelinks]{hyperref}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{bytefield}
+\usepackage{url}
+\usepackage{longtable}
+\usepackage{amsmath}
+
+\setlist{nosep,leftmargin=*}
+\newif\ifdraft\drafttrue
+\newcommand{\dnote}[1]{\ifdraft\textcolor{red!70!black}{\textsf{\small[#1]}}\fi}
+\newcommand{\sys}{LayerFS}
+\newcommand{\ws}{Workspace}
+\newcommand{\X}{$\times$}
+
+\title{\sys{}: A Recursive Filesystem for\\ Ephemeral Computing in AI Agents}
+\author{Draft --- authors withheld}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+AI coding agents spend most of their time thinking, not running: in 2,095
+agent sessions we analyzed, the model takes a median 84\% of active time,
+and most tool calls only touch files. Yet each agent is given a whole
+computer for its task, and that computer's disk is the only copy of its
+work. \sys{} inverts the arrangement with \emph{ephemeral computing}:
+compute is borrowed per command, and all state lives outside it, in one
+shared, versioned Store.
+File calls run in the agent's own process against it and need no computer.
+Each shell call mounts a complete, writable \ws{}---source, \texttt{.git},
+installed dependencies, build outputs and every ignored file---over an
+immutable committed root, in time independent of tree size; it commits what
+changed and goes away. Every step becomes an immutable commit, and the
+filesystem is \emph{recursive}: any commit, including one inside a fork of
+a fork, can start a new Branch at the same constant cost, without copying
+data.
+
+Recording whole trees at every step is affordable because commits share
+structure. In a 13-hour build by nine agents, 4,354 commits of a 9\,GB tree
+on 211 Branches occupy 4.93\,GB---less than half of one checkout of the
+final tree---and the median edit commit adds 0.9\,KB. Mounts take a median
+7\,ms and forks 5\,ms. We find that commit granularity decides which storage
+mechanism matters: per-call commits make exact deduplication dominant,
+while coarse snapshots rely on delta compression. Against ovnfs, an overlay
+filesystem for agent checkouts, \sys{} adds 6--22\X{} fewer bytes per
+commit on code histories and commits 1.5--21\X{} faster from a cold cache;
+it is slower on cold large-file reads, bulk import and brand-new data.
+\end{abstract}
+
+\section{Introduction}
+
+An AI coding agent works in a loop: the model reads context and decides on
+an action, a tool executes it, and the result returns to the model. Most
+tool calls read or edit files; a minority run commands that need an
+operating system---building, testing, installing packages. In 2,095 agent
+sessions we analyzed, the model accounts for a median 84\% of each
+session's active time, and about 63\% of file and shell calls are file
+operations that need no process at all (\S\ref{sec:premise}).
+
+Today's agent infrastructure nevertheless starts from the computer. Each
+task receives a sandbox---a container~\cite{e2b} or a micro-VM~\cite{firecracker}---whose
+local filesystem holds the repository, its installed dependencies and every
+intermediate result. The sandbox must stay alive for the whole task because
+its disk \emph{is} the agent's state. This couples three things that have
+different lifetimes: the agent's files (which must survive the task, be
+inspected, branched and resumed), the compute that runs a command (needed
+for seconds), and the model's thinking time (minutes, needing no compute at
+all). It also makes checkpointing, branching and parallel exploration
+expensive: copying or snapshotting a sandbox costs seconds and gigabytes,
+and Git-based alternatives drop the ignored files---\texttt{node\_modules},
+build outputs, caches---so every fresh checkout must reinstall before it can
+run anything.
+
+We present \sys{}, a filesystem for \textbf{ephemeral computing}: compute
+is borrowed per command and given back, and state lives outside it, in
+durable history that every agent shares. Each agent mounts a complete,
+writable \ws{} over shared committed history, does its work, commits what it
+changed, and goes away. \sys{} is also \textbf{recursive}: every step is a
+commit, and any commit---including one inside a fork of a fork, or in the
+middle of an earlier rollout---can start a new Branch at the same constant
+cost. The two halves, ephemeral \ws{}s and durable shared history, have
+different jobs.
+
+\emph{Ephemeral Workspaces} are the compute side, borrowed per command:
+\begin{itemize}
+\item \textbf{File calls need no computer.} Reads, writes and edits run in
+  the agent's process, directly against the Store; each write is one atomic
+  commit (\S\ref{sec:filecalls}).
+\item \textbf{Shell calls get a \ws{}.} A \ws{} is a complete POSIX view of a
+  Branch, including dependencies, build outputs and ignored files. Mounting
+  scans, copies and installs nothing; its only new file is a small private
+  overlay database (\S\ref{sec:mount}). After the command, a commit records
+  every change regardless of which process made it, and unmount discards the
+  view (\S\ref{sec:commit}).
+\end{itemize}
+
+\emph{Durable shared history} is the state side. It outlives every \ws{},
+Sandbox and agent, and every agent, Branch and project on a Store shares it:
+\begin{itemize}
+\item \textbf{Every step is a commit} that can be read, diffed or blamed.
+\item \textbf{Forks are recursive.} Any commit, at any fork depth, can start
+  a Branch by writing one metadata row, so rollouts, best-of-$N$ sampling~\cite{monkeys} and tree
+  search~\cite{tot,uct} become cheap filesystem operations; every step of a
+  rollout is itself a node to search from (\S\ref{sec:fork},
+  \S\ref{sec:search}).
+\item \textbf{Many agents can work on one Branch}, with conflicting writes
+  refused atomically rather than silently interleaved (\S\ref{sec:merge}).
+\end{itemize}
+
+\textbf{Recording everything must be nearly free}, or none of this is
+practical: every commit names a whole tree, build outputs included. \sys{}
+shares first and compresses second. Unchanged subtrees keep their
+identities, so a commit costs what changed; content addressing reuses
+identical files and chunks across steps, Branches and projects; and what
+remains new is delta-encoded against a base chosen from filesystem events
+such as rename-over saves, then compressed (\S\ref{sec:storage}).
+
+The individual storage techniques---content-defined chunking~\cite{lbfs,fastcdc},
+content addressing~\cite{venti,git}, resemblance-based delta
+compression~\cite{shilane,finesse}---are well known; backup systems and
+version-control systems apply them \emph{offline}, over complete snapshots.
+\sys{} applies them \emph{online}, inside a live filesystem's commit path,
+at tool-call latency, and organizes agent execution around the result. Doing
+so exposes a finding we did not expect: \emph{commit granularity decides
+which mechanism saves space}. With one commit per tool call, consecutive
+states are nearly identical and exact deduplication carries the load
+(1,179\X{} against 5.4\X{} from deltas and compression in a nine-agent run);
+with coarse snapshots the burden shifts to delta encoding.
+
+This paper makes the following contributions:
+\begin{itemize}
+\item A characterization of where agent time and tool calls go, from 2,095
+  sessions across two agent systems (\S\ref{sec:premise}).
+\item The ephemeral-\ws{} model: complete views whose mount cost is
+  independent of tree size and whose commit cost follows the change, over
+  recursive history in which any commit, at any fork depth, can be forked
+  (\S\ref{sec:design}--\S\ref{sec:history}).
+\item A Store that builds and encodes immutable objects in parallel and
+  serializes metadata publication through one writer with short holds, so many \ws{}s and in-process
+  callers share one database (\S\ref{sec:store}).
+\item An online storage pipeline---structural sharing first, then delta
+  bases chosen from filesystem events---and the observation that commit
+  granularity decides which of the two matters (\S\ref{sec:storage},
+  \S\ref{sec:eval-granularity}).
+\item An evaluation including a 13-hour, nine-agent build and comparisons
+  with an agent overlay filesystem, Btrfs snapshots and Git, including the
+  cases where \sys{} loses (\S\ref{sec:eval}).
+\end{itemize}
+
+\section{Agents Think More Than They Run}
+\label{sec:motivation}
+
+\subsection{How agents use computers}
+\label{sec:premise}
+
+To ground the design we analyzed agent runs recorded on one developer's
+machine: 483 sessions of an open-source agent harness driving six model
+families (49,757 agent steps, 251 hours inside steps), and 1,612 transcripts
+of a commercial coding agent (14,641 prompts, 1,043 active hours, with time
+spent waiting for the human excluded). Table~\ref{tab:premise} summarizes
+them.
+
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l r r}
+\toprule
+& Harness & Coding agent \\
+\midrule
+Sessions / transcripts & 483 & 1,612 \\
+Model share of active time, aggregate & 64.3\% & 68.9\% \\
+\quad per session, median & 85\% & 84\% \\
+Tool result $\rightarrow$ next call, median & 6.5\,s & 5.6\,s \\
+File + shell calls & 61,001 & 211,613 \\
+\quad file operations (any tool) & 63.3\% & 61.9\% \\
+\quad need process execution & 33.5\% & 31.6\% \\
+Shell commands that only read/search & 52.4\% & 53.5\% \\
+Shell calls per prompt, median / mean & 3 / 21.8 & 2 / 12.9 \\
+\bottomrule
+\end{tabular}
+\caption{Where agent time and tool calls go. ``File operations'' counts
+dedicated file tools plus shell commands whose program reads, searches or
+moves files; the rest builds, tests, runs programs, writes Git state or
+manages infrastructure.}
+\label{tab:premise}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\scriptsize,x=0.92cm,y=1cm]
+\node[anchor=east] at (-0.05,1.0) {Model};
+\node[anchor=east] at (-0.05,0.4) {Tools};
+\foreach \a/\b in {0/1.6, 1.75/3.0, 3.15/4.6, 5.2/6.8, 6.95/8.0}
+  \fill[blue!30] (\a,0.86) rectangle (\b,1.14);
+\node[font=\tiny,blue!50!black] at (0.8,1.0) {thinking};
+\foreach \a/\t in {1.6/read, 3.0/edit, 6.8/read} {
+  \fill[green!55!black] (\a,0.28) rectangle ++(0.15,0.24);
+  \node[font=\tiny,anchor=north] at (\a+0.075,0.27) {\texttt{file.\t}};
+}
+\fill[orange!75] (4.6,0.28) rectangle (5.2,0.52);
+\node[font=\tiny,anchor=north] at (4.9,0.27) {shell};
+\draw[decorate,decoration={brace,amplitude=3pt}] (1.75,1.2) -- node[above=2pt,font=\tiny]
+  {result $\rightarrow$ next call: median 6\,s} (3.0,1.2);
+\draw[-{Stealth[length=3pt]},gray] (0,1.55) -- node[above,font=\tiny,pos=0.93]{time} (8.0,1.55);
+% zoom into the shell call
+\draw[dashed,gray] (4.6,0.06) -- (0.6,-0.45);
+\draw[dashed,gray] (5.2,0.06) -- (8.0,-0.45);
+\draw[fill=orange!25] (0.6,-0.95) rectangle (1.45,-0.45);
+\node[align=center,font=\tiny] at (1.025,-0.7) {mount\\7\,ms};
+\draw[fill=orange!50] (1.45,-0.95) rectangle (5.4,-0.45);
+\node[align=center,font=\tiny] at (3.425,-0.7) {command runs in the Sandbox\\(\texttt{cargo test}, \texttt{npm run build}, \dots)};
+\draw[fill=orange!25] (5.4,-0.95) rectangle (7.15,-0.45);
+\node[align=center,font=\tiny] at (6.275,-0.7) {commit\\204\,ms};
+\draw[fill=orange!25] (7.15,-0.95) rectangle (8.0,-0.45);
+\node[align=center,font=\tiny] at (7.575,-0.7) {unmount\\14\,ms};
+\draw[decorate,decoration={brace,amplitude=3pt,mirror}] (0.6,-1.02) -- node[below=2pt,font=\tiny]
+  {the \ws{} exists only here; its lasting product is one commit} (8.0,-1.02);
+\end{tikzpicture}
+\caption{One agent turn, schematically. The model thinks most of the time
+(median 84--85\% per session, Table~\ref{tab:premise}). File calls write to
+the Store from the agent's process and need no computer. Only a shell call
+borrows a \ws{}, for the length of one command; latencies are medians from
+the nine-agent build (Table~\ref{tab:quarry-lat}).}
+\label{fig:turn}
+\end{figure}
+
+Two observations follow. \textbf{Most time is spent in the model.} In
+aggregate the model accounts for 64--69\% of active wall time, and in the
+median session for 84--85\%; the median gap between a tool's result and the
+next tool call is about six seconds. A computer held for the task idles
+through all of it. \textbf{Most tool calls need no computer.} Agents issue
+most calls \emph{as} shell commands---the coding agent chose its shell tool
+for 89\% of file and shell calls even though it also offers file
+tools---but more than half of those commands only read or search files.
+Counting dedicated file tools, 62--63\% of calls are file operations that a
+filesystem API can serve directly; about a third need to run a process.
+Figure~\ref{fig:turn} shows what this means for one turn: a computer is
+needed for a few short intervals, not for the whole task.
+
+These numbers come from one developer's systems-heavy work, which inflates
+build and test time, and we classify shell commands by their first program
+word. They are indicative, not general; \S\ref{sec:discussion} lists what a
+cleaner measurement would record.
+
+\subsection{The cost of a computer per agent}
+
+A sandbox held for a whole task pays for idle time while the model thinks,
+and it is the sole home of the agent's work: losing it loses the state, and
+branching it means copying it. Two common ways to avoid holding a sandbox
+both fall short.
+
+\textbf{Re-create from Git.} Cloning or checking out a commit is cheap only
+because Git ignores the files that make a tree runnable: installed
+dependencies, build outputs and caches. A fresh checkout must reinstall
+before the first test can run, a cost measured in minutes for typical
+JavaScript or Rust projects. Git also commits by scanning the working tree,
+and it is not a mountable filesystem.
+
+\textbf{Snapshot the sandbox.} Container layers, VM snapshots and
+copy-on-write file systems capture everything, but at whole-file or
+whole-image granularity, or only for in-place updates. Overlay filesystems
+copy a file up in full on its first write~\cite{overlayfs}. Snapshot
+filesystems such as Btrfs~\cite{btrfs} share extents that stay in place, but
+a file rewritten whole---as editors, Git and package managers do when they
+write a temporary file and rename it over the original---is new data.
+
+\subsection{Agent filesystems today}
+
+Several systems target agents directly. ovnfs~\cite{ovnfs} provides
+disposable, Git-integrated agent checkouts through file-level copy-on-write
+overlays with snapshots into a packed object store. AgentFS~\cite{agentfs}
+stores a filesystem in SQLite as fixed 4\,KiB chunk rows with a per-session
+delta database, but (in the version we studied, 0.6.4) keeps no version
+history or snapshots. JuiceFS~\cite{juicefs} and earlier database-backed
+filesystems~\cite{inversion,tablefs} keep metadata in a database but are not
+versioned. None combines a complete mountable tree, per-call history and
+fork-from-anywhere at low storage cost.
+
+\subsection{Goals}
+
+\begin{enumerate}
+\item \textbf{Complete views.} A \ws{} is the whole tree, ignored files
+  included, so commands run as in an installed checkout.
+\item \textbf{Constant-cost bootstrap.} Mounting does not scan, copy or
+  install; cost is independent of tree size.
+\item \textbf{Commit cost follows the change}, not the size of the tree or
+  of the edited file.
+\item \textbf{Every step is history.} Every tool call that changes the tree
+  is an immutable, forkable commit.
+\item \textbf{Affordable history.} Storage grows with what changed, across
+  steps, Branches and projects.
+\item \textbf{Shared without a server.} Many processes and \ws{}s share one
+  Store with no database server in the data path.
+\end{enumerate}
+
+\section{Ephemeral Workspaces, Shared History}
+\label{sec:design}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  font=\footnotesize,
+  box/.style={draw,rounded corners=2pt,align=center,inner sep=3pt},
+  arr/.style={-{Stealth[length=4pt]},thick}]
+\node[box,minimum width=7.6cm,minimum height=1.0cm,fill=gray!10] (store) at (0,0)
+  {\textbf{Store} (one SQLite file or PostgreSQL schema)\\
+   immutable packs $\cdot$ Layers $\cdot$ Branches $\cdot$ Commits};
+\node[box,fill=blue!6,minimum width=2.4cm] (agent) at (-2.6,2.6)
+  {\textbf{Agent process}\\SDK: \texttt{file.*}, \texttt{branch.*}\\(no sandbox)};
+\node[box,fill=orange!8,minimum width=4.7cm,minimum height=2.0cm] (sbx) at (1.45,2.75) {};
+\node[anchor=north,inner sep=3pt] at (sbx.north) {\textbf{Sandbox} (daemon, pooled)};
+\node[box,fill=white] (w1) at (0.35,2.45) {\ws{} 1\\overlay.sqlite};
+\node[box,fill=white] (w2) at (2.55,2.45) {\ws{} 2\\overlay.sqlite};
+\draw[arr] (agent.south) -- node[right,align=left,font=\scriptsize]{write =\\Commit} (agent.south|-store.north);
+\draw[arr] (w1.south) -- node[left,font=\scriptsize]{commit} (w1.south|-store.north);
+\draw[arr,dashed] (w2.south|-store.north) -- node[right,font=\scriptsize]{demand reads} (w2.south);
+\node[align=center,font=\scriptsize,anchor=south] at (sbx.north)
+  {per shell call: mount $\rightarrow$ exec $\rightarrow$ commit $\rightarrow$ unmount};
+\end{tikzpicture}
+\caption{\sys{} architecture. State lives only in the Store. File calls run
+in the agent's process. Shell calls borrow a \ws{}: a private overlay over a
+committed root, created at mount and deleted at unmount.}
+\label{fig:arch}
+\end{figure}
+
+\paragraph{Objects.} A \emph{project} is one source tree. Its committed
+state lives in a \emph{Store}: one SQLite database file in WAL mode, or one
+PostgreSQL schema, holding immutable content-addressed objects and the
+history records that name them. A \emph{Branch} is a named line of
+\emph{Commits}; each Commit names a filesystem root and its parent(s). The
+distinguished Branch \texttt{main} is read-only and grows by \emph{Layers},
+each a published state. Project initialization reads the source tree once,
+including \texttt{.git}, dependencies, caches, symlinks and every
+Git-ignored file, and makes it the first Layer.
+
+\paragraph{Two execution paths.} Figure~\ref{fig:arch} shows the two ways an
+agent touches state. \emph{File calls} (\texttt{file.read}, \texttt{file.write},
+\texttt{file.edit}, and history calls such as \texttt{branch.fork} or
+\texttt{file.blame}) run inside the caller's process, which opens the Store
+directly. \emph{Shell calls} run in a \emph{Sandbox}: a long-lived daemon
+plus an isolation environment (Linux namespaces and cgroups inside a VM or
+container, or a host process on macOS). The orchestrator mounts a Branch as
+a \ws{} in the Sandbox, runs the command, commits and unmounts.
+
+\paragraph{What is ephemeral.} The unit created and destroyed per call is
+the \ws{}---a private overlay database plus a kernel mount---not the Sandbox.
+A Sandbox holds up to 16 \ws{}s, shares an object cache among them, and can
+be discarded at any time: it never holds committed state, so losing it loses
+only uncommitted overlays, and any Sandbox attached to the Store can mount
+any Branch. This is what lets compute be pooled, replaced and scaled
+independently of the agents whose state it serves.
+
+\paragraph{What is durable.} History---every object, Commit, Branch and
+Layer---lives only in the Store and is never rewritten. By \emph{durable}
+we mean that it outlives every \ws{}, Sandbox and agent: losing any of them
+loses no committed work. We do not mean crash-durable in the
+\texttt{fsync} sense; the Store trades that for latency
+(\S\ref{sec:durable}).
+
+\paragraph{Interface.} One call table defines the whole interface: 73 calls
+in ten families, from which the \texttt{layerfs} command line and the Node
+and Python SDKs are generated, so \texttt{layerfs.file.write} in an SDK is
+\texttt{layerfs file write} in a shell. Table~\ref{tab:api} groups the calls
+an agent uses by the role they play; Appendix~\ref{app:cli} lists all of them.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\begin{tabular}{@{}p{0.27\columnwidth}p{0.69\columnwidth}@{}}
+\toprule
+Role & Calls \\
+\midrule
+No computer: file calls, one Commit per write &
+\texttt{file.read}, \texttt{write}, \texttt{edit}, \texttt{apply}, \texttt{cp},
+\texttt{mv}, \texttt{rm}, \texttt{mkdir}, \texttt{stat}, \texttt{list},
+\texttt{glob}, \texttt{grep} \\
+\addlinespace
+Borrowed compute: one shell call &
+\texttt{workspace.mount}, \texttt{exec}, \texttt{commit}, \texttt{unmount};
+\texttt{workspace.status}, \texttt{exec\_cancel} \\
+\addlinespace
+Compute pool &
+\texttt{sandbox.create}, \texttt{close}, \texttt{get}, \texttt{list};
+\texttt{machine.*} \\
+\addlinespace
+Recursive forks &
+\texttt{branch.fork} (from any Branch, Commit or Layer), \texttt{merge},
+\texttt{publish} \\
+\addlinespace
+Every step a checkpoint &
+\texttt{commit.list}, \texttt{get}, \texttt{diff}; \texttt{branch.diff},
+\texttt{commits}; \texttt{file.blame}, \texttt{revision}, \texttt{diff};
+\texttt{file.read} at a Commit \\
+\addlinespace
+Shared state &
+\texttt{store.create}, \texttt{connect} (PostgreSQL), \texttt{push},
+\texttt{attach}; \texttt{project.init}, \texttt{export} \\
+\addlinespace
+Measurement &
+\texttt{store.stats}, \texttt{project.stats},
+\texttt{branch.commits --include-storage} \\
+\bottomrule
+\end{tabular}
+\caption{The \sys{} 2.0 interface by role. A call written after a family
+name belongs to that family (\texttt{write} is \texttt{file.write}).}
+\label{tab:api}
+\end{table}
+
+\section{Ephemeral Workspaces}
+\label{sec:workspaces}
+
+\subsection{File calls without a computer}
+\label{sec:filecalls}
+
+A file call binds a private \ws{} that is never mounted. Its overlay is a
+copy of the process's template; the call applies each change as overlay
+jobs and then commits through exactly the same capture, construction, merge
+and publication path as a mounted \ws{} (\S\ref{sec:commit}). A write is
+therefore one atomic operation and one Commit. A write that leaves the tree
+unchanged answers \texttt{UpToDate} and creates nothing. Because the caller
+opens the Store itself, there is no server in the data path.
+
+Opening a SQLite Store from several processes requires one kernel and a
+local filesystem whose locking SQLite trusts (ext4, xfs or btrfs on Linux;
+APFS on macOS); a guard refuses anything else as \texttt{Unsupported}. Hosts
+that cannot open the Store directly forward each call once, with no retry
+or replay, to a loopback worker on the Store's machine. With the PostgreSQL
+backend, callers on different machines can open one Store, since
+PostgreSQL arbitrates access instead of the local kernel.
+
+\subsection{Constant-cost mount}
+\label{sec:mount}
+
+Mounting a Branch performs four steps: read the Branch's head from the
+Store, decode and authenticate the root object, copy a pre-built,
+schema-only overlay template into a fresh SQLite file, and attach a FUSE
+session (Linux) or a loopback NFSv3 export (macOS). None of these steps
+depends on the size of the tree: nothing is scanned, copied, restored or
+installed. Directory pages, inode-table pages and file extents are fetched
+on demand from the Store when first accessed, authenticated against their
+object identifiers, and kept in a per-daemon cache keyed by identity and
+shared by all \ws{}s of that daemon. The first read of a file still pays
+real I/O; what mount avoids is work proportional to the tree.
+
+\subsection{A private overlay per \ws{}}
+\label{sec:overlay}
+
+Each mounted \ws{} owns one SQLite overlay database configured for speed
+over durability (in-memory journal, \texttt{synchronous=OFF}, exclusive
+locking, in-memory temporary storage). It records only changes: names and
+whiteouts, inodes, and file bytes as 4\,KiB cells and 32\,KiB dense runs.
+\emph{Reference pieces} describe ranges equal to already-committed bytes
+without copying them, so a small write to a large file stores only what was
+written. Open-file, directory-position and kernel-reference state live in
+daemon memory.
+
+One lock guards a \ws{}'s connection. It is held for exactly one short
+atomic job---at most one transaction---and never across Store I/O, a command
+or a commit. Every job is bounded by a window (FUSE writes and reads of at
+most 128\,KiB, 256\,KiB transfers on the NFS route, 1,024-row pages), so no file, edit or \ws{} size is capped by
+resident memory. Workspaces share no overlay connection, writer, page cache
+or memory budget; the only shared state is committed immutable content and
+the Store.
+
+FUSE kernel write-back caching is disabled: every \texttt{write(2)} is
+published to the overlay before it returns. This makes capture exact---an
+acknowledged write is always in the next commit---at the price of writing
+new data through SQLite at write time (\S\ref{sec:eval-slow}).
+
+\paragraph{Execution is not the filesystem's business.} Any process that
+can see the mount uses ordinary system calls. The daemon supervises no
+commands and registers no executions; the Sandbox runtime launches commands,
+owns their streams and exit status, and places each in its own cgroup. A
+commit captures what was published, not what a registered command did.
+
+\subsection{Commit cost follows the change}
+\label{sec:commit}
+
+A commit proceeds in five steps.
+\begin{enumerate}
+\item \textbf{Capture.} The overlay's active generation is sealed as the
+  published frontier and a new one opens. No rows are copied and nothing is
+  filtered by process: changes from several commands, including background
+  processes, are captured together.
+\item \textbf{Construct.} One producer thread reads only the sealed rows and
+  the immutable base. Unchanged directories keep their stored roots. A
+  changed file applies localized edits to its extent tree: it splits stored
+  extents at edit boundaries, chunks only the new bytes and rebuilds only
+  the pages on the paths to the root (\S\ref{sec:edits}). A file recreated
+  with identical bytes reuses its stored root.
+\item \textbf{Merge.} If the Branch head moved since the \ws{}'s base, the
+  candidate is merged three-way with the new head before publication.
+\item \textbf{Publish.} A short \emph{publication lane}, holding the
+  Store's single writer, re-checks the head, merges whatever landed in the
+  meantime (bounded) and advances the Branch in one transaction.
+\item \textbf{Install.} The \ws{}'s base is rebound to the new root without
+  a tree walk; changes made after the capture remain on top.
+\end{enumerate}
+A commit with no changes answers \texttt{UpToDate} without capturing,
+saving or taking the lane.
+
+Commit captures a filesystem, not a process. Unflushed dirty
+\texttt{mmap} pages and writes by still-running descendants that have not
+reached the overlay are not captured; command exit is not treated as proof
+that a command's descendants are finished.
+
+\subsection{Unmount and reclamation}
+
+Unmount refuses a \ws{} with uncommitted changes unless told to discard
+them. It then detaches the kernel mount, drains in-flight requests, revokes
+kernel references and deletes the overlay file as a whole. Committed history
+is untouched. A \ws{} is therefore a disposable view whose only lasting
+product is a commit.
+
+\section{Shared History}
+\label{sec:history}
+
+History is the half of \sys{} that lasts. Every agent, Branch and project
+on a Store shares one object graph and one record of Commits and Layers, so
+forking, merging and many agents working at once are operations on
+metadata.
+
+\subsection{Recursive forks}
+\label{sec:fork}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\scriptsize,x=1cm,y=0.72cm,
+  c/.style={circle,draw,inner sep=0pt,minimum size=5.5pt},
+  m/.style={c,fill=gray!45},
+  b/.style={c,fill=blue!20},
+  d/.style={c,fill=white,draw=gray!60},
+  e/.style={-{Stealth[length=3pt]}},
+  f/.style={-{Stealth[length=3pt]},dashed,blue!60!black},
+  g/.style={-{Stealth[length=3pt]},thick,green!45!black}]
+% main
+\foreach \i/\x in {0/0,1/1.1,2/2.2,3/3.3,4/4.6,5/5.7}
+  \node[m] (m\i) at (\x,0) {};
+\foreach \i/\j in {0/1,1/2,2/3,3/4,4/5} \draw[e] (m\i) -- (m\j);
+\node[anchor=east] at (-0.15,0) {\texttt{main}};
+% lane, forked from main
+\node[b] (a1) at (1.7,1) {}; \node[b] (a2) at (2.5,1) {}; \node[b] (a3) at (4.0,1) {};
+\draw[f] (m1) -- (a1); \draw[e] (a1) -- (a2); \draw[e] (a2) -- (a3);
+\node[anchor=east] at (1.55,1) {lane};
+\draw[g] (a3) -- node[right,font=\tiny,pos=0.35]{merge, publish} (m4);
+% forks of the fork
+\node[b] (t1) at (3.05,2.6) {}; \node[d] (t2) at (3.6,2.6) {};
+\node[b] (u1) at (3.05,1.8) {}; \node[b] (u2) at (3.6,1.8) {};
+\draw[f] (a2) -- (t1); \draw[e] (t1) -- (t2);
+\draw[f] (a2) -- (u1); \draw[e] (u1) -- (u2);
+\draw[g] (u2) -- (a3);
+\node[anchor=west,font=\tiny,gray] at (3.75,2.6) {try 1: dropped};
+\node[anchor=west,font=\tiny] at (3.75,1.85) {try 2: kept};
+% best-of-N from a past commit
+\foreach \k/\y in {1/-0.85,2/-1.45,3/-2.05} {
+  \node[b] (r\k) at (3.0,\y) {};
+  \draw[f] (m2) -- (r\k);
+}
+\node[d] (r1x) at (3.55,-0.85) {}; \draw[e] (r1) -- (r1x);
+\node[b] (r2x) at (3.55,-1.45) {}; \draw[e] (r2) -- (r2x);
+\node[d] (r3x) at (3.55,-2.05) {}; \draw[e] (r3) -- (r3x);
+\node[anchor=west,font=\tiny,align=left] at (3.75,-1.45)
+  {best-of-$N$ rollouts\\from a past commit};
+% legend
+\draw[f] (-0.3,-2.75) -- (0.25,-2.75);
+\node[anchor=west,font=\tiny] at (0.3,-2.75)
+  {fork: one Branch row, no tree read, nothing copied (median 5\,ms)};
+\end{tikzpicture}
+\caption{Recursive forks. Any Commit or Layer can start a Branch,
+including a past commit and a fork of a fork. A dropped fork costs only the
+bytes it changed; a kept one is merged back and published.}
+\label{fig:forks}
+\end{figure}
+
+\texttt{branch.fork(name, from)} writes one Branch row naming its start: the
+newest Layer of \texttt{main}, another Branch's head, or any Commit or Layer
+by identifier. It reads no tree and copies no object, so a fork of a fork of
+a fork costs the same as the first, and its mount is the same
+constant-cost bind (Figure~\ref{fig:forks}). This is what we mean by a
+\emph{recursive} filesystem: a fork is a full peer of its parent, and
+forking it again costs nothing more. Changes a fork makes are deduplicated against everything
+already stored, so a losing fork costs only the bytes it changed. A winning
+fork is folded back by \texttt{branch.merge} (a fast-forward when one side
+contains the other) and published as \texttt{main}'s next Layer.
+
+\subsection{Many agents, one Branch}
+\label{sec:merge}
+
+Agents do not lock files. Each commit merges with the Branch head it finds
+when it publishes. Changes to different files land on top. A file changed
+on both sides is merged three-way: text is line-merged and overlapping hunks
+become a \emph{conflict}; binaries keep the local side. A conflict never
+half-lands: nothing is published. In a \ws{}, the merged tree with marker
+blocks is installed so the agent can resolve it with ordinary tools, and a
+commit is refused while a complete marker block remains.
+
+Some files are rewritten wholesale by tools---lockfiles, build outputs,
+caches---and a line merge of them is meaningless. A \texttt{/.lww} file at
+the tree root lists gitignore-style patterns; for matching paths changed on
+both sides, the newer modification time wins with no conflict, and each
+decision is recorded on the commit.
+
+\subsection{Search over filesystem states}
+\label{sec:search}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\scriptsize,x=1cm,y=0.78cm,
+  c/.style={circle,draw,fill=blue!20,inner sep=0pt,minimum size=6pt},
+  dr/.style={c,fill=white,draw=gray!60},
+  win/.style={c,fill=green!45!black},
+  e/.style={-{Stealth[length=3pt]}},
+  f/.style={-{Stealth[length=3pt]},dashed,blue!60!black},
+  st/.style={circle,draw,fill=white,inner sep=0.6pt,font=\tiny\bfseries},
+  sc/.style={font=\tiny,anchor=west}]
+% root
+\node[c,fill=gray!45,minimum size=7pt] (R) at (2.5,0) {};
+\node[anchor=south,font=\tiny] at (R.north) {\texttt{main} head};
+% expanded children and their rollouts (every step is a commit)
+\node[c] (A)  at (0.6,-1) {}; \node[c] (a1) at (0.6,-1.8) {}; \node[c] (a2) at (0.6,-2.6) {};
+\node[c] (B)  at (2.5,-1) {}; \node[c,very thick,draw=orange!80!black,minimum size=8pt] (b1) at (2.5,-1.8) {};
+\node[c] (b2) at (2.5,-2.6) {};
+\node[dr] (C) at (4.4,-1) {}; \node[dr] (c1) at (4.4,-1.8) {};
+\foreach \u/\v in {R/A,R/B,R/C} \draw[f] (\u) -- (\v);
+\foreach \u/\v in {A/a1,a1/a2,B/b1,b1/b2,C/c1} \draw[e] (\u) -- (\v);
+\node[sc] at (a2.east) {$v{=}0.3$};
+\node[sc] at (b2.east) {$v{=}0.5$};
+\node[font=\tiny,anchor=east,gray] at (c1.west) {$v{=}0.1$};
+% deeper expansions, from mid-rollout commits
+\node[c] (e1) at (1.5,-2.6) {}; \node[dr] (e2) at (1.5,-3.4) {};
+\draw[f] (a1) -- (e1); \draw[e] (e1) -- (e2);
+\node[sc,gray] at (e2.east) {$v{=}0.2$};
+\node[c] (d1) at (3.5,-2.6) {}; \node[c] (d2) at (3.5,-3.4) {}; \node[win] (d3) at (3.5,-4.2) {};
+\draw[f] (b1) -- (d1); \draw[e] (d1) -- (d2); \draw[e] (d2) -- (d3);
+\node[sc] at (d3.east) {$v{=}0.9$, merged \& published};
+% backpropagation
+\draw[-{Stealth[length=3pt]},densely dotted,thick,red!65!black]
+  (d3.north east) .. controls (5.9,-3.2) and (5.6,0.1) .. (R.east);
+% step markers
+\node[st] at (2.05,-1.55) {1};
+\node[st] at (3.15,-2.0)  {2};
+\node[st] at (3.85,-3.0)  {3};
+\node[st] at (3.15,-4.2)  {4};
+\node[st] at (5.55,-1.6)  {5};
+% legend
+\begin{scope}[shift={(-0.35,-5.0)}]
+\node[st] at (0,0) {1}; \node[sc] at (0.12,0) {select any commit, even mid-rollout};
+\node[st] at (0,-0.45) {2}; \node[sc] at (0.12,-0.45) {expand: fork = one Branch row (5\,ms)};
+\node[st] at (0,-0.9) {3}; \node[sc] at (0.12,-0.9) {simulate: mount (7\,ms), each step commits};
+\node[st] at (3.75,0) {4}; \node[sc] at (3.87,0) {evaluate: tests run,};
+\node[sc] at (3.87,-0.3) {nothing reinstalled};
+\node[st] at (3.75,-0.75) {5}; \node[sc] at (3.87,-0.75) {backpropagate:};
+\node[sc] at (3.87,-1.05) {scores kept by the search};
+\end{scope}
+\end{tikzpicture}
+\caption{Monte Carlo tree search over commits. Every node is a Commit---a
+complete tree with dependencies and build outputs---and every rollout step
+is a node, so search can expand from the middle of an earlier rollout
+(orange). Dashed edges are forks, solid edges are steps; dropped Branches
+(white) cost only the bytes they changed. Schematic; values are
+illustrative.}
+\label{fig:mcts}
+\end{figure}
+
+Because forks are recursive---one row at any depth---and every step is a
+commit,
+search algorithms that branch over environment states map directly onto
+\sys{}. Figure~\ref{fig:mcts} shows Monte Carlo tree
+search~\cite{uct,mctssurvey} over commits. A node is a Commit. Selection
+picks any Commit by identifier. Expansion forks it. A simulation mounts a
+\ws{} on the new Branch and lets the agent act; each step commits, adding a
+median 0.9\,KB for an edit in the nine-agent build. Evaluation runs the
+task's tests in the same \ws{} without reinstalling anything, because
+ignored files are part of the state. Backpropagation updates statistics
+the search keeps outside the tree; \sys{} stores no scores. A dropped
+Branch costs only the bytes it changed, and the winner is merged and
+published.
+
+Two properties distinguish this from search over sandbox snapshots.
+\emph{Every rollout step is a resumable node}: a search can later expand
+from the middle of an earlier rollout without replaying it, whereas
+container or VM snapshots cost seconds and gigabytes and are taken only at
+chosen points. \emph{Expansion cost does not depend on depth}: a fork of a
+fork writes one row and mounts in the same constant time as the first.
+Siblings that write identical files---the same dependency install, the same
+generated output---store them once, because deduplication spans every
+Branch on the Store. The same pattern serves best-of-$N$
+sampling~\cite{monkeys}, tree-of-thought search~\cite{tot}, reinforcement
+learning rollouts whose environment is a source tree, and agents that try a
+change to their own code in a fork before adopting it. These are
+consequences of the design rather than measured results;
+\S\ref{sec:discussion} lists the limits that wide searches would hit.
+
+\subsection{Parallel objects, single-writer metadata}
+\label{sec:store}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\scriptsize,x=0.88cm,y=0.62cm,
+  par/.style={fill=orange!35,draw=orange!60!black},
+  lane/.style={fill=blue!55,draw=blue!60!black},
+  capt/.style={fill=black},
+  ins/.style={fill=gray!40,draw=gray!60}]
+\newcommand{\row}[7]{%
+  \node[anchor=east] at (-0.1,#1) {#2};
+  \fill[capt] (#3,#1-0.25) rectangle ++(0.08,0.5);
+  \draw[par] (#3+0.08,#1-0.25) rectangle (#4,#1+0.25);
+  \draw[densely dotted,thick] (#5,#1) -- (#6,#1);
+  \draw[lane] (#6,#1-0.25) rectangle (#7,#1+0.25);
+  \draw[ins] (#7,#1-0.25) rectangle ++(0.2,0.5);}
+\row{3}{Commit 1}{0.0}{3.0}{3.0}{3.0}{3.5}
+\row{2}{Commit 2}{0.8}{3.15}{3.15}{3.5}{4.0}
+\row{1}{Commit 3}{2.5}{5.2}{5.2}{5.2}{5.7}
+\node[font=\tiny] at (1.5,3) {construct, compress, write objects};
+% lane occupancy
+\node[anchor=east] at (-0.1,0) {Lane};
+\draw[gray!60] (0,0) -- (5.8,0);
+\draw[lane] (3.0,-0.2) rectangle (3.5,0.2);
+\draw[lane] (3.5,-0.2) rectangle (4.0,0.2);
+\draw[lane] (5.2,-0.2) rectangle (5.7,0.2);
+\node[font=\tiny,anchor=west] at (5.85,0) {idle most of the time};
+\draw[-{Stealth[length=3pt]},gray] (0,-0.75) -- node[below,font=\tiny,pos=0.95]{time} (8,-0.75);
+% legend
+\begin{scope}[shift={(0,4.1)}]
+\fill[capt] (0,-0.15) rectangle ++(0.08,0.3); \node[anchor=west,font=\tiny] at (0.1,0) {capture};
+\draw[par] (1.2,-0.15) rectangle ++(0.3,0.3); \node[anchor=west,font=\tiny] at (1.5,0) {objects (multi-writer)};
+\draw[lane] (3.95,-0.15) rectangle ++(0.3,0.3); \node[anchor=west,font=\tiny] at (4.25,0) {lane: head check, merge, publish};
+\draw[densely dotted,thick] (0,-0.55) -- ++(0.3,0); \node[anchor=west,font=\tiny] at (0.3,-0.55) {queued};
+\draw[ins] (1.2,-0.7) rectangle ++(0.3,0.3); \node[anchor=west,font=\tiny] at (1.5,-0.55) {install};
+\end{scope}
+\end{tikzpicture}
+\caption{Three overlapping commits. Object construction runs in parallel,
+since immutable, content-addressed objects commute; on SQLite the pack
+writes themselves serialize briefly. Only the short metadata step takes the
+publication lane; commit~2 queues behind commit~1. Schematic.}
+\label{fig:lane}
+\end{figure}
+
+The Store separates writes by whether they need an order.
+\textbf{Object data is multi-writer.} Objects are immutable and
+content-addressed: two writers that store the same object store the same
+bytes, so object writes commute and need no global order. Every commit, in
+any process, constructs, encodes, compresses and seals its packs on its own,
+concurrently with other commits. With PostgreSQL, pack bodies are copied
+into the Store before the lane row is locked. With SQLite, each pack batch
+is a short write transaction that also takes the Store's directory lock
+across processes, so the CPU work---construction, encoding, compression,
+sealing---runs in parallel while the batch writes serialize briefly.
+\textbf{Metadata is single-writer.} Order matters for the locator index
+that makes an object addressable---an identifier is inserted only if
+absent, which is unique because one writer inserts---and for history:
+Branch heads, Commits and Layers. These go through one writer at a time,
+enforced by an in-process FIFO turn and a directory lock across processes
+(SQLite) or a lane row (PostgreSQL). A commit holds this \emph{publication
+lane} only for its head check, a bounded merge of whatever landed meanwhile,
+and the atomic publish; reads never take it (Figure~\ref{fig:lane}).
+Writers queue for their turn
+instead of failing at once; a writer that cannot get it within a bounded wait
+is refused as \texttt{Busy}, and nothing is retried automatically. In the
+nine-agent run, 0.66\% of writes were refused this way
+(\S\ref{sec:eval-casestudy}).
+
+This is the split used by lakehouse table formats, which write data files
+in parallel and serialize commits to a metadata log~\cite{deltalake}, and by
+Git, which writes objects freely and updates references atomically. We chose
+it over sharding or a multi-writer metadata engine because agents' tool
+calls are separated by model latency, so concurrent publications on one
+Store are uncommon: the uncontended commit is the case to optimize, and
+contention must only stay correct and bounded. Work that grows with tree
+size, history length or Branch count inside the lane is treated as a
+defect.
+
+The SQLite Store runs in WAL mode with \texttt{synchronous=OFF}. It survives
+process failure but not a kernel or VM crash, a deliberate trade for
+latency that we discuss in \S\ref{sec:durable}.
+
+\section{Recording Everything: Share First, Then Compress}
+\label{sec:storage}
+
+Every commit names a whole tree, dependencies and build outputs included,
+so recording everything is practical only if what did not change costs
+nothing. \sys{} stores committed state as a Merkle DAG of immutable,
+content-addressed objects. It \emph{shares first}: unchanged subtrees,
+files and chunks keep their identities and are reused, across steps,
+Branches and projects. It \emph{compresses second}: what is genuinely new
+is delta-encoded against one well-chosen base and compressed, inside the
+commit that creates it. Section~\ref{sec:eval-granularity} shows which of
+the two dominates depends on how often agents commit, and
+Appendix~\ref{app:pipeline} traces the pipeline through 14 workload
+patterns and two worked examples; Appendix~\ref{app:analysis} bounds the
+time and storage each change costs and how storage grows over many
+snapshots.
+
+\subsection{Objects and identity}
+
+Each object is a role-tagged value in a fixed envelope. Its identifier is
+the BLAKE3 hash~\cite{blake3} of a domain string,
+\texttt{layerfs/object/v2\textbackslash 0}, followed by the canonical
+bytes. Thirteen roles form the tree: a
+filesystem root names a B$^+$-tree inode table keyed by a stable serial; an
+inode value names a content root and metadata; content is a whole-file
+object, a file state over a B$^+$-tree of extent pages referencing chunks,
+a directory B$^+$-tree from names to serials, or a symlink. Decoders accept
+exactly one encoding per value, and references are derived from bytes,
+never supplied by callers.
+
+Physical representation---compression, delta base, pack location---is
+outside the identifier. Every read rebuilds canonical bytes and re-hashes
+them, so a corrupted or mis-decoded record is detected at read time.
+
+\subsection{Structural sharing and exact reuse}
+\label{sec:reuse}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\scriptsize,x=1cm,y=0.85cm,
+  n/.style={draw,rounded corners=1.5pt,inner sep=2pt,minimum height=0.38cm},
+  old/.style={n,fill=white,draw=gray!60,text=gray!55!black},
+  shared/.style={n,fill=gray!22},
+  new/.style={n,fill=orange!40},
+  e/.style={-{Stealth[length=3pt]},gray!65},
+  ne/.style={-{Stealth[length=3pt]},orange!70!black,thick}]
+\node[old]    (R)   at (0.8,3) {root $N$};
+\node[new]    (R2)  at (5.6,3) {root $N{+}1$};
+\node[old]    (B)   at (0.8,2) {\texttt{src/}};
+\node[shared] (A)   at (3.2,2) {\texttt{target/} (GBs)};
+\node[new]    (B2)  at (5.6,2) {\texttt{src/}};
+\node[old]    (F3)  at (0.8,1) {\texttt{lib.rs}};
+\node[shared] (F4)  at (3.2,1) {\texttt{main.rs}};
+\node[new]    (F32) at (5.6,1) {\texttt{lib.rs}};
+\node[old]    (C2)  at (0.8,0) {chunk $c_2$};
+\node[shared] (C1)  at (2.55,0) {$c_1$};
+\node[shared] (C3)  at (3.85,0) {$c_3$};
+\node[new]    (C22) at (5.6,0) {chunk $c_2'$};
+\draw[e] (R) -- (B);  \draw[e] (R) -- (A);
+\draw[e] (B) -- (F3); \draw[e] (B) -- (F4);
+\draw[e] (F3) -- (C2); \draw[e] (F3) -- (C1); \draw[e] (F3) -- (C3);
+\draw[ne] (R2) -- (A); \draw[ne] (R2) -- (B2);
+\draw[ne] (B2) -- (F4); \draw[ne] (B2) -- (F32);
+\draw[ne] (F32) -- (C1); \draw[ne] (F32) -- (C22); \draw[ne] (F32) -- (C3);
+\node[old,anchor=west]    (L1) at (0.0,-0.85) {commit $N$ only};
+\node[shared,anchor=west] (L2) at (2.05,-0.85) {shared};
+\node[new,anchor=west]    (L3) at (3.35,-0.85) {written by commit $N{+}1$};
+\end{tikzpicture}
+\caption{Structural sharing after a one-line edit to \texttt{lib.rs}.
+Commit $N{+}1$ writes only the path from the changed chunk to the root;
+every other object, including all of \texttt{target/}, is referenced, not
+copied. Simplified: directories, the inode table and large files are
+B$^+$-trees, so the new path is a few pages.}
+\label{fig:sharing}
+\end{figure}
+
+A commit rebuilds only the paths from changed entries to the root.
+Unchanged directories keep their stored roots, an inode-table page that no
+change reaches is not rewritten, and an unchanged file keeps its content
+root, so committing a 9\,GB tree after a one-line edit writes a few pages
+(Figure~\ref{fig:sharing}).
+Publishing \texttt{main}'s next Layer names an existing root rather than
+copying it.
+
+
+Objects reach storage in batches (\emph{waves}). Duplicates within a wave
+are compared byte for byte. An object already stored with the same
+identifier, role and length is reused without reading it back; integrity is
+deferred to the read path, which authenticates every decoded object.
+Concurrent writers are arbitrated by insert-if-absent locators, and a losing
+writer compares its bytes with the winner's. Reuse spans the whole Store:
+across steps, Branches and projects.
+
+\subsection{Chunking and localized edits}
+\label{sec:edits}
+
+Files below a per-Store cutoff (128\,KiB by default) are single whole-file
+objects. Larger files are split by a FastCDC-style~\cite{fastcdc} GEAR
+scanner with an 8\,KiB minimum, 16\,KiB normalization point and 32\,KiB
+maximum. The chunking profile is hashed into every file state so the
+partition cannot drift silently. Runs of zeros exploit the scanner's
+32\,KiB period: interior zero chunks become a repeat count and identical
+mapping pages are reused, so construction work grows with tree height rather
+than hole length.
+
+A \emph{localized edit} splits stored extents at its boundaries, discards
+the replaced middle unread, chunks only the replacement bytes and rebuilds
+pages only on the join paths. Unchanged extents keep their identities,
+including slices of stored chunks, so the same overwrite reads 3 pages on an
+8\,MB file and 4 on a 24\,MB file. The price is that equal bytes can have
+different roots depending on edit history; diff and merge therefore compare
+bytes (skipping shared extents) rather than roots.
+
+\subsection{Delta bases from filesystem events}
+\label{sec:delta}
+
+Each new payload object (whole file or chunk) first receives an independent
+record: zstd~\cite{zstd} level~3, or raw when a 1\,KiB probe predicts no
+gain. Selection then makes \emph{at most one} delta trial: a zstd frame
+compressed with a single base payload as prefix. The delta is kept only if
+its full record, including the 32-byte base identifier, is strictly smaller.
+
+The single base is chosen from \emph{filesystem events} rather than content
+search:
+\begin{itemize}
+\item \textbf{Localized edits.} An aligner walks the old extent map and
+  offers each new chunk the old chunk it overlaps most.
+\item \textbf{Rename-over.} Git, editors and package managers save by
+  writing a temporary file and renaming it over the original, producing a
+  new inode that an edit-based scheme never connects to the old file. The
+  \ws{} overlay records the replaced file when \texttt{rename()} runs and
+  offers it as the base.
+\item \textbf{Recreate at a path.} A file deleted and recreated at the same
+  path is offered the file the base held there.
+\item \textbf{Similarity fallback.} Whole files with no event-derived base
+  consult a bounded, persisted resemblance index of eight-hash bottom-$k$
+  signatures (8,192 entries, 704\,KiB in total), in the spirit of
+  super-features~\cite{shilane,finesse}.
+\end{itemize}
+Rename-over tracking reduced bytes stored for a replayed agent's Git index
+churn by 80\% (1,463,988 to 297,095 bytes), and small-file base selection on
+rename-over and recreate cut payload by 44\% on a new-path-per-version
+workload (\S\ref{sec:eval-mech}).
+
+\subsection{Bounded chains}
+
+Deltas create read dependencies. Chains are bounded by depth (16 for whole
+files, 8 for chunks and metadata) and by work: a payload chain's decoded
+bytes must stay within 4\X{} the cutoff and its encoded bytes within
+2\X{}. When a candidate's chain reaches a limit, the dependent re-bases
+onto the chain's independent root rather than being stored in full. A base
+whose delta trials keep losing---for example the old last chunk offered to
+every appended chunk---is backed off after eight losses. There is no
+background repacking or garbage collection: a representation chosen at
+commit time is permanent, and the selection must therefore be cheap and
+bounded.
+
+\subsection{Metadata}
+
+Per-commit cost on small edits is dominated by metadata, not payload. Inode
+values are pooled, with leaves storing (serial, ordinal) pairs; values live
+in immutable, field-packed, checksummed blocks of at most 4,000 bytes. Inode
+table branches, directory pages and extent pages may be stored as
+COPY/INSERT programs against the page they replace, under the metadata depth
+cap.
+
+\subsection{Packs}
+
+New records are grouped by lane (tree pages, chunks, compact whole files,
+singletons), sealed into append-only packs of at most 256\,KiB, and stored as
+database rows; triggers forbid updating or deleting a sealed pack. A locator
+row maps each identifier to its pack, group and record.
+
+\section{Implementation and Performance Engineering}
+\label{sec:impl}
+
+\sys{} is written in Rust, with a Node.js SDK and a command-line client.
+On Linux it serves \ws{}s through FUSE using \texttt{fuser} 0.18 with three
+small patches (signed timestamps, explicit session lifecycle, and receive
+buffers sized to \texttt{max\_write} rather than 16\,MiB); on macOS it serves
+a loopback NFSv3 export. It negotiates 128\,KiB reads and writes and keeps
+kernel write-back off. We optimized by instrumenting exact counters (SQL
+statements, Store round trips, overlay jobs, delta trials) and removing
+work, keeping one construction producer per commit.
+
+\paragraph{Isolating \ws{}s.} The first daemon served all \ws{}s through one
+overlay database owned by a single thread with class queues and admission
+credits; it saturated near 7,000 file operations per second. Giving each
+\ws{} its own overlay file and a single short-hold lock cut statements by
+12--61\% across our case set and a four-\ws{} commit from 67.4\,s to 13.4\,s
+(one sample; one dense-rewrite case regressed by 45\%).
+
+\paragraph{Flat commits on long histories.} Commit cost first grew with
+Branch length, because each commit re-read every inode leaf under an edited
+branch page. Storing inode values as Store rows and reading only children a
+change reaches reduced pack reads per commit from 2,198 to 15 at 2,000 prior
+commits; mounted commit latency stayed at a 13--16\,ms median from 0 to 950
+earlier commits.
+
+\paragraph{Reads never wait for writes.} Removing an accidental dependency
+of reads on the publication lane cut p95 read latency in a multi-agent
+replay from 96\,ms to 10\,ms.
+
+\paragraph{Large new data.} Appending 500\,MiB once took 6.9\,s to commit.
+Seven fixes---a producer thread feeding the Save through a
+bounded queue, backing off losing delta bases (26,966 trials to 22), batched
+locator lookups (53,500 calls to 144), hashing each pack once, reading
+overlay rows in whole windows, moving WAL checkpoints off the commit path,
+and reclaiming after the reply---brought it to 1.40\,s. An eighth trades 1\%
+more storage for 37\% faster log-append commits; we report both.
+
+\paragraph{Import and exec.} A 500\,MiB import from macOS into the Linux
+worker fell from 32.1\,s to 5.0\,s after replacing base64 frame encoding
+with binary attachments and pipelining parts. Restoring file timestamps when
+unpacking Sandbox images stopped Python from recompiling every import,
+cutting a typical edit step from about 105\,ms to 62\,ms.
+
+\section{Evaluation}
+\label{sec:eval}
+
+We start with a 13-hour build by nine agents that used \sys{} as their
+only filesystem, then ask: (1) how much does recording everything cost
+compared with agent and snapshot filesystems; (2) which storage mechanism
+does the work, and when; (3) how fast is the per-call lifecycle; (4) where
+is \sys{} slower; and (5) is it correct.
+
+\subsection{Setup and methodology}
+
+All measurements ran on an Apple M3 Max (14 cores, 36\,GiB) under macOS,
+with \sys{} and baselines inside Docker Desktop's Linux VM (8 vCPUs,
+7.75--8\,GiB), using SQLite Stores, one construction worker, and binaries,
+bundles and images pinned by hash. The host was shared with other workloads
+(1-minute load 4--29). Storage figures are exact byte counts. Most timings
+are single samples and we treat them as diagnostics; the ovnfs comparison
+uses three samples per case and reports medians, with a verified cold
+boundary before every commit and read: each system's files are flushed and
+evicted with \texttt{posix\_fadvise(DONTNEED)}, and a boundary counts only
+when \texttt{fincore} reports zero resident bytes (1,014 of 1,014 did).
+Daemon caches, VM metadata caches and the host cache beneath the VM disk
+were not controlled. Every Branch head was verified against an oracle.
+\dnote{Before submission: rerun on dedicated native Linux, same route into
+every system, $N\geq5$ samples with intervals.}
+
+\paragraph{Driving \sys{}.} Every harness drives \sys{} only through the
+public command line (Appendix~\ref{app:cli}), in the sequence below; times
+in \S\ref{sec:eval} include each command's process launch and routing.
+
+{\footnotesize
+\begin{verbatim}
+# once per case
+layerfs store create s     # or: store connect s <url>
+layerfs machine start m    # docker or a VM
+layerfs store push s m     # Store next to the Sandboxes
+layerfs project init s/p <folder>
+layerfs sandbox create s/p box m
+# once per shell call
+layerfs workspace mount box <branch>
+layerfs workspace exec <ws> '<command>'
+layerfs workspace commit <ws>
+layerfs workspace unmount <ws>
+# measurement and teardown
+layerfs store stats s; layerfs project stats s/p
+layerfs sandbox close box; layerfs store remove s
+\end{verbatim}
+}
+
+\paragraph{Baselines.} ovnfs~\cite{ovnfs} (commit \texttt{5d54cb0}), which
+packs, compresses and delta-encodes its store, run on ext4 (no reflinks).
+Btrfs with zstd, with and without offline deduplication (bees), from an
+earlier unpaired run. Git packs as an offline storage reference: Git is not
+a live filesystem and its commit scans the tree, so we compare only its
+packed size.
+
+\paragraph{Workloads.} (i) \emph{History shapes}: a real 65.0\,MB,
+9,404-file repository with a seeded edit model (70\% line edits, 10\% new
+files, 5\% deletes, 10\% renames, 5\% appends; five operations per commit)
+on one or several Branches. (ii) \emph{Large files}: 100\,B overwrites,
+inserts and 16\,KiB appends on 5--500\,MiB incompressible files, and
+500\,MiB create, append, remove and truncate. (iii) \emph{Real history}:
+157 snapshots of a public agent-harness repository (every 100th of 15,632
+commits), replayed by rewriting each changed file whole. (iv)
+\emph{Single-mechanism micro cases}. (v) \emph{Multi-agent runs} of an
+open-source coding harness on \sys{}: a 13-hour, nine-agent build on a 2.0
+release build (\S\ref{sec:eval-casestudy}) and two earlier runs on 1.x.
+
+\subsection{A 13-hour, nine-agent build}
+\label{sec:eval-casestudy}
+
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l r r r r}
+\toprule
+\multicolumn{5}{l}{\textbf{Run}: 9 agents, 13\,h 22\,min, 4,354 commits, 211 Branches} \\
+\midrule
+Commit kind & Commits & New & Stored & Total \\
+ & & (median) & (median) & stored \\
+\midrule
+File edits      & 3,051 & 29\,KB  & \textbf{0.9\,KB} & 0.07\,GB \\
+Builds, tests   & 1,195 & 9.8\,MB & 1.3\,MB & 4.68\,GB \\
+Merges          & 67    & 188\,KB & 16\,KB  & 0.002\,GB \\
+\bottomrule
+\end{tabular}
+\caption{Storage of the nine-agent build by commit kind (totals in
+Figure~\ref{fig:quarrybytes}). Every commit records the whole project tree,
+about 9\,GB including build folders. \sys{} at
+\texttt{c5e58735bb}, release build, SQLite Store.}
+\label{tab:quarry}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  ybar, bar width=16pt, width=\columnwidth, height=4.6cm,
+  ymode=log, log origin=infty, ymin=0.1, ymax=4e5,
+  ylabel={GB (log scale)}, ylabel style={font=\footnotesize},
+  xtick={0,1,2,3}, xmin=-0.6, xmax=3.6,
+  xticklabels={Every tree\\named, After\\sharing, After $\Delta$\\+ zstd, Store\\file},
+  xticklabel style={font=\scriptsize,align=center},
+  yticklabel style={font=\scriptsize},
+  ytick={0.1,1,10,100,1000,10000,100000},
+  clip=false]
+\addplot+[fill=gray!55,draw=gray!80,mark=none,bar shift=0pt] coordinates {(0,30200) (1,25.6) (2,4.75)};
+\addplot+[fill=blue!60,draw=blue!80,mark=none,bar shift=0pt] coordinates {(3,4.93)};
+\draw[dashed,red!60!black] (axis cs:-0.6,11.4) -- (axis cs:3.6,11.4);
+\node[font=\tiny,red!60!black,anchor=south east] at (axis cs:3.55,11.4) {one checkout of the final tree, 11.4\,GB};
+\node[font=\tiny,anchor=south] at (axis cs:0,30200) {30.2\,TB};
+\node[font=\tiny,anchor=south] at (axis cs:1,25.6) {25.6\,GB};
+\node[font=\tiny,align=center] at (axis cs:2,0.6) {4.75\\GB};
+\node[font=\tiny,align=center,white] at (axis cs:3,0.6) {\textbf{4.93}\\\textbf{GB}};
+\draw[-{Stealth[length=3pt]}] (axis cs:0.25,1500) -- node[above,font=\tiny]{$\div$1,179} (axis cs:0.75,1500);
+\draw[-{Stealth[length=3pt]}] (axis cs:1.25,60) -- node[above,font=\tiny]{$\div$5.4} (axis cs:1.75,60);
+\end{axis}
+\end{tikzpicture}
+\caption{Where the nine-agent build's bytes went. 4,354 commits name
+30.2\,TB of whole trees; sharing removes all but 25.6\,GB, deltas and
+compression leave 4.75\,GB, and the Store file is smaller than one checkout
+of the final tree.}
+\label{fig:quarrybytes}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{l r r r}
+\toprule
+Call & Median & p90 & Calls \\
+\midrule
+\texttt{workspace.mount}   & 7\,ms   & 16\,ms  & 1,121 \\
+\texttt{workspace.unmount} & 14\,ms  & 35\,ms  & 1,121 \\
+\texttt{workspace.commit}  & 204\,ms & 1.06\,s & 1,186 \\
+\texttt{file.read}         & 6\,ms   & 10\,ms  & 4,926 \\
+\texttt{file.edit}         & 14\,ms  & 25\,ms  & 982 \\
+\texttt{branch.fork}       & 5\,ms   & 8\,ms   & 93 \\
+\texttt{branch.merge}      & 263\,ms & 479\,ms & 67 \\
+\texttt{branch.publish} (11\,GB tree) & 7\,ms & 11\,ms & 39 \\
+\bottomrule
+\end{tabular}
+\caption{\sys{} call latency in the nine-agent build, after the release
+build was installed mid-run.}
+\label{tab:quarry-lat}
+\end{table}
+
+Nine agents---a lead and eight workers in four lanes---built a
+SQLite-compatible database engine in Rust through an open-source agent
+harness, with \sys{} as their only filesystem. Every shell call ran in a
+\ws{} (mount, run, commit, unmount); each lane worked on its own Branch, and
+the lead merged lanes on an integration Branch and published to
+\texttt{main}. The run ended when a terminal check passed on a fresh fork of
+\texttt{main}: 15 crates and about 87,000 lines of Rust, 1,567 passing tests,
+and 16 of 16 acceptance checks against the reference \texttt{sqlite3}.
+
+\paragraph{Storage.} Every commit recorded the whole tree, about 9\,GB
+including \texttt{target/}. The 4,354 commits on 211 Branches name 30.2\,TB
+of trees, which reduce to 25.6\,GB of distinct content and then to 4.75\,GB
+after deltas and compression. The Store file is 4.93\,GB, less than half of
+one checkout of the final tree (Figure~\ref{fig:quarrybytes}). Edits are
+nearly
+free: the 3,051 file-edit commits stored a median 0.9\,KB each, although
+every one recorded a 9\,GB tree. Builds produced 98.5\% of the stored
+bytes. Keeping ignored files and build outputs therefore costs what the
+agents \emph{produce}, not what the tree \emph{holds}.
+
+\paragraph{Latency.} Table~\ref{tab:quarry-lat} shows \sys{} calls over the
+run. Borrowing a \ws{} cost a median 7\,ms to mount and 14\,ms to unmount
+across 1,121 shell calls. Forks took 5\,ms, and publishing an 11\,GB tree to
+\texttt{main} took 7\,ms because a Layer names an existing root. Commits
+took a median 204\,ms because many carried fresh build outputs.
+
+\paragraph{State outlives compute.} Midway through the run, a settings save
+in the host application reloaded the harness plugin and ended the live run.
+No work was lost: every agent's state was in its Branches, and the run
+resumed from them.
+
+\paragraph{What went wrong.} Of 59,331 \sys{} calls, 1.2\% were refused,
+and 35 of 5,312 writes (0.66\%) were refused because the Store was busy.
+Concurrent writes to the Store were sometimes refused with an operating
+system \texttt{NotFound} error, which agents worked around by retrying.
+Stopping an agent's turn left its command running in the Sandbox while
+\ws{} status reported it idle. Copying a warm \texttt{target/} with a file
+call took about a minute. Two \sys{} changes were installed while the agents
+kept working: a release build replacing a debug build of the Linux bundle,
+and a fix that stopped unmount from waiting for a commit's deferred cleanup;
+the latencies above are from after both. The harness's operator checked the
+run every 10--15 minutes and steered it when it stalled.
+
+\begin{table*}[t]
+\centering
+\small
+\begin{tabular}{l l r r r r r r}
+\toprule
+& & \multicolumn{2}{c}{Stored at end (MB)} & \multicolumn{2}{c}{Added per commit} &
+\multicolumn{2}{c}{Commit, cold (ms)} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}\cmidrule(lr){7-8}
+Case & Shape & ovnfs & \sys{} & ovnfs & \sys{} & ovnfs & \sys{} \\
+\midrule
+S1 & 1 Branch $\times$ 40 commits        & 26.37 & \textbf{23.97} & 32.2\,KB & \textbf{5.1\,KB} & 83.8 & \textbf{41.9} \\
+S2 & 5 Branches $\times$ 3 commits       & 26.09 & \textbf{23.88} & 66.6\,KB & \textbf{5.5\,KB} & 77.5 & \textbf{35.8} \\
+S3 & fork chain 4 deep $\times$ 3        & 25.59 & \textbf{23.81} & 41.6\,KB & \textbf{6.5\,KB} & 73.7 & \textbf{39.1} \\
+S4 & 5 Branches, same commit             & 25.62 & \textbf{23.78} & 105.7\,KB & \textbf{4.9\,KB} & 70.6 & \textbf{46.0} \\
+\midrule
+L100 & 100\,MiB, 100\,B overwrite $\times$10 & 1,154.7 & \textbf{106.3} & 104.9\,MB & \textbf{5.3\,KB} & 221.1 & \textbf{24.5} \\
+L10  & 10\,MiB, 100\,B overwrite $\times$20  & 221.5 & \textbf{10.9} & 10.5\,MB & \textbf{5.5\,KB} & 190.9 & \textbf{24.4} \\
+I10  & 10\,MiB, 100\,B insert $\times$10     & 116.6 & \textbf{10.9} & 10.5\,MB & \textbf{5.3\,KB} & 197.9 & \textbf{25.5} \\
+A5   & 5\,MiB, 16\,KiB append $\times$20     & 18.7 & \textbf{5.9} & 613\,KB & \textbf{18.4\,KB} & 145.2 & \textbf{19.5} \\
+L500 & 500\,MiB, 100\,B overwrite $\times$5  & 3,146.9 & \textbf{530.4} & 524.3\,MB & \textbf{7.4\,KB} & 603.9 & \textbf{28.1} \\
+\bottomrule
+\end{tabular}
+\caption{\sys{} versus ovnfs on code-edit histories (S1--S4, from a 65\,MB,
+9,404-file tree) and large-file edits. Medians of three samples; commit
+times are measured after a verified cold boundary and include each system's
+route (CLI-to-worker for \sys{}, \texttt{docker exec} for ovnfs). \sys{} at
+\texttt{b9c4adcb}; ovnfs at \texttt{5d54cb0}.}
+\label{tab:ovnfs}
+\end{table*}
+
+\subsection{Storage against agent filesystems}
+\label{sec:eval-storage}
+
+Table~\ref{tab:ovnfs} compares \sys{} with ovnfs. On code-edit histories
+the imported base tree dominates the total, and ovnfs ends 7.6--10\% larger.
+The per-commit cost differs far more: ovnfs adds 32--106\,KB per commit and
+\sys{} 4.9--6.5\,KB, a 6--22\X{} gap. About two thirds of \sys{}'s
+per-commit bytes are metadata. On large files the gap is structural: ovnfs
+stores each overwritten or inserted-into version in full (about 100\% of raw
+bytes), while \sys{} stores the original plus 5--7\,KB per commit (5--17\%
+of raw); the 100\,B overwrite itself costs 153\,B of payload at every file
+size, and the rest is metadata (Figure~\ref{fig:comparison} contrasts
+whole-file copy-up, block copy-on-write and \sys{} for this edit). Appends are the one large-file case where ovnfs compresses well
+(16\% of raw); \sys{} stores the incompressible appended bytes nearly as is
+and ends at 5\%.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  ybar, bar width=5pt, width=\columnwidth, height=4.6cm,
+  ymode=log, log origin=infty, ymin=1, ymax=1e6,
+  ylabel={KB added per commit}, ylabel style={font=\footnotesize},
+  symbolic x coords={S1,S2,S3,S4,L10,I10,A5,L100,L500},
+  xtick=data, ticklabel style={font=\scriptsize},
+  legend style={font=\scriptsize,at={(0.02,0.98)},anchor=north west,legend columns=2},
+  enlarge x limits=0.07]
+\addplot+[fill=gray!60,draw=gray!80] coordinates
+  {(S1,32.2) (S2,66.6) (S3,41.6) (S4,105.7) (L10,10500) (I10,10500) (A5,613) (L100,104900) (L500,524300)};
+\addplot+[fill=blue!60,draw=blue!80] coordinates
+  {(S1,5.1) (S2,5.5) (S3,6.5) (S4,4.9) (L10,5.5) (I10,5.3) (A5,18.4) (L100,5.3) (L500,7.4)};
+\legend{ovnfs, \sys{}}
+\end{axis}
+\end{tikzpicture}
+\caption{Bytes added per commit (log scale), from Table~\ref{tab:ovnfs}.}
+\label{fig:percommit}
+\end{figure}
+
+\subsection{Recording everything on real histories}
+\label{sec:eval-history}
+
+\paragraph{157 snapshots of a real repository.} Replaying 157 snapshots of a
+public agent-harness repository (4.94\,GB of trees; 75,929 distinct files
+totalling 892\,MB; two thirds of distinct files under 8\,KiB), \sys{} keeps
+every snapshot as a mountable commit in 100.1\,MB, 49\X{} less than the
+trees. Btrfs with zstd snapshots required 1,994.6\,MB (19.9\X{}), and adding
+the bees deduplicator raised it to 2,068.9\,MB including its state, because
+sharing metadata grew by more than the data it merged. A Git pack of the
+same states is 55.1\,MB, smaller than \sys{}. The replay rewrites each
+changed file whole, which removes Btrfs's in-place extent sharing by
+construction, and the Btrfs run was not paired with this \sys{} build; we
+rerun it in the final evaluation. \dnote{Release-labelled v1.0.0 run at
+\texttt{e5c7aaae05}; rerun on 2.0.}
+
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l r r r r r}
+\toprule
+Case & Raw & Stored & Raw/ & Dedup & $\Delta$+zstd \\
+ & MB & MB & stored & & \\
+\midrule
+D10 17 states & 561 & 47.9 & 11.7\X & 1.48\X & 9.26\X \\
+D03 53 states & 1,677 & 61.0 & 27.5\X & 2.84\X & 11.6\X \\
+H01 500 commits & 32,477 & 26.5 & 1,226\X & -- & -- \\
+H03 50 same Br. & 3,316 & 23.8 & 139\X & -- & -- \\
+H05 20 proj./1 Store & 7,802 & 28.3 & 276\X & -- & -- \\
+H06 20 proj./20 Stores & 7,802 & 471.4 & 16.6\X & -- & -- \\
+\bottomrule
+\end{tabular}
+\caption{Reduction on real and seeded histories (SQLite, \texttt{7691ac20}).
+\emph{Dedup} is raw over new canonical bytes; \emph{delta+zstd} is new
+canonical over new stored bytes. H rows start from a 65\,MB imported base.}
+\label{tab:history}
+\end{table}
+
+\paragraph{History shapes.} Table~\ref{tab:history} breaks down the
+reduction. On the real history at two sampling strides (D10, D03), exact
+deduplication contributes 1.5--2.8\X{} and delta encoding plus compression
+9.3--11.6\X; Store overhead (database pages, indexes and free space around
+the packs) adds 17--20\%. Against the offline Git reference, \sys{} is
+1.15--1.27\X{} larger. On seeded histories over a 65\,MB base, 500 commits
+add about 5.9\,KB each (2,990\,B of new packs, two thirds metadata); fifty
+identical Branches add about 270\,KB in total; and twenty projects sharing
+one Store need 16.7\X{} less space than twenty separate Stores.
+
+\paragraph{Earlier multi-agent runs.} Two earlier runs of the same harness,
+on a 1.x build, used \sys{} as the agents' only filesystem. Building a
+trip-planning web application (1 lead and 7 worker agents, 56 minutes)
+produced 147 commits on 31 Branches, whose snapshots total 91.5\,MB, in a
+1.21\,MB Store. Building a SQL database in Rust with every build's
+\texttt{target/} directory committed (8 agents, 4 hours 16 minutes)
+produced 913 commits on 56 Branches whose snapshots total 4.93\,TB, in an
+8.90\,GB Store---less than one copy of the final tree (13.5\,GB).
+\dnote{Site-reported v1 runs; cite the run record.}
+
+\subsection{Commit granularity decides what saves space}
+\label{sec:eval-granularity}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  xbar, bar width=6pt, width=0.92\columnwidth, height=4.3cm,
+  xmode=log, log origin=infty, xmin=1, xmax=2e4,
+  xlabel={reduction factor (log scale)}, xlabel style={font=\footnotesize},
+  ytick={0,1,2}, ymin=-0.6, ymax=2.6,
+  yticklabels={{Real history,\\every 10th state\\(17 commits)},
+               {Real history,\\every 3rd state\\(53 commits)},
+               {Nine-agent build,\\one per call\\(4,354 commits)}},
+  yticklabel style={font=\scriptsize,align=right},
+  xticklabel style={font=\scriptsize},
+  legend style={font=\scriptsize,at={(0.98,0.03)},anchor=south east},
+  legend cell align=left,
+  point meta=rawx,
+  nodes near coords={\pgfmathprintnumber[fixed,precision=2]{\pgfplotspointmeta}\X},
+  nodes near coords style={font=\tiny,black,anchor=west},
+  nodes near coords align={horizontal},
+  area legend, reverse legend,
+  enlarge y limits=0]
+\addplot+[fill=gray!55,draw=gray!80,mark=none] coordinates {(1.48,0) (2.84,1) (1179,2)};
+\addplot+[fill=blue!60,draw=blue!80,mark=none] coordinates {(9.26,0) (11.6,1) (5.4,2)};
+\legend{sharing, $\Delta$ + zstd}
+\end{axis}
+\end{tikzpicture}
+\caption{Which mechanism does the work. \emph{Sharing} is logical bytes
+over distinct canonical bytes; \emph{delta + zstd} is distinct canonical
+bytes over stored bytes. Per-call commits make sharing dominant; coarse snapshots
+shift the load to deltas.}
+\label{fig:granularity}
+\end{figure}
+
+Figure~\ref{fig:granularity} splits the reduction into the two stages of
+\S\ref{sec:storage}. When agents commit after every tool call, consecutive
+states differ in a few files, so nearly every object in the next commit
+already exists: sharing reduces 30.2\,TB of trees to 25.6\,GB, a 1,179\X{}
+reduction, and deltas plus compression contribute a further 5.4\X{}, mostly
+on fresh build outputs. When the same kind of source tree is snapshotted
+coarsely---every 3rd or 10th of 157 historical states, with each changed
+file rewritten whole---many files change between snapshots, each a new
+version close to an old one. Sharing then contributes only 1.5--2.8\X{} and
+delta encoding carries the load (9.3--11.6\X). The per-call model that makes
+\ws{}s ephemeral is also what makes sharing so effective; delta encoding
+matters for rewritten files, build outputs and coarse imports. The two
+workloads differ in more than granularity---the build includes compiled
+outputs, the replay does not---so we read the figure as indicative.
+\dnote{Control for content: replay the nine-agent run's states at strides
+1, 3 and 10.}
+
+\subsection{Mechanism contributions}
+\label{sec:eval-mech}
+
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l r r r}
+\toprule
+Micro case & Raw/stored & Dedup & Delta+zstd \\
+\midrule
+M01 10,000 tiny files        & 0.91\X & 0.94\X & 1.05\X \\
+M02 tree + 10 copies         & 16.97\X & 11.90\X & 1.45\X \\
+M03 1\% in-place edits       & 29.27\X & 1.00\X & 32.12\X \\
+M04 same, rename-over        & 28.02\X & 1.00\X & 32.04\X \\
+M05 same, new path           & 25.15\X & 1.00\X & 30.07\X \\
+M06 64\,MiB random + 5 edits & 5.87\X & 5.90\X & 1.00\X \\
+M07 random / zeros / text    & 4.29\X & 2.99\X & 1.45\X \\
+M08 SQLite DB, 1\% churn     & 13.73\X & 3.21\X & 4.44\X \\
+\bottomrule
+\end{tabular}
+\caption{Single-mechanism cases (SQLite Store, \texttt{7691ac20}).}
+\label{tab:micro}
+\end{table}
+
+Table~\ref{tab:micro} isolates mechanisms. Copies (M02) are absorbed by
+exact reuse; small edits to text files (M03) by deltas, whether the editor
+writes in place, renames over the original (M04) or writes a new path (M05,
+which falls back to the similarity index); edits to a large random file
+(M06) by chunk reuse, with each edit adding one or two chunks; and a SQLite
+database under row churn (M08) by both. Tiny files (M01) are the one case
+where the Store exceeds raw bytes, by about 10\%, because per-object
+metadata outweighs the content.
+
+Event-sourced base selection matters most where content search fails. Before
+rename-over tracking, a replayed agent's Git index---rewritten through
+\texttt{index.lock} on every Git command---received no delta base; with it,
+stored bytes for that workload fell from 1,463,988 to 297,095 (\S\ref{sec:delta}).
+A storage round that changed only base selection, metadata programs and
+layout (with the codec frozen) cut net Store bytes by 27--45\% on
+small-file edit sequences (comparing closed Stores), by 3--18\% on SQLite
+history workloads with payload unchanged, and per-commit metadata by
+19--41\%. \dnote{Add controlled ablations: CDC off, deltas off, similarity
+index off, rename predecessor off, metadata deltas off; cutoff and depth
+sweeps.}
+
+\subsection{Per-call latency}
+\label{sec:eval-latency}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{l r}
+\toprule
+Operation (Docker, SQLite Store) & Time \\
+\midrule
+Mount a Branch as a \ws{}              & 18.8 (13--32)\,ms \\
+Fork + mount                            & 31--41\,ms \\
+Run a no-op command (route included)    & 22--42\,ms \\
+Commit, no change (\texttt{UpToDate})   & 11--15\,ms \\
+Commit, small edit (warm / cold)        & 20--33 / 36--46\,ms \\
+Commit, 100\,B edit in a 500\,MiB file  & 15--28\,ms \\
+Unmount                                 & 16.9 (12--50)\,ms \\
+\midrule
+Sandbox create, warm VM$^\dagger$       & 0.39 (0.29--0.90)\,s \\
+Sandbox create, first on a fresh VM     & 3.4--5.3\,s \\
+\bottomrule
+\end{tabular}
+\caption{Per-call lifecycle costs through the public CLI, including client
+launch and routing. Mount, unmount and warm create are medians (ranges) over
+32 test rows of one campaign; other rows are single samples, except cold
+commits (median of 3). Mount takes 17--18\,ms in Lima and Apple container
+VMs as well. $^\dagger$Earlier per-container Sandbox route; warm create on
+the current namespaces route is not yet measured.}
+\label{tab:lifecycle}
+\end{table}
+
+Table~\ref{tab:lifecycle} shows the lifecycle of one shell call. Mount,
+an unchanged commit and unmount each take a median of 11--19\,ms, so the per-call
+overhead of borrowing a \ws{} is tens of milliseconds---small next to a
+model call. Creating a Sandbox is three orders of magnitude slower, which is
+why Sandboxes are pooled and only \ws{}s are per call. Under real agent
+load the per-call costs were lower still: a median 7\,ms mount and 14\,ms
+unmount across 1,121 shell calls (Table~\ref{tab:quarry-lat}). Commit latency is
+also flat in history length: the median mounted commit stayed at 13--16\,ms
+from 0 to 950 earlier commits on one Branch (\S\ref{sec:impl}). Against
+ovnfs, \sys{} ran the edit step of each code-history commit 1.3--1.7\X{}
+faster and committed 1.5--2.2\X{} faster cold (Table~\ref{tab:ovnfs}); on
+large files it ran the edit 1.5--4.9\X{} faster and committed 7.4--21\X{}
+faster, because ovnfs copies the whole file up on first write and re-hashes
+it at snapshot. \dnote{Missing: mount and commit latency vs tree size
+(10\textsuperscript{3}--10\textsuperscript{6} files) and vs fork depth; time
+to first passing test vs clone + install.}
+
+\subsection{Where \sys{} is slower}
+\label{sec:eval-slow}
+
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{l r r}
+\toprule
+Case (cold, median of 3) & ovnfs & \sys{} \\
+\midrule
+Read 9,404-file tree (65\,MB)     & \textbf{3.53\,s} & 5.31\,s \\
+Same tree after 40 commits        & \textbf{3.96\,s} & 5.32\,s \\
+Read one 500\,MiB file            & \textbf{0.56\,s} & 3.33\,s \\
+Same file after 5 commits         & \textbf{0.58\,s} & 3.31\,s \\
+\midrule
+Write new 500\,MiB file / commit  & \textbf{1.76 / 1.00\,s} & 2.67 / 1.36\,s \\
+Truncate 500\,MiB / commit        & 0.97 / 0.59\,s & \textbf{0.05 / 0.05\,s} \\
+\bottomrule
+\end{tabular}
+\caption{Cold reads and bulk data. History depth barely affects \sys{}
+reads (under 1\%).}
+\label{tab:slow}
+\end{table}
+
+Table~\ref{tab:slow} shows the costs of \sys{}'s design. \textbf{Reads}:
+a cold read of a 500\,MiB file reaches 158\,MB/s against ovnfs's 943\,MB/s,
+and warm reads are similarly slow, which points at the request path rather
+than storage: \sys{} negotiates 128\,KiB reads with one outstanding
+background request, so read-ahead is serialized through the daemon. History
+depth is not the cause---reading after five overwrite commits differs by
+under 1\%. Cold whole-tree reads are 1.3--1.5\X{} slower because each file's
+content is a separate Store read with no directory-level prefetch.
+\textbf{New data} is written twice: once into the overlay at
+\texttt{write(2)} time (write-back is off so capture is exact) and again into
+the Store at commit. \textbf{Import} of a 65\,MB tree takes 2.2--3.1\,s,
+6--8\X{} slower than ovnfs, partly because \sys{}'s route crosses the
+Docker Desktop port forward while ovnfs imports from inside its container;
+import is a one-time cost per project. \dnote{Profile and fix the read
+path before submission; this is the weakness reviewers will press.}
+
+Against JuiceFS with PostgreSQL metadata on the same VM (JuiceFS's own
+\texttt{bench}, four workers), \sys{} wrote small files 8.8\X{}, read them
+3.6\X{} and stat'ed them 2.6\X{} faster, but streamed 1\,GiB files at
+0.26--0.30\X{} JuiceFS's throughput. The comparison is not
+durability-matched: JuiceFS ran with \texttt{fsync} and synchronous commit
+on, \sys{} with its disposable profile.
+
+\subsection{Correctness}
+
+The format deliberately omits set-id bits, extended attributes, FIFOs,
+sockets and device files; within that scope we ran three suites. fsx ran
+3.06 million operations across seven variants (256\,KiB--64\,MiB files,
+including \texttt{mmap} and \texttt{O\_DIRECT}) with zero miscompares on a
+1.0 build, and its current-build subset passes in all nine platform and
+backend configurations. Four fsstress workers performed 40,000 concurrent
+operations; committing, forking and remounting the result reproduced all
+3,755 entries exactly. On the current build, fsstress passes 8 of 8
+configurations; an intermediate build lacking support for hard links to
+symbolic links failed 7 of 9. A pjdfstest subset (29 assertions over
+\texttt{open}, \texttt{rename}, \texttt{chmod} and \texttt{symlink}) passes
+in all nine configurations. \dnote{Run full pjdfstest and an xfstests
+generic subset; independent committed-content verification was skipped in
+the six-suite campaign.}
+
+\section{Discussion and Limitations}
+\label{sec:discussion}
+
+\paragraph{What ``durable'' means here.}\label{sec:durable} History is
+durable in that it outlives every \ws{}, Sandbox and agent: losing any of
+them loses no committed work, as the nine-agent run showed when its live
+session ended mid-run. It is not crash-durable in the \texttt{fsync} sense.
+The SQLite Store runs WAL with \texttt{synchronous=OFF} and \ws{} overlays
+are never synced, so committed history survives process crashes but not
+kernel or VM crashes. For agent workloads, where the costliest loss is the
+agent's time and a recent commit can be recomputed, we chose latency; a
+crash-durable profile exists but was not evaluated.
+
+\paragraph{No garbage collection.} The Store only grows; deleting a Branch
+does not reclaim its objects, and representations chosen at commit time are
+never improved by repacking. Both are future work.
+
+\paragraph{Single-writer metadata.} Object construction proceeds in
+parallel, but publications on one Store are serialized through the lane,
+and on SQLite each pack batch also takes SQLite's write lock and the Store
+directory lock briefly. With
+nine agents, 0.66\% of writes were refused as busy after a bounded wait; we
+have not yet measured contention systematically as the number of agents
+grows.
+
+\paragraph{Search at scale.} Section~\ref{sec:search} argues from the
+design. Wide searches would stress three limits. Every Branch on a Store
+shares one publication lane, so thousands of concurrent rollouts that commit
+every step put the lane in the contended regime it was not sized for
+(\S\ref{sec:store}). A Sandbox hosts a bounded number of \ws{}s, so wide
+fan-out needs a pool of Sandboxes. Without garbage collection, dropped
+rollouts stay stored, each costing only its changed bytes. A node also
+restores files, not processes: services a rollout started must be started
+again. \dnote{Experiment: synthetic MCTS driver, branching 8, depth 4
+(about 4,700 nodes): fork, mount and commit latency against depth and
+fan-out; bytes per node; lane wait and Busy refusals against concurrency;
+time to first test from a deep node against clone + install.}
+
+\paragraph{Semantics.} Commit captures the filesystem, not processes,
+memory, sockets or output; unflushed \texttt{mmap} pages and still-running
+descendants are not fenced. Because the filesystem does not supervise
+commands, stopping an agent's turn can leave its command running while \ws{}
+status reports idle; the Sandbox runtime, not the filesystem, must cancel
+it. On macOS, the NFS route cannot host SQLite in WAL mode inside a \ws{}.
+
+\paragraph{Open issues.} The nine-agent run exposed concurrent writes
+refused with an operating system \texttt{NotFound} error on the Docker
+Store, and slow file-call copies of large build directories (about a minute
+for a warm \texttt{target/}). Both are open.
+
+\paragraph{Premise data.} Our agent-time analysis covers one developer's
+runs and classifies shell commands heuristically. A cleaner study would
+record, per tool call, monotonic start and end times and a harness-assigned
+intent class; per model call, request, first-token and last-token times;
+per shell call, whether it touched only \ws{} files (from a filesystem
+trace); and task identifiers across many users and codebases.
+
+\paragraph{Evaluation scope.} All numbers come from one Apple-silicon host
+running Docker Desktop, mostly single samples, with different routes into
+\sys{} and ovnfs; the nine-agent build is one run, steered by an operator. Several key claims---mount cost independent of tree size,
+fork cost independent of depth, time to first passing test without
+reinstalling, and rollout throughput---follow from the design but still
+need direct measurement.
+
+\section{Related Work}
+
+\paragraph{Deduplication and delta compression.} LBFS~\cite{lbfs} introduced
+content-defined chunking for file systems; Venti~\cite{venti} and Data
+Domain~\cite{datadomain} built content-addressed archival and backup stores;
+FastCDC~\cite{fastcdc} is the chunker family \sys{} uses. Resemblance
+detection with super-features~\cite{shilane,finesse} selects delta bases by
+content; \sys{} prefers bases derived from filesystem events and uses
+resemblance only as a fallback. Git~\cite{git} delta-compresses offline in
+\texttt{gc}; \sys{} decides once, inline, under bounded work.
+
+\paragraph{Versioning file systems.} Elephant~\cite{elephant},
+ext3cow~\cite{ext3cow}, WAFL~\cite{wafl} and Btrfs~\cite{btrfs} keep
+snapshots of a live file system. They share blocks that stay in place;
+\sys{} additionally shares content across rewritten files, paths, Branches
+and projects, and makes every tool call a named, forkable state.
+
+\paragraph{Containers and serverless.} Overlay and layered container
+filesystems~\cite{overlayfs,slacker} make container start-up fast but copy
+whole files on write. Serverless platforms~\cite{berkeleyserverless,sock}
+and snapshot-restore systems~\cite{firecracker,catalyzer,reap} make compute
+ephemeral for stateless functions; \sys{} applies the same separation to
+stateful agents by moving the state into a versioned store. Image-based
+sandbox filesystems have moved from FUSE over overlayfs to lazily served
+block devices with block-level copy-on-write, as in Modal's two
+generations~\cite{modalimagefs,modalvmfs}; Appendix~\ref{app:modal} compares
+them with \sys{}.
+
+\paragraph{Database-backed file systems.} Inversion~\cite{inversion},
+TableFS~\cite{tablefs} and JuiceFS~\cite{juicefs} keep file system state in
+databases. AgentFS~\cite{agentfs} stores an agent's files in SQLite without
+history. \sys{} uses a database as the single home of an immutable,
+versioned object graph.
+
+\paragraph{Agent infrastructure.} Agent benchmarks and
+frameworks~\cite{swebench,sweagent,openhands} run each task in its own
+container. Sampling and search methods~\cite{monkeys,tot} multiply the number
+of trajectories per task; \sys{} makes each trajectory a Branch.
+
+\section{Conclusion}
+
+\sys{} is a recursive filesystem for ephemeral computing: it gives agents
+ephemeral \ws{}s over durable shared history. File calls
+need no computer; shell calls borrow a complete \ws{}---dependencies, build
+outputs and ignored files included---for milliseconds, commit, and go away;
+and every step becomes a commit that any agent can fork, at any fork depth,
+without copying data. Recording everything is affordable because commits
+share structure first and compress second: in a nine-agent build, 4,354
+whole-tree commits fit in less than half of one checkout. Because agents
+commit at every tool call, sharing does most of the work.
+
+\balance
+\bibliographystyle{plain}
+\IfFileExists{appendix.bib}{\bibliography{references,appendix}}{\bibliography{references}}
+\IfFileExists{appendix.tex}{\input{appendix}}{}
+
+\end{document}

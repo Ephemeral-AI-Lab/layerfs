@@ -1,0 +1,142 @@
+% Input by appendix.tex. Notes: notes/appendix/P-pipeline.md.
+\section{From \texttt{write(2)} to Stored Bytes}
+\label{app:pipeline}
+
+\sys{} turns filesystem calls into Store objects in two phases. At write time it records
+\emph{what changed}, cheaply and without reading committed data. At Commit time it turns
+that record into the smallest set of new immutable objects it can find in bounded work.
+This appendix follows one byte range through content addressing, chunking, deduplication,
+compression and delta encoding. Measurements are the evaluation's single samples
+(Section~\ref{sec:eval}); stored bytes are exact.
+
+\begin{figure}[h]
+\centering
+\resizebox{\linewidth}{!}{\input{appendix-figures/pipeline}}
+\caption{From \texttt{write(2)} to stored bytes. Row 1 runs per request without Store I/O; rows 2 and 3 run before the publication lane, in parallel across Commits; only the lane is serialized.}
+\label{fig:pipeline}
+\end{figure}
+
+\paragraph{Write time: localized-edit capture.} Kernel write-back is off, so every
+\texttt{write(2)} reaches the daemon and is published into the \ws{}'s overlay
+(Appendix~\ref{app:overlay}) before it returns. Bytes are kept as 4\,KiB cells, whose
+per-byte validity mask distinguishes a written zero from a hole, or as dense runs of up
+to 32\,KiB. Holes cost no rows, a shrink is one staircase row, and a write never reads
+the committed bytes it partly covers. Two kinds of provenance are kept beside the bytes.
+A \emph{reference piece} says that a range equals bytes of a committed file: \emph{write
+recognition} creates one when a write of at least 8\,KiB contains whole chunks the file
+already had, as when a program rewrites a file in place, and stops after 1\,MiB of
+unmatched bytes. A \emph{predecessor} row records that \texttt{rename()} put one file
+over another, which is how editors, Git and package managers save.
+
+\paragraph{Capture to edit list.} A Commit seals the overlay generation without copying
+rows. For each changed file a first pass reads only row \emph{shapes}: an unchanged
+region is one indexed gap, so the pass grows with rows written, not with file length. A
+one-pass script turns the spans into an ordered edit list in result coordinates. Bytes
+inherited from the file's own base, or reference pieces of it, are \emph{retained};
+everything else is new. Overwrites, appends (one trailing insert), truncations (one
+trailing delete), holes (zero runs) and shifted rewrites (pieces plus a small residue,
+with up to 64\,KiB at each edge compared against the base and trimmed where equal) all
+come out in this one form, and a rewrite that reproduces the base exactly returns the
+base root.
+
+\paragraph{Construction.} Content applies the edits to the stored extent tree
+(Algorithm~\ref{alg:edit}): it splits extents at each boundary, drops the replaced
+middle unread, chunks only the replacement, and rebuilds pages only on the join paths.
+Unchanged extents keep their chunk identities, possibly as slices. A file the base did
+not hold---a new path, a renamed-over temporary file, a recreated path---is built from
+scratch; because chunking is content-defined, its unchanged chunks resynchronize and are
+the same objects as before. \emph{Small files} below the per-Store cutoff (128\,KiB by
+default; any power of two up to 1\,MiB) are single whole-file objects, rebuilt whole on
+every edit, so their natural delta base is the previous version of the whole file.
+
+\paragraph{Storage.} Each object's identity is the BLAKE3 hash of its canonical bytes,
+so identical files, chunks, pages and subtrees are stored once across Commits, Branches
+and projects. The Save reuses any object already located, then gives each new payload
+one representation trial (Algorithm~\ref{alg:select}). The independent record is a
+level-3 zstd frame, or raw when a 1\,KiB probe saves at most 1/32. At most one delta base
+is tried, and the delta is kept only if strictly smaller. Bases come from filesystem
+events rather than search: the edited version, the aligned old chunk, the renamed-over
+file or the file previously at the same path; a similarity sketch is the fallback for
+whole files only. Tree pages get COPY/INSERT programs against the page they replace.
+Chains are bounded in depth and decode work, and a chain that reaches a bound is
+re-based onto its root. Records are grouped into append-only 256\,KiB packs inside the
+single Store database; the ordinary lane compresses tree-page groups with zstd level~1.
+
+\paragraph{The codec is frozen deliberately.} An offline study of 9,386 files under
+128\,KiB found zstd-6 4.4\% smaller than zstd-3 at 2.6\X{} the compression CPU, a
+trained dictionary 14\% smaller but requiring a new frame format, and 256\,KiB group
+compression 22\% smaller but forcing 256\,KiB of decoding to serve a 2\,KB file.
+\sys{} keeps per-object, random-access records and spends its effort on base selection
+and metadata instead. The cost is visible: per-chunk frames lose cross-chunk context, so
+64\,MiB of synthetic text stores 1.25\X{} larger than a whole-file \texttt{zstd -3}.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.24\linewidth} p{0.33\linewidth} p{0.35\linewidth}}
+\toprule
+Workload pattern & Absorbed by & Measured \\
+\midrule
+Copy of a 50\,MB tree & File-digest relink, content addressing & Copy Commit of 500\,MB: 15.9\,KB, no payload; 11.9\X{} over 10 copies \\
+Small text edit in place & Whole-file PREFIX delta against the edited version & delta$+$zstd 32.1\X{} (100 files, 20 Commits of 1\% edits) \\
+Rename-over save, small file & Predecessor recorded at \texttt{rename()} & 32.0\X{}; payload equal to in-place editing \\
+Rename-over save, large file & Content addressing $+$ aligned chunk bases & Git index churn $-$80\% (1.46\,MB $\rightarrow$ 0.30\,MB) \\
+New path per version & Same-path base, similarity ring & 30.1\X{} \\
+100\,B overwrite, 500\,MiB file & Cell row, one edit, one new chunk & 153\,B payload, 5.9\,KB stored per Commit \\
+100\,B insert shifting a 10\,MiB tail & Recognition $\rightarrow$ reference pieces & 153\,B payload, 4.0\,KB metadata per Commit \\
+16\,KiB append, 5\,MiB file & Trailing insert, losing-base back-off & 17.0\,KB per Commit ($+$0.3\% payload) \\
+Truncate 500\,MiB to 0 & Split and discard & 8.4\,KB, metadata only \\
+500\,MiB of random data & Raw after probe & $+$0.11\% payload \\
+64\,MiB of zeros & Zero runs, repeated pages & 76\,B payload, 684\,B metadata \\
+SQLite page churn & In-place page edits, chunk deltas & 13.7\X{} raw$\div$stored (a Git pack is 2.3\X{} smaller) \\
+Tiny files & Whole-file objects, pooled metadata & 0.91\X{}: Store larger than raw \\
+20 projects in one Store & Store-wide content addressing & 16.7\X{} smaller than 20 Stores \\
+\bottomrule
+\end{tabular}
+\caption{Which mechanism absorbs which workload pattern.}
+\label{tab:patterns}
+\end{table}
+
+\paragraph{Example 1: a 100-byte overwrite in a 500\,MiB file.} The write produces one
+cell row in the overlay (two if it crosses a 4\,KiB boundary) and reads nothing from the
+Store; recognition is skipped below 8\,KiB. At Commit the shape pass finds one local
+window between two inherited gaps and emits a single overwrite edit. The edit reads the
+mapping pages on the path to that offset---about 27,000 extents in a three-level tree,
+by calculation---and the one stored chunk under the range, finds that the bytes differ,
+splits the chunk's extent into two slices, scans the 100 bytes into one new chunk, and
+rebuilds only that leaf, its ancestors and the 93-byte file state. Each rebuilt page is
+offered its predecessor as a COPY/INSERT base, and the old overlapping chunk is offered
+as the new chunk's delta base (random data stays raw). The parent directory is
+untouched, because directory entries bind inode serials rather than content. Over five
+Commits each stored 153\,B of payload and 5.7\,KB of metadata; the Store grew 7.4\,KB per
+Commit and a cold Commit took 28\,ms, against 524\,MB and 0.6\,s for a whole-file
+copy-up overlay. The same edit on 10\,MiB and 100\,MiB files stores the same 153\,B; in a
+unit test, a larger file adds one page read per tree level (3 pages at 8\,MB, 4 at
+24\,MB, the same three payloads).
+
+\paragraph{Example 2: a rename-over save of a small file.} An editor writes
+\texttt{f.tmp} (a new inode, say 40\,KiB) and calls \texttt{rename(f.tmp, f)}. The overlay
+stores the new bytes as dense runs, rebinds the name \texttt{f} to the new serial and
+records the old serial as its predecessor; no Store I/O happens. At Commit the new file
+has no base of its own, so it is built from scratch as one whole-file object, and the
+old file's root is declared as an explicit delta base without being read. The Save tries
+one zstd frame with the old version as prefix (the 256\,KiB window covers both) and keeps
+it if smaller. The directory page that maps \texttt{f} gets a COPY/INSERT program against
+the page it replaces. On 100 such files with 1\% line edits, 20 Commits stored about
+613\,B per file version (32.0\X{}, against 32.1\X{} for in-place editing); on a smaller
+suite of 25 files the rename-over and in-place payloads are byte-identical. For a large
+file saved this way, such as Git's index, the new file is re-chunked in full, unchanged
+chunks dedupe by identity, and the aligner offers each new chunk the old chunk at the
+same position: index churn fell 80\%, with 110 of 120 chunks stored as deltas.
+
+\paragraph{Costs.} Tiny files cost about 200\,B each beyond their bytes, so a Store of
+2\,KB files is about 10\% larger than the raw data. Metadata is about two-thirds of a
+typical small Commit; fitted per-operation costs are 414\,B per edit, 1,360\,B per new
+file, 1,111\,B per delete and 464\,B per rename. New data is written twice, once to the
+overlay and again to the Store, so a 500\,MiB random write commits more slowly than in a
+copy-up overlay (1.36\,s against 1.0\,s cold). A large file saved under a new inode is
+re-chunked in full: storage stays small, but CPU does not, because recognition covers
+only same-inode writes. Edits fragment the mapping into slices with no defragmentation,
+and equal bytes may then have different roots, which is why diff and merge compare
+bytes. Nothing is garbage-collected or repacked: removing a 500\,MiB file frees nothing
+until a collector exists.

@@ -1,0 +1,705 @@
+% Appendix for the LayerFS paper. Included by layerfs.tex after the bibliography.
+% Status: Research; informative and not a product contract.
+% Code identity: origin/layerfs_v2_0_0 at 8cfb6e2734. Notes behind every claim:
+% docs/research/paper/notes/appendix/ (G, O, S, R, M, P).
+
+\clearpage
+\appendix
+\usetikzlibrary{patterns,decorations.pathmorphing}
+\usepgfplotslibrary{groupplots}
+\onecolumn
+\section*{Appendices}
+\addcontentsline{toc}{section}{Appendices}
+
+These appendices describe \sys{} 2.0 (branch \texttt{layerfs\_v2\_0\_0}, commit
+\texttt{8cfb6e2734}) at the level of data structures, algorithms and architecture.
+Constants are the source's defaults. Pseudocode follows the source's control flow and
+omits error paths, counters and cache plumbing.
+
+% ---------------------------------------------------------------------------
+\section{System Architecture and Concurrency}
+\label{app:arch}
+
+\paragraph{Layers and crates.} \sys{} 2.0 is 26 Rust crates in four layers,
+\texttt{core} $<$ \texttt{engine} $<$ \texttt{control} $<$ \texttt{api}; a layer depends
+only on layers below it, and a guard script enforces this. Core holds environment-free
+algorithms. Engine turns them into a persistent Store and mounted \ws{}s. Control knows
+which machines, Stores and Sandboxes exist and where each call runs. The API layer is
+one call table (73 calls in 10 families) behind the CLI, Node and Python front ends
+(Table~\ref{tab:crates}).
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.07\linewidth} p{0.32\linewidth} p{0.53\linewidth}}
+\toprule
+Layer & Crate (\texttt{layerfs-} omitted) & Responsibility \\
+\midrule
+core & content & Objects and identities, CDC files, trees, diff, three-way merge, \texttt{.lww} \\
+core & storage & Delta and zstd encoding, packs, Saves, authenticated reads \\
+core & history & LayerStacks, Branches, Commits, Layers \\
+core & telemetry & Timing trees \\
+engine & persistence & The global Store (SQLite or PostgreSQL), admission, writer lock, publication lane \\
+engine & store-service & In-process Store calls, Commit publication, private \ws{}s \\
+engine & project & Project initialization (directory $\rightarrow$ first Layer) \\
+engine & overlay & Per-\ws{} disposable SQLite overlay \\
+engine & workspace & \ws{} semantics, shared object cache, Commit construction \\
+engine & mount-ports, fuse, nfs & Kernel routes: shared ports, FUSE (Linux), loopback NFSv3 (macOS) \\
+engine & bridge, daemon & Authenticated channel (Noise KK); the Sandbox daemon \\
+control & home, machine, store, sandbox, control & Records and locks; machines and workers; Stores; Sandboxes and exec \\
+control & platform, sandbox-backend, bucket & Drivers: platform adapters; namespaces or host-process Sandboxes; backups \\
+api & api, cli, node, python & Call table and front ends \\
+\bottomrule
+\end{tabular}
+\caption{Crates at \texttt{8cfb6e2734}.}
+\label{tab:crates}
+\end{table}
+
+\paragraph{Processes.} The agent's SDK process runs every Store call---file reads and
+writes, fork, merge, publish---in-process, opening the Store directly. A file write
+commits through a private, never-mounted \ws{} (up to 64 per process) using the same
+Commit pipeline as a mount. A \emph{Sandbox} is one daemon on a machine's kernel plus the
+commands run beside it. The daemon opens the same Store, holds up to 16 \ws{}s and
+serves each through FUSE (Linux) or a loopback NFSv3 export (macOS). Each \ws{} has its
+own SQLite overlay file, lock and kernel mount. All \ws{}s of a daemon share one 64\,MiB
+object cache keyed by object identifier, so \ws{}s on different Branches reuse identical
+objects with no invalidation protocol. Commands run through the Sandbox runtime
+(namespaces and a cgroup on Linux, a host process on macOS); the daemon only serves
+files. When a SQLite Store lives on a kernel the caller cannot share (a Docker, Lima or
+Apple-container VM, or Windows), calls go once to that machine's \emph{worker}, which
+listens on loopback, authenticates a secret, accepts one request per connection and
+never retries.
+
+\paragraph{Parallel objects, single-writer metadata.} Writes are ordered at two levels:
+within a process by a FIFO admission queue (waiting is readiness, never a retry), and
+across processes by an exclusive \texttt{flock} on the Store's directory followed by
+\texttt{BEGIN IMMEDIATE} (SQLite), or by \texttt{SELECT \ldots{} FOR UPDATE} on a one-row
+\texttt{store\_lane} table (PostgreSQL). Coordinated writers queue rather than fail; on
+PostgreSQL the wait is bounded by \texttt{lock\_timeout} (30\,s), after which the call
+fails \texttt{Busy}. Reads never take either lock: packs, locators and value blocks are
+immutable once visible.
+
+A Commit splits its work around a \emph{publication lane}, the writer lock plus an
+admission turn held by one thread across several short transactions. Everything that
+grows with the Commit runs before the lane: capture, construction on one producer
+thread, encoding, compression and pack sealing, a full three-way merge when the head has
+moved, and validation. The Save publishes packs as it goes, in batches of at most
+4\,MiB (SQLite) or 16\,MiB (PostgreSQL), each an ordinary short write. On PostgreSQL the
+pack bodies are copied in \emph{before} the lane row is locked, so only locator inserts
+wait on it; on SQLite the CPU work runs in parallel across Commits while the batch
+writes themselves serialize on the directory lock. Inside the lane the Commit re-reads
+the head, merges only what landed since its pre-lane read (at most 1,024 inodes, else
+\texttt{LaneMerge}) and advances the Branch in one transaction that checks the expected
+head. Figure~\ref{fig:twocommits} shows two concurrent Commits.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[font=\scriptsize,x=0.6cm,y=0.55cm]
+\draw[->] (0,0) -- (26,0) node[right]{time};
+% Commit A
+\node[anchor=east] at (0,2.2) {Commit A};
+\fill[gray!25] (0.3,1.9) rectangle (1.3,2.5); \node at (0.8,2.2) {cap};
+\fill[blue!15] (1.3,1.9) rectangle (9.5,2.5); \node at (5.4,2.2) {construct, encode, publish pack batches};
+\fill[gray!25] (9.5,1.9) rectangle (11,2.5); \node at (10.25,2.2) {finish};
+\fill[orange!50] (11,1.9) rectangle (14.5,2.5); \node at (12.75,2.2) {lane: publish};
+\fill[green!20] (14.5,1.9) rectangle (16.1,2.5); \node at (15.3,2.2) {install};
+% Commit B
+\node[anchor=east] at (0,1.0) {Commit B};
+\fill[gray!25] (1,0.7) rectangle (2,1.3); \node at (1.5,1.0) {cap};
+\fill[blue!15] (2,0.7) rectangle (11.5,1.3); \node at (6.75,1.0) {construct, encode, publish pack batches};
+\fill[gray!25] (11.5,0.7) rectangle (13,1.3); \node at (12.25,1.0) {finish};
+\draw[dashed] (13,1.0) -- (14.5,1.0); \node[below] at (13.75,0.7) {wait};
+\fill[orange!50] (14.5,0.7) rectangle (21,1.3); \node at (17.75,1.0) {lane: merge A's change, publish};
+\fill[green!20] (21,0.7) rectangle (22.6,1.3); \node at (21.8,1.0) {install};
+\node[anchor=west,align=left] at (22.9,1.9) {readers never\\take the lane};
+\end{tikzpicture}
+\caption{Two concurrent Commits on one Branch. Construction, compression and pack
+batches overlap; only the lane serializes, and B merges only the change A published.}
+\label{fig:twocommits}
+\end{figure}
+
+\paragraph{Read path.} A read that misses the kernel page cache (1) arrives as a FUSE
+request of at most 128\,KiB, with one background request outstanding; (2) runs one
+overlay job under the \ws{} lock that decides locally written bytes; (3) reads inherited
+bytes \emph{outside} that lock from the shared object cache; (4) on a miss, issues one
+batched Store demand, plus 8\,MiB of read-ahead for sequential streams (at most 16\,MiB
+held per reader); and (5) decodes delta bases and zstd frames through a 2\,MiB pack
+cache, re-hashing every object against its identifier. Mount reads only the root object.
+Per-request round trips and decoding, not history depth, dominate read cost.
+
+\paragraph{Lifecycles and custody.} A Sandbox lives from creation until it is explicitly
+closed or its machine stops. A \ws{} is mounted, serves any number of processes and
+Commits, and is unmounted; unmount refuses uncommitted changes unless told to discard
+them. A Commit ends \texttt{Committed} (possibly after merging a moved head),
+\texttt{UpToDate}, \texttt{Conflict} (marker blocks become the \ws{}'s local base and the
+next Commit is refused while complete markers remain), or uncertain. Every hop makes one
+attempt; a lost reply is reported as unknown and its custody (published outcome,
+captured reader, operation intent) is retained until inspected. Committed history
+survives a daemon or Sandbox loss, which loses only the disposable overlays. Under the
+only permitted SQLite profile (WAL, \texttt{synchronous=OFF}) the Store survives process
+termination, but a kernel or VM crash can lose or damage it.
+
+% ---------------------------------------------------------------------------
+\section{Committed State: Objects, Trees and Packs}
+\label{app:objects}
+
+All committed state of a Store lives in one SQLite file or PostgreSQL schema as two kinds
+of data: immutable, content-addressed \emph{objects} that encode filesystem trees, and a
+small set of mutable \emph{history} rows that name tree roots.
+
+\paragraph{Objects.} Every object is a canonical byte string in a fixed envelope
+(Table~\ref{tab:layouts}). Its identifier is
+$\mathrm{BLAKE3}(\texttt{"layerfs/object/v2\textbackslash 0"} \,\|\, \text{canonical
+bytes})$, 32 bytes. The value begins with an 8-byte role magic, so equal payload bytes
+under different roles have different identifiers. Thirteen roles exist: whole file,
+chunk, extent leaf and branch, file state, inode leaf and branch, directory leaf and
+branch, filesystem root, attribute leaf and branch, and symlink. Identity-bearing integers
+are big-endian. Decoders refuse padding, trailing bytes, nonzero flags, unknown versions
+and unsorted rows rather than repairing them, so each logical value has exactly one
+encoding, and references are always derived from the bytes, never supplied by a caller.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{l p{0.7\linewidth}}
+\toprule
+Structure & Layout (bytes) \\
+\midrule
+Envelope (13) & \texttt{"LFSO"} [0:4] $\cdot$ kind \texttt{0x01} [4] $\cdot$ payload\_len u32 [5:9] $=$ value\_len$+4$ $\cdot$ value\_len u32 [9:13] $\cdot$ value \\
+Tree-page header (31) & magic [0:8] $\cdot$ version u16 $\cdot$ role $\cdot$ level $\cdot$ flags$=0$ $\cdot$ count u16 $\cdot$ two subtree totals u64 \\
+Whole file & \texttt{"LFS5SML\textbackslash 0"} $\cdot$ version u16 $\cdot$ payload (canonical $=$ raw $+$ 23) \\
+Chunk & \texttt{"LFS4CHK\textbackslash 0"} $\cdot$ payload $\leq$ 32,768 \\
+File state (93) & \texttt{"LFS4MAP\textbackslash 0"} $\cdot$ version $\cdot$ length u64 $\cdot$ extents u64 $\cdot$ level $\cdot$ profile id (32) $\cdot$ mapping root (32) \\
+Extent leaf entry (40) & chunk id (32) $\cdot$ offset into chunk u32 $\cdot$ length u32 \\
+Extent branch entry (48) & cumulative end bytes u64 $\cdot$ cumulative end extents u64 $\cdot$ child id (32) \\
+Inode value (73) & kind (bit 7 $=$ inline) $\cdot$ link count u64 $\cdot$ content root (32) $\cdot$ \{attribute root (32) $|$ mode u32 $\cdot$ mtime s i64 $\cdot$ ns u32 $\cdot$ 16 zero\} \\
+Filesystem root (116) & \texttt{"LFS6FSR\textbackslash 0"} $\cdot$ version $\cdot$ role $\cdot$ profile id (32) $\cdot$ scope id (32) $\cdot$ root serial u64 $\cdot$ inode-table root (32) \\
+\bottomrule
+\end{tabular}
+\caption{Canonical byte layouts.}
+\label{tab:layouts}
+\end{table}
+
+\paragraph{Trees.} A filesystem root names an inode table: a B$^+$-tree keyed by 64-bit
+serial whose leaves hold 50--100 rows of (serial, 73-byte inode value) and whose
+branches hold 64--127 (maximum serial, child) rows. A directory's content root is its own
+B$^+$-tree from raw-byte name to serial; a name binds a serial, never an object, so a
+hard link is two names for one serial. Tree pages are at most 8,192 bytes, and directory
+and attribute pages are at least 40\% full except at the root. A regular file below the
+cutoff (128\,KiB by default) is one whole-file object; a larger file is a file state over
+an extent B$^+$-tree of 64--128 entries per page whose leaves map logical ranges to
+\emph{slices}---(chunk, offset, length)---of content-defined chunks
+(Figure~\ref{fig:tree}). Slices let a localized edit keep the untouched parts of boundary
+chunks, and cumulative totals in branch entries locate an offset with one binary search
+per level. Holes are not special: a run of zeros is a sequence of identical all-zero
+32\,KiB chunks whose identical mapping pages are shared by identity. Profile identities
+hashed from the frozen chunking and page parameters are embedded in each file state and
+root and checked on decode. Updates rewrite only root-to-change paths; every unread
+subtree keeps its identity.
+
+\begin{figure}[h]
+\centering
+\small
+\begin{verbatim}
+FilesystemRoot --> InodeLeaf (root page of the inode table)
+                    1: Dir   --> DirectoryLeaf { "a.bin" -> 2, "b.txt" -> 3 }
+                    2: File  --> FileState(len, extents, level 1, profile)
+                    3: File  --> WholeFile "LFS5SML\0" | bytes
+FileState --> ExtentBranch [(end0,n0,L0) (end1,n1,L1)]
+                L0 ExtentLeaf [(C1,0,len1) (C2,0,len2) ...]      (64-128 entries)
+                L1 ExtentLeaf [(C2,4096,len) (C9,0,len9) ...]    <- a slice of C2
+                     |
+                Chunk C1, C2, C9 ...   (shared across files, versions, Branches, projects)
+\end{verbatim}
+\caption{One directory and one chunked file.}
+\label{fig:tree}
+\end{figure}
+
+\paragraph{Physical records.} Identity excludes physical form. Payload objects (whole
+files and chunks) are stored as \texttt{FULL} (a zstd frame), \texttt{STORED} (raw bytes,
+chosen by an incompressibility probe) or \texttt{PREFIX} (a zstd frame compressed against
+one base object's payload, recording the 32-byte base identifier). Inode branches and
+directory and extent pages may be stored as a COPY/INSERT program against a predecessor
+page (\texttt{COPY} $=$ 0 $\cdot$ offset u32 $\cdot$ length u32; \texttt{INSERT} $=$ 1
+$\cdot$ length u32 $\cdot$ bytes), kept only when strictly smaller. Inode leaves are
+pooled: each 73-byte value is replaced by a 4-byte ordinal, and values live in
+append-only, field-packed blocks of at most 4,000 bytes and 255 entries ending in a
+CRC32C. Every read rebuilds canonical bytes, base first along a delta chain, and hashes
+each element against its identifier.
+
+\paragraph{Packs.} Records are grouped (at most 8,191 records and 64\,KiB per group) into
+immutable packs of at most 256\,KiB in four lanes: ordinary (tree pages, optionally
+zstd-compressed per group), chunk, whole file, and singleton for one record too large for
+a pack. A pack is a 24-byte header (\texttt{"LFPACK"}, version, group count, used
+length), a directory of group offsets, encoded and decoded lengths and codecs, and the
+group bodies; its key is the SHA-256 of its sealed bytes. A locator row maps each object
+identifier to (role, canonical length, pack, group, record).
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.08\linewidth} p{0.24\linewidth} p{0.40\linewidth} p{0.18\linewidth}}
+\toprule
+Group & Table & Key $\rightarrow$ contents & Written by \\
+\midrule
+Physical & \texttt{pack} & pack id $\rightarrow$ SHA-256, length, body (update and delete refused by trigger) & object batches \\
+ & \texttt{object\_location} & object id $\rightarrow$ role, canonical length, pack, group, record & object batches (insert if absent) \\
+ & \texttt{inode\_value\_block} & first ordinal $\rightarrow$ $\leq$255 packed values $+$ CRC32C & object batches \\
+ & \texttt{content\_signature} & ring slot $\rightarrow$ object id, 32-byte sketch & object batches (upsert) \\
+ & \texttt{store\_policy}, \texttt{store\_totals} & cutoff, depth caps, next pack id and ordinal; byte totals & reservation, publication \\
+History & \texttt{layer\_stack} & id $\rightarrow$ name, scope, profile, head Layer & init, \texttt{add\_layer} \\
+ & \texttt{layer} & id $\rightarrow$ stack, parent, root, source Branch and Commit & \texttt{add\_layer} \\
+ & \texttt{commit} & id $\rightarrow$ root, parent(s), base Layer, message, statistics, \texttt{.lww} decisions & publication lane \\
+ & \texttt{branch} & id $\rightarrow$ name, base Layer, forked-from node, head Commit & fork, merge, lane \\
+ & \texttt{scope\_allocator} & scope $\rightarrow$ serial high-water mark & serial reservation \\
+Lineage & \texttt{layer\_lineage}, \texttt{commit\_lineage}, \ldots & heights, first-parent runs, absorption & with each Layer or Commit \\
+Hints & \texttt{binding\_hint\_block}, \texttt{file\_digest} & name-binding hints; file-bytes digest $\rightarrow$ root & before the lane \\
+\bottomrule
+\end{tabular}
+\caption{Store tables (SQLite; PostgreSQL is equivalent). Object batches run outside the
+publication lane; only Commit insertion and head moves run inside it.}
+\label{tab:schema}
+\end{table}
+
+\paragraph{History and invariants.} History identifiers are domain-separated BLAKE3
+digests with a one-byte kind tag; a Commit identifier covers its root, parents, base
+Layer and message but not its timestamp. Lineage tables record each Commit's
+first-parent run and depth, so ancestry queries walk run segments rather than individual
+Commits. The Store maintains six invariants: (i) every read authenticates; (ii) one
+encoding per value; (iii) references are derived from bytes; (iv) packs, locators and
+value blocks are append-only; (v) pack identifiers and inode serials are never reused;
+(vi) Commits and Layers are immutable, and only Branch and stack heads move, by
+expected-head checks. (Mutable rows besides heads are counters, the similarity ring and
+the file-digest hint table.)
+
+% ---------------------------------------------------------------------------
+\section{Workspace Overlay and Request Path}
+\label{app:overlay}
+
+\paragraph{Overlay database.} Each mounted \ws{} owns one SQLite file created by a byte
+copy of a schema-only template built at daemon start; mount therefore costs a fixed-size
+file copy and one root-object read, independent of the tree. The file runs a disposable
+profile (\texttt{journal\_mode=MEMORY}, \texttt{synchronous=OFF},
+\texttt{locking\_mode=EXCLUSIVE}, 4\,KiB pages, no mmap, \texttt{busy\_timeout=0}) and
+holds only changes (Table~\ref{tab:overlay}). All tables are \texttt{STRICT}; all except
+the payload table and two single-key tables are \texttt{WITHOUT ROWID}. \texttt{fs\_data}
+keeps a rowid so live runs can be overwritten in place with incremental blob I/O.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.30\linewidth} p{0.62\linewidth}}
+\toprule
+Table & Rows \\
+\midrule
+\texttt{fs\_inode(inode, generation)} & One row per changed inode per generation: size, mode, mtime, kind, \texttt{inherited\_cutoff} \\
+\texttt{fs\_entry(parent, name, generation)} & One row per changed name; a NULL inode is a whiteout \\
+\texttt{fs\_data} & File bytes as 4\,KiB cells with a per-byte validity mask, or dense runs of whole cells inside one aligned 32\,KiB slot \\
+\texttt{fs\_data\_ref} & \emph{Reference pieces}: ranges declared equal to committed bytes of a content root; no bytes stored \\
+\texttt{fs\_truncate} & A shrink ``staircase'' so stale cells can be identified by epoch \\
+\texttt{fs\_predecessor} & The file a rename replaced; an advisory delta base for the next Commit \\
+\texttt{fs\_digest}, \texttt{cleanup\_task} & Append-only BLAKE3 digests; the reclamation queue \\
+\bottomrule
+\end{tabular}
+\caption{Overlay schema (selected tables).}
+\label{tab:overlay}
+\end{table}
+
+\paragraph{Layered view.} A \ws{}'s view is the committed base root plus overlay rows
+with $\mathit{installed} < \mathit{generation} \leq \mathit{active}$. Each inode row
+carries an \texttt{inherited\_cutoff}: bytes below it not written in that generation fall
+through to the next lower layer and finally to the base file. Reads compose at most four
+local layers newest-first and return the locally decided bytes, an \emph{inherited}
+bitmask with one covering span, and reference ranges; the request then reads the span
+and ranges from the immutable Store \emph{after} releasing the \ws{} lock.
+
+\begin{figure}[h]
+\centering
+\resizebox{\linewidth}{!}{\input{appendix-figures/overlay-view}}
+\caption{(a) A file seen through the overlay: two generations of rows over the committed file. A READ composes them newest first, deciding locally written and zero bytes under the \ws{} lock and reading inherited and referenced bytes from the Store after releasing it. (b) Capture and install move counters, not rows.}
+\label{fig:overlayview}
+\end{figure}
+
+\paragraph{Request path.} All state of one \ws{} sits behind one mutex. A job holds it
+for at most one transaction and performs no Store I/O; base facts a job lacks are
+returned as \emph{needs}, read without the lock, and supplied to a second job that
+decides over the then-current rows. Kernel lookup counts, open descriptors, directory
+cookies and read windows live in in-memory maps that commit or roll back with the job's
+SQL. Windows bound each job, not files: a FUSE WRITE carries at most 128\,KiB (the
+negotiated \texttt{max\_write}; the 256\,KiB job window is the NFS transfer size), a read
+at most 128\,KiB, a page of rows at most 1,024. Algorithms~\ref{alg:write}
+and~\ref{alg:read} show WRITE and READ.
+
+\begin{algorithm}[h]
+\caption{FUSE WRITE$(s, \mathit{off}, d)$, $|d| \leq 128$\,KiB}
+\label{alg:write}
+\small
+\begin{algorithmic}[1]
+\State $\mathit{claims} \gets$ \Call{Recognize}{$s, \mathit{off}, d$} \Comment{optional, bounded, no lock}
+\Loop
+  \State lock($W$) \Comment{one job, at most one transaction}
+  \State $o \gets$ newest row of $s$ with generation in $(\mathit{installed}, \mathit{active}]$, else base facts
+  \If{$o$ unknown} unlock; fetch base inode of $s$ without the lock; \textbf{continue} \EndIf
+  \State \textbf{begin}; if no row $(s, \mathit{active})$, insert one with cutoff $\gets o.\mathit{size}$
+  \ForAll{32\,KiB slots overlapping $[\mathit{off}, \mathit{off}+|d|)$}
+    \State whole cells: overwrite the live dense run in place, or replace it with one run
+    \State partial cell: point read, merge, set validity bits \Comment{no base read}
+  \EndFor
+  \State cells in $\mathit{claims}$ $\rightarrow$ reference pieces (no bytes)
+  \State size $\gets \max(o.\mathit{size}, \mathit{off}+|d|)$; revision $\mathrel{+}= 1$; \textbf{commit}; unlock
+  \State reply $|d|$; \textbf{return}
+\EndLoop
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[h]
+\caption{FUSE READ$(s, \mathit{off}, n)$, $n \leq 128$\,KiB}
+\label{alg:read}
+\small
+\begin{algorithmic}[1]
+\State lock($W$) \Comment{read-only job}
+\State $L \gets$ newest $\leq 4$ rows of $s$ with generation in $(\mathit{installed}, \mathit{active}]$
+\ForAll{$\ell \in L$, newest first}
+  \State copy live cells and runs of $\ell$ into undecided bytes
+  \State mark bytes covered by $\ell$'s reference pieces as reference ranges
+  \State mark bytes $\geq \ell.\mathit{cutoff}$ below EOF decided (zero if unwritten)
+\EndFor
+\State $r \gets$ base root at this instant; unlock
+\If{every byte decided} reply \EndIf
+\State read the inherited span of the base file at $r$ and the reference ranges \Comment{outside the lock}
+\State reply
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{No copy-up.} The first write to a committed file inserts one inode row whose
+cutoff is the base length and stores only the written cells; no base byte is read or
+copied, and partially written cells keep unwritten bytes inherited through their masks.
+A truncate edits at most one 32\,KiB row, adds one staircase step and lowers the cutoff.
+Appends past the old length skip even the row-shape read. Renames, including directory
+renames and rename-over, change at most four inode rows and two name rows and move no
+bytes; a rename-over records the replaced file as a predecessor. Hard links share one
+serial and hence one kernel inode.
+
+\paragraph{Capture and install.} A Commit seals the active generation by an in-memory
+state change: \emph{active} becomes \emph{captured} and new mutations go to
+$\mathit{active}+1$; no row is copied. Capture waits until every earlier mutation's reply
+has been attempted, and later mutations wait behind it, so the captured frontier is
+finite. Construction reads only the sealed generation, in pages of at most 1,024 rows.
+After publication, install is one SQL step that sets the new base root and raises the
+floor to the captured generation, plus a pointer swap of the base view; no tree is
+walked. Rows written after the capture remain on top of the view, because their cutoffs
+were taken from the sealed layer that the new root reproduces. Rows of the retired
+generation are deleted after the Commit replies, in steps of at most 14 cells or 64 rows.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.20\linewidth} p{0.22\linewidth} p{0.24\linewidth} p{0.12\linewidth} p{0.10\linewidth}}
+\toprule
+Operation & Overlay cost & Base cost & In tree size & In file size \\
+\midrule
+Mount & fixed template copy & one root object & $O(1)$ & -- \\
+LOOKUP, GETATTR & $O(\log R)$ & $O(\log D + \log N)$ pages if unchanged & logarithmic & $O(1)$ \\
+READ $w$ & $O(w + L\log R)$ & $O(w) + O(\log F)$ mapping pages & $O(1)$ & logarithmic \\
+WRITE $w$ & $O(w + \log R)$ & none & $O(1)$ & $O(1)$ \\
+Truncate & one $\leq$32\,KiB row $+ O(\log h)$ & none & $O(1)$ & $O(1)$ \\
+CREATE, UNLINK, RENAME, LINK & $\leq$4 inode $+$ $\leq$2 name rows & name facts & $O(1)$ rows & $O(1)$ \\
+Capture, install & in memory / one SQL step & one root object & $O(1)$ & $O(1)$ \\
+\bottomrule
+\end{tabular}
+\caption{Per-request cost. $R$ changed rows, $N$ inodes, $D$ directory entries, $F$ file
+size, $L \leq 4$ layers, $h$ staircase height. Logarithmic base costs follow from the
+B$^+$-tree layout.}
+\label{tab:overlaycost}
+\end{table}
+
+\paragraph{Limits.} Kernel write-back caching is off, so each \texttt{write(2)} is a
+synchronous FUSE WRITE published to the overlay, and dirty shared-mapping pages not yet
+sent are outside a capture. FLUSH and FSYNC answer \texttt{ENOSYS} once: durability
+exists only at Commit. Extended attributes, READDIRPLUS, remote locks, \texttt{fallocate}
+and \texttt{copy\_file\_range} are not implemented. Per-\ws{} open state (lookups,
+descriptors, readers) is the one resident structure without a cap.
+
+% ---------------------------------------------------------------------------
+\IfFileExists{appendix-pipeline.tex}{\input{appendix-pipeline}}{}
+
+% ---------------------------------------------------------------------------
+\section{Algorithms}
+\label{app:algorithms}
+
+\subsection{Content-defined chunking}
+
+\sys{} uses a FastCDC-style GEAR scanner~\cite{fastcdc} with minimum 8\,KiB, target
+16\,KiB and maximum 32\,KiB, two bytes per step, and normalization level~2: the cut
+probability per byte is $2^{-16}$ between 8 and 16\,KiB and $2^{-12}$ between 16 and
+32\,KiB. The first 8\,KiB of each chunk are copied without hashing. Scanner state
+(chunk buffer, hash, and a pending odd byte) persists across reads, so read-buffer
+boundaries never move a cut. The profile (sizes, masks, seed and table) is digested into
+every file state.
+
+\emph{Zero runs.} For a run of zeros the scanner state repeats with period 32\,KiB. A hole
+of length $\ell$ is handled as one 32\,KiB scan, a repeat count $n = \lfloor(\ell -
+32\,\mathrm{KiB})/32\,\mathrm{KiB}\rfloor$ of one all-zero chunk, and the remainder; the
+mapping builder emits \emph{one} uniform page of 128 identical entries to stand for every
+full page and recurses on the next level. A hole of any length therefore costs
+$O(32\,\mathrm{KiB})$ scanning plus $O(h \cdot 128)$ mapping work for tree height $h =
+O(\log_{128}(\ell/32\,\mathrm{KiB}))$, and yields the same partition and root as
+byte-by-byte scanning.
+
+\subsection{Localized edits and the aligner}
+
+Edits are $(\mathit{start}, \mathit{removed}, \mathit{replacement})$ in result
+coordinates. Algorithm~\ref{alg:edit} applies them to a chunked file. The removed middle
+is discarded unread; only replacement bytes are chunked, with a fresh scanner, so CDC
+never resynchronizes across an edit boundary and the two boundary chunks become slices.
+Each edit costs two splits and two concatenations, each touching $O(h)$ pages on one
+root-to-boundary path. The cost is therefore independent of file size: the same
+overwrite reads 3 mapping pages on an 8\,MB file and 4 on a 24\,MB file.
+
+\begin{figure}[h]
+\centering
+\resizebox{0.82\linewidth}{!}{\input{appendix-figures/edit-tree}}
+\caption{A 100\,B overwrite inside chunk $c_6$. The Commit writes only the orange path (leaf, branch, root, file state) and one 100\,B chunk $n$; $c_6$ is kept as two slices, and every other page and chunk is shared with version 0.}
+\label{fig:edittree}
+\end{figure}
+
+\begin{algorithm}[h]
+\caption{Apply localized edits to a chunked file}
+\label{alg:edit}
+\small
+\begin{algorithmic}[1]
+\Function{ReplaceChunked}{$\mathit{base}, E$}
+  \State $T \gets$ mapping tree of $\mathit{base}$; $A \gets$ \Call{Aligner}{$\mathit{base}$}; $\mathit{shift} \gets 0$
+  \ForAll{$e \in E$ in ascending order}
+    \State $(L, R_0) \gets$ \Call{Split}{$T, e.\mathit{start}$}; $(X, R) \gets$ \Call{Split}{$R_0, e.\mathit{removed}$} \Comment{$X$ discarded unread}
+    \State $M \gets \bot$
+    \If{$e.\mathit{replacement} > 0$}
+      \State $A$.anchor($e.\mathit{start}$, $e.\mathit{start} - \mathit{shift}$)
+      \State $M \gets$ CDC-build(replacement bytes, delta hint $\gets A$.offer)
+    \EndIf
+    \State $\mathit{shift} \mathrel{+}= e.\mathit{replacement} - e.\mathit{removed}$
+    \State $T \gets \textsc{Concat}(\textsc{Concat}(L, M), R)$ \Comment{rebuild join paths only}
+  \EndFor
+  \State \Return new file state over $T$
+\EndFunction
+\Statex
+\Function{Offer}{$\mathit{start}, \mathit{len}, \mathit{id}$} \Comment{aligner: delta base for a new chunk}
+  \State $[f, t) \gets$ old byte range $[\mathit{start} - \mathit{shift}, \mathit{start} - \mathit{shift} + \mathit{len})$
+  \If{an old extent in the window has payload $\mathit{id}$}
+    \State re-anchor $\mathit{shift}$ at it; \Return $\bot$ \Comment{unchanged chunk: exact reuse}
+  \EndIf
+  \State \Return the old chunk with the largest overlap with $[f, t)$, else the successor of the last anchor
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Choosing a representation}
+
+Each new payload object first receives an independent record: \texttt{STORED} if a
+1\,KiB zstd probe saves at most 1/32, else a level-3 zstd frame (falling back to
+\texttt{STORED} if the frame is not smaller). Algorithm~\ref{alg:select} then makes at
+most one delta trial. Candidates come from filesystem events first: the aligner for
+edited files; for fresh files, the rename-over predecessor recorded by the overlay, else
+the file the base held at the same path. Only whole files with no event-derived base
+consult the similarity ring. $T$ is the Store's whole-file cutoff (128\,KiB by default).
+
+\begin{algorithm}[h]
+\caption{Representation selection for one payload object}
+\label{alg:select}
+\small
+\begin{algorithmic}[1]
+\Function{Select}{$\mathit{id}, \mathit{raw}, \mathit{role}, \mathit{advisory}$}
+  \State $\mathit{full} \gets$ \Call{Independent}{$\mathit{raw}$}; $\mathit{cap} \gets 16$ (whole file) or $8$ (chunk)
+  \If{$\mathit{role} = $ chunk}
+    \State $c \gets \mathit{advisory}[0]$; \textbf{if} $c$ is in back-off \textbf{then return} $\mathit{full}$
+  \Else
+    \State $c \gets$ first eligible advisory base, else \Call{Ring.Propose}{$\mathit{id}$, signature($\mathit{raw}$)}
+  \EndIf
+  \If{$c = \bot$ or ineligible} \Return $\mathit{full}$ \EndIf
+  \If{$c$ is at the depth cap or its chain exceeds the budgets}
+    \State $c \gets$ root of $c$'s chain \Comment{re-base: new object lands at depth 1}
+  \EndIf
+  \If{$\Sigma$decoded$(c) + |\mathit{raw}| > 4T$ or $\Sigma$encoded$(c) + |\mathit{raw}| > 2T$} \Return $\mathit{full}$ \EndIf
+  \State $b \gets$ \Call{Acquire}{$c$} \Comment{authenticated, charged to the budgets}
+  \State $p \gets$ zstd-3($\mathit{raw}$, prefix $=$ payload($b$)) \Comment{exactly one trial}
+  \If{$\mathit{role} = $ chunk} record a win for $c$ iff $p$ saves at least $|\mathit{full}|/8$ \EndIf
+  \If{$|p| < |\mathit{full}|$} \Return \texttt{PREFIX}$(c, p)$ \Comment{strictly smaller; ties keep FULL} \EndIf
+  \State \Return $\mathit{full}$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\emph{Back-off.} A chunk base whose trials keep losing---for example the old last chunk
+offered to every appended chunk---is skipped starting at the eighth consecutive loss,
+with the skip doubling per further loss up to $2^{16}$; a win forgets it. On a 500\,MiB
+append this reduced delta trials from 26,966 to 22 with identical stored bytes.
+
+\emph{Similarity ring.} A whole file's signature is the bottom-8 of a splitmix-finalized
+Rabin--Karp hash over 16-byte windows~\cite{broder}, folded to 32 bits. The ring holds
+8,192 slots and a 65,536-entry reference table (704\,KiB in total, persisted with the
+Store). A proposal requires at least two of the eight hashes to overlap and prefers the
+newest entry, so the latest version of a lineage is proposed. Only objects that found no
+other base, or won against a ring-proposed base admitted before the current Save, enter
+the ring. A false proposal costs one trial and is harmless under the strictly-smaller
+rule.
+
+\begin{figure}[h]
+\centering
+\resizebox{\linewidth}{!}{\input{appendix-figures/delta-chain}}
+\caption{Bounding delta work. (a) A whole-file object that would exceed the depth cap is delta-encoded against the chain root instead of being stored FULL. (b) A chunk base that keeps losing is skipped for exponentially growing gaps.}
+\label{fig:deltachain}
+\end{figure}
+
+\subsection{Exact reuse and chain reads}
+
+Objects reach storage in waves. Duplicate identifiers within a wave are compared byte for
+byte. An identifier already located with the same role and canonical length is reused
+without reading it back; integrity is deferred to the read path. Concurrent writers are
+arbitrated by insert-if-absent locators, and a losing writer compares its bytes with the
+winner's (a mismatch is a collision error). Reading an object resolves its delta chain
+iteratively, rejects cycles and chains longer than the role's cap, enforces the decoded
+and encoded budgets, reconstructs base first, and authenticates every element against
+its identifier.
+
+\subsection{Commit}
+
+\begin{algorithm}[h]
+\caption{Commit of a \ws{}}
+\label{alg:commit}
+\small
+\begin{algorithmic}[1]
+\Function{Commit}{$\mathit{ws}, \mathit{force}$}
+  \If{another Commit of $\mathit{ws}$ is in flight} \Return \texttt{Busy} \EndIf
+  \If{no dirty rows, no pending merge, and head and base unchanged since bind} \Return \texttt{UpToDate} \EndIf
+  \State $G \gets$ \Call{Capture}{} \Comment{seal generation; no row copied}
+  \State producer thread: construct changed inodes of $G$ over the immutable base $\rightarrow$ bounded queue (32 batches) $\rightarrow$ Save
+  \State $\mathit{cur} \gets$ head; \textbf{if} $\mathit{cur}$ moved and $\neg\mathit{force}$ \textbf{then} $\mathit{root} \gets$ \Call{Merge}{bound root, candidate, $\mathit{cur}$}
+  \State Save.finish; validate; prepare install
+  \State \textbf{acquire publication lane}
+  \State \quad $\mathit{now} \gets$ head; \textbf{if} $\mathit{now} \neq \mathit{cur}$ \textbf{then} $\mathit{root} \gets$ \Call{Merge}{$\mathit{cur}$, $\mathit{root}$, $\mathit{now}$} bounded to 1,024 inodes
+  \State \quad \textbf{if} conflicted: install merged tree with markers as local base; publish nothing
+  \State \quad \textbf{else} one write transaction: check expected head, insert Commit, advance Branch
+  \State \textbf{release lane}; install new base; retire $G$ after the reply
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+Capture is $O(1)$. Construction and Save work is proportional to the captured changes.
+The lane holds two head reads, an optional merge of at most 1,024 changed inodes with
+byte comparison capped at 1\,MiB per file, and one write transaction, independent of
+tree size, history length and Branch count.
+
+\subsection{Three-way merge and byte equality}
+
+Merge walks the inode-table difference between the base and one side in windows of 256
+\emph{serials}, not paths, so a move on one side and an edit on the other compose (the
+edit lands at the new path). For an inode changed on both sides it decides in order:
+identical change or one side unchanged; a \texttt{/.lww} rule (newer modification time
+wins, ours on a tie); a three-way line merge for text files up to 1\,MiB, with
+Git-compatible marker blocks per conflicting hunk; ours for binaries (recorded as a
+conflict); kept side wrapped in deletion markers for modify/delete; and a type conflict
+otherwise. The inode-table difference reads only pages whose child identifiers differ.
+
+Because localized edits make a file's root depend on its edit history, equal bytes can
+have different roots, so ``same'' means same bytes. Byte equality walks both files'
+extent cursors, skips extents that are identical in chunk, offset, length and position
+without reading them, and compares only the remaining ranges in 256\,KiB windows with
+early exit.
+
+% ---------------------------------------------------------------------------
+\IfFileExists{appendix-analysis.tex}{\input{appendix-analysis}}{}
+
+% ---------------------------------------------------------------------------
+\section{Comparison with Image-FUSE and Overlayfs Sandboxes}
+\label{app:modal}
+
+Agent sandboxes commonly build their root filesystem from a lazily loaded, read-only
+image and a writable copy-on-write layer. Modal's design is a well-documented example
+with two generations~\cite{modalvmfs,modalimagefs,modallaunch}. \emph{ImageFS} serves
+images through a FUSE server backed by a whole-file content-addressed cache spanning
+memory, local SSD, zonal caches, a CDN and blob storage, with a kernel overlayfs upper on
+XFS above it; whole-file copy-up in that arrangement can, in Modal's words, cost
+gigabytes of overhead to write individual bytes. For VM sandboxes, Modal reports that
+exposing this stack over virtio-fs made metadata-heavy work several times slower
+(recursive \texttt{chown} from about 4\,s to over a minute) and replaced it with
+\emph{ImageFS-blk}: the host synthesizes a sparse ext4 image, serves its blocks lazily
+over virtio-blk, and records guest writes block by block in a per-VM sparse file with a
+dirty bitmap, so the guest kernel owns all metadata~\cite{modalvmfs,modalvm}. Snapshots
+are exposed as images that store the modified files, with an alpha memory snapshot that
+also captures processes; filesystem snapshots expire after 30 days by default and cannot
+be listed~\cite{modalsnap}. Table~\ref{tab:modal} compares the designs.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.14\linewidth} p{0.24\linewidth} p{0.24\linewidth} p{0.26\linewidth}}
+\toprule
+& FUSE image $+$ overlayfs & Block image (ImageFS-blk) & \sys{} \\
+\midrule
+Lower layer & Read-only image, whole-file content addressing & Synthesized sparse ext4 image & Any committed root of any Branch \\
+Lazy-load unit & Whole file; 32\,MB read-ahead & Block, mapped to file ranges & Tree page, whole file $<$128\,KiB, 8--32\,KiB chunk; authenticated \\
+Write target & overlayfs upper on XFS & Per-VM sparse file, dirty bitmap & Per-\ws{} SQLite overlay \\
+Copy-up unit & Whole file & One block & None: 4\,KiB cells; references for unchanged chunks \\
+Metadata ops & Copy-up of lower files unless \texttt{metacopy} & In guest (\texttt{chown} $\approx$2\,\textmu s) & One overlay row; one FUSE round trip \\
+Snapshot output & Image of modified files & Image of modified files (dirty bitmap) & Immutable Commit; chunk dedup and deltas \\
+Snapshot cost & $\propto$ bytes of modified files & Not published & $\propto$ changed paths and bytes \\
+Fork, history, merge & New sandbox from image; no history & Same & Fork is one row; diff, merge, blame \\
+Distribution & Fleet-wide cache tiers & Fleet-wide cache tiers & One Store (one kernel, or PostgreSQL) \\
+Steady-state I/O & Kernel page cache and overlayfs & Guest ext4 and page cache & FUSE; write-back off; 128\,KiB requests \\
+POSIX coverage & Full & Full (Docker inside the VM) & No xattrs, FIFOs, locks, \texttt{fallocate} \\
+\bottomrule
+\end{tabular}
+\caption{Image-based sandbox filesystems and \sys{}. Modal entries are taken from its
+publications and documentation, not reproduced.}
+\label{tab:modal}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\resizebox{\linewidth}{!}{\input{appendix-figures/comparison}}
+\caption{What a 100\,B overwrite of a 500\,MiB file costs at write time and at snapshot time in each design. Copy-up and Commit figures are measured on one host; block copy-on-write figures are from Modal's description and a recovered Btrfs report.}
+\label{fig:comparison}
+\end{figure}
+
+\paragraph{Where \sys{} wins.} The differences that matter for agents are in capture and
+history. \sys{} never copies up: a 100\,B edit to a 500\,MiB file commits in 20--28\,ms
+and adds 3--8\,KB, whereas a whole-file copy-up overlay (ovnfs, measured on the same
+host) took about 0.6\,s and stored a full copy; across ten such edits to a 100\,MiB file
+\sys{} stores 106\,MB against 1.15\,GB (Table~\ref{tab:ovnfs}). Against block-level
+copy-on-write the write-time advantage largely disappears, but the snapshot difference
+remains: Modal's documented snapshot unit is the modified file, so a database, a Git
+pack or a build artifact touched by one byte is captured whole, and there is no
+branch, merge, diff or history. In \sys{} every step is a Commit, forks are one row,
+and unchanged chunks, pages and subtrees are shared across Commits, Branches and
+projects.
+
+\paragraph{Where \sys{} loses.} Raw I/O and coverage favor the image designs. Every
+\sys{} write is a FUSE request published to SQLite before it returns, and the mount
+negotiates 128\,KiB read-ahead with one background request. In an earlier three-way
+measurement on the same host (a v1.0-era build, warm, one sample), kernel overlayfs
+achieved 6\X{} the sequential-write and 75\X{} the 4\,KiB random-write bandwidth of
+\sys{} and created small files 30\X{} faster; cold sequential reads of a 500\,MiB file
+reach 158\,MB/s against 943\,MB/s for another FUSE overlay and about 2.5\,GiB/s that
+Modal reports for ImageFS with 32\,MB read-ahead. ImageFS-blk performs metadata
+operations entirely in the guest. \sys{} omits extended attributes, special files, locks
+and \texttt{fallocate}, so Docker-in-sandbox, which Modal's VM runtime targets, cannot
+run on a \ws{}. Modal distributes images across a fleet, while a \sys{} SQLite Store is
+confined to one kernel.
+
+\paragraph{Complementary, not competing.} The comparison is not a single ordering:
+\sys{} is better at the operations that make sandbox state versioned---commit cost
+proportional to change, sub-file copy-on-write, deduplication across snapshots, cheap
+forks and history---and worse at steady-state throughput, POSIX coverage and fleet-scale
+distribution. The designs also compose: a \sys{} \ws{} can run inside a VM whose block
+device serves the operating system image, with \sys{} serving only the project. A fair
+evaluation would run, on one native Linux host, \sys{}, a FUSE-image lower with an
+overlayfs upper and whole-file snapshots, a block-level copy-on-write analog of
+ImageFS-blk, and plain ext4, on (1) per-tool-call agent replays with a snapshot after
+each mutating call, (2) small edits to 10\,MiB--1\,GiB files, a SQLite database and a
+large Git repository, (3) Modal's own metadata and install workloads, (4) fork fan-out
+to 64 views, and (5) 1,000 sequential snapshots, plus (6) a \sys{} ablation of
+read-ahead, background requests and write-back caching that separates design cost from
+tuning.
+
+% ---------------------------------------------------------------------------
+\IfFileExists{appendix-cli.tex}{\input{appendix-cli}}{}

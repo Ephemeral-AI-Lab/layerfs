@@ -1,0 +1,32 @@
+% Measured time and storage. Input by appendix-analysis.tex.
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=3 by 1, horizontal sep=1.55cm},
+  width=5.9cm, height=4.6cm,
+  tick label style={font=\tiny}, label style={font=\scriptsize}, title style={font=\scriptsize\bfseries},
+  legend style={font=\tiny, draw=none, fill=none}, ymode=log, grid=major, grid style={gray!20}]
+% (a) Commit time vs file size
+\nextgroupplot[title={(a) Cold Commit, 100\,B overwrite}, xmode=log, xlabel={file size (MiB)}, ylabel={ms},
+  xtick={10,100,500}, xticklabels={10,100,500}, ymin=10, ymax=1000, legend pos=north west]
+\addplot[mark=square*, orange!80!black, thick] coordinates {(10,190.9) (100,221.1) (500,603.9)};
+\addlegendentry{copy-up (ovnfs)}
+\addplot[mark=*, blue!70!black, thick] coordinates {(10,24.4) (100,24.5) (500,28.1)};
+\addlegendentry{\sys{}}
+% (b) store growth per Commit
+\nextgroupplot[title={(b) Store growth per Commit}, ybar, bar width=4pt, ylabel={bytes},
+  symbolic x coords={L10,L100,L500,I10,A5,DEL500}, xtick=data, x tick label style={rotate=40, anchor=east, font=\tiny},
+  ymin=1e3, ymax=1e12, legend pos=north west, enlarge x limits=0.12]
+\addplot[fill=orange!60, draw=orange!80!black] coordinates {(L10,10.5e6) (L100,104.9e6) (L500,524.3e6) (I10,10.5e6) (A5,613e3) (DEL500,524.3e6)};
+\addlegendentry{copy-up (ovnfs)}
+\addplot[fill=blue!40, draw=blue!70!black] coordinates {(L10,5.5e3) (L100,5.3e3) (L500,7.4e3) (I10,5.3e3) (A5,18.4e3) (DEL500,8.2e3)};
+\addlegendentry{\sys{}}
+% (c) logical / stored
+\nextgroupplot[title={(c) Logical $\div$ stored bytes}, xbar, bar width=5pt, xmode=log, ymode=normal,
+  symbolic y coords={M01 tiny files,M08 SQLite DB,D10 repo replay,M02 tree copies,D03 repo replay,M03 text edits,H05 20 projects,H01 500 Commits},
+  ytick=data, y tick label style={font=\tiny}, xmin=0.5, xmax=4000, xlabel={ratio (SQLite Store)},
+  nodes near coords, nodes near coords style={font=\tiny, anchor=west}, point meta=explicit symbolic,
+  enlarge y limits=0.08]
+\addplot[fill=blue!40, draw=blue!70!black] coordinates {
+ (0.91,M01 tiny files) [0.91] (13.73,M08 SQLite DB) [13.7] (11.71,D10 repo replay) [11.7] (16.97,M02 tree copies) [17.0]
+ (27.48,D03 repo replay) [27.5] (29.27,M03 text edits) [29.3] (275.5,H05 20 projects) [276] (1225.9,H01 500 Commits) [1226]};
+\end{groupplot}
+\end{tikzpicture}

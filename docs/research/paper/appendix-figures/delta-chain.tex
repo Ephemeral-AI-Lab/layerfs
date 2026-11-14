@@ -1,0 +1,34 @@
+% Delta chains: depth cap and re-base; chunk back-off. Input by appendix.tex.
+\begin{tikzpicture}[font=\scriptsize,
+  ob/.style={draw, rounded corners=1.5pt, minimum width=0.85cm, minimum height=0.5cm, inner sep=1pt},
+  full/.style={ob, fill=gray!25},
+  pre/.style={ob, fill=blue!10},
+  bk/.style={-{Stealth[length=3pt]}}]
+\node[font=\scriptsize\bfseries, anchor=west] at (-0.5,1.75) {(a) Whole-file chain, cap 16: re-base instead of FULL};
+\node[full] (v1) at (0,0) {$v_1$};
+\node[pre] (v2) at (1.15,0) {$v_2$};
+\node[pre] (v3) at (2.3,0) {$v_3$};
+\node (dots) at (3.35,0) {$\cdots$};
+\node[pre] (v16) at (4.4,0) {$v_{17}$};
+\node[pre, fill=orange!45] (v17) at (6.4,0) {$v_{18}$};
+\draw[bk] (v2) -- (v1); \draw[bk] (v3) -- (v2); \draw[bk] (dots) -- (v3); \draw[bk] (v16) -- (dots);
+\draw[bk, orange!70!black, thick] (v17.north) to[out=160,in=20] node[above, font=\scriptsize]{re-based onto the chain root: depth 1} (v1.north);
+\draw[bk, dashed, gray] (v17) -- node[below, font=\scriptsize, align=center]{would be\\depth 17} (v16);
+\foreach \n/\d in {v1/0, v2/1, v3/2, v16/16, v17/1}{\node[font=\scriptsize, below=1pt of \n] {d=\d};}
+\node[anchor=west, align=left, font=\scriptsize, text width=4.6cm] at (7.3,0.1) {Reading any object decodes at most cap$+1$ records, $\leq 4T$ decoded and $\leq 2T$ encoded bytes (512 / 256\,KiB). Re-base cost: $+$22.5\% mean decode; edit-Commit payload 290\,$\rightarrow$\,120\,KB.};
+% (b) back-off
+\begin{scope}[yshift=-2.1cm]
+\node[font=\scriptsize\bfseries, anchor=west] at (-0.5,0.75) {(b) Chunk base back-off: appended chunks keep losing against the old last chunk};
+\foreach \i in {1,...,8}{\draw[fill=red!35] ({(\i-1)*0.42},-0.2) rectangle ++(0.36,0.4);}
+\node[font=\scriptsize, below] at (1.6,-0.25) {8 losing trials};
+\foreach \x/\g in {3.6/1, 4.4/2, 5.6/4, 7.5/8}{
+  \draw[fill=red!35] (\x,-0.2) rectangle ++(0.36,0.4);
+  \node[font=\scriptsize, above] at ({\x-0.25*\g*0.3-0.1},0.2) {skip \g};}
+\draw[gray, decorate, decoration={snake, amplitude=1pt, segment length=4pt}] (3.4,0) -- (3.6,0);
+\draw[gray, decorate, decoration={snake, amplitude=1pt, segment length=4pt}] (3.96,0) -- (4.4,0);
+\draw[gray, decorate, decoration={snake, amplitude=1pt, segment length=4pt}] (4.76,0) -- (5.6,0);
+\draw[gray, decorate, decoration={snake, amplitude=1pt, segment length=4pt}] (5.96,0) -- (7.5,0);
+\node at (8.3,0) {$\cdots\;2^{16}$};
+\node[anchor=west, align=left, font=\scriptsize, text width=4.6cm] at (9.1,0) {Skipped chunks are stored FULL with no trial; a win resets the base. 500\,MiB append: 26,966 $\rightarrow$ 22 trials, identical stored bytes.};
+\end{scope}
+\end{tikzpicture}

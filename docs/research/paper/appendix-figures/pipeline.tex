@@ -1,0 +1,51 @@
+% write(2) -> stored bytes pipeline. Input by appendix-pipeline.tex.
+\begin{tikzpicture}[
+  font=\scriptsize,
+  box/.style={draw, rounded corners=2pt, align=center, inner sep=3pt, minimum height=0.95cm, fill=white},
+  st/.style={box, fill=blue!7},
+  ov/.style={box, fill=yellow!15},
+  sv/.style={box, fill=green!10},
+  ln/.style={box, fill=orange!35},
+  side/.style={box, dashed, fill=gray!6},
+  ar/.style={-{Stealth[length=4pt]}, thick},
+  lane/.style={font=\scriptsize\bfseries, anchor=west, text=black!70},
+  node distance=0.32cm and 0.38cm
+]
+% ---- row 1: write time
+\node[lane] (l1) at (-0.2,0.95) {1\;\; Write time: per FUSE request, under the \ws{} lock, no Store I/O};
+\node[box] (w) at (0.9,0) {\texttt{write(2)}\\$\leq$128\,KiB};
+\node[ov, right=of w, text width=3.3cm] (cells) {Overlay rows\\4\,KiB cells $+$ validity mask\\or 32\,KiB dense runs};
+\node[side, right=of cells, text width=3.2cm] (rec) {Recognition ($\geq$8\,KiB)\\whole committed chunks\\$\rightarrow$ reference pieces};
+\node[side, right=of rec, text width=3.0cm] (pred) {\texttt{rename()} over a file\\$\rightarrow$ predecessor row};
+\draw[ar] (w) -- (cells);
+\draw[ar,dashed] (rec) -- (cells);
+\draw[ar,dashed] (pred.south) |- ++(0,-0.35) -| ([xshift=4pt]cells.south);
+% ---- row 2: commit, before the lane
+\node[lane] (l2) at (2.3,-1.5) {2\;\; Commit, before the lane: one producer thread, work $\propto$ changes};
+\node[st, text width=1.8cm] (cap) at (1.15,-2.55) {Capture\\generation flip\\(no row copy)};
+\node[st, right=of cap, text width=2.5cm] (shape) {Shape pass\\gaps and windows\\$\propto$ rows written};
+\node[st, right=of shape, text width=2.8cm] (edits) {Edit list\\$(\mathit{start}, \mathit{removed}, \mathit{repl})$\\retained vs new bytes};
+\node[st, right=of edits, text width=3.6cm] (build) {$\geq$\,$T$: split, slice, CDC only the\\replacement (8/16/32\,KiB),\\rebuild join paths\\$<$\,$T$: one whole-file object};
+\draw[ar] (cells.south) -- ++(0,-0.4) -| (cap.north);
+\draw[ar] (cap) -- (shape);
+\draw[ar] (shape) -- (edits);
+\draw[ar] (edits) -- (build);
+% ---- row 3: Save
+\node[lane] (l3) at (2.3,-4.4) {3\;\; Save: per new object, parallel across Commits};
+\node[sv, text width=2.0cm] (id) at (1.25,-5.4) {Identity\\BLAKE3 of\\canonical bytes};
+\node[sv, right=of id, text width=1.9cm] (dedup) {Already\\located?\\$\rightarrow$ reuse};
+\node[sv, right=of dedup, text width=2.4cm] (ind) {Independent record\\1\,KiB probe: STORED\\else zstd-3 FULL};
+\node[sv, right=of ind, text width=4.2cm] (delta) {One delta trial: base from aligner,\\predecessor, same path or ring;\\PREFIX iff strictly smaller};
+\node[sv, right=of delta, text width=1.75cm] (pack) {Packs\\$\leq$256\,KiB\\4 lanes};
+\draw[ar] (build.south) -- ++(0,-0.35) -| (id.north);
+\draw[ar] (id) -- (dedup);
+\draw[ar] (dedup) -- node[above,font=\tiny]{new} (ind);
+\draw[ar] (ind) -- (delta);
+\draw[ar] (delta) -- (pack);
+% ---- row 4: pages and lane
+\node[side, text width=7.6cm, minimum height=0.6cm, anchor=west] (pages) at (0.2,-6.85) {Tree pages (inode, directory, extent): COPY/INSERT program\\against the page they replace, else stored whole};
+\node[ln, text width=2.6cm, minimum height=0.6cm] (lane) at (pack |- pages) {Lane: locators,\\Commit, head};
+\draw[ar] (pack) -- (lane);
+\draw[ar, dashed] (pages.east) -- ++(0.4,0) |- ([yshift=-6pt]delta.south) -- ([yshift=0pt]delta.south);
+\node[font=\tiny, anchor=east, align=right] at ([xshift=-4pt]lane.west) {the only serialized step;\\$O(1)$ in tree size, history, Branches};
+\end{tikzpicture}

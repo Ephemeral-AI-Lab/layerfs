@@ -1,0 +1,135 @@
+% CLI reference appendix, generated from the 2.0 call table
+% (origin/layerfs_v2_0_0 at 8cfb6e2734, api/crates/layerfs-api/src/<family>/<call>.rs).
+% Source list: notes/cli-calls.md.
+\section{Command-Line Interface}
+\label{app:cli}
+
+\sys{} 2.0 exposes one call table: 73 calls in ten families. The \texttt{layerfs}
+command, the Node SDK and the Python SDK are all generated from it, so
+\texttt{layerfs file write} on the command line is \texttt{layerfs.file.write} in the
+SDKs, with the same positional arguments and options. Positionals run from the
+outside in: owner, Branch, path or new name, other inputs, and an optional Commit
+last. A project is named \texttt{<store>/<project>}. File content comes from standard
+input or \texttt{--from}. Every call prints JSON, or text with \texttt{--text}; it exits
+0 when done, 2 on a malformed command line and 125 when refused, with a structured
+\texttt{\{code, message, detail\}} on standard error. Each call is attempted once and
+never retried. Table~\ref{tab:cli} lists every call; five more commands exist only on
+the command line (\texttt{help}, \texttt{--version}, \texttt{doctor},
+\texttt{import-env} and \texttt{worker}).
+
+{\footnotesize
+\setlength{\LTpre}{4pt}\setlength{\LTpost}{0pt}
+\begin{longtable}{@{}p{0.60\linewidth}@{\hspace{1em}}p{0.36\linewidth}@{}}
+\caption{Every call of the \sys{} 2.0 command line, generated from the call table.
+\texttt{[...]} marks an optional positional or option.}\label{tab:cli}\\
+\toprule
+Command & What it does \\
+\midrule
+\endfirsthead
+\toprule
+Command & What it does \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\multicolumn{2}{@{}l}{\textbf{Stores} (12)}\\*
+{\raggedright\ttfamily layerfs store attach \textless{}name\textgreater{} \textless{}machine\textgreater{} [--url \textless{}url\textgreater{}] [--password \textless{}password\textgreater{}]} & Let a machine run Sandboxes of a PostgreSQL Store, after checking it reaches the server \\
+{\raggedright\ttfamily layerfs store connect \textless{}name\textgreater{} \textless{}url\textgreater{} [--password \textless{}password\textgreater{}] [--synchronous-commit \textless{}synchronous-commit\textgreater{}]} & Attach a PostgreSQL database as a Store \\
+{\raggedright\ttfamily layerfs store create \textless{}name\textgreater{}} & An empty sqlite Store on native \\
+{\raggedright\ttfamily layerfs store detach \textless{}name\textgreater{} \textless{}machine\textgreater{}} & Stop a machine running Sandboxes of a PostgreSQL Store \\
+{\raggedright\ttfamily layerfs store disconnect \textless{}name\textgreater{}} & Forget a PostgreSQL Store; its data stays \\
+{\raggedright\ttfamily layerfs store get \textless{}name\textgreater{}} & A Store's record \\
+{\raggedright\ttfamily layerfs store list} & Every Store, from the home's records \\
+{\raggedright\ttfamily layerfs store pull \textless{}name\textgreater{} [--progress]} & Bring a sqlite Store from its machine to native \\
+{\raggedright\ttfamily layerfs store push \textless{}name\textgreater{} \textless{}machine\textgreater{} [--progress]} & Send a sqlite Store from native to a machine \\
+{\raggedright\ttfamily layerfs store remove \textless{}name\textgreater{}} & Delete a sqlite Store with every project in it \\
+{\raggedright\ttfamily layerfs store stats \textless{}name\textgreater{}} & Store-wide publication and allocation counters \\
+{\raggedright\ttfamily layerfs store status \textless{}name\textgreater{}} & A Store's live state \\
+\addlinespace
+\multicolumn{2}{@{}l}{\textbf{Projects} (6)}\\*
+{\raggedright\ttfamily layerfs project export \textless{}project\textgreater{} \textless{}destination\textgreater{} [--branch \textless{}branch\textgreater{}] [--progress]} & Export a project's snapshot from its Store to a local folder \\
+{\raggedright\ttfamily layerfs project get \textless{}project\textgreater{}} & A project's record: its Store, kind and machine \\
+{\raggedright\ttfamily layerfs project init \textless{}project\textgreater{} \textless{}folder\textgreater{} [--timeout \textless{}timeout\textgreater{}] [--progress]} & Import a host folder as a new project into an existing Store \\
+{\raggedright\ttfamily layerfs project list [\textless{}store\textgreater{}] [--page-size \textless{}page-size\textgreater{}] [--page-pos \textless{}page-pos\textgreater{}]} & Every project in the home, or one Store's \\
+{\raggedright\ttfamily layerfs project remove \textless{}project\textgreater{}} & Remove one project from its Store \\
+{\raggedright\ttfamily layerfs project stats \textless{}project\textgreater{} [\textless{}branch\textgreater{}] [\textless{}commit\textgreater{}]} & Entry counts of one pinned saved tree \\
+\addlinespace
+\multicolumn{2}{@{}l}{\textbf{Branches} (8)}\\*
+{\raggedright\ttfamily layerfs branch commits \textless{}project\textgreater{} \textless{}branch\textgreater{} [--page \textless{}page\textgreater{}] [--page-size \textless{}page-size\textgreater{}] [--at-commit \textless{}at-commit\textgreater{}] [--include-storage]} & Saved branch commits or main publications, newest first \\
+{\raggedright\ttfamily layerfs branch diff \textless{}project\textgreater{} \textless{}from-branch\textgreater{} \textless{}to-branch\textgreater{} [--paths-only] [--page-size \textless{}page-size\textgreater{}] [--page-pos \textless{}page-pos\textgreater{}] [--cursor \textless{}cursor\textgreater{}] [--page \textless{}page\textgreater{}] [--from-commit \textless{}from-commit\textgreater{}] [--to-commit \textless{}to-commit\textgreater{}] [--path-prefix \textless{}path-prefix\textgreater{}] [--include-attribution] [--continuation \textless{}continuation\textgreater{}]} & Files that differ between two Branches' heads \\
+{\raggedright\ttfamily layerfs branch fork \textless{}project\textgreater{} \textless{}name\textgreater{} \textless{}from-branch\textgreater{} [\textless{}from-commit\textgreater{}]} & A new Branch from another Branch's head or Commit \\
+{\raggedright\ttfamily layerfs branch get \textless{}project\textgreater{} \textless{}branch\textgreater{}} & One Branch and its head Commit \\
+{\raggedright\ttfamily layerfs branch get-commit \textless{}project\textgreater{} \textless{}branch\textgreater{} \textless{}commit\textgreater{}} & One saved Commit or main publication \\
+{\raggedright\ttfamily layerfs branch list \textless{}project\textgreater{} [--page-size \textless{}page-size\textgreater{}] [--page-pos \textless{}page-pos\textgreater{}] [--page \textless{}page\textgreater{}]} & A project's Branches \\
+{\raggedright\ttfamily layerfs branch merge \textless{}project\textgreater{} \textless{}name\textgreater{} \textless{}a\textgreater{} \textless{}b\textgreater{} [--message \textless{}message\textgreater{}] [--units \textless{}units\textgreater{}]} & Merge two Branches into a new one \\
+{\raggedright\ttfamily layerfs branch publish \textless{}project\textgreater{} \textless{}branch\textgreater{} [\textless{}commit\textgreater{}]} & A Branch's head or Commit as main's next Layer \\
+\addlinespace
+\multicolumn{2}{@{}l}{\textbf{Files (in-process; no Sandbox)} (15)}\\*
+{\raggedright\ttfamily layerfs file apply \textless{}project\textgreater{} \textless{}branch\textgreater{} [--message \textless{}message\textgreater{}] [--from \textless{}file\textgreater{}]} & Apply a list of changes; one Commit \\
+{\raggedright\ttfamily layerfs file blame \textless{}project\textgreater{} \textless{}branch\textgreater{} \textless{}path\textgreater{} [\textless{}commit\textgreater{}] [--from-line \textless{}from-line\textgreater{}] [--line-count \textless{}line-count\textgreater{}]} & The Commit of each line \\
+{\raggedright\ttfamily layerfs file cp \textless{}project\textgreater{} \textless{}branch\textgreater{} \textless{}from-path\textgreater{} \textless{}to-path\textgreater{} [--message \textless{}message\textgreater{}]} & Copy a path; one Commit \\
+{\raggedright\ttfamily layerfs file diff \textless{}project\textgreater{} \textless{}left-branch\textgreater{} \textless{}left-path\textgreater{} \textless{}right-branch\textgreater{} \textless{}right-path\textgreater{} [--left-commit \textless{}left-commit\textgreater{}] [--right-commit \textless{}right-commit\textgreater{}] [--include-attribution] [--allow-missing] [--page \textless{}page\textgreater{}] [--page-size \textless{}page-size\textgreater{}]} & The difference between two files \\
+{\raggedright\ttfamily layerfs file edit \textless{}project\textgreater{} \textless{}branch\textgreater{} \textless{}path\textgreater{} [--old \textless{}old\textgreater{}] [--new \textless{}new\textgreater{}] [--message \textless{}message\textgreater{}]} & Replace one unique text in a file; one Commit \\
+{\raggedright\ttfamily layerfs file glob \textless{}project\textgreater{} \textless{}branch\textgreater{} \textless{}path\textgreater{} \textless{}pattern\textgreater{} [\textless{}commit\textgreater{}] [--page-size \textless{}page-size\textgreater{}] [--page \textless{}page\textgreater{}] [--page-pos \textless{}page-pos\textgreater{}]} & Paths under path matching a glob \\
+{\raggedright\ttfamily layerfs file grep \textless{}project\textgreater{} \textless{}branch\textgreater{} \textless{}path\textgreater{} \textless{}pattern\textgreater{} [\textless{}commit\textgreater{}] [--page-size \textless{}page-size\textgreater{}] [--page \textless{}page\textgreater{}] [--page-pos \textless{}page-pos\textgreater{}]} & Lines under path matching a regular expression \\
+{\raggedright\ttfamily layerfs file list \textless{}project\textgreater{} \textless{}branch\textgreater{} \textless{}path\textgreater{} [\textless{}commit\textgreater{}] [--page-size \textless{}page-size\textgreater{}] [--page \textless{}page\textgreater{}] [--page-pos \textless{}page-pos\textgreater{}]} & A folder's entries \\
+{\raggedright\ttfamily layerfs file mkdir \textless{}project\textgreater{} \textless{}branch\textgreater{} \textless{}path\textgreater{} [--message \textless{}message\textgreater{}] [--mode \textless{}mode\textgreater{}]} & Make a folder; one Commit \\
+{\raggedright\ttfamily layerfs file mv \textless{}project\textgreater{} \textless{}branch\textgreater{} \textless{}from-path\textgreater{} \textless{}to-path\textgreater{} [--message \textless{}message\textgreater{}]} & Move a path; one Commit \\
+{\raggedright\ttfamily layerfs file read \textless{}project\textgreater{} \textless{}branch\textgreater{} \textless{}path\textgreater{} [\textless{}commit\textgreater{}] [--start-line \textless{}start-line\textgreater{}] [--end-line \textless{}end-line\textgreater{}]} & Read a file \\
+{\raggedright\ttfamily layerfs file revision \textless{}project\textgreater{} \textless{}branch\textgreater{} \textless{}path\textgreater{} [--at-commit \textless{}at-commit\textgreater{}] [--traversal \textless{}traversal\textgreater{}] [--page \textless{}page\textgreater{}] [--page-size \textless{}page-size\textgreater{}] [--continuation \textless{}continuation\textgreater{}]} & Saved changes to a literal path \\
+{\raggedright\ttfamily layerfs file rm \textless{}project\textgreater{} \textless{}branch\textgreater{} \textless{}path\textgreater{} [--message \textless{}message\textgreater{}]} & Remove a path; one Commit \\
+{\raggedright\ttfamily layerfs file stat \textless{}project\textgreater{} \textless{}branch\textgreater{} \textless{}path\textgreater{} [\textless{}commit\textgreater{}]} & A path's kind, size and mode \\
+{\raggedright\ttfamily layerfs file write \textless{}project\textgreater{} \textless{}branch\textgreater{} \textless{}path\textgreater{} [--message \textless{}message\textgreater{}] [--mode \textless{}mode\textgreater{}] [--from \textless{}file\textgreater{}]} & Write a file; one Commit \\
+\addlinespace
+\multicolumn{2}{@{}l}{\textbf{Commits} (3)}\\*
+{\raggedright\ttfamily layerfs commit diff \textless{}project\textgreater{} \textless{}from-commit\textgreater{} \textless{}to-commit\textgreater{} [--paths-only] [--page-size \textless{}page-size\textgreater{}] [--page-pos \textless{}page-pos\textgreater{}] [--cursor \textless{}cursor\textgreater{}]} & Files that differ between two Commits \\
+{\raggedright\ttfamily layerfs commit get \textless{}project\textgreater{} \textless{}branch\textgreater{} \textless{}commit\textgreater{}} & One Commit of a Branch \\
+{\raggedright\ttfamily layerfs commit list \textless{}project\textgreater{} \textless{}branch\textgreater{} [--page-size \textless{}page-size\textgreater{}] [--page-pos \textless{}page-pos\textgreater{}]} & A Branch's Commits, newest first \\
+\addlinespace
+\multicolumn{2}{@{}l}{\textbf{Sandboxes} (4)}\\*
+{\raggedright\ttfamily layerfs sandbox close \textless{}name\textgreater{} [--force]} & Stop a Sandbox \\
+{\raggedright\ttfamily layerfs sandbox create \textless{}project\textgreater{} \textless{}name\textgreater{} [\textless{}machine\textgreater{}] [--image \textless{}image\textgreater{}] [--progress]} & Start a named Sandbox of a project on a machine (default: its sqlite Store's, or native) \\
+{\raggedright\ttfamily layerfs sandbox get \textless{}name\textgreater{} [--page-size \textless{}page-size\textgreater{}] [--page-pos \textless{}page-pos\textgreater{}]} & A Sandbox and its Workspaces \\
+{\raggedright\ttfamily layerfs sandbox list [\textless{}project\textgreater{}] [--page-size \textless{}page-size\textgreater{}] [--page-pos \textless{}page-pos\textgreater{}]} & Every Sandbox in the home, or one project's \\
+\addlinespace
+\multicolumn{2}{@{}l}{\textbf{Workspaces} (6)}\\*
+{\raggedright\ttfamily layerfs workspace commit \textless{}ws\textgreater{} [--message \textless{}message\textgreater{}] [--force]} & Commit a Workspace's changes to its Branch \\
+{\raggedright\ttfamily layerfs workspace exec \textless{}ws\textgreater{} \textless{}command\textgreater{} [--message \textless{}message\textgreater{}] [--stream] [--exec-id \textless{}exec-id\textgreater{}] [--progress] [--events]} & Run one bash command in a Workspace \\
+{\raggedright\ttfamily layerfs workspace exec-cancel \textless{}ws\textgreater{} \textless{}exec-id\textgreater{} [--grace-ms \textless{}grace-ms\textgreater{}]} & End a running command: SIGTERM, then SIGKILL after grace\_ms \\
+{\raggedright\ttfamily layerfs workspace mount \textless{}sandbox\textgreater{} \textless{}branch\textgreater{} [--name \textless{}name\textgreater{}]} & Mount a Branch in a Sandbox \\
+{\raggedright\ttfamily layerfs workspace status \textless{}ws\textgreater{}} & A Workspace's changes since its base \\
+{\raggedright\ttfamily layerfs workspace unmount \textless{}ws\textgreater{} [--discard] [--force]} & End a Workspace \\
+\addlinespace
+\multicolumn{2}{@{}l}{\textbf{Machines} (12)}\\*
+{\raggedright\ttfamily layerfs machine create \textless{}name\textgreater{} \textless{}platform\textgreater{} [--cpus \textless{}cpus\textgreater{}] [--memory \textless{}memory\textgreater{}] [--disk \textless{}disk\textgreater{}] [--image \textless{}image\textgreater{}] [--os-image \textless{}os-image\textgreater{}] [--progress]} & Create an enabled VM machine (apple-container, lima) \\
+{\raggedright\ttfamily layerfs machine get \textless{}name\textgreater{}} & A machine's record \\
+{\raggedright\ttfamily layerfs machine images \textless{}name\textgreater{}} & The Sandbox images a machine holds, and the host's Docker images it can copy \\
+{\raggedright\ttfamily layerfs machine list} & Every machine, with what it supports \\
+{\raggedright\ttfamily layerfs machine load \textless{}name\textgreater{} \textless{}image\textgreater{} [--progress]} & Copy an image from the host's Docker to a machine without creating a Sandbox \\
+{\raggedright\ttfamily layerfs machine platforms} & The platforms this host and build support, and what each is missing \\
+{\raggedright\ttfamily layerfs machine prune \textless{}name\textgreater{} [\textless{}image\textgreater{}] [--unused]} & Remove a Sandbox image from a machine, or every unused one \\
+{\raggedright\ttfamily layerfs machine remove \textless{}name\textgreater{}} & Delete a VM machine and its disk; one of a removed platform is only forgotten \\
+{\raggedright\ttfamily layerfs machine start \textless{}name\textgreater{} [--progress]} & Start a stopped machine and its worker; a running one answers at once \\
+{\raggedright\ttfamily layerfs machine status \textless{}name\textgreater{}} & A machine's live state, free disk and tool version \\
+{\raggedright\ttfamily layerfs machine stop \textless{}name\textgreater{} [--force]} & Stop a machine's worker and VM; its disks stay \\
+{\raggedright\ttfamily layerfs machine update \textless{}name\textgreater{} [--cpus \textless{}cpus\textgreater{}] [--memory \textless{}memory\textgreater{}] [--image \textless{}image\textgreater{}] [--docker \textless{}docker\textgreater{}] [--wsl \textless{}wsl\textgreater{}] [--daemon \textless{}daemon\textgreater{}]} & Resize a VM, or set a built-in machine's image, Docker socket and daemon \\
+\addlinespace
+\multicolumn{2}{@{}l}{\textbf{Backups} (5)}\\*
+{\raggedright\ttfamily layerfs backup connect \textless{}name\textgreater{} \textless{}url\textgreater{} [--key \textless{}key\textgreater{}] [--region \textless{}region\textgreater{}] [--part-size \textless{}part-size\textgreater{}]} & Connect an r2 or MinIO bucket \\
+{\raggedright\ttfamily layerfs backup create \textless{}store\textgreater{} \textless{}bucket\textgreater{} [\textless{}file\textgreater{}] [--progress]} & Upload a sqlite Store to a bucket \\
+{\raggedright\ttfamily layerfs backup disconnect \textless{}name\textgreater{}} & Forget a bucket and this home's links to it \\
+{\raggedright\ttfamily layerfs backup list [\textless{}bucket\textgreater{}]} & Every Store file on the connected buckets \\
+{\raggedright\ttfamily layerfs backup restore \textless{}store\textgreater{} \textless{}bucket\textgreater{} [\textless{}file\textgreater{}] [--progress]} & Download a backup as a sqlite Store on native \\
+\addlinespace
+\multicolumn{2}{@{}l}{\textbf{Call log} (2)}\\*
+{\raggedright\ttfamily layerfs logs list [--op \textless{}op\textgreater{}] [--project \textless{}project\textgreater{}] [--client \textless{}client\textgreater{}] [--tag \textless{}tag\textgreater{}] [--outcome \textless{}outcome\textgreater{}] [--since \textless{}since\textgreater{}] [--cursor \textless{}cursor\textgreater{}] [--limit \textless{}limit\textgreater{}]} & The calls made against this home, newest first \\
+{\raggedright\ttfamily layerfs logs reset} & Clear this home's call log \\
+\addlinespace
+\multicolumn{2}{@{}l}{\textbf{Command line only} (5)}\\*
+{\raggedright\ttfamily layerfs help [\textless{}family\textgreater{} [\textless{}call\textgreater{}]]} & This list; \texttt{help --json} prints the call table \\
+{\raggedright\ttfamily layerfs --version} & The build's version \\
+{\raggedright\ttfamily layerfs doctor [--quick | --write-test] [--timeout \textless{}duration\textgreater{}]} & Report what is wrong in the home, changing nothing \\
+{\raggedright\ttfamily layerfs import-env} & Write this environment's 1.1.0 settings as records, once \\
+{\raggedright\ttfamily layerfs worker} & Serve this machine's worker (inside a machine) \\
+\end{longtable}
+}

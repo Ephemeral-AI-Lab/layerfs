@@ -1,0 +1,37 @@
+% What a 100-byte overwrite of a 500 MiB file costs in three designs. Input by appendix.tex.
+\begin{tikzpicture}[font=\scriptsize, x=1cm, y=1cm,
+  lbl/.style={anchor=east, align=right, text width=2.9cm},
+  note/.style={anchor=west, align=left, font=\scriptsize, text width=5.0cm}]
+\def\W{7.0}
+% lower layer, common
+\node[lbl] at (-0.2,0) {committed file (500\,MiB)};
+\draw[fill=gray!15] (0,-0.2) rectangle (\W,0.2);
+\draw[red!70!black, very thick] (4.55,-0.3) -- (4.55,0.3);
+\node[font=\scriptsize, red!70!black, above] at (4.55,0.3) {100\,B write};
+% copy-up overlay
+\node[lbl] at (-0.2,-1.0) {copy-up overlay\\(overlayfs upper, ovnfs)};
+\draw[fill=orange!55] (0,-1.2) rectangle (\W,-0.8);
+\node[font=\scriptsize] at (\W/2,-1.0) {whole file copied up before the write};
+\node[note] at (\W+0.2,-1.0) {write: 500\,MiB copy\\snapshot: 524.3\,MB, 0.6\,s per Commit};
+% block CoW
+\node[lbl] at (-0.2,-2.0) {block copy-on-write\\(ImageFS-blk, Btrfs)};
+\draw[fill=gray!15] (0,-2.2) rectangle (\W,-1.8);
+\draw[fill=orange!55] (4.5,-2.2) rectangle (4.65,-1.8);
+\node[font=\scriptsize, anchor=west] at (4.7,-2.0) {one 4\,KiB block};
+\node[note] at (\W+0.2,-2.0) {write: one block\\snapshot: modified \emph{file} in Modal;\\$\approx$36\,KiB extent in Btrfs};
+% LayerFS
+\node[lbl] at (-0.2,-3.0) {\sys{} overlay};
+\draw[dotted] (0,-3.2) rectangle (\W,-2.8);
+\draw[fill=orange!55] (4.5,-3.2) rectangle (4.65,-2.8);
+\node[font=\scriptsize, anchor=west] at (4.7,-3.0) {one 4\,KiB cell};
+\node[font=\scriptsize] at (2.0,-3.0) {nothing else stored};
+\node[note] at (\W+0.2,-3.0) {write: one cell row (100\,B valid),\\no base read};
+\node[lbl] at (-0.2,-4.0) {\sys{} Commit};
+\draw[fill=gray!15] (0,-4.2) rectangle (\W,-3.8);
+\foreach \x in {0.8,1.6,2.5,3.2,3.9,5.3,6.1}{\draw[gray] (\x,-4.2) -- (\x,-3.8);}
+\draw[fill=gray!15, pattern=north east lines, pattern color=gray] (3.9,-4.2) rectangle (5.3,-3.8);
+\draw[fill=orange!55] (4.5,-4.2) rectangle (4.65,-3.8);
+\node[font=\scriptsize, anchor=north] at (4.65,-4.25) {old chunk $\rightarrow$ two slices $+$ new 100\,B chunk};
+\node[font=\scriptsize, fill=gray!15, inner sep=1pt] at (1.9,-4.0) {other chunks shared};
+\node[note] at (\W+0.2,-4.0) {Commit: 153\,B payload $+$ path pages\\snapshot: 7.4\,KB, 28\,ms per Commit};
+\end{tikzpicture}
