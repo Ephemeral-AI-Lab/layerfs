@@ -436,10 +436,15 @@ Each is a place where this spec did not match the tree. Adopting them changes no
 
 - Automatic periodic collection (forbidden by layerfs-project#41): no 600 s compaction / 3600 s GC loop is adopted.
 - Fragmentation thresholds (`min_slice_count`, `min_fragment_ratio`, `sync_threshold`) measure slices inside the same **mutable** chunk overwriting each other. LayerFS objects are immutable, so "unreachable byte ratio" is the equivalent measure.
-- light / heavy two-level compaction: LayerFS's "light" equivalent is logical removal, already an operation of its own.
+- light / heavy two-level compaction as BrewFS defined it: that pair is **not** what this spec means by the
+  *light path*. Here the light path is the third path of `store.compact` (§7.1b) — it deletes unreachable
+  locator rows in place; logical removal is a separate operation (`branch.remove` / `project.delete` /
+  `project.remove_file`).
 - `VACUUM FULL`-style whole-table reclamation (blocking, 2× space).
 - compact of remote object-storage copies (out of scope for layerfs-project#41).
-- Any power-loss durability promise (Disposable remains the only execution profile).
+- Any power-loss durability promise. **Durability is outside this contract**: #155 §7 proposes a `Normal` profile
+  for both backends (owner direction 2026-11-13), which would replace `Disposable`; it needs its own issue and is
+  not part of the frozen GC contract.
 
 
 ---
