@@ -5,8 +5,11 @@
 //! LAYERFS_TEST_PG_URL (a server URL without a password, to a database with
 //! no `layerfs` schema; the test leaves one behind) and
 //! LAYERFS_TEST_PG_PASSWORD; without them the test says so and passes.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 #![cfg(all(feature = "postgresql", feature = "machine"))]
 use layerfs_api::home::{self, paths};
+
 use layerfs_bridge::control::SdkValue;
 use std::path::{Path, PathBuf};
 

@@ -131,6 +131,8 @@ pub fn platform(named: Option<&str>, deploy: &Deploy) -> Result<String, SdkRefus
             format!(
                 "platform {named} does not run the deployment's Sandbox backend ({}) on this host",
                 match backend {
+                    #[cfg(windows)]
+                    _ => unreachable!("the Windows stub face has no runtime arm"),
                     Backend::HostProcess => NATIVE,
                     Backend::Namespaces => NAMESPACES,
                 }
@@ -143,6 +145,8 @@ pub fn platform(named: Option<&str>, deploy: &Deploy) -> Result<String, SdkRefus
 /// A running Sandbox's `runtime`, as its record names it.
 pub fn kind(runtime: &Sandbox) -> &'static str {
     match runtime {
+        #[cfg(windows)]
+        _ => unreachable!("the Windows stub face has no runtime arm"),
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         Sandbox::HostProcess(_) => NATIVE,
         #[cfg(target_os = "linux")]

@@ -1,4 +1,6 @@
 //! Backing placement and cleanup custody of initial acquisition.
+//! Unix-only: its custody invariants are stated over unix stat identity.
+#![cfg(unix)]
 //!
 //! A backing inside the source is refused before the source changes or an
 //! operation begins. Working rows and the operation record are removed before

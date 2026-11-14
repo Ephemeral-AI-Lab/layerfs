@@ -3,7 +3,10 @@
 //! machine's worker, which adds the copy and removes it; the caller
 //! records the project. The folder here is under the caller's temp
 //! directory, outside the worker's root.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home::{self, paths, read_record, write_record};
+
 use layerfs_api::worker::{self, Endpoint};
 use layerfs_bridge::control::SdkValue;
 use std::net::{SocketAddr, TcpListener, TcpStream};

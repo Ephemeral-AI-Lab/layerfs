@@ -20,17 +20,14 @@ mod backend;
 pub use backend::namespaces::rootfs;
 #[cfg(unix)]
 pub use backend::Backend;
-#[cfg(unix)]
+#[cfg(not(unix))]
+pub use types::kind::Backend;
 mod helper_spec;
-#[cfg(unix)]
 pub mod json;
 pub mod platform_policy;
-#[cfg(unix)]
 mod postgres_url;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod runtime;
 pub mod steps;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod stop;
 mod types;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -41,14 +38,15 @@ pub use backend::namespaces::{self, NamespaceProvider};
 pub mod local;
 #[cfg(target_os = "macos")]
 pub use backend::host_process::HostProcessProvider;
-#[cfg(unix)]
 pub use helper_spec::HelperSpec;
-#[cfg(unix)]
 pub use postgres_url::PostgresUrl;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub use runtime::{LaunchFailure, Runtime, Sandbox};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub use runtime::{LaunchFailure, Sandbox};
+#[cfg(unix)]
+pub use runtime::Runtime;
 pub use stop::{Cancelled, ExecSlot, Stop};
+
+// The WireFailure twin for the Windows face lives in runtime.rs
+// alongside the Sandbox enum (windows_runtime keeps only helpers).
 pub use types::{
     Bind, CommandIdentity, ContainerId, ExecExit, ExecRequest, Image, IsolationModel, LaunchPhase,
     LaunchRequest, LocalRecord, MountDriver, NamespaceRecord, PendingRequest, ProviderCapabilities,

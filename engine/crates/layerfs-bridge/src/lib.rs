@@ -31,7 +31,7 @@ pub use support::{KernelRoute, StoreKind};
 mod daemon_types;
 mod daemon_wire;
 pub mod initial_record;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub mod os_bytes;
 pub mod process;
 pub mod store;
 pub mod support;

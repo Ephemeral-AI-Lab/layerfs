@@ -12,8 +12,11 @@
 //! its process group and reaped (finding 2), and the host's secret check
 //! counts a `Denied` reply, or an accept that never answers (its 2 s
 //! limit), as no worker (finding 6).
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 #![cfg(feature = "machine")]
 use layerfs_api::home::{paths, read_record, write_record};
+
 use layerfs_bridge::control::SdkValue;
 use std::io::{Read, Write};
 use std::net::TcpListener;

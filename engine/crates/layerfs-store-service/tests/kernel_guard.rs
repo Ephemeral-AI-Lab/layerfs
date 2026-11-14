@@ -111,6 +111,7 @@ fn direct_access_is_allowed_on_a_local_macos_filesystem() {
     std::fs::remove_dir_all(directory).unwrap();
 }
 
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 #[allow(dead_code)]
 #[path = "support/installed_store.rs"]
 mod installed;

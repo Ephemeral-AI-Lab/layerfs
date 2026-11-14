@@ -7,8 +7,11 @@
 //! stops the VM, removes
 //! `worker.json` and answers the machine as `machine.get` does. One test,
 //! because it sets the process's environment.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths, read_record, write_record};
+
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};

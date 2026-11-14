@@ -23,13 +23,22 @@ use super::frame::{StageFrame, StageStep};
 use super::tree::{Reader, Record};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{failed, refused, Outcome};
+#[cfg(unix)]
 use nix::sys::stat::{utimensat, UtimensatFlags};
+#[cfg(unix)]
 use nix::sys::time::TimeSpec;
 use std::ffi::OsStr;
 use std::fs::{self, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
+#[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
+#[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, FileExt, OpenOptionsExt, PermissionsExt};
+
+// Windows face: the bytes grammar is UTF-8 (PathName enforces it);
+// the conversions live in layerfs_home::os_bytes.
+#[cfg(windows)]
+use layerfs_bridge::os_bytes::from_bytes;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -81,10 +90,22 @@ fn one(dir: &Path, record: Record<'_>, strict: bool) -> Result<()> {
         Record::Directory { path } => {
             let at = place(dir, path, false, strict).map_err(plain)?;
             match strict {
-                true => fs::DirBuilder::new()
-                    .mode(0o700)
-                    .create(&at)
-                    .map_err(|e| io_refusal(&at, e)),
+                true => {
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::DirBuilderExt;
+                        fs::DirBuilder::new()
+                            
+                            .create(&at)
+                            .map_err(|e| io_refusal(&at, e))
+                    }
+                    // Windows: the folder's face carries the mode when a
+                    // record reads it back.
+                    #[cfg(windows)]
+                    fs::DirBuilder::new()
+                        .create(&at)
+                        .map_err(|e| io_refusal(&at, e))
+                }
                 false => folder_at(&at).map_err(plain),
             }
         }
@@ -97,22 +118,52 @@ fn one(dir: &Path, record: Record<'_>, strict: bool) -> Result<()> {
             match strict {
                 true => write_in_order(&at, offset, bytes),
                 false => {
+                    #[cfg(unix)]
+                    let file = {
+                        use std::os::unix::fs::OpenOptionsExt;
+                        OpenOptions::new()
+                            .write(true)
+                            .create(true)
+                            .mode(0o600)
+                            .custom_flags(libc::O_NOFOLLOW)
+                            .open(&at)
+                            .map_err(|e| io_refusal(&at, e))?
+                    };
+                    #[cfg(windows)]
                     let file = OpenOptions::new()
                         .write(true)
                         .create(true)
-                        .mode(0o600)
-                        .custom_flags(libc::O_NOFOLLOW)
                         .open(&at)
                         .map_err(|e| io_refusal(&at, e))?;
-                    file.write_all_at(bytes, offset)
-                        .map_err(|e| io_refusal(&at, e))
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::FileExt;
+                        file.write_all_at(bytes, offset)
+                            .map_err(|e| io_refusal(&at, e))
+                    }
+                    #[cfg(windows)]
+                    {
+                        use std::os::windows::fs::FileExt;
+                        file.seek_write(bytes, offset)
+                            .map(|_| ())
+                            .map_err(|e| io_refusal(&at, e))
+                    }
                 }
             }
         }
         Record::Link { path, target } => {
             let at = place(dir, path, false, strict).map_err(plain)?;
-            std::os::unix::fs::symlink(OsStr::from_bytes(target), &at)
-                .map_err(|e| io_refusal(&at, e))
+            #[cfg(unix)]
+            {
+                std::os::unix::fs::symlink(OsStr::from_bytes(target), &at)
+                    .map_err(|e| io_refusal(&at, e))
+            }
+            #[cfg(windows)]
+            {
+                let target = from_bytes(target);
+                std::os::windows::fs::symlink_file(target.as_os_str(), &at)
+                    .map_err(|e| io_refusal(&at, e))
+            }
         }
         Record::Meta {
             path,
@@ -124,10 +175,23 @@ fn one(dir: &Path, record: Record<'_>, strict: bool) -> Result<()> {
             let shown =
                 |e: &dyn std::fmt::Display| refused("Failed", format!("{}: {e}", at.display()));
             let meta = fs::symlink_metadata(&at).map_err(|e| io_refusal(&at, e))?;
+            #[cfg(unix)]
             if !meta.file_type().is_symlink() {
+                use std::os::unix::fs::PermissionsExt;
                 fs::set_permissions(&at, fs::Permissions::from_mode(mode & 0o7777))
                     .map_err(|e| io_refusal(&at, e))?;
             }
+            // Windows: the readonly attribute is the only mode bit; the
+            // recorded face already chose 0644/0755 writable shapes, and
+            // the mtime write is the port's SetFileTime remainder (#454).
+            #[cfg(windows)]
+            {
+                let _ = (mode, seconds, nanoseconds);
+                let _ = &meta;
+                Ok::<(), SdkRefusal>(())
+            }
+            #[cfg(unix)]
+            {
             let mtime = TimeSpec::new(seconds, i64::from(nanoseconds) as _);
             utimensat(
                 nix::fcntl::AT_FDCWD,
@@ -137,6 +201,7 @@ fn one(dir: &Path, record: Record<'_>, strict: bool) -> Result<()> {
                 UtimensatFlags::NoFollowSymlink,
             )
             .map_err(|e| shown(&e))
+            }
         }
     }
 }
@@ -146,9 +211,22 @@ fn one(dir: &Path, record: Record<'_>, strict: bool) -> Result<()> {
 /// the file's length.
 fn write_in_order(at: &Path, offset: u64, bytes: &[u8]) -> Result<()> {
     let mut options = OpenOptions::new();
-    options.write(true).custom_flags(libc::O_NOFOLLOW);
+    options.write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW);
+        if offset == 0 {
+            options.mode(0o600);
+        }
+    }
+    #[cfg(windows)]
+    {
+        use std::io::Write;
+        let _ = &mut options;
+    }
     if offset == 0 {
-        options.create_new(true).mode(0o600);
+        options.create_new(true);
     }
     let mut file = options.open(at).map_err(|e| io_refusal(at, e))?;
     if file.metadata().map_err(|e| io_refusal(at, e))?.len() != offset {
@@ -182,7 +260,13 @@ fn io_refusal(at: &Path, error: std::io::Error) -> SdkRefusal {
 /// part's record may make it first. Anything else there, a link to a
 /// directory included, is refused.
 fn folder_at(at: &Path) -> std::result::Result<(), String> {
-    let made = fs::DirBuilder::new().mode(0o700).create(at);
+    #[cfg(unix)]
+    let made = {
+        use std::os::unix::fs::DirBuilderExt;
+        fs::DirBuilder::new().mode(0o700).create(at)
+    };
+    #[cfg(windows)]
+    let made = fs::DirBuilder::new().create(at);
     if let Err(e) = made {
         if e.kind() != std::io::ErrorKind::AlreadyExists {
             return Err(format!("{}: {e}", at.display()));
@@ -221,7 +305,10 @@ fn place(
                 String::from_utf8_lossy(path)
             ));
         }
+        #[cfg(unix)]
         at.push(OsStr::from_bytes(name));
+        #[cfg(windows)]
+        at.push(from_bytes(name));
         if names.peek().is_some() {
             match strict {
                 true => real_dir(&at)?,
@@ -254,6 +341,7 @@ pub fn remove(dir: &Path) -> Result<()> {
         if !meta.is_dir() || meta.file_type().is_symlink() {
             continue;
         }
+        #[cfg(unix)]
         if meta.permissions().mode() & 0o700 != 0o700 {
             fs::set_permissions(&at, fs::Permissions::from_mode(0o700))
                 .map_err(|e| refused("Failed", format!("{}: {e}", at.display())))?;

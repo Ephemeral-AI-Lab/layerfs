@@ -12,7 +12,7 @@ pub(super) fn identity(checks: &mut Checks) {
         }
         _ => checks.unknown("host.build", "Calling executable could not be inspected"),
     }
-    #[cfg(feature = "machine")]
+    #[cfg(all(unix, feature = "machine"))]
     {
         use layerfs_machine::platform::{native_missing, HostOs};
         let missing = native_missing(HostOs::current());

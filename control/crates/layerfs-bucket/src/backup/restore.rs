@@ -227,8 +227,11 @@ fn fetch(
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
         {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
         }
         let mut file = options.open(&temporary).map_err(text)?;
         left = Some(temporary.clone());

@@ -54,6 +54,7 @@ pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::R
     // the root holds Stores and records: private, as a home is (a machine's
     // data disk mounts 0755), but passable by others (0701), since a
     // namespaces Sandbox's commands run as another identity below it
+    #[cfg(unix)]
     {
         use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
         std::fs::DirBuilder::new()
@@ -62,6 +63,8 @@ pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::R
             .create(&root)?;
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o701))?;
     }
+    #[cfg(windows)]
+    std::fs::create_dir_all(&root)?;
     layerfs_home::home::guest::serve_root(&root);
     layerfs_home::home::guest::retire_layout_2(&root);
     let secret = Arc::new(secret);
@@ -212,8 +215,12 @@ fn run(
                     .collect(),
             ))
         }
+        #[cfg(unix)]
         "machine.images" => layerfs_sandbox::images::in_worker(root, args),
+        #[cfg(unix)]
         "machine.prune" => layerfs_sandbox::images::prune_in_worker(root, args),
+        #[cfg(windows)]
+        "machine.images" | "machine.prune" => unreachable!("the worker does not run on Windows"),
         "doctor.sandbox" => crate::doctor::diagnose_worker_sandbox(root, args),
         "store.diagnose" => crate::doctor::diagnose_store_in_worker(root, args, events),
         // `store.attach`'s check of this machine's connection to a
@@ -258,7 +265,10 @@ fn run(
         }
         // a Sandbox image copied to this machine (`sandbox.create --image`,
         // `machine.load`), one step at a time
+        #[cfg(unix)]
         "image.artifact" => layerfs_sandbox::image_artifact::in_worker(root, &args),
+        #[cfg(windows)]
+        "image.artifact" => unreachable!("the worker does not run on Windows"),
         // a Sandbox or Workspace operation on this machine's own native
         "sandbox.host" => layerfs_sandbox::route::in_worker(
             root,

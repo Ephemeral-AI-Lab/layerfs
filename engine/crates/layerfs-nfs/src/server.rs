@@ -187,14 +187,27 @@ impl Server {
     /// returns their paths below the mount point, for the mode-preserving
     /// SETATTR that makes the client drop its cache (see [`crate::refresh`]).
     pub fn refresh(&self, serials: impl IntoIterator<Item = u64>) -> Vec<std::path::PathBuf> {
-        use std::os::unix::ffi::OsStrExt;
-        (self.shared.kernel.refresh(serials).into_iter())
-            .map(|names| {
-                (names.iter())
-                    .map(|name| std::ffi::OsStr::from_bytes(name))
-                    .collect()
-            })
-            .collect()
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStrExt;
+            (self.shared.kernel.refresh(serials).into_iter())
+                .map(|names| {
+                    (names.iter())
+                        .map(|name| std::ffi::OsStr::from_bytes(name))
+                        .collect()
+                })
+                .collect()
+        }
+        #[cfg(not(unix))]
+        {
+            (self.shared.kernel.refresh(serials).into_iter())
+                .map(|names| {
+                    (names.iter())
+                        .map(|name| String::from_utf8_lossy(name).into_owned())
+                        .collect()
+                })
+                .collect()
+        }
     }
     /// The write verifier this export answers WRITE and COMMIT with.
     pub fn verifier(&self) -> [u8; 8] {

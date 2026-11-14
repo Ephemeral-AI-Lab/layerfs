@@ -156,11 +156,18 @@ pub enum Made {
 /// `mkdir` that fails — `AlreadyExists`, when another caller made the
 /// directory first, included — claims nothing.
 pub fn make_private_directory(directory: &Path) -> io::Result<Made> {
-    use std::os::unix::fs::DirBuilderExt;
     if directory.exists() {
         return Ok(Made::AlreadyThere);
     }
-    fs::DirBuilder::new().mode(0o700).create(directory)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        fs::DirBuilder::new().mode(0o700).create(directory)?;
+    }
+    // Windows has no directory mode: the private-inherit default of a new
+    // directory under the home is what 0700 secures on the unix side.
+    #[cfg(windows)]
+    fs::DirBuilder::new().create(directory)?;
     Ok(Made::ThisCall)
 }
 
@@ -248,6 +255,16 @@ pub fn install_local(
     result.map_err(|cause: String| LocalInstallFailure { cause, ..left })
 }
 
+/// Windows reaches the Store in-process (no root daemon); the daemon
+/// install route is not offered there yet (#454).
+#[cfg(windows)]
+pub fn installer_user() -> Result<(), String> {
+    Err(
+        "the daemon Store install is not available on Windows; the Store runs in-process (#454)"
+            .to_owned(),
+    )
+}
+
 /// macOS has only the native route, whose daemon runs as the user who
 /// installs its Store (there is no root daemon to match); the daemon's own
 /// check that it owns the Store file still holds.
@@ -256,7 +273,7 @@ fn installer_user() -> Result<(), String> {
     Ok(())
 }
 /// Refuses an installer that is not the daemons' user.
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn installer_user() -> Result<(), String> {
     use std::os::unix::fs::MetadataExt;
     // the owner of /proc/self is this process's effective user

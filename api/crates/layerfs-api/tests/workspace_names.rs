@@ -4,7 +4,10 @@
 //! against a Sandbox folder whose records stand in for a running Sandbox:
 //! no daemon runs, so a call that gets past the name reaches the Sandbox
 //! and is refused there (`NoSuchSandbox`: no daemon keys).
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home::{self, paths, read_record, write_record};
+
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

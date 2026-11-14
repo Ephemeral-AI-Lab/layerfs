@@ -17,12 +17,22 @@ pub const STORE_HEADROOM_BYTES: u64 = 64 * 1024 * 1024;
 /// twice: the WAL holds them until a checkpoint copies them into the file.
 /// A Store file whose filesystem cannot be observed is an integrity failure.
 pub(crate) fn admit(path: &Path, bytes: u64) -> Result<(), BackendError> {
-    let filesystem = nix::sys::statvfs::statvfs(path).map_err(|_| BackendError::Integrity)?;
-    let available =
-        u128::from(filesystem.blocks_available()) * u128::from(filesystem.fragment_size());
-    let needed = u128::from(bytes) * 2 + u128::from(STORE_HEADROOM_BYTES);
-    if available < needed {
-        return Err(BackendError::Capacity);
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    {
+        let filesystem = nix::sys::statvfs::statvfs(path).map_err(|_| BackendError::Integrity)?;
+        let available =
+            u128::from(filesystem.blocks_available()) * u128::from(filesystem.fragment_size());
+        let needed = u128::from(bytes) * 2 + u128::from(STORE_HEADROOM_BYTES);
+        if available < needed {
+            return Err(BackendError::Capacity);
+        }
+    }
+    // Windows: the free-space gate needs the volume-guard port (#454); until
+    // then admission is granted and a filling disk ends in SQLite's own
+    // full-disk refusal, the same best-effort end state the module documents.
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        let _ = (path, bytes);
     }
     Ok(())
 }

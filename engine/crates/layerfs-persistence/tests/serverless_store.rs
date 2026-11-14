@@ -1,4 +1,6 @@
 //! Disposable serverless Store proofs through the real public provider.
+//! Unix-only: the serverless proof speaks over a unix-domain socket.
+#![cfg(unix)]
 mod support;
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, HistoryError, ReserveRequest};

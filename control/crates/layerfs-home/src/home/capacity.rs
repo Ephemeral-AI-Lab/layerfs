@@ -3,6 +3,7 @@ use std::path::Path;
 
 /// Bytes available to this caller on the filesystem containing `path`.
 /// Uses filesystem allocation units, with checked arithmetic; never writes.
+#[cfg(unix)]
 pub fn filesystem_available(path: &Path) -> std::io::Result<u64> {
     let filesystem = nix::sys::statvfs::statvfs(path).map_err(std::io::Error::from)?;
     // `fsblkcnt_t` is `u32` on macOS but `u64` on Linux, so `u64::from`
@@ -12,4 +13,11 @@ pub fn filesystem_available(path: &Path) -> std::io::Result<u64> {
         u128::from(filesystem.blocks_available()) * u128::from(filesystem.fragment_size());
     u64::try_from(available)
         .map_err(|_| std::io::Error::other("filesystem available-byte count overflow"))
+}
+
+/// Windows: the volume free-space answer waits for the volume-guard port
+/// (#454); MAX never refuses for room.
+#[cfg(windows)]
+pub fn filesystem_available(_path: &Path) -> std::io::Result<u64> {
+    Ok(u64::MAX)
 }

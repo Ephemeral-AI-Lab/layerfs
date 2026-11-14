@@ -7,8 +7,11 @@
 //! Nothing ran a start: no `start.lock`, no `limactl start`, no
 //! `worker.json`. The same holds with a stale `worker.json` that nothing
 //! answers. One test, because it sets the process's environment.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths, write_record};
+
 use layerfs_bridge::control::SdkValue;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;

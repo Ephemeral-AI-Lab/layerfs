@@ -8,6 +8,7 @@
 use crate::outcome::{failed, refused};
 use layerfs_bridge::control::SdkRefusal;
 use std::fs::{File, OpenOptions};
+#[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -30,6 +31,7 @@ impl Drop for EntityLock {
 /// `wait`; past it the call is refused `Unavailable` with `held`, and
 /// nothing was changed.
 pub fn take(path: &Path, wait: Duration, held: &str) -> Result<EntityLock, SdkRefusal> {
+    #[cfg(unix)]
     let file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -37,6 +39,17 @@ pub fn take(path: &Path, wait: Duration, held: &str) -> Result<EntityLock, SdkRe
         .truncate(false)
         .mode(0o600)
         .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(failed)?;
+    // Windows: the mode and O_NOFOLLOW open guards are unix concepts; the
+    // lock files are plain zero-byte files (a path crossing a reparse point
+    // gets its own check where one is taken).
+    #[cfg(not(unix))]
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
         .open(path)
         .map_err(failed)?;
     let deadline = Instant::now() + wait;

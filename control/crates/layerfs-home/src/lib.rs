@@ -3,13 +3,17 @@
 //! the one in-flight intent (`op`), typed names, call outcomes and event
 //! streams (`events`), secrets, the call trace, the call log (`logs`, #659) and the process identity records name. It knows no
 //! entity: machines, Stores, Sandboxes and Workspaces build on it.
-#![forbid(unsafe_code)]
+// Windows carries one audited unsafe FFI module (flock's LockFileEx);
+// forbid cannot be allowed back on, so it stays a hard deny there.
+#![cfg_attr(not(windows), forbid(unsafe_code))]
+#![cfg_attr(windows, deny(unsafe_code))]
 #![deny(missing_docs)]
 
 pub mod events;
 pub mod helpers;
 pub mod home;
 pub mod json;
+/// The call log (#659): one line per public call against this home.
 pub mod logs;
 pub mod names;
 pub mod op;

@@ -16,7 +16,6 @@ pub use backend::postgresql::status::{
 };
 pub use backend::sqlite::acquisition::AcquisitionProvider;
 pub use backend::sqlite::heads::{heads_digest, read_heads};
-#[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use backend::sqlite::lifecycle::headroom::STORE_HEADROOM_BYTES;
 pub use backend::sqlite::lifecycle::reclamation::{SpaceReclamation, RECLAMATION_PAGE_LIMIT};
 pub use backend::sqlite::session::connection::{ConnectionProfile, SqlWork};

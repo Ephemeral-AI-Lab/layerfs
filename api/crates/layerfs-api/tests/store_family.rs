@@ -292,10 +292,22 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
 fn push_and_remove_refuse_a_store_in_use_and_remove_deletes_it() {
     let (home, root) = home_with_box();
     call(&home, "store.create", &[("name", t("shop"))]).unwrap();
-    // process 1 is always alive: its lease holds the Store
-    let lease = paths::lease_dir(&home, "shop").join("1");
+    // A live OTHER process holds the lease (its own pid is skipped);
+    // unix names init, Windows begets a sleeper child for the role.
+    #[cfg(unix)]
+    let holder = 1u32;
+    #[cfg(windows)]
+    let holder = {
+        let child = std::process::Command::new("cmd")
+            .args(["/C", "pause"])
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .expect("sleeper");
+        child.id()
+    };
+    let lease = paths::lease_dir(&home, "shop").join(holder.to_string());
     std::fs::create_dir_all(lease.parent().unwrap()).unwrap();
-    std::fs::write(&lease, "1\n").unwrap();
+    std::fs::write(&lease, format!("{holder}\n")).unwrap();
     let moved = call(
         &home,
         "store.push",

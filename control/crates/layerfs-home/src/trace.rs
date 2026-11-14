@@ -13,6 +13,7 @@
 use layerfs_bridge::control::SdkValue;
 use std::cell::{Cell, RefCell};
 use std::io::Write;
+#[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::time::{Duration, Instant};
 
@@ -228,11 +229,17 @@ fn append(text: &str) {
     let Some(path) = std::env::var_os("LAYERFS_TRACE").filter(|path| !path.is_empty()) else {
         return;
     };
-    let file = std::fs::OpenOptions::new()
-        .append(true)
-        .create(true)
-        .mode(0o600)
-        .open(path);
+    #[cfg(unix)]
+    let file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .mode(0o600)
+            .open(path)
+    };
+    #[cfg(not(unix))]
+    let file = std::fs::OpenOptions::new().append(true).create(true).open(path);
     if let Ok(mut file) = file {
         let _ = file.write_all(text.as_bytes());
     }

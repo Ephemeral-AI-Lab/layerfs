@@ -4,7 +4,10 @@
 //! write and a Store that returns is never served from a stale handle; and
 //! (where a writer waits on its Store directory's lock, Linux and macOS) a
 //! call that is running keeps its Store open against a push or remove.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home::{self, paths, write_record};
+
 use layerfs_bridge::control::SdkValue;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;

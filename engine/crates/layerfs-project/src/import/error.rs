@@ -115,7 +115,6 @@ impl From<io::Error> for ProjectError {
         Self::Io(error)
     }
 }
-#[cfg(unix)]
 impl ProjectError {
     /// True when a persistence outcome behind this failure is unknown.
     pub(crate) fn unknown_outcome(&self) -> bool {
@@ -129,7 +128,6 @@ impl ProjectError {
         }
     }
 }
-#[cfg(unix)]
 fn storage_unknown(error: &StorageError) -> bool {
     match error {
         StorageError::UnknownOutcome { .. } => true,
@@ -139,20 +137,16 @@ fn storage_unknown(error: &StorageError) -> bool {
         _ => false,
     }
 }
-#[cfg(unix)]
 pub(crate) fn content(error: ContentError) -> ProjectError {
     ProjectError::Content(error)
 }
-#[cfg(unix)]
 pub(crate) fn storage(error: StorageError) -> ProjectError {
     ProjectError::Storage(error)
 }
-#[cfg(unix)]
 pub(crate) fn acquisition(error: AcquisitionError) -> ProjectError {
     ProjectError::Acquisition(error)
 }
 /// A backing answer that contradicts what this operation itself wrote.
-#[cfg(unix)]
 pub(crate) fn malformed() -> ProjectError {
     ProjectError::Acquisition(AcquisitionError::Persistence(PersistenceError::Malformed))
 }

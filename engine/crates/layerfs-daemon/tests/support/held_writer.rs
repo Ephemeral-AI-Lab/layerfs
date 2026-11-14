@@ -9,8 +9,14 @@ use std::{
 pub struct HeldWriter(Child);
 impl HeldWriter {
     pub fn acquire(database: &std::path::Path) -> Self {
-        let script = "import sqlite3,sys,select\nc=sqlite3.connect(sys.argv[1],timeout=0)\nc.execute('BEGIN IMMEDIATE')\nprint('held',flush=True)\nselect.select([sys.stdin],[],[],5)\nc.rollback()\nc.close()\n";
-        let child = Command::new("python3")
+        // A blocking readline waits for the release line on every host;
+        // select() on stdin is a unix-only shape (Windows: sockets only).
+        let script = "import sqlite3,sys\nc=sqlite3.connect(sys.argv[1],timeout=0)\nc.execute('BEGIN IMMEDIATE')\nprint('held',flush=True)\nsys.stdin.readline()\nc.rollback()\nc.close()\n";
+        #[cfg(windows)]
+        let interpreter = "python";
+        #[cfg(not(windows))]
+        let interpreter = "python3";
+        let child = Command::new(interpreter)
             .arg("-c")
             .arg(script)
             .arg(database)
@@ -26,10 +32,8 @@ impl HeldWriter {
             let result = output.read_line(&mut line).map(|_| line);
             let _ = tx.send(result);
         });
-        assert_eq!(
-            rx.recv_timeout(Duration::from_secs(3)).unwrap().unwrap(),
-            "held\n"
-        );
+        let answer = rx.recv_timeout(Duration::from_secs(3)).unwrap().unwrap();
+        assert_eq!(answer.trim_end(), "held", "the holder answered: {answer:?}");
         reader.join().unwrap();
         held
     }

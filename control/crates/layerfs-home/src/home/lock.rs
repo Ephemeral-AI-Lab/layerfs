@@ -7,6 +7,7 @@
 use crate::outcome::{failed, refused};
 use layerfs_bridge::control::SdkRefusal;
 use std::fs::{File, OpenOptions};
+#[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Condvar, Mutex};
@@ -77,14 +78,24 @@ pub fn take(home: &Path) -> Result<HomeLock, SdkRefusal> {
         held.push((home.clone(), me, 1));
     }
     let opened = super::records::private_dir(&home).and_then(|()| {
-        OpenOptions::new()
+        #[cfg(unix)]
+        let opened = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .truncate(false)
             .mode(0o600)
             .open(home.join("layerfs.lock"))
-            .map_err(failed)
+            .map_err(failed);
+        #[cfg(not(unix))]
+        let opened = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(home.join("layerfs.lock"))
+            .map_err(failed);
+        opened
     });
     let file = match opened {
         Ok(file) => file,

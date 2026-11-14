@@ -16,6 +16,7 @@ use layerfs_home::home::flock::{try_lock, unlock};
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
 use std::fs::{File, OpenOptions};
+#[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
@@ -251,10 +252,20 @@ impl Staging {
         let _lock = home::lock::take(home)?;
         sweep(&parent);
         home::private_dir(&dir)?;
+        #[cfg(unix)]
+        let lock = {
+            use std::os::unix::fs::OpenOptionsExt;
+            OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(dir.join("lock"))
+                .map_err(failed)?
+        };
+        #[cfg(windows)]
         let lock = OpenOptions::new()
             .write(true)
             .create_new(true)
-            .mode(0o600)
             .open(dir.join("lock"))
             .map_err(failed)?;
         if !try_lock(&lock, true).map_err(failed)? {
@@ -282,11 +293,23 @@ fn sweep(parent: &Path) {
             continue;
         }
         let dir = entry.path();
-        let Ok(lock) = OpenOptions::new()
-            .write(true)
-            .custom_flags(libc::O_NOFOLLOW)
-            .open(dir.join("lock"))
-        else {
+        let lock = {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                OpenOptions::new()
+                    .write(true)
+                    .custom_flags(libc::O_NOFOLLOW)
+                    .open(dir.join("lock"))
+            }
+            // Windows: open resolves a reparse point to its target; the
+            // lock's holder face is the same.
+            #[cfg(windows)]
+            {
+                OpenOptions::new().write(true).open(dir.join("lock"))
+            }
+        };
+        let Ok(lock) = lock else {
             continue;
         };
         if try_lock(&lock, true).unwrap_or(false) {
