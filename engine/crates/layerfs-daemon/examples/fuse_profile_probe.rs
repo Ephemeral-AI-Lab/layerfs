@@ -139,6 +139,19 @@ mod probe {
             },
         )
         .unwrap();
+        let flags: Vec<String> = handles
+            .profile()
+            .compile_options
+            .iter()
+            .filter(|o| o.contains("MMAP") || o.contains("OVERFLOW") || o.contains("CACHE"))
+            .map(|o| format!("\"{o}\""))
+            .collect();
+        println!(
+            "PROBE {{\"phase\":\"prepare_profile\",\"page_size\":{},\"sqlite\":\"{}\",\"compile_options\":[{}]}}",
+            handles.profile().page_size,
+            handles.profile().sqlite_version,
+            flags.join(",")
+        );
         let storage = Storage::new(handles.storage.clone()).unwrap();
         let initialized = Timing::disabled("probe.init", |timing| {
             init(
@@ -214,6 +227,26 @@ mod probe {
             .and_then(|rest| rest.split_whitespace().next()?.parse().ok())
             .unwrap()
     }
+    /// `/proc/self/io` counters: read syscalls, bytes read by them, storage bytes.
+    fn io() -> [u64; 3] {
+        let text = fs::read_to_string("/proc/self/io").unwrap_or_default();
+        let get = |name: &str| {
+            text.lines()
+                .find_map(|line| line.strip_prefix(name))
+                .and_then(|rest| rest.trim().parse().ok())
+                .unwrap_or(0)
+        };
+        [get("syscr:"), get("rchar:"), get("read_bytes:")]
+    }
+    /// The Store file's page size from its header (1 means 65,536).
+    fn page_size(path: &Path) -> u64 {
+        let mut header = [0; 18];
+        File::open(path).unwrap().read_exact(&mut header).unwrap();
+        match u16::from_be_bytes([header[16], header[17]]) {
+            1 => 65_536,
+            n => u64::from(n),
+        }
+    }
     fn resident_reset() -> u64 {
         fs::write("/proc/self/clear_refs", "5").unwrap();
         status_kb("VmRSS:")
@@ -265,7 +298,7 @@ mod probe {
             field(receipt, "served_ns"),
         )
     }
-    fn stage_delta(before: &([u64; 12], [u64; 12])) -> String {
+    fn stage_delta(before: &([u64; stages::STAGES], [u64; stages::STAGES])) -> String {
         let after = stages::snapshot();
         let rows: Vec<String> = (0..stages::STAGES)
             .map(|i| {
@@ -378,6 +411,7 @@ mod probe {
         let store_resident = resident(&copy);
         let path = Path::new(&ready.directory).join("rand");
         let (stage0, work0, sql0) = (stages::snapshot(), opened.store.work(), readers(&opened));
+        let io0 = io();
         let rss = resident_reset();
         let started = Instant::now();
         let mut file = File::open(&path).unwrap();
@@ -393,13 +427,39 @@ mod probe {
         drop(file);
         let seconds = started.elapsed().as_secs_f64();
         let hwm = status_kb("VmHWM:");
+        let (rss_file, rss_anon) = (status_kb("RssFile:"), status_kb("RssAnon:"));
+        let io1 = io();
         let (work1, sql1) = (opened.store.work(), readers(&opened));
         let split = stage_delta(&stage0);
         assert_eq!((total, sum), (BIG, expected), "cold read bytes");
         let receipt = unmount(&harness, &ready);
+        let sql = format!(
+            "{{\"vm_steps\":{},\"statement_ns\":{},\"read_snapshots\":{},\"read_snapshot_ns\":{},\"blob_opens\":{},\"blob_reads\":{},\"blob_read_bytes\":{},\"blob_read_ns\":{},\"phases\":[{}]}}",
+            sql1.vm_steps - sql0.vm_steps,
+            sql1.statement_ns - sql0.statement_ns,
+            sql1.read_snapshots - sql0.read_snapshots,
+            sql1.read_snapshot_ns - sql0.read_snapshot_ns,
+            sql1.blob_open_calls - sql0.blob_open_calls,
+            sql1.blob_read_calls - sql0.blob_read_calls,
+            sql1.blob_read_bytes - sql0.blob_read_bytes,
+            sql1.blob_read_ns - sql0.blob_read_ns,
+            // Statement phases: prepare, query, next, map, cursor drop,
+            // status, statement drop; each [calls, ns].
+            sql1.statement_phases
+                .iter()
+                .zip(sql0.statement_phases)
+                .map(|(a, b)| format!("[{},{}]", a.calls - b.calls, a.wall_ns - b.wall_ns))
+                .collect::<Vec<_>>()
+                .join(","),
+        );
         println!(
-            "PROBE {{\"phase\":\"cold_read\",\"profile\":{profile},\"read_ahead_kb\":[\"{ra_before}\",\"{ra_after}\"],\"store_resident_before\":{store_resident},\"bytes\":{total},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"object_batches\":{},\"object_ids\":{},\"statements\":{},\"returned_rows\":{},\"stages\":{split},\"kernel\":{}}}",
+            "PROBE {{\"phase\":\"cold_read\",\"profile\":{profile},\"read_ahead_kb\":[\"{ra_before}\",\"{ra_after}\"],\"store_page_size\":{},\"store_bytes\":{},\"store_resident_before\":{store_resident},\"bytes\":{total},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"rss_file_kb\":{rss_file},\"rss_anon_kb\":{rss_anon},\"read_syscalls\":{},\"read_syscall_bytes\":{},\"storage_read_bytes\":{},\"object_batches\":{},\"object_ids\":{},\"statements\":{},\"returned_rows\":{},\"sql\":{sql},\"stages\":{split},\"kernel\":{}}}",
+            page_size(&copy),
+            fs::metadata(&copy).unwrap().len(),
             total as f64 / seconds / 1e6,
+            io1[0] - io0[0],
+            io1[1] - io0[1],
+            io1[2] - io0[2],
             work1.object_batches - work0.object_batches,
             work1.object_ids - work0.object_ids,
             sql1.statements - sql0.statements,
