@@ -317,6 +317,22 @@ mod probe {
     }
 
     fn run(dir: &Path, work: &Path) {
+        // Diagnostic: `LAYERFS_PROBE_BURN=<n>` keeps n threads spinning for
+        // the whole run, so fewer guest CPUs sit idle between requests.
+        let burn = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let burners: Vec<_> = (0..std::env::var("LAYERFS_PROBE_BURN")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(0))
+            .map(|_| {
+                let burn = burn.clone();
+                std::thread::spawn(move || {
+                    while burn.load(std::sync::atomic::Ordering::Relaxed) {
+                        std::hint::spin_loop();
+                    }
+                })
+            })
+            .collect();
         let window: u32 = std::env::var("LAYERFS_PROBE_FUSE_WINDOW")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -522,6 +538,10 @@ mod probe {
             opcodes(&receipt)
         );
         harness.stop();
+        burn.store(false, std::sync::atomic::Ordering::Relaxed);
+        for burner in burners {
+            burner.join().unwrap();
+        }
         drop(opened);
         fs::remove_dir_all(work).unwrap();
     }
