@@ -203,7 +203,9 @@ the body changed since the snapshot (`used` tick), and a spilled body is opened
 by path per `pread`/`pwrite`/`set_len` and never held open. One edit per
 companion runs under `Companion::editing` ([`edit.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/edit.rs)),
 recording length and bytes together and spilling its own body rather than
-failing with `NFS3ERR_IO`. Eviction follows `Companions::by_use`, the
+failing with `NFS3ERR_IO`. A file operation that fails after the spill put the
+length the companion had back, so a refused write reports neither bytes nor the
+longer file the spill made for it. Eviction follows `Companions::by_use`, the
 `(used tick, serial)` order kept on attach, detach and every use: the victim is
 the first entry (O(log n) per round, no walk of the index), and the rounds end
 when no companion holding memory is left.

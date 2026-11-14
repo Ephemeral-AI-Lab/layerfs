@@ -33,6 +33,18 @@ use std::{
     path::Path,
 };
 
+/// One `pread` of `buf` at `offset`: a short read is the answer, and a read a
+/// signal interrupted is asked again, since no bytes of it moved.
+fn read_window(file: &File, buf: &mut [u8], offset: u64) -> Result<usize, Status> {
+    loop {
+        match file.read_at(buf, offset) {
+            Ok(read) => return Ok(read),
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+            Err(e) => return Err(io_status(&e)),
+        }
+    }
+}
+
 impl Kernel {
     /// READ of a companion, at most `count` bytes from `offset`, appended to
     /// `out`; `eof` when the reply reaches the companion's end.
@@ -74,10 +86,7 @@ impl Kernel {
             // call may have truncated the file since, and the bytes the file
             // still holds are the reply - a short read, not an I/O error.
             let mut buf = vec![0u8; end - start];
-            let read = self
-                .spill_file(serial, false)?
-                .read_at(&mut buf, start as u64)
-                .map_err(|e| io_status(&e))?;
+            let read = read_window(&self.spill_file(serial, false)?, &mut buf, start as u64)?;
             buf.truncate(read);
             out.extend_from_slice(&buf);
         }
@@ -188,10 +197,32 @@ impl Kernel {
             }
         }
         // The body still does not fit resident memory: write it out and edit
-        // its file, which needs no body budget.
-        self.spill_gated(serial, target)?;
-        edit.disk(&self.spill_file(serial, true)?)?;
+        // its file, which needs no body budget. A failed file operation leaves
+        // the length the companion had: the spill may have grown its file to
+        // the length this edit wanted, and a refused edit must not report it.
+        let before = self
+            .companions()
+            .files
+            .get(&serial)
+            .map(|file| file.len)
+            .ok_or(Status::Stale)?;
+        let written = self.spill_gated(serial, target).and_then(|()| {
+            let file = self.spill_file(serial, true)?;
+            edit.disk(&file)
+        });
+        if let Err(status) = written {
+            self.restore_len(serial, before);
+            return Err(status);
+        }
         self.record_edit(serial, &edit)
+    }
+    /// Puts back the length `serial` had before an edit whose file operation
+    /// failed.
+    fn restore_len(&self, serial: u64, len: usize) {
+        let mut companions = self.companions();
+        if let Some(file) = companions.files.get_mut(&serial) {
+            file.len = len;
+        }
     }
     /// Applies `edit` to `serial`'s body in memory while the budget holds it
     /// (a decoded body is encoded first), recording its length, recency and
@@ -318,9 +349,13 @@ impl Kernel {
             }
         };
         // One writer of a companion's file at a time: an edit of this companion
-        // is writing to it, and a spill may not wait for another call's I/O.
-        let Ok(_editing) = gate.try_lock() else {
-            return Ok(false);
+        // is writing to it, and a spill may not wait for another call's I/O. A
+        // gate poisoned by a panic is taken anyway, as every other holder of it
+        // does, so one panicked edit does not make its body undevictable.
+        let _editing = match gate.try_lock() {
+            Ok(editing) => editing,
+            Err(std::sync::TryLockError::Poisoned(poison)) => poison.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return Ok(false),
         };
         let (dir, bytes, size, used) = {
             let companions = self.companions();
