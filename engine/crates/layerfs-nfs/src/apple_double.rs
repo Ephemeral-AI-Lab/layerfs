@@ -480,6 +480,27 @@ impl Companions {
             || serial.is_some_and(|serial| self.slots.contains(&serial))
             || self.slots.len() < self.held_limit
     }
+    /// The companions no name of the export reaches: neither the name it
+    /// records nor another name of its inode finds it. Such a companion holds
+    /// its body with no way for a client to ask for it, which is one of the two
+    /// shapes a lost attribute takes (the other is no companion at all). It is
+    /// counted once, when the export releases, so a file of reports from a real
+    /// client can say which shape a loss had.
+    fn unreachable(&self) -> usize {
+        self.files
+            .iter()
+            .filter(|(serial, file)| {
+                self.names.get(&file.named) != Some(serial)
+                    && !file
+                        .also
+                        .iter()
+                        .any(|also| self.names.get(also) == Some(serial))
+                    && file
+                        .inode
+                        .is_none_or(|inode| self.inodes.get(&inode) != Some(serial))
+            })
+            .count()
+    }
     fn holding(&self) -> Holding {
         Holding {
             held: self.files.len(),
@@ -1009,10 +1030,11 @@ impl Kernel {
     /// Drops every companion and removes the export's spill directory; returns
     /// what the index held.
     pub(crate) fn companions_release(&self) -> Holding {
-        let (held, dir) = {
+        let (held, dir, unreachable) = {
             let mut companions = self.companions();
             let dir = companions.spill_dir.take();
-            (std::mem::take(&mut *companions), dir)
+            let unreachable = companions.unreachable();
+            (std::mem::take(&mut *companions), dir, unreachable)
         };
         if let Some(dir) = dir {
             drop(fs::remove_dir_all(dir));
@@ -1020,7 +1042,7 @@ impl Kernel {
         let holding = held.holding();
         if holding.held > 0 {
             eprintln!(
-                "layerfs-nfs: AppleDouble companions released: export={:?} held={} slotted={} decoded={} resident_bytes={}",
+                "layerfs-nfs: AppleDouble companions released: export={:?} held={} slotted={} decoded={} resident_bytes={} unreachable={unreachable}",
                 self.mount(),
                 holding.held,
                 holding.slotted,

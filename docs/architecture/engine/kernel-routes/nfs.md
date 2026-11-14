@@ -259,6 +259,14 @@ the first entry (O(log n) per round, no walk of the index), and the rounds end
 when no companion holding memory is left. `ExportServing::reclaim` and release
 delete `<mounts>/.appledouble`.
 
+Release logs one line per export that still holds companions:
+`held= slotted= decoded= resident_bytes= unreachable=`. `unreachable` counts the
+companions no name reaches - neither the name a companion records nor another
+name of its inode finds it - which is the shape a lost attribute takes when the
+body is still held but a client cannot ask for it; a zero beside a client that
+lost attributes says the loss was a missing companion rather than a lost name.
+It is counted once, at release, over the companions held.
+
 ## Mount (`mount.rs`, daemon `export.rs`)
 
 ```text
