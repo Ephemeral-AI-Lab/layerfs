@@ -27,6 +27,7 @@ fn stopped_machine_images_is_unavailable_and_preserves_state() {
     )
     .unwrap_err();
     assert_eq!(error.code, "Unavailable", "{}", error.message);
+    assert_eq!(error.detail.get_text("what"), Some("machine"));
     assert_eq!(
         before,
         std::fs::read(home.join("machine/image-test/record.json")).unwrap()

@@ -40,10 +40,12 @@ pub enum Side<'a> {
 /// is taken; the bundle's archive is the only one, and the choice names
 /// the `docker` platform its Sandboxes keep showing.
 pub fn choose(home: &Path, machine: &str, image: Option<&str>) -> Result<Choice> {
+    // the caller resolved a Docker reference to its Id already (R1); an
+    // image that is no digest here is never dropped for the default (R0)
     if image.is_some_and(|value| !is_digest(value)) {
         return Err(refused(
             "InvalidInput",
-            "Sandbox image must be a full sha256 config digest",
+            "Sandbox image must be a sha256 digest or Docker image Id here",
         ));
     }
     let record = MachineRecord::read(home, machine)?
@@ -87,7 +89,7 @@ pub fn resolve(side: &Side<'_>, choice: &Choice) -> Result<Deploy> {
     };
     // a namespaces Sandbox (Linux): its image archive and digest
     if cfg!(target_os = "linux") {
-        let archive = selected_archive(side, choice)?;
+        let archive = archive(side, choice.archive.as_deref())?;
         settings.image_archive = Some(archive.display().to_string());
         settings.image = choice.image.clone().filter(|i| is_digest(i));
     }
@@ -141,15 +143,6 @@ fn daemon(side: &Side<'_>) -> Result<String> {
 /// (`chosen`; in a guest, its copy under [`GUEST_IMAGES`]), else the
 /// bundle's.
 pub fn archive(side: &Side<'_>, chosen: Option<&str>) -> Result<PathBuf> {
-    if let Some(key) = chosen.and_then(|path| path.strip_prefix("cache:")) {
-        if !is_digest(&format!("sha256:{key}")) {
-            return Err(refused("InvalidInput", "invalid image cache key"));
-        }
-        let root = match side {
-            Side::Home(root) | Side::Worker(root) => root,
-        };
-        return Ok(crate::image_artifact::directory(root).join(format!("{key}.tar")));
-    }
     Ok(match (side, chosen) {
         (Side::Home(_), Some(path)) => PathBuf::from(path),
         (Side::Home(_), None) => bundle_dir("linux")?.join(IMAGE_ARCHIVE),
@@ -176,63 +169,4 @@ fn is_digest(image: &str) -> bool {
                 .bytes()
                 .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
     })
-}
-
-/// Resolves an exact image from the effective archive or a published import.
-fn selected_archive(side: &Side<'_>, choice: &Choice) -> Result<PathBuf> {
-    let primary = archive(side, choice.archive.as_deref())?;
-    let Some(digest) = choice.image.as_deref() else {
-        return Ok(primary);
-    };
-    // A caller-supplied content-addressed archive stays pinned to that archive.
-    if choice
-        .archive
-        .as_deref()
-        .is_some_and(|p| p.starts_with("cache:"))
-    {
-        return Ok(primary);
-    }
-    if archive_has(&primary, digest)? {
-        return Ok(primary);
-    }
-    let root = match side {
-        Side::Home(root) | Side::Worker(root) => root,
-    };
-    let directory = crate::image_artifact::directory(root);
-    match std::fs::read_dir(directory) {
-        Ok(files) => {
-            let mut paths = Vec::new();
-            for file in files {
-                let path = file.map_err(failed)?.path();
-                if path.extension().is_some_and(|ext| ext == "tar") {
-                    paths.push(path);
-                }
-            }
-            paths.sort();
-            for path in paths {
-                if archive_has(&path, digest)? {
-                    return Ok(path);
-                }
-            }
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(failed(error)),
-    }
-    Ok(primary)
-}
-
-fn archive_has(path: &Path, digest: &str) -> Result<bool> {
-    let entries = layerfs_sandbox_backend::rootfs::images(path).map_err(|error| {
-        refused(
-            "InvalidInput",
-            format!("image archive {}: {error}", path.display()),
-        )
-    })?;
-    if entries.is_empty() {
-        return Err(refused(
-            "InvalidInput",
-            format!("image archive {} contains no images", path.display()),
-        ));
-    }
-    Ok(entries.iter().any(|entry| entry.digest.as_str() == digest))
 }

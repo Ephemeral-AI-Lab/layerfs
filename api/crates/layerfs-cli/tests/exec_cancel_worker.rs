@@ -48,7 +48,10 @@ fn worker(seen: Seen) -> SocketAddr {
             };
             let args = request.get("args").cloned().unwrap_or_default();
             let more = args.get("more").cloned().unwrap_or_default();
+            // the machine holds the named image already: nothing is copied
+            let image = request.get_text("op") == Some("image.artifact");
             let value = match args.get_text("op") {
+                _ if image => SdkValue::map([("present", SdkValue::Bool(true))]),
                 Some("workspace.exec") => SdkValue::map([
                     ("kind", t("exit:0")),
                     ("exitCode", SdkValue::Int(0)),

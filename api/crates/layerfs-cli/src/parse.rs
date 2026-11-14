@@ -50,16 +50,6 @@ fn value(call: &Call, arg: &Arg, word: &str) -> Result<SdkValue, Usage> {
             .parse::<i64>()
             .map(SdkValue::Int)
             .map_err(|_| usage(format!("{} must be a whole number", what()))),
-        // Sandbox image selection also accepts its original bare digest.
-        // Structured archive input remains JSON, checked by the same API call.
-        Kind::Json
-            if call.family == "sandbox"
-                && call.call == "create"
-                && arg.name == "image"
-                && word.starts_with("sha256:") =>
-        {
-            Ok(SdkValue::text(word))
-        }
         Kind::Json => {
             json::parse(word).map_err(|why| usage(format!("{} is not JSON: {}", what(), why.0)))
         }

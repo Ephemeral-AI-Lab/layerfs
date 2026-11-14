@@ -140,7 +140,9 @@ fn named_sandboxes_on_native() {
             ("image", t("local")),
         ],
     );
-    assert_eq!(invalid.unwrap_err().0, "InvalidInput");
+    // macOS native runs no image: refused, never dropped for the default (R0)
+    let expected = if cfg!(target_os = "macos") { "Unsupported" } else { "InvalidInput" };
+    assert_eq!(invalid.unwrap_err().0, expected);
     let taken = call(
         &home,
         "sandbox.create",

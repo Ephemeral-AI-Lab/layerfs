@@ -1,4 +1,4 @@
-//! `machine.images`: available Sandbox images on a machine.
+//! `machine.images`: the Sandbox images a machine holds, and the host's Docker images it can copy.
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call};
 use crate::calls::Context;
@@ -13,7 +13,7 @@ pub(crate) const CALL: Call = call(
     "images",
     &[a("name", Name)],
     &[],
-    "available Sandbox images on a machine",
+    "the Sandbox images a machine holds, and the host's Docker images it can copy",
     run,
 );
 

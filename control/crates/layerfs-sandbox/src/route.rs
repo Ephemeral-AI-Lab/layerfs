@@ -194,11 +194,9 @@ pub struct Asked {
     pub call: Call,
     /// Its Commit message (exec and Commit send one).
     pub message: Message,
-    /// The image `sandbox.create` names; every other call runs the
-    /// Sandbox's own.
+    /// The image `sandbox.create` names (a digest, Docker Id or Docker
+    /// reference); every other call runs the Sandbox's own.
     pub image: Option<String>,
-    /// A caller-local archive supplied to Sandbox creation.
-    pub image_archive: Option<String>,
 }
 
 impl From<Call> for Asked {
@@ -207,7 +205,6 @@ impl From<Call> for Asked {
             call,
             message: Message::Absent,
             image: None,
-            image_archive: None,
         }
     }
 }
@@ -259,7 +256,6 @@ fn host_op(
         call,
         message,
         image,
-        image_archive,
     } = asked;
     let op = call.op();
     // the Sandbox's name is its identity on every machine
@@ -284,34 +280,32 @@ fn host_op(
     };
     // a Sandbox's host operations run where its machine runs them, for
     // either Store kind (#535 §7.4)
-    let executor = place::on_machine(&home, machine)?;
+    let mut executor = place::on_machine(&home, machine)?;
+    // the image a create names: none on macOS native (R0), else resolved
+    // and copied to the machine when it does not hold it yet (R1)
+    let image = match (op, image) {
+        (Op::SandboxCreate, Some(_)) if crate::images::host_mode(&executor) => {
+            return Err(crate::images::host_only(machine))
+        }
+        (Op::SandboxCreate, Some(named)) => {
+            let archive = deploy::choose(&home, machine, None)?.archive;
+            let docker = crate::docker::Docker::of(&home)?;
+            let mut target = match &mut executor {
+                Executor::Local => crate::image_load::Target::Local(&home),
+                Executor::Worker(worker) => crate::image_load::Target::Worker(worker),
+            };
+            let loaded =
+                crate::image_load::load(&docker, events, &mut target, archive.as_deref(), &named)?;
+            events.progress(SdkValue::map([("phase", SdkValue::text("start"))]));
+            Some(loaded.id)
+        }
+        (_, image) => image,
+    };
     // what the machine's record chooses; the side that runs the call
     // resolves the rest
-    let mut choice = deploy::choose(&home, machine, image.as_deref())?;
-    if let Some(path) = image_archive.as_deref() {
-        events.progress(SdkValue::map([(
-            "phase",
-            SdkValue::text("image-validation"),
-        )]));
-        crate::image_artifact::validate(path, image.as_deref())?;
-        choice.archive = Some(path.to_owned());
-        choice.image = image.clone();
-    }
+    let choice = deploy::choose(&home, machine, image.as_deref())?;
     match executor {
         Executor::Local => {
-            if (image_archive.is_some() || image.is_some()) && cfg!(target_os = "macos") {
-                return Err(refused(
-                    "Unsupported",
-                    "native macOS Sandboxes use host processes and do not accept image overrides",
-                ));
-            }
-            if let Some(path) = image_archive.as_deref() {
-                choice.archive = Some(crate::image_artifact::local(
-                    &home,
-                    events,
-                    Path::new(path),
-                )?);
-            }
             let key = store_path(&home, &target.store, &target.record, kind);
             if let (Some(postgresql), Op::SandboxCreate) = (&postgresql, op) {
                 reach_check(
@@ -350,16 +344,12 @@ fn host_op(
             let out = local(host, call)?;
             let out = drain(out, &mut |event| events.event(event));
             closed(op, opened.as_deref(), &out);
+            if let (Op::SandboxCreate, Ok(out)) = (op, &out) {
+                touched(&Side::Home(&home), &choice, out);
+            }
             out
         }
         Executor::Worker(mut worker) => {
-            if let Some(path) = image_archive.as_deref() {
-                choice.archive = Some(crate::image_artifact::send(
-                    &mut worker,
-                    events,
-                    Path::new(path),
-                )?);
-            }
             // the guest runs the same call on its own native machine, with
             // the records it needs sent along
             let project_record = ProjectRecord::read(&home, &target.store, &target.project)?
@@ -503,8 +493,19 @@ pub fn in_worker(
     // the caller reaches the new Sandbox's daemon directly where its
     // machine forwards the port (#535 G4): the answer carries its keys
     match op {
-        Op::SandboxCreate => crate::direct::with_keys(root, &name, out),
+        Op::SandboxCreate => {
+            touched(&Side::Worker(root), &choice, &out);
+            crate::direct::with_keys(root, &name, out)
+        }
         _ => Ok(out),
+    }
+}
+
+/// Marks the image a Sandbox was just created from as used (its sidecar's
+/// `last_used`). A sidecar that cannot be written does not fail the create.
+fn touched(side: &Side<'_>, choice: &deploy::Choice, out: &SdkValue) {
+    if let Some(image) = out.get_text("image") {
+        let _ = crate::image_artifact::touch(side, choice.archive.as_deref(), image);
     }
 }
 

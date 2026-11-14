@@ -18,6 +18,7 @@ const ARGUMENT = {
   size: "Size",
   content: "Content",
   json: "Value",
+  image: "string",
 };
 const FUNCTION = { on_progress: "ProgressHandler", stdout: "OutputHandler", stderr: "OutputHandler" };
 

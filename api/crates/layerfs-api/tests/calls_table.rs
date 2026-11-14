@@ -1,4 +1,4 @@
-//! The call table and its dispatcher (#533 step 2): 71 calls in ten
+//! The call table and its dispatcher (#533 step 2): 73 calls in ten
 //! families, arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::{families, json, keys, size, Call, Kind};
@@ -51,9 +51,9 @@ fn code(name: &str, args: SdkValue) -> String {
 }
 
 #[test]
-fn the_table_has_ten_families_and_71_calls() {
+fn the_table_has_ten_families_and_73_calls() {
     let all: Vec<&Call> = layerfs_api::calls();
-    assert_eq!(all.len(), 71);
+    assert_eq!(all.len(), 73);
     // each family holds only its own calls, and has at least one
     for family in families() {
         assert!(!family.calls().is_empty(), "{}", family.name);
@@ -66,7 +66,7 @@ fn the_table_has_ten_families_and_71_calls() {
     let mut names: Vec<_> = all.iter().map(|c| c.name()).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 71, "call names are unique");
+    assert_eq!(names.len(), 73, "call names are unique");
     // an optional positional is only ever followed by optional ones (D7)
     for c in &all {
         let first_optional = c.args.iter().position(|a| a.optional);
@@ -75,7 +75,7 @@ fn the_table_has_ten_families_and_71_calls() {
         }
     }
     let counts: Vec<usize> = families().iter().map(|f| f.calls().len()).collect();
-    assert_eq!(counts, [6, 8, 3, 15, 4, 6, 10, 12, 5, 2]);
+    assert_eq!(counts, [6, 8, 3, 15, 4, 6, 12, 12, 5, 2]);
 }
 
 #[test]
@@ -407,7 +407,34 @@ fn native_machine_images_reports_host_userland_without_a_bundle() {
     let (outcome, events) = run("machine.images", map(&[("name", t("native"))]));
     let result = outcome.unwrap();
     assert_eq!(result.get_text("mode"), Some("host"));
-    assert_eq!(result.get("default_digest"), Some(&SdkValue::Null));
+    assert_eq!(result.get("default"), Some(&SdkValue::Null));
     assert_eq!(result.get("images"), Some(&SdkValue::List(vec![])));
+    assert_eq!(result.get("docker"), Some(&SdkValue::Null));
+    assert_eq!(result.get("available"), Some(&SdkValue::List(vec![])));
     assert!(events.is_empty());
+    // no image on macOS native: a load or prune is refused, naming why
+    for (call, args) in [
+        ("machine.load", map(&[("name", t("native")), ("image", t("alpine:3"))])),
+        ("machine.prune", map(&[("name", t("native")), ("unused", SdkValue::Bool(true))])),
+    ] {
+        let home = tempdir();
+        let error = layerfs_api::call(Some(&home), call, args, &mut |_| {}).unwrap_err();
+        let _ = std::fs::remove_dir_all(&home);
+        assert_eq!(error.code, "Unsupported", "{call}");
+        assert_eq!(error.detail.get_text("reason"), Some("host"), "{call}");
+    }
+}
+
+#[test]
+fn sandbox_images_are_named_by_the_image_kind() {
+    let create = layerfs_api::find("sandbox.create").unwrap();
+    let image = create.options.iter().find(|a| a.name == "image").unwrap();
+    assert_eq!(image.kind, Kind::Image);
+    assert!(create.options.iter().all(|a| a.name != "image_archive"));
+    let load = layerfs_api::find("machine.load").unwrap();
+    assert_eq!(load.args[1].kind, Kind::Image);
+    assert!(load.options.iter().any(|a| a.name == "on_progress"));
+    let prune = layerfs_api::find("machine.prune").unwrap();
+    assert!(prune.args[1].optional);
+    assert_eq!(prune.options[0].name, "unused");
 }

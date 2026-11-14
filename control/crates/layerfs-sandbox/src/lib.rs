@@ -21,6 +21,8 @@ pub use daemon::workspace::{
 mod close;
 mod create;
 #[doc(hidden)]
+pub mod docker;
+#[doc(hidden)]
 pub mod deploy;
 #[doc(hidden)]
 pub mod direct;
@@ -37,7 +39,10 @@ mod get;
 pub mod host;
 #[doc(hidden)]
 pub mod image_artifact;
-mod image_choice;
+#[doc(hidden)]
+pub mod image_load;
+#[doc(hidden)]
+pub mod image_tar;
 #[doc(hidden)]
 pub mod images;
 #[doc(hidden)]
