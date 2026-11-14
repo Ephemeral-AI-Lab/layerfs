@@ -45,8 +45,10 @@ mod probe {
     use layerfs_store_service::bootstrap::{open_store_observed, OpenedStore};
     use layerfs_telemetry::timer::{stages, Timing};
     use std::{
+        ffi::OsStr,
         fs::{self, File, OpenOptions},
         io::{Read, Write},
+        os::fd::AsRawFd,
         os::unix::fs::{FileExt, MetadataExt, PermissionsExt},
         path::Path,
         process::Command,
@@ -254,9 +256,27 @@ mod probe {
             .filter(|(_, count)| **count > 0)
             .map(|(i, count)| format!("\"{}\":[{count},{}]", Opcode::NAMES[i], nanos[i]))
             .collect();
+        let (counts, nanos) = (
+            array(receipt, "phase_counts"),
+            array(receipt, "phase_nanos"),
+        );
+        let phases: Vec<String> = counts
+            .iter()
+            .enumerate()
+            .filter(|(_, count)| **count > 0)
+            .map(|(i, count)| {
+                format!(
+                    "\"{}\":[{count},{}]",
+                    layerfs_fuse::request::Phase::NAMES[i],
+                    nanos[i]
+                )
+            })
+            .collect();
         format!(
-            "{{\"opcodes\":{{{}}},\"served\":{},\"inline\":{},\"refused\":{},\"largest_read\":{},\"largest_write\":{},\"served_ns\":{}}}",
+            "{{\"opcodes\":{{{}}},\"phases\":{{{}}},\"forget_units\":{},\"served\":{},\"inline\":{},\"refused\":{},\"largest_read\":{},\"largest_write\":{},\"served_ns\":{}}}",
             rows.join(","),
+            phases.join(","),
+            field(receipt, "forget_units"),
             field(receipt, "served"),
             field(receipt, "inline"),
             field(receipt, "refused"),
@@ -301,6 +321,117 @@ mod probe {
     }
     fn unmount(harness: &Harness, ready: &ReadyMount) -> String {
         format!("{:?}", harness.unmount(ready).kernel)
+    }
+
+    /// FNV-1a over a listing's output: equal listings compare equal across arms.
+    fn fnv(bytes: &[u8]) -> u64 {
+        bytes.iter().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+            (hash ^ u64::from(*byte)).wrapping_mul(0x100_0000_01b3)
+        })
+    }
+    /// Runs one listing command, its binary warmed outside the timing.
+    fn listed(program: &str, args: &[&OsStr]) -> (f64, Vec<u8>) {
+        Command::new(program).arg("--version").output().unwrap();
+        let started = Instant::now();
+        let out = Command::new(program).args(args).output().unwrap();
+        let seconds = started.elapsed().as_secs_f64();
+        assert!(
+            out.status.success(),
+            "{program}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        (seconds, out.stdout)
+    }
+    fn summary(out: &[u8]) -> String {
+        let text = String::from_utf8_lossy(out);
+        let lines: Vec<&str> = text.lines().collect();
+        let head: Vec<&&str> = lines.iter().take(3).collect();
+        let tail: Vec<&&str> = lines.iter().rev().take(2).collect();
+        format!(
+            "\"lines\":{},\"hash\":\"{:016x}\",\"head\":{head:?},\"tail\":{tail:?}",
+            lines.len(),
+            fnv(out)
+        )
+    }
+    /// Prototype custody check (`LAYERFS_PROBE_FORGET_CHECK=1`, after the
+    /// timing): the guest drops its unused dentries and inodes, so the kernel
+    /// forgets every lookup reference it holds on this mount. The engine's
+    /// kernel lookup rows must then fall to the root's implicit one: a row
+    /// left over is a reference the kernel never held, and one the kernel
+    /// held that the engine did not fails FORGET as an underflow.
+    fn forget_check(harness: &Harness, ready: &ReadyMount) -> String {
+        if std::env::var("LAYERFS_PROBE_FORGET_CHECK").as_deref() != Ok("1") {
+            return "null".into();
+        }
+        let count = || harness.engine_resources(ready.token).open.kernel_entries;
+        let before = count();
+        let started = Instant::now();
+        let drop = || fs::write("/proc/sys/vm/drop_caches", "2").is_ok();
+        // The container's /proc/sys is read-only until remounted.
+        let dropped = drop()
+            || (Command::new("mount")
+                .args(["-o", "remount,rw", "/proc/sys"])
+                .status()
+                .is_ok_and(|status| status.success())
+                && drop());
+        let mut after = count();
+        while after > 1 && started.elapsed() < Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(20));
+            after = count();
+        }
+        format!(
+            "{{\"dropped\":{dropped},\"kernel_entries_before\":{before},\"kernel_entries_after\":{after},\"waited_ms\":{}}}",
+            started.elapsed().as_millis()
+        )
+    }
+    /// One `getdents64` call into a buffer of `size` bytes: (ino, off, name).
+    fn getdents(fd: i32, size: usize) -> Vec<(u64, i64, String)> {
+        let mut buffer = vec![0_u8; size];
+        // SAFETY: the buffer is valid for `size` bytes for the call.
+        let n = unsafe {
+            nix::libc::syscall(
+                nix::libc::SYS_getdents64,
+                fd,
+                buffer.as_mut_ptr(),
+                buffer.len(),
+            )
+        };
+        assert!(n >= 0, "getdents64: {}", std::io::Error::last_os_error());
+        let (mut at, mut out) = (0, Vec::new());
+        while at < n as usize {
+            let ino = u64::from_ne_bytes(buffer[at..at + 8].try_into().unwrap());
+            let off = i64::from_ne_bytes(buffer[at + 8..at + 16].try_into().unwrap());
+            let reclen = u16::from_ne_bytes(buffer[at + 16..at + 18].try_into().unwrap());
+            let name = &buffer[at + 19..at + reclen as usize];
+            let name = &name[..name.iter().position(|b| *b == 0).unwrap()];
+            out.push((ino, off, String::from_utf8_lossy(name).into_owned()));
+            at += reclen as usize;
+        }
+        out
+    }
+    /// One listing command over `small/` on its own fresh mount.
+    fn directory_phase(harness: &Harness, tag: u8, phase: &str, program: &str, args: &[&str]) {
+        let ready = harness.mount(tag);
+        let small = Path::new(&ready.directory).join("small");
+        // `@` stands for the directory; without one it goes last.
+        let mut argv: Vec<&OsStr> = args
+            .iter()
+            .map(|arg| match *arg {
+                "@" => small.as_os_str(),
+                arg => OsStr::new(arg),
+            })
+            .collect();
+        if !args.contains(&"@") {
+            argv.push(small.as_os_str());
+        }
+        let (seconds, out) = listed(program, &argv);
+        let forget = forget_check(harness, &ready);
+        let receipt = unmount(harness, &ready);
+        println!(
+            "PROBE {{\"phase\":\"{phase}\",\"entries\":{SMALL_FILES},\"seconds\":{seconds:.4},{},\"forget\":{forget},\"kernel\":{}}}",
+            summary(&out),
+            opcodes(&receipt)
+        );
     }
 
     fn run(dir: &Path, work: &Path) {
@@ -366,7 +497,8 @@ mod probe {
         // 1. Cold sequential read of `rand` on a fresh mount.
         let ready = harness.mount(1);
         let profile = format!(
-            "{{\"max_write\":{},\"max_readahead\":{},\"max_background\":{},\"congestion\":{},\"loops\":{}}}",
+            "{{\"selected\":{},\"max_write\":{},\"max_readahead\":{},\"max_background\":{},\"congestion\":{},\"loops\":{}}}",
+            ready.receipt.selected,
             ready.receipt.max_write,
             ready.receipt.max_readahead,
             ready.receipt.max_background,
@@ -481,21 +613,105 @@ mod probe {
         );
 
         // 5. `ls -l` of the committed 2,000-file directory on a fresh mount.
-        let ready = harness.mount(5);
+        directory_phase(&harness, 5, "ls_l", "ls", &["-l", "--time-style=full-iso"]);
+        // 6. Plain `ls`: names only, no attribute is needed.
+        directory_phase(&harness, 6, "ls", "ls", &[]);
+        // 7. A stat walk: `find` must stat every file for its size and mode.
+        directory_phase(
+            &harness,
+            7,
+            "find_stat",
+            "find",
+            &["@", "-type", "f", "-printf", "%s %m %n %f\n"],
+        );
+
+        // 8. A repeated offset: a seek back to a handed-out offset relists
+        //    the same names, which reuses the published reply.
+        let ready = harness.mount(8);
+        let small = Path::new(&ready.directory).join("small");
+        let fallback0 = layerfs_fuse::request::fallback_entries();
         let started = Instant::now();
-        let status = Command::new("ls")
-            .arg("-l")
-            .arg(Path::new(&ready.directory).join("small"))
-            .stdout(std::process::Stdio::null())
-            .status()
-            .unwrap();
+        let directory = File::open(&small).unwrap();
+        let raw = directory.as_raw_fd();
+        let first = getdents(raw, 4096);
+        let resume = first.last().unwrap().1;
+        let second = getdents(raw, 4096);
+        // SAFETY: plain lseek on a descriptor this function owns.
+        let at = unsafe { nix::libc::lseek(raw, resume, nix::libc::SEEK_SET) };
+        assert_eq!(at, resume);
+        let third = getdents(raw, 4096);
+        drop(directory);
         let seconds = started.elapsed().as_secs_f64();
-        assert!(status.success());
+        let same = second == third;
+        let nonzero = [&first, &second, &third]
+            .iter()
+            .all(|batch| batch.iter().all(|entry| entry.0 != 0));
+        let fallback = layerfs_fuse::request::fallback_entries() - fallback0;
+        let forget = forget_check(&harness, &ready);
         let receipt = unmount(&harness, &ready);
         println!(
-            "PROBE {{\"phase\":\"ls_l\",\"entries\":{SMALL_FILES},\"seconds\":{seconds:.4},\"kernel\":{}}}",
+            "PROBE {{\"phase\":\"seek_relist\",\"seconds\":{seconds:.4},\"counts\":[{},{},{}],\"relist_equal\":{same},\"inos_nonzero\":{nonzero},\"fallback_entries\":{fallback},\"forget\":{forget},\"kernel\":{}}}",
+            first.len(),
+            second.len(),
+            third.len(),
             opcodes(&receipt)
         );
+        assert!(same && nonzero, "relisted names differ");
+
+        // 9. `ls -l` of a directory changed in the Workspace first: creates,
+        //    renames, a rename over an existing name, deletes, a directory
+        //    and a symlink. The listing must show exactly the expected names.
+        let ready = harness.mount(9);
+        let small = Path::new(&ready.directory).join("small");
+        let mut expected: Vec<String> = (0..SMALL_FILES).map(|n| format!("f{n:05}")).collect();
+        for n in 0..5_usize {
+            fs::write(small.join(format!("new{n}")), vec![n as u8; 100 * (n + 1)]).unwrap();
+            expected.push(format!("new{n}"));
+            let (old, new) = (format!("f{:05}", 10 + n), format!("r{:05}", 10 + n));
+            fs::rename(small.join(&old), small.join(&new)).unwrap();
+            expected.retain(|name| *name != old);
+            expected.push(new);
+            let gone = format!("f{:05}", 20 + n);
+            fs::remove_file(small.join(&gone)).unwrap();
+            expected.retain(|name| *name != gone);
+        }
+        fs::rename(small.join("f00030"), small.join("f00031")).unwrap();
+        expected.retain(|name| name != "f00030");
+        fs::create_dir(small.join("dnew")).unwrap();
+        std::os::unix::fs::symlink("f00000", small.join("lnk")).unwrap();
+        expected.push("dnew".into());
+        expected.push("lnk".into());
+        expected.sort();
+        let (seconds, out) = listed(
+            "ls",
+            &[
+                OsStr::new("-l"),
+                OsStr::new("--time-style=+"),
+                small.as_os_str(),
+            ],
+        );
+        // `mode links owner group size <empty time> name [-> target]`.
+        let mut names: Vec<String> = String::from_utf8_lossy(&out)
+            .lines()
+            .skip(1)
+            .map(|line| {
+                line.split_whitespace()
+                    .nth(5)
+                    .unwrap_or_default()
+                    .to_owned()
+            })
+            .collect();
+        names.sort();
+        let names_ok = names == expected;
+        let forget = forget_check(&harness, &ready);
+        let receipt = unmount(&harness, &ready);
+        println!(
+            "PROBE {{\"phase\":\"modified_ls_l\",\"seconds\":{seconds:.4},\"names_ok\":{names_ok},\"expected\":{},{},\"forget\":{forget},\"kernel\":{}}}",
+            expected.len(),
+            summary(&out),
+            opcodes(&receipt)
+        );
+        assert!(names_ok, "modified listing names differ");
         harness.stop();
         drop(opened);
         fs::remove_dir_all(work).unwrap();

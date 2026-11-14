@@ -1,6 +1,7 @@
 //! Borrowed kernel input enters fixed receive accounting before owned copies.
 use super::{
     accounting::Opcode,
+    directory::Listing,
     failure::{failed, KernelInput},
     mutate::MutationReply,
     reply::ReadReply,
@@ -257,7 +258,7 @@ impl Filesystem for KernelFilesystem {
         reply: ReplyDirectory,
     ) {
         let _timed = self.accounting.timed(Opcode::Readdir);
-        self.read_directory(req, inode, handle, offset, reply);
+        self.read_directory(req, inode, handle, offset, Listing::Names(reply));
     }
     fn releasedir(
         &self,
@@ -660,15 +661,20 @@ impl Filesystem for KernelFilesystem {
         let _timed = self.accounting.timed(Opcode::Access);
         self.refuse(Opcode::Access, reply, ReplyEmpty::error, absent());
     }
+    /// Prototype (READDIRPLUS experiment): served only when the switch asked
+    /// the kernel for it; otherwise it is never negotiated and stays absent.
     fn readdirplus(
         &self,
-        _: &Request,
-        _: INodeNo,
-        _: FileHandle,
-        _: u64,
+        req: &Request,
+        inode: INodeNo,
+        handle: FileHandle,
+        offset: u64,
         reply: ReplyDirectoryPlus,
     ) {
         let _timed = self.accounting.timed(Opcode::Readdirplus);
+        if crate::mount::listing() != crate::mount::Listing::Names {
+            return self.read_directory(req, inode, handle, offset, Listing::Plus(reply));
+        }
         self.refuse(
             Opcode::Readdirplus,
             reply,
