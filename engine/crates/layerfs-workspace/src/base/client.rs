@@ -582,14 +582,19 @@ impl CanonicalClient {
                 return Err(ContentError::IdentityMismatch);
             }
         }
+        let moved = layerfs_telemetry::timer::copies::switches().moved;
         let mut state = self.state()?;
         for (id, value) in wanted.into_iter().zip(fetched) {
-            let evictions = state.cache.insert(id, &value);
+            let length = value.len() as u64;
+            // Prototype (copies experiment, `move`): the fetched object is
+            // moved into the cache instead of copied.
+            let evictions = if moved {
+                state.cache.insert_shared(id, Arc::new(value))
+            } else {
+                state.cache.insert(id, &value)
+            };
             state.work.evictions = state.work.evictions.saturating_add(evictions);
-            state.work.authenticated_bytes = state
-                .work
-                .authenticated_bytes
-                .saturating_add(value.len() as u64);
+            state.work.authenticated_bytes = state.work.authenticated_bytes.saturating_add(length);
         }
         Ok(())
     }
@@ -704,6 +709,30 @@ impl AuthenticatedObjects for CanonicalClient {
         Some(&self.cache.decoded)
     }
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
+        // Unshared, every value is this demand's own buffer: unwrapping it
+        // copies nothing.
+        Ok(self
+            .demand(ids, false)?
+            .into_iter()
+            .map(|value| Arc::try_unwrap(value).unwrap_or_else(|shared| Vec::clone(&shared)))
+            .collect())
+    }
+    /// Prototype (copies experiment, `share`): cache hits are the cached
+    /// buffers themselves and a fetched object is cached and returned as one
+    /// buffer. Unset, each value is copied exactly as [`Self::demand`] did.
+    fn read_shared_batch_scoped(
+        &self,
+        ids: &[ObjectId],
+        _scope: layerfs_telemetry::timer::TimingScope<'_>,
+    ) -> ContentResult<Vec<Arc<Vec<u8>>>> {
+        self.demand(ids, layerfs_telemetry::timer::copies::switches().shared)
+    }
+}
+impl CanonicalClient {
+    /// One bounded demand: cache hits, then one upstream batch for the rest,
+    /// checked and cached. `shared` hands out and caches shared buffers
+    /// instead of copies (prototype, copies experiment).
+    fn demand(&self, ids: &[ObjectId], shared: bool) -> ContentResult<Vec<Arc<Vec<u8>>>> {
         let _stage = layerfs_telemetry::timer::stages::Timer::start(
             layerfs_telemetry::timer::stages::Stage::ClientDemand,
         );
@@ -719,7 +748,14 @@ impl AuthenticatedObjects for CanonicalClient {
             cache: &self.cache,
             ids: Vec::new(),
         };
-        let mut values = vec![None; ids.len()];
+        let hit = |cache: &mut crate::cache::Cache, id: ObjectId, remaining: usize| {
+            if shared {
+                cache.get_shared(id, remaining)
+            } else {
+                Ok(cache.get(id, remaining)?.map(Arc::new))
+            }
+        };
+        let mut values: Vec<Option<Arc<Vec<u8>>>> = vec![None; ids.len()];
         let mut misses = Vec::new();
         let mut cached_bytes = 0;
         {
@@ -734,7 +770,7 @@ impl AuthenticatedObjects for CanonicalClient {
                 if self.resident && !state.cache.within(*id, RESIDENT_BYTES) {
                     return Err(NOT_RESIDENT);
                 }
-                if let Some(value) = state.cache.get(*id, DEMAND_BYTES - cached_bytes)? {
+                if let Some(value) = hit(&mut state.cache, *id, DEMAND_BYTES - cached_bytes)? {
                     cached_bytes += value.len();
                     values[index] = Some(value);
                     state.work.cache_hits = state.work.cache_hits.saturating_add(1);
@@ -763,7 +799,7 @@ impl AuthenticatedObjects for CanonicalClient {
                 }
                 let mut rest = Vec::with_capacity(misses.len());
                 for (index, id) in misses {
-                    match state.cache.get(id, DEMAND_BYTES - cached_bytes)? {
+                    match hit(&mut state.cache, id, DEMAND_BYTES - cached_bytes)? {
                         Some(value) => {
                             cached_bytes += value.len();
                             values[index] = Some(value);
@@ -804,7 +840,7 @@ impl AuthenticatedObjects for CanonicalClient {
                 if !probe.noverify && ObjectId::for_bytes(&value) != *id {
                     return Err(ContentError::IdentityMismatch);
                 }
-                values[*index] = Some(value);
+                values[*index] = Some(Arc::new(value));
             }
         }
         let mut result = Vec::with_capacity(ids.len());
@@ -834,7 +870,11 @@ impl AuthenticatedObjects for CanonicalClient {
                 what: "base cache owner",
             })?;
         for (index, id) in misses {
-            let evictions = state.cache.insert(id, &result[index]);
+            let evictions = if shared {
+                state.cache.insert_shared(id, Arc::clone(&result[index]))
+            } else {
+                state.cache.insert(id, &result[index])
+            };
             state.work.evictions = state.work.evictions.saturating_add(evictions);
             state.work.authenticated_bytes = state
                 .work

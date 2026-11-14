@@ -96,6 +96,10 @@ impl ReadReply {
                 let _stage = layerfs_telemetry::timer::stages::Timer::start(
                     layerfs_telemetry::timer::stages::Stage::Reply,
                 );
+                layerfs_telemetry::timer::copies::copied(
+                    layerfs_telemetry::timer::copies::Site::Reply,
+                    data.bytes().len(),
+                );
                 reply.data(data.bytes());
                 RequestDisposition::Complete
             }
@@ -269,11 +273,45 @@ async fn windows(
             offset: offset + data.len() as u64,
             length: want,
         };
-        match KernelData::read(services.clone(), mount, request, protected, handle, input).await {
+        // Prototype (copies experiment, `join`): each window is emitted into
+        // the one reply instead of copied there; a failed window's partial
+        // bytes are dropped, as a failed window added none before.
+        let before = data.len();
+        let answer = if layerfs_telemetry::timer::copies::switches().join {
+            KernelData::read_into(
+                services.clone(),
+                mount,
+                request,
+                protected,
+                handle,
+                input,
+                &mut data,
+            )
+            .await
+            .map(|answer| answer.map(|()| None))
+        } else {
+            KernelData::read(services.clone(), mount, request, protected, handle, input)
+                .await
+                .map(|answer| answer.map(Some))
+        };
+        if !matches!(answer, Ok(Ok(_))) {
+            data.truncate(before);
+        }
+        match answer {
             Ok(Ok(part)) => {
-                let bytes = part.bytes();
-                data.extend_from_slice(bytes);
-                if (bytes.len() as u32) < want {
+                let got = match part {
+                    Some(part) => {
+                        let bytes = part.bytes();
+                        layerfs_telemetry::timer::copies::copied(
+                            layerfs_telemetry::timer::copies::Site::Join,
+                            bytes.len(),
+                        );
+                        data.extend_from_slice(bytes);
+                        bytes.len()
+                    }
+                    None => data.len() - before,
+                };
+                if (got as u32) < want {
                     break;
                 }
             }
@@ -303,6 +341,10 @@ async fn windows(
     }
     let _stage = layerfs_telemetry::timer::stages::Timer::start(
         layerfs_telemetry::timer::stages::Stage::Reply,
+    );
+    layerfs_telemetry::timer::copies::copied(
+        layerfs_telemetry::timer::copies::Site::Reply,
+        data.len(),
     );
     reply.data(&data);
     RequestDisposition::Complete

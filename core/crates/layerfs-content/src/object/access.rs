@@ -50,6 +50,22 @@ pub trait AuthenticatedObjects {
         self.read_canonical_batch(ids)
     }
 
+    /// Prototype (FUSE profile probe, copies experiment): the scoped demand
+    /// with each value as a shared immutable buffer. A provider that keeps
+    /// objects in memory may hand out its own buffer instead of a copy; the
+    /// default moves each owned value into one, without copying its bytes.
+    fn read_shared_batch_scoped(
+        &self,
+        ids: &[ObjectId],
+        scope: TimingScope<'_>,
+    ) -> ContentResult<Vec<std::sync::Arc<Vec<u8>>>> {
+        Ok(self
+            .read_canonical_batch_scoped(ids, scope)?
+            .into_iter()
+            .map(std::sync::Arc::new)
+            .collect())
+    }
+
     /// Reads one object; a point read is a one-ID batch.
     fn read_canonical(&self, id: ObjectId) -> ContentResult<Vec<u8>> {
         let mut values = self.read_canonical_batch(std::slice::from_ref(&id))?;

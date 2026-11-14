@@ -350,6 +350,10 @@ impl Fetch {
             validate_frame(info, &body)?;
             self.remember_pack(info)?;
             self.note(|c| c.pack_read_bytes += body.len() as u64);
+            layerfs_telemetry::timer::copies::copied(
+                layerfs_telemetry::timer::copies::Site::Pack,
+                body.len(),
+            );
             packs.insert(info.pack_id, body)?;
         }
         Ok(())
@@ -415,6 +419,10 @@ impl Fetch {
             .ok_or(StorageError::Integrity("payload descriptor"))?;
         let (_, body) = row.into_parts();
         self.note(|c| c.payload_read_bytes += body.len() as u64);
+        layerfs_telemetry::timer::copies::copied(
+            layerfs_telemetry::timer::copies::Site::Pack,
+            body.len(),
+        );
         validate_frame(info, &body)?;
         Ok(body)
     }
@@ -508,6 +516,10 @@ impl Source for Fetch {
                 }
                 self.remember_pack(info)?;
                 validate_frame(info, &body)?;
+                layerfs_telemetry::timer::copies::copied(
+                    layerfs_telemetry::timer::copies::Site::Pack,
+                    body.len(),
+                );
                 self.note(|c| {
                     c.whole_selected += 1;
                     match plan.whole_reason {
@@ -534,6 +546,10 @@ impl Source for Fetch {
                     return Err(StorageError::Integrity("selected pack binding"));
                 }
                 self.remember_pack(row.info())?;
+                layerfs_telemetry::timer::copies::copied(
+                    layerfs_telemetry::timer::copies::Site::Pack,
+                    row.acquired_bytes(),
+                );
                 self.note(|c| {
                     c.range_selected += 1;
                     c.range_acquired_bytes += row.acquired_bytes() as u64;

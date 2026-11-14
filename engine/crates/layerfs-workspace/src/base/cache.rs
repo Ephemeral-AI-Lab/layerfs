@@ -3,9 +3,10 @@ use layerfs_content::filesystem::attributes::PortableMetadata;
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::policy::WHOLE_FILE_CANONICAL_OVERHEAD;
 use layerfs_content::{ContentError, ContentResult, FinalizedObject, ObjectId, ObjectRole};
+use layerfs_telemetry::timer::copies::{copied, Site};
 use std::{
     collections::{BTreeMap, VecDeque},
-    sync::{Condvar, Mutex},
+    sync::{Arc, Condvar, Mutex},
 };
 
 pub(crate) struct State {
@@ -94,7 +95,7 @@ impl CanonicalCache {
             let evictions = match objects.remove(&id) {
                 Some(Constructed::Object(value)) => {
                     let length = value.len() as u64;
-                    let placed = state.cache.place(id, value.len(), || value);
+                    let placed = state.cache.place(id, value.len(), || Arc::new(value));
                     if placed.is_some() {
                         state.work.seeded_objects = state.work.seeded_objects.saturating_add(1);
                         state.work.seeded_bytes = state.work.seeded_bytes.saturating_add(length);
@@ -238,7 +239,9 @@ const fn portable_tag(kind: InodeKind) -> u8 {
 }
 
 pub(crate) struct Cache {
-    objects: BTreeMap<ObjectId, (Vec<u8>, u64)>,
+    /// Prototype (copies experiment): each object is one shared immutable
+    /// buffer, so a hit can be handed out without a copy (`share`).
+    objects: BTreeMap<ObjectId, (Arc<Vec<u8>>, u64)>,
     /// Logical lengths of regular files by content root: the Store's own
     /// answer, a pure function of that immutable root. They are charged to
     /// the same allowance and evicted in the same order as the objects.
@@ -346,6 +349,19 @@ impl Cache {
         self.portable.len()
     }
     pub(crate) fn get(&mut self, id: ObjectId, remaining: usize) -> ContentResult<Option<Vec<u8>>> {
+        let value = self.get_shared(id, remaining)?;
+        Ok(value.map(|value| {
+            copied(Site::Get, value.len());
+            Vec::clone(&value)
+        }))
+    }
+    /// Prototype (copies experiment): [`Self::get`] without the copy; the
+    /// caller shares the cached buffer.
+    pub(crate) fn get_shared(
+        &mut self,
+        id: ObjectId,
+        remaining: usize,
+    ) -> ContentResult<Option<Arc<Vec<u8>>>> {
         let Some((value, age)) = self.objects.get_mut(&id) else {
             return Ok(None);
         };
@@ -361,7 +377,7 @@ impl Cache {
         self.ages.remove(&(*age, OBJECT, id));
         *age = self.epoch;
         self.ages.insert((*age, OBJECT, id), ());
-        Ok(Some(value.clone()))
+        Ok(Some(Arc::clone(value)))
     }
     /// Whether the object is cached and no longer than `limit`.
     pub(crate) fn within(&self, id: ObjectId, limit: usize) -> bool {
@@ -370,7 +386,20 @@ impl Cache {
             .is_some_and(|(value, _)| value.len() <= limit)
     }
     pub(crate) fn insert(&mut self, id: ObjectId, value: &[u8]) -> u64 {
-        self.place(id, value.len(), || value.to_vec()).unwrap_or(0)
+        self.place(id, value.len(), || {
+            copied(Site::Insert, value.len());
+            Arc::new(value.to_vec())
+        })
+        .unwrap_or(0)
+    }
+    /// Prototype (copies experiment, `move`/`share`): retains `value` itself,
+    /// without copying its bytes. Its allocation is trimmed to its length
+    /// first, so the charge stays the bytes it holds.
+    pub(crate) fn insert_shared(&mut self, id: ObjectId, mut value: Arc<Vec<u8>>) -> u64 {
+        if let Some(owned) = Arc::get_mut(&mut value) {
+            owned.shrink_to_fit();
+        }
+        self.place(id, value.len(), || value).unwrap_or(0)
     }
     /// Retains one object of `length` bytes and returns what it evicted, or
     /// nothing when it is already cached or larger than the allowance.
@@ -379,7 +408,7 @@ impl Cache {
         &mut self,
         id: ObjectId,
         length: usize,
-        value: impl FnOnce() -> Vec<u8>,
+        value: impl FnOnce() -> Arc<Vec<u8>>,
     ) -> Option<u64> {
         // Charge canonical bytes and a conservative bookkeeping allowance.
         // This is logical accounting, not a measured allocator/RSS bound.

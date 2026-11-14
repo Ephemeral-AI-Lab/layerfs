@@ -91,6 +91,10 @@ impl PackUnit {
                         .get(view.start - range.offset..view.end - range.offset)
                         .ok_or(StorageError::Integrity("coalesced group extent"))?
                         .to_vec();
+                    layerfs_telemetry::timer::copies::copied(
+                        layerfs_telemetry::timer::copies::Site::Pack,
+                        selected.len(),
+                    );
                     units.push(Self {
                         info,
                         number,

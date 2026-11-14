@@ -11,6 +11,7 @@
 use layerfs_content::encode_whole_file_payload;
 use layerfs_content::file::mapping::encode_chunk_object;
 use layerfs_content::ObjectRole;
+use layerfs_telemetry::timer::copies::{copied, Site};
 
 use crate::encoding::codec::{CodecProfile, DecompressionWorkspace};
 use crate::encoding::delta::record;
@@ -164,6 +165,7 @@ pub(crate) fn decode_selected_group(
                 return Err(StorageError::Integrity("record tag is not FULL"));
             }
             let canonical = bytes[1..].to_vec();
+            copied(Site::Canonical, canonical.len());
             if canonical.len() != canonical_length {
                 return Err(StorageError::Integrity("ordinary record length"));
             }
@@ -175,16 +177,32 @@ pub(crate) fn decode_selected_group(
             }
             let bytes = framed_record(selected, location.record_number)?;
             let parsed = record::parse_chunk(bytes)?;
-            let raw = decode_payload(
-                PackLane::Chunk,
-                parsed.tag,
-                parsed.raw_length,
-                parsed.frame,
-                base,
-                capacities,
-                workspace,
-            )?;
-            let canonical = encode_chunk_object(&raw)?;
+            // Prototype (FUSE profile probe, `LAYERFS_PROBE_COPY=frame`): a
+            // stored record is encoded straight from the pack body, with the
+            // same checks `decode_payload` makes, and no frame `Vec`.
+            let canonical = if layerfs_telemetry::timer::copies::switches().frame
+                && record::is_stored(parsed.tag)
+            {
+                if base.is_some() {
+                    return Err(StorageError::Integrity("stored record with base bytes"));
+                }
+                if parsed.frame.len() != parsed.raw_length || parsed.raw_length == 0 {
+                    return Err(StorageError::Integrity("stored record length"));
+                }
+                encode_chunk_object(parsed.frame)?
+            } else {
+                let raw = decode_payload(
+                    PackLane::Chunk,
+                    parsed.tag,
+                    parsed.raw_length,
+                    parsed.frame,
+                    base,
+                    capacities,
+                    workspace,
+                )?;
+                encode_chunk_object(&raw)?
+            };
+            copied(Site::Canonical, canonical.len());
             if canonical.len() != canonical_length {
                 return Err(StorageError::Integrity("chunk record length"));
             }
@@ -210,6 +228,7 @@ pub(crate) fn decode_selected_group(
                 workspace,
             )?;
             let canonical = encode_whole_file_payload(&raw)?;
+            copied(Site::Canonical, canonical.len());
             if canonical.len() != canonical_length {
                 return Err(StorageError::Integrity("whole-file record length"));
             }
@@ -263,6 +282,7 @@ fn decode_payload(
         if frame.len() != raw_length || raw_length == 0 {
             return Err(StorageError::Integrity("stored record length"));
         }
+        copied(Site::Frame, frame.len());
         return Ok(frame.to_vec());
     }
     let profile = match lane {

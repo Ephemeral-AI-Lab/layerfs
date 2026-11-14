@@ -158,13 +158,30 @@ impl KernelWindow {
     /// admitted Store reader and is required when the window `inherits`; it
     /// is read at the root the visit named, never at a later one.
     pub fn finish(
-        mut self,
+        self,
         base: Option<&BaseView>,
         serial: u64,
         offset: u64,
         length: u32,
         link: bool,
     ) -> WorkspaceResult<Result<Vec<u8>, Refusal>> {
+        let mut data = Vec::new();
+        Ok(self
+            .finish_into(base, serial, offset, length, link, &mut data)?
+            .map(|()| data))
+    }
+    /// Prototype (copies experiment, `join`): [`Self::finish`] appending the
+    /// reply to `into`. A base window is emitted straight into it; any other
+    /// answer is moved in when `into` is empty and appended otherwise.
+    pub fn finish_into(
+        mut self,
+        base: Option<&BaseView>,
+        serial: u64,
+        offset: u64,
+        length: u32,
+        link: bool,
+        into: &mut Vec<u8>,
+    ) -> WorkspaceResult<Result<(), Refusal>> {
         let base = base.map(|base| base.at(self.root)).transpose()?;
         let base = base.as_deref();
         if self.local.is_none() && self.base.is_none() {
@@ -177,21 +194,31 @@ impl KernelWindow {
         if let Some(refusal) = self.refusal(link) {
             return Ok(Err(refusal));
         }
-        Ok(Ok(match (self.local, self.base, link) {
+        let data = match (self.local, self.base, link) {
             (Some(local), _, false) => file_window(base, serial, local)?,
             (Some(local), _, true) => link_target(base, serial, local)?.as_bytes().to_vec(),
             (None, _, true) => base.ok_or(NO_BASE)?.readlink(serial)?.as_bytes().to_vec(),
             (None, Some(value), false) => match base {
                 Some(base) => {
                     let plan = base.plan_file(value, offset, length)?;
-                    let mut data = Vec::with_capacity(plan.length() as usize);
-                    plan.emit(&mut data)?;
-                    data
+                    into.reserve(plan.length() as usize);
+                    plan.emit(into)?;
+                    return Ok(Ok(()));
                 }
                 None if self.length.is_some_and(|end| offset >= end) => Vec::new(),
                 None => return Err(NO_BASE.into()),
             },
             (None, None, false) => return Err(NO_BASE.into()),
-        }))
+        };
+        if into.is_empty() {
+            *into = data;
+        } else {
+            layerfs_telemetry::timer::copies::copied(
+                layerfs_telemetry::timer::copies::Site::Join,
+                data.len(),
+            );
+            into.extend_from_slice(&data);
+        }
+        Ok(Ok(()))
     }
 }

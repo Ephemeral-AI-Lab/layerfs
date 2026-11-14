@@ -43,7 +43,7 @@ mod probe {
     use layerfs_project::{init, InitRequest};
     use layerfs_storage::{Storage, StoragePolicy};
     use layerfs_store_service::bootstrap::{open_store_observed, OpenedStore};
-    use layerfs_telemetry::timer::{stages, Timing};
+    use layerfs_telemetry::timer::{copies, stages, Timing};
     use std::{
         fs::{self, File, OpenOptions},
         io::{Read, Write},
@@ -390,6 +390,34 @@ mod probe {
             .collect();
         format!("{{{}}}", rows.join(","))
     }
+    /// The object cache's charge, entries, hits, misses, evictions and
+    /// authenticated bytes.
+    fn cache_state(opened: &OpenedStore) -> String {
+        let w = opened.store.cache_work().unwrap();
+        format!(
+            "{{\"charged\":{},\"objects\":{},\"hits\":{},\"misses\":{},\"evictions\":{},\"authenticated\":{}}}",
+            w.charged_cache_bytes,
+            w.cached_objects,
+            w.cache_hits,
+            w.cache_misses,
+            w.evictions,
+            w.authenticated_bytes
+        )
+    }
+    fn copy_delta(before: &([u64; copies::SITES], [u64; copies::SITES])) -> String {
+        let after = copies::snapshot();
+        let rows: Vec<String> = (0..copies::SITES)
+            .map(|i| {
+                format!(
+                    "\"{}\":[{},{}]",
+                    copies::SITE_NAMES[i],
+                    after.0[i] - before.0[i],
+                    after.1[i] - before.1[i]
+                )
+            })
+            .collect();
+        format!("{{{}}}", rows.join(","))
+    }
     /// Raises the mount's bdi readahead to the window; returns (before, after) KiB.
     fn readahead(directory: &str, window: u32) -> (String, String) {
         let dev = fs::metadata(directory).unwrap().dev();
@@ -703,6 +731,8 @@ mod probe {
         let (busy0, session0) = (stages::busy::snapshot(), opened.store.read_work());
         let dec0 = layerfs_mount_ports::decoded::snapshot();
         let io0 = io();
+        let copies0 = copies::snapshot();
+        let cache0 = cache_state(&opened);
         let rss = resident_reset();
         let started = Instant::now();
         let mut file = File::open(&path).unwrap();
@@ -733,6 +763,8 @@ mod probe {
         );
         let split = stage_delta(&stage0);
         let dec = decoded_delta(&dec0);
+        let copied = copy_delta(&copies0);
+        let cache1 = cache_state(&opened);
         assert_eq!((total, sum), (BIG, expected), "cold read bytes");
         let receipt = unmount(&harness, &ready);
         let (files, logical, allocated, _) = cache_usage(&decoded);
@@ -756,7 +788,7 @@ mod probe {
                 .join(","),
         );
         println!(
-            "PROBE {{\"phase\":\"cold_read\",\"decoded\":{dec},\"cache_files\":{files},\"cache_bytes\":{logical},\"cache_allocated\":{allocated},\"profile\":{profile},\"read_ahead_kb\":[\"{ra_before}\",\"{ra_after}\"],\"store_page_size\":{},\"store_bytes\":{},\"store_resident_before\":{store_resident},\"bytes\":{total},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"rss_file_kb\":{rss_file},\"rss_anon_kb\":{rss_anon},\"read_syscalls\":{},\"read_syscall_bytes\":{},\"storage_read_bytes\":{},\"object_batches\":{},\"object_ids\":{},\"statements\":{},\"returned_rows\":{},{lanes},\"sql\":{sql},\"stages\":{split},\"kernel\":{}}}",
+            "PROBE {{\"phase\":\"cold_read\",\"decoded\":{dec},\"cache_files\":{files},\"cache_bytes\":{logical},\"cache_allocated\":{allocated},\"profile\":{profile},\"read_ahead_kb\":[\"{ra_before}\",\"{ra_after}\"],\"store_page_size\":{},\"store_bytes\":{},\"store_resident_before\":{store_resident},\"bytes\":{total},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"rss_file_kb\":{rss_file},\"rss_anon_kb\":{rss_anon},\"read_syscalls\":{},\"read_syscall_bytes\":{},\"storage_read_bytes\":{},\"object_batches\":{},\"object_ids\":{},\"statements\":{},\"returned_rows\":{},{lanes},\"sql\":{sql},\"stages\":{split},\"copies\":{copied},\"copy_switches\":\"{:?}\",\"cache\":[{cache0},{cache1}],\"kernel\":{}}}",
             page_size(&copy),
             fs::metadata(&copy).unwrap().len(),
             total as f64 / seconds / 1e6,
@@ -767,6 +799,7 @@ mod probe {
             work1.object_ids - work0.object_ids,
             sql1.statements - sql0.statements,
             sql1.returned_rows - sql0.returned_rows,
+            copies::switches(),
             opcodes(&receipt)
         );
 
