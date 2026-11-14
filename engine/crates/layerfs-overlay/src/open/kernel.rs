@@ -32,6 +32,10 @@ pub(crate) struct OpenState {
     /// The last file finished with no descriptor: serial, content sequence
     /// and followed state, so its next chunked append resumes. One slot.
     pub resumable: JournalMap<(), (i64, i64, crate::payload::digest::Digesting)>,
+    /// Prototype (experiment `write2`, `reldefer`): followed digests whose
+    /// last descriptor closed in a light job, written by the next job that
+    /// is not light, in that job's transaction.
+    pub closed: JournalMap<i64, crate::payload::digest::Digesting>,
     pub waits: JournalMap<(i64, i64), ()>,
     /// One attached/revoked mount, restored by whole-job rollback.
     pub mount: Option<(KernelMount, bool)>,
@@ -57,6 +61,7 @@ impl OpenState {
         self.kept_live.commit();
         self.digests.commit();
         self.resumable.commit();
+        self.closed.commit();
         self.waits.commit();
         self.directories.commit();
         self.operations.commit();
@@ -76,6 +81,7 @@ impl OpenState {
         self.kept_live.rollback();
         self.digests.rollback();
         self.resumable.rollback();
+        self.closed.rollback();
         self.waits.rollback();
         self.directories.rollback();
         self.operations.rollback();

@@ -32,8 +32,9 @@ impl OwnerClient {
         route: Route,
         job: Box<KernelReadVisit>,
     ) -> Result<std::sync::Arc<layerfs_workspace::KernelReadOutcome>, OwnerError> {
+        // Prototype (experiment `write2`, `reldefer`): an observe visit is light.
         self.call(route, ServiceClass::General, None, move |db| {
-            Ok(Arc::new(job.perform(db)))
+            Ok(Arc::new(db.light_job(|| job.perform(db))))
         })
     }
     pub fn kernel_read_visit(

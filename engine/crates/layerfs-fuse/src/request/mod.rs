@@ -11,7 +11,7 @@ mod reply;
 mod state;
 mod terminal;
 
-pub use accounting::{Accounting, Disposal, Opcode, OpcodeWork, Timed, OPCODES};
+pub use accounting::{process_callbacks, Accounting, Disposal, Opcode, OpcodeWork, Timed, OPCODES};
 pub use directory_plus::fallback_entries;
 pub use failure::{KernelInput, RequestFailure};
 pub(crate) use layerfs_mount_ports::phase::charge;

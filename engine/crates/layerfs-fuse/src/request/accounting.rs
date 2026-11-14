@@ -181,6 +181,19 @@ impl Default for Accounting {
     }
 }
 
+/// Prototype (experiment `write2`): timed callbacks and their wall
+/// nanoseconds by opcode over every mount of the process, so a probe can
+/// read them mid-mount.
+static PROCESS_CALLBACKS: [AtomicU64; OPCODES] = [const { AtomicU64::new(0) }; OPCODES];
+static PROCESS_NANOS: [AtomicU64; OPCODES] = [const { AtomicU64::new(0) }; OPCODES];
+/// Prototype (experiment `write2`): a snapshot of the process-wide
+/// callback counts and nanoseconds by opcode.
+pub fn process_callbacks() -> ([u64; OPCODES], [u64; OPCODES]) {
+    (
+        std::array::from_fn(|index| PROCESS_CALLBACKS[index].load(Ordering::Relaxed)),
+        std::array::from_fn(|index| PROCESS_NANOS[index].load(Ordering::Relaxed)),
+    )
+}
 /// Charges the wall time from its creation to its drop to one opcode, and
 /// makes its accounting the current one for [`charge`] meanwhile.
 pub struct Timed {
@@ -193,6 +206,8 @@ impl Drop for Timed {
     fn drop(&mut self) {
         let elapsed = u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
         self.accounting.nanos[self.opcode as usize].fetch_add(elapsed, Ordering::Relaxed);
+        PROCESS_CALLBACKS[self.opcode as usize].fetch_add(1, Ordering::Relaxed);
+        PROCESS_NANOS[self.opcode as usize].fetch_add(elapsed, Ordering::Relaxed);
         layerfs_mount_ports::phase::restore(self.previous.take());
     }
 }

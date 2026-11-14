@@ -134,6 +134,13 @@ impl Overlay {
             Some(followed) if followed.length == write.offset => followed.hasher.clone(),
             _ => return Ok(()),
         };
+        // Prototype (experiment `write2`, `digestidle`): the helper takes a
+        // window only while it is idle; otherwise this job hashes inline,
+        // so concurrent Workspaces never queue behind one helper thread.
+        if probe_switch("digestidle") && HELPER_BUSY.swap(true, std::sync::atomic::Ordering::AcqRel)
+        {
+            return Ok(());
+        }
         let (reply, result) = std::sync::mpsc::channel();
         let check = probe_switch("digestcheck").then(|| (hasher.clone(), write.data.clone()));
         let job = (hasher, write.data.clone(), reply);
@@ -339,6 +346,29 @@ impl Overlay {
         if !self.open.borrow().digests.rows.contains_key(&serial) {
             return Ok(());
         }
+        let _stage = layerfs_telemetry::timer::stages::Timer::start(
+            layerfs_telemetry::timer::stages::Stage::ReleaseDigest,
+        );
+        // Prototype (experiment `write2`, `reldefer`): in a light job (a
+        // kernel RELEASE), keep the finished state and let the next job that
+        // is not light write it, before its own statements and in its own
+        // transaction. A bounded number wait: past `CLOSED_BOUND` this job
+        // writes them all.
+        if LIGHT.get() {
+            let mut open = self.open.borrow_mut();
+            if let Some(followed) = open.digests.rows.get(&serial).cloned() {
+                open.digests.remove(serial);
+                open.closed.put(serial, followed);
+            }
+            let full = open.closed.rows.len() >= CLOSED_BOUND;
+            drop(open);
+            return if full { self.write_closed() } else { Ok(()) };
+        }
+        self.digest_closed_now(serial)
+    }
+    /// The original close of a followed digest: it describes the latest row
+    /// when that row's size is still the followed length.
+    fn digest_closed_now(&self, serial: i64) -> OverlayResult<()> {
         let latest = self
             .query(StatementKind::Inode, LATEST, &[&serial], 16, |row| {
                 Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
@@ -353,6 +383,60 @@ impl Overlay {
                 Ok(())
             }
         }
+    }
+
+    /// Prototype (experiment `write2`, `reldefer`): writes the digests whose
+    /// last descriptor closed in a light job, as their close would have,
+    /// in the running job's transaction. Called first in every job that is
+    /// not light, so no row of theirs has changed since the close. A
+    /// failure fails that job, and rollback restores them.
+    pub(crate) fn flush_closed_digests(&self) -> OverlayResult<()> {
+        if LIGHT.get() || self.open.borrow().closed.rows.is_empty() {
+            return Ok(());
+        }
+        self.write_closed()
+    }
+    fn write_closed(&self) -> OverlayResult<()> {
+        let _stage = layerfs_telemetry::timer::stages::Timer::start(
+            layerfs_telemetry::timer::stages::Stage::DigestFlush,
+        );
+        let serials: Vec<i64> = self.open.borrow().closed.rows.keys().copied().collect();
+        for serial in serials {
+            let followed = {
+                let mut open = self.open.borrow_mut();
+                let followed = open.closed.rows.get(&serial).cloned();
+                open.closed.remove(serial);
+                // A file followed again since cannot be: following resumes
+                // only in a job that is not light, which wrote this first.
+                if open.digests.rows.contains_key(&serial) {
+                    continue;
+                }
+                followed
+            };
+            if let Some(followed) = followed {
+                self.open.borrow_mut().digests.put(serial, followed);
+                self.digest_closed_now(serial)?;
+            }
+        }
+        Ok(())
+    }
+    /// Prototype (experiment `write2`, `reldefer`): runs `job` as a light
+    /// job. A light job finishes no followed digest itself and writes none
+    /// that wait. Only kernel RELEASE and observe visits are light; they
+    /// read no digest and write no inode row.
+    pub fn light_job<T>(&self, job: impl FnOnce() -> T) -> T {
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                LIGHT.set(false);
+            }
+        }
+        if !probe_switch("reldefer") {
+            return job();
+        }
+        LIGHT.set(true);
+        let _reset = Reset;
+        job()
     }
 
     fn followed(&self, serial: i64) -> Option<i64> {
@@ -398,11 +482,16 @@ impl Overlay {
         serials: &[u64],
     ) -> OverlayResult<Vec<Option<CapturedDigest>>> {
         self.check_captured_reader(reader)?;
+        // Prototype (experiment `write2`, `reldefer`): digests that wait are
+        // written first, so a capture sees what a close would have written.
+        if !self.open.borrow().closed.rows.is_empty() {
+            self.atomic(|| Ok(()))?;
+        }
         if serials.len() > crate::PAGE_ROWS {
             return Err(crate::OverlayError::Invalid("captured digest window"));
         }
         let generation = reader.capture.generation.0;
-        serials
+        let found: OverlayResult<Vec<Option<CapturedDigest>>> = serials
             .iter()
             .map(|serial| {
                 // A file open now may still change: no digest describes it.
@@ -423,7 +512,18 @@ impl Overlay {
                     })
                 }))
             })
-            .collect()
+            .collect();
+        // Prototype (experiment `write2`): asked and found, for the probe.
+        if let Ok(found) = &found {
+            use layerfs_telemetry::timer::stages::{add, Stage};
+            add(Stage::CapturedAsked, serials.len() as u64, 0);
+            add(
+                Stage::CapturedFound,
+                found.iter().flatten().count() as u64,
+                0,
+            );
+        }
+        found
     }
 }
 
@@ -470,12 +570,19 @@ impl Pending {
 }
 thread_local! {
     static PENDING: std::cell::RefCell<Option<Pending>> = const { std::cell::RefCell::new(None) };
+    /// Prototype (experiment `write2`, `reldefer`): this thread runs a light job.
+    static LIGHT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
+/// Prototype (experiment `write2`, `reldefer`): at most this many closed
+/// digests wait; a light job that reaches it writes them.
+const CLOSED_BOUND: usize = 64;
 type HashJob = (
     blake3::Hasher,
     std::sync::Arc<[u8]>,
     std::sync::mpsc::Sender<blake3::Hasher>,
 );
+/// Prototype (experiment `write2`, `digestidle`): the helper holds a window.
+static HELPER_BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 /// One process-wide helper thread that extends hashers (prototype).
 static HELPER: std::sync::LazyLock<std::sync::Mutex<std::sync::mpsc::Sender<HashJob>>> =
     std::sync::LazyLock::new(|| {
@@ -488,6 +595,7 @@ static HELPER: std::sync::LazyLock<std::sync::Mutex<std::sync::mpsc::Sender<Hash
                         layerfs_telemetry::timer::stages::Stage::OverlayDigestHelper,
                     );
                     hasher.update(&data);
+                    HELPER_BUSY.store(false, std::sync::atomic::Ordering::Release);
                     let _ = reply.send(hasher);
                 }
             })

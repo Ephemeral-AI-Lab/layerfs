@@ -115,9 +115,22 @@ pub enum Stage {
     GetattrCreateParent,
     /// A GETATTR answered from the published-attribute cache (prototype).
     GetattrCached,
+    /// Prototype (experiment `write2`): the RELEASE owner job's overlay work.
+    ReleaseJob,
+    /// Prototype (experiment `write2`): the part of a close that finishes a
+    /// followed digest.
+    ReleaseDigest,
+    /// Prototype (experiment `write2`, `reldefer`): closed digests a later
+    /// job writes.
+    DigestFlush,
+    /// Prototype (experiment `write2`): serials a Commit asked for captured
+    /// digests.
+    CapturedAsked,
+    /// Prototype (experiment `write2`): captured digests found.
+    CapturedFound,
 }
 /// Number of [`Stage`]s.
-pub const STAGES: usize = Stage::GetattrCached as usize + 1;
+pub const STAGES: usize = Stage::CapturedFound as usize + 1;
 /// Names of the [`Stage`]s, in order.
 pub const STAGE_NAMES: [&str; STAGES] = [
     "read_visit",
@@ -172,6 +185,11 @@ pub const STAGE_NAMES: [&str; STAGES] = [
     "getattr_handle",
     "getattr_create_parent",
     "getattr_cached",
+    "release_job",
+    "release_digest",
+    "digest_flush",
+    "captured_asked",
+    "captured_found",
 ];
 
 const ZERO: AtomicU64 = AtomicU64::new(0);
