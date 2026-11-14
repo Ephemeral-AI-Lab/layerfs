@@ -580,3 +580,135 @@ fn list_states_compare_the_store_and_the_copy() {
         let _ = std::fs::remove_dir_all(dir);
     }
 }
+
+/// The project a call names, as `sandbox.create` reads it
+/// (`layerfs-sandbox`'s `lifecycle::installed`): its entry's manifest and
+/// installed manifest.
+fn entry(home: &Path, store: &str, project: &str) -> layerfs_store::project::discovery::Project {
+    layerfs_store::project::discovery::project(Some(home), Some(store), Some(project))
+        .unwrap_or_else(|refusal| panic!("{store}/{project}: {refusal:?}"))
+}
+
+/// The project `store` restored into `home`, which must describe the same
+/// project as `original`: the manifest a restore rebuilds names the
+/// restored Store's own history and authority, and the entry carries the
+/// installed manifest `sandbox.create` requires.
+fn same_project(
+    home: &Path,
+    store: &str,
+    original: &layerfs_store::project::discovery::Project,
+) -> layerfs_store::project::discovery::Project {
+    let restored = entry(home, store, "api");
+    // the restored Store's own record: the file's binding, and the cursor
+    // authority a load gives the new Store
+    let record = read_record(&paths::store_record(home, store))
+        .unwrap()
+        .expect("the restored Store's record");
+    let field = |name: &str| match record.get(name) {
+        Some(SdkValue::Bytes(bytes)) => bytes.clone(),
+        other => panic!("{name}: {other:?}"),
+    };
+    let (want, got) = (&original.manifest, &restored.manifest);
+    assert_eq!(got.binding, want.binding, "binding");
+    assert_eq!(got.binding, field("binding"), "the Store's own binding");
+    assert_eq!(
+        got.cursor_key.to_vec(),
+        field("cursor"),
+        "the Store's own cursor key"
+    );
+    assert_eq!(got.stack, want.stack, "stack");
+    assert_eq!(got.branch, want.branch, "branch");
+    assert_eq!(got.root, want.root, "root");
+    assert_eq!(got.profile, want.profile, "profile");
+    let installed = restored
+        .installed
+        .as_ref()
+        .expect("a restored project's entry records its installed manifest");
+    assert_eq!(installed.stack, want.stack, "installed stack");
+    assert_eq!(installed.branch, want.branch, "installed branch");
+    assert_eq!(installed.root, want.root, "installed root");
+    // the daemon's own checks of the manifest it is handed
+    for manifest in [&restored.manifest, installed] {
+        manifest.check().expect("a manifest a daemon accepts");
+    }
+    restored
+}
+
+/// #668: every project of a restored Store gets the record `project.init`
+/// writes, so `sandbox.create` finds its Store: a restore under a new Store
+/// name in the same home, a restore into a new home, and a restore over an
+/// existing Store, which keeps the records it has.
+#[test]
+fn restored_records_are_complete_for_a_sandbox() {
+    let Some((home, folder, url)) = backed_up("records") else {
+        return;
+    };
+    let original = entry(&home, "shop", "api");
+    // the same home, the backup as a new Store
+    ok(
+        &home,
+        "backup.restore",
+        &[
+            ("store", t("copy")),
+            ("bucket", t("b1")),
+            ("file", t("shop")),
+        ],
+    );
+    let copy = same_project(&home, "copy", &original);
+    let file = paths::store_file(&home, "copy");
+    assert_eq!(
+        copy.manifest.bytes,
+        std::fs::metadata(&file).unwrap().len(),
+        "the restored manifest names its own Store file"
+    );
+    // a new home, the backup as a new Store
+    let other = tempdir("records-home");
+    home::open(&other).unwrap();
+    ok(
+        &other,
+        "backup.connect",
+        &[
+            ("name", t("b1")),
+            ("url", t(&url)),
+            ("key", t("env:LAYERFS_REMOTE")),
+        ],
+    );
+    ok(
+        &other,
+        "backup.restore",
+        &[("store", t("shop")), ("bucket", t("b1"))],
+    );
+    same_project(&other, "shop", &original);
+    let read = ok(
+        &other,
+        "file.read",
+        &[
+            ("project", t("shop/api")),
+            ("branch", t("main")),
+            ("path", t("/README.md")),
+        ],
+    );
+    assert_eq!(read.get_text("text"), Some("backed up\n"));
+    // the unchanged Store restores over itself and keeps its record
+    let record = paths::project_record(&other, "shop", "api");
+    let before = std::fs::read(&record).unwrap();
+    ok(
+        &other,
+        "backup.restore",
+        &[("store", t("shop")), ("bucket", t("b1"))],
+    );
+    assert_eq!(std::fs::read(&record).unwrap(), before, "record rewritten");
+    // a record an earlier restore left without its manifests is completed
+    let stack = layerfs_bridge::sdk_values::hex(&original.manifest.stack);
+    let listing = SdkValue::map([("name", t("api")), ("stack", t(&stack))]);
+    write_record(&record, &listing).unwrap();
+    ok(
+        &other,
+        "backup.restore",
+        &[("store", t("shop")), ("bucket", t("b1"))],
+    );
+    same_project(&other, "shop", &original);
+    for dir in [home, folder, other] {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

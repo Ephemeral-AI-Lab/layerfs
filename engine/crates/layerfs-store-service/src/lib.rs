@@ -27,6 +27,7 @@ mod store_service;
 pub mod telemetry;
 pub mod write;
 
+pub use overlay::hold::MaintenanceHold;
 pub use overlay::owner;
 pub use owner::{OriginalInput, Owner, OwnerClient, OwnerConfig, OwnerError, WorkspacePanic};
 pub use service::observations::JobWork;
