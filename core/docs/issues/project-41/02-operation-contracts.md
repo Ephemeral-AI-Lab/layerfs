@@ -1,3 +1,5 @@
+> **SUPERSEDED IN PART (2026-11-13).** Two decisions postdate this page: `store.compact` is **one call** (`compact(name)`, choosing no-copy / light / rebuild internally; `reorg` is gone — layerfs-project#42 item 2), and the tombstone lives in **marker tables**, not `removed_ms` / `deleted_ms` columns (item 7). Anything below that says otherwise is historical.
+
 # Operation Contracts
 
 > **Status:** Proposal; target LayerFS 2.0.0; not a released contract.
