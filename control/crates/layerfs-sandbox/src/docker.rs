@@ -193,7 +193,51 @@ impl Docker {
                 None => images.push(image),
             }
         }
+        self.measure(&mut images);
         Ok(images)
+    }
+
+    /// The bytes image `id`'s layers unpack to: the sum of `docker history`'s
+    /// layer sizes, or `None` when Docker does not answer within `deadline`.
+    pub fn unpacked(&self, id: &str, deadline: Duration) -> Option<u64> {
+        let args = [
+            "history",
+            "--no-trunc",
+            "--human=false",
+            "--format",
+            "{{.Size}}",
+            id,
+        ];
+        let out = self.read(&args, deadline).ok()?;
+        let mut layers = out.lines().map(str::trim).filter(|l| !l.is_empty());
+        layers.try_fold(None, |sum: Option<u64>, layer| {
+            Some(Some(sum.unwrap_or(0).saturating_add(layer.parse().ok()?)))
+        })?
+    }
+
+    /// Raises each image's `size` to what its layers unpack to (D8): with
+    /// Docker's containerd image store, `docker image inspect`'s `Size` is
+    /// the compressed content, a third of what a copy sends. One `docker
+    /// history` per image, eight at a time, all within [`READ`]; an image
+    /// Docker does not measure in time keeps the size `inspect` gave.
+    pub fn measure(&self, images: &mut [Inspected]) {
+        let start = Instant::now();
+        let per = images.len().div_ceil(8).max(1);
+        std::thread::scope(|scope| {
+            for part in images.chunks_mut(per) {
+                scope.spawn(move || {
+                    for image in part {
+                        let left = READ.saturating_sub(start.elapsed());
+                        if left.is_zero() {
+                            return;
+                        }
+                        if let Some(n) = self.unpacked(&image.id, left) {
+                            image.size = image.size.max(n);
+                        }
+                    }
+                });
+            }
+        });
     }
 
     /// Starts `docker args...` with its stdout to read as it comes.
@@ -228,7 +272,9 @@ pub struct Inspected {
     pub os: String,
     /// `arm64`, `amd64`, ...
     pub architecture: String,
-    /// Its size as Docker reports it.
+    /// Its size: what its layers unpack to once [`Docker::measure`]d,
+    /// else `docker image inspect`'s `Size` (the compressed content with the
+    /// containerd image store).
     pub size: u64,
     /// `Env`, `WorkingDir`, `User`, `Entrypoint`, `Cmd`.
     pub config: SdkValue,

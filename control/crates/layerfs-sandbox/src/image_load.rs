@@ -70,7 +70,8 @@ pub struct Loaded {
     pub id: String,
     /// Its references.
     pub refs: Vec<String>,
-    /// The bytes sent, or Docker's size when nothing was.
+    /// The bytes sent, else the sidecar's size, else what Docker's layers
+    /// unpack to when nothing was sent.
     pub size: Option<u64>,
     /// Whether the machine held it already (nothing was sent).
     pub reused: bool,
@@ -131,7 +132,7 @@ pub fn load(
         }
     }
     // 2. Docker's answer; 3. without Docker, a cached image of that ref
-    let inspected = match docker.inspect(&[image]) {
+    let mut inspected = match docker.inspect(&[image]) {
         Ok(mut found) if !found.is_empty() => found.remove(0),
         Ok(_) => return Err(Failure::Missing(String::new()).refusal(image)),
         Err(Failure::Missing(m)) => return Err(Failure::Missing(m).refusal(image)),
@@ -145,6 +146,7 @@ pub fn load(
             return Err(failure.refusal(image));
         }
     };
+    docker.measure(std::slice::from_mut(&mut inspected));
     let Inspected { id, refs, .. } = &inspected;
     let mut probe = target.probe(Some(id), None, archive)?;
     let machine_arch = probe.get_text("architecture").unwrap_or("").to_owned();
@@ -201,7 +203,9 @@ pub fn load(
         .ok()
         .and_then(|out| out.trim().parse::<u64>().ok())
         .filter(|n| *n > 0);
+    // the larger of what the layers unpack to and the container's root
     let size = unpacked.unwrap_or(0).max(inspected.size);
+    let estimate = Some(size).filter(|n| *n > 0);
     let free = probe.get_int("free").map(|n| n.max(0) as u64);
     if let Some(free) = free {
         let need = docker::need(size);
@@ -225,11 +229,11 @@ pub fn load(
         &container,
         id,
         (staged, prefix),
-        unpacked,
+        estimate,
     )? {
         Some(done) => done,
         // the staged bytes are not this export's prefix: start over
-        None => send(docker, events, target, &container, id, (0, None), unpacked)?
+        None => send(docker, events, target, &container, id, (0, None), estimate)?
             .ok_or_else(|| refused("Failed", "the image export changed while it was sent"))?,
     };
     phase(events, "unpack", None);
@@ -375,7 +379,9 @@ fn send(
     }
     let mut offset = staged;
     let mut last = Instant::now();
-    phase(events, "send", Some((offset, total)));
+    // `total` is an estimate: an event never shows more done than total
+    let shown = |offset: u64| Some((offset, total.map(|t| t.max(offset))));
+    phase(events, "send", shown(offset));
     loop {
         let n = fill(&mut tar, &mut buffer)?;
         if n == 0 {
@@ -390,7 +396,7 @@ fn send(
         ]))?;
         offset += n as u64;
         if last.elapsed() >= Duration::from_millis(200) {
-            phase(events, "send", Some((offset, total)));
+            phase(events, "send", shown(offset));
             last = Instant::now();
         }
     }
@@ -401,8 +407,9 @@ fn send(
             format!("docker export {container} failed"),
         ));
     }
-    // the last event is exact: `total` was an estimate (`SizeRootFs`)
-    phase(events, "send", Some((offset, total.map(|_| offset))));
+    // the last event is exact, with or without an estimate: done == total
+    // == the bytes sent
+    phase(events, "send", Some((offset, Some(offset))));
     Ok(Some((
         offset,
         layerfs_bridge::sdk_values::hex(&whole.finalize()),

@@ -190,6 +190,60 @@ fn refusals_carry_their_detail() {
 }
 
 #[test]
+fn need_counts_what_the_layers_unpack_to() {
+    // containerd's image store: inspect's Size (4000) is the compressed
+    // content; the layers unpack to far more than the machine has free
+    let (_scratch, standin, home) = setup("copy-need-layers");
+    let layers = [u64::MAX / 32, 0, u64::MAX / 32];
+    standin.layers(ID, &layers);
+    let error = run(&standin, &home, "demo/pg:17").0.unwrap_err();
+    assert_eq!(error.code, "NoSpace", "{}", error.message);
+    let need = layerfs_sandbox::docker::need(layers.iter().sum());
+    assert_eq!(error.detail.get_int("need"), Some(need as i64));
+}
+
+#[test]
+fn the_last_send_is_done_equals_total_whatever_the_estimate() {
+    // an export of several 1 MiB frames and a partial one
+    let big = Tar::new()
+        .directory("usr/", 0o755)
+        .file("usr/lib.so", 0o644, &vec![5u8; 5 * 1024 * 1024 / 2])
+        .file("usr/tail", 0o644, &vec![6u8; 777])
+        .finish();
+    let sent = filtered(&big).len() as u64;
+    assert!(sent > cache::CHUNK as u64 * 2);
+    // (root size, layer sizes, inspect's Size): an estimate over, under,
+    // from the layers, from inspect alone, and none at all
+    let cases: [(&str, u64, Option<u64>, u64); 5] = [
+        ("over", sent * 3, None, 4000),
+        ("under", sent / 2, None, 4000),
+        ("layers", 0, Some(sent - 4096), 4000),
+        ("inspect", 0, None, 4000),
+        ("none", 0, None, 0),
+    ];
+    for (name, rootfs, layers, size) in cases {
+        let (_scratch, standin, home) = setup(&format!("copy-total-{name}"));
+        standin.image(ID, &["demo/pg:17"], ("linux", architecture()), size);
+        standin.export(&big);
+        standin.set_rootfs_size(rootfs);
+        if let Some(n) = layers {
+            standin.layers(ID, &[n, 0]);
+        }
+        let (out, run) = run(&standin, &home, "demo/pg:17");
+        let loaded = out.unwrap();
+        assert_eq!(loaded.size, Some(sent), "{name}");
+        let sends = named(&run, "send");
+        for event in &sends {
+            let (done, total) = (event.get_int("done"), event.get_int("total"));
+            assert!(total.is_none_or(|t| Some(t) >= done), "{name}: {event:?}");
+        }
+        let last = sends.last().expect("send events");
+        assert_eq!(last.get_int("done"), Some(sent as i64), "{name}");
+        assert_eq!(last.get_int("total"), Some(sent as i64), "{name}");
+    }
+}
+
+#[test]
 fn a_staged_prefix_is_resumed_and_a_mismatched_one_restarted() {
     for (name, matching) in [("copy-resume", true), ("copy-restart", false)] {
         let (_scratch, standin, home) = setup(name);

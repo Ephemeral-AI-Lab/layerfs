@@ -27,6 +27,11 @@ esac
 case "$1" in
   create) mkdir -p "$D/containers"; touch "$D/containers/$3"; echo id ;;
   export) echo x >> "$D/exports"; cat "$D/export.tar" ;;
+  history)
+    for ref in "$@"; do :; done
+    f="$D/history/$(key "$ref")"
+    if [ -f "$f" ]; then cat "$f"; exit 0; fi
+    echo "Error: No such image: $ref" >&2; exit 1 ;;
   rm) rm -f "$D/containers/$3" ;;
   ps) ;;
   *) echo "unexpected: $*" >&2; exit 2 ;;
@@ -74,6 +79,19 @@ impl Standin {
             ls.push('\n');
         }
         fs::write(self.dir.join("ls.txt"), ls).unwrap();
+    }
+
+    /// `docker history` of image `id` lists these layer sizes, in bytes
+    /// (without it, `history` answers no such image).
+    pub fn layers(&self, id: &str, sizes: &[u64]) {
+        let dir = self.dir.join("history");
+        fs::create_dir_all(&dir).unwrap();
+        let text = sizes.iter().fold(String::new(), |mut text, n| {
+            text.push_str(&n.to_string());
+            text.push('\n');
+            text
+        });
+        fs::write(dir.join(id.replace(['/', ':'], "_")), text).unwrap();
     }
 
     /// `docker export` answers these bytes.

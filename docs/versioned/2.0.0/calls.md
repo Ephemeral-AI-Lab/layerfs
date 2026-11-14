@@ -252,14 +252,17 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   `docker image inspect` through the `docker` machine's recorded socket
   (else Docker's default context), refused `Unsupported`
   `{reason: "arch", value}` for another architecture, `NoSpace`
-  `{need, free}` when `2 × size × 1.05` is over the machine's free bytes,
+  `{need, free}` when `2 × size × 1.05` is over the machine's free bytes
+  (`size`: what the image's layers unpack to, the sum of `docker history`'s
+  layer sizes, or the export container's root if larger),
   and otherwise exported once (`docker create` + `docker export`, without
   the init layer's files), sent in 1 MiB frames and unpacked on the
   machine under `machines/native/run/images/<hex>.2/` with a sidecar
   `<hex>.2.json`; the staged tar is deleted. Docker unreachable is
   `Unavailable` `{what: "docker"}`, the machine stopped `Unavailable`
   `{what: "machine"}`. `--progress` reports `inspect`, `export`, `send`
-  (`done`, `total`), `unpack` and `start`. The record keeps the image's id,
+  (`done`, `total`; `total` is an estimate until the last `send` event,
+  which has `done` equal to `total`, the bytes sent), `unpack` and `start`. The record keeps the image's id,
   and every create sets its sidecar's `last_used`. The worker container's own
   image is the one `machine update docker --image` recorded, else that
   archive, loaded into Docker once and recorded on the docker machine as

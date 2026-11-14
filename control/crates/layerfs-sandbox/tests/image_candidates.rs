@@ -37,6 +37,10 @@ fn candidates_are_deduped_and_judged() {
     let tag = format!("layerfs-cache/sandbox:{}", &bundle[7..]);
     standin.image(&id('6'), &[tag.as_str()], ("linux", "arm64"), 10);
     standin.image(&id('7'), &["big:1"], ("linux", "arm64"), 1_000_000);
+    // containerd's image store: Size is the compressed content (1200, which
+    // would fit); the layers unpack to 5000, which does not
+    standin.image(&id('8'), &["zipped:1"], ("linux", "arm64"), 1200);
+    standin.layers(&id('8'), &[3000, 0, 2000]);
     let held = vec![
         (id('4'), vec![]),
         (id('e'), vec!["also-held:1".to_owned()]),
@@ -44,7 +48,14 @@ fn candidates_are_deduped_and_judged() {
     ];
     let (docker, rows) = candidates(&standin.docker(), "arm64", Some(10_000), &held);
     assert_eq!(docker, SdkValue::map([("available", SdkValue::Bool(true))]));
-    assert_eq!(rows.len(), 4, "{rows:?}");
+    assert_eq!(rows.len(), 5, "{rows:?}");
+    let zipped = row(&rows, &id('8')).unwrap();
+    assert_eq!(zipped.get_int("size"), Some(5000));
+    assert_eq!(zipped.get_int("need"), Some(need(5000) as i64));
+    assert!(!zipped.get_bool("fits"), "need(5000) is over 10,000 free");
+    // without a history, inspect's Size stands
+    let pg = row(&rows, &id('1')).unwrap();
+    assert_eq!(pg.get_int("size"), Some(1000));
     let pg = row(&rows, &id('1')).unwrap();
     assert_eq!(
         pg.get("refs"),

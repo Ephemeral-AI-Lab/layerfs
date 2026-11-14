@@ -178,7 +178,11 @@ lists the host's tagged Docker images (one `docker image ls`, one batched
 else Docker's default context, minus any whose id or refs `images` already
 has (the bundle's image in Docker, `layerfs-cache/sandbox:<hex>`, included).
 A row for another OS or architecture is `usable: false` with `reason {kind:
-"os" | "arch", value}`; `need` is `2 × size × 1.05` and `fits` is
+"os" | "arch", value}`. `size` is what the image's layers unpack to: the
+sum of `docker history`'s layer sizes (one call per image, eight at a time,
+10 s in all), never less than `docker image inspect`'s `Size`, which with
+Docker's containerd image store is the compressed content, about a third of
+it; an image not measured in time keeps that `Size`. `need` is `2 × size × 1.05` and `fits` is
 `need <= free` (true when `free` is unknown). A Docker failure fills
 `docker.available: false` and never fails the call. macOS `native` answers
 `mode: "host"`, `docker: null` and no rows. Errors: `NotFound`,
@@ -206,8 +210,12 @@ the image), streams `docker export` without the init layer's files
 once into `<hex>.2/`, writes the sidecar and deletes the staged tar. A staged
 tar left by a stopped copy is resumed when its bytes hash as this export's
 prefix, else restarted; one still growing (under 30 s old) is another
-caller's copy, which this one waits for. Progress: `inspect`, `export`,
-`send` (`done`, `total`), `unpack`. Errors: `Unsupported` `{reason: "host"}`
+caller's copy, which this one waits for. `NoSpace`'s `need` counts the
+larger of the layers' unpacked size and the export container's root
+(`SizeRootFs`); `size` is the bytes sent, else the sidecar's, else the
+layers' unpacked size. Progress: `inspect`, `export`, `send` (`done`,
+`total`: an estimate, never below `done`, until the last `send` event, whose
+`done` and `total` are both the bytes sent), `unpack`. Errors: `Unsupported` `{reason: "host"}`
 (macOS `native`), `{reason: "arch" | "os", value}`; `InvalidInput` (Docker
 has no such image); `Unavailable` `{what: "docker" | "machine"}`; `NoSpace`
 `{need, free}`.
