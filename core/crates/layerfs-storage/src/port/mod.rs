@@ -5,6 +5,7 @@ mod persistence;
 mod read_pack;
 mod read_scoped;
 mod read_selection;
+pub(crate) use pack::read_probe;
 pub use pack::ObjectKey;
 pub use persistence::{
     PackPersistence, PersistenceError, Publication, Published, PublishedPack, Reserve, Reserved,

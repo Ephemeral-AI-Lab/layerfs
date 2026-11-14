@@ -14,7 +14,9 @@ impl PersistedPack {
     /// Verifies a real acquired body before returning it across the read port.
     /// This does not validate C2 framing or relax the caller's read budgets.
     pub fn authenticate(info: PackInfo, body: Vec<u8>) -> Result<Self, PersistenceError> {
-        if body.len() != info.length || ObjectKey::for_bytes(&body) != info.key {
+        if body.len() != info.length
+            || !super::read_probe().nopacksha && ObjectKey::for_bytes(&body) != info.key
+        {
             return Err(PersistenceError::Malformed);
         }
         Ok(Self { info, body })

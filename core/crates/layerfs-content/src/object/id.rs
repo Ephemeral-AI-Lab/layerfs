@@ -15,6 +15,21 @@ pub const DIGEST_BYTES: usize = 32;
 /// Frozen domain separator for v2 object identity.
 pub const OBJECT_DOMAIN: &[u8] = b"layerfs/object/v2\0";
 
+/// Prototype (FUSE profile probe `verify-once`, not a product contract):
+/// `LAYERFS_PROBE_READ` containing `fasthash` computes the same identity with
+/// one `blake3::hash` over a contiguous copy of domain and bytes. The
+/// incremental `Hasher` must hash the chunks after an 18-byte prefix in
+/// alignment-limited subtrees, so fewer of them reach the 4-way NEON kernel.
+fn one_shot() -> bool {
+    static ONE_SHOT: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ONE_SHOT.get_or_init(|| {
+        std::env::var("LAYERFS_PROBE_READ")
+            .unwrap_or_default()
+            .split(',')
+            .any(|part| part.trim() == "fasthash")
+    })
+}
+
 /// Immutable canonical object identity.
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct ObjectId([u8; DIGEST_BYTES]);
@@ -25,6 +40,12 @@ impl ObjectId {
         layerfs_telemetry::timer::stages::time(
             layerfs_telemetry::timer::stages::Stage::ObjectHash,
             || {
+                if one_shot() {
+                    let mut framed = Vec::with_capacity(OBJECT_DOMAIN.len() + canonical.len());
+                    framed.extend_from_slice(OBJECT_DOMAIN);
+                    framed.extend_from_slice(canonical);
+                    return Self(*blake3::hash(&framed).as_bytes());
+                }
                 let mut hasher = blake3::Hasher::new();
                 hasher.update(OBJECT_DOMAIN);
                 hasher.update(canonical);

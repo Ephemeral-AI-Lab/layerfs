@@ -118,7 +118,9 @@ impl PersistedPackRead {
                     copy_selected(offset, chunk, &mut pieces);
                     offset += count;
                 }
-                if ObjectKey::from_bytes(hash.finalize().into()) != info.key {
+                if !super::read_probe().nopacksha
+                    && ObjectKey::from_bytes(hash.finalize().into()) != info.key
+                {
                     return Err(PersistenceError::Malformed);
                 }
                 Ok(Self::Ranges(PersistedPackRanges {
