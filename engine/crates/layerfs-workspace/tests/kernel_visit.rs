@@ -93,8 +93,8 @@ fn observe(
     assert!(outcome.directory_candidate.is_none());
     match outcome.decision {
         Some(KernelReadDecision::Needs(needs)) => Seen::Needs(needs),
-        Some(KernelReadDecision::Value(inode)) => Seen::Value(inode),
-        Some(KernelReadDecision::Refused(refusal)) => Seen::Refused(refusal),
+        Some(KernelReadDecision::Value(decided)) => Seen::Value(decided.inode),
+        Some(KernelReadDecision::Refused { refusal, .. }) => Seen::Refused(refusal),
         other => panic!("undecided read visit: {other:?}"),
     }
 }
@@ -127,8 +127,8 @@ fn open(
     assert!(outcome.directory_candidate.is_none());
     let seen = match outcome.decision {
         Some(KernelReadDecision::Needs(needs)) => Seen::Needs(needs),
-        Some(KernelReadDecision::Value(inode)) => Seen::Value(inode),
-        Some(KernelReadDecision::Refused(refusal)) => Seen::Refused(refusal),
+        Some(KernelReadDecision::Value(decided)) => Seen::Value(decided.inode),
+        Some(KernelReadDecision::Refused { refusal, .. }) => Seen::Refused(refusal),
         other => panic!("undecided open visit: {other:?}"),
     };
     assert_eq!(
@@ -962,7 +962,7 @@ fn a_visit_through_a_read_only_descriptor_is_refused_and_changes_nothing() {
         .perform(&b.overlay);
     assert!(matches!(
         stat.decision,
-        Some(KernelReadDecision::Value(ref inode)) if inode.serial == serial
+        Some(KernelReadDecision::Value(ref decided)) if decided.inode.serial == serial
     ));
     b.overlay
         .kernel_close_file(mount, serial, file.owner_id())
@@ -1078,4 +1078,56 @@ fn a_resident_client_answers_only_from_memory_and_only_small_objects() {
         (filled.cache_misses + 1, filled.upstream_batches + 1)
     );
     assert_eq!(memory.read_canonical_batch(&[absent]).unwrap().len(), 1);
+}
+
+#[test]
+fn a_refused_lookup_answers_the_directory_its_job_read() {
+    let b = Bench::new("kernel-read-refused-directory");
+    let mount = b.overlay.create_kernel_mount(1).unwrap();
+    let mut facts = VisitFacts::default();
+    // The name binds nothing: the job still read the root's own row, and its
+    // refusal carries that row, so a reply's directory attributes need no
+    // second visit and are never a stale observation.
+    for _ in 0..4 {
+        let visit = b
+            .workspace
+            .kernel_read_visit(
+                empty(),
+                mount,
+                1,
+                None,
+                lookup(1, "absent"),
+                Arc::new(facts.clone()),
+            )
+            .unwrap();
+        let demand = b.demand();
+        let outcome = visit.perform(&b.overlay);
+        assert_eq!(b.demand(), demand, "an owner visit asked the provider");
+        match outcome.decision {
+            Some(KernelReadDecision::Needs(needs)) => facts
+                .supply(&b.workspace.base().unwrap(), &needs, None)
+                .unwrap(),
+            Some(KernelReadDecision::Refused { refusal, directory }) => {
+                assert_eq!(refusal, Refusal::Missing);
+                let directory = directory.expect("the directory the job read");
+                let fresh = b.stat(1).unwrap();
+                assert_eq!(
+                    directory.serial, fresh.serial,
+                    "the directory the name was in"
+                );
+                assert_eq!(
+                    (directory.mtime_seconds, directory.mtime_nanoseconds),
+                    (
+                        fresh.metadata.mtime_seconds,
+                        fresh.metadata.mtime_nanoseconds
+                    ),
+                    "the directory's own current row"
+                );
+                assert_eq!(directory.nlink, fresh.namespace_refs, "its reference count");
+                return;
+            }
+            other => panic!("undecided read visit: {other:?}"),
+        }
+    }
+    panic!("the missing lookup was not decided in four visits");
 }

@@ -12,10 +12,12 @@
 //! directory's end, so the same reply says so; any other reply's next call
 //! resumes after the last accepted cookie.
 //!
-//! A READDIRPLUS entry carries the attributes the listing already read — the
-//! local inode row of the name, or the inherited inode's own immutable facts
-//! — and the handle of the entry's serial. Both are optional in RFC 1813;
-//! here they are present for every named entry whose offsets this request
+//! A READDIRPLUS entry carries the attributes the listing read — the local
+//! inode row of the name, or the inherited inode's immutable facts, read for
+//! the window in one batch demand for file lengths and one inode batch per
+//! level of the inode tree the cache does not already answer —
+//! and the handle of the entry's serial. Both are optional in RFC 1813; here
+//! they are present for every named entry whose offsets this request
 //! publishes, and the publishing visit takes one kernel lookup reference per
 //! handed-out handle in that same job, so nothing is looked up twice and no
 //! entry is left without the reference its handle presents.
@@ -23,7 +25,8 @@ use crate::{
     attributes::{post_op_maybe, Identity, Status},
     block::wait,
     handle::HANDLE_BYTES,
-    kernel::{failure, Kernel},
+    kernel::Kernel,
+    read::failure,
     xdr::{opaque_size, Writer},
 };
 use layerfs_content::object::inode_leaf::InodeKind;
@@ -210,6 +213,15 @@ pub fn list(kernel: &Kernel, request: Listing) -> Result<Vec<u8>, Status> {
             (at_end, directory)
         }
     };
+    // A window that read the listed directory's own row answers it: the
+    // reply's `post_op_attr` is those fresh facts and no further read. An
+    // inherited directory has no local row, so its window reads none.
+    // Answering the facts this export last observed for it instead — what its
+    // OPENDIR visit read, whenever the descriptor was opened — restarts the
+    // client's `actimeo` on a snapshot that nothing ages, so a directory
+    // whose facts moved on since is answered as it was then, for as long as
+    // the descriptor lives. RFC 1813 makes the field optional, so such a
+    // reply says nothing and the client falls back to its own timer.
     finish(entries, directory.as_ref(), handle, eof)
 }
 

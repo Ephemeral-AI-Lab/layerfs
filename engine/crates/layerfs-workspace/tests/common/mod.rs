@@ -28,10 +28,18 @@ pub struct Store {
     pub lengths: Arc<Mutex<BTreeMap<ObjectId, u64>>>,
     /// Canonical bytes served upstream, to tell metadata demand from payload.
     pub served: Arc<AtomicU64>,
+    /// Object batch demands: one per `read_canonical_batch` call, whatever
+    /// the number of objects it names. A window's SQL batches, not its rows.
+    pub batches: Arc<AtomicU64>,
+    /// Length demands that asked for several ids in one call.
+    pub length_batches: Arc<AtomicU64>,
+    /// Length demands that asked for one id at a time.
+    pub length_demands: Arc<AtomicU64>,
 }
 impl AuthenticatedObjects for Store {
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
         self.demand.fetch_add(ids.len() as u64, Ordering::Relaxed);
+        self.batches.fetch_add(1, Ordering::Relaxed);
         let objects = self.objects.lock().unwrap();
         ids.iter()
             .map(|id| {
@@ -47,12 +55,25 @@ impl AuthenticatedObjects for Store {
 }
 impl layerfs_workspace::FileLengths for Store {
     fn file_length(&self, id: ObjectId) -> layerfs_workspace::WorkspaceResult<u64> {
+        self.length_demands.fetch_add(1, Ordering::Relaxed);
         self.lengths
             .lock()
             .unwrap()
             .get(&id)
             .copied()
             .ok_or(ContentError::MissingObject.into())
+    }
+    fn file_lengths(&self, ids: &[ObjectId]) -> layerfs_workspace::WorkspaceResult<Vec<u64>> {
+        self.length_batches.fetch_add(1, Ordering::Relaxed);
+        let lengths = self.lengths.lock().unwrap();
+        ids.iter()
+            .map(|id| {
+                lengths
+                    .get(id)
+                    .copied()
+                    .ok_or(ContentError::MissingObject.into())
+            })
+            .collect()
     }
 }
 impl FinalizedConsumer for Store {

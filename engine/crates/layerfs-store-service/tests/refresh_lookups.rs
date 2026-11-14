@@ -208,7 +208,7 @@ fn refresh_lookups() {
             visits += 1;
             match &outcome.decision {
                 Some(KernelReadDecision::Value(_)) => break,
-                Some(KernelReadDecision::Refused(_)) => {
+                Some(KernelReadDecision::Refused { .. }) => {
                     missing += 1;
                     break;
                 }

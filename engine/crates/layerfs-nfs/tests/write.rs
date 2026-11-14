@@ -831,12 +831,13 @@ impl layerfs_mount_ports::ports::RequestServices for CountingRequest {
         handle: u64,
         offset: u64,
         after: Option<Vec<u8>>,
+        attributes: bool,
     ) -> layerfs_mount_ports::ports::ServiceFuture<
         '_,
         layerfs_mount_ports::ports::ServiceReply<Arc<layerfs_workspace::KernelDirectoryWindow>>,
     > {
         self.inner
-            .directory_visit(mount, serial, handle, offset, after)
+            .directory_visit(mount, serial, handle, offset, after, attributes)
     }
     fn publish_cookies(
         &self,
@@ -1014,8 +1015,9 @@ fn create_write_remove_and_apple_double_avoid_redundant_owner_jobs_and_orphans()
 
     // 4. AppleDouble companion changing lifecycle (CREATE, WRITE, SETATTR,
     //    REMOVE) issues 0 SQLite owner jobs (0 observe_visit, 0 mutate_visit),
-    //    and LOOKUP of an absent companion issues 0 lookup observe_visit
-    //    (only the 1 parent getattr in nfs.rs proc 3).
+    //    and LOOKUP of an absent companion issues none either: the export
+    //    refuses the name before any visit, and the reply's directory
+    //    attributes come from the facts it already published.
     let before = counts.snapshot();
     let ad = c.touch(&root, b"._single.txt", 0o644).unwrap();
     // The directory's wcc_data is not a hole: a companion changes nothing in
@@ -1055,8 +1057,8 @@ fn create_write_remove_and_apple_double_avoid_redundant_owner_jobs_and_orphans()
     assert_eq!(c.lookup(&root, b"._single.txt").map(|_| ()), Err(NOENT));
     assert_eq!(
         counts.snapshot(),
-        (before.0 + 1, before.1, before.2, before.3),
-        "AppleDouble LOOKUP avoids the target lookup visit"
+        before,
+        "an absent AppleDouble LOOKUP issues no owner job at all"
     );
 
     // 5. REMOVE drops the last link and retires the synthetic kernel's file

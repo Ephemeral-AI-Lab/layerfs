@@ -32,15 +32,34 @@ pub enum KernelReadOperation {
 #[derive(Debug)]
 pub enum KernelReadDecision {
     Needs(Vec<Need>),
-    Value(Inode),
-    Refused(Refusal),
+    Value(Decided),
+    /// A refusal and, when the refusing job read it, the directory that job
+    /// read: a LOOKUP that binds no name still read its parent's row, so the
+    /// failure's directory attributes are those fresh facts and cost no
+    /// second visit. `None` when no job read a directory (a refusal decided
+    /// before the visit, or one about the name itself).
+    Refused {
+        refusal: Refusal,
+        directory: Option<Inode>,
+    },
     Failed(WorkspaceError),
+}
+/// What a read decided: the inode it names and, for a LOOKUP, the directory
+/// it named it in. That job read the directory's own row to resolve the name,
+/// so a reply that shows the directory's attributes needs no second visit.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Decided {
+    pub inode: Inode,
+    pub parent: Option<Inode>,
 }
 pub type KernelReadOutcome = KernelObservation<KernelReadDecision>;
 
 #[derive(Debug)]
 pub struct KernelReadValue {
     pub stat: ViewStat,
+    /// The directory a LOOKUP named the inode in, from the same job: a reply
+    /// that carries the directory's attributes reads nothing more for them.
+    pub parent: Option<ViewStat>,
     pub file: Option<OpenFile>,
     pub directory: Option<KernelDirectory>,
     pub original: Arc<KernelReadOutcome>,
@@ -90,20 +109,25 @@ pub(crate) fn decide_read(
         kernel: None,
         needs: Vec::new(),
     };
-    let decision = match decide(operation, &mut eval) {
-        Ok(Some(inode)) => KernelReadDecision::Value(inode),
+    // The directory a refusing decision read, when it read one.
+    let mut refused_directory = None;
+    let decision = match decide(operation, &mut eval, &mut refused_directory) {
+        Ok(Some(decided)) => KernelReadDecision::Value(decided),
         Ok(None) if !eval.needs.is_empty() => KernelReadDecision::Needs(eval.needs),
         Ok(None) => KernelReadDecision::Failed(
             ContentError::InvalidRecord("empty kernel read needs").into(),
         ),
         Err(WorkspaceError::Overlay(error)) => return Err(error),
-        Err(WorkspaceError::Refused(refusal)) => KernelReadDecision::Refused(refusal),
+        Err(WorkspaceError::Refused(refusal)) => KernelReadDecision::Refused {
+            refusal,
+            directory: refused_directory,
+        },
         Err(error) => KernelReadDecision::Failed(error),
     };
     Ok(match decision {
         KernelReadDecision::Needs(_) => KernelDecision::Needs(decision),
-        KernelReadDecision::Value(ref inode) => KernelDecision::Finished {
-            inode: Some(inode.clone()),
+        KernelReadDecision::Value(ref decided) => KernelDecision::Finished {
+            inode: Some(decided.inode.clone()),
             value: decision,
         },
         _ => KernelDecision::Finished {
@@ -112,20 +136,37 @@ pub(crate) fn decide_read(
         },
     })
 }
-fn decide(operation: &KernelReadOperation, eval: &mut Eval<'_>) -> WorkspaceResult<Option<Inode>> {
+/// One read's decision. `refused` receives the directory row a refusal read,
+/// when the refused operation read one (LOOKUP of a name that binds nothing).
+fn decide(
+    operation: &KernelReadOperation,
+    eval: &mut Eval<'_>,
+    refused: &mut Option<Inode>,
+) -> WorkspaceResult<Option<Decided>> {
     match operation {
         // The source's independent read reference permits removed metadata.
         KernelReadOperation::Getattr { serial } | KernelReadOperation::Data { serial } => {
-            eval.target(*serial)
+            Ok(eval.target(*serial)?.map(|inode| Decided {
+                inode,
+                parent: None,
+            }))
         }
-        KernelReadOperation::Opendir { serial } => eval.directory(*serial),
+        KernelReadOperation::Opendir { serial } => {
+            Ok(eval.directory(*serial)?.map(|inode| Decided {
+                inode,
+                parent: None,
+            }))
+        }
         // The kernel names an inode it still references. A file whose
         // last name is gone stays openable under that reference, so a
         // path open racing an unlink or replacement gets the old file.
         KernelReadOperation::Open { serial, .. } => {
             let inode = eval.target(*serial)?;
             match inode {
-                Some(inode) if inode.kind == InodeKind::File => Ok(Some(inode)),
+                Some(inode) if inode.kind == InodeKind::File => Ok(Some(Decided {
+                    inode,
+                    parent: None,
+                })),
                 Some(inode) if inode.kind == InodeKind::Directory => {
                     Err(WorkspaceError::Refused(Refusal::IsDirectory))
                 }
@@ -137,11 +178,22 @@ fn decide(operation: &KernelReadOperation, eval: &mut Eval<'_>) -> WorkspaceResu
             let directory = eval.directory(*parent)?;
             let layers = eval.layers(*parent, name)?;
             let bound = eval.bound(*parent, directory.as_ref(), name, layers);
-            let (Some(_), Some(bound)) = (directory, bound) else {
+            let (Some(directory), Some(bound)) = (directory, bound) else {
                 return Ok(None);
             };
-            let serial = bound.ok_or(WorkspaceError::Refused(Refusal::Missing))?;
-            eval.target(serial)
+            let Some(serial) = bound else {
+                // The name binds nothing. This job still read the directory's
+                // own row, so its fresh facts answer the failure's directory
+                // attributes without a second visit.
+                *refused = Some(directory);
+                return Err(WorkspaceError::Refused(Refusal::Missing));
+            };
+            // The name resolved, so the reply also says what the directory
+            // is: the same job read its row, and no second visit is needed.
+            Ok(eval.target(serial)?.map(|inode| Decided {
+                inode,
+                parent: Some(directory),
+            }))
         }
     }
 }
