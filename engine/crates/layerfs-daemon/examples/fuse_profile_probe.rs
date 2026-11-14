@@ -319,6 +319,16 @@ mod probe {
             usage.system_time().num_microseconds(),
         ]
     }
+    /// Prototype (lanes2): guest-wide steal time from `/proc/stat`, in
+    /// clock ticks (a disturbance indicator: CPU taken by the host).
+    fn steal_ticks() -> u64 {
+        fs::read_to_string("/proc/stat")
+            .unwrap_or_default()
+            .lines()
+            .find(|line| line.starts_with("cpu "))
+            .and_then(|line| line.split_whitespace().nth(8)?.parse().ok())
+            .unwrap_or(0)
+    }
     /// `/proc/self/io` counters: read syscalls, bytes read by them, storage bytes.
     fn io() -> [u64; 3] {
         let text = fs::read_to_string("/proc/self/io").unwrap_or_default();
@@ -916,6 +926,7 @@ mod probe {
         let cache0 = cache_state(&opened);
         let rss = resident_reset();
         let cpu0 = cpu_us();
+        let steal0 = steal_ticks();
         let started = Instant::now();
         let mut file = File::open(&path).unwrap();
         let (mut total, mut sum) = (0_u64, 0);
@@ -930,13 +941,15 @@ mod probe {
         drop(file);
         let seconds = started.elapsed().as_secs_f64();
         let cpu1 = cpu_us();
+        let steal1 = steal_ticks();
+        let threads = status_kb("Threads:");
         let hwm = status_kb("VmHWM:");
         let (rss_file, rss_anon) = (status_kb("RssFile:"), status_kb("RssAnon:"));
         let io1 = io();
         let (work1, sql1) = (opened.store.work(), readers(&opened));
         let (busy1, session1) = (stages::busy::snapshot(), opened.store.read_work());
         let lanes = format!(
-            "\"sessions\":\"{}\",\"store_busy_ns\":{},\"store_peak\":{},\"session_requests\":{},\"session_wait_ns\":{},\"readers\":{},\"shared_hits\":{},\"shared_kept\":{},\"cpu_user_us\":{},\"cpu_sys_us\":{}",
+            "\"sessions\":\"{}\",\"store_busy_ns\":{},\"store_peak\":{},\"session_requests\":{},\"session_wait_ns\":{},\"readers\":{},\"shared_hits\":{},\"shared_kept\":{},\"cpu_user_us\":{},\"cpu_sys_us\":{},\"steal_ticks\":{},\"threads\":{}",
             std::env::var("LAYERFS_PROBE_READ_SESSIONS").unwrap_or_else(|_| "1".into()),
             busy1.0 - busy0.0,
             busy1.1,
@@ -947,6 +960,8 @@ mod probe {
             session1.shared_kept - session0.shared_kept,
             cpu1[0] - cpu0[0],
             cpu1[1] - cpu0[1],
+            steal1 - steal0,
+            threads,
         );
         let split = stage_delta(&stage0);
         let dec = decoded_delta(&dec0);
