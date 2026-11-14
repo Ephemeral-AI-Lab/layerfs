@@ -238,7 +238,12 @@ impl Image {
             let name_end = name_at + attr.name.len();
             emit(&mut out, start, name_at, &attr.name);
             let next = entry + entry_len(name_len);
-            emit(&mut out, start, name_end + 1, &attr.pad[..next - name_end - 1]);
+            emit(
+                &mut out,
+                start,
+                name_end + 1,
+                &attr.pad[..next - name_end - 1],
+            );
             emit(&mut out, start, value_at, &attr.value);
             entry = next;
             value_at += attr.value.len();
