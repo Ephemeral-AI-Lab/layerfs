@@ -4,9 +4,10 @@
 //! filesystem that holds it: SQLite's WAL locks and the writers' admission
 //! lane (a `flock` on the Store's directory) coordinate only within one
 //! kernel. The guard checks what this process can verify before it opens any
-//! file: the platform, and the type of the filesystem holding the Store's
-//! directory, from an allowlist of local filesystems. Anything else is
-//! `Unsupported` with its reason; there is no other route to fall back to.
+//! file: the platform, the Store's own directory (a real `0700` directory
+//! owned by this user) and the type of the filesystem holding it, from an
+//! allowlist of local filesystems. Anything else is `Unsupported` with its
+//! reason; there is no other route to fall back to.
 use std::path::Path;
 
 /// Filesystems that carry the Store's locks: ext4, xfs and btrfs.
@@ -27,8 +28,54 @@ impl std::fmt::Display for Unsupported {
     }
 }
 
-/// Checks the platform and the filesystem holding `store`'s directory,
-/// before anything is opened. Returns the filesystem's name.
+/// Checks that `directory` satisfies the daemon's private-directory
+/// requirements: an existing real directory (not a symlink) owned by the
+/// current effective user with no group/other access (`mode & 0o077 == 0`).
+/// Side-effect-free: never creates a directory or modifies permissions.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn check_private_directory(directory: &Path) -> Result<(), Unsupported> {
+    use std::fs;
+    use std::os::unix::fs::MetadataExt;
+    let euid = nix::unistd::geteuid().as_raw();
+    let meta = fs::symlink_metadata(directory).map_err(|error| {
+        Unsupported(format!(
+            "the Store's directory {} cannot be examined: {error}",
+            directory.display()
+        ))
+    })?;
+    let path = directory.display();
+    if meta.file_type().is_symlink() {
+        return Err(Unsupported(format!(
+            "the Store's directory {path} is a symlink; a real private directory (mode 0700) is required"
+        )));
+    }
+    if !meta.is_dir() {
+        return Err(Unsupported(format!(
+            "the Store's directory {path} is not a directory (mode {:04o}); a private directory (mode 0700) is required",
+            meta.mode() & 0o7777
+        )));
+    }
+    if meta.uid() != euid {
+        return Err(Unsupported(format!(
+            "the Store's directory {path} is owned by uid {}, not the current user (uid {euid}); \
+             the daemon requires a private directory owned by uid {euid} (mode 0700)",
+            meta.uid()
+        )));
+    }
+    let mode = meta.mode() & 0o7777;
+    if mode & 0o077 != 0 {
+        return Err(Unsupported(format!(
+            "the Store's directory {path} has mode {mode:04o} (group/other bits {:04o} are set); \
+             the daemon requires a private directory (mode 0700, no group/other access); \
+             fix with: chmod 700 {path}",
+            mode & 0o077
+        )));
+    }
+    Ok(())
+}
+
+/// Checks the platform, `store`'s own private directory and the filesystem
+/// holding it, before anything is opened. Returns the filesystem's name.
 pub fn check(store: &Path) -> Result<&'static str, Unsupported> {
     #[cfg(target_os = "linux")]
     {
@@ -36,6 +83,7 @@ pub fn check(store: &Path) -> Result<&'static str, Unsupported> {
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
             .unwrap_or_else(|| Path::new("."));
+        check_private_directory(directory)?;
         let stat = nix::sys::statfs::statfs(directory).map_err(|error| {
             Unsupported(format!(
                 "the Store's directory {} cannot be examined: {error}",
@@ -65,6 +113,7 @@ pub fn check(store: &Path) -> Result<&'static str, Unsupported> {
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
             .unwrap_or_else(|| Path::new("."));
+        check_private_directory(directory)?;
         let stat = nix::sys::statfs::statfs(directory).map_err(|error| {
             Unsupported(format!(
                 "the Store's directory {} cannot be examined: {error}",

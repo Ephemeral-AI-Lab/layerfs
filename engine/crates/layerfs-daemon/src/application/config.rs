@@ -106,11 +106,36 @@ fn private_directory(path: &Path, create: bool) -> io::Result<()> {
         .custom_flags((OFlag::O_NOFOLLOW | OFlag::O_DIRECTORY | OFlag::O_CLOEXEC).bits())
         .open(path)?;
     let metadata = directory.metadata()?;
-    if !metadata.is_dir()
-        || metadata.uid() != Uid::effective().as_raw()
-        || metadata.mode() & 0o077 != 0
-    {
-        return Err(invalid("private directory ownership/mode/type"));
+    let uid = Uid::effective().as_raw();
+    let mode = metadata.mode() & 0o7777;
+    if !metadata.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "private directory ownership/mode/type at {}: not a directory (mode {mode:04o})",
+                path.display()
+            ),
+        ));
+    }
+    if metadata.uid() != uid {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "private directory ownership/mode/type at {}: owned by uid {}, expected uid {uid}",
+                path.display(),
+                metadata.uid()
+            ),
+        ));
+    }
+    if mode & 0o077 != 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "private directory ownership/mode/type at {}: mode is {mode:04o}, expected 0700 (fix with: chmod 700 {})",
+                path.display(),
+                path.display()
+            ),
+        ));
     }
     Ok(())
 }

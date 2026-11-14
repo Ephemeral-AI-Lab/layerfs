@@ -89,6 +89,36 @@ fn init_files_branches_move_and_remove() {
     );
     assert_eq!(refused.unwrap_err().0, "NotFound");
     ok(&home, "store.create", &[("name", t("shop"))]);
+    // project.init on an existing Store refuses up front if its directory was
+    // made non-private (e.g. chmod 0755), reporting path, 0755, 0700 and chmod 700
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let shop_dir = paths::store_dir(&home, "shop");
+        std::fs::set_permissions(&shop_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let (code, message) = call(
+            &home,
+            "project.init",
+            &[
+                ("project", t("shop/api")),
+                ("folder", t(&folder.display().to_string())),
+            ],
+        )
+        .unwrap_err();
+        assert_eq!(code, "Unsupported", "{message}");
+        assert!(
+            message.contains(&shop_dir.display().to_string()),
+            "{message}"
+        );
+        assert!(
+            message.contains("0755") && message.contains("0700"),
+            "{message}"
+        );
+        assert!(
+            message.contains(&format!("chmod 700 {}", shop_dir.display())),
+            "{message}"
+        );
+        std::fs::set_permissions(&shop_dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
     let mut events = Vec::new();
     let args = SdkValue::map([
         ("project", t("shop/api")),

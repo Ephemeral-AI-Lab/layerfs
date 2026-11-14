@@ -12,3 +12,5 @@ pub mod progress;
 pub mod record;
 #[doc(hidden)]
 pub mod restore;
+#[doc(hidden)]
+pub mod restored;

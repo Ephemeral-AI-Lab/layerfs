@@ -2,13 +2,15 @@
 use super::family::{hex, write_link};
 use super::progress::Shown;
 use super::record::{BucketRecord, StoreLink};
+use super::restored::{records, Found, Main, Restored};
+use crate::identity::{Identity, Kind};
 use crate::lease;
-use crate::project::record::ProjectRecord;
 use crate::record::{StoreKind, StoreRecord};
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup as remote;
 use layerfs_bucket::bucket::pieces;
+use layerfs_history::{HistoryName, NamedSnapshot};
 use layerfs_home::events::Events;
 use layerfs_home::home::flock::{try_lock, unlock};
 use layerfs_home::home::{self, paths};
@@ -29,7 +31,8 @@ pub type BackupRestore = super::create::BackupCreate;
 /// (`Conflict` otherwise; `InUse` while a process holds it or a Sandbox of
 /// its projects runs). The download, its checks and the read of its
 /// projects happen before the home lock; the lock covers the re-checks, the
-/// install and the record writes only.
+/// planning of each project's record, the install and the record writes
+/// only.
 pub fn restore(
     home: &Path,
     events: &mut Events<'_>,
@@ -39,6 +42,15 @@ pub fn restore(
     let home = home.to_path_buf();
     let store = request.store.as_str();
     layerfs_home::names::StoreName::parse(store)?;
+    // the Store's own directory, before this call writes anything (its
+    // staging folder included): a restore installs into the folder a daemon
+    // opens, so an existing one must be the same private directory
+    // `store.create` and every opener require, refused with its own code and
+    // remedy (#570 P1). Absent: the install makes it `0700`, as before.
+    if paths::store_dir(&home, store).exists() {
+        layerfs_store_service::kernel_guard::check(&paths::store_file(&home, store))
+            .map_err(|reason| refused("Unsupported", reason.0))?;
+    }
     let bucket = request.bucket.as_str();
     let driver = BucketRecord::of(&home, bucket)?.driver()?;
     let existing = StoreRecord::read(&home, store)?;
@@ -102,22 +114,99 @@ pub fn restore(
         _ => StoreRecord::restored(store, &loaded.binding, &cursor),
     };
     let found = projects_in(&home, store, &record, &staged)?;
+    // the restored Store's own authority and the file it is installed as, as
+    // `project.init` records them; the staged file becomes the installed one
+    let restored = Restored {
+        identity: Identity {
+            kind: Kind::Sqlite,
+            binding: match &identity {
+                Some(identity) => identity.binding.clone(),
+                None => loaded.binding.clone(),
+            },
+            cursor_key: cursor,
+        },
+        file: staged.clone(),
+        sqlite: loaded
+            .sqlite
+            .clone()
+            .unwrap_or_else(|| found.sqlite.clone()),
+    };
+    // what each project's record becomes is decided under the home lock the
+    // record writes take, and before the install: a record that cannot be
+    // rebuilt refuses the restore with the Store not yet installed, rather
+    // than installing one and leaving a record short
     shown.phase(events, "install");
     let _lock = home::lock::take(&home)?;
+    let projects = records(&home, store, &restored, &found.projects)?;
+    install(
+        &home,
+        store,
+        bucket,
+        existing.as_ref(),
+        &record,
+        &staged,
+        related,
+    )?;
+    write_link(
+        &home,
+        store,
+        bucket,
+        StoreLink::new(
+            &file,
+            "restore",
+            loaded.bytes,
+            &loaded.sha256,
+            loaded.heads.as_ref(),
+        ),
+    )?;
+    let projects = projects.write(&home)?;
+    Ok(SdkValue::map([
+        ("store", SdkValue::text(store)),
+        ("bucket", SdkValue::text(bucket)),
+        ("file", SdkValue::text(&file)),
+        ("bytes", SdkValue::Int(loaded.bytes as i64)),
+        ("sha256", hex(&loaded.sha256)),
+        ("heads", loaded.heads.as_ref().map(hex).unwrap_or_default()),
+        ("projects", projects),
+    ]))
+}
+
+/// Installs the downloaded Store `staged` as `store` (under the home lock):
+/// a new Store where `existing` is `None`, else it replaces the Store that
+/// record names.
+///
+/// The target's folder is checked again first: the download is a long
+/// window, in which `store/<name>` can appear or lose its privacy after the
+/// restore's own first check, and `home::private_dir` keeps an existing
+/// folder's mode. This is `store.create`'s guard, its code and its remedy
+/// (#570 P1).
+pub fn install(
+    home: &Path,
+    store: &str,
+    bucket: &str,
+    existing: Option<&StoreRecord>,
+    record: &StoreRecord,
+    staged: &Path,
+    related: Related,
+) -> Result<()> {
+    if paths::store_dir(home, store).exists() {
+        layerfs_store_service::kernel_guard::check(&paths::store_file(home, store))
+            .map_err(|reason| refused("Unsupported", reason.0))?;
+    }
     // a Store replaced here is checked and replaced under its lock, which
     // the link below takes again
     let store_lock = match &existing {
-        Some(_) => Some(crate::record::lock(&home, store)?),
+        Some(_) => Some(crate::record::lock(home, store)?),
         None => None,
     };
-    let destination = paths::store_file(&home, store);
-    let now = StoreRecord::read(&home, store)?;
+    let destination = paths::store_file(home, store);
+    let now = StoreRecord::read(home, store)?;
     match (&existing, now) {
         (None, None) if !destination.exists() => {
-            home::private_dir(&paths::store_dir(&home, store))?;
+            home::private_dir(&paths::store_dir(home, store))?;
             // a link never replaces a Store that appeared meanwhile
-            std::fs::hard_link(&staged, &destination).map_err(failed)?;
-            record.write(&home)?;
+            std::fs::hard_link(staged, &destination).map_err(failed)?;
+            record.write(home)?;
         }
         (None, _) => {
             return Err(refused(
@@ -138,33 +227,12 @@ pub fn restore(
                     format!("Store {store} was replaced while this restore downloaded"),
                 ));
             }
-            replaceable(&home, store, bucket, &now, related)?;
-            std::fs::rename(&staged, &destination).map_err(failed)?;
+            replaceable(home, store, bucket, &now, related)?;
+            std::fs::rename(staged, &destination).map_err(failed)?;
         }
     }
     drop(store_lock);
-    write_link(
-        &home,
-        store,
-        bucket,
-        StoreLink::new(
-            &file,
-            "restore",
-            loaded.bytes,
-            &loaded.sha256,
-            loaded.heads.as_ref(),
-        ),
-    )?;
-    let projects = write_projects(&home, store, &found)?;
-    Ok(SdkValue::map([
-        ("store", SdkValue::text(store)),
-        ("bucket", SdkValue::text(bucket)),
-        ("file", SdkValue::text(&file)),
-        ("bytes", SdkValue::Int(loaded.bytes as i64)),
-        ("sha256", hex(&loaded.sha256)),
-        ("heads", loaded.heads.as_ref().map(hex).unwrap_or_default()),
-        ("projects", projects),
-    ]))
+    Ok(())
 }
 
 /// A restore's own download folder, `store/.restore-<random>/` (hidden from
@@ -293,14 +361,16 @@ fn replaceable(
     Ok(())
 }
 
-/// `(name, stack)` of each project the Store file `file` holds, read on a
-/// connection of this call's own that is closed before this returns.
-fn projects_in(
-    home: &Path,
-    store: &str,
-    record: &StoreRecord,
-    file: &Path,
-) -> Result<Vec<(String, SdkValue)>> {
+/// What the restored Store file holds, read before it is installed: its
+/// projects and the SQLite version that opened the file here.
+struct Listing {
+    projects: Vec<Found>,
+    sqlite: String,
+}
+
+/// [`Listing`] of the Store file `file`: read on a connection of this
+/// call's own that is closed before this returns.
+fn projects_in(home: &Path, store: &str, record: &StoreRecord, file: &Path) -> Result<Listing> {
     let open = crate::open_args::OpenArgs {
         home: Some(home.to_path_buf()),
         store: Some(store.to_owned()),
@@ -308,33 +378,35 @@ fn projects_in(
         store_path: Some(file.display().to_string()),
         ..Default::default()
     };
-    let SdkValue::List(items) = crate::identity::list_projects(&open)? else {
-        return Err(refused("Failed", "the Store's project list is not a list"));
-    };
-    Ok(items
-        .iter()
-        .filter_map(|item| {
-            let name = item.get_text("name")?.to_owned();
-            Some((name, item.get("stack").cloned().unwrap_or_default()))
+    crate::service::with_service(&open, |service| {
+        // the project's own line of Layers: `main`, through its name index
+        let main =
+            HistoryName::new(layerfs_store_service::history::branch::MAIN).map_err(failed)?;
+        let projects = service
+            .store
+            .published(|history| {
+                let mut found = Vec::new();
+                for stack in layerfs_project::store::projects(history)? {
+                    let snapshot = match history.branch_snapshot_named(&stack.name, &main)? {
+                        NamedSnapshot::Found(snapshot) => Some(Main {
+                            stack: snapshot.branch.stack,
+                            branch: snapshot.branch.id,
+                            root: snapshot.base_root.to_bytes(),
+                        }),
+                        NamedSnapshot::NoStack | NamedSnapshot::NoBranch => None,
+                    };
+                    found.push(Found {
+                        name: stack.name.as_str().to_owned(),
+                        stack: SdkValue::text(pieces::hex(&stack.id.to_bytes())),
+                        main: snapshot,
+                    });
+                }
+                Ok(found)
+            })
+            .map_err(failed)?;
+        Ok(Listing {
+            projects,
+            sqlite: service.opened.sqlite_version.clone(),
         })
-        .collect())
-}
-
-/// The project records of a restored Store, rebuilt from what it holds:
-/// one per project; a record whose project it lacks is removed. Under the
-/// home lock, after [`replaceable`] found no Sandbox of the Store.
-fn write_projects(home: &Path, store: &str, found: &[(String, SdkValue)]) -> Result<SdkValue> {
-    let mut names = Vec::new();
-    for (name, stack) in found {
-        if ProjectRecord::read(home, store, name)?.is_none() {
-            ProjectRecord::found(store, name, stack.clone()).write(home)?;
-        }
-        names.push(SdkValue::text(name));
-    }
-    for old in paths::names(&paths::store_dir(home, store).join("project")).map_err(failed)? {
-        if !names.contains(&SdkValue::text(&old)) {
-            std::fs::remove_dir_all(paths::project_dir(home, store, &old)).map_err(failed)?;
-        }
-    }
-    Ok(SdkValue::List(names))
+    })
 }

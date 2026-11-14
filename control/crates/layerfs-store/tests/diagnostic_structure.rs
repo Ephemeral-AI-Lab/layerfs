@@ -3,9 +3,24 @@ use layerfs_store::{
     diagnostic::{self, Options, Outcome},
     identity::{Identity, Kind},
 };
+
+/// A private (`0700`) scratch directory for one Store file: the kernel guard
+/// admits a Store's own directory only, as in a home.
+fn scratch(label: &str) -> std::path::PathBuf {
+    use std::os::unix::fs::DirBuilderExt;
+    let directory =
+        std::env::temp_dir().join(format!("layerfs-doctor-{label}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&directory);
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&directory)
+        .unwrap();
+    directory
+}
+
 #[test]
 fn selected_malformed_store_has_structural_failure_and_incomplete_access() {
-    let path = std::env::temp_dir().join(format!("layerfs-doctor-header-{}", std::process::id()));
+    let path = scratch("header").join("store.sqlite");
     std::fs::write(&path, vec![0xA5; 8192]).unwrap();
     let before = std::fs::read(&path).unwrap();
     let mut observations = Vec::new();
@@ -27,14 +42,14 @@ fn selected_malformed_store_has_structural_failure_and_incomplete_access() {
         "{observations:?}"
     );
     assert_eq!(std::fs::read(&path).unwrap(), before);
-    std::fs::remove_file(path).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
 #[test]
 fn binding_mismatch_keeps_logical_access_unavailable_without_corruption() {
     use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
     use layerfs_storage::StoragePolicy;
-    let path = std::env::temp_dir().join(format!("layerfs-doctor-binding-{}", std::process::id()));
+    let path = scratch("binding").join("store.sqlite");
     let handles = SqliteHandles::create(
         PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
         StoragePolicy::frozen_default(),
@@ -72,5 +87,5 @@ fn binding_mismatch_keeps_logical_access_unavailable_without_corruption() {
         "{observations:?}"
     );
     assert_eq!(std::fs::read(&path).unwrap(), before);
-    std::fs::remove_file(path).unwrap();
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }

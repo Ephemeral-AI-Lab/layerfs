@@ -50,7 +50,7 @@ Commits use; those are described under [Commit](../commit/README.md) and
 | --- | --- | --- |
 | One route, in the caller's process | `fs.*`, `branch.*`, `project.*` and `store.stats` run on this engine in the process that opened the Store. There is no daemon route for them and no fallback. | [`lib.rs`](../../../../engine/crates/layerfs-store-service/src/lib.rs), [`service.rs`](../../../../control/crates/layerfs-store/src/service.rs) |
 | Daemon serves only Workspace calls | Mount, exec, Workspace Commit, status and unmount go to a Sandbox daemon; the daemon reuses this crate's `store` and `overlay` modules, not `StoreService`. | [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs), [Daemon](../daemon/README.md) |
-| Kernel guard first | Before any file opens, `kernel_guard::check` reads the platform and the filesystem type of the Store's directory. Linux: ext4, xfs, btrfs. macOS: apfs or hfs (native Sandbox, one shared macOS kernel). Anything else: `OpenRefusal::Unsupported` with its reason. | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
+| Kernel guard first | Before any file opens or is created, `kernel_guard::check` verifies without modifying permissions that the Store's own directory (`store.parent()`, or `.` when empty) exists as a real `0700` directory owned by the current effective user (refusing a missing path, a symlink, wrong owner or `mode & 0o077 != 0` with a `chmod 700` hint) and checks the filesystem type. Linux: ext4, xfs, btrfs. macOS: apfs or hfs (native Sandbox, one shared macOS kernel). Anything else: `OpenRefusal::Unsupported` with its reason. | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | macOS and Windows hosts | A process that cannot open the Store under the guard sends its Store calls to a loopback worker: a Linux process (a container on macOS, a WSL2 distribution on Windows) that runs this same engine and opens the Store directly. The engine knows no worker. | [Control: Workers and reach](../../control/machines/workers-and-reach.md) |
 | PostgreSQL | `open_postgres` (feature `postgresql`) runs no kernel guard: the Store is a server reached over a connection. Without the feature a PostgreSQL selection fails `BackendUnavailable`. | [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs), [`bootstrap.rs`](../../../../engine/crates/layerfs-store-service/src/bootstrap.rs) |
 
@@ -195,7 +195,7 @@ not in `methods::call`, and in this repository only tests call it.
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| Unsupported platform or filesystem | `OpenRefusal::Unsupported`, nothing opened | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
+| Unsupported directory, platform or filesystem | `OpenRefusal::Unsupported`, nothing opened or created | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | Store file absent | `OpenRefusal::Missing` | [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) |
 | Private Workspaces per process | 64; then `Capacity` | same |
 | Overlay maintenance stopped | `bind` refuses | same |

@@ -133,8 +133,7 @@ pub fn add_project(request: &ProjectAdd) -> Outcome {
     let deadline = crate::project::init::deadline(request.timeout_ms)?;
     let open = request.open();
     let store_file = request.store_file();
-    let global = store_file.parent().unwrap_or(&store_file);
-    layerfs_store_service::kernel_guard::check(global)
+    layerfs_store_service::kernel_guard::check(&store_file)
         .map_err(|reason| refused("Unsupported", reason.0))?;
     let identity = identity(&open)?;
     sqlite_only(&identity, "adding a project")?;

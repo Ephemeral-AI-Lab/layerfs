@@ -1,9 +1,10 @@
 //! One ordinary command to its end in a local Sandbox: the command identity,
-//! the Workspace directory and a search path (on macOS this process's own);
-//! nothing else of this process's environment, no shell of its own and no
-//! implicit timeout. Each command leads a process group of its own, named in
-//! the Sandbox until it is empty, so what it leaves running ends with the
-//! Sandbox.
+//! the Workspace directory, a search path (on macOS this process's own), and
+//! (on macOS) the caller's Rust and Git locations (`RUSTUP_HOME`,
+//! `CARGO_HOME`, `GIT_CONFIG_GLOBAL`) when present; nothing else of this
+//! process's environment, no shell of its own and no implicit timeout. Each
+//! command leads a process group of its own, named in the Sandbox until it is
+//! empty, so what it leaves running ends with the Sandbox.
 use super::sandbox::Sandbox;
 use crate::local::streams;
 use crate::local::{groups, search::search_path};
@@ -12,6 +13,7 @@ use crate::{ExecExit, ExecRequest, RuntimeError, WireFailure};
 use layerfs_bridge::process::{self, LocalProcess};
 use nix::sys::signal::{killpg, Signal};
 use std::{
+    ffi::OsString,
     io::{self, Write},
     os::unix::process::{CommandExt, ExitStatusExt},
     path::Path,
@@ -54,6 +56,7 @@ impl Sandbox {
             .args(&request.arguments[1..])
             .env_clear()
             .env("PATH", search_path())
+            .envs(user_environment())
             .current_dir(Path::new(&request.directory))
             // std drops supplementary groups (setgroups 0) when it sets a uid as root
             .uid(request.identity.uid)
@@ -154,4 +157,44 @@ fn check(request: &ExecRequest) -> Result<(), RuntimeError> {
         return Err(RuntimeError::Unsupported("local command standard input"));
     }
     Ok(())
+}
+
+/// The caller's Rust and Git locations on macOS, when present, so a command
+/// whose `HOME` is the Sandbox's scratch directory still sees them unless the
+/// caller's environment or the request sets its own.
+#[cfg(target_os = "macos")]
+fn user_environment() -> Vec<(&'static str, OsString)> {
+    use std::path::PathBuf;
+    let home = non_empty_env("HOME").map(PathBuf::from);
+    let existing = |path: PathBuf| path.exists().then(|| path.into_os_string());
+    let mut vars = Vec::new();
+    for (name, subdir) in [("RUSTUP_HOME", ".rustup"), ("CARGO_HOME", ".cargo")] {
+        let value =
+            non_empty_env(name).or_else(|| home.as_ref().and_then(|h| existing(h.join(subdir))));
+        if let Some(value) = value {
+            vars.push((name, value));
+        }
+    }
+    let git_config = non_empty_env("GIT_CONFIG_GLOBAL")
+        .or_else(|| home.as_ref().and_then(|h| existing(h.join(".gitconfig"))))
+        .or_else(|| {
+            let xdg = non_empty_env("XDG_CONFIG_HOME")
+                .map(PathBuf::from)
+                .or_else(|| home.as_ref().map(|h| h.join(".config")))?;
+            existing(xdg.join("git").join("config"))
+        });
+    if let Some(value) = git_config {
+        vars.push(("GIT_CONFIG_GLOBAL", value));
+    }
+    vars
+}
+
+#[cfg(not(target_os = "macos"))]
+fn user_environment() -> Vec<(&'static str, OsString)> {
+    Vec::new()
+}
+
+#[cfg(target_os = "macos")]
+fn non_empty_env(name: &str) -> Option<OsString> {
+    std::env::var_os(name).filter(|value| !value.is_empty())
 }

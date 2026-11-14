@@ -172,14 +172,21 @@ CLI     layerfs store create <name>
 
 Returns `{ name, kind: "sqlite", machine: "native", profile: "disposable",
 created, sqlite, projects: [] }`. Under the home lock (waits up to 120 s)
-the call makes `store/<name>/` (0700), builds the empty file as
-`store.sqlite.creating` (0600) and renames it to `store.sqlite`; a failure
-before the record is written removes the call's folder
+the call makes `store/` (`0700`), creates `store/<name>/` (`0700`) when
+absent and checks `store/<name>/store.sqlite` with `kernel_guard::check`
+before building the empty file as `store.sqlite.creating` (`0600`) and
+renaming it to `store.sqlite`. A failure of `make_empty` removes
+`store/<name>/` only when this call's own `mkdir` made it (a pre-existing
+folder or one made by another caller is never removed); once `make_empty`
+succeeds, a `save_record` failure keeps the Store file and folder
 ([`sqlite/create.rs`](../../../../control/crates/layerfs-store/src/sqlite/create.rs),
 [`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs)).
 To place it elsewhere, create it and then push it. Errors: `Exists` (a
-record of that name, of either kind, or a file at the target); `Unavailable`
-(a lock held 120 s); `Failed`.
+record of that name, of either kind, or a file at the target);
+`Unsupported` (the kernel guard refuses `store/<name>/`: not on a local
+lock-carrying filesystem, or an existing directory is not owned by this
+user, is a symlink, or has group/other access instead of `0700`);
+`Unavailable` (a lock held 120 s); `Failed`.
 
 ### store.connect
 

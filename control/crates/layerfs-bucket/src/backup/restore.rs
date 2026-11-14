@@ -25,8 +25,7 @@ use crate::bucket::{progress, Driver};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_storage::ReservationBlocks;
 use layerfs_store_service::bootstrap::open_store_observed;
-use layerfs_store_service::install::{installer_user, paths};
-use layerfs_store_service::kernel_guard;
+use layerfs_store_service::install::{paths, prepare};
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -59,6 +58,9 @@ pub struct Loaded {
     pub pieces: u64,
     /// The installed Store's history heads digest, when it could be read.
     pub heads: Option<[u8; 32]>,
+    /// The SQLite version that wrote the remote copy, as its push recorded
+    /// it (`layerfs-sqlite`); `None` when the copy carries none.
+    pub sqlite: Option<String>,
 }
 
 /// A failed pull or load: its cause and the temporary file it left, if any.
@@ -144,6 +146,14 @@ pub fn load(
     fetch(driver, file, destination, None, cursor_key).map(|(fetched, _)| fetched)
 }
 
+/// The remote copy's recorded SQLite version, if push recorded one.
+fn remote_sqlite(metadata: &crate::bucket::Metadata) -> Option<String> {
+    metadata
+        .get(crate::backup::create::SQLITE_VERSION)
+        .filter(|version| !version.is_empty())
+        .cloned()
+}
+
 /// The remote copy's recorded binding, if push recorded one.
 fn remote_binding(metadata: &crate::bucket::Metadata) -> Result<Option<Vec<u8>>, String> {
     let Some(text) = metadata.get(BINDING) else {
@@ -176,28 +186,10 @@ fn fetch(
     let result = (|| {
         let text = |error: io::Error| error.to_string();
         let object = store_object(name)?;
-        let directory = destination
-            .parent()
-            .ok_or("the Store destination has no directory")?;
-        // as install_local: the volume holding the Store's directory
-        kernel_guard::check(directory).map_err(|reason| reason.0)?;
-        installer_user()?;
-        if !directory.exists() {
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::DirBuilderExt;
-                fs::DirBuilder::new()
-                    .mode(0o700)
-                    .create(directory)
-                    .map_err(text)?;
-            }
-            #[cfg(not(unix))]
-            {
-                fs::DirBuilder::new()
-                    .create(directory)
-                    .map_err(text)?;
-            }
-        }
+        // as install_local: the Store's own directory (`0700` when absent),
+        // the Store file guarded; a refusal reclaims only an empty directory
+        // this call made
+        prepare(destination)?;
         let (target, _) = paths(destination).map_err(text)?;
         let cloning = binding.is_none();
         if cloning && exists(&target).map_err(text)? {
@@ -298,6 +290,7 @@ fn fetch(
                 sha256: moved.sha256,
                 pieces: moved.pieces,
                 heads: digest,
+                sqlite: remote_sqlite(&stat.metadata),
             },
             replaced,
         ))
