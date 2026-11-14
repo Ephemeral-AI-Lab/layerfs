@@ -43,6 +43,7 @@ impl Kernel {
     fn holdings(&self, table: &Table, companions: crate::apple_double::Holding) -> Released {
         Released {
             companions: companions.held,
+            companion_bytes: companions.resident_bytes,
             companions_decoded: companions.decoded,
             companion_decoded_bytes: companions.decoded_bytes,
             files: table.files.len(),
@@ -77,6 +78,8 @@ pub struct Released {
     /// AppleDouble companions held in the export's index (see
     /// [`crate::apple_double`]).
     pub companions: usize,
+    /// Companion payload bytes currently resident in memory.
+    pub companion_bytes: usize,
     /// Of the companions held, those kept decoded, and the bytes counted for
     /// them.
     pub companions_decoded: usize,

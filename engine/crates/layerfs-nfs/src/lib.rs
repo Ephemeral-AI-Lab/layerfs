@@ -18,6 +18,7 @@
 
 pub mod apple_double;
 pub mod apple_double_codec;
+mod apple_double_spill;
 pub mod attributes;
 mod block;
 pub mod change;
