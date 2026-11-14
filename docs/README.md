@@ -8,7 +8,7 @@
 - [The `layerfs` package](../api/README.md) for Node and [Python](../api/python/README.md)
 - [Architecture](architecture/README.md): how 2.0 is built, one page per
   component in core, engine, connect and api, plus flows across them
-- [Work order](../core/docs/issues/533/README.md) and [decisions](../core/docs/issues/533/DECISIONS.md)
+- [Work order](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/README.md) and [decisions](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/DECISIONS.md)
 
 ## LayerFS 1.1.0 (release candidate)
 
@@ -64,9 +64,9 @@
 ## Plan and build
 
 - [Roadmap](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/README.md), [0.1.1 history](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/0.1.1/README.md), [0.1.3 completed checkpoint](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/0.1.3/README.md) and [0.1.x development](https://github.com/Ephemeral-AI-Lab/layerfs/blob/792715f00a2dbfcf0cb8435ae84862cce972dc90/docs/roadmap/0.1/development.md): archived, see [removed roadmap](#removed-roadmap-and-raw-evidence)
-- [Complete cluster-two implementation plan](../core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S13-20261007.md): current S7–S13 ordering, iterative exits, optimization decisions, FUSE experiment readiness and expected source structure
-- [Cluster-two performance acceptance](../core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md): existing numerical gates, required work/resource bounds, prospective registration and retained failures
-- [Historical S7–S9 continuation prompt](../core/docs/issues/307/HANDOFF-S7-S9.md): retained source and stopping-boundary context; use the complete plan for current remaining-work ordering
+- [Complete cluster-two implementation plan](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/IMPLEMENTATION-PLAN-S7-S13-20261007.md): current S7–S13 ordering, iterative exits, optimization decisions, FUSE experiment readiness and expected source structure
+- [Cluster-two performance acceptance](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md): existing numerical gates, required work/resource bounds, prospective registration and retained failures
+- [Historical S7–S9 continuation prompt](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/HANDOFF-S7-S9.md): retained source and stopping-boundary context; use the complete plan for current remaining-work ordering
 - [Core concepts](general/concepts.md)
 - [Back up a Store to MinIO or Cloudflare R2](general/backups-minio-r2.md): tested setup, commands, limits, permissions, troubleshooting and cleanup
 - [Sandbox cache design](general/sandbox-cache-design.md): cluster-two ownership, branch sharing, source structure and remaining qualification
@@ -80,6 +80,7 @@
 - [Release policy](general/release-policy.md)
 - [Publishing the `layerfs` Node package to npm](general/npm-release.md): release build, tarball checks, the first prerelease, verification and rollback
 - [Documentation policy](general/documentation-policy.md)
+- [Code review and triage policy](policy/code-review.md): PR tiers P0–P3, gate risks, evidence, issue priority and labels
 - [Development workspace cleanup](general/cleanup.md): ownership checks, verified recovery, evidence retention, and disk-space reporting
 - [Parallel worktree development](general/parallel-worktrees.md): private Cargo resources, prepared dependencies, pinned SDK builds, and per-run Docker E2E state
 - [Plugin listings](plugins/README.md): how a plugin built on LayerFS is listed in `plugins/<plugin-id>/`, with the template to copy and the checker
@@ -101,6 +102,17 @@ assets/       images used by maintained documentation
 
 Release announcements, proof, artifacts, limitations, and performance evidence
 remain under [`docs/release-notes/`](release-notes/).
+
+## Removed core/docs
+
+Issue #671 removed all of `core/docs/` from the tree: issue records and their
+receipts, the numbered architecture papers, benchmark notes, the old API
+notes and proposals. The maintained design reference is
+[`docs/architecture/`](architecture/README.md); the fuser patch decision
+records moved to [`engine/patches/fuser-0.18.0/records/`](../engine/patches/fuser-0.18.0/records/).
+Nothing was rewritten in history. Every removed file is at commit
+[`af2ad92bce`](https://github.com/Ephemeral-AI-Lab/layerfs/tree/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs),
+and links that pointed into it now use pinned URLs at that commit.
 
 ## Removed roadmap and raw evidence
 

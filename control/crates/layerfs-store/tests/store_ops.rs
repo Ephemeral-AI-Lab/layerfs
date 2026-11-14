@@ -169,6 +169,7 @@ fn saved_query_selectors_and_numbered_pages_are_forwarded_without_resolving_head
         at_commit: Some(t("saved")),
         page: Some(2),
         page_size: Some(5),
+        include_storage: Some(true),
     };
     assert_eq!(StoreOp::BranchCommits(&history).method(), "branch.commits");
     assert_eq!(
@@ -178,6 +179,7 @@ fn saved_query_selectors_and_numbered_pages_are_forwarded_without_resolving_head
             (t("atCommit"), SdkValue::text("saved")),
             (t("page"), SdkValue::Int(2)),
             (t("pageSize"), SdkValue::Int(5)),
+            (t("includeStorage"), SdkValue::Bool(true)),
         ]
     );
     let detail = BranchGetCommit {

@@ -87,10 +87,13 @@ pub struct Got {
     pub state: &'static str,
     /// The page of its Workspaces.
     pub workspaces: Vec<ListedWorkspace>,
-    /// Why its machine did not answer, when it did not.
+    /// Why its machine did not answer, or why the daemon it reached admitted
+    /// no control connection, when either.
     pub down_reason: Option<String>,
     /// The structured counts behind `down_reason`, when the refusing
-    /// daemon's capacity notice carried them (#649).
+    /// daemon's capacity notice carried them (#649): read from a forwarded
+    /// daemon's unanswered dial, or from the pool a worker or this process
+    /// itself dialed.
     pub down: Option<Down>,
     /// The next page's position; `None` after the last.
     pub next: Option<usize>,
@@ -123,6 +126,17 @@ pub fn get(home: &Path, events: &mut Events<'_>, request: &GetRequest) -> Result
     };
     let (all, down_reason, down, gone) = match listed {
         Ok(Err(refusal)) if refusal.code == "NoSuchSandbox" => (Vec::new(), None, None, true),
+        // a route that runs the call in a machine's worker, or here, is told
+        // by the pool it dialed: `Capacity` on `daemon_control_slot`, with
+        // the counts the admission notice carried and no `code`. It reads as
+        // the forwarded route's down Sandbox (#649), from the same detail.
+        Ok(Err(refusal)) if slot_refused(&refusal) => {
+            let tagged = SdkRefusal {
+                detail: direct::down_detail("Capacity", refusal.detail.clone()),
+                ..refusal.clone()
+            };
+            (Vec::new(), Some(refusal.message), Down::of(&tagged), false)
+        }
         Ok(workspaces) => match workspaces?.get("workspaces") {
             Some(SdkValue::List(items)) => (
                 items.iter().map(|i| listed_workspace(name, i)).collect(),
@@ -152,6 +166,14 @@ pub fn get(home: &Path, events: &mut Events<'_>, request: &GetRequest) -> Result
         next,
         daemon_capacity,
     })
+}
+
+/// Whether `refusal` is a full pool's own refusal: the pool a worker or this
+/// process dialed admitted no control connection. A `Capacity` an admitted
+/// connection returned (`values::refusal`'s `{phase}`) observed no counts and
+/// is not one.
+fn slot_refused(refusal: &SdkRefusal) -> bool {
+    refusal.code == "Capacity" && refusal.detail.get_text("resource") == Some("daemon_control_slot")
 }
 
 /// The daemon's `backend.daemon.connection_failures` read model of a Sandbox

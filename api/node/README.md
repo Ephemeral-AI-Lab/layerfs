@@ -1,8 +1,8 @@
 # layerfs
 
-The LayerFS SDK for Node: nine families — `project`, `branch`, `commit`,
-`file`, `sandbox`, `workspace`, `machine`, `store`, `backup` — over one call
-table of 61 calls into one native library. Each function makes one call; it
+The LayerFS SDK for Node: ten families — `project`, `branch`, `commit`,
+`file`, `sandbox`, `workspace`, `machine`, `store`, `backup`, `logs` — over one call
+table of 70 calls into one native library. Each function makes one call; it
 does not retry, replay or commit on its own. Results are plain objects with
 snake_case keys, whole numbers are exact (`bigint` beyond
 `Number.MAX_SAFE_INTEGER`), bytes are `Buffer`s, and the TypeScript typings

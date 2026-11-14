@@ -6,8 +6,40 @@
 > each connection the caller opens to a machine's worker appends one line,
 > **and the step lines**: with `LAYERFS_TRACE_STEP` set too, each call
 > appends one line per step it timed. Calls that run in the caller's process
-> (`native`, any PostgreSQL Store call) write no connection line. The call-line format further down is 1.1.0's (#333), kept for
-> reading old traces and as the target the settings are reserved for.
+> (`native`, any PostgreSQL Store call) write no connection line.
+> **Independently, the home's call log** (#659) records one line per public
+> call in `<home>/trace/calls.jsonl`, on by default. The call-line format
+> further down is 1.1.0's (#333), kept for reading old traces.
+
+## The call log
+
+Every call made through the dispatcher (the `layerfs` command, Node,
+Python, direct `layerfs_api::call`) appends one line to
+`<home>/trace/calls.jsonl` when it ends; `LAYERFS_LOGS=0` turns it off,
+and `LAYERFS_TRACE` / `LAYERFS_TRACE_STEP` do not affect it.
+
+```json
+{"v":1,"at":1793000004120,"ms":212,"client":"node","argv":["file","write","demo/app","main","/index.ts","<5321 bytes>"],"outcome":"ok","kind":"Committed","commit":"<66 hex>","tag":"dsh:s_4d2a:a91e"}
+```
+
+It keeps 1.1.0's redaction rule (values cut to 200 characters; contents,
+JSON, commands, messages, edit strings, passwords and URLs as byte counts)
+and drops the daemon telemetry: no `sizes`, `scope` or `daemon`. `argv` is
+the call as CLI words (`argv[0]`/`argv[1]` are the family and call),
+`outcome` is `"ok"` or the refusal code, `kind` and `commit`/`layer` come
+from the result, `client` is `cli`/`node`/`python`/`rust`, and `tag` is the
+caller's (`log_tag` argument, else `LAYERFS_LOGS_TAG`). Read it with
+`layerfs logs list` (filters `--op`, `--project`, `--client`, `--tag`,
+`--outcome`, `--since`; newest first; `--cursor` pages) and clear it with
+`layerfs logs reset`. It rotates once to `calls.1.jsonl` past 16 MiB. See
+[Home: traces and the call log](../../../../docs/architecture/control/home/README.md#traces-and-the-call-log).
+
+```bash
+# slowest calls in the home's log
+layerfs logs list --limit 1000 | jq -c '.lines[] | [.ms, .argv[0] + "." + .argv[1]]' | sort -rn | head
+# refusals
+layerfs logs list --limit 1000 | jq -c '.lines[] | select(.outcome != "ok") | [.at, .argv, .outcome]'
+```
 
 ## The worker-connection line
 
@@ -84,12 +116,13 @@ outcome. Written by `layerfs-home/src/trace.rs` (`stepped`, `step`),
 | Piece | 1.1.0 | 2.0 build |
 | --- | --- | --- |
 | Settings `LAYERFS_TRACE`, `LAYERFS_TRACE_STEP`, `LAYERFS_TRACE_START` | read by `@layerfs/agent` (`api/agent/sdk/src/trace.js` at tag `v1.1.0`) | kept as the only settings besides `LAYERFS_HOME` (S §2.5); `LAYERFS_TRACE` is read for the worker-connection line, and with `LAYERFS_TRACE_STEP` for the step lines; `LAYERFS_TRACE_START` is not read |
-| The trace line writer | in that JavaScript file | deleted with `@layerfs/agent` (#533 step 14); no per-call Rust replacement yet |
+| The trace line writer | in that JavaScript file | deleted with `@layerfs/agent` (#533 step 14); the call log (#659, `layerfs-home/src/logs.rs`) is its per-call replacement, without daemon telemetry |
 | In-process collector | `host/trace.rs` in the Node binding | `api/crates/layerfs-api/src/host/trace.rs`: takes a 64-hex scope from an `observe` argument, traces the call's daemon control exchanges under it and collects up to 64 telemetry values. **No front end calls it** (`take_scope` and `run` have no callers) |
-| The home's `trace/` folder | `traces/` | reserved (`paths::trace_dir`; a 1.1.0 `traces/` folder is renamed to it); O26 makes trace files there the event feed. Nothing writes it yet |
+| The home's `trace/` folder | `traces/` | `paths::trace_dir` (a 1.1.0 `traces/` folder is renamed to it); O26 makes trace files there the feed. Holds the call log, `calls.jsonl` and `calls.1.jsonl` (#659) |
 
-So, today: turning tracing on records worker connections and, with
-`LAYERFS_TRACE_STEP`, each call's step times. For storage work use Commit
+So, today: the call log records every call's outcome and time; turning
+tracing on records worker connections and, with `LAYERFS_TRACE_STEP`, each
+call's step times. For storage work use Commit
 records and messages ([storage metrics](storage-metrics.md#one-row-per-step)),
 and report daemon-side timing (1.1.0's `daemon` entries) as not collected.
 

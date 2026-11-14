@@ -44,8 +44,21 @@ pub enum OpenRefusal {
     Unsupported(Unsupported),
     /// The Store file is absent: no Sandbox installed it into the volume yet.
     Missing(String),
+    /// Another writer held the Store at open, before any effect. The call is
+    /// a definite refusal the caller may repeat; nothing was changed.
+    Busy(String),
     /// The Store or the overlay template failed to open.
     Failed(String),
+}
+
+/// The refusal for a Store open that failed: a Busy open is a definite
+/// pre-effect refusal, every other open failure is not.
+fn open_refusal(error: layerfs_storage::StorageError) -> OpenRefusal {
+    let reason = format!("Store open: {error}");
+    match error {
+        layerfs_storage::StorageError::Busy => OpenRefusal::Busy(reason),
+        _ => OpenRefusal::Failed(reason),
+    }
 }
 
 /// The Store and overlay owner of this process's Store calls.
@@ -101,7 +114,7 @@ impl StoreService {
             CACHE_BYTES,
             ReservationBlocks::default(),
         )
-        .map_err(|error| OpenRefusal::Failed(format!("Store open: {error}")))?;
+        .map_err(open_refusal)?;
         Self::owning(opened, template)
     }
 
@@ -124,7 +137,7 @@ impl StoreService {
             CACHE_BYTES,
             ReservationBlocks::default(),
         )
-        .map_err(|error| OpenRefusal::Failed(format!("Store open: {error}")))?;
+        .map_err(open_refusal)?;
         Self::owning(opened, template)
     }
 

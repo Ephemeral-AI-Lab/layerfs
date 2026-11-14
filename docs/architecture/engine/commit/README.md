@@ -1,180 +1,171 @@
 # Commit
 
-[Architecture](../../README.md) › [Engine](../README.md) › Commit
-
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Capturing a Workspace's published frontier, constructing it and publishing a Commit, then installing the new base.
+Capturing a Workspace's published frontier, constructing it, publishing a Commit (merging with a moved head) and installing the new base.
 
 | | |
 | --- | --- |
 | Layer | [Engine](../README.md) |
-| Crates | `layerfs-workspace`, `layerfs-store-service` |
-| Source | [`engine/crates/layerfs-workspace/src/construction`](../../../../engine/crates/layerfs-workspace/src/construction), [`engine/crates/layerfs-store-service/src/store`](../../../../engine/crates/layerfs-store-service/src/store), [`engine/crates/layerfs-store-service/src/install.rs`](../../../../engine/crates/layerfs-store-service/src/install.rs) (Store-file install, see [Install](install.md)), [`engine/crates/layerfs-workspace/src/workspace/install.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/install.rs), [`engine/crates/layerfs-daemon/src/control/operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
-| Uses | [Workspace](../workspace/README.md), [Overlay](../overlay/README.md), [Store calls](../store-calls/README.md), [Store](../store/README.md), [Core: Compare and merge](../../core/compare-and-merge/README.md) |
-| Used by | [Daemon](../daemon/README.md) |
-| Flows | [A Commit](../../flows/commit.md) |
+| Crates | `layerfs-workspace`, `layerfs-store-service`, `layerfs-overlay` |
+| Source | [`layerfs-workspace/src/construction`](../../../../engine/crates/layerfs-workspace/src/construction), [`layerfs-workspace/src/workspace/install.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/install.rs), [`layerfs-store-service/src/store`](../../../../engine/crates/layerfs-store-service/src/store) (`commit*.rs`, `captured.rs`, `pipeline.rs`, `producer.rs`, `settle.rs`, `bind.rs`), [`layerfs-overlay/src/lifetime/generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
+| Uses | [Workspace](../workspace/README.md), [Overlay](../overlay/README.md), [Store](../store/README.md), [Core: Compare and merge](../../core/compare-and-merge/README.md), [Core: Physical storage](../../core/physical-storage/README.md), [Core: History](../../core/history/README.md) |
+| Used by | [Daemon](../daemon/README.md), [Store calls](../store-calls/README.md) (SDK `file.*` writes) |
+| Flows | [A Commit](../../flows/commit.md), [Fork and merge](../../flows/merge.md) |
 
-Terms such as Capture, generation and Save are in the [glossary](../../glossary.md).
-
-## Topics
-
-| Topic | What it covers |
-| --- | --- |
-| [Capture](capture.md) | Capturing the published frontier. |
-| [Construction](construction.md) | Constructing the captured namespace. |
-| [Publish and merge](publish-and-merge.md) | Publishing a Commit, including after the head moved. |
-| [Install](install.md) | Advancing the Workspace base after a Commit. |
-
-## The picture
+## Picture
 
 ```text
- any process            Workspace overlay file        global Store
- (no Exec needed)       (one per Workspace)           (one writer)
-      |                 +--------------------+
-      | write, rename   | active generation  |
-      +---------------->|  published rows    |
-                        +---------+----------+
-   Capture: seal the active       |
-   generation, open a new one     v
-                        +--------------------+
-                        | captured generation|-- CapturedReader --+
-                        +--------------------+                    |
-                                                                  v
-                     Construction: CapturedNamespace    +------------------+
-                     (one producer, its own thread) --->| Save (objects)   |
-                       bounded queue, 32 batches        | (Commit thread)  |
-                                                        +--------+---------+
-                     Publish and merge: head check,              |
-                     merge, publish lane, commit_branch -------->| history row
-                                                                  |
-                     Install: overlay.install(capture, root)      |
-                     base := new root; later rows stay  <---------+
+ any process          Workspace overlay file          global Store
+ (no Exec needed)     (one per Workspace)             (one writer)
+    | write, rename   +---------------------+
+    +---------------->| active gen G        |
+                      +----------+----------+
+ 1 capture: seal G, open G+1     |
+                      +----------v----------+
+                      | captured gen G      |--CapturedReader--+
+                      +---------------------+                  |
+ 2 construct: one producer thread              +---------------v--+
+   CapturedNamespace --- queue, 32 msgs ------>| Save (Commit     |
+                                               | thread)          |
+ 3 head read, merge if moved, Save::finish     +--------+---------+
+ 4 lane: head re-read, in-lane merge,                   |
+   commit_branch (one history transaction) ------------>| history row
+ 5 install: base := new root; G retired;                |
+   rows of G+1 stay on top  <---------------------------+
 ```
 
-| Step | Owner | Source |
+`BoundWorkspace::commit_admitted` runs every phase on the Commit thread; each
+phase is a telemetry child (`uptodate.state`, `capture`, `producer`, `begin`,
+`construct`, `head`, `merge`, `finish`, `validate`, `lane`, `head.lane`,
+`publish`, `install`).
+
+| Phase (`CommitPhase`) | Lock held | Source |
 | --- | --- | --- |
-| Admission | `BoundWorkspace::admit_commit` (one Commit per Workspace) | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
-| [Capture](capture.md) | `Overlay::capture`, through `OwnerClient::capture` | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
-| [Construction](construction.md) | `CapturedNamespace::construct` | [`driver.rs`](../../../../engine/crates/layerfs-workspace/src/construction/driver.rs) |
-| [Publish and merge](publish-and-merge.md) | `BoundWorkspace::commit_admitted` | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
-| [Install](install.md) | `Workspace::install_prepared_base`, `Overlay::install` | [`install.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/install.rs) |
+| `Admission` | `committing` flag, whole Commit | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
+| `Capture`: UpToDate check, capture | Workspace lock, one short job each | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
+| `Begin`: take the producer `Storage`, `begin_save` | none | [`producer.rs`](../../../../engine/crates/layerfs-store-service/src/store/producer.rs) |
+| `Construct`: captured namespace, head read, merge | Workspace lock per job only | [Construction](construction.md), [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
+| `Finish`: `Save::finish`, logical size, binding hints, then the lane | none, then the publication lane | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs), [`hints.rs`](../../../../engine/crates/layerfs-store-service/src/store/hints.rs) |
+| `Validate`: `checked_base`, `prepare_base_install` | none (before the lane); again in the lane only after an in-lane merge changed the candidate | [`bind.rs`](../../../../engine/crates/layerfs-store-service/src/store/bind.rs), [`install.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/install.rs) |
+| `Publish`: `commit_branch` | lane; one history write transaction | [`history/commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
+| `Install` | Workspace lock and base write lock, one job | [`install.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/install.rs) |
 
 ## What it does
 
-| Case | Result | Source |
+| Behaviour | Detail | Source |
 | --- | --- | --- |
-| Changes published by any process | All are captured, whatever launched the process and whether it still runs | [`captured.rs`](../../../../engine/crates/layerfs-store-service/src/store/captured.rs) |
-| No changes, head unchanged | `UpToDate` with no capture, Save, lane or install | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
-| Candidate root equals the head's root | `CommitOutcome::UpToDate`; the base is still installed | [`commit.rs` (persistence)](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
+| What is captured | Every change a filesystem request already published to the overlay, from any process, whatever launched it and whether it still runs. No Exec, command or process identity enters capture; stdout and stderr are not captured unless written to a file in the Workspace | [`captured.rs`](../../../../engine/crates/layerfs-store-service/src/store/captured.rs) |
+| Capture | `Overlay::capture` copies no rows: `active` G becomes `captured`, G+1 becomes active, `captured_revision` is frozen, dirty counts restart; `base_root` is unchanged until install | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
+| Capture readiness | Waits (lock released) while earlier reply attempts are unrecorded or a failed capture is still folding back; mutations arriving meanwhile queue behind the capture (`behind_frontier`), so the frontier is finite. A wait is readiness, not a retry | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs), [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs), [`state.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/state.rs) |
+| Captured reads | `OverlayCapturedNamespace` and `OverlayCapturedRuns` over the `CapturedReader`: pages of at most `PAGE_ROWS` rows in key order, run windows of at most `READ_WINDOW`; later active writes cannot change them | [`captured_namespace.rs`](../../../../engine/crates/layerfs-workspace/src/ports/captured_namespace.rs), [`captured_namespace_port.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/captured_namespace_port.rs), [`captured_run_port.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/captured_run_port.rs) |
+| No change, head unchanged | `UpToDate` with no capture, Save, lane or install: no dirty rows, no capture or consolidation, base root equals the bound root, no pending conflict, head and base Layer unchanged | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
+| Candidate equals the head's root | `commit_branch` answers `CommitOutcome::UpToDate`; capture, construction and Save ran and the base is still installed. No Commit record is created | [`history/commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
 | Head unchanged | `Committed` against the head the Workspace bound | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
-| Head moved, no conflict | Merged in the same Save, published against the new head (`MergeCommitted`) | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
-| Head moved, conflict | Nothing published; the merge with markers becomes the local base (`Conflict`) | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
-| `force` with a moved head | Published over the head; the displaced head is recorded | [`commit.rs` (persistence)](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
+| Head moved, `force` false | `merge_candidate`: `merge_roots(base, ours, theirs)` in the Commit's own Save, before the lane; published against the head it merged with (`MergeReport`) | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
+| Head moved again before the lane | `merge_in_lane`: only what landed in between, with its own Save, at most `LANE_MERGE_PATHS` serials | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
+| Merge conflict | Nothing published; the merge with marker blocks becomes the local base, `PendingMerge` is kept and the history binding moves to the head. The lane is released when the Commit returns | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs), [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
+| `force` with a moved head | No merge; published over the head, the displaced head recorded | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs), [`history/commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
+| Relink (unlink and re-create with equal bytes) | A fresh chunked file whose overlay digest names an already saved root reuses it (`files_reused`); others are built and `record_file_digests` stores their digest. Files below the Store's `small_file_threshold_bytes` are rebuilt to the same object id | [`digests.rs`](../../../../engine/crates/layerfs-store-service/src/store/digests.rs), [`digest.rs`](../../../../engine/crates/layerfs-overlay/src/payload/digest.rs) |
+| Install | `prepare_base_install` rebinds the base to the new root without a tree walk; after publish, `install_prepared_base` waits for `base_readers == 0`, then `Overlay::install` sets `base_root`, `installed := G`, `captured := None` and queues `RETIRE` of G, in one SQL transaction | [`install.rs`](../../../../engine/crates/layerfs-workspace/src/workspace/install.rs), [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
+| Rows written after the capture | Untouched by install; still the top of the effective view. An mtime-only change keeps the base row and carries its live row into G+1 (`keep_live_row`) | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs), [`inodes.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/inodes.rs) |
+| Kernel caches after install | Own root installed: nothing sent, the visible tree is unchanged. A merge root: the daemon invalidates the entries `stale_after_install` names before it answers | [`invalidate.rs`](../../../../engine/crates/layerfs-daemon/src/control/invalidate.rs) |
+| Cache admission | Objects the construction staged enter the shared object cache only in the `published` callback; every other path drops them | [`captured.rs`](../../../../engine/crates/layerfs-store-service/src/store/captured.rs) |
 | SDK `file.*` writes | Same route through a private Workspace, `CommitVia::Files` | [`files.rs`](../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
+| Where a control Commit runs | On the daemon's control thread; the Commit spawns its one construction thread | [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
 
-A Commit captures the Workspace's shared published frontier: every change that
-a filesystem request has already published to the overlay. Commit has no
-notion of Exec, command or process; nothing is filtered by who made a change.
-A control Commit runs on the daemon's control thread
-([`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs)),
-which spawns the Commit's one construction thread
-([Construction: One producer](construction.md#one-producer)).
+A merge reserves fresh inode serials `MERGE_SERIALS` (64) at a time. Merge
+rules and markers are in [Core: Compare and merge](../../core/compare-and-merge/README.md).
+Dirty shared-mapping pages the kernel has not yet sent as WRITE are not
+published, so they are outside the capture; a command's exit is not a flush
+fence for mappings or descriptors it handed on.
+
+[`layerfs-store-service/src/install.rs`](../../../../engine/crates/layerfs-store-service/src/install.rs)
+is a different install, placing a sealed Store file into a project volume; see
+[Project Init](../project-init/README.md).
+
+### Custody and settle
+
+```text
+ capture --> acquire_captured_reader(capture, request = generation)
+         --> acquire_operation(request) --> construct ... outcome known
+         --> release reader, then operation owner --> answer --> reclaim
+
+ failure --> published or uncertain? --yes--> keep all custody
+               | no
+             capture taken? --no--> locally_settled
+               | yes
+             resolve_failed(capture) --ok--> locally_settled
+                                     --err-> local_error kept
+```
+
+| Owner | Released when | Source |
+| --- | --- | --- |
+| Admission flag | Success, or a `locally_settled` failure with no retained owner | [`captured.rs`](../../../../engine/crates/layerfs-store-service/src/store/captured.rs) |
+| `CapturedReader`, then `OperationOwner` | After the outcome is known, in that order; nothing is released on `Drop` | [`captured_reader.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/captured_reader.rs), [`captured.rs`](../../../../engine/crates/layerfs-store-service/src/store/captured.rs) |
+| Captured generation | Install, or `resolve_failed` after a definite nonpublication: it becomes the consolidating generation and maintenance folds its rows back under the active one; an active row for the same name or inode wins | [`composition.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/composition.rs) |
+| Readied maintenance | Not drained by the releases; the daemon calls `BoundWorkspace::reclaim` after it sent the answer, else the Workspace's next job drains it | [`captured.rs`](../../../../engine/crates/layerfs-store-service/src/store/captured.rs) |
+
+`CapturedConstruction` is the receipt: the reader or owner not known released,
+the work counted and the release error that stopped the sequence
+([`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs)).
+`CommitFailure` carries `phase`, `intent`, `capture`, `prepared`, `saved`,
+`published` and `locally_settled`.
+
+| Failure kind | Daemon activity | Next Commit | Source |
+| --- | --- | --- | --- |
+| Definite, settled, owners released | `Idle` | Admitted | [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
+| Published, then install or a release failed | `LocalFailure` | Refused: code `Unknown`, phase `admission`; the daemon keeps `published`, the SDK refusal does not carry it | [`registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs) |
+| Uncertain (`CommitError::uncertain()`) | `Uncertain` | Refused as above | [`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs), [`registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs) |
 
 ## Invariants
 
 | Rule | Enforced by |
 | --- | --- |
-| One Commit at a time per Workspace | `committing` flag in `admit_commit`, else `CommitError::InFlight` ([`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs)) |
-| One construction producer per Commit | One `Storage` handle from `Producer::take` and one Save, both on the Commit thread; files constructed one at a time, in order, on one producer thread that hands objects to the Save through one bounded queue (owner approval, 2026-11-07) ([`producer.rs`](../../../../engine/crates/layerfs-store-service/src/store/producer.rs), [`pipeline.rs`](../../../../engine/crates/layerfs-store-service/src/store/pipeline.rs), [`normalize.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/normalize.rs)) |
-| No Workspace lock across construction or Store I/O | Each overlay call is one short job ([`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs)); doc of `BoundWorkspace::commit` |
-| Content, Storage and Persistence are shared with Init | Objects go to `Save::sink`; no Commit-only encoder ([`captured.rs`](../../../../engine/crates/layerfs-store-service/src/store/captured.rs)) |
-| Construction reads only the capture, never later rows | `CapturedNamespace` binds the reader's root ([`driver.rs`](../../../../engine/crates/layerfs-workspace/src/construction/driver.rs)) |
-| Install keeps later mutations | `Overlay::install` changes only base root, floor and captured state ([`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs)) |
-| A lost reply does not remove a published Commit | Publication is one history transaction; a later failure keeps `published` in the daemon and blocks the next Commit, which is refused with code `Unknown`, phase `admission`; the SDK refusal does not return `published` ([`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs), [`registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs)) |
-| No retry or replay | `settle_failure` resolves only a definite nonpublication ([`settle.rs`](../../../../engine/crates/layerfs-store-service/src/store/settle.rs)) |
-
-`LAYERFS_CONSTRUCTION_WORKERS` is not read by any engine source file; the
-single producer holds by construction, as the
-[`r5_10_producer_profile.rs`](../../../../engine/crates/layerfs-daemon/tests/r5_10_producer_profile.rs)
-header records. Measurement runs still export `LAYERFS_CONSTRUCTION_WORKERS=1`.
-Project Init keeps its own parallel profile ([Project Init: Construction](../project-init/construction.md)).
+| One Commit at a time per Workspace; a second never queues an implicit capture | `committing` compare-exchange in `admit_commit`, else `CommitError::InFlight`: [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
+| One construction producer per Commit; one `Storage` handle and one Save on the Commit thread | [`producer.rs`](../../../../engine/crates/layerfs-store-service/src/store/producer.rs), [`pipeline.rs`](../../../../engine/crates/layerfs-store-service/src/store/pipeline.rs); see [Construction](construction.md) |
+| Construction reads only the capture, never later active rows | `CapturedNamespace` binds the reader's root: [`driver.rs`](../../../../engine/crates/layerfs-workspace/src/construction/driver.rs) |
+| No Workspace lock across construction or Store I/O | Every overlay call is one short owner job: [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs) |
+| Short holds: work that grows with the Commit (Save finish, logical count, binding hints, first merge, validation) runs before the lane | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
+| Content, Storage and Persistence are shared with Init; no Commit-only encoder | Objects go to `Save::sink`: [`captured.rs`](../../../../engine/crates/layerfs-store-service/src/store/captured.rs) |
+| Install keeps later mutations and changes only base root, floor and captured state | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
+| Root inode identity never changes at install | `validate_candidate` refuses "candidate changes root inode identity": [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
+| A lost reply does not remove a published Commit | Publication is one history transaction; `published` is kept and blocks the next Commit: [`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs) |
+| No retry, replay or guessed outcome | `settle_failure` resolves only a definite nonpublication and never reads history to guess: [`settle.rs`](../../../../engine/crates/layerfs-store-service/src/store/settle.rs) |
 
 ## Limits and failures
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
 | Second Commit on the same Workspace | `CommitError::InFlight` (control code `Busy`) | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs), [`failure.rs`](../../../../engine/crates/layerfs-daemon/src/control/failure.rs) |
-| Captured page and record window | `PAGE_ROWS` = 1,024 rows | [`types.rs`](../../../../engine/crates/layerfs-overlay/src/contract/types.rs) |
-| Moved again after the merge | In-lane merge up to `LANE_MERGE_PATHS` = 1,024 serials, else `CommitError::LaneMerge` | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
-| Paths listed for a conflict | 4,096 (`written_truncated` when cut) | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
-| Conflict markers still present | `CommitError::Markers`; nothing published | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
-| Concurrent Commits on other Workspaces | Correct; serialized by the publication lane, not the optimized case | [Store](../store/README.md) |
-| Uncertain outcome | `CommitError::uncertain()` true, control code `Unknown`; custody kept, the Workspace refuses the next Commit | [`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs), [`registry.rs`](../../../../engine/crates/layerfs-daemon/src/control/registry.rs) |
-| Published, install failed | `CommitFailure.published` is `Some`; activity `LocalFailure` | [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
+| A capture already held | `OverlayError::CaptureInFlight` | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
+| Captured page | `PAGE_ROWS` = 1,024 rows | [`types.rs`](../../../../engine/crates/layerfs-overlay/src/contract/types.rs) |
+| Head moved again after the merge | Up to `LANE_MERGE_PATHS` = 1,024 serials merged in the lane, else `CommitError::LaneMerge { paths, limit }`; nothing published | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
+| Paths listed for a conflict | `WRITTEN_PATHS` = 4,096 (`written_truncated` when cut) | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
+| Marker blocks still present | `CommitError::Markers`; nothing published | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
+| Moved head without merge | `HeadMoved` from `commit_branch` unless `force` | [`history/commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
+| Base sources still open at install | Install waits; `OverlayError::BaseSourcesPending` if called unready | [`generation.rs`](../../../../engine/crates/layerfs-overlay/src/lifetime/generation.rs) |
+| Install failed after publish | `OwnerError::Install` with the `PreparedBase`, never replayed; `CommitFailure.published` is `Some`; activity `LocalFailure` | [`owner.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/owner.rs), [`operations.rs`](../../../../engine/crates/layerfs-daemon/src/control/operations.rs) |
+| Uncertain outcome | `CommitError::uncertain()` true, code `Unknown`; custody kept | [`commit_types.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_types.rs) |
+| Concurrent Commits on other Workspaces | Correct, serialized by the publication lane; not the optimized case | [Store](../store/README.md) |
 
 No total file, edit or Commit size cap exists: captured input is paged and
-construction state is kept in indexed operation records.
+construction state lives in indexed operation records.
 
 ## Demonstration
 
-Commands were written from source and were not run while writing this page.
+| Test or example | Command | Platform | Shows |
+| --- | --- | --- | --- |
+| [`mounted_commit.rs`](../../../../engine/crates/layerfs-daemon/tests/mounted_commit.rs) | `cargo +1.85.1 test --locked -p layerfs-daemon --test mounted_commit` | Linux, `/dev/fuse` and mount privilege | Ordinary processes change every entry kind through a FUSE mount; the Commit read back from a fresh mount equals the tree the mount showed; `UpToDate`, five incremental Commits, shared-mapping writes |
+| [`concurrent_commits.rs`](../../../../engine/crates/layerfs-daemon/tests/concurrent_commits.rs) | `cargo +1.85.1 test --locked -p layerfs-daemon --test concurrent_commits` | any (no kernel mount) | Stale Workspaces merge with the current head; one shared path gives one conflict |
+| [`lane_merge.rs`](../../../../engine/crates/layerfs-daemon/tests/lane_merge.rs) | `cargo +1.85.1 test --locked -p layerfs-daemon --test lane_merge` | any | A Commit landing while another waits for the lane is merged in the lane; over the bound is `LaneMerge` |
+| [`captured_namespace.rs`](../../../../engine/crates/layerfs-workspace/tests/captured_namespace.rs) | `cargo +1.85.1 test --locked -p layerfs-workspace --test captured_namespace` | any | One captured reader becomes one complete root; mutations after the capture land only in the next |
+| [`mounted_install.rs`](../../../../engine/crates/layerfs-daemon/tests/mounted_install.rs) | `cargo +1.85.1 test --locked -p layerfs-daemon --test mounted_install` | Linux, `/dev/fuse` | Installing the Workspace's own root sends no notification; the mount reads the same through open descriptors, caches and `O_DIRECT` |
 
-| Test or example | Crate | Shows |
-| --- | --- | --- |
-| [`mounted_commit.rs`](../../../../engine/crates/layerfs-daemon/tests/mounted_commit.rs) | `layerfs-daemon` | Changes made by external processes through a FUSE mount are committed and read back on a fresh mount |
-| [`concurrent_commits.rs`](../../../../engine/crates/layerfs-daemon/tests/concurrent_commits.rs) | `layerfs-daemon` | Stale Workspaces merge with the current head; one shared path gives one conflict |
-| [`captured_namespace.rs`](../../../../engine/crates/layerfs-workspace/tests/captured_namespace.rs) | `layerfs-workspace` | One captured reader becomes one complete root, compared with a model |
-| [`relink_commit.rs`](../../../../engine/crates/layerfs-store-service/tests/relink_commit.rs) | `layerfs-store-service` | Unlink and recreate with equal bytes reuses saved file roots |
-| [`commit_pipeline.rs`](../../../../engine/crates/layerfs-store-service/tests/commit_pipeline.rs) | `layerfs-store-service` | The two-thread Commit gives the single-thread roots and stored bytes; a refused Save write stops the producer; a failed construction abandons the Save |
+Run each under a wall timeout of at most 120 s.
 
-```text
-mounted_commit:  bash in mount --> write/rename/unlink --> control Commit
-                 --> fresh bind + fresh mount --> tree == tree seen before
-```
+## Pages
 
-- **`mounted_commit.rs`** sets up an installed Store and a real kernel mount,
-  runs ordinary processes that change every entry kind, commits, then compares
-  each published root, read from a fresh bind and a fresh mount, with the tree
-  the mount showed. It also checks `UpToDate`, five incremental Commits and
-  writes through shared mappings. Command:
-  `cargo +1.85.1 test --locked -p layerfs-daemon --test mounted_commit`.
-  Needs Linux (`#![cfg(target_os = "linux")]`); it mounts FUSE with `mount(2)`
-  ([`syscalls.rs`](../../../../engine/crates/layerfs-fuse/src/mount/syscalls.rs)),
-  so it needs `/dev/fuse` and mount privilege.
-- **`concurrent_commits.rs`** binds several Workspaces through the control
-  service, writes through overlay jobs (no kernel mount) and starts their
-  Commits together on barriers. Different files all publish; one shared file
-  gives one conflict. Command:
-  `cargo +1.85.1 test --locked -p layerfs-daemon --test concurrent_commits`.
-  No `cfg` gate and no `#[ignore]`.
-- **`captured_namespace.rs`** drives `CapturedNamespace` over a test overlay
-  and checks creates, deletes, renames, mode and time changes, and that
-  mutations after the capture land only in the next one. Command:
-  `cargo +1.85.1 test --locked -p layerfs-workspace --test captured_namespace`.
-  No `cfg` gate.
-- **`relink_commit.rs`** is `#[ignore]` and needs a replay Store:
-  `LAYERFS_364_RELINK_STORE`, `LAYERFS_364_RELINK_BINDING` and
-  `LAYERFS_364_RELINK_FROM`. Command:
-  `cargo +1.85.1 test --locked -p layerfs-store-service --test relink_commit -- --ignored`.
-- **`commit_pipeline.rs`** commits the same changes to two copies of one
-  installed Store, one through `commit_captured` and one with the same
-  constructor on the calling thread, and compares roots and Save outcomes for
-  a 12 MiB and a small Commit. Its failure cases hold the Store's write lock
-  from the start of the `construct` phase. Command:
-  `cargo +1.85.1 test --locked -p layerfs-store-service --test commit_pipeline`.
-  No `cfg` gate.
-
-## Earlier material
-
-Folded into these pages. Matched by title, so check each one before relying on it.
-
-- [`core/docs/architecture/26-capture-custody.md`](../../../../core/docs/architecture/26-capture-custody.md) — covered in [Capture](capture.md).
-- [`core/docs/architecture/27-prepared-base-install.md`](../../../../core/docs/architecture/27-prepared-base-install.md) — covered in [Install](install.md).
-- [`core/docs/architecture/65-store-commit-composition.md`](../../../../core/docs/architecture/65-store-commit-composition.md) — covered in [Publish and merge](publish-and-merge.md); its staging API is removed (historical only).
-- [`core/docs/architecture/78-captured-namespace-construction.md`](../../../../core/docs/architecture/78-captured-namespace-construction.md) — covered in [Construction](construction.md); its "no product caller" note is historical.
-- [`core/docs/architecture/79-product-commit.md`](../../../../core/docs/architecture/79-product-commit.md) — covered in [Capture](capture.md) and [Construction](construction.md).
-
----
-
-← [Workspace: State](../workspace/state.md) · [Up: Engine](../README.md) · [Commit: Capture](capture.md) →
+| Page | What it covers |
+| --- | --- |
+| [Construction](construction.md) | The captured namespace constructor, its operation records and outcome, and the one-producer pipeline into the Save. |

@@ -1,9 +1,0 @@
-layerfs-api [machine] rc=0 77s; passed 100 failed 0
-layerfs-api [-] rc=0 52s; passed 81 failed 0
-layerfs-control [machine] rc=0 45s; passed 75 failed 0
-layerfs-control [-] rc=0 45s; passed 71 failed 0
-layerfs-machine [-] rc=0 37s; passed 83 failed 0
-layerfs-sandbox [-] rc=0 10s; passed 71 failed 0
-layerfs-bridge [-] rc=0 3s; passed 30 failed 0
-layerfs-store-backup [-] rc=0 3s; passed 19 failed 0
-layerfs-cli [-] rc=0 6s; passed 6 failed 0

@@ -206,11 +206,16 @@ impl Session {
         if !cfg!(any(target_os = "macos", target_os = "linux")) {
             return Err(BackendError::Integrity);
         }
-        // Opening/configuring WAL can initialize shared state before any
-        // transaction. The same short owner excludes another writer or last
-        // close, including on read-only and diagnostic opens. Declared before
-        // the connection so error exits close SQLite before releasing it.
-        let lifecycle = crate::backend::sqlite::lane::writer_admission::Writer::acquire(path)?;
+        // A writable open runs PRAGMA and schema statements that write, so it
+        // takes the same local-volume lane a transaction takes: another
+        // opener waits for it instead of meeting SQLite's Busy (#534, #647).
+        // A read-only open takes no lane, and the lane is released below
+        // before this session serves its first call.
+        let writer = if writable {
+            Some(crate::backend::sqlite::lane::writer_admission::Writer::acquire(path)?)
+        } else {
+            None
+        };
         let flags = if writable {
             OpenFlags::SQLITE_OPEN_READ_WRITE
         } else {
@@ -316,13 +321,13 @@ impl Session {
         if !diagnostic {
             profile::check(&profile)?;
         }
+        if let Some(writer) = writer {
+            writer.release().map_err(|_| BackendError::Unknown)?;
+        }
         super::thread_work::add(&work.borrow());
         let background = (writable && selected == SqlitePersistenceProfile::Disposable)
             .then(|| super::background::Checkpointer::start(path))
             .transpose()?;
-        // Session::run takes its own writer ownership; never retain lifecycle
-        // ownership into those calls or acquire it again in background start.
-        drop(lifecycle);
         Ok(Self {
             diagnostic,
             background,

@@ -7,7 +7,7 @@
 //   work   the families an agent works in (branch, commit, file, workspace)
 //          plus the read-only project and Sandbox calls named below
 //   admin  every other call: project create/remove, Sandbox create/close,
-//          and the machine, store and backup families
+//          and the machine, store, backup and logs families
 // The `admin` launch profile exposes the union, so `admin` adds the
 // administrative calls to the `work` set.
 
@@ -18,17 +18,17 @@ export const PROFILES = ["work", "admin"];
 const WORK_FAMILIES = new Set(["branch", "commit", "file", "workspace"]);
 
 /** Read-only calls of families that are otherwise administration. */
-const WORK_CALLS = new Set(["project.list", "project.get", "project.export", "sandbox.list", "sandbox.get"]);
+const WORK_CALLS = new Set(["project.list", "project.get", "project.stats", "project.export", "sandbox.list", "sandbox.get"]);
 
 /** Administrative calls of the project and sandbox families. */
 const ADMIN_CALLS = new Set(["project.init", "project.remove", "sandbox.create", "sandbox.close"]);
 
 /** Families whose every call belongs to the `admin` profile. */
-const ADMIN_FAMILIES = new Set(["machine", "store", "backup"]);
+const ADMIN_FAMILIES = new Set(["machine", "store", "backup", "logs"]);
 
 /** Why a family's calls sit where they do; one line per family, in the doc. */
 const WHY = {
-  project: "read a project's record or export one (work); importing and removing a project are administration",
+  project: "read a project's record or its entry counts, or export one (work); importing and removing a project are administration",
   branch: "work on Branches: list, read, fork, merge, publish and diff",
   commit: "read a Branch's Commit history",
   file: "read and change files in a Branch; each write is one explicit Commit",
@@ -37,6 +37,7 @@ const WHY = {
   machine: "machines hold Stores and workers; creating, changing and removing them is administration",
   store: "create, connect, transfer and remove Stores; administration",
   backup: "upload and restore a Store on a bucket; administration",
+  logs: "read and clear the home's call log; administration",
 };
 
 const nameOf = (spec) => `${spec.family}.${spec.call}`;

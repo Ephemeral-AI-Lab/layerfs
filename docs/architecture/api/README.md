@@ -1,93 +1,101 @@
 # API
 
-[Architecture](../README.md) › API
-
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-**The question this layer answers:** What can a program call, and where does each call run?
+The public surface: the `layerfs-api` call table with its one dispatcher, and the front ends (the `layerfs` command, Node, Python and a local MCP server) that expose its **70 calls in 10 families** with the same names and arguments.
 
-The API layer is the public surface: the management library, the call table and its one dispatcher, and the front ends (the `layerfs` command, Node, Python and a local MCP server).
+| | |
+| --- | --- |
+| Layer | API (above [Control](../control/README.md), [Engine](../engine/README.md) and [Core](../core/README.md)) |
+| Crates | `layerfs-api`, `layerfs-cli`, `layerfs-node`, `layerfs-python`; JavaScript packages under `api/` |
+| Source | [`api/crates`](../../../api/crates), [`api/node`](../../../api/node), [`api/python`](../../../api/python), [`api/cli`](../../../api/cli), [`api/mcp`](../../../api/mcp), [`api/scripts`](../../../api/scripts) |
+| Uses | [Control](../control/README.md) (home, machines, Stores, Sandboxes, backups), [Store calls](../engine/store-calls/README.md) |
+| Used by | programs, shells and agents |
+| Flows | [A call, end to end](../flows/call.md) |
 
-What a program sees of this layer is the **SDK**: 64 calls in nine
-families, the same names and arguments in JavaScript, Python and the
-`layerfs` command. The [SDK reference](sdk/README.md) has one page per
-call; the other components below explain how those calls are checked,
-routed and run.
-
-## The SDK
+## Picture
 
 ```text
- import layerfs from "@layerfs/node"     import layerfs        layerfs <family> <call>
- await layerfs.<family>.<call>(          layerfs.<family>.     <positionals> --options
-   positionals..., { options })            <call>(..., opt=...)
-                \                         |                      /
-                 +---- one entry in the call table, one call ----+
-                                          |
-     project  branch  commit  file  sandbox  workspace  machine  store  backup
+ import layerfs from "@layerfs/node"  import layerfs     layerfs <family> <call>
+ await layerfs.<family>.<call>(       layerfs.<family>.  <positionals> --options
+   positionals..., { options })         <call>(..., k=v)
+          |                                  |                   |
+   layerfs-node (napi)              layerfs-python (pyo3)    layerfs-cli
+          \___________ call_json (text) ____/                    |
+                             |                       call_scoped (SdkValue)
+                             v                                   v
+           layerfs-api: table -> check -> scope -> home -> run once -> log
+                             |
+                             v
+           control crates: in process | machine's worker | Sandbox daemon
 ```
 
-| Family | Calls (help order) | What it is for |
+## The layerfs-api crate
+
+| Part | What it holds | Source |
 | --- | --- | --- |
-| [`project`](sdk/project/README.md) | [init](sdk/project/init.md), [list](sdk/project/list.md), [get](sdk/project/get.md), [export](sdk/project/export.md), [remove](sdk/project/remove.md) | a folder imported into a Store as `<store>/<project>` |
-| [`branch`](sdk/branch/README.md) | [list](sdk/branch/list.md), [get](sdk/branch/get.md), [fork](sdk/branch/fork.md), [merge](sdk/branch/merge.md), [publish](sdk/branch/publish.md), [diff](sdk/branch/diff.md) | lines of work; `publish` makes `main`'s next Layer |
-| [`commit`](sdk/commit/README.md) | [list](sdk/commit/list.md), [get](sdk/commit/get.md), [diff](sdk/commit/diff.md) | reading a Branch's history |
-| [`file`](sdk/file/README.md) | [read](sdk/file/read.md), [stat](sdk/file/stat.md), [list](sdk/file/list.md), [glob](sdk/file/glob.md), [grep](sdk/file/grep.md), [blame](sdk/file/blame.md), [diff](sdk/file/diff.md), [write](sdk/file/write.md), [edit](sdk/file/edit.md), [rm](sdk/file/rm.md), [mkdir](sdk/file/mkdir.md), [mv](sdk/file/mv.md), [cp](sdk/file/cp.md), [apply](sdk/file/apply.md) | files at a Branch or Commit, without a mount; each write is one Commit |
-| [`sandbox`](sdk/sandbox/README.md) | [create](sdk/sandbox/create.md), [list](sdk/sandbox/list.md), [get](sdk/sandbox/get.md), [close](sdk/sandbox/close.md) | a project's Workspace daemon on a machine |
-| [`workspace`](sdk/workspace/README.md) | [mount](sdk/workspace/mount.md), [exec](sdk/workspace/exec.md), [commit](sdk/workspace/commit.md), [unmount](sdk/workspace/unmount.md), [status](sdk/workspace/status.md) | a mounted, writable Branch: run commands, then commit |
-| [`machine`](sdk/machine/README.md) | [list](sdk/machine/list.md), [platforms](sdk/machine/platforms.md), [get](sdk/machine/get.md), [status](sdk/machine/status.md), [start](sdk/machine/start.md), [stop](sdk/machine/stop.md), [create](sdk/machine/create.md), [remove](sdk/machine/remove.md), [update](sdk/machine/update.md) | where Sandboxes and sqlite Stores live: `native`, `docker`, VMs and containers |
-| [`store`](sdk/store/README.md) | [list](sdk/store/list.md), [get](sdk/store/get.md), [status](sdk/store/status.md), [create](sdk/store/create.md), [connect](sdk/store/connect.md), [push](sdk/store/push.md), [pull](sdk/store/pull.md), [remove](sdk/store/remove.md), [disconnect](sdk/store/disconnect.md) | the database that holds every project's history: sqlite or PostgreSQL |
-| [`backup`](sdk/backup/README.md) | [connect](sdk/backup/connect.md), [disconnect](sdk/backup/disconnect.md), [list](sdk/backup/list.md), [create](sdk/backup/create.md), [restore](sdk/backup/restore.md) | copies of sqlite Stores in r2 or MinIO buckets |
+| `families()` | the ten families in help order: `project`, `branch`, `commit`, `file`, `sandbox`, `workspace`, `machine`, `store`, `backup`, `logs` | [`lib.rs`](../../../api/crates/layerfs-api/src/lib.rs) |
+| `calls/` | the table types, argument checks, folder scope, dispatcher, argv rendering, key casing, text form, platform policy and call context | [`calls/`](../../../api/crates/layerfs-api/src/calls), [Calls](calls/README.md) |
+| `<family>/` | one file per call, `<family>/<call>.rs`; the family's `mod.rs` lists them in help order. Each `run` builds one typed request and calls one control-crate function | [`src/`](../../../api/crates/layerfs-api/src), [SDK](sdk/README.md) |
+| `doctor/` | explicit diagnostics outside the call table (`layerfs doctor`) | [`doctor/mod.rs`](../../../api/crates/layerfs-api/src/doctor/mod.rs) |
+| Entry points | `calls()`, `find`, `table_json`, `call`, `call_scoped`, `call_json` | [`lib.rs`](../../../api/crates/layerfs-api/src/lib.rs) |
+| Re-exports | the control-crate paths the front ends need (`home`, `worker`, `daemon`, `ProjectApi`, `WorkspaceApi`, doctor), so front ends reach control through this crate | [`lib.rs`](../../../api/crates/layerfs-api/src/lib.rs) |
+| Features | `machine` (machine calls; host builds only, not the guest worker), `postgresql` (PostgreSQL Stores), `tls` (`https://` remotes); the latter two are on in the sealed Linux worker build | [`Cargo.toml`](../../../api/crates/layerfs-api/Cargo.toml) |
 
-| A typical session | Calls |
-| --- | --- |
-| set up | [store.create](sdk/store/create.md) → [project.init](sdk/project/init.md) → [branch.fork](sdk/branch/fork.md) |
-| work in a mounted tree | [sandbox.create](sdk/sandbox/create.md) → [workspace.mount](sdk/workspace/mount.md) → [workspace.exec](sdk/workspace/exec.md) → [workspace.commit](sdk/workspace/commit.md) → [workspace.unmount](sdk/workspace/unmount.md) |
-| work without a mount | [file.read](sdk/file/read.md), [file.edit](sdk/file/edit.md), [file.apply](sdk/file/apply.md) |
-| ship | [branch.diff](sdk/branch/diff.md) → [branch.merge](sdk/branch/merge.md) → [branch.publish](sdk/branch/publish.md) |
+## Calling conventions
 
-| SDK rule | Where it is explained |
-| --- | --- |
-| Names are snake_case in every front end; options are a trailing object (JS), keywords (Python) or `--options` (CLI) | [SDK: Calling the SDK](sdk/README.md#calling-the-sdk) |
-| Answers are maps, often with `kind`; lists page with `has_more` and `next_page_pos` | [SDK: Answers and errors](sdk/README.md#answers-and-errors) |
-| A refusal is `{ code, message, detail }`; `Unknown`, and `Failed` with `attempted`, mean the outcome is uncertain: read state before acting again | [Errors](call-table/errors.md), [uncertain outcomes](call-table/errors.md#uncertain-outcomes) |
-| Store calls (`branch`, `commit`, `file`) run in the caller or the Store's machine worker; Workspace calls reach the Sandbox daemon; nothing starts a stopped machine except `machine.start` | [SDK: Where calls run](sdk/README.md#where-calls-run), [Routing table](../control/routing/routing-table.md) |
-| A folder scope binds a client to one project, folder and Branch namespace | [SDK: Calling the SDK](sdk/README.md#calling-the-sdk) |
-| Every function is generated from the call table; a call is changed in `layerfs-api/src/<family>/<call>.rs` | [Table](call-table/table.md), [Front ends](front-ends/README.md) |
+These hold for every call in every front end; the [SDK](sdk/README.md) pages
+give each call's own arguments, answer and errors.
 
-## How the components relate
-
-```text
- program (JS / Python / shell)
-      |  the SDK: 64 calls
-      v
- Front ends (CLI, Node, Python)
-      |
-      v
- Call table ---> control: Management ---> Machines, Sandboxes, Backups
-                    |    \--> engine: Store calls, Project Init
-                    v
-             Routing and workers
-                    : Workspace calls (another process)
-                    v
-              engine: Daemon
-```
-
-Dotted edges cross a process boundary.
-
-## Components
-
-| Component | What it covers | Topics |
+| Convention | Rule | Source |
 | --- | --- | --- |
-| [Call table](call-table/README.md) | The nine call families and the one dispatcher every front end goes through. | [Table](call-table/table.md), [Errors](call-table/errors.md) |
-| [SDK](sdk/README.md) | Every call a program can make: 64 calls in nine families, one page per call, with JavaScript, Python and CLI forms. | [project](sdk/project/README.md), [branch](sdk/branch/README.md), [commit](sdk/commit/README.md), [file](sdk/file/README.md), [sandbox](sdk/sandbox/README.md), [workspace](sdk/workspace/README.md), [machine](sdk/machine/README.md), [store](sdk/store/README.md), [backup](sdk/backup/README.md) |
-| [Front ends](front-ends/README.md) | The `layerfs` command, the Node addon, the Python module and the MCP server: one call each, over the call table. | [CLI](front-ends/cli.md), [Node](front-ends/node.md), [Python](front-ends/python.md), [MCP](front-ends/mcp.md) |
+| Names | `family.call`, snake_case in every front end (`branch.get_commit`, `workspace.exec_cancel`); the CLI writes `layerfs branch get-commit` and options as `--page-size` | [`calls/table.rs`](../../../api/crates/layerfs-api/src/calls/table.rs), [`layerfs-cli/src/parse.rs`](../../../api/crates/layerfs-cli/src/parse.rs) |
+| Positionals | required, in table order, from the outside in: owner, Branch, path or new name, other inputs, an optional Commit last | [`calls/table.rs`](../../../api/crates/layerfs-api/src/calls/table.rs) |
+| Options | named and optional: a trailing object (JS), keywords (Python), `--flags` (CLI); an unknown or misspelled one is `InvalidInput` before any effect | [`calls/check.rs`](../../../api/crates/layerfs-api/src/calls/check.rs) |
+| Kinds | `Name`, `Project` (`<store>/<project>`), `Text`, `Int`, `Bool`, `Json`, `Content` (text or bytes), `Size` (bytes, or `64K`, `512M`, `8G` in powers of 1024), `Function` (stays in the front end) | [Calls](calls/README.md) |
+| Answers | a map with snake_case keys, usually with a `kind` naming what happened (`Created`, `UpToDate`, `Committed`, ...); bytes that are not UTF-8 are `{ base64 }` (Node `Buffer`, Python `bytes`) | [`calls/keys.rs`](../../../api/crates/layerfs-api/src/calls/keys.rs), [`calls/text.rs`](../../../api/crates/layerfs-api/src/calls/text.rs) |
+| Refusals | `{ code, message, detail }`: Node throws `LayerFSError`, Python raises `layerfs.LayerFSError`, the CLI prints it on stderr and exits 125 (2 for a wrong command line) | [Errors and events](calls/errors-and-events.md) |
+| Uncertainty | `Unknown`, and `Failed` with `attempted: true`, mean the outcome is not known; `Unresolved` blocks later calls on that entity. Read state with `get`, `list` or `status` before acting again | [Uncertain outcomes](calls/errors-and-events.md#uncertain-outcomes) |
+| One attempt | a call runs once; nothing retries, refreshes or replays it | [`calls/dispatch.rs`](../../../api/crates/layerfs-api/src/calls/dispatch.rs) |
+| Paging | lists that page take `page_size` and `page_pos` and answer `{ items, has_more, next_page_pos }`; pass `next_page_pos` back as `page_pos`. Diffs add `paths_only` and a `cursor`; `logs.list` uses `cursor` and `limit` | [`calls/table.rs`](../../../api/crates/layerfs-api/src/calls/table.rs) `PAGE`, `DIFF` |
+| Events | `on_progress` (nine calls) and `workspace.exec`'s `stdout`/`stderr` functions receive events before the call answers; an event never means the call finished | [Errors and events](calls/errors-and-events.md) |
+| Home | explicit, else `LAYERFS_HOME`, else `$HOME/.layerfs`; absolute | [`calls/dispatch.rs`](../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home` |
+| Scope | a client may be bound to one project, folder and Branch namespace: out-of-scope calls are `InvalidInput`, paths are relative to the folder and Branch names to the namespace | [`calls/scope.rs`](../../../api/crates/layerfs-api/src/calls/scope.rs), [folder scope](calls/README.md#folder-scope) |
+| Call log | every call except `logs.*` writes one line to `<home>/trace/calls.jsonl` when it ends (not with `LAYERFS_LOGS=0`) | [the call log](calls/README.md#the-call-log) |
 
-## Rules for this layer
+## Invariants
 
-The [api guide](../../../api/AGENTS.md) holds the binding
-rules for code in this layer. These pages explain the design; they do not
-replace those rules.
+| Rule | Enforced by |
+| --- | --- |
+| Every front end exposes exactly the table's calls and arguments | [`coverage.mjs`](../../../api/node/test/coverage.mjs) over the generated [coverage matrix](calls/coverage.md) |
+| A call is changed in one place, `layerfs-api/src/<family>/<call>.rs`; front-end functions, types and stubs follow the table | [`calls_table.rs`](../../../api/crates/layerfs-api/tests/calls_table.rs), [`gen-node-types.mjs`](../../../api/scripts/gen-node-types.mjs), [`gen_stubs.py`](../../../api/python/tools/gen_stubs.py) |
+| Arguments are checked, scoped and platform-checked before the home is opened or anything happens | [`calls/dispatch.rs`](../../../api/crates/layerfs-api/src/calls/dispatch.rs) |
+| Dependencies point down: `core < engine < control < api`, test code included | [api guide](../../../api/AGENTS.md) |
 
----
+## Limits and failures
 
-← [Routing and workers: Daemon channel](../control/routing/daemon-channel.md) · [Up: Architecture](../README.md) · [Call table](call-table/README.md) →
+| Limit or failure | Value or error | Source |
+| --- | --- | --- |
+| Unknown call or argument, wrong kind, out of scope | `InvalidInput`, before any effect | [`calls/check.rs`](../../../api/crates/layerfs-api/src/calls/check.rs) |
+| New work on a removed platform | `Unsupported`, before the home is opened | [`calls/platform_policy.rs`](../../../api/crates/layerfs-api/src/calls/platform_policy.rs) |
+| Where a Store call runs | the caller's process, or the Store machine's worker; no daemon serves a Store call | [Control](../control/README.md) |
+| Persistence | Disposable/WAL/synchronous=OFF is the only Store profile; Durable execution is `NOT_RUN — disabled by owner until explicit reauthorization` | [store family](sdk/store.md) |
+
+## Demonstration
+
+| Test or example | Command | Platform | Shows |
+| --- | --- | --- | --- |
+| [`calls_table.rs`](../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host | 70 calls in ten families; one source file per call; refusals before any effect |
+| [`coverage.mjs`](../../../api/node/test/coverage.mjs) | `node --test api/node/test/coverage.mjs` | macOS or Linux, with the built addon, Python module and CLI | every front end matches the table |
+| [`file-history.mjs`](../../../api/node/examples/file-history.mjs) | `node api/node/examples/file-history.mjs` | macOS or Linux, with the built addon | a Store, Init, file writes and history reads |
+
+## Topics
+
+| Topic | What it covers |
+| --- | --- |
+| [Calls](calls/README.md) | the table, checks, folder scope, dispatcher and call log; [errors and events](calls/errors-and-events.md); the [coverage matrix](calls/coverage.md) |
+| [SDK](sdk/README.md) | every call, one page per family, with JavaScript, Python and CLI forms |
+| [Front ends](front-ends/README.md) | the `layerfs` command and packaging; the Node and Python [bindings](front-ends/bindings.md); the [MCP server](front-ends/mcp.md) |
+
+The [api guide](../../../api/AGENTS.md) holds the binding rules for code in
+this layer; these pages explain the design.

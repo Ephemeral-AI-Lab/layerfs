@@ -114,7 +114,7 @@ pub(crate) enum BackendError {
     /// database, failed authentication): no session, so nothing ran.
     #[cfg_attr(not(feature = "postgresql"), allow(dead_code))]
     Rejected,
-    /// A signal interrupted the cross-process writer wait (Linux only).
+    /// A signal interrupted the cross-process writer wait (Linux or macOS).
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Cancelled,
     ReadOnly,

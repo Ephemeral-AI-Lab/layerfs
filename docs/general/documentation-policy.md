@@ -12,8 +12,14 @@
   `792715f00a` (see [the docs entry point](../README.md#removed-roadmap-and-raw-evidence)).
   Do not commit raw run output (`.json`, `.jsonl`, logs, databases) as
   documentation; keep the `.md` record and link to retained evidence.
+- `core/docs/` was removed by #671; its records stay at commit `af2ad92bce`.
+  New issue, fix and decision records go in the GitHub issue or pull request,
+  not in the tree. One exception, by owner decision (2026-11-14): the
+  garbage-collection design for layerfs-project#41 lives at
+  `core/docs/issues/project-41/LayerFS-GC-spec.md` until the feature lands
+  and its architecture pages replace it.
 - `docs/architecture/<layer>/` is the maintained design reference for the
-  current source, one page per component of `core`, `engine`, `control` and
+  current source, one folder per topic of `core`, `engine`, `control` and
   `api`, with cross-layer flows under `docs/architecture/flows/`. A change that
   alters a component's boundary, format, algorithm or named limit updates its
   page in the same commit.

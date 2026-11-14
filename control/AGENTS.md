@@ -44,8 +44,8 @@ behalf of the engine:
   backed up to a bucket (`src/backup/` and `src/bucket/<provider>/`).
 
 See the [control README](README.md) for the layout and how to read
-`SUPPORT.json`, [#535](../core/docs/issues/535/README.md) for the drivers'
-design and the [compute plane 2.0 spec](../core/docs/proposals/compute-plane-2.0.md)
+`SUPPORT.json`, [#535](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/535/README.md) for the drivers'
+design and the [compute plane 2.0 spec](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/proposals/compute-plane-2.0.md)
 §6 for the split.
 
 ## Dependencies
@@ -91,8 +91,8 @@ from it and a test compares them.
 - sqlite Store calls run in a process on the Store's kernel (in process on
   `native`, else that machine's worker); PostgreSQL Store calls and bucket
   I/O run in the caller's process (#533 G2). A sqlite Store is on exactly one
-  machine; a PostgreSQL Store is usable from every machine the support
-  table allows, with no attach records (#535 G3).
+  machine; a PostgreSQL Store's Sandboxes run on the machines it is attached to
+  (`store.attach`, each checked from that machine; supersedes #535 G3).
 - Workers listen on loopback behind a secret; one attempt per call, no
   retry, no replay; an uncertain outcome is reported, never resent.
 - A PostgreSQL password is resolved only in the caller, travels only in one

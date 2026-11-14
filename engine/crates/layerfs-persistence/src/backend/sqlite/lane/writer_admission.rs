@@ -1,4 +1,4 @@
-//! Local-volume cooperative ownership before one SQLite write attempt.
+//! Cooperative local-volume ownership before one SQLite write attempt.
 use crate::backend::records::BackendError;
 use std::path::Path;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -21,10 +21,12 @@ impl Writer {
         {
             // Never open another FD to SQLite's main/WAL/SHM files here:
             // closing any main-file FD cancels every process POSIX lock on
-            // that inode, including SQLite's live SHARED locks. An independent
-            // description of the existing parent directory coordinates short
-            // writer jobs without interfering with SQLite's descriptors.
-            // Multiple Store files in one directory share this coarse lane.
+            // that inode, including SQLite's live SHARED locks, and Darwin
+            // flock on that file conflicts with SQLite's own fcntl locks. An
+            // independent description of the existing parent directory
+            // coordinates short writer jobs without interfering with SQLite's
+            // descriptors. Multiple Store files in one directory share this
+            // coarse lane.
             let directory = path
                 .parent()
                 .filter(|parent| !parent.as_os_str().is_empty())
@@ -84,7 +86,7 @@ impl Writer {
         }
         #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         {
-            // As `acquire`: unsupported platforms have no advisory lane.
+            // As `acquire`: no advisory lane on these platforms.
             Self::acquire(path).map(Some)
         }
     }

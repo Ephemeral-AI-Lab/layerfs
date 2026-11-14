@@ -147,6 +147,198 @@ fn a_clean_home_is_ok_with_no_findings() {
 }
 
 #[test]
+fn a_store_folder_others_may_pass_through_is_an_error_naming_chmod_700() {
+    // #534: the daemon refuses a Store folder with any group/other bit, so
+    // doctor must not call 0701 fine there; other home folders keep 0701.
+    let home = new_home("store-0701");
+    layerfs_control::migrate::open(&home).unwrap();
+    store(&home, "shop", sqlite("shop", "native"));
+    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
+    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
+    let dir = paths::store_dir(&home, "shop");
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o701)).unwrap();
+    std::fs::set_permissions(home.join("store"), std::fs::Permissions::from_mode(0o701)).unwrap();
+    let report = doctor(&home).unwrap();
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)), "{report:?}");
+    let found = findings(&report);
+    assert_eq!(found.len(), 1, "{found:?}");
+    let (severity, kind, name, message, fix) = &found[0];
+    assert_eq!(
+        (severity.as_str(), kind.as_str(), name.as_str()),
+        ("error", "store", "shop")
+    );
+    assert!(message.contains("0701"), "{message}");
+    assert!(fix.contains("chmod 700"), "{fix}");
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let report = doctor(&home).unwrap();
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(true)), "{report:?}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_symlinked_store_folder_is_an_error_that_does_not_change_the_target() {
+    // the home's `store/` as a link: its own mode is 0777, not the folder's,
+    // and the remedy must not chmod through the link into its target
+    let home = new_home("store-link");
+    layerfs_control::migrate::open(&home).unwrap();
+    let elsewhere =
+        std::env::temp_dir().join(format!("layerfs-doctor-link-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&elsewhere);
+    std::fs::create_dir(&elsewhere).unwrap();
+    std::fs::set_permissions(&elsewhere, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let store = home.join("store");
+    let _ = std::fs::remove_dir_all(&store);
+    std::os::unix::fs::symlink(&elsewhere, &store).unwrap();
+    let report = doctor(&home).unwrap();
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)), "{report:?}");
+    let found = findings(&report);
+    assert_eq!(found.len(), 1, "{found:?}");
+    let (severity, kind, _name, message, fix) = &found[0];
+    assert_eq!((severity.as_str(), kind.as_str()), ("error", "home"));
+    assert!(message.contains("symlink"), "{message}");
+    assert!(!fix.contains("chmod"), "{fix}");
+    std::fs::remove_file(&store).unwrap();
+    std::fs::remove_dir_all(&elsewhere).unwrap();
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_symlinked_store_entry_is_an_error_that_does_not_change_the_target() {
+    // `store/<name>` as a link: the daemon refuses it, so doctor reports it;
+    // the remedy is not a chmod, which would change the link's target
+    let home = new_home("store-entry-link");
+    layerfs_control::migrate::open(&home).unwrap();
+    store(&home, "shop", sqlite("shop", "native"));
+    let elsewhere =
+        std::env::temp_dir().join(format!("layerfs-doctor-entry-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&elsewhere);
+    std::fs::rename(paths::store_dir(&home, "shop"), &elsewhere).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, paths::store_dir(&home, "shop")).unwrap();
+    let report = doctor(&home).unwrap();
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)), "{report:?}");
+    let found = findings(&report);
+    assert_eq!(found.len(), 1, "{found:?}");
+    let (severity, kind, name, message, fix) = &found[0];
+    assert_eq!(
+        (severity.as_str(), kind.as_str(), name.as_str()),
+        ("error", "store", "shop")
+    );
+    assert!(message.contains("symlink"), "{message}");
+    assert!(!fix.contains("chmod"), "{fix}");
+    std::fs::remove_file(paths::store_dir(&home, "shop")).unwrap();
+    std::fs::remove_dir_all(&elsewhere).unwrap();
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_symlink_to_a_file_under_store_does_not_abort_other_findings() {
+    // `store/<name>` linked to a regular file: must not fail `read_dir(.../project)`
+    // with ENOTDIR and discard findings for the rest of the home
+    let home = new_home("store-entry-file-link");
+    layerfs_control::migrate::open(&home).unwrap();
+    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
+    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
+    store(&home, "other", sqlite("other", "native"));
+    std::fs::set_permissions(
+        paths::store_dir(&home, "other"),
+        std::fs::Permissions::from_mode(0o701),
+    )
+    .unwrap();
+    let target = std::env::temp_dir().join(format!("layerfs-doctor-file-{}", std::process::id()));
+    let _ = std::fs::remove_file(&target);
+    std::fs::write(&target, b"keep").unwrap();
+    std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o644)).unwrap();
+    let link = paths::store_dir(&home, "shop");
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+
+    let report = doctor(&home).unwrap();
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)), "{report:?}");
+    let found = findings(&report);
+    assert_eq!(found.len(), 2, "{found:#?}");
+    assert_eq!(
+        (
+            found[0].0.as_str(),
+            found[0].1.as_str(),
+            found[0].2.as_str()
+        ),
+        ("error", "store", "other")
+    );
+    assert!(found[0].3.contains("0701"), "{found:#?}");
+    assert_eq!(
+        (
+            found[1].0.as_str(),
+            found[1].1.as_str(),
+            found[1].2.as_str()
+        ),
+        ("error", "store", "shop")
+    );
+    assert!(found[1].3.contains("symlink"), "{found:#?}");
+    assert!(!found[1].4.contains("chmod"), "{found:#?}");
+
+    assert!(std::fs::symlink_metadata(&link)
+        .unwrap()
+        .file_type()
+        .is_symlink());
+    assert_eq!(std::fs::read_link(&link).unwrap(), target);
+    let target_meta = std::fs::symlink_metadata(&target).unwrap();
+    assert!(target_meta.file_type().is_file());
+    assert_eq!(target_meta.permissions().mode() & 0o7777, 0o644);
+    assert_eq!(std::fs::read(&target).unwrap(), b"keep");
+
+    std::fs::remove_file(&link).unwrap();
+    std::fs::remove_file(&target).unwrap();
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_dangling_symlink_under_store_is_an_error_that_keeps_scanning() {
+    let home = new_home("store-entry-dangling-link");
+    layerfs_control::migrate::open(&home).unwrap();
+    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
+    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
+    store(&home, "other", sqlite("other", "native"));
+    std::fs::set_permissions(
+        paths::store_dir(&home, "other"),
+        std::fs::Permissions::from_mode(0o701),
+    )
+    .unwrap();
+    let missing =
+        std::env::temp_dir().join(format!("layerfs-doctor-missing-{}", std::process::id()));
+    let _ = std::fs::remove_file(&missing);
+    let link = paths::store_dir(&home, "dangling");
+    std::os::unix::fs::symlink(&missing, &link).unwrap();
+
+    let report = doctor(&home).unwrap();
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)), "{report:?}");
+    let found = findings(&report);
+    assert_eq!(found.len(), 2, "{found:#?}");
+    assert_eq!(
+        (
+            found[0].0.as_str(),
+            found[0].1.as_str(),
+            found[0].2.as_str()
+        ),
+        ("error", "store", "dangling")
+    );
+    assert!(found[0].3.contains("symlink"), "{found:#?}");
+    assert!(!found[0].4.contains("chmod"), "{found:#?}");
+    assert_eq!(
+        (
+            found[1].0.as_str(),
+            found[1].1.as_str(),
+            found[1].2.as_str()
+        ),
+        ("error", "store", "other")
+    );
+    assert!(found[1].3.contains("0701"), "{found:#?}");
+    assert_eq!(std::fs::read_link(&link).unwrap(), missing);
+    assert!(!missing.exists());
+
+    std::fs::remove_file(&link).unwrap();
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
 fn a_home_that_does_not_exist_is_ok_and_stays_absent() {
     let home = new_home("absent");
     let report = doctor(&home).unwrap();

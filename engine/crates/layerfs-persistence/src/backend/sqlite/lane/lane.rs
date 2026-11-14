@@ -1,7 +1,7 @@
-//! The Store's publication lane: one connection turn and, on Linux and macOS, the
-//! cooperative writer lock, held by one thread across a short read-decide-write
-//! sequence. Its own SQL work runs as ordinary transactions inside the held
-//! turn; no other publication of any process can interleave.
+//! The Store's publication lane: one connection turn and the cooperative
+//! writer lock (Linux and macOS), held by one thread across a short
+//! read-decide-write sequence. Its own SQL work runs as ordinary transactions
+//! inside the held turn; no other publication of any process can interleave.
 use super::writer_admission::Writer;
 use crate::backend::records::BackendError;
 use crate::backend::sqlite::session::connection::Session;

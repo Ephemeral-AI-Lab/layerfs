@@ -738,6 +738,7 @@ fn destination_and_argument_refusals_have_no_side_effects() {
             ("destination", t(&valid_dest.display().to_string())),
         ]),
         &mut |_| {},
+        layerfs_api::Client::Rust,
     )
     .unwrap_err();
     assert_eq!(scoped_err.code, "InvalidInput");
@@ -874,7 +875,7 @@ fn branch_selection_and_pinned_snapshot_under_concurrent_writes() {
 fn move_store_file(from: &Path, to: &Path, store: &str) {
     let source = paths::store_dir(from, store);
     let target = paths::store_dir(to, store);
-    std::fs::create_dir_all(&target).unwrap();
+    home::private_dir(&target).unwrap();
     for entry in std::fs::read_dir(&source).unwrap() {
         let entry = entry.unwrap();
         let name = entry.file_name().to_string_lossy().into_owned();

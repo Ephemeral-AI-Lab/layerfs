@@ -105,7 +105,7 @@ fn worker_child() {
 fn actual_worker_audit_streams_and_cancelled_peer_does_not_poison_next_call() {
     let f = Fixture::new();
     let path = paths::store_file(&f.root, "one");
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    layerfs_home::home::private_dir(path.parent().unwrap()).unwrap();
     let authority = HistoryCatalogConfig {
         binding_key: b"doctor-worker".to_vec(),
         cursor_key: [9; 32],

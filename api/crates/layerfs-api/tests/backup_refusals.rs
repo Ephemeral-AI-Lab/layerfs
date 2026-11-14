@@ -128,6 +128,121 @@ fn restore_over_a_store_with_a_running_sandbox_is_in_use() {
     }
 }
 
+/// `store/<name>` already there but not the daemon's private directory: the
+/// restore refuses it with `store.create`'s own code and remedy before it
+/// stages anything, writes nothing and leaves the user's directory as it was
+/// (#570 P1). The same folder held `0700`, and an absent one, pass the check
+/// and go on into the download.
+#[test]
+fn restore_refuses_a_store_folder_that_is_not_private() {
+    let home = tempdir("folder-mode");
+    home::open(&home).unwrap();
+    dead_bucket(&home);
+    let directory = paths::store_dir(&home, "open-dir");
+    let store = home.join("store");
+    let restore = || {
+        call(
+            &home,
+            "backup.restore",
+            &[("store", t("open-dir")), ("bucket", t("dead"))],
+        )
+        .unwrap_err()
+    };
+    let mode = |dir: &Path| std::fs::metadata(dir).unwrap().permissions().mode() & 0o7777;
+
+    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let (code, message) = restore();
+    assert_eq!(code, "Unsupported", "{message}");
+    assert!(
+        message.contains(&directory.display().to_string()),
+        "{message}"
+    );
+    assert!(
+        message.contains("0755") && message.contains("0700"),
+        "{message}"
+    );
+    assert!(
+        message.contains(&format!("chmod 700 {}", directory.display())),
+        "{message}"
+    );
+    // nothing was written: no staging folder, no Store file or record, and
+    // the user's own directory keeps its mode
+    let names: Vec<_> = std::fs::read_dir(&store)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names, vec!["open-dir"], "a refused restore stages nothing");
+    assert_eq!(mode(&directory), 0o755, "the folder's mode is not changed");
+    assert!(!paths::store_file(&home, "open-dir").exists());
+    assert!(!paths::store_record(&home, "open-dir").exists());
+
+    // the daemon's own private directory passes: the restore goes on into
+    // the download (`remote::load`), which fails there as it would without
+    // this check
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let failed = restore();
+    failed_in_the_download(&failed.0, &failed.1);
+    assert!(!paths::store_file(&home, "open-dir").exists());
+    assert!(!paths::store_record(&home, "open-dir").exists());
+
+    // and an absent folder passes the check the same way; the install that
+    // would make it `0700` never runs without install permission, and is
+    // covered by `layerfs-store`'s `restore_install`
+    std::fs::remove_dir_all(&directory).unwrap();
+    let failed = restore();
+    failed_in_the_download(&failed.0, &failed.1);
+    assert!(!directory.exists(), "no install ran for this call");
+    // both calls reached the download: each made its staging folder under
+    // the home lock and removed it when it failed
+    let staged: Vec<_> = std::fs::read_dir(&store)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with(".restore-"))
+        .collect();
+    assert!(
+        staged.is_empty(),
+        "a failed download left its staging folder: {staged:?}"
+    );
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// A restore that passed the directory check failed inside the download:
+/// `remote::load`'s own first checks run there, and which one stops it says
+/// how far it went — the installer user in a Linux process that cannot
+/// install (before any request is sent), else the dead endpoint's own
+/// request. Neither is this directory guard.
+fn failed_in_the_download(code: &str, message: &str) {
+    assert_eq!(code, "Failed", "{message}");
+    if installs_as_the_daemons_user() {
+        assert!(
+            !message.contains("chmod 700"),
+            "the download failed, not the directory guard: {message}"
+        );
+    } else {
+        assert!(
+            message.contains("must run as user 0"),
+            "the download's own installer-user check: {message}"
+        );
+    }
+}
+
+/// Whether this process is the user a Store install requires: on Linux only
+/// uid 0 is (`layerfs-store-service` `install`), so every other run stops at
+/// that check instead of reaching the bucket.
+fn installs_as_the_daemons_user() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        nix::unistd::geteuid().is_root()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        true
+    }
+}
+
 /// A restore killed mid-download leaves its folder; the next restore removes
 /// it, and keeps a folder whose restore still holds its lock and one with
 /// no lock file at all.

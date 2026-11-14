@@ -1,7 +1,7 @@
 //! A minimal NFSv3/MOUNT client over the export's public XDR and record
 //! framing: what a kernel client sends, one call at a time.
 use layerfs_nfs::{
-    rpc::{read_record, write_record},
+    rpc::{write_record, Records},
     xdr::{Reader, Writer},
 };
 use std::{
@@ -83,6 +83,9 @@ pub struct Entry {
 
 pub struct Client {
     stream: TcpStream,
+    /// One reader for the connection: a record may arrive with the bytes of
+    /// the next.
+    records: Records,
     xid: u32,
     uid: u32,
     gid: u32,
@@ -97,6 +100,7 @@ impl Client {
             .unwrap();
         Self {
             stream,
+            records: Records::new(),
             xid: 1,
             uid,
             gid,
@@ -129,7 +133,7 @@ impl Client {
             wire.counts.lock().unwrap().0 += 1;
         }
         write_record(&mut self.stream, call.as_bytes()).unwrap();
-        let record = read_record(&mut self.stream).unwrap().unwrap();
+        let record = self.records.read(&mut self.stream).unwrap().unwrap();
         if let Some(wire) = &self.wire {
             wire.counts.lock().unwrap().1 += 1;
             wire.changed.notify_all();

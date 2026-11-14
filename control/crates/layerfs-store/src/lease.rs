@@ -140,6 +140,18 @@ fn leases(home: &Path, store: &str) -> Result<Vec<(u32, PathBuf, bool)>, SdkRefu
     Ok(found)
 }
 
+/// Removes the stale lease at `path`: `false` when it is gone already. A
+/// holder drops its own lease without the Store's lock ([`Lease`]'s drop),
+/// so a lease read here can be gone by the time its holder is found ended:
+/// the holder dropped it and then ended, and nothing stale is left.
+fn remove_stale(path: &Path) -> Result<bool, SdkRefusal> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(failed(e)),
+    }
+}
+
 /// The processes holding Store `store`, other than this one; stale leases
 /// are removed and logged (O35). The caller holds the Store's lock.
 pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
@@ -149,27 +161,8 @@ pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
             live.push(pid);
             continue;
         }
-        match std::fs::remove_file(&path) {
-            Ok(()) => {}
-            // Its holder can drop the lease after the snapshot above. It is
-            // already released; no removal happened here to log.
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(error) => {
-                let mut refusal = failed(&error);
-                refusal.detail = SdkValue::map([
-                    ("operation", SdkValue::text("remove_stale_lease")),
-                    ("store", SdkValue::text(store)),
-                    ("path", SdkValue::text(path.display().to_string())),
-                    (
-                        "os_error",
-                        error
-                            .raw_os_error()
-                            .map(|code| SdkValue::Int(i64::from(code)))
-                            .unwrap_or_default(),
-                    ),
-                ]);
-                return Err(refusal);
-            }
+        if !remove_stale(&path)? {
+            continue;
         }
         home::log_line(
             home,

@@ -9,6 +9,8 @@ mod store;
 pub(crate) use store::config;
 mod history;
 #[cfg(feature = "postgresql")]
+pub use backend::postgresql::access::{access as postgresql_access, PostgresAccess};
+#[cfg(feature = "postgresql")]
 pub use backend::postgresql::status::{
     status as postgresql_status, PostgresStatus, PostgresStatusError,
 };

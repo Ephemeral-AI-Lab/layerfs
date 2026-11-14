@@ -19,6 +19,9 @@ impl Session {
         if state.quarantined || !state.connection.is_autocommit() {
             return Err(PersistenceError::Uncertain);
         }
+        // The same advisory lane as a write transaction: a seal is the sole
+        // owner's offline handoff, so no other opener may write while the
+        // checkpoint, close and sidecar removal below run.
         if state.writer_hold.is_none() {
             state.writer_hold =
                 Some(crate::backend::sqlite::lane::writer_admission::Writer::acquire(&self.path)?);
@@ -44,9 +47,10 @@ impl Session {
         }
         // SQLite has checked-closed before advisory ownership is released.
         // Earlier error exits drop State.connection before its retained owner.
-        if let Some(writer) = state.writer_hold.take() {
-            writer.release().map_err(|_| PersistenceError::Uncertain)?;
-        }
+        // The sidecar check below runs while the lane is still held: an opener
+        // waiting on it takes the same lane before it may create `-wal`, so
+        // releasing first would let one land between the close and this check
+        // and turn a sealed Store into a refused one.
         for suffix in ["-wal", "-shm", "-journal"] {
             let mut sidecar = self.path.as_os_str().to_os_string();
             sidecar.push(suffix);
@@ -63,6 +67,9 @@ impl Session {
                     })
                 }
             }
+        }
+        if let Some(writer) = state.writer_hold.take() {
+            writer.release().map_err(|_| PersistenceError::Uncertain)?;
         }
         #[cfg(target_os = "macos")]
         let bytes = super::seal_allocation::release(&self.path, identity)?;

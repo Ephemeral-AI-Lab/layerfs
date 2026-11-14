@@ -38,7 +38,7 @@ https://github.com/user-attachments/assets/70c25887-86a1-4d81-bd78-571cf1c09a18
 
 > **Status:** the latest release is [LayerFS 1.1.0](https://github.com/Ephemeral-AI-Lab/layerfs/releases/tag/v1.1.0)
 > ([release record](docs/release-notes/1.1.0/README.md)). This tree is LayerFS 2.0
-> ([#533](core/docs/issues/533/README.md), not released): one home (`LAYERFS_HOME`),
+> ([#533](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/README.md), not released): one home (`LAYERFS_HOME`),
 > machines and Stores as records, and one call table behind the `layerfs` package for
 > Node and Python ([`api/`](api/README.md)) and the native `layerfs` command. It replaces
 > 1.1.0's `@layerfs/agent`, `@layerfs/backend`, `@layerfs/runtime` and `@layerfs/cli`;

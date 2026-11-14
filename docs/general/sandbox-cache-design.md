@@ -7,7 +7,7 @@
 
 Navigation links were updated on 2026-10-06 for the responsibility-folder moves.
 The source-review claims retain their original pin above; current continuation
-scope is in the [S7–S9 handoff](../../core/docs/issues/307/HANDOFF-S7-S9.md).
+scope is in the [S7–S9 handoff](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/HANDOFF-S7-S9.md).
 
 Issue [#321](https://github.com/Ephemeral-AI-Lab/layerfs/issues/321) update, 2026-10-14
 (local branch `issue321-workspace-overlay`): every mounted Workspace now has its
@@ -18,7 +18,7 @@ row prefixes, the owner thread, its queues, admission credits and the common
 memory budget described below at this guide's source pin are removed.
 Workspaces share only committed immutable content and the global Store. The
 implemented description is the
-[owner guide](../../core/docs/architecture/21-daemon-owner.md#issue-321-final-model-one-lock-per-workspace-2026-10-14).
+[owner guide](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/21-daemon-owner.md#issue-321-final-model-one-lock-per-workspace-2026-10-14).
 The immutable object cache policy of this guide is unchanged; its SQLite page
 row now reads one pager per Workspace file, and the `credits.rs` source it
 names no longer exists.
@@ -29,10 +29,10 @@ using different branches of the same project. It describes implementation gaps
 explicitly; it is not a release, memory qualification or performance claim.
 Concurrent uncommitted implementation work is outside this source review.
 
-The [cluster-two design index](../../core/docs/issues/303/README.md),
-[cache ownership contract](../../core/docs/issues/303/02-base-overlay.md#8-caches-owner-key-visibility-invalidation),
-[daemon contract](../../core/docs/issues/303/daemon-sqlite.md) and
-[FUSE contract](../../core/docs/issues/303/fuse.md) remain authoritative. This
+The [cluster-two design index](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/README.md),
+[cache ownership contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/02-base-overlay.md#8-caches-owner-key-visibility-invalidation),
+[daemon contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/daemon-sqlite.md) and
+[FUSE contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/fuse.md) remain authoritative. This
 guide explains those contracts without selecting a new cache algorithm, changing
 their budgets or completing a milestone in [tracker #307](https://github.com/Ephemeral-AI-Lab/layerfs/issues/307).
 
@@ -104,9 +104,9 @@ The relevant production boundaries are:
   [`schema.sql`](../../engine/crates/layerfs-overlay/sql/schema.sql): one initialized
   disposable connection, read-back settings and Workspace-prefixed relations.
 
-The [base access guide](../../core/docs/architecture/20-workspace-base.md),
-[daemon owner guide](../../core/docs/architecture/21-daemon-owner.md) and
-[Store length-fact guide](../../core/docs/architecture/24-file-lengths.md)
+The [base access guide](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/20-workspace-base.md),
+[daemon owner guide](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/21-daemon-owner.md) and
+[Store length-fact guide](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/24-file-lengths.md)
 describe the implemented seams. Source directory presence alone does not establish
 an active mounted product; [the core manifest](../../Cargo.toml) identifies
 active members.
@@ -137,7 +137,7 @@ of complete cross-Workspace runtime authorization.
 
 Installing a new root does not change the bytes of an existing immutable object,
 so the base cache needs no blanket invalidation. FUSE pages, dentries and mutable
-attributes still need the [owning coherence protocol](../../core/docs/issues/303/fuse.md#4-cache-coherence-and-lifetime-transitions).
+attributes still need the [owning coherence protocol](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/fuse.md#4-cache-coherence-and-lifetime-transitions).
 Cache retention is not a canonical root-retention or future Store-GC lease.
 
 ## 4. Why this ownership structure is a good default

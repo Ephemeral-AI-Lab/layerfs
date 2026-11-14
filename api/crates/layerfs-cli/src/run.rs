@@ -197,8 +197,14 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
             };
         }
     };
-    let outcome =
-        layerfs_api::call_scoped(None, scope.as_ref(), &call.name(), parsed.args, &mut send);
+    let outcome = layerfs_api::call_scoped(
+        None,
+        scope.as_ref(),
+        &call.name(),
+        parsed.args,
+        &mut send,
+        layerfs_api::Client::Cli,
+    );
     if is_term && last_progress_len > 0 {
         let mut err = std::io::stderr().lock();
         let _ = write!(err, "\r{}\r", " ".repeat(last_progress_len));

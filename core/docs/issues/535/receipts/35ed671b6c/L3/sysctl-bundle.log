@@ -1,9 +1,0 @@
-total 3064588
-drwxr-xr-x 2 root root       4096 Nov  3 16:58 .
-drwxr-xr-x 3 root root       4096 Nov  3 16:58 ..
--rw-r--r-- 1 root root        939 Nov  3 16:58 bundle.json
--rwxr-xr-x 1 root root  189991184 Nov  3 16:58 layerfs
--rwxr-xr-x 1 root root  189847552 Nov  3 16:58 layerfs-daemon
--rwxr-xr-x 1 root root   10557648 Nov  3 16:58 layerfs-sandbox-helper
--rw-r--r-- 1 root root 2747719680 Nov  3 16:58 sandbox-image.tar
-user.max_user_namespaces = 0

@@ -2,7 +2,8 @@
 //! Store kind, whether a Sandbox is supported or the fixed reason it is
 //! refused. It encodes what is allowed; phase 5a enabled PostgreSQL
 //! Sandboxes on native (macOS and Linux) and docker, and the G7 live
-//! receipts (`core/docs/issues/535/receipts/g7-live/`) enabled them on the
+//! receipts (archived at af2ad92bce,
+//! `core/docs/issues/535/receipts/g7-live/`) enabled them on the
 //! VM platforms; `control/SUPPORT.json` (rendered by [`support_json`], compared by a
 //! test) and `machine.platforms` follow.
 use crate::options::OptSpec;

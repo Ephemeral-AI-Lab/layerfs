@@ -1,7 +1,8 @@
 //! Uncommitted changes that refuse an Unmount without `discard`.
 //!
 //! A Workspace is dirty when its active generation holds a change a Commit
-//! would keep, a capture is still in flight, or its local base differs from
+//! would keep, a capture is still in flight or folding back after a failed
+//! Commit, or its local base differs from
 //! the history binding (an unpublished conflicted merge). The changed paths
 //! are named from the same indexed windows a capture reads: a changed name is
 //! joined to its parent's path, a changed file to its own, and a base
@@ -73,9 +74,13 @@ impl Service {
         let state = self.job(route, |client, route| client.state(route))?;
         let pending = workspace.pending_conflicts().map_err(Failure::Workspace)?;
         let moved = state.base_root != *binding.effective_root.as_bytes();
+        // A failed Commit's capture being folded back (`consolidating`) holds
+        // changes the active counts no longer show, as Commit's own up-to-date
+        // check knows (#679 review).
         if state.dirty_inodes == 0
             && state.dirty_directory_entries == 0
             && state.captured.is_none()
+            && state.consolidating.is_none()
             && !moved
             && pending.is_none()
         {
@@ -152,6 +157,7 @@ impl Service {
             && modes.is_empty()
             && !truncated
             && state.captured.is_none()
+            && state.consolidating.is_none()
             && !moved
             && pending.is_none()
         {
@@ -201,7 +207,8 @@ impl Service {
             }
         }
         paths.extend(pending.iter().flatten().cloned());
-        truncated |= paths.len() > PATHS;
+        // Paths still in a folding capture are not named from active windows.
+        truncated |= paths.len() > PATHS || state.consolidating.is_some();
         Ok(Some(DirtyReport {
             token,
             paths: paths.into_iter().take(PATHS).collect(),

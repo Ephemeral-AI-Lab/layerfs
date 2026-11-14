@@ -29,6 +29,50 @@ fn history(f: &Fixture, branch: &str, page: i64, at: Option<&str>) -> SdkValue {
     f.call("branch.commits", args)
 }
 #[test]
+fn compact_history_preserves_save_allocations_and_layers_have_no_save_cost() {
+    let f = fixture("saved-allocation-summary");
+    let storage_history = |branch: &str| {
+        f.call(
+            "branch.commits",
+            vec![
+                ("branch", text(branch)),
+                ("pageSize", SdkValue::Int(10)),
+                ("includeStorage", SdkValue::Bool(true)),
+            ],
+        )
+    };
+    for field in ["newCanonical", "newStored", "newMetadata"] {
+        assert_eq!(
+            items(&storage_history("main"))[0].get(field),
+            Some(&SdkValue::Null)
+        );
+    }
+    f.fork("work");
+    f.apply("work", vec![write("/a", "new content\n")]);
+    let saved = storage_history("work");
+    let summary = &items(&saved)[0];
+    let detail = f.call(
+        "branch.get_commit",
+        vec![
+            ("branch", text("work")),
+            ("commit", text(summary.get_text("id").unwrap())),
+        ],
+    );
+    for field in ["newCanonical", "newStored", "newMetadata"] {
+        assert!(summary.get_int(field).is_some());
+        assert_eq!(summary.get(field), detail.get(field));
+    }
+    assert!(summary.get_int("newStored").unwrap() >= summary.get_int("newMetadata").unwrap());
+    f.call("branch.publish", vec![("branch", text("work"))]);
+    for field in ["newCanonical", "newStored", "newMetadata"] {
+        assert_eq!(
+            items(&storage_history("main"))[0].get(field),
+            Some(&SdkValue::Null)
+        );
+    }
+    f.cleanup();
+}
+#[test]
 fn publication_details_keep_source_and_parent_distinct_and_pages_pinned() {
     let f = fixture("saved-publications");
     let init = history(&f, "main", 1, None);

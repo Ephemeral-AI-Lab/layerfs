@@ -171,6 +171,7 @@ impl Held {
         // Darwin inherits the listener's nonblocking flag on accepted sockets.
         socket.set_nonblocking(false).unwrap();
         let mut held = Self { child, socket };
+        held.socket.set_nonblocking(false).unwrap();
         held.socket
             .set_read_timeout(Some(Duration::from_secs(3)))
             .unwrap();
@@ -191,7 +192,7 @@ impl Held {
                 break;
             }
             assert!(Instant::now() < deadline, "child exit deadline");
-            std::thread::yield_now();
+            std::thread::yield_now()
         }
     }
 }
@@ -200,6 +201,113 @@ impl Drop for Held {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+    }
+}
+
+/// The test children of one concurrency case, owned as one group: the wait
+/// carries a single deadline for the whole set, a child that outlives it or
+/// exits unsuccessfully fails the case, and dropping the group while any child
+/// still runs stops it. A lane deadlock therefore fails the case instead of
+/// hanging it or leaving a live child that holds the Store, and the failure
+/// names the child that hung together with what the group wrote to stderr.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+struct Children(Vec<(String, Child)>);
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+impl Children {
+    fn new() -> Self {
+        Self(Vec::new())
+    }
+    fn push(&mut self, what: String, child: Child) {
+        self.0.push((what, child));
+    }
+    /// Waits for every child, `seconds` for the group as a whole; the 60 s
+    /// ceiling stays under the per-invocation test limit. Any child failure or
+    /// timeout stops the entire group (`kill` + `wait`) and attaches every
+    /// child's stderr to the failure panic.
+    fn wait_all(mut self, seconds: u64) {
+        let deadline = Instant::now() + Duration::from_secs(seconds);
+        let mut early_failure = false;
+        let mut late = Vec::new();
+        loop {
+            let mut any_running = false;
+            for (what, child) in self.0.iter_mut() {
+                match child.try_wait().unwrap() {
+                    Some(status) if !status.success() => {
+                        early_failure = true;
+                    }
+                    Some(_) => {}
+                    None => {
+                        any_running = true;
+                        if Instant::now() >= deadline {
+                            late.push(what.clone());
+                        }
+                    }
+                }
+            }
+            if early_failure || !late.is_empty() || !any_running {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        if early_failure || !late.is_empty() {
+            self.stop();
+        }
+        let details = self.collect_details();
+        assert!(
+            late.is_empty(),
+            "the group's deadline passed with {late:?} still running\n{}",
+            details
+                .iter()
+                .map(|(line, _)| line.as_str())
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        assert!(
+            !early_failure && details.iter().all(|(_, ok)| *ok),
+            "opener failed:\n{}",
+            details
+                .into_iter()
+                .map(|(line, _)| line)
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
+    fn collect_details(&mut self) -> Vec<(String, bool)> {
+        let mut details = Vec::new();
+        for (what, child) in std::mem::take(&mut self.0) {
+            let output = child.wait_with_output().unwrap();
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let line = format!("{what}: {}\n{}", output.status, stderr.trim_end());
+            details.push((line, output.status.success()));
+        }
+        details
+    }
+    /// Stops every child and panics with `reason` plus each child's stderr.
+    fn abort(mut self, reason: impl std::fmt::Display) -> ! {
+        self.stop();
+        let details = self
+            .collect_details()
+            .into_iter()
+            .map(|(line, _)| line)
+            .collect::<Vec<_>>();
+        panic!("{reason}\n{}", details.join("\n"));
+    }
+    /// Stops every child of the group, exited or not.
+    fn stop(&mut self) {
+        for (_, child) in self.0.iter_mut() {
+            let _ = child.kill();
+        }
+        for (_, child) in self.0.iter_mut() {
+            let _ = child.wait();
+        }
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+impl Drop for Children {
+    fn drop(&mut self) {
+        self.stop();
     }
 }
 
@@ -241,40 +349,6 @@ fn another_process_admission_precedes_the_single_sqlite_begin() {
     assert_eq!(after.write_transactions - before.write_transactions, 1);
     assert_eq!(after.write_commits - before.write_commits, 1);
     assert_eq!(after.rollbacks, before.rollbacks);
-    drop(original);
-}
-
-#[test]
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-fn another_process_admission_precedes_read_only_connection_open() {
-    let temp = support::Temp::new("wa-open");
-    let path = temp.join("store.sqlite");
-    let original = create(&path);
-    let held = Held::start(&path, &temp.join("s"));
-    let (ready_tx, ready_rx) = mpsc::channel();
-    let (result_tx, result_rx) = mpsc::channel();
-    let opener = std::thread::spawn(move || {
-        ready_tx.send(()).unwrap();
-        let result = SqliteHandles::open_read_only(
-            config(&path),
-            &authority().binding_key,
-            authority().cursor_key,
-        )
-        .map(|handles| handles.profile().clone());
-        result_tx.send(result).unwrap();
-    });
-    ready_rx.recv_timeout(Duration::from_secs(2)).unwrap();
-    let premature = result_rx.recv_timeout(Duration::from_millis(100)).ok();
-    held.release();
-    let outcome = premature
-        .clone()
-        .unwrap_or_else(|| result_rx.recv_timeout(Duration::from_secs(3)).unwrap());
-    opener.join().unwrap();
-    assert!(
-        premature.is_none(),
-        "connection initialization bypassed its lifecycle owner"
-    );
-    assert_eq!(outcome.unwrap().busy_timeout, 0);
     drop(original);
 }
 
@@ -436,7 +510,7 @@ fn queued_writers_outlive_the_old_window_and_all_succeed() {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn a_cross_process_waiter_outlives_the_old_window_and_succeeds() {
     let temp = support::Temp::new("wl");
     let path = temp.join("store.sqlite");
@@ -560,7 +634,7 @@ fn writers_queue_behind_a_held_publication_lane_without_deadlock() {
 }
 
 #[test]
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn a_holder_process_that_exits_hands_the_lock_to_the_waiter() {
     let temp = support::Temp::new("wx");
     let path = temp.join("store.sqlite");
@@ -668,4 +742,95 @@ fn a_thread_reentering_its_own_turn_is_refused_instead_of_deadlocking() {
     );
     // The turn was released: the next call is admitted at once.
     assert!(handles.storage.reserve(reserve()).is_ok());
+}
+
+/// Child half of `three_processes_open_and_reserve_concurrently`: it waits for
+/// the parent's go on the inherited socket name, then opens the Store (which
+/// takes the open-time lane) and makes twenty reservations there.
+#[test]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn concurrent_open_child() {
+    let Some(path) = std::env::var_os("LAYERFS_ADMISSION_OPEN_STORE") else {
+        return;
+    };
+    let mut sock =
+        UnixStream::connect(std::env::var_os("LAYERFS_ADMISSION_OPEN_SOCK").unwrap()).unwrap();
+    sock.set_read_timeout(Some(Duration::from_secs(30)))
+        .unwrap();
+    sock.set_write_timeout(Some(Duration::from_secs(10)))
+        .unwrap();
+    sock.write_all(b"R").unwrap();
+    let mut go = [0u8; 1];
+    sock.read_exact(&mut go).unwrap();
+    let handles = open(Path::new(&path));
+    for _ in 0..20 {
+        handles.storage.reserve(reserve()).unwrap();
+    }
+}
+
+/// Three processes open the same Store at once: the open-time lane and the
+/// transaction lane queue them instead of meeting SQLite's Busy, so every
+/// open and every reservation of all three succeeds (#534, #647).
+#[test]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn three_processes_open_and_reserve_concurrently() {
+    let temp = support::Temp::new("wo");
+    let path = temp.join("store.sqlite");
+    create(&path).seal().unwrap();
+    let sock_path = temp.join("s");
+    let listener = UnixListener::bind(&sock_path).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let exe = std::env::current_exe().unwrap();
+    let mut children = Children::new();
+    for id in 0..3 {
+        let child = Command::new(&exe)
+            .args(["--exact", "concurrent_open_child", "--nocapture"])
+            .env("LAYERFS_ADMISSION_OPEN_STORE", &path)
+            .env("LAYERFS_ADMISSION_OPEN_SOCK", &sock_path)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        children.push(format!("opener-{id}"), child);
+    }
+    let mut sockets = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while sockets.len() < 3 {
+        match listener.accept() {
+            Ok((mut stream, _)) => {
+                stream.set_nonblocking(false).unwrap();
+                // The handshake itself is bounded too: a child that connects
+                // and never writes `R` must fail the case, not wait forever.
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(10)))
+                    .unwrap();
+                stream
+                    .set_write_timeout(Some(Duration::from_secs(10)))
+                    .unwrap();
+                let mut ready = [0u8; 1];
+                if let Err(e) = stream.read_exact(&mut ready) {
+                    children.abort(format!("barrier read: {e}"));
+                }
+                if &ready != b"R" {
+                    children.abort(format!("unexpected barrier byte: {ready:?}"));
+                }
+                sockets.push(stream);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            Err(e) => children.abort(format!("barrier accept: {e}")),
+        }
+    }
+    for mut stream in sockets {
+        if let Err(e) = stream.write_all(b"G") {
+            children.abort(format!("barrier write: {e}"));
+        }
+    }
+    children.wait_all(60);
+    let handles = open(&path);
+    let next = handles.storage.reserve(reserve()).unwrap();
+    assert_eq!(next.first_pack_id, 61);
+    assert_eq!(next.first_ordinal, 61);
 }

@@ -120,8 +120,9 @@ pub fn unanswered(id: &str, daemon: &DaemonRecord, refusal: SdkRefusal) -> SdkRe
 /// (#649): a `Capacity` refusal's notice counts, tagged with the refusal
 /// code it came from. Every other refusal keeps nothing: a legacy EOF, a
 /// malformed record, or a remote refusal collapsed to `{phase}` has no
-/// counts, and inventing zeros would be false.
-fn down_detail(code: &str, detail: SdkValue) -> SdkValue {
+/// counts, and inventing zeros would be false. A worker or local route's
+/// notice carries the same counts without the tag, so `get` tags it here.
+pub(crate) fn down_detail(code: &str, detail: SdkValue) -> SdkValue {
     match code {
         "Capacity" => home::with_field(detail, "code", SdkValue::text("Capacity")),
         _ => SdkValue::Null,
