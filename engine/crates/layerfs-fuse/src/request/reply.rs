@@ -1,5 +1,5 @@
 //! Pinned fuser consumes replies once; send/delivery outcomes are unavailable.
-use super::{accounting::Accounting, terminal};
+use super::{accounting::Accounting, passthrough::Passthrough, terminal};
 use crate::{
     attributes::{refusal, Identity},
     RequestDisposition,
@@ -60,6 +60,7 @@ impl ReadReply {
         operation: KernelReadOperation,
         identity: Identity,
         accounting: Arc<Accounting>,
+        passthrough: Option<Arc<Passthrough>>,
     ) -> RequestDisposition {
         let (reply, input) = match self {
             Self::Data(reply, offset, length) => (reply, ReadDataInput::File { offset, length }),
@@ -67,8 +68,16 @@ impl ReadReply {
             reply => {
                 return reply
                     .attributes(
-                        services, fence, mount, request, protected, handle, operation, identity,
+                        services,
+                        fence,
+                        mount,
+                        request,
+                        protected,
+                        handle,
+                        operation,
+                        identity,
                         accounting,
+                        passthrough,
                     )
                     .await
             }
@@ -113,7 +122,24 @@ impl ReadReply {
         operation: KernelReadOperation,
         identity: Identity,
         accounting: Arc<Accounting>,
+        passthrough: Option<Arc<Passthrough>>,
     ) -> RequestDisposition {
+        // Prototype (experiment `passthrough`): a read-only OPEN of a regular
+        // file asks, before it is decided, whether its whole content is a
+        // complete decoded cached file.
+        let cached = match (&self, &operation, &passthrough) {
+            (
+                Self::Open(_, false),
+                KernelReadOperation::Open {
+                    writable: false, ..
+                },
+                Some(_),
+            ) => layerfs_mount_ports::operations::unchanged_open(&services, mount, protected)
+                .await
+                .and_then(|root| layerfs_mount_ports::decoded::get()?.complete(root))
+                .map(|(file, _)| file),
+            _ => None,
+        };
         let answer =
             match KernelRead::prepare(services, mount, request, protected, handle, operation).await
             {
@@ -154,7 +180,12 @@ impl ReadReply {
                         std::io::Error::other("successful kernel open has no handle"),
                     ))));
                 };
-                reply.opened(FileHandle(handle), open_flags());
+                match passthrough.filter(|_| !directory) {
+                    Some(passthrough) => {
+                        passthrough.open(reply, protected, handle, open_flags(), cached.as_deref())
+                    }
+                    None => reply.opened(FileHandle(handle), open_flags()),
+                }
             }
             reply => {
                 let attributes = match identity.attributes(&value.stat) {

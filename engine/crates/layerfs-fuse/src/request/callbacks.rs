@@ -186,6 +186,7 @@ impl Filesystem for KernelFilesystem {
         reply: ReplyEmpty,
     ) {
         let _timed = self.accounting.timed(Opcode::Release);
+        self.passthrough.release(handle.0);
         let Some((permit, reply)) =
             self.receive_reply(Opcode::Release, 0, reply, ReplyEmpty::error)
         else {

@@ -1,6 +1,7 @@
 //! Per-mount callback state; the request worker pool remains daemon-wide.
 use super::accounting::{Accounting, Disposal, Opcode};
 use super::failure::{failed, KernelInput};
+use super::passthrough::Passthrough;
 use super::reply::ReadReply;
 use crate::{
     attributes::Identity, mount::Negotiation, DispatchError, MountRequests, RequestFuture,
@@ -22,6 +23,8 @@ pub struct KernelFilesystem {
     pub(super) identity: Identity,
     pub(super) negotiation: Arc<OnceLock<Negotiation>>,
     pub(super) accounting: Arc<Accounting>,
+    /// Prototype (experiment `passthrough`): this mount's open counts.
+    pub(super) passthrough: Arc<Passthrough>,
 }
 impl KernelFilesystem {
     pub fn new(
@@ -39,6 +42,7 @@ impl KernelFilesystem {
             identity,
             negotiation: Arc::new(OnceLock::new()),
             accounting: Arc::new(Accounting::default()),
+            passthrough: Arc::default(),
         })
     }
     pub fn negotiation(&self) -> Arc<OnceLock<Negotiation>> {
@@ -162,6 +166,11 @@ impl KernelFilesystem {
         let mount = self.queue.identity();
         let identity = self.identity;
         let accounting = self.accounting.clone();
+        let passthrough = self
+            .negotiation
+            .get()
+            .is_some_and(|value| value.selected.contains(fuser::InitFlags::FUSE_PASSTHROUGH))
+            .then(|| self.passthrough.clone());
         self.serve(
             permit,
             Box::pin(async move {
@@ -185,8 +194,16 @@ impl KernelFilesystem {
                 };
                 reply
                     .serve(
-                        services, fence, mount, request, protected, handle, operation, identity,
+                        services,
+                        fence,
+                        mount,
+                        request,
+                        protected,
+                        handle,
+                        operation,
+                        identity,
                         accounting,
+                        passthrough,
                     )
                     .await
             }),
