@@ -9,7 +9,7 @@ implementation must do. **Authority**: [#511](https://github.com/Ephemeral-AI-La
 
 | Id | Decision | Result (recommended default) | Where it lives |
 |---|---|---|---|
-| R1 | How PostgreSQL replaces the Store during `store.compact` | **E** — two `ALTER SCHEMA RENAME` in one transaction (default); **A'** only if a read-available SLO is required | §1.3 R1, §7.3, S11 |
+| R1 | How PostgreSQL replaces the Store during `store.compact` | **Three-table swap** in one transaction (default; replaces the earlier whole-schema rename); **A'** only if a read-available SLO is required | §1.3 R1, §7.3, S11 |
 | Q1 | May a Branch name be reused after `branch.remove` | **A** — no reuse: terminal tombstone, `NameRetired`, no migration | §1.2 Q1, C6 |
 | C3 | Signature of a per-object delete | **`delete(id, generation)`** — the intent is bound to `(ObjectId, G)` | §5 C3 |
 
@@ -77,8 +77,9 @@ named for each one in §4.
 |---|---|---|---|---|---|
 | L1 | Atomic switch; retained data complete | ✓ transaction | ✓ one `UPDATE` | ✓ transaction | ✓ |
 | L1 | Reader/session fence (C8) present | required | required | required | required |
-| L2 | Lock held only for the switch, not the copy | ✓ | ✓ | per-table | ✓ |
+| L2 | Lock held only for the switch, not the copy | ✗ the copy runs inside the lock | ✓ one `UPDATE` | per-table | ✓ |
 | L3 | Reads usable during compact | ✗ window | ✓ | ✗ | ✓ |
+| — | *(the L2/L3 failures of the three-table swap are one fact: the copy runs inside `ACCESS EXCLUSIVE`, which is exactly the window S11 measures; A' wins both and pays L4 — a pointer that must be recovered)* | | | | |
 | L4 | Recoverable without a new state machine | ✓ | pointer must be recovered | ✓ | triggers to maintain |
 | L4 | Understandable and maintainable | ✓ | 3 moving parts | N tables | triggers |
 
