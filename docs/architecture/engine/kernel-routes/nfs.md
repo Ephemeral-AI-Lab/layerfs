@@ -177,7 +177,7 @@ the export.
 
 | Bound | Value | Over the bound | Source |
 | --- | --- | --- | --- |
-| `HELD` | 65,536 slotted companion entries | Reclaim orphan slotted companions; if still at the bound, CREATE answers `NFS3ERR_NOSPC`, increments `names_refused` and logs at most once per 60 s per export | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
+| `HELD` | 65,536 slotted companion entries | `Companions::admits` decides the bound in one place, before anything is committed: CREATE, and a WRITE, SETATTR or RENAME that needs a new slot, first reclaim the orphan slotted companions outside the companion lock, once, and then answer the whole operation `NFS3ERR_NOSPC` with the body, its length and its name as they were (CREATE also increments `names_refused` and logs at most once per 60 s per export) | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 | `FILE_BYTES` | 1 MiB per companion | WRITE / SETATTR `NFS3ERR_FBIG` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
 | `RESIDENT_BYTES` | 32 MiB of companion bodies in all: a body kept as written at its length, a decoded one as `Image::cost` | Spill the least recently touched bodies, decoded ones included, to `companion_spill_dir` (`<mounts>/.appledouble/<namespace>/<serial>`); host disk I/O errors map to `NFS3ERR_NOSPC` (`ENOSPC`/`EDQUOT`), `NFS3ERR_FBIG` (`EFBIG`), `NFS3ERR_ACCES` (`EACCES`), `NFS3ERR_PERM` (`EPERM`), `NFS3ERR_ROFS` (`EROFS`) or `NFS3ERR_IO` | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs), [`apple_double_spill.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_spill.rs), [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 | `DECODED_ENTRY_BYTES` | 128 KiB counted for one decoded companion | A whole image costing more keeps its bytes as written and still takes no `HELD` slot | [`apple_double.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double.rs) |
@@ -195,6 +195,13 @@ writes, resource forks, other layouts and unknown-main companions stay as
 written bytes and occupy a slot. `companion_rename` re-classifies under the
 destination so moving onto an unknown main name takes a slot (a spilled body
 keeps its prior class).
+
+`HELD` is the admission limit of this export-local shim, not a Workspace or
+Sandbox capacity: the companions live for one mount, are deleted at release and
+never reach the Workspace, the SQLite overlay or a Commit (owner decision,
+2026-11-14, option C, a scoped waiver). Option A, a per-export SQLite index, is
+deferred until `NFS3ERR_NOSPC` shows up in real use; it would add a `rusqlite`
+dependency edge to `layerfs-nfs`, which the workspace already pins.
 
 `Table::names` and `Table::aliases` index each serial's names so unlink,
 `entry_taken` (when `nlink <= 1`), `renamed` (keeping an overwritten recalled

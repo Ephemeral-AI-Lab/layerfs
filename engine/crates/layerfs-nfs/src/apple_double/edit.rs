@@ -18,7 +18,9 @@
 //! spilled body: each operation opens its file by path and closes it again.
 use super::{edited_len, record, Body, Companions, Decoded, DECODED_ENTRY_BYTES, FILE_BYTES};
 use crate::{
-    apple_double_spill::{create_spilled, io_status, spill_path, touch, unlink_paths, Edit, Room},
+    apple_double_spill::{
+        create_spilled, io_status, spill_path, touch, unlink_paths, Edit, Edited, Room,
+    },
     attributes::Status,
     change::{Sattr, Tickets, Wcc},
     kernel::Kernel,
@@ -173,10 +175,34 @@ impl Kernel {
         };
         // Held to the end: no other edit of this companion runs meanwhile.
         let _editing = gate.lock().unwrap_or_else(|poison| poison.into_inner());
+        match self.apply_edit(serial, &edit)? {
+            Edited::Done(stat) => Ok(stat),
+            Edited::NoSlot => {
+                // A body that takes a slot of the index bound has none:
+                // reclaim the companions no name reaches any more, once,
+                // outside the companion lock, and apply the same edit again.
+                // A bound that still has no room refuses the whole edit, with
+                // the body, its length and its name as they were.
+                if self.reclaim_orphans() == 0 {
+                    return Err(Status::NoSpc);
+                }
+                match self.apply_edit(serial, &edit)? {
+                    Edited::Done(stat) => Ok(stat),
+                    Edited::NoSlot => Err(Status::NoSpc),
+                }
+            }
+        }
+    }
+    /// Applies `edit` to `serial` once: in the resident body while the budget
+    /// holds it, else in its spilled file. It answers that a slot of the index
+    /// bound is missing rather than changing anything, so the caller can make
+    /// room and try again.
+    fn apply_edit(&self, serial: u64, edit: &Edit<'_>) -> Result<Edited, Status> {
         let target = edit.target_len();
         loop {
-            match self.edit_resident(serial, target, &edit)? {
-                Room::Resident(stat) => return Ok(stat),
+            match self.edit_resident(serial, target, edit)? {
+                Room::Resident(stat) => return Ok(Edited::Done(stat)),
+                Room::NoSlot => return Ok(Edited::NoSlot),
                 Room::Spilled => break,
                 Room::Grow(need) => {
                     // No other call changes this body, so a round that finds
@@ -188,10 +214,16 @@ impl Kernel {
             }
         }
         // The body still does not fit resident memory: write it out and edit
-        // its file, which needs no body budget.
+        // its file, which needs no body budget. A body edited on its file is no
+        // longer known to be a whole image, so it takes a slot of the index
+        // bound: decide that before the file is written, and leave the body,
+        // its file and its name as they were when the bound has none.
+        if !self.companions().admits(Some(serial), true) {
+            return Ok(Edited::NoSlot);
+        }
         self.spill_gated(serial, target)?;
         edit.disk(&self.spill_file(serial, true)?)?;
-        self.record_edit(serial, &edit)
+        self.record_edit(serial, edit).map(Edited::Done)
     }
     /// Applies `edit` to `serial`'s body in memory while the budget holds it
     /// (a decoded body is encoded first), recording its length, recency and
@@ -250,12 +282,26 @@ impl Kernel {
                 return Ok(Room::Spilled);
             }
         };
+        // A companion holding no slot while the bound is full may take one with
+        // this edit, and only the edited body says whether it does: its bytes
+        // are kept when that is the case, so a refusal puts them back exactly.
+        let restore = (!file.slotted() && !companions.admits(Some(serial), true))
+            .then(|| (bytes.clone(), file.whole, file.len));
         edit.memory(&mut bytes);
         file.body = Body::Resident(bytes);
         record(edit, &mut file);
+        companions.classify(&mut file);
+        if let Some((bytes, whole, len)) = restore {
+            if !companions.admits(Some(serial), file.slotted()) {
+                file.body = Body::Resident(bytes);
+                file.whole = whole;
+                file.len = len;
+                companions.attach(serial, file);
+                return Ok(Room::NoSlot);
+            }
+        }
         touch(&mut file.metadata);
         file.used = tick;
-        companions.classify(&mut file);
         let stat = Companions::stat(serial, &file);
         companions.attach(serial, file);
         Ok(Room::Resident(stat))

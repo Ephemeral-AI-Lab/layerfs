@@ -412,6 +412,14 @@ impl Companions {
             .find(|(_, serial)| !skip.contains(serial))
             .map(|(_, serial)| *serial)
     }
+    /// Whether the index takes a companion that takes a slot of the bound: the
+    /// one place the bound is decided. A companion already holding a slot
+    /// keeps it, and a body that takes no slot is always admitted.
+    fn admits(&self, serial: Option<u64>, slotted: bool) -> bool {
+        !slotted
+            || serial.is_some_and(|serial| self.slots.contains(&serial))
+            || self.slots.len() < self.held_limit
+    }
     fn holding(&self) -> Holding {
         Holding {
             held: self.files.len(),
@@ -470,11 +478,12 @@ impl Kernel {
         let main = name.strip_prefix(b"._").filter(|main| !main.is_empty())?;
         self.table().by_name.get(&(parent, main.to_vec())).copied()
     }
-    /// The companions no name reaches any more: one whose main inode holds no
-    /// name in the kernel table, and one whose main file the export never
-    /// observed and does not know now. Taken under the kernel table lock and,
-    /// inside it, the companion lock, so nothing here copies the namespace;
-    /// the caller drops them by serial under the companion lock again.
+    /// The companion slots no name reaches any more: one whose main inode
+    /// holds no name in the kernel table, and one whose main file the export
+    /// never observed and does not know now. Taken under the kernel table lock
+    /// and, inside it, the companion lock, so nothing here copies the
+    /// namespace; the caller drops them by serial under the companion lock
+    /// again.
     fn orphans(&self) -> Vec<(u64, Option<u64>)> {
         let table = self.table();
         let companions = self.companions();
@@ -494,6 +503,31 @@ impl Kernel {
                 (!live).then_some((*serial, file.inode))
             })
             .collect()
+    }
+    /// Drops the companion slots no name reaches any more and answers how many
+    /// it dropped. Takes the kernel table lock and, inside it, the companion
+    /// lock; the files it retires are unlinked afterwards, outside both. Never
+    /// call it under the companion lock.
+    fn reclaim_orphans(&self) -> usize {
+        let orphans = self.orphans();
+        let (reclaimed, spilled) = {
+            let mut companions = self.companions();
+            let mut spilled = Vec::new();
+            let mut reclaimed = 0;
+            for (serial, inode) in orphans {
+                let still_orphan = companions
+                    .files
+                    .get(&serial)
+                    .is_some_and(|file| file.inode == inode && file.slotted());
+                if still_orphan {
+                    reclaimed += 1;
+                    spilled.extend(companions.take_serial(serial));
+                }
+            }
+            (reclaimed, spilled)
+        };
+        unlink_paths(spilled);
+        reclaimed
     }
     /// GETATTR of a companion serial.
     pub(crate) fn companion_stat(&self, serial: u64) -> Result<ViewStat, Status> {
@@ -560,12 +594,10 @@ impl Kernel {
             return self.companion_open(serial, how, directory, companions, tickets);
         }
         // At the index bound, reclaim the companions no name reaches any more
-        // first: found under the kernel table and the companion index, one
-        // entry at a time, so nothing here copies the namespace.
-        let mut reclaimed = Vec::new();
-        if companions.slots.len() >= companions.held_limit {
+        // first, outside this lock.
+        if !companions.admits(None, true) {
             drop(companions);
-            let orphans = self.orphans();
+            self.reclaim_orphans();
             // The reclaim held no companion lock, so another CREATE of this
             // name may have inserted it meanwhile and the main file may have
             // changed: both are read again, and the name is inserted under the
@@ -575,17 +607,8 @@ impl Kernel {
             if let Some(serial) = companions.resolve(&named, main) {
                 return self.companion_open(serial, how, directory, companions, tickets);
             }
-            for (serial, inode) in orphans {
-                let still_orphan = companions
-                    .files
-                    .get(&serial)
-                    .is_some_and(|file| file.inode == inode && file.slotted());
-                if still_orphan {
-                    reclaimed.extend(companions.take_serial(serial));
-                }
-            }
         }
-        if companions.slots.len() >= companions.held_limit {
+        if !companions.admits(None, true) {
             let held = companions.slots.len();
             let limit = companions.held_limit;
             let log = companions
@@ -596,7 +619,6 @@ impl Kernel {
                 companions.last_refusal_log = Some(Instant::now());
             }
             drop(companions);
-            unlink_paths(reclaimed);
             let refused = self.names_refused.fetch_add(1, Ordering::Relaxed) + 1;
             if let Some(namespace) = namespace {
                 eprintln!(
@@ -629,7 +651,6 @@ impl Kernel {
         companions.index(serial, &file);
         companions.attach(serial, file);
         drop(companions);
-        unlink_paths(reclaimed);
         self.names_detached.fetch_add(1, Ordering::Relaxed);
         Ok((stat, directory))
     }

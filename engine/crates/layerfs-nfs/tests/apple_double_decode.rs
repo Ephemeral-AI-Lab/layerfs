@@ -412,6 +412,66 @@ fn a_resource_fork_keeps_the_stored_as_written_fallback() {
 }
 
 #[test]
+fn a_write_that_takes_the_last_slot_is_refused_by_the_bound() {
+    let base = temp("write-bound");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    // Two slots, reached through WRITE and not through CREATE: each companion
+    // is created as a whole image, which takes none, and then broken by a write
+    // that leaves it not whole, which takes one.
+    rig.companions_held = 2;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    let mut images = Vec::new();
+    for i in 0..3 {
+        c.touch(&root, format!("m{i}").as_bytes(), 0o644).unwrap();
+        let ad = c
+            .touch(&root, format!("._m{i}").as_bytes(), 0o644)
+            .unwrap();
+        let whole = image(
+            [i as u8 + 1; 32],
+            &[(b"user.value", pattern(70 + i, 512 + i as usize))],
+        );
+        c.write(&ad.handle, 0, &whole).unwrap();
+        assert_eq!(c.read_all(&ad.handle, 64 * 1024), whole);
+        images.push((ad.handle, whole));
+    }
+    assert_eq!(server.held().companions, 3);
+    assert_eq!(server.held().companions_slotted, 0, "no companion takes a slot");
+    // Two writes that break an image take the two slots.
+    for i in 0..2 {
+        c.write(&images[i].0, 24, b"EDIT").unwrap();
+        assert_eq!(server.held().companions_slotted, i + 1);
+    }
+    // The third would take one more, and the bound has none: the whole write is
+    // refused, and no companion loses a byte.
+    assert_eq!(c.write(&images[2].0, 24, b"EDIT").map(|_| ()), Err(NOSPC));
+    assert_eq!(server.held().companions, 3, "no companion was dropped");
+    assert_eq!(server.held().companions_slotted, 2);
+    for (handle, whole) in &images {
+        assert_eq!(c.getattr(handle).unwrap().size as usize, whole.len());
+    }
+    assert_eq!(
+        c.read_all(&images[2].0, 64 * 1024),
+        images[2].1,
+        "the refused companion still holds its image"
+    );
+    for i in 0..2 {
+        let mut broken = images[i].1.clone();
+        broken[24..28].copy_from_slice(b"EDIT");
+        assert_eq!(c.read_all(&images[i].0, 64 * 1024), broken);
+    }
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn whole_images_take_no_slot_of_the_index_bound() {
     let base = temp("slots");
     let tree = base.join("tree");
