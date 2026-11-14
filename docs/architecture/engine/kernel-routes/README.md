@@ -85,7 +85,7 @@ stops: a stopped mount starts nothing new and still gives back what it holds.
 
 | Type or module | Kernel requests | Source |
 | --- | --- | --- |
-| `KernelRead` | LOOKUP, GETATTR, OPEN, OPENDIR; holds nothing after its visits (a LOOKUP also carries the directory it named) | [`lookup.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/lookup.rs) |
+| `KernelRead` | LOOKUP, GETATTR, OPEN, OPENDIR; holds nothing after its visits (a LOOKUP also carries the directory it named, and a refused LOOKUP the directory row its own job read) | [`lookup.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/lookup.rs) |
 | `KernelData` | READ, READLINK | [`read.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/read.rs) |
 | `KernelMutation` | Every changing request; holds one `Publication` ticket until `replied` | [`mutation.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/mutation.rs) |
 | `DirectoryStream` | READDIR; only accepted names become valid offsets | [`directory.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/directory.rs) |
