@@ -16,6 +16,7 @@ mod spy;
 #[path = "support/tree.rs"]
 mod tree;
 use client::{Client, Set, STALE};
+use layerfs_nfs::apple_double::SERIALS;
 use layerfs_nfs::apple_double_codec::{Attribute, Image};
 use std::{
     fs,
@@ -49,6 +50,73 @@ fn image(finder: [u8; 32], attrs: &[(&[u8], Vec<u8>)]) -> Vec<u8> {
     Image::new(finder, 0, attrs)
         .expect("an entry can describe these attributes")
         .encode()
+}
+
+/// The companions whose bodies the spill directory holds, by serial.
+fn spill_serials(dir: &Path) -> Vec<u64> {
+    let mut serials: Vec<u64> = fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter_map(|entry| entry.file_name().to_str()?.parse().ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    serials.sort_unstable();
+    serials
+}
+
+#[test]
+fn eviction_follows_the_order_of_use_not_the_shape_of_the_index() {
+    const HELD: usize = 64;
+    let base = temp("use-order");
+    let tree = base.join("tree");
+    source(&tree);
+    let spill = base.join("spill");
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    rig.companion_spill_dir = Some(spill.clone());
+    // Room for exactly 64 bodies of 16 bytes, so every body after the 64th
+    // takes the room of one other.
+    rig.companion_resident_bytes = 16 * HELD;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    let body = pattern(50, 16);
+    let mut handles = Vec::with_capacity(HELD);
+    for n in 0..HELD {
+        c.touch(&root, format!("c{n}").as_bytes(), 0o644).unwrap();
+        let ad = c.touch(&root, format!("._c{n}").as_bytes(), 0o644).unwrap();
+        c.write(&ad.handle, 0, &body).unwrap();
+        handles.push(ad.handle);
+    }
+    assert_eq!(server.held().companion_bytes, 16 * HELD);
+    assert!(spill_serials(&spill).is_empty(), "nothing is on disk yet");
+    // Three bodies are read again, so they are the most recently used ones.
+    for n in [0, 1, 2] {
+        assert_eq!(c.read_all(&handles[n], 4096), body);
+    }
+    // Eight more bodies: the eight least recently used ones leave memory, in
+    // that order, and the three read again stay.
+    for n in HELD..HELD + 8 {
+        c.touch(&root, format!("c{n}").as_bytes(), 0o644).unwrap();
+        let ad = c.touch(&root, format!("._c{n}").as_bytes(), 0o644).unwrap();
+        c.write(&ad.handle, 0, &body).unwrap();
+    }
+    let expected: Vec<u64> = (3..11).map(|n| SERIALS + n).collect();
+    assert_eq!(spill_serials(&spill), expected);
+    assert_eq!(server.held().companion_bytes, 16 * HELD);
+    assert_eq!(server.held().companions, HELD + 8);
+    // The evicted bodies still hold their bytes, and the kept ones never left
+    // memory.
+    for n in [3, 7, 10, 0, 1, 2] {
+        assert_eq!(c.read_all(&handles[n], 4096), body, "companion {n}");
+    }
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
 }
 
 #[test]

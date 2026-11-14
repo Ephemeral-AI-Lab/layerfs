@@ -196,8 +196,11 @@ together, spill outside the companion lock to
 rename to `<serial>` only if unchanged (`used` tick); spilled bodies are opened
 by path per `pread`/`pwrite`/`set_len` and never held open. One edit per
 companion runs under `Companion::editing` ([`edit.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/edit.rs)),
-recording length and bytes together and spilling its own body after bounded
-eviction rounds (`SPILL_ROUNDS`) rather than failing with `NFS3ERR_IO`.
+recording length and bytes together and spilling its own body rather than
+failing with `NFS3ERR_IO`. Eviction follows `Companions::by_use`, the
+`(used tick, serial)` order kept on attach, detach and every use: the victim is
+the first entry (O(log n) per round, no walk of the index), and the rounds end
+when no companion holding memory is left.
 `ExportServing::reclaim` and release delete `<mounts>/.appledouble`.
 
 ## Mount (`mount.rs`, daemon `export.rs`)

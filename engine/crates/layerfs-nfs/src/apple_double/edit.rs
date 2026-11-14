@@ -29,12 +29,6 @@ use std::{
     os::unix::fs::FileExt,
 };
 
-/// Rounds one edit takes to make room in the resident budget before it spills
-/// its own body instead. Each round either spills the least recently touched
-/// body or finds no body to spill; another call's spill can take the room a
-/// round just made, which is why a round is retried at all.
-const SPILL_ROUNDS: usize = 4;
-
 impl Kernel {
     /// READ of a companion, at most `count` bytes from `offset`, appended to
     /// `out`; `eof` when the reply reaches the companion's end.
@@ -134,9 +128,11 @@ impl Kernel {
             self.edit_companion(serial, Edit::Size(size as usize))?;
         }
         let mut companions = self.companions();
-        let tick = companions.tick();
+        if companions.files.get(&serial).is_none() {
+            return Err(Status::Stale);
+        }
+        companions.use_serial(serial);
         let file = companions.files.get_mut(&serial).ok_or(Status::Stale)?;
-        file.used = tick;
         if let Some(mode) = sattr.mode {
             file.metadata.mode = mode & 0o777;
         }
@@ -169,7 +165,7 @@ impl Kernel {
         // Held to the end: no other edit of this companion runs meanwhile.
         let _editing = gate.lock().unwrap_or_else(|poison| poison.into_inner());
         let target = edit.target_len();
-        for _ in 0..SPILL_ROUNDS {
+        loop {
             match self.edit_resident(serial, target, &edit)? {
                 Room::Resident(stat) => return Ok(stat),
                 Room::Spilled => break,
@@ -261,22 +257,17 @@ impl Kernel {
         companions.attach(serial, file);
         Ok(stat)
     }
-    /// Spills the least recently used resident companions to disk (outside the
-    /// companion lock) until adding `need` bytes stays within `resident_budget`.
-    /// Returns `true` if `need` fits in resident memory afterwards. A victim
-    /// another call changed meanwhile is picked again on the next round; the
-    /// rounds are bounded by the index, and the caller then writes out its own
-    /// body, which needs no budget at all.
+    /// Spills the least recently used bodies to disk (outside the companion
+    /// lock) until adding `need` bytes stays within `resident_budget`. Returns
+    /// `true` if `need` fits in resident memory afterwards. Each round takes
+    /// the oldest entry of the eviction order, so a round costs one step into
+    /// it rather than a walk of every companion, and the rounds end when no
+    /// companion holding memory is left: a victim another call changed
+    /// meanwhile has moved to the newest end of the order, so it is not picked
+    /// twice, and the caller then writes out its own body, which needs no
+    /// budget at all.
     fn spill_for(&self, target: u64, need: usize) -> Result<bool, Status> {
-        let mut rounds = {
-            let companions = self.companions();
-            if companions.resident_bytes + need <= companions.resident_budget {
-                return Ok(true);
-            }
-            companions.files.len()
-        };
-        while rounds > 0 {
-            rounds -= 1;
+        loop {
             let victim = {
                 let companions = self.companions();
                 if companions.resident_bytes + need <= companions.resident_budget {
@@ -287,11 +278,8 @@ impl Kernel {
             let Some(victim) = victim else {
                 return Ok(false);
             };
-            // A victim another call changed meanwhile leaves the next round to
-            // pick again; only a disk failure ends the loop.
             let _ = self.spill_one(victim, None)?;
         }
-        Ok(false)
     }
     /// Writes `serial`'s body out to the spill directory and switches it to
     /// that file, keeping at least `keep` bytes (all of them when `None`),

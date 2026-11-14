@@ -42,7 +42,7 @@ use crate::{
 use layerfs_content::{filesystem::attributes::PortableMetadata, object::inode_leaf::InodeKind};
 use layerfs_workspace::ViewStat;
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     fs,
     path::{Path, PathBuf},
     sync::{atomic::Ordering, Arc, Mutex},
@@ -117,6 +117,10 @@ pub(crate) struct Companions {
     tick: u64,
     files: HashMap<u64, Companion>,
     names: HashMap<Named, u64>,
+    /// Every companion holding memory, oldest use first: (used tick, serial).
+    /// One tick is one touch and no serial takes two ticks, so the keys are
+    /// unique and the oldest entry is the first one.
+    by_use: BTreeSet<(u64, u64)>,
     resident_bytes: usize,
     decoded: usize,
     spill_dir: Option<PathBuf>,
@@ -129,6 +133,7 @@ impl Default for Companions {
             tick: 0,
             files: HashMap::new(),
             names: HashMap::new(),
+            by_use: BTreeSet::new(),
             resident_bytes: 0,
             decoded: 0,
             spill_dir: None,
@@ -141,10 +146,22 @@ impl Companions {
         self.tick += 1;
         self.tick
     }
+    /// Marks `serial` as used now, which is the order eviction follows. Only a
+    /// companion holding memory is in the order: a spilled body has nothing to
+    /// give back.
     fn use_serial(&mut self, serial: u64) {
         let tick = self.tick();
-        if let Some(file) = self.files.get_mut(&serial) {
-            file.used = tick;
+        self.set_used(serial, tick);
+    }
+    /// Moves `serial`'s index entry to `used`.
+    fn set_used(&mut self, serial: u64, used: u64) {
+        let Some(file) = self.files.get_mut(&serial) else {
+            return;
+        };
+        let old = std::mem::replace(&mut file.used, used);
+        self.by_use.remove(&(old, serial));
+        if file.resident_cost() > 0 {
+            self.by_use.insert((used, serial));
         }
     }
     fn stat(serial: u64, file: &Companion) -> ViewStat {
@@ -157,8 +174,11 @@ impl Companions {
             subdirs: 0,
         }
     }
-    /// Adds `file` to the index and to the byte counts.
+    /// Adds `file` to the index, the byte counts and the eviction order.
     fn attach(&mut self, serial: u64, file: Companion) {
+        if file.resident_cost() > 0 {
+            self.by_use.insert((file.used, serial));
+        }
         self.resident_bytes += file.resident_cost();
         self.decoded += usize::from(matches!(file.body, Body::Decoded(_)));
         self.files.insert(serial, file);
@@ -167,6 +187,7 @@ impl Companions {
     /// the caller to unindex.
     fn detach(&mut self, serial: u64) -> Option<Companion> {
         let file = self.files.remove(&serial)?;
+        self.by_use.remove(&(file.used, serial));
         self.resident_bytes -= file.resident_cost();
         self.decoded -= usize::from(matches!(file.body, Body::Decoded(_)));
         Some(file)
@@ -261,12 +282,12 @@ impl Companions {
     }
     /// The least recently used companion holding memory, a body kept as
     /// written or a decoded one: the budget counts both, so both are evicted.
+    /// One step into the eviction order, not a walk of every companion.
     fn oldest_resident(&self, skip: Option<u64>) -> Option<u64> {
-        self.files
+        self.by_use
             .iter()
-            .filter(|(serial, file)| Some(**serial) != skip && file.resident_cost() > 0)
-            .min_by_key(|(_, file)| file.used)
-            .map(|(serial, _)| *serial)
+            .find(|(_, serial)| Some(*serial) != skip)
+            .map(|(_, serial)| *serial)
     }
     fn holding(&self) -> Holding {
         Holding {
