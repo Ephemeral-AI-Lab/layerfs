@@ -200,17 +200,25 @@ fn native_force_stop_refused_before_any_signal_leaves_no_uncertain_op() {
     std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
     home::open(&home).unwrap();
     // A started Sandbox whose runtime record is missing: the stop is refused
-    // before anything is signalled, so nothing about it is uncertain.
-    write_record(
-        &paths::sandbox_record(&home, "lost"),
-        &SdkValue::map([
-            ("name", t("lost")),
-            ("id", t("lost")),
+    // before anything is signalled, so nothing about it is uncertain, and the
+    // stop goes on to the next Sandbox (one never started, so nothing runs).
+    for (name, id) in [("a-lost", Some("a-lost")), ("b-idle", None)] {
+        let mut fields = vec![
+            ("name", t(name)),
             ("machine", t("native")),
             ("project", t("shop/app")),
-        ]),
-    )
-    .unwrap();
+        ];
+        if let Some(id) = id {
+            fields.push(("id", t(id)));
+        }
+        let record = SdkValue::Map(
+            fields
+                .into_iter()
+                .map(|(field, value)| (field.to_owned(), value))
+                .collect(),
+        );
+        write_record(&paths::sandbox_record(&home, name), &record).unwrap();
+    }
     let refused = call(
         &home,
         "machine.stop",
@@ -218,6 +226,14 @@ fn native_force_stop_refused_before_any_signal_leaves_no_uncertain_op() {
     )
     .unwrap_err();
     assert_eq!(refused.code, "Unavailable", "{refused:?}");
+    assert_eq!(
+        refused.detail.get("refused_sandboxes"),
+        Some(&SdkValue::List(vec![t("a-lost")]))
+    );
+    assert_eq!(
+        refused.detail.get("stopped_sandboxes"),
+        Some(&SdkValue::List(vec![t("b-idle")]))
+    );
     let op = read_record(&paths::machine_record(&home, "native"))
         .unwrap()
         .and_then(|record| record.get("op").cloned());
@@ -225,7 +241,7 @@ fn native_force_stop_refused_before_any_signal_leaves_no_uncertain_op() {
         op.is_none(),
         "a refusal before any signal left an op on native: {op:?}"
     );
-    let sandbox = read_record(&paths::sandbox_record(&home, "lost"))
+    let sandbox = read_record(&paths::sandbox_record(&home, "a-lost"))
         .unwrap()
         .unwrap();
     for field in ["machine_stopped", "machine_stop_unknown"] {

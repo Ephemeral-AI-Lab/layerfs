@@ -1,6 +1,7 @@
 //! Connection custody at the last Session close, including quarantined owners.
 use super::connection::State;
 use crate::backend::sqlite::lane::writer_admission::Writer;
+use rusqlite::config::DbConfig;
 use rusqlite::Connection;
 use std::ops::Deref;
 
@@ -38,28 +39,37 @@ impl Drop for State {
         if self.connection.is_closed() {
             return;
         }
-        // An uncertain transaction already owns the lane. Taking it again
-        // through an independent directory descriptor would deadlock.
         let writer = match (self.writer_hold.take(), &self.close_lane) {
+            // An uncertain transaction already owns the lane. Taking it again
+            // through an independent directory descriptor would deadlock.
             (Some(writer), _) => Some(writer),
             // A read-only or diagnostic connection cannot checkpoint or remove
-            // the WAL and SHM files, so its close takes no lane: it must not
-            // wait behind a writer another session keeps after an uncertain
-            // write.
+            // the WAL and SHM files, so its close takes no lane.
             (None, None) => None,
-            (None, Some(path)) => match Writer::acquire(path) {
-                Ok(writer) => Some(writer),
-                Err(_) => {
-                    // Drop cannot report a cancelled/failed admission. Retain
-                    // the SQLite connection until process exit instead of
-                    // attempting unadmitted WAL teardown or retrying the wait.
-                    std::mem::forget(self.connection.take());
-                    return;
+            // A writable close makes one non-blocking attempt: it never waits,
+            // not even behind a writer another session keeps after an
+            // uncertain write. Without the lane it closes with SQLite's
+            // checkpoint-on-close turned off, so it takes no exclusive lock
+            // and leaves the WAL and SHM files for the lane's next holder.
+            (None, Some(path)) => match Writer::try_acquire(path) {
+                Ok(Some(writer)) => Some(writer),
+                Ok(None) | Err(_) => {
+                    let quiet = self
+                        .connection
+                        .set_db_config(DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, true);
+                    if quiet.is_err() {
+                        // Drop cannot report it: retain the connection until
+                        // process exit rather than tear the WAL down unadmitted.
+                        std::mem::forget(self.connection.take());
+                        return;
+                    }
+                    None
                 }
             },
         };
-        // The background connection has already ended; a writable close may be
-        // SQLite's last connection and can checkpoint/delete the WAL and SHM.
+        // The background connection has already ended; a writable close that
+        // holds the lane may be SQLite's last and checkpoint/delete the WAL
+        // and SHM files.
         drop(self.connection.take());
         drop(writer);
     }

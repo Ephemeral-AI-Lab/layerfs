@@ -354,29 +354,30 @@ fn another_process_admission_precedes_the_single_sqlite_begin() {
 
 #[test]
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-fn another_process_admission_precedes_last_connection_close() {
+fn writable_last_close_without_the_lane_neither_waits_nor_tears_down_the_wal() {
     let temp = support::Temp::new("wa-close");
     let path = temp.join("store.sqlite");
+    let wal = temp.join("store.sqlite-wal");
     let handles = create(&path);
+    assert!(wal.exists(), "the test needs a WAL file before the close");
     let held = Held::start(&path, &temp.join("s"));
-    let (ready_tx, ready_rx) = mpsc::channel();
     let (result_tx, result_rx) = mpsc::channel();
     let closer = std::thread::spawn(move || {
-        ready_tx.send(()).unwrap();
         drop(handles);
         result_tx.send(()).unwrap();
     });
-    ready_rx.recv_timeout(Duration::from_secs(2)).unwrap();
-    let premature = result_rx.recv_timeout(Duration::from_millis(100)).ok();
+    let closed = result_rx.recv_timeout(Duration::from_secs(2)).ok();
+    let wal_kept = wal.exists();
     held.release();
-    if premature.is_none() {
+    if closed.is_none() {
         result_rx.recv_timeout(Duration::from_secs(3)).unwrap();
     }
     closer.join().unwrap();
-    assert!(
-        premature.is_none(),
-        "last connection close bypassed its lifecycle owner"
-    );
+    assert!(closed.is_some(), "a writable close waited for the lane");
+    assert!(wal_kept, "a close without the lane removed the WAL");
+    // With the lane free, the last close checkpoints and removes it.
+    drop(open(&path));
+    assert!(!wal.exists(), "an admitted last close left the WAL");
 }
 
 #[test]

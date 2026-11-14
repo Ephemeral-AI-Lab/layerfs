@@ -222,7 +222,9 @@ CLI     layerfs machine stop <name> [--force]
 `apple-container` end the worker and VM. `worker.json` is deleted and the
 state recorded `stopped`. Nothing stops a machine because it is unused.
 Errors: `InUse` while Sandboxes are recorded on it and `force` is not set
-(`detail.related`, `can_stop_machine`); `Unavailable` (`start.lock` held 600 s,
+(`detail.related`, `can_stop_machine`); `InvalidInput` on `docker` when the
+container named for the machine is not a LayerFS worker (its role label), which
+is left alone; `Unavailable` (`start.lock` held 600 s,
 or the provider did not answer: records stay as they were); `Unknown` (a
 provider command timed out: the machine may be stopped while still recorded
 with its worker).
@@ -242,8 +244,13 @@ not be listed; these are not saved Commits). Stopped Sandboxes are recorded
 `gone` for explicit reclaim, or `unresolved` when the stop could not be
 confirmed. On `native` a Sandbox is uncertain only once its stop has been
 sent: a refusal before that (no recorded runtime, or a recorded process
-identity that no longer matches) leaves that Sandbox and the machine as they
-were, with no op left on `native`. A provider failure or uncertain outcome is
+identity that no longer matches) leaves that Sandbox as it was, and the stop
+goes on to the next one. The call then answers the first such refusal, with
+`detail.refused_sandboxes`, `stopped_sandboxes` and `unknown`, and leaves no op
+on `native`. If recording the outcome fails, the stop's own refusal is still
+answered, with `detail.custody_errors`. A later forced stop may settle an
+uncertain stop this process left, or one whose process has ended; one a live
+process still holds is `Busy`. A provider failure or uncertain outcome is
 reported, never replayed or turned into success
 ([`machine_force.rs`](../../../../control/crates/layerfs-control/src/machine_force.rs)).
 

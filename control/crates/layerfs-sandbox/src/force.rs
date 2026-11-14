@@ -30,6 +30,19 @@ pub fn native_host(home: &Path, sandbox: &str) -> Result<Host, SdkRefusal> {
     })
 }
 
+/// The refusal detail field a forced close sets once its runtime stopped.
+pub const RUNTIME_STOPPED: &str = "runtime_stopped";
+
+/// Refuses while a live process holds `native` (a forced `machine.stop` in
+/// progress, for one); an unresolved intent left by an ended process does not
+/// stop a forced close.
+pub fn native_free(home: &Path) -> Result<(), SdkRefusal> {
+    match layerfs_machine::record::MachineRecord::read(home, "native")? {
+        Some(machine) => machine.not_running(),
+        None => Ok(()),
+    }
+}
+
 /// Forced `sandbox.close` of the Sandbox `host` names, on this process's
 /// kernel: no daemon control call, Store open, active-Workspace refusal or
 /// retry. The backend's Stop checks the runtime identity and ends its
@@ -57,15 +70,22 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
         }
     }
     crate::reopen::recorded(host, &id, &value)?.stop_now()?;
-    crate::reopen::recorded(host, &id, &value)?
+    // The runtime is confirmed stopped from here on: a later failure says so,
+    // so the record shows it stopped instead of as it was.
+    let after_stop = |mut refusal: SdkRefusal| {
+        refusal.detail = home::with_field(refusal.detail, RUNTIME_STOPPED, SdkValue::Bool(true));
+        refusal
+    };
+    crate::reopen::recorded(host, &id, &value)
+        .map_err(after_stop)?
         .stopped()
         .delete()
-        .map_err(failed)?;
+        .map_err(|error| after_stop(failed(error)))?;
     crate::registry::SANDBOXES
         .lock()
-        .map_err(|_| refused("Failed", "the Sandbox table's lock was poisoned"))?
+        .map_err(|_| after_stop(refused("Failed", "the Sandbox table's lock was poisoned")))?
         .remove(&directory);
-    std::fs::remove_dir_all(&directory).map_err(failed)?;
+    std::fs::remove_dir_all(&directory).map_err(|error| after_stop(failed(error)))?;
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Closed")),
         ("sandbox", SdkValue::text(id)),

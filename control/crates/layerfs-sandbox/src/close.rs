@@ -108,7 +108,8 @@ pub fn close(home: &Path, events: &mut Events<'_>, request: &CloseRequest) -> Re
         // a forced close on `native` needs no Store or daemon discovery,
         // even when active mounts or a broken Store would block the
         // ordinary route
-        crate::force::native_host(&home, name)
+        crate::force::native_free(&home)
+            .and_then(|()| crate::force::native_host(&home, name))
             .and_then(|host| crate::force::close(&host, held.as_deref().unwrap_or(&[])))
     } else {
         on_machine(
@@ -148,10 +149,16 @@ pub fn close(home: &Path, events: &mut Events<'_>, request: &CloseRequest) -> Re
             op.log_uncertain(&home, "sandbox", name, &refusal.message);
             Err(refusal)
         }
-        // a certain failure leaves the Sandbox as it was
+        // a certain failure leaves the Sandbox as it was, except a forced
+        // close whose runtime already stopped: the record says so
         Err(refusal) => {
             if let Some(now) = SandboxRecord::read(&home, name)? {
-                now.without_op().write(&home)?;
+                let stopped = refusal.detail.get_bool(crate::force::RUNTIME_STOPPED);
+                match stopped {
+                    true => now.without_op().with_machine_stop(true),
+                    false => now.without_op(),
+                }
+                .write(&home)?;
             }
             Err(refusal)
         }

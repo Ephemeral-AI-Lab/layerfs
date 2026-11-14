@@ -1,6 +1,6 @@
 //! Live native machine force stop and Sandbox force close with mounted, executing Workspaces.
 #![cfg(all(target_os = "macos", feature = "machine"))]
-use layerfs_api::home::{self, paths, read_record};
+use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
 use layerfs_bridge::process::LocalProcess;
 use std::{
@@ -161,6 +161,57 @@ fn live_case(home: &Path, name: &str, machine: bool) {
     );
     assert_eq!(saved.get_text("text"), Some("saved\n"));
 }
+/// A recorded pid that now names an unrelated live process: the forced stop
+/// refuses that Sandbox before any signal, leaves no op on `native`, and
+/// signals neither process.
+fn identity_case(home: &Path) {
+    call(
+        home,
+        "sandbox.create",
+        &[
+            ("project", t("shop/app")),
+            ("name", t("moved")),
+            ("machine", t("native")),
+        ],
+    );
+    let path = paths::sandbox_record(home, "moved");
+    let original = read_record(&path).unwrap().unwrap();
+    let daemon = original.get("daemon").unwrap().clone();
+    let real = LocalProcess::observe(daemon.get_int("pid").unwrap() as u32).unwrap();
+    let mut other = Helper(Command::new("/bin/sleep").arg("30").spawn().unwrap());
+    let moved = home::with_field(daemon, "pid", SdkValue::Int(i64::from(other.0.id())));
+    write_record(&path, &home::with_field(original.clone(), "daemon", moved)).unwrap();
+    let refused = layerfs_api::call(
+        Some(home),
+        "machine.stop",
+        SdkValue::map([("name", t("native")), ("force", SdkValue::Bool(true))]),
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert!(
+        format!("{:?}", refused.detail).contains("moved"),
+        "refused_sandboxes names it: {refused:?}"
+    );
+    assert!(
+        other.0.try_wait().unwrap().is_none(),
+        "the unrelated process was signalled"
+    );
+    assert!(real.alive(), "the real daemon was signalled");
+    let op = read_record(&paths::machine_record(home, "native"))
+        .unwrap()
+        .and_then(|record| record.get("op").cloned());
+    assert!(
+        op.is_none(),
+        "a refusal before any signal left {op:?} on native"
+    );
+    write_record(&path, &original).unwrap();
+    call(
+        home,
+        "sandbox.close",
+        &[("name", t("moved")), ("force", SdkValue::Bool(true))],
+    );
+    assert!(!real.alive(), "the restored record's daemon ended");
+}
 #[test]
 fn native_force_stops_live_daemon_and_command_and_detaches_mount_without_opening_store() {
     let Ok(daemon) = std::env::var("LAYERFS_DAEMON") else {
@@ -200,5 +251,6 @@ fn native_force_stops_live_daemon_and_command_and_detaches_mount_without_opening
     home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
     live_case(&home, "live", true);
     live_case(&home, "close", false);
+    identity_case(&home);
     std::fs::remove_dir_all(&home).unwrap();
 }
