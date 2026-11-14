@@ -12,6 +12,17 @@
 
 ## Answer
 
+- **Round 3 ([§6](#6-experiments-and-the-combined-round-round-3)): the cold
+  read goes from 215 to 937 MB/s (4.35×) with no integrity or format
+  change.** The changes are Store read lanes, asynchronous single-flight
+  read-ahead, one-shot BLAKE3, fewer copies and 512 KiB / 4. Adding the
+  owner-decision items raises it to 1,048 MB/s, and to 1,121 MB/s (5.2×)
+  with 16 KiB Store pages. The native read is about 2.8 GB/s.
+  - `ls -l` and `find` are 4–8× faster with READDIRPLUS.
+  - Sequential write goes from 581 to 912 MB/s.
+  - Seven experiments, one switch each, are written up under
+    [`experiments/`](experiments/).
+
 - **Quantified (round 2, [§5](#5-quantified-read-path-changes-round-2)):**
   the read-path changes raise the cold read from 206 MB/s to 361–393 MB/s,
   about 1.8–1.9×. No profile change on its own did better than 1.32×.
@@ -462,6 +473,130 @@ check is the smallest change with the largest gain at any profile.
   check reaches 361–383 MB/s with no profile change at all.
 - Asynchronous read-ahead should not be combined with more requests in
   flight until the Store read session admits concurrent fetches.
+
+## 6. Experiments and the combined round (round 3)
+
+Seven experiments ran in parallel, one subagent each. Each worked on its own
+branch from `4db7d765c6`, with its own Docker volumes and one host-wide lock
+for every build and probe run. All are merged here, and every switch is off by
+default. Each write-up gives its arms, receipts and risks:
+
+| Experiment | Result, same-batch control against best | Needs an owner decision? |
+| --- | --- | --- |
+| [parallel-store](experiments/parallel-store.md) | N=4 Store read lanes: 373→765 MB/s at 128K/1, 358→856 at 512K/4 | Lane count against PostgreSQL connections |
+| [verify-once](experiments/verify-once.md) | one-shot BLAKE3 +7–8%; drop pack SHA-256 on read +19–22% | Where to authenticate; pack SHA-256 on read |
+| [copies](experiments/copies.md) | 7.43→4.02 copies per byte, +4–10% | No |
+| [sqlite-read](experiments/sqlite-read.md) | 16 KiB pages + split locate +7.8% (+0.9% Store bytes) | Page size (Store profile) |
+| [passthrough](experiments/passthrough.md) | re-read of an unchanged file: 383→1,077 (cache), 2,823 (passthrough) | **Yes: decoded content outside the Store; passthrough is not coherent** |
+| [readdirplus](experiments/readdirplus.md) | `ls -l` 175→36 ms, `find` 142→17 ms, `ls` 18.7→5.0 ms | No |
+| [write-path](experiments/write-path.md) | append digest off the lock: sequential write +16–39%; `spin` creates −12–28% | A second core per write; spin CPU cost |
+
+### Combined round
+
+- **Binary:** the merged probe `52021bd28356…418d`, tree `583aa95e7c`.
+- **Fixtures:** two fresh ones, a 4 KiB-page Store (batch F1) and a 16 KiB-page
+  Store (F2).
+- **Samples:** one per arm. Arms ran back to back in one window. BLAKE3 was
+  13.1–13.5 µs per call in every arm.
+- **Cache state:** the Store was 0 bytes resident before every cold read.
+- **Load:** host 1-minute load was 5.8–6.2.
+- **Checks:** every arm exited 0, read the 500 MiB back with the correct
+  fold, gave the same listing hashes within its fixture, and passed both
+  coherence checks.
+- **Receipts:** `receipts/round3-combined/`.
+
+The switch sets:
+
+- **base:** nothing set. This is today's product profile, 128 KiB / 1.
+- **ref:** 512 KiB / 4 with `LAYERFS_PROBE_READ=async,noverify`, the round-2
+  reference.
+- **safe:** ref plus `fasthash`, `READ_SESSIONS=4`, `COPY=all`,
+  `WRITE=noresume,digestpar,spin`, `READDIRPLUS=plain` and `READDIR_ROWS=129`.
+  It keeps every integrity check that ref has: pack SHA-256 and one BLAKE3
+  per object in the Store.
+- **full:** safe plus `nopacksha` and `SQLITE=locate=typed+bucket+split`.
+  - **full16:** full on the 16 KiB-page fixture.
+
+| Arm | Cold read MB/s | × base | Wall ms | Store busy ms | Re-read cold MB/s | Seq write MB/s | 4K rand MB/s | 2,000 creates ms | `ls -l` ms | `find` ms | `VmHWM` cold read KB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| F1 base | 215.3 | 1.00 | 2,435 | — | 226.9 | 580.9 | 64.9 | 483 | 135.2 | 121.6 | 114,616 |
+| F1 ref | 351.4 | 1.63 | 1,492 | 1,380 | 352.4 | 731.6 | 69.0 | 463 | 138.2 | 123.6 | 103,252 |
+| F1 safe at 128K/1 | 849.4 | 3.95 | 617 | — | 842.9 | 677.4 | 67.8 | 439 | 31.5 | 19.2 | 127,228 |
+| **F1 safe** | **937.2** | **4.35** | 559 | 479 | 1,003.9 | 912.4 | 67.9 | 461 | 32.9 | 16.9 | 130,928 |
+| F1 full | 1,048.1 | 4.87 | 500 | 420 | 1,092.2 | 914.7 | 70.4 | 381 | 29.1 | 19.2 | 127,396 |
+| F2 ref, 16 KiB pages | 351.6 | — | 1,491 | — | 356.5 | 703.6 | 69.0 | 467 | 140.4 | 129.2 | 185,488 |
+| **F2 full16** | **1,120.5** | 5.20 | 468 | 388 | 1,154.8 | 892.9 | 66.8 | 455 | 29.5 | 15.9 | 127,492 |
+
+The native read of the same file was 2,680–2,837 MB/s in every arm. Re-read
+cold is the per-tool-call case: a fresh mount after the cold read, with the
+Store evicted. The decoded-file cache and passthrough were off in every arm.
+
+**Findings:**
+
+- **The safe set reads 4.35× faster than today's profile: 215 → 937 MB/s.**
+  It changes no integrity check and no Store format. The full set reaches
+  4.87×, and 5.20× with 16 KiB pages.
+- **Most of the gain is parallel Store lanes plus asynchronous
+  single-flight read-ahead.**
+  - The safe set at 128K/1 already reaches 849 MB/s, so 512 KiB / 4 adds
+    about 10% on top.
+  - At ref, a READ callback waits 2.6 ms per 512 KiB on average. With the
+    safe set it waits 0.58 ms, and with full 0.42 ms.
+- **The Store is still the limit, but now with four lanes.**
+  - full: Store busy (at least one demand running) is 420 of 500 ms of
+    wall, at a peak of 4 concurrent demands.
+  - Summed time across the four lanes: Store demands 1,418 ms, pack reads
+    692 ms, locate 244 ms, BLAKE3 364 ms.
+  - Lanes re-read about 10% of packs: 2,719 pack reads against 2,356 at
+    ref, and 586 MB against 535 MB.
+- **Copies:**
+  - Each byte is now copied twice in user space (pack and canonical) plus
+    the emit and reply buffers. That is about 4.1 copies per byte, down from
+    8.4 at ref.
+  - `get` copies fell from 653 MB to 3 MB.
+- **Writes:**
+  - Sequential write is 581 MB/s at base, 732 at ref (512 KiB) and 912–915
+    with `digestpar`.
+  - 4 KiB random write is flat at 65–70 MB/s; the kernel round trip bounds
+    it.
+  - Creates: 381–483 ms for 2,000 files, within the ±20% create noise
+    except full (−21% against base).
+- **Listings:**
+  - `ls -l` and `find` are 4–8× faster with READDIRPLUS.
+  - Plain `ls` stays 14–22 ms in this probe. The one-reply READDIR window
+    gave 5.0 ms in its own experiment, but not here. This was not
+    diagnosed; one sample.
+- **Memory:**
+  - Cold-read `VmHWM` is 127–131 MB against 103–115 MB, about +25 MB for
+    four read lanes.
+  - Sequential-write `VmHWM` is 189–194 MB against 163–224 MB.
+  - F2 ref's 185 MB is the 512 KiB async peak noted in §5.
+
+**Recommended profile from this evidence:**
+
+1. **Adopt now, with no owner decision needed:**
+   - asynchronous single-flight read-ahead
+   - 4 Store read lanes, with a fixed pool and lanes split on pack
+     boundaries
+   - one-shot BLAKE3
+   - `move` and `share` copies
+   - `noresume`
+   - READDIRPLUS with one-reply windows
+   - 512 KiB / 4 with the READ/WRITE splitting made into product code
+2. **Ask the owner:**
+   - where the one BLAKE3 check runs, and whether pack SHA-256 is checked on
+     read
+   - the digest helper thread
+   - 16 KiB Store pages
+   - whether a bounded, disposable decoded-file cache may live outside the
+     Store (2.8× on re-reads)
+   - Passthrough only with a semantic exception
+3. **Next limits:**
+   - Store lane work: duplicate pack reads across lanes, and BLAKE3 inside
+     the lane
+   - The FUSE reply copy
+   - The per-file request chain of small-file reads, which no experiment has
+     measured yet
 
 ## Checks and gaps
 
