@@ -24,9 +24,11 @@ pub enum Site {
     Join,
     /// The reply handed to the kernel (`writev` to `/dev/fuse`).
     Reply,
+    /// A mapping page into or out of a read's page cache (`Wave::pages`).
+    Page,
 }
 /// Number of [`Site`]s.
-pub const SITES: usize = Site::Reply as usize + 1;
+pub const SITES: usize = Site::Page as usize + 1;
 /// Names of the [`Site`]s, in order.
 pub const SITE_NAMES: [&str; SITES] = [
     "pack",
@@ -37,6 +39,7 @@ pub const SITE_NAMES: [&str; SITES] = [
     "emit",
     "join",
     "reply",
+    "page",
 ];
 
 const ZERO: AtomicU64 = AtomicU64::new(0);

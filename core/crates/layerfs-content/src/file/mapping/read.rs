@@ -92,7 +92,9 @@ struct Frontier {
 /// growing with the file.
 #[derive(Default)]
 pub struct PageCache {
-    pages: std::collections::HashMap<(ObjectId, bool), Vec<u8>>,
+    /// Prototype (copies experiment, `share`): each page is a shared buffer,
+    /// so a traversal can hold it without a copy.
+    pages: std::collections::HashMap<(ObjectId, bool), std::sync::Arc<Vec<u8>>>,
     /// Pages this cache refuses to exceed before it empties wholesale.
     limit: usize,
 }
@@ -113,7 +115,12 @@ impl PageCache {
 
     /// The page `id` decoded under `root` context, if this cache holds it.
     pub fn get(&self, id: ObjectId, root: bool) -> Option<&[u8]> {
-        self.pages.get(&(id, root)).map(Vec::as_slice)
+        self.pages.get(&(id, root)).map(|page| page.as_slice())
+    }
+
+    /// Prototype (copies experiment): the held buffer itself.
+    fn get_shared(&self, id: ObjectId, root: bool) -> Option<std::sync::Arc<Vec<u8>>> {
+        self.pages.get(&(id, root)).cloned()
     }
 
     /// Holds one page.
@@ -122,7 +129,8 @@ impl PageCache {
     /// inserted, never here: a page this call has just been handed must stay
     /// readable by the pass that is about to use it.
     pub fn insert(&mut self, id: ObjectId, root: bool, canonical: Vec<u8>) {
-        self.pages.insert((id, root), canonical);
+        self.pages
+            .insert((id, root), std::sync::Arc::new(canonical));
     }
 
     /// Empties the cache when `incoming` more pages would exceed the bound.
@@ -181,7 +189,10 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
     /// cached as it is decoded, so a later range of the same cursor never asks
     /// the provider for it again; the cache is emptied wholesale rather than
     /// page by page once it would exceed [`READ_NAVIGATION_CACHE_PAGES`].
-    fn pages(&mut self, nodes: &[&Frontier]) -> ContentResult<Vec<Vec<u8>>> {
+    fn pages(&mut self, nodes: &[&Frontier]) -> ContentResult<Vec<std::sync::Arc<Vec<u8>>>> {
+        if layerfs_telemetry::timer::copies::switches().shared {
+            return self.shared_pages(nodes);
+        }
         let mut wanted: Vec<(ObjectId, bool)> = Vec::new();
         for node in nodes {
             let key = (node.id, node.root);
@@ -208,6 +219,10 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
                 });
             }
             for (index, key) in missing.iter().enumerate() {
+                layerfs_telemetry::timer::copies::copied(
+                    layerfs_telemetry::timer::copies::Site::Page,
+                    values[index].len(),
+                );
                 self.cache.insert(key.0, key.1, values[index].clone());
             }
             self.counters.nodes_read = self.counters.nodes_read.saturating_add(ids.len() as u64);
@@ -219,7 +234,52 @@ impl<'a, 'r, 's> Wave<'a, 'r, 's> {
             .map(|node| {
                 self.cache
                     .get(node.id, node.root)
-                    .map(<[u8]>::to_vec)
+                    .map(|page| {
+                        layerfs_telemetry::timer::copies::copied(
+                            layerfs_telemetry::timer::copies::Site::Page,
+                            page.len(),
+                        );
+                        std::sync::Arc::new(page.to_vec())
+                    })
+                    .ok_or(ContentError::MissingObject)
+            })
+            .collect()
+    }
+
+    /// Prototype (copies experiment, `share`): [`Self::pages`] with every
+    /// page held as the provider's shared buffer; no page byte is copied.
+    fn shared_pages(&mut self, nodes: &[&Frontier]) -> ContentResult<Vec<std::sync::Arc<Vec<u8>>>> {
+        let mut missing: Vec<(ObjectId, bool)> = Vec::new();
+        for node in nodes {
+            let key = (node.id, node.root);
+            if self.cache.get(key.0, key.1).is_none() && !missing.contains(&key) {
+                missing.push(key);
+            }
+        }
+        if !missing.is_empty() {
+            self.cache.make_room_for(missing.len());
+            let ids: Vec<ObjectId> = missing.iter().map(|(id, _)| *id).collect();
+            let values = self
+                .reader
+                .read_shared_batch_scoped(&ids, self.scope.child("mapping.navigate"))?;
+            if values.len() != ids.len() {
+                return Err(ContentError::BatchCardinality {
+                    requested: ids.len(),
+                    returned: values.len(),
+                });
+            }
+            for (key, value) in missing.iter().zip(values) {
+                self.cache.pages.insert(*key, value);
+            }
+            self.counters.nodes_read = self.counters.nodes_read.saturating_add(ids.len() as u64);
+            self.counters.node_batches_read = self.counters.node_batches_read.saturating_add(1);
+            self.counters.max_node_batch = self.counters.max_node_batch.max(ids.len() as u64);
+        }
+        nodes
+            .iter()
+            .map(|node| {
+                self.cache
+                    .get_shared(node.id, node.root)
                     .ok_or(ContentError::MissingObject)
             })
             .collect()
