@@ -190,7 +190,8 @@ length, so no decoded image is memory the budget cannot see, and every READ
 synthesizes the same bytes again. Partial writes, resource forks and other
 layouts stay as the client wrote them.
 
-Resident bodies exceeding `RESIDENT_BYTES` spill outside the companion lock to
+Bodies kept as written and decoded bodies alike, exceeding `RESIDENT_BYTES`
+together, spill outside the companion lock to
 `<serial>.<n>.tmp` (`create_new`, dir `0700`, file `0600`) and are adopted by
 rename to `<serial>` only if unchanged (`used` tick); spilled bodies are opened
 by path per `pread`/`pwrite`/`set_len` and never held open. One edit per

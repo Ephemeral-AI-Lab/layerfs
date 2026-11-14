@@ -158,6 +158,62 @@ fn the_clients_write_sequence_is_served_byte_for_byte() {
 }
 
 #[test]
+fn eviction_takes_the_decoded_body_before_the_written_ones() {
+    let base = temp("decoded-evict");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    rig.companion_spill_dir = Some(base.join("spill"));
+    // Room for two 2,000-byte bodies and one decoded image of a few hundred
+    // bytes.
+    rig.companion_resident_bytes = 4096;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    // A whole image, decoded: it costs its attributes, not its 4 KiB.
+    let whole = image(
+        [0x21; 32],
+        &[(b"com.apple.provenance", pattern(40, 40))],
+    );
+    c.touch(&root, b"old", 0o644).unwrap();
+    let old = c.touch(&root, b"._old", 0o644).unwrap();
+    c.write(&old.handle, 0, &whole).unwrap();
+    assert_eq!(server.held().companions_decoded, 1);
+    let decoded_cost = server.held().companion_bytes;
+    assert!(decoded_cost < 4096, "the image is counted as its attributes");
+
+    // Two bodies kept as written fill the budget: the decoded body is the least
+    // recently used memory there is, so it is the one spilled, and its file
+    // holds the image the client wrote.
+    let first = pattern(41, 2000);
+    let second = pattern(42, 2000);
+    c.touch(&root, b"one", 0o644).unwrap();
+    let one = c.touch(&root, b"._one", 0o644).unwrap();
+    c.write(&one.handle, 0, &first).unwrap();
+    c.touch(&root, b"two", 0o644).unwrap();
+    let two = c.touch(&root, b"._two", 0o644).unwrap();
+    c.write(&two.handle, 0, &second).unwrap();
+    assert_eq!(
+        server.held().companions_decoded,
+        0,
+        "the decoded body was the memory evicted"
+    );
+    assert_eq!(server.held().companion_bytes, 4000);
+    assert_eq!(c.read_all(&old.handle, 64 * 1024), whole, "from its spill file");
+    assert_eq!(c.read_all(&one.handle, 64 * 1024), first);
+    assert_eq!(c.read_all(&two.handle, 64 * 1024), second);
+    assert_eq!(c.getattr(&old.handle).unwrap().size as usize, whole.len());
+
+    drop(c);
+    let released = server.stop();
+    assert_eq!(released.companions_decoded, 0);
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn a_decoded_companion_is_edited_under_a_full_resident_budget() {
     let base = temp("decoded-budget");
     let tree = base.join("tree");

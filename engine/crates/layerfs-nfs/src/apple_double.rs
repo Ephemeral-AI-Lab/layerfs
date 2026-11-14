@@ -259,13 +259,12 @@ impl Companions {
         self.attach(serial, file);
         Ok(true)
     }
+    /// The least recently used companion holding memory, a body kept as
+    /// written or a decoded one: the budget counts both, so both are evicted.
     fn oldest_resident(&self, skip: Option<u64>) -> Option<u64> {
         self.files
             .iter()
-            .filter(|(serial, file)| {
-                Some(**serial) != skip
-                    && matches!(file.body, Body::Resident(ref b) if !b.is_empty())
-            })
+            .filter(|(serial, file)| Some(**serial) != skip && file.resident_cost() > 0)
             .min_by_key(|(_, file)| file.used)
             .map(|(serial, _)| *serial)
     }
