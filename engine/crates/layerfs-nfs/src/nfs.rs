@@ -111,36 +111,33 @@ pub fn call(
             // in (RFC 1813 LOOKUP3resok's `obj_attributes` and
             // `dir_attributes`, and the failure's). The job had to read the
             // directory's own row to resolve the name, so its attributes cost
-            // no second job. Deliberate change from the route before this: a
-            // failure (`NFS3ERR_NOENT` included), `.`, `..` and a silly name
-            // answer the directory facts this export last published or
-            // observed for it, and none when it never saw the directory,
-            // where each of them used to make a fresh GETATTR of the parent.
-            // RFC 1813 keeps those attributes optional, so both are legal;
-            // the answer is now at most one observation old.
-            let (parent, found) = match parent {
-                Ok(parent) => (parent, kernel.lookup(parent, name)),
+            // no second job, and a name that binds nothing still read that row:
+            // the failed answer carries the same fresh facts.
+            //
+            // Every answer that read no directory row says so instead of
+            // repeating this export's last observation: `.`, `..`, a silly
+            // name and a refusal decided before the job. Stale attributes are
+            // worse than none here — the client would load them into its
+            // attribute cache, restart `actimeo` and keep a listing nothing
+            // refreshes — and RFC 1813 keeps both fields optional.
+            let found = match parent {
+                Ok(parent) => kernel.lookup(parent, name),
                 Err(status) => {
                     out.u32(status.code());
                     post_op_maybe(kernel.identity(), out, None);
                     return Ok(());
                 }
             };
-            let directory = match &found {
-                Ok((_, directory)) => directory.clone(),
-                Err(_) => None,
-            }
-            .or_else(|| kernel.directory_wcc(parent).0);
             match found {
-                Ok((stat, _)) => {
+                Ok((stat, directory)) => {
                     out.u32(Status::Ok.code());
                     out.opaque(&kernel.encode(stat.serial));
                     kernel.identity().post_op(out, &stat);
                     post_op_maybe(kernel.identity(), out, directory.as_ref());
                 }
-                Err(status) => {
-                    out.u32(status.code());
-                    post_op_maybe(kernel.identity(), out, directory.as_ref());
+                Err(refused) => {
+                    out.u32(refused.status.code());
+                    post_op_maybe(kernel.identity(), out, refused.directory.as_ref());
                 }
             }
             Ok(())

@@ -25,7 +25,8 @@ use crate::{
     attributes::{post_op_maybe, Identity, Status},
     block::wait,
     handle::HANDLE_BYTES,
-    kernel::{failure, Kernel},
+    kernel::Kernel,
+    read::failure,
     xdr::{opaque_size, Writer},
 };
 use layerfs_content::object::inode_leaf::InodeKind;

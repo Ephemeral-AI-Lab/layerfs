@@ -33,7 +33,15 @@ pub enum KernelReadOperation {
 pub enum KernelReadDecision {
     Needs(Vec<Need>),
     Value(Decided),
-    Refused(Refusal),
+    /// A refusal and, when the refusing job read it, the directory that job
+    /// read: a LOOKUP that binds no name still read its parent's row, so the
+    /// failure's directory attributes are those fresh facts and cost no
+    /// second visit. `None` when no job read a directory (a refusal decided
+    /// before the visit, or one about the name itself).
+    Refused {
+        refusal: Refusal,
+        directory: Option<Inode>,
+    },
     Failed(WorkspaceError),
 }
 /// What a read decided: the inode it names and, for a LOOKUP, the directory
@@ -101,14 +109,19 @@ pub(crate) fn decide_read(
         kernel: None,
         needs: Vec::new(),
     };
-    let decision = match decide(operation, &mut eval) {
+    // The directory a refusing decision read, when it read one.
+    let mut refused_directory = None;
+    let decision = match decide(operation, &mut eval, &mut refused_directory) {
         Ok(Some(decided)) => KernelReadDecision::Value(decided),
         Ok(None) if !eval.needs.is_empty() => KernelReadDecision::Needs(eval.needs),
         Ok(None) => KernelReadDecision::Failed(
             ContentError::InvalidRecord("empty kernel read needs").into(),
         ),
         Err(WorkspaceError::Overlay(error)) => return Err(error),
-        Err(WorkspaceError::Refused(refusal)) => KernelReadDecision::Refused(refusal),
+        Err(WorkspaceError::Refused(refusal)) => KernelReadDecision::Refused {
+            refusal,
+            directory: refused_directory,
+        },
         Err(error) => KernelReadDecision::Failed(error),
     };
     Ok(match decision {
@@ -123,9 +136,12 @@ pub(crate) fn decide_read(
         },
     })
 }
+/// One read's decision. `refused` receives the directory row a refusal read,
+/// when the refused operation read one (LOOKUP of a name that binds nothing).
 fn decide(
     operation: &KernelReadOperation,
     eval: &mut Eval<'_>,
+    refused: &mut Option<Inode>,
 ) -> WorkspaceResult<Option<Decided>> {
     match operation {
         // The source's independent read reference permits removed metadata.
@@ -165,7 +181,13 @@ fn decide(
             let (Some(directory), Some(bound)) = (directory, bound) else {
                 return Ok(None);
             };
-            let serial = bound.ok_or(WorkspaceError::Refused(Refusal::Missing))?;
+            let Some(serial) = bound else {
+                // The name binds nothing. This job still read the directory's
+                // own row, so its fresh facts answer the failure's directory
+                // attributes without a second visit.
+                *refused = Some(directory);
+                return Err(WorkspaceError::Refused(Refusal::Missing));
+            };
             // The name resolved, so the reply also says what the directory
             // is: the same job read its row, and no second visit is needed.
             Ok(eval.target(serial)?.map(|inode| Decided {

@@ -547,3 +547,73 @@ fn a_listing_spends_one_owner_visit_and_reads_its_window_in_batches() {
     assert_eq!(outstanding, 0);
     fs::remove_dir_all(base).unwrap();
 }
+
+#[test]
+fn a_failed_lookup_answers_fresh_directory_facts_never_a_stale_observation() {
+    let base = temp("lookup-directory");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let first = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut client = Client::connect(first.local_addr(), UID, GID);
+    let root = client.mnt("/");
+    let made = client.mkdir(&root, b"watched", 0o755).unwrap();
+    let before = client.getattr(&made.handle).unwrap();
+    assert_eq!(before.nlink, 2, "an empty directory");
+
+    // A second engine mount of the same Workspace adds a name to the
+    // directory this export watches. This export observes no publication for
+    // it, which is the install and other-writer case: its last observation of
+    // the directory is now older than the directory's own row.
+    let second = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut other = Client::connect(second.local_addr(), UID, GID);
+    let other_root = other.mnt("/");
+    let (target, _) = other.lookup(&other_root, b"watched").unwrap();
+    other.mkdir(&target, b"child", 0o755).unwrap();
+
+    // The failed LOOKUP answers the directory's current facts: the job that
+    // found no name read the directory's row in the same visit. Nothing may
+    // answer the last observation instead, which no time bound ages.
+    let (status, found, directory) = client.lookup_with_directory(&made.handle, b"absent");
+    assert_eq!((status, found), (NOENT, None));
+    let fresh = client.getattr(&made.handle).unwrap();
+    assert_eq!(fresh.nlink, 3, "the directory gained a child directory");
+    assert_eq!(directory, Some(fresh.clone()), "the current facts");
+    assert_ne!(directory, Some(before), "never the last observation");
+
+    // A name this export decides without an owner job reads no directory row
+    // and answers no directory attributes, so a client falls back to its own
+    // `actimeo` rather than restarting it on facts nothing refreshes.
+    let (status, found, directory) = client.lookup_with_directory(&made.handle, b".");
+    assert_eq!(status, 0);
+    assert!(found.is_some());
+    assert_eq!(directory, None, "no attributes for `.`");
+    let (status, found, directory) = client.lookup_with_directory(&made.handle, b"..");
+    assert_eq!(status, 0);
+    assert!(found.is_some());
+    assert_eq!(directory, None, "no attributes for `..`");
+
+    // A silly name is kept by this export alone; its reply names none either.
+    let open = client.touch(&made.handle, b"open", 0o644).unwrap();
+    client
+        .rename(
+            &made.handle,
+            b"open",
+            &made.handle,
+            b".nfs00000000000012ab00000001",
+        )
+        .unwrap();
+    let (status, found, directory) =
+        client.lookup_with_directory(&made.handle, b".nfs00000000000012ab00000001");
+    assert_eq!(status, 0);
+    assert_eq!(found.map(|(handle, _)| handle), Some(open.handle));
+    assert_eq!(directory, None, "no attributes for a silly name");
+
+    drop(client);
+    drop(other);
+    let released = first.stop();
+    second.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}

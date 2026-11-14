@@ -183,7 +183,7 @@ impl Kernel {
         let mutation = match wait(KernelMutation::perform(services, request)) {
             Ok(mutation) => mutation,
             Err(failure) => {
-                let status = if crate::kernel::failure_is_stale(&failure.reason) {
+                let status = if crate::read::failure_is_stale(&failure.reason) {
                     Status::Stale
                 } else {
                     Status::Io
@@ -262,8 +262,10 @@ impl Kernel {
     fn existing(&self, parent: u64, name: &[u8]) -> Result<Option<ViewStat>, Status> {
         match self.lookup(parent, name) {
             Ok((stat, _)) => Ok(Some(stat)),
-            Err(Status::NoEnt) => Ok(None),
-            Err(status) => Err(status),
+            Err(refused) => match refused.status {
+                Status::NoEnt => Ok(None),
+                status => Err(status),
+            },
         }
     }
     /// CREATE of a regular file.
