@@ -109,3 +109,42 @@ fn legacy_copy_failure_keeps_the_previous_complete_bundle() {
     assert_eq!(fs::read_to_string(marker).unwrap().trim(), "0123abcd");
     assert!(s.path("guest/layerfs/bundle/layerfs").is_file());
 }
+
+/// R5: the runtime layer is one folder, copied in when the guest lacks it or
+/// its hash changed, and kept otherwise.
+#[test]
+fn the_runtime_layer_is_copied_in_when_missing_or_changed() {
+    let s = Scratch::new("guest-runtime");
+    setup(&s);
+    let bundle = |hash: &str, runtime: &str| {
+        let b = manifest(&s, hash, &"b".repeat(64));
+        fs::create_dir_all(b.dir.join("runtime/lib")).unwrap();
+        fs::create_dir_all(b.dir.join("runtime/bin")).unwrap();
+        fs::write(b.dir.join("runtime/lib/libc.so.6"), runtime).unwrap();
+        let text = fs::read_to_string(b.dir.join("bundle.json")).unwrap();
+        let text = text.trim_end().strip_suffix('}').unwrap().to_owned()
+            + &format!(
+                r#","sandbox_runtime":{{"hash":"{}"}}}}"#,
+                runtime.repeat(64)
+            );
+        fs::write(b.dir.join("bundle.json"), text).unwrap();
+        b
+    };
+    let guest = s.path("guest/layerfs/bundle/runtime/lib/libc.so.6");
+    let b = bundle("1111", "d");
+    start(&s, &b);
+    assert_eq!(fs::read_to_string(&guest).unwrap(), "d");
+    assert!(s.log().contains("-cf - runtime"), "{}", s.log());
+    fs::remove_file(s.log_file()).unwrap();
+    start(&s, &b);
+    assert!(
+        !s.log().contains("-cf - runtime"),
+        "unchanged runtime stays"
+    );
+    fs::remove_file(s.log_file()).unwrap();
+    let b = bundle("2222", "e");
+    start(&s, &b);
+    assert_eq!(fs::read_to_string(&guest).unwrap(), "e");
+    assert!(!s.path("guest/layerfs/bundle/runtime.old").exists());
+    assert!(!s.path("guest/layerfs/bundle/.install/runtime").exists());
+}

@@ -58,7 +58,7 @@ function same(name, fromShell, fromNode) {
 }
 
 /** A value of `kind` that every call refuses before any effect. */
-const refusing = { project: "nosuch/x", name: "Bad!", text: "/x", json: [], content: "x", int: 1, size: "1G" };
+const refusing = { project: "nosuch/x", name: "Bad!", text: "/x", json: [], content: "x", int: 1, size: "1G", image: "alpine:3" };
 
 test("every call is refused the same way by the command and the package", { skip: !existsSync(command) }, async () => {
   const home = temp("refused");

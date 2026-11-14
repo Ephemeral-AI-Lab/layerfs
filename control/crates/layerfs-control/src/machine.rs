@@ -64,6 +64,22 @@ pub fn update(home: &Path, request: &MachineUpdate) -> Outcome {
     layerfs_machine::update(home, request, RELATED)
 }
 
+/// `machine.images`: the Sandbox images on this machine, and the host's
+/// Docker images it can copy.
+pub fn images(home: &Path, name: &MachineName) -> Outcome {
+    layerfs_sandbox::images::list(home, name)
+}
+
+/// `machine.load`: copies an image to this machine without a Sandbox.
+pub fn load(home: &Path, events: &mut Events<'_>, name: &MachineName, image: &str) -> Outcome {
+    layerfs_sandbox::image_load::machine_load(home, events, name, image)
+}
+
+/// `machine.prune`: removes one image, or every unused one.
+pub fn prune(home: &Path, name: &MachineName, image: Option<&str>, unused: bool) -> Outcome {
+    layerfs_sandbox::images::prune(home, name, image, unused)
+}
+
 /// Explicit crash stop of a machine and this home's Sandboxes, preserving data.
 pub fn stop_force(home: &Path, name: &MachineName) -> Outcome {
     crate::machine_force::stop(home, name)

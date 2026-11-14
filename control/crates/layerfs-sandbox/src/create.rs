@@ -23,7 +23,8 @@ pub struct CreateRequest {
     pub name: String,
     /// The machine it names; none (or empty) chooses one.
     pub machine: Option<String>,
-    /// The image a namespaces Sandbox runs.
+    /// The image a namespaces Sandbox runs: a digest, Docker image Id or
+    /// Docker reference, copied to the machine when it does not hold it.
     pub image: Option<String>,
 }
 

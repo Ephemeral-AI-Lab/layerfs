@@ -59,7 +59,7 @@ ROOT = HERE.parent.parent.parent
 TARGET = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target"))
 COMMAND = (ROOT / TARGET if not TARGET.is_absolute() else TARGET) / "debug" / "layerfs"
 
-REFUSING = {"project": "nosuch/x", "name": "Bad!", "text": "/x", "json": [], "content": "x", "int": 1, "size": "1G"}
+REFUSING = {"project": "nosuch/x", "name": "Bad!", "text": "/x", "json": [], "content": "x", "int": 1, "size": "1G", "image": "alpine:3"}
 
 
 def temp(tag):
@@ -340,7 +340,7 @@ class Calls(unittest.TestCase):
             layerfs.FAMILIES,
             ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs"],
         )
-        self.assertEqual(len(layerfs.TABLE), 70)
+        self.assertEqual(len(layerfs.TABLE), 73)
         for spec in layerfs.TABLE:
             self.assertTrue(callable(getattr(getattr(layerfs, spec["family"]), spec["call"])))
         with self.assertRaises(layerfs.LayerFSError) as caught:

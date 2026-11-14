@@ -290,6 +290,7 @@ fn a_backend_that_binds_carries_its_binds_through_the_helper_spec() {
                 upper: "/layerfs/local/kit-1/overlay/upper".into(),
                 work: "/layerfs/local/kit-1/overlay/work".into(),
                 binds: list,
+                runtime: None,
             };
             let encoded = spec.encode().unwrap();
             assert_eq!(HelperSpec::parse(&encoded).unwrap(), spec, "{backend:?}");

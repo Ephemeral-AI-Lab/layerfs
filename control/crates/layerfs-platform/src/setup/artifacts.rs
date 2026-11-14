@@ -1,5 +1,8 @@
 //! Per-file bundle installation preserves unchanged large Sandbox archives.
 //! The manifest is published last, so an interrupted copy is never sealed.
+//! The Sandbox runtime layer (R5, `runtime/`) is one folder, copied in whole
+//! when its hash (`sandbox_runtime.hash`) changes or the guest lacks it; a
+//! running Sandbox keeps its own copy, so replacing it ends nothing.
 use super::guest::Guest;
 use crate::error::{Code, MachineError};
 use crate::facts;
@@ -70,6 +73,36 @@ pub(crate) fn install(spec: &Spec, guest: &Guest, bundle: &Bundle) -> Result<boo
             )?;
         }
     }
+    if let Some(wanted) = runtime_hash(&manifest)? {
+        let previous = runtime_hash(&old).ok().flatten();
+        let held = guest.script(
+            &spec.tools,
+            "checking the installed Sandbox runtime layer",
+            r#"test -d "$1/runtime/lib" && echo held; true"#,
+            &[BUNDLE],
+        )?;
+        if previous.as_deref() != Some(wanted.as_str()) || held.trim() != "held" {
+            changed = true;
+            let stage = format!("{BUNDLE}/.install");
+            guest.script(
+                &spec.tools,
+                "clearing a staged Sandbox runtime layer",
+                r#"rm -rf "$1/runtime""#,
+                &[&stage],
+            )?;
+            guest.copy_in(&spec.tools, &bundle.dir, Some(RUNTIME), &stage)?;
+            guest.script(
+                &spec.tools,
+                "publishing the Sandbox runtime layer",
+                r#"set -eu
+rm -rf "$2/runtime.old"
+if [ -e "$2/runtime" ]; then mv "$2/runtime" "$2/runtime.old"; fi
+mv "$1/runtime" "$2/runtime"
+rm -rf "$2/runtime.old""#,
+                &[&stage, BUNDLE],
+            )?;
+        }
+    }
     if !changed && old == manifest {
         return Ok(true);
     }
@@ -80,6 +113,29 @@ pub(crate) fn install(spec: &Spec, guest: &Guest, bundle: &Bundle) -> Result<boo
         &format!("{}\n", bundle.hash),
     )?;
     Ok(true)
+}
+
+/// The bundle's Sandbox runtime layer folder.
+const RUNTIME: &str = "runtime";
+
+/// The runtime layer's hash (`sandbox_runtime.hash`), when the bundle has one.
+fn runtime_hash(manifest: &str) -> Result<Option<String>, MachineError> {
+    if manifest.is_empty() {
+        return Ok(None);
+    }
+    let hash = facts::json_string(manifest, &["sandbox_runtime", "hash"]).map_err(|e| {
+        MachineError::new(Code::InvalidInput, format!("invalid bundle manifest: {e}"))
+    })?;
+    if hash
+        .as_ref()
+        .is_some_and(|s| s.len() != 64 || !s.bytes().all(|b| b.is_ascii_hexdigit()))
+    {
+        return Err(MachineError::new(
+            Code::InvalidInput,
+            "the bundle's runtime layer identity is not sha256",
+        ));
+    }
+    Ok(hash)
 }
 
 fn file_hash(manifest: &str, name: &str) -> Result<Option<String>, MachineError> {

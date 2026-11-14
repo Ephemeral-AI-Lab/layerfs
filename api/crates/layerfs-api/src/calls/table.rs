@@ -28,6 +28,9 @@ pub enum Kind {
     Bool,
     /// Any JSON value; the shell reads it as JSON text.
     Json,
+    /// A Sandbox image: a `sha256:` digest, a Docker image Id or a Docker
+    /// reference (`postgres:17-bookworm`); text in every front end.
+    Image,
     /// File content: text or bytes; the shell reads stdin or `--from`.
     Content,
     /// A size: bytes as a number, or text with `K`, `M` or `G`.

@@ -21,7 +21,7 @@
 //! - `docker save` is available everywhere the Docker backend already works,
 //!   which is where the image comes from;
 //! - its layer blobs are uncompressed tars, so unpacking needs no decompressor
-//!   and this crate keeps its single dependency.
+//!   and the reader needs no layer decompressor.
 //!
 //! A compressed layer blob (`podman save` and some other writers gzip them) is
 //! refused before anything is written; the archive must be produced by
@@ -35,8 +35,10 @@
 //! requested digest. An archive whose config digest is something else is
 //! refused before anything is unpacked, so a Sandbox never runs a root other
 //! than the one the deployment named. The config blob is not re-hashed here:
-//! the archive arrives inside a sealed bundle that the provider copies in
-//! whole, and this crate has no hashing dependency of its own.
+//! the runtime archive arrives inside a sealed bundle that the provider copies
+//! in whole. Read-only inventory verifies the config blob hash; user imports
+//! additionally verify every uncompressed layer against `rootfs.diff_ids`
+//! before publication. Listing never rehashes layer contents.
 //!
 //! # One unpack per digest
 //!
@@ -96,7 +98,7 @@ mod layers;
 mod tar;
 mod types;
 
-pub use archive::{holds, image_of};
-pub use cache::{cache, ensure, lookup};
+pub use archive::{holds, image_of, images, validate_import, ImageEntry};
+pub use cache::{cache, ensure, ensure_flat, ensure_held, lookup, remove, ImageHold};
 pub use types::ImageRoot;
 pub(crate) use types::{refuse, PATH_MAX};

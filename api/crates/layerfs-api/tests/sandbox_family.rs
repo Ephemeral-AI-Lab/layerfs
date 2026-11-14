@@ -125,6 +125,28 @@ fn named_sandboxes_on_native() {
         .unwrap()
         .unwrap();
     assert!(record.get("op").is_none(), "{record:?}");
+    // Host-process Sandboxes store `local`, not an image digest. Reads
+    // must still reach the daemon; public image overrides stay strict.
+    let inspected = ok(&home, "sandbox.get", &[("name", t("t1"))]);
+    assert_eq!(inspected.get_text("state"), Some("running"));
+    assert_eq!(inspected.get("image"), made.get("image"));
+    let invalid = call(
+        &home,
+        "sandbox.create",
+        &[
+            ("project", t("shop/api")),
+            ("name", t("invalid-image")),
+            ("machine", t("native")),
+            ("image", t("local")),
+        ],
+    );
+    // macOS native runs no image: refused, never dropped for the default (R0)
+    let expected = if cfg!(target_os = "macos") {
+        "Unsupported"
+    } else {
+        "InvalidInput"
+    };
+    assert_eq!(invalid.unwrap_err().0, expected);
     let taken = call(
         &home,
         "sandbox.create",

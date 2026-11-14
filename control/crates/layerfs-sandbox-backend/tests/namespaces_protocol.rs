@@ -24,6 +24,7 @@ fn spec() -> HelperSpec {
         upper: PathBuf::from("/var/lib/layerfs/local/sandbox-1/overlay/upper"),
         work: PathBuf::from("/var/lib/layerfs/local/sandbox-1/overlay/work"),
         binds: vec![Bind::store(Path::new("/layerfs-store/project/store.sqlite")).unwrap()],
+        runtime: None,
     }
 }
 
@@ -37,6 +38,98 @@ fn the_init_spec_roundtrips() {
     assert_eq!(text.lines().count(), 9);
     assert!(text.starts_with("root=/var/lib/layerfs/local/sandbox-1.root\n"));
     assert!(text.ends_with("\nbind=rw\t/layerfs-store/project\t/layerfs-store/project\n"));
+}
+
+/// R5: a spec may name the Sandbox's runtime layer once; it roundtrips, and
+/// a spec written before it (the eight fields and binds, no runtime line)
+/// still parses, with no runtime.
+#[test]
+fn the_runtime_is_optional_and_roundtrips() {
+    let with = HelperSpec {
+        runtime: Some(PathBuf::from("/var/lib/layerfs/local/sandbox-1/runtime")),
+        ..spec()
+    };
+    let encoded = with.encode().unwrap();
+    assert_eq!(HelperSpec::parse(&encoded).unwrap(), with);
+    let text = String::from_utf8(encoded).unwrap();
+    assert!(text.contains("\nruntime=/var/lib/layerfs/local/sandbox-1/runtime\n"));
+    assert_eq!(text.lines().count(), 10);
+    // an eight-field spec, as a Sandbox made before the runtime layer has it
+    let old = [
+        "root=/var/lib/layerfs/local/sandbox-1.root",
+        "sandbox=/var/lib/layerfs/local/sandbox-1",
+        "daemon=/var/lib/layerfs/local/sandbox-1/bin/layerfs-daemon",
+        "config=/var/lib/layerfs/local/sandbox-1/config/daemon.setup",
+        "cgroup=/sys/fs/cgroup/layerfs/0000000000000000000000000000000000000000000000000000000000000001",
+        "lower=/var/lib/layerfs/local/images/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "upper=/var/lib/layerfs/local/sandbox-1/overlay/upper",
+        "work=/var/lib/layerfs/local/sandbox-1/overlay/work",
+        "bind=rw\t/layerfs-store/project\t/layerfs-store/project",
+    ]
+    .join("\n");
+    assert_eq!(HelperSpec::parse(old.as_bytes()).unwrap(), spec());
+    // twice, or not absolute, is refused
+    let twice = format!(
+        "{}runtime=/a\nruntime=/b\n",
+        String::from_utf8(spec().encode().unwrap()).unwrap()
+    );
+    assert!(HelperSpec::parse(twice.as_bytes()).is_err());
+    let relative = format!(
+        "{}runtime=runtime\n",
+        String::from_utf8(spec().encode().unwrap()).unwrap()
+    );
+    assert!(HelperSpec::parse(relative.as_bytes()).is_err());
+    let bad = HelperSpec {
+        runtime: Some(PathBuf::from("/a/../b")),
+        ..spec()
+    };
+    assert!(bad.encode().is_err());
+}
+
+fn line(command: &std::process::Command) -> Vec<String> {
+    std::iter::once(command.get_program())
+        .chain(command.get_args())
+        .map(|word| word.to_string_lossy().into_owned())
+        .collect()
+}
+
+/// R5: with a runtime the daemon starts through the runtime's loader, on its
+/// libraries only, and is told the runtime; without one, as before.
+#[test]
+fn the_daemon_starts_through_the_runtime_loader_when_the_spec_has_one() {
+    let with = HelperSpec {
+        runtime: Some(PathBuf::from("/var/lib/layerfs/local/sandbox-1/runtime")),
+        ..spec()
+    };
+    let command = with.daemon_command().unwrap();
+    let loader = layerfs_bridge::sandbox_runtime::LOADER.unwrap();
+    assert_eq!(
+        line(&command),
+        [
+            format!("/.layerfs/runtime/lib/{loader}").as_str(),
+            "--inhibit-cache",
+            "--library-path",
+            "/.layerfs/runtime/lib",
+            "/var/lib/layerfs/local/sandbox-1/bin/layerfs-daemon",
+            "--config",
+            "/var/lib/layerfs/local/sandbox-1/config/daemon.setup",
+        ]
+    );
+    let told = command
+        .get_envs()
+        .find(|(name, _)| *name == "LAYERFS_SANDBOX_RUNTIME")
+        .and_then(|(_, value)| value);
+    assert_eq!(told, Some(std::ffi::OsStr::new("/.layerfs/runtime")));
+    let without = spec().daemon_command().unwrap();
+    assert_eq!(
+        line(&without),
+        [
+            "/var/lib/layerfs/local/sandbox-1/bin/layerfs-daemon",
+            "--config",
+            "/var/lib/layerfs/local/sandbox-1/config/daemon.setup",
+        ]
+    );
+    assert_eq!(without.get_envs().count(), 0);
 }
 
 /// #535 §6.3: a sqlite Store's Sandbox binds its Store's directory

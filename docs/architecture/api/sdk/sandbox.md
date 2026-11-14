@@ -45,22 +45,22 @@ Starts a named Sandbox for one project on a machine, ready for
 `workspace.mount`.
 
 ```text
-JS      await layerfs.sandbox.create(project, name, machine?, { image })
-Python  layerfs.sandbox.create(project, name, machine=None, *, image=None)
-CLI     layerfs sandbox create <project> <name> [<machine>] [--image <image>]
+JS      await layerfs.sandbox.create(project, name, machine?, { image, on_progress })
+Python  layerfs.sandbox.create(project, name, machine=None, *, image=None, on_progress=None)
+CLI     layerfs sandbox create <project> <name> [<machine>] [--image <image>] [--progress]
 ```
 
 | Argument | Kind | Rule |
 | --- | --- | --- |
 | `name` | Name | unique across the home; not `native` or `docker` (built-in machine names) |
 | `machine` (optional) | Name | default a sqlite Store's machine, else `native`; a sqlite Store's Sandbox must run on that machine, and the support table's `sandbox_allowed` must accept the platform and Store kind |
-| `image` option | Text | a digest `sha256:<64 hex>` of an image the bundle's Sandbox image archive holds; default the machine record's image (not on `docker`), else the archive's; sent in the deploy settings ([`deploy.rs`](../../../../control/crates/layerfs-sandbox/src/deploy.rs)) |
+| `image` option | Image | a digest, Docker image Id or Docker reference: one the machine holds (unpacked, or in its archive) starts at once; any other is copied from the host's Docker first, as [`machine.load`](machine.md#machineload) does (progress `inspect`, `export`, `send`, `unpack`, then `start`). Default the machine record's image (not on `docker`), else the archive's; refused on macOS `native` ([`deploy.rs`](../../../../control/crates/layerfs-sandbox/src/deploy.rs), [`image_load.rs`](../../../../control/crates/layerfs-sandbox/src/image_load.rs)) |
 
 | Field | Meaning |
 | --- | --- |
 | `platform` | `docker` (the docker machine), `mac` or `linux` ([`runtime.rs`](../../../../control/crates/layerfs-sandbox/src/runtime.rs)) |
 | `runtime`, `backend` | `native` (macOS host process) or `namespaces` (Linux, the `docker` machine's worker container included) |
-| `image` | the namespaces root's digest, or `local` |
+| `image` | the namespaces root's id (a Docker image Id or a config digest), or `local`; each create sets that image's sidecar `last_used` |
 | `route` | `nfs` for a macOS host process, else `fuse` ([`files.rs`](../../../../control/crates/layerfs-sandbox/src/files.rs)) |
 | `forward_failed` | why the caller could not forward the daemon port; Workspace calls then go through the worker ([`sandbox/create.rs`](../../../../api/crates/layerfs-api/src/sandbox/create.rs)) |
 
@@ -73,11 +73,13 @@ first. Nothing starts a stopped machine.
 
 | Error | When |
 | --- | --- |
-| `InvalidInput` | `native`/`docker` as the name, a malformed image digest |
+| `InvalidInput` | `native`/`docker` as the name; an image Docker does not have |
+| `NoSpace` | copying the image needs `2 × size × 1.05` bytes and the machine has fewer (`detail { need, free }`) |
+| `Unavailable` | the machine is stopped (`detail { what: "machine" }`) or Docker cannot be read (`detail { what: "docker" }`) |
 | `NotFound` | no machine of that name |
 | `NoStore` | the project has no installed Store |
 | `Exists` | the name is taken, or the machine already records a started Sandbox of it |
-| `Unsupported` | the platform cannot run this Store kind; a sqlite Store on another machine; no image archive in the bundle |
+| `Unsupported` | the platform cannot run this Store kind; a sqlite Store on another machine; no image archive in the bundle; an image on macOS `native` (`detail { reason: "host" }`) or for another architecture (`detail { reason: "arch", value }`) |
 | `Failed` | the start failed and every effect is known: the Sandbox was stopped and deleted (`detail { container, removed, log }`, [`launch/local.rs`](../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `abandon`) |
 | `Unknown` | the worker's answer was lost, the start's effect is unknown, or it started but could not be recorded: the record keeps its `op` with `uncertain: true` and `state` is `unresolved` |
 

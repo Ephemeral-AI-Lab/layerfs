@@ -21,7 +21,7 @@ the [contract](../../architecture/control/machines/platforms.md#removed-platform
 | Kind | How many | Made by | Sandboxes run as | Tool |
 | --- | --- | --- | --- | --- |
 | `native` | one, built in | — | macOS: host processes with a loopback NFS mount (each sqlite Store's directory must be owned by this user and private, mode `0700`). Linux: namespaces (needs root). Windows: none; `native` holds only records (O5) | — |
-| `docker` | one, built in | — | namespaces inside its worker container (D-8), rooted in the bundle's Sandbox image. The image `machine update docker --image` records, else the bundle's Sandbox image loaded into Docker once (#535 P5), is the worker container's; see Routes | `docker` |
+| `docker` | one, built in | — | namespaces inside its worker container (D-8), rooted in the bundle's Sandbox image or an image copied from the host's Docker (`--image`). The image `machine update docker --image` records, else the bundle's Sandbox image loaded into Docker once (#535 P5), is the worker container's; see Routes | `docker` |
 | `apple-container` | many | `machine create` | namespaces inside the VM | `container` |
 | `lima` | many | `machine create` | namespaces inside the VM | `limactl` |
 
@@ -88,7 +88,11 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   Chromium and Selenium), sealed into the bundle as `sandbox-image.tar`.
   `--image` (and `machine update native --image`) chooses another. On
   `docker` the recorded `image` is only its worker container's image; its
-  Sandboxes' root is the bundle's `sandbox-image.tar` (D-8).
+  Sandboxes' root is the bundle's `sandbox-image.tar` (D-8) unless
+  `sandbox create --image` names another. Any local Docker image (a
+  reference or Id) can be named on `docker`, `lima` and
+  `apple-container`: it is copied to the machine once and reused
+  (`machine images`, `machine load`, `machine prune`).
   The image is not published yet; a build places it with the bundle.
 - A create checks the kind's tools first; a missing tool is `Unsupported`
   with `detail.missing`.
@@ -226,8 +230,11 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   layerfs-project#111). The worker container is privileged, in a cgroup
   namespace of its own, and mounts only its data volume and the bundle
   (never the Docker Engine socket). A Sandbox's root is the bundle's
-  `sandbox-image.tar`; `--image sha256:<64 hex>` names a digest that
-  archive must hold. Its record keeps `platform: "docker"` and shows
+  `sandbox-image.tar`, or the image `--image` names: a digest that archive
+  holds, or a host Docker image (reference or Id) that the host exports
+  and sends to the worker once, unpacked under the worker's
+  `machines/native/run/images/`. The worker never sees the Docker socket.
+  Its record keeps `platform: "docker"` and shows
   `backend: "namespaces"`. A PostgreSQL Store's Sandbox starts the same way
   as a sqlite Store's on that machine; it binds no Store file. A Sandbox
   recorded under the retired docker backend (one container per Sandbox) is

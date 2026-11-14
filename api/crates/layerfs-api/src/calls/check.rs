@@ -41,6 +41,7 @@ pub fn check(call: &Call, args: SdkValue) -> Result<Vec<(String, SdkValue)>, Sdk
 fn kind(call: &Call, name: &str, kind: Kind, value: SdkValue) -> Result<SdkValue, SdkRefusal> {
     let ok = match (&kind, &value) {
         (Kind::Name | Kind::Text, SdkValue::Text(_)) => true,
+        (Kind::Image, SdkValue::Text(text)) => !text.trim().is_empty(),
         (Kind::Project, SdkValue::Text(text)) => {
             layerfs_home::names::project(text)
                 .map_err(|refusal| refused("InvalidInput", refusal))?;
@@ -92,6 +93,7 @@ fn describe(kind: Kind) -> &'static str {
         Kind::Int => "a whole number",
         Kind::Bool => "true or false",
         Kind::Json => "JSON",
+        Kind::Image => "an image: a sha256 digest, Docker image Id or Docker reference",
         Kind::Content => "text or bytes",
         Kind::Size => "a size such as 512M or 8G",
         Kind::Function => "a function",

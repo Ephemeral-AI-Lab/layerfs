@@ -243,9 +243,27 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 - A sqlite project's Sandbox runs on the machine that holds its Store;
   another machine is `Unsupported`, naming the Store's machine.
 - On `docker` a Sandbox runs `namespaces` in the docker machine's worker
-  container (D-8). Its root comes from the sealed bundle's
-  `sandbox-image.tar` in the worker; `image` (a `sha256:` digest) names an
-  image that archive must hold, as on a VM. The worker container's own
+  container (D-8). Its root is the sealed bundle's `sandbox-image.tar`
+  unless `image` names another. `image` (call-table kind `image`) is a
+  `sha256:` digest, a Docker image Id or a Docker reference
+  (`postgres:17-bookworm`), on every machine but macOS `native`, which
+  refuses it `Unsupported` `{reason: "host"}`. An image the machine holds
+  (unpacked, or in its archive) starts at once; any other is resolved with
+  `docker image inspect` through the `docker` machine's recorded socket
+  (else Docker's default context), refused `Unsupported`
+  `{reason: "arch", value}` for another architecture, `NoSpace`
+  `{need, free}` when `2 × size × 1.05` is over the machine's free bytes
+  (`size`: what the image's layers unpack to, the sum of `docker history`'s
+  layer sizes, or the export container's root if larger),
+  and otherwise exported once (`docker create` + `docker export`, without
+  the init layer's files), sent in 1 MiB frames and unpacked on the
+  machine under `machines/native/run/images/<hex>.2/` with a sidecar
+  `<hex>.2.json`; the staged tar is deleted. Docker unreachable is
+  `Unavailable` `{what: "docker"}`, the machine stopped `Unavailable`
+  `{what: "machine"}`. `--progress` reports `inspect`, `export`, `send`
+  (`done`, `total`; `total` is an estimate until the last `send` event,
+  which has `done` equal to `total`, the bytes sent), `unpack` and `start`. The record keeps the image's id,
+  and every create sets its sidecar's `last_used`. The worker container's own
   image is the one `machine update docker --image` recorded, else that
   archive, loaded into Docker once and recorded on the docker machine as
   `loaded_image` (`{id, bundle}`; another bundle's image is loaded again).
@@ -367,13 +385,16 @@ form.
   Routes.
 - Not run for this manual.
 
-### `machine` (9)
+### `machine` (12)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `list` | — | — | every machine, with what it supports (`supports`) |
 | `platforms` | — | — | the platforms this host and build support: backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox runs and why not, readiness and options (#535; the rows of `control/SUPPORT.json`) |
 | `get` | `name` | — | a machine's record |
+| `images` | `name` | — | the Sandbox images the machine holds (`images`: `id`, `refs`, `size`, `architecture`, `source` `bundle`/`machine`/`imported`, `sandboxes`, `last_used`), its `default`, `free` bytes and `architecture`; and the host's tagged Docker images it could copy (`docker`, `available`: `id`, `refs`, `size`, `os`, `architecture`, `usable`, `reason`, `need`, `fits`). macOS `native` answers `mode: "host"` with none. Never starts a machine |
+| `load` | `name`, `image` | `on_progress` | copies an image to the machine as `sandbox create --image` does, without a Sandbox: `{id, refs, size, reused}` |
+| `prune` | `name`, `image`? | `unused` | removes one unpacked image, or with `unused` every one no Sandbox uses but the machine's default: `{removed, freed}` (`freed` measured on the filesystem); an image in use is `InUse` |
 | `status` | `name` | — | a machine's live state, free disk and tool version; `op` while a create or remove holds it (#536 H6) |
 | `start` | `name` | — | starts a stopped machine and its worker and waits until ready; a running one, and `native`, answer at once (#535 P1) |
 | `stop` | `name` | — | stops a machine's worker and, where it has one, its VM; disks stay; `InUse` while Sandboxes run on it (#535 P1) |
