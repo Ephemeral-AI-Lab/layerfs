@@ -18,15 +18,17 @@
 //!
 //! Whenever a write leaves a companion holding a whole AppleDouble image the
 //! client laid out itself (see [`crate::apple_double_codec`]), it is decoded: a
-//! small one keeps only its FinderInfo and attributes in memory (at most
-//! [`DECODED_BYTES`] in all, each at most [`DECODED_ENTRY_BYTES`]), and every
-//! read synthesizes the same bytes again.
+//! small one keeps only its FinderInfo and attributes in memory (each at most
+//! [`DECODED_ENTRY_BYTES`] counted), and every read synthesizes the same bytes
+//! again.
 //!
 //! The memory is bounded: [`HELD`] companions of at most [`FILE_BYTES`] each,
-//! [`RESIDENT_BYTES`] of written bodies and [`DECODED_BYTES`] of decoded ones
-//! counted as [`Image::cost`]. Beyond the count a creation is refused
+//! and [`RESIDENT_BYTES`] of bodies in all, a body kept as written counted at
+//! its length and a decoded one as [`Image::cost`], so a decoded image is never
+//! memory the budget cannot see. Beyond the count a creation is refused
 //! (`NFS3ERR_ACCES`, as before this module), beyond a file's bytes a write
-//! (`NFS3ERR_FBIG`), beyond the resident body budget a write (`NFS3ERR_NOSPC`).
+//! (`NFS3ERR_FBIG`), beyond the body budget a write (`NFS3ERR_NOSPC`), which
+//! leaves the companion exactly as it was.
 use crate::{
     apple_double_codec::Image,
     attributes::Status,
@@ -49,12 +51,12 @@ pub const SERIALS: u64 = 1 << 62;
 pub const HELD: usize = 4096;
 /// Largest companion kept.
 pub const FILE_BYTES: u64 = 1 << 20;
-/// Companion payload bytes kept resident in memory before a write is refused.
+/// Companion payload bytes kept resident in memory before a write is refused:
+/// a body kept as written counts its length, a decoded one [`Image::cost`].
 pub const RESIDENT_BYTES: usize = 32 << 20;
-/// Bytes counted for all decoded companions (see [`Image::cost`]).
-pub const DECODED_BYTES: usize = 512 << 20;
-/// Bytes counted for one decoded companion; a larger whole image keeps its
-/// bytes as written.
+/// Most bytes counted for one decoded companion, [`Image::cost`]; a whole
+/// image costing more keeps its bytes as written, so one companion cannot take
+/// the whole budget.
 pub const DECODED_ENTRY_BYTES: usize = 128 << 10;
 /// Mode of a companion created without one.
 const MODE: u32 = 0o644;
@@ -74,16 +76,12 @@ struct Companion {
     metadata: PortableMetadata,
 }
 impl Companion {
-    fn resident_len(&self) -> usize {
+    /// The bytes it takes of [`RESIDENT_BYTES`]: its body as written, or what
+    /// its decoded form is counted as.
+    fn resident_cost(&self) -> usize {
         match &self.body {
             Body::Resident(bytes) => bytes.len(),
-            Body::Decoded(_) => 0,
-        }
-    }
-    fn decoded_cost(&self) -> usize {
-        match &self.body {
             Body::Decoded(image) => image.cost(),
-            Body::Resident(_) => 0,
         }
     }
 }
@@ -93,7 +91,7 @@ impl Companion {
 pub(crate) struct Holding {
     pub held: usize,
     pub decoded: usize,
-    pub decoded_bytes: usize,
+    pub resident_bytes: usize,
 }
 
 /// The companions of one export.
@@ -104,7 +102,6 @@ pub(crate) struct Companions {
     names: HashMap<(u64, Vec<u8>), u64>,
     resident_bytes: usize,
     decoded: usize,
-    decoded_bytes: usize,
 }
 impl Companions {
     pub(crate) fn len(&self) -> usize {
@@ -122,18 +119,16 @@ impl Companions {
     }
     /// Adds `file` to the index and to the byte counts.
     fn attach(&mut self, serial: u64, file: Companion) {
-        self.resident_bytes += file.resident_len();
+        self.resident_bytes += file.resident_cost();
         self.decoded += usize::from(matches!(file.body, Body::Decoded(_)));
-        self.decoded_bytes += file.decoded_cost();
         self.files.insert(serial, file);
     }
     /// Takes `serial` out of the index and the counts; its name key stays for
     /// the caller to unindex.
     fn detach(&mut self, serial: u64) -> Option<Companion> {
         let file = self.files.remove(&serial)?;
-        self.resident_bytes -= file.resident_len();
+        self.resident_bytes -= file.resident_cost();
         self.decoded -= usize::from(matches!(file.body, Body::Decoded(_)));
-        self.decoded_bytes -= file.decoded_cost();
         Some(file)
     }
     /// Drops `serial` and its name key.
@@ -143,7 +138,7 @@ impl Companions {
         }
     }
     /// Decides whether `file`'s body is a whole image: one that parses back to
-    /// the same bytes and that the decoded budget takes. `file` must be
+    /// the same bytes and that [`DECODED_ENTRY_BYTES`] takes. `file` must be
     /// detached from the index.
     fn classify(&self, file: &mut Companion) {
         let Body::Resident(bytes) = &file.body else {
@@ -152,25 +147,23 @@ impl Companions {
         let Some(image) = Image::compact(bytes) else {
             return;
         };
-        let cost = image.cost();
-        if cost <= DECODED_ENTRY_BYTES && self.decoded_bytes + cost <= DECODED_BYTES {
+        if image.cost() <= DECODED_ENTRY_BYTES {
             file.body = Body::Decoded(image);
         }
     }
     /// Replaces `serial`'s body by `len` bytes built from it by `apply`, kept
-    /// within the budgets: a body that decodes costs its attributes, not its
-    /// bytes, and any other body stays in memory only while [`RESIDENT_BYTES`]
-    /// takes it. All of it or nothing: a body the budgets cannot take leaves
-    /// the companion exactly as it was.
+    /// within [`RESIDENT_BYTES`]: a body that decodes is counted as its
+    /// attributes, not as its bytes, and any other body stays in memory only
+    /// while the budget takes it. All of it or nothing: a body the budget
+    /// cannot take leaves the companion exactly as it was.
     fn edit_body(
         &mut self,
         serial: u64,
         len: usize,
         apply: impl FnOnce(&mut Vec<u8>),
     ) -> Result<(), Status> {
-        let avail = RESIDENT_BYTES.saturating_sub(self.resident_bytes);
         let mut file = self.detach(serial).ok_or(Status::Stale)?;
-        let need = len.saturating_sub(file.resident_len());
+        let avail = RESIDENT_BYTES.saturating_sub(self.resident_bytes);
         let before_len = file.len;
         let original = std::mem::replace(&mut file.body, Body::Resident(Vec::new()));
         let mut bytes = match &original {
@@ -182,9 +175,10 @@ impl Companions {
         file.body = Body::Resident(bytes);
         file.len = len;
         self.classify(&mut file);
-        if need > avail && !matches!(file.body, Body::Decoded(_)) {
-            // The body does not decode and the resident budget does not take
-            // it: the companion keeps what it had and the caller answers NOSPC.
+        if file.resident_cost() > avail {
+            // Neither as bytes nor as attributes does the body fit what the
+            // budget has left: the companion keeps what it had and the caller
+            // answers NOSPC.
             file.body = original;
             file.len = before_len;
             self.attach(serial, file);
@@ -211,7 +205,7 @@ impl Companions {
         Holding {
             held: self.files.len(),
             decoded: self.decoded,
-            decoded_bytes: self.decoded_bytes,
+            resident_bytes: self.resident_bytes,
         }
     }
 }

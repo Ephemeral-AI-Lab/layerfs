@@ -81,12 +81,21 @@ fn the_clients_write_sequence_is_served_byte_for_byte() {
     c.write(&ad.handle, 50, &whole[50..]).unwrap();
     assert_eq!(c.read_all(&ad.handle, 64 * 1024), whole);
     assert_eq!(server.held().companions_decoded, 1);
+    // The decoded form is memory too: it is counted against the same resident
+    // budget as a body kept as written, at what its attributes cost.
+    let decoded = Image::compact(&whole).expect("the client's image decodes");
+    assert_eq!(server.held().companion_bytes, decoded.cost());
 
     // A delete and rebuild starts empty and decodes the rewrite again.
     c.remove(&root, b"._seq").unwrap();
     assert_eq!(c.getattr(&ad.handle), Err(STALE));
     let again = c.touch(&root, b"._seq", 0o644).unwrap();
     assert_eq!(again.attr.size, 0);
+    assert_eq!(
+        server.held().companion_bytes,
+        0,
+        "the removed companion gave its bytes back"
+    );
     assert_eq!(c.read_all(&again.handle, 4096), Vec::<u8>::new());
     let rebuilt = image(
         [0x44; 32],
@@ -97,6 +106,8 @@ fn the_clients_write_sequence_is_served_byte_for_byte() {
     );
     c.write(&again.handle, 0, &rebuilt).unwrap();
     assert_eq!(c.read_all(&again.handle, 128 * 1024), rebuilt);
+    let rebuilt_cost = Image::compact(&rebuilt).expect("decodes").cost();
+    assert_eq!(server.held().companion_bytes, rebuilt_cost);
 
     // An edit that leaves the image not whole is served as written, and a
     // later edit that completes it decodes again: both are the client's own
@@ -106,9 +117,15 @@ fn the_clients_write_sequence_is_served_byte_for_byte() {
     c.write(&again.handle, 24, b"EDIT").unwrap();
     assert_eq!(c.read_all(&again.handle, 128 * 1024), edited);
     assert_eq!(server.held().companions_decoded, 0);
+    assert_eq!(
+        server.held().companion_bytes,
+        edited.len(),
+        "a body kept as written counts its length"
+    );
     c.write(&again.handle, 24, &rebuilt[24..28]).unwrap();
     assert_eq!(c.read_all(&again.handle, 128 * 1024), rebuilt);
     assert_eq!(server.held().companions_decoded, 1);
+    assert_eq!(server.held().companion_bytes, rebuilt_cost);
 
     // Truncating below the image is served as the client's truncation, and
     // resizing back up serves zeros, as on any file.
