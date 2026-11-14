@@ -1,6 +1,6 @@
 # LayerFS GC Specification (single file)
 
-> **Status:** Proposal; target LayerFS 2.0.0; not a released contract.
+> **Status:** **FROZEN 2026-11-13** by the owner on layerfs-project#42 item 13 — §1.1 S1–S11 and §5 C1–C10 + C8b are the frozen contract for LayerFS 2.0.0. Anything after this date needs a new decision entry on #42 before it changes a frozen sentence.
 
 > **Authority:** may be merged into layerfs-project#42 as a whole. **This file is the only authoritative version.** In this directory the other documents derive from it and cite its section numbers.
 > **Scope:** the mechanism layer of layerfs-project#41: correctness of collection decisions, sweep recoverability, fences, reporting definitions, acceptance shape.
@@ -105,7 +105,7 @@
 
 ## 5. Contracts
 
-The following 11 items (C1–C10 and C8b) are frozen before implementation; changes need owner approval.
+The following 11 items (C1–C10 and C8b) are **frozen as of 2026-11-13** (layerfs-project#42 item 13). A change needs a new decision entry on #42 first; a silent edit of a frozen sentence is a defect.
 
 ### C1 Root set and generation (S1)
 - The generation `G` is the Store generation, `history_meta.catalog_incarnation`; no per-root or per-commit counter is added (C8 forbids a second generation field). It is bumped by the install of `store.compact` (C8).
