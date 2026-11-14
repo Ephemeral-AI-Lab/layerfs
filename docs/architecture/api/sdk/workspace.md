@@ -225,8 +225,12 @@ with a forced attempt (the daemon's guard remains the real gate, and `Busy`,
 `Dirty`, or an unsent call restores the earlier record). A `Failed` answer
 without a stage — a send or connect failure, or a refusal before any effect —
 and an in-progress, `Unknown`, already-forced, other-stage or pre-`forced`
-record keeps its answer and is not forceable. A Workspace the daemon no longer
-knows answers `Unmounted`
+record keeps its answer and is not forceable. The record is versioned (`v`):
+version 1 adds `forced` and the daemon's `stage` to version 0's `state`,
+`startedMs`, `path`, `code`, `message` and `detail`. A version-0 record has
+neither field and is read and answered as before; a record from a newer
+version is answered as it stands and is never forceable. A Workspace the daemon
+no longer knows answers `Unmounted`
 ([`unmount_guard.rs`](../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs)).
 
 | Error | When |

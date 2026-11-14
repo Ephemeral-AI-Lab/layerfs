@@ -118,7 +118,7 @@ fn unmount_guard_forceable_rejects_crashed_and_already_forced_records() {
         // 1. Crashed force unmount (state=Unmounting, forced=true, no active lock -> code=Unknown)
         write_rec(
             "01.unmount",
-            r#"{"state":"Unmounting","startedMs":1,"path":"/w/1","forced":true}"#,
+            r#"{"v":1,"state":"Unmounting","startedMs":1,"path":"/w/1","forced":true}"#,
         );
         let r1 = layerfs_sandbox::unmount_guard::find_in(&dir, "/w/1")
             .unwrap()
@@ -130,7 +130,7 @@ fn unmount_guard_forceable_rejects_crashed_and_already_forced_records() {
         // 2. Crashed normal unmount (state=Unmounting, forced=false, no active lock -> code=Unknown)
         write_rec(
             "02.unmount",
-            r#"{"state":"Unmounting","startedMs":1,"path":"/w/2","forced":false}"#,
+            r#"{"v":1,"state":"Unmounting","startedMs":1,"path":"/w/2","forced":false}"#,
         );
         let r2 = layerfs_sandbox::unmount_guard::find_in(&dir, "/w/2")
             .unwrap()
@@ -141,7 +141,7 @@ fn unmount_guard_forceable_rejects_crashed_and_already_forced_records() {
         // 3. Completed forced unmount that remained Retained (forced=true, code=Failed)
         write_rec(
             "03.unmount",
-            r#"{"state":"Retained","startedMs":1,"path":"/w/3","forced":true,"code":"Failed","message":"m","detail":null}"#,
+            r#"{"v":1,"state":"Retained","startedMs":1,"path":"/w/3","forced":true,"code":"Failed","message":"m","detail":null}"#,
         );
         let r3 = layerfs_sandbox::unmount_guard::find_in(&dir, "/w/3")
             .unwrap()
@@ -152,7 +152,7 @@ fn unmount_guard_forceable_rejects_crashed_and_already_forced_records() {
         //    (forced=false, code=Failed, stage=Detach) -> forceable!
         write_rec(
             "04.unmount",
-            r#"{"state":"Retained","startedMs":1,"path":"/w/4","forced":false,"stage":"Detach","code":"Failed","message":"m","detail":null}"#,
+            r#"{"v":1,"state":"Retained","startedMs":1,"path":"/w/4","forced":false,"stage":"Detach","code":"Failed","message":"m","detail":null}"#,
         );
         let r4 = layerfs_sandbox::unmount_guard::find_in(&dir, "/w/4")
             .unwrap()
@@ -164,12 +164,32 @@ fn unmount_guard_forceable_rejects_crashed_and_already_forced_records() {
         //    not replace it.
         write_rec(
             "05.unmount",
-            r#"{"state":"Retained","startedMs":1,"path":"/w/5","forced":false,"code":"Failed","message":"m","detail":null}"#,
+            r#"{"v":1,"state":"Retained","startedMs":1,"path":"/w/5","forced":false,"code":"Failed","message":"m","detail":null}"#,
         );
         let r5 = layerfs_sandbox::unmount_guard::find_in(&dir, "/w/5")
             .unwrap()
             .unwrap();
         assert!(!layerfs_sandbox::unmount_guard::forceable(&r5));
+
+        // 6. A version-0 record (no `v`): answered, never forceable.
+        write_rec(
+            "06.unmount",
+            r#"{"state":"Retained","startedMs":1,"path":"/w/6","code":"Failed","message":"m","detail":null}"#,
+        );
+        let r6 = layerfs_sandbox::unmount_guard::find_in(&dir, "/w/6")
+            .unwrap()
+            .unwrap();
+        assert!(!layerfs_sandbox::unmount_guard::forceable(&r6));
+
+        // 7. A record from a newer version: answered, never forceable.
+        write_rec(
+            "07.unmount",
+            r#"{"v":2,"state":"Retained","startedMs":1,"path":"/w/7","forced":false,"stage":"Detach","code":"Failed","message":"m","detail":null}"#,
+        );
+        let r7 = layerfs_sandbox::unmount_guard::find_in(&dir, "/w/7")
+            .unwrap()
+            .unwrap();
+        assert!(!layerfs_sandbox::unmount_guard::forceable(&r7));
 
         std::fs::remove_dir_all(dir).unwrap();
         let _ = send.send(());

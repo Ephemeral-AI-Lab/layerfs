@@ -4,7 +4,7 @@ use layerfs_bridge::control::{
     Request, SdkRefusal, SdkValue, TeardownCustody, TeardownStage, UnmountControl, WorkspaceToken,
 };
 use layerfs_history::WorkspaceId;
-use layerfs_sandbox::unmount_guard::{begin_at, cancel, finish, forceable, repeat};
+use layerfs_sandbox::unmount_guard::{begin_at, cancel, find_in, finish, forceable, repeat};
 use layerfs_sandbox::{lifecycle, OperationCause, OperationFailure};
 use layerfs_store::project::discovery;
 use std::{
@@ -32,6 +32,7 @@ fn record_file(dir: &Path) -> PathBuf {
 /// with its export still held at `Detach`.
 fn completed() -> SdkValue {
     SdkValue::map([
+        ("v", SdkValue::Int(1)),
         ("state", SdkValue::text("Retained")),
         ("startedMs", SdkValue::Int(7)),
         ("path", SdkValue::text("/w")),
@@ -48,6 +49,7 @@ fn completed() -> SdkValue {
 fn completed_at(stage: Option<&str>) -> SdkValue {
     let mut fields = Vec::new();
     for (name, value) in [
+        ("v", SdkValue::Int(1)),
         ("state", SdkValue::text("Retained")),
         ("startedMs", SdkValue::Int(7)),
         ("path", SdkValue::text("/w")),
@@ -215,4 +217,91 @@ fn refusal_at(stage: &str) -> SdkRefusal {
         message: "retained".into(),
         detail: SdkValue::map([("stage", SdkValue::text(stage))]),
     }
+}
+
+/// A version-0 record (the base of #644): no `v`, no `forced`, no `stage`.
+fn version_zero() -> SdkValue {
+    SdkValue::map([
+        ("state", SdkValue::text("Retained")),
+        ("startedMs", SdkValue::Int(7)),
+        ("path", SdkValue::text("/w")),
+        ("code", SdkValue::text("Failed")),
+        ("message", SdkValue::text("client unmount: exit 1")),
+        ("detail", SdkValue::Null),
+    ])
+}
+
+/// A record written before the forced fields existed is still read and
+/// answered exactly as it was, and is never forceable.
+#[test]
+fn a_version_zero_record_is_answered_and_never_forced() {
+    let dir = fixture("version-zero");
+    let file = record_file(&dir);
+    discovery::save(&file, version_zero()).unwrap();
+    let value = find_in(&dir, "/w").unwrap().expect("version-0 record");
+    assert_eq!(value.get_text("state"), Some("Retained"));
+    assert_eq!(value.get_text("code"), Some("Failed"));
+    assert!(!forceable(&value), "a pre-forced record is not forceable");
+    let error = repeat(&value).expect_err("a retained record answers Retained");
+    assert_eq!(error.code, "Failed");
+    assert_eq!(
+        error.message, "client unmount: exit 1",
+        "the version-0 message is answered unchanged"
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+/// A version-1 record answers every field the version-0 reader used, with the
+/// values it wrote: the new fields are additive, so an older reader reads the
+/// record it expects and ignores the rest.
+#[test]
+fn a_current_record_answers_every_version_zero_field() {
+    let dir = fixture("version-one");
+    let file = record_file(&dir);
+    let attempt = begin_at(file.clone(), "/w", false).unwrap();
+    finish(&attempt, "/w", &Err(refusal_at("Detach"))).unwrap();
+    let value = discovery::load(&file).unwrap();
+    assert_eq!(value.get_int("v"), Some(1));
+
+    // The version-0 field set, and only it, is what the older reader sees.
+    let older = SdkValue::Map(
+        ["state", "startedMs", "path", "code", "message", "detail"]
+            .into_iter()
+            .filter_map(|name| Some((name.to_owned(), value.get(name)?.clone())))
+            .collect(),
+    );
+    assert_eq!(older.get_text("state"), Some("Retained"));
+    assert!(older.get_int("startedMs").is_some());
+    assert_eq!(older.get_text("path"), Some("/w"));
+    assert_eq!(older.get_text("code"), Some("Failed"));
+    assert_eq!(older.get_text("message"), Some("retained"));
+    assert!(older.get("detail").is_some());
+    // The same answer either way: the newer fields never change the reading.
+    let current = repeat(&value).expect_err("retained");
+    let before = repeat(&older).expect_err("retained");
+    assert_eq!(
+        (current.code, current.message),
+        (before.code, before.message)
+    );
+    drop(attempt);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+/// A record from a newer version is answered as it stands and is never
+/// forced: this build cannot know what the newer fields mean.
+#[test]
+fn a_newer_record_is_answered_and_not_forced() {
+    let dir = fixture("version-two");
+    let file = record_file(&dir);
+    let mut fields = match completed() {
+        SdkValue::Map(fields) => fields,
+        _ => unreachable!(),
+    };
+    fields[0].1 = SdkValue::Int(2);
+    discovery::save(&file, SdkValue::Map(fields)).unwrap();
+    let value = find_in(&dir, "/w").unwrap().expect("version-2 record");
+    assert!(!forceable(&value), "a newer record is not forceable");
+    let error = repeat(&value).expect_err("retained");
+    assert_eq!(error.code, "Failed");
+    std::fs::remove_dir_all(dir).unwrap();
 }

@@ -3,6 +3,21 @@
 //! admission and shared-record cleanup, never during the daemon's helper wait.
 //! Mount paths are unique within one daemon lifetime; Sandbox removal clears
 //! the terminal records before that directory can be reused.
+//!
+//! The record is JSON in the version its `v` field names.
+//!
+//! - Version 0 (no `v`) has `state`, `startedMs`, `path`, `code`, `message`
+//!   and `detail`, and nothing else. It predates any forced attempt.
+//! - Version 1 ([`VERSION`]) adds `forced`, whether this attempt was started
+//!   with `force`, and — in a published result — `stage`, the daemon's own
+//!   retained teardown stage (`Null` when the failure never got a daemon
+//!   answer). Both are extra fields: a version-0 reader reads the version-0
+//!   fields unchanged and ignores them, which is what
+//!   `tests/unmount_record.rs` checks.
+//! - A record whose `v` is above [`VERSION`] is answered as it stands and is
+//!   never forceable: the only step that could destroy unknown custody is the
+//!   one this version does not take. Every reader keeps answering version-0
+//!   records exactly as before.
 use crate::files as discovery;
 use crate::registry::SandboxState;
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
@@ -13,6 +28,9 @@ use std::{
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
+
+/// The record version this build writes and the newest one it forces.
+const VERSION: i64 = 1;
 
 fn millis() -> i64 {
     SystemTime::now()
@@ -127,6 +145,7 @@ fn inspect(path: &std::path::Path) -> Result<Option<SdkValue>, SdkRefusal> {
         Some(_) => {
             let error = progress(&value, false);
             Ok(Some(SdkValue::map([
+                ("v", value.get("v").cloned().unwrap_or_default()),
                 ("state", SdkValue::text("Retained")),
                 (
                     "startedMs",
@@ -242,6 +261,7 @@ pub fn forceable(value: &SdkValue) -> bool {
     // the daemon's `stage`), one kept at another stage, one already forced,
     // and a record written before this field existed keep their answer.
     value.get_text("state") == Some("Retained")
+        && value.get_int("v") == Some(VERSION)
         && value.get("forced") == Some(&SdkValue::Bool(false))
         && value.get_text("code") == Some("Failed")
         && value.get_text("stage") == Some(FORCEABLE_STAGE)
@@ -276,6 +296,7 @@ pub fn begin_at(path_record: PathBuf, path: &str, forced: bool) -> Result<Attemp
     layerfs_store::project::discovery::save(
         &attempt.path,
         SdkValue::map([
+            ("v", SdkValue::Int(VERSION)),
             ("state", SdkValue::text("Unmounting")),
             ("startedMs", SdkValue::Int(attempt.started)),
             ("path", SdkValue::text(path)),
@@ -319,6 +340,7 @@ pub fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result<(), Sd
             layerfs_store::project::discovery::save(
                 &attempt.path,
                 SdkValue::map([
+                    ("v", SdkValue::Int(VERSION)),
                     ("state", SdkValue::text(state)),
                     ("startedMs", SdkValue::Int(attempt.started)),
                     ("path", SdkValue::text(path)),
