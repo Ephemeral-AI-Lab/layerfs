@@ -16,6 +16,12 @@
 //! first one); a path may not contain a control character, because the format
 //! is line based. A bind is one `bind=<rw|ro>\t<host>\t<guest>` line, which a
 //! tab (refused in every path) separates.
+//!
+//! An optional `runtime=` line names the Sandbox's copy of the bundle's
+//! runtime layer (R5, `layerfs_bridge::sandbox_runtime`), which the init stage
+//! binds read-only at `/.layerfs/runtime` and starts the daemon through. A
+//! spec without it (one written before the runtime layer, or from a bundle
+//! that has none) still parses, and that Sandbox reopens unchanged.
 use crate::{Bind, RuntimeError};
 use std::{
     os::unix::ffi::OsStrExt,
@@ -29,6 +35,8 @@ const FIELDS: [&str; 8] = [
 ];
 /// The key of a bind line.
 const BIND: &str = "bind";
+/// The key of the optional runtime line, written once after the fields.
+const RUNTIME: &str = "runtime";
 
 /// One init stage's decoded inputs.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -56,6 +64,11 @@ pub struct HelperSpec {
     /// (SQLite's WAL and the writers' directory lock then see the same inode
     /// as every other opener); none for a PostgreSQL Store.
     pub binds: Vec<Bind>,
+    /// The Sandbox's copy of the bundle's runtime layer, bound read-only,
+    /// nosuid and nodev at `/.layerfs/runtime`; the daemon then starts
+    /// through its loader. `None` for a bundle without one, and for a spec
+    /// written before it.
+    pub runtime: Option<PathBuf>,
 }
 
 impl HelperSpec {
@@ -73,6 +86,10 @@ impl HelperSpec {
             out.extend_from_slice(text(path)?.as_bytes());
             out.push(b'\n');
         }
+        if let Some(runtime) = &self.runtime {
+            check(runtime)?;
+            out.extend_from_slice(format!("{RUNTIME}={}\n", text(runtime)?).as_bytes());
+        }
         for bind in &self.binds {
             check(&bind.host)?;
             check(&bind.guest)?;
@@ -88,7 +105,8 @@ impl HelperSpec {
     }
 
     /// Decodes a spec written by [`Self::encode`]: exactly the eight fields,
-    /// each once, in any order, and any number of binds, kept in order.
+    /// each once, in any order, the runtime at most once, and any number of
+    /// binds, kept in order.
     pub fn parse(bytes: &[u8]) -> Result<Self, RuntimeError> {
         if bytes.len() > MAX {
             return Err(RuntimeError::Protocol(PATH));
@@ -96,10 +114,19 @@ impl HelperSpec {
         let text = std::str::from_utf8(bytes).map_err(|_| RuntimeError::Protocol(PATH))?;
         let mut values: [Option<PathBuf>; 8] = Default::default();
         let mut binds = Vec::new();
+        let mut runtime = None;
         for line in text.lines() {
             let (key, value) = line.split_once('=').ok_or(RuntimeError::Protocol(FIELD))?;
             if key == BIND {
                 binds.push(parse_bind(value)?);
+                continue;
+            }
+            if key == RUNTIME {
+                let path = PathBuf::from(value);
+                check(&path)?;
+                if runtime.replace(path).is_some() {
+                    return Err(RuntimeError::Protocol(FIELD));
+                }
                 continue;
             }
             let index = FIELDS
@@ -124,11 +151,33 @@ impl HelperSpec {
             upper: take(6)?,
             work: take(7)?,
             binds,
+            runtime,
         };
         for path in [&spec.lower, &spec.upper, &spec.work] {
             check_overlay(path)?;
         }
         Ok(spec)
+    }
+
+    /// The daemon's command line inside the Sandbox's root. With a runtime
+    /// layer (R5) the daemon runs through its loader on its libraries only
+    /// (`--inhibit-cache --library-path`), and `LAYERFS_SANDBOX_RUNTIME`
+    /// tells it the runtime; without one it runs on the image's own loader
+    /// and libraries, as before. The caller sets the rest of its environment.
+    pub fn daemon_command(&self) -> Result<std::process::Command, RuntimeError> {
+        use layerfs_bridge::sandbox_runtime::{command, ENVIRONMENT, GUEST};
+        let mut daemon = match &self.runtime {
+            Some(_) => {
+                let mut daemon = command(Path::new(GUEST), &self.daemon).ok_or(
+                    RuntimeError::Unsupported("this architecture has no Sandbox runtime layer"),
+                )?;
+                daemon.env(ENVIRONMENT, GUEST);
+                daemon
+            }
+            None => std::process::Command::new(&self.daemon),
+        };
+        daemon.arg("--config").arg(&self.config);
+        Ok(daemon)
     }
 
     fn fields(&self) -> [(&'static str, &Path); 8] {

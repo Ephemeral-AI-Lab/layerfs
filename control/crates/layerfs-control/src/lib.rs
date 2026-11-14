@@ -12,6 +12,8 @@ pub mod doctor;
 pub mod inventory;
 #[cfg(feature = "machine")]
 pub mod machine;
+#[cfg(feature = "machine")]
+mod machine_force;
 pub mod migrate;
 pub mod project;
 pub mod store;

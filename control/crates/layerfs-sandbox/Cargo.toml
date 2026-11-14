@@ -7,6 +7,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+sha2 = "=0.11.0"
 layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
 layerfs-history = { path = "../../../core/crates/layerfs-history" }
 layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }

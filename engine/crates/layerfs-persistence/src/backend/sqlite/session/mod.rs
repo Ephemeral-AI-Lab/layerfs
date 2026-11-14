@@ -2,6 +2,7 @@
 pub(crate) mod background;
 pub(crate) mod checkpoint;
 pub(crate) mod connection;
+pub(crate) mod lifecycle;
 pub(crate) mod prepared;
 pub(crate) mod profile;
 pub(crate) mod query;

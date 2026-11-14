@@ -30,6 +30,7 @@ ANNOTATION = {
     "size": "Size",
     "content": "Content",
     "json": "JSON",
+    "image": "str",
 }
 #: The functions an option may be, by name.
 FUNCTIONS = {

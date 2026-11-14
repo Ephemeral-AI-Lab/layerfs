@@ -62,6 +62,8 @@ enum Field {
     RuntimeId(String),
     Daemon(DaemonRecord),
     Left(String),
+    MachineStopped(bool),
+    MachineStopUnknown(bool),
 }
 
 impl fields::Field for Field {
@@ -83,6 +85,14 @@ impl fields::Field for Field {
             "runtime_id" => Self::RuntimeId(text()?),
             "daemon" => Self::Daemon(DaemonRecord::decode(value)?),
             "left" => Self::Left(text()?),
+            "machine_stopped" => Self::MachineStopped(match value {
+                SdkValue::Bool(v) => *v,
+                _ => return None,
+            }),
+            "machine_stop_unknown" => Self::MachineStopUnknown(match value {
+                SdkValue::Bool(v) => *v,
+                _ => return None,
+            }),
             _ => return None,
         })
     }
@@ -104,6 +114,8 @@ impl fields::Field for Field {
             Self::RuntimeId(_) => "runtime_id",
             Self::Daemon(_) => "daemon",
             Self::Left(_) => "left",
+            Self::MachineStopped(_) => "machine_stopped",
+            Self::MachineStopUnknown(_) => "machine_stop_unknown",
         }
     }
 
@@ -112,6 +124,7 @@ impl fields::Field for Field {
             Self::V(n) | Self::Created(n) => SdkValue::Int(*n),
             Self::Op(op) => op.to_record().clone(),
             Self::Daemon(daemon) => daemon.to_record(),
+            Self::MachineStopped(v) | Self::MachineStopUnknown(v) => SdkValue::Bool(*v),
             Self::Name(text)
             | Self::Project(text)
             | Self::Machine(text)
@@ -382,6 +395,23 @@ impl SandboxRecord {
         }))
     }
 
+    /// Whether a provider-confirmed crash stop ended this exact runtime.
+    pub fn machine_stopped(&self) -> bool {
+        self.fields
+            .get(|f| match f {
+                Field::MachineStopped(v) => Some(*v),
+                _ => None,
+            })
+            .unwrap_or(false)
+    }
+
+    /// Record a confirmed stop, or an uncertain attempted stop, symmetrically.
+    pub fn with_machine_stop(mut self, stopped: bool) -> Self {
+        self.fields.set(Field::MachineStopped(stopped));
+        self.fields.set(Field::MachineStopUnknown(!stopped));
+        self
+    }
+
     /// The Sandbox's state (#536 §7.2), from its record, its `op` and,
     /// where the call asked, the daemon's answer (`gone`: its machine
     /// answered that no such Sandbox runs): `creating` or `closing` while
@@ -392,6 +422,19 @@ impl SandboxRecord {
     /// (compute-plane 2.0 P-1: it ended behind control's back; its
     /// `sandbox.close` clears it), else `running`.
     pub fn state(&self, gone: bool) -> &'static str {
+        if self.machine_stopped() {
+            return "gone";
+        }
+        if self
+            .fields
+            .get(|f| match f {
+                Field::MachineStopUnknown(v) => Some(*v),
+                _ => None,
+            })
+            .unwrap_or(false)
+        {
+            return "unresolved";
+        }
         let op = self.op();
         match op.as_ref().map(|op| (op.standing(), op.name())) {
             Some((Standing::Running, "sandbox.close")) => "closing",

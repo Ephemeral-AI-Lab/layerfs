@@ -41,7 +41,7 @@ The call table and the one dispatcher every front end goes through: what a call 
 
 | Behaviour | Detail | Source |
 | --- | --- | --- |
-| Table | ten `Family { name, list }`; a `Call` is `{ family, call, args, options, help, run }`, an `Arg` `{ name, kind, optional }`; 70 calls, help order | [`table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs), [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families` |
+| Table | ten `Family { name, list }`; a `Call` is `{ family, call, args, options, help, run }`, an `Arg` `{ name, kind, optional }`; 73 calls, help order | [`table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs), [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families` |
 | JSON form | `table_json()`: `[{ family, call, args: [{ name, kind, optional }], options, help }]`; Node's `table`, Python's `TABLE`; the CLI parser and help read the same `Call` values | `table.rs` `table_json` |
 | Shared options | `PAGE` (`page_size`, `page_pos`), `DIFF` (`paths_only`, `page_size`, `page_pos`, `cursor`), `MESSAGE` (`message`), `PROGRESS` (`on_progress`) | `table.rs` |
 | Kinds | below | `table.rs` `Kind` |
@@ -154,7 +154,7 @@ changes it. Reading and clearing it are the [`logs`](../sdk/logs.md) calls.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host, temporary folders | ten families and 70 calls; unknown calls and arguments refused before any effect; each family reached; JSON round trips; sizes and keys; a relative home refused; one source file per call |
+| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host, temporary folders | ten families and 73 calls; unknown calls and arguments refused before any effect; each family reached; JSON round trips; sizes and keys; a relative home refused; one source file per call |
 | [`calls_scope.rs`](../../../../api/crates/layerfs-api/tests/calls_scope.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_scope` | any Unix host | a scope names its project, refuses every call it does not cover, needs a Sandbox of its project, and a scoped `branch.list` reads every page |
 | [`scope_references.rs`](../../../../api/crates/layerfs-api/tests/scope_references.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test scope_references` | any Unix host | fork and publish references outside the namespace refused before any effect; the JSON form refuses the same |
 | [`logs.rs`](../../../../api/crates/layerfs-api/tests/logs.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test logs` | any Unix host | one line per call, rendering and redaction, `logs.list` and `logs.reset` |

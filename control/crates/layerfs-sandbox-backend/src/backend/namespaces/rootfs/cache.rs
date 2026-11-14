@@ -2,7 +2,10 @@
 //! `<root>/images/<64 hex>.2`, published by a rename, guarded by a per-digest
 //! `flock`. A Sandbox made before file times were restored keeps the
 //! `<64 hex>` it was built on.
-use super::{archive::unpack, refuse, ImageRoot};
+use super::{
+    archive::{unpack, unpack_flat},
+    refuse, ImageRoot,
+};
 use crate::{Image, RuntimeError};
 use nix::fcntl::{Flock, FlockArg};
 use std::{
@@ -28,13 +31,59 @@ pub fn cache(root: &Path) -> PathBuf {
 /// has no complete copy of that digest yet. One unpack per digest, however
 /// many Sandboxes ask for it at once.
 pub fn ensure(archive: &Path, image: &Image, cache: &Path) -> Result<ImageRoot, RuntimeError> {
+    ensure_held(archive, image, cache).map(|(root, _)| root)
+}
+
+/// [`ensure`], keeping a shared hold on the image's lock until the returned
+/// [`ImageHold`] is dropped: a Sandbox's create keeps it until its
+/// `helper.spec` names the image, so [`remove`] never takes an image a
+/// Sandbox is about to use.
+pub fn ensure_held(
+    archive: &Path,
+    image: &Image,
+    cache: &Path,
+) -> Result<(ImageRoot, ImageHold), RuntimeError> {
+    publish(image, cache, |staging| unpack(archive, image, staging))
+        .map(|(root, hold, _)| (root, hold))
+}
+
+/// The image's root under `cache`, unpacking the flat root filesystem tar
+/// `tar` (`docker export`'s output, without its init layer) when this host
+/// has no copy of `image` yet; `true` when this call unpacked it. The same
+/// single-flight lock and rename as [`ensure`].
+pub fn ensure_flat(
+    tar: &Path,
+    image: &Image,
+    cache: &Path,
+) -> Result<(ImageRoot, bool), RuntimeError> {
+    publish(image, cache, |staging| unpack_flat(tar, staging))
+        .map(|(root, _, unpacked)| (root, unpacked))
+}
+
+/// A shared hold on one image's lock: while it lives, [`remove`] skips the
+/// image.
+#[derive(Debug)]
+pub struct ImageHold(#[allow(dead_code)] Flock<File>);
+
+/// Publishes `image` under `cache` with `fill` (which writes the tree into
+/// the staging directory it is given) unless it is there already, under
+/// the image's exclusive lock, which is then turned shared and returned.
+fn publish(
+    image: &Image,
+    cache: &Path,
+    fill: impl FnOnce(&Path) -> Result<(), RuntimeError>,
+) -> Result<(ImageRoot, ImageHold, bool), RuntimeError> {
     let cache = beneath(cache)?;
     let lock = lock(&cache, image)?;
     let directory = cache.join(name(image));
+    let held = |lock: Flock<File>| -> Result<ImageHold, RuntimeError> {
+        lock.relock(FlockArg::LockShared)
+            .map_err(|error| RuntimeError::Io(error.into()))?;
+        Ok(ImageHold(lock))
+    };
     match fs::symlink_metadata(&directory) {
         Ok(metadata) if metadata.is_dir() => {
-            drop(lock);
-            return Ok(ImageRoot::new(image.clone(), directory));
+            return Ok((ImageRoot::new(image.clone(), directory), held(lock)?, false));
         }
         Ok(_) => {
             return Err(refuse(format!(
@@ -54,7 +103,7 @@ pub fn ensure(archive: &Path, image: &Image, cache: &Path) -> Result<ImageRoot, 
         crate::ContainerId::random()?.as_str()
     ));
     DirBuilder::new().mode(0o700).create(&staging)?;
-    if let Err(cause) = unpack(archive, image, &staging) {
+    if let Err(cause) = fill(&staging) {
         let _ = fs::remove_dir_all(&staging);
         return Err(cause);
     }
@@ -71,8 +120,49 @@ pub fn ensure(archive: &Path, image: &Image, cache: &Path) -> Result<ImageRoot, 
             }
         }
     }
-    drop(lock);
-    Ok(ImageRoot::new(image.clone(), directory))
+    Ok((ImageRoot::new(image.clone(), directory), held(lock)?, true))
+}
+
+/// Removes `image`'s unpacked copies from `cache` (`<64 hex>.2` and an older
+/// unpack's `<64 hex>`) unless `in_use` names one of them or another process
+/// holds the image's lock (a create between its unpack and its spec):
+/// `false` then, and nothing is removed. `true` when nothing of it is left.
+pub fn remove(
+    image: &Image,
+    cache: &Path,
+    in_use: impl Fn(&Path) -> bool,
+) -> Result<bool, RuntimeError> {
+    let cache = beneath(cache)?;
+    let path = cache.join(format!("{}.lock", name(image)));
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .custom_flags(nix::fcntl::OFlag::O_NOFOLLOW.bits())
+        .open(path)?;
+    let _lock = match Flock::lock(file, FlockArg::LockExclusiveNonblock) {
+        Ok(lock) => lock,
+        Err((_, nix::errno::Errno::EWOULDBLOCK)) => return Ok(false),
+        Err((_, error)) => return Err(RuntimeError::Io(error.into())),
+    };
+    let directories = [cache.join(name(image)), cache.join(image.hex())];
+    if directories.iter().any(|directory| in_use(directory)) {
+        return Ok(false);
+    }
+    for directory in directories {
+        match fs::symlink_metadata(&directory) {
+            Ok(metadata) if metadata.is_dir() => {
+                fs::set_permissions(&directory, fs::Permissions::from_mode(0o700))?;
+                fs::remove_dir_all(&directory)?;
+            }
+            Ok(_) => fs::remove_file(&directory)?,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(true)
 }
 
 /// The root a Sandbox of `image` was built on, `lower` as its spec records
@@ -122,7 +212,13 @@ fn beneath(cache: &Path) -> Result<PathBuf, RuntimeError> {
                 .parent()
                 .ok_or(RuntimeError::Protocol("image cache parent"))?;
             fs::symlink_metadata(parent)?;
-            DirBuilder::new().mode(0o700).create(cache)?;
+            match DirBuilder::new().mode(0o700).create(cache) {
+                // another unpack made it first
+                Err(error)
+                    if error.kind() == io::ErrorKind::AlreadyExists
+                        && fs::symlink_metadata(cache)?.is_dir() => {}
+                other => other?,
+            }
             Ok(cache.to_owned())
         }
         Err(error) => Err(error.into()),

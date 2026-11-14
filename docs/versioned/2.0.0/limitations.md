@@ -140,6 +140,14 @@ step commits.
   on the id it reports was tested with a stand-in `docker`
   only; a real Engine (Docker Desktop's classic or containerd image store)
   was not used.
+- **Images from Docker** (`sandbox create --image <ref>`, `machine load`).
+  Tested with a stand-in `docker` and live on the `docker` machine with
+  Docker Desktop's containerd store. An image runs the daemon inside its
+  own root, so images without glibc 2.34, libssl3 and bash (alpine,
+  distroless, Debian bullseye) fail at start until the Sandbox runtime
+  layer lands. Unpacked files are root-owned and lose setuid bits; the
+  image's `Env`, `WorkingDir` and `User` are recorded but not applied.
+  Copies over Lima and apple-container use one round trip per 1 MiB frame.
 - **One worker serving several Stores** and the guest-to-host send speed.
 - **Linux.** No Linux host was used. Linux namespaces Sandboxes, Init into
   `docker` on Linux, the Linux route of the `docker` machine (its worker,

@@ -40,6 +40,14 @@ pub enum Side<'a> {
 /// is taken; the bundle's archive is the only one, and the choice names
 /// the `docker` platform its Sandboxes keep showing.
 pub fn choose(home: &Path, machine: &str, image: Option<&str>) -> Result<Choice> {
+    // the caller resolved a Docker reference to its Id already (R1); an
+    // image that is no digest here is never dropped for the default (R0)
+    if image.is_some_and(|value| !is_digest(value)) {
+        return Err(refused(
+            "InvalidInput",
+            "Sandbox image must be a sha256 digest or Docker image Id here",
+        ));
+    }
     let record = MachineRecord::read(home, machine)?
         .unwrap_or_else(|| MachineRecord::from_record(machine, SdkValue::Null));
     let docker = machine == "docker";
@@ -134,7 +142,7 @@ fn daemon(side: &Side<'_>) -> Result<String> {
 /// The namespaces image archive on `side`: the machine's own archive
 /// (`chosen`; in a guest, its copy under [`GUEST_IMAGES`]), else the
 /// bundle's.
-fn archive(side: &Side<'_>, chosen: Option<&str>) -> Result<PathBuf> {
+pub fn archive(side: &Side<'_>, chosen: Option<&str>) -> Result<PathBuf> {
     Ok(match (side, chosen) {
         (Side::Home(_), Some(path)) => PathBuf::from(path),
         (Side::Home(_), None) => bundle_dir("linux")?.join(IMAGE_ARCHIVE),

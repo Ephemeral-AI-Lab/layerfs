@@ -27,14 +27,26 @@ pub mod direct;
 #[doc(hidden)]
 pub mod dispatch;
 #[doc(hidden)]
+pub mod docker;
+#[doc(hidden)]
 pub mod exec;
 #[doc(hidden)]
 pub mod family;
 #[doc(hidden)]
 pub mod files;
+/// The forced close of a `native` Sandbox, from its own records alone.
+pub mod force;
 mod get;
 #[doc(hidden)]
 pub mod host;
+#[doc(hidden)]
+pub mod image_artifact;
+#[doc(hidden)]
+pub mod image_load;
+#[doc(hidden)]
+pub mod image_tar;
+#[doc(hidden)]
+pub mod images;
 #[doc(hidden)]
 pub mod launch;
 #[doc(hidden)]

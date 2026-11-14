@@ -112,6 +112,7 @@ pub fn get(home: &Path, events: &mut Events<'_>, request: &GetRequest) -> Result
     // (P4): a machine that is down answers the record with no Workspaces
     // and why
     let listed = match record.id() {
+        _ if record.machine_stopped() => Ok(Ok(SdkValue::Null)),
         // one reached directly lists its daemon's Workspaces from here (#535 G4)
         Some(_) if direct::forwarded(&record) => direct::list(&home, &record),
         Some(_) => reach(

@@ -111,7 +111,7 @@ built addon).
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
-70 calls: 38 in `work`, 32 in `admin` only; `--profile admin` lists all 70.
+73 calls: 38 in `work`, 35 in `admin` only; `--profile admin` lists all 73.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
@@ -160,6 +160,9 @@ built addon).
 | `machine.list` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.platforms` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.get` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
+| `machine.images` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
+| `machine.load` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
+| `machine.prune` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.status` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.start` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.stop` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |

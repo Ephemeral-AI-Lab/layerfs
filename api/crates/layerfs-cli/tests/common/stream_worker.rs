@@ -52,6 +52,10 @@ fn worker() -> SocketAddr {
                 }
             }
             let answer = match op {
+                // the machine holds the named image already: nothing is copied
+                Some("image.artifact") => {
+                    SdkValue::map([("value", SdkValue::map([("present", SdkValue::Bool(true))]))])
+                }
                 Some("workspace.exec") => exec(more.get_text("command").unwrap_or("")),
                 _ => create(&more),
             };
@@ -73,7 +77,7 @@ fn create(more: &SdkValue) -> SdkValue {
         SdkValue::map([
             ("sandbox", more.get("sandbox").cloned().unwrap_or_default()),
             ("name", t("lfs-x-t1")),
-            ("image", t("local")),
+            ("image", t(&format!("sha256:{}", "c".repeat(64)))),
             ("platform", t("docker")),
             ("runtime", t("namespaces")),
             ("route", t("fuse")),

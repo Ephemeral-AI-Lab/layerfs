@@ -4,7 +4,7 @@
 use super::pipeline::Piped;
 use super::{
     BoundWorkspace, CapturedConstruction, CommitError, CommitFailure, CommitOptions, CommitSuccess,
-    PortError, ReleasedOwner, StoreOperation,
+    ReleasedOwner, StoreOperation,
 };
 use crate::OwnerError;
 use layerfs_content::{
@@ -303,15 +303,12 @@ fn classify(
         (Err(label), _) => label,
     };
     Err(match original {
-        Some(WorkspaceError::Service(service)) => match service.downcast::<OwnerError>() {
-            Ok(owner) => CommitError::Owner(*owner),
-            Err(other) => match other.downcast::<Arc<PortError>>() {
-                Ok(port) => CommitError::Content {
-                    error: label,
-                    provider: Some(*port),
-                },
-                Err(other) => CommitError::Workspace(WorkspaceError::Service(other)),
-            },
+        // The port's own typed cause: an owner job, the Store provider's
+        // failure, or a History failure that keeps its exact class (a
+        // definite pre-effect `Busy` is not an unknown outcome, #647).
+        Some(WorkspaceError::Service(service)) => match super::service_cause(service, label) {
+            Ok(error) => error,
+            Err(other) => CommitError::Workspace(WorkspaceError::Service(other)),
         },
         Some(WorkspaceError::Content(error)) => CommitError::Content {
             error,

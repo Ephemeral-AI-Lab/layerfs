@@ -237,6 +237,29 @@ impl From<WorkspaceError> for CommitError {
         Self::Workspace(error)
     }
 }
+/// The exact original cause a Workspace service port carried, as the product
+/// type it is: an owner job, the Store provider's failure, or a typed History
+/// failure. A definite pre-effect History refusal (a `Busy` admission, for
+/// one) must keep its own class here, so it is never read as an unknown
+/// outcome (#647). Anything else stays a Workspace service failure.
+pub fn service_cause(
+    service: Box<dyn std::error::Error + Send + Sync>,
+    label: ContentError,
+) -> Result<CommitError, Box<dyn std::error::Error + Send + Sync>> {
+    match service.downcast::<OwnerError>() {
+        Ok(owner) => Ok(CommitError::Owner(*owner)),
+        Err(other) => match other.downcast::<Arc<PortError>>() {
+            Ok(port) => Ok(CommitError::Content {
+                error: label,
+                provider: Some(*port),
+            }),
+            Err(other) => match other.downcast::<HistoryError>() {
+                Ok(history) => Ok(CommitError::History(*history)),
+                Err(other) => Err(other),
+            },
+        },
+    }
+}
 pub fn owner_uncertain(error: &OwnerError) -> bool {
     match error {
         OwnerError::Unattempted { .. } => false,

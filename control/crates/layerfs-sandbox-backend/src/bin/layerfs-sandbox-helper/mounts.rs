@@ -5,6 +5,8 @@
 //! binds at its guest path (a sqlite Store's directory at its own), so every
 //! path keeps one meaning on both sides of the pivot, and a
 //! private `/proc`, `/dev` and `/tmp` are mounted over the image's own.
+//! The Sandbox's copy of the bundle's runtime layer, when its spec names one,
+//! is bound read-only, nosuid and nodev at `/.layerfs/runtime` (R5).
 //! Nothing the Sandbox mounts reaches the VM's mount tree: the init stage made
 //! this mount namespace private first.
 use layerfs_sandbox_backend::HelperSpec;
@@ -62,8 +64,54 @@ pub(super) fn build(spec: &HelperSpec) -> Result<(), String> {
             !entry.read_write,
         )?;
     }
+    if let Some(runtime) = &spec.runtime {
+        bind_runtime(runtime, &spec.root)?;
+    }
     Ok(())
 }
+
+/// The runtime layer at `source`, bound read-only, nosuid and nodev at
+/// [`RUNTIME`] inside `root`. Its mount point is made in the Sandbox's own
+/// writable layer; an image whose `/.layerfs` or `/.layerfs/runtime` is not
+/// a plain directory (a link would lead the bind out of the root before the
+/// pivot) is refused.
+fn bind_runtime(source: &Path, root: &Path) -> Result<(), String> {
+    let mut at = root.to_owned();
+    for part in RUNTIME.split('/').filter(|part| !part.is_empty()) {
+        at.push(part);
+        match fs::symlink_metadata(&at) {
+            Ok(metadata) if metadata.is_dir() => {}
+            Ok(_) => {
+                return Err(format!(
+                    "the image's {} is not a directory, so the runtime layer cannot be bound",
+                    at.display()
+                ))
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => directory(&at, 0o755)?,
+            Err(error) => return Err(format!("{}: {error}", at.display())),
+        }
+    }
+    let flags = MsFlags::MS_NOSUID | MsFlags::MS_NODEV;
+    mount(
+        Some(source),
+        &at,
+        None::<&str>,
+        MsFlags::MS_BIND | MsFlags::MS_REC,
+        None::<&str>,
+    )
+    .map_err(|error| format!("binding {} at {}: {error}", source.display(), at.display()))?;
+    mount(
+        None::<&Path>,
+        &at,
+        None::<&str>,
+        MsFlags::MS_BIND | MsFlags::MS_REMOUNT | MsFlags::MS_RDONLY | flags,
+        None::<&str>,
+    )
+    .map_err(|error| format!("making {} read-only: {error}", at.display()))
+}
+
+/// Where the runtime layer is bound inside the root.
+const RUNTIME: &str = layerfs_bridge::sandbox_runtime::GUEST;
 
 /// The image as the root's lower layer and the Sandbox's own upper and work
 /// directories above it. The result is one mount, so a command's writes stay

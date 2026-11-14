@@ -10,7 +10,7 @@ CLI package `@layerfs/cli` (in [`cli/`](cli)), the Python package (in
 the private stdio MCP server [`mcp/`](mcp) (`@layerfs/mcp`: one generated tool
 per call, `work` and `admin` profiles). The design is in
 [docs/architecture/api](../docs/architecture/api/README.md). The package is the
-library's call table as ten families of functions, 70 calls in all:
+library's call table as ten families of functions, 73 calls in all:
 
 | Family | Calls |
 | --- | --- |

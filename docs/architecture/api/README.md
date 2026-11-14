@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The public surface: the `layerfs-api` call table with its one dispatcher, and the front ends (the `layerfs` command, Node, Python and a local MCP server) that expose its **70 calls in 10 families** with the same names and arguments.
+The public surface: the `layerfs-api` call table with its one dispatcher, and the front ends (the `layerfs` command, Node, Python and a local MCP server) that expose its **73 calls in 10 families** with the same names and arguments.
 
 | | |
 | --- | --- |
@@ -85,7 +85,7 @@ give each call's own arguments, answer and errors.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`calls_table.rs`](../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host | 70 calls in ten families; one source file per call; refusals before any effect |
+| [`calls_table.rs`](../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host | 73 calls in ten families; one source file per call; refusals before any effect |
 | [`coverage.mjs`](../../../api/node/test/coverage.mjs) | `node --test api/node/test/coverage.mjs` | macOS or Linux, with the built addon, Python module and CLI | every front end matches the table |
 | [`file-history.mjs`](../../../api/node/examples/file-history.mjs) | `node api/node/examples/file-history.mjs` | macOS or Linux, with the built addon | a Store, Init, file writes and history reads |
 
