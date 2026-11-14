@@ -309,7 +309,25 @@ impl OwnerClient {
             return Err(refuse(OwnerError::Overlay(OverlayError::Stale), action));
         }
         let requested = Instant::now();
-        let locked = shared.foreground(|| shared.state.lock());
+        let locked = shared.foreground(|| {
+            // Prototype (write-path probe, `spin`): try the lock for up to
+            // 50 µs before parking, so a short job of another receive loop
+            // hands over without a futex wake-up.
+            if probe_switch("spin") {
+                let until = Instant::now() + std::time::Duration::from_micros(50);
+                loop {
+                    match shared.state.try_lock() {
+                        Ok(state) => return Ok(state),
+                        Err(std::sync::TryLockError::Poisoned(poisoned)) => return Err(poisoned),
+                        Err(std::sync::TryLockError::WouldBlock) if Instant::now() < until => {
+                            std::hint::spin_loop()
+                        }
+                        Err(std::sync::TryLockError::WouldBlock) => break,
+                    }
+                }
+            }
+            shared.state.lock()
+        });
         let mut state = match locked {
             Ok(state) => state,
             Err(_) => return Err(refuse(OwnerError::Stopped, action)),
@@ -416,6 +434,7 @@ impl OwnerClient {
         work.payload = db.payload_work().since(payload);
         work.lock_wait_ns = wait;
         work.hold_ns = elapsed(start);
+        probe_stages(&work);
         // A quarantined engine can run no later maintenance step: that stop
         // is retained here, with no statement and no job.
         let quarantined = db.quarantined();
@@ -447,6 +466,9 @@ impl OwnerClient {
         shared.changed.notify_all();
         drop(disposals);
         if needs_maintenance && drain {
+            let _stage = layerfs_telemetry::timer::stages::Timer::start(
+                layerfs_telemetry::timer::stages::Stage::OwnerMaintain,
+            );
             self.maintain();
         }
         match result {
@@ -679,4 +701,40 @@ fn retain_panic(
     }));
     state.failure = Some(cause.clone());
     cause
+}
+/// Prototype (write-path probe): charges one owner job's lock wait, hold and
+/// overlay statements by family to the process-wide diagnostic stages.
+fn probe_stages(work: &JobWork) {
+    use layerfs_overlay::StatementKind as Kind;
+    use layerfs_telemetry::timer::stages::{add, Stage};
+    add(Stage::OwnerWait, 1, work.lock_wait_ns);
+    if work.lock_wait_ns > 5_000 {
+        add(Stage::OwnerWaitLong, 1, work.lock_wait_ns);
+    }
+    add(Stage::OwnerHold, 1, work.hold_ns);
+    for (kind, stage) in [
+        (Kind::Begin, Stage::SqlBegin),
+        (Kind::Commit, Stage::SqlCommit),
+        (Kind::Inode, Stage::SqlInode),
+        (Kind::DirectoryEntry, Stage::SqlEntry),
+        (Kind::Payload, Stage::SqlPayload),
+        (Kind::Frontier, Stage::SqlFrontier),
+        (Kind::OperationRecord, Stage::SqlRecord),
+        (Kind::Reclaim, Stage::SqlReclaim),
+        (Kind::Startup, Stage::SqlOther),
+        (Kind::Capture, Stage::SqlOther),
+        (Kind::Explain, Stage::SqlOther),
+        (Kind::Rollback, Stage::SqlOther),
+    ] {
+        let family = work.sql.statements[kind as usize];
+        if family.attempts > 0 {
+            add(stage, family.attempts, family.elapsed_ns);
+        }
+    }
+}
+/// Prototype (write-path probe): `LAYERFS_PROBE_WRITE`, a comma list.
+fn probe_switch(name: &str) -> bool {
+    static SWITCHES: std::sync::LazyLock<String> =
+        std::sync::LazyLock::new(|| std::env::var("LAYERFS_PROBE_WRITE").unwrap_or_default());
+    SWITCHES.split(',').any(|switch| switch == name)
 }

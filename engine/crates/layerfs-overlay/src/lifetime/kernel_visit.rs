@@ -315,7 +315,9 @@ impl Overlay {
             Option<OpenFile>,
         ) -> OverlayResult<Option<(Changes, KernelEffect)>>,
     ) -> OverlayResult<Option<KernelApplied>> {
+        use layerfs_telemetry::timer::stages::{Stage, Timer};
         self.atomic(|| {
+            let fence = Timer::start(Stage::OverlayFence);
             let held = handle.map_or(Held::Lookup, Held::File);
             // The rows the decision reads are the rows it publishes over;
             // the fence read the row of the inode the request names.
@@ -328,12 +330,15 @@ impl Overlay {
             });
             let source = self.visit_source(state)?;
             let rows = self.source_rows_at(source, state, Some(&seen));
+            drop(fence);
             let Some((changes, effect)) = decide(rows, file)? else {
                 return Ok(None);
             };
-            let checked = self.check_changes(&changes)?;
+            let checked = Timer::start(Stage::OverlayCheck);
+            let checked = (self.check_changes(&changes)?, checked).0;
             let publication =
                 self.apply_checked(source, state, file, Some(&seen), &changes, &checked)?;
+            let _effect = Timer::start(Stage::OverlayEffect);
             self.kernel_effect(mount, request.to_be_bytes(), &changes, effect, publication)
                 .map(Some)
         })

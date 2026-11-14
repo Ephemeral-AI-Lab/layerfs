@@ -26,6 +26,11 @@ use layerfs_overlay::KernelMount;
 use layerfs_workspace::{Refusal, Time};
 use std::{ffi::OsStr, io, os::unix::ffi::OsStrExt, sync::Arc, time::SystemTime};
 
+/// Prototype (write-path probe): the parent serial of the latest CREATE or
+/// MKDIR, to attribute the GETATTR that follows.
+pub(super) static CREATE_PARENT: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
 pub(super) enum MutationReply {
     /// MKNOD, MKDIR, SYMLINK and LINK; LINK names the serial it must bind.
     Entry(ReplyEntry, Option<u64>),
@@ -104,6 +109,9 @@ impl MutationReply {
                 return reply_order::attempted(mutation).await;
             }
         };
+        let replying = layerfs_telemetry::timer::stages::Timer::start(
+            layerfs_telemetry::timer::stages::Stage::MutateReply,
+        );
         match (self, composed) {
             (reply, Err(reason)) => {
                 reply.error(Errno::EIO);
@@ -131,6 +139,7 @@ impl MutationReply {
                 );
             }
         }
+        drop(replying);
         reply_order::attempted(mutation).await
     }
 }
@@ -323,6 +332,9 @@ impl KernelFilesystem {
         let Some((parent, reply)) = self.serial(parent, reply, MutationReply::error) else {
             return;
         };
+        if matches!(opcode, Opcode::Create | Opcode::Mkdir) {
+            CREATE_PARENT.store(parent, std::sync::atomic::Ordering::Relaxed);
+        }
         let mut owned = Vec::with_capacity(N);
         for name in names {
             match PathName::from_bytes(name.as_bytes()) {

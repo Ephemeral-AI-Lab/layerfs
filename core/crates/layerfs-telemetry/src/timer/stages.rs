@@ -1,5 +1,5 @@
-//! Diagnostic, process-wide totals of the steps of a kernel READ (FUSE
-//! profile probe). Each stage keeps a count and summed wall nanoseconds over
+//! Diagnostic, process-wide totals of the steps of a kernel READ and of a
+//! kernel mutation (FUSE profile probe). Each stage keeps a count and summed wall nanoseconds over
 //! every thread; nested stages are not subtracted from their parents. A
 //! reader diffs [`snapshot`] around the phase it measures.
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -37,9 +37,87 @@ pub enum Stage {
     LocateSql,
     /// Prototype: the pack descriptor statement of one pack read, inside PackRead.
     PackDescriptor,
+    /// Prototype (write-path probe): one mutation owner visit as the request
+    /// sees it, dispatch and the daemon's post-job step included.
+    MutateVisit,
+    /// Base facts read between undecided mutation visits.
+    MutateSupply,
+    /// The write recognizer (claims of committed chunks), before the visit.
+    Recognize,
+    /// The post-reply release job of a published mutation's ticket.
+    MutateRelease,
+    /// The reply of a mutation handed to the kernel.
+    MutateReply,
+    /// Waiting for the Workspace lock before an owner job (any class).
+    OwnerWait,
+    /// One owner job under the Workspace lock (any class).
+    OwnerHold,
+    /// Maintenance drained on the caller's thread after an owner job.
+    OwnerMaintain,
+    /// `Overlay::mutate_kernel_visit`: fence, decision, apply and COMMIT.
+    VisitOverlay,
+    /// The Workspace decision inside a mutation visit (publication included).
+    VisitDecide,
+    /// `prepare_kernel_mutation` inside the decision.
+    VisitPublish,
+    /// Overlay statements of owner jobs by family (count = statements):
+    /// BEGIN IMMEDIATE.
+    SqlBegin,
+    /// COMMIT.
+    SqlCommit,
+    /// Inode rows.
+    SqlInode,
+    /// Directory entries.
+    SqlEntry,
+    /// Payload cells and pieces.
+    SqlPayload,
+    /// Frontier and publication rows.
+    SqlFrontier,
+    /// Operation records.
+    SqlRecord,
+    /// Reclamation.
+    SqlReclaim,
+    /// Startup, capture, explain and rollback.
+    SqlOther,
+    /// LOOKUP/GETATTR/OPEN/OPENDIR owner visit as the request sees it.
+    ObserveVisit,
+    /// Base facts read between undecided observe visits.
+    ObserveSupply,
+    /// Owner lock waits longer than 5 µs (count and their time).
+    OwnerWaitLong,
+    /// Overlay visit fence and source, before the decision.
+    OverlayFence,
+    /// `check_changes` of a mutation.
+    OverlayCheck,
+    /// Inode rows written by `apply_checked`.
+    OverlayInodes,
+    /// Payload cells of a write (`write_cells`/`write_claimed`), SQL and BLOB I/O.
+    OverlayCells,
+    /// BLAKE3 of an appended write followed as a whole-content digest (#364).
+    OverlayDigest,
+    /// BLAKE3 of an appended window on the digest helper thread (prototype).
+    OverlayDigestHelper,
+    /// `digestcheck`: helper digests equal to an inline update (count).
+    DigestCheckSame,
+    /// `digestcheck`: helper digests that differ from an inline update.
+    DigestCheckDiffer,
+    /// The rest of `apply_checked` after the cells: digests and settle.
+    OverlaySettle,
+    /// `kernel_effect` after apply (reply ticket, kernel custody rows).
+    OverlayEffect,
+    /// A GETATTR reply of a directory (counts only).
+    GetattrDirectory,
+    /// A GETATTR reply of a non-directory.
+    GetattrFile,
+    /// A GETATTR that named a descriptor.
+    GetattrHandle,
+    /// A GETATTR of the parent the latest CREATE/MKDIR named.
+    GetattrCreateParent,
+    /// A GETATTR answered from the published-attribute cache (prototype).
+    GetattrCached,
 }
 /// Number of [`Stage`]s.
-pub const STAGES: usize = Stage::PackDescriptor as usize + 1;
+pub const STAGES: usize = Stage::GetattrCached as usize + 1;
 /// Names of the [`Stage`]s, in order.
 pub const STAGE_NAMES: [&str; STAGES] = [
     "read_visit",
@@ -56,6 +134,44 @@ pub const STAGE_NAMES: [&str; STAGES] = [
     "reply",
     "locate_sql",
     "pack_descriptor",
+    "mutate_visit",
+    "mutate_supply",
+    "recognize",
+    "mutate_release",
+    "mutate_reply",
+    "owner_wait",
+    "owner_hold",
+    "owner_maintain",
+    "visit_overlay",
+    "visit_decide",
+    "visit_publish",
+    "sql_begin",
+    "sql_commit",
+    "sql_inode",
+    "sql_entry",
+    "sql_payload",
+    "sql_frontier",
+    "sql_record",
+    "sql_reclaim",
+    "sql_other",
+    "observe_visit",
+    "observe_supply",
+    "owner_wait_long",
+    "overlay_fence",
+    "overlay_check",
+    "overlay_inodes",
+    "overlay_cells",
+    "overlay_digest",
+    "overlay_digest_helper",
+    "digest_check_same",
+    "digest_check_differ",
+    "overlay_settle",
+    "overlay_effect",
+    "getattr_directory",
+    "getattr_file",
+    "getattr_handle",
+    "getattr_create_parent",
+    "getattr_cached",
 ];
 
 const ZERO: AtomicU64 = AtomicU64::new(0);
@@ -67,6 +183,11 @@ pub fn charge(stage: Stage, started: Instant) {
     let elapsed = started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
     COUNTS[stage as usize].fetch_add(1, Ordering::Relaxed);
     NANOS[stage as usize].fetch_add(elapsed, Ordering::Relaxed);
+}
+/// Adds `count` and `nanos` to `stage` (work measured elsewhere).
+pub fn add(stage: Stage, count: u64, nanos: u64) {
+    COUNTS[stage as usize].fetch_add(count, Ordering::Relaxed);
+    NANOS[stage as usize].fetch_add(nanos, Ordering::Relaxed);
 }
 /// Runs `work` and charges its wall time to `stage`.
 pub fn time<T>(stage: Stage, work: impl FnOnce() -> T) -> T {

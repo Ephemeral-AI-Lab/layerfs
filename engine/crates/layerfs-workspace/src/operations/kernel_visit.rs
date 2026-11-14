@@ -349,7 +349,10 @@ impl KernelMutationVisit {
                 .cloned()
                 .map(ViewStat::from)
         };
+        use layerfs_telemetry::timer::stages::{Stage, Timer};
+        let _overlay = Timer::start(Stage::VisitOverlay);
         let applied = db.mutate_kernel_visit(mount, request, serial, handle, |rows, file| {
+            let _decide = Timer::start(Stage::VisitDecide);
             let source = rows.source();
             let Some(operation) = self.request.input.operation(file) else {
                 decided = Some(Ok(JobOutcome::Refused(Refusal::Invalid)));
@@ -455,6 +458,7 @@ impl KernelMutationVisit {
                             }
                         }
                         let effect = effect(&job.operation, job.serial, open);
+                        let publish = Timer::start(Stage::VisitPublish);
                         db.prepare_kernel_mutation(
                             mount,
                             request.to_be_bytes(),
@@ -463,6 +467,7 @@ impl KernelMutationVisit {
                             open == Some(false),
                             detached_handle,
                         )?;
+                        drop(publish);
                         published = Some(inode);
                         return Ok(Some((*changes, effect)));
                     }
@@ -474,6 +479,7 @@ impl KernelMutationVisit {
                 }
             }
         });
+        drop(_overlay);
         let mut file = None;
         let result = match (applied, decided, published) {
             (Err(error), _, _) => Err(error.into()),

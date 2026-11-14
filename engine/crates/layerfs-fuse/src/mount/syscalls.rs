@@ -64,8 +64,18 @@ pub(crate) fn open_device() -> io::Result<OwnedFd> {
 /// The daemon is the mount owner; ordinary commands enter through allow_other
 /// under kernel permission checks, so they cannot abort this connection.
 pub(crate) fn attach(device: &OwnedFd, target: &Path, uid: u32, gid: u32) -> Result<(), Errno> {
+    // Prototype (write-path probe, diagnostic only): `nodefperm` drops
+    // kernel permission checks to show which requests they cause. It is not
+    // a candidate change: the daemon does not check permissions itself.
+    let checks = if std::env::var("LAYERFS_PROBE_WRITE")
+        .is_ok_and(|switches| switches.split(',').any(|switch| switch == "nodefperm"))
+    {
+        ""
+    } else {
+        ",default_permissions"
+    };
     let data = format!(
-        "fd={},rootmode=40000,user_id={uid},group_id={gid},allow_other,default_permissions,max_read={}",
+        "fd={},rootmode=40000,user_id={uid},group_id={gid},allow_other{checks},max_read={}",
         device.as_raw_fd(),
         super::window()
     );

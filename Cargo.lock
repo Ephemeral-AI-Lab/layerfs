@@ -891,6 +891,7 @@ name = "layerfs-overlay"
 version = "2.0.0"
 dependencies = [
  "blake3",
+ "layerfs-telemetry",
  "nix",
  "rusqlite",
 ]

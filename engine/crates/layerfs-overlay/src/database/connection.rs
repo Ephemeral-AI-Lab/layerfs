@@ -308,8 +308,17 @@ impl Overlay {
         let result = job();
         let issued = std::mem::take(&mut *self.issued.borrow_mut());
         let begun = self.transaction.get() == Transaction::Begun;
+        // Prototype (write-path probe, `digestpar`): a deferred digest of
+        // this job is installed after COMMIT, or at once on any other path.
+        if !(begun && result.is_ok()) {
+            self.settle_digest();
+        }
         let failed = match result {
-            Ok(value) if begun => match self.execute(StatementKind::Commit, "COMMIT", &[], 0) {
+            Ok(value) if begun => match {
+                let committed = self.execute(StatementKind::Commit, "COMMIT", &[], 0);
+                self.settle_digest();
+                committed
+            } {
                 Ok(_) => {
                     self.transaction.set(Transaction::None);
                     self.open.borrow_mut().commit();

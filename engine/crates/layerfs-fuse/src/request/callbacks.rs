@@ -91,6 +91,15 @@ impl Filesystem for KernelFilesystem {
         let Some((serial, reply)) = self.serial(inode, reply, ReadReply::error) else {
             return;
         };
+        {
+            use layerfs_telemetry::timer::stages::{add, Stage};
+            if handle.is_some() {
+                add(Stage::GetattrHandle, 1, 0);
+            }
+            if serial == super::mutate::CREATE_PARENT.load(std::sync::atomic::Ordering::Relaxed) {
+                add(Stage::GetattrCreateParent, 1, 0);
+            }
+        }
         self.submit(
             permit,
             req.unique().0,

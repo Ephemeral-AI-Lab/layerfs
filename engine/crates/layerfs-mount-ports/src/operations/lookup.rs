@@ -186,6 +186,10 @@ impl Custody {
                 )
                 .await;
             crate::phase::charge(crate::phase::Phase::ReadVisit, started);
+            layerfs_telemetry::timer::stages::charge(
+                layerfs_telemetry::timer::stages::Stage::ObserveVisit,
+                started,
+            );
             let receipt = receipt?;
             let original = receipt.get().clone();
             let needs = match (&original.result, &original.decision) {
@@ -217,6 +221,10 @@ impl Custody {
             let result = Arc::make_mut(&mut facts).supply(&base, needs, None);
             drop(base); // Return the actual reader before another SQL wait.
             crate::phase::charge(crate::phase::Phase::ReadSupply, started);
+            layerfs_telemetry::timer::stages::charge(
+                layerfs_telemetry::timer::stages::Stage::ObserveSupply,
+                started,
+            );
             if let Err(error) = result {
                 return Err(self.services.failed_base_read(error.into()));
             }
