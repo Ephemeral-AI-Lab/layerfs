@@ -643,8 +643,10 @@ impl Kernel {
         name: &[u8],
         tickets: &mut Tickets,
     ) -> Result<(ViewStat, Wcc), Status> {
+        // A companion holds no engine inode, so its LINK is another `._` name
+        // of the same companion, decided in the export alone.
         if crate::apple_double::companion(serial) {
-            return Err(Status::Access);
+            return self.companion_link(serial, parent, name);
         }
         let checked = self.checked(name, true)?;
         let published = self.mutate(

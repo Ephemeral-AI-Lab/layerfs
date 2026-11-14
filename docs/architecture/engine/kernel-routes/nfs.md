@@ -185,7 +185,16 @@ the export.
 A companion whose main inode the export knows belongs to that inode rather than
 to one name: hard links share it, main-file RENAME keeps it under the new name
 and existing aliases, and only the inode's last name (or its silly rename)
-drops it. When a write leaves an inode-bound companion holding a complete
+drops it. It can hold several of the inode's `._` names at once: a LINK of a
+companion name (`._a` to `._b`, which a client that carries the attributes to
+a new name sends) adds one, answering `NFS3ERR_EXIST` for a name already held
+and `NFS3ERR_ACCES` for a name of the Workspace, and a REMOVE of one of those
+names drops only that name while the companion holds another or its inode has
+another name the export knows. The REMOVE of the last name of an inode with one
+name is the client clearing the attributes, which takes the companion with it,
+as does any name of a companion no main inode owns.
+
+When a write leaves an inode-bound companion holding a complete
 AppleDouble image that encodes back to the exact bytes written
 ([`apple_double_codec.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double_codec.rs)),
 it is marked whole and takes no `HELD` slot: decoded in memory (counted as

@@ -1244,3 +1244,109 @@ fn an_eviction_victim_that_cannot_be_written_out_does_not_fail_the_writer() {
     assert_eq!(outstanding, 0);
     fs::remove_dir_all(base).unwrap();
 }
+
+#[test]
+fn a_hard_link_keeps_the_companion_under_its_other_names() {
+    let base = temp("hard-link");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    // What `cp` leaves: the data file and its attributes alongside.
+    let a = c.touch(&root, b"a", 0o644).unwrap();
+    c.write(&a.handle, 0, b"the data file").unwrap();
+    let ad = c.touch(&root, b"._a", 0o644).unwrap();
+    let whole = image([0x61; 32], &[(b"user.kept", pattern(11, 64))]);
+    c.write(&ad.handle, 0, &whole).unwrap();
+    assert_eq!(server.held().companions, 1);
+
+    // `ln a b`, and the client drops the `._` name of the old name it no
+    // longer uses: the attributes belong to the inode `b` still names, so the
+    // companion stays.
+    c.link(&a.handle, &root, b"b").unwrap();
+    let (shared, attr) = c.lookup(&root, b"._b").unwrap();
+    assert_eq!(
+        shared, ad.handle,
+        "the linked name reads the same companion"
+    );
+    assert_eq!(attr.size as usize, whole.len());
+    c.remove(&root, b"._a").unwrap();
+    assert_eq!(server.held().companions, 1);
+    assert_eq!(c.read_all(&ad.handle, 64 * 1024), whole, "attributes kept");
+
+    // `rm a`: one name of the inode goes, the companion stays with `b`.
+    c.remove(&root, b"a").unwrap();
+    assert_eq!(server.held().companions, 1);
+    let (still, _) = c.lookup(&root, b"._b").unwrap();
+    assert_eq!(still, ad.handle);
+    assert_eq!(c.read_all(&still, 64 * 1024), whole);
+
+    // The inode's last name takes it with it.
+    c.remove(&root, b"b").unwrap();
+    assert_eq!(server.held().companions, 0);
+    assert_eq!(c.lookup(&root, b"._b").map(|_| ()), Err(NOENT));
+    assert_eq!(c.getattr(&ad.handle), Err(STALE));
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_linked_companion_name_is_another_name_of_the_same_companion() {
+    let base = temp("companion-link");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    let a = c.touch(&root, b"a", 0o644).unwrap();
+    c.write(&a.handle, 0, b"the data file").unwrap();
+    let ad = c.touch(&root, b"._a", 0o644).unwrap();
+    let whole = image([0x62; 32], &[(b"user.kept", pattern(12, 80))]);
+    c.write(&ad.handle, 0, &whole).unwrap();
+
+    // What a client that carries the attributes to the new name does: the
+    // main file first, then its companion, one companion behind both names.
+    c.link(&a.handle, &root, b"b").unwrap();
+    let linked = c.link(&ad.handle, &root, b"._b").unwrap();
+    assert_eq!(linked.fileid, ad.attr.fileid);
+    assert_eq!(c.read_all(&ad.handle, 64 * 1024), whole);
+    assert_eq!(server.held().companions, 1);
+    // A name already held is not linked again, and a companion is never
+    // linked onto a name of the Workspace.
+    assert_eq!(c.link(&ad.handle, &root, b"._b").map(|_| ()), Err(17));
+    assert_eq!(c.link(&ad.handle, &root, b"plain").map(|_| ()), Err(13));
+
+    // The client drops the old name: the companion keeps the new one and its
+    // bytes, and reads through the inode as well.
+    c.remove(&root, b"._a").unwrap();
+    assert_eq!(server.held().companions, 1);
+    let (kept, _) = c.lookup(&root, b"._b").unwrap();
+    assert_eq!(kept, ad.handle);
+    assert_eq!(c.read_all(&kept, 64 * 1024), whole);
+    assert_eq!(c.read_all(&ad.handle, 64 * 1024), whole);
+
+    // An inode with one name has only one `._` name: removing it is the client
+    // clearing its attributes, which takes the companion.
+    let alone = c.touch(&root, b"alone", 0o644).unwrap();
+    c.write(&alone.handle, 0, b"data").unwrap();
+    let one = c.touch(&root, b"._alone", 0o644).unwrap();
+    c.write(&one.handle, 0, &whole).unwrap();
+    assert_eq!(server.held().companions, 2);
+    c.remove(&root, b"._alone").unwrap();
+    assert_eq!(server.held().companions, 1);
+    assert_eq!(c.getattr(&one.handle), Err(STALE));
+    assert_eq!(c.lookup(&root, b"._alone").map(|_| ()), Err(NOENT));
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}

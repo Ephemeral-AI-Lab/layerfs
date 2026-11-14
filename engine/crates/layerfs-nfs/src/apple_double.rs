@@ -4,7 +4,8 @@
 //! fork in a `._<name>` companion file (see [`crate::names`]). When the export
 //! keeps such names out of the Workspace, a CREATE of one makes a file that
 //! lives only here, under its own serial range: LOOKUP, GETATTR, ACCESS, READ,
-//! WRITE, SETATTR, COMMIT, REMOVE and a RENAME to another AppleDouble name
+//! WRITE, SETATTR, COMMIT, REMOVE, a LINK to another AppleDouble name and a
+//! RENAME to another AppleDouble name
 //! work on it, READDIR does not list it, and no mutation of it ever reaches
 //! the engine, so the Workspace stays clean and no Commit can capture it.
 //! Everything is dropped when the export is released.
@@ -21,7 +22,11 @@
 //! hard links share one companion, it follows the inode through RENAME, and it
 //! goes with the inode's last name rather than with one name. Its FinderInfo
 //! and extended attributes are kept under that inode's serial, not under the
-//! `._` name. Whenever a write leaves such a companion holding a whole
+//! `._` name. It may hold several of the inode's `._` names at once (a LINK of
+//! a companion name makes one, and a client that links a file keeps the
+//! attributes aside under each name), and removing one of them leaves the
+//! companion to the inode's other names: only its last name, on an inode with
+//! no other name the export knows, is the client clearing the attributes. Whenever a write leaves such a companion holding a whole
 //! AppleDouble image the client laid out itself (see
 //! [`crate::apple_double_codec`]), it is decoded: a small one keeps only its
 //! FinderInfo and attributes in memory (each at most [`DECODED_ENTRY_BYTES`]
@@ -97,6 +102,10 @@ enum Body {
 struct Companion {
     /// The `._` name it was created or last renamed to.
     named: Named,
+    /// The other `._` names of the same companion, which a LINK made: a client
+    /// that links a file keeps its attributes aside under each of the file's
+    /// names, and every one of them is a name of this one companion.
+    also: Vec<Named>,
     /// The main inode it belongs to, when the export knew it at creation.
     inode: Option<u64>,
     /// Its body is a whole image: any name of the inode reads it, and it takes
@@ -261,23 +270,59 @@ impl Companions {
         self.decoded -= usize::from(matches!(file.body, Body::Decoded(_)));
         Some(file)
     }
-    /// Makes `file`'s name and main inode find `serial`.
+    /// Makes every name of `file` and its main inode find `serial`.
     fn index(&mut self, serial: u64, file: &Companion) {
         self.names.insert(file.named.clone(), serial);
+        for named in &file.also {
+            self.names.insert(named.clone(), serial);
+        }
         if let Some(inode) = file.inode {
             self.inodes.insert(inode, serial);
         }
     }
-    /// Drops `file`'s name and inode keys that still find `serial`.
+    /// Drops every name of `file` and its inode key that still find `serial`.
     fn unindex(&mut self, serial: u64, file: &Companion) {
-        if self.names.get(&file.named) == Some(&serial) {
-            self.names.remove(&file.named);
+        for named in std::iter::once(&file.named).chain(&file.also) {
+            if self.names.get(named) == Some(&serial) {
+                self.names.remove(named);
+            }
         }
         if let Some(inode) = file.inode {
             if self.inodes.get(&inode) == Some(&serial) {
                 self.inodes.remove(&inode);
             }
         }
+    }
+    /// Whether `serial` holds a name other than `named`.
+    fn holds_another(&self, serial: u64, named: &Named) -> bool {
+        self.files.get(&serial).is_some_and(|file| {
+            (file.named != *named && self.names.get(&file.named) == Some(&serial))
+                || file.also.iter().any(|also| also != named)
+        })
+    }
+    /// Drops `named`, one of `serial`'s names, and answers whether it held it.
+    /// A companion left with no name is still reached through its main inode,
+    /// so it keeps its record; another held name becomes the one its record
+    /// names, so a later `index` puts back only names it still holds.
+    fn drop_name(&mut self, serial: u64, named: &Named) -> bool {
+        let Some(file) = self.files.get_mut(&serial) else {
+            return false;
+        };
+        let primary = file.named == *named;
+        if !primary && !file.also.iter().any(|also| also == named) {
+            return false;
+        }
+        if self.names.get(named) == Some(&serial) {
+            self.names.remove(named);
+        }
+        if primary {
+            if let Some(next) = file.also.pop() {
+                file.named = next;
+            }
+        } else {
+            file.also.retain(|also| also != named);
+        }
+        true
     }
     /// The companion `named` reaches when its main file is `main`: the one
     /// held under that name, unless it belongs to another inode than `main`,
@@ -715,6 +760,7 @@ impl Kernel {
         let used = companions.tick();
         let file = Companion {
             named,
+            also: Vec::new(),
             inode: main,
             whole: false,
             len: 0,
@@ -732,15 +778,48 @@ impl Kernel {
     }
     /// REMOVE of a companion name, with the directory's `wcc_data`; `None`
     /// when no companion has that name.
+    ///
+    /// A companion the export pairs with a main inode is the inode's, not one
+    /// name's: its FinderInfo and attributes belong to the file, so a client
+    /// that links the file (or removes one of its names) and drops the `._`
+    /// name it no longer uses leaves the companion to the inode's remaining
+    /// names. Only while this name is the companion's last one, and its inode
+    /// has no other name the export knows, is the REMOVE the client clearing
+    /// the attributes, which takes the companion with it. A companion no main
+    /// inode owns has nothing else to go with and always goes.
     pub(crate) fn companion_remove(&self, parent: u64, name: &[u8]) -> Option<Wcc> {
+        let named = (parent, name.to_vec());
         let main = self.main_of(parent, name);
+        let (serial, inode, one_name) = {
+            let companions = self.companions();
+            let serial = companions.resolve(&named, main)?;
+            let file = companions.files.get(&serial)?;
+            (
+                serial,
+                file.inode,
+                !companions.holds_another(serial, &named),
+            )
+        };
+        let kept = !one_name || inode.is_some_and(|inode| self.knows_another_name(inode));
         let spilled = {
             let mut companions = self.companions();
-            let serial = companions.resolve(&(parent, name.to_vec()), main)?;
-            companions.take_serial(serial)
+            if kept {
+                companions.drop_name(serial, &named);
+                Vec::new()
+            } else {
+                companions.take_serial(serial).into_iter().collect()
+            }
         };
         unlink_paths(spilled);
         Some(self.directory_wcc(parent))
+    }
+    /// Whether the export's name index knows a name of `inode` beyond the one
+    /// it remembers: a hard link the client made, which the companion of an
+    /// inode follows.
+    fn knows_another_name(&self, inode: u64) -> bool {
+        let table = self.table();
+        let remembered = usize::from(table.names.contains_key(&inode));
+        remembered + table.aliases.get(&inode).map_or(0, Vec::len) > 1
     }
     /// The main file `name` in `parent` was removed, silly-renamed or replaced
     /// by `RENAME`: drops the companion held under `._<name>`, or only that
@@ -768,7 +847,7 @@ impl Kernel {
                 .get(&serial)
                 .is_some_and(|file| file.inode.is_some())
             {
-                companions.names.remove(&named);
+                companions.drop_name(serial, &named);
                 None
             } else {
                 companions.take_serial(serial)
@@ -786,6 +865,44 @@ impl Kernel {
             companions.take_serial(serial)
         };
         unlink_paths(spilled);
+    }
+    /// LINK of a companion name: the same companion under another AppleDouble
+    /// name, as a client that links a file makes to carry its attributes to
+    /// the new name. The name it names must be free, and a name that is not
+    /// another companion name is refused, so a companion never becomes a file
+    /// of the Workspace.
+    pub(crate) fn companion_link(
+        &self,
+        serial: u64,
+        parent: u64,
+        name: &[u8],
+    ) -> Result<(ViewStat, Wcc), Status> {
+        if !crate::names::apple_double(name) || name.len() > 255 {
+            return Err(Status::Access);
+        }
+        if parent != self.root() && !self.table().parents.contains_key(&parent) {
+            return Err(Status::NotDir);
+        }
+        let named = (parent, name.to_vec());
+        let directory = self.directory_wcc(parent);
+        let main = self.main_of(parent, name);
+        let mut companions = self.companions();
+        if companions.names.contains_key(&named)
+            || companions
+                .resolve(&named, main)
+                .is_some_and(|other| other != serial)
+        {
+            return Err(Status::Exist);
+        }
+        let Some(mut file) = companions.detach(serial) else {
+            return Err(Status::Stale);
+        };
+        file.also.push(named);
+        file.used = companions.tick();
+        let stat = Companions::stat(serial, &file);
+        companions.index(serial, &file);
+        companions.attach(serial, file);
+        Ok((stat, directory))
     }
     /// RENAME of a companion name: only to another AppleDouble name, which it
     /// replaces when held. It then belongs to the destination's main inode, or
