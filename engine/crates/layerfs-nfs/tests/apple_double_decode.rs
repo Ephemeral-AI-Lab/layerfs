@@ -412,6 +412,52 @@ fn a_resource_fork_keeps_the_stored_as_written_fallback() {
 }
 
 #[test]
+fn a_rename_onto_an_unknown_main_keeps_the_resident_budget() {
+    let base = temp("rename-budget");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    rig.companion_spill_dir = Some(base.join("spill"));
+    // Nearly full: a decoded image of a few hundred bytes and a written body
+    // of 700 bytes.
+    rig.companion_resident_bytes = 1024;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    c.touch(&root, b"a", 0o644).unwrap();
+    let image_name = c.touch(&root, b"._a", 0o644).unwrap();
+    let whole = image([0x31; 32], &[(b"user.small", pattern(80, 64))]);
+    c.write(&image_name.handle, 0, &whole).unwrap();
+    assert_eq!(server.held().companions_decoded, 1);
+    c.touch(&root, b"b", 0o644).unwrap();
+    let other = c.touch(&root, b"._b", 0o644).unwrap();
+    c.write(&other.handle, 0, &pattern(81, 700)).unwrap();
+    let before = server.held();
+    assert!(before.companion_bytes <= 1024, "{}", before.companion_bytes);
+
+    // Onto a name whose main file the export does not know: the decoded body is
+    // the client's bytes again, which the budget does not take, so it leaves
+    // memory first and the rename still happens.
+    c.rename(&root, b"._a", &root, b"._zzz").unwrap();
+    let after = server.held();
+    assert_eq!(
+        after.companion_bytes, 700,
+        "only the written body takes the budget: the image left memory"
+    );
+    assert_eq!(after.companions_decoded, 0);
+    let (moved, attr) = c.lookup(&root, b"._zzz").unwrap();
+    assert_eq!(attr.size as usize, whole.len());
+    assert_eq!(c.read_all(&moved, 64 * 1024), whole);
+    assert_eq!(c.lookup(&root, b"._a").map(|_| ()), Err(NOENT));
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn a_write_that_takes_the_last_slot_is_refused_by_the_bound() {
     let base = temp("write-bound");
     let tree = base.join("tree");

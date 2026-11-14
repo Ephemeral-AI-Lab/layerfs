@@ -723,25 +723,74 @@ impl Kernel {
     ) -> Option<Result<(), Status>> {
         let from_main = self.main_of(from, name);
         let to_main = self.main_of(to, new_name);
+        let serial = {
+            let companions = self.companions();
+            companions.resolve(&(from, name.to_vec()), from_main)?
+        };
+        if !crate::names::apple_double(new_name) || new_name.len() > 255 {
+            return Some(Err(Status::Access));
+        }
+        Some(self.rename_companion(serial, (to, new_name.to_vec()), to_main))
+    }
+    /// Moves `serial`'s companion to `target`, under `to_main`'s inode.
+    ///
+    /// The body is classified again under the destination, so a whole image
+    /// renamed onto an unknown main is the client's bytes again and takes a
+    /// slot: such a body no longer fits the resident budget as attributes, and
+    /// is written out first (outside the companion lock, with the companion's
+    /// edit gate held), so the rename itself only records a name and a class.
+    /// A companion that needs a new slot of the index bound takes the same
+    /// decision the edit path takes: the orphan slots are reclaimed once and
+    /// the rename is refused if the bound still has none.
+    fn rename_companion(&self, serial: u64, target: Named, to_main: Option<u64>) -> Result<(), Status> {
+        let gate = {
+            let companions = self.companions();
+            companions.files.get(&serial).ok_or(Status::Stale)?.editing.clone()
+        };
+        // Held to the end: the body written out below is the body renamed.
+        let _editing = gate.lock().unwrap_or_else(|poison| poison.into_inner());
+        // A decoded body renamed onto an unknown main would cost its whole
+        // image of the resident budget: write it out instead, which costs none.
+        let leaves_memory = {
+            let companions = self.companions();
+            let file = companions.files.get(&serial).ok_or(Status::Stale)?;
+            match &file.body {
+                Body::Decoded(image) if to_main.is_none() => {
+                    let cost = image.len();
+                    companions
+                        .resident_bytes
+                        .saturating_sub(image.cost())
+                        .saturating_add(cost)
+                        > companions.resident_budget
+                }
+                _ => false,
+            }
+        };
+        if leaves_memory {
+            self.spill_gated(serial, 0)?;
+        }
+        // A companion moved onto an unknown main takes a slot; one already
+        // holding a slot keeps it, and one that stays a whole image keeps its
+        // exemption.
+        if !self.companions().admits(Some(serial), to_main.is_none()) {
+            self.reclaim_orphans();
+            if !self.companions().admits(Some(serial), to_main.is_none()) {
+                return Err(Status::NoSpc);
+            }
+        }
         let mut replaced_path = None;
         {
             let mut companions = self.companions();
-            let serial = companions.resolve(&(from, name.to_vec()), from_main)?;
-            if !crate::names::apple_double(new_name) || new_name.len() > 255 {
-                return Some(Err(Status::Access));
-            }
-            let target = (to, new_name.to_vec());
+            let mut file = companions.detach(serial).ok_or(Status::Stale)?;
+            companions.unindex(serial, &file);
             if let Some(replaced) = companions.resolve(&target, to_main) {
                 if replaced != serial {
                     replaced_path = companions.take_serial(replaced);
                 }
             }
-            let tick = companions.tick();
-            let mut file = companions.detach(serial)?;
-            companions.unindex(serial, &file);
             file.named = target;
             file.inode = to_main;
-            file.used = tick;
+            file.used = companions.tick();
             // A client may write a companion under another name first, and a
             // name it moves onto may belong to another main inode, or to
             // none: the body is classified again under the destination, so
@@ -752,7 +801,7 @@ impl Kernel {
             companions.attach(serial, file);
         }
         unlink_paths(replaced_path);
-        Some(Ok(()))
+        Ok(())
     }
     /// Drops every companion and removes the export's spill directory; returns
     /// what the index held.

@@ -392,7 +392,7 @@ impl Kernel {
     /// Writes `serial`'s body out while its own edit runs alone, keeping
     /// `size` bytes: no other edit can change the body, so the file written is
     /// the body this edit then applies to.
-    fn spill_gated(&self, serial: u64, size: usize) -> Result<(), Status> {
+    pub(super) fn spill_gated(&self, serial: u64, size: usize) -> Result<(), Status> {
         let (dir, bytes, size) = {
             let companions = self.companions();
             let file = companions.files.get(&serial).ok_or(Status::Stale)?;

@@ -194,7 +194,10 @@ kept as written bytes, which take the same budget at their length; partial
 writes, resource forks, other layouts and unknown-main companions stay as
 written bytes and occupy a slot. `companion_rename` re-classifies under the
 destination so moving onto an unknown main name takes a slot (a spilled body
-keeps its prior class).
+keeps its prior class); a decoded body that would be the client's bytes again
+and does not fit `RESIDENT_BYTES` is written out first, under the companion's
+edit gate and outside the companion lock, so the rename never exceeds the
+budget and only records the new name and class.
 
 `HELD` is the admission limit of this export-local shim, not a Workspace or
 Sandbox capacity: the companions live for one mount, are deleted at release and
