@@ -566,6 +566,9 @@ impl DecompressionWorkspace {
         frame: &[u8],
         raw_length: usize,
     ) -> StorageResult<Vec<u8>> {
+        let _stage = layerfs_telemetry::timer::stages::Timer::start(
+            layerfs_telemetry::timer::stages::Stage::Zstd,
+        );
         if frame.is_empty()
             || frame.len() > profile.frame_limit()
             || raw_length == 0
@@ -624,6 +627,9 @@ impl DecompressionWorkspace {
         raw_length: usize,
         prefix: &[u8],
     ) -> StorageResult<Vec<u8>> {
+        let _stage = layerfs_telemetry::timer::stages::Timer::start(
+            layerfs_telemetry::timer::stages::Stage::Zstd,
+        );
         if frame.is_empty()
             || frame.len() > profile.frame_limit()
             || raw_length == 0
@@ -684,6 +690,9 @@ impl DecompressionWorkspace {
 
     /// Decompresses one ordinary group body frame.
     pub fn decompress_group(&mut self, frame: &[u8], raw_length: usize) -> StorageResult<Vec<u8>> {
+        let _stage = layerfs_telemetry::timer::stages::Timer::start(
+            layerfs_telemetry::timer::stages::Stage::Zstd,
+        );
         if frame.is_empty()
             || raw_length == 0
             || raw_length > GROUP_LIMIT

@@ -117,6 +117,7 @@ impl ReadSession {
         })
     }
     pub fn objects(&self, ids: &[ObjectId]) -> Result<Vec<Vec<u8>>, Arc<PortError>> {
+        let _stage = layerfs_telemetry::timer::stages::Timer::start(layerfs_telemetry::timer::stages::Stage::StoreDemand);
         self.attempt(|handle, cache, counts| {
             counts.objects.fetch_add(1, Ordering::Relaxed);
             counts

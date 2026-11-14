@@ -28,6 +28,31 @@ impl Negotiation {
         self.selected.bits()
     }
 }
+/// Prototype (FUSE profile probe, not a product contract): the request
+/// window and background requests come from `LAYERFS_PROBE_FUSE_WINDOW`
+/// (131072, 524288 or 1048576 bytes) and `LAYERFS_PROBE_FUSE_BACKGROUND`
+/// (1 to 64); unset, they are the selected 128 KiB and 1.
+pub fn window() -> u32 {
+    static WINDOW: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+    *WINDOW.get_or_init(|| {
+        std::env::var("LAYERFS_PROBE_FUSE_WINDOW")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .filter(|value| [131_072, 524_288, 1_048_576].contains(value))
+            .unwrap_or(layerfs_overlay::READ_WINDOW as u32)
+    })
+}
+/// See [`window`].
+pub fn background() -> u16 {
+    static BACKGROUND: std::sync::OnceLock<u16> = std::sync::OnceLock::new();
+    *BACKGROUND.get_or_init(|| {
+        std::env::var("LAYERFS_PROBE_FUSE_BACKGROUND")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .filter(|value| (1..=64).contains(value))
+            .unwrap_or(1)
+    })
+}
 pub(crate) fn negotiate(config: &mut KernelConfig) -> io::Result<Negotiation> {
     let offered = config.capabilities();
     let defaults = InitFlags::FUSE_ASYNC_READ | InitFlags::FUSE_BIG_WRITES;
@@ -39,11 +64,22 @@ pub(crate) fn negotiate(config: &mut KernelConfig) -> io::Result<Negotiation> {
     }
     let selected = defaults | (offered & InitFlags::FUSE_MAX_PAGES);
     let refused = |_| io::Error::new(io::ErrorKind::Unsupported, "kernel profile limit refused");
-    let window = layerfs_overlay::READ_WINDOW as u32;
+    let window = window();
+    let background = background();
     config.set_max_write(window).map_err(refused)?;
-    config.set_max_readahead(window).map_err(refused)?;
-    config.set_max_background(1).map_err(|_| refused(0))?;
-    config.set_congestion_threshold(1).map_err(|_| refused(0))?;
+    // The kernel offers its bdi readahead (128 KiB) as the most it accepts;
+    // a larger window reads ahead only once the bdi's read_ahead_kb is raised.
+    let readahead = match config.set_max_readahead(window) {
+        Ok(_) => window,
+        Err(most) => {
+            config.set_max_readahead(most).map_err(refused)?;
+            most
+        }
+    };
+    config.set_max_background(background).map_err(|_| refused(0))?;
+    config
+        .set_congestion_threshold(background)
+        .map_err(|_| refused(0))?;
     config
         .set_time_granularity(Duration::from_nanos(1))
         .map_err(|_| refused(0))?;
@@ -57,9 +93,9 @@ pub(crate) fn negotiate(config: &mut KernelConfig) -> io::Result<Negotiation> {
         offered,
         selected,
         max_write: window,
-        max_readahead: window,
-        max_background: 1,
-        congestion_threshold: 1,
+        max_readahead: readahead,
+        max_background: background,
+        congestion_threshold: background,
         page_size,
     })
 }

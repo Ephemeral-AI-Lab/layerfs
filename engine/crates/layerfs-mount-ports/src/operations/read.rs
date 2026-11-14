@@ -66,10 +66,12 @@ impl Custody {
             return Err(Box::new(OverlayError::Invalid("kernel read window")));
         }
         let (mount, serial, handle) = self.target();
+        let started = std::time::Instant::now();
         let visit = self
             .services
             .read_visit(mount, serial, handle, offset, length)
             .await?;
+        layerfs_telemetry::timer::stages::charge(layerfs_telemetry::timer::stages::Stage::ReadVisit, started);
         if visit.get().whole(link).is_some() {
             return Ok(Ok(KernelData(Bytes::Visit(visit))));
         }
@@ -79,11 +81,16 @@ impl Custody {
         drop(visit);
         let base = if window.inherits(offset, link) {
             // Provider reads never run on the loop that received the request.
-            Some(self.services.base().await?)
+            let started = std::time::Instant::now();
+            let base = self.services.base().await?;
+            layerfs_telemetry::timer::stages::charge(layerfs_telemetry::timer::stages::Stage::BaseAdmit, started);
+            Some(base)
         } else {
             None
         };
-        let answer = window.finish(base.as_ref(), serial, offset, length, link);
+        let answer = layerfs_telemetry::timer::stages::time(layerfs_telemetry::timer::stages::Stage::Finish, || {
+            window.finish(base.as_ref(), serial, offset, length, link)
+        });
         drop(base); // Return the actual reader before the reply.
         match answer {
             Ok(answer) => Ok(answer.map(|data| KernelData(Bytes::Owned(data)))),

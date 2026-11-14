@@ -9,7 +9,7 @@ pub struct ObjectKey([u8; 32]);
 impl ObjectKey {
     /// Hashes the complete sealed bytes.
     pub fn for_bytes(bytes: &[u8]) -> Self {
-        Self(Sha256::digest(bytes).into())
+        layerfs_telemetry::timer::stages::time(layerfs_telemetry::timer::stages::Stage::PackHash, || Self(Sha256::digest(bytes).into()))
     }
     /// Imports a persisted digest.
     pub const fn from_bytes(bytes: [u8; 32]) -> Self {

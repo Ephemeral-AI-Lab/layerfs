@@ -816,6 +816,7 @@ dependencies = [
  "layerfs-content",
  "layerfs-mount-ports",
  "layerfs-overlay",
+ "layerfs-telemetry",
  "layerfs-workspace",
  "libc",
  "nix",
@@ -853,6 +854,7 @@ version = "2.0.0"
 dependencies = [
  "layerfs-content",
  "layerfs-overlay",
+ "layerfs-telemetry",
  "layerfs-workspace",
 ]
 

@@ -73,9 +73,18 @@ impl ReadReply {
                     .await
             }
         };
+        if let ReadDataInput::File { offset, length } = input {
+            if length as usize > layerfs_overlay::READ_WINDOW {
+                return windows(services, fence, mount, request, protected, handle, offset, length, reply)
+                    .await;
+            }
+        }
         // Nothing is held in the engine after the visit: the reply ends it.
         match KernelData::read(services, mount, request, protected, handle, input).await {
             Ok(Ok(data)) => {
+                let _stage = layerfs_telemetry::timer::stages::Timer::start(
+                    layerfs_telemetry::timer::stages::Stage::Reply,
+                );
                 reply.data(data.bytes());
                 RequestDisposition::Complete
             }
@@ -202,4 +211,53 @@ pub(super) fn open_flags() -> FopenFlags {
     flags.set(FopenFlags::FOPEN_KEEP_CACHE, cache.keep);
     flags.set(FopenFlags::FOPEN_DIRECT_IO, cache.direct);
     flags
+}
+/// Prototype (FUSE profile probe): a READ above the engine's read window is
+/// served as consecutive window reads, each its own owner visit, and replied
+/// once. A short window ends it; a failure after the first window replies
+/// the bytes already read.
+#[allow(clippy::too_many_arguments)]
+async fn windows(
+    services: Arc<dyn RequestServices>,
+    fence: Fence,
+    mount: KernelMount,
+    request: u64,
+    protected: u64,
+    handle: Option<u64>,
+    offset: u64,
+    length: u32,
+    reply: ReplyData,
+) -> RequestDisposition {
+    let window = layerfs_overlay::READ_WINDOW as u32;
+    let mut data = Vec::with_capacity(length as usize);
+    while (data.len() as u32) < length {
+        let want = (length - data.len() as u32).min(window);
+        let input = ReadDataInput::File {
+            offset: offset + data.len() as u64,
+            length: want,
+        };
+        match KernelData::read(services.clone(), mount, request, protected, handle, input).await {
+            Ok(Ok(part)) => {
+                let bytes = part.bytes();
+                data.extend_from_slice(bytes);
+                if (bytes.len() as u32) < want {
+                    break;
+                }
+            }
+            Ok(Err(_)) | Err(_) if !data.is_empty() => break,
+            Ok(Err(reason)) => {
+                reply.error(refusal(reason));
+                return RequestDisposition::Complete;
+            }
+            Err(error) => {
+                reply.error(terminal::errno(error.fenced()));
+                return terminal::read(&fence, error).await;
+            }
+        }
+    }
+    let _stage = layerfs_telemetry::timer::stages::Timer::start(
+        layerfs_telemetry::timer::stages::Stage::Reply,
+    );
+    reply.data(&data);
+    RequestDisposition::Complete
 }

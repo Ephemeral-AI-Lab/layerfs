@@ -10,7 +10,8 @@ pub const RECEIVE_SLOTS: usize = 2;
 /// negotiates as `max_write`, independent of the larger NFS transfer window:
 /// the kernel never sends a request above `max_write`, so one receive slot
 /// keeps a 128 KiB buffer per Workspace.
-pub const MAX_INPUT_BYTES: usize = layerfs_overlay::READ_WINDOW + 2 * 255;
+/// Prototype (FUSE profile probe): the largest probe window, 1 MiB.
+pub const MAX_INPUT_BYTES: usize = (1 << 20) + 2 * 255;
 
 /// Completion means original reply/result/source consumers are disposed. A
 /// retained error must itself keep the operation's original inputs and custody.

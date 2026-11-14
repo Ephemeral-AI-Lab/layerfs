@@ -21,6 +21,7 @@ mod limits;
 mod recording;
 mod report;
 mod scope;
+pub mod stages;
 pub mod waits;
 
 pub use recording::{MAX_DEPTH, MAX_LABEL_BYTES, MAX_NODES};

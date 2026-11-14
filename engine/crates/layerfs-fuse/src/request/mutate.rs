@@ -195,6 +195,109 @@ impl KernelFilesystem {
             }),
         );
     }
+    /// Prototype (FUSE profile probe): a WRITE above the engine's write
+    /// window, published as consecutive window jobs, each its own SQLite
+    /// transaction and publication, then replied once. A failure after a
+    /// published window replies the bytes already written.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn write_windows(
+        &self,
+        permit: RequestOwner,
+        request: u64,
+        serial: u64,
+        handle: u64,
+        offset: u64,
+        data: Vec<u8>,
+        cached: bool,
+        reply: ReplyWrite,
+    ) {
+        let services = self.services.clone();
+        let fence = self.fence.clone();
+        let mount: KernelMount = self.queue.identity();
+        self.serve(
+            permit,
+            Box::pin(async move {
+                let mut done = 0_usize;
+                for window in data.chunks(layerfs_overlay::WRITE_WINDOW) {
+                    let partial = |reply: ReplyWrite, errno: Errno, done: usize| {
+                        if done > 0 {
+                            reply.written(done as u32)
+                        } else {
+                            reply.error(errno)
+                        }
+                    };
+                    let Some(now) = time(SystemTime::now()) else {
+                        partial(reply, Errno::EIO, done);
+                        return RequestDisposition::Complete;
+                    };
+                    let input = match layerfs_mount_ports::operations::write::write(
+                        offset + done as u64,
+                        window,
+                        cached,
+                    ) {
+                        Ok(input) => input,
+                        Err(reason) => {
+                            partial(reply, declined(reason), done);
+                            return RequestDisposition::Complete;
+                        }
+                    };
+                    let services = match services.request(&fence) {
+                        Ok(services) => services,
+                        Err(error) => {
+                            partial(reply, Errno::EIO, done);
+                            return failed(
+                                request,
+                                mount,
+                                KernelInput::Mutation {
+                                    protected: serial,
+                                    handle: Some(handle),
+                                    input,
+                                },
+                                error,
+                            );
+                        }
+                    };
+                    let mutation = match KernelMutation::perform(
+                        services,
+                        MutationRequest {
+                            mount,
+                            request,
+                            protected: serial,
+                            handle: Some(handle),
+                            input,
+                            open: None,
+                            now,
+                        },
+                    )
+                    .await
+                    {
+                        Ok(mutation) => mutation,
+                        Err(failure) => {
+                            partial(reply, terminal::errno(failure.fenced()), done);
+                            return terminal::mutation(&fence, failure).await;
+                        }
+                    };
+                    if let Err(reason) = mutation.value() {
+                        partial(reply, declined(reason), done);
+                        return reply_order::attempted(mutation).await;
+                    }
+                    done += window.len();
+                    if done == data.len() {
+                        reply.written(done as u32);
+                        return reply_order::attempted(mutation).await;
+                    }
+                    if let RequestDisposition::Retained(error) =
+                        reply_order::attempted(mutation).await
+                    {
+                        partial(reply, Errno::EIO, done);
+                        return RequestDisposition::Retained(error);
+                    }
+                }
+                reply.written(done as u32);
+                RequestDisposition::Complete
+            }),
+        );
+    }
     /// A mutation addressed by a parent and one or two names. Names are
     /// checked and copied on the receive loop; `build` receives them owned.
     #[allow(clippy::too_many_arguments)]

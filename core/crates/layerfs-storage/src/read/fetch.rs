@@ -221,7 +221,7 @@ impl Fetch {
         for page in missing.chunks(READ_OBJECT_LIMIT) {
             let mut rows = Vec::new();
             self.note(|c| c.locate += 1);
-            self.metadata.locate(page, &mut rows)?;
+            layerfs_telemetry::timer::stages::time(layerfs_telemetry::timer::stages::Stage::Locate, || self.metadata.locate(page, &mut rows))?;
             if rows.len() > page.len() {
                 return Err(StorageError::Integrity("locator cardinality"));
             }
@@ -327,7 +327,7 @@ impl Fetch {
             c.read_packs += 1;
             c.pack_misses += ids.len() as u64;
         });
-        self.metadata.read_packs(ids, &mut rows)?;
+        layerfs_telemetry::timer::stages::time(layerfs_telemetry::timer::stages::Stage::PackRead, || self.metadata.read_packs(ids, &mut rows))?;
         let bytes: usize = rows.iter().map(|row| row.body().len()).sum();
         if rows.len() != ids.len()
             || bytes > DEPENDENCY_PACK_CACHE_BYTES
@@ -399,7 +399,9 @@ impl Fetch {
             c.pack_misses += 1;
         });
         let mut rows = Vec::new();
-        self.metadata.read_packs(&[info.pack_id], &mut rows)?;
+        layerfs_telemetry::timer::stages::time(layerfs_telemetry::timer::stages::Stage::PackRead, || {
+            self.metadata.read_packs(&[info.pack_id], &mut rows)
+        })?;
         let row = rows
             .pop()
             .filter(|row| rows.is_empty() && row.info() == info)
@@ -464,7 +466,9 @@ impl Source for Fetch {
             whole_for_reuse,
             self.metadata.whole_pack_bytes(),
         );
-        let reply = self.metadata.read_scoped_pack(id, &mut plan);
+        let reply = layerfs_telemetry::timer::stages::time(layerfs_telemetry::timer::stages::Stage::PackRead, || {
+            self.metadata.read_scoped_pack(id, &mut plan)
+        });
         if let Some(error) = plan.error {
             return Err(error);
         }

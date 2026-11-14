@@ -160,7 +160,7 @@ impl Filesystem for KernelFilesystem {
         else {
             return;
         };
-        if size as usize > layerfs_overlay::READ_WINDOW {
+        if size > crate::mount::window() {
             return self.refused(reply, ReadReply::error, Errno::EINVAL);
         }
         let Some((serial, reply)) = self.serial(inode, reply, ReadReply::error) else {
@@ -554,7 +554,7 @@ impl Filesystem for KernelFilesystem {
     ) {
         let _timed = self.accounting.timed(Opcode::Write);
         self.accounting.write_size(data.len());
-        if data.len() > layerfs_overlay::WRITE_WINDOW {
+        if data.len() > crate::mount::window() as usize {
             return self.refuse(Opcode::Write, reply, ReplyWrite::error, Errno::EINVAL);
         }
         let reply = MutationReply::Written(reply, data.len());
@@ -571,6 +571,22 @@ impl Filesystem for KernelFilesystem {
         let cached = flags.contains(WriteFlags::FUSE_WRITE_CACHE);
         if cached {
             self.accounting.store_unit();
+        }
+        if data.len() > layerfs_overlay::WRITE_WINDOW {
+            let MutationReply::Written(reply, _) = reply else {
+                unreachable!("a WRITE replies a count")
+            };
+            // Prototype (FUSE profile probe): one engine job per window.
+            return self.write_windows(
+                permit,
+                req.unique().0,
+                serial,
+                handle.0,
+                offset,
+                data.to_vec(),
+                cached,
+                reply,
+            );
         }
         let input = write::write(offset, data, cached);
         self.mutate(

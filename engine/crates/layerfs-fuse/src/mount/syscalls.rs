@@ -67,7 +67,7 @@ pub(crate) fn attach(device: &OwnedFd, target: &Path, uid: u32, gid: u32) -> Res
     let data = format!(
         "fd={},rootmode=40000,user_id={uid},group_id={gid},allow_other,default_permissions,max_read={}",
         device.as_raw_fd(),
-        layerfs_overlay::READ_WINDOW
+        super::window()
     );
     mount(
         Some(SOURCE),
