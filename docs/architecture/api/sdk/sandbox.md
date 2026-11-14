@@ -148,6 +148,16 @@ CLI     layerfs sandbox close <name> [--force]
 running command is cancelled first (5000 ms grace), and uncommitted changes
 and processes end with the Sandbox
 ([`exec/cancel.rs`](../../../../control/crates/layerfs-sandbox/src/exec/cancel.rs) `settle`).
+On `native`, a forced close works from the Sandbox's own records instead: it
+opens no Store and calls no daemon, checks the runtime's identity, ends its
+mounts and processes, and answers every recorded or held Workspace as
+`unknown` ([`force.rs`](../../../../control/crates/layerfs-sandbox/src/force.rs)).
+It does not settle commands one by one or check mounts first: the runtime's
+stop ends them. It is `Busy` while a live process holds `native` (a forced
+`machine.stop`, for one), but not for an unresolved intent, whether an ended
+process or this one left it. If the
+runtime stopped and a later step (delete, folder removal) failed, the refusal
+carries `detail.runtime_stopped: true` and the record is marked stopped.
 
 | Case | Answer |
 | --- | --- |

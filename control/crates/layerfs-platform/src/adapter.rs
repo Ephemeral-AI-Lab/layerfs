@@ -24,7 +24,7 @@ pub(crate) trait Adapter: Sync {
     /// Starts a stopped machine or its worker; `None`: nothing to start.
     fn start(&self, spec: &Spec, bundle: &Bundle) -> Result<Option<Running>, MachineError>;
     /// Stops the worker and, where there is one, the VM.
-    fn stop(&self, spec: &Spec) -> Result<(), MachineError>;
+    fn stop(&self, spec: &Spec, force: bool) -> Result<(), MachineError>;
     /// Provider runtime state only, without worker contact or guest commands.
     fn provider_state(&self, spec: &Spec) -> Result<State, MachineError>;
     /// The machine's state now; starts nothing.

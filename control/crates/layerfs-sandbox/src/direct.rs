@@ -324,6 +324,9 @@ pub fn capacity(home: &Path, record: &SandboxRecord) -> Outcome {
 /// Store's lease (the Sandbox half of `workspace::direct::call`).
 fn served(home: &Path, record: &SandboxRecord, call: Call) -> Outcome {
     let home = home.to_path_buf();
+    if let Some(machine) = layerfs_machine::record::MachineRecord::read(&home, record.machine())? {
+        machine.not_held()?;
+    }
     let target = resolve::target(&home, record.project().unwrap_or(""))?;
     let _lease = lease::hold(&home, &target.store)?;
     dispatch::call(host(&home, record, &target, Message::Absent), call)

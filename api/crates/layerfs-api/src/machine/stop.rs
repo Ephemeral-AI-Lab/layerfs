@@ -1,6 +1,6 @@
 //! `machine.stop`: stop a machine's worker and VM; its disks stay.
-use crate::calls::table::Kind::Name;
-use crate::calls::table::{a, call, Call};
+use crate::calls::table::Kind::{Bool, Name};
+use crate::calls::table::{a, call, opt, Call};
 use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
 #[cfg(feature = "machine")]
@@ -12,7 +12,7 @@ pub(crate) const CALL: Call = call(
     "machine",
     "stop",
     &[a("name", Name)],
-    &[],
+    &[opt("force", Bool)],
     "stop a machine's worker and VM; its disks stay",
     run,
 );
@@ -21,7 +21,11 @@ pub(crate) const CALL: Call = call(
 #[cfg(feature = "machine")]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let name = MachineName::parse(args.get_text("name").unwrap_or(""))?;
-    layerfs_control::machine::stop(&context.home, &name)
+    if args.get_bool("force") {
+        layerfs_control::machine::stop_force(&context.home, &name)
+    } else {
+        layerfs_control::machine::stop(&context.home, &name)
+    }
 }
 
 /// Without the `machine` feature (the guest worker's build) it is

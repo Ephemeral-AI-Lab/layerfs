@@ -84,6 +84,31 @@ impl Sandbox {
         owner.endpoint()?;
         Ok(owner)
     }
+    /// Reopen only for an explicit crash stop, including a daemon already gone.
+    /// No endpoint or daemon RPC is needed. Stop still matches pid, start and boot.
+    pub fn reopen_for_stop(
+        directory: PathBuf,
+        id: ContainerId,
+        process: LocalProcess,
+        port: u16,
+        labels: Vec<(String, String)>,
+    ) -> Result<Self, Box<WireFailure>> {
+        let mut owner = Self::unstarted(id, directory, labels);
+        owner.process = Some(process);
+        owner.port = port;
+        if !owner.directory.is_absolute() || port == 0 {
+            return Err(owner.invalid("saved local Sandbox"));
+        }
+        if process.boot.is_none() {
+            return Err(owner.invalid("saved local daemon has no boot identity; mounts retained"));
+        }
+        if let Ok(current) = LocalProcess::observe(process.pid) {
+            if current.alive() && !process.alive() {
+                return Err(owner.invalid("saved local daemon identity changed; mounts retained"));
+            }
+        }
+        Ok(owner)
+    }
     /// A recorded Sandbox that [`Self::reopen`] found stopped
     /// ([`WireFailure::container_stopped`]): only its one Delete is admitted.
     pub fn stopped(

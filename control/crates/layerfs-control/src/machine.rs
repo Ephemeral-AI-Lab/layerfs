@@ -63,3 +63,8 @@ pub fn remove(home: &Path, name: &MachineName) -> Outcome {
 pub fn update(home: &Path, request: &MachineUpdate) -> Outcome {
     layerfs_machine::update(home, request, RELATED)
 }
+
+/// Explicit crash stop of a machine and this home's Sandboxes, preserving data.
+pub fn stop_force(home: &Path, name: &MachineName) -> Outcome {
+    crate::machine_force::stop(home, name)
+}

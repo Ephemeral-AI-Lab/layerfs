@@ -70,7 +70,14 @@ pub fn start(spec: &Spec, bundle: &Bundle) -> Result<Option<Running>, MachineErr
 /// `docker` stops only its worker; `native` has nothing to stop.
 pub fn stop(spec: &Spec) -> Result<(), MachineError> {
     spec.validate()?;
-    adapter(spec.kind).stop(spec)
+    adapter(spec.kind).stop(spec, false)
+}
+
+/// Stops directly through the provider, without contacting or starting its worker.
+/// The caller owns Sandbox/Workspace reconciliation; registered machines and disks stay.
+pub fn stop_force(spec: &Spec) -> Result<(), MachineError> {
+    spec.validate()?;
+    adapter(spec.kind).stop(spec, true)
 }
 
 /// `machine remove` deletes a VM and its data disk. `InUse` is the

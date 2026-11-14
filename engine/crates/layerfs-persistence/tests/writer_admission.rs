@@ -168,6 +168,8 @@ impl Held {
                 }
             }
         };
+        // Darwin inherits the listener's nonblocking flag on accepted sockets.
+        socket.set_nonblocking(false).unwrap();
         let mut held = Self { child, socket };
         held.socket.set_nonblocking(false).unwrap();
         held.socket
@@ -347,6 +349,71 @@ fn another_process_admission_precedes_the_single_sqlite_begin() {
     assert_eq!(after.write_transactions - before.write_transactions, 1);
     assert_eq!(after.write_commits - before.write_commits, 1);
     assert_eq!(after.rollbacks, before.rollbacks);
+    drop(original);
+}
+
+#[test]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn writable_last_close_waits_for_the_lane_then_removes_the_wal() {
+    // A pull's verify and a restore's in-use check rely on the last close
+    // folding the WAL in: a writable close waits for a held lane instead of
+    // leaving the WAL behind.
+    let temp = support::Temp::new("wa-close");
+    let path = temp.join("store.sqlite");
+    let wal = temp.join("store.sqlite-wal");
+    let handles = create(&path);
+    assert!(wal.exists(), "the test needs a WAL file before the close");
+    let held = Held::start(&path, &temp.join("s"));
+    let (result_tx, result_rx) = mpsc::channel();
+    let closer = std::thread::spawn(move || {
+        drop(handles);
+        result_tx.send(()).unwrap();
+    });
+    let premature = result_rx.recv_timeout(Duration::from_millis(200)).ok();
+    let wal_kept = wal.exists();
+    held.release();
+    if premature.is_none() {
+        result_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+    }
+    closer.join().unwrap();
+    assert!(
+        premature.is_none(),
+        "a writable close bypassed the held lane"
+    );
+    assert!(wal_kept, "the WAL went before the close was admitted");
+    assert!(!wal.exists(), "the admitted last close left the WAL");
+}
+
+#[test]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn read_only_close_does_not_wait_for_a_held_writer_lane() {
+    // A writer kept after an uncertain write holds the directory lane until
+    // its session goes; a reader's close must still return meanwhile.
+    let temp = support::Temp::new("wa-ro-close");
+    let path = temp.join("store.sqlite");
+    let original = create(&path);
+    let reader = SqliteHandles::open_read_only(
+        config(&path),
+        &authority().binding_key,
+        authority().cursor_key,
+    )
+    .unwrap();
+    let held = Held::start(&path, &temp.join("s"));
+    let (result_tx, result_rx) = mpsc::channel();
+    let closer = std::thread::spawn(move || {
+        drop(reader);
+        result_tx.send(()).unwrap();
+    });
+    let closed = result_rx.recv_timeout(Duration::from_secs(2)).ok();
+    held.release();
+    if closed.is_none() {
+        result_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+    }
+    closer.join().unwrap();
+    assert!(
+        closed.is_some(),
+        "a read-only close waited for the writer lane"
+    );
     drop(original);
 }
 

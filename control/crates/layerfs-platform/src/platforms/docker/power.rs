@@ -123,13 +123,22 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
 }
 
 /// Stops the worker container; Docker itself and the Store volume stay.
-pub(crate) fn stop(spec: &Spec) -> Result<(), MachineError> {
-    if inspect(spec)?.is_none() {
+pub(crate) fn stop(spec: &Spec, force: bool) -> Result<(), MachineError> {
+    let Some((state, role)) = inspect(spec)? else {
+        return Ok(());
+    };
+    if role != "machine-worker" {
+        return Err(MachineError::new(
+            Code::InvalidInput,
+            "the recorded container is not a LayerFS worker; it is left alone",
+        ));
+    }
+    if !matches!(state.as_str(), "running" | "restarting" | "paused") {
         return Ok(());
     }
     run(
         spec,
-        &["stop", "-t", "5", &spec.vm_name],
+        &["stop", "-t", if force { "0" } else { "5" }, &spec.vm_name],
         "stopping the worker container",
     )?
     .answer("stopping the worker container")?;
