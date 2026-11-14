@@ -549,17 +549,15 @@ impl Kernel {
                     dead.push((orphan.serial, orphan.inode));
                     return (bound, dead);
                 };
-                match PathName::from_bytes(&main) {
-                    Ok(name) => {
-                        let lookup = KernelReadOperation::Lookup { parent, name };
-                        match self.observe(parent, None, lookup) {
-                            Ok((stat, _, _)) => bound.push((orphan.serial, stat.serial)),
-                            Err(Status::NoEnt) => dead.push((orphan.serial, orphan.inode)),
-                            // Unknown: the companion keeps its custody.
-                            Err(_) => {}
-                        }
+                // A name the engine cannot even take, or a lookup it cannot
+                // answer, leaves the companion as it is.
+                if let Ok(name) = PathName::from_bytes(&main) {
+                    let lookup = KernelReadOperation::Lookup { parent, name };
+                    match self.observe(parent, None, lookup) {
+                        Ok((stat, _, _)) => bound.push((orphan.serial, stat.serial)),
+                        Err(Status::NoEnt) => dead.push((orphan.serial, orphan.inode)),
+                        Err(_) => {}
                     }
-                    Err(_) => {}
                 }
                 (bound, dead)
             },
@@ -810,10 +808,20 @@ impl Kernel {
     /// A companion that needs a new slot of the index bound takes the same
     /// decision the edit path takes: the orphan slots are reclaimed once and
     /// the rename is refused if the bound still has none.
-    fn rename_companion(&self, serial: u64, target: Named, to_main: Option<u64>) -> Result<(), Status> {
+    fn rename_companion(
+        &self,
+        serial: u64,
+        target: Named,
+        to_main: Option<u64>,
+    ) -> Result<(), Status> {
         let gate = {
             let companions = self.companions();
-            companions.files.get(&serial).ok_or(Status::Stale)?.editing.clone()
+            companions
+                .files
+                .get(&serial)
+                .ok_or(Status::Stale)?
+                .editing
+                .clone()
         };
         // Held to the end: the body written out below is the body renamed.
         let _editing = gate.lock().unwrap_or_else(|poison| poison.into_inner());

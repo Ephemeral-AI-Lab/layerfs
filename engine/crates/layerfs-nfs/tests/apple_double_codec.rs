@@ -96,7 +96,10 @@ fn any_window_of_the_image_encodes_to_that_window() {
     assert_eq!(built.encode_range(len + 10, len + 20), Vec::<u8>::new());
     assert_eq!(built.encode_range(7, 3), Vec::<u8>::new());
     assert_eq!(built.encode_range(0, len + 10), bytes);
-    assert_eq!(built.encode_range(len - 1, len + 10), bytes[len - 1..].to_vec());
+    assert_eq!(
+        built.encode_range(len - 1, len + 10),
+        bytes[len - 1..].to_vec()
+    );
     // The fork's own bytes are not all zero: a window inside it is served
     // from the fork, not from the zeroed layout.
     let fork_at = get32(&bytes, FORK_AT) as usize;

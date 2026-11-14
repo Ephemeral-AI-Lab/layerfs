@@ -197,7 +197,10 @@ fn a_read_racing_a_truncation_is_a_short_read_not_an_io_error() {
         // The next round starts from the whole body again: nothing else runs
         // while it is written back.
         writer.write(&ad.handle, 0, &body).unwrap();
-        assert_eq!(reader.getattr(&ad.handle).unwrap().size as usize, body.len());
+        assert_eq!(
+            reader.getattr(&ad.handle).unwrap().size as usize,
+            body.len()
+        );
     }
 
     drop((reader, writer));
@@ -520,9 +523,7 @@ fn a_write_that_takes_the_last_slot_is_refused_by_the_bound() {
     let mut images = Vec::new();
     for i in 0..3 {
         c.touch(&root, format!("m{i}").as_bytes(), 0o644).unwrap();
-        let ad = c
-            .touch(&root, format!("._m{i}").as_bytes(), 0o644)
-            .unwrap();
+        let ad = c.touch(&root, format!("._m{i}").as_bytes(), 0o644).unwrap();
         let whole = image(
             [i as u8 + 1; 32],
             &[(b"user.value", pattern(70 + i, 512 + i as usize))],
@@ -532,11 +533,15 @@ fn a_write_that_takes_the_last_slot_is_refused_by_the_bound() {
         images.push((ad.handle, whole));
     }
     assert_eq!(server.held().companions, 3);
-    assert_eq!(server.held().companions_slotted, 0, "no companion takes a slot");
+    assert_eq!(
+        server.held().companions_slotted,
+        0,
+        "no companion takes a slot"
+    );
     // Two writes that break an image take the two slots.
-    for i in 0..2 {
-        c.write(&images[i].0, 24, b"EDIT").unwrap();
-        assert_eq!(server.held().companions_slotted, i + 1);
+    for (taken, (handle, _)) in images.iter().take(2).enumerate() {
+        c.write(handle, 24, b"EDIT").unwrap();
+        assert_eq!(server.held().companions_slotted, taken + 1);
     }
     // The third would take one more, and the bound has none: the whole write is
     // refused, and no companion loses a byte.
@@ -551,10 +556,10 @@ fn a_write_that_takes_the_last_slot_is_refused_by_the_bound() {
         images[2].1,
         "the refused companion still holds its image"
     );
-    for i in 0..2 {
-        let mut broken = images[i].1.clone();
+    for (handle, whole) in images.iter().take(2) {
+        let mut broken = whole.clone();
         broken[24..28].copy_from_slice(b"EDIT");
-        assert_eq!(c.read_all(&images[i].0, 64 * 1024), broken);
+        assert_eq!(c.read_all(handle, 64 * 1024), broken);
     }
 
     drop(c);
@@ -737,16 +742,16 @@ fn eviction_takes_the_decoded_body_before_the_written_ones() {
     let root = c.mnt("/");
 
     // A whole image, decoded: it costs its attributes, not its 4 KiB.
-    let whole = image(
-        [0x21; 32],
-        &[(b"com.apple.provenance", pattern(40, 40))],
-    );
+    let whole = image([0x21; 32], &[(b"com.apple.provenance", pattern(40, 40))]);
     c.touch(&root, b"old", 0o644).unwrap();
     let old = c.touch(&root, b"._old", 0o644).unwrap();
     c.write(&old.handle, 0, &whole).unwrap();
     assert_eq!(server.held().companions_decoded, 1);
     let decoded_cost = server.held().companion_bytes;
-    assert!(decoded_cost < 4096, "the image is counted as its attributes");
+    assert!(
+        decoded_cost < 4096,
+        "the image is counted as its attributes"
+    );
 
     // Two bodies kept as written fill the budget: the decoded body is the least
     // recently used memory there is, so it is the one spilled, and its file
@@ -765,7 +770,11 @@ fn eviction_takes_the_decoded_body_before_the_written_ones() {
         "the decoded body was the memory evicted"
     );
     assert_eq!(server.held().companion_bytes, 4000);
-    assert_eq!(c.read_all(&old.handle, 64 * 1024), whole, "from its spill file");
+    assert_eq!(
+        c.read_all(&old.handle, 64 * 1024),
+        whole,
+        "from its spill file"
+    );
     assert_eq!(c.read_all(&one.handle, 64 * 1024), first);
     assert_eq!(c.read_all(&two.handle, 64 * 1024), second);
     assert_eq!(c.getattr(&old.handle).unwrap().size as usize, whole.len());
