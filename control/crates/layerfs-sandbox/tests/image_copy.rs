@@ -87,6 +87,28 @@ fn setup(name: &str) -> (Scratch, Standin, std::path::PathBuf) {
 }
 
 #[test]
+fn export_containers_are_removed_with_their_anonymous_volumes() {
+    let (_scratch, standin, home) = setup("rm-volumes");
+    standin.ps("layerfs-export-stale 1\nlayerfs-export-fresh 99999999999\n");
+    let (out, _) = run(&standin, &home, "demo/pg:17");
+    out.unwrap();
+    let rms = standin.rms();
+    assert_eq!(
+        rms,
+        vec![
+            "rm -f -v layerfs-export-stale".to_owned(),
+            format!("rm -f -v layerfs-export-{HEX}"),
+        ],
+        "an image VOLUME gets an anonymous volume at create; rm without -v leaves it"
+    );
+    assert!(!standin
+        .dir
+        .join("containers")
+        .join(format!("layerfs-export-{HEX}"))
+        .exists());
+}
+
+#[test]
 fn a_reference_is_copied_once_then_reused_with_nothing_sent() {
     let (_scratch, standin, home) = setup("copy-once");
     let (first, run1) = run(&standin, &home, "demo/pg:17");
