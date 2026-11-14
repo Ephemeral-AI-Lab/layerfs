@@ -240,6 +240,27 @@ retire     delete old copies the record no longer names
 - `uncertain` follows the existing rules: `Unknown`, or the `record` phase, is uncertain; a definite failure of `send/verify/install` keeps the copy, records the op with a definite result, and lets doctor report it.
 - install is the only irreversible point; "half new, half old" is forbidden.
 
+### 7.1a The path set, at a glance
+
+`store.compact(name)` picks one of **three** paths, and the receipt's `path` field is that closed set
+(`none | light | rebuild`) — so the API and the acceptance tests can enumerate it.
+
+| path | when | SQLite | PostgreSQL | frees |
+|---|---|---|---|---|
+| `none` | nothing collectable | nothing; zero report | same | 0 |
+| `light` | wholly dead packs < **10%** of the bytes a rebuild would replace | checkpoint WAL → delete the four row families → `incremental_vacuum` **only under `auto_vacuum=2`** | delete the same rows → `COMMIT` → plain `VACUUM` | locator bytes and, conditionally, pages; **payload 0** |
+| `rebuild` | ≥ 10% | fresh file, retained rows only, `rename` into place | three-table swap | the dead packs' payload |
+
+The three share one `mark` (closure + `pinned`) and one receipt shape; `light` and `rebuild` differ only
+in applying the retained predicate as `DELETE` or as "do not copy".
+
+**Not paths, and not to be re-opened as paths:** `reorg`/level-2 repacking (reported as `keptWaste`,
+never performed — v14 groups cannot move byte-for-byte into v17+ packs); in-place row deletion
+(§5.1 reading (b), needs the pack immutability triggers disabled); `reclaim_space` / `VACUUM FULL`
+(a rebuild wearing another name, and `reclaim_space` is not part of compact); and an online sweep
+(跨窗口 → C3's full contract, a forward-looking item). A' is a different **swap mechanism**, not a
+fourth path.
+
 ### 7.2 SQLite (layerfs-project#49)
 0. **Run where the Store lives — no refusal.** `place::plan` routes a non-`native` SQLite Store (`Placement::Machine(m)` / `Unknown`) to that machine's worker, the route `store.push` / `pull` / `remove` already take, so compact copies and renames in place and transfers nothing. The earlier rule (refuse with `Unsupported`, then "`store.pull` home, compact, `store.push` back") is **superseded** (decided 2026-11-13, layerfs-project#42 item 5): it charged the user two full transfers for something the architecture already does in one place. What this costs: **cross-machine interruption** — the op record lives in the caller's home while the staged copy lives on the machine, so `Unresolved` and `doctor` must observe both ends; `Capacity` comes from the machine's disk; and the C8b `(dev, ino)` check is only meaningful inside the worker, since the caller sees a different inode space.
 1. Pass the old Store through `doctor`/`diagnose` first, then enter `check`.
@@ -364,7 +385,7 @@ Each is a place where this spec did not match the tree. Adopting them changes no
 
 ## 8. Operations surface
 
-- Method: `store.compact(name)` registers an op, and progress is read from `store.status`; `operation.get` must not be added.
+- Method: `store.compact(name)` registers an op, and progress is read from `store.status`; `operation.get` must not be added. **It takes no `PROGRESS` option** (unlike `store.push`/`store.pull`), for the same reason it takes no other option: the four operations accept only a resource identifier (#155 §9.3, settled 2026-11-13).
 - All four operations take only a resource identifier: `branch.remove(name)`, `project.delete(name)`, `store.compact(name)`, `project.remove_file(project, path)`, and they jointly forbid `confirm`/`force`/`dryRun`/`stopSandboxes`/Store or volume options (layerfs-project#41 verbatim). Implementations do no implicit unmount, no waiting, no retry; an unclean environment returns `MountsActive`/`Busy`/`InUse`.
 - Backend route: `backend.store.compact` (following the `backend.store.*` naming family); CLI `store compact`.
 - Rejection codes: reuse `Busy`/`InUse`/`MountsActive`/`NoSuchStore`/`Unsupported`/`NotFound`; add `StaleStore`/`NameTaken` (a live row already holds the name)/`NameRetired` (the name belongs to a retired row)/`OrphanArtifact` (a leftover staged copy/schema that no record can judge — Q4)/`Capacity` (cf. `StaleSandbox`). `Unresolved`/`Stale` are op states, not return codes.
