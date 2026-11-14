@@ -62,7 +62,9 @@ pub(crate) fn create(
             cause,
         })
     };
-    let (paths, image) = start_request(local, helper, request, options)
+    // the image's lock stays shared until the spec names it (`hold`), so a
+    // prune never removes the image between its unpack and this Sandbox
+    let (paths, image, hold) = start_request(local, helper, request, options)
         .map_err(|cause| fail(LocalPhase::Validate, None, cause))?;
     let id =
         crate::ContainerId::random().map_err(|cause| fail(LocalPhase::Validate, None, cause))?;
@@ -84,6 +86,7 @@ pub(crate) fn create(
         Ok(log) => log,
         Err(cause) => return Err(fail(LocalPhase::Create, Some(sandbox), cause)),
     };
+    drop(hold);
     match cgroup::create(&id) {
         Ok(_) => {}
         Err(error) => return Err(fail(LocalPhase::Create, Some(sandbox), error.into())),
@@ -142,7 +145,7 @@ fn start_request(
     helper: &Path,
     request: &crate::LaunchRequest,
     options: &Options,
-) -> Result<(Paths, ImageRoot), RuntimeError> {
+) -> Result<(Paths, ImageRoot, rootfs::ImageHold), RuntimeError> {
     let paths = {
         let named = local.clone().naming(&request.name)?;
         Paths::of(named.paths()?)?
@@ -185,8 +188,9 @@ fn start_request(
     }
     let root = (paths.local.directory.parent())
         .ok_or(RuntimeError::Protocol("namespaces Sandbox root"))?;
-    let image = rootfs::ensure(&options.archive, &options.image, &rootfs::cache(root))?;
-    Ok((paths, image))
+    let (image, hold) =
+        rootfs::ensure_held(&options.archive, &options.image, &rootfs::cache(root))?;
+    Ok((paths, image, hold))
 }
 
 /// The daemon starts with the search path, this backend's kernel route

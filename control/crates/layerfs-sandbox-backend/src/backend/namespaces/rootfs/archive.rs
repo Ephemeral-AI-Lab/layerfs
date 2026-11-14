@@ -81,6 +81,22 @@ pub(super) fn unpack(archive: &Path, image: &Image, root: &Path) -> Result<(), R
     directory_times(root, &times)
 }
 
+/// Unpacks one flat root filesystem tar (`docker export`'s output) into
+/// `root` with the same entry rules as a layer, then gives each directory
+/// the time its entry carries.
+pub(super) fn unpack_flat(tar: &Path, root: &Path) -> Result<(), RuntimeError> {
+    let size = open(tar)?.metadata()?.len();
+    let mut times = BTreeMap::new();
+    extract_layer(
+        tar,
+        Blob { offset: 0, size },
+        "the flat image tar",
+        root,
+        &mut times,
+    )?;
+    directory_times(root, &times)
+}
+
 /// The image `archive` holds, by its config digest (#529): the one image its
 /// `manifest.json` names, which is the default of a namespaces Sandbox given
 /// no image. An archive naming none or several is refused, never guessed from.

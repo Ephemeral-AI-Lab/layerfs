@@ -13,8 +13,11 @@ fn digest(bytes: &[u8]) -> String {
         "sha256:{}",
         Sha256::digest(bytes)
             .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>()
+            .fold(String::new(), |mut text, byte| {
+                use std::fmt::Write;
+                let _ = write!(text, "{byte:02x}");
+                text
+            })
     )
 }
 fn archive(
