@@ -325,11 +325,11 @@ rather than a matter of taste:
 
 ---
 
-## 5. Open items this record surfaces
+## 5. Items this record surfaced — and how they were answered
 
-Deciding R1, Q1 and C3 exposed places where the spec text still says two things
-at once. They are listed here rather than resolved silently, because layerfs-project#50 cannot
-implement around them without a choice.
+Deciding R1, Q1 and C3 exposed places where the spec text said two things at once.
+They were listed here rather than resolved silently, and **all of them have since been answered**
+(2026-11-13, layerfs-project#42); the text below keeps the reasoning and records the outcome.
 
 ### 5.1 PostgreSQL: rebuild-and-swap vs in-place row deletion
 
@@ -390,7 +390,9 @@ Why the argument is decisive, in current terms:
 - `sql/postgresql/schema.sql:25-28` — `pack_immutable()` is `BEFORE UPDATE OR DELETE ON pack`. An in-place sweep cannot delete a pack row at all, and a pack is where the bytes are. Disabling the trigger needs table ownership and re-opens the window the trigger exists to close.
 - The lock-free read path is sound *because* those rows never change. An in-place `DELETE` of `object_location` rows would make two such reads able to observe an inconsistent pair — the reason `read_immutable` documents its own premise.
 
-Consequence for §5.1: if this argument is accepted, reading **(a) replacement + rename** is the only one that does not reopen pack immutability; reading **(b) an additional in-place path** is not a cheap option, it is a change to the immutability and lockdown contracts. Owner decides; the sign-off box on layerfs-project#42 already asks the question in that form.
+Consequence for §5.1: reading **(a) replacement** is the only one that does not reopen pack immutability; reading **(b) an additional in-place path** is not a cheap option, it is a change to the immutability and lockdown contracts.
+
+**Answered (2026-11-13, layerfs-project#42 item 1):** reading (a) holds, and its *mechanism* was revised a second time — the whole-schema copy was replaced by a **three-table swap** (`pack`, `object_location`, `content_signature`) inside one transaction, because copying the whole schema re-fires `add_logical`, needs `OVERRIDING SYSTEM VALUE` for `init_operation`, loses every table GRANT and can exceed the 63-byte identifier limit (§7.3). In-place row deletion stays ruled out, with one nuance: `store.compact`'s **light path** does delete `object_location` rows, but inside the exclusive window, under the compact's own op record and pre-commit incarnation re-check — which is exactly what C3 asks for (§5 C3, §7.1b).
 
 ### 5.2 What is *not* open
 
@@ -403,8 +405,9 @@ Consequence for §5.1: if this argument is accepted, reading **(a) replacement +
 
 ### 5.3 Recording the answer
 
-Whichever way 5.1 goes, it lands in two places: this section (the decision), and
-the affected issue — layerfs-project#50 for the compact path, layerfs-project#42 for C3's scope.
+5.1 is answered: **three-table swap** (reading (a), mechanism revised), and it landed in two places —
+this section and layerfs-project#50 for the compact path, with the light path's per-row deletion
+recorded under layerfs-project#42 item 2 and §5 C3 here.
 
 **The space of answers is already constrained**, and the constraint is on the
 record: the C3 sign-off asks the owner to confirm that C3 binds a future
@@ -414,10 +417,10 @@ if v2 needs per-row deletion somewhere:
 
 <https://github.com/Ephemeral-AI-Lab/layerfs-project/issues/42#issuecomment-6818138560>
 
-So 5.1 is not an open design question today. It resolves one of two ways:
+It is no longer an open question, and the two outcomes it allowed resolved as follows:
 
-- **confirmed** — nothing in v2 deletes object rows, so §7.3's delete-order bullet
-  and `backend_reusable` for PostgreSQL go, and reading (a) is what the spec says;
-- **reopened** — an owner names a v2 path that deletes rows; then reading (b) exists
-  and its cost is the one stated in 5.1a: the `pack` immutability trigger and the
-  lock-free read premise both have to be renegotiated.
+- **confirmed** — nothing in v2 deletes `pack` rows, so §7.3's delete-order bullet and
+  `backend_reusable` for PostgreSQL go, and reading (a) — now the three-table swap — is what the spec says;
+- **the narrow exception a later decision created**: `store.compact`'s light path deletes
+  `object_location` rows (never `pack`). That is recorded rather than reopened, because it runs inside the
+  exclusive window under the compact's op record and the pre-commit incarnation re-check (§7.1b, §5 C3).
