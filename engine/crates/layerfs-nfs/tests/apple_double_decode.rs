@@ -511,6 +511,63 @@ fn a_companion_of_a_main_file_the_name_index_missed_is_kept() {
 }
 
 #[test]
+fn a_companion_bound_back_to_its_main_file_survives_the_next_reclaim() {
+    let base = temp("orphan-bound");
+    let tree = base.join("tree");
+    source(&tree);
+    // As in the test above: the main file is part of the tree the export was
+    // initialized from, and never looked up, so the companion starts with no
+    // main inode and takes the one slot.
+    fs::write(tree.join("live"), b"the data file").unwrap();
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    rig.companions_held = 1;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    let ad = c.touch(&root, b"._live", 0o644).unwrap();
+    let whole = image([0x52; 32], &[(b"user.kept", pattern(91, 128))]);
+    c.write(&ad.handle, 0, &whole).unwrap();
+    assert_eq!(server.held().companions_slotted, 1);
+
+    // The bound is full, so this CREATE reclaims first: the lookup finds the
+    // main file, the companion becomes that inode's, and the name the visit
+    // found is the export's one reference (not a second one it never gives
+    // back). The CREATE is then refused.
+    c.touch(&root, b"other", 0o644).unwrap();
+    let lookups = server.held().lookups;
+    assert_eq!(c.touch(&root, b"._other", 0o644).map(|_| ()), Err(NOSPC));
+    assert_eq!(server.held().lookups, lookups + 1, "one reference, kept");
+    assert_eq!(server.held().companions_slotted, 1);
+
+    // A second reclamation runs without the client ever looking the main file
+    // up: the bound companion holds a name in the export's table now, so it is
+    // not an orphan, and its attributes stay.
+    c.touch(&root, b"other2", 0o644).unwrap();
+    let lookups = server.held().lookups;
+    assert_eq!(c.touch(&root, b"._other2", 0o644).map(|_| ()), Err(NOSPC));
+    assert_eq!(
+        server.held().lookups,
+        lookups,
+        "the live name needs no visit"
+    );
+    assert_eq!(server.held().companions, 1);
+    assert_eq!(server.held().companions_slotted, 1);
+    assert_eq!(c.read_all(&ad.handle, 64 * 1024), whole, "attributes kept");
+
+    // It follows that inode: it goes with the inode's last name.
+    c.remove(&root, b"live").unwrap();
+    assert_eq!(server.held().companions, 0);
+    assert_eq!(c.getattr(&ad.handle), Err(STALE));
+    assert_eq!(c.lookup(&root, b"._live").map(|_| ()), Err(NOENT));
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn a_write_that_takes_the_last_slot_is_refused_by_the_bound() {
     let base = temp("write-bound");
     let tree = base.join("tree");
@@ -1122,7 +1179,6 @@ fn a_rename_keeps_the_other_names_of_the_inode_companion() {
     c.remove(&root, b"b").unwrap();
     assert_eq!(server.held().companions, 0);
     assert_eq!(c.lookup(&root, b"._b").map(|_| ()), Err(NOENT));
-
 
     drop(c);
     let released = server.stop();

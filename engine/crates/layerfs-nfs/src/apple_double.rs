@@ -541,6 +541,13 @@ impl Kernel {
     /// locks. A main file that is there binds the companion back to its inode,
     /// which keeps its attributes; only a lookup that answers "no such file"
     /// makes it an orphan, and one that cannot answer leaves it as it is.
+    ///
+    /// A lookup that finds the main file took one engine reference on it, and
+    /// the export keeps exactly one per serial: the visit is the entry's, so it
+    /// is registered as `Kernel::lookup` registers one (`entry_taken` remembers
+    /// the name and forgets a second reference). Without that the name reaches
+    /// the companion nowhere, and the next reclamation would read the bound one
+    /// as an inode holding no name and drop it.
     fn reclaim_orphans(&self) -> usize {
         let (bound, dead) = self.orphans().into_iter().fold(
             (Vec::new(), Vec::new()),
@@ -554,7 +561,10 @@ impl Kernel {
                 if let Ok(name) = PathName::from_bytes(&main) {
                     let lookup = KernelReadOperation::Lookup { parent, name };
                     match self.observe(parent, None, lookup) {
-                        Ok((stat, _, _)) => bound.push((orphan.serial, stat.serial)),
+                        Ok((stat, _, _)) => {
+                            self.entry_taken(&stat, parent, &main);
+                            bound.push((orphan.serial, stat.serial));
+                        }
                         Err(Status::NoEnt) => dead.push((orphan.serial, orphan.inode)),
                         Err(_) => {}
                     }
