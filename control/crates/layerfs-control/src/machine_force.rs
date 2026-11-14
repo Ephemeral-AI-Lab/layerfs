@@ -244,10 +244,8 @@ fn mark(home: &Path, sandbox: &SandboxRecord, stopped: bool) -> Result<()> {
     Ok(())
 }
 
-/// Native is the host itself: only this home's recorded runtime processes
-/// stop. The Sandbox's recorded native runtime, reopened for a stop without
-/// sending anything; `None` when there is nothing left to stop.
-/// What a forced stop finds for one native Sandbox.
+/// What a forced stop finds for one native Sandbox. Native is the host
+/// itself: only this home's recorded runtime processes stop.
 enum Native {
     /// Its recorded runtime, reopened for the stop; nothing sent yet.
     Stop(Box<layerfs_sandbox_backend::Sandbox>),
@@ -257,6 +255,8 @@ enum Native {
     NeverStarted,
 }
 
+/// The Sandbox's recorded native runtime, reopened for a stop without sending
+/// anything, or why there is nothing to stop.
 fn native_runtime(home: &Path, sandbox: &SandboxRecord) -> Result<Native> {
     if sandbox.machine_stopped() {
         return Ok(Native::Stopped);
