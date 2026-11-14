@@ -43,6 +43,10 @@ pub struct ReadServiceWork {
     pub opening_failures: usize,
     pub requests: u64,
     pub lock_wait_ns: u64,
+    /// Prototype (lanes2 probe, `sharepacks`): bodies lanes copied from
+    /// their shared map, and bodies kept there.
+    pub shared_hits: u64,
+    pub shared_kept: u64,
 }
 struct State {
     sessions: BTreeMap<Option<WorkspaceId>, Option<Arc<ReadSession>>>,
@@ -399,6 +403,11 @@ impl ReadSet {
             work.lock_wait_ns = work
                 .lock_wait_ns
                 .saturating_add(session.wait_ns.load(Ordering::Relaxed));
+            if let Some(shared) = &session.shared {
+                let (hits, kept) = shared.work();
+                work.shared_hits += hits;
+                work.shared_kept += kept;
+            }
         }
         work
     }

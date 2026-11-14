@@ -54,16 +54,17 @@ pub(crate) struct Probe {
     pub(crate) noverify: bool,
     pub(crate) single: bool,
     pub(crate) ahead: bool,
-    /// Prototype (parallel-store): `LAYERFS_PROBE_READ_SESSIONS`, 1 to 8. A
-    /// read-ahead window's chunk list is split into this many contiguous
-    /// parts, fetched at once, each over its own fresh custody.
-    pub(crate) sessions: usize,
     /// Prototype (parallel-store): `LAYERFS_PROBE_READ_WINDOWS`, 1 to 4:
     /// background read-ahead fetches of one stream that may run at once
     /// (`async`). The frontier bound is unchanged: a fetch starts only while
     /// the stream has fetched less than one window past the reader, so at
     /// most two windows past it are ever fetched.
     pub(crate) windows: usize,
+    /// Prototype (parallel-store, lanes2): a read-ahead window's chunk list
+    /// is split into this many contiguous parts, fetched at once, each over
+    /// its own fresh custody: `LAYERFS_PROBE_READ_PARTS` (1 to 16), or
+    /// unset, `LAYERFS_PROBE_READ_SESSIONS` (1 to 8).
+    pub(crate) parts: usize,
 }
 pub(crate) fn probe() -> Probe {
     static PROBE: std::sync::OnceLock<Probe> = std::sync::OnceLock::new();
@@ -71,15 +72,20 @@ pub(crate) fn probe() -> Probe {
         let value = std::env::var("LAYERFS_PROBE_READ").unwrap_or_default();
         let has = |name: &str| value.split(',').any(|part| part.trim() == name);
         let ahead = has("async");
+        let sessions = std::env::var("LAYERFS_PROBE_READ_SESSIONS")
+            .ok()
+            .and_then(|value| value.trim().parse().ok())
+            .filter(|sessions| (1..=8).contains(sessions))
+            .unwrap_or(1);
         Probe {
             noverify: has("noverify"),
             single: has("single") || ahead,
             ahead,
-            sessions: std::env::var("LAYERFS_PROBE_READ_SESSIONS")
+            parts: std::env::var("LAYERFS_PROBE_READ_PARTS")
                 .ok()
                 .and_then(|value| value.trim().parse().ok())
-                .filter(|sessions| (1..=8).contains(sessions))
-                .unwrap_or(1),
+                .filter(|parts| (1..=16).contains(parts))
+                .unwrap_or(sessions),
             windows: std::env::var("LAYERFS_PROBE_READ_WINDOWS")
                 .ok()
                 .and_then(|value| value.trim().parse().ok())
@@ -220,6 +226,9 @@ pub struct CanonicalClient {
     /// Prototype (FUSE profile probe, `async`): a fresh demand custody over
     /// the same reader, for a read-ahead that runs beside this operation.
     fresh: Option<Fresh>,
+    /// Prototype (lanes2): the Workspace's fixed fetch pool, which runs a
+    /// window's other parts instead of threads spawned per window.
+    pool: Option<Arc<super::pool::FetchPool>>,
 }
 /// See [`CanonicalClient::with_fresh`].
 pub type Fresh = Arc<dyn Fn() -> Arc<dyn AuthenticatedObjects + Send + Sync> + Send + Sync>;
@@ -245,6 +254,7 @@ impl CanonicalClient {
             lengths: None,
             resident: true,
             fresh: None,
+            pool: None,
         }
     }
     /// Selects a cache allowance. A large object can bypass cache without refusal.
@@ -281,11 +291,17 @@ impl CanonicalClient {
             lengths,
             resident: false,
             fresh: None,
+            pool: None,
         }
     }
     /// Prototype (FUSE profile probe): how to make a fresh demand custody.
     pub fn with_fresh(mut self, fresh: Fresh) -> Self {
         self.fresh = Some(fresh);
+        self
+    }
+    /// Prototype (lanes2): runs a window's other parts on `pool`.
+    pub fn with_pool(mut self, pool: Option<Arc<super::pool::FetchPool>>) -> Self {
+        self.pool = pool;
         self
     }
     /// Prototype (`async`): a client over a fresh custody and the same cache.
@@ -297,6 +313,7 @@ impl CanonicalClient {
             lengths: None,
             resident: false,
             fresh: Some(fresh.clone()),
+            pool: self.pool.clone(),
         }))
     }
     /// The length provider's own answer, asked every time: nothing is
@@ -553,7 +570,7 @@ impl CanonicalClient {
             return Ok(());
         }
         // No cache lock spans transport, provider service or authentication.
-        let fetched = self.fetch_parts(&wanted, probe.sessions)?;
+        let fetched = self.fetch_parts(&wanted, probe.parts)?;
         if fetched.len() != wanted.len() {
             return Err(ContentError::BatchCardinality {
                 requested: wanted.len(),
@@ -610,23 +627,38 @@ impl CanonicalClient {
             _ => return self.source.read_canonical_batch(wanted),
         };
         let size = wanted.len().div_ceil(parts);
+        if let Some(pool) = &self.pool {
+            return super::pool::fetch_pooled(pool, self.source.as_ref(), fresh, wanted, size);
+        }
         let mut pieces = wanted.chunks(size);
         let first = pieces.next().unwrap_or(&[]);
+        let started = std::time::Instant::now();
+        let mut ends = Vec::with_capacity(parts);
         std::thread::scope(|scope| {
             let others: Vec<_> = pieces
                 .map(|part| {
                     let source = fresh();
                     std::thread::Builder::new()
                         .name("layerfs-read-part".into())
-                        .spawn_scoped(scope, move || source.read_canonical_batch(part))
+                        .spawn_scoped(scope, move || {
+                            let part = source.read_canonical_batch(part);
+                            (part, std::time::Instant::now())
+                        })
                 })
                 .collect();
             let mut values = self.source.read_canonical_batch(first);
+            ends.push(std::time::Instant::now());
             for other in others {
                 let part = match other {
-                    Ok(handle) => handle.join().unwrap_or(Err(ContentError::ProviderFailure {
-                        what: "read-ahead part panicked",
-                    })),
+                    Ok(handle) => match handle.join() {
+                        Ok((part, end)) => {
+                            ends.push(end);
+                            part
+                        }
+                        Err(_) => Err(ContentError::ProviderFailure {
+                            what: "read-ahead part panicked",
+                        }),
+                    },
                     Err(_) => Err(ContentError::ProviderFailure {
                         what: "read-ahead part thread",
                     }),
@@ -639,6 +671,7 @@ impl CanonicalClient {
                     (Err(error), _) | (Ok(_), Err(error)) => Err(error),
                 };
             }
+            super::pool::window_work(started, &ends);
             values
         })
     }

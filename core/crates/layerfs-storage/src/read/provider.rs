@@ -101,6 +101,25 @@ impl Storage {
         kept.0
             .read(&mut workspace, &self.source, &self.capacities(), ids)
     }
+    /// Prototype (lanes2 probe, `defer`): [`Self::read_kept`], with the
+    /// BLAKE3 check of each requested ordinary-lane object left to the
+    /// caller; the flags mark those objects. The caller must check every
+    /// marked object against its requested identity before any consumer
+    /// sees it.
+    pub fn read_kept_deferred(
+        &self,
+        kept: &mut KeptReads,
+        ids: &[ObjectId],
+    ) -> StorageResult<(Vec<Vec<u8>>, Vec<bool>)> {
+        let mut workspace = Decoder::new()?;
+        kept.0
+            .read_deferring(&mut workspace, &self.source, &self.capacities(), ids, true)
+    }
+    /// Prototype (lanes2 probe, `sharepacks`): this reader's lane shares
+    /// whole edge pack bodies with its sibling lanes through `shared`.
+    pub fn share_packs(&self, shared: std::sync::Arc<super::SharedPacks>) {
+        self.source.share(shared);
+    }
     /// [`Reader::file_lengths`] through kept caches and a fresh arena.
     pub fn lengths_kept(&self, kept: &mut KeptReads, ids: &[ObjectId]) -> StorageResult<Vec<u64>> {
         super::length::read(self, ids, |states| self.read_kept(kept, states))

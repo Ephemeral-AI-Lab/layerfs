@@ -307,6 +307,18 @@ mod probe {
             .and_then(|rest| rest.split_whitespace().next()?.parse().ok())
             .unwrap()
     }
+    /// Prototype (lanes2): this process's user and system CPU time, µs.
+    fn cpu_us() -> [i64; 2] {
+        use nix::sys::{
+            resource::{getrusage, UsageWho},
+            time::TimeValLike,
+        };
+        let usage = getrusage(UsageWho::RUSAGE_SELF).unwrap();
+        [
+            usage.user_time().num_microseconds(),
+            usage.system_time().num_microseconds(),
+        ]
+    }
     /// `/proc/self/io` counters: read syscalls, bytes read by them, storage bytes.
     fn io() -> [u64; 3] {
         let text = fs::read_to_string("/proc/self/io").unwrap_or_default();
@@ -827,6 +839,14 @@ mod probe {
             std::env::var("LAYERFS_PROBE_PASSTHROUGH").unwrap_or_default(),
         );
         println!(
+            "PROBE {{\"phase\":\"lanes2_switches\",\"sessions\":\"{}\",\"lanes\":\"{}\",\"pool\":\"{}\",\"parts\":\"{}\",\"windows\":\"{}\"}}",
+            std::env::var("LAYERFS_PROBE_READ_SESSIONS").unwrap_or_default(),
+            std::env::var("LAYERFS_PROBE_LANES").unwrap_or_default(),
+            std::env::var("LAYERFS_PROBE_READ_POOL").unwrap_or_default(),
+            std::env::var("LAYERFS_PROBE_READ_PARTS").unwrap_or_default(),
+            std::env::var("LAYERFS_PROBE_READ_WINDOWS").unwrap_or_default(),
+        );
+        println!(
             "PROBE {{\"phase\":\"setup\",\"window\":{window},\"background\":\"{}\",\"loadavg\":\"{}\"}}",
             std::env::var("LAYERFS_PROBE_FUSE_BACKGROUND").unwrap_or_else(|_| "1".into()),
             load.trim()
@@ -895,6 +915,7 @@ mod probe {
         let copies0 = copies::snapshot();
         let cache0 = cache_state(&opened);
         let rss = resident_reset();
+        let cpu0 = cpu_us();
         let started = Instant::now();
         let mut file = File::open(&path).unwrap();
         let (mut total, mut sum) = (0_u64, 0);
@@ -908,19 +929,24 @@ mod probe {
         }
         drop(file);
         let seconds = started.elapsed().as_secs_f64();
+        let cpu1 = cpu_us();
         let hwm = status_kb("VmHWM:");
         let (rss_file, rss_anon) = (status_kb("RssFile:"), status_kb("RssAnon:"));
         let io1 = io();
         let (work1, sql1) = (opened.store.work(), readers(&opened));
         let (busy1, session1) = (stages::busy::snapshot(), opened.store.read_work());
         let lanes = format!(
-            "\"sessions\":\"{}\",\"store_busy_ns\":{},\"store_peak\":{},\"session_requests\":{},\"session_wait_ns\":{},\"readers\":{}",
+            "\"sessions\":\"{}\",\"store_busy_ns\":{},\"store_peak\":{},\"session_requests\":{},\"session_wait_ns\":{},\"readers\":{},\"shared_hits\":{},\"shared_kept\":{},\"cpu_user_us\":{},\"cpu_sys_us\":{}",
             std::env::var("LAYERFS_PROBE_READ_SESSIONS").unwrap_or_else(|_| "1".into()),
             busy1.0 - busy0.0,
             busy1.1,
             session1.requests - session0.requests,
             session1.lock_wait_ns - session0.lock_wait_ns,
             opened.store.reuse_work().readers_opened,
+            session1.shared_hits - session0.shared_hits,
+            session1.shared_kept - session0.shared_kept,
+            cpu1[0] - cpu0[0],
+            cpu1[1] - cpu0[1],
         );
         let split = stage_delta(&stage0);
         let dec = decoded_delta(&dec0);
