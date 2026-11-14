@@ -295,6 +295,42 @@ fn with_facts(
     page: &KernelDirectoryPage,
     entries: Vec<KernelDirectoryEntry>,
 ) -> WorkspaceResult<Vec<KernelDirectoryEntry>> {
+    // Prototype (`smallread`): the inherited entries' lengths in one demand
+    // (`lengths`), and their small files remembered (`sibling`).
+    let small = crate::base::small::small();
+    let inherited: Vec<u64> = if small.lengths || small.sibling {
+        entries
+            .iter()
+            .map(|entry| entry.serial)
+            .filter(|serial| {
+                page.local_inodes
+                    .binary_search_by_key(serial, |row| row.0)
+                    .is_err()
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    if small.lengths && !inherited.is_empty() {
+        let roots = base.file_roots(&inherited)?;
+        crate::base::small::counted_lengths(roots.len());
+        base.client().provide_lengths(&roots)?;
+    }
+    let entries = with_facts_each(base, page, entries)?;
+    if small.sibling && !inherited.is_empty() {
+        let client = base.client();
+        client.remember_window(
+            page.directory().serial(),
+            client.remembered_lengths(&base.file_roots(&inherited)?),
+        );
+    }
+    Ok(entries)
+}
+fn with_facts_each(
+    base: &BaseView,
+    page: &KernelDirectoryPage,
+    entries: Vec<KernelDirectoryEntry>,
+) -> WorkspaceResult<Vec<KernelDirectoryEntry>> {
     entries
         .into_iter()
         .map(|mut entry| {

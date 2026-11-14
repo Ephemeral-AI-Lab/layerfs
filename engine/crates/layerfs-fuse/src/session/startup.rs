@@ -1,7 +1,6 @@
 //! One attach attempt: direct mount, handshake and all-loop serving evidence.
 use super::state::{
     AttachFailure, AttachPhase, AttachRemainder, DetachAttempt, KernelSession, SessionConfig,
-    RECEIVE_LOOPS,
 };
 use crate::{attributes::Identity, mount::syscalls, request::KernelFilesystem, MountRequests};
 use fuser::{Config, Session, SessionACL, SessionMonitor, SessionPhase};
@@ -86,14 +85,16 @@ impl KernelSession {
         // The command identity differs from the mount owner; kernel permission
         // checks, not a library uid filter, decide access.
         options.acl = SessionACL::All;
-        options.n_threads = Some(RECEIVE_LOOPS);
+        options.n_threads = Some(super::state::receive_loops());
         // The session takes the only descriptor: losing it aborts the connection.
+        let pusher = filesystem.pusher();
         let kernel = match Session::from_fd(filesystem, device, SessionACL::All, options) {
             Ok(kernel) => kernel,
             Err(cause) => return Err(session.abandon(AttachPhase::Handshake, cause)),
         };
         session.negotiation = negotiated.get().copied();
         session.invalidator = Some(super::Invalidator::new(kernel.notifier(), identity));
+        let _ = pusher.set(kernel.notifier());
         let runner = kernel.into_runner();
         let monitor = runner.monitor();
         session.monitor = Some(monitor.clone());
@@ -119,7 +120,7 @@ impl KernelSession {
             Err(cause) => return Err(session.abandon(AttachPhase::Spawn, cause)),
         }
         let loops = monitor.wait_ready(config.ready_wait);
-        if loops.phase != SessionPhase::Serving || loops.entered != RECEIVE_LOOPS {
+        if loops.phase != SessionPhase::Serving || loops.entered != super::state::receive_loops() {
             let cause = io::Error::other(format!("receive loops not serving: {loops:?}"));
             return Err(session.abandon(AttachPhase::Serving, cause));
         }

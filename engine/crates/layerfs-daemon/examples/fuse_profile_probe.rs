@@ -16,6 +16,9 @@ mod installed;
 #[allow(dead_code)]
 #[path = "../tests/support/mounted.rs"]
 mod mounted;
+#[cfg(target_os = "linux")]
+#[path = "fuse_profile_probe/tree.rs"]
+mod tree;
 
 #[cfg(not(target_os = "linux"))]
 fn main() {
@@ -64,7 +67,7 @@ mod probe {
     const RANDOM_WRITES: usize = 16_384;
     const CREATES: usize = 2_000;
     /// The daemon's Store object cache (`install_types.rs`).
-    const CACHE: usize = 64 * 1024 * 1024;
+    pub(super) const CACHE: usize = 64 * 1024 * 1024;
 
     /// The fixed non-repeating xorshift64* stream of `rand`.
     struct Stream(u64);
@@ -85,7 +88,7 @@ mod probe {
         }
     }
     /// Order-sensitive fold of 8-byte words; a cheap equality check.
-    fn fold(mut sum: u64, bytes: &[u8]) -> u64 {
+    pub(super) fn fold(mut sum: u64, bytes: &[u8]) -> u64 {
         for word in bytes.chunks(8) {
             let mut value = [0; 8];
             value[..word.len()].copy_from_slice(word);
@@ -177,6 +180,8 @@ mod probe {
         match args.get(1).map(String::as_str) {
             Some("prepare") => prepare(Path::new(&args[2])),
             Some("run") => run(Path::new(&args[2]), Path::new(&args[3])),
+            // Prototype (experiment `smallread`): one tree phase in a child.
+            Some("tree") => super::tree::phase(Path::new(&args[2]), Path::new(&args[3]), &args[4]),
             _ => panic!("usage: prepare <dir> | run <dir> <work>"),
         }
     }
@@ -202,6 +207,7 @@ mod probe {
             Stream::new(n as u64 + 1).fill(&mut bytes);
             fs::write(source.join("small").join(format!("f{n:05}")), bytes).unwrap();
         }
+        super::tree::generate(&source, dir);
         let store = dir.join("store");
         fs::create_dir(&store).unwrap();
         fs::set_permissions(&store, fs::Permissions::from_mode(0o700)).unwrap();
@@ -276,7 +282,7 @@ mod probe {
     }
 
     /// Writes dirty pages back (setup only) and drops a file's page cache.
-    fn evict(path: &Path) {
+    pub(super) fn evict(path: &Path) {
         let file = File::open(path).unwrap();
         file.sync_all().unwrap();
         nix::fcntl::posix_fadvise(
@@ -288,7 +294,7 @@ mod probe {
         .unwrap();
     }
     /// Resident bytes of a file, by `fincore`.
-    fn resident(path: &Path) -> u64 {
+    pub(super) fn resident(path: &Path) -> u64 {
         let out = Command::new("fincore")
             .args(["--bytes", "--noheadings", "--output", "RES"])
             .arg(path)
@@ -299,7 +305,7 @@ mod probe {
             .parse()
             .unwrap_or(u64::MAX)
     }
-    fn status_kb(field: &str) -> u64 {
+    pub(super) fn status_kb(field: &str) -> u64 {
         fs::read_to_string("/proc/self/status")
             .unwrap()
             .lines()
@@ -327,11 +333,11 @@ mod probe {
             n => u64::from(n),
         }
     }
-    fn resident_reset() -> u64 {
+    pub(super) fn resident_reset() -> u64 {
         fs::write("/proc/self/clear_refs", "5").unwrap();
         status_kb("VmRSS:")
     }
-    fn readers(opened: &OpenedStore) -> SqlWork {
+    pub(super) fn readers(opened: &OpenedStore) -> SqlWork {
         let mut total = SqlWork::default();
         for reader in opened.diagnostics().unwrap().readers {
             total.accumulate(&reader);
@@ -359,7 +365,7 @@ mod probe {
             .unwrap()
     }
     /// The nonzero opcodes of a drain receipt as `{name:[count,ns]}`.
-    fn opcodes(receipt: &str) -> String {
+    pub(super) fn opcodes(receipt: &str) -> String {
         let (counts, nanos) = (array(receipt, "opcodes"), array(receipt, "nanos"));
         let rows: Vec<String> = counts
             .iter()
@@ -396,7 +402,7 @@ mod probe {
             field(receipt, "served_ns"),
         )
     }
-    fn stage_delta(before: &([u64; stages::STAGES], [u64; stages::STAGES])) -> String {
+    pub(super) fn stage_delta(before: &([u64; stages::STAGES], [u64; stages::STAGES])) -> String {
         let after = stages::snapshot();
         let rows: Vec<String> = (0..stages::STAGES)
             .map(|i| {
@@ -412,7 +418,7 @@ mod probe {
     }
     /// The object cache's charge, entries, hits, misses, evictions and
     /// authenticated bytes.
-    fn cache_state(opened: &OpenedStore) -> String {
+    pub(super) fn cache_state(opened: &OpenedStore) -> String {
         let w = opened.store.cache_work().unwrap();
         format!(
             "{{\"charged\":{},\"objects\":{},\"hits\":{},\"misses\":{},\"evictions\":{},\"authenticated\":{}}}",
@@ -1227,6 +1233,51 @@ mod probe {
         if std::env::var_os("LAYERFS_PROBE_HASHBENCH").is_some() {
             hash_bench();
         }
+        // Prototype (experiment `smallread`): `LAYERFS_PROBE_TREE` names the
+        // tree phases (`read,read8,stat`), each run in its own child process
+        // before this process opens the Store. `LAYERFS_PROBE_TREE_ONLY=1`
+        // then runs only the coherence phases here.
+        let tree = std::env::var("LAYERFS_PROBE_TREE").unwrap_or_default();
+        println!("PROBE {{\"phase\":\"tree_switches\",\"tree\":\"{tree}\",\"readdirplus\":\"{}\",\"small\":\"{}\"}}",
+            std::env::var("LAYERFS_PROBE_READDIRPLUS").unwrap_or_default(),
+            std::env::var("LAYERFS_PROBE_SMALL").unwrap_or_default());
+        if tree.contains("native") {
+            super::tree::native_setup(dir);
+        }
+        for phase in tree.split(',').filter(|p| !p.is_empty()) {
+            let status = Command::new(std::env::current_exe().unwrap())
+                .arg("tree")
+                .arg(dir)
+                .arg(work)
+                .arg(phase)
+                .status()
+                .unwrap();
+            assert!(status.success(), "tree phase {phase}: {status}");
+        }
+        if std::env::var("LAYERFS_PROBE_TREE_ONLY").as_deref() == Ok("1") {
+            let opened = open_store_observed(
+                PersistenceConfig::sqlite(&copy)
+                    .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+                    .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),
+                installed::BINDING,
+                installed::CURSOR,
+                64,
+                CACHE,
+                layerfs_storage::ReservationBlocks::default(),
+            )
+            .unwrap();
+            let harness = Harness::new(
+                opened.store.clone(),
+                work,
+                BranchId::from_authority([24; 16]),
+            );
+            coherence(&harness);
+            super::tree::coherence_small(&harness);
+            harness.stop();
+            drop(opened);
+            fs::remove_dir_all(work).unwrap();
+            return;
+        }
 
         // Native reference: the same bytes from the volume's ext4, cold.
         let native = dir.join("native-rand");
@@ -1382,6 +1433,7 @@ mod probe {
             expected,
         );
         coherence(&harness);
+        super::tree::coherence_small(&harness);
 
         // 2. Sequential write of a new 256 MiB file, 1 MiB writes.
         let mut pool = vec![0; 32 * 1024 * 1024];

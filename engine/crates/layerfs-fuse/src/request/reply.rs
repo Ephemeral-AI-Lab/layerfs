@@ -8,12 +8,15 @@ use fuser::{
     Errno, FileAttr, FileHandle, FileType, FopenFlags, Generation, INodeNo, ReplyAttr, ReplyData,
     ReplyEntry, ReplyOpen,
 };
+use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_mount_ports::{
     operations::{KernelData, KernelRead, ReadDataInput},
     ports::{Fence, RequestServices},
 };
 use layerfs_overlay::KernelMount;
 use layerfs_workspace::{KernelReadOperation, Refusal};
+/// Prototype (experiment `smallread`, `push`): largest file stored at OPEN.
+const SMALL_BYTES: u64 = 64 * 1024;
 use std::{
     sync::Arc,
     time::{Duration, UNIX_EPOCH},
@@ -61,6 +64,7 @@ impl ReadReply {
         identity: Identity,
         accounting: Arc<Accounting>,
         passthrough: Option<Arc<Passthrough>>,
+        push: Option<fuser::Notifier>,
     ) -> RequestDisposition {
         let (reply, input) = match self {
             Self::Data(reply, offset, length) => (reply, ReadDataInput::File { offset, length }),
@@ -78,6 +82,7 @@ impl ReadReply {
                         identity,
                         accounting,
                         passthrough,
+                        push,
                     )
                     .await
             }
@@ -127,6 +132,7 @@ impl ReadReply {
         identity: Identity,
         accounting: Arc<Accounting>,
         passthrough: Option<Arc<Passthrough>>,
+        push: Option<fuser::Notifier>,
     ) -> RequestDisposition {
         // Prototype (experiment `passthrough`): a read-only OPEN of a regular
         // file asks, before it is decided, whether its whole content is a
@@ -144,15 +150,22 @@ impl ReadReply {
                 .map(|(file, _)| file),
             _ => None,
         };
-        let answer =
-            match KernelRead::prepare(services, mount, request, protected, handle, operation).await
-            {
-                Ok(answer) => answer,
-                Err(error) => {
-                    self.error(terminal::errno(error.fenced()));
-                    return terminal::read(&fence, error).await;
-                }
-            };
+        let answer = match KernelRead::prepare(
+            services.clone(),
+            mount,
+            request,
+            protected,
+            handle,
+            operation,
+        )
+        .await
+        {
+            Ok(answer) => answer,
+            Err(error) => {
+                self.error(terminal::errno(error.fenced()));
+                return terminal::read(&fence, error).await;
+            }
+        };
         let value = match answer.value() {
             Ok(value) => value,
             Err(reason) => {
@@ -184,6 +197,19 @@ impl ReadReply {
                         std::io::Error::other("successful kernel open has no handle"),
                     ))));
                 };
+                if let Some(notifier) = push.filter(|_| !directory) {
+                    let length = value.stat.logical_len;
+                    let file = value.stat.kind == InodeKind::RegularFile;
+                    if file && length > 0 && length <= SMALL_BYTES {
+                        push_small(
+                            &services, mount, request, protected, handle, length, identity,
+                            &notifier,
+                        )
+                        .await;
+                    } else {
+                        layerfs_workspace::small_probe::counted_push(0, 0, 1, 0);
+                    }
+                }
                 match passthrough.filter(|_| !directory) {
                     Some(passthrough) => {
                         passthrough.open(reply, protected, handle, open_flags(), cached.as_deref())
@@ -224,6 +250,59 @@ impl ReadReply {
             }
         }
         dispose(answer).await
+    }
+}
+/// Prototype (experiment `smallread`, `push`): before a read-only OPEN of
+/// a small unchanged base file is answered, its whole content is read as a
+/// READ of the new handle would read it and stored in the kernel page cache.
+/// A read-only visit before and after the store must both name the same
+/// unchanged base content root; otherwise the inode's cached pages are
+/// invalidated, so a store that raced a change never stays visible. Any
+/// failure stores nothing; the file is then read by READ as before.
+#[allow(clippy::too_many_arguments)]
+async fn push_small(
+    services: &Arc<dyn RequestServices>,
+    mount: KernelMount,
+    request: u64,
+    serial: u64,
+    handle: u64,
+    length: u64,
+    identity: Identity,
+    notifier: &fuser::Notifier,
+) {
+    use layerfs_mount_ports::operations::unchanged_open;
+    use layerfs_workspace::small_probe::counted_push;
+    let Some(root) = unchanged_open(services, mount, serial).await else {
+        return counted_push(0, 0, 1, 0);
+    };
+    let input = ReadDataInput::File {
+        offset: 0,
+        length: length as u32,
+    };
+    let data = match KernelData::read(
+        services.clone(),
+        mount,
+        request,
+        serial,
+        Some(handle),
+        input,
+    )
+    .await
+    {
+        Ok(Ok(data)) if data.bytes().len() as u64 == length => data,
+        _ => return counted_push(0, 0, 1, 0),
+    };
+    let Ok(inode) = identity.inode(serial) else {
+        return counted_push(0, 0, 1, 0);
+    };
+    if notifier.store(inode, 0, data.bytes()).is_err() {
+        return counted_push(0, 0, 1, 0);
+    }
+    if unchanged_open(services, mount, serial).await == Some(root) {
+        counted_push(1, length, 0, 0);
+    } else {
+        let _ = notifier.inval_inode(inode, 0, 0);
+        counted_push(0, 0, 0, 1);
     }
 }
 /// The entry of a name that does not exist: node id 0, which the kernel

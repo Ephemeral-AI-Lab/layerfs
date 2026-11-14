@@ -145,6 +145,22 @@ impl BaseView {
         }
         self.client.provide_lengths(&roots)
     }
+    /// Prototype (`smallread`): the content roots of the regular files among
+    /// `serials`, in order.
+    pub(crate) fn file_roots(
+        &self,
+        serials: &[u64],
+    ) -> ContentResult<Vec<layerfs_content::ObjectId>> {
+        let work = &mut InodeReadWork::default();
+        Ok(
+            lookup_many(self.client.as_ref(), self.table(), serials, work)?
+                .into_iter()
+                .flatten()
+                .filter(|value| value.kind == InodeKind::RegularFile)
+                .map(|value| value.content_root)
+                .collect(),
+        )
+    }
     /// [`Self::provide_sibling_lengths`] for one looked-up base child that is
     /// a regular file whose length is not remembered yet.
     pub(crate) fn sibling_lengths_for(
@@ -293,6 +309,11 @@ impl BaseView {
         offset: u64,
         length: u32,
     ) -> ContentResult<BaseRead> {
+        // Prototype (`smallread`, `sibling`): a missed small file fetches
+        // the siblings listed after it.
+        if value.kind == InodeKind::RegularFile {
+            self.client.sibling_prefetch(value.content_root);
+        }
         let file = self.file(value)?;
         let start = offset.min(file.logical_len());
         let end = start
