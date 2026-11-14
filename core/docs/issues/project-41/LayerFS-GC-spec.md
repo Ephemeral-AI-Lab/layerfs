@@ -36,7 +36,7 @@
 | Q3 | How to set an age threshold when online collection is introduced | **Out of this release (decided 2026-11-13, layerfs-project#42 item 11).** 2.0 deletes nothing on a live Store and needs no age guard: the closure is computed over the frozen generation inside an exclusive window, so there are no in-flight writers to protect against. Not in this spec; when the time comes, add timestamp columns first, then measure the longest Commit / longest in-flight handle | Medium: add timestamp columns + migration + threshold contract | Without timestamps an age threshold cannot be implemented; forcing it deletes in-flight writes |
 | Q4 | Retention cap for interrupted copies | **Decided 2026-11-13 (layerfs-project#42 item 4): cap = 1, and it is enforced by refusal, not by cleanup.** While an unjudgeable leftover exists, `store.compact` is refused **`OrphanArtifact`** naming `phase`, `artifact` and both paths. `check` retires only what it can *judge* (`transfer/resolve.rs::leftover`); an `Unresolved` leftover is cleared only by record authority (`doctor` + runbook), never by compact and never by a time window. `doctor` enumerates the machine side through the worker, and an unreachable machine reports **`unknown`, never `clean`** | Small: `doctor` report + runbook + one new code | Residue accumulates and consumes disk (and pins objects, distorting byte accounting); automatic cleanup violates "no guessed cleanup" |
 | Q5 | Reader behavior when PG swaps tables | **Superseded by C8/R2**: readers go through the `(catalog_id, incarnation)` session check → `StaleStore`, and read the new generation after reconnecting; table names are not versioned | Small: session/transaction entry check (shared with SQLite) | Cross-generation reads (no crash, but wrong data) |
-| Q6 | Does `store.compact` promise "drop dead packs" or "reorganize data" | **One call, `store.compact(name)`, choosing its own path (decided 2026-11-13, layerfs-project#42 item 2, per #155):** nothing collectable → no copy; wholly dead packs below **10% of Store bytes** → the light path (locator rows only, live Store); otherwise the rebuild. Wholly dead packs are dropped by not copying them, and partial-pack repacking is **reported, not performed**, in this release | Medium: one entry point, one receipt with a `path` field and the three byte definitions | Level 1 alone leaves dead objects sharing a pack with a live one; promising "all discarded bytes are reclaimed" without repacking over-promises, so the receipt must say what was kept |
+| Q6 | Does `store.compact` promise "drop dead packs" or "reorganize data" | **One call, `store.compact(name)`, choosing its own path (decided 2026-11-13, layerfs-project#42 item 2, per #155):** nothing collectable → no copy; wholly dead packs below **10% of the bytes a rebuild would replace** → the light path (locator rows only, live Store); otherwise the rebuild. Wholly dead packs are dropped by not copying them, and partial-pack repacking is **reported, not performed**, in this release | Medium: one entry point, one receipt with a `path` field and the three byte definitions | Level 1 alone leaves dead objects sharing a pack with a live one; promising "all discarded bytes are reclaimed" without repacking over-promises, so the receipt must say what was kept |
 
 > **Q6 is answered together with §5.1** of `03-decision-record.md`, and revised on
 > 2026-11-13: there is **one call**, and it picks among three paths — no copy, the
@@ -127,7 +127,17 @@ collectable(o) := o ∉ closure(Roots@G) ∧ o ∉ pinned
 - The decision must land as a receipt (G, Roots fingerprint, closure size, collectable count, the three definitions).
 
 ### C3 Death decision bound to `(ObjectId, generation)`
-For per-object/per-row deletion (PostgreSQL, future online GC), the delete intent must be bound to `(ObjectId, G)` — **scope decided 2026-11-13 (layerfs-project#42 item 9): forward-looking; 2.0.0 has no such caller**, because the replacement path deletes nothing (§7.2 step 2)., where `G` is `catalog_incarnation` at the time the intent was formed; ABA (same bytes written again after a delete) must not apply an old intent. Whole-file replacement in SQLite is covered by C1's re-check.
+For per-object/per-row deletion (PostgreSQL, future online GC), the delete intent must be bound to
+`(ObjectId, G)`, where `G` is `catalog_incarnation` at the time the intent was formed; ABA (same bytes
+written again after a delete) must not apply an old intent. Whole-file replacement in SQLite is covered
+by C1's re-check.
+
+**Scope, decided 2026-11-13 (layerfs-project#42 item 9, revised with the light path).** In this release
+the only per-row deletion is inside `store.compact`'s **light path** (§7.2, §7.3), and C3 is satisfied
+there **without a separate intent path**: the intent is the compact op record (which names `G`, C7 — no
+sidecar), the deletions run inside the exclusive window, and the delete transaction re-checks
+`catalog_incarnation == G` before it commits. So C3 stays a **forward-looking** contract, for an online
+sweep that would delete rows *outside* such a window — not a 2.0.0 deliverable.
 
 ### C4 No object age (S4)
 - Object age must not be a deletion condition.
@@ -292,6 +302,48 @@ forward-looking contract with no caller in 2.0.0. Both statements are in this sp
 an open question for the owner, not a resolved design:** either the light path deletes rows and
 C3 becomes a 2.0.0 deliverable (item 9 reopened), or the light path only vacuums/reports and
 frees effectively nothing, and the receipt must say so.
+
+#### Light path (the third path of `store.compact`)
+
+**Trigger.** Wholly dead packs are below **10% of the bytes a rebuild would replace** — SQLite: the
+file's `page_count × page_size`; PostgreSQL: `pg_total_relation_size` of `pack` + `object_location` +
+`content_signature`. The numerator is the bytes of wholly dead packs (`pack.body` / `pack_unit.body`);
+10% is a first value to revisit after the first measurement.
+
+**Rule.** The light path applies the **same retained predicate as the rebuild**, with `DELETE` in place
+of "do not copy", and **never touches a `pack` row** (I2 and the immutability triggers stand):
+
+| Table | Light path |
+|---|---|
+| `object_location` | delete rows of collectable objects (outside the closure and `pinned`) |
+| `content_signature` | delete entries naming a deleted object (the rebuild's cleanup rule) |
+| `file_digest` | delete rows whose root is not retained (the rebuild's correctness rule) |
+| `inode_value_block` | delete a block only when **every** ordinal in it is dead |
+| `pack` / `pack_unit` | **nothing** — so by construction the light path frees no payload bytes |
+| history / catalog tables | untouched |
+
+**No install, no generation bump.** It deletes only unreachable rows, so the Store's semantics do not
+change: `catalog_incarnation` stays at `G`, the receipt reports `generation.before == generation.after`,
+and readers are **not** sent `StaleStore`. Because it does delete rows it is still covered by C3 — and
+C3 is satisfied locally (op record names `G`, exclusive window, re-check before commit).
+
+**SQLite specifics.**
+1. Checkpoint the old WAL first (`checkpoint_leftover_wal`); pages in the WAL cannot be returned.
+2. One write transaction: the deletions above, then re-check `catalog_incarnation == G`.
+3. `PRAGMA incremental_vacuum` — **only when `auto_vacuum = 2`** (`lifecycle/reclamation.rs` already
+   requires it), in its page batches, until the freelist is empty or a cap is reached.
+4. When `auto_vacuum ≠ 2`: no vacuum; report `physical_shrink = 0` and `backend_reusable` as the
+   freelist bytes, saying in the receipt that `auto_vacuum=2` is what would return them to the OS.
+
+**PostgreSQL specifics.**
+1. One transaction, inside the exclusive window and the advisory lock: re-check the incarnation, run the
+   deletions. `pack` is never locked exclusively for this path.
+2. `COMMIT`, then a **plain `VACUUM`** (never `VACUUM FULL`, which is a rebuild with a different name and
+   needs `ACCESS EXCLUSIVE`) on the three tables: dead tuples and dead index entries go, pages become
+   reusable. A failed or skipped `VACUUM` does not fail the call; the receipt records
+   `vacuum: { ran, reason }`.
+3. `physical_shrink = 0` **by definition** here, with the reason "dead tuples await autovacuum";
+   `backend_reusable` carries the `n_dead_tup` estimate.
 
 ### 7.2a Code-level corrections from the #155 source review
 
