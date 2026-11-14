@@ -19,6 +19,8 @@ pub(crate) struct State {
     /// Prototype (FUSE profile probe, `single`): objects some demand is
     /// fetching now; another demand for them waits for [`CanonicalCache::landed`].
     pub(crate) inflight: std::collections::BTreeSet<ObjectId>,
+    /// Prototype (`smallread`): recently listed small files.
+    pub(crate) small: crate::base::small::Windows,
 }
 
 /// One bounded immutable cache allowance shared by operation-scoped providers.
@@ -51,6 +53,7 @@ impl CanonicalCache {
                 streams: Default::default(),
                 work: crate::ClientWork::default(),
                 inflight: Default::default(),
+                small: Default::default(),
             }),
             landed: Condvar::new(),
             decoded: layerfs_content::filesystem::decoded::DecodedPages::new(decoded),

@@ -27,6 +27,20 @@ use std::{
 /// between two threads; every owner job is serialized on one connection
 /// anyway, and provider I/O leaves the loop for a worker.
 pub const RECEIVE_LOOPS: usize = crate::RECEIVE_SLOTS;
+/// Prototype (experiment `smallread`): receive loops per connection, from
+/// `LAYERFS_PROBE_FUSE_LOOPS` (1 to 16); unset or invalid is
+/// [`RECEIVE_LOOPS`]. Each loop serves one request at a time and keeps its
+/// own receive buffer.
+pub fn receive_loops() -> usize {
+    static LOOPS: OnceLock<usize> = OnceLock::new();
+    *LOOPS.get_or_init(|| {
+        std::env::var("LAYERFS_PROBE_FUSE_LOOPS")
+            .ok()
+            .and_then(|value| value.trim().parse().ok())
+            .filter(|loops| (1..=16).contains(loops))
+            .unwrap_or(RECEIVE_LOOPS)
+    })
+}
 
 #[derive(Clone, Debug)]
 pub struct SessionConfig {
@@ -178,7 +192,7 @@ impl SessionObserver {
             loops,
             serving: !detached
                 && loops.is_some_and(|loops| {
-                    loops.phase == SessionPhase::Serving && loops.entered == RECEIVE_LOOPS
+                    loops.phase == SessionPhase::Serving && loops.entered == receive_loops()
                 }),
             detached,
             work: self.queue.work(),

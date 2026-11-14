@@ -90,9 +90,15 @@ pub(crate) fn probe() -> Probe {
 }
 /// Prototype: the ids a demand marked in flight, released (and waiters
 /// woken) when it ends, whatever its outcome.
-struct Flight<'c> {
+pub(crate) struct Flight<'c> {
     cache: &'c CanonicalCache,
     ids: Vec<ObjectId>,
+}
+impl<'c> Flight<'c> {
+    /// Prototype (`smallread`): releases `ids`, already marked in flight.
+    pub(crate) fn new(cache: &'c CanonicalCache, ids: Vec<ObjectId>) -> Self {
+        Self { cache, ids }
+    }
 }
 impl Drop for Flight<'_> {
     fn drop(&mut self) {
@@ -213,7 +219,7 @@ pub struct ClientWork {
 /// before upstream returns remains that provider's responsibility.
 pub struct CanonicalClient {
     source: Arc<dyn AuthenticatedObjects + Send + Sync>,
-    cache: Arc<CanonicalCache>,
+    pub(crate) cache: Arc<CanonicalCache>,
     lengths: Option<Arc<dyn crate::FileLengths + Send + Sync>>,
     /// Answers only from the cache: no upstream demand is ever made.
     resident: bool,
@@ -603,7 +609,11 @@ impl CanonicalClient {
     /// thread, each other over a fresh custody on a scoped thread. The
     /// window's bytes are the same; only who fetches them changes. Every
     /// part is waited for; the first failure, in part order, fails the batch.
-    fn fetch_parts(&self, wanted: &[ObjectId], parts: usize) -> ContentResult<Vec<Vec<u8>>> {
+    pub(crate) fn fetch_parts(
+        &self,
+        wanted: &[ObjectId],
+        parts: usize,
+    ) -> ContentResult<Vec<Vec<u8>>> {
         let parts = parts.min(wanted.len());
         let fresh = match &self.fresh {
             Some(fresh) if parts > 1 => fresh,
@@ -646,7 +656,7 @@ impl CanonicalClient {
     pub(crate) const fn is_resident(&self) -> bool {
         self.resident
     }
-    fn state(&self) -> ContentResult<std::sync::MutexGuard<'_, crate::cache::State>> {
+    pub(crate) fn state(&self) -> ContentResult<std::sync::MutexGuard<'_, crate::cache::State>> {
         self.cache
             .state
             .lock()

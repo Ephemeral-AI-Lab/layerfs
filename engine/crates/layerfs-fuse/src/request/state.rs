@@ -25,6 +25,9 @@ pub struct KernelFilesystem {
     pub(super) accounting: Arc<Accounting>,
     /// Prototype (experiment `passthrough`): this mount's open counts.
     pub(super) passthrough: Arc<Passthrough>,
+    /// Prototype (experiment `smallread`, `push`): this connection's
+    /// notifier, set once the session exists.
+    pub(super) pusher: Arc<OnceLock<fuser::Notifier>>,
 }
 impl KernelFilesystem {
     pub fn new(
@@ -43,7 +46,12 @@ impl KernelFilesystem {
             negotiation: Arc::new(OnceLock::new()),
             accounting: Arc::new(Accounting::default()),
             passthrough: Arc::default(),
+            pusher: Arc::default(),
         })
+    }
+    /// Prototype (experiment `smallread`): where the session's notifier goes.
+    pub fn pusher(&self) -> Arc<OnceLock<fuser::Notifier>> {
+        self.pusher.clone()
     }
     pub fn negotiation(&self) -> Arc<OnceLock<Negotiation>> {
         self.negotiation.clone()
@@ -171,6 +179,12 @@ impl KernelFilesystem {
             .get()
             .is_some_and(|value| value.selected.contains(fuser::InitFlags::FUSE_PASSTHROUGH))
             .then(|| self.passthrough.clone());
+        let push = match &operation {
+            KernelReadOperation::Open {
+                writable: false, ..
+            } if layerfs_workspace::small_probe::push() => self.pusher.get().cloned(),
+            _ => None,
+        };
         self.serve(
             permit,
             Box::pin(async move {
@@ -204,6 +218,7 @@ impl KernelFilesystem {
                         identity,
                         accounting,
                         passthrough,
+                        push,
                     )
                     .await
             }),
