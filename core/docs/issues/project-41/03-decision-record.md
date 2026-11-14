@@ -372,10 +372,10 @@ directory's):
 >
 > A reachability-driven `DELETE` of unreachable rows, then `VACUUM FULL` (PG) or
 > `incremental_vacuum` (SQLite), does not survive the schema: `pack` refuses
-> `DELETE` and `UPDATE` by trigger on both backends (§6.1), so the biggest bytes
+> `DELETE` and `UPDATE` by trigger on both backends (§6.1 of that draft), so the biggest bytes
 > cannot be freed without disabling the trigger, which needs table ownership and
 > opens a window in which a concurrent writer can mutate an immutable row. It also
-> breaks the lock-free read invariant (§6.3). Rebuild-and-swap replaces it — one
+> breaks the lock-free read invariant (§6.3 of that draft). Rebuild-and-swap replaces it — one
 > algorithm, two swap primitives.
 
 Where those two old anchors now sit:
