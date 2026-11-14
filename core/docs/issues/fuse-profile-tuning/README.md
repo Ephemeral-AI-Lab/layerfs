@@ -11,6 +11,27 @@
 
 ## Answer
 
+- **Quantified (round 2, [§5](#5-quantified-read-path-changes-round-2)):**
+  the read-path changes raise the cold read from 206 MB/s to 361–393 MB/s,
+  about 1.8–1.9×. No profile change on its own did better than 1.32×.
+
+  | Change, at 128 KiB / 1 in flight | Cold read | Factor |
+  | --- | ---: | ---: |
+  | Control | 206.0 MB/s | — |
+  | One BLAKE3 check (`noverify`) | 257.3 MB/s | 1.25× |
+  | Asynchronous read-ahead | 283.4 MB/s | 1.38× |
+  | Both | 361–383 MB/s | 1.75–1.86× |
+
+  | Change, at 512 KiB / 4 in flight | Cold read | Object demands |
+  | --- | ---: | ---: |
+  | Control | 279.9 MB/s | 53,771 |
+  | Single-flight | 386.0 MB/s | 27,214 (half) |
+  | Single-flight + one BLAKE3 check | 392.5 MB/s | 27,214 |
+
+  At either profile the Store read session is now the limit: one lock and
+  one thread per Workspace. Round 2 ran with the CPU about 1.37× faster than
+  round 1 (BLAKE3 13.5 µs against 18.6 µs per call), so compare MB/s only
+  within a round.
 - **The cold read is bound by the Store read path, not by the kernel
   profile.** At the current profile (128 KiB, one background request), 75% of
   wall time is a synchronous 8 MiB read-ahead that the READ request waits for,
@@ -344,6 +365,103 @@ follow the same pattern. Sequential writes may gain 10–20% from larger
 requests. A 4 KiB random write is dominated by one SQLite transaction per
 write plus one round trip, which no profile setting changes.
 
+## 5. Quantified read-path changes (round 2)
+
+**Switches.** Commit `d4bb874862` adds three switches in
+`LAYERFS_PROBE_READ`, all off when unset:
+
+- **`noverify`:** the Workspace client skips its BLAKE3 re-check of objects
+  the in-process Store resolver has just authenticated. Pack SHA-256 and the
+  resolver's BLAKE3 stay.
+- **`single`:** a demand for objects another demand is already fetching waits
+  for that fetch and reads them from the cache.
+- **`async`:** after reading its own window on demand, a sequential read
+  starts the next 8 MiB read-ahead on a separate thread, up to two windows
+  ahead. The thread runs over a fresh Store custody (`StorePorts::fresh`).
+  `async` implies `single`.
+
+**Setup.** The probe is the same as above: a fresh Init into a new fixture
+(Store 532,885,504 bytes), one sample per arm. Every arm that completed read
+the 500 MiB back with the correct checksum.
+
+**Binaries.**
+
+| Binary SHA-256 | Arms |
+| --- | --- |
+| `7bf34a15c7fa2fc69131685fc9f64db75b489f464eacecca87660cdab01a38ae` | 128 KiB control, noverify, single, async, async+noverify; 512 KiB control, single, and the async run that failed |
+| `a85576ea205ce77bee0a29b9757b3971f34eae87423137eee3d975cd9da619b5` (adds error logging) | Diagnosis rerun of the failure |
+| `bc9ee3b5365db7861516ac94720a3bf74b6d1ee0d999a19014f9f6c53a0765e3` (= `d4bb874862`; adds the fresh custody) | `-v2` arms, 512 KiB single+noverify, 512 KiB async+noverify |
+
+The `-v2` arms reran the two 128 KiB async arms on the fixed binary because
+their code changed. The async arm reproduced within 0.2% (283.2 / 283.6
+MB/s); async+noverify read 361.2 then 383.3 MB/s. Both results are listed.
+
+| Arm | Cold read MB/s | Wall ms | READ callback ms | Read-ahead calls / ms | Store demands / ms | Objects | BLAKE3 calls / ms | `VmHWM` KB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 128 KiB / 1, control | 206.0 | 2,545 | 2,234 | 62 / 1,888 | 130 / 1,458 | 27,214 | 54,429 / 744 | 131,244 |
+| + noverify | 257.3 | 2,038 | 1,728 | 62 / 1,468 | 130 / 1,399 | 27,214 | 27,215 / 371 | 116,048 |
+| + single | 219.9 | 2,384 | 2,084 | 62 / 1,815 | 130 / 1,388 | 27,214 | 54,429 / 735 | 118,148 |
+| + async | 283.2 | 1,852 | 1,527 | 63 / 1,830 | 134 / 1,397 | 27,214 | 54,429 / 735 | 104,560 |
+| + async (v2) | 283.6 | 1,848 | 1,527 | 63 / 1,830 | 134 / 1,389 | 27,214 | 54,429 / 735 | 104,616 |
+| + async + noverify | 361.2 | 1,452 | 1,138 | 63 / 1,433 | 134 / 1,354 | 27,214 | 27,215 / 366 | 104,512 |
+| + async + noverify (v2) | 383.3 | 1,368 | 1,065 | 63 / 1,352 | 134 / 1,285 | 27,214 | 27,215 / 364 | 105,256 |
+| 512 KiB / 4, control | 279.9 | 1,873 | 3,421 | 991 / 3,189 | 1,199 / 2,282 | 53,771 | 107,543 / 1,470 | 98,468 |
+| + single | 386.0 | 1,358 | 2,413 | 988 / 2,202 | 1,195 / 1,679 | 27,214 | 54,429 / 746 | 98,924 |
+| + single + noverify | **392.5** | 1,336 | 2,374 | 991 / 2,143 | 1,198 / 2,008 | 27,214 | 27,215 / 357 | 98,108 |
+| + async | **FAIL** | — | — | — | — | — | — | — |
+| + async (v2) | 278.0 | 1,886 | 3,386 | 128 / 1,859 | 238 / 1,415 | 27,214 | 54,429 / 729 | 105,232 |
+| + async + noverify | 340.0 | 1,542 | 2,697 | 129 / 1,516 | 246 / 1,438 | 27,214 | 27,215 / 375 | 184,676 |
+
+Read-ahead with `async` runs on its own thread, so its time overlaps the
+READ callbacks.
+
+**The FAIL.** In the first 512 KiB async run the cold read ended at 393,216
+bytes and the checksum assertion failed. The cause was
+`Store object demand: concurrent demand in one operation`: the background
+fetch used the request's own `StorePorts`, which refuses a second demand
+while one is running. The next 128 KiB piece of the same split READ hit
+that refusal, and the prototype's split-READ path turned the error into a
+short reply. Receipts: `r512-b4-async.log`, `r512-b4-async-diag.log`. The
+fix gives the background fetch a fresh custody over the same reader.
+
+**What the numbers say:**
+
+- **One BLAKE3 check:** +25% at 128 KiB / 1. It halves BLAKE3 calls and
+  takes about 370 ms off the 500 MiB read.
+- **Single-flight:** with one request in flight nothing was duplicated, so
+  it changes little (+7%). At 512 KiB / 4 it halves the objects fetched
+  (53,771 → 27,214) and Store demand time (2,282 → 1,679 ms). That turns the
+  concurrency gain from wasted work into real work: 279.9 → 386.0 MB/s. Round
+  1's duplicated-work arm reached 205 MB/s on the slower CPU.
+- **Asynchronous read-ahead** helps with one request in flight (+38%). The
+  fetch overlaps the serving of cached windows and the kernel round trip.
+  With 4 in flight it is slower than single-flight alone (278 against 386
+  MB/s). The background fetch is a third claimant on the Workspace's one
+  read-session lock, so a READ waiting for its own window can sit behind an
+  8 MiB fetch.
+- **The next ceiling is the Store read session.** In the best 128 KiB arm
+  Store demands are busy 1,285 of 1,368 ms (94%). That is about 410 MB/s of
+  single-threaded fetch: SQLite reads, pack SHA-256, resolver BLAKE3 and
+  copies. Going further needs Store fetches in parallel within one Workspace
+  (more than one read session or connection) or cheaper fetches. The native
+  read of the same bytes on this VM was 2.4–2.8 GB/s in round 2.
+- **Memory:** peak memory stayed at 98–131 MB in every arm except 512 KiB
+  async+noverify (185 MB, one sample, not diagnosed). Asynchronous
+  read-ahead keeps up to two 8 MiB windows ahead, inside the existing
+  `READ_AHEAD_CACHE` bound (two windows per stream).
+
+**What this means for the recommendation:** single-flight plus one BLAKE3
+check is the smallest change with the largest gain at any profile.
+
+- With it, 512 KiB / 4 in flight becomes the best profile measured (392.5
+  MB/s, 1.9× the round-2 control). It needs the profile prototype's READ/WRITE
+  splitting and the bdi readahead write made into product code, plus 0.75 MiB
+  more receive buffer per mount.
+- At the current 128 KiB / 1 profile, asynchronous read-ahead plus one BLAKE3
+  check reaches 361–383 MB/s with no profile change at all.
+- Asynchronous read-ahead should not be combined with more requests in
+  flight until the Store read session admits concurrent fetches.
+
 ## Checks and gaps
 
 **Run:**
@@ -352,6 +470,9 @@ write plus one round trip, which no profile setting changes.
   layerfs-daemon --example fuse_profile_probe`, `--locked --offline`).
 - rustfmt on changed files (`e6b610b79a`).
 - All nine arms and the prepare step, each once, each exited 0.
+- Round 2 (§5): 13 runs and a fresh prepare. One arm failed and is kept as
+  FAIL with its diagnosis rerun. The two 128 KiB async arms were rerun after
+  the fix changed their code; both results are listed.
 
 **Not run:**
 
@@ -362,6 +483,10 @@ write plus one round trip, which no profile setting changes.
   `MAX_INPUT_BYTES` now admits 1 MiB.
 - **Uninstrumented baseline arm:** `NOT_RUN`; timer overhead is estimated
   above.
+- **Correctness proof for the read switches** (concurrent writers during an
+  asynchronous read-ahead, unmount while a background fetch runs, failure
+  custody): `NOT_RUN`. The probe checks only that the 500 MiB read back is
+  correct.
 - **Durable:** `NOT_RUN`, disabled by the owner until explicit
   reauthorization.
 

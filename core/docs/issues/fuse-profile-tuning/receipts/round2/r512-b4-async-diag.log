@@ -1,0 +1,11 @@
+PROBE {"phase":"setup","window":524288,"background":"4","loadavg":"1.66 0.91 0.72 2/539 9"}
+PROBE {"phase":"native_cold_read","resident_before":0,"bytes":524288000,"seconds":0.2055,"mb_s":2550.9}
+PROBE_AHEAD_FAILED ProviderFailure { what: "Store object demand: concurrent demand in one operation" }
+PROBE_SHORT_READ at 393216 failure ReadFailure { reason: Content(ProviderFailure { what: "Store object demand: concurrent demand in one operation" }), provider: None, mount: KernelMount { engine: 2, owner: 1, root: 1 }, request: 12, operation: Data { serial: 2 }, data_input: Some(File { offset: 393216, length: 131072 }), .. } / Content(ProviderFailure { what: "Store object demand: concurrent demand in one operation" })
+
+thread 'main' panicked at engine/crates/layerfs-daemon/examples/fuse_profile_probe.rs:398:9:
+assertion `left == right` failed: cold read bytes
+  left: (393216, 9357088489355585088)
+ right: (524288000, 12611530657069975626)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+EXIT=101
