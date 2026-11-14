@@ -7,6 +7,8 @@ use std::time::{Duration, Instant};
 /// Resolves one address through the host's system resolver before `deadline`.
 /// Numeric IPs need no helper. On macOS/Linux, a bounded system resolver child
 /// is drained, killed and reaped on every exit. No shell or retry is used.
+/// Under a Sandbox runtime layer (`sandbox_runtime`) the resolver is the
+/// bundle's `getent`, run by the bundle's loader.
 /// The original hostname must still be used for TLS identity verification.
 pub fn resolve_within(host: &str, port: u16, deadline: Instant) -> io::Result<SocketAddr> {
     resolve_all_within(host, port, deadline)?
@@ -40,7 +42,15 @@ fn resolve_name(host: &str, port: u16, deadline: Instant) -> io::Result<Vec<Sock
         command.args(["-q", "host", "-a", "name", host]);
         command
     } else if cfg!(target_os = "linux") {
-        let mut command = Command::new("/usr/bin/getent");
+        // a daemon in a namespaces Sandbox runs the bundle's `getent` through
+        // the bundle's loader: the image may have neither (alpine, distroless)
+        let runtime = crate::sandbox_runtime::from_environment();
+        let mut command = runtime
+            .and_then(|runtime| {
+                let getent = runtime.join("bin").join("getent");
+                crate::sandbox_runtime::command(&runtime, getent)
+            })
+            .unwrap_or_else(|| Command::new("/usr/bin/getent"));
         command.args(["ahosts", host]);
         command
     } else {

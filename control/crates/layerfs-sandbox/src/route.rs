@@ -198,8 +198,8 @@ pub struct Asked {
     pub call: Call,
     /// Its Commit message (exec and Commit send one).
     pub message: Message,
-    /// The image `sandbox.create` names; every other call runs the
-    /// Sandbox's own.
+    /// The image `sandbox.create` names (a digest, Docker Id or Docker
+    /// reference); every other call runs the Sandbox's own.
     pub image: Option<String>,
 }
 
@@ -254,6 +254,9 @@ fn host_op(
 ) -> Outcome {
     let home = home.to_path_buf();
     let machine = record.machine();
+    if let Some(machine) = layerfs_machine::record::MachineRecord::read(&home, machine)? {
+        machine.not_held()?;
+    }
     let project = record.project().unwrap_or("");
     let target = resolve::target(&home, project)?;
     let Asked {
@@ -265,12 +268,13 @@ fn host_op(
     // the Sandbox's name is its identity on every machine
     let sandbox = Some(record.name().to_owned());
     // the call's image (sandbox.create) else the Sandbox's own travels in
-    // the deploy settings, never as a top-level argument
+    // the deploy settings, never as a top-level argument. A native host
+    // Sandbox records `local`, which is a runtime marker, not an image.
     let image = match image {
         Some(text) => Some(text),
         _ => record
             .image()
-            .filter(|_| op != Op::SandboxCreate)
+            .filter(|image| op != Op::SandboxCreate && crate::image_artifact::digest(image))
             .map(str::to_owned),
     };
     let kind = target.store_ref.kind();
@@ -283,7 +287,27 @@ fn host_op(
     };
     // a Sandbox's host operations run where its machine runs them, for
     // either Store kind (#535 §7.4)
-    let executor = place::on_machine(&home, machine)?;
+    let mut executor = place::on_machine(&home, machine)?;
+    // the image a create names: none on macOS native (R0), else resolved
+    // and copied to the machine when it does not hold it yet (R1)
+    let image = match (op, image) {
+        (Op::SandboxCreate, Some(_)) if crate::images::host_mode(&executor) => {
+            return Err(crate::images::host_only(machine))
+        }
+        (Op::SandboxCreate, Some(named)) => {
+            let archive = deploy::choose(&home, machine, None)?.archive;
+            let docker = crate::docker::Docker::of(&home)?;
+            let mut target = match &mut executor {
+                Executor::Local => crate::image_load::Target::Local(&home),
+                Executor::Worker(worker) => crate::image_load::Target::Worker(worker),
+            };
+            let loaded =
+                crate::image_load::load(&docker, events, &mut target, archive.as_deref(), &named)?;
+            events.progress(SdkValue::map([("phase", SdkValue::text("start"))]));
+            Some(loaded.id)
+        }
+        (_, image) => image,
+    };
     // what the machine's record chooses; the side that runs the call
     // resolves the rest
     let choice = deploy::choose(&home, machine, image.as_deref())?;
@@ -327,6 +351,9 @@ fn host_op(
             let out = local(host, call)?;
             let out = drain(out, &mut |event| events.event(event));
             closed(op, opened.as_deref(), &out);
+            if let (Op::SandboxCreate, Ok(out)) = (op, &out) {
+                touched(&Side::Home(&home), &choice, out);
+            }
             out
         }
         Executor::Worker(mut worker) => {
@@ -473,8 +500,19 @@ pub fn in_worker(
     // the caller reaches the new Sandbox's daemon directly where its
     // machine forwards the port (#535 G4): the answer carries its keys
     match op {
-        Op::SandboxCreate => crate::direct::with_keys(root, &name, out),
+        Op::SandboxCreate => {
+            touched(&Side::Worker(root), &choice, &out);
+            crate::direct::with_keys(root, &name, out)
+        }
         _ => Ok(out),
+    }
+}
+
+/// Marks the image a Sandbox was just created from as used (its sidecar's
+/// `last_used`). A sidecar that cannot be written does not fail the create.
+fn touched(side: &Side<'_>, choice: &deploy::Choice, out: &SdkValue) {
+    if let Some(image) = out.get_text("image") {
+        let _ = crate::image_artifact::touch(side, choice.archive.as_deref(), image);
     }
 }
 

@@ -100,7 +100,7 @@ report that a check was not run and why:
 | Check | Covers |
 | --- | --- |
 | Every relative link and anchor in the changed pages resolves | links, renamed headings, moved files |
-| No link points into a removed folder such as `core/docs/` | removed material coming back by link |
+| No link points into a removed folder such as `core/docs/` (except the GC design at `core/docs/issues/project-41/`, see the [documentation policy](../general/documentation-policy.md)) | removed material coming back by link |
 | Every Source link names a file or folder that exists | pages describing moved code |
 | Diagrams are `text` blocks of at most 80 columns | layout |
 | `node --test api/node/test/branch-file/inventory.mjs` | one SDK heading per call, the count line (needs the built Node addon) |

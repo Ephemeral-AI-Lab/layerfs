@@ -55,8 +55,8 @@ impl Adapter for Docker {
     fn start(&self, spec: &Spec, bundle: &Bundle) -> Result<Option<Running>, MachineError> {
         start(spec, bundle).map(Some)
     }
-    fn stop(&self, spec: &Spec) -> Result<(), MachineError> {
-        stop(spec)
+    fn stop(&self, spec: &Spec, force: bool) -> Result<(), MachineError> {
+        stop(spec, force)
     }
     fn provider_state(&self, spec: &Spec) -> Result<crate::setup::State, MachineError> {
         super::provider_state(spec)

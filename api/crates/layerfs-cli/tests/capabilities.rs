@@ -34,6 +34,10 @@ fn version_identifies_source_and_features_without_a_home() {
         features.contains(&SdkValue::text("machine")),
         cfg!(feature = "machine")
     );
+    assert_eq!(
+        features.contains(&SdkValue::text("sandbox-runtime")),
+        layerfs_bridge::sandbox_runtime::LOADER.is_some()
+    );
     assert!(!home.exists());
 }
 
@@ -96,5 +100,38 @@ fn invalid_discovery_options_are_usage_errors() {
         assert!(out.stdout.is_empty());
         assert!(text(&out.stderr).starts_with("layerfs: "));
     }
+    assert!(!home.exists());
+}
+
+#[test]
+fn explicit_force_options_are_discoverable_alongside_existing_integration_calls() {
+    let home = tempdir("force-capabilities").join("missing");
+    let out = run(&mut layerfs(&home, &["help", "--json"]));
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    let value = json::parse(&text(&out.stdout)).unwrap();
+    let Some(SdkValue::List(calls)) = value.get("calls") else {
+        panic!("calls list");
+    };
+    for (family, name) in [("machine", "stop"), ("sandbox", "close")] {
+        let call = calls
+            .iter()
+            .find(|call| {
+                call.get_text("family") == Some(family) && call.get_text("call") == Some(name)
+            })
+            .unwrap();
+        let Some(SdkValue::List(options)) = call.get("options") else {
+            panic!("call options");
+        };
+        let force = options
+            .iter()
+            .find(|option| option.get_text("name") == Some("force"))
+            .unwrap();
+        assert_eq!(force.get_text("kind"), Some("bool"));
+        assert_eq!(force.get("optional"), Some(&SdkValue::Bool(true)));
+    }
+    assert!(calls
+        .iter()
+        .any(|call| call.get_text("family") == Some("project")
+            && call.get_text("call") == Some("export")));
     assert!(!home.exists());
 }

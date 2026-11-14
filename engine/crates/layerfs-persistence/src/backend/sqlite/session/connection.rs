@@ -145,7 +145,11 @@ pub struct SqlWork {
     pub connects: u64,
 }
 pub(crate) struct State {
-    pub(crate) connection: Connection,
+    pub(crate) connection: super::lifecycle::ConnectionSlot,
+    /// The Store path whose lane a writable session takes around its last
+    /// close; `None` for read-only and diagnostic sessions, whose close cannot
+    /// checkpoint or remove `-wal`/`-shm` and so takes no lane.
+    pub(crate) close_lane: Option<PathBuf>,
     pub(crate) quarantined: bool,
     pub(crate) work: RefCell<SqlWork>,
     pub(crate) writer_hold: Option<crate::backend::sqlite::lane::writer_admission::Writer>,
@@ -210,6 +214,16 @@ impl Session {
         if !cfg!(any(target_os = "macos", target_os = "linux", target_os = "windows")) {
             return Err(BackendError::Integrity);
         }
+        // A writable open runs PRAGMA and schema statements that write, so it
+        // takes the same local-volume lane a transaction takes: another
+        // opener waits for it instead of meeting SQLite's Busy (#534, #647).
+        // A read-only open takes no lane, and the lane is released below
+        // before this session serves its first call.
+        let writer = if writable {
+            Some(crate::backend::sqlite::lane::writer_admission::Writer::acquire(path)?)
+        } else {
+            None
+        };
         let flags = if writable {
             OpenFlags::SQLITE_OPEN_READ_WRITE
         } else {
@@ -315,6 +329,9 @@ impl Session {
         if !diagnostic {
             profile::check(&profile)?;
         }
+        if let Some(writer) = writer {
+            writer.release().map_err(|_| BackendError::Unknown)?;
+        }
         super::thread_work::add(&work.borrow());
         let background = (writable && selected == SqlitePersistenceProfile::Disposable)
             .then(|| super::background::Checkpointer::start(path))
@@ -325,7 +342,8 @@ impl Session {
             admission: crate::backend::admission::Admission::default(),
             path: path.to_path_buf(),
             state: Mutex::new(State {
-                connection,
+                connection: super::lifecycle::ConnectionSlot::new(connection),
+                close_lane: writable.then(|| path.to_path_buf()),
                 quarantined: false,
                 work,
                 writer_hold: None,

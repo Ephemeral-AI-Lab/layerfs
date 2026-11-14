@@ -24,7 +24,13 @@ fn result_is_final_even_for_command_exit_2_125_or_cancellation() {
             &home,
             &["workspace", "exec", "d1:one", command, "--events"],
         ));
-        assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "stdout={} stderr={}",
+            text(&out.stdout),
+            text(&out.stderr)
+        );
         assert!(out.stderr.is_empty());
         let frames = frames(&out.stdout);
         assert!(frames[0].get("progress").is_some());
@@ -52,7 +58,13 @@ fn output_over_one_mib_and_binary_bytes_are_preserved_in_order() {
         &home,
         &["workspace", "exec", "d1:one", "framed-big", "--events"],
     ));
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stdout={} stderr={}",
+        text(&out.stdout),
+        text(&out.stderr)
+    );
     let frames = frames(&out.stdout);
     let bytes: Vec<_> = frames.iter().filter_map(|f| f.get("bytes")).collect();
     assert_eq!(bytes.len(), 3);

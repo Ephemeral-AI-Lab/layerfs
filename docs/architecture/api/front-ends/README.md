@@ -103,7 +103,9 @@ usage lines built from the entry ([`help.rs`](../../../../api/crates/layerfs-cli
 for a `Bool`, `[--progress]` for `on_progress`). The banner
 ([`banner.rs`](../../../../api/crates/layerfs-cli/src/banner.rs)) prints only
 when stdout is a terminal; `NO_COLOR` turns colour off. `--version --json`
-gives `{ version, commit, dirty, features }` and `help --json` gives
+gives `{ version, commit, dirty, features }` (`features`: the Cargo features
+`machine`, `postgresql`, `tls` built in, and `sandbox-runtime` when namespaces
+Sandboxes run on the bundle's runtime layer, R5) and `help --json` gives
 `{ calls, commands, switches }` with `calls` exactly `table_json`
 ([`capabilities.rs`](../../../../api/crates/layerfs-cli/src/capabilities.rs)).
 

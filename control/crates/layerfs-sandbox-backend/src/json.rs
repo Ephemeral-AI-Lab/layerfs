@@ -227,7 +227,6 @@ impl<R: Read> Json<R> {
     }
 }
 /// Read by the namespaces backend's image archive reader (Linux only).
-#[cfg(target_os = "linux")]
 pub(crate) fn once(bits: &mut u8, bit: u8) -> Result<(), RuntimeError> {
     if *bits & bit != 0 {
         return Err(RuntimeError::Protocol("duplicate deciding JSON field"));

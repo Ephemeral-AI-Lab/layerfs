@@ -34,6 +34,11 @@ pub(crate) struct Paths {
     /// it: root-owned 0700, and deleted with the directory.
     pub(crate) upper: PathBuf,
     pub(crate) work: PathBuf,
+    /// The Sandbox's copy of the bundle's runtime layer (R5),
+    /// `<directory>/runtime`, root-owned; absent when the bundle has none.
+    /// Copied like the daemon, so a bundle replaced under a running Sandbox
+    /// leaves its runtime as it was.
+    pub(crate) runtime: PathBuf,
 }
 
 impl Paths {
@@ -56,6 +61,7 @@ impl Paths {
             root: PathBuf::from(root),
             upper: local.directory.join("overlay").join("upper"),
             work: local.directory.join("overlay").join("work"),
+            runtime: local.directory.join("runtime"),
             local,
         })
     }

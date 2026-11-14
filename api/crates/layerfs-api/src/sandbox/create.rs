@@ -1,6 +1,6 @@
 //! `sandbox.create`: start a named Sandbox of a project on a machine (default: its sqlite Store's, or native).
-use crate::calls::table::Kind::{Name, Project, Text};
-use crate::calls::table::{a, call, opt, Call};
+use crate::calls::table::Kind::{Image, Name, Project};
+use crate::calls::table::{a, call, opt, Call, PROGRESS};
 use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::with_field;
@@ -12,7 +12,7 @@ pub(crate) const CALL: Call = call(
     "sandbox",
     "create",
     &[a("project", Project), a("name", Name), opt("machine", Name)],
-    &[opt("image", Text)],
+    &[opt("image", Image), PROGRESS],
     "start a named Sandbox of a project on a machine (default: its sqlite Store's, or native)",
     run,
 );

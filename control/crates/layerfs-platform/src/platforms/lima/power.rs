@@ -20,9 +20,15 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
 }
 
 /// `limactl stop` keeps the instance and its disk; the worker ends with it.
-pub(crate) fn stop(spec: &Spec) -> Result<(), MachineError> {
-    if observe(spec)?.0 == State::Running {
-        checked(spec, CLI, &["stop", &spec.vm_name], BOOT)?;
+pub(crate) fn stop(spec: &Spec, force: bool) -> Result<(), MachineError> {
+    let state = observe(spec)?.0;
+    if state == State::Running || (force && state == State::Failed) {
+        let mut words = vec!["stop"];
+        if force {
+            words.push("--force");
+        }
+        words.push(&spec.vm_name);
+        checked(spec, CLI, &words, BOOT)?;
     }
     Ok(())
 }

@@ -17,6 +17,8 @@
 #[cfg(unix)]
 mod backend;
 #[cfg(unix)]
+pub use backend::namespaces::rootfs;
+#[cfg(unix)]
 pub use backend::Backend;
 #[cfg(not(unix))]
 pub use types::kind::Backend;

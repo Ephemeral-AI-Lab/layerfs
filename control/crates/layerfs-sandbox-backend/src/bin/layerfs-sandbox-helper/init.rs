@@ -56,9 +56,7 @@ pub(super) fn inner(spec_path: &Path) -> Result<i32, String> {
     let spec = read(spec_path)?;
     mounts::build(&spec)?;
     mounts::pivot(&spec.root)?;
-    let daemon = Command::new(&spec.daemon)
-        .arg("--config")
-        .arg(&spec.config)
+    let daemon = daemon(&spec)?
         .current_dir("/")
         .stdin(Stdio::null())
         .spawn()
@@ -80,6 +78,23 @@ pub(super) fn inner(spec_path: &Path) -> Result<i32, String> {
             Err(error) => return Err(format!("reaping the Sandbox's processes: {error}")),
         }
     }
+}
+
+/// The daemon's command line (`HelperSpec::daemon_command`: through the
+/// runtime layer's loader when the spec names one). Its environment is this
+/// stage's, which the launcher cleared (only `PATH` and LayerFS's own
+/// settings), with no loader variable, so nothing reaches the loader but the
+/// bundle's libraries.
+fn daemon(spec: &HelperSpec) -> Result<Command, String> {
+    let mut daemon = spec
+        .daemon_command()
+        .map_err(|error| format!("starting the daemon: {error}"))?;
+    for (name, _) in std::env::vars_os() {
+        if name.to_str().is_some_and(|name| name.starts_with("LD_")) {
+            daemon.env_remove(name);
+        }
+    }
+    Ok(daemon)
 }
 
 /// The Sandbox's own cgroup, written by the Sandbox's own init stage: every

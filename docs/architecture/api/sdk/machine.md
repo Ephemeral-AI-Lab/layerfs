@@ -13,7 +13,8 @@ The `machine` calls: list, inspect, create, start, stop, update and remove the m
 ## Calls
 
 ```text
- reads (start nothing):  list   platforms   get   status
+ reads (start nothing):  list   platforms   get   status   images
+ Sandbox images:         load (copy from the host's Docker)   prune
 
  built in: native, docker ---------------------- update (image, docker,
                                                   wsl, daemon)
@@ -31,9 +32,12 @@ The `machine` calls: list, inspect, create, start, stop, update and remove the m
 | [`machine.list`](#machinelist) | `{ machines: [summary] }` |
 | [`machine.platforms`](#machineplatforms) | `{ host, platforms: [row] }` |
 | [`machine.get`](#machineget) | summary |
+| [`machine.images`](#machineimages) | `{ machine, mode, architecture, default, free, images, docker, available }` |
+| [`machine.load`](#machineload) | `{ id, refs, size, reused }` |
+| [`machine.prune`](#machineprune) | `{ removed: [id], freed }` |
 | [`machine.status`](#machinestatus) | `{ name, platform, state, free_disk, tool_version, down_reason, stores, op? }` |
 | [`machine.start`](#machinestart) | summary, once the worker answers |
-| [`machine.stop`](#machinestop) | summary, `state: "stopped"` |
+| [`machine.stop`](#machinestop) | summary, `state: "stopped"`; with `force`, also `forced`, `stopped_sandboxes`, `unknown` |
 | [`machine.create`](#machinecreate) | summary, `state: "running"` |
 | [`machine.remove`](#machineremove) | `{ name, removed: true, note? }` |
 | [`machine.update`](#machineupdate) | summary |
@@ -140,6 +144,102 @@ A machine held by an `op` is not probed (its state comes from the record);
 error. Errors: `InvalidInput` (not a machine name), `NotFound`, `Failed` (no
 known platform).
 
+### machine.images
+
+The Sandbox images a machine holds and the host's Docker images it could
+copy, read without starting it
+([`images.rs`](../../../../control/crates/layerfs-sandbox/src/images.rs),
+[`docker.rs`](../../../../control/crates/layerfs-sandbox/src/docker.rs)).
+
+```text
+JS      await layerfs.machine.images(name)
+Python  layerfs.machine.images(name)
+CLI     layerfs machine images <name>
+```
+
+```text
+{ machine, mode: "images" | "host", architecture, default, free,
+  images: [{ id, refs, size, architecture, source, sandboxes, last_used }],
+  docker: null | { available: true }
+        | { available: false, reason: "not-installed" | "not-running" | "error", message },
+  available: [{ id, refs, size, os, architecture, usable, reason?, need, fits }] }
+```
+
+`images` are the unpacked images with their sidecars
+(`machines/native/run/images/<hex>.2.json`: `source: "imported"` for one
+copied from Docker) and what the archives its Sandboxes read still hold
+(`bundle`, `machine`), unpacked or not. `id` is the Docker image Id for an
+imported image and the config digest for an archive's. `sandboxes` counts
+the Sandbox records on this machine naming that `id`; `last_used` is the
+last create's time (RFC 3339) or null. `default` is the record's image, else
+the archive's only one. `free` is the image cache's free bytes. `available`
+lists the host's tagged Docker images (one `docker image ls`, one batched
+`docker image inspect`, 10 s each) through the `docker` machine's socket,
+else Docker's default context, minus any whose id or refs `images` already
+has (the bundle's image in Docker, `layerfs-cache/sandbox:<hex>`, included).
+A row for another OS or architecture is `usable: false` with `reason {kind:
+"os" | "arch", value}`. `size` is what the image's layers unpack to: the
+sum of `docker history`'s layer sizes (one call per image, eight at a time,
+10 s in all), never less than `docker image inspect`'s `Size`, which with
+Docker's containerd image store is the compressed content, about a third of
+it; an image not measured in time keeps that `Size`. `need` is `2 × size × 1.05` and `fits` is
+`need <= free` (true when `free` is unknown). A Docker failure fills
+`docker.available: false` and never fails the call. macOS `native` answers
+`mode: "host"`, `docker: null` and no rows. Errors: `NotFound`,
+`Unavailable` `{what: "machine"}` when its worker does not answer.
+
+### machine.load
+
+Copies an image to a machine as `sandbox.create`'s `image` does, without a
+Sandbox ([`image_load.rs`](../../../../control/crates/layerfs-sandbox/src/image_load.rs)).
+
+```text
+JS      await layerfs.machine.load(name, image, { on_progress })
+Python  layerfs.machine.load(name, image, *, on_progress=None)
+CLI     layerfs machine load <name> <image> [--progress]
+```
+
+`image` is a digest, Docker image Id or Docker reference. The machine is
+asked first: an image it holds is `reused: true` and needs neither Docker nor
+a byte sent. Otherwise `docker image inspect` resolves it; the host keeps an
+export container `layerfs-export-<hex>` (removed once the machine publishes
+the image), streams `docker export` without the init layer's files
+(`.dockerenv`, `etc/hosts`, `etc/hostname`, `etc/resolv.conf`, `etc/mtab`,
+`dev/*`) and device or FIFO entries in 1 MiB `image.artifact` frames to
+`.recv-<hex>.part`, and the machine checks its size and sha256, unpacks it
+once into `<hex>.2/`, writes the sidecar and deletes the staged tar. A staged
+tar left by a stopped copy is resumed when its bytes hash as this export's
+prefix, else restarted; one still growing (under 30 s old) is another
+caller's copy, which this one waits for. `NoSpace`'s `need` counts the
+larger of the layers' unpacked size and the export container's root
+(`SizeRootFs`); `size` is the bytes sent, else the sidecar's, else the
+layers' unpacked size. Progress: `inspect`, `export`, `send` (`done`,
+`total`: an estimate, never below `done`, until the last `send` event, whose
+`done` and `total` are both the bytes sent), `unpack`. Errors: `Unsupported` `{reason: "host"}`
+(macOS `native`), `{reason: "arch" | "os", value}`; `InvalidInput` (Docker
+has no such image); `Unavailable` `{what: "docker" | "machine"}`; `NoSpace`
+`{need, free}`.
+
+### machine.prune
+
+Removes one unpacked image, or with `unused` every one no Sandbox uses
+except the machine's default
+([`images.rs`](../../../../control/crates/layerfs-sandbox/src/images.rs)).
+
+```text
+JS      await layerfs.machine.prune(name, image?, { unused })
+Python  layerfs.machine.prune(name, image=None, *, unused=None)
+CLI     layerfs machine prune <name> [<image>] [--unused]
+```
+
+An image is in use while a Sandbox directory's `config/helper.spec`
+`lower=` names it, or while a create holds its lock between its unpack and
+its spec: a named one is refused `InUse` (`detail.count`), `unused` skips
+it. Naming the default removes it; the next create unpacks it again from
+its archive. `freed` is the free bytes after minus before. Errors:
+`InvalidInput` (neither an image nor `unused`, or not an id), `NotFound`
+(not unpacked here), `InUse`, `Unsupported` `{reason: "host"}`.
+
 ### machine.status
 
 The machine's state now, its data disk's free space, the provider tool's
@@ -213,18 +313,46 @@ Stops a machine's worker and, where it has one, its VM; disks and Stores
 stay.
 
 ```text
-JS      await layerfs.machine.stop(name)
-Python  layerfs.machine.stop(name)
-CLI     layerfs machine stop <name>
+JS      await layerfs.machine.stop(name, { force })
+Python  layerfs.machine.stop(name, *, force=None)
+CLI     layerfs machine stop <name> [--force]
 ```
 
 `native` stops nothing; `docker` ends its worker container only; `lima` and
 `apple-container` end the worker and VM. `worker.json` is deleted and the
 state recorded `stopped`. Nothing stops a machine because it is unused.
-Errors: `InUse` while Sandboxes are recorded on it (`detail.related`,
-`can_stop_machine`); `Unavailable` (`start.lock` held 600 s, or the provider did
-not answer: records stay as they were); `Unknown` (a provider command timed out:
-the machine may be stopped while still recorded with its worker).
+Errors: `InUse` while Sandboxes are recorded on it and `force` is not set
+(`detail.related`, `can_stop_machine`); `InvalidInput` on `docker` when the
+container named for the machine is not a LayerFS worker (its role label), which
+is left alone; `Unavailable` (`start.lock` held 600 s,
+or the provider did not answer: records stay as they were); `Unknown` (a
+provider command timed out: the machine may be stopped while still recorded
+with its worker).
+
+`force` (Bool, default false) stops the machine while Sandboxes, mounted
+Workspaces or commands are active; their uncommitted state may be lost. It goes
+straight to the provider: it does not start the machine, call its worker,
+commit, unmount Workspaces one by one, or delete any machine, Sandbox, Store or
+disk record. On `native` it ends only this home's recorded Sandbox runtimes and
+commands, without opening the Store or calling the daemon, and the machine
+stays `ready`. On `docker`, ending the worker container ends its Sandboxes; the
+Store volume stays. `lima` uses `limactl stop --force`, also when the host
+agent reports a broken VM. It returns the recorded summary without a worker
+probe, plus `forced: true`, `stopped_sandboxes: [name]` and
+`unknown: [workspace]` (`sandbox:*` when a worker-side Workspace frontier could
+not be listed; these are not saved Commits). Stopped Sandboxes are recorded
+`gone` for explicit reclaim, or `unresolved` when the stop could not be
+confirmed. A Sandbox that never started is neither stopped nor listed. On `native` a Sandbox is uncertain only once its stop has been
+sent: a refusal before that (no recorded runtime, or a recorded process
+identity that no longer matches) leaves that Sandbox as it was, and the stop
+goes on to the next one. The call then answers the first such refusal, with
+`detail.refused_sandboxes`, `stopped_sandboxes` and `unknown`, and leaves no op
+on `native`. If recording the outcome fails, the stop's own refusal is still
+answered, with `detail.custody_errors`. A later forced stop may settle an
+uncertain stop this process left, or one whose process has ended; one a live
+process still holds is `Busy`. A provider failure or uncertain outcome is
+reported, never replayed or turned into success
+([`machine_force.rs`](../../../../control/crates/layerfs-control/src/machine_force.rs)).
 
 ### machine.create
 

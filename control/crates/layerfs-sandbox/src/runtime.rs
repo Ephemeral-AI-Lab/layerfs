@@ -174,7 +174,8 @@ pub fn image(runtime: &Sandbox) -> String {
 /// The image a namespaces deployment's Sandbox root is an overlay of, and
 /// the docker-archive that holds it (`deploy.imageArchive`,
 /// LAYERFS_IMAGE_ARCHIVE). The image is `deploy.image` when the caller gave
-/// one, else the one image the archive names by its config digest (#529;
+/// one (held by the archive, or already unpacked in this machine's image
+/// cache: an image copied from Docker), else the one image the archive names by its config digest (#529;
 /// a Docker image id may name the same image by another digest, so the
 /// docker machine's worker image is never taken for it, D-8). Both are read before any effect, so a bundle without its
 /// image, or a given image the archive does not hold, refuses the start
@@ -205,8 +206,12 @@ pub fn namespaces_image(deploy: &Deploy) -> Result<(Image, PathBuf), SdkRefusal>
         Some(digest) => {
             let image = Image::parse(digest)
                 .map_err(|error| refused("InvalidInput", format!("deploy.image: {error}")))?;
-            layerfs_sandbox_backend::namespaces::rootfs::holds(&archive, &image)
-                .map_err(in_archive)?;
+            // an image this machine already holds unpacked (one copied from
+            // Docker, `machine.load`) needs no archive
+            if !crate::image_artifact::unpacked(deploy, &image) {
+                layerfs_sandbox_backend::namespaces::rootfs::holds(&archive, &image)
+                    .map_err(in_archive)?;
+            }
             image
         }
         None => {

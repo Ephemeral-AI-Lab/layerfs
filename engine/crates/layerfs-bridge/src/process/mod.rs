@@ -10,8 +10,8 @@ mod identity;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
-pub use darwin::{boot, processes, stat};
-pub use identity::{LocalProcess};
+pub use darwin::{boot, processes, stat, sync_volume_wait};
+pub use identity::LocalProcess;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use identity::{pid, Stat};
 #[cfg(target_os = "linux")]

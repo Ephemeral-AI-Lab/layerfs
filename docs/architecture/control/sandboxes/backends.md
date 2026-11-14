@@ -110,6 +110,7 @@ not prove descendants ended.
    tmp/                        1777  commands' scratch and HOME
    groups/                     0700  native: one empty file per group
    bin/layerfs-daemon, layerfs-sandbox-helper   namespaces only, 0755
+   runtime/lib/  runtime/bin/  0755  namespaces only: the bundle's runtime layer
  <root>/<name>.root/           0755  namespaces only: private root (sibling)
  <root>/images/<64 hex>.2/           namespaces only: unpacked image cache
 ```
@@ -151,7 +152,8 @@ and whose environment has no `PATH`
    virtiofs or fuse*)
  launch_with_binds
    check binds; rootfs: unpack the docker-archive once per digest
-   prepare: Local parts + copied daemon and helper + spec + upper/work
+   prepare: Local parts + copied daemon, helper and runtime layer + spec
+            + upper/work
    cgroup::create /sys/fs/cgroup/layerfs/<id>  (needs cgroup.kill)
    spawn: helper init --spec <spec>
             joins the cgroup; unshare(NEWNS | NEWPID | NEWIPC); private
@@ -159,19 +161,24 @@ and whose environment has no `PATH`
           helper init-inner --spec <spec>          PID 1 of the namespace
             overlay(lower = image, upper/work = the Sandbox's), /proc,
             /dev (fuse null zero full random urandom tty, pts, shm), /tmp,
-            Sandbox directory and each Bind at their own paths; pivot
+            Sandbox directory and each Bind at their own paths, the
+            runtime layer read-only at /.layerfs/runtime; pivot
             v
-          layerfs-daemon --config <setup> as root; init reaps
+          /.layerfs/runtime/lib/ld-linux-<arch> --inhibit-cache
+            --library-path /.layerfs/runtime/lib layerfs-daemon --config
+            <setup> as root (layerfs-daemon --config <setup> without a
+            runtime layer); init reaps
    await_listener on daemon.log
 ```
 
 | Item | Rule | Source |
 | --- | --- | --- |
-| `HelperSpec` | One 0600 file of absolute paths (`root`, `sandbox`, `daemon`, `config`, `cgroup`, `lower`, `upper`, `work`) and `bind=<rw\|ro>\t<host>\t<guest>` lines. No secret: the helper never reads the daemon setup. | [`helper_spec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/helper_spec.rs) |
+| `HelperSpec` | One 0600 file of absolute paths (`root`, `sandbox`, `daemon`, `config`, `cgroup`, `lower`, `upper`, `work`), an optional `runtime=` line (the Sandbox's copy of the runtime layer) and `bind=<rw\|ro>\t<host>\t<guest>` lines. A spec without `runtime=` (written before it) still parses and reopens unchanged. No secret: the helper never reads the daemon setup. | [`helper_spec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/helper_spec.rs) |
 | `Bind` | A sqlite Store's directory, read-write at its own path, so SQLite's WAL and the writers' lock see one inode; none for a PostgreSQL Store. A bind may not hold the runtime root, the Sandbox directory or its private root. | [`types/bind.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/bind.rs), `check_bind` in [`namespaces/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/create.rs) |
 | Image | `sha256:<64 hex>`, the archive's config digest; a `docker save` archive with uncompressed layers (gzip or zstd layers refused); unpacked once per digest under `<root>/images` and shared read-only. A reopen unpacks nothing: an image gone is refused. | [`rootfs/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/mod.rs), [`types/image.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/image.rs), [`namespaces/provider.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/provider.rs) |
 | Helper | `LAYERFS_SANDBOX_HELPER`, else beside the daemon or this executable; copied into the Sandbox's `bin/`, which a reopen uses. | `namespaces/provider.rs` |
-| Commands | `helper exec --init <pid> --cgroup <dir> [--command-cgroup <dir>] --uid --gid --cwd -- <argv>`: joins the cgroup, enters the namespaces, becomes uid:gid with no capabilities and no-new-privs, installs the filter below, execs. | [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs), [`helper exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/exec.rs) |
+| Runtime layer | `runtime/` beside the daemon (the sealed bundle's, R5), when it holds this architecture's loader; else none, and the daemon runs on the image's own loader and libraries as before. Copied into the Sandbox's `runtime/` (regular files of `lib/` and `bin/` only; anything else refused; the loader and programs 0755, the libraries 0644), so a bundle replaced under a running Sandbox changes nothing. The init stage binds it read-only, nosuid and nodev at `/.layerfs/runtime`, refusing an image whose `/.layerfs` or `/.layerfs/runtime` is not a plain directory, and starts the daemon through its loader (`--inhibit-cache --library-path /.layerfs/runtime/lib`) with `LAYERFS_SANDBOX_RUNTIME=/.layerfs/runtime` and no `LD_*` variable: the image's loader, libraries and `/etc/ld.so.cache` are never used, so an image with an older glibc, musl or no libc starts it. The image's `/etc/ld.so.preload` is still read by the loader. Its files are unmodified Debian binaries (glibc's loader and libraries, `libgcc_s`, OpenSSL, `getent`, `bash-static`, `busybox-static`), several GPL or LGPL: the bundle's `licenses/` holds each package's copyright file and `SOURCES`, the written source offer naming every file's Debian source package, version and snapshot.debian.org page (`sandbox_runtime.sources` in `bundle.json`); `tools/linux_bundle.py sources` downloads exactly those sources to publish beside a release. | `namespaces/provider.rs`, `namespaces/create.rs`, [`helper mounts.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/mounts.rs), [`helper init.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/init.rs), [`sandbox_runtime.rs`](../../../../engine/crates/layerfs-bridge/src/sandbox_runtime.rs) |
+| Commands | `helper exec --init <pid> --cgroup <dir> [--command-cgroup <dir>] [--runtime <dir>] --uid --gid --cwd -- <argv>`: joins the cgroup, enters the namespaces, becomes uid:gid with no capabilities and no-new-privs, installs the filter below, execs. `--runtime /.layerfs/runtime` (a Sandbox with the runtime layer) appends `/.layerfs/runtime/bin` to the end of the command's `PATH` once; `argv[0]` (`bash`) is looked up on it inside the Sandbox, so the image's own `bash` wins and an image with none runs the runtime's static one. That directory holds only `bash`, `busybox` (no applet links) and `getent`. | [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs), [`helper exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/exec.rs) |
 | Command cgroup | With an exec slot, the command (never the helper) moves into `ws-<workspace>/exec-<exec>` just before exec; the helper then writes one byte on a socket it was given as stdin, and only then is the stop handle told. A command that cannot join never runs. | `namespaces/exec.rs`, [`namespaces/cgroup.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/cgroup.rs) |
 | End | One `cgroup.kill` ends everything the Sandbox started, whatever session it left; `track` is a no-op. Reopen checks the recorded init and its cgroup membership. | `namespaces/cgroup.rs`, [`namespaces/host.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/host.rs) `in_cgroup` |
 
@@ -188,7 +195,8 @@ mount outside the daemon's unmount. Two guards stop it:
 There is no docker backend. The `docker` machine runs `namespaces` Sandboxes
 inside its worker container, as a VM's worker does; the container is root,
 has `/dev/fuse` and a writable cgroup v2 tree, and the Sandbox root is the
-bundle's image archive. Its worker never sets `user.max_user_namespaces`
+bundle's image archive. The bundle is bound into the container, so its
+`runtime/` is there beside the daemon. Its worker never sets `user.max_user_namespaces`
 (that would change the whole Docker host), so the command filter alone blocks
 user namespaces. Docker publishes ports only when a container starts, so the
 machine refuses a forward and every call goes through the worker

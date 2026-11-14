@@ -78,3 +78,10 @@ pub use spec::{
 pub use status::status;
 #[cfg(feature = "machine")]
 pub use update::{update, MachineUpdate};
+
+/// The machine lifecycle lock, shared by the spanning forced-stop call.
+#[cfg(feature = "machine")]
+pub use endpoint::start_lock as force_stop_lock;
+/// A confirmed stopped machine summary without a worker or provider probe.
+#[cfg(feature = "machine")]
+pub use power::stopped_summary;

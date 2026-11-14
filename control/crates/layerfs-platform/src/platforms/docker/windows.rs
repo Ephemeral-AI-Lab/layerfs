@@ -25,7 +25,7 @@ pub(crate) fn guest(spec: &Spec) -> Result<(), MachineError> {
     Err(unsupported(spec))
 }
 
-pub(crate) fn stop(spec: &Spec) -> Result<(), MachineError> {
+pub(crate) fn stop(spec: &Spec, _force: bool) -> Result<(), MachineError> {
     Err(unsupported(spec))
 }
 

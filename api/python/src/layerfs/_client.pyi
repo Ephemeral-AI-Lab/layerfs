@@ -343,6 +343,7 @@ class SandboxFamily:
         machine: str | None = None,
         *,
         image: str | None = None,
+        on_progress: Callable[[Progress], object] = ...,
         log_tag: str | None = None,
     ) -> Result:
         """start a named Sandbox of a project on a machine (default: its sqlite Store's, or native)"""
@@ -414,6 +415,26 @@ class MachineFamily:
         """the platforms this host and build support, and what each is missing"""
     def get(self, name: str, *, log_tag: str | None = None) -> Result:
         """a machine's record"""
+    def images(self, name: str, *, log_tag: str | None = None) -> Result:
+        """the Sandbox images a machine holds, and the host's Docker images it can copy"""
+    def load(
+        self,
+        name: str,
+        image: str,
+        *,
+        on_progress: Callable[[Progress], object] = ...,
+        log_tag: str | None = None,
+    ) -> Result:
+        """copy an image from the host's Docker to a machine without creating a Sandbox"""
+    def prune(
+        self,
+        name: str,
+        image: str | None = None,
+        *,
+        unused: bool | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """remove a Sandbox image from a machine, or every unused one"""
     def status(self, name: str, *, log_tag: str | None = None) -> Result:
         """a machine's live state, free disk and tool version"""
     def start(

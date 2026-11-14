@@ -23,6 +23,13 @@
 //! With `--trace <file>` (a traced call, `LAYERFS_TRACE_STEP`) it writes
 //! when each stage ended to that file, which the worker made, once the
 //! command ended ([`Stamps`]).
+//!
+//! With `--runtime <dir>` (a Sandbox with the bundle's runtime layer, R5,
+//! bound at `<dir>` inside it) the command's `PATH` gets `<dir>/bin` at its
+//! end (`sandbox_runtime::search_path`). The program is looked up on that
+//! `PATH` inside the Sandbox, so an image's own `bash` wins, and an image with
+//! none (alpine, distroless) runs the runtime's static `bash` instead of
+//! failing.
 use nix::{
     sched::{setns, CloneFlags},
     sys::prctl::set_no_new_privs,
@@ -44,6 +51,7 @@ struct Run {
     cgroup: PathBuf,
     command_cgroup: Option<PathBuf>,
     trace: Option<PathBuf>,
+    runtime: Option<PathBuf>,
     uid: u32,
     gid: u32,
     directory: PathBuf,
@@ -78,6 +86,14 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
         .current_dir(&run.directory)
         .stdin(Stdio::null())
         .process_group(0);
+    if let Some(runtime) = &run.runtime {
+        // set on the command, so its lookup of a bare program name (`bash`)
+        // searches this PATH, in the Sandbox's root
+        let path = (std::env::var_os("PATH").filter(|path| !path.is_empty()))
+            .unwrap_or_else(|| CONTAINER_PATH.into());
+        let path = layerfs_bridge::sandbox_runtime::search_path(&path, runtime);
+        command.env("PATH", path);
+    }
     if let Some(procs) = command_procs {
         layerfs_sandbox_backend::local::start_in_cgroup(&mut command, procs);
     }
@@ -170,6 +186,9 @@ impl Namespaces {
     }
 }
 
+/// A container's search path, for a command started with none.
+const CONTAINER_PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+
 /// Group `cgroup`'s process list, opened to move a process into it.
 fn procs(cgroup: &Path) -> Result<File, String> {
     fs::OpenOptions::new()
@@ -199,7 +218,7 @@ fn fail(message: &str) -> ! {
 fn parse(arguments: &[OsString]) -> Result<Run, String> {
     let (mut init, mut uid, mut gid) = (0, 0, 0);
     let (mut cgroup, mut directory) = (PathBuf::new(), PathBuf::new());
-    let (mut command_cgroup, mut trace) = (None, None);
+    let (mut command_cgroup, mut trace, mut runtime) = (None, None, None);
     let mut command = Vec::new();
     let mut index = 0;
     while index < arguments.len() {
@@ -218,6 +237,7 @@ fn parse(arguments: &[OsString]) -> Result<Run, String> {
             Some("--cgroup") => cgroup = PathBuf::from(value),
             Some("--command-cgroup") => command_cgroup = Some(PathBuf::from(value)),
             Some("--trace") => trace = Some(PathBuf::from(value)),
+            Some("--runtime") => runtime = Some(PathBuf::from(value)),
             Some("--cwd") => directory = PathBuf::from(value),
             _ => {
                 return Err(format!(
@@ -233,6 +253,9 @@ fn parse(arguments: &[OsString]) -> Result<Run, String> {
         || gid == 0
         || cgroup.as_os_str().is_empty()
         || !directory.is_absolute()
+        || runtime
+            .as_deref()
+            .is_some_and(|runtime| !runtime.is_absolute())
         || command.is_empty()
     {
         return Err("missing or invalid exec argument".to_owned());
@@ -242,6 +265,7 @@ fn parse(arguments: &[OsString]) -> Result<Run, String> {
         cgroup,
         command_cgroup,
         trace,
+        runtime,
         uid,
         gid,
         directory,

@@ -25,7 +25,9 @@ request carries what its operation needs. Which calls take a worker is the
             echo 0 > /proc/sys/user/max_user_namespaces, read back
    install  bundle files (layerfs, layerfs-daemon, layerfs-sandbox-helper,
             sandbox-image.tar) copied per file when their hash changed;
-            bundle.json published last
+            runtime/ (the Sandbox runtime layer) copied whole when
+            sandbox_runtime.hash changed or the guest lacks it, then
+            swapped in; bundle.json published last
  3 launch   new secret (32 random bytes, 64 hex) -> /layerfs/state/secret
             0600 via stdin; end an earlier worker; start detached as root:
             LAYERFS_WORKER_LISTEN=<bind>:7070

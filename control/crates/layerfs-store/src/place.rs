@@ -47,6 +47,9 @@ pub fn plan(home: &Path, store: &StoreRef) -> Result<Executor> {
 /// Where a call on machine `machine` runs: its Sandboxes' host operations,
 /// and the Store calls of the sqlite Stores on it.
 pub fn on_machine(home: &Path, machine: &str) -> Result<Executor> {
+    if let Some(record) = layerfs_machine::record::MachineRecord::read(home, machine)? {
+        record.not_held()?;
+    }
     if layerfs_machine::runs_here(home, machine)? {
         return Ok(Executor::Local);
     }
