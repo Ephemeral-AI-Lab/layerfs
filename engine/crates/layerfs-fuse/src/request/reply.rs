@@ -171,7 +171,19 @@ impl ReadReply {
                     Self::Entry(reply) => {
                         reply.entry(&TTL, &attributes, Generation(mount.owner_id()))
                     }
-                    Self::Attr(reply) => reply.attr(&TTL, &attributes),
+                    Self::Attr(reply) => {
+                        use layerfs_telemetry::timer::stages::{add, Stage};
+                        add(
+                            if attributes.kind == FileType::Directory {
+                                Stage::GetattrDirectory
+                            } else {
+                                Stage::GetattrFile
+                            },
+                            1,
+                            0,
+                        );
+                        reply.attr(&TTL, &attributes)
+                    }
                     _ => unreachable!("data is served before, opens above"),
                 }
             }

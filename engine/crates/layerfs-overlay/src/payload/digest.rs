@@ -55,6 +55,22 @@ impl Overlay {
         if self.open.borrow().digests.rows.contains_key(&serial) {
             return Ok(());
         }
+        // Prototype (write-path probe, `noresume`): both resumable cases need
+        // the window to start where the followed bytes end, so a write that
+        // starts elsewhere needs no row read.
+        if probe_switch("noresume") && write.offset != 0 {
+            let open = self.open.borrow();
+            let possible = open
+                .resumable
+                .rows
+                .get(&())
+                .is_some_and(|(held, _, followed)| {
+                    *held == serial && followed.length == write.offset
+                });
+            if !possible {
+                return Ok(());
+            }
+        }
         let latest = self
             .query(StatementKind::Inode, LATEST, &[&serial], 16, |row| {
                 Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
@@ -94,6 +110,69 @@ impl Overlay {
         Ok(())
     }
 
+    /// Prototype (write-path probe, `digestpar`): starts the BLAKE3 update
+    /// of an appended window on the helper thread while the job writes its
+    /// rows and commits. `follow_digests` advances the followed length and
+    /// the transaction installs the hasher after COMMIT (or joins at once
+    /// where the digest is finished in the job). Called after `resume_digest`.
+    pub(crate) fn start_digest(&self, changes: &Changes) -> OverlayResult<()> {
+        PENDING.with(|pending| pending.borrow_mut().take());
+        if !probe_switch("digestpar") || changes.cell.is_some() {
+            return Ok(());
+        }
+        // A small window hashes inline faster than a helper hand-off wakes
+        // (about 1 µs per KiB against a 10 µs round trip).
+        let Some(write) = changes
+            .write
+            .as_ref()
+            .filter(|write| write.data.len() >= HELPER_BYTES)
+        else {
+            return Ok(());
+        };
+        let key = integer(write.serial)?;
+        let hasher = match self.open.borrow().digests.rows.get(&key) {
+            Some(followed) if followed.length == write.offset => followed.hasher.clone(),
+            _ => return Ok(()),
+        };
+        let (reply, result) = std::sync::mpsc::channel();
+        let check = probe_switch("digestcheck").then(|| (hasher.clone(), write.data.clone()));
+        let job = (hasher, write.data.clone(), reply);
+        let sent = HELPER
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .send(job)
+            .is_ok();
+        if sent {
+            PENDING.with(|pending| {
+                *pending.borrow_mut() = Some(Pending {
+                    key,
+                    offset: write.offset,
+                    length: write.data.len() as u64,
+                    result,
+                    deferred: false,
+                    check,
+                })
+            });
+        }
+        Ok(())
+    }
+    /// Installs a deferred hasher of this job (prototype `digestpar`).
+    pub(crate) fn settle_digest(&self) {
+        let Some(pending) = PENDING.with(|pending| pending.borrow_mut().take()) else {
+            return;
+        };
+        if !pending.deferred {
+            return;
+        }
+        let _stage = layerfs_telemetry::timer::stages::Timer::start(
+            layerfs_telemetry::timer::stages::Stage::OverlayDigest,
+        );
+        let hasher = pending.receive();
+        if let Some(followed) = self.open.borrow_mut().digests.rows.get_mut(&pending.key) {
+            followed.hasher = hasher;
+        }
+    }
+
     /// Before a job writes its rows: the files whose digest still describes
     /// their latest row and that this job changes without touching a byte
     /// (no write, no cell, the same size: a mode or time change). Their
@@ -109,6 +188,11 @@ impl Overlay {
             }
             let serial = integer(inode.serial)?;
             if self.open.borrow().digests.rows.contains_key(&serial) {
+                continue;
+            }
+            // Prototype (write-path probe, `noresume`): an inode this job
+            // creates has a fresh serial, so no earlier row or pin exists.
+            if probe_switch("noresume") && changes.created == Some(inode.serial) {
                 continue;
             }
             let latest = self
@@ -167,11 +251,37 @@ impl Overlay {
             }
             if let Some(write) = &changes.write {
                 let key = integer(write.serial)?;
+                let opens = open.custody.rows.get(&key).map_or(0, |refs| refs.opens);
                 // The running hasher is followed in place: an append extends it
                 // where it is, so a window never clones its state to advance it.
                 if let Some(followed) = open.digests.rows.get_mut(&key) {
                     if followed.length == write.offset {
-                        followed.hasher.update(&write.data);
+                        let started = PENDING.with(|pending| {
+                            let mut pending = pending.borrow_mut();
+                            let pending = pending.as_mut().filter(|pending| {
+                                pending.key == key
+                                    && pending.offset == write.offset
+                                    && pending.length == write.data.len() as u64
+                            })?;
+                            // A file no descriptor holds finishes its digest
+                            // in this job: join now.
+                            if opens == 0 {
+                                Some(Some(pending.receive()))
+                            } else {
+                                pending.deferred = true;
+                                Some(None)
+                            }
+                        });
+                        match started {
+                            Some(Some(hasher)) => followed.hasher = hasher,
+                            Some(None) => {}
+                            None => {
+                                let _stage = layerfs_telemetry::timer::stages::Timer::start(
+                                    layerfs_telemetry::timer::stages::Stage::OverlayDigest,
+                                );
+                                followed.hasher.update(&write.data);
+                            }
+                        }
                         followed.length += write.data.len() as u64;
                     } else {
                         open.digests.remove(key);
@@ -316,3 +426,71 @@ impl Overlay {
             .collect()
     }
 }
+
+/// Prototype (write-path probe): `LAYERFS_PROBE_WRITE`, a comma list.
+pub(crate) fn probe_switch(name: &str) -> bool {
+    static SWITCHES: std::sync::LazyLock<String> =
+        std::sync::LazyLock::new(|| std::env::var("LAYERFS_PROBE_WRITE").unwrap_or_default());
+    SWITCHES.split(',').any(|switch| switch == name)
+}
+/// The smallest window `digestpar` hands to the helper (prototype).
+const HELPER_BYTES: usize = 32 * 1024;
+/// A hash started by `start_digest` for one appended window.
+struct Pending {
+    key: i64,
+    offset: u64,
+    length: u64,
+    result: std::sync::mpsc::Receiver<blake3::Hasher>,
+    /// `follow_digests` advanced the length; the hasher waits for COMMIT.
+    deferred: bool,
+    /// `digestcheck`: the hasher before the window and the window, to
+    /// compare the helper's result with an inline update.
+    check: Option<(blake3::Hasher, std::sync::Arc<[u8]>)>,
+}
+impl Pending {
+    fn receive(&self) -> blake3::Hasher {
+        let hasher = self.result.recv().expect("digest helper");
+        if let Some((before, data)) = &self.check {
+            use layerfs_telemetry::timer::stages::{add, Stage};
+            let mut inline = before.clone();
+            inline.update(data);
+            let same = inline.finalize() == hasher.finalize();
+            add(
+                if same {
+                    Stage::DigestCheckSame
+                } else {
+                    Stage::DigestCheckDiffer
+                },
+                1,
+                0,
+            );
+        }
+        hasher
+    }
+}
+thread_local! {
+    static PENDING: std::cell::RefCell<Option<Pending>> = const { std::cell::RefCell::new(None) };
+}
+type HashJob = (
+    blake3::Hasher,
+    std::sync::Arc<[u8]>,
+    std::sync::mpsc::Sender<blake3::Hasher>,
+);
+/// One process-wide helper thread that extends hashers (prototype).
+static HELPER: std::sync::LazyLock<std::sync::Mutex<std::sync::mpsc::Sender<HashJob>>> =
+    std::sync::LazyLock::new(|| {
+        let (jobs, queue) = std::sync::mpsc::channel::<HashJob>();
+        std::thread::Builder::new()
+            .name("layerfs-digest".into())
+            .spawn(move || {
+                for (mut hasher, data, reply) in queue {
+                    let _stage = layerfs_telemetry::timer::stages::Timer::start(
+                        layerfs_telemetry::timer::stages::Stage::OverlayDigestHelper,
+                    );
+                    hasher.update(&data);
+                    let _ = reply.send(hasher);
+                }
+            })
+            .expect("digest helper thread");
+        std::sync::Mutex::new(jobs)
+    });

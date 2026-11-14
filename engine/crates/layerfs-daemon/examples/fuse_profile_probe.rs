@@ -265,7 +265,7 @@ mod probe {
             field(receipt, "served_ns"),
         )
     }
-    fn stage_delta(before: &([u64; 12], [u64; 12])) -> String {
+    fn stage_delta(before: &([u64; stages::STAGES], [u64; stages::STAGES])) -> String {
         let after = stages::snapshot();
         let rows: Vec<String> = (0..stages::STAGES)
             .map(|i| {
@@ -298,6 +298,19 @@ mod probe {
             fs::write(&path, format!("{}", window / 1024)).unwrap();
         }
         (before, read())
+    }
+    /// Prints the overlay statement trace since the last call (only with
+    /// `LAYERFS_PROBE_SQLTRACE`), sorted by time.
+    fn sql_trace(phase: &str) {
+        let mut rows = layerfs_overlay::probe_sql_take();
+        if phase.is_empty() || rows.is_empty() {
+            return;
+        }
+        rows.sort_by_key(|row| std::cmp::Reverse(row.2));
+        for (sql, count, nanos) in rows {
+            let sql: String = sql.chars().take(160).collect();
+            println!("PROBE_SQL {phase} {count} {nanos} {sql}");
+        }
     }
     fn unmount(harness: &Harness, ready: &ReadyMount) -> String {
         format!("{:?}", harness.unmount(ready).kernel)
@@ -413,6 +426,8 @@ mod probe {
         let ready = harness.mount(2);
         readahead(&ready.directory, window);
         let rss = resident_reset();
+        sql_trace("");
+        let stage0 = stages::snapshot();
         let started = Instant::now();
         let mut file = File::create(Path::new(&ready.directory).join("seq.bin")).unwrap();
         for n in 0..SEQ_WRITE / BUFFER {
@@ -426,9 +441,11 @@ mod probe {
         drop(file);
         let seconds = started.elapsed().as_secs_f64();
         let hwm = status_kb("VmHWM:");
+        let split = stage_delta(&stage0);
+        sql_trace("seq_write");
         let receipt = unmount(&harness, &ready);
         println!(
-            "PROBE {{\"phase\":\"seq_write\",\"bytes\":{SEQ_WRITE},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"kernel\":{}}}",
+            "PROBE {{\"phase\":\"seq_write\",\"bytes\":{SEQ_WRITE},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"stages\":{split},\"kernel\":{}}}",
             SEQ_WRITE as f64 / seconds / 1e6,
             opcodes(&receipt)
         );
@@ -440,6 +457,8 @@ mod probe {
         let mut block = vec![0; 4096];
         Stream::new(11).fill(&mut block);
         let mut lcg = 0x1234_5678_u64;
+        sql_trace("");
+        let stage0 = stages::snapshot();
         let started = Instant::now();
         let file = OpenOptions::new()
             .write(true)
@@ -453,10 +472,12 @@ mod probe {
         drop(file);
         let seconds = started.elapsed().as_secs_f64();
         let hwm = status_kb("VmHWM:");
+        let split = stage_delta(&stage0);
+        sql_trace("random_write_4k");
         let receipt = unmount(&harness, &ready);
         let bytes = RANDOM_WRITES * 4096;
         println!(
-            "PROBE {{\"phase\":\"random_write_4k\",\"writes\":{RANDOM_WRITES},\"bytes\":{bytes},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"kernel\":{}}}",
+            "PROBE {{\"phase\":\"random_write_4k\",\"writes\":{RANDOM_WRITES},\"bytes\":{bytes},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"stages\":{split},\"kernel\":{}}}",
             bytes as f64 / seconds / 1e6,
             opcodes(&receipt)
         );
@@ -466,6 +487,8 @@ mod probe {
         let new = Path::new(&ready.directory).join("new");
         let mut small = vec![0; SMALL_BYTES];
         Stream::new(13).fill(&mut small);
+        sql_trace("");
+        let stage0 = stages::snapshot();
         let started = Instant::now();
         fs::create_dir(&new).unwrap();
         for n in 0..CREATES {
@@ -473,9 +496,11 @@ mod probe {
             file.write_all(&small).unwrap();
         }
         let seconds = started.elapsed().as_secs_f64();
+        let split = stage_delta(&stage0);
+        sql_trace("small_create");
         let receipt = unmount(&harness, &ready);
         println!(
-            "PROBE {{\"phase\":\"small_create\",\"files\":{CREATES},\"seconds\":{seconds:.4},\"per_file_us\":{:.1},\"kernel\":{}}}",
+            "PROBE {{\"phase\":\"small_create\",\"files\":{CREATES},\"seconds\":{seconds:.4},\"per_file_us\":{:.1},\"stages\":{split},\"kernel\":{}}}",
             seconds * 1e6 / CREATES as f64,
             opcodes(&receipt)
         );

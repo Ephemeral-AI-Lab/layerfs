@@ -193,6 +193,7 @@ impl Overlay {
             }
         }
         self.resume_digest(changes)?;
+        self.start_digest(changes)?;
         let carried = self.carried_digests(changes)?;
         // Whether the job's write starts at or after the length its file had
         // before the job; a window that does meets no payload row of a layer
@@ -214,6 +215,8 @@ impl Overlay {
                 }
             }
         };
+        use layerfs_telemetry::timer::stages::{Stage, Timer};
+        let stage = Timer::start(Stage::OverlayInodes);
         let mut inodes = 0_i64;
         let mut layers = Vec::with_capacity(changes.inodes.len());
         for inode in &changes.inodes {
@@ -227,6 +230,7 @@ impl Overlay {
             inodes += i64::from(added);
             layers.push((inode.serial, layer));
         }
+        drop(stage);
         let layer = |serial: u64| {
             layers
                 .iter()
@@ -278,12 +282,14 @@ impl Overlay {
             self.put_cell(integer(*serial)?, layer(*serial)?, cell)?;
         }
         if let Some(write) = &changes.write {
+            let _stage = Timer::start(Stage::OverlayCells);
             let (serial, layer) = (integer(write.serial)?, layer(write.serial)?);
             match &changes.claims {
                 None => self.write_cells(serial, layer, write.offset, &write.data, appended)?,
                 Some(claims) => self.write_claimed(serial, layer, write, claims, appended)?,
             }
         }
+        let _stage = Timer::start(Stage::OverlaySettle);
         for inode in &changes.inodes {
             if inode.kind == crate::InodeKind::File || changes.detached == Some(inode.serial) {
                 self.detach_orphan(&state, inode)?;

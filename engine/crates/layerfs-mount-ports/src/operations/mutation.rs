@@ -244,10 +244,16 @@ impl Custody {
             cached: false,
         } = &mut self.request.input
         {
-            *data = self
+            let started = std::time::Instant::now();
+            let recognized = self
                 .services
                 .recognize(protected, *offset, data.clone())
-                .await?;
+                .await;
+            layerfs_telemetry::timer::stages::charge(
+                layerfs_telemetry::timer::stages::Stage::Recognize,
+                started,
+            );
+            *data = recognized?;
         }
         let mut facts = Arc::new(VisitFacts::default());
         loop {
@@ -265,6 +271,10 @@ impl Custody {
             let started = std::time::Instant::now();
             let receipt = self.services.mutate_visit(visit).await;
             crate::phase::charge(crate::phase::Phase::MutateVisit, started);
+            layerfs_telemetry::timer::stages::charge(
+                layerfs_telemetry::timer::stages::Stage::MutateVisit,
+                started,
+            );
             self.receipt = Some(receipt?);
             let original = self.receipt.as_ref().unwrap().get().clone();
             let needs = match &original.result {
@@ -318,6 +328,10 @@ impl Custody {
             let result = Arc::make_mut(&mut facts).supply(&base, needs, path);
             drop(base); // Return the actual reader before another SQL wait.
             crate::phase::charge(crate::phase::Phase::MutateSupply, started);
+            layerfs_telemetry::timer::stages::charge(
+                layerfs_telemetry::timer::stages::Stage::MutateSupply,
+                started,
+            );
             if let Err(error) = result {
                 return Err(self.services.failed_base_read(error.into()));
             }
@@ -328,6 +342,10 @@ impl Custody {
             let started = std::time::Instant::now();
             let released = self.services.reply_attempted(publication).await;
             crate::phase::charge(crate::phase::Phase::MutateRelease, started);
+            layerfs_telemetry::timer::stages::charge(
+                layerfs_telemetry::timer::stages::Stage::MutateRelease,
+                started,
+            );
             drop(released?);
             self.publication = None;
         }

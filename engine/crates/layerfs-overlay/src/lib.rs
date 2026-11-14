@@ -51,7 +51,7 @@ pub use diagnostics::payload::PayloadWork;
 pub use error::{CloseFailure, OverlayError, OverlayResult};
 pub use lifetime::tickets::{ReplyTickets, Settled};
 pub use maintenance::{MaintenanceCursor, MaintenanceStep};
-pub use metrics::{DatabaseWork, StatementKind, StatementWork};
+pub use metrics::{probe_sql_take, DatabaseWork, StatementKind, StatementWork};
 pub use open::{OpenDisposals, OpenStateCounts};
 pub use payload::captured_types::{
     CapturedGap, CapturedRunCursor, CapturedRunReply, CapturedRunStep, CapturedRunWork,

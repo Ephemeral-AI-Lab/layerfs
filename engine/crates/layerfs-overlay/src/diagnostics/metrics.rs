@@ -151,7 +151,28 @@ pub(crate) fn query<T>(
     let elapsed = start.elapsed().saturating_sub(nested);
     observed.elapsed_ns = elapsed.as_nanos().min(u64::MAX as u128) as u64;
     work.borrow_mut().statements[kind as usize].accumulate(observed);
+    if *TRACING {
+        let key = sql.split_whitespace().collect::<Vec<_>>().join(" ");
+        let mut trace = TRACE.lock().unwrap_or_else(|p| p.into_inner());
+        let entry = trace.entry(key).or_default();
+        entry.0 += 1;
+        entry.1 += observed.elapsed_ns;
+    }
     result
+}
+/// Prototype (write-path probe): with `LAYERFS_PROBE_SQLTRACE` set, every
+/// statement's count and elapsed nanoseconds by SQL text, process-wide.
+static TRACING: std::sync::LazyLock<bool> =
+    std::sync::LazyLock::new(|| std::env::var_os("LAYERFS_PROBE_SQLTRACE").is_some());
+type Trace = std::collections::BTreeMap<String, (u64, u64)>;
+static TRACE: std::sync::Mutex<Trace> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+/// Prototype (write-path probe): takes and clears the statement trace.
+pub fn probe_sql_take() -> Vec<(String, u64, u64)> {
+    let mut trace = TRACE.lock().unwrap_or_else(|p| p.into_inner());
+    std::mem::take(&mut *trace)
+        .into_iter()
+        .map(|(sql, (count, nanos))| (sql, count, nanos))
+        .collect()
 }
 impl StatementWork {
     pub fn accumulate(&mut self, other: Self) {

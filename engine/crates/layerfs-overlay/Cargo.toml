@@ -8,6 +8,7 @@ license.workspace = true
 
 [dependencies]
 blake3 = { version = "=1.8.5", default-features = false }
+layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
 nix = { version = "=0.31.3", default-features = false, features = ["fs"] }
 rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob"] }
 
