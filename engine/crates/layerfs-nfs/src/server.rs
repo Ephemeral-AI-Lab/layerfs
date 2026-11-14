@@ -120,6 +120,8 @@ struct Shared {
     config: ExportConfig,
     counters: Counters,
     stopping: AtomicBool,
+    exited: AtomicBool,
+    joined: AtomicBool,
     connections: Mutex<Vec<(TcpStream, JoinHandle<()>)>>,
 }
 /// A running export.
@@ -145,6 +147,8 @@ impl Server {
             config,
             counters: Counters::default(),
             stopping: AtomicBool::new(false),
+            exited: AtomicBool::new(false),
+            joined: AtomicBool::new(false),
             connections: Mutex::default(),
         });
         let accepting = shared.clone();
@@ -200,13 +204,19 @@ impl Server {
     pub fn verifier(&self) -> [u8; 8] {
         self.shared.verifier
     }
+    pub fn exited(&self) -> bool {
+        self.shared.exited.load(Ordering::Acquire)
+    }
+    pub fn joined(&self) -> bool {
+        self.shared.joined.load(Ordering::Acquire)
+    }
     /// Stops accepting, closes every connection, joins every thread, then
     /// releases the synthetic kernel's descriptors and references. The engine
     /// mount itself stays with the caller, who revokes it afterwards.
     pub fn stop(mut self) -> Released {
         self.shutdown()
     }
-    fn shutdown(&mut self) -> Released {
+    pub fn shutdown(&mut self) -> Released {
         let Some(accept) = self.accept.take() else {
             return Released::default();
         };
@@ -214,6 +224,7 @@ impl Server {
         // Wake the blocking accept; it sees the flag and returns.
         drop(TcpStream::connect(self.address));
         drop(accept.join());
+        self.shared.exited.store(true, Ordering::Release);
         let connections = std::mem::take(
             &mut *self
                 .shared
@@ -227,6 +238,7 @@ impl Server {
         for (_, thread) in connections {
             drop(thread.join());
         }
+        self.shared.joined.store(true, Ordering::Release);
         self.shared.kernel.release()
     }
 }
@@ -238,6 +250,7 @@ impl Drop for Server {
 fn accept_loop(listener: &TcpListener, shared: &Arc<Shared>) {
     for stream in listener.incoming() {
         if shared.stopping.load(Ordering::Acquire) {
+            shared.exited.store(true, Ordering::Release);
             return;
         }
         let Ok(stream) = stream else { continue };

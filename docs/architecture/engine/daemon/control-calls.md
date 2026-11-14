@@ -96,11 +96,11 @@ differs. `Exported`, `ExportLeaving` and `ExportKept` mirror `Ready`,
 
 | Step | NFS route | Source |
 | --- | --- | --- |
-| Attach | Serve the engine mount as one loopback NFSv3 export on a fresh port; the client mounts it with the mount helper; Ready only after the helper reports the mount. The receipt has `abi_major == 0` and `mount_id` = the port | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
+| Attach | Serve the engine mount as one loopback NFSv3 export on a fresh port; the client mounts it with the mount helper; Ready only after the helper reports the mount, and the host's mount table is read once to record whether the mount is listed. The receipt has `abi_major == 0` and `mount_id` = the port | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 | Commit | Flush first (flush helper, or the export volume's own flush: `sync_volume_np(<dir>, SYNC_VOLUME_WAIT)` on macOS, `sync(2)` elsewhere; a failed flush refuses the Commit as `Failed` at `commit:flush`), close the export's descriptors, run the unchanged Commit; after an install of another root, close them again | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs), [`invalidate.rs`](../../../../engine/crates/layerfs-daemon/src/control/invalidate.rs) |
-| Unmount | Helper unmount (busy is reversible), stop the export, revoke, Close | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
-| ForceUnmount | Force helper once, then the same teardown | same |
-| Helper run | One attempt, at most `HELPER_WAIT` 60 s, then killed and reported | [`export_helper.rs`](../../../../engine/crates/layerfs-daemon/src/control/export_helper.rs) |
+| Unmount | Helper unmount (busy is reversible), stop the export, revoke, Close. A failed or timed-out helper is settled by the mount table: a mount listed at Attach and gone now completes teardown, while a still-listed one or an unreadable table keeps `Retained(Detach)` | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
+| ForceUnmount | Force helper once, then the same teardown; also finishes an export kept at `Detach` whose client mount stayed | same |
+| Helper run | One attempt, at most `HELPER_WAIT` 60 s, then killed and reported; a child still unreaped past `REAP_WAIT` 5 s enters the retained queue and is polled by its one background reaper | [`export_helper.rs`](../../../../engine/crates/layerfs-daemon/src/control/export_helper.rs), [`process/retained.rs`](../../../../engine/crates/layerfs-bridge/src/process/retained.rs) |
 
 ## Unmount
 
@@ -163,7 +163,8 @@ each step is made once.
 ```text
 under the registry lock (a refusal changes nothing):
   1 ExportKept / Retained -> Retained   (a normal unmount stalled at
-                                         Join is admitted instead)
+                                         Join, or a forceable export
+                                         kept at Detach, is admitted)
   2 Committing | Attaching | Closing   -> Busy     force:admission
   3 no serving connection              -> Invalid / Unknown / Busy
   4 Commit knowledge: Idle -> Absent; LocalFailure + published ->
@@ -198,6 +199,9 @@ reply ForceUnmounted { token, ForcedOutcome { facts, work, cleanup } }
 | --- | --- |
 | The abort write uses the connection's own control, bound from the daemon's `fusectl` tree at Attach; without it Force is refused before any effect | [`force.rs`](../../../../engine/crates/layerfs-daemon/src/control/force.rs), [`application/filesystem.rs`](../../../../engine/crates/layerfs-daemon/src/application/filesystem.rs) |
 | A normal unmount stalled at `Join` with its abort unused is forced from its retained session; its plain detach counts as the one detach | [`force.rs`](../../../../engine/crates/layerfs-daemon/src/control/force.rs), [`serving.rs`](../../../../engine/crates/layerfs-daemon/src/control/serving.rs) |
+| An export kept at `Detach` whose export and receipt are still held and whose forced facts are unset is forced by the one forced client unmount (`umount -f` on macOS, `umount -f -l` on Linux); a still-listed mount keeps `Retained(Detach)` with forced facts. On Linux that helper detaches lazily, so its failure never counts as a detach even when the table no longer lists the mount | [`force.rs`](../../../../engine/crates/layerfs-daemon/src/control/force.rs), [`export_custody.rs`](../../../../engine/crates/layerfs-daemon/src/control/export_custody.rs) `ExportKept::forceable` |
+| Normal NFS `Unmount` keeps `Retained(Detach)` when Attach never saw the mount listed (`Exported::tracked` false), when the table still lists it or cannot be read (`detached_export`), or when the helper detaches lazily (`-l`/`--lazy` in its own words: the mount leaves the table before the kernel gives its superblock back, so the table proves nothing); the mount point itself is never resolved (`listed` compares the configured path and the name below canonical mount home) | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs), [`export_helper.rs`](../../../../engine/crates/layerfs-daemon/src/control/export_helper.rs) |
+| A helper past `KILL` and `REAP_WAIT` enters the retained queue, whose one background thread reaps and records its exit (shared with the macOS driver's `umount -f`). Its bound is one thread and 64 recorded exits, not time: a child whose exit never comes keeps that thread polling for as long as the custody lasts, because a deadline would drop the only handle that can reap it. For tests only, `ExportServingConfig` adds `mount_table`, `reap_wait` and `helper_wait`, and `ExportServing::reaped_helpers` reads observed exits | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs), [`process/retained.rs`](../../../../engine/crates/layerfs-bridge/src/process/retained.rs) |
 | `relinquish_unknown` permits local disposal of stopped unknown Commit custody; the receipt keeps it `Unknown` | [`force.rs`](../../../../engine/crates/layerfs-daemon/src/control/force.rs) |
 | On the NFS route the force helper is the abort | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 | Outside Linux without NFS the guard runs and the call is refused (`kernel serving requires Linux`) | [`force.rs`](../../../../engine/crates/layerfs-daemon/src/control/force.rs) |

@@ -183,14 +183,25 @@ reaches the Workspace or a Commit; everything is dropped with the export.
 ## Mount (`mount.rs`, daemon `export.rs`)
 
 ```text
- Attach:   bind 127.0.0.1:0 -> Server::start -> port P
-           helper mount_nfs -o vers=3,tcp,port=P,mountport=P,... <dir>
-           client MOUNT MNT "/" -> root handle, AUTH_UNIX
- Commit:   flush helper (else the export volume's own flush: sync_volume_np
-           on macOS, sync(2) elsewhere), close_files, Commit
- Unmount:  unmount helper (busy is reversible), Server::stop,
-           revoke the engine mount, Close
+ Attach:       bind 127.0.0.1:0 -> Server::start -> port P
+               helper mount_nfs -o vers=3,tcp,port=P,mountport=P,... <dir>
+               client MOUNT MNT "/" -> root handle, AUTH_UNIX
+               read host mount table once -> tracked: is <dir> listed?
+ Commit:       flush helper (else the export volume's own flush: sync_volume_np
+               on macOS, sync(2) elsewhere), close_files, Commit
+ Unmount:      unmount helper (busy is reversible); failure or deadline
+               settled by the mount table; Server::stop, revoke, Close
+ ForceUnmount: one forced client unmount (umount -f, or umount -f -l on
+               Linux), then the same teardown
 ```
+
+| Mount-table and helper rule | Source |
+| --- | --- |
+| Every step above is one attempt; the mount table is the only witness for a failed or timed-out unmount helper. | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
+| Attach reads the host's mount table once after the mount helper returns: one `/sbin/mount` run (macOS) or `/proc/self/mountinfo` read (Linux) per Attach; unmount timing is unaffected. | `Exported::tracked` in [`export_custody.rs`](../../../../engine/crates/layerfs-daemon/src/control/export_custody.rs) |
+| The mount point itself is never resolved (a lookup through a wedged mount can block or fail); `listed` compares the configured path and the same name below the canonical mount home. | [`export_helper.rs`](../../../../engine/crates/layerfs-daemon/src/control/export_helper.rs) `listed` |
+| A failed or timed-out unmount helper completes teardown only when Attach saw it listed and the table no longer does; a still-listed mount, an unreadable table, or a helper that detaches lazily (`-l`) keeps `Retained(Detach)` and the export serving. | `detached_export` in [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
+| A helper past `KILL` and `REAP_WAIT` is reaped in the background by the shared retained queue, with nothing waiting for it or signalling twice. | [`process/retained.rs`](../../../../engine/crates/layerfs-bridge/src/process/retained.rs) |
 
 | MOUNT procedure | Answer |
 | --- | --- |
@@ -204,6 +215,8 @@ Client options are the daemon's `Mounter::host`. macOS:
 `vers=3,proto=tcp,port={port},mountport={port},mountproto=tcp,nolock,actimeo=60`
 ([`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs)).
 An NFS ready receipt has `abi_major == 0` and its `mount_id` is the port.
+Forced teardown on this route is in
+[Daemon: Control calls](../daemon/control-calls.md#force).
 
 ## Application SQLite databases on the NFS route
 

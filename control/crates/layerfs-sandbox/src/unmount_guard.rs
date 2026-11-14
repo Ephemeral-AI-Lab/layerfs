@@ -3,6 +3,21 @@
 //! admission and shared-record cleanup, never during the daemon's helper wait.
 //! Mount paths are unique within one daemon lifetime; Sandbox removal clears
 //! the terminal records before that directory can be reused.
+//!
+//! The record is JSON in the version its `v` field names.
+//!
+//! - Version 0 (no `v`) has `state`, `startedMs`, `path`, `code`, `message`
+//!   and `detail`, and nothing else. It predates any forced attempt.
+//! - Version 1 ([`VERSION`]) adds `forced`, whether this attempt was started
+//!   with `force`, and — in a published result — `stage`, the daemon's own
+//!   retained teardown stage (`Null` when the failure never got a daemon
+//!   answer). Both are extra fields: a version-0 reader reads the version-0
+//!   fields unchanged and ignores them, which is what
+//!   `tests/unmount_record.rs` checks.
+//! - A record whose `v` is above [`VERSION`] is answered as it stands and is
+//!   never forceable: the only step that could destroy unknown custody is the
+//!   one this version does not take. Every reader keeps answering version-0
+//!   records exactly as before.
 use crate::files as discovery;
 use crate::registry::SandboxState;
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
@@ -13,6 +28,9 @@ use std::{
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
+
+/// The record version this build writes and the newest one it forces.
+const VERSION: i64 = 1;
 
 fn millis() -> i64 {
     SystemTime::now()
@@ -51,6 +69,10 @@ pub struct Attempt {
     _lease: Lease,
     path: PathBuf,
     started: i64,
+    forced: bool,
+    /// The record this attempt replaced, put back when the attempt has no
+    /// effect of its own (see [`restore`]).
+    prior: Option<SdkValue>,
 }
 fn result(value: &SdkValue) -> Outcome {
     if value.get_text("state") == Some("Unmounted") {
@@ -123,12 +145,20 @@ fn inspect(path: &std::path::Path) -> Result<Option<SdkValue>, SdkRefusal> {
         Some(_) => {
             let error = progress(&value, false);
             Ok(Some(SdkValue::map([
+                ("v", value.get("v").cloned().unwrap_or_default()),
                 ("state", SdkValue::text("Retained")),
                 (
                     "startedMs",
                     value.get("startedMs").cloned().unwrap_or_default(),
                 ),
                 ("path", value.get("path").cloned().unwrap_or_default()),
+                (
+                    "forced",
+                    value
+                        .get("forced")
+                        .cloned()
+                        .unwrap_or(SdkValue::Bool(false)),
+                ),
                 ("code", SdkValue::text(error.code)),
                 ("message", SdkValue::text(error.message)),
                 ("detail", error.detail),
@@ -183,7 +213,7 @@ pub fn check_in(directory: &std::path::Path, path: &str) -> Result<(), SdkRefusa
     Ok(())
 }
 /// [`find`] by scanning Sandbox folder `directory`'s unmount records.
-fn find_in(directory: &std::path::Path, path: &str) -> Result<Option<SdkValue>, SdkRefusal> {
+pub fn find_in(directory: &std::path::Path, path: &str) -> Result<Option<SdkValue>, SdkRefusal> {
     for entry in unmounts_in(directory)? {
         let entry = entry.map_err(failed)?;
         if entry.path().extension().is_some_and(|ext| ext == "unmount") {
@@ -220,37 +250,77 @@ pub fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal> {
     }
     Ok(recoverable)
 }
+pub fn forceable(value: &SdkValue) -> bool {
+    // Only a record the daemon itself answered `Retained` at `Detach` may be
+    // replaced by `force`: it holds an export whose client unmount was not
+    // established, and the one forced client unmount is what finishes it. The
+    // daemon's own guard remains the real gate, and a refusal answers with
+    // the record it holds. A record that is still `Unmounting` (its caller
+    // ended without publishing), one the machine wrote after a send or
+    // connect failure or a refusal before any effect (code `Failed` without
+    // the daemon's `stage`), one kept at another stage, one already forced,
+    // and a record written before this field existed keep their answer.
+    value.get_text("state") == Some("Retained")
+        && value.get_int("v") == Some(VERSION)
+        && value.get("forced") == Some(&SdkValue::Bool(false))
+        && value.get_text("code") == Some("Failed")
+        && value.get_text("stage") == Some(FORCEABLE_STAGE)
+}
+/// The daemon's retained stage one forced client unmount can still finish:
+/// an NFS export kept because its client unmount was not established
+/// (`ExportKept::forceable` in the daemon). Any other stage keeps its answer.
+const FORCEABLE_STAGE: &str = "Detach";
+
 /// Called under the Sandbox guard, after all before-effect checks.
 pub fn begin(
     state: &SandboxState,
     token: WorkspaceToken,
     path: &str,
+    forced: bool,
 ) -> Result<Attempt, SdkRefusal> {
-    let path_record = record(state, token);
+    begin_at(record(state, token), path, forced)
+}
+/// [`begin`] at the record file `path_record` (a Workspace's
+/// `workspace/<id>.unmount`), holding its lease and replacing the record it
+/// found with this attempt's `Unmounting` record.
+pub fn begin_at(path_record: PathBuf, path: &str, forced: bool) -> Result<Attempt, SdkRefusal> {
     let file = lease(&path_record.with_extension("unmount-lock"), true)?
         .ok_or_else(|| refused("Busy", "Workspace is Unmounting"))?;
     let attempt = Attempt {
         _lease: file,
+        prior: observed(&path_record)?,
         path: path_record,
         started: millis(),
+        forced,
     };
     layerfs_store::project::discovery::save(
         &attempt.path,
         SdkValue::map([
+            ("v", SdkValue::Int(VERSION)),
             ("state", SdkValue::text("Unmounting")),
             ("startedMs", SdkValue::Int(attempt.started)),
             ("path", SdkValue::text(path)),
+            ("forced", SdkValue::Bool(attempt.forced)),
         ]),
     )?;
     Ok(attempt)
+}
+/// Undo this attempt's own record: what it replaced comes back, or the file
+/// goes when there was none. A forced attempt admitted over an earlier record
+/// that answers `Busy` or `Dirty` changed nothing, so the earlier record —
+/// possibly one that says "do not resend" — must not be lost with it. A call
+/// that sent nothing is the same case.
+fn restore(attempt: &Attempt) -> Result<(), SdkRefusal> {
+    match &attempt.prior {
+        Some(prior) => layerfs_store::project::discovery::save(&attempt.path, prior.clone()),
+        None => std::fs::remove_file(&attempt.path).map_err(failed),
+    }
 }
 /// Publish while the Workspace lease prevents another terminal request.
 /// No Sandbox guard is needed to replace this attempt's own result file.
 pub fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result<(), SdkRefusal> {
     match outcome {
-        Err(error) if matches!(error.code.as_str(), "Busy" | "Dirty") => {
-            std::fs::remove_file(&attempt.path).map_err(failed)?;
-        }
+        Err(error) if matches!(error.code.as_str(), "Busy" | "Dirty") => restore(attempt)?,
         _ => {
             let (state, code, message, detail) = match outcome {
                 Ok(_) => ("Unmounted", "", "", SdkValue::Null),
@@ -261,12 +331,21 @@ pub fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result<(), Sd
                     error.detail.clone(),
                 ),
             };
+            // The daemon's own retained stage, when it answered one; `Null`
+            // for a failure that never got that answer (see [`forceable`]).
+            let stage = match outcome {
+                Ok(_) => SdkValue::Null,
+                Err(error) => error.detail.get("stage").cloned().unwrap_or(SdkValue::Null),
+            };
             layerfs_store::project::discovery::save(
                 &attempt.path,
                 SdkValue::map([
+                    ("v", SdkValue::Int(VERSION)),
                     ("state", SdkValue::text(state)),
                     ("startedMs", SdkValue::Int(attempt.started)),
                     ("path", SdkValue::text(path)),
+                    ("forced", SdkValue::Bool(attempt.forced)),
+                    ("stage", stage),
                     ("code", SdkValue::text(code)),
                     ("message", SdkValue::text(message)),
                     ("detail", detail),
@@ -277,7 +356,7 @@ pub fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result<(), Sd
     Ok(())
 }
 pub fn cancel(attempt: &Attempt) -> Result<(), SdkRefusal> {
-    std::fs::remove_file(&attempt.path).map_err(failed)
+    restore(attempt)
 }
 pub fn cleanup_failure(mut outcome: Outcome, error: SdkRefusal) -> Outcome {
     // Do not replace a known daemon success with a cleanup Busy/Failed.
