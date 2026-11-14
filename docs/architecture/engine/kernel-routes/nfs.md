@@ -23,7 +23,7 @@ The daemon starts it and has the host's own NFS client mount it.
  | Server                                                         |
  |  thread layerfs-nfs-accept                                     |
  |  thread layerfs-nfs-connection (one per TCP connection)        |
- |    read_record -> answer(call) -> write_record -> Tickets::replied
+ |    Records::read -> answer(call) -> write_record -> Tickets::replied
  |  Kernel (synthetic kernel, shared by all connections)          |
  |    lookups, parents, files, directories, silly names,          |
  |    verifiers, names, refreshing;  Companions (AppleDouble)     |
@@ -64,6 +64,17 @@ read-only export answers each changing procedure `NFS3ERR_ROFS`
 
 `Reader` bounds-checks every read and declared length; `Writer` pads opaque
 data to four bytes. A reply is written as one last fragment.
+
+A call is framed from the bytes one `read` delivered: the connection keeps them
+in [`rpc::Records`](../../../../engine/crates/layerfs-nfs/src/rpc.rs), so a call
+whose fragments arrived together costs one socket read. A record larger than
+the 8 KiB read-ahead (a WRITE of a transfer window) is read into a buffer of its
+own, so its bytes are not copied twice. Those counts are the case's own and are
+reproducible on any platform
+([`tests/protocol.rs`](../../../../engine/crates/layerfs-nfs/tests/protocol.rs)):
+one read per call that arrived in one piece, two for a record past the
+read-ahead. A blocking read a signal interrupts is retried, as `read_exact`
+does, and the bytes already received stay buffered.
 
 ## Handles (`handle.rs`)
 
