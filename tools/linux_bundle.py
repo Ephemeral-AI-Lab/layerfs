@@ -14,8 +14,10 @@ the build image the daemon was built in, so the ABIs match; `runtime/bin/` holds
 that image's glibc `getent` and Debian's static `bash` and `busybox`
 (`bash-static`, `busybox-static`, from the build image's own Debian release).
 `seal` refuses when `ldd` lists a library it did not copy. `bundle.json` names it
-in `sandbox_runtime` (its hash, loader and glibc version), and `licenses/` holds
-the Debian copyright files of every package it came from.
+in `sandbox_runtime` (its hash, loader, glibc version and the Debian source
+packages it was built from), and `licenses/` holds the Debian copyright files of
+every package it came from and `SOURCES`, the written source offer: each runtime
+file's package, source package, version and snapshot.debian.org page.
 
 The namespaces backend reads a docker-archive with uncompressed layers, named by
 its config digest (#527). Docker with the containerd store saves gzip layers, so
@@ -31,10 +33,14 @@ most), so no build runs long:
     python3 tools/linux_bundle.py helper --resources R
     python3 tools/linux_bundle.py runtime --resources R
     python3 tools/linux_bundle.py seal --resources R
+    python3 tools/linux_bundle.py sources --resources R
 
 `runtime` is the one step with network: it downloads the two static packages with
 the build image's apt (over https, signatures checked by apt) into the
-registration's state, once; it does not depend on the source.
+registration's state, once; it does not depend on the source. `sources` (network
+too, after `seal`) downloads the exact Debian source packages `SOURCES` names into
+`<cache>/layerfs/bundle/<version>/sources/`, to publish beside a release; it resumes
+where a time limit ended it.
 
 Each build step records the source inputs it built. `seal` refuses unless all three
 built the inputs the tree has now; it exports the binaries, saves the image, writes
@@ -55,8 +61,10 @@ import sys
 import tarfile
 import time
 import tomllib
+import urllib.request
 import uuid
 from pathlib import Path
+from urllib.parse import quote
 
 from cleanup_state import Refused
 from worktree_resources import (
@@ -90,6 +98,23 @@ RUNTIME = "runtime"
 LOADERS = {"aarch64": "ld-linux-aarch64.so.1", "x86_64": "ld-linux-x86-64.so.2"}
 STATIC = {"bash": ("bash-static", "bin/bash-static"), "busybox": ("busybox-static", "bin/busybox")}
 LICENSES = "licenses"
+# the runtime layer's written source offer (GPL-2.0 §3(b), GPL-3.0 §6(b), LGPL-2.1 §6(c)):
+# `licenses/SOURCES` names every Debian source package and version it was built from,
+# and `sources` downloads exactly those, to publish beside the bundle
+SOURCES = "SOURCES"
+SNAPSHOT = "https://snapshot.debian.org"
+OFFER = """The Sandbox runtime layer (runtime/) of this LayerFS bundle holds unmodified
+binaries from Debian packages: each file below names its Debian package and
+the Debian source package and version it was built from. Their licences are in this
+folder (<package>.copyright); several are GPL or LGPL.
+
+Written offer. For at least three years after this bundle was published, the LayerFS
+maintainers will give anyone who asks a complete machine-readable copy of the
+corresponding source of these binaries, the exact Debian source packages listed below,
+for no more than the cost of physically performing the distribution. Ask through
+https://github.com/Ephemeral-AI-Lab/layerfs/issues. The same sources are published
+beside LayerFS releases, and Debian keeps every version at {snapshot}.
+"""
 LIMIT = 300
 
 
@@ -187,8 +212,8 @@ mkdir -p /out/debs /out/x
 cd /out/debs
 apt-get -o Acquire::Retries=3 -qq download "$@"
 for deb in *.deb; do
-  printf '%s %s %s\n' "$(dpkg-deb -f "$deb" Package)" "$(dpkg-deb -f "$deb" Version)" \
-    "$(sha256sum "$deb" | cut -d' ' -f1)"
+  printf '%s\t%s\t%s\t%s\n' "$(dpkg-deb -f "$deb" Package)" "$(dpkg-deb -f "$deb" Version)" \
+    "$(sha256sum "$deb" | cut -d' ' -f1)" "$(dpkg-deb -f "$deb" Source)"
   dpkg-deb -x "$deb" /out/x
 done > /out/packages
 chown -R "$uid:$gid" /out
@@ -210,8 +235,9 @@ def fetch_runtime(record, timeout):
         execute(fetch, record["worktree"], timeout=timeout, log=receipt / "output.log")
         versions = {}
         for line in (stage / "packages").read_text().splitlines():
-            package, version, sha = line.split()
-            versions[package] = {"version": version, "deb": sha}
+            package, version, sha, field = (line.split("\t") + [""])[:4]
+            source, source_version = source_of(field, package, version)
+            versions[package] = {"version": version, "deb": sha, "source": source, "source_version": source_version}
         meta = {"image": record["images"]["build"], "packages": versions, "files": {}, "at": timestamp()}
         for name, (package, path) in STATIC.items():
             if package not in versions:
@@ -239,6 +265,37 @@ def fetch_runtime(record, timeout):
     print(f"runtime: {named} ({out})")
 
 
+def source_of(field, package, version):
+    """A binary package's Debian source package and version from its `Source`
+    field: empty means the package's own name and version, `name (version)` names
+    the source version (a binNMU's binary version has a `+bN` the source lacks)."""
+    field = field.strip()
+    if not field:
+        return package, version
+    match = re.fullmatch(r"(\S+)(?:\s+\((\S+)\))?", field)
+    if not match:
+        raise Refused(f"{package}'s Source field {field!r} is not `name` or `name (version)`")
+    return match.group(1), match.group(2) or version
+
+
+def snapshot_url(source, version):
+    """The snapshot.debian.org page of one source package version."""
+    return f"{SNAPSHOT}/package/{quote(source, safe='')}/{quote(version, safe='')}/"
+
+
+def sources_text(by_source):
+    """`licenses/SOURCES`: the offer, then each source package, its version, the
+    binary packages and runtime files built from it, and its snapshot page."""
+    lines = [OFFER.format(snapshot=SNAPSHOT)]
+    for (source, version), binaries in sorted(by_source.items()):
+        lines.append(f"{source} {version}")
+        lines.append(f"  {snapshot_url(source, version)}")
+        for package, files in sorted(binaries.items()):
+            lines.append(f"  {package}: " + ", ".join(sorted(files)))
+        lines.append("")
+    return "\n".join(lines)
+
+
 def interpreter(path):
     """An ELF executable's `PT_INTERP` (its loader) as text, `False` for a static
     one; refuses a file that is not a 64-bit little-endian ELF."""
@@ -261,7 +318,8 @@ def interpreter(path):
 # Runs in the build image, offline, beside the binaries' export: copies the loader and
 # every library `ldd` lists for the daemon and `getent` (by the name `ldd` gives, the
 # file it resolves to), `getent` itself and the copyright files of the packages that
-# own them, and leaves `ldd`'s own output for `runtime_layer` to check.
+# own them, and leaves `ldd`'s own output, each file's package (`.files`) and each
+# package's source package and version (`.sources`) for `runtime_layer`.
 COLLECT = r"""set -eu
 p=$1; u=$2; g=$3
 lib=/export/runtime/lib; bin=/export/runtime/bin
@@ -270,15 +328,18 @@ mkdir -p "$lib" "$bin" /export/licenses
 awk '$2 == "=>" && $3 ~ /^\// { print $1, $3 } $1 ~ /^\// { n = split($1, a, "/"); print a[n], $1 }' /export/.ldd |
   sort -u | while read -r name path; do
     real=$(readlink -f "$path"); cp "$real" "$lib/$name"
-    { dpkg -S "$path" 2>/dev/null || dpkg -S "$real" 2>/dev/null || true; } | cut -d: -f1 >> /export/.owners
+    owner=$({ dpkg -S "$path" 2>/dev/null || dpkg -S "$real" 2>/dev/null || true; } | head -n 1 | cut -d: -f1)
+    echo "$owner" >> /export/.owners; printf 'lib/%s\t%s\n' "$name" "$owner" >> /export/.files
   done
 cp /usr/bin/getent "$bin/getent"
-dpkg -S "$(readlink -f /usr/bin/getent)" | cut -d: -f1 >> /export/.owners
+owner=$(dpkg -S "$(readlink -f /usr/bin/getent)" | head -n 1 | cut -d: -f1)
+echo "$owner" >> /export/.owners; printf 'bin/getent\t%s\n' "$owner" >> /export/.files
 for pkg in $(sort -u /export/.owners); do
   cp "/usr/share/doc/$pkg/copyright" "/export/licenses/$pkg.copyright"
+  dpkg-query -W -f='${Package}\t${Version}\t${source:Package}\t${source:Version}\n' "$pkg" >> /export/.sources
 done
 getconf GNU_LIBC_VERSION | cut -d' ' -f2 > /export/.glibc
-chown -R "$u:$g" /export/runtime /export/licenses /export/.ldd /export/.glibc /export/.owners
+chown -R "$u:$g" /export/runtime /export/licenses /export/.ldd /export/.glibc /export/.owners /export/.files /export/.sources
 """
 
 
@@ -324,7 +385,35 @@ def runtime_layer(stage, arch_name, fetched):
     for path in (stage / LICENSES).iterdir():
         path.chmod(0o644)
     glibc = (stage / ".glibc").read_text().strip()
-    for scratch in (".ldd", ".glibc", ".owners"):
+    # every runtime file's binary package, and every package's source and version
+    owners = {}
+    for line in (stage / ".files").read_text().splitlines():
+        path, package = line.split("\t")
+        owners[path] = package
+    built = {}
+    for line in (stage / ".sources").read_text().splitlines():
+        package, version, source, source_version = line.split("\t")
+        built[package] = (source or package, source_version or version)
+    for name, (package, _) in STATIC.items():
+        value = fetched_record["packages"].get(package, {})
+        if "source" not in value:
+            raise Refused(
+                "the fetched runtime layer predates source records; fetch it again: python3 tools/linux_bundle.py runtime"
+            )
+        owners[f"bin/{name}"] = package
+        built[package] = (value["source"], value["source_version"])
+    by_source = {}
+    for path in sorted(p.relative_to(stage / RUNTIME).as_posix() for p in (stage / RUNTIME).rglob("*") if p.is_file()):
+        package = owners.get(path)
+        if not package or package not in built:
+            raise Refused(f"runtime/{path} has no Debian package and source on record")
+        by_source.setdefault(built[package], {}).setdefault(package, []).append(path)
+    versions = {}
+    for source, version in by_source:
+        if versions.setdefault(source, version) != version:
+            raise Refused(f"the runtime layer holds two versions of the source package {source}")
+    (stage / LICENSES / SOURCES).write_text(sources_text(by_source))
+    for scratch in (".ldd", ".glibc", ".owners", ".files", ".sources"):
         (stage / scratch).unlink(missing_ok=True)
     files = {
         p.relative_to(stage).as_posix(): digest(p)
@@ -338,6 +427,7 @@ def runtime_layer(stage, arch_name, fetched):
         "loader": f"lib/{loader}",
         "glibc": glibc,
         "packages": {p: v["version"] for p, v in fetched_record["packages"].items()},
+        "sources": dict(sorted(versions.items())),
     }
     return sandbox_runtime, files
 
@@ -425,6 +515,85 @@ def seal(record, profile, image, dest, timeout):
     return final
 
 
+def fetch_sources(record, dest, timeout):
+    """Downloads the exact Debian source packages a sealed bundle's runtime layer
+    names (`sandbox_runtime.sources`) from snapshot.debian.org into
+    `<dest>/<version>/sources/<source>_<version>/`, each file checked against the
+    sha1 snapshot names it by, and lists them in `sources/sources.json`. A file
+    already there and intact is kept, so a step ended by its time limit resumes."""
+    parent = Path(dest) / version(record["worktree"])
+    sealed = parent / ("linux-" + arch(record["images"]["build"])) / "bundle.json"
+    if not sealed.is_file():
+        raise Refused(f"seal the bundle first: no {sealed}")
+    wanted = json.loads(sealed.read_text()).get("sandbox_runtime", {}).get("sources")
+    if not wanted:
+        raise Refused("the sealed bundle names no runtime sources; seal it again with this tool")
+    out = parent / "sources"
+    out.mkdir(parents=True, exist_ok=True)
+    listing = out / "sources.json"
+    known = json.loads(listing.read_text()) if listing.is_file() else {}
+    deadline = time.monotonic() + timeout
+    for source, source_version in sorted(wanted.items()):
+        if known.get(source, {}).get("version") == source_version:
+            continue
+        answer = snapshot_json(
+            f"{SNAPSHOT}/mr/package/{quote(source, safe='')}/{quote(source_version, safe='')}/srcfiles?fileinfo=1"
+        )
+        # Debian's own file names leave the epoch out
+        folder = out / f"{source}_{source_version.split(':', 1)[-1]}"
+        folder.mkdir(exist_ok=True)
+        files = {}
+        for item in answer["result"]:
+            sha1 = item["hash"]
+            name = answer["fileinfo"][sha1][0]["name"]
+            if "/" in name or name.startswith("."):
+                raise Refused(f"snapshot.debian.org names a file {name!r}")
+            target = folder / name
+            if not (target.is_file() and file_sha1(target) == sha1):
+                snapshot_file(f"{SNAPSHOT}/file/{sha1}", target, sha1, deadline)
+            files[name] = digest(target)
+        known[source] = {"version": source_version, "page": snapshot_url(source, source_version), "files": files}
+        write(listing, known)
+        print(f"sources: {source} {source_version} ({len(files)} files)")
+    print(f"sources: {len(wanted)} source packages in {out}")
+    return out
+
+
+def snapshot_json(url):
+    request = urllib.request.Request(url, headers={"User-Agent": "layerfs-bundle"})
+    with urllib.request.urlopen(request, timeout=60) as answer:
+        return json.load(answer)
+
+
+def snapshot_file(url, target, sha1, deadline):
+    """Downloads one file to `target` through a partial file, refusing at the
+    step's deadline (the next run resumes with the files already kept) or when
+    its sha1 is not the one snapshot names it by."""
+    partial = target.with_name("." + target.name + ".partial")
+    check = hashlib.sha1()
+    request = urllib.request.Request(url, headers={"User-Agent": "layerfs-bundle"})
+    try:
+        with urllib.request.urlopen(request, timeout=60) as answer, partial.open("wb") as sink:
+            while block := answer.read(1 << 20):
+                if time.monotonic() > deadline:
+                    raise Refused("the step's time limit ended a download; run sources again to continue")
+                check.update(block)
+                sink.write(block)
+        if check.hexdigest() != sha1:
+            raise Refused(f"{target.name} from snapshot.debian.org does not hash to {sha1}")
+        partial.rename(target)
+    finally:
+        partial.unlink(missing_ok=True)
+
+
+def file_sha1(path):
+    check = hashlib.sha1()
+    with Path(path).open("rb") as source:
+        while block := source.read(1 << 20):
+            check.update(block)
+    return check.hexdigest()
+
+
 def docker_archive(saved, out, scratch):
     """Rewrites a `docker save` archive holding one image as a docker-archive
     whose layers are uncompressed (`<n>/layer.tar`) and whose config is
@@ -474,7 +643,7 @@ def docker_archive(saved, out, scratch):
 
 def main(argv=None):
     cli = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    cli.add_argument("step", choices=[*STEPS, RUNTIME, "seal"])
+    cli.add_argument("step", choices=[*STEPS, RUNTIME, "seal", "sources"])
     cli.add_argument("--resources", required=True, help="the worktree's resources.json from tools/worktree.py")
     cli.add_argument("--profile", choices=["debug", "release"], default="debug")
     cli.add_argument("--image", help="the Sandbox image to save (default: the registration's sandbox image)")
@@ -489,6 +658,8 @@ def main(argv=None):
             seal(record, args.profile, args.image, args.dest or cache_root(), args.timeout)
         elif args.step == RUNTIME:
             fetch_runtime(record, args.timeout)
+        elif args.step == "sources":
+            fetch_sources(record, args.dest or cache_root(), args.timeout)
         else:
             build(record, args.step, args.profile, args.timeout)
     except Refused as error:
