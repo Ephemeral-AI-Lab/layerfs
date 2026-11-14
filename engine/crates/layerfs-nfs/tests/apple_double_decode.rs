@@ -156,4 +156,3 @@ fn the_clients_write_sequence_is_served_byte_for_byte() {
     assert_eq!(outstanding, 0);
     fs::remove_dir_all(base).unwrap();
 }
-
