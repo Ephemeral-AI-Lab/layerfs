@@ -80,7 +80,7 @@ test("a Store, an Init with progress, files, Branches and a folder scope", async
   rmSync(folder, { recursive: true, force: true });
 });
 
-test("the call log names the client node and takes log_tag with any call (#659)", async () => {
+test("the call log names the client node and takes log_tag with any call (#659)", { skip: process.platform === "win32" && "the call log is not ported to Windows yet (#659)" }, async () => {
   const home = temp("logs");
   const lfs = client({ home });
   await lfs.store.create("shop");
