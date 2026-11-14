@@ -38,12 +38,11 @@
 | Q5 | Reader behavior when PG swaps tables | **Superseded by C8/R2**: readers go through the `(catalog_id, incarnation)` session check → `StaleStore`, and read the new generation after reconnecting; table names are not versioned | Small: session/transaction entry check (shared with SQLite) | Cross-generation reads (no crash, but wrong data) |
 | Q6 | Does `store.compact` promise "drop dead packs" or "reorganize data" | **One call, `store.compact(name)`, choosing its own path (decided 2026-11-13, layerfs-project#42 item 2, per #155):** nothing collectable → no copy; wholly dead packs below **10% of Store bytes** → the light path (locator rows only, live Store); otherwise the rebuild. Wholly dead packs are dropped by not copying them, and partial-pack repacking is **reported, not performed**, in this release | Medium: one entry point, one receipt with a `path` field and the three byte definitions | Level 1 alone leaves dead objects sharing a pack with a live one; promising "all discarded bytes are reclaimed" without repacking over-promises, so the receipt must say what was kept |
 
-> **Q6 is answered together with §5.1** of `03-decision-record.md`. Neither level
-> deletes rows in place: level 1 is the replacement copy without wholly dead packs,
-> which is what R1-E's "copy retained rows" already does on PostgreSQL, and level 2
-> adds repacking to that copy. Both levels therefore exist on PostgreSQL under
-> §5.1 reading (a); reading (b) would add a separate in-place entry point with its
-> own report, and the docs must then say which level it is.
+> **Q6 is answered together with §5.1** of `03-decision-record.md`, and revised on
+> 2026-11-13: there is **one call**, and it picks among three paths — no copy, the
+> light path (locator rows only), or the rebuild. Nothing repacks, so the earlier
+> "level 1 / level 2" split no longer exists, and §5.1 reading (b) (a separate
+> in-place entry point) stays unadopted.
 
 > Sign-off: adopt the Q1/Q2/Q4/Q5 recommendations directly (small cost, controlled risk); Q3 is explicitly out of this release; Q6 needs the owner to sign off on the "commitment level", because it decides the documentation wording and capacity planning.
 
@@ -143,7 +142,7 @@ For per-object/per-row deletion (PostgreSQL, future online GC), the delete inten
 | `backend_reusable` | `freelist_count × page_size` of the old file (pages SQLite could reuse without a copy; compact does not create them) | `n_dead_tup` estimate + reusable pages (an in-place path only; 0 under replacement, see `03-decision-record.md` §5.1) |
 | `physical_shrink` | Old file's `page_count × page_size` minus the installed file's. It comes from packs not copied: report `dropped_packs` and their `pack.length` / `pack_unit.length` sum separately, and with `reorg` the bytes freed by repacking | Difference of `pg_relation_size` / `pg_total_relation_size` between the old and new schema, with `dropped_packs` reported the same way |
 
-- `logical_discarded` and `physical_shrink` differ by design: a collectable object in a retained pack is discarded but not freed until `reorg`.
+- `logical_discarded` and `physical_shrink` differ by design: a collectable object in a retained **pack is not freed**, because repacking is reported rather than performed (it is the receipt's `keptWaste`).
 
 - Available sources: a `commit` row already carries `logical`/`new_canonical`/`new_stored`/`new_metadata`/`created_ms`.
 - Must also report: peak temporary space, elapsed time, residue (enumerable).
