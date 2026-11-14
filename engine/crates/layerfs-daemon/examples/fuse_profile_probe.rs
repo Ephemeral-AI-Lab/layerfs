@@ -37,8 +37,8 @@ mod probe {
         LayerStackId,
     };
     use layerfs_persistence::{
-        PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile,
-        SqlWork,
+        PersistenceConfig, SqlWork, SqliteAcquisitionSchema, SqliteHandles,
+        SqlitePersistenceProfile,
     };
     use layerfs_project::{init, InitRequest};
     use layerfs_storage::{Storage, StoragePolicy};
@@ -287,7 +287,12 @@ mod probe {
             nix::sys::stat::major(dev),
             nix::sys::stat::minor(dev)
         );
-        let read = || fs::read_to_string(&path).unwrap_or_default().trim().to_owned();
+        let read = || {
+            fs::read_to_string(&path)
+                .unwrap_or_default()
+                .trim()
+                .to_owned()
+        };
         let before = read();
         if window > 128 * 1024 {
             fs::write(&path, format!("{}", window / 1024)).unwrap();

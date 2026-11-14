@@ -75,8 +75,10 @@ impl ReadReply {
         };
         if let ReadDataInput::File { offset, length } = input {
             if length as usize > layerfs_overlay::READ_WINDOW {
-                return windows(services, fence, mount, request, protected, handle, offset, length, reply)
-                    .await;
+                return windows(
+                    services, fence, mount, request, protected, handle, offset, length, reply,
+                )
+                .await;
             }
         }
         // Nothing is held in the engine after the visit: the reply ends it.

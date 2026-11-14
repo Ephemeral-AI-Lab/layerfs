@@ -22,12 +22,15 @@ pub struct ObjectId([u8; DIGEST_BYTES]);
 impl ObjectId {
     /// Identity of `canonical` under the frozen object domain.
     pub fn for_bytes(canonical: &[u8]) -> Self {
-        layerfs_telemetry::timer::stages::time(layerfs_telemetry::timer::stages::Stage::ObjectHash, || {
-            let mut hasher = blake3::Hasher::new();
-            hasher.update(OBJECT_DOMAIN);
-            hasher.update(canonical);
-            Self(*hasher.finalize().as_bytes())
-        })
+        layerfs_telemetry::timer::stages::time(
+            layerfs_telemetry::timer::stages::Stage::ObjectHash,
+            || {
+                let mut hasher = blake3::Hasher::new();
+                hasher.update(OBJECT_DOMAIN);
+                hasher.update(canonical);
+                Self(*hasher.finalize().as_bytes())
+            },
+        )
     }
 
     /// Starts the identity of canonical bytes that arrive in parts over time.

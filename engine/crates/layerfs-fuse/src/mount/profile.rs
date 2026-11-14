@@ -76,7 +76,9 @@ pub(crate) fn negotiate(config: &mut KernelConfig) -> io::Result<Negotiation> {
             most
         }
     };
-    config.set_max_background(background).map_err(|_| refused(0))?;
+    config
+        .set_max_background(background)
+        .map_err(|_| refused(0))?;
     config
         .set_congestion_threshold(background)
         .map_err(|_| refused(0))?;

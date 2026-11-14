@@ -369,9 +369,10 @@ impl BaseRead {
                     self.end,
                     self.file.logical_len(),
                 ) {
-                    layerfs_telemetry::timer::stages::time(layerfs_telemetry::timer::stages::Stage::ReadAhead, || {
-                        self.client.read_ahead(state, ahead)
-                    })?;
+                    layerfs_telemetry::timer::stages::time(
+                        layerfs_telemetry::timer::stages::Stage::ReadAhead,
+                        || self.client.read_ahead(state, ahead),
+                    )?;
                 }
             }
         }

@@ -510,7 +510,9 @@ impl AuthenticatedObjects for CanonicalClient {
         Some(&self.cache.decoded)
     }
     fn read_canonical_batch(&self, ids: &[ObjectId]) -> ContentResult<Vec<Vec<u8>>> {
-        let _stage = layerfs_telemetry::timer::stages::Timer::start(layerfs_telemetry::timer::stages::Stage::ClientDemand);
+        let _stage = layerfs_telemetry::timer::stages::Timer::start(
+            layerfs_telemetry::timer::stages::Stage::ClientDemand,
+        );
         if ids.len() > DEMAND_IDS {
             return Err(ContentError::BoundedCapacityExceeded {
                 what: "base demand ids",
