@@ -58,7 +58,10 @@ fn spill_serials(dir: &Path) -> Vec<u64> {
         .map(|entries| {
             entries
                 .flatten()
-                .filter_map(|entry| entry.file_name().to_str()?.parse().ok())
+                .filter_map(|entry| {
+                    entry.file_type().ok().filter(std::fs::FileType::is_file)?;
+                    entry.file_name().to_str()?.parse().ok()
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -414,6 +417,64 @@ fn a_decoded_companion_is_edited_under_a_full_resident_budget() {
     c.setattr(&ad.handle, empty, None).unwrap();
     assert_eq!(c.getattr(&ad.handle).unwrap().size, 0);
     assert_eq!(c.read_all(&ad.handle, 4096), Vec::<u8>::new());
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn an_eviction_victim_that_cannot_be_written_out_does_not_fail_the_writer() {
+    let base = temp("victim-error");
+    let tree = base.join("tree");
+    source(&tree);
+    let spill = base.join("spill");
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    rig.companion_spill_dir = Some(spill.clone());
+    // Room for two bodies of 1,000 bytes: a third one makes the two oldest
+    // give their room back.
+    rig.companion_resident_bytes = 2000;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    let mut bodies = Vec::new();
+    for i in 0..2 {
+        c.touch(&root, format!("m{i}").as_bytes(), 0o644).unwrap();
+        let ad = c.touch(&root, format!("._m{i}").as_bytes(), 0o644).unwrap();
+        let body = pattern(60 + i, 1000);
+        c.write(&ad.handle, 0, &body).unwrap();
+        bodies.push((ad.handle, body));
+    }
+    assert_eq!(server.held().companion_bytes, 2000);
+
+    // The oldest body's spill file is a directory with a file in it, so no
+    // file can be renamed onto it: evicting that body fails.
+    let oldest = format!("{SERIALS}");
+    fs::create_dir_all(spill.join(&oldest)).unwrap();
+    fs::write(spill.join(&oldest).join("kept"), b"not a spill file").unwrap();
+
+    // A third body needs room. The victim that cannot be written out is
+    // passed over, the next one gives its room back, and this call's own
+    // write lands: the failure belonged to a companion this writer never
+    // named.
+    c.touch(&root, b"m2", 0o644).unwrap();
+    let third = c.touch(&root, b"._m2", 0o644).unwrap();
+    let body = pattern(62, 1000);
+    c.write(&third.handle, 0, &body).unwrap();
+    assert_eq!(c.read_all(&third.handle, 4096), body);
+    assert_eq!(
+        spill_serials(&spill),
+        vec![SERIALS + 1],
+        "the victim whose file cannot be written stays in memory"
+    );
+    assert_eq!(server.held().companion_bytes, 2000);
+    // Both other bodies still read back byte for byte: the spilled one from
+    // its file, the passed-over one from memory.
+    for (handle, want) in &bodies {
+        assert_eq!(&c.read_all(handle, 4096), want);
+    }
 
     drop(c);
     let released = server.stop();

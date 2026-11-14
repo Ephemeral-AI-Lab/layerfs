@@ -196,7 +196,9 @@ together, are written to `<serial>.<n>.tmp` (`create_new`, dir `0700`, file
 body is committed as spilled under the lock afterwards, so a reader reads the
 body in memory until its file is whole. One writer per companion is the edit
 gate (`Companion::editing`): an edit holds it, and an eviction takes it with
-`try_lock`, skipping a companion someone is editing. A rename is dropped when
+`try_lock`, skipping a companion someone is editing, one another call removed
+and one whose file cannot be written out; only a call that finds no room and
+then cannot write out its own body answers its own error. A rename is dropped when
 the body changed since the snapshot (`used` tick), and a spilled body is opened
 by path per `pread`/`pwrite`/`set_len` and never held open. One edit per
 companion runs under `Companion::editing` ([`edit.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/edit.rs)),

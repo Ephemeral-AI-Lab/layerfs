@@ -275,6 +275,12 @@ impl Kernel {
     /// meanwhile has moved to the newest end of the order, so it is not picked
     /// twice, and the caller then writes out its own body, which needs no
     /// budget at all.
+    ///
+    /// A victim that cannot be written out is no failure of this call: one
+    /// another call removed has nothing left to give back, and one whose file
+    /// cannot be written keeps its body in memory, so the round passes over it
+    /// and looks at the body after it. Only a call that finds no room and then
+    /// cannot write out its own body reports that error, and it is its own.
     fn spill_for(&self, target: u64, need: usize) -> Result<bool, Status> {
         let mut skip = BTreeSet::from([target]);
         loop {
@@ -288,10 +294,11 @@ impl Kernel {
             let Some(victim) = victim else {
                 return Ok(false);
             };
-            if !self.spill_one(victim, None)? {
-                // The body changed under the file written from it, or the
-                // companion's own edit holds it: this call does not pick it
-                // again, and the next round looks at the body after it.
+            if self.spill_one(victim, None) != Ok(true) {
+                // The body changed under the file written from it, the
+                // companion's own edit holds it, or its file could not be
+                // written: this call does not pick it again, and the next
+                // round looks at the body after it.
                 skip.insert(victim);
             }
         }
