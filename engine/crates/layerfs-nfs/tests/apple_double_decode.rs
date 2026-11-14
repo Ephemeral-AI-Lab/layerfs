@@ -1350,3 +1350,89 @@ fn a_linked_companion_name_is_another_name_of_the_same_companion() {
     assert_eq!(outstanding, 0);
     fs::remove_dir_all(base).unwrap();
 }
+
+#[test]
+fn the_slot_bound_holds_when_writes_claim_the_last_slot_together() {
+    const WRITERS: usize = 8;
+    let base = temp("slot-race");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    // One slot, and a body budget smaller than the images below, so each
+    // breaking write spills its body and needs the slot after I/O.
+    rig.companions_held = 1;
+    rig.companion_resident_bytes = 1024;
+    rig.companion_spill_dir = Some(base.join("spill"));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let address = server.local_addr();
+    let mut c = Client::connect(address, UID, GID);
+    let root = c.mnt("/");
+    let mut images = Vec::new();
+    for i in 0..WRITERS {
+        c.touch(&root, format!("m{i}").as_bytes(), 0o644).unwrap();
+        let ad = c.touch(&root, format!("._m{i}").as_bytes(), 0o644).unwrap();
+        // A whole image is 4,096 bytes however small its attributes are: it
+        // costs a few dozen bytes of the budget and is broken by one byte of
+        // its header, which leaves 4,096 bytes that cannot stay resident here.
+        let whole = image(
+            [i as u8 + 7; 32],
+            &[(b"user.value", pattern(70 + i as u32, 64))],
+        );
+        assert_eq!(whole.len(), 4096);
+        c.write(&ad.handle, 0, &whole).unwrap();
+        assert_eq!(c.read_all(&ad.handle, 64 * 1024), whole);
+        images.push((ad.handle.clone(), whole));
+    }
+    assert_eq!(server.held().companions, WRITERS);
+    assert_eq!(
+        server.held().companions_slotted,
+        0,
+        "a whole image takes no slot"
+    );
+
+    // Every companion is broken at once, each on its own connection: one slot
+    // is free, so exactly one may take it. A bound decided before the I/O and
+    // taken after it lets more than one through.
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(WRITERS + 1));
+    let writers: Vec<_> = images
+        .iter()
+        .map(|(handle, _)| {
+            let (barrier, mut writer) = (barrier.clone(), Client::connect(address, UID, GID));
+            let handle = handle.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                writer.write(&handle, 0, b"X").map(|_| ())
+            })
+        })
+        .collect();
+    barrier.wait();
+    let results: Vec<Result<(), u32>> = writers
+        .into_iter()
+        .map(|writer| writer.join().unwrap())
+        .collect();
+    assert_eq!(
+        results.iter().filter(|result| result.is_ok()).count(),
+        1,
+        "one slot, one writer: {results:?}"
+    );
+    assert_eq!(server.held().companions_slotted, 1, "{results:?}");
+    assert_eq!(server.held().companions, WRITERS);
+    // The refused ones kept their image, the taken one holds the edit.
+    let refused = results.iter().filter(|result| result.is_err()).count();
+    assert_eq!(refused, WRITERS - 1);
+    for (handle, whole) in &images {
+        let bytes = c.read_all(handle, 64 * 1024);
+        let mut edited = whole.clone();
+        edited[0] = b'X';
+        assert!(
+            bytes == *whole || bytes == edited,
+            "every companion is its image or the edit"
+        );
+    }
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}

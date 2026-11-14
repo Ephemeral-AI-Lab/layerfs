@@ -16,7 +16,7 @@
 //! lock and renamed to the companion's own name outside it, before the body is
 //! committed as spilled under the lock again. No descriptor is kept for a
 //! spilled body: each operation opens its file by path and closes it again.
-use super::{edited_len, record, Body, Companions, Decoded, DECODED_ENTRY_BYTES, FILE_BYTES};
+use super::{edited_len, record, Body, Companions, Decoded, Slot, DECODED_ENTRY_BYTES, FILE_BYTES};
 use crate::{
     apple_double_spill::{
         create_spilled, io_status, spill_path, touch, unlink_paths, Edit, Edited, Room,
@@ -226,8 +226,10 @@ impl Kernel {
         // its file, which needs no body budget. A body edited on its file is no
         // longer known to be a whole image, so it takes a slot of the index
         // bound: decide that before the file is written, and leave the body,
-        // its file and its name as they were when the bound has none.
-        if !self.companions().admits(Some(serial), true) {
+        // its file and its name as they were when the bound has none. The slot
+        // is held from the decision, not taken by the commit after the I/O, so
+        // another call cannot be told the same last slot is free.
+        if self.companions().reserve(serial) == Slot::Full {
             return Ok(Edited::NoSlot);
         }
         // A failed file operation leaves the length the companion had: the
@@ -245,6 +247,7 @@ impl Kernel {
         });
         if let Err(status) = written {
             self.restore_len(serial, before);
+            self.companions().unreserve(serial);
             return Err(status);
         }
         self.record_edit(serial, edit).map(Edited::Done)
@@ -350,6 +353,7 @@ impl Kernel {
         touch(&mut file.metadata);
         let stat = Companions::stat(serial, &file);
         companions.attach(serial, file);
+        companions.unreserve(serial);
         Ok(stat)
     }
     /// Spills the least recently used bodies to disk (outside the companion

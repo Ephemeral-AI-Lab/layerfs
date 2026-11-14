@@ -149,6 +149,18 @@ struct Orphan {
     main: Option<Named>,
 }
 
+/// What [`Companions::reserve`] made of a call's claim on a slot of the index
+/// bound.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Slot {
+    /// It took the slot, which it gives back if its commit does not land.
+    Taken,
+    /// It already held a slot (or a reservation for one): nothing was taken.
+    Held,
+    /// The bound has none.
+    Full,
+}
+
 /// What [`Companions::keep_decoded`] made of an edited body.
 pub(crate) enum Decoded {
     /// The companion holds the body's decoded form.
@@ -184,6 +196,10 @@ pub(crate) struct Companions {
     /// takes no slot, whether it is decoded or kept as written bytes, so whole
     /// images add nothing to the walk.
     slots: HashSet<u64>,
+    /// The serials holding a slot for a commit that is still on its way, whose
+    /// I/O runs outside this lock. A reserved slot counts against the bound, so
+    /// two calls cannot both be told the bound has room for one.
+    reserved: HashSet<u64>,
     /// Every companion holding memory, oldest use first: (used tick, serial).
     /// One tick is one touch and no serial takes two ticks, so the keys are
     /// unique and the oldest entry is the first one.
@@ -204,6 +220,7 @@ impl Default for Companions {
             names: HashMap::new(),
             inodes: HashMap::new(),
             slots: HashSet::new(),
+            reserved: HashSet::new(),
             by_use: BTreeSet::new(),
             resident_bytes: 0,
             decoded: 0,
@@ -414,6 +431,7 @@ impl Companions {
         }
     }
     fn take_serial(&mut self, serial: u64) -> Option<PathBuf> {
+        self.reserved.remove(&serial);
         let file = self.detach(serial)?;
         self.unindex(serial, &file);
         match file.body {
@@ -477,8 +495,29 @@ impl Companions {
     /// keeps it, and a body that takes no slot is always admitted.
     fn admits(&self, serial: Option<u64>, slotted: bool) -> bool {
         !slotted
-            || serial.is_some_and(|serial| self.slots.contains(&serial))
-            || self.slots.len() < self.held_limit
+            || serial.is_some_and(|serial| {
+                self.slots.contains(&serial) || self.reserved.contains(&serial)
+            })
+            || self.slots.len() + self.reserved.len() < self.held_limit
+    }
+    /// Decides whether `serial` may take a slot of the bound and holds it when
+    /// it may, in one step under this lock: a call that needs I/O before its
+    /// commit keeps the slot for the commit, so two calls cannot both be told
+    /// the bound has room for one. [`Slot::Held`] means it already has one
+    /// (or a reservation) and nothing was taken.
+    fn reserve(&mut self, serial: u64) -> Slot {
+        if self.slots.contains(&serial) || self.reserved.contains(&serial) {
+            return Slot::Held;
+        }
+        if self.slots.len() + self.reserved.len() >= self.held_limit {
+            return Slot::Full;
+        }
+        self.reserved.insert(serial);
+        Slot::Taken
+    }
+    /// Gives back a slot reserved for a commit that did not land.
+    fn unreserve(&mut self, serial: u64) {
+        self.reserved.remove(&serial);
     }
     /// The companions no name of the export reaches: neither the name it
     /// records nor another name of its inode finds it. Such a companion holds
@@ -995,17 +1034,21 @@ impl Kernel {
         }
         // A companion moved onto an unknown main takes a slot; one already
         // holding a slot keeps it, and one that stays a whole image keeps its
-        // exemption.
-        if !self.companions().admits(Some(serial), to_main.is_none()) {
+        // exemption. The slot is held from here, so the commit below cannot
+        // find another call took the last one while this rename waited.
+        if to_main.is_none() && self.companions().reserve(serial) == Slot::Full {
             self.reclaim_orphans();
-            if !self.companions().admits(Some(serial), to_main.is_none()) {
+            if self.companions().reserve(serial) == Slot::Full {
                 return Err(Status::NoSpc);
             }
         }
         let mut replaced_path = None;
         {
             let mut companions = self.companions();
-            let mut file = companions.detach(serial).ok_or(Status::Stale)?;
+            let Some(mut file) = companions.detach(serial) else {
+                companions.unreserve(serial);
+                return Err(Status::Stale);
+            };
             companions.unindex(serial, &file);
             if let Some(replaced) = companions.resolve(&target, to_main) {
                 if replaced != serial {
@@ -1023,6 +1066,7 @@ impl Kernel {
             companions.classify(&mut file);
             companions.index(serial, &file);
             companions.attach(serial, file);
+            companions.unreserve(serial);
         }
         unlink_paths(replaced_path);
         Ok(())
