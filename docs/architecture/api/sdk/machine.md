@@ -240,8 +240,11 @@ probe, plus `forced: true`, `stopped_sandboxes: [name]` and
 `unknown: [workspace]` (`sandbox:*` when a worker-side Workspace frontier could
 not be listed; these are not saved Commits). Stopped Sandboxes are recorded
 `gone` for explicit reclaim, or `unresolved` when the stop could not be
-confirmed. A provider failure or uncertain outcome is reported, never replayed
-or turned into success
+confirmed. On `native` a Sandbox is uncertain only once its stop has been
+sent: a refusal before that (no recorded runtime, or a recorded process
+identity that no longer matches) leaves that Sandbox and the machine as they
+were, with no op left on `native`. A provider failure or uncertain outcome is
+reported, never replayed or turned into success
 ([`machine_force.rs`](../../../../control/crates/layerfs-control/src/machine_force.rs)).
 
 ### machine.create

@@ -381,6 +381,39 @@ fn another_process_admission_precedes_last_connection_close() {
 
 #[test]
 #[cfg(any(target_os = "linux", target_os = "macos"))]
+fn read_only_close_does_not_wait_for_a_held_writer_lane() {
+    // A writer kept after an uncertain write holds the directory lane until
+    // its session goes; a reader's close must still return meanwhile.
+    let temp = support::Temp::new("wa-ro-close");
+    let path = temp.join("store.sqlite");
+    let original = create(&path);
+    let reader = SqliteHandles::open_read_only(
+        config(&path),
+        &authority().binding_key,
+        authority().cursor_key,
+    )
+    .unwrap();
+    let held = Held::start(&path, &temp.join("s"));
+    let (result_tx, result_rx) = mpsc::channel();
+    let closer = std::thread::spawn(move || {
+        drop(reader);
+        result_tx.send(()).unwrap();
+    });
+    let closed = result_rx.recv_timeout(Duration::from_secs(2)).ok();
+    held.release();
+    if closed.is_none() {
+        result_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+    }
+    closer.join().unwrap();
+    assert!(
+        closed.is_some(),
+        "a read-only close waited for the writer lane"
+    );
+    drop(original);
+}
+
+#[test]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn two_opened_handles_admit_eight_distinct_reservations_without_conflict() {
     let temp = support::Temp::new("writer-admission-two-handles");
     let path = temp.join("store.sqlite");

@@ -40,10 +40,15 @@ impl Drop for State {
         }
         // An uncertain transaction already owns the lane. Taking it again
         // through an independent directory descriptor would deadlock.
-        let writer = match self.writer_hold.take() {
-            Some(writer) => writer,
-            None => match Writer::acquire(&self.path) {
-                Ok(writer) => writer,
+        let writer = match (self.writer_hold.take(), &self.close_lane) {
+            (Some(writer), _) => Some(writer),
+            // A read-only or diagnostic connection cannot checkpoint or remove
+            // the WAL and SHM files, so its close takes no lane: it must not
+            // wait behind a writer another session keeps after an uncertain
+            // write.
+            (None, None) => None,
+            (None, Some(path)) => match Writer::acquire(path) {
+                Ok(writer) => Some(writer),
                 Err(_) => {
                     // Drop cannot report a cancelled/failed admission. Retain
                     // the SQLite connection until process exit instead of
@@ -53,8 +58,8 @@ impl Drop for State {
                 }
             },
         };
-        // The background connection has already ended; this may be SQLite's
-        // last connection and can checkpoint/delete the WAL and SHM files.
+        // The background connection has already ended; a writable close may be
+        // SQLite's last connection and can checkpoint/delete the WAL and SHM.
         drop(self.connection.take());
         drop(writer);
     }

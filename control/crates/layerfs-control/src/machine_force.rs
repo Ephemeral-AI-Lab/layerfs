@@ -62,9 +62,14 @@ pub(crate) fn stop(home: &Path, name: &MachineName) -> Outcome {
     let attempted = (|| -> Result<()> {
         if spec.kind == Platform::Native {
             for sandbox in &sandboxes {
-                native_attempt = Some(sandbox);
-                native_stop(&home, sandbox)?;
+                // A refusal before the signal leaves this runtime as it was:
+                // only a sent stop makes its outcome uncertain.
+                if let Some(mut runtime) = native_runtime(&home, sandbox)? {
+                    native_attempt = Some(sandbox);
+                    runtime.stop(0).map_err(failed)?;
+                }
                 mark(&home, sandbox, true)?;
+                native_attempt = None;
                 stopped.push(sandbox.name().to_owned());
                 unknown.extend(workspaces(&home, sandbox)?);
             }
@@ -84,9 +89,11 @@ pub(crate) fn stop(home: &Path, name: &MachineName) -> Outcome {
         Ok(())
     })();
     if let Err(mut error) = attempted {
+        // Native Sandboxes are recorded one by one as they stop, so only the
+        // one being signalled is uncertain; a provider stop covers them all.
         let uncertain = error.code == "Unknown"
-            || !stopped.is_empty()
             || native_attempt.is_some()
+            || (spec.kind != Platform::Native && !stopped.is_empty())
             || (spec.kind != Platform::Native && error.code != "Unsupported");
         {
             let _home = lock::take(&home)?;
@@ -197,9 +204,14 @@ fn mark(home: &Path, sandbox: &SandboxRecord, stopped: bool) -> Result<()> {
 }
 
 /// Native is the host itself: stop only this home's recorded runtime processes.
-fn native_stop(home: &Path, sandbox: &SandboxRecord) -> Result<()> {
+/// The Sandbox's recorded native runtime, reopened for a stop without
+/// sending anything; `None` when there is nothing left to stop.
+fn native_runtime(
+    home: &Path,
+    sandbox: &SandboxRecord,
+) -> Result<Option<Box<layerfs_sandbox_backend::Sandbox>>> {
     if sandbox.machine_stopped() {
-        return Ok(());
+        return Ok(None);
     }
     let host = layerfs_sandbox::force::native_host(home, sandbox.name())?;
     let Some(daemon) = files::started(&sandbox.dir(home))? else {
@@ -212,9 +224,10 @@ fn native_stop(home: &Path, sandbox: &SandboxRecord) -> Result<()> {
                 ),
             ));
         }
-        return sandbox.free();
+        sandbox.free()?;
+        return Ok(None);
     };
-    reopen::recorded(&host, sandbox.name(), &daemon)?.stop_now()
+    reopen::recorded(&host, sandbox.name(), &daemon)?.for_stop()
 }
 
 /// These are lost/unknown uncommitted frontiers, never manufactured commits.

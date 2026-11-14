@@ -190,3 +190,49 @@ esac
     assert_eq!(native.get_text("state"), Some("ready"));
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn native_force_stop_refused_before_any_signal_leaves_no_uncertain_op() {
+    let root = std::env::temp_dir().join(format!("lfs-force-pre-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let home = root.join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
+    home::open(&home).unwrap();
+    // A started Sandbox whose runtime record is missing: the stop is refused
+    // before anything is signalled, so nothing about it is uncertain.
+    write_record(
+        &paths::sandbox_record(&home, "lost"),
+        &SdkValue::map([
+            ("name", t("lost")),
+            ("id", t("lost")),
+            ("machine", t("native")),
+            ("project", t("shop/app")),
+        ]),
+    )
+    .unwrap();
+    let refused = call(
+        &home,
+        "machine.stop",
+        &[("name", t("native")), ("force", SdkValue::Bool(true))],
+    )
+    .unwrap_err();
+    assert_eq!(refused.code, "Unavailable", "{refused:?}");
+    let op = read_record(&paths::machine_record(&home, "native"))
+        .unwrap()
+        .and_then(|record| record.get("op").cloned());
+    assert!(
+        op.is_none(),
+        "a refusal before any signal left an op on native: {op:?}"
+    );
+    let sandbox = read_record(&paths::sandbox_record(&home, "lost"))
+        .unwrap()
+        .unwrap();
+    for field in ["machine_stopped", "machine_stop_unknown"] {
+        assert!(
+            sandbox.get(field).is_none(),
+            "an unsignalled Sandbox was marked {field}: {sandbox:?}"
+        );
+    }
+    std::fs::remove_dir_all(root).unwrap();
+}

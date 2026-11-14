@@ -146,7 +146,10 @@ pub struct SqlWork {
 }
 pub(crate) struct State {
     pub(crate) connection: super::lifecycle::ConnectionSlot,
-    pub(crate) path: PathBuf,
+    /// The Store path whose lane a writable session takes around its last
+    /// close; `None` for read-only and diagnostic sessions, whose close cannot
+    /// checkpoint or remove `-wal`/`-shm` and so takes no lane.
+    pub(crate) close_lane: Option<PathBuf>,
     pub(crate) quarantined: bool,
     pub(crate) work: RefCell<SqlWork>,
     pub(crate) writer_hold: Option<crate::backend::sqlite::lane::writer_admission::Writer>,
@@ -335,7 +338,7 @@ impl Session {
             path: path.to_path_buf(),
             state: Mutex::new(State {
                 connection: super::lifecycle::ConnectionSlot::new(connection),
-                path: path.to_path_buf(),
+                close_lane: writable.then(|| path.to_path_buf()),
                 quarantined: false,
                 work,
                 writer_hold: None,
