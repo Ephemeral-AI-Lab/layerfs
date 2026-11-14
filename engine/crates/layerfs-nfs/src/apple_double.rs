@@ -51,8 +51,11 @@ use crate::{
     change::{How, Sattr, Tickets, Wcc},
     kernel::Kernel,
 };
-use layerfs_content::{filesystem::attributes::PortableMetadata, object::inode_leaf::InodeKind};
-use layerfs_workspace::ViewStat;
+use layerfs_content::{
+    filesystem::{attributes::PortableMetadata, PathName},
+    object::inode_leaf::InodeKind,
+};
+use layerfs_workspace::{KernelReadOperation, ViewStat};
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     fs,
@@ -123,6 +126,18 @@ impl Companion {
     fn slotted(&self) -> bool {
         !self.whole
     }
+}
+
+/// A slot of the index the export's own name index cannot reach, and what the
+/// reclaim needs to decide about it.
+struct Orphan {
+    serial: u64,
+    /// The main inode the export knows for it; an inode holding no name in the
+    /// kernel table is gone.
+    inode: Option<u64>,
+    /// Its main file's directory and name when it has no inode: the name index
+    /// is lossy, so only the engine can say whether that file is there.
+    main: Option<Named>,
 }
 
 /// What [`Companions::keep_decoded`] made of an edited body.
@@ -480,11 +495,11 @@ impl Kernel {
     }
     /// The companion slots no name reaches any more: one whose main inode
     /// holds no name in the kernel table, and one whose main file the export
-    /// never observed and does not know now. Taken under the kernel table lock
-    /// and, inside it, the companion lock, so nothing here copies the
-    /// namespace; the caller drops them by serial under the companion lock
-    /// again.
-    fn orphans(&self) -> Vec<(u64, Option<u64>)> {
+    /// never observed and whose name its name index does not hold. Taken under
+    /// the kernel table lock and, inside it, the companion lock, so nothing
+    /// here copies the namespace; the caller drops them by serial under the
+    /// companion lock again.
+    fn orphans(&self) -> Vec<Orphan> {
         let table = self.table();
         let companions = self.companions();
         companions
@@ -492,15 +507,25 @@ impl Kernel {
             .iter()
             .filter_map(|serial| {
                 let file = companions.files.get(serial)?;
-                let live = match file.inode {
-                    Some(inode) => {
-                        table.names.contains_key(&inode) || table.aliases.contains_key(&inode)
-                    }
-                    None => file.named.1.strip_prefix(b"._").is_some_and(|main| {
-                        table.by_name.contains_key(&(file.named.0, main.to_vec()))
-                    }),
-                };
-                (!live).then_some((*serial, file.inode))
+                if let Some(inode) = file.inode {
+                    let live =
+                        table.names.contains_key(&inode) || table.aliases.contains_key(&inode);
+                    return (!live).then_some(Orphan {
+                        serial: *serial,
+                        inode: Some(inode),
+                        main: None,
+                    });
+                }
+                let main = file.named.1.strip_prefix(b"._")?;
+                let main = (file.named.0, main.to_vec());
+                // A name the index does hold reaches the companion; one it does
+                // not hold only makes it a candidate, since that index is
+                // lossy.
+                (!table.by_name.contains_key(&main)).then_some(Orphan {
+                    serial: *serial,
+                    inode: None,
+                    main: Some(main),
+                })
             })
             .collect()
     }
@@ -508,13 +533,56 @@ impl Kernel {
     /// it dropped. Takes the kernel table lock and, inside it, the companion
     /// lock; the files it retires are unlinked afterwards, outside both. Never
     /// call it under the companion lock.
+    ///
+    /// A companion whose main inode the export does not know is not dropped on
+    /// the name index's word: that index is lossy (its own bound, a name the
+    /// export never looked up, a rename on the client side), so each one costs
+    /// one read-only lookup of its main file in the engine, run outside both
+    /// locks. A main file that is there binds the companion back to its inode,
+    /// which keeps its attributes; only a lookup that answers "no such file"
+    /// makes it an orphan, and one that cannot answer leaves it as it is.
     fn reclaim_orphans(&self) -> usize {
-        let orphans = self.orphans();
+        let (bound, dead) = self.orphans().into_iter().fold(
+            (Vec::new(), Vec::new()),
+            |(mut bound, mut dead), orphan| {
+                let Some((parent, main)) = orphan.main else {
+                    dead.push((orphan.serial, orphan.inode));
+                    return (bound, dead);
+                };
+                match PathName::from_bytes(&main) {
+                    Ok(name) => {
+                        let lookup = KernelReadOperation::Lookup { parent, name };
+                        match self.observe(parent, None, lookup) {
+                            Ok((stat, _, _)) => bound.push((orphan.serial, stat.serial)),
+                            Err(Status::NoEnt) => dead.push((orphan.serial, orphan.inode)),
+                            // Unknown: the companion keeps its custody.
+                            Err(_) => {}
+                        }
+                    }
+                    Err(_) => {}
+                }
+                (bound, dead)
+            },
+        );
         let (reclaimed, spilled) = {
             let mut companions = self.companions();
             let mut spilled = Vec::new();
             let mut reclaimed = 0;
-            for (serial, inode) in orphans {
+            for (serial, main) in bound {
+                let Some(mut file) = companions.detach(serial) else {
+                    continue;
+                };
+                if file.inode.is_some() || !file.slotted() {
+                    companions.attach(serial, file);
+                    continue;
+                }
+                // Bound back to the inode the engine found: it keeps the slot it
+                // took, and from here it follows that inode's names.
+                file.inode = Some(main);
+                companions.index(serial, &file);
+                companions.attach(serial, file);
+            }
+            for (serial, inode) in dead {
                 let still_orphan = companions
                     .files
                     .get(&serial)

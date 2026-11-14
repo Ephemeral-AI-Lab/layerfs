@@ -214,7 +214,12 @@ collect orphans from `Companions::slots` (walking only slotted entries under
 the table and companion locks, never whole images or `by_name`), then re-acquires
 the lock and re-reads the companion name and main file before inserting, so
 concurrent GUARDED creates of one name yield one serial and one
-`NFS3ERR_EXIST`.
+`NFS3ERR_EXIST`. The name index is lossy (its own bound, a name never looked
+up, a client-side rename), so a candidate whose main inode the export does not
+know costs one read-only lookup of its main file in the engine, outside both
+locks: a file that is there binds the companion back to that inode and keeps
+its attributes, only `NFS3ERR_NOENT` makes it an orphan, and a lookup that
+cannot answer leaves it alone.
 
 Bodies kept as written and decoded bodies alike, exceeding `RESIDENT_BYTES`
 together, are written to `<serial>.<n>.tmp` (`create_new`, dir `0700`, file

@@ -458,6 +458,53 @@ fn a_rename_onto_an_unknown_main_keeps_the_resident_budget() {
 }
 
 #[test]
+fn a_companion_of_a_main_file_the_name_index_missed_is_kept() {
+    let base = temp("orphan-live");
+    let tree = base.join("tree");
+    source(&tree);
+    // The main file is part of the tree the export is initialized from, and
+    // this export never looks its name up, so its name index does not hold it:
+    // the companion created for it has no main inode, which the export's own
+    // index reads as an orphan.
+    fs::write(tree.join("live"), b"the data file").unwrap();
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    // One slot, so the next CREATE has to reclaim before it can ask.
+    rig.companions_held = 1;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    let ad = c.touch(&root, b"._live", 0o644).unwrap();
+    let whole = image([0x51; 32], &[(b"user.kept", pattern(90, 128))]);
+    c.write(&ad.handle, 0, &whole).unwrap();
+    assert_eq!(server.held().companions_slotted, 1);
+
+    // The bound is full, so the next CREATE reclaims the orphan slots first.
+    // The main file is there, so the lookup keeps the companion and binds it to
+    // that inode, and the CREATE is then refused.
+    c.touch(&root, b"other", 0o644).unwrap();
+    assert_eq!(c.touch(&root, b"._other", 0o644).map(|_| ()), Err(NOSPC));
+    let held = server.held();
+    assert_eq!((held.companions, held.companions_slotted), (1, 1));
+    assert_eq!(held.names_refused, 1);
+    assert_eq!(c.getattr(&ad.handle).unwrap().size as usize, whole.len());
+    assert_eq!(c.read_all(&ad.handle, 64 * 1024), whole, "attributes kept");
+
+    // It belongs to that inode now: another name of the inode reaches it.
+    let live = c.lookup(&root, b"live").unwrap().0;
+    c.link(&live, &root, b"alias").unwrap();
+    let (shared, attr) = c.lookup(&root, b"._alias").unwrap();
+    assert_eq!(shared, ad.handle, "hard links share one companion");
+    assert_eq!(attr.size as usize, whole.len());
+    assert_eq!(c.read_all(&shared, 64 * 1024), whole);
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn a_write_that_takes_the_last_slot_is_refused_by_the_bound() {
     let base = temp("write-bound");
     let tree = base.join("tree");

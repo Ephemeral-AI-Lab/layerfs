@@ -371,7 +371,7 @@ impl Kernel {
         let services = self.services.request(&self.fence).map_err(failure)?;
         Ok((services, self.requests.fetch_add(1, Ordering::Relaxed)))
     }
-    fn observe(
+    pub(crate) fn observe(
         &self,
         protected: u64,
         handle: Option<u64>,
