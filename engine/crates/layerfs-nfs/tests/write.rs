@@ -57,6 +57,15 @@ fn pattern(seed: u32, length: usize) -> Vec<u8> {
         .collect()
 }
 
+/// The files an export spilled into `dir`, and their bytes.
+fn spilled(dir: &Path) -> (usize, u64) {
+    let files: Vec<u64> = (fs::read_dir(dir).into_iter().flatten().flatten())
+        .filter_map(|entry| entry.metadata().ok())
+        .map(|metadata| metadata.len())
+        .collect();
+    (files.len(), files.iter().sum())
+}
+
 #[test]
 fn every_changing_procedure_and_its_statuses() {
     let base = temp("procedures");
@@ -531,6 +540,234 @@ fn apple_double_files_stay_out_of_the_workspace() {
     fs::remove_dir_all(base).unwrap();
 }
 
+#[test]
+fn a_spill_replaces_a_companion_body_only_when_no_call_changed_it() {
+    use layerfs_nfs::apple_double::spill_applies;
+    // The companion the body was written from, still resident and untouched:
+    // the spilled file replaces it.
+    assert!(spill_applies(7, 7, true));
+    // Another call wrote to the companion while its body was being written out:
+    // that newer body stays and the file just written is dropped.
+    assert!(!spill_applies(7, 8, true));
+    // Another call spilled the body first: its file stays.
+    assert!(!spill_applies(7, 7, false));
+}
+
+/// The process's soft and hard `RLIMIT_NOFILE`.
+fn nofile_limits() -> (libc::rlim_t, libc::rlim_t) {
+    let mut limit = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: `getrlimit` only fills the limit structure it is given.
+    let asked = unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) };
+    assert_eq!(asked, 0, "RLIMIT_NOFILE is readable");
+    (limit.rlim_cur, limit.rlim_max)
+}
+
+/// Sets the process's soft `RLIMIT_NOFILE`, leaving the hard limit alone.
+fn set_nofile_soft(soft: libc::rlim_t) {
+    let (_, hard) = nofile_limits();
+    let limit = libc::rlimit {
+        rlim_cur: soft,
+        rlim_max: hard,
+    };
+    // SAFETY: a soft limit at or below the hard limit is always allowed.
+    let set = unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limit) };
+    assert_eq!(set, 0, "soft RLIMIT_NOFILE is settable");
+}
+
+/// Puts the process's soft `RLIMIT_NOFILE` back when it drops, `panic` included.
+struct SoftNofile(libc::rlim_t);
+impl SoftNofile {
+    fn lower(soft: libc::rlim_t) -> Self {
+        let (was, _) = nofile_limits();
+        set_nofile_soft(soft);
+        Self(was)
+    }
+}
+impl Drop for SoftNofile {
+    fn drop(&mut self) {
+        set_nofile_soft(self.0);
+    }
+}
+
+/// The descriptors this process holds, counted from the kernel's own view.
+fn open_fds() -> Option<usize> {
+    ["/dev/fd", "/proc/self/fd"]
+        .into_iter()
+        .find_map(|dir| fs::read_dir(dir).ok())
+        .map(|entries| entries.flatten().count())
+}
+
+#[test]
+fn a_spilled_companion_keeps_its_length_and_bytes_together() {
+    let base = temp("appledouble-spilled-race");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    rig.companion_spill_dir = Some(base.join("spill-race"));
+    // Smaller than the body below, which therefore lives on disk.
+    rig.companion_resident_bytes = 1024;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let mut other = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    let name = b"._raced".as_slice();
+    let made = c.touch(&root, b"raced", 0o644).unwrap();
+    let ad = c.touch(&root, name, 0o644).unwrap();
+    let payload = pattern(29, 2048);
+    c.write(&ad.handle, 0, &payload).unwrap();
+    assert_eq!(made.handle, c.lookup(&root, b"raced").unwrap().0);
+    assert_eq!(server.held().companion_bytes, 0, "the body spilled");
+
+    // A truncate and a write of this companion start together, round after
+    // round: each runs to completion under the companion's own gate, so the
+    // length a reply reports is always the length its file holds, and a read
+    // never asks for bytes the file does not have (NFS3ERR_IO).
+    for round in 0..64 {
+        let start = std::sync::Barrier::new(2);
+        let empty = Set {
+            size: Some(0),
+            ..Set::default()
+        };
+        let (a, b) = std::thread::scope(|scope| {
+            let a = scope.spawn(|| {
+                start.wait();
+                c.setattr(&ad.handle, empty, None)
+            });
+            let b = scope.spawn(|| {
+                start.wait();
+                other.write(&ad.handle, 0, &payload)
+            });
+            (a.join().unwrap(), b.join().unwrap())
+        });
+        a.unwrap();
+        b.unwrap();
+        let size = c.getattr(&ad.handle).unwrap().size as usize;
+        assert!(
+            size == 0 || size == payload.len(),
+            "round {round}: length {size} of a truncate or a write"
+        );
+        assert_eq!(
+            c.read_all(&ad.handle, 4096).len(),
+            size,
+            "round {round}: the bytes served match the length"
+        );
+    }
+
+    drop((c, other));
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+/// Set in the child process [`run_alone`] starts, so it runs the body of the one
+/// test it was started for.
+const FD_LIMIT_CHILD: &str = "LAYERFS_NFS_FD_LIMIT_CHILD";
+
+/// Re-runs one test of this binary in its own process, so a change of
+/// process-wide state (a soft `RLIMIT_NOFILE`, the descriptors this process
+/// holds) can neither reach nor be reached by the tests running in parallel in
+/// this one. `name` is selected with `--exact`, so exactly that test runs.
+fn run_alone(marker: &str, name: &str) {
+    let exe = std::env::current_exe().expect("the test binary's own path");
+    let status = std::process::Command::new(exe)
+        .arg("--exact")
+        .arg(name)
+        .arg("--test-threads=1")
+        .env(marker, "1")
+        .status()
+        .expect("the test binary starts again");
+    assert!(status.success(), "{name} failed in its own process");
+}
+
+/// The export opens a spilled body by path for one operation and closes it
+/// again, so companions far outnumbering the process's own file limit all
+/// read and write: a descriptor per spilled body would end in `EMFILE` here.
+#[test]
+fn spilled_companions_outnumber_the_open_file_limit() {
+    // The soft limit is process-wide and the descriptor count is the whole
+    // process's: both are set and asserted in a process running this test
+    // alone, never next to the tests this binary runs in parallel.
+    if std::env::var_os(FD_LIMIT_CHILD).is_none() {
+        run_alone(
+            FD_LIMIT_CHILD,
+            "spilled_companions_outnumber_the_open_file_limit",
+        );
+        return;
+    }
+    let base = temp("appledouble-fd");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let spill_dir = base.join("spill-fd");
+    rig.companion_spill_dir = Some(spill_dir.clone());
+    rig.companion_resident_bytes = 1024;
+    let budget = 1024;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    // Four times as many companions as the process may hold open at once.
+    // This process runs no other test: the limit and the count are its own.
+    let (soft, hard) = nofile_limits();
+    let limit = soft.min(hard).min(512);
+    let count = limit as usize * 4;
+    let payload = pattern(29, 600);
+    let mut handles = Vec::with_capacity(count);
+    {
+        let _restored = SoftNofile::lower(limit);
+        assert_eq!(nofile_limits().0, limit);
+        for i in 0..count {
+            let name = format!("._fd-{i}");
+            let made = c.touch(&root, name.as_bytes(), 0o644).unwrap();
+            c.write(&made.handle, 0, &payload).unwrap();
+            handles.push((made.handle, made.attr.fileid));
+        }
+        assert!(server.held().companion_bytes <= budget);
+        let (on_disk, _) = spilled(&spill_dir);
+        assert_eq!(on_disk, count - 1, "all but the newest body spilled");
+        if let Some(fds) = open_fds() {
+            assert!(
+                fds < count / 4,
+                "{fds} descriptors open for {count} companions"
+            );
+        }
+        for (i, (handle, fileid)) in handles.iter().enumerate() {
+            assert_eq!(c.read_all(handle, 64 * 1024), payload, "companion {i}");
+            // The newest body is still resident; every older one is on disk.
+            assert_eq!(
+                spill_dir.join(fileid.to_string()).is_file(),
+                i + 1 < count,
+                "companion {i}"
+            );
+        }
+        // The disk half still writes and truncates through its own open.
+        let (ref h0, _) = handles[0];
+        c.write(h0, 0, b"opened by path").unwrap();
+        let shrink = Set {
+            size: Some(14),
+            ..Set::default()
+        };
+        c.setattr(h0, shrink, None).unwrap();
+        assert_eq!(c.read_all(h0, 64), b"opened by path");
+    }
+    assert_eq!(nofile_limits().0, soft, "the soft limit is put back");
+
+    drop(c);
+    let released = server.stop();
+    assert_eq!(released.companions, count);
+    assert!(released.companion_bytes <= budget);
+    assert!(
+        !spill_dir.exists(),
+        "export stop removes the spill directory"
+    );
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
 #[test]
 fn tickets_are_released_only_after_the_reply() {
     let base = temp("tickets");

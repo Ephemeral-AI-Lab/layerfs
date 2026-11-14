@@ -140,3 +140,77 @@ fn the_clients_write_sequence_is_served_byte_for_byte() {
     fs::remove_dir_all(base).unwrap();
 }
 
+#[test]
+fn a_decoded_companion_is_edited_under_a_full_resident_budget() {
+    let base = temp("decoded-budget");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    // A body budget smaller than one encoded image: an edit that leaves the
+    // image not whole has to spill rather than grow memory.
+    rig.companion_resident_bytes = 1024;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+
+    let main = c.touch(&root, b"full", 0o644).unwrap();
+    c.write(&main.handle, 0, b"the data file").unwrap();
+    let ad = c.touch(&root, b"._full", 0o644).unwrap();
+    let whole = image(
+        [0x77; 32],
+        &[
+            (b"com.apple.provenance", pattern(30, 40)),
+            (b"user.big", pattern(31, 4096)),
+        ],
+    );
+    // Another companion's body stays in memory; truncating a decoded body needs
+    // no room for its image, so that body must not be evicted for it.
+    c.touch(&root, b"other", 0o644).unwrap();
+    let other = c.touch(&root, b"._other", 0o644).unwrap();
+    c.write(&other.handle, 0, &pattern(35, 100)).unwrap();
+    assert_eq!(server.held().companion_bytes, 100);
+
+    // A whole image costs its attributes, not its bytes: it is decoded.
+    c.write(&ad.handle, 0, &whole).unwrap();
+    assert_eq!(c.read_all(&ad.handle, 64 * 1024), whole);
+    assert_eq!(server.held().companions_decoded, 1);
+
+    // Truncating a decoded body to nothing is the client's truncation, with no
+    // resident room for its image, and a rewrite decodes again.
+    let empty = Set {
+        size: Some(0),
+        ..Set::default()
+    };
+    c.setattr(&ad.handle, empty, None).unwrap();
+    assert_eq!(c.getattr(&ad.handle).unwrap().size, 0);
+    assert_eq!(c.read_all(&ad.handle, 4096), Vec::<u8>::new());
+    assert_eq!(server.held().companions_decoded, 0);
+    assert_eq!(
+        server.held().companion_bytes,
+        100,
+        "the image was never resident, so nothing had to be evicted for it"
+    );
+    c.write(&ad.handle, 0, &whole).unwrap();
+    assert_eq!(c.read_all(&ad.handle, 64 * 1024), whole);
+    assert_eq!(server.held().companions_decoded, 1);
+
+    // An edit that leaves the image not whole cannot grow memory: the decoded
+    // body is spilled and the write applied to its file, not refused.
+    let mut edited = whole.clone();
+    edited[24..28].copy_from_slice(b"EDIT");
+    c.write(&ad.handle, 24, b"EDIT").unwrap();
+    assert_eq!(c.read_all(&ad.handle, 64 * 1024), edited);
+    assert_eq!(server.held().companions_decoded, 0);
+
+    // Truncating the spilled body is the client's truncation.
+    c.setattr(&ad.handle, empty, None).unwrap();
+    assert_eq!(c.getattr(&ad.handle).unwrap().size, 0);
+    assert_eq!(c.read_all(&ad.handle, 4096), Vec::<u8>::new());
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
