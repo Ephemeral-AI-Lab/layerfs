@@ -148,15 +148,28 @@ fn unmount_guard_forceable_rejects_crashed_and_already_forced_records() {
             .unwrap();
         assert!(!layerfs_sandbox::unmount_guard::forceable(&r3));
 
-        // 4. Completed normal unmount that returned Retained (forced=false, code=Failed) -> forceable!
+        // 4. Completed normal unmount the daemon answered Retained at Detach
+        //    (forced=false, code=Failed, stage=Detach) -> forceable!
         write_rec(
             "04.unmount",
-            r#"{"state":"Retained","startedMs":1,"path":"/w/4","forced":false,"code":"Failed","message":"m","detail":null}"#,
+            r#"{"state":"Retained","startedMs":1,"path":"/w/4","forced":false,"stage":"Detach","code":"Failed","message":"m","detail":null}"#,
         );
         let r4 = layerfs_sandbox::unmount_guard::find_in(&dir, "/w/4")
             .unwrap()
             .unwrap();
         assert!(layerfs_sandbox::unmount_guard::forceable(&r4));
+
+        // 5. The same completed `Retained` answer without the daemon's stage:
+        //    the machine wrote it after a send/connect failure, so force must
+        //    not replace it.
+        write_rec(
+            "05.unmount",
+            r#"{"state":"Retained","startedMs":1,"path":"/w/5","forced":false,"code":"Failed","message":"m","detail":null}"#,
+        );
+        let r5 = layerfs_sandbox::unmount_guard::find_in(&dir, "/w/5")
+            .unwrap()
+            .unwrap();
+        assert!(!layerfs_sandbox::unmount_guard::forceable(&r5));
 
         std::fs::remove_dir_all(dir).unwrap();
         let _ = send.send(());

@@ -6,7 +6,9 @@
 //! refusals with stable codes.
 use super::workspace::{CommitReply, MountedWorkspace, Unmounted};
 use crate::{OperationCause, OperationFailure};
-use layerfs_bridge::control::{ForcedOutcome, SdkRefusal, SdkValue, WorkspaceStatus};
+use layerfs_bridge::control::{
+    ForcedOutcome, SdkRefusal, SdkValue, TeardownStage, WorkspaceStatus,
+};
 use layerfs_bridge::sdk_values::{
     commit_value, conflicts, conflicts_truncated, hex, lww, lww_truncated,
 };
@@ -23,6 +25,22 @@ pub fn refusal(failure: &OperationFailure) -> Option<SdkRefusal> {
             code: format!("{:?}", refused.code),
             message: refused.detail.clone(),
             detail: SdkValue::map([("phase", SdkValue::text(refused.phase.as_str()))]),
+        }),
+        // A terminal step the daemon stopped after effects. Its stage is the
+        // one fact a later `force` is judged by, so it travels in the detail
+        // the machine writes into `workspace/<id>.unmount`; a failure without
+        // such an answer (a send or connect failure, or a refusal before any
+        // effect) has no stage.
+        OperationCause::Retained(custody) => Some(SdkRefusal {
+            code: "Failed".to_owned(),
+            message: format!(
+                "teardown custody retained at {}; do not resend",
+                stage_text(custody.stage)
+            ),
+            detail: SdkValue::map([
+                ("stage", SdkValue::text(stage_text(custody.stage))),
+                ("detached", SdkValue::Bool(custody.detached)),
+            ]),
         }),
         // The request was sent but no reply arrived (the daemon reclaimed or
         // expired the worker, or it died mid-operation): its effect is
@@ -42,6 +60,21 @@ pub fn refusal(failure: &OperationFailure) -> Option<SdkRefusal> {
             })
         }
         _ => None,
+    }
+}
+
+/// A retained teardown stage as the machine's unmount record writes it.
+fn stage_text(stage: TeardownStage) -> &'static str {
+    match stage {
+        TeardownStage::Detach => "Detach",
+        TeardownStage::Join => "Join",
+        TeardownStage::Owner => "Owner",
+        TeardownStage::Requests => "Requests",
+        TeardownStage::Lane => "Lane",
+        TeardownStage::Revoke => "Revoke",
+        TeardownStage::Close => "Close",
+        TeardownStage::Registry => "Registry",
+        TeardownStage::Abort => "Abort",
     }
 }
 

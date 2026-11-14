@@ -218,13 +218,15 @@ either may add cleanup_error (daemon succeeded; a local record stayed)
 
 The machine writes `workspace/<id>.unmount` before it calls the daemon and
 records the outcome after, so a repeated unmount answers what the first one
-established without dialling again. The exception is a completed `Failed`
-record that was not itself forced: `force` may replace it with a forced
-attempt (the daemon's guard remains the real gate, and `Busy`, `Dirty`, or
-an unsent call restores the earlier record); an in-progress, `Unknown`,
-already-forced, or pre-`forced` record (no `forced` field) keeps its answer
-and is not forceable. A Workspace the daemon no longer knows answers
-`Unmounted`
+established without dialling again. The one exception is a record the daemon
+itself answered `Retained` at stage `Detach`: its export is still held and one
+forced client unmount is what finishes it, so `force` may replace that record
+with a forced attempt (the daemon's guard remains the real gate, and `Busy`,
+`Dirty`, or an unsent call restores the earlier record). A `Failed` answer
+without a stage — a send or connect failure, or a refusal before any effect —
+and an in-progress, `Unknown`, already-forced, other-stage or pre-`forced`
+record keeps its answer and is not forceable. A Workspace the daemon no longer
+knows answers `Unmounted`
 ([`unmount_guard.rs`](../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs)).
 
 | Error | When |

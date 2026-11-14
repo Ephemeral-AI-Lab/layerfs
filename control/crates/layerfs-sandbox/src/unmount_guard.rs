@@ -232,16 +232,25 @@ pub fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal> {
     Ok(recoverable)
 }
 pub fn forceable(value: &SdkValue) -> bool {
-    // A completed `Failed` record is the one shape a force may replace: the
-    // daemon's own guard is the real gate on whether force may proceed, and a
-    // refusal answers with the record it holds. A record that is still `Unmounting` (its caller ended without publishing),
-    // `Unknown` or already `forced` keeps its answer. A record written before
-    // this rule (no `forced` field) is answered as it stands and is not
-    // forceable.
+    // Only a record the daemon itself answered `Retained` at `Detach` may be
+    // replaced by `force`: it holds an export whose client unmount was not
+    // established, and the one forced client unmount is what finishes it. The
+    // daemon's own guard remains the real gate, and a refusal answers with
+    // the record it holds. A record that is still `Unmounting` (its caller
+    // ended without publishing), one the machine wrote after a send or
+    // connect failure or a refusal before any effect (code `Failed` without
+    // the daemon's `stage`), one kept at another stage, one already forced,
+    // and a record written before this field existed keep their answer.
     value.get_text("state") == Some("Retained")
         && value.get("forced") == Some(&SdkValue::Bool(false))
         && value.get_text("code") == Some("Failed")
+        && value.get_text("stage") == Some(FORCEABLE_STAGE)
 }
+/// The daemon's retained stage one forced client unmount can still finish:
+/// an NFS export kept because its client unmount was not established
+/// (`ExportKept::forceable` in the daemon). Any other stage keeps its answer.
+const FORCEABLE_STAGE: &str = "Detach";
+
 /// Called under the Sandbox guard, after all before-effect checks.
 pub fn begin(
     state: &SandboxState,
@@ -301,6 +310,12 @@ pub fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result<(), Sd
                     error.detail.clone(),
                 ),
             };
+            // The daemon's own retained stage, when it answered one; `Null`
+            // for a failure that never got that answer (see [`forceable`]).
+            let stage = match outcome {
+                Ok(_) => SdkValue::Null,
+                Err(error) => error.detail.get("stage").cloned().unwrap_or(SdkValue::Null),
+            };
             layerfs_store::project::discovery::save(
                 &attempt.path,
                 SdkValue::map([
@@ -308,6 +323,7 @@ pub fn finish(attempt: &Attempt, path: &str, outcome: &Outcome) -> Result<(), Sd
                     ("startedMs", SdkValue::Int(attempt.started)),
                     ("path", SdkValue::text(path)),
                     ("forced", SdkValue::Bool(attempt.forced)),
+                    ("stage", stage),
                     ("code", SdkValue::text(code)),
                     ("message", SdkValue::text(message)),
                     ("detail", detail),
