@@ -1436,3 +1436,45 @@ fn the_slot_bound_holds_when_writes_claim_the_last_slot_together() {
     assert_eq!(outstanding, 0);
     fs::remove_dir_all(base).unwrap();
 }
+
+#[test]
+fn a_companion_of_a_removed_directory_is_reclaimed() {
+    let base = temp("orphan-dir-gone");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    // One slot, and both companions below take one: a whole image whose main
+    // file the export never saw stays as the client wrote it.
+    rig.companions_held = 1;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    c.mkdir(&root, b"gone", 0o755).unwrap();
+    let gone = c.lookup(&root, b"gone").unwrap().0;
+    let held = c.touch(&gone, b"._x", 0o644).unwrap();
+    c.write(&held.handle, 0, &pattern(80, 64)).unwrap();
+    assert_eq!(server.held().companions_slotted, 1);
+
+    // The client removes the directory: nothing the engine can see is in it,
+    // so the removal succeeds and leaves the companion it never listed behind,
+    // with a main file whose parent the engine no longer has.
+    c.rmdir(&root, b"gone").unwrap();
+    assert_eq!(server.held().companions, 1);
+
+    // The next CREATE at the bound reclaims first. The lookup of the vanished
+    // main file answers `NFS3ERR_STALE` (its parent is gone), which is as much
+    // "there is no such file" as `NFS3ERR_NOENT`, so the slot comes free and
+    // this CREATE lands instead of the bound staying full for good.
+    let made = c.touch(&root, b"._y", 0o644).unwrap();
+    assert_eq!(server.held().companions, 1);
+    assert_eq!(server.held().companions_slotted, 1);
+    assert_eq!(c.getattr(&held.handle), Err(STALE));
+    c.write(&made.handle, 0, &pattern(81, 32)).unwrap();
+    assert_eq!(c.read_all(&made.handle, 4096), pattern(81, 32));
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}

@@ -644,8 +644,10 @@ impl Kernel {
     /// export never looked up, a rename on the client side), so each one costs
     /// one read-only lookup of its main file in the engine, run outside both
     /// locks. A main file that is there binds the companion back to its inode,
-    /// which keeps its attributes; only a lookup that answers "no such file"
-    /// makes it an orphan, and one that cannot answer leaves it as it is.
+    /// which keeps its attributes; only a lookup that answers "no such file",
+    /// or whose parent directory the engine no longer has (so the file cannot
+    /// be there either), makes it an orphan, and one that cannot answer leaves
+    /// it as it is.
     ///
     /// A lookup that finds the main file took one engine reference on it, and
     /// the export keeps exactly one per serial: the visit is the entry's, so it
@@ -670,7 +672,15 @@ impl Kernel {
                             self.entry_taken(&stat, parent, &main);
                             bound.push((orphan.serial, stat.serial));
                         }
-                        Err(Status::NoEnt) => dead.push((orphan.serial, orphan.inode)),
+                        // A parent directory the engine no longer has cannot
+                        // hold the main file: the companion is an orphan as
+                        // much as one whose file answers "no such file".
+                        // A parent directory the engine no longer has cannot
+                        // hold the main file: the companion is an orphan as
+                        // much as one whose file answers "no such file".
+                        Err(Status::NoEnt | Status::Stale | Status::NotDir) => {
+                            dead.push((orphan.serial, orphan.inode))
+                        }
                         Err(_) => {}
                     }
                 }

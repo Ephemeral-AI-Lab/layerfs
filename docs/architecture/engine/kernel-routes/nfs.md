@@ -227,8 +227,10 @@ concurrent GUARDED creates of one name yield one serial and one
 up, a client-side rename), so a candidate whose main inode the export does not
 know costs one read-only lookup of its main file in the engine, outside both
 locks: a file that is there binds the companion back to that inode and keeps
-its attributes, only `NFS3ERR_NOENT` makes it an orphan, and a lookup that
-cannot answer leaves it alone. The lookup that finds the main file took one
+its attributes, `NFS3ERR_NOENT` - or `NFS3ERR_STALE`/`NFS3ERR_NOTDIR`, a main
+file whose directory the engine no longer has, which cannot hold it either -
+makes it an orphan, and a lookup that cannot answer any other way leaves it
+alone. The lookup that finds the main file took one
 engine reference on it, and the export keeps exactly one per serial, so the
 visit registers the name it found the file under (`Kernel::entry_taken`, as
 `Kernel::lookup` does) before the companion is bound: that name is what makes
