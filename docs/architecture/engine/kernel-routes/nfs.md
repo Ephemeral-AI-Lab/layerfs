@@ -191,9 +191,13 @@ synthesizes the same bytes again. Partial writes, resource forks and other
 layouts stay as the client wrote them.
 
 Bodies kept as written and decoded bodies alike, exceeding `RESIDENT_BYTES`
-together, spill outside the companion lock to
-`<serial>.<n>.tmp` (`create_new`, dir `0700`, file `0600`) and are adopted by
-rename to `<serial>` only if unchanged (`used` tick); spilled bodies are opened
+together, are written to `<serial>.<n>.tmp` (`create_new`, dir `0700`, file
+`0600`) and renamed to `<serial>`, all of it outside the companion lock; the
+body is committed as spilled under the lock afterwards, so a reader reads the
+body in memory until its file is whole. One writer per companion is the edit
+gate (`Companion::editing`): an edit holds it, and an eviction takes it with
+`try_lock`, skipping a companion someone is editing. A rename is dropped when
+the body changed since the snapshot (`used` tick), and a spilled body is opened
 by path per `pread`/`pwrite`/`set_len` and never held open. One edit per
 companion runs under `Companion::editing` ([`edit.rs`](../../../../engine/crates/layerfs-nfs/src/apple_double/edit.rs)),
 recording length and bytes together and spilling its own body rather than

@@ -34,7 +34,7 @@
 //! which removes that directory too.
 use crate::{
     apple_double_codec::Image,
-    apple_double_spill::{io_status, now, spill_path, touch, unlink_paths, Edit},
+    apple_double_spill::{now, spill_path, touch, unlink_paths, Edit},
     attributes::Status,
     change::{How, Sattr, Tickets, Wcc},
     kernel::Kernel,
@@ -44,7 +44,7 @@ use layerfs_workspace::ViewStat;
 use std::{
     collections::{BTreeSet, HashMap},
     fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{atomic::Ordering, Arc, Mutex},
 };
 
@@ -243,50 +243,52 @@ impl Companions {
             Body::Spilled => (self.spill_dir.as_ref()).map(|dir| spill_path(dir, serial)),
         }
     }
-    /// Renames the temporary file `temp`, which holds `serial`'s body of `len`
-    /// bytes, to the companion's own name in the spill directory and switches
-    /// the companion to it. With `used`, the tick the snapshot was read at,
-    /// only a companion nothing touched since and whose body is still in memory
-    /// (resident or decoded) takes it: a body another call changed or already
-    /// spilled stays, `Ok(false)` then, and `temp` is the caller's to unlink.
-    /// `None` is an edit's own body written out while it holds the companion's
-    /// edit gate, so no other edit can have changed it.
-    fn adopt_spilled(
-        &mut self,
-        serial: u64,
-        used: Option<u64>,
-        temp: &Path,
-        len: usize,
-    ) -> Result<bool, Status> {
-        let path = self
-            .spill_dir
-            .as_ref()
-            .map(|dir| spill_path(dir, serial))
-            .ok_or(Status::NoSpc)?;
-        let Some(file) = self.files.get_mut(&serial) else {
-            return Err(Status::Stale);
-        };
+    /// Where a body a spill wrote out replaces its companion: the companion's
+    /// own file, or `None` when another call changed the body since the
+    /// snapshot (`used` is the tick read then, and only a body still in memory
+    /// can be replaced). The caller renames its file to that path itself,
+    /// outside this lock, and then commits the body with
+    /// [`Self::commit_spilled`].
+    fn spill_target(&self, serial: u64, used: Option<u64>) -> Result<Option<PathBuf>, Status> {
+        let file = self.files.get(&serial).ok_or(Status::Stale)?;
         if let Some(used) = used {
             if !spill_applies(used, file.used, !matches!(file.body, Body::Spilled)) {
-                return Ok(false);
+                return Ok(None);
             }
         }
-        fs::rename(temp, path).map_err(|e| io_status(&e))?;
-        let mut file = self.detach(serial).ok_or(Status::Stale)?;
+        let dir = self.spill_dir.as_ref().ok_or(Status::NoSpc)?;
+        Ok(Some(spill_path(dir, serial)))
+    }
+    /// Commits the body whose bytes now sit at the companion's spill file: it
+    /// holds them on disk from now on, `len` bytes of them, which were the
+    /// whole body the file was written from. `false` when the companion is gone
+    /// or already holds a file, and the file just renamed into place is the
+    /// caller's to drop.
+    ///
+    /// The caller holds the companion's edit gate and no other call writes this
+    /// companion's file, so a body that changed between the snapshot and here
+    /// cannot be the body this file was written from.
+    fn commit_spilled(&mut self, serial: u64, len: usize) -> bool {
+        let Some(mut file) = self.detach(serial) else {
+            return false;
+        };
+        if matches!(file.body, Body::Spilled) {
+            self.attach(serial, file);
+            return false;
+        }
         file.body = Body::Spilled;
-        // A shorter file than the companion had described is not the body any
-        // more.
         file.len = file.len.max(len);
         self.attach(serial, file);
-        Ok(true)
+        true
     }
     /// The least recently used companion holding memory, a body kept as
     /// written or a decoded one: the budget counts both, so both are evicted.
-    /// One step into the eviction order, not a walk of every companion.
-    fn oldest_resident(&self, skip: Option<u64>) -> Option<u64> {
+    /// The companions the caller will not take are passed over, one step into
+    /// the eviction order rather than a walk of every companion.
+    fn oldest_resident(&self, skip: &BTreeSet<u64>) -> Option<u64> {
         self.by_use
             .iter()
-            .find(|(_, serial)| Some(*serial) != skip)
+            .find(|(_, serial)| !skip.contains(serial))
             .map(|(_, serial)| *serial)
     }
     fn holding(&self) -> Holding {

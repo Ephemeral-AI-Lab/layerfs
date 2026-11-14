@@ -12,8 +12,10 @@
 //! A body that does not fit the resident budget is spilled first, least
 //! recently touched first; the body that still does not fit is written out
 //! itself and edited in its file, which needs no budget. The file I/O never
-//! holds the companion lock, and no descriptor is kept for a spilled body:
-//! each operation opens its file by path and closes it again.
+//! holds the companion lock: the file is written from a body read under the
+//! lock and renamed to the companion's own name outside it, before the body is
+//! committed as spilled under the lock again. No descriptor is kept for a
+//! spilled body: each operation opens its file by path and closes it again.
 use super::{edited_len, record, Body, Companions, DECODED_ENTRY_BYTES, FILE_BYTES};
 use crate::{
     apple_double_spill::{create_spilled, io_status, spill_path, touch, unlink_paths, Edit, Room},
@@ -24,9 +26,11 @@ use crate::{
 use layerfs_mount_ports::operations::write::Stamp;
 use layerfs_workspace::ViewStat;
 use std::{
-    fs::{File, OpenOptions},
+    collections::BTreeSet,
+    fs::{self, File, OpenOptions},
     io,
     os::unix::fs::FileExt,
+    path::Path,
 };
 
 impl Kernel {
@@ -128,7 +132,7 @@ impl Kernel {
             self.edit_companion(serial, Edit::Size(size as usize))?;
         }
         let mut companions = self.companions();
-        if companions.files.get(&serial).is_none() {
+        if !companions.files.contains_key(&serial) {
             return Err(Status::Stale);
         }
         companions.use_serial(serial);
@@ -267,27 +271,45 @@ impl Kernel {
     /// twice, and the caller then writes out its own body, which needs no
     /// budget at all.
     fn spill_for(&self, target: u64, need: usize) -> Result<bool, Status> {
+        let mut skip = BTreeSet::from([target]);
         loop {
             let victim = {
                 let companions = self.companions();
                 if companions.resident_bytes + need <= companions.resident_budget {
                     return Ok(true);
                 }
-                companions.oldest_resident(Some(target))
+                companions.oldest_resident(&skip)
             };
             let Some(victim) = victim else {
                 return Ok(false);
             };
-            let _ = self.spill_one(victim, None)?;
+            if !self.spill_one(victim, None)? {
+                // The body changed under the file written from it, or the
+                // companion's own edit holds it: this call does not pick it
+                // again, and the next round looks at the body after it.
+                skip.insert(victim);
+            }
         }
     }
     /// Writes `serial`'s body out to the spill directory and switches it to
     /// that file, keeping at least `keep` bytes (all of them when `None`),
     /// with the disk I/O outside the companion lock. `Ok(false)` when another
     /// call changed the companion, or already spilled it, while the file was
-    /// written: that temporary file is dropped and the caller decides again on
-    /// the body it now finds.
+    /// written, or when the companion's own edit holds it: that temporary file
+    /// is dropped and the caller decides again on the body it now finds.
     fn spill_one(&self, serial: u64, keep: Option<usize>) -> Result<bool, Status> {
+        let gate = {
+            let companions = self.companions();
+            match companions.files.get(&serial) {
+                Some(file) => file.editing.clone(),
+                None => return Ok(true),
+            }
+        };
+        // One writer of a companion's file at a time: an edit of this companion
+        // is writing to it, and a spill may not wait for another call's I/O.
+        let Ok(_editing) = gate.try_lock() else {
+            return Ok(false);
+        };
         let (dir, bytes, size, used) = {
             let companions = self.companions();
             let file = companions.files.get(&serial).ok_or(Status::Stale)?;
@@ -301,9 +323,7 @@ impl Kernel {
             (dir, bytes, size, file.used)
         };
         let temp = create_spilled(&dir, serial, &bytes, size as u64)?;
-        let adopted = self
-            .companions()
-            .adopt_spilled(serial, Some(used), &temp, size);
+        let adopted = self.adopt_spilled(serial, Some(used), &temp, size);
         if matches!(adopted, Ok(true)) {
             return Ok(true);
         }
@@ -327,11 +347,42 @@ impl Kernel {
             (dir, bytes, size)
         };
         let temp = create_spilled(&dir, serial, &bytes, size as u64)?;
-        let adopted = self.companions().adopt_spilled(serial, None, &temp, size);
+        let adopted = self.adopt_spilled(serial, None, &temp, size);
         if !matches!(adopted, Ok(true)) {
             unlink_paths([temp]);
         }
         adopted.map(|_| ())
+    }
+    /// Renames `temp`, holding `serial`'s body written out, onto the
+    /// companion's own spill file and switches the companion to it. The
+    /// rename runs outside the companion lock: a reader keeps reading the
+    /// body in memory until the rename is done and the body is committed
+    /// under the lock again, and the file is never visible half written. The
+    /// caller holds the companion's edit gate for the whole adoption, so no
+    /// other call writes this companion's file.
+    fn adopt_spilled(
+        &self,
+        serial: u64,
+        used: Option<u64>,
+        temp: &Path,
+        len: usize,
+    ) -> Result<bool, Status> {
+        let path = match self.companions().spill_target(serial, used) {
+            Ok(Some(path)) => path,
+            Ok(None) => return Ok(false),
+            Err(status) => return Err(status),
+        };
+        if let Err(e) = fs::rename(temp, &path) {
+            // The temporary file is the caller's to drop: nothing was adopted.
+            return Err(io_status(&e));
+        }
+        let committed = self.companions().commit_spilled(serial, len);
+        if !committed {
+            // The companion is gone or already holds a file: the file just put
+            // in place is this call's to drop.
+            unlink_paths([path]);
+        }
+        Ok(committed)
     }
     /// The spill directory's file of `serial`, opened for one operation and
     /// closed again when the returned descriptor drops: the export holds no

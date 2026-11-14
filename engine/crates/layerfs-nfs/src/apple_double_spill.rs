@@ -5,7 +5,11 @@
 //! `pread`/`pwrite` by an operation that opens it and closes it again: the
 //! export holds no descriptor per spilled body. A spill writes a temporary
 //! `<serial>.<n>.tmp` that only the call adopting it renames to `<serial>`, so
-//! two calls spilling the same companion never share a file. The directory
+//! two calls spilling the same companion never share a file; the rename runs
+//! outside the companion lock, once the renaming call holds the companion's
+//! edit gate, and the body is committed as spilled under the lock afterwards.
+//! A reader therefore keeps reading the body in memory until the file is
+//! whole, and never sees a partial one. The directory
 //! and its files are this user's alone; the modes are set here rather than
 //! left to the caller's umask.
 use crate::attributes::Status;
