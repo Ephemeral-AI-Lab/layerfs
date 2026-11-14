@@ -118,7 +118,7 @@ fn readdirplus_lists_a_directory_with_attributes_and_handles() {
     let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, true);
     let mut client = Client::connect(server.local_addr(), UID, GID);
     let root = client.mnt("/");
-    let (src, src_attr) = client.lookup(&root, b"src").unwrap();
+    let (src, _) = client.lookup(&root, b"src").unwrap();
     let held = server.held().lookups;
 
     // One reply lists the whole directory: the window that lists its last
@@ -129,10 +129,12 @@ fn readdirplus_lists_a_directory_with_attributes_and_handles() {
         .unwrap();
     assert_eq!(client.calls - calls, 1, "one READDIRPLUS for the directory");
     assert!(eof, "the reply that lists the last name is the end");
+    // `src` is inherited from the committed base: the window reads no local
+    // row of it, so the reply says nothing about the directory rather than
+    // repeating the facts this export last observed for it.
     assert_eq!(
-        directory,
-        Some(src_attr),
-        "dir_attributes of the listed directory"
+        directory, None,
+        "no dir_attributes for an inherited directory"
     );
     let names: BTreeSet<Vec<u8>> = entries.iter().map(|entry| entry.name.clone()).collect();
     assert_eq!(
@@ -246,6 +248,71 @@ fn readdirplus_reports_a_local_directorys_own_rows() {
     );
     let released = server.stop();
     assert_eq!(released.lookups, held - 1, "every reference given back");
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn an_inherited_directorys_listing_never_answers_a_stale_observation() {
+    let base = temp("inherited");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let first = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut client = Client::connect(first.local_addr(), UID, GID);
+    let root = client.mnt("/");
+    // `many` comes from the committed base: the overlay holds no local row of
+    // it, so no listing visit reads the directory's own row.
+    let (many, _) = client.lookup(&root, b"many").unwrap();
+    let before = client.getattr(&many).unwrap();
+    assert_eq!(before.nlink, 2, "the directory has no child directory");
+
+    // The first reply lists the two dots only, so the descriptor stays open
+    // across the change below and the next reply continues this enumeration.
+    // Its window read no row of `many`, so it carries no attributes of it
+    // rather than the facts the OPENDIR visit observed.
+    let (dots, verifier, eof, directory) = client
+        .readdir_with_directory(&many, 0, 0, 300, true)
+        .unwrap();
+    assert!(!eof, "the enumeration continues after the dots");
+    assert_eq!(
+        directory, None,
+        "an inherited directory's window reads no row to answer"
+    );
+    let cookie = dots.last().expect("the dots").cookie;
+
+    // A second export of the same Workspace adds a child directory to
+    // `many`, which this export does not observe: its last observation of the
+    // directory is now older than the directory's own row, and nothing ages
+    // it.
+    let second = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut other = Client::connect(second.local_addr(), UID, GID);
+    let other_root = other.mnt("/");
+    let (target, _) = other.lookup(&other_root, b"many").unwrap();
+    other.mkdir(&target, b"child", 0o755).unwrap();
+
+    // The continued reply says the directory's current facts or nothing at
+    // all; it never repeats the pre-change observation.
+    let (_, _, _, directory) = client
+        .readdir_with_directory(&many, cookie, verifier, 4096, true)
+        .unwrap();
+    let fresh = client.getattr(&many).unwrap();
+    assert_eq!(fresh.nlink, 3, "the directory gained a child directory");
+    assert_ne!(
+        directory,
+        Some(before),
+        "never the last observation of the directory"
+    );
+    assert!(
+        directory.is_none() || directory == Some(fresh),
+        "the current facts or no attributes at all: {directory:?}"
+    );
+
+    drop(client);
+    drop(other);
+    let released = first.stop();
+    second.stop();
     let (_, outstanding) = rig.stop(released);
     assert_eq!(outstanding, 0);
     fs::remove_dir_all(base).unwrap();

@@ -213,10 +213,15 @@ pub fn list(kernel: &Kernel, request: Listing) -> Result<Vec<u8>, Status> {
             (at_end, directory)
         }
     };
-    // An inherited directory has no local row in this window: its attributes
-    // are the facts this export last observed or published for it (its
-    // OPENDIR read them), so the reply carries them without a read of its own.
-    let directory = directory.or_else(|| kernel.directory_wcc(request.serial).0);
+    // A window that read the listed directory's own row answers it: the
+    // reply's `post_op_attr` is those fresh facts and no further read. An
+    // inherited directory has no local row, so its window reads none.
+    // Answering the facts this export last observed for it instead — what its
+    // OPENDIR visit read, whenever the descriptor was opened — restarts the
+    // client's `actimeo` on a snapshot that nothing ages, so a directory
+    // whose facts moved on since is answered as it was then, for as long as
+    // the descriptor lives. RFC 1813 makes the field optional, so such a
+    // reply says nothing and the client falls back to its own timer.
     finish(entries, directory.as_ref(), handle, eof)
 }
 
