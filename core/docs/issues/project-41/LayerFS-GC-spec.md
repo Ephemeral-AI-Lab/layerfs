@@ -261,6 +261,30 @@ never performed — v14 groups cannot move byte-for-byte into v17+ packs); in-pl
 (跨窗口 → C3's full contract, a forward-looking item). A' is a different **swap mechanism**, not a
 fourth path.
 
+### 7.1b Light path — the general rule
+
+**Trigger.** Wholly dead packs are below **10% of the bytes a rebuild would replace** — SQLite: the
+file's `page_count × page_size`; PostgreSQL: `pg_total_relation_size` of `pack` + `object_location` +
+`content_signature`. The numerator is the bytes of wholly dead packs (`pack.body` / `pack_unit.body`);
+10% is a first value to revisit after the first measurement.
+
+**Rule.** The light path applies the **same retained predicate as the rebuild**, with `DELETE` in place
+of "do not copy", and **never touches a `pack` row** (I2 and the immutability triggers stand):
+
+| Table | Light path |
+|---|---|
+| `object_location` | delete rows of collectable objects (outside the closure and `pinned`) |
+| `content_signature` | delete entries naming a deleted object (the rebuild's cleanup rule) |
+| `file_digest` | delete rows whose root is not retained (the rebuild's correctness rule) |
+| `inode_value_block` | delete a block only when **every** ordinal in it is dead |
+| `pack` / `pack_unit` | **nothing** — so by construction the light path frees no payload bytes |
+| history / catalog tables | untouched |
+
+**No install, no generation bump.** It deletes only unreachable rows, so the Store's semantics do not
+change: `catalog_incarnation` stays at `G`, the receipt reports `generation.before == generation.after`,
+and readers are **not** sent `StaleStore`. Because it does delete rows it is still covered by C3 — and
+C3 is satisfied locally (op record names `G`, exclusive window, re-check before commit).
+
 ### 7.2 SQLite (layerfs-project#49)
 0. **Run where the Store lives — no refusal.** `place::plan` routes a non-`native` SQLite Store (`Placement::Machine(m)` / `Unknown`) to that machine's worker, the route `store.push` / `pull` / `remove` already take, so compact copies and renames in place and transfers nothing. The earlier rule (refuse with `Unsupported`, then "`store.pull` home, compact, `store.push` back") is **superseded** (decided 2026-11-13, layerfs-project#42 item 5): it charged the user two full transfers for something the architecture already does in one place. What this costs: **cross-machine interruption** — the op record lives in the caller's home while the staged copy lives on the machine, so `Unresolved` and `doctor` must observe both ends; `Capacity` comes from the machine's disk; and the C8b `(dev, ino)` check is only meaningful inside the worker, since the caller sees a different inode space.
 1. Pass the old Store through `doctor`/`diagnose` first, then enter `check`.
@@ -272,6 +296,16 @@ fourth path.
 7. Insufficient disk reports `Capacity`; on failure keep the op and the staged copy, and do not clean up on your own.
 8. **Insertion order is decided by the FK graph**: `pack_unit.pack_id → pack.pack_id`, `object_location.pack_id → pack.pack_id`, `content_signature.object_id → object_location.object_id` (`sql/sqlite/objects*.sql`, `sql/sqlite/metadata.sql`), constraints IMMEDIATE, `foreign_keys=ON`. Insert `pack` → `pack_unit` → `object_location` → `content_signature` into the staged Store. In-place deletion in the live Store stays ruled out (`03-decision-record.md` §5.1a).
 9. `reclaim_space` is not part of compact: the fresh staged Store has no free pages to return. It only reports the old file's `backend_reusable`.
+
+**Light path, SQLite specifics.**
+
+1. Checkpoint the old WAL first (`checkpoint_leftover_wal`); pages in the WAL cannot be returned.
+2. One write transaction: the deletions above, then re-check `catalog_incarnation == G`.
+3. `PRAGMA incremental_vacuum` — **only when `auto_vacuum = 2`** (`lifecycle/reclamation.rs` already
+   requires it), in its page batches, until the freelist is empty or a cap is reached.
+4. When `auto_vacuum ≠ 2`: no vacuum; report `physical_shrink = 0` and `backend_reusable` as the
+   freelist bytes, saying in the receipt that `auto_vacuum=2` is what would return them to the OS.
+
 
 ### 7.3 PostgreSQL (layerfs-project#50)
 - **Scope**: remote PostgreSQL Stores are in scope (including remote servers); out of scope are remote SQLite and remote object-storage copies.
@@ -307,56 +341,8 @@ fourth path.
 - Reader fence: the lane blocks only writers; readers uniformly go through C8's `(catalog_id, incarnation)` session check → `StaleStore` (Q5 is superseded by C8/R2 and is no longer chosen separately).
 - Reclamation metric: the delta of `pg_relation_size` / `pg_total_relation_size`; `autovacuum` stays enabled but is not counted.
 
-### 7.4 Leftover recovery
-- Every `check` runs `resolve` first, and judges by the op's phase whether that phase holds anything.
-- When it cannot be judged, report `Unresolved`; automatic install or automatic cleanup is forbidden.
-- An orphan file with no op reports `OrphanArtifact` and is not deleted.
+**Light path, PostgreSQL specifics.**
 
----
-
-#### One contradiction this revision leaves open, deliberately
-
-The light path deletes `object_location` rows **in the live Store**, which is exactly the
-per-row deletion C3's `delete(id, G)` was written for — while C3 (item 9) is recorded as a
-forward-looking contract with no caller in 2.0.0. Both statements are in this spec right now:
-§7.2 step 2 says nothing is deleted, while the Q6 row's light path deletes locators. **This is
-an open question for the owner, not a resolved design:** either the light path deletes rows and
-C3 becomes a 2.0.0 deliverable (item 9 reopened), or the light path only vacuums/reports and
-frees effectively nothing, and the receipt must say so.
-
-#### Light path (the third path of `store.compact`)
-
-**Trigger.** Wholly dead packs are below **10% of the bytes a rebuild would replace** — SQLite: the
-file's `page_count × page_size`; PostgreSQL: `pg_total_relation_size` of `pack` + `object_location` +
-`content_signature`. The numerator is the bytes of wholly dead packs (`pack.body` / `pack_unit.body`);
-10% is a first value to revisit after the first measurement.
-
-**Rule.** The light path applies the **same retained predicate as the rebuild**, with `DELETE` in place
-of "do not copy", and **never touches a `pack` row** (I2 and the immutability triggers stand):
-
-| Table | Light path |
-|---|---|
-| `object_location` | delete rows of collectable objects (outside the closure and `pinned`) |
-| `content_signature` | delete entries naming a deleted object (the rebuild's cleanup rule) |
-| `file_digest` | delete rows whose root is not retained (the rebuild's correctness rule) |
-| `inode_value_block` | delete a block only when **every** ordinal in it is dead |
-| `pack` / `pack_unit` | **nothing** — so by construction the light path frees no payload bytes |
-| history / catalog tables | untouched |
-
-**No install, no generation bump.** It deletes only unreachable rows, so the Store's semantics do not
-change: `catalog_incarnation` stays at `G`, the receipt reports `generation.before == generation.after`,
-and readers are **not** sent `StaleStore`. Because it does delete rows it is still covered by C3 — and
-C3 is satisfied locally (op record names `G`, exclusive window, re-check before commit).
-
-**SQLite specifics.**
-1. Checkpoint the old WAL first (`checkpoint_leftover_wal`); pages in the WAL cannot be returned.
-2. One write transaction: the deletions above, then re-check `catalog_incarnation == G`.
-3. `PRAGMA incremental_vacuum` — **only when `auto_vacuum = 2`** (`lifecycle/reclamation.rs` already
-   requires it), in its page batches, until the freelist is empty or a cap is reached.
-4. When `auto_vacuum ≠ 2`: no vacuum; report `physical_shrink = 0` and `backend_reusable` as the
-   freelist bytes, saying in the receipt that `auto_vacuum=2` is what would return them to the OS.
-
-**PostgreSQL specifics.**
 1. One transaction, inside the exclusive window and the advisory lock: re-check the incarnation, run the
    deletions. `pack` is never locked exclusively for this path.
 2. `COMMIT`, then a **plain `VACUUM`** (never `VACUUM FULL`, which is a rebuild with a different name and
@@ -366,7 +352,15 @@ C3 is satisfied locally (op record names `G`, exclusive window, re-check before 
 3. `physical_shrink = 0` **by definition** here, with the reason "dead tuples await autovacuum";
    `backend_reusable` carries the `n_dead_tup` estimate.
 
-### 7.2a Code-level corrections from the #155 source review
+
+### 7.4 Leftover recovery
+- Every `check` runs `resolve` first, and judges by the op's phase whether that phase holds anything.
+- When it cannot be judged, report `Unresolved`; automatic install or automatic cleanup is forbidden.
+- An orphan file with no op reports `OrphanArtifact` and is not deleted.
+
+---
+
+### 7.5 Code-level corrections from the #155 source review
 
 Each is a place where this spec did not match the tree. Adopting them changes no contract.
 
