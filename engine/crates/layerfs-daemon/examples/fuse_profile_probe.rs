@@ -92,6 +92,84 @@ mod probe {
         sum
     }
 
+    /// Prototype (`verify-once`): in-cache hash rates on this CPU, before any
+    /// measured phase, when `LAYERFS_PROBE_HASHBENCH` is set. Objects are the
+    /// cold read's mean size (500 MiB / 27,214), packs its mean pack size;
+    /// 64 objects (1.2 MiB) and 8 packs (1.9 MiB) are reused, so this is the
+    /// hash's own speed over cache-resident bytes, not a cold claim.
+    fn hash_bench() {
+        use layerfs_content::object::OBJECT_DOMAIN;
+        const OBJECT: usize = 19_265;
+        const PACK: usize = 235_000;
+        const CALLS: usize = 4_096;
+        const PACK_CALLS: usize = 256;
+        let mut stream = Stream::new(0x5eed);
+        let objects: Vec<Vec<u8>> = (0..64)
+            .map(|_| {
+                let mut buffer = vec![0; OBJECT];
+                stream.fill(&mut buffer);
+                buffer
+            })
+            .collect();
+        let packs: Vec<Vec<u8>> = (0..8)
+            .map(|_| {
+                let mut buffer = vec![0; PACK];
+                stream.fill(&mut buffer);
+                buffer
+            })
+            .collect();
+        let rate = |seconds: f64, bytes: usize, calls: usize| {
+            format!(
+                "{{\"us_per_call\":{:.2},\"gb_s\":{:.3}}}",
+                seconds * 1e6 / calls as f64,
+                (bytes * calls) as f64 / seconds / 1e9
+            )
+        };
+        let mut check = 0_u8;
+        let started = Instant::now();
+        for index in 0..CALLS {
+            let mut hasher = blake3::Hasher::new();
+            hasher.update(OBJECT_DOMAIN);
+            hasher.update(&objects[index % 64]);
+            check ^= hasher.finalize().as_bytes()[0];
+        }
+        let incremental = rate(started.elapsed().as_secs_f64(), OBJECT, CALLS);
+        let started = Instant::now();
+        for index in 0..CALLS {
+            let mut framed = Vec::with_capacity(OBJECT_DOMAIN.len() + OBJECT);
+            framed.extend_from_slice(OBJECT_DOMAIN);
+            framed.extend_from_slice(&objects[index % 64]);
+            check ^= blake3::hash(&framed).as_bytes()[0];
+        }
+        let one_shot = rate(started.elapsed().as_secs_f64(), OBJECT, CALLS);
+        let started = Instant::now();
+        for index in 0..CALLS {
+            check ^= blake3::hash(&objects[index % 64]).as_bytes()[0];
+        }
+        let unprefixed = rate(started.elapsed().as_secs_f64(), OBJECT, CALLS);
+        let started = Instant::now();
+        for index in 0..CALLS {
+            let copy = objects[index % 64].clone();
+            check ^= copy[0];
+        }
+        let copy = rate(started.elapsed().as_secs_f64(), OBJECT, CALLS);
+        let started = Instant::now();
+        for index in 0..PACK_CALLS {
+            check ^= layerfs_storage::port::ObjectKey::for_bytes(&packs[index % 8]).as_bytes()[0];
+        }
+        let sha = rate(started.elapsed().as_secs_f64(), PACK, PACK_CALLS);
+        // The one-shot form must give the incremental identity.
+        let mut framed = OBJECT_DOMAIN.to_vec();
+        framed.extend_from_slice(&objects[0]);
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(OBJECT_DOMAIN);
+        hasher.update(&objects[0]);
+        assert_eq!(blake3::hash(&framed), hasher.finalize());
+        println!(
+            "PROBE {{\"phase\":\"hash_bench\",\"object_bytes\":{OBJECT},\"pack_bytes\":{PACK},\"blake3_incremental\":{incremental},\"blake3_one_shot_with_copy\":{one_shot},\"blake3_unprefixed\":{unprefixed},\"copy_only\":{copy},\"pack_sha256\":{sha},\"check\":{check}}}"
+        );
+    }
+
     pub fn main() {
         let args: Vec<String> = std::env::args().collect();
         match args.get(1).map(String::as_str) {
@@ -324,6 +402,9 @@ mod probe {
             std::env::var("LAYERFS_PROBE_FUSE_BACKGROUND").unwrap_or_else(|_| "1".into()),
             load.trim()
         );
+        if std::env::var_os("LAYERFS_PROBE_HASHBENCH").is_some() {
+            hash_bench();
+        }
 
         // Native reference: the same bytes from the volume's ext4, cold.
         let native = dir.join("native-rand");

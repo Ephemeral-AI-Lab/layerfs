@@ -253,7 +253,9 @@ impl PoolReader {
             if decoded.len() != location.canonical_length {
                 return Err(StorageError::Integrity("branch canonical length"));
             }
-            if ObjectId::for_bytes(&decoded) != location.object_id {
+            if !crate::port::read_probe().noresolve
+                && ObjectId::for_bytes(&decoded) != location.object_id
+            {
                 return Err(StorageError::Integrity("branch canonical identity"));
             }
             page = Some((location.object_id, decoded));

@@ -557,7 +557,7 @@ fn canonical_from_body(
     if canonical.len() != root.canonical_length {
         return Err(StorageError::Integrity("pooled canonical length"));
     }
-    if ObjectId::for_bytes(&canonical) != root.object_id {
+    if !crate::port::read_probe().noresolve && ObjectId::for_bytes(&canonical) != root.object_id {
         return Err(StorageError::Integrity("pooled canonical identity"));
     }
     Ok(canonical)
