@@ -7,6 +7,7 @@ mod detach;
 mod diagnostic;
 mod dirty;
 mod export;
+mod export_custody;
 mod export_helper;
 mod failure;
 mod force;

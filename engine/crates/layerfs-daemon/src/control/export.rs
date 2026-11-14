@@ -26,10 +26,12 @@
 //!   (`export_helper::listed`, `Helper::lazy`).
 //! - ForceUnmount runs the forced helper once, then the same teardown. It is
 //!   also how an export kept at Detach for a mount still listed is finished.
-//!   A helper that outlives its KILL goes to the bounded retained queue.
+//!   A helper that outlives its KILL goes to the retained queue, whose one
+//!   background thread polls it (no call waits for it).
+pub(super) use super::export_custody::{ExportKept, ExportLeaving, Exported};
 use super::{
     export_helper::{listed, mounted_under, Helpers, Ran},
-    kernel::{bounded, Kernel},
+    kernel::Kernel,
     registry::{bound_mut, idle},
     Failure, Service, Success,
 };
@@ -37,12 +39,11 @@ use crate::store::BoundWorkspace;
 use layerfs_bridge::control::{
     AbortDisposition, Activity, ControlCode, DetachDisposition, ForceUnmounted, ForcedCleanup,
     ForcedFacts, ForcedOutcome, MountPhase, MountReceipt, MountStatus, MountWork, ReadyMount,
-    Reply, TeardownCustody, TeardownStage, WorkspaceToken, MOUNT_DIRECTORY_LIMIT,
+    Reply, TeardownStage, WorkspaceToken, MOUNT_DIRECTORY_LIMIT,
 };
 use layerfs_nfs::{ExportConfig, Released, Server};
 use layerfs_overlay::{CleanupState, KernelMount};
 use std::{
-    fmt,
     net::{IpAddr, Ipv4Addr, TcpListener},
     path::PathBuf,
     sync::Arc,
@@ -154,8 +155,8 @@ pub struct ExportServingConfig {
     pub helper_wait: std::time::Duration,
     /// The post-KILL window in which the helper's own exit is still observed
     /// synchronously; past it the child goes to the retained queue. Zero
-    /// skips the window, which bounded tests use to reach the retained path
-    /// at once. Production value [`REAP_WAIT`].
+    /// skips the window, so a test reaches the retained path at once with a
+    /// bounded wait. Production value [`REAP_WAIT`].
     pub reap_wait: std::time::Duration,
     /// Test hook, `None` in production: a file read line by line in place of
     /// the host's mount table, so a test states which mounts exist without
@@ -193,8 +194,9 @@ impl ExportServing {
     pub fn config(&self) -> &ExportServingConfig {
         &self.config
     }
-    /// Test and diagnostic accessor: the helper exits the bounded reaper has
-    /// observed since the daemon started (newest last, at most 64 kept).
+    /// Test and diagnostic accessor: the helper exits the queue's one
+    /// background thread has observed since the daemon started (newest last,
+    /// at most 64 kept).
     /// Production code reports a retained child inside its own refusal text
     /// instead; nothing in the daemon reads this.
     pub fn reaped_helpers(&self) -> Vec<(u32, String)> {
@@ -234,73 +236,6 @@ impl ExportServing {
                 }
             })
             .collect()
-    }
-}
-/// A serving export and the mount the host client holds of it.
-pub(super) struct Exported {
-    pub server: Arc<Server>,
-    pub mount: KernelMount,
-    pub ready: ReadyMount,
-    pub tracked: bool,
-}
-/// A terminal operation owns the export; status still observes it.
-pub(super) struct ExportLeaving {
-    pub ready: ReadyMount,
-    pub phase: MountPhase,
-    pub work: MountWork,
-}
-/// Export custody a terminal or attach step could not finish disposing:
-/// kept exactly, never retried or settled by a later observation.
-pub(super) struct ExportKept {
-    pub ready: Option<ReadyMount>,
-    pub stage: TeardownStage,
-    pub detail: String,
-    pub work: Option<MountWork>,
-    pub exported: Option<Box<Exported>>,
-    pub evidence: Box<dyn fmt::Debug + Send>,
-    pub forced: Option<ForcedFacts>,
-}
-impl ExportKept {
-    pub(super) fn forceable(&self) -> bool {
-        self.exported.is_some()
-            && self.stage == TeardownStage::Detach
-            && self.forced.is_none()
-            && self.ready.is_some()
-    }
-    pub(super) fn custody(&self, token: WorkspaceToken) -> TeardownCustody {
-        TeardownCustody {
-            token,
-            stage: self.stage,
-            detached: matches!(self.stage, TeardownStage::Revoke | TeardownStage::Close),
-            work: self.work,
-            detail: bounded(&self.detail),
-            forced: self.forced.clone(),
-        }
-    }
-}
-impl fmt::Debug for ExportKept {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let evidence: &dyn fmt::Debug = self
-            .exported
-            .as_ref()
-            .map_or(&*self.evidence as &dyn fmt::Debug, |e| e);
-        f.debug_struct("ExportKept")
-            .field("ready", &self.ready)
-            .field("stage", &self.stage)
-            .field("detail", &self.detail)
-            .field("work", &self.work)
-            .field("evidence", &evidence)
-            .field("forced", &self.forced)
-            .finish()
-    }
-}
-impl fmt::Debug for Exported {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Exported")
-            .field("address", &self.server.local_addr())
-            .field("mount", &self.mount)
-            .field("held", &self.server.held())
-            .finish()
     }
 }
 /// The maintained counters of a serving export.
@@ -707,7 +642,8 @@ impl Service {
                     format!("client reported the mount busy; no terminal effect: {detail}"),
                 ));
             }
-            Ran::Failed(_) | Ran::Interrupted(_) if self.detached_export(&exported, helper.as_ref()) => {}
+            Ran::Failed(_) | Ran::Interrupted(_)
+                if self.detached_export(&exported, helper.as_ref()) => {}
             Ran::Failed(detail) | Ran::Interrupted(detail) => {
                 return Err(self.keep_export(
                     token,

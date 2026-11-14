@@ -2,8 +2,13 @@
 //! helper with a deadline: the daemon's NFS mount and unmount helpers and the
 //! macOS driver's `umount -f` (layerfs-project#136). A child that survived its
 //! KILL and the post-KILL grace window is never waited on synchronously and is
-//! never signalled twice. One bounded background thread polls it instead and
-//! records the exit it observes.
+//! never signalled twice. One background thread polls it instead and records
+//! the exit it observes.
+//!
+//! The bound is one reaper thread and [`RECORDED`] observed exits, not time: a
+//! child whose exit never arrives keeps the queue non-empty and the one thread
+//! polling every [`PAUSE`] for as long as its custody lasts. That is the point
+//! of keeping it; a deadline would drop the only handle that can reap it.
 use std::{
     fmt,
     process::Child,
@@ -18,6 +23,10 @@ use std::{
 const PAUSE: Duration = Duration::from_millis(20);
 /// Observed exits kept for diagnostics; the oldest go first.
 const RECORDED: usize = 64;
+/// Consecutive failed waits after which a child is given up on (~0.5 s at
+/// [`PAUSE`]). A wait that keeps failing cannot reap the child, so holding its
+/// handle only polls a broken one; the failure is recorded instead.
+const ERROR_TRIES: u8 = 25;
 
 /// Children a caller could not observe exiting, and the exits seen since.
 /// `retain`, `reap`, `exits` and `record` are the whole surface: nothing here
@@ -27,9 +36,17 @@ pub struct Retained(Arc<Inner>);
 
 #[derive(Debug, Default)]
 struct Inner {
-    children: Mutex<Vec<Child>>,
+    children: Mutex<Vec<Kept>>,
     exits: Mutex<Vec<(u32, String)>>,
     reaping: AtomicBool,
+}
+
+/// One retained child and, when its last wait failed, that failure.
+#[derive(Debug)]
+struct Kept {
+    child: Child,
+    error: Option<String>,
+    failures: u8,
 }
 
 impl Retained {
@@ -40,7 +57,11 @@ impl Retained {
             .children
             .lock()
             .unwrap_or_else(|error| error.into_inner())
-            .push(child);
+            .push(Kept {
+                child,
+                error: None,
+                failures: 0,
+            });
         if self.0.reaping.swap(true, Ordering::AcqRel) {
             return;
         }
@@ -97,14 +118,33 @@ impl Inner {
             .lock()
             .unwrap_or_else(|error| error.into_inner());
         let mut exits = self.exits.lock().unwrap_or_else(|error| error.into_inner());
-        children.retain_mut(|child| match child.try_wait() {
+        children.retain_mut(|kept| match kept.child.try_wait() {
             Ok(Some(status)) => {
-                exits.push((child.id(), status.to_string()));
+                exits.push((kept.child.id(), status.to_string()));
                 false
             }
-            Ok(None) => true,
+            Ok(None) => {
+                kept.error = None;
+                kept.failures = 0;
+                true
+            }
+            // A failed wait is not an exit. Keep the child so its exit is
+            // still observed, record the failure once (changed message or the
+            // final give-up), and stop polling it after `ERROR_TRIES`.
             Err(error) => {
-                exits.push((child.id(), format!("wait error: {error}")));
+                let message = error.to_string();
+                if kept.error.as_deref() != Some(message.as_str()) {
+                    kept.error = Some(message.clone());
+                    kept.failures = 0;
+                }
+                kept.failures = kept.failures.saturating_add(1);
+                if kept.failures < ERROR_TRIES {
+                    return true;
+                }
+                exits.push((
+                    kept.child.id(),
+                    format!("exit unobservable after {ERROR_TRIES} failed waits: {message}"),
+                ));
                 false
             }
         });

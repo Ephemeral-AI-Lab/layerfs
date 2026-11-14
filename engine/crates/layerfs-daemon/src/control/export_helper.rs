@@ -31,9 +31,7 @@ impl Helper {
     pub fn lazy(&self) -> bool {
         self.0.iter().any(|word| {
             word == "--lazy"
-                || (word.starts_with('-')
-                    && !word.starts_with("--")
-                    && word.contains('l'))
+                || (word.starts_with('-') && !word.starts_with("--") && word.contains('l'))
         })
     }
     fn command(&self, port: u16, directory: &str) -> Option<Command> {
@@ -56,7 +54,8 @@ pub(super) enum Ran {
 }
 
 /// Retained children are never waited on synchronously or signalled twice.
-/// A bounded background reaper reaps their exits and records their status.
+/// The retained queue's one background thread reaps their exits and records
+/// their status; its bound is that thread, not time.
 #[derive(Debug, Default)]
 pub(super) struct Helpers {
     retained: Retained,
