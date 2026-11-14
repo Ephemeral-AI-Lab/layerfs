@@ -30,8 +30,8 @@ fn main() {
 #[cfg(target_os = "linux")]
 mod probe {
     use super::{installed, mounted::Harness};
-    use layerfs_bridge::control::ReadyMount;
-    use layerfs_fuse::request::Opcode;
+    use layerfs_bridge::control::{ReadyMount, Reply};
+    use layerfs_fuse::request::{Opcode, OPCODES};
     use layerfs_history::{
         BranchId, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryName,
         LayerStackId,
@@ -50,7 +50,7 @@ mod probe {
         io::{Read, Write},
         os::fd::AsRawFd,
         os::unix::fs::{FileExt, MetadataExt, PermissionsExt},
-        path::Path,
+        path::{Path, PathBuf},
         process::Command,
         time::{Duration, Instant},
     };
@@ -784,6 +784,399 @@ mod probe {
         );
     }
 
+    /// Prototype (experiment `write2`): process CPU time from `getrusage`
+    /// (user, system, in µs) and the run time of the `layerfs-digest`
+    /// helper thread from its `schedstat` (µs).
+    fn cpu() -> [u64; 3] {
+        use nix::sys::resource::{getrusage, UsageWho};
+        let usage = getrusage(UsageWho::RUSAGE_SELF).unwrap();
+        let us = |t: nix::sys::time::TimeVal| t.tv_sec() as u64 * 1_000_000 + t.tv_usec() as u64;
+        let mut helper = 0;
+        for task in fs::read_dir("/proc/self/task").unwrap().flatten() {
+            let comm = fs::read_to_string(task.path().join("comm")).unwrap_or_default();
+            if comm.trim() == "layerfs-digest" {
+                helper += fs::read_to_string(task.path().join("schedstat"))
+                    .ok()
+                    .and_then(|text| text.split_whitespace().next()?.parse::<u64>().ok())
+                    .unwrap_or(0)
+                    / 1_000;
+            }
+        }
+        [us(usage.user_time()), us(usage.system_time()), helper]
+    }
+    /// CPU used since `before`, as JSON: totals, CPU per wall second and
+    /// CPU per `unit` (MB or file).
+    fn cpu_delta(before: [u64; 3], seconds: f64, units: f64, unit: &str) -> String {
+        let after = cpu();
+        let (user, system, helper) = (
+            after[0] - before[0],
+            after[1] - before[1],
+            after[2] - before[2],
+        );
+        let total = user + system;
+        format!(
+            "{{\"user_us\":{user},\"sys_us\":{system},\"cpu_us\":{total},\"helper_us\":{helper},\"cpu_per_wall\":{:.3},\"cpu_us_per_{unit}\":{:.2}}}",
+            total as f64 / (seconds * 1e6),
+            total as f64 / units
+        )
+    }
+    /// Prototype (experiment `write2`): FUSE callbacks since `before` over
+    /// every mount, by opcode: [count, wall ns]. Read before any check, so
+    /// the read-back is not in it.
+    fn callbacks_delta(before: &([u64; OPCODES], [u64; OPCODES])) -> String {
+        let after = layerfs_fuse::request::process_callbacks();
+        let rows: Vec<String> = (0..OPCODES)
+            .filter(|&i| after.0[i] > before.0[i])
+            .map(|i| {
+                format!(
+                    "\"{}\":[{},{}]",
+                    Opcode::NAMES[i],
+                    after.0[i] - before.0[i],
+                    after.1[i] - before.1[i]
+                )
+            })
+            .collect();
+        format!("{{{}}}", rows.join(","))
+    }
+    /// Prototype (experiment `write2`): drops a file's clean kernel pages, so
+    /// the reads that follow reach the daemon (write-back is off, so every
+    /// written page is clean).
+    fn drop_pages(file: &File) {
+        nix::fcntl::posix_fadvise(
+            file,
+            0,
+            0,
+            nix::fcntl::PosixFadviseAdvice::POSIX_FADV_DONTNEED,
+        )
+        .unwrap();
+    }
+    /// A written file read back whole: its length and every 1 MiB chunk.
+    fn verify_file(path: &Path, length: usize, chunk: &dyn Fn(usize) -> Vec<u8>) -> bool {
+        let file = File::open(path).unwrap();
+        drop_pages(&file);
+        if file.metadata().unwrap().len() != length as u64 {
+            return false;
+        }
+        let mut got = vec![0; BUFFER];
+        (0..length / BUFFER).all(|n| {
+            file.read_exact_at(&mut got, (n * BUFFER) as u64).unwrap();
+            got == chunk(n)
+        })
+    }
+    /// The block offsets of `count` random 4 KiB writes in `length` bytes.
+    fn random_offsets(seed: u64, count: usize, length: u64) -> Vec<u64> {
+        let mut lcg = seed;
+        (0..count)
+            .map(|_| {
+                lcg = lcg.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+                ((lcg >> 33) % (length / 4096)) * 4096
+            })
+            .collect()
+    }
+    struct Blocks {
+        ok: bool,
+        written: usize,
+        base: usize,
+    }
+    impl std::fmt::Display for Blocks {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(
+                f,
+                "{{\"ok\":{},\"written_blocks\":{},\"base_blocks\":{}}}",
+                self.ok, self.written, self.base
+            )
+        }
+    }
+    /// After random writes into a file of `length` bytes: every written
+    /// block holds its writer's block, and the blocks of 1,024 sampled
+    /// offsets no one wrote still hold the committed bytes (compared with
+    /// the native copy) or, in a new file (`native` None), zeros.
+    fn verify_blocks(
+        path: &Path,
+        writers: &[(Vec<u64>, Vec<u8>)],
+        native: Option<&Path>,
+        length: u64,
+    ) -> Blocks {
+        let file = File::open(path).unwrap();
+        drop_pages(&file);
+        let reference = native.map(|native| File::open(native).unwrap());
+        let mut written = std::collections::BTreeMap::new();
+        for (offsets, block) in writers {
+            for at in offsets {
+                written.insert(*at, block);
+            }
+        }
+        let mut got = vec![0; 4096];
+        let mut ok = file.metadata().unwrap().len() == length;
+        for (at, block) in &written {
+            file.read_exact_at(&mut got, *at).unwrap();
+            ok &= got == block.as_slice();
+        }
+        let mut want = vec![0; 4096];
+        let mut base = 0;
+        for n in 0..1_024_u64 {
+            let at = ((n * 104_729 + 17) % (length / 4096)) * 4096;
+            if written.contains_key(&at) {
+                continue;
+            }
+            file.read_exact_at(&mut got, at).unwrap();
+            if let Some(reference) = &reference {
+                reference.read_exact_at(&mut want, at).unwrap();
+            }
+            ok &= got == want;
+            base += 1;
+        }
+        Blocks {
+            ok,
+            written: written.len(),
+            base,
+        }
+    }
+    /// Every created file holds exactly `bytes`.
+    fn verify_creates(directory: &Path, count: usize, bytes: &[u8]) -> bool {
+        (0..count).all(|n| {
+            let mut file = File::open(directory.join(format!("c{n:05}"))).unwrap();
+            drop_pages(&file);
+            let mut got = Vec::new();
+            file.read_to_end(&mut got).unwrap();
+            got == bytes
+        })
+    }
+    #[derive(Clone, Copy, PartialEq)]
+    enum Contention {
+        Sequential,
+        Create,
+        Random,
+    }
+    /// Prototype (experiment `write2`): `WRITERS` threads write at once,
+    /// each on its own Workspace (or all on one, `shared`): 64 MiB
+    /// sequential, 500 creates of 1 KiB or 4,096 random 4 KiB writes each,
+    /// into `rand`, or, in one Workspace, each into its own new 64 MiB file
+    /// (the kernel serializes writes to one inode).
+    /// Wall and process CPU cover the whole set; every writer's bytes are
+    /// read back after.
+    fn contend(harness: &Harness, kind: Contention, first: u8, shared: bool, native: &Path) {
+        const WRITERS: usize = 4;
+        const SEQ: usize = 64;
+        const FILES: usize = 500;
+        const RANDOM: usize = 4_096;
+        const SPARSE: u64 = 64 * 1024 * 1024;
+        let mounts: Vec<ReadyMount> = (0..if shared { 1 } else { WRITERS })
+            .map(|n| harness.mount(first + n as u8))
+            .collect();
+        let root =
+            |writer: usize| PathBuf::from(&mounts[if shared { 0 } else { writer }].directory);
+        let mut pool = vec![0; 32 * BUFFER];
+        Stream::new(7).fill(&mut pool);
+        let chunk = |writer: usize, n: usize| {
+            let at = ((n + 8 * writer) % 32) * BUFFER;
+            let mut chunk = pool[at..at + BUFFER].to_vec();
+            chunk[..8].copy_from_slice(&(n as u64).to_le_bytes());
+            chunk[8..16].copy_from_slice(&(writer as u64).to_le_bytes());
+            chunk
+        };
+        let mut small = vec![0; SMALL_BYTES];
+        Stream::new(13).fill(&mut small);
+        let writers: Vec<(Vec<u64>, Vec<u8>)> = (0..WRITERS)
+            .map(|writer| {
+                let mut block = vec![0; 4096];
+                Stream::new(100 + writer as u64).fill(&mut block);
+                let length = if shared { SPARSE } else { BIG };
+                let offsets = random_offsets(0x9876_5432 + writer as u64, RANDOM, length);
+                (offsets, block)
+            })
+            .collect();
+        let name = |writer: usize| format!("w{writer}");
+        let target = |writer: usize| {
+            root(writer).join(if shared {
+                format!("r{writer}")
+            } else {
+                "rand".into()
+            })
+        };
+        for writer in 0..WRITERS {
+            match kind {
+                Contention::Create => fs::create_dir(root(writer).join(name(writer))).unwrap(),
+                Contention::Random if shared => File::create(target(writer))
+                    .unwrap()
+                    .set_len(SPARSE)
+                    .unwrap(),
+                _ => {}
+            }
+        }
+        let barrier = std::sync::Barrier::new(WRITERS + 1);
+        let stage0 = stages::snapshot();
+        let calls0 = layerfs_fuse::request::process_callbacks();
+        let mut start = None;
+        std::thread::scope(|scope| {
+            for writer in 0..WRITERS {
+                let (barrier, root, chunk, small, writers, target) = (
+                    &barrier,
+                    root(writer),
+                    &chunk,
+                    &small,
+                    &writers,
+                    target(writer),
+                );
+                scope.spawn(move || {
+                    barrier.wait();
+                    match kind {
+                        Contention::Sequential => {
+                            let mut file = File::create(root.join(format!("seq{writer}"))).unwrap();
+                            for n in 0..SEQ {
+                                file.write_all(&chunk(writer, n)).unwrap();
+                            }
+                        }
+                        Contention::Create => {
+                            for n in 0..FILES {
+                                let path = root.join(format!("w{writer}/c{n:05}"));
+                                File::create(path).unwrap().write_all(small).unwrap();
+                            }
+                        }
+                        Contention::Random => {
+                            let file = OpenOptions::new().write(true).open(target).unwrap();
+                            let (offsets, block) = &writers[writer];
+                            for at in offsets {
+                                file.write_all_at(block, *at).unwrap();
+                            }
+                        }
+                    }
+                });
+            }
+            start = Some((cpu(), Instant::now()));
+            barrier.wait();
+        });
+        let (cpu0, started) = start.unwrap();
+        let seconds = started.elapsed().as_secs_f64();
+        let random_mb = (WRITERS * RANDOM * 4096) as f64 / 1e6;
+        let (units, unit, phase) = match kind {
+            Contention::Sequential => ((WRITERS * SEQ * BUFFER) as f64 / 1e6, "mb", "contend_seq"),
+            Contention::Create => ((WRITERS * FILES) as f64, "file", "contend_create"),
+            Contention::Random if shared => (random_mb, "mb", "shared_random_4k"),
+            Contention::Random => (random_mb, "mb", "contend_random_4k"),
+        };
+        let used = cpu_delta(cpu0, seconds, units, unit);
+        let split = stage_delta(&stage0);
+        let calls = callbacks_delta(&calls0);
+        let verified = match kind {
+            Contention::Sequential => (0..WRITERS).all(|writer| {
+                verify_file(
+                    &root(writer).join(format!("seq{writer}")),
+                    SEQ * BUFFER,
+                    &|n| chunk(writer, n),
+                )
+            }),
+            Contention::Create => (0..WRITERS)
+                .all(|writer| verify_creates(&root(writer).join(name(writer)), FILES, &small)),
+            Contention::Random => (0..WRITERS).all(|writer| {
+                let (native, length) = if shared {
+                    (None, SPARSE)
+                } else {
+                    (Some(native), BIG)
+                };
+                verify_blocks(
+                    &target(writer),
+                    std::slice::from_ref(&writers[writer]),
+                    native,
+                    length,
+                )
+                .ok
+            }),
+        };
+        let kernel: Vec<String> = mounts
+            .iter()
+            .map(|ready| opcodes(&unmount(harness, ready)))
+            .collect();
+        println!(
+            "PROBE {{\"phase\":\"{phase}\",\"writers\":{WRITERS},\"workspaces\":{},\"seconds\":{seconds:.4},\"per_unit_us\":{:.2},\"mb_s\":{:.1},\"cpu\":{used},\"verified\":{verified},\"callbacks\":{calls},\"stages\":{split},\"kernel\":[{}]}}",
+            mounts.len(),
+            seconds * 1e6 / units,
+            if unit == "mb" { units / seconds } else { 0.0 },
+            kernel.join(",")
+        );
+        assert!(verified, "{phase} bytes");
+    }
+    /// Prototype (experiment `write2`): files written by appends through the
+    /// mount, each closed (one in four reopened to append again), then one
+    /// Commit. Every chunked file's recorded digest must be the BLAKE3 of
+    /// its bytes (the Store finds its root by that digest), and a fresh
+    /// mount of the new head reads every file back exactly.
+    fn digest_commit(harness: &Harness, opened: &OpenedStore) {
+        const FILES: usize = 120;
+        const CHUNKED: usize = 131_072;
+        let content = |n: usize| {
+            let length = match n % 4 {
+                0 => 1024,
+                1 => 160 * 1024,
+                2 => 400 * 1024,
+                _ => 300 * 1024,
+            };
+            let mut bytes = vec![0; length];
+            Stream::new(1_000 + n as u64).fill(&mut bytes);
+            bytes
+        };
+        let ready = harness.mount(60);
+        let directory = Path::new(&ready.directory).join("dg");
+        fs::create_dir(&directory).unwrap();
+        let stage0 = stages::snapshot();
+        for n in 0..FILES {
+            let bytes = content(n);
+            let path = directory.join(format!("d{n:04}"));
+            match n % 4 {
+                0 | 1 => File::create(&path).unwrap().write_all(&bytes).unwrap(),
+                2 => {
+                    let mut file = File::create(&path).unwrap();
+                    for piece in bytes.chunks(100 * 1024) {
+                        file.write_all(piece).unwrap();
+                    }
+                }
+                _ => {
+                    // Closed after 200 KiB, then reopened to append the rest.
+                    File::create(&path)
+                        .unwrap()
+                        .write_all(&bytes[..200 * 1024])
+                        .unwrap();
+                    OpenOptions::new()
+                        .append(true)
+                        .open(&path)
+                        .unwrap()
+                        .write_all(&bytes[200 * 1024..])
+                        .unwrap();
+                }
+            }
+        }
+        let saved = harness.try_commit(ready.token);
+        let saved = match &saved {
+            Ok(done) => matches!(done.reply, Reply::Committed(_)),
+            Err(_) => false,
+        };
+        let split = stage_delta(&stage0);
+        unmount(harness, &ready);
+        let fresh = harness.mount(61);
+        let directory = Path::new(&fresh.directory).join("dg");
+        let mut readback = true;
+        let (mut chunked, mut found) = (0, 0);
+        for n in 0..FILES {
+            let bytes = content(n);
+            readback &= fs::read(directory.join(format!("d{n:04}"))).unwrap() == bytes;
+            if bytes.len() >= CHUNKED {
+                chunked += 1;
+                let digest = *blake3::hash(&bytes).as_bytes();
+                let roots = opened
+                    .store
+                    .history()
+                    .file_roots(&[(digest, bytes.len() as u64)])
+                    .unwrap();
+                found += usize::from(roots[0].is_some());
+            }
+        }
+        unmount(harness, &fresh);
+        let ok = saved && readback && found == chunked;
+        println!(
+            "PROBE {{\"phase\":\"digest_commit\",\"files\":{FILES},\"committed\":{saved},\"readback\":{readback},\"chunked\":{chunked},\"roots_by_true_digest\":{found},\"ok\":{ok},\"stages\":{split}}}"
+        );
+        assert!(ok, "digest_commit");
+    }
     fn run(dir: &Path, work: &Path) {
         // Diagnostic: `LAYERFS_PROBE_BURN=<n>` keeps n threads spinning for
         // the whole run, so fewer guest CPUs sit idle between requests.
@@ -895,6 +1288,7 @@ mod probe {
         let copies0 = copies::snapshot();
         let cache0 = cache_state(&opened);
         let rss = resident_reset();
+        let cpu0 = cpu();
         let started = Instant::now();
         let mut file = File::open(&path).unwrap();
         let (mut total, mut sum) = (0_u64, 0);
@@ -908,6 +1302,7 @@ mod probe {
         }
         drop(file);
         let seconds = started.elapsed().as_secs_f64();
+        let used = cpu_delta(cpu0, seconds, total as f64 / 1e6, "mb");
         let hwm = status_kb("VmHWM:");
         let (rss_file, rss_anon) = (status_kb("RssFile:"), status_kb("RssAnon:"));
         let io1 = io();
@@ -949,7 +1344,7 @@ mod probe {
                 .join(","),
         );
         println!(
-            "PROBE {{\"phase\":\"cold_read\",\"decoded\":{dec},\"cache_files\":{files},\"cache_bytes\":{logical},\"cache_allocated\":{allocated},\"profile\":{profile},\"read_ahead_kb\":[\"{ra_before}\",\"{ra_after}\"],\"store_page_size\":{},\"store_bytes\":{},\"store_resident_before\":{store_resident},\"bytes\":{total},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"rss_file_kb\":{rss_file},\"rss_anon_kb\":{rss_anon},\"read_syscalls\":{},\"read_syscall_bytes\":{},\"storage_read_bytes\":{},\"object_batches\":{},\"object_ids\":{},\"statements\":{},\"returned_rows\":{},{lanes},\"sql\":{sql},\"stages\":{split},\"copies\":{copied},\"copy_switches\":\"{:?}\",\"cache\":[{cache0},{cache1}],\"kernel\":{}}}",
+            "PROBE {{\"phase\":\"cold_read\",\"cpu\":{used},\"decoded\":{dec},\"cache_files\":{files},\"cache_bytes\":{logical},\"cache_allocated\":{allocated},\"profile\":{profile},\"read_ahead_kb\":[\"{ra_before}\",\"{ra_after}\"],\"store_page_size\":{},\"store_bytes\":{},\"store_resident_before\":{store_resident},\"bytes\":{total},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"rss_file_kb\":{rss_file},\"rss_anon_kb\":{rss_anon},\"read_syscalls\":{},\"read_syscall_bytes\":{},\"storage_read_bytes\":{},\"object_batches\":{},\"object_ids\":{},\"statements\":{},\"returned_rows\":{},{lanes},\"sql\":{sql},\"stages\":{split},\"copies\":{copied},\"copy_switches\":\"{:?}\",\"cache\":[{cache0},{cache1}],\"kernel\":{}}}",
             page_size(&copy),
             fs::metadata(&copy).unwrap().len(),
             total as f64 / seconds / 1e6,
@@ -991,32 +1386,45 @@ mod probe {
         // 2. Sequential write of a new 256 MiB file, 1 MiB writes.
         let mut pool = vec![0; 32 * 1024 * 1024];
         Stream::new(7).fill(&mut pool);
+        // A different 1 MiB slice each time within the pool's 32 slices,
+        // shifted per pass so no two writes carry the same bytes.
+        let seq_chunk = |n: usize| {
+            let at = (n % 32) * BUFFER;
+            let mut chunk = pool[at..at + BUFFER].to_vec();
+            chunk[..8].copy_from_slice(&(n as u64).to_le_bytes());
+            chunk
+        };
         let ready = harness.mount(2);
         readahead(&ready.directory, window);
         let rss = resident_reset();
         sql_trace("");
         let stage0 = stages::snapshot();
+        let calls0 = layerfs_fuse::request::process_callbacks();
+        let cpu0 = cpu();
         let started = Instant::now();
         let mut file = File::create(Path::new(&ready.directory).join("seq.bin")).unwrap();
         for n in 0..SEQ_WRITE / BUFFER {
-            // A different 1 MiB slice each time within the pool's 32 slices,
-            // shifted per pass so no two writes carry the same bytes.
-            let at = (n % 32) * BUFFER;
-            let mut chunk = pool[at..at + BUFFER].to_vec();
-            chunk[..8].copy_from_slice(&(n as u64).to_le_bytes());
-            file.write_all(&chunk).unwrap();
+            file.write_all(&seq_chunk(n)).unwrap();
         }
         drop(file);
         let seconds = started.elapsed().as_secs_f64();
+        let used = cpu_delta(cpu0, seconds, SEQ_WRITE as f64 / 1e6, "mb");
         let hwm = status_kb("VmHWM:");
         let split = stage_delta(&stage0);
+        let calls = callbacks_delta(&calls0);
         sql_trace("seq_write");
+        let verified = verify_file(
+            &Path::new(&ready.directory).join("seq.bin"),
+            SEQ_WRITE,
+            &seq_chunk,
+        );
         let receipt = unmount(&harness, &ready);
         println!(
-            "PROBE {{\"phase\":\"seq_write\",\"bytes\":{SEQ_WRITE},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"stages\":{split},\"kernel\":{}}}",
+            "PROBE {{\"phase\":\"seq_write\",\"bytes\":{SEQ_WRITE},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"cpu\":{used},\"verified\":{verified},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"callbacks\":{calls},\"stages\":{split},\"kernel\":{}}}",
             SEQ_WRITE as f64 / seconds / 1e6,
             opcodes(&receipt)
         );
+        assert!(verified, "seq_write bytes");
         drop(pool);
 
         // 3. 4 KiB random writes into the committed 500 MiB file.
@@ -1024,31 +1432,40 @@ mod probe {
         let rss = resident_reset();
         let mut block = vec![0; 4096];
         Stream::new(11).fill(&mut block);
-        let mut lcg = 0x1234_5678_u64;
+        let offsets = random_offsets(0x1234_5678, RANDOM_WRITES, BIG);
         sql_trace("");
         let stage0 = stages::snapshot();
+        let calls0 = layerfs_fuse::request::process_callbacks();
+        let cpu0 = cpu();
         let started = Instant::now();
         let file = OpenOptions::new()
             .write(true)
             .open(Path::new(&ready.directory).join("rand"))
             .unwrap();
-        for _ in 0..RANDOM_WRITES {
-            lcg = lcg.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
-            let at = ((lcg >> 33) % (BIG / 4096)) * 4096;
-            file.write_all_at(&block, at).unwrap();
+        for at in &offsets {
+            file.write_all_at(&block, *at).unwrap();
         }
         drop(file);
         let seconds = started.elapsed().as_secs_f64();
+        let bytes = RANDOM_WRITES * 4096;
+        let used = cpu_delta(cpu0, seconds, bytes as f64 / 1e6, "mb");
         let hwm = status_kb("VmHWM:");
         let split = stage_delta(&stage0);
+        let calls = callbacks_delta(&calls0);
         sql_trace("random_write_4k");
+        let verified = verify_blocks(
+            &Path::new(&ready.directory).join("rand"),
+            &[(offsets, block.clone())],
+            Some(&native),
+            BIG,
+        );
         let receipt = unmount(&harness, &ready);
-        let bytes = RANDOM_WRITES * 4096;
         println!(
-            "PROBE {{\"phase\":\"random_write_4k\",\"writes\":{RANDOM_WRITES},\"bytes\":{bytes},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"stages\":{split},\"kernel\":{}}}",
+            "PROBE {{\"phase\":\"random_write_4k\",\"writes\":{RANDOM_WRITES},\"bytes\":{bytes},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"cpu\":{used},\"verified\":{verified},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"callbacks\":{calls},\"stages\":{split},\"kernel\":{}}}",
             bytes as f64 / seconds / 1e6,
             opcodes(&receipt)
         );
+        assert!(verified.ok, "random_write_4k bytes");
 
         // 4. Small-file creates: 2,000 files of 1 KiB in a new directory.
         let ready = harness.mount(4);
@@ -1057,6 +1474,8 @@ mod probe {
         Stream::new(13).fill(&mut small);
         sql_trace("");
         let stage0 = stages::snapshot();
+        let calls0 = layerfs_fuse::request::process_callbacks();
+        let cpu0 = cpu();
         let started = Instant::now();
         fs::create_dir(&new).unwrap();
         for n in 0..CREATES {
@@ -1064,14 +1483,18 @@ mod probe {
             file.write_all(&small).unwrap();
         }
         let seconds = started.elapsed().as_secs_f64();
+        let used = cpu_delta(cpu0, seconds, CREATES as f64, "file");
         let split = stage_delta(&stage0);
+        let calls = callbacks_delta(&calls0);
         sql_trace("small_create");
+        let verified = verify_creates(&new, CREATES, &small);
         let receipt = unmount(&harness, &ready);
         println!(
-            "PROBE {{\"phase\":\"small_create\",\"files\":{CREATES},\"seconds\":{seconds:.4},\"per_file_us\":{:.1},\"stages\":{split},\"kernel\":{}}}",
+            "PROBE {{\"phase\":\"small_create\",\"files\":{CREATES},\"seconds\":{seconds:.4},\"per_file_us\":{:.1},\"cpu\":{used},\"verified\":{verified},\"callbacks\":{calls},\"stages\":{split},\"kernel\":{}}}",
             seconds * 1e6 / CREATES as f64,
             opcodes(&receipt)
         );
+        assert!(verified, "small_create bytes");
 
         // 5. `ls -l` of the committed 2,000-file directory on a fresh mount.
         directory_phase(&harness, 5, "ls_l", "ls", &["-l", "--time-style=full-iso"]);
@@ -1173,6 +1596,16 @@ mod probe {
             opcodes(&receipt)
         );
         assert!(names_ok, "modified listing names differ");
+
+        // 10. Prototype (experiment `write2`): four writers at once, each on
+        //     its own Workspace, then four in one Workspace.
+        contend(&harness, Contention::Sequential, 40, false, &native);
+        contend(&harness, Contention::Create, 44, false, &native);
+        contend(&harness, Contention::Random, 48, false, &native);
+        contend(&harness, Contention::Random, 52, true, &native);
+        // 11. Prototype (experiment `write2`): followed digests reach a
+        //     Commit intact, whatever job writes them.
+        digest_commit(&harness, &opened);
         harness.stop();
         burn.store(false, std::sync::atomic::Ordering::Relaxed);
         for burner in burners {

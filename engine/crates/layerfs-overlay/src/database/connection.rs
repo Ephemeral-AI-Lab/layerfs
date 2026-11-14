@@ -305,7 +305,9 @@ impl Overlay {
             self.open.borrow().mount,
         );
         let workspace = self.workspace.get();
-        let result = job();
+        // Prototype (experiment `write2`, `reldefer`): digests closed in
+        // light jobs are written first, in this job's transaction.
+        let result = self.flush_closed_digests().and_then(|()| job());
         let issued = std::mem::take(&mut *self.issued.borrow_mut());
         let begun = self.transaction.get() == Transaction::Begun;
         // Prototype (write-path probe, `digestpar`): a deferred digest of

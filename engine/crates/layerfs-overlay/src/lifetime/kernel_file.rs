@@ -42,6 +42,13 @@ impl Overlay {
         serial: u64,
         handle: u64,
     ) -> OverlayResult<()> {
+        let _stage = layerfs_telemetry::timer::stages::Timer::start(
+            layerfs_telemetry::timer::stages::Stage::ReleaseJob,
+        );
+        // Prototype (experiment `write2`, `reldefer`): a RELEASE is light.
+        self.light_job(|| self.close_file_light(mount, serial, handle))
+    }
+    fn close_file_light(&self, mount: KernelMount, serial: u64, handle: u64) -> OverlayResult<()> {
         self.atomic_cleanup(|| {
             // The fence read this descriptor's row and the Workspace row;
             // a closed Workspace still releases its descriptors.
