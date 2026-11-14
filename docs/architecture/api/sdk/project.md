@@ -74,7 +74,7 @@ Branch's base) and `root` (that Branch's effective root)
 | Store | Runs in |
 | --- | --- |
 | PostgreSQL | caller's process (a build with the `postgresql` feature) |
-| sqlite on a locally executing machine (`native` on Linux or macOS) | caller's process; the kernel guard admits only Linux ext4, xfs or btrfs, or macOS apfs or hfs |
+| sqlite on a locally executing machine (`native` on Linux or macOS) | caller's process; the kernel guard admits the Store's directory only when it is owned by this user and private (`0700`) on Linux ext4, xfs or btrfs, or macOS apfs or hfs |
 | sqlite on any other machine, and `native` on Windows | that machine's worker, on a staged copy of the folder sent from the caller |
 
 | Error | When | Source |
@@ -84,7 +84,7 @@ Branch's base) and `root` (that Branch's effective root)
 | `Exists` | the project's record, entry or LayerStack name exists | `project/family.rs`, [`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs) |
 | `Busy` | also when another add's working rows remain in the Store | `identity.rs` `add_failure` |
 | `Capacity` | worker route: the machine's free disk is below the copy plus headroom | `project/send.rs` `room` |
-| `Unsupported` | the kernel guard refuses the Store's filesystem; PostgreSQL in a build without `postgresql` | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
+| `Unsupported` | the kernel guard refuses the Store's directory (non-private mode/owner/type or unsupported filesystem); PostgreSQL in a build without `postgresql` | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | `NoStore` | no Store file at the Store's path | `identity.rs` |
 | `Failed` | deadline passed, read error or any other engine failure, **including an Init whose outcome is unknown**; the entry this call made is kept | `identity.rs` `add_failure` |
 | `Unknown` | worker route: a stage or the `project.init` answer was lost; the home gains no record, and the worker removes its staged copy when its Init ends | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
@@ -254,7 +254,7 @@ under the Store's lease, locally or as the worker operation `project.remove`.
 | --- | --- | --- |
 | `NoSuchProject` | also when the Store holds no LayerStack of that name | [`identity.rs`](../../../../control/crates/layerfs-store/src/identity.rs) |
 | `InUse` | a Sandbox of the project is recorded; `detail.related` lists `{ kind: "sandbox", name }` | [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
-| `Unsupported` | a PostgreSQL Store ("removing a project from a PostgreSQL Store is not built"); the kernel guard refuses the Store's filesystem | [`project/family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs) |
+| `Unsupported` | a PostgreSQL Store ("removing a project from a PostgreSQL Store is not built"); the kernel guard refuses the Store's directory when opened (non-private mode/owner/type — another user's directory or group/other access instead of `0700` — or unsupported filesystem) | [`project/family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs) |
 | `Failed` | the Store write failed, its outcome included | `identity.rs` `remove_project` |
 | `Unknown` | worker route: the answer was lost | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 

@@ -10,8 +10,9 @@
 //! - Ready carries the same receipt record; an NFS receipt is recognized by
 //!   `abi_major == 0`, and its `mount_id` is the export's TCP port.
 //! - Commit first has the client write back what it buffered (the flush
-//!   helper, `sync(2)` by default) and closes the export's implicit file
-//!   descriptors, then runs the unchanged Commit. A Commit that installed
+//!   helper, else the export volume's own flush: `sync_volume_np(...,
+//!   SYNC_VOLUME_WAIT)` on macOS, `sync(2)` elsewhere) and closes the
+//!   export's implicit file descriptors, then runs the unchanged Commit. A Commit that installed
 //!   another root closes the export's descriptors again; the client
 //!   revalidates attributes on its own schedule (close-to-open, `actimeo`).
 //! - Unmount asks the helper to unmount (a busy answer is reversible and the
@@ -77,8 +78,9 @@ pub struct Mounter {
     pub mount: Helper,
     pub unmount: Helper,
     pub force: Helper,
-    /// Writes back what the client buffered before a Commit; `sync(2)` of
-    /// the daemon itself when absent.
+    /// Writes back what the client buffered before a Commit; `sync_volume_np`
+    /// of the export directory on macOS (its failure refuses the Commit) or
+    /// `sync(2)` elsewhere when absent.
     pub flush: Option<Helper>,
 }
 impl Mounter {
@@ -583,7 +585,11 @@ impl Service {
             return Ok(());
         };
         match &serving.config.mounter.flush {
-            None => nix::unistd::sync(),
+            None => {
+                if let Err(detail) = flush_default(std::path::Path::new(&directory)) {
+                    return Err(kernel_failure(ControlCode::Failed, "commit:flush", detail));
+                }
+            }
             Some(helper) => {
                 match serving
                     .helpers
@@ -931,4 +937,19 @@ pub(super) fn take(kernel: &mut Kernel, phase: MountPhase) -> Result<Exported, F
         work: work(&exported.server),
     }));
     Ok(*exported)
+}
+
+/// The export volume's own flush on macOS. A failed `sync_volume_np` refuses
+/// the Commit, as a failed flush helper does: `sync(2)` may return before the
+/// writes are flushed, so it cannot stand in for the waited flush.
+#[cfg(target_os = "macos")]
+fn flush_default(directory: &std::path::Path) -> Result<(), String> {
+    layerfs_bridge::process::sync_volume_wait(directory)
+        .map_err(|error| format!("sync_volume_np({}): {error}", directory.display()))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn flush_default(_directory: &std::path::Path) -> Result<(), String> {
+    nix::unistd::sync();
+    Ok(())
 }

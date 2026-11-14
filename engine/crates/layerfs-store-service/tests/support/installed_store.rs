@@ -16,13 +16,37 @@ use std::{
 
 pub const BINDING: &[u8] = b"daemon-installed-store";
 pub const CURSOR: [u8; 32] = [43; 32];
+/// Creates one directory owner-only (`0700`) as any directory holding a Store
+/// file must be: the kernel guard refuses one that grants a group or other bit
+/// (#663), and the daemon installs every Store that way.
+fn private_directory(path: &std::path::Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        std::fs::DirBuilder::new().mode(0o700).create(path).unwrap();
+    }
+    #[cfg(not(unix))]
+    std::fs::create_dir(path).unwrap();
+}
+/// A sealed Store installed as a consumer sees it.
 pub struct Fixture {
+    /// Everything this fixture owns. It stays traversable (`0755`): the kernel
+    /// source, the overlay template and any mount live here, and tests run
+    /// commands as another uid inside them. Only `store/` below is private.
     pub directory: PathBuf,
     pub config: PersistenceConfig,
     pub branch: BranchId,
     pub count: usize,
 }
 impl Fixture {
+    /// `directory/store`, where this fixture keeps its Store files: `0700`, as
+    /// every directory a daemon opens a Store in must be (#663).
+    pub fn store_directory(&self) -> &std::path::Path {
+        self.config
+            .path
+            .parent()
+            .expect("the fixture's Store file stands in its own directory")
+    }
     pub fn new(count: usize, label: &str) -> Self {
         Self::built(label, |source| {
             for n in 0..count {
@@ -46,10 +70,12 @@ impl Fixture {
         let directory =
             std::env::temp_dir().join(format!("layerfs-installed-{}-{label}", std::process::id()));
         std::fs::create_dir(&directory).unwrap();
+        let store_directory = directory.join("store");
+        private_directory(&store_directory);
         let source = directory.join("source");
         std::fs::create_dir(&source).unwrap();
         let count = build(&source);
-        let sealed = directory.join("sealed.sqlite");
+        let sealed = store_directory.join("sealed.sqlite");
         let config = PersistenceConfig::sqlite(&sealed)
             .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
             .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables);
@@ -95,7 +121,7 @@ impl Fixture {
             .unwrap();
         drop(storage);
         let sealed = handles.seal().unwrap();
-        let installed = directory.join("store.sqlite");
+        let installed = store_directory.join("store.sqlite");
         std::fs::copy(sealed.path, &installed).unwrap();
         // No source or sealed original remains available to the consumer.
         std::fs::remove_dir_all(source).unwrap();
@@ -117,7 +143,9 @@ impl Fixture {
         let directory =
             std::env::temp_dir().join(format!("layerfs-installed-{}-{label}", std::process::id()));
         std::fs::create_dir(&directory).unwrap();
-        let installed = directory.join("store.sqlite");
+        let store_directory = directory.join("store");
+        private_directory(&store_directory);
+        let installed = store_directory.join("store.sqlite");
         std::fs::copy(store, &installed).unwrap();
         Self {
             directory,
@@ -132,6 +160,7 @@ impl Fixture {
         std::fs::remove_dir_all(self.directory).unwrap();
     }
 }
+
 pub fn bytes(n: usize) -> Vec<u8> {
     format!("complete installed file {n:06}\n").into_bytes()
 }

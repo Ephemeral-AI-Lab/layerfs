@@ -259,7 +259,9 @@ impl OwnerClient {
     }
     /// Drains the Workspace's ready maintenance on this thread, one bounded
     /// step per hold of its lock, as the end of a job does. A failed step is
-    /// retained as the maintenance failure; it is not returned here.
+    /// retained as the maintenance failure; it is not returned here. While a
+    /// terminal unmount holds the Workspace (`hold_maintenance`), neither this
+    /// nor the end of a job runs a step.
     pub fn reclaim(&self, route: Route) -> Result<(), OwnerError> {
         match self.roster() {
             Some(pool) => pool.client(route.namespace())?.reclaim(route),
@@ -307,7 +309,8 @@ impl OwnerClient {
             return Err(refuse(OwnerError::Overlay(OverlayError::Stale), action));
         }
         let requested = Instant::now();
-        let mut state = match shared.state.lock() {
+        let locked = shared.foreground(|| shared.state.lock());
+        let mut state = match locked {
             Ok(state) => state,
             Err(_) => return Err(refuse(OwnerError::Stopped, action)),
         };
@@ -461,7 +464,22 @@ impl OwnerClient {
         };
         loop {
             let mut state = shared.state.lock().unwrap_or_else(|e| e.into_inner());
-            if state.stopping || state.failure.is_some() || state.maintenance_error.is_some() {
+            // Foreground first: this loop retakes the lock step after step and
+            // std's Mutex is not fair, so a waiting job (a Status probe, an
+            // unmount) would wait for the whole queue (#679). Waiting here
+            // releases the lock; the job's end notifies `changed`.
+            while shared.waiting.load(std::sync::atomic::Ordering::Acquire) != 0 && !state.stopping
+            {
+                state = shared
+                    .changed
+                    .wait(state)
+                    .unwrap_or_else(|e| e.into_inner());
+            }
+            if state.stopping
+                || shared.held.load(std::sync::atomic::Ordering::Acquire) != 0
+                || state.failure.is_some()
+                || state.maintenance_error.is_some()
+            {
                 return;
             }
             let Some(db) = state.db.as_deref() else {
@@ -582,7 +600,9 @@ impl OwnerClient {
     ) -> Result<(), OwnerError> {
         let client = self.clone();
         let shared = client.connection()?;
-        let mut state = shared.state.lock().map_err(|_| OwnerError::Stopped)?;
+        let mut state = shared
+            .foreground(|| shared.state.lock())
+            .map_err(|_| OwnerError::Stopped)?;
         let start = Instant::now();
         if let Some(cause) = &state.failure {
             return Err(OwnerError::Retained(cause.clone()));

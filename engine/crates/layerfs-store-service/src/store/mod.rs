@@ -38,3 +38,4 @@ pub use types::{
 };
 
 pub use commit_types::owner_uncertain;
+pub use commit_types::service_cause;

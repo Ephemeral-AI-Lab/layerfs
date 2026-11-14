@@ -79,7 +79,7 @@ mount home) and the negotiated `MountReceipt`. The kernel side is in
 
 | Call | Reads | Settles |
 | --- | --- | --- |
-| `Status(token)` | Registry copy (binding, activity, epoch, last publication, `MountStatus` from maintained counters: no syscall, SQL job or kernel request) and one engine `state()` job | Nothing; a failed engine read goes in `local_failure` |
+| `Status(token)` | Registry copy (binding, activity, epoch, last publication, `MountStatus` from maintained counters: no syscall, SQL job or kernel request) and one engine `observe_state()` job, which drains no queued maintenance (#679) | Nothing; a failed engine read goes in `local_failure` |
 | `Locate(workspace)` | Finds the token, then `Status` | Nothing |
 | `Cleanup(token)` | `observe_cleanup`: `Live`, `Held`, `Queued` or `Gone` from the overlay roster, also after the registry entry is gone | Nothing |
 
@@ -97,7 +97,7 @@ differs. `Exported`, `ExportLeaving` and `ExportKept` mirror `Ready`,
 | Step | NFS route | Source |
 | --- | --- | --- |
 | Attach | Serve the engine mount as one loopback NFSv3 export on a fresh port; the client mounts it with the mount helper; Ready only after the helper reports the mount. The receipt has `abi_major == 0` and `mount_id` = the port | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
-| Commit | Flush first (flush helper, or `sync(2)`), close the export's descriptors, run the unchanged Commit; after an install of another root, close them again | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs), [`invalidate.rs`](../../../../engine/crates/layerfs-daemon/src/control/invalidate.rs) |
+| Commit | Flush first (flush helper, or the export volume's own flush: `sync_volume_np(<dir>, SYNC_VOLUME_WAIT)` on macOS, `sync(2)` elsewhere; a failed flush refuses the Commit as `Failed` at `commit:flush`), close the export's descriptors, run the unchanged Commit; after an install of another root, close them again | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs), [`invalidate.rs`](../../../../engine/crates/layerfs-daemon/src/control/invalidate.rs) |
 | Unmount | Helper unmount (busy is reversible), stop the export, revoke, Close | [`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs) |
 | ForceUnmount | Force helper once, then the same teardown | same |
 | Helper run | One attempt, at most `HELPER_WAIT` 60 s, then killed and reported | [`export_helper.rs`](../../../../engine/crates/layerfs-daemon/src/control/export_helper.rs) |
@@ -132,8 +132,10 @@ Unmount { token, discard }
 ### Dirty check
 
 ```text
-state job: dirty_inodes, dirty_directory_entries, captured, base_root
-clean if all zero, no capture, base_root == binding root, no pending merge
+state job: dirty_inodes, dirty_directory_entries, captured,
+           consolidating, base_root
+clean if all zero, no capture, nothing consolidating,
+         base_root == binding root, no pending merge
 else stream active entries and inodes (64-row windows):
   changed name -> parent path + name;  changed file -> its path
   base directory whose mode moved -> its path
@@ -144,7 +146,12 @@ reply Dirty(DirtyReport { paths <= 256, inodes, entries,
 
 The check is an observation before admission; a write after it is closed
 with the Workspace. No-op rows (an unbound local inode, a base directory
-with an unchanged mode) neither refuse nor truncate. Force skips it. Source:
+with an unchanged mode) neither refuse nor truncate. A failed Commit's
+capture still folding back (`consolidating`) is a change: it refuses and sets
+`truncated`, since its paths are not in the active windows. The whole Unmount
+runs under a maintenance hold, and a refused one drains the queue after it
+(#679, [`unmount.rs`](../../../../engine/crates/layerfs-daemon/src/control/unmount.rs)).
+Force skips it. Source:
 [`dirty.rs`](../../../../engine/crates/layerfs-daemon/src/control/dirty.rs).
 
 ## Force

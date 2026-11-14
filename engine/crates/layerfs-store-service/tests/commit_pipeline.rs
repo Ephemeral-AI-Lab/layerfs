@@ -21,7 +21,7 @@ use layerfs_store_service::store::{
     CommitPhase, CommitSuccess,
 };
 use layerfs_store_service::telemetry::{mark_phases, Recording};
-use layerfs_workspace::{CapturedNamespace, Operation, Outcome, Position, Time, WorkspaceError};
+use layerfs_workspace::{CapturedNamespace, Operation, Outcome, Position, Time};
 use std::{cell::Cell, rc::Rc, sync::Once};
 
 const MIB: usize = 1024 * 1024;
@@ -330,14 +330,21 @@ fn construction_failure_abandons_the_save() {
         &[("a.txt", 0, b"alpha\n"), ("c.bin", 0, &chunked)],
     );
     let failure = failed(&fixture, &workspace);
-    let CommitError::Workspace(WorkspaceError::Service(cause)) = &failure.error else {
-        panic!("not the producer's own failure: {failure:?}");
-    };
+    // The producer's own first cause, kept as the product type it is: a
+    // definite pre-effect refusal is `History(Busy)`, never a Workspace
+    // service wrapper read as an unknown outcome (#647).
     assert!(
-        cause
-            .downcast_ref::<layerfs_history::HistoryError>()
-            .is_some(),
-        "{cause:?}"
+        matches!(
+            failure.error,
+            CommitError::History(layerfs_history::HistoryError::Busy)
+        ),
+        "not the producer's own refusal: {:?}",
+        failure.error
+    );
+    assert!(
+        !failure.error.uncertain(),
+        "a refusal made before any effect is not unknown: {:?}",
+        failure.error
     );
     fixture.cleanup();
 }

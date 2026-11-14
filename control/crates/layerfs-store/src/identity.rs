@@ -200,21 +200,50 @@ pub fn sqlite_only(identity: &Identity, what: &str) -> Result<()> {
     }
 }
 
+/// Whether `make_empty`'s own `mkdir` made the Store's directory: the only
+/// ownership that lets its caller reclaim the directory when nothing was
+/// published. A directory another caller (or the user) made is never this
+/// call's to remove.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MadeDirectory {
+    /// This call's `mkdir` created it.
+    ThisCall,
+    /// It was already there.
+    AlreadyThere,
+}
+
 /// Creates and seals the empty Store at `<destination>.creating`, then
-/// renames it into place; a failure removes this call's own file.
+/// renames it into place; a failure removes this call's own temporary file.
+/// Also says whether this call's own `mkdir` made `global`, which is the only
+/// ownership that may reclaim the directory.
 pub fn make_empty(
     global: &Path,
     destination: &Path,
     identity: &Identity,
     policy: layerfs_storage::StoragePolicy,
+) -> (Result<SealedStore>, MadeDirectory) {
+    let mut made = MadeDirectory::AlreadyThere;
+    let result = create_empty(global, destination, identity, policy, &mut made);
+    (result, made)
+}
+
+/// [`make_empty`]'s steps; `made` records whether this call's own `mkdir`
+/// created `global`.
+fn create_empty(
+    global: &Path,
+    destination: &Path,
+    identity: &Identity,
+    policy: layerfs_storage::StoragePolicy,
+    made: &mut MadeDirectory,
 ) -> Result<SealedStore> {
-    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-    if !global.exists() {
-        std::fs::DirBuilder::new()
-            .mode(0o700)
-            .create(global)
-            .map_err(failed)?;
-    }
+    use std::os::unix::fs::PermissionsExt;
+    // the one ownership rule an install uses too: this call's own `mkdir`
+    *made = match layerfs_store_service::install::make_private_directory(global).map_err(failed)? {
+        layerfs_store_service::install::Made::ThisCall => MadeDirectory::ThisCall,
+        layerfs_store_service::install::Made::AlreadyThere => MadeDirectory::AlreadyThere,
+    };
+    layerfs_store_service::kernel_guard::check(destination)
+        .map_err(|reason| refused("Unsupported", reason.0))?;
     let (target, _) = layerfs_store_service::install::paths(destination).map_err(failed)?;
     layerfs_store_service::install::absent(&target)
         .map_err(|error| refused("Exists", format!("{}: {error}", target.display())))?;

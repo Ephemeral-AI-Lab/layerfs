@@ -45,3 +45,17 @@ fn the_process_table_lists_this_process_in_its_group() {
     assert_eq!(listed.group, stat.group);
     assert!(process::pid(u32::MAX).is_err());
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn sync_volume_wait_flushes_existing_directory_and_rejects_missing_path() {
+    let dir = std::env::temp_dir().join(format!("layerfs-bridge-sync-vol-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    assert!(process::sync_volume_wait(&dir).is_ok());
+    std::fs::remove_dir_all(&dir).unwrap();
+
+    let missing = dir.join("missing-subdir");
+    let err = process::sync_volume_wait(&missing).unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+}

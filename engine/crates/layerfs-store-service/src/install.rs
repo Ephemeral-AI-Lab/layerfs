@@ -5,7 +5,9 @@
 //! initial Branch. The daemon does this for a Store streamed to it; Import
 //! does it in the SDK's process ([`install_local`]), so no Sandbox is started
 //! to install a Store. One attempt: a failure keeps whatever it left, named
-//! in its report, and nothing is deleted or tried again.
+//! in its report, and nothing is deleted or tried again, except that a guard
+//! refusal before any Store file exists reclaims only the empty directory
+//! that call's own `mkdir` made.
 use crate::bootstrap::{open_store_observed, OpenedStore};
 use crate::store::{checked_base, PortError};
 use layerfs_bridge::provision::{StoreManifest, StoreProfile};
@@ -136,12 +138,66 @@ impl std::fmt::Display for LocalInstallFailure {
     }
 }
 
+/// Whether this call's own `mkdir` made the Store's directory: the only
+/// ownership that lets a caller reclaim that directory when nothing was
+/// published. A directory another caller, or the user, made is never this
+/// call's to remove.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Made {
+    /// This call's `mkdir` created it.
+    ThisCall,
+    /// It was already there; it is not this call's to remove.
+    AlreadyThere,
+}
+
+/// Makes the Store's directory owner-only (`0700`) when it is absent and says
+/// whether this call's own `mkdir` made it. One ownership rule for the Store's
+/// directory, shared by an install and `store.create` (`make_empty`): a
+/// `mkdir` that fails — `AlreadyExists`, when another caller made the
+/// directory first, included — claims nothing.
+pub fn make_private_directory(directory: &Path) -> io::Result<Made> {
+    use std::os::unix::fs::DirBuilderExt;
+    if directory.exists() {
+        return Ok(Made::AlreadyThere);
+    }
+    fs::DirBuilder::new().mode(0o700).create(directory)?;
+    Ok(Made::ThisCall)
+}
+
+/// Makes the Store's directory owner-only (`0700`, created as such when it is
+/// absent), then checks the kernel guard for the Store file. A directory is
+/// this call's own only when this call's `mkdir` returned success: an
+/// installer-user or `mkdir` failure (`AlreadyExists`, when another caller
+/// made the directory first, included) removes nothing, and a guard refusal —
+/// which happens before any Store file exists — removes only that own
+/// directory, non-recursively, so it cannot take another caller's Store.
+pub fn prepare(destination: &Path) -> Result<(), String> {
+    installer_user()?;
+    let directory = destination
+        .parent()
+        .ok_or("the Store destination has no directory")?;
+    let made =
+        make_private_directory(directory).map_err(|error| error.to_string())? == Made::ThisCall;
+    match crate::kernel_guard::check(destination) {
+        Ok(_) => Ok(()),
+        Err(reason) => {
+            if made {
+                // no Store file exists yet: this call's own directory, and
+                // only while it still holds nothing
+                let _ = fs::remove_dir(directory);
+            }
+            Err(reason.0)
+        }
+    }
+}
+
 /// Installs the sealed Store `source` (described by `manifest`) at
 /// `destination` in this process: the project volume's
-/// `global/store.sqlite`, its `global/` directory made owner-only. The
-/// destination's filesystem must pass the kernel guard, as every Store opener
-/// must, and this process must run as the daemons' user. Returns the
-/// installed manifest, which records this process's SQLite version.
+/// `global/store.sqlite`, its `global/` directory made owner-only (`0700`,
+/// created as such when missing). The destination's directory and filesystem
+/// must pass the kernel guard, as every Store opener must, and this process
+/// must run as the daemons' user. Returns the installed manifest, which
+/// records this process's SQLite version.
 pub fn install_local(
     source: &Path,
     manifest: &StoreManifest,
@@ -156,19 +212,8 @@ pub fn install_local(
         if manifest.profile != StoreProfile::Disposable || manifest.daemon_sqlite.is_some() {
             return Err("a sealed, not yet installed, Disposable Store is required".to_owned());
         }
-        let directory = destination
-            .parent()
-            .ok_or("the Store destination has no directory")?;
-        crate::kernel_guard::check(directory).map_err(|reason| reason.0)?;
-        installer_user()?;
         let text = |error: io::Error| error.to_string();
-        if !directory.exists() {
-            use std::os::unix::fs::DirBuilderExt;
-            fs::DirBuilder::new()
-                .mode(0o700)
-                .create(directory)
-                .map_err(text)?;
-        }
+        prepare(destination)?;
         let (target, temporary) = paths(destination).map_err(text)?;
         let mut file = claim(&target, &temporary).map_err(text)?;
         left.temporary = Some(temporary.clone());
@@ -207,12 +252,12 @@ pub fn install_local(
 /// installs its Store (there is no root daemon to match); the daemon's own
 /// check that it owns the Store file still holds.
 #[cfg(target_os = "macos")]
-pub fn installer_user() -> Result<(), String> {
+fn installer_user() -> Result<(), String> {
     Ok(())
 }
 /// Refuses an installer that is not the daemons' user.
 #[cfg(not(target_os = "macos"))]
-pub fn installer_user() -> Result<(), String> {
+fn installer_user() -> Result<(), String> {
     use std::os::unix::fs::MetadataExt;
     // the owner of /proc/self is this process's effective user
     let uid = fs::metadata("/proc/self")

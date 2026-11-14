@@ -488,7 +488,8 @@ layerfs doctor --text     # a count line, then each finding and its fix
   out of date and refuses nothing. Each finding's `fix` names the call (or
   the by-hand step, where no call can) that fixes it.
 - It checks: records that do not parse, or whose `"v"` is not 1; folder
-  modes other than 0700 (0701 where a namespaces Sandbox passes through) and
+  modes other than 0700 (0701 where a namespaces Sandbox passes through, but
+  never a Store's own folder, which stays 0700) and
   record modes other than 0600; broken references (a Sandbox whose Store,
   project or machine is gone, a Store on a machine with no record, a project
   in a Store folder with no record, a built-in machine whose recorded daemon is not there, an error
@@ -562,7 +563,7 @@ Codes seen in the 2.0 library include:
 | `NoSuchPath`, `NoSuchSandbox`, `NoSuchProcess`, … | 1.1.0's codes for paths, Sandboxes and processes |
 | `Exists` | the name is taken, the same database or bucket is already connected (under any name), or a bucket object was exported from another home |
 | `InUse` | held: running Sandboxes, processes with the Store open, Stores on a machine; a layout 2 home with any of these, or with a move, removal or create still running, which is not converted yet ([the home](home.md#a-layout-2-home)) |
-| `Busy` | an operation runs on the entity: a Store being pushed, pulled or removed, a machine being made or removed, a Sandbox being created or closed; the message names it (`op` id and phase) and its process (#536 §7.1); `detail` is `{entity: {kind, name}, phase, op}`. Also: another project is being added to the same Store |
+| `Busy` | an operation runs on the entity: a Store being pushed, pulled or removed, a machine being made or removed, a Sandbox being created or closed; the message names it (`op` id and phase) and its process (#536 §7.1); `detail` is `{entity: {kind, name}, phase, op}`. Also: another project is being added to the same Store; a Store's writable open met SQLite's busy lock before any effect (the open wrote nothing, so the caller may repeat the call) |
 | `Unresolved` | an earlier operation on the entity ended with its outcome not known; its process is gone and its `op` stays. The message names the call that shows it (`store status`, `machine status`, `sandbox get`) and the one that clears it (`store remove`, `machine remove`, `sandbox close`); `detail` as for `Busy` |
 | `Unsupported` | not possible here, or not built (see [limitations](limitations.md)); a missing tool is listed in `detail.missing` |
 | `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret |
