@@ -70,10 +70,15 @@ impl Kernel {
             (spilled, length, start, end)
         };
         if spilled {
+            // One `pread` of the window the last lock saw, outside it: another
+            // call may have truncated the file since, and the bytes the file
+            // still holds are the reply - a short read, not an I/O error.
             let mut buf = vec![0u8; end - start];
-            self.spill_file(serial, false)?
-                .read_exact_at(&mut buf, start as u64)
+            let read = self
+                .spill_file(serial, false)?
+                .read_at(&mut buf, start as u64)
                 .map_err(|e| io_status(&e))?;
+            buf.truncate(read);
             out.extend_from_slice(&buf);
         }
         Ok(end as u64 >= length)

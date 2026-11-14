@@ -67,6 +67,64 @@ fn spill_serials(dir: &Path) -> Vec<u64> {
 }
 
 #[test]
+fn a_read_racing_a_truncation_is_a_short_read_not_an_io_error() {
+    let base = temp("read-truncate");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    rig.companion_spill_dir = Some(base.join("spill"));
+    // Smaller than one body, so every read of the body is a `pread` of its file.
+    rig.companion_resident_bytes = 1024;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut reader = Client::connect(server.local_addr(), UID, GID);
+    let mut writer = Client::connect(server.local_addr(), UID, GID);
+    let root = reader.mnt("/");
+    reader.touch(&root, b"raced", 0o644).unwrap();
+    let ad = reader.touch(&root, b"._raced", 0o644).unwrap();
+    let body = pattern(60, 64 * 1024);
+    reader.write(&ad.handle, 0, &body).unwrap();
+    assert_eq!(server.held().companion_bytes, 0, "the body spilled");
+
+    // A length read under the companion lock and the bytes read outside it can
+    // disagree: the truncation below may land in between. The reply is then the
+    // bytes the file still holds, a short read, never `NFS3ERR_IO`.
+    let empty = Set {
+        size: Some(0),
+        ..Set::default()
+    };
+    for round in 0..512 {
+        let start = std::sync::Barrier::new(2);
+        let (read, truncate) = std::thread::scope(|scope| {
+            let read = scope.spawn(|| {
+                start.wait();
+                reader.read_all(&ad.handle, 64 * 1024)
+            });
+            let truncate = scope.spawn(|| {
+                start.wait();
+                writer.setattr(&ad.handle, empty, None)
+            });
+            (read.join().unwrap(), truncate.join().unwrap())
+        });
+        truncate.unwrap();
+        assert!(
+            body.starts_with(&read),
+            "round {round}: {} bytes read of the body or its truncation",
+            read.len()
+        );
+        // The next round starts from the whole body again: nothing else runs
+        // while it is written back.
+        writer.write(&ad.handle, 0, &body).unwrap();
+        assert_eq!(reader.getattr(&ad.handle).unwrap().size as usize, body.len());
+    }
+
+    drop((reader, writer));
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn eviction_follows_the_order_of_use_not_the_shape_of_the_index() {
     const HELD: usize = 64;
     let base = temp("use-order");
