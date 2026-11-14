@@ -90,7 +90,7 @@ CLI     layerfs workspace exec <ws> <command> [--message <message>] [--stream] [
 
 | Argument | Kind | Rule |
 | --- | --- | --- |
-| `command` | Text | `bash -c <command>` as the Sandbox's command identity, `HOME` its scratch folder ([`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs)) |
+| `command` | Text | `bash -c <command>` as the Sandbox's command identity, `HOME` its scratch folder (on macOS `native`, `RUSTUP_HOME`, `CARGO_HOME` and `GIT_CONFIG_GLOBAL` default to the caller's when present; override in the caller's environment or the command) ([`exec/run.rs`](../../../../control/crates/layerfs-sandbox/src/exec/run.rs)) |
 | `message` option | Text | echoed in the answer; no Commit is made |
 | `stream` option | Bool | pass output to this process's stdout and stderr when no functions are given (CLI `--stream`) |
 | `stdout`, `stderr` options | Function | receive each output event's text, or bytes when not UTF-8; never reach the library |

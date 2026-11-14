@@ -632,16 +632,27 @@ impl Application {
             eprintln!("layerfs-daemon: idle Store reader thread not started: {error}");
         }
     }
-    /// After a Commit was answered (or its answer failed), drains on this
-    /// thread the overlay reclamation its releases left queued (owner
-    /// approval, 2026-11-07). The connection reads its next call after it.
+    /// After a Commit was answered (or its answer failed), drains the overlay
+    /// reclamation its releases left queued on a thread of its own, so the
+    /// connection reads its next call at once (#679; this replaces the drain
+    /// on the connection thread approved 2026-11-07). A Sandbox reuses its
+    /// control connection, so a drain here held its next call, an unmount's
+    /// Status probe and the unmount included, for the whole reclamation. The
+    /// drain yields to foreground jobs and stops under an unmount's hold. A
+    /// thread that does not start leaves the queue to the Workspace's next job.
     fn reclaim_after_commit(&self, token: layerfs_bridge::control::WorkspaceToken) {
         let service = match self.state.lock() {
             Ok(state) => state.startup.service.clone(),
             Err(_) => return,
         };
-        if let Some(service) = service {
-            service.reclaim_after_commit(token);
+        let Some(service) = service else {
+            return;
+        };
+        let spawned = std::thread::Builder::new()
+            .name("layerfs-reclaim".into())
+            .spawn(move || service.reclaim_after_commit(token));
+        if let Err(error) = spawned {
+            eprintln!("layerfs-daemon: reclaim thread after a Commit not started: {error}");
         }
     }
     pub(super) fn control_operation(

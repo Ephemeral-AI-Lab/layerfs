@@ -160,6 +160,7 @@ impl Fixture {
         std::fs::remove_dir_all(self.directory).unwrap();
     }
 }
+
 pub fn bytes(n: usize) -> Vec<u8> {
     format!("complete installed file {n:06}\n").into_bytes()
 }

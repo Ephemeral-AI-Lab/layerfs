@@ -488,7 +488,8 @@ layerfs doctor --text     # a count line, then each finding and its fix
   out of date and refuses nothing. Each finding's `fix` names the call (or
   the by-hand step, where no call can) that fixes it.
 - It checks: records that do not parse, or whose `"v"` is not 1; folder
-  modes other than 0700 (0701 where a namespaces Sandbox passes through) and
+  modes other than 0700 (0701 where a namespaces Sandbox passes through, but
+  never a Store's own folder, which stays 0700) and
   record modes other than 0600; broken references (a Sandbox whose Store,
   project or machine is gone, a Store on a machine with no record, a project
   in a Store folder with no record, a built-in machine whose recorded daemon is not there, an error

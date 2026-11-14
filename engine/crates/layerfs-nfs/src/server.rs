@@ -261,7 +261,8 @@ fn accept_loop(listener: &TcpListener, shared: &Arc<Shared>) {
     }
 }
 fn connection(mut stream: TcpStream, shared: &Shared) {
-    while let Ok(Some(record)) = rpc::read_record(&mut stream) {
+    let mut records = rpc::Records::new();
+    while let Ok(Some(record)) = records.read(&mut stream) {
         if shared.stopping.load(Ordering::Acquire) {
             return;
         }

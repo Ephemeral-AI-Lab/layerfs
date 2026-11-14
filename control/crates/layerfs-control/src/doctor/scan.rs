@@ -1,8 +1,8 @@
 //! Every record of a layout 3 home, read once: whether it parses, whether
 //! an entity record has `"v": 1`, and the modes of the home's folders
-//! (0700, or 0701 where a namespaces Sandbox passes through) and record
-//! files (0600). A Store folder with projects and no Store record is
-//! reported here too.
+//! (0700, or 0701 where a namespaces Sandbox passes through; a Store's own
+//! folder is 0700 like the daemon's rule) and record files (0600). A Store
+//! folder with projects and no Store record is reported here too.
 use super::report::Findings;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{paths, read_record, RECORD_VERSION};
@@ -37,6 +37,31 @@ fn names(dir: &Path) -> Result<Vec<String>> {
     paths::names(dir).map_err(failed)
 }
 
+/// The Store names under `home/store`: a real folder, and a link to one, which
+/// the scan reports (the Store guard refuses a link where it wants the Store's
+/// own directory) rather than skipping it as [`paths::names`] does.
+fn store_names(dir: &Path) -> Result<Vec<String>> {
+    let mut names = Vec::new();
+    let entries = match std::fs::read_dir(dir) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(names),
+        other => other.map_err(failed)?,
+    };
+    for entry in entries {
+        let entry = entry.map_err(failed)?;
+        let kind = entry.file_type().map_err(failed)?;
+        if !kind.is_dir() && !kind.is_symlink() {
+            continue;
+        }
+        if let Some(name) = entry.file_name().to_str() {
+            if !name.starts_with('.') {
+                names.push(name.to_owned());
+            }
+        }
+    }
+    names.sort();
+    Ok(names)
+}
+
 /// Reads the home's records and modes.
 pub(super) fn scan(home: &Path, findings: &mut Findings) -> Result<Scanned> {
     let mut scanned = Scanned::default();
@@ -60,7 +85,7 @@ pub(super) fn scan(home: &Path, findings: &mut Findings) -> Result<Scanned> {
         }
         record(&paths::worker_record(home, &name), entity, false, findings);
     }
-    for name in names(&home.join("store"))? {
+    for name in store_names(&home.join("store"))? {
         store(home, &name, &mut scanned, findings)?;
     }
     for name in names(&home.join("sandbox"))? {
@@ -78,7 +103,9 @@ pub(super) fn scan(home: &Path, findings: &mut Findings) -> Result<Scanned> {
 /// One Store's folder: its record and its projects'.
 fn store(home: &Path, name: &str, scanned: &mut Scanned, findings: &mut Findings) -> Result<()> {
     let entity = ("store", name);
-    folder(&paths::store_dir(home, name), entity, findings);
+    if store_folder(&paths::store_dir(home, name), entity, findings) {
+        return Ok(());
+    }
     let path = paths::store_record(home, name);
     let has_record = path.exists();
     if has_record {
@@ -260,9 +287,37 @@ fn mode(path: &Path) -> Option<u32> {
     Some(metadata.permissions().mode() & 0o7777)
 }
 
+/// Reports `path` when it is a symbolic link and says whether it did: a
+/// link's own mode (0777) is not the folder's, and a `chmod` through the link
+/// changes what it points at, so neither describes the folder. The Store
+/// guard likewise refuses a link where it wants the Store's own directory.
+fn link(path: &Path, entity: (&str, &str), findings: &mut Findings) -> bool {
+    let Ok(metadata) = std::fs::symlink_metadata(path) else {
+        return false;
+    };
+    if !metadata.file_type().is_symlink() {
+        return false;
+    }
+    findings.error(
+        entity,
+        format!(
+            "{} is a symlink, not a folder; a `chmod` through it would change what it points at",
+            path.display()
+        ),
+        format!(
+            "make it a real folder: remove the link and create {} as 0700",
+            path.display()
+        ),
+    );
+    true
+}
+
 /// A folder others may list or change, or its group may use, is an error;
 /// others may pass through (0701).
 fn folder(path: &Path, entity: (&str, &str), findings: &mut Findings) {
+    if link(path, entity, findings) {
+        return;
+    }
     if let Some(mode) = mode(path).filter(|mode| mode & 0o076 != 0) {
         findings.error(
             entity,
@@ -273,6 +328,27 @@ fn folder(path: &Path, entity: (&str, &str), findings: &mut Findings) {
             format!("`chmod g-rwx,o-rw {}`", path.display()),
         );
     }
+}
+
+/// A Store's own folder is held to the daemon's rule (kernel_guard): no
+/// group or other bits at all, not even pass-through, so a folder doctor
+/// calls fine is one the daemon opens. Returns whether `path` is a symlink
+/// (already reported, so the caller stops descending into this entry).
+fn store_folder(path: &Path, entity: (&str, &str), findings: &mut Findings) -> bool {
+    if link(path, entity, findings) {
+        return true;
+    }
+    if let Some(mode) = mode(path).filter(|mode| mode & 0o077 != 0) {
+        findings.error(
+            entity,
+            format!(
+                "{} has mode {mode:04o}; a Store's folder is 0700",
+                path.display()
+            ),
+            format!("`chmod 700 {}`", path.display()),
+        );
+    }
+    false
 }
 
 /// A record file others or its group may read is an error.
