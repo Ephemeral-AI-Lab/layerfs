@@ -217,6 +217,7 @@ class LinuxBundleTests(unittest.TestCase):
         )
         self.assertEqual((final / "runtime/bin/bash").stat().st_mode & 0o777, 0o755)
         self.assertEqual((final / "runtime/lib/libc.so.6").stat().st_mode & 0o777, 0o644)
+        self.assertEqual((final / "runtime/lib/ld-linux-aarch64.so.1").stat().st_mode & 0o777, 0o755)
         self.assertEqual(sorted(p.name for p in final.iterdir() if p.name.startswith(".")), [])
         self.assertEqual(manifest["protocol"], 3)
         self.assertEqual(manifest["runtime"], bundle.bundle_hash({n: files[n] for n in bundle.BINARIES}))

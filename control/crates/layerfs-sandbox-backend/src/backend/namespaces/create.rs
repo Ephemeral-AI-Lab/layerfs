@@ -298,8 +298,8 @@ fn prepare(
 
 /// Copies the runtime layer at `source` (`lib/` and `bin/`, regular files
 /// only, as `tools/linux_bundle.py` seals it) to `target`, root-owned: the
-/// libraries 0644, the programs 0755, the directories 0755. Anything else
-/// in it (a link, a device, a deeper directory) is refused.
+/// libraries 0644, the loader and the programs 0755, the directories 0755.
+/// Anything else in it (a link, a device, a deeper directory) is refused.
 fn copy_runtime(source: &Path, target: &Path) -> Result<(), RuntimeError> {
     let refuse = || RuntimeError::Protocol("the bundle's runtime layer holds an unexpected entry");
     fs::DirBuilder::new().mode(0o755).create(target)?;
@@ -313,6 +313,11 @@ fn copy_runtime(source: &Path, target: &Path) -> Result<(), RuntimeError> {
             }
             let file = into.join(entry.file_name());
             fs::copy(entry.path(), &file)?;
+            let loader = layerfs_bridge::sandbox_runtime::LOADER;
+            let mode = match loader.is_some_and(|loader| entry.file_name() == loader) {
+                true => 0o755,
+                false => mode,
+            };
             fs::set_permissions(&file, Permissions::from_mode(mode))?;
         }
     }

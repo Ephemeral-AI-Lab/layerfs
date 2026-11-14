@@ -317,7 +317,8 @@ def runtime_layer(stage, arch_name, fetched):
         if notice.is_file():
             shutil.copyfile(notice, stage / LICENSES / (package + ".copyright"))
     for path in lib.iterdir():
-        path.chmod(0o644)
+        # the loader runs as a program: it starts the daemon and `getent`
+        path.chmod(0o755 if path.name == loader else 0o644)
     for path in bin_.iterdir():
         path.chmod(0o755)
     for path in (stage / LICENSES).iterdir():
