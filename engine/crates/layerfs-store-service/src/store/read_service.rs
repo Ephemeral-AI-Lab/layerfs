@@ -192,13 +192,16 @@ impl ReadSet {
                 (index, Ok(Arc::new(session)))
             }
             None => {
+                // Prototype (parallel-store probe): a mounted Workspace's
+                // further readers take identities after its own.
+                let lanes = super::read_handle::probe_sessions();
                 let index = {
                     let mut state = self
                         .state
                         .lock()
                         .map_err(|_| Arc::new(PortError::Poisoned))?;
                     let index = state.next;
-                    match index.checked_add(1) {
+                    match index.checked_add(lanes) {
                         Some(next) => state.next = next,
                         None => {
                             state.sessions.remove(&Some(workspace));
@@ -209,16 +212,24 @@ impl ReadSet {
                     }
                     index
                 };
-                self.counts.readers_opened.fetch_add(1, Ordering::Relaxed);
-                let result = (self.factory)(index).and_then(|reader| {
-                    if reader.storage.policy() != self.policy {
-                        return Err(StorageError::Integrity("Workspace reader policy"));
-                    }
-                    Ok(Arc::new(ReadSession::new(
-                        index,
-                        reader,
-                        self.counts.clone(),
-                    )))
+                self.counts
+                    .readers_opened
+                    .fetch_add(lanes as u64, Ordering::Relaxed);
+                let open = |index| {
+                    (self.factory)(index).and_then(|reader| {
+                        if reader.storage.policy() != self.policy {
+                            return Err(StorageError::Integrity("Workspace reader policy"));
+                        }
+                        Ok(reader)
+                    })
+                };
+                let result = open(index).and_then(|reader| {
+                    let more = (1..lanes)
+                        .map(|lane| open(index + lane))
+                        .collect::<StorageResult<Vec<_>>>()?;
+                    Ok(Arc::new(
+                        ReadSession::new(index, reader, self.counts.clone()).with_lanes(more),
+                    ))
                 });
                 (index, result)
             }

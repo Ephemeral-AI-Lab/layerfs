@@ -5,8 +5,8 @@ use layerfs_history::{BranchId, BranchSnapshot, HistoryCatalog};
 use layerfs_storage::{Diagnostics, KeptReads, ReadCache, Storage};
 use std::{
     sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc, Mutex, OnceLock,
+        atomic::{AtomicU64, AtomicUsize, Ordering},
+        Arc, Mutex, MutexGuard, OnceLock, TryLockError,
     },
     time::Instant,
 };
@@ -54,9 +54,28 @@ struct State {
     /// long as it is mounted (see [`ReadSession::cached`]).
     cache: Option<KeptReads>,
 }
+/// Prototype (parallel-store probe): read-only sessions one mounted
+/// Workspace opens, from `LAYERFS_PROBE_READ_SESSIONS` (1 to 8; unset or
+/// invalid is 1, today's one session).
+pub(super) fn probe_sessions() -> usize {
+    static SESSIONS: OnceLock<usize> = OnceLock::new();
+    *SESSIONS.get_or_init(|| {
+        std::env::var("LAYERFS_PROBE_READ_SESSIONS")
+            .ok()
+            .and_then(|value| value.trim().parse().ok())
+            .filter(|sessions| (1..=8).contains(sessions))
+            .unwrap_or(1)
+    })
+}
 pub(super) struct ReadSession {
     pub index: usize,
     state: Mutex<State>,
+    /// Prototype (parallel-store probe): further read-only readers of the
+    /// same Store file for this Workspace, each with its own connection and
+    /// kept caches. A demand takes the first free one, or waits for one in
+    /// turn; failure custody stays the session's.
+    lanes: Vec<Mutex<State>>,
+    turn: AtomicUsize,
     counts: Arc<Counts>,
     failure: OnceLock<Arc<PortError>>,
     pub requests: AtomicU64,
@@ -70,18 +89,53 @@ impl ReadSession {
                 reader: Some(reader),
                 cache: None,
             }),
+            lanes: Vec::new(),
+            turn: AtomicUsize::new(0),
             counts,
             failure: OnceLock::new(),
             requests: AtomicU64::new(0),
             wait_ns: AtomicU64::new(0),
         }
     }
-    fn lock(&self) -> Result<std::sync::MutexGuard<'_, State>, Arc<PortError>> {
-        self.state.lock().map_err(|_| {
-            self.failure
-                .get_or_init(|| Arc::new(PortError::Poisoned))
-                .clone()
-        })
+    /// Prototype (parallel-store probe): adds further readers as lanes.
+    pub fn with_lanes(mut self, readers: Vec<StoreReader>) -> Self {
+        self.lanes = readers
+            .into_iter()
+            .map(|reader| {
+                Mutex::new(State {
+                    reader: Some(reader),
+                    cache: None,
+                })
+            })
+            .collect();
+        self
+    }
+    fn poisoned(&self) -> Arc<PortError> {
+        self.failure
+            .get_or_init(|| Arc::new(PortError::Poisoned))
+            .clone()
+    }
+    fn lock(&self) -> Result<MutexGuard<'_, State>, Arc<PortError>> {
+        self.state.lock().map_err(|_| self.poisoned())
+    }
+    /// The first free lane, the session's own first; when all are busy,
+    /// the next one in turn, waited for.
+    fn take(&self) -> Result<MutexGuard<'_, State>, Arc<PortError>> {
+        if self.lanes.is_empty() {
+            return self.lock();
+        }
+        for lane in std::iter::once(&self.state).chain(&self.lanes) {
+            match lane.try_lock() {
+                Ok(state) => return Ok(state),
+                Err(TryLockError::WouldBlock) => {}
+                Err(TryLockError::Poisoned(_)) => return Err(self.poisoned()),
+            }
+        }
+        let turn = self.turn.fetch_add(1, Ordering::Relaxed) % (self.lanes.len() + 1);
+        match turn {
+            0 => self.lock(),
+            lane => self.lanes[lane - 1].lock().map_err(|_| self.poisoned()),
+        }
     }
 
     fn attempt<T>(
@@ -89,7 +143,7 @@ impl ReadSession {
         call: impl FnOnce(&StoreReader, &mut Option<KeptReads>, &Counts) -> Result<T, PortError>,
     ) -> Result<T, Arc<PortError>> {
         let before = Instant::now();
-        let mut state = self.lock()?;
+        let mut state = self.take()?;
         let State { reader, cache } = &mut *state;
         let waited = before.elapsed();
         layerfs_telemetry::timer::waits::add(
@@ -120,6 +174,7 @@ impl ReadSession {
         let _stage = layerfs_telemetry::timer::stages::Timer::start(
             layerfs_telemetry::timer::stages::Stage::StoreDemand,
         );
+        let _busy = layerfs_telemetry::timer::stages::busy::Demand::enter();
         self.attempt(|handle, cache, counts| {
             counts.objects.fetch_add(1, Ordering::Relaxed);
             counts
@@ -229,10 +284,17 @@ impl ReadSession {
             return Err(cause.clone());
         }
         state.cache = None;
+        for lane in &self.lanes {
+            let mut lane = lane.lock().map_err(|_| self.poisoned())?;
+            lane.cache = None;
+            lane.reader = None;
+        }
         Ok(state.reader.take())
     }
     pub fn quarantined(&self) -> bool {
-        self.failure.get().is_some() || self.state.is_poisoned()
+        self.failure.get().is_some()
+            || self.state.is_poisoned()
+            || self.lanes.iter().any(Mutex::is_poisoned)
     }
     pub fn failure(&self) -> Option<Arc<PortError>> {
         self.failure.get().cloned().or_else(|| {

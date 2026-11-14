@@ -54,6 +54,16 @@ pub(crate) struct Probe {
     pub(crate) noverify: bool,
     pub(crate) single: bool,
     pub(crate) ahead: bool,
+    /// Prototype (parallel-store): `LAYERFS_PROBE_READ_SESSIONS`, 1 to 8. A
+    /// read-ahead window's chunk list is split into this many contiguous
+    /// parts, fetched at once, each over its own fresh custody.
+    pub(crate) sessions: usize,
+    /// Prototype (parallel-store): `LAYERFS_PROBE_READ_WINDOWS`, 1 to 4:
+    /// background read-ahead fetches of one stream that may run at once
+    /// (`async`). The frontier bound is unchanged: a fetch starts only while
+    /// the stream has fetched less than one window past the reader, so at
+    /// most two windows past it are ever fetched.
+    pub(crate) windows: usize,
 }
 pub(crate) fn probe() -> Probe {
     static PROBE: std::sync::OnceLock<Probe> = std::sync::OnceLock::new();
@@ -65,6 +75,16 @@ pub(crate) fn probe() -> Probe {
             noverify: has("noverify"),
             single: has("single") || ahead,
             ahead,
+            sessions: std::env::var("LAYERFS_PROBE_READ_SESSIONS")
+                .ok()
+                .and_then(|value| value.trim().parse().ok())
+                .filter(|sessions| (1..=8).contains(sessions))
+                .unwrap_or(1),
+            windows: std::env::var("LAYERFS_PROBE_READ_WINDOWS")
+                .ok()
+                .and_then(|value| value.trim().parse().ok())
+                .filter(|windows| (1..=4).contains(windows))
+                .unwrap_or(1),
         }
     })
 }
@@ -134,12 +154,16 @@ impl Streams {
         self.0.drain(..excess);
         until
     }
-    /// Prototype (`async`): whether a background read-ahead of `root` runs.
+    /// Prototype (`async`): whether as many background read-aheads of
+    /// `root` run as may run at once.
     fn busy(&self, root: ObjectId) -> bool {
-        self.1.contains(&root)
+        self.1.iter().filter(|busy| **busy == root).count() >= probe().windows
     }
+    /// Prototype (`async`): one background read-ahead of `root` ended.
     pub(crate) fn finish(&mut self, root: ObjectId) {
-        self.1.retain(|busy| *busy != root);
+        if let Some(index) = self.1.iter().position(|busy| *busy == root) {
+            self.1.swap_remove(index);
+        }
     }
     /// The latest read's stream has fetched up to `until`.
     fn fetched(&mut self, until: u64) {
@@ -529,7 +553,7 @@ impl CanonicalClient {
             return Ok(());
         }
         // No cache lock spans transport, provider service or authentication.
-        let fetched = self.source.read_canonical_batch(&wanted)?;
+        let fetched = self.fetch_parts(&wanted, probe.sessions)?;
         if fetched.len() != wanted.len() {
             return Err(ContentError::BatchCardinality {
                 requested: wanted.len(),
@@ -568,6 +592,50 @@ impl CanonicalClient {
                 .saturating_add(value.len() as u64);
         }
         Ok(())
+    }
+    /// Prototype (parallel-store): `wanted` in up to `parts` contiguous
+    /// parts fetched at once: the first over this client's source on this
+    /// thread, each other over a fresh custody on a scoped thread. The
+    /// window's bytes are the same; only who fetches them changes. Every
+    /// part is waited for; the first failure, in part order, fails the batch.
+    fn fetch_parts(&self, wanted: &[ObjectId], parts: usize) -> ContentResult<Vec<Vec<u8>>> {
+        let parts = parts.min(wanted.len());
+        let fresh = match &self.fresh {
+            Some(fresh) if parts > 1 => fresh,
+            _ => return self.source.read_canonical_batch(wanted),
+        };
+        let size = wanted.len().div_ceil(parts);
+        let mut pieces = wanted.chunks(size);
+        let first = pieces.next().unwrap_or(&[]);
+        std::thread::scope(|scope| {
+            let others: Vec<_> = pieces
+                .map(|part| {
+                    let source = fresh();
+                    std::thread::Builder::new()
+                        .name("layerfs-read-part".into())
+                        .spawn_scoped(scope, move || source.read_canonical_batch(part))
+                })
+                .collect();
+            let mut values = self.source.read_canonical_batch(first);
+            for other in others {
+                let part = match other {
+                    Ok(handle) => handle.join().unwrap_or(Err(ContentError::ProviderFailure {
+                        what: "read-ahead part panicked",
+                    })),
+                    Err(_) => Err(ContentError::ProviderFailure {
+                        what: "read-ahead part thread",
+                    }),
+                };
+                values = match (values, part) {
+                    (Ok(mut values), Ok(part)) => {
+                        values.extend(part);
+                        Ok(values)
+                    }
+                    (Err(error), _) | (Ok(_), Err(error)) => Err(error),
+                };
+            }
+            values
+        })
     }
     /// Whether this client answers from memory only.
     pub(crate) const fn is_resident(&self) -> bool {

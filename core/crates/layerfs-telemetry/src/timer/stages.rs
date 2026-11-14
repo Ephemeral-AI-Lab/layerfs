@@ -89,3 +89,53 @@ impl Drop for Timer {
         charge(self.0, self.1);
     }
 }
+
+/// Prototype (parallel-store probe): wall time during which at least one
+/// Store demand ran, and the most that ran at once. Unlike the summed stage
+/// time it does not grow when demands overlap, so busy / wall is a share.
+pub mod busy {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::OnceLock;
+    use std::time::Instant;
+
+    static EPOCH: OnceLock<Instant> = OnceLock::new();
+    static ACTIVE: AtomicU64 = AtomicU64::new(0);
+    static SINCE: AtomicU64 = AtomicU64::new(0);
+    static BUSY: AtomicU64 = AtomicU64::new(0);
+    static PEAK: AtomicU64 = AtomicU64::new(0);
+
+    fn now() -> u64 {
+        EPOCH
+            .get_or_init(Instant::now)
+            .elapsed()
+            .as_nanos()
+            .min(u64::MAX as u128) as u64
+    }
+    /// Union busy nanoseconds so far and the peak concurrency so far.
+    pub fn snapshot() -> (u64, u64) {
+        (BUSY.load(Ordering::Relaxed), PEAK.load(Ordering::Relaxed))
+    }
+    /// One running Store demand, from [`Demand::enter`] to its drop.
+    pub struct Demand(());
+    impl Demand {
+        /// Marks one more demand running.
+        pub fn enter() -> Self {
+            let at = now();
+            let before = ACTIVE.fetch_add(1, Ordering::AcqRel);
+            if before == 0 {
+                SINCE.store(at, Ordering::Release);
+            }
+            PEAK.fetch_max(before + 1, Ordering::Relaxed);
+            Self(())
+        }
+    }
+    impl Drop for Demand {
+        fn drop(&mut self) {
+            let since = SINCE.load(Ordering::Acquire);
+            let at = now();
+            if ACTIVE.fetch_sub(1, Ordering::AcqRel) == 1 {
+                BUSY.fetch_add(at.saturating_sub(since), Ordering::Relaxed);
+            }
+        }
+    }
+}

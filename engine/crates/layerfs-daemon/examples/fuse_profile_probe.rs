@@ -378,6 +378,7 @@ mod probe {
         let store_resident = resident(&copy);
         let path = Path::new(&ready.directory).join("rand");
         let (stage0, work0, sql0) = (stages::snapshot(), opened.store.work(), readers(&opened));
+        let (busy0, session0) = (stages::busy::snapshot(), opened.store.read_work());
         let rss = resident_reset();
         let started = Instant::now();
         let mut file = File::open(&path).unwrap();
@@ -394,11 +395,21 @@ mod probe {
         let seconds = started.elapsed().as_secs_f64();
         let hwm = status_kb("VmHWM:");
         let (work1, sql1) = (opened.store.work(), readers(&opened));
+        let (busy1, session1) = (stages::busy::snapshot(), opened.store.read_work());
+        let lanes = format!(
+            "\"sessions\":\"{}\",\"store_busy_ns\":{},\"store_peak\":{},\"session_requests\":{},\"session_wait_ns\":{},\"readers\":{}",
+            std::env::var("LAYERFS_PROBE_READ_SESSIONS").unwrap_or_else(|_| "1".into()),
+            busy1.0 - busy0.0,
+            busy1.1,
+            session1.requests - session0.requests,
+            session1.lock_wait_ns - session0.lock_wait_ns,
+            opened.store.reuse_work().readers_opened,
+        );
         let split = stage_delta(&stage0);
         assert_eq!((total, sum), (BIG, expected), "cold read bytes");
         let receipt = unmount(&harness, &ready);
         println!(
-            "PROBE {{\"phase\":\"cold_read\",\"profile\":{profile},\"read_ahead_kb\":[\"{ra_before}\",\"{ra_after}\"],\"store_resident_before\":{store_resident},\"bytes\":{total},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"object_batches\":{},\"object_ids\":{},\"statements\":{},\"returned_rows\":{},\"stages\":{split},\"kernel\":{}}}",
+            "PROBE {{\"phase\":\"cold_read\",\"profile\":{profile},\"read_ahead_kb\":[\"{ra_before}\",\"{ra_after}\"],\"store_resident_before\":{store_resident},\"bytes\":{total},\"seconds\":{seconds:.4},\"mb_s\":{:.1},\"rss_before_kb\":{rss},\"vm_hwm_kb\":{hwm},\"object_batches\":{},\"object_ids\":{},\"statements\":{},\"returned_rows\":{},{lanes},\"stages\":{split},\"kernel\":{}}}",
             total as f64 / seconds / 1e6,
             work1.object_batches - work0.object_batches,
             work1.object_ids - work0.object_ids,
