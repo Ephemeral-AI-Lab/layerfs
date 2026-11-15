@@ -1,5 +1,5 @@
 //! `sandbox.files`: a Sandbox's roots, one page of a folder of its home
-//! or one window of a file there.
+//! or of its root, or one window of a file there.
 use crate::calls::table::Kind::{Name, Text};
 use crate::calls::table::{a, call, opt, Call, FILES};
 use crate::calls::Context;
@@ -14,14 +14,15 @@ pub(crate) const CALL: Call = call(
     "files",
     &[a("sandbox", Name), opt("path", Text)],
     &FILES,
-    "a Sandbox's files: its roots, or a folder or file under its home",
+    "a Sandbox's files: its roots, or a folder or file under its home or in its root",
     run,
 )
 .quiet();
 
 /// Runs `sandbox.files`. With no `path`: `{ kind: "folder", entries, next,
 /// has_more }`, the Sandbox's roots, each with a `role` (`workspace`,
-/// `home`, `log`). With the path of a folder under its home: one page of
+/// `home`, `log`, and `root` for a namespaces Sandbox). With the path of a
+/// folder under its home, or in its root when it has one: one page of
 /// its entries in tree order, `{ path, depth, kind, size, mode, mtime,
 /// target? }`, continued from `next` while `has_more`. With the path of a
 /// file: `{ kind: "file", size, offset, content, binary, next }`. It is

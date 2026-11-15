@@ -632,10 +632,10 @@ it. The whole call is in the
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `files` | `sandbox`, `[path]` | `depth`, `cursor`, `limit`, `offset`, `length` (int) | a Sandbox's roots, one page of a folder under its home, or one window of a file there |
+| `files` | `sandbox`, `[path]` | `depth`, `cursor`, `limit`, `offset`, `length` (int) | a Sandbox's roots, one page of a folder, or one window of a file, in its home or (a Sandbox with a root of its own) its root |
 
 ```bash
-layerfs sandbox files s1                       # its roots: Workspaces, home, log
+layerfs sandbox files s1                       # its roots: Workspaces, home, log, and / where it has one
 layerfs sandbox files s1 "$HOME_PATH" --depth 2 --limit 100
 layerfs sandbox files s1 "$HOME_PATH/notes.txt" --offset 0 --length 4096
 ```
@@ -643,8 +643,9 @@ layerfs sandbox files s1 "$HOME_PATH/notes.txt" --offset 0 --length 4096
 - With no path it answers the Sandbox's roots, each with a `role`: one
   `workspace` per mounted Workspace (kind `mount`, with the Workspace's id
   in `workspace`; taken from the Workspace records and never opened),
-  `home` (the folder that is `HOME` for its commands) and `log` (its
-  daemon's log, which `logs sandbox` reads).
+  `home` (the folder that is `HOME` for its commands), `log` (its
+  daemon's log, which `logs sandbox` reads) and, for a Sandbox with a root
+  of its own (every one but a native macOS Sandbox), `/` with role `root`.
   ```text
   {"kind":"folder","entries":[{"path":"/…/workspaces/1","depth":1,"kind":"mount","size":null,"mode":null,"mtime":null,"role":"workspace","workspace":"5f…"},{"path":"/…/tmp","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794000000000,"role":"home"},{"path":"/…/daemon.log","depth":1,"kind":"file","size":10,"mode":420,"mtime":1794000000000,"role":"log"}],"next":null,"has_more":false}
   ```
@@ -664,12 +665,25 @@ layerfs sandbox files s1 "$HOME_PATH/notes.txt" --offset 0 --length 4096
   U+FFFD and control characters other than line breaks and tabs are escaped
   (`\u{1b}`). `binary` is true when the window holds a NUL byte; `content`
   is then empty. `next` is the next window's offset, `null` at the end.
-- A path is absolute, as the Sandbox's commands see it, and under the
-  Sandbox's home; anything else is `InvalidInput`, as are a path with
-  `..`, a symbolic link on the way or at the end, a FIFO, a socket, a
-  device, a mount point, a file LayerFS keeps private (`store.sqlite*`) and
-  a file with several names that the Sandbox's commands do not own. A path
-  that is not there is `NotFound`.
+- A path is absolute, as the Sandbox's commands see it. Under the
+  Sandbox's home no link is followed and no mount entered. Refused
+  `InvalidInput` there: a path with `..`, a symbolic link on the way or at
+  the end, a FIFO, a socket, a device, a mount point, a file LayerFS keeps
+  private (`store.sqlite*`) and a file with several names that the
+  Sandbox's commands do not own. A path that is not there is `NotFound`.
+- A path outside the home is read in the Sandbox's root, when its roots
+  offer `/`: what its commands see, read through the root of the Sandbox's
+  init process on its machine. A link on the way resolves inside the root
+  (`/lib/...` opens in a merged-`/usr` image) and the last name is never
+  followed; `/proc`, `/sys` and `/dev` are `system`; a mount is entered
+  only when it is a local disk or memory, so a Workspace mount is `mount`
+  (with the Workspace's id) and is never entered; the run folder's
+  `config/` and `overlay/` and a bound Store's `store.sqlite` are
+  `restricted`, by their own path or through a link. A Sandbox that has
+  stopped answers `Unavailable` for its root and still reads its home. A
+  kernel without `openat2`, or a reader that is not root (a native Linux
+  home), answers `Unsupported` with its reason. A Sandbox with no root of
+  its own (native macOS) refuses a path outside its home `InvalidInput`.
 - It takes no lock, asks no daemon, starts nothing and writes nothing, the
   call log included; a Sandbox whose daemon has ended keeps its home
   readable. At most two inspection reads run on a machine at a time

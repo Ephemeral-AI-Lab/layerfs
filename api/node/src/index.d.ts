@@ -551,7 +551,7 @@ export interface SandboxFamily {
   get(name: string, options?: SandboxGetOptions): Promise<Result>;
   /** stop a Sandbox */
   close(name: string, options?: SandboxCloseOptions): Promise<Result>;
-  /** a Sandbox's files: its roots, or a folder or file under its home */
+  /** a Sandbox's files: its roots, or a folder or file under its home or in its root */
   files(sandbox: string, options: SandboxFilesOptions): Promise<Result>;
   files(sandbox: string, path?: string | null, options?: SandboxFilesOptions): Promise<Result>;
 }

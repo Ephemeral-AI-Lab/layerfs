@@ -2,7 +2,8 @@
 //! window of a file, read beneath a base folder and nowhere else. The
 //! inspect kind `sandbox_files` is its first view, a Sandbox's home, and
 //! `machine_files` (`machine.rs`) the views of a machine; a view is a
-//! [`Scope`] with its [`Rules`], and [`answer`] serves any of them.
+//! [`Scope`] with its [`Rules`], and [`answer`] serves any of them. A
+//! namespaces Sandbox's whole root (`root.rs`) is the third.
 //!
 //! A folder page is a flat list in tree order: names in byte order, a
 //! folder's entries after it, to `depth` levels. Its cursor is the path of
@@ -168,12 +169,24 @@ pub fn sandbox_page(side: &Side<'_>, args: &SdkValue, spent: &dyn Fn() -> bool) 
     request.check(CALL)?;
     let name = args.get_text("sandbox").unwrap_or("");
     let run = super::run_folder(side, name)?;
+    let sent = args.get("workspaces");
+    // a namespaces Sandbox has a root of its own, which is a second view
+    let daemon = roots::daemon(side, name);
+    let rooted = (daemon.as_ref()).filter(|daemon| daemon.runtime() == Some("namespaces"));
     let Some(path) = request.path.as_deref().map(Path::new) else {
-        return roots::sandbox(side, name, &run, args.get("workspaces"));
+        return roots::sandbox(side, name, &run, sent, rooted.is_some());
     };
     let (Side::Home(root) | Side::Worker(root)) = side;
     let home = run.join(roots::HOME);
     let Ok(relative) = path.strip_prefix(&home) else {
+        if let Some(daemon) = rooted {
+            let sandbox = super::root::Sandbox {
+                name,
+                run: &run,
+                daemon,
+            };
+            return super::root::page(root, &sandbox, path, &request, sent, spent);
+        }
         let why = match roots::kept(root, path) {
             Kept::Workspace => "a Workspace's files are read through its mount, by its commands",
             Kept::Log => "a log is read with `logs.sandbox`",
@@ -292,6 +305,9 @@ pub(super) struct Scope<'a> {
     /// several names owned by anyone else is not read. `None` where the
     /// rule does not apply.
     owner: Option<u32>,
+    /// Where that rule applies: under this folder only. `None`: in the
+    /// whole view.
+    owned: Option<PathBuf>,
     rules: Rules,
     /// The Workspace records a request carried, `[{ id, path }]`.
     sent: Option<&'a SdkValue>,
@@ -372,6 +388,7 @@ impl<'a> Scope<'a> {
             base,
             mounts,
             owner,
+            owned: None,
             rules,
             sent: None,
             workspaces: OnceCell::new(),
@@ -382,6 +399,13 @@ impl<'a> Scope<'a> {
     /// keeps them (`[{ id, path }]`), beside this side's own.
     pub(super) fn with_workspaces(mut self, sent: Option<&'a SdkValue>) -> Self {
         self.sent = sent;
+        self
+    }
+
+    /// Keeps the hard-link rule to what is under `folder` (a Sandbox's
+    /// run folder in its root, where an image's files keep their links).
+    pub(super) fn owning(mut self, folder: &Path) -> Self {
+        self.owned = Some(folder.to_owned());
         self
     }
 
@@ -449,6 +473,31 @@ impl<'a> Scope<'a> {
         }
     }
 
+    /// Opens `relative`, shown as `path`, and judges what was opened: in
+    /// a view that resolves links (`View::InRoot`) a path can end where
+    /// its own names do not say, so where the kernel says it ended is
+    /// asked of `roots::kept` too, for the entry and every folder above
+    /// it. Answers what was opened and its path as the kernel names it.
+    fn opened(&self, relative: &Path, path: &Path) -> Result<(Opened, PathBuf), SdkRefusal> {
+        let opened = (self.base.open_at(relative)).map_err(|why| refusal(self.call, path, why))?;
+        if self.rules.view != View::InRoot {
+            return Ok((opened, path.to_owned()));
+        }
+        // the base is shown as `/`: a path inside it is its own name
+        let real = match opened.path() {
+            Ok(real) if real.is_absolute() => real,
+            _ => return Ok((opened, path.to_owned())),
+        };
+        if real != path && (real.ancestors()).any(|part| roots::kept(self.root, part) != Kept::Open)
+        {
+            return Err(self.invalid(
+                path,
+                "leads to what LayerFS keeps private under another name; it is not read",
+            ));
+        }
+        Ok((opened, real))
+    }
+
     /// Whether a walk enters the folder at `relative`: not a LayerFS
     /// folder this view lists as a base of its own.
     fn enters(&self, relative: &Path) -> bool {
@@ -458,6 +507,9 @@ impl<'a> Scope<'a> {
     /// Refuses a regular file with several names that its view's owner
     /// does not own: a link a command made to a file that is not its own.
     fn own_link(&self, path: &Path, stat: &Stat) -> Result<(), SdkRefusal> {
+        if (self.owned.as_ref()).is_some_and(|folder| !path.starts_with(folder)) {
+            return Ok(());
+        }
         match self.owner {
             Some(owner) if stat.kind == Kind::File && stat.links > 1 && stat.owner != owner => {
                 Err(self.invalid(
@@ -603,7 +655,7 @@ pub(super) fn answer(
             },
         }
     }
-    let opened = (scope.base.open_at(relative)).map_err(|why| refusal(scope.call, &path, why))?;
+    let (opened, real) = scope.opened(relative, &path)?;
     // what was opened, not what was listed before the open
     if !scope.rules.opens(&opened.stat) {
         return Err(scope.invalid(&path, NOT_FOR_ALL));
@@ -612,7 +664,7 @@ pub(super) fn answer(
         Kind::Folder => page(scope, &opened, relative, request, spent),
         _ => {
             // what was opened, not what was listed before the open
-            scope.own_link(&path, &opened.stat)?;
+            scope.own_link(&real, &opened.stat)?;
             window(&opened, request)
         }
     }
@@ -829,7 +881,8 @@ impl Walk<'_> {
 
     /// Walks the folder at `relative`, if it opens as one.
     fn enter(&mut self, relative: &Path, level: usize, after: &[&OsStr]) -> ControlFlow<()> {
-        match self.scope.base.open_at(relative) {
+        let path = self.scope.shown.join(relative);
+        match (self.scope.opened(relative, &path)).map(|(folder, _)| folder) {
             Ok(folder)
                 if folder.stat.kind == Kind::Folder && self.scope.rules.opens(&folder.stat) =>
             {

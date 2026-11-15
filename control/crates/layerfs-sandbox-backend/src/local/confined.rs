@@ -139,7 +139,8 @@ pub enum Refused {
 impl From<Errno> for Refused {
     fn from(errno: Errno) -> Self {
         match errno {
-            Errno::ENOENT | Errno::ENOTDIR => Self::Missing,
+            // `ESRCH`: a `/proc` entry of a process that has ended
+            Errno::ENOENT | Errno::ENOTDIR | Errno::ESRCH => Self::Missing,
             Errno::ELOOP => Self::Symlink,
             Errno::EXDEV => Self::Outside,
             // what an open of a socket answers (Linux, macOS)
@@ -304,10 +305,66 @@ impl Opened {
         Ok(())
     }
 
+    /// The path of what this holds, as the kernel names it now: where a
+    /// path that led through links ended. In a root of another mount
+    /// namespace it is the path inside that root.
+    pub fn path(&self) -> io::Result<PathBuf> {
+        os::confined::path_of(self.file.as_fd())
+    }
+
     /// Reads at most `bytes.len()` bytes of this file at `offset`, and
     /// nothing outside that window.
     pub fn read_at(&self, bytes: &mut [u8], offset: u64) -> io::Result<usize> {
         self.file.read_at(bytes, offset)
+    }
+}
+
+/// The root of another process, as that process sees it: what a Sandbox's
+/// commands have as `/` (layerfs-project#178 security rule 4).
+#[derive(Debug)]
+pub struct ProcessRoot {
+    /// Its root folder, a [`View::InRoot`] base: opens resolve inside it.
+    pub base: Base,
+    /// The mounts of its mount namespace, where `/` is that root.
+    pub mounts: Vec<Mount>,
+    /// When the process started, as `/proc/<pid>/stat` counts it (clock
+    /// ticks since boot): its caller matches it against the process it
+    /// meant, since a process id alone can name a later process.
+    pub start: Option<u64>,
+}
+
+/// Opens the root of process `pid` and reads its mount table, all through
+/// one descriptor of that process's `/proc` entry, so every part is of the
+/// same process: once it has ended the kernel answers nothing through that
+/// descriptor, and a later process with the same id has another entry. The
+/// start time is read last: an answer says the process still ran when its
+/// root was opened. A process that is not there is [`Refused::Missing`].
+///
+/// It needs root and the right to read that process's root, as starting a
+/// namespaces Sandbox does; without them, and on macOS, where no Sandbox
+/// has a root of its own, it is [`Refused::Unsupported`] with the reason.
+pub fn root_of(pid: u32) -> Result<ProcessRoot, Refused> {
+    #[cfg(target_os = "linux")]
+    {
+        if !nix::unistd::Uid::effective().is_root() {
+            return Err(Refused::Unsupported(
+                "reading a Sandbox's root needs root (it is read through /proc/<pid>/root of the Sandbox's init), as starting a namespaces Sandbox does".to_owned(),
+            ));
+        }
+        let (root, table, start) = os::confined::process_root(pid)?;
+        Ok(ProcessRoot {
+            base: Base::over(root, View::InRoot)?,
+            mounts: parse_mounts(&table),
+            start,
+        })
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = pid;
+        Err(Refused::Unsupported(
+            "no Sandbox has a root of its own on macOS: its commands see this computer's"
+                .to_owned(),
+        ))
     }
 }
 

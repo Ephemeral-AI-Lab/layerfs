@@ -4,7 +4,8 @@
 //! [`sandbox`] is the no-path answer of `sandbox.files`: the Sandbox's
 //! roots, each with a `role`. Its Workspaces come from the Workspace
 //! records and are never `stat`ed, so a stopped daemon's mount cannot hang
-//! the answer; `home` and `log` are entries of the run folder.
+//! the answer; `home` and `log` are entries of the run folder; `/` is the
+//! root of a Sandbox that has one of its own.
 //!
 //! [`machine`] is the no-path answer of `machine.files`: the machine's
 //! LayerFS folders ([`folders`]) ranked by role, then `/`.
@@ -14,7 +15,7 @@
 //! folder above it.
 use super::files::{entry, refusal, CALL};
 use super::Side;
-use crate::record::SandboxRecord;
+use crate::record::{DaemonRecord, SandboxRecord};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{refused, Outcome};
@@ -111,16 +112,25 @@ pub(super) fn kept(root: &Path, path: &Path) -> Kept {
     }
 }
 
-/// The uid the commands of Sandbox `name` run as: the numeric id its
-/// daemon record on `side` names, else 501. It is never looked up in an
-/// image's `/etc/passwd`.
-pub(super) fn command_uid(side: &Side<'_>, name: &str) -> u32 {
+/// The daemon record of Sandbox `name` on `side`, read as a file.
+pub(super) fn daemon(side: &Side<'_>, name: &str) -> Option<DaemonRecord> {
     let (Side::Home(root) | Side::Worker(root)) = side;
-    (SandboxRecord::read_in(&paths::sandbox_dir(root, name), name).ok())
-        .flatten()
-        .and_then(|record| record.daemon()?.uid())
+    let record = SandboxRecord::read_in(&paths::sandbox_dir(root, name), name);
+    record.ok().flatten()?.daemon().cloned()
+}
+
+/// The uid the commands of the Sandbox `daemon` records run as: the
+/// numeric id the record names, else 501. It is never looked up in an
+/// image's `/etc/passwd`.
+pub(super) fn uid_of(daemon: Option<&DaemonRecord>) -> u32 {
+    (daemon.and_then(DaemonRecord::uid))
         .and_then(|uid| u32::try_from(uid).ok())
         .unwrap_or(COMMAND_UID)
+}
+
+/// [`uid_of`] the daemon record of Sandbox `name` on `side`.
+pub(super) fn command_uid(side: &Side<'_>, name: &str) -> u32 {
+    uid_of(daemon(side, name).as_ref())
 }
 
 /// The Workspace records of the Sandbox folder `directory`, as a request
@@ -230,9 +240,19 @@ fn page_of(entries: Vec<SdkValue>) -> SdkValue {
 
 /// The roots of Sandbox `name`, whose run folder on `side` is `run`: one
 /// `workspace` per Workspace record (those `sent` with the request, else
-/// this side's own), then `home` and `log` when the run folder has them.
-/// The answer is a folder page that is never continued.
-pub(super) fn sandbox(side: &Side<'_>, name: &str, run: &Path, sent: Option<&SdkValue>) -> Outcome {
+/// this side's own), then `home` and `log` when the run folder has them,
+/// then, for a Sandbox with a root of its own (`rooted`: a namespaces
+/// Sandbox), `/` with role `root`. That entry is from the record alone:
+/// nothing of the root is opened, so a stopped Sandbox lists it too, and a
+/// read of it then says why it cannot be read. The answer is a folder page
+/// that is never continued.
+pub(super) fn sandbox(
+    side: &Side<'_>,
+    name: &str,
+    run: &Path,
+    sent: Option<&SdkValue>,
+    rooted: bool,
+) -> Outcome {
     let (Side::Home(root) | Side::Worker(root)) = side;
     let own;
     let recorded = match sent {
@@ -282,6 +302,11 @@ pub(super) fn sandbox(side: &Side<'_>, name: &str, run: &Path, sent: Option<&Sdk
             root.push(("role".to_owned(), SdkValue::text(role)));
             entries.push(SdkValue::Map(root));
         }
+    }
+    if rooted {
+        let mut root = entry("/", 1, "folder", None);
+        root.push(("role".to_owned(), SdkValue::text("root")));
+        entries.push(SdkValue::Map(root));
     }
     Ok(page_of(entries))
 }

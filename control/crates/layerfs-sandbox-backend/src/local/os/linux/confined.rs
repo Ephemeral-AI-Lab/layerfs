@@ -10,10 +10,13 @@
 //! server, and for the id of the mount it is in (`STATX_MNT_ID`).
 use crate::local::confined::{Kind, Refused, Stat, View};
 use nix::errno::Errno;
-use nix::fcntl::{openat2, OFlag, OpenHow, ResolveFlag};
+use nix::fcntl::{open as open_path, openat, openat2, OFlag, OpenHow, ResolveFlag};
+use nix::sys::stat::Mode;
 use rustix::fs::{statx, AtFlags, StatxFlags};
 use std::ffi::OsStr;
-use std::os::fd::{AsRawFd, BorrowedFd, OwnedFd};
+use std::fs::File;
+use std::io::Read;
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd};
 use std::path::{Path, PathBuf};
 
 /// How `view` resolves a path from its base.
@@ -86,4 +89,49 @@ pub(crate) fn stat(folder: BorrowedFd<'_>, name: &OsStr) -> nix::Result<Stat> {
         ),
         mount: (found.stx_mask & StatxFlags::MNT_ID.bits() != 0).then_some(found.stx_mnt_id),
     })
+}
+
+/// The root folder of process `pid`, its mount table's text and its start
+/// time (field 22 of its `stat`, clock ticks since boot), each opened from
+/// one descriptor of `/proc/<pid>`: the root first, the start time last.
+/// The `root` link is the one magic link an inspection read follows; it
+/// is the kernel's own, and what it leads to is then a base like any other.
+pub(crate) fn process_root(pid: u32) -> Result<(OwnedFd, String, Option<u64>), Refused> {
+    let folder = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_CLOEXEC;
+    let entry = open_path(
+        format!("/proc/{pid}").as_str(),
+        folder | OFlag::O_NOFOLLOW,
+        Mode::empty(),
+    )?;
+    let root = openat(entry.as_fd(), "root", folder | OFlag::O_NONBLOCK, Mode::empty()).map_err(
+        |errno| match errno {
+            Errno::EACCES | Errno::EPERM => Refused::Unsupported(format!(
+                "this process may not read the root of process {pid} (/proc/{pid}/root: {errno}); a Sandbox's root is read as root with the right to inspect its init"
+            )),
+            other => other.into(),
+        },
+    )?;
+    let text = |name: &str| -> Result<String, Refused> {
+        let file = openat(
+            entry.as_fd(),
+            name,
+            OFlag::O_RDONLY | OFlag::O_CLOEXEC,
+            Mode::empty(),
+        )?;
+        let mut text = String::new();
+        (File::from(file).read_to_string(&mut text)).map_err(|error| {
+            match error.raw_os_error() {
+                Some(code) => Errno::from_raw(code).into(),
+                None => Refused::Failed(error),
+            }
+        })?;
+        Ok(text)
+    };
+    let table = text("mountinfo")?;
+    let stat = text("stat")?;
+    // the command name, in parentheses, may hold spaces: count from its end
+    let start = (stat.rsplit_once(')'))
+        .and_then(|(_, rest)| rest.split_ascii_whitespace().nth(19))
+        .and_then(|ticks| ticks.parse().ok());
+    Ok((root, table, start))
 }

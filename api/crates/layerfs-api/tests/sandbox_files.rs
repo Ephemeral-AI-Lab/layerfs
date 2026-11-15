@@ -5,7 +5,8 @@
 //! the home reaches directly. Its answers, and what #179 B asks of every
 //! monitoring read: no lock or lease, nothing written on either side, no
 //! call-log line (the call is `quiet`), nothing started, and no refusal
-//! while a machine operation holds the machine.
+//! while a machine operation holds the machine. And the Root view (step
+//! 5): a namespaces Sandbox's roots offer `/`, read on its machine.
 //!
 //! Nothing runs: a Sandbox is its record and its run folder. Inspect
 //! permits are the process's, and the worker is in this process, so every
@@ -113,6 +114,12 @@ fn home_records(home: &Path, machine: &str, platform: &str, worker: Option<(Sock
 /// runs it records it, with its run folder as a start leaves it and two
 /// files a command left in its home; answers the folder.
 fn local_sandbox(root: &Path) -> PathBuf {
+    sandbox_as(root, "native")
+}
+
+/// [`local_sandbox`] under backend `runtime`: `namespaces` is a Sandbox
+/// with a root of its own, whose init this process stands in for.
+fn sandbox_as(root: &Path, runtime: &'static str) -> PathBuf {
     let name = "layerfs-0a1b2c3d-s1";
     let folder = paths::run_root(root).join(name);
     for part in ["overlay", "config", "workspaces", "tmp/project"] {
@@ -127,7 +134,7 @@ fn local_sandbox(root: &Path) -> PathBuf {
         platform: "macos".to_owned(),
         name: name.to_owned(),
         container: "ab".repeat(32),
-        runtime: "native",
+        runtime,
         uid: home::flock::euid(),
         gid: home::flock::egid(),
         directory: folder.display().to_string(),
@@ -143,7 +150,7 @@ fn local_sandbox(root: &Path) -> PathBuf {
             ("project", t("shop/api")),
             ("machine", t("native")),
             ("id", t("s1")),
-            ("runtime", t("native")),
+            ("runtime", t(runtime)),
             ("daemon", daemon.to_record()),
         ]),
     )
@@ -325,6 +332,21 @@ fn row(path: &str, kind: &str, role: &str, workspace: &str) -> (String, String, 
 /// The reads of Sandbox `s1` whose run folder is `folder`, common to every
 /// route: its home's listing, a file window, and its refusals.
 fn reads_its_home(home: &Path, folder: &Path) {
+    reads_its_home_only(home, folder);
+    // a host-process Sandbox has no other view: what is not its home
+    for path in [
+        folder.join("config/daemon.setup"),
+        folder.join("daemon.log"),
+        PathBuf::from("/etc/hosts"),
+    ] {
+        let asked = [("sandbox", t("s1")), ("path", p(&path))];
+        let (refused, message) = call(home, "sandbox.files", &asked).unwrap_err();
+        assert_eq!(refused, "InvalidInput", "{}: {message}", path.display());
+    }
+}
+
+/// The reads of a Sandbox's home that every Sandbox answers alike.
+fn reads_its_home_only(home: &Path, folder: &Path) {
     let tmp = folder.join("tmp");
     let listed = call(
         home,
@@ -367,16 +389,9 @@ fn reads_its_home(home: &Path, folder: &Path) {
         layerfs_api::json::print(&call(home, "sandbox.files", &file).unwrap()),
         r#"{"kind":"file","size":18,"offset":5,"content":"by a","binary":false,"next":9}"#
     );
-    for (path, code) in [
-        (folder.join("config/daemon.setup"), "InvalidInput"),
-        (folder.join("daemon.log"), "InvalidInput"),
-        (PathBuf::from("/etc/hosts"), "InvalidInput"),
-        (tmp.join("nothing"), "NotFound"),
-    ] {
-        let asked = [("sandbox", t("s1")), ("path", p(&path))];
-        let (refused, message) = call(home, "sandbox.files", &asked).unwrap_err();
-        assert_eq!(refused, code, "{}: {message}", path.display());
-    }
+    let asked = [("sandbox", t("s1")), ("path", p(&tmp.join("nothing")))];
+    let (refused, message) = call(home, "sandbox.files", &asked).unwrap_err();
+    assert_eq!(refused, "NotFound", "{message}");
     let wide = [("sandbox", t("s1")), ("limit", SdkValue::Int(1001))];
     let (code, message) = call(home, "sandbox.files", &wide).unwrap_err();
     assert_eq!(
@@ -545,6 +560,70 @@ fn a_forwarded_sandbox_s_roots_list_the_workspaces_the_home_records() {
     reads_its_home(&home, &folder);
     assert_eq!(files(&home), before);
     assert_eq!(files(&root), guest);
+    std::fs::remove_dir_all(scratch).unwrap();
+}
+
+#[test]
+fn a_namespaces_sandbox_s_roots_offer_its_root_which_its_machine_reads() {
+    let _turn = serial();
+    let (scratch, home, root) = boxed("rooted");
+    worker_sandbox(&home);
+    // this process stands in for the Sandbox's init: its root is `/`
+    let folder = sandbox_as(&root, "namespaces");
+    settle(&home);
+    held(&home, "box");
+    let (before, guest) = (files(&home), files(&root));
+
+    let roots = call(&home, "sandbox.files", &[("sandbox", t("s1"))]).unwrap();
+    assert_eq!(
+        shown(&roots, &folder),
+        [
+            row("tmp", "folder", "home", "-"),
+            row("daemon.log", "file", "log", "-"),
+            row("/", "folder", "root", "-"),
+        ]
+    );
+    let top = call(
+        &home,
+        "sandbox.files",
+        &[
+            ("sandbox", t("s1")),
+            ("path", t("/")),
+            ("limit", SdkValue::Int(1000)),
+        ],
+    );
+    if cfg!(target_os = "linux") && home::flock::euid() == 0 {
+        let top = top.unwrap();
+        let kind = |path: &str| {
+            let found = (entries(&top).iter()).find(|entry| entry.get_text("path") == Some(path));
+            found.and_then(|entry| entry.get_text("kind"))
+        };
+        assert_eq!(kind("/proc"), Some("system"));
+        assert_eq!(kind("/etc"), Some("folder"));
+        let asked = [("sandbox", t("s1")), ("path", t("/proc/self/environ"))];
+        let (code, message) = call(&home, "sandbox.files", &asked).unwrap_err();
+        assert_eq!(code, "InvalidInput", "{message}");
+    } else {
+        // macOS has no such root, and a reader that is not root may not
+        // read one: the view says so, with its reason
+        let (code, message) = top.unwrap_err();
+        assert_eq!(code, "Unsupported", "{message}");
+        println!("NOT_RUN the root's listing: {message}");
+    }
+    // its home is read as any Sandbox's
+    reads_its_home_only(&home, &folder);
+    assert_eq!(
+        files(&home),
+        before,
+        "a files read changed a file in the home"
+    );
+    assert_eq!(
+        files(&root),
+        guest,
+        "a files read changed a file under the root"
+    );
+    no_lease(&home);
+    no_lease(&root);
     std::fs::remove_dir_all(scratch).unwrap();
 }
 

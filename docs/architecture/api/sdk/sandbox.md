@@ -240,8 +240,9 @@ is as it was ([`close.rs`](../../../../control/crates/layerfs-sandbox/src/close.
 
 ### sandbox.files
 
-Reads what is in a Sandbox: its roots, one page of a folder of its home, or
-one window of a file there. It is a read for a UI that shows a tree
+Reads what is in a Sandbox: its roots, one page of a folder, or one window
+of a file, in its home and, for a Sandbox with a root of its own, in that
+root. It is a read for a UI that shows a tree
 (layerfs-project#178): no lock, no lease, no daemon call, nothing written,
 no call-log line (the call is `quiet`), and the MCP server does not list it.
 
@@ -253,7 +254,7 @@ CLI     layerfs sandbox files <sandbox> [<path>] [--depth <depth>] [--cursor <cu
 
 | Argument | Kind | Rule |
 | --- | --- | --- |
-| `path` (optional) | Text | none: the roots. Else an absolute path as the Sandbox's commands see it, with no `..`, under the Sandbox's home |
+| `path` (optional) | Text | none: the roots. Else an absolute path as the Sandbox's commands see it, with no `..`: under the Sandbox's home, or, when the roots offer `/`, anywhere in its root |
 | `depth` option | Int | how many levels of a folder a page walks: 1 (default) to 32 |
 | `limit` option | Int | the most entries of a page: 1 to 1000, default 500 |
 | `cursor` option | Text | a page's `next`: the entries after it. An entry's path under `path`, at most `depth` levels down |
@@ -270,10 +271,28 @@ with a `role`, in this order.
 | `workspace` | one per mounted Workspace: `kind: "mount"`, `path` its mount (`<run folder>/workspaces/<n>`), `workspace` its id; `size`, `mode` and `mtime` null. Ordered by path, `2` before `10` | the Workspace records on the side that keeps them (the home for `native` and for a Sandbox whose daemon the home reaches directly, which sends them with the request; else the worker's root). The mount is never `stat`ed or opened: a stopped daemon cannot hang the answer |
 | `home` | `kind: "folder"`, `path` `<run folder>/tmp`: `HOME` for the Sandbox's commands | the run folder |
 | `log` | `kind: "file"`, `path` `<run folder>/daemon.log`, with its `size`. It is read with [`logs.sandbox`](logs.md#logssandbox), not with this call | the run folder |
+| `root` | `kind: "folder"`, `path` `/`: what the Sandbox's commands see as `/`. Only for a Sandbox with a root of its own (the `namespaces` backend: native Linux, docker, Lima, Apple Container); `size`, `mode` and `mtime` null | the Sandbox's record: nothing of the root is opened for this answer, so a stopped Sandbox lists it too |
 
-A view of the whole root a Sandbox's commands see is not built yet: when it
-is, the roots gain `/` with role `root` on the machines that have it, and a
-client shows that view only when the answer offers it.
+A client offers a second view ("whole filesystem") only when the answer has
+the `root` entry. A host-process Sandbox (native macOS) has none: its
+commands see the owner's computer, and a path outside its home is
+`InvalidInput`.
+
+**The root** (a path outside the home, when the roots offer `/`) is read
+through the root of the Sandbox's init process, on the machine that runs it
+([`inspect/root.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/root.rs)):
+
+| | In the root |
+| --- | --- |
+| Links | one on the way resolves inside the root (`/lib` of a merged-`/usr` image); the last name is never followed |
+| `system` | `/proc`, `/sys`, `/dev`: listed, never `stat`ed or entered |
+| Mounts | entered when the type is `ext4`, `xfs`, `btrfs`, `zfs`, `f2fs`, `overlay` or `tmpfs` (the private `/tmp`, `/.layerfs/runtime`, the run folder and a bound Store's folder); any other is `mount` with its `fs`. A Workspace mount is `mount` with `workspace`, its id, and is never `stat`ed or entered |
+| What is opened | every file and folder: the Sandbox's files are its own, and there is no world-readable rule |
+| `restricted` | the run folder and a bound Store's folder are in the root at their own paths: the run folder's `config/` and `overlay/`, `store.sqlite*`, locks and leases are listed and never read; `daemon.log` is a `log`. A path that a link leads to one of them is refused too: where the open ended is judged, not only its names |
+| Hard links | read, but for a file in the run folder that the command user does not own: an image's files keep their links (busybox applets) |
+
+A path under the home is read in the home's own view in every case, which
+needs no running Sandbox. A stopped Sandbox's root is `Unavailable`.
 
 **A folder** answers `{ kind: "folder", entries, next, has_more, reason? }`.
 `entries` is a flat list in tree order: names in byte order, and a folder's
@@ -306,15 +325,15 @@ window is read: a sparse 10 GiB file answers a window near its end at once.
 
 | Error | When |
 | --- | --- |
-| `InvalidInput` | an option outside its range; a `cursor` with no `path`, or not an entry of the folder; a path that is not absolute, holds a `..`, or is outside the Sandbox's home (its run folder's `config/`, `overlay/`, `daemon.log` and Workspace mounts included); a symbolic link on the way or at the end, wherever it leads; a FIFO, socket or device; a mount point or a path in one; a `restricted` entry or a path in one (`store.sqlite*`); a regular file with several names that the Sandbox's command user (the numeric uid of its daemon record, else 501) does not own |
+| `InvalidInput` | an option outside its range; a `cursor` with no `path`, or not an entry of the folder; a path that is not absolute or holds a `..`; for a Sandbox with no root of its own, a path outside its home (its run folder's `config/`, `overlay/`, `daemon.log` and Workspace mounts included); a symbolic link at the end, or, in the home, on the way, wherever it leads; a `system` entry or a path in one; a path a link leads into a mount that is not entered, or to what LayerFS keeps private; a FIFO, socket or device; a mount point or a path in one; a `restricted` entry or a path in one (`store.sqlite*`); a regular file with several names that the Sandbox's command user (the numeric uid of its daemon record, else 501) does not own |
 | `NotFound` | nothing is at the path |
 | `NoSuchSandbox` | no Sandbox of that name, or its machine holds no run folder for it |
-| `Unavailable` | the Sandbox's machine is stopped or its worker did not answer in 8 s; the read ran past 6 s. Nothing starts a machine |
+| `Unavailable` | the Sandbox's machine is stopped or its worker did not answer in 8 s; the read ran past 6 s; a path in the root of a Sandbox whose daemon is not running, or whose recorded process id now names another process. Nothing starts a machine or a Sandbox |
 | `Busy` | two inspection reads already run on that machine; read again |
-| `Unsupported` | a Linux kernel before 5.6 (no `openat2`); nothing else is tried |
+| `Unsupported` | a Linux kernel before 5.6 (no `openat2`), or before 5.8 for a path in the root (no mount id in `statx`); a path in the root read by a process that is not root (a native Linux home), or that may not read the init's root, each with its reason; nothing else is tried |
 
-A Sandbox whose daemon has ended is read as before while its run folder is
-there. Which calls open what, and what a page costs, is in
+A Sandbox whose daemon has ended keeps its home readable while its run
+folder is there. Which calls open what, and what a page costs, is in
 [inspection](../../control/sandboxes/inspect.md#files).
 
 ## Family errors

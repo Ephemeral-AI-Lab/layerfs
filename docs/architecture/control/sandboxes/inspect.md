@@ -8,7 +8,7 @@ one worker operation, `inspect`, with bounded admission and deadlines, within
 
 | | |
 | --- | --- |
-| Source | [`layerfs-sandbox/src/inspect`](../../../../control/crates/layerfs-sandbox/src/inspect), [`layerfs-sandbox-backend/src/local/confined.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/confined.rs) with `os/{linux,macos}/confined.rs`, [`layerfs-home/src/tail.rs`](../../../../control/crates/layerfs-home/src/tail.rs), [`layerfs-store/src/place.rs`](../../../../control/crates/layerfs-store/src/place.rs) `on_machine_read`, `Worker::read`, [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `send_within`, [`worker_server/ops.rs`](../../../../control/crates/layerfs-control/src/worker_server/ops.rs) |
+| Source | [`layerfs-sandbox/src/inspect`](../../../../control/crates/layerfs-sandbox/src/inspect), [`layerfs-sandbox-backend/src/local/confined.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/confined.rs) with `os/{linux,macos}/confined.rs` (`root_of`: a process's root), [`layerfs-home/src/tail.rs`](../../../../control/crates/layerfs-home/src/tail.rs), [`layerfs-store/src/place.rs`](../../../../control/crates/layerfs-store/src/place.rs) `on_machine_read`, `Worker::read`, [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `send_within`, [`worker_server/ops.rs`](../../../../control/crates/layerfs-control/src/worker_server/ops.rs) |
 | Used by | [API: `logs.machine`, `logs.sandbox`](../../api/sdk/logs.md#logsmachine), [`sandbox.files`](../../api/sdk/sandbox.md#sandboxfiles), [`machine.files`](../../api/sdk/machine.md#machinefiles), [`machine.stats`](../../api/sdk/machine.md#machinestats), [`sandbox.list`](../../api/sdk/sandbox.md#sandboxlist) with `live`, [`sandbox.get`](../../api/sdk/sandbox.md#sandboxget) of a forwarded Sandbox |
 
 ## Picture
@@ -92,9 +92,21 @@ file window in any of them.
    workspaces  <- Workspace records    never stat'ed: kind "mount"
    home, log   <- stat in the run folder
 
- sandbox.files s1 <home>/a/b           files::sandbox_page
-   under <run folder>/tmp ? ----- no -----------------> InvalidInput
-   Scope::open: Base (the home's descriptor), mount table, Rules::beneath
+ sandbox.files s1                      roots::sandbox
+   ... then "/" (role root) when the record's backend is namespaces
+
+ sandbox.files s1 <path>               files::sandbox_page
+   under <run folder>/tmp ? -- yes --> Scope::open: Base (the home's
+        | no                           descriptor), mount table, Rules::beneath
+        +-- host-process Sandbox ---------------------> InvalidInput
+        +-- namespaces Sandbox --> root::page
+              the record's process runs ? ---- no ----> Unavailable
+              confined::root_of(pid): /proc/<pid> opened once; through it
+                root, mountinfo, then stat (start time)
+              not root, or may not read it -----------> Unsupported
+              start time is not the record's ---------> Unavailable
+              Scope::over: the root as "/", that namespace's mount table,
+                View::InRoot, system names, hard links owned in the run folder
 
  machine.files m                       roots::machine
    the LayerFS folders that are there, by role (roots::folders), then "/"
@@ -120,17 +132,19 @@ file window in any of them.
 
 ### The views
 
-| | A Sandbox's home | A LayerFS folder of a machine | A machine's `/` |
-| --- | --- | --- | --- |
-| Call | `sandbox.files` | `machine.files` | `machine.files`, on a worker's side only |
-| Base | `<run folder>/tmp` | the outermost of `roots::folders` that holds the path: `/layerfs/data`, `state`, `bundle`, `image`; in a home `store`, `sandbox`, `machine/native/run`, `log` | `/` |
-| `View` | `Beneath` | `Beneath` | `InRoot` |
-| Links | none followed | none followed | on the way: resolved inside the base; at the end: never |
-| Mounts | none entered | none entered | entered when the type is one of `files::CROSSED` and the mount is not in a system folder, a LayerFS folder, a path LayerFS keeps, or a mount that is not entered itself |
-| `system` | — | — | `proc`, `sys`, `dev`, `run` of the base: never `stat`ed |
-| World rule (`Rules::world`) | — | — | a file must be `o+r`, a folder `o+rx`, and so must every folder above it; else `unreadable` |
-| LayerFS folders (`Rules::roles`) | — | listed with their `role` | listed with their `role`, never entered (`Rules::apart`) |
-| Hard links | a regular file with several names must be the command uid's | any | any |
+| | A Sandbox's home | A LayerFS folder of a machine | A machine's `/` | A Sandbox's root |
+| --- | --- | --- | --- | --- |
+| Call | `sandbox.files` | `machine.files` | `machine.files`, on a worker's side only | `sandbox.files`, a `namespaces` Sandbox, a path outside its home |
+| Base | `<run folder>/tmp` | the outermost of `roots::folders` that holds the path: `/layerfs/data`, `state`, `bundle`, `image`; in a home `store`, `sandbox`, `machine/native/run`, `log` | `/` | the root of the Sandbox's init process (`/proc/<pid>/root`), shown as `/` |
+| Mount table | this process's | this process's | this process's | the init's (`/proc/<pid>/mountinfo`) |
+| `View` | `Beneath` | `Beneath` | `InRoot` | `InRoot` |
+| Links | none followed | none followed | on the way: resolved inside the base; at the end: never | as a machine's `/` |
+| Mounts | none entered | none entered | entered when the type is one of `files::CROSSED` and the mount is not in a system folder, a LayerFS folder, a path LayerFS keeps, or a mount that is not entered itself | the same rule: the private `/tmp`, `/.layerfs/runtime`, the run folder and a bound Store's folder are entered, a Workspace's FUSE mount is not |
+| `system` | — | — | `proc`, `sys`, `dev`, `run` of the base: never `stat`ed | `proc`, `sys`, `dev` |
+| World rule (`Rules::world`) | — | — | a file must be `o+r`, a folder `o+rx`, and so must every folder above it; else `unreadable` | — (the Sandbox's files are its own) |
+| LayerFS folders (`Rules::roles`) | — | listed with their `role` | listed with their `role`, never entered (`Rules::apart`) | — (the run folder and a Store's folder are at their own paths, judged by `roots::kept`) |
+| Hard links | a regular file with several names must be the command uid's | any | any | the command uid's in the run folder (`Scope::owning`); any elsewhere: an image's files keep their links |
+| Needs | the run folder | the folder | — | the Sandbox running, and a reader that is root |
 
 A machine's LayerFS folders are the ones `roots::folders` names from the
 side's root alone: the root, what is in it, and beside it `state`, `bundle`
@@ -149,14 +163,43 @@ root, read once when a listing first meets such an entry, and those the
 request carried (`workspaces: [{ id, path }]`, which the home sends for
 Sandboxes whose daemon it reaches directly, as it keeps their records).
 
-What the `/` view relies on, and what it does not: a path in a LayerFS
-folder is always read in that folder's own view, where `roots::kept` judges
-it. From `/`, the same files can be named another way only through a link
-or a second mount of the same disk (Lima mounts the data disk at
+**Where an open ended.** A view that resolves links can end where the
+names of its path do not say: a command can make `/tmp/k` a link to its run
+folder's `config/`. So in an `InRoot` view every open (`Scope::opened`, of a
+path and of each folder a walk enters) asks the kernel where the descriptor
+is (`Opened::path`: its `/proc/self/fd` link, which for a root of another
+mount namespace is the path inside that root), and when that is not the
+path asked for, `roots::kept` judges it and every folder above it; what it
+keeps is refused. The hard-link rule of a Sandbox's root goes by that path
+too.
+
+What a machine's `/` view relies on, and what it does not: a path in a
+LayerFS folder is always read in that folder's own view. From `/`, the
+same files can be named another way through a link (judged as above) or
+through a second mount of the same disk (Lima mounts the data disk at
 `/mnt/lima-<name>` and binds it at `/layerfs/data`); there the world rule
 is what applies, with `store.sqlite*` restricted by name wherever it is.
 The secrets LayerFS writes are not world-readable (`control.json`, the
 worker's `secret`, a daemon's setup file).
+
+**A Sandbox's root** (security rule 4). The daemon record of a
+`namespaces` Sandbox names its init process: the first stage of
+`layerfs-sandbox-helper`, whose root became the Sandbox's when the second
+stage pivoted. `confined::root_of(pid)` opens `/proc/<pid>` once and
+everything else through that descriptor: `root` (the one magic link an
+inspection read follows), `mountinfo`, and last `stat` for the start time.
+A descriptor of a `/proc` entry is of one process: the kernel answers
+`ESRCH` through it once that process has ended, and a later process with
+the same id has another entry, so the three are of the same process and the
+last read says it still ran. `root::page` then requires that start time to
+be the record's and the record's process to run (id, start time and boot,
+`process::live`), else `Unavailable`. `pidfd_open` is not used: no
+dependency wraps it without `unsafe` (rustix's is behind its `process`
+feature, which this crate does not enable); the `/proc` descriptor gives
+the same binding. The reader must be root, as the start of a namespaces
+Sandbox is; on a native Linux home that is not, and where the kernel
+refuses the read of the init's root, the view is `Unsupported` with the
+reason. The roots answer offers `/` from the record alone.
 
 ### A folder page
 
@@ -223,6 +266,7 @@ and its `os/` files: the confined open, the `stat`, and the mount table.
 | After the open | a `stat` of the descriptor: only a regular file or a folder is answered; a FIFO opens at once and is refused | the same |
 | `stat` of an entry (`Opened::stat_of`) | `statx` (rustix) with `AT_SYMLINK_NOFOLLOW \| AT_NO_AUTOMOUNT \| AT_STATX_DONT_SYNC`, `AT_EMPTY_PATH` for a descriptor, asking `STATX_BASIC_STATS \| STATX_MNT_ID`. Every `stat` of the walker is this call | `fstatat(AT_SYMLINK_NOFOLLOW)`, `fstat` for a descriptor |
 | Two mounts (`Stat::apart_from`) | by mount id: a file of an overlay's lower layer or a btrfs subvolume has its own device and is no mount | by device |
+| Another process's root (`confined::root_of`) | `/proc/<pid>` opened as a folder, then `root`, `mountinfo` and `stat` through it; root only | `Unsupported`: no Sandbox has a root of its own |
 | Mount table (`confined::mounts`, `parse_mounts`) | `/proc/self/mountinfo`, read as a file: each mount's id, point and type | one run of `/sbin/mount` per files request with a path: fixed path, no environment but `LC_ALL=C`, no input, 500 ms, then killed and reaped (`darwin::mount_table`). A run that fails or is late answers no table, and a mount is then told by its device after a `stat` |
 
 `getfsstat(MNT_NOWAIT)`, the system call under `mount`, is not called: no
@@ -247,6 +291,8 @@ the crate for `statx`, which `nix` does not wrap.
 | On Linux no `stat` is made but `statx` with `AT_STATX_DONT_SYNC \| AT_SYMLINK_NOFOLLOW \| AT_NO_AUTOMOUNT`. | `os/linux/confined.rs` `stat`, the walker's only one |
 | From a machine's `/`, nothing is opened that not every user of the machine may read, and no system folder or LayerFS folder is entered. | `Rules::opens`, `Rules::system`, `Scope::enters` |
 | On `native`, nothing outside the home's LayerFS folders is read. | `machine::machine_page` |
+| A Sandbox's root is read only while the process its record names runs, and only as that process's root. | `root::page`, `confined::root_of` |
+| What LayerFS keeps private is not read under another name. | `Scope::opened`: the kernel's path of every descriptor an `InRoot` view opens, judged by `roots::kept` |
 | Only regular files and folders are opened for an answer; a FIFO is never waited on. | every open is `O_NONBLOCK` and followed by a `stat` of the descriptor |
 | A Workspace mount is never `stat`ed, opened or read through; nor is a mount point the mount table names. | `roots::sandbox`, `roots::kept`, `Scope::class` |
 | A Store's database, an overlay database, a key, a lease or a lock is never opened. | `roots::kept`, asked for a path and for each folder above it |
@@ -269,6 +315,8 @@ the crate for `statx`, which `nix` does not wrap.
 | `machine.files` request | at most 1024 Workspace records sent with it | `machine.rs`, `roots::MOST` |
 | Path that is not there | `NotFound` | `files.rs` `refusal` |
 | Linux before 5.6 | `Unsupported` (no `openat2`) | `confined.rs` `Refused::Unsupported` |
+| A Sandbox's root, stopped Sandbox or a reused process id | `Unavailable`; its home is still read | `root.rs` |
+| A Sandbox's root, reader not root or refused by the kernel | `Unsupported` with the reason | `confined::root_of` |
 | Linux before 5.8, a view that crosses mounts | `Unsupported` (`statx` names no mount id) | `confined.rs` `Base::over` |
 | macOS mount table | one run of `/sbin/mount`, 500 ms; none read: mounts told by device | `darwin::mount_table` |
 | `machine_stats`, `sandboxes_live` request | at most 4096 names in a list (`MOST`), each a valid Store or Sandbox name, else `InvalidInput` | `live.rs` |
@@ -287,11 +335,11 @@ folder page does, or `complete: false` with `reason: "deadline"` as
 `machine_stats` and `sandboxes_live` do), rather than run to the hard
 deadline.
 
-A files view (a Sandbox's whole root) is a kind whose serving function
-builds a `files::Scope` with its `files::Rules` and calls `files::answer`,
-as `machine.rs` does; its roots answer goes in `roots.rs`, beside
-`roots::sandbox` and `roots::machine`. A view of another mount namespace
-gives `Scope::over` that namespace's table (`confined::parse_mounts`). What
+A files view is a serving function that builds a `files::Scope` with its
+`files::Rules` and calls `files::answer`, as `machine.rs` and `root.rs` do;
+its roots answer goes in `roots.rs`, beside `roots::sandbox` and
+`roots::machine`. A view of another mount namespace gives `Scope::over`
+that namespace's table (`confined::parse_mounts`), as `root.rs` does. What
 it keeps private is one line of `roots::kept`.
 
 ## Demonstration
@@ -308,8 +356,9 @@ it keeps private is one line of `roots::kept`.
 | [`confined.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/confined.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox-backend --test confined` | Linux and macOS | an open stays beneath its base and follows no link, out or in; a FIFO is refused at once; a device where one can be made; Linux: `/proc` is refused as another mount and listed in the table; a root view resolves links inside its base and ends only in the mounts allowed by id, with a mount table given as text; macOS: the table from one bounded run of `mount` |
 | [`inspect_files.rs`](../../../../control/crates/layerfs-sandbox/tests/inspect_files.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox --test inspect_files` | Linux and macOS | 3000 entries paged by name through additions and removals; tree order at depths 1 to 4; byte order; a page cut by its budget; file windows, binary, a sparse 10 GiB file; every refusal; hard links by owner; the roots with Workspace mounts never touched; a stopped Sandbox's home |
 | [`inspect_machine_files.rs`](../../../../control/crates/layerfs-sandbox/tests/inspect_machine_files.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox --test inspect_machine_files` | Linux and macOS | a machine's roots by role; a LayerFS folder with what LayerFS keeps and its Workspace mounts from the records; a home's folders only; pages and the soft budget; `/`: system folders, a closed file, a program read through a merged-`/usr` link; Linux: the world rule, links, and a mount that is not entered where the host has one |
+| [`inspect_root_files.rs`](../../../../control/crates/layerfs-sandbox/tests/inspect_root_files.rs) | `cargo +1.85.1 test --locked -p layerfs-sandbox --test inspect_root_files` | Linux as root (a child process stands in for a Sandbox's init, in this host's mount namespace) and macOS | the roots offer `/` for a namespaces Sandbox only; a stopped Sandbox reads its home and answers `Unavailable` for its root; Linux: the root's listing, the run folder and a Store's folder restricted at their own paths and through links, hard links, a mount that is not entered, a reused process id; macOS: `Unsupported` |
 | [`machine_files.rs`](../../../../api/crates/layerfs-api/tests/machine_files.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test machine_files` | Unix; this build's worker on a scratch root | `machine.files` on the native, worker and forwarded routes with a Store's lock held and the machine held: nothing written on either side, no lease, no call-log line; a stopped machine |
-| [`sandbox_files.rs`](../../../../api/crates/layerfs-api/tests/sandbox_files.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test sandbox_files` | Unix; this build's worker on a scratch root | `sandbox.files` on the native, worker and forwarded routes with a Store's lock held and the machine held: nothing written on either side, no lease, no call-log line; a stopped machine |
+| [`sandbox_files.rs`](../../../../api/crates/layerfs-api/tests/sandbox_files.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test sandbox_files` | Unix; this build's worker on a scratch root | `sandbox.files` on the native, worker and forwarded routes with a Store's lock held and the machine held: nothing written on either side, no lease, no call-log line; a stopped machine; a namespaces Sandbox's roots and root through its machine's worker |
 
 ## Related
 

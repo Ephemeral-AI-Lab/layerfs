@@ -390,7 +390,7 @@ class SandboxFamily:
         length: int | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """a Sandbox's files: its roots, or a folder or file under its home"""
+        """a Sandbox's files: its roots, or a folder or file under its home or in its root"""
 
 class WorkspaceFamily:
     def mount(self, sandbox: str, branch: str, *, name: str | None = None, log_tag: str | None = None) -> Result:
