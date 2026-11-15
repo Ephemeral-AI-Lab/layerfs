@@ -35,6 +35,8 @@ pub struct Snap {
     pub node: NodeId,
     pub root: ObjectId,
     pub tree: TreeTable,
+    /// The node's `history_serial`, for the `remove_file` visibility rule.
+    pub serial: u64,
 }
 
 /// The stack's object reader.
@@ -89,12 +91,17 @@ pub fn resolve(
     }
     let root = args::root(store, node)?;
     let tree = TreeTable::open(reader, FilesystemRootId(root)).map_err(args::content)?;
+    let serial = match store.published(|history| history.node_history_serial(node)) {
+        Ok(Some(serial)) => serial,
+        _ => 0,
+    };
     Ok(Snap {
         kind,
         label,
         node,
         root,
         tree,
+        serial,
     })
 }
 

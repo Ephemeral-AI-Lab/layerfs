@@ -6,6 +6,7 @@ CREATE TABLE history_meta (
     binding_key BLOB NOT NULL CHECK (length(binding_key) BETWEEN 1 AND 128),
     identity_format INTEGER NOT NULL CHECK (identity_format = 3),
     schema_version INTEGER NOT NULL CHECK(schema_version=1),
+    next_history_serial INTEGER NOT NULL DEFAULT 1,
     schema_source TEXT NOT NULL,
     schema_definition TEXT NOT NULL
 ) STRICT;
@@ -50,6 +51,7 @@ CREATE TABLE layer (
             source_commit_id IS NULL
             OR (length(source_commit_id) = 33 AND substr(source_commit_id, 1, 1) = X'12')
         ),
+    history_serial INTEGER NOT NULL DEFAULT 0,
     CHECK (
         (parent_layer_id IS NULL AND source_branch_id IS NULL AND source_commit_id IS NULL)
         OR
@@ -102,6 +104,7 @@ CREATE TABLE "commit" (
     new_metadata INTEGER NOT NULL DEFAULT 0 CHECK(new_metadata>=0),
     lww BLOB NOT NULL,
     displaced_id BLOB CHECK(displaced_id IS NULL OR length(displaced_id)=33),
+    history_serial INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (layer_stack_id, base_layer_id)
         REFERENCES layer(layer_stack_id, layer_id) DEFERRABLE INITIALLY DEFERRED,
     FOREIGN KEY (layer_stack_id, parent_commit_id)

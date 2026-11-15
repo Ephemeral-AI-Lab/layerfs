@@ -11,6 +11,8 @@ mod layerstack;
 mod lineage;
 mod lineage_backfill;
 mod merge;
+mod paths;
+mod position;
 mod provider;
 mod removal;
 mod rows;

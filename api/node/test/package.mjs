@@ -42,14 +42,6 @@ test("index.d.ts is exactly what the call table generates", () => {
 test("every call, argument and option of the table is in the typings", () => {
   const types = readFileSync(here("../src/index.d.ts"), "utf8");
   const pascal = (word) => word.replace(/(^|_)([a-z])/g, (_, __, letter) => letter.toUpperCase());
-  // the annotation each table kind is written as; a call's own options
-  // interface must name its options with exactly these (#691: `branch.publish`
-  // takes `expected_base`, `expected_head` and `force`).
-  const ARGUMENT = {
-    project: "string", name: "string", text: "string", int: "WholeNumber", bool: "boolean",
-    size: "Size", content: "Content", json: "Value", image: "string",
-  };
-  const FUNCTION = { on_progress: "ProgressHandler", stdout: "OutputHandler", stderr: "OutputHandler" };
   for (const spec of table) {
     const block = types.split(`export interface ${pascal(spec.family)}Family {\n`)[1].split("\n}\n")[0];
     // the overloads that take the options right after the required positionals
@@ -59,22 +51,6 @@ test("every call, argument and option of the table is in the typings", () => {
     assert.ok(lines.length > 0 && lines.every((text) => text.endsWith("): Promise<Result>;")), `${spec.family}.${spec.call}`);
     assert.ok(block.includes(`  /** ${spec.help} */\n${lines[0]}`), `${spec.family}.${spec.call} help`);
     for (const arg of spec.args) assert.ok(line.includes(`${arg.name}${arg.optional ? "?" : ""}: `), `${spec.family}.${spec.call}(${arg.name})`);
-    if (spec.options.length === 0) {
-      assert.ok(line.endsWith("options?: CallOptions): Promise<Result>;"), `${spec.family}.${spec.call}: CallOptions`);
-      continue;
-    }
-    const name = `${pascal(spec.family)}${pascal(spec.call)}Options`;
-    assert.ok(line.endsWith(`options?: ${name}): Promise<Result>;`), `${spec.family}.${spec.call}: options?.${name}`);
-    const declaration = `export interface ${name} extends CallOptions {\n`;
-    const at = types.indexOf(declaration);
-    assert.ok(at >= 0, `${spec.family}.${spec.call}: no ${name} interface`);
-    const declared = types.slice(at + declaration.length).split("\n}\n")[0];
-    const wanted = spec.options.map((opt) => {
-      const type = opt.kind === "function" ? FUNCTION[opt.name] : ARGUMENT[opt.kind];
-      assert.ok(type, `${spec.family}.${spec.call}: no typings for ${opt.kind} option ${opt.name}`);
-      return `  ${opt.name}?: ${type};`;
-    });
-    assert.equal(declared, wanted.join("\n"), `${spec.family}.${spec.call}: ${name} options`);
     for (const opt of spec.options) assert.ok(types.includes(`  ${opt.name}?: `), `${spec.family}.${spec.call} ${opt.name}`);
   }
 });

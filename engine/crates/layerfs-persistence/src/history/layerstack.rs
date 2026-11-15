@@ -47,6 +47,14 @@ const STACK_HEAD: &str = "layerstack_stack_head";
 
 const LAYER_BY_SOURCE: &str = "layerstack_layer_by_source";
 
+const INSERT_PROJECT_EPOCH: &str = "layerstack_insert_project_epoch";
+
+const BUMP_PROJECT_EPOCH: &str = "layerstack_bump_project_epoch";
+
+const INSERT_RETIRED: &str = "layerstack_insert_retired";
+
+const DELETED_MS: &str = "layerstack_deleted_ms";
+
 /// Creates the genesis Layer and the stack in one transaction.
 pub(crate) fn initialize_layerstack(
     tx: &Transaction<'_>,
@@ -59,6 +67,7 @@ pub(crate) fn initialize_layerstack(
         return Err(HistoryError::Integrity("LayerStack name"));
     }
     let genesis = LayerId::derive(request.stack, None, request.genesis_root);
+    let serial = super::position::next_serial(tx)?;
     tx.execute(
         INSERT_STACK,
         params![
@@ -70,6 +79,8 @@ pub(crate) fn initialize_layerstack(
         ],
     )
     .map_err(sql)?;
+    tx.execute(INSERT_PROJECT_EPOCH, [request.stack.as_slice()])
+        .map_err(sql)?;
     tx.execute(
         INSERT_LAYER,
         params![
@@ -81,6 +92,7 @@ pub(crate) fn initialize_layerstack(
             Option::<Vec<u8>>::None,
             i64::try_from(request.logical).map_err(|_| HistoryError::Capacity("logical bytes"))?,
             Vec::<u8>::new(),
+            i64::try_from(serial).map_err(|_| HistoryError::Capacity("history serials"))?,
         ],
     )
     .map_err(sql)?;
@@ -102,6 +114,41 @@ pub(crate) fn layer_stack_named(
     name: &HistoryName,
 ) -> HistoryResult<Option<LayerStackRecord>> {
     one(tx, STACK_BY_NAME, params![name.as_str()], stack_row)
+}
+
+/// Records a project.delete marker in one write transaction: the project's
+/// epoch is bumped with the marker, and the marker is the commit point. A
+/// hidden or absent stack, and a repeat, are Missing(LayerStack); a repeat
+/// writes nothing, so it cannot bump the epoch twice.
+pub(crate) fn mark_stack_deleted(
+    tx: &Transaction<'_>,
+    stack: LayerStackId,
+    deleted_ms: i64,
+) -> HistoryResult<()> {
+    if layer_stack(tx, stack)?.is_none() {
+        return Err(HistoryError::Missing(Missing::LayerStack));
+    }
+    tx.execute(BUMP_PROJECT_EPOCH, [stack.as_slice()])
+        .map_err(sql)?;
+    let marked = tx
+        .execute(INSERT_RETIRED, params![stack.as_slice(), deleted_ms])
+        .map_err(sql)?;
+    if marked == 0 {
+        return Err(HistoryError::Missing(Missing::LayerStack));
+    }
+    Ok(())
+}
+
+/// The deleted_ms a project.delete marker recorded. The same-home retry
+/// reads it by the stack id its intent recorded before the marker; a live or
+/// absent stack has none.
+pub(crate) fn stack_deleted_ms(
+    tx: &Transaction<'_>,
+    stack: LayerStackId,
+) -> HistoryResult<Option<i64>> {
+    one(tx, DELETED_MS, [stack.as_slice()], |row| {
+        cell::<i64>(row, 0)
+    })
 }
 
 /// Reads stacks in name order, one bounded page at a time.
@@ -315,9 +362,8 @@ pub(crate) fn add_layer(
             actual: stack.head_layer,
         });
     }
-    // Overwrite-only here: the new Layer sits on the stack head, whatever
-    // main gained since the Branch's base. `branch.publish` refuses that
-    // case before this call unless the caller passed `force` (#691).
+    // Overwrite-only: the new Layer sits on the stack head, whatever main
+    // gained since the Branch's base.
     if commit.root == layer_root(tx, stack.head_layer)? {
         return Ok(AddLayerOutcome::NoChanges {
             head: stack.head_layer,
@@ -338,6 +384,9 @@ pub(crate) fn add_layer(
         source_commit: Some(request.commit),
         logical: commit.meta.statistics.logical,
     };
+    // A Layer that republishes a Commit carries that Commit's serial.
+    let serial =
+        super::position::node_serial(tx, layerfs_history::NodeId::Commit(commit.id))?.unwrap_or(0);
     if !verify_layer(tx, &layer)? {
         tx.execute(
             INSERT_LAYER,
@@ -352,6 +401,7 @@ pub(crate) fn add_layer(
                 // Overwritten Layers are addressed by height (`overwritten`);
                 // only Layers published before #353 list them here.
                 Vec::<u8>::new(),
+                i64::try_from(serial).map_err(|_| HistoryError::Capacity("history serials"))?,
             ],
         )
         .map_err(sql)?;
@@ -381,7 +431,7 @@ pub(crate) fn add_layer(
     Ok(AddLayerOutcome::Added { layer })
 }
 
-pub(crate) fn published_source(
+fn published_source(
     tx: &Transaction<'_>,
     branch: layerfs_history::identity::BranchId,
     commit: layerfs_history::identity::CommitId,

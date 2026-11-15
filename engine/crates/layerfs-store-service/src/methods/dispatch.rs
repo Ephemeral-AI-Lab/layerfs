@@ -22,6 +22,7 @@ pub fn call(service: &StoreService, call: &SdkCall) -> Answer {
         "store.stats" => store::stats(service),
         "project.stats" => project::stats(service, args),
         "project.list_branches" => project::list_branches(service, args),
+        "project.remove_file" => project::remove_file(service, args),
         "branch.fork" => branch::fork(service, args),
         "branch.list_commits" => branch::list_commits(service, args),
         "branch.commits" => branch::commits(service, args),
