@@ -75,7 +75,7 @@ or any process, memory, socket or stdout/stderr state.
 | Create a project | `initialize_layerstack` | [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/layerstack.rs) |
 | Fork | `fork(ForkRequest)`: from `Layer(id)` (no head) or `Commit { branch, commit }`, which must be in that Branch's ancestry, else `NotInHistory` | [`branch.rs`](../../../../engine/crates/layerfs-persistence/src/history/branch.rs) |
 | Commit | `commit_branch(CommitRequest)` against the expected head and base | [`commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
-| Publish | `add_layer`: the Commit's root becomes the stack head (overwrite-only); Layers it does not contain are counted in `overwrote_count` and paged by `overwritten` | [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/layerstack.rs) |
+| Publish | `add_layer`: the Commit's root becomes the stack head (overwrite-only at this level; the SDK's `branch.publish` refuses a stale base first unless `force`); Layers it does not contain are counted in `overwrote_count` and paged by `overwritten` | [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/layerstack.rs) |
 | Merge | `merge_branch`: a new Branch whose first state is a node (fast-forward) or a two-parent Commit | [`merge.rs`](../../../../engine/crates/layerfs-persistence/src/history/merge.rs) |
 | Remove | `remove_layerstack`: the one removal; packs, objects, file digests and the allocation scope stay | [`removal.rs`](../../../../engine/crates/layerfs-persistence/src/history/removal.rs) |
 

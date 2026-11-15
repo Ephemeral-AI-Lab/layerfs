@@ -315,8 +315,9 @@ pub(crate) fn add_layer(
             actual: stack.head_layer,
         });
     }
-    // Overwrite-only: the new Layer sits on the stack head, whatever main
-    // gained since the Branch's base.
+    // Overwrite-only here: the new Layer sits on the stack head, whatever
+    // main gained since the Branch's base. `branch.publish` refuses that
+    // case before this call unless the caller passed `force` (#691).
     if commit.root == layer_root(tx, stack.head_layer)? {
         return Ok(AddLayerOutcome::NoChanges {
             head: stack.head_layer,

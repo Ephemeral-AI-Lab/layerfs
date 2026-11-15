@@ -230,10 +230,7 @@ fn random_history(seed: u64) {
             // topology, which is explicit now (#691).
             fixture.call(
                 "branch.publish",
-                vec![
-                    ("branch", text(&branch)),
-                    ("force", SdkValue::Bool(true)),
-                ],
+                vec![("branch", text(&branch)), ("force", SdkValue::Bool(true))],
             );
             publishes += 1;
         }
