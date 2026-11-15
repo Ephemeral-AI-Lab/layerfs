@@ -67,8 +67,6 @@ jobs:
       - if: ${{ !cancelled() }}
         run: python3 -B tools/check_product_boundary.py --skip-sdk
       - if: ${{ !cancelled() }}
-        run: python3 -B tools/check_fuser_integrity.py
-      - if: ${{ !cancelled() }}
         run: python3 -B -m unittest discover -s tools -p 'test_*.py'
 
   clippy:

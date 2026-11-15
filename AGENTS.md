@@ -339,10 +339,9 @@ remain binding; moving them out of this file does not weaken them.
 - Preserve unrelated work. Build the current core implementation, not legacy
   aliases, source includes or error-driven substitutes. Keep platform cfgs.
 - No new dependency if an existing crate supplies the capability. Never patch,
-  fork, vendor, replace or edit third-party code/registry packages, except the
-  owner's explicitly authorized fuser 0.18.0 timestamp, scoped receive-loop
-  lifecycle and negotiated receive-buffer patches described in
-  [core provenance checks](engine/AGENTS.md#fuser-provenance-and-authorized-patch-checks).
+  fork, vendor, replace or edit third-party code/registry packages. The explicit
+  exception is the owner's selected [fuser Git fork](engine/AGENTS.md#fuser-git-source):
+  use its pinned revision, not a local vendor, patch or registry substitute.
   Use locked builds and report an incompatible required dependency with evidence.
 - One attempted operation; no automatic retry/busy handler, refresh/reprepare
   or failed-operation replay. Readiness waits are not retries. Preserve exact
@@ -515,3 +514,6 @@ direction is `core < engine < control < api`, including dev dependencies and
 test includes; nothing in engine depends on control. Workstream names do not change this layering.
 After rebasing across #463, update each selected worktree's own target registration and prepare again
 for the root `target/` path; never migrate another worktree's resource record.
+After rebasing across #686 (fuser from its Git fork), or any later fuser `rev` change, run
+`tools/worktree.py prepare` again for each platform before offline builds; a Cargo
+home prepared earlier has no checkout of that revision and fails `--offline`.

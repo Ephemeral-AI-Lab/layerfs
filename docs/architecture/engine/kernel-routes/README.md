@@ -8,7 +8,7 @@ How the kernel reaches a mounted Workspace: route-neutral mount ports, then FUSE
 | --- | --- |
 | Layer | [Engine](../README.md) |
 | Crates | `layerfs-mount-ports`, `layerfs-fuse`, `layerfs-nfs` |
-| Source | [`layerfs-mount-ports/src`](../../../../engine/crates/layerfs-mount-ports/src), [`layerfs-fuse/src`](../../../../engine/crates/layerfs-fuse/src), [`layerfs-nfs/src`](../../../../engine/crates/layerfs-nfs/src), [`engine/patches/fuser-0.18.0`](../../../../engine/patches/fuser-0.18.0) |
+| Source | [`layerfs-mount-ports/src`](../../../../engine/crates/layerfs-mount-ports/src), [`layerfs-fuse/src`](../../../../engine/crates/layerfs-fuse/src), [`layerfs-nfs/src`](../../../../engine/crates/layerfs-nfs/src), [pinned fuser fork](fuse.md#fuser-git-dependency) |
 | Uses | [Workspace](../workspace/README.md), [Overlay](../overlay/README.md) |
 | Used by | [Daemon](../daemon/README.md) |
 | Flows | [A Workspace session](../../flows/workspace.md) |
@@ -151,7 +151,7 @@ stable media.
 | A mutation takes effect at the commit of its one owner job; the reply is built from that job's values and a published mutation is never undone | [`reply_order.rs`](../../../../engine/crates/layerfs-fuse/src/coherence/reply_order.rs) |
 | READDIR publishes exactly the accepted names as offsets before its reply | [`directory.rs`](../../../../engine/crates/layerfs-mount-ports/src/operations/directory.rs) |
 | Kernel writeback stays off: `FUSE_WRITEBACK_CACHE` is never selected; every `write(2)` is published before it returns | [`profile.rs`](../../../../engine/crates/layerfs-fuse/src/mount/profile.rs), [engine guide](../../../../engine/AGENTS.md) |
-| Only the owner-authorized fuser 0.18.0 patches | [`check_fuser_integrity.py`](../../../../tools/check_fuser_integrity.py); see [FUSE](fuse.md) |
+| FUSE uses the pinned organization fork directly | [`layerfs-fuse/Cargo.toml`](../../../../engine/crates/layerfs-fuse/Cargo.toml), [`Cargo.lock`](../../../../Cargo.lock), checked by [`check_product_boundary.py`](../../../../tools/check_product_boundary.py); see [FUSE](fuse.md#fuser-git-dependency) |
 | Filesystem access needs no Exec registration: any process that sees the mount is served the same way | [`ports.rs`](../../../../engine/crates/layerfs-mount-ports/src/ports.rs) (no command crosses `RequestServices`), [engine guide](../../../../engine/AGENTS.md) |
 
 ## Limits and failures

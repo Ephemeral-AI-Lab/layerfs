@@ -1,12 +1,15 @@
 import os
+import tomllib
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from check_product_boundary import (
+    FUSER_GIT,
     RETIRED_PACKAGES,
     crate_directories,
     dependency_violations,
+    fuser_source_violations,
     layer_violations,
     production_files,
     test_path_violations,
@@ -696,6 +699,54 @@ class DurablePersistenceEdges(unittest.TestCase):
                 '[package]\nname="layerfs-persistence"\n[dependencies]\nlayerfs-storage={path="../layerfs-storage"}\nlayerfs-history={path="../layerfs-history"}\n'
             )
         )
+
+
+class FuserSourcePin(unittest.TestCase):
+    REV = "7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4"
+    MANIFEST = "engine/crates/layerfs-fuse/Cargo.toml"
+
+    def check(self, spec, root=None, lock_source=None, config=None):
+        manifests = {
+            self.MANIFEST: {"target": {'cfg(target_os = "linux")': {"dependencies": {"fuser": spec}}}},
+            "Cargo.toml": root or {},
+        }
+        source = lock_source or f"git+{FUSER_GIT}?rev={self.REV}#{self.REV}"
+        return fuser_source_violations(manifests, {"package": [{"name": "fuser", "source": source}]}, config or {})
+
+    def test_pinned_fork_revision_passes(self):
+        self.assertFalse(self.check({"version": "=0.18.0", "git": FUSER_GIT, "rev": self.REV}))
+
+    def test_floating_local_registry_or_other_sources_are_refused(self):
+        for spec in [
+            "=0.18.0",
+            {"version": "=0.18.0"},
+            {"git": FUSER_GIT, "branch": "fuser-0.18.0"},
+            {"git": FUSER_GIT, "tag": "v0.18.0-layerfs.1"},
+            {"git": FUSER_GIT, "rev": self.REV[:12]},
+            {"git": "https://github.com/cberner/fuser.git", "rev": self.REV},
+            {"path": "../fuser", "git": FUSER_GIT, "rev": self.REV},
+        ]:
+            self.assertTrue(self.check(spec), spec)
+
+    def test_overrides_and_lock_drift_are_refused(self):
+        spec = {"git": FUSER_GIT, "rev": self.REV}
+        self.assertTrue(self.check(spec, root={"patch": {FUSER_GIT: {"fuser": {"path": "../fuser"}}}}))
+        self.assertTrue(self.check(spec, root={"patch": {"crates-io": {"alias": {"package": "fuser", "path": "x"}}}}))
+        self.assertTrue(self.check(spec, root={"replace": {"fuser:0.18.0": {"path": "../fuser"}}}))
+        self.assertTrue(self.check(spec, config={"paths": ["../fuser"]}))
+        self.assertTrue(self.check(spec, config={"source": {"fork": {"git": FUSER_GIT, "replace-with": "local"}}}))
+        self.assertTrue(self.check(spec, config={"patch": {FUSER_GIT: {"fuser": {"path": "../fuser"}}}}))
+        self.assertTrue(self.check(spec, lock_source=f"git+{FUSER_GIT}?branch=fuser-0.18.0#{self.REV}"))
+        self.assertTrue(self.check(spec, lock_source="registry+https://github.com/rust-lang/crates.io-index"))
+        other = {"dependencies": {"fuser": {"git": FUSER_GIT, "rev": "0" * 40}}}
+        self.assertTrue(self.check(spec, root=other))
+
+    def test_repository_pin_passes(self):
+        repository = Path(__file__).resolve().parents[1]
+        manifests = {name: tomllib.loads((repository / name).read_text()) for name in ("Cargo.toml", self.MANIFEST)}
+        lock = tomllib.loads((repository / "Cargo.lock").read_text())
+        config = tomllib.loads((repository / ".cargo/config.toml").read_text())
+        self.assertFalse(fuser_source_violations(manifests, lock, config))
 
 
 if __name__ == "__main__":

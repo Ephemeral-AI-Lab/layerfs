@@ -478,7 +478,7 @@ fixtures, examples and tools do not contribute to production LOC.
   fsync/fdatasync/sync_data/sync_all on disposable Workspace backing. Memory
   hints do not prove bounds. Claim only actual completion/durability contracts.
 - No third-party patch, fork, vendor, registry edit or replacement dependency,
-  except the owner's fuser 0.18.0 signed-timestamp correction below.
+  except the owner's pinned [fuser Git fork](#fuser-git-source) below.
   Use existing capabilities and locked builds; report an incompatible required
   dependency with source evidence. Unsupported required platforms/capabilities
   fail explicitly, not via a silent no-op or fallback.
@@ -547,61 +547,36 @@ Measurement work additionally follows the
 [owning core harness guide](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/fs-bench-pro/AGENTS.md). Frozen identities,
 cache states and budgets are evidence contracts, not product runtime limits.
 
-### Fuser provenance and authorized-patch checks
+### Fuser Git source
 
-Additional owner authorization 2026-10-14: "you are allowed to modify fuser with
-patch". The [receive-buffer decision](patches/fuser-0.18.0/records/FUSER-RECEIVE-BUFFER-DECISION-20261014.md)
-records the scope. Receive loops read into the `max_write + 4096` bytes
-negotiated at INIT instead of fuser's 16 MiB + 4 KiB maximum. The delta is in
-`read_buf.rs`, `session.rs` and `session/lifecycle.rs`, applied after the
-lifecycle patch. `receive-buffer.patch` and `receive-buffer-provenance.json`
-pin it, and the focused check verifies it. The earlier records stay unchanged.
+Owner direction 2026-11-15 supersedes the earlier crates.io-only and local-patch
+rules: use [Ephemeral-AI-Lab/fuser](https://github.com/Ephemeral-AI-Lab/fuser)
+directly as a Git dependency. The selected revision is
+`7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4` (package version 0.18.0), kept
+reachable by the fork's tag `v0.18.0-layerfs.1`. Repository rulesets on the fork
+forbid deleting or force-pushing `fuser-0.18.0` and moving or deleting
+`v*-layerfs.*` tags; tag every new pinned revision the same way.
+The fork owns its timestamp correction, observable receive-loop lifecycle and
+negotiated receive buffers. These changes are independent of LayerFS; maintain
+them in that repository, not through a second copy or local patch here.
 
-Additional owner authorization2026-10-08: the [scoped receive-loop lifecycle
-extension](patches/fuser-0.18.0/records/FUSER-LIFECYCLE-DECISION-20261008.md) may extend the
-pinned fuser0.18.0 package beyond time.rs to establish loop entry/exit, retained
-startup/join ownership and the proposed explicit lifecycle API. This narrowly
-supersedes the timestamp-only file restriction below. Preserve the original
-timestamp provenance unchanged; record and verify the lifecycle delta separately.
-No other dependency change or general unsafe exception is authorized. Permission
-does not establish implementation or native Ready/drain qualification.
+Keep the full `rev` in `layerfs-fuse/Cargo.toml` and the matching Git source
+and commit in the root lockfile. Do not use a floating branch/tag, a registry
+fallback, `[patch]`, `[replace]` or a local vendored fuser. A revision change
+updates the manifest, lockfile and the
+[FUSE architecture page](../docs/architecture/engine/kernel-routes/fuse.md#fuser-git-dependency)
+together, needs owner approval ([code review policy](../docs/policy/code-review.md)),
+and needs a fresh `tools/worktree.py prepare` in each worktree before its offline
+builds. Use locked builds; fail explicitly when the selected source is unavailable.
 
-Latest owner direction2026-10-06: "use fuser 0.18.0 from crates io and apply patch".
-This supersedes the earlier registry-only/no-patch ruling for this one correction.
-Keep the dependency version exactly0.18.0; use the checked-in copy of its official
-crates.io archive with only `src/time.rs` changed by the recorded upstream timestamp
-fix and regression tests. Both owning workspace roots use the exact path/version
-`[patch.crates-io]` entry. Do not edit shared Cargo registry packages, adopt a Git
-dependency, or extend this exception to unrelated source/dependency changes.
-
-The original archive checksum, all85 published file hashes, exact diff and patched
-time.rs hash are pinned in `patches/fuser-0.18.0/provenance.json` and checked by the
-focused guard. A patched Cargo.lock entry has no registry checksum; the explicit
-provenance record authenticates its modified bytes. See
-[the authorized patch record](patches/fuser-0.18.0/records/FUSER-REGISTRY-PATCH-20261006.md).
-Native qualification and the complete S8 contract remain separate requirements.
-
-Subsequent owner direction2026-10-06: "docker verification is enough". Existing
-native Docker proofs are accepted for verifying this fuser correction. Retain
-Linux's fractional signed-minimum endpoint outcome as a platform limitation;
-do not require QEMU or a custom-kernel campaign to verify the dependency fix.
-This acceptance does not complete S8's product implementation or turn that
-individual native FAIL into PASS. Continue the remaining S7–S9 work using Docker.
-
-Before a native fuser build, run the focused provenance check:
-
-```sh
-python3 -B tools/check_fuser_integrity.py
-```
-
-For an installed registry source, also supply its archive, package directory and
-checksum taken from its original registry lock or the pinned base-archive record
-with `--archive`, `--package-directory` and `--locked-checksum`. This reads and
-verifies package files without modifying
-them. Run scoped self-tests when changing the check. It is not an aggregate
-pre-push/CI wrapper or a timestamp-capability proof. Current evidence and the
-historically rejected unmodified Git candidate are in
-[the fuser verification record](patches/fuser-0.18.0/records/FUSER-OFFICIAL-CANDIDATE-20261006.md).
+The fork's own repository maintains its code and tests; LayerFS uses ordinary
+locked dependency builds and integration tests. The boundary guard
+(`tools/check_product_boundary.py`) refuses a fuser source other than the fork at
+a full `rev`, a `[patch]`/`[replace]`/`paths` override and a lock entry that
+differs from the manifest; it does not check the fork's code. The earlier source pins, owner decisions,
+Docker acceptance and Linux fractional signed-minimum FAIL remain unchanged in
+[the historical records](https://github.com/Ephemeral-AI-Lab/layerfs/tree/8cfb6e273470d0bb2a4ec5a9256fcf4972441eb5/engine/patches/fuser-0.18.0).
+Switching the dependency does not relabel that evidence or extend its scope.
 
 ### Authorized Persistence seal file control
 
