@@ -500,6 +500,9 @@ impl Kernel {
             tickets,
             |_| Ok(MutationInput::Named(remove::unlink(parent, checked))),
         )?;
+        if let Some(detached) = &published.detached {
+            self.trace_main_file("REMOVE", parent, name, detached.serial, "Ok");
+        }
         self.finish_unlink(parent, name, retire, published.detached);
         Ok(published.wcc[0].clone())
     }
@@ -660,6 +663,7 @@ impl Kernel {
         let stat = published.stat.ok_or(Status::ServerFault)?;
         // The engine took one more lookup reference; the export holds one.
         self.entry_taken(&stat, parent, name);
+        self.trace_main_file("LINK", parent, name, stat.serial, "Ok");
         Ok((stat, published.wcc[0].clone()))
     }
     /// SETATTR. `guard` is the client's expected ctime (seconds,

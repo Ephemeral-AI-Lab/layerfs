@@ -460,6 +460,7 @@ impl Kernel {
         )?;
         // The deciding visit took one engine reference; keep exactly one.
         self.entry_taken(&stat, parent, name);
+        self.trace_main_file("LOOKUP", parent, name, stat.serial, "Ok");
         Ok(stat)
     }
     /// A visit or mutation that decided `stat` as the entry `name` of
@@ -498,6 +499,18 @@ impl Kernel {
                                 // that retiring the serial drops no other name.
                                 table.remember_alias(stat.serial, &old);
                             }
+                            // Held here: the table lock, and inside it the
+                            // companion lock as everywhere else. Off unless the
+                            // trace is on.
+                            self.trace_bind(
+                                parent,
+                                name,
+                                stat.serial,
+                                match stat.namespace_refs <= 1 {
+                                    true => "unbound",
+                                    false => "alias",
+                                },
+                            );
                         }
                     }
                     table.bind_name(named, stat.serial);

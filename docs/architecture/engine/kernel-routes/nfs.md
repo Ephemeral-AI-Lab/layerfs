@@ -270,6 +270,24 @@ body is still held but a client cannot ask for it; a zero beside a client that
 lost attributes says the loss was a missing companion rather than a lost name.
 It is counted once, at release, over the companions held.
 
+The requests one real client makes can be read from an optional trace
+([`trace.rs`](../../../../engine/crates/layerfs-nfs/src/trace.rs)): with
+`LAYERFS_NFS_TRACE=1` the export prints, to the daemon's standard error, one
+line for each request that names an AppleDouble companion - the `._` names
+themselves and the main file names of the inodes that hold one - carrying the
+directory serial, the name, the main inode the export's name index gave the
+name, which part of the companion index answered it (`route=name` for the
+companion's own name key, `route=inode` for the main inode, `route=none` when
+neither did), the companion serial a reply carries as its fileid, and the
+status the client is answered. A CREATE that finds the companion already held
+says whether it would truncate it (`existing-truncate`), a SETATTR of a `._`
+file is traced by handle, `BIND` shows a main name the kernel table
+re-attributed to an inode that has a companion (`alias` while that inode keeps
+several names, `unbound` when the one it held is all it has), and `UNPAIR`
+shows a main name whose paired `._` name the export dropped. It is off unless
+the variable is exactly `1`, is read once per process, and changes no state;
+the lines are written under the lock the request already holds.
+
 ## Mount (`mount.rs`, daemon `export.rs`)
 
 ```text

@@ -57,6 +57,7 @@ use crate::{
     attributes::Status,
     change::{How, Sattr, Tickets, Wcc},
     kernel::Kernel,
+    trace::{self, Route as Trace},
 };
 use layerfs_content::{
     filesystem::{attributes::PortableMetadata, PathName},
@@ -349,13 +350,20 @@ impl Companions {
     /// held under that name, unless it belongs to another inode than `main`,
     /// else the one its main inode already has.
     fn resolve(&self, named: &Named, main: Option<u64>) -> Option<u64> {
+        self.resolve_route(named, main).0
+    }
+    /// [`Self::resolve`], and which part of the index answered, for the trace.
+    fn resolve_route(&self, named: &Named, main: Option<u64>) -> (Option<u64>, Trace) {
         if let Some(&serial) = self.names.get(named) {
             let inode = self.files.get(&serial).and_then(|file| file.inode);
             if inode.is_none() || main.is_none() || inode == main {
-                return Some(serial);
+                return (Some(serial), Trace::Name);
             }
         }
-        main.and_then(|main| self.inodes.get(&main).copied())
+        match main.and_then(|main| self.inodes.get(&main).copied()) {
+            Some(serial) => (Some(serial), Trace::Inode),
+            None => (None, Trace::None),
+        }
     }
     /// Replaces `serial`'s body by the decoded form of `bytes`, the caller's
     /// edited body of `len` bytes, while the resident budget takes it and the
@@ -553,6 +561,16 @@ impl Companions {
         }
     }
 }
+/// How a CREATE that found the companion already held is traced: an UNCHECKED
+/// create with an explicit size truncates the body every name of the inode
+/// shares, and a GUARDED or EXCLUSIVE one is answered `NFS3ERR_EXIST`.
+fn opening(how: &How) -> &'static str {
+    match how {
+        How::Unchecked(sattr) if sattr.size.is_some() => "existing-truncate",
+        How::Unchecked(_) | How::Guarded(_) => "existing",
+        How::Exclusive(_) => "existing-exclusive",
+    }
+}
 /// Whether a body a spill wrote out still replaces its companion: only when the
 /// companion is the one the snapshot saw (`used` is the tick read then) and its
 /// body is still in memory, so no call wrote to it while the file was written.
@@ -748,9 +766,23 @@ impl Kernel {
     pub(crate) fn companion_named(&self, parent: u64, name: &[u8]) -> Option<ViewStat> {
         let main = self.main_of(parent, name);
         let mut companions = self.companions();
-        let serial = companions.resolve(&(parent, name.to_vec()), main)?;
-        let stat = Companions::stat(serial, companions.files.get(&serial)?);
-        companions.use_serial(serial);
+        let (serial, route) = companions.resolve_route(&(parent, name.to_vec()), main);
+        if crate::names::apple_double(name) {
+            trace::companion(
+                "LOOKUP",
+                parent,
+                name,
+                main,
+                route,
+                serial,
+                match serial {
+                    Some(_) => "Ok",
+                    None => "NoEnt",
+                },
+            );
+        }
+        let stat = Companions::stat(serial?, companions.files.get(&serial?)?);
+        companions.use_serial(serial?);
         Some(stat)
     }
     /// CREATE of an already-held companion name: UNCHECKED applies its size,
@@ -796,7 +828,9 @@ impl Kernel {
         let named = (parent, name.to_vec());
         let mut main = self.main_of(parent, name);
         let mut companions = self.companions();
-        if let Some(serial) = companions.resolve(&named, main) {
+        let (held, route) = companions.resolve_route(&named, main);
+        if let Some(serial) = held {
+            trace::companion("CREATE", parent, name, main, route, held, opening(&how));
             return self.companion_open(serial, how, directory, companions, tickets);
         }
         // At the index bound, reclaim the companions no name reaches any more
@@ -810,7 +844,9 @@ impl Kernel {
             // lock this call now holds without releasing it again.
             main = self.main_of(parent, name);
             companions = self.companions();
-            if let Some(serial) = companions.resolve(&named, main) {
+            let (held, route) = companions.resolve_route(&named, main);
+            if let Some(serial) = held {
+                trace::companion("CREATE", parent, name, main, route, held, opening(&how));
                 return self.companion_open(serial, how, directory, companions, tickets);
             }
         }
@@ -824,6 +860,7 @@ impl Kernel {
             if log {
                 companions.last_refusal_log = Some(Instant::now());
             }
+            trace::companion("CREATE", parent, name, main, Trace::None, None, "NoSpc");
             drop(companions);
             let refused = self.names_refused.fetch_add(1, Ordering::Relaxed) + 1;
             if let Some(namespace) = namespace {
@@ -855,6 +892,15 @@ impl Kernel {
             editing: Arc::new(Mutex::new(())),
         };
         let stat = Companions::stat(serial, &file);
+        trace::companion(
+            "CREATE",
+            parent,
+            name,
+            main,
+            Trace::None,
+            Some(serial),
+            "Ok",
+        );
         companions.index(serial, &file);
         companions.attach(serial, file);
         drop(companions);
@@ -875,17 +921,38 @@ impl Kernel {
     pub(crate) fn companion_remove(&self, parent: u64, name: &[u8]) -> Option<Wcc> {
         let named = (parent, name.to_vec());
         let main = self.main_of(parent, name);
-        let (serial, inode, one_name) = {
+        let resolved = {
             let companions = self.companions();
-            let serial = companions.resolve(&named, main)?;
-            let file = companions.files.get(&serial)?;
-            (
-                serial,
-                file.inode,
-                !companions.holds_another(serial, &named),
-            )
+            let (serial, route) = companions.resolve_route(&named, main);
+            serial.and_then(|serial| {
+                let file = companions.files.get(&serial)?;
+                Some((
+                    serial,
+                    route,
+                    file.inode,
+                    !companions.holds_another(serial, &named),
+                ))
+            })
+        };
+        let Some((serial, route, inode, one_name)) = resolved else {
+            if crate::names::apple_double(name) {
+                trace::companion("REMOVE", parent, name, main, Trace::None, None, "NoEnt");
+            }
+            return None;
         };
         let kept = !one_name || inode.is_some_and(|inode| self.knows_another_name(inode));
+        trace::companion(
+            "REMOVE",
+            parent,
+            name,
+            main,
+            route,
+            Some(serial),
+            match kept {
+                true => "name-dropped",
+                false => "companion-dropped",
+            },
+        );
         let spilled = {
             let mut companions = self.companions();
             if kept {
@@ -927,11 +994,23 @@ impl Kernel {
             let Some(&serial) = companions.names.get(&named) else {
                 return;
             };
-            if companions
+            let of_inode = companions
                 .files
                 .get(&serial)
-                .is_some_and(|file| file.inode.is_some())
-            {
+                .is_some_and(|file| file.inode.is_some());
+            trace::companion(
+                "UNPAIR",
+                parent,
+                name,
+                companions.files.get(&serial).and_then(|file| file.inode),
+                Trace::Name,
+                Some(serial),
+                match of_inode {
+                    true => "name-dropped",
+                    false => "companion-dropped",
+                },
+            );
+            if of_inode {
                 companions.drop_name(serial, &named);
                 None
             } else {
@@ -977,6 +1056,7 @@ impl Kernel {
                 .resolve(&named, main)
                 .is_some_and(|other| other != serial)
         {
+            trace::companion("LINK", parent, name, main, Trace::Name, None, "Exist");
             return Err(Status::Exist);
         }
         let Some(mut file) = companions.detach(serial) else {
@@ -985,6 +1065,7 @@ impl Kernel {
         file.also.push(named);
         file.used = companions.tick();
         let stat = Companions::stat(serial, &file);
+        trace::companion("LINK", parent, name, main, Trace::None, Some(serial), "Ok");
         companions.index(serial, &file);
         companions.attach(serial, file);
         Ok((stat, directory))
@@ -1008,7 +1089,20 @@ impl Kernel {
         if !crate::names::apple_double(new_name) || new_name.len() > 255 {
             return Some(Err(Status::Access));
         }
-        Some(self.rename_companion(serial, (to, new_name.to_vec()), to_main))
+        let renamed = self.rename_companion(serial, (to, new_name.to_vec()), to_main);
+        trace::companion(
+            "RENAME",
+            to,
+            new_name,
+            to_main,
+            Trace::None,
+            Some(serial),
+            match &renamed {
+                Ok(()) => "Ok",
+                Err(status) => trace::status(*status),
+            },
+        );
+        Some(renamed)
     }
     /// Moves `serial`'s companion to `target`, under `to_main`'s inode.
     ///
@@ -1124,5 +1218,36 @@ impl Kernel {
     /// What the companion index holds now.
     pub(crate) fn companions_held(&self) -> Holding {
         self.companions().holding()
+    }
+    /// Traces a request about a main file (`op`, its directory and name) when
+    /// the export holds a companion for that inode: these are the requests
+    /// that make a `._` name resolvable (see [`crate::trace`]).
+    pub(crate) fn trace_main_file(
+        &self,
+        op: &str,
+        parent: u64,
+        name: &[u8],
+        inode: u64,
+        status: &str,
+    ) {
+        if !trace::enabled() {
+            return;
+        }
+        let companion = self.companions().inodes.get(&inode).copied();
+        if companion.is_some() {
+            trace::main_file(op, parent, name, Some(inode), companion, status);
+        }
+    }
+    /// Traces a name the export's kernel table bound to `inode` (`alias`: kept
+    /// as another name of it) or dropped from it (`unbound`), when the inode
+    /// has a companion: a `._` name resolves through those names.
+    pub(crate) fn trace_bind(&self, parent: u64, name: &[u8], inode: u64, status: &str) {
+        if !trace::enabled() {
+            return;
+        }
+        let companion = self.companions().inodes.get(&inode).copied();
+        if companion.is_some() {
+            trace::main_file("BIND", parent, name, Some(inode), companion, status);
+        }
     }
 }

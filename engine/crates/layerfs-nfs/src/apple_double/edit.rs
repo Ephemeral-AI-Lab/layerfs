@@ -145,6 +145,9 @@ impl Kernel {
             if size > FILE_BYTES {
                 return Err(Status::FBig);
             }
+            if crate::trace::enabled() {
+                crate::trace::handle("SETATTR", serial, &format!("size={size}"));
+            }
             self.edit_companion(serial, Edit::Size(size as usize))?;
         }
         let mut companions = self.companions();

@@ -32,6 +32,7 @@ mod nfs;
 pub mod refresh;
 pub mod rpc;
 mod server;
+mod trace;
 pub mod xdr;
 
 pub use kernel::Released;
