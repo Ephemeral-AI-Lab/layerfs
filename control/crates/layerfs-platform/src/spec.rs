@@ -60,6 +60,16 @@ pub struct Bundle {
     pub hash: String,
 }
 
+/// A provider's own limit on a VM's name on this host, beyond the
+/// plain-name rule (63 characters): what [`crate::name_limit`] answers.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NameLimit {
+    /// The longest VM name the provider takes here, in bytes.
+    pub longest: usize,
+    /// The provider's rule, for a refusal's message.
+    pub why: String,
+}
+
 /// How the host reaches its tools.
 #[derive(Clone, Debug)]
 pub struct Tools {

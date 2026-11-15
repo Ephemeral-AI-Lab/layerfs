@@ -383,7 +383,12 @@ new home's first call. A record without `vm_name` (an existing home's
 `docker`) means `lfs-<home id prefix>-<name>`, the formula before
 layerfs-project#180, so it keeps its container and volume. Under the home
 lock a create refuses `InvalidInput` a name longer than 46 characters (a VM
-name is at most 63, the prefix takes 17) and `Exists` a name whose VM name,
+name is at most 63, the prefix takes 17), then a name whose VM name is
+longer than the platform's provider takes on this host
+(`layerfs_platform::name_limit`, the adapters' `name_limit`: only `lima` has
+one, since `limactl create` refuses an instance whose
+`<Lima home>/<VM name>/ssh.sock.<16 digits>` reaches 104 characters; the
+message states the longest name that fits), and `Exists` a name whose VM name,
 under either formula, is another machine's. The name is claimed with an
 `op` `create` under the home lock; the boot runs under `start.lock` only.
 

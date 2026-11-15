@@ -30,13 +30,14 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 const NEW_NAME_MAX: usize = 46;
 
 /// A new machine's name: valid, not built in, short enough for its VM name
-/// and not taken, here or at the provider. A VM name keeps no punctuation
+/// (and, where `kind`'s provider has a limit of its own on this host, for
+/// that: [`provider_room`]) and not taken, here or at the provider. A VM name keeps no punctuation
 /// (`a.b` and `a_b` both give `...-a-b`), so the second such machine is
 /// refused `Exists`: the new machine's VM name, under today's formula or
 /// the one before layerfs-project#180, must be no other machine's (its
 /// recorded `vm_name`, else that earlier formula's). Checked under the
 /// home lock, before any effect.
-fn new_name(home: &Path, id: &str, name: &str) -> Result<()> {
+fn new_name(home: &Path, id: &str, kind: Platform, name: &str) -> Result<()> {
     layerfs_home::names::MachineName::parse(name)?;
     if layerfs_home::names::BUILT_IN.contains(&name) {
         return Err(refused(
@@ -55,6 +56,7 @@ fn new_name(home: &Path, id: &str, name: &str) -> Result<()> {
             ),
         ));
     }
+    provider_room(kind, &record::vm_name(id, name), name)?;
     if paths::machine_dir(home, name).exists() {
         return Err(refused("Exists", format!("a machine named {name} exists")));
     }
@@ -78,6 +80,36 @@ fn new_name(home: &Path, id: &str, name: &str) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Refuses a name whose VM name `vm` is longer than `kind`'s provider takes
+/// on this host (layerfs-project#180): Lima's socket paths under its home
+/// make the longest `lima` name shorter than [`NEW_NAME_MAX`] on most
+/// hosts. The message states the longest name that fits here and why.
+fn provider_room(kind: Platform, vm: &str, name: &str) -> Result<()> {
+    let Some(limit) = adapters::name_limit(kind) else {
+        return Ok(());
+    };
+    if vm.len() <= limit.longest {
+        return Ok(());
+    }
+    let prefix = vm.len().saturating_sub(name.len());
+    let fits = match limit.longest.saturating_sub(prefix) {
+        0 => format!("no {} machine name fits on this host", kind.name()),
+        room => format!(
+            "on this host a {} machine's name is at most {room}",
+            kind.name()
+        ),
+    };
+    Err(refused(
+        "InvalidInput",
+        format!(
+            "machine name `{name}` has {} characters; {fits}: {}, and its VM name's prefix \
+             `layerfs-<home id8>-` takes {prefix}",
+            name.len(),
+            limit.why
+        ),
+    ))
 }
 
 /// A `machine.create` request. The name stays text: it is checked under the
@@ -166,7 +198,7 @@ pub fn create(
     // claim the name under the lock; the VM is made outside it
     let spec = {
         let _lock = lock::take(&home)?;
-        new_name(&home, &id, name)?;
+        new_name(&home, &id, kind, name)?;
         record.write(&home)?;
         record::spec(&home, &id, &record)
     };

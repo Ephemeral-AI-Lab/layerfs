@@ -9,7 +9,7 @@ use crate::reach::{dial, Loopback};
 use crate::setup::forward::refuse;
 use crate::setup::guest::Guest;
 use crate::setup::Status;
-use crate::spec::{Bundle, Forward, Running, Spec, Tools};
+use crate::spec::{Bundle, Forward, NameLimit, Running, Spec, Tools};
 
 /// Why a Sandbox daemon's port is not forwarded: `container run --publish`
 /// (`create.rs`) is the only way the CLI publishes a port, so the worker's
@@ -29,6 +29,9 @@ impl Adapter for AppleContainer {
     }
     fn guest(&self, spec: &Spec) -> Result<Guest, MachineError> {
         Ok(guest(spec))
+    }
+    fn name_limit(&self) -> Option<NameLimit> {
+        None
     }
     fn create(&self, spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
         create(spec, bundle)
