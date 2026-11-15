@@ -403,6 +403,20 @@ export interface LogsListOptions extends CallOptions {
   limit?: WholeNumber;
 }
 
+/** Options of `logs.machine`; an unknown option is refused. */
+export interface LogsMachineOptions extends CallOptions {
+  cursor?: string;
+  before?: string;
+  limit?: WholeNumber;
+}
+
+/** Options of `logs.sandbox`; an unknown option is refused. */
+export interface LogsSandboxOptions extends CallOptions {
+  cursor?: string;
+  before?: string;
+  limit?: WholeNumber;
+}
+
 export interface ProjectFamily {
   /** import a host folder as a new project into an existing Store */
   init(project: string, folder: string, options?: ProjectInitOptions): Promise<Result>;
@@ -594,6 +608,10 @@ export interface LogsFamily {
   list(options?: LogsListOptions): Promise<Result>;
   /** clear this home's call log */
   reset(options?: CallOptions): Promise<Result>;
+  /** a machine's worker log: its last lines, or the lines after or before a cursor */
+  machine(machine: string, options?: LogsMachineOptions): Promise<Result>;
+  /** a Sandbox's daemon log: its last lines, or the lines after or before a cursor */
+  sandbox(sandbox: string, options?: LogsSandboxOptions): Promise<Result>;
 }
 
 export interface Client {

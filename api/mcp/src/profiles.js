@@ -3,13 +3,16 @@
 // small exception lists below. `tools()` is the one generated tool list the
 // server, the documentation table and the coverage column use.
 //
-// Assignment rule (each call lands in exactly one bucket, none excluded):
+// Assignment rule (each call lands in exactly one bucket):
 //   work   the families an agent works in (branch, commit, file, workspace)
 //          plus the read-only project and Sandbox calls named below
-//   admin  every other call: project create/remove, Sandbox create/close,
-//          and the machine, store, backup and logs families
-// The `admin` launch profile exposes the union, so `admin` adds the
-// administrative calls to the `work` set.
+//   admin  every other call an agent may make: project create/remove,
+//          Sandbox create/close, and the machine, store, backup and logs
+//          families
+//   ui     the monitoring calls a UI polls (layerfs-project#178 D2): in no
+//          profile, so no agent is offered them
+// The `admin` launch profile exposes the union of `work` and `admin`, so
+// `admin` adds the administrative calls to the `work` set.
 
 /** The profile names, in help order. `work` is the default. */
 export const PROFILES = ["work", "admin"];
@@ -22,6 +25,9 @@ const WORK_CALLS = new Set(["project.list", "project.get", "project.stats", "pro
 
 /** Administrative calls of the project and sandbox families. */
 const ADMIN_CALLS = new Set(["project.init", "project.remove", "sandbox.create", "sandbox.close"]);
+
+/** Monitoring calls for a UI, which no profile lists (layerfs-project#178 D2). */
+const UI_CALLS = new Set(["logs.machine", "logs.sandbox"]);
 
 /** Families whose every call belongs to the `admin` profile. */
 const ADMIN_FAMILIES = new Set(["machine", "store", "backup", "logs"]);
@@ -43,11 +49,13 @@ const WHY = {
 const nameOf = (spec) => `${spec.family}.${spec.call}`;
 
 /**
- * The profile bucket of one table entry: `"work"` or `"admin"`, or `null` when
- * this file has not classified the call (a new family or a renamed call).
+ * The profile bucket of one table entry: `"work"`, `"admin"` or `"ui"` (in no
+ * profile), or `null` when this file has not classified the call (a new family
+ * or a renamed call).
  */
 export function bucketOf(spec) {
   const name = nameOf(spec);
+  if (UI_CALLS.has(name)) return "ui";
   if (WORK_CALLS.has(name)) return "work";
   if (WORK_FAMILIES.has(spec.family)) return "work";
   if (ADMIN_CALLS.has(name)) return "admin";
@@ -57,6 +65,7 @@ export function bucketOf(spec) {
 
 /** Why this call is in its bucket: a line for the generated documentation table. */
 export function whyOf(spec) {
+  if (UI_CALLS.has(nameOf(spec))) return "a monitoring read a UI polls (a machine's worker log, a Sandbox's daemon log); offered to no agent";
   if (spec.family === "project" && spec.call === "init") return "import a host folder into a Store; administration";
   if (spec.family === "project" && spec.call === "remove") return "remove a project from its Store; administration";
   if (spec.family === "sandbox" && spec.call === "create") return "start a Sandbox process; administration";
@@ -67,8 +76,8 @@ export function whyOf(spec) {
 
 /**
  * The table entries a launch profile exposes: `work` its own bucket, `admin`
- * both buckets. Throws when a call has no bucket, so a new call cannot appear
- * in a profile silently.
+ * the `work` and `admin` buckets; a `ui` call is in neither. Throws when a
+ * call has no bucket, so a new call cannot appear in a profile silently.
  */
 export function tools(table, profile = "work") {
   if (!PROFILES.includes(profile)) throw new Error(`unknown profile "${profile}"; one of ${PROFILES.join(", ")}`);
@@ -76,6 +85,7 @@ export function tools(table, profile = "work") {
   for (const spec of table) {
     const bucket = bucketOf(spec);
     if (bucket === null) throw new Error(`${nameOf(spec)}: no profile bucket; add it to api/mcp/src/profiles.js`);
+    if (bucket === "ui") continue;
     if (profile === "admin" || bucket === "work") out.push(spec);
   }
   return out;
@@ -91,7 +101,7 @@ export function check(table) {
     seen.add(name);
     if (bucketOf(spec) === null) problems.push(`${name}: no profile bucket`);
   }
-  for (const name of [...WORK_CALLS, ...ADMIN_CALLS]) {
+  for (const name of [...WORK_CALLS, ...ADMIN_CALLS, ...UI_CALLS]) {
     if (!seen.has(name)) problems.push(`${name}: a profile exception that the table does not have`);
   }
   return problems;
@@ -101,6 +111,7 @@ export function check(table) {
 export function renderRows(table) {
   return table.map((spec) => {
     const bucket = bucketOf(spec);
-    return `| \`${nameOf(spec)}\` | ${bucket ?? "UNCLASSIFIED"} | ${bucket === "work" ? "work, admin" : "admin"} | ${whyOf(spec)} |`;
+    const listed = bucket === "work" ? "work, admin" : bucket === "ui" ? "none" : "admin";
+    return `| \`${nameOf(spec)}\` | ${bucket ?? "UNCLASSIFIED"} | ${listed} | ${whyOf(spec)} |`;
   });
 }

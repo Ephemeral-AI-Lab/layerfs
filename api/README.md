@@ -10,7 +10,7 @@ CLI package `@layerfs/cli` (in [`cli/`](cli)), the Python package (in
 the private stdio MCP server [`mcp/`](mcp) (`@layerfs/mcp`: one generated tool
 per call, `work` and `admin` profiles). The design is in
 [docs/architecture/api](../docs/architecture/api/README.md). The package is the
-library's call table as ten families of functions, 73 calls in all:
+library's call table as ten families of functions, 75 calls in all:
 
 | Family | Calls |
 | --- | --- |
@@ -23,7 +23,7 @@ library's call table as ten families of functions, 73 calls in all:
 | [`machine`](../docs/architecture/api/sdk/machine.md) | `list`, `platforms`, `get`, `status`, `start`, `stop`, `create`, `remove`, `update` |
 | [`store`](../docs/architecture/api/sdk/store.md) | `list`, `get`, `status`, `stats`, `create`, `connect`, `attach`, `detach`, `push`, `pull`, `remove`, `disconnect` |
 | [`backup`](../docs/architecture/api/sdk/backup.md) | `connect`, `disconnect`, `list`, `create`, `restore` |
-| [`logs`](../docs/architecture/api/sdk/logs.md) | `list`, `reset` |
+| [`logs`](../docs/architecture/api/sdk/logs.md) | `list`, `reset`, `machine`, `sandbox` |
 
 `layerfs.table` lists every call with its arguments and options; it is the
 source for the list above, for the `layerfs` command (`layerfs help`) and for

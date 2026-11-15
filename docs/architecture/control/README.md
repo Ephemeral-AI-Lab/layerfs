@@ -51,7 +51,7 @@ never up. `layerfs-machine` reaches `layerfs-platform` only through its
 | [Home](home/README.md) | `layerfs-home` | Layout, record files, locks, the `op` intent, names, secrets, traces and the call log | [Migration](home/migration.md) |
 | [Machines](machines/README.md) | `layerfs-machine`, `layerfs-platform` | Machine records and calls; one adapter per platform; the support table | [Platforms](machines/platforms.md), [Workers and reach](machines/workers-and-reach.md) |
 | [Stores and projects](stores-and-projects/README.md) | `layerfs-store` (but `backup/`) | Store and project records, placement, leases, the open-Store cache, Store calls | [SQLite and PostgreSQL](stores-and-projects/sqlite-and-postgresql.md), [Projects](stores-and-projects/projects.md) |
-| [Sandboxes](sandboxes/README.md) | `layerfs-sandbox`, `layerfs-sandbox-backend` | Sandbox records and lifecycle, Workspace calls, exec; the two backends | [Daemon channel and exec](sandboxes/daemon-channel-and-exec.md), [Backends](sandboxes/backends.md) |
+| [Sandboxes](sandboxes/README.md) | `layerfs-sandbox`, `layerfs-sandbox-backend` | Sandbox records and lifecycle, Workspace calls, exec; the two backends; the inspect route | [Daemon channel and exec](sandboxes/daemon-channel-and-exec.md), [Backends](sandboxes/backends.md), [Inspection](sandboxes/inspect.md) |
 | [Backups](backups/README.md) | `layerfs-store` `backup/`, `layerfs-bucket` | Whole-Store backup to a bucket and restore | [Buckets](backups/buckets.md) |
 | [Doctor](doctor/README.md) | `layerfs-control` `doctor/` | Read-only home, host, machine, Sandbox, Store and backup checks | [Checks](doctor/checks.md) |
 

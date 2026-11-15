@@ -340,7 +340,7 @@ class Calls(unittest.TestCase):
             layerfs.FAMILIES,
             ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs"],
         )
-        self.assertEqual(len(layerfs.TABLE), 73)
+        self.assertEqual(len(layerfs.TABLE), 75)
         for spec in layerfs.TABLE:
             self.assertTrue(callable(getattr(getattr(layerfs, spec["family"]), spec["call"])))
         # the options the Publish change added are in the table the Python

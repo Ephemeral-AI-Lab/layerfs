@@ -8,16 +8,20 @@
 //! A line that cannot be written is dropped: it changes no outcome and is
 //! not retried. `LAYERFS_LOGS=0` turns the log off for the process.
 //!
+//! `logs.list` reads the two files by cursor with the pair reader of
+//! [`crate::tail`], which the log calls of a machine and a Sandbox share.
+//!
 //! The lines of `log/*.jsonl` rotate the same way ([`rotate`], under
 //! `log/rotate.lock`; layerfs-project#180), all but `log/uncertain.jsonl`.
 use crate::home::{flock, paths};
 use crate::json;
 use crate::outcome::{failed, refused, Outcome};
+use crate::tail::{Backward, Cursor, Identity, Pair};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::log_file;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Write};
-use std::os::unix::fs::{DirBuilderExt, FileExt, MetadataExt, OpenOptionsExt};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::Path;
 
 /// The size past which `calls.jsonl` rotates to `calls.1.jsonl`, as every
@@ -29,9 +33,6 @@ pub const DEFAULT_LIMIT: i64 = 100;
 pub const MAX_LIMIT: i64 = 1000;
 /// The longest tag a line carries, in bytes.
 pub const MAX_TAG: usize = 128;
-
-/// How much of a file the reader takes at a time, from its end.
-const CHUNK: u64 = 64 << 10;
 
 /// Whether this process writes the call log: on unless `LAYERFS_LOGS=0`.
 pub fn enabled() -> bool {
@@ -243,7 +244,10 @@ pub fn read(home: &Path, filter: &Filter, cursor: Option<&str>, limit: Option<i6
         ));
     }
     let limit = limit as usize;
-    let files = [paths::calls_file(home), paths::calls_rotated(home)];
+    let pair = Pair {
+        current: paths::calls_file(home),
+        rotated: paths::calls_rotated(home),
+    };
     let start = match cursor {
         Some(text) => Some(Cursor::parse(text).ok_or_else(stale)?),
         None => None,
@@ -253,7 +257,7 @@ pub fn read(home: &Path, filter: &Filter, cursor: Option<&str>, limit: Option<i6
     let mut last: Option<Cursor> = None;
     let mut has_more = false;
     let first = start.as_ref().map_or(0, |cursor| cursor.file);
-    'files: for (index, path) in files.iter().enumerate().skip(first) {
+    'files: for (index, path) in pair.files().into_iter().enumerate().skip(first) {
         let file = match File::open(path) {
             Ok(file) => file,
             Err(error) if error.kind() == ErrorKind::NotFound => {
@@ -318,127 +322,5 @@ fn parse(bytes: &[u8]) -> Option<SdkValue> {
     match json::parse(text).ok()? {
         line @ SdkValue::Map(_) => Some(line),
         _ => None,
-    }
-}
-
-/// Which file a cursor was made in: its inode and a hash of its first
-/// line, which a rotation (a new file) or a reset (new first line) changes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Identity {
-    inode: u64,
-    first: u64,
-}
-
-impl Identity {
-    fn of(file: &File) -> std::io::Result<Self> {
-        let mut head = vec![0u8; 4096];
-        let mut filled = 0;
-        while filled < head.len() {
-            let read = file.read_at(&mut head[filled..], filled as u64)?;
-            if read == 0 {
-                break;
-            }
-            filled += read;
-        }
-        let first = head[..filled]
-            .split(|byte| *byte == b'\n')
-            .next()
-            .unwrap_or(&[]);
-        Ok(Self {
-            inode: file.metadata()?.ino(),
-            first: fnv(first),
-        })
-    }
-}
-
-fn fnv(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
-        (hash ^ u64::from(*byte)).wrapping_mul(0x0100_0000_01b3)
-    })
-}
-
-/// Where the next page ends: before the line at `offset` of file `file`
-/// (0 `calls.jsonl`, 1 `calls.1.jsonl`), as that file was.
-struct Cursor {
-    file: usize,
-    offset: u64,
-    identity: Identity,
-}
-
-impl Cursor {
-    fn text(&self) -> String {
-        format!(
-            "c1.{}.{:x}.{:x}.{:x}",
-            self.file, self.identity.inode, self.identity.first, self.offset
-        )
-    }
-
-    fn parse(text: &str) -> Option<Self> {
-        let mut parts = text.split('.');
-        if parts.next()? != "c1" {
-            return None;
-        }
-        let file = match parts.next()? {
-            "0" => 0,
-            "1" => 1,
-            _ => return None,
-        };
-        let hex = |part: Option<&str>| part.and_then(|p| u64::from_str_radix(p, 16).ok());
-        let inode = hex(parts.next())?;
-        let first = hex(parts.next())?;
-        let offset = hex(parts.next())?;
-        if parts.next().is_some() {
-            return None;
-        }
-        Some(Self {
-            file,
-            offset,
-            identity: Identity { inode, first },
-        })
-    }
-}
-
-/// The lines of a file before `end`, last first, read in chunks from the
-/// end; blank lines are passed over.
-struct Backward<'f> {
-    file: &'f File,
-    /// Where the buffered bytes start in the file.
-    at: u64,
-    /// Bytes from `at` not yet answered.
-    buffer: Vec<u8>,
-}
-
-impl<'f> Backward<'f> {
-    fn new(file: &'f File, end: u64) -> Self {
-        Self {
-            file,
-            at: end,
-            buffer: Vec::new(),
-        }
-    }
-
-    /// The next line back and the offset it starts at.
-    fn next_line(&mut self) -> std::io::Result<Option<(u64, Vec<u8>)>> {
-        loop {
-            while self.buffer.last() == Some(&b'\n') {
-                self.buffer.pop();
-            }
-            if let Some(newline) = self.buffer.iter().rposition(|byte| *byte == b'\n') {
-                let line = self.buffer.split_off(newline + 1);
-                return Ok(Some((self.at + newline as u64 + 1, line)));
-            }
-            if self.at == 0 {
-                if self.buffer.is_empty() {
-                    return Ok(None);
-                }
-                return Ok(Some((0, std::mem::take(&mut self.buffer))));
-            }
-            let take = CHUNK.min(self.at);
-            self.at -= take;
-            let mut chunk = vec![0u8; take as usize];
-            self.file.read_exact_at(&mut chunk, self.at)?;
-            chunk.extend_from_slice(&self.buffer);
-            self.buffer = chunk;
-        }
     }
 }

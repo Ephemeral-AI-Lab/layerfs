@@ -163,6 +163,7 @@ waits at most 10 s; other operations wait as long as they run
 | `store.reach` | `store.attach`'s check of this machine's connection to a PostgreSQL Store |
 | `store.diagnose`, `doctor.sandbox` | doctor's read-only observations |
 | `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`, decoded into its typed request first |
+| `inspect` | one read-only inspect request `{ kind, .. }` (a window of `worker.log` or of a Sandbox's `daemon.log`, overlay file sizes) on a helper thread, two at a time, answered within 6 s ([Inspection](../sandboxes/inspect.md)) |
 | `project.stage`, `project.init`, `project.export`, `project.remove` | write one part of a folder copy; add it as a project; stream a pinned snapshot back; drop a project |
 | anything else | `InvalidInput`, "the worker has no operation …" |
 
@@ -202,7 +203,7 @@ Nothing here is a retry: no request is read twice and none is resent.
 | Stalled caller | `store.file` and `sandbox.host` ignore the failed event and end their step; `project.export` returns at its next part, closes the Store and releases its lease; the thread then ends | [`worker_server/ops.rs`](../../../../control/crates/layerfs-control/src/worker_server/ops.rs), [`export/route.rs`](../../../../control/crates/layerfs-store/src/project/export/route.rs) |
 | After the answer | the worker waits at most 30 s for the caller's close, once | `Wire::answer` |
 | Panic | `catch_unwind` around each connection. One line `<op> panicked: <message>` (300 characters at most; never arguments, a secret or a request), then the connection closes with no answer: `Unknown` (layerfs-project#179 D7) | `connection::serve` |
-| Panic, read-only | `worker.ping`, `machine.images`, `store.reach`, `doctor.sandbox` and `store.diagnose` answer `Failed` instead, only if no frame was started after the request | `ops::READ_ONLY` |
+| Panic, read-only | `worker.ping`, `machine.images`, `store.reach`, `doctor.sandbox`, `store.diagnose` and `inspect` answer `Failed` instead, only if no frame was started after the request | `ops::READ_ONLY` |
 
 **No connection cap, and no bound on frame memory** (decided in
 layerfs-project#177). A cap must make a connection wait, never refuse it

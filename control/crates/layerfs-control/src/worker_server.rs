@@ -10,6 +10,8 @@
 //! secret and closes, before it reads anything larger. A caller of another
 //! build sends nothing more and closes. Then a request `{ op, args }`, read with at most
 //! [`REQUEST_WAIT`] between bytes. `worker.ping` answers who it is;
+//! `inspect` reads this machine or one of its Sandboxes (`layerfs-sandbox`
+//! `inspect`: at most two at once, each on a helper thread with deadlines);
 //! `store.call`, `store.file`, `store.reach`, `sandbox.host`, `project.stage`,
 //! `project.init`, `project.export` and `project.remove` run one operation on
 //! this machine (`ops`),

@@ -91,14 +91,16 @@ Workspace, confined by its Sandbox backend, not by this list.
 
 ## Profiles
 
-Each call belongs to exactly one bucket, `work` (listed by both profiles) or
-`admin` (listed only by `admin`); none is excluded
+Each call belongs to exactly one bucket: `work` (listed by both profiles),
+`admin` (listed only by `admin`) or `ui` (listed by neither: `UI_CALLS`, the
+monitoring reads a UI polls, which no agent is offered)
 ([`profiles.js`](../../../../api/mcp/src/profiles.js)):
 
 | Bucket | Calls |
 | --- | --- |
 | `work` | the `branch`, `commit`, `file` and `workspace` families; `project.list`, `project.get`, `project.export`, `sandbox.list`, `sandbox.get` |
-| `admin` | `project.init`, `project.remove`, `sandbox.create`, `sandbox.close`; the `machine`, `store`, `backup` and `logs` families |
+| `admin` | `project.init`, `project.remove`, `sandbox.create`, `sandbox.close`; the `machine`, `store` and `backup` families; `logs.list`, `logs.reset` |
+| `ui` (no profile) | `logs.machine`, `logs.sandbox` |
 
 `work` lets an agent read a project, work on Branches and files (each write
 is one explicit Commit), run in a mounted Workspace and export a snapshot.
@@ -111,7 +113,7 @@ built addon).
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
-73 calls: 38 in `work`, 35 in `admin` only; `--profile admin` lists all 73.
+75 calls: 38 in `work`, 35 in `admin` only, 2 in no profile (`ui`); `--profile admin` lists 73.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
@@ -188,6 +190,8 @@ built addon).
 | `backup.restore` | admin | admin | upload and restore a Store on a bucket; administration |
 | `logs.list` | admin | admin | read and clear the home's call log; administration |
 | `logs.reset` | admin | admin | read and clear the home's call log; administration |
+| `logs.machine` | ui | none | a monitoring read a UI polls (a machine's worker log, a Sandbox's daemon log); offered to no agent |
+| `logs.sandbox` | ui | none | a monitoring read a UI polls (a machine's worker log, a Sandbox's daemon log); offered to no agent |
 
 <!-- END GENERATED -->
 

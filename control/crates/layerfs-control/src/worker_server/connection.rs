@@ -181,7 +181,7 @@ fn exchange(server: &Server, wire: &mut Wire, served: &mut Option<String>) {
     let op = served.insert(op).as_str();
     #[cfg(feature = "worker-fault")]
     server.faults.before(op, &mut |event| wire.event(event));
-    let outcome = ops::run(op, args, &server.root, &mut |event| wire.event(event));
+    let outcome = ops::run(op, args, server, &mut |event| wire.event(event));
     let mut frame = match outcome {
         Ok(value) => SdkValue::map([("value", value)]),
         Err(refusal) => refusal_frame(refusal),

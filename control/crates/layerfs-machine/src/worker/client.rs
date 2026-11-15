@@ -3,7 +3,7 @@ use super::frame::{frame_bytes, read_frame, read_frame_within, write_frame, MAX_
 use super::hello::Hello;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::time::{Duration, Instant};
 
@@ -27,6 +27,39 @@ impl std::fmt::Debug for Endpoint {
 }
 
 const CONNECT: Duration = Duration::from_secs(10);
+
+/// How long one send waits for each of its steps ([`send_within`]): a call
+/// that must answer in a known time whatever its worker does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Budget {
+    /// The connection.
+    pub connect: Duration,
+    /// The worker's whole answer to the secret.
+    pub hello: Duration,
+    /// The whole answer, from when the request is sent.
+    pub answer: Duration,
+}
+
+/// A stream read until `end`, however many reads that takes; with no end,
+/// as the stream is set.
+struct Until<'a> {
+    stream: &'a TcpStream,
+    end: Option<Instant>,
+}
+
+impl Read for Until<'_> {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        if let Some(end) = self.end {
+            let left = end.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Err(std::io::ErrorKind::TimedOut.into());
+            }
+            self.stream.set_read_timeout(Some(left))?;
+        }
+        let mut stream = self.stream;
+        stream.read(buffer)
+    }
+}
 
 /// How long the caller waits for the worker to answer its secret.
 pub const HELLO_WAIT: Duration = Duration::from_secs(10);
@@ -100,10 +133,54 @@ pub fn send(
 ) -> Result<Outcome, Unreached> {
     let started = Instant::now();
     layerfs_home::trace::step("route");
-    let sent = send_once(endpoint, op, request, events, answer_within);
+    let waits = Waits {
+        connect: CONNECT,
+        hello: HELLO_WAIT,
+        read: answer_within,
+        answer: None,
+    };
+    let sent = send_once(endpoint, op, request, events, waits);
     let worker = endpoint.address.to_string();
     layerfs_home::trace::connection(&worker, op, sent.is_ok(), started);
     sent
+}
+
+/// [`send`] within `budget`: the connection, the worker's whole answer to
+/// the secret and the whole answer to the request each have their own
+/// limit, and a send that makes no progress is cut at the answer's. For an
+/// operation that sends no events and must answer in a known time
+/// (layerfs-project#178's `inspect`). An answer that does not come in time
+/// is `Unknown`, as any lost answer.
+pub fn send_within(
+    endpoint: &Endpoint,
+    op: &str,
+    request: &[u8],
+    budget: Budget,
+) -> Result<Outcome, Unreached> {
+    let started = Instant::now();
+    layerfs_home::trace::step("route");
+    let waits = Waits {
+        connect: budget.connect,
+        hello: budget.hello,
+        read: None,
+        answer: Some(budget.answer),
+    };
+    let sent = send_once(endpoint, op, request, &mut |_| Ok(()), waits);
+    let worker = endpoint.address.to_string();
+    layerfs_home::trace::connection(&worker, op, sent.is_ok(), started);
+    sent
+}
+
+/// The waits of one send.
+#[derive(Clone, Copy)]
+struct Waits {
+    connect: Duration,
+    /// The whole hello.
+    hello: Duration,
+    /// Each read of the answer, when limited.
+    read: Option<Duration>,
+    /// The whole answer and each write of the request, when limited.
+    answer: Option<Duration>,
 }
 
 fn send_once(
@@ -111,7 +188,7 @@ fn send_once(
     op: &str,
     request: &[u8],
     events: &mut EventSink<'_>,
-    answer_within: Option<Duration>,
+    waits: Waits,
 ) -> Result<Outcome, Unreached> {
     let unavailable = |why: &dyn std::fmt::Display| {
         Unreached(refused(
@@ -122,44 +199,60 @@ fn send_once(
             ),
         ))
     };
-    let (stream, hello) = greet(endpoint).map_err(|refusal| match refusal {
-        Greeting::Refused(refusal) => Unreached(refusal),
-        Greeting::Unanswered(why) => unavailable(&why),
-    })?;
+    let (stream, hello) =
+        greet(endpoint, waits.connect, waits.hello).map_err(|refusal| match refusal {
+            Greeting::Refused(refusal) => Unreached(refusal),
+            Greeting::Unanswered(why) => unavailable(&why),
+        })?;
     // a worker of another build is sent nothing
     if let Some(refusal) = hello.mismatch(&endpoint.address.to_string()) {
         return Err(Unreached(refusal));
     }
     stream
-        .set_read_timeout(answer_within)
+        .set_read_timeout(waits.read)
+        .and_then(|()| stream.set_write_timeout(waits.answer))
         .map_err(|error| unavailable(&error))?;
+    let end = waits.answer.map(|wait| Instant::now() + wait);
     // from here the request may have reached the worker: nothing is resent
-    Ok(answer(stream, op, request, events))
+    Ok(answer(stream, op, request, events, end))
 }
 
 /// Why a worker did not answer its secret.
 enum Greeting {
     /// It refused (a wrong secret: `Denied`) or answered no known frame.
     Refused(SdkRefusal),
-    /// It could not be reached or did not answer in [`HELLO_WAIT`].
+    /// It could not be reached or did not answer in time ([`HELLO_WAIT`]).
     Unanswered(String),
 }
 
 /// One new connection to the worker, its secret sent alone and answered:
-/// the open stream and what the worker said of itself. Nothing else is sent.
-fn greet(endpoint: &Endpoint) -> Result<(TcpStream, Hello), Greeting> {
+/// the open stream and what the worker said of itself. Nothing else is
+/// sent. The connection waits at most `connect`, and the whole answer to
+/// the secret at most `hello`.
+fn greet(
+    endpoint: &Endpoint,
+    connect: Duration,
+    hello: Duration,
+) -> Result<(TcpStream, Hello), Greeting> {
     let unanswered = |why: &dyn std::fmt::Display| Greeting::Unanswered(why.to_string());
-    let mut stream = TcpStream::connect_timeout(&endpoint.address, CONNECT)
+    let mut stream = TcpStream::connect_timeout(&endpoint.address, connect)
         .map_err(|error| unanswered(&error))?;
     layerfs_home::trace::step("connect");
     let _ = stream.set_nodelay(true);
     // the secret first, alone: the worker answers it before the request
     stream
-        .set_read_timeout(Some(HELLO_WAIT))
+        .set_write_timeout(Some(hello))
         .map_err(|error| unanswered(&error))?;
     let secret = SdkValue::map([("secret", SdkValue::text(&endpoint.secret))]);
     write_frame(&mut stream, &secret).map_err(|error| unanswered(&error))?;
-    match read_frame_within(&mut stream, MAX_HELLO) {
+    let mut answered = Until {
+        stream: &stream,
+        end: Some(Instant::now() + hello),
+    };
+    let frame = read_frame_within(&mut answered, MAX_HELLO);
+    let reset = stream.set_write_timeout(None);
+    match frame {
+        _ if reset.is_err() => Err(unanswered(&"its socket could not be set")),
         Ok(Some(frame)) if frame.get("ready").is_some() => {
             layerfs_home::trace::step("ready");
             let hello = Hello::of(&frame);
@@ -183,7 +276,7 @@ fn greet(endpoint: &Endpoint) -> Result<(TcpStream, Hello), Greeting> {
 /// refusal (`Denied`) when it refuses the secret.
 pub fn hello(endpoint: &Endpoint) -> Result<Hello, SdkRefusal> {
     let started = Instant::now();
-    let greeted = greet(endpoint);
+    let greeted = greet(endpoint, CONNECT, HELLO_WAIT);
     layerfs_home::trace::connection(&endpoint.address.to_string(), "hello", false, started);
     match greeted {
         Ok((_, hello)) => Ok(hello),
@@ -195,8 +288,15 @@ pub fn hello(endpoint: &Endpoint) -> Result<Hello, SdkRefusal> {
     }
 }
 
-/// Writes the request and reads the events and the answer.
-fn answer(mut stream: TcpStream, op: &str, request: &[u8], events: &mut EventSink<'_>) -> Outcome {
+/// Writes the request and reads the events and the answer, all of it by
+/// `end` when there is one.
+fn answer(
+    mut stream: TcpStream,
+    op: &str,
+    request: &[u8],
+    events: &mut EventSink<'_>,
+    end: Option<Instant>,
+) -> Outcome {
     stream
         .write_all(request)
         .and_then(|()| stream.flush())
@@ -208,7 +308,11 @@ fn answer(mut stream: TcpStream, op: &str, request: &[u8], events: &mut EventSin
         })?;
     layerfs_home::trace::step("request");
     loop {
-        let frame = match read_frame(&mut stream) {
+        let mut answered = Until {
+            stream: &stream,
+            end,
+        };
+        let frame = match read_frame(&mut answered) {
             Ok(Some(frame)) => frame,
             Ok(None) => return Err(lost(op, "the worker closed the connection")),
             Err(refusal) => return Err(lost(op, &refusal.message)),

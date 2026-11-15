@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Every call a program can make: **73 calls in 10 families**, the same names and arguments in JavaScript, Python and the `layerfs` command, one page per family.
+Every call a program can make: **75 calls in 10 families**, the same names and arguments in JavaScript, Python and the `layerfs` command, one page per family.
 
 | | |
 | --- | --- |
@@ -42,7 +42,8 @@ built table.
  |           commit unmount  |  to its  | commit  list get diff         |
  |           status          |  Branch  | file    read ... write apply  |
  +---------------------------+          +-------------------------------+
- backup: buckets <-> sqlite Store files      logs: the home's call log
+ backup: buckets <-> sqlite Store files      logs: the home's call log,
+                                                   worker and daemon logs
 ```
 
 ## What it does
@@ -58,7 +59,7 @@ built table.
 | [`machine`](machine.md) | [`list`](machine.md#machinelist), [`platforms`](machine.md#machineplatforms), [`get`](machine.md#machineget), [`images`](machine.md#machineimages), [`load`](machine.md#machineload), [`prune`](machine.md#machineprune), [`status`](machine.md#machinestatus), [`start`](machine.md#machinestart), [`stop`](machine.md#machinestop), [`create`](machine.md#machinecreate), [`remove`](machine.md#machineremove), [`update`](machine.md#machineupdate) | the caller's process, through the platform adapter | [`machine/`](../../../../api/crates/layerfs-api/src/machine) |
 | [`store`](store.md) | [`list`](store.md#storelist), [`get`](store.md#storeget), [`status`](store.md#storestatus), [`stats`](store.md#storestats), [`create`](store.md#storecreate), [`connect`](store.md#storeconnect), [`attach`](store.md#storeattach), [`detach`](store.md#storedetach), [`push`](store.md#storepush), [`pull`](store.md#storepull), [`remove`](store.md#storeremove), [`disconnect`](store.md#storedisconnect) | the caller's process; sqlite file steps in the Store machine's worker | [`store/`](../../../../api/crates/layerfs-api/src/store) |
 | [`backup`](backup.md) | [`connect`](backup.md#backupconnect), [`disconnect`](backup.md#backupdisconnect), [`list`](backup.md#backuplist), [`create`](backup.md#backupcreate), [`restore`](backup.md#backuprestore) | the caller's process; `create` stages on the Store's machine | [`backup/`](../../../../api/crates/layerfs-api/src/backup) |
-| [`logs`](logs.md) | [`list`](logs.md#logslist), [`reset`](logs.md#logsreset) | the caller's process, home files only | [`logs/`](../../../../api/crates/layerfs-api/src/logs) |
+| [`logs`](logs.md) | [`list`](logs.md#logslist), [`reset`](logs.md#logsreset), [`machine`](logs.md#logsmachine), [`sandbox`](logs.md#logssandbox) | `list`, `reset`: the caller's process, home files only; `machine`, `sandbox`: where the log file is | [`logs/`](../../../../api/crates/layerfs-api/src/logs) |
 
 "Where the Store's calls run" is the caller's process for a PostgreSQL Store
 and for a sqlite Store on a locally executing machine (`native`, except on
@@ -103,7 +104,7 @@ in the [API layer page](../README.md#calling-conventions).
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
 | [`inventory.mjs`](../../../../api/node/test/branch-file/inventory.mjs) | `perl -e 'alarm 120; exec @ARGV' node --test api/node/test/branch-file/inventory.mjs` | macOS or Linux, with the built addon (`npm --prefix api run build:native`) and `target/debug/layerfs` | the count line and one heading per call match the built table; branch and file CLI help exposes every option |
-| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host | 73 calls in ten families; one source file per call; unknown calls and arguments refused before any effect |
+| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host | 75 calls in ten families; one source file per call; unknown calls and arguments refused before any effect |
 | [`file-history.mjs`](../../../../api/node/examples/file-history.mjs) | `node api/node/examples/file-history.mjs` | macOS or Linux, with the built addon | a Store, Init, file writes and history reads |
 
 ## Pages
@@ -119,4 +120,4 @@ in the [API layer page](../README.md#calling-conventions).
 | [machine](machine.md) | built-in and VM machines |
 | [store](store.md) | sqlite and PostgreSQL Stores |
 | [backup](backup.md) | buckets and Store backups |
-| [logs](logs.md) | the home's call log |
+| [logs](logs.md) | the home's call log; a machine's worker log and a Sandbox's daemon log |

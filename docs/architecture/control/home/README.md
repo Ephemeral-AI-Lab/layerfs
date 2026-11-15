@@ -63,6 +63,7 @@ id its caller sent
 | Streams events | one event stream per running call: progress, a worker's events, command output | [`events.rs`](../../../../control/crates/layerfs-home/src/events.rs) |
 | Names this process | pid, kernel start time and boot id, so a reused pid does not keep an `op`, lease or forward alive | [`process.rs`](../../../../control/crates/layerfs-home/src/process.rs) |
 | Writes traces and the call log | `LAYERFS_TRACE` lines and `trace/calls.jsonl` | [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs), [`logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs) |
+| Reads a log by cursor | one window of a log file and the one file it rotates to: its last lines, or the lines after or before a cursor that names the file's identity; shared by `logs.list` (identity and cursor text) and the inspect route | [`tail.rs`](../../../../control/crates/layerfs-home/src/tail.rs), [Inspection](../sandboxes/inspect.md#the-cursor) |
 | Prints JSON | whole numbers only; non-UTF-8 bytes as `{"base64": ..}`; worker frames carry byte values as attachments | [`json.rs`](../../../../control/crates/layerfs-home/src/json.rs) |
 
 ### Entities
