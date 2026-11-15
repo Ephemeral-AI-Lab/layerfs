@@ -28,11 +28,12 @@ use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::{
     read_frame, read_frame_within, write_frame, Hello, HELLO_WAIT, MAX_HELLO,
 };
-use layerfs_store::project::delete::delete_project;
+use layerfs_store::project::delete::{admit_project, delete_project, release_project};
 use layerfs_store::project::discovery::home_of;
 use layerfs_store::project::export::in_worker as export_in_worker;
 use layerfs_store::project::frame::{
-    DeleteFrame, ExportFrame, InitFrame, ListingFrame, RemoveFrame, StageFrame,
+    DeleteAdmitFrame, DeleteFrame, DeleteReleaseFrame, ExportFrame, InitFrame, ListingFrame,
+    RemoveFrame, StageFrame,
 };
 use layerfs_store::project::listing::list_projects;
 use layerfs_store::project::{init::in_worker, remove::remove_project, staged};
@@ -280,10 +281,22 @@ fn run(
         }
         // retires one project in the Store under this worker root and
         // removes the worker own entry (2.0, T4.5b): `{ store, stack_id,
-        // deleted_ms?, project?, store_record? }`
+        // deleted_ms?, project?, op_id?, store_record? }`
         "project.delete" => {
             let root = home_of(Some(root))?;
             delete_project(&root, &DeleteFrame::decode(&args)?)
+        }
+        // registers the caller's project-scope admission before its sidecar
+        // and marker (2.0, T4.6): `{ store, stack_id, op_id, store_record? }`
+        "project.delete.admit" => {
+            let root = home_of(Some(root))?;
+            admit_project(&root, &DeleteAdmitFrame::decode(&args)?)
+        }
+        // releases the caller's project-scope admission after the marker
+        // (2.0, T4.6): `{ store, op_id, store_record? }`
+        "project.delete.release" => {
+            let root = home_of(Some(root))?;
+            release_project(&root, &DeleteReleaseFrame::decode(&args)?)
         }
         // reads the Store's own filtered project listing under this worker
         // root, the same `layerfs_project::store::projects` a local Store

@@ -118,8 +118,14 @@ with one line in `<home>/trace/calls.jsonl`, except the `logs` calls and with
 | `tag` | a top-level `log_tag` argument (taken out before the check; no entry declares it), else `LAYERFS_LOGS_TAG`; at most 128 bytes |
 
 Values are cut to 200 characters. Content, JSON, and the `Text` arguments
-`command`, `message`, `old`, `new`, `password` and `url` are logged only as
-`<N bytes>` (`REDACTED`). The line is written after the outcome and never
+`command`, `message`, `old`, `new`, `password`, `url` and every path argument
+(`path`, `left_path`, `right_path`, `from_path`, `to_path`, `path_prefix`)
+are logged only as `<N bytes>` (`REDACTED`), so a `project.remove_file` or
+`file.*` path never enters the log (#41 §4.3). A path counts its normalized
+form, one leading `/` stripped (`/a` and `a` are both `<1 bytes>`); a glob or
+grep `pattern` is not a path and counts its own bytes. A refusal contributes
+only its code: its message and `detail` (which may echo the path, as `Removed`
+does) are never logged. The line is written after the outcome and never
 changes it. Reading and clearing it are the [`logs`](../sdk/logs.md) calls.
 
 ## Invariants

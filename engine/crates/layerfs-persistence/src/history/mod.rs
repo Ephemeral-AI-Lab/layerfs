@@ -7,6 +7,7 @@ mod branch;
 mod catalog;
 mod commit;
 mod digests;
+mod epoch;
 mod hints;
 mod kept;
 mod layerstack;
@@ -21,8 +22,8 @@ mod removal;
 mod rows;
 mod transaction;
 pub use kept::{KeptHistory, KeptNode, KeptNodeId};
-pub use objects::{KeptObjects, KeptWaste, MarkResult};
 pub(crate) use lineage_backfill::backfill_lineage;
+pub use objects::{GcTuple, KeptObjects, KeptWaste, MarkResult};
 pub use provider::HistoryProvider;
 pub(crate) use rows::{
     branch_row as diagnostic_branch, commit_graph_row as diagnostic_commit_graph,

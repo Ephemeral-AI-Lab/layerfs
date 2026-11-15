@@ -4,7 +4,9 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_bridge::sdk_values::hex;
 use layerfs_history::LayerStackId;
 use layerfs_home::names::StoreName;
-use layerfs_store::project::frame::{DeleteFrame, DeleteReply};
+use layerfs_store::project::frame::{
+    DeleteAdmitFrame, DeleteFrame, DeleteReleaseFrame, DeleteReply,
+};
 
 fn t(text: &str) -> SdkValue {
     SdkValue::text(text)
@@ -21,12 +23,14 @@ fn stack(body: u8) -> LayerStackId {
 #[test]
 fn the_frame_names_the_store_stack_and_optional_context() {
     let stack = stack(1);
+    let op = [7u8; 16];
     let record = map(vec![("name", t("shop")), ("kind", t("sqlite"))]);
     let frame = DeleteFrame {
         store: StoreName::parse("shop").unwrap(),
         project: Some("app".to_owned()),
         stack,
         deleted_ms: Some(5),
+        op_id: Some(op),
         store_record: Some(record.clone()),
     };
     let encoded = frame.encode();
@@ -37,6 +41,7 @@ fn the_frame_names_the_store_stack_and_optional_context() {
             ("stack_id", t(&hex(&stack.to_bytes()))),
             ("deleted_ms", SdkValue::Int(5)),
             ("project", t("app")),
+            ("op_id", t(&hex(&op))),
             ("store_record", record),
         ])
     );
@@ -45,6 +50,7 @@ fn the_frame_names_the_store_stack_and_optional_context() {
     assert_eq!(decoded.project, frame.project);
     assert_eq!(decoded.stack, stack);
     assert_eq!(decoded.deleted_ms, Some(5));
+    assert_eq!(decoded.op_id, Some(op));
     assert_eq!(decoded.store_record, frame.store_record);
 }
 
@@ -57,8 +63,75 @@ fn a_frame_with_only_the_store_and_stack_decodes() {
     ]);
     let decoded = DeleteFrame::decode(&minimal).unwrap();
     assert_eq!((decoded.project, decoded.deleted_ms), (None, None));
+    assert_eq!(decoded.op_id, None);
     assert_eq!(decoded.store_record, None);
     assert_eq!(decoded.stack, stack);
+}
+
+#[test]
+fn the_admission_and_release_frames_round_trip() {
+    let stack = stack(4);
+    let op = [9u8; 16];
+    let record = map(vec![("name", t("shop")), ("kind", t("sqlite"))]);
+    let admit = DeleteAdmitFrame {
+        store: StoreName::parse("shop").unwrap(),
+        stack,
+        op,
+        store_record: Some(record.clone()),
+    };
+    let encoded = admit.encode();
+    assert_eq!(
+        encoded,
+        map(vec![
+            ("store", t("shop")),
+            ("stack_id", t(&hex(&stack.to_bytes()))),
+            ("op_id", t(&hex(&op))),
+            ("store_record", record.clone()),
+        ])
+    );
+    assert_eq!(DeleteAdmitFrame::decode(&encoded).unwrap(), admit);
+
+    let release = DeleteReleaseFrame {
+        store: StoreName::parse("shop").unwrap(),
+        op,
+        store_record: None,
+    };
+    let encoded = release.encode();
+    assert_eq!(
+        encoded,
+        map(vec![("store", t("shop")), ("op_id", t(&hex(&op)))])
+    );
+    assert_eq!(DeleteReleaseFrame::decode(&encoded).unwrap(), release);
+}
+
+#[test]
+fn the_admission_frames_refuse_a_bad_operation_identity() {
+    let decode = |fields| DeleteAdmitFrame::decode(&map(fields)).unwrap_err().message;
+    let stack = stack(5);
+    assert_eq!(
+        decode(vec![
+            ("store", t("shop")),
+            ("stack_id", t(&hex(&stack.to_bytes()))),
+            ("op_id", t("zz")),
+        ]),
+        "`op_id` must be hex digits"
+    );
+    assert_eq!(
+        decode(vec![
+            ("store", t("shop")),
+            ("stack_id", t(&hex(&stack.to_bytes()))),
+            ("op_id", t("ab")),
+        ]),
+        "`op_id` must be an operation identity (16 bytes)"
+    );
+    assert_eq!(
+        delete_release_decode(&map(vec![("store", t("shop"))])),
+        "missing text argument `op_id`"
+    );
+}
+
+fn delete_release_decode(frame: &SdkValue) -> String {
+    DeleteReleaseFrame::decode(frame).unwrap_err().message
 }
 
 #[test]

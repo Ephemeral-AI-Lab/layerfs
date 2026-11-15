@@ -17,6 +17,8 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
             return Err(refusal);
         }
     }
+    // The page-independent `removed_count`: the hidden entries this pattern
+    // would return anywhere under `path`, not only direct children.
     let removed = seen.hidden_matches(&reader, &snap, &path, pattern)?;
     if args.get("page").is_some() {
         return paged_reads::pin(

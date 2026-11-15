@@ -181,21 +181,19 @@ fn argv_has_positionals_options_flags_and_the_scope_before_it_rewrites() {
             ("page_size", SdkValue::Int(5)),
         ],
     );
-    assert_eq!(
-        argv(&last(&home)),
-        [
-            "file",
-            "diff",
-            "shop/api",
-            "main",
-            "/README.md",
-            "main",
-            "/README.md",
-            "--allow-missing",
-            "--page-size",
-            "5"
-        ]
-    );
+    let want: Vec<String> = vec![
+        "file".into(),
+        "diff".into(),
+        "shop/api".into(),
+        "main".into(),
+        bytes("README.md".len()),
+        "main".into(),
+        bytes("README.md".len()),
+        "--allow-missing".into(),
+        "--page-size".into(),
+        "5".into(),
+    ];
+    assert_eq!(argv(&last(&home)), want);
     // optional positionals stop at the first absent one
     let _ = call(&home, "backup.list", &[]);
     assert_eq!(argv(&last(&home)), ["backup", "list"]);
@@ -266,7 +264,7 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
             "write".into(),
             "shop/api".into(),
             "dev".into(),
-            "/a.ts".into(),
+            bytes("a.ts".len()),
             bytes(5321),
             "--message".into(),
             bytes(5)
@@ -283,16 +281,22 @@ fn free_text_credentials_content_and_json_are_byte_counts() {
         ],
     );
     assert_eq!(argv(&last(&home))[5], bytes(7));
-    // text is cut at 200 characters
+    // a path argument is logged as its byte length, never its text
     let long = format!("/{}", "é".repeat(300));
     let _ = call(
         &home,
         "file.stat",
         &[p(), ("branch", t("main")), ("path", t(&long))],
     );
-    let path = &argv(&last(&home))[4];
-    assert_eq!(path.chars().count(), 201);
-    assert!(path.ends_with('…'));
+    // a path logs the length of its normalized form: one leading `/` is
+    // stripped, so this path counts 600 bytes, not 601
+    assert_eq!(argv(&last(&home))[4], bytes(long.len() - 1));
+    // text that is not redacted is cut at 200 characters
+    let long = "n".repeat(300);
+    let _ = call(&home, "store.get", &[("name", t(&long))]);
+    let name = &argv(&last(&home))[2];
+    assert_eq!(name.chars().count(), 201);
+    assert!(name.ends_with('…'));
     // each named text argument
     let _ = call(
         &home,

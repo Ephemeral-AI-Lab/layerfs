@@ -8,6 +8,7 @@ mod storage;
 mod store;
 pub(crate) use store::config;
 mod history;
+mod report;
 #[cfg(feature = "postgresql")]
 pub use backend::postgresql::access::{access as postgresql_access, PostgresAccess};
 #[cfg(feature = "postgresql")]
@@ -15,7 +16,14 @@ pub use backend::postgresql::status::{
     status as postgresql_status, PostgresStatus, PostgresStatusError,
 };
 pub use backend::sqlite::acquisition::AcquisitionProvider;
+pub use backend::sqlite::compact::{
+    compact_op_status, CompactFailpoint, CompactKeptWaste, CompactOpStatus, CompactPath,
+    CompactReceipt, CompactRequest, CompactResidue, CompactZeroReason,
+};
 pub use backend::sqlite::heads::{heads_digest, read_heads};
+pub use report::{
+    CompactGeneration, CompactReport, CompactReportSource, CompactStatus, SQLITE_COMPACT_PHASES,
+};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use backend::sqlite::lifecycle::headroom::STORE_HEADROOM_BYTES;
 pub use backend::sqlite::lifecycle::reclamation::{SpaceReclamation, RECLAMATION_PAGE_LIMIT};

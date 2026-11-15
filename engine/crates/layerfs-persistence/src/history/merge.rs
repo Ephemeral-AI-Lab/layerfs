@@ -77,6 +77,9 @@ pub(crate) fn merge_branch(
     if let Some(state) = super::branch::name_taken(tx, request.stack, &request.name)? {
         return Err(HistoryError::NameTaken(Box::new(state)));
     }
+    // Spec 5: read the project epoch at the start of this write transaction;
+    // `confirm` below re-checks it before the transaction commits.
+    let fence = super::epoch::open(tx, request.stack)?;
     let (base, head) = match &request.head {
         MergeHead::Node(NodeId::Layer(layer)) => (*layer, None),
         MergeHead::Node(NodeId::Commit(commit)) => {
@@ -132,6 +135,8 @@ pub(crate) fn merge_branch(
         ],
     )
     .map_err(sql)?;
-    super::branch::branch_snapshot(tx, request.branch)?
-        .ok_or(HistoryError::Integrity("Branch insertion"))
+    let snapshot = super::branch::branch_snapshot(tx, request.branch)?
+        .ok_or(HistoryError::Integrity("Branch insertion"))?;
+    fence.confirm(tx)?;
+    Ok(snapshot)
 }

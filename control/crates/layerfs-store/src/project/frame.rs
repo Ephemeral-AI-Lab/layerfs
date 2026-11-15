@@ -1,6 +1,7 @@
 //! The `project` worker frames (layerfs-project#109): `project.init`,
-//! `project.remove`, `project.list` (T4.5c), `project.stage` and
-//! `project.export`, each encoded by the caller and
+//! `project.remove`, `project.list` (T4.5c), `project.stage`,
+//! `project.export`, `project.delete` (T4.5b) and its admission ops, each
+//! encoded by the caller and
 //! decoded once in the worker, in the order the worker always refused them.
 //! The worker sets the home to its own root; a frame names none.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -104,6 +105,17 @@ fn stack_id(text: &str) -> Result<LayerStackId> {
         refused(
             "InvalidInput",
             "`stack_id` must be a LayerStack identity (17 bytes)",
+        )
+    })
+}
+
+/// The operation identity an `op_id` field holds: its 16 bytes in hex.
+fn op_id(text: &str) -> Result<[u8; 16]> {
+    let bytes = unhex(text).ok_or_else(|| refused("InvalidInput", "`op_id` must be hex digits"))?;
+    bytes.as_slice().try_into().map_err(|_| {
+        refused(
+            "InvalidInput",
+            "`op_id` must be an operation identity (16 bytes)",
         )
     })
 }
@@ -246,7 +258,9 @@ impl ExportFrame {
 /// worker, spec §4). The caller writes `deleted_ms` to its durable intent
 /// before the call and resends it on a retry; `project` and `store_record`
 /// are the caller context for the worker own entry and its Store open.
-#[derive(Clone, Debug)]
+/// `op_id` is the admission the caller already took, so the marker reuses it
+/// instead of scanning past a second row.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DeleteFrame {
     /// The Store.
     pub store: StoreName,
@@ -257,6 +271,37 @@ pub struct DeleteFrame {
     /// The `deleted_ms` the marker should hold; `None` lets the worker take
     /// the current time.
     pub deleted_ms: Option<i64>,
+    /// The admission operation identity the marker reuses, when the caller
+    /// took one.
+    pub op_id: Option<[u8; 16]>,
+    /// The Store record.
+    pub store_record: Option<SdkValue>,
+}
+
+/// `project.delete.admit`: register the caller's project-scope admission
+/// before it writes its sidecar and sends the marker (T4.6). The frame is
+/// `{store, stack_id, op_id, store_record?}`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DeleteAdmitFrame {
+    /// The Store.
+    pub store: StoreName,
+    /// The LayerStack the caller recorded.
+    pub stack: LayerStackId,
+    /// The admission operation identity.
+    pub op: [u8; 16],
+    /// The Store record.
+    pub store_record: Option<SdkValue>,
+}
+
+/// `project.delete.release`: delete the caller's admission row after the
+/// marker, on every exit path (T4.6). The frame is
+/// `{store, op_id, store_record?}`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DeleteReleaseFrame {
+    /// The Store.
+    pub store: StoreName,
+    /// The admission operation identity.
+    pub op: [u8; 16],
     /// The Store record.
     pub store_record: Option<SdkValue>,
 }
@@ -275,7 +320,7 @@ pub struct DeleteReply {
 
 impl DeleteFrame {
     /// The `project.delete` frame: `{ store, stack_id, deleted_ms?, project?,
-    /// store_record? }`, each optional field sent when set.
+    /// op_id?, store_record? }`, each optional field sent when set.
     pub fn encode(&self) -> SdkValue {
         let mut fields = vec![
             ("store", SdkValue::text(self.store.as_str())),
@@ -287,12 +332,14 @@ impl DeleteFrame {
                 .as_deref()
                 .map(|p| ("project", SdkValue::text(p))),
         );
+        fields.extend(self.op_id.map(|op| ("op_id", SdkValue::text(hex(&op)))));
         fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
         map(fields)
     }
 
-    /// A `project.delete` frame: no Store, a bad Store name, no Stack id, or
-    /// a Stack id that is not a LayerStack identity are refused.
+    /// A `project.delete` frame: no Store, a bad Store name, no Stack id, a
+    /// Stack id that is not a LayerStack identity, or an `op_id` that is not
+    /// an operation identity are refused.
     pub fn decode(frame: &SdkValue) -> Result<Self> {
         let store = StoreName::parse(required(frame.get_text("store"), "store")?)?;
         let stack = stack_id(required(frame.get_text("stack_id"), "stack_id")?)?;
@@ -301,6 +348,59 @@ impl DeleteFrame {
             project: frame.get_text("project").map(str::to_owned),
             stack,
             deleted_ms: frame.get_int("deleted_ms"),
+            op_id: frame.get_text("op_id").map(op_id).transpose()?,
+            store_record: frame.get("store_record").cloned(),
+        })
+    }
+}
+
+impl DeleteAdmitFrame {
+    /// The `project.delete.admit` frame: `{store, stack_id, op_id,
+    /// store_record?}`.
+    pub fn encode(&self) -> SdkValue {
+        let mut fields = vec![
+            ("store", SdkValue::text(self.store.as_str())),
+            ("stack_id", SdkValue::text(hex(&self.stack.to_bytes()))),
+            ("op_id", SdkValue::text(hex(&self.op))),
+        ];
+        fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
+        map(fields)
+    }
+
+    /// A `project.delete.admit` frame: its Store, Stack and operation
+    /// identity are required and checked.
+    pub fn decode(frame: &SdkValue) -> Result<Self> {
+        let store = StoreName::parse(required(frame.get_text("store"), "store")?)?;
+        let stack = stack_id(required(frame.get_text("stack_id"), "stack_id")?)?;
+        let op = op_id(required(frame.get_text("op_id"), "op_id")?)?;
+        Ok(Self {
+            store,
+            stack,
+            op,
+            store_record: frame.get("store_record").cloned(),
+        })
+    }
+}
+
+impl DeleteReleaseFrame {
+    /// The `project.delete.release` frame: `{store, op_id, store_record?}`.
+    pub fn encode(&self) -> SdkValue {
+        let mut fields = vec![
+            ("store", SdkValue::text(self.store.as_str())),
+            ("op_id", SdkValue::text(hex(&self.op))),
+        ];
+        fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
+        map(fields)
+    }
+
+    /// A `project.delete.release` frame: its Store and operation identity
+    /// are required and checked.
+    pub fn decode(frame: &SdkValue) -> Result<Self> {
+        let store = StoreName::parse(required(frame.get_text("store"), "store")?)?;
+        let op = op_id(required(frame.get_text("op_id"), "op_id")?)?;
+        Ok(Self {
+            store,
+            op,
             store_record: frame.get("store_record").cloned(),
         })
     }

@@ -2,6 +2,7 @@
 //! lane, objects, metadata and history statements, and Init's acquisition.
 pub(crate) mod access;
 pub(crate) mod acquisition;
+pub(crate) mod compact;
 pub(crate) mod history;
 pub(crate) mod lane;
 mod mechanics;

@@ -9,7 +9,7 @@ use layerfs_history::LayerStackId;
 use layerfs_home::home::{paths, write_record};
 use layerfs_home::outcome::{failed, refused};
 use layerfs_store::project::delete::{
-    delete_with, remove_worker_entry, Effects, Intent, IntentState,
+    delete_with, remove_worker_entry, Admission, Effects, Intent, IntentState,
 };
 use layerfs_store_service::history::deletion::Deletion;
 use std::collections::VecDeque;
@@ -54,11 +54,14 @@ fn intent(_home: &Path, store: &str, project: &str, stack: LayerStackId, id: i64
         deleted_ms: id,
         attempt_ms: 1,
         state: IntentState::Pending,
+        op: None,
     }
 }
 
-/// A fake Store side and entry remover. `mark` reads the intent as the
-/// marker would see it, so a test can see the state that preceded it.
+/// A fake home/worker: the Store side and entry remover, with the project
+/// scope admission a live mount or operation would refuse. `mark` reads the
+/// intent as the marker would see it, so a test can see the state that
+/// preceded it.
 struct Fake {
     home: PathBuf,
     store: String,
@@ -68,6 +71,14 @@ struct Fake {
     states: Vec<IntentState>,
     prepared: usize,
     fail_removal: bool,
+    /// What `admit` refuses with, before registering anything.
+    refuse: Option<SdkRefusal>,
+    /// What `mark` refuses with, before writing anything.
+    mark_refusal: Option<SdkRefusal>,
+    /// Admissions taken, in order.
+    admitted: Vec<Admission>,
+    /// Admissions released, in order.
+    released: Vec<Admission>,
 }
 
 impl Fake {
@@ -81,12 +92,32 @@ impl Fake {
             states: Vec::new(),
             prepared: 0,
             fail_removal: false,
+            refuse: None,
+            mark_refusal: None,
+            admitted: Vec::new(),
+            released: Vec::new(),
         }
     }
 
     fn failing(mut self) -> Self {
         self.fail_removal = true;
         self
+    }
+
+    /// A Store with a live mount (or another live operation) at the project
+    /// scope: `admit` refuses with the same code the Store's admission does.
+    fn refusing(mut self, code: &str, detail: SdkValue) -> Self {
+        self.refuse = Some(SdkRefusal {
+            code: code.to_owned(),
+            message: format!("test admission refusal: {code}"),
+            detail,
+        });
+        self
+    }
+
+    /// A fake whose admission refuses.
+    fn refused(&self) -> bool {
+        self.refuse.is_some()
     }
 }
 
@@ -96,8 +127,29 @@ impl Effects for Fake {
         Ok(())
     }
 
-    fn mark(&mut self, stack: LayerStackId, deleted_ms: i64) -> Result<Deletion, SdkRefusal> {
-        self.seen.push((stack, deleted_ms));
+    fn admit(
+        &mut self,
+        stack: LayerStackId,
+        reuse: Option<[u8; 16]>,
+    ) -> Result<Admission, SdkRefusal> {
+        if self.refused() {
+            return Err(self.refuse.clone().expect("refused above"));
+        }
+        let admission = Admission::new(stack, reuse.unwrap_or([0x5a; 16]));
+        self.admitted.push(admission);
+        Ok(admission)
+    }
+
+    fn release(&mut self, admission: Admission) -> Result<(), SdkRefusal> {
+        self.released.push(admission);
+        Ok(())
+    }
+
+    fn mark(&mut self, admission: Admission, deleted_ms: i64) -> Result<Deletion, SdkRefusal> {
+        if let Some(refusal) = &self.mark_refusal {
+            return Err(refusal.clone());
+        }
+        self.seen.push((admission.stack, deleted_ms));
         let state = Intent::read(&self.home, &self.store, &self.project)
             .unwrap()
             .expect("the intent is durable before the marker")
@@ -142,8 +194,101 @@ fn a_fresh_delete_marks_then_removes_the_entry_and_unlinks_the_intent() {
     // the identity save precedes the intent, and the intent precedes the mark
     assert_eq!(fake.prepared, 1);
     assert_eq!(fake.states, [IntentState::Pending]);
+    // the project scope was admitted before the marker and released after
+    assert_eq!(fake.admitted.len(), 1);
+    assert_eq!(fake.released, fake.admitted);
     assert!(!paths::project_dir(&home, store, project).exists());
     assert_eq!(Intent::read(&home, store, project).unwrap(), None);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_refused_admission_writes_no_sidecar_and_leaves_no_intent() {
+    let refused_home = home("refused");
+    let (store, project, stack) = ("shop", "app", stack(20));
+    project_record(&refused_home, store, project, stack);
+    let holders = SdkValue::map([(
+        "holders",
+        SdkValue::List(vec![SdkValue::map([
+            ("kind", t("mount")),
+            ("entity", t("main")),
+        ])]),
+    )]);
+    let mut fake =
+        Fake::new(&refused_home, store, project, Vec::new()).refusing("MountsActive", holders);
+    let refusal = delete_with(&refused_home, store, project, Some(stack), &mut fake).unwrap_err();
+    // the live mount's refusal is the call's, with its holders
+    assert_eq!(refusal.code, "MountsActive");
+    assert!(refusal.detail.get("holders").is_some());
+    // no identity save, no sidecar, no marker
+    assert_eq!(fake.prepared, 0);
+    assert!(fake.seen.is_empty(), "{:?}", fake.seen);
+    assert_eq!(Intent::read(&refused_home, store, project).unwrap(), None);
+    // the admission refused, so there is no admission to release
+    assert!(fake.admitted.is_empty());
+    assert!(fake.released.is_empty());
+    // the home entry and the project's record stay
+    assert!(paths::project_dir(&refused_home, store, project).is_dir());
+    let _ = std::fs::remove_dir_all(&refused_home);
+
+    // a live operation at the project scope is `Busy`, with the same rule
+    let busy_home = home("busy");
+    project_record(&busy_home, store, project, stack);
+    let conflict = SdkValue::map([
+        ("kind", t("removal")),
+        ("entity", t("app")),
+        ("phase", SdkValue::Null),
+        ("op", t("11")),
+        ("uncertain", SdkValue::Bool(false)),
+    ]);
+    let mut fake = Fake::new(&busy_home, store, project, Vec::new()).refusing("Busy", conflict);
+    let refusal = delete_with(&busy_home, store, project, Some(stack), &mut fake).unwrap_err();
+    assert_eq!(refusal.code, "Busy");
+    assert_eq!(fake.prepared, 0);
+    assert!(fake.seen.is_empty());
+    assert_eq!(Intent::read(&busy_home, store, project).unwrap(), None);
+    let _ = std::fs::remove_dir_all(&busy_home);
+}
+
+#[test]
+fn a_retry_reuses_the_sidecar_admission_identity() {
+    let home = home("reuse");
+    let (store, project, stack) = ("shop", "app", stack(22));
+    project_record(&home, store, project, stack);
+    let mut pending = intent(&home, store, project, stack, 111);
+    pending.op = Some([3; 16]);
+    Intent::write(&home, &pending).unwrap();
+    let mut fake = Fake::new(
+        &home,
+        store,
+        project,
+        vec![Deletion::Retired { deleted_ms: 111 }],
+    );
+    let outcome = delete_with(&home, store, project, Some(stack), &mut fake).unwrap();
+    // the retry re-registers the recorded identity, then releases it
+    assert_eq!(fake.admitted, [Admission::new(stack, [3; 16])]);
+    assert_eq!(fake.released, fake.admitted);
+    assert_eq!(outcome.get_int("deleted_ms"), Some(111));
+    assert_eq!(Intent::read(&home, store, project).unwrap(), None);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_failed_marker_releases_the_admission_it_took() {
+    let home = home("marker-refused");
+    let (store, project, stack) = ("shop", "app", stack(21));
+    project_record(&home, store, project, stack);
+    let mut fake = Fake::new(&home, store, project, Vec::new());
+    fake.mark_refusal = Some(refused("Busy", "the project is held"));
+    let refusal = delete_with(&home, store, project, Some(stack), &mut fake).unwrap_err();
+    assert_eq!(refusal.code, "Busy");
+    // the admission taken before the sidecar is released on the failure
+    assert_eq!(fake.admitted.len(), 1);
+    assert_eq!(fake.released, fake.admitted);
+    // the sidecar stays `pending` for the retry, and the entry stays
+    let left = Intent::read(&home, store, project).unwrap().unwrap();
+    assert_eq!(left.state, IntentState::Pending);
+    assert!(paths::project_dir(&home, store, project).is_dir());
     let _ = std::fs::remove_dir_all(&home);
 }
 
@@ -350,9 +495,11 @@ fn the_intent_moves_pending_marked_done_and_unlinks() {
 
     value.state = IntentState::Marked;
     value.deleted_ms = 6;
+    value.op = Some([4; 16]);
     Intent::write(&home, &value).unwrap();
     let read = Intent::read(&home, store, project).unwrap().unwrap();
     assert_eq!((read.state, read.deleted_ms), (IntentState::Marked, 6));
+    assert_eq!(read.op, Some([4; 16]), "the admission identity persists");
 
     value.state = IntentState::Done;
     Intent::write(&home, &value).unwrap();

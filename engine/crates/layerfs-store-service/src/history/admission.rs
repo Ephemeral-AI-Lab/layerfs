@@ -49,8 +49,16 @@ pub fn project_removal(stack: &LayerStackRecord) -> GcIntent {
 
 /// A `project.delete` intent when only the stack id is known.
 pub fn project_removal_from_id(stack: LayerStackId) -> GcIntent {
+    project_removal_at(stack, op_id())
+}
+
+/// A `project.delete` intent under an operation identity the caller already
+/// registered. The control layer admits the project scope before its sidecar
+/// and marker and reuses the identity there, so one row is taken and released
+/// once, never two competing rows.
+pub fn project_removal_at(stack: LayerStackId, op: [u8; 16]) -> GcIntent {
     GcIntent::operation(
-        op_id(),
+        op,
         GcIntentKind::Removal,
         GcScopeKind::Project,
         stack.as_slice(),

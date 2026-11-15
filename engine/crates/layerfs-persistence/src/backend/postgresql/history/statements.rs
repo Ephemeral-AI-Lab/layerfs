@@ -12,6 +12,9 @@ pub(crate) fn statement(key: &str) -> Result<&'static str, BackendError> {
         "statistics_totals" => Ok(include_str!(
             "../../../../sql/postgresql/queries/history/statistics_totals.sql"
         )),
+        "gc_epoch_read" => Ok(include_str!(
+            "../../../../sql/postgresql/queries/history/gc_epoch_read.sql"
+        )),
         "gc_epoch_share" => Ok(include_str!(
             "../../../../sql/postgresql/queries/history/gc_epoch_share.sql"
         )),

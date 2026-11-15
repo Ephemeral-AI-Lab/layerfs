@@ -4,6 +4,7 @@
 //! a `store.call` frame to the Store's worker).
 use super::branch::{
     BranchCommits, BranchDiff, BranchFork, BranchGetCommit, BranchMerge, BranchPublish,
+    BranchRemove,
 };
 use super::commit::CommitDiff;
 use super::file::{
@@ -62,6 +63,9 @@ pub enum StoreOp<'a> {
     Statistics,
     /// Entry counts at one project pin.
     ProjectStats(&'a super::project::ProjectStats),
+    /// `project.remove_file`: hide one path from every node at or below its
+    /// marker frontier.
+    RemoveFile(&'a super::project::ProjectRemoveFile),
     /// `project.list_branches`: the Branch `name`, or one page.
     ListBranches {
         /// The one Branch it lists.
@@ -88,6 +92,8 @@ pub enum StoreOp<'a> {
     Merge(&'a BranchMerge),
     /// `branch.publish`.
     Publish(&'a BranchPublish),
+    /// `branch.remove`.
+    BranchRemove(&'a BranchRemove),
     /// `branch.diff_branches`.
     DiffBranches(&'a BranchDiff),
     /// `branch.diff_commits`.
@@ -236,6 +242,7 @@ impl StoreOp<'_> {
         match self {
             Self::Statistics => "store.stats",
             Self::ProjectStats(_) => "project.stats",
+            Self::RemoveFile(_) => "project.remove_file",
             Self::ListBranches { .. } => "project.list_branches",
             Self::ListCommits { .. } => "branch.list_commits",
             Self::BranchCommits(_) => "branch.commits",
@@ -244,6 +251,7 @@ impl StoreOp<'_> {
             Self::Fork(_) => "branch.fork",
             Self::Merge(_) => "branch.merge",
             Self::Publish(_) => "branch.publish",
+            Self::BranchRemove(_) => "branch.remove",
             Self::DiffBranches(_) => "branch.diff_branches",
             Self::DiffCommits(_) => "branch.diff_commits",
             Self::Read(_) => "fs.read",
@@ -269,6 +277,7 @@ impl StoreOp<'_> {
         match self {
             Self::Statistics => &mut args,
             Self::ProjectStats(r) => args.at(&r.branch, r.commit.as_deref()),
+            Self::RemoveFile(r) => args.text("path", &r.path),
             Self::ListBranches { name, page } => args.opt("name", *name).page(*page),
             Self::ListCommits { branch, page } => args.text("branch", branch).page(*page),
             Self::BranchCommits(r) => args
@@ -297,6 +306,7 @@ impl StoreOp<'_> {
             Self::Publish(r) => args
                 .text("branch", &r.branch)
                 .opt("commit", r.commit.as_deref()),
+            Self::BranchRemove(r) => args.text("branch", &r.branch),
             Self::DiffBranches(r) => args
                 .text("from", &r.from_branch)
                 .text("to", &r.to_branch)
