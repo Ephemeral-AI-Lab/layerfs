@@ -123,8 +123,10 @@ export async function doctor({ home, ...options } = {}) {
 /** Closes every Store this process holds open with no call running,
  * releasing its leases, so it leaves none behind when it exits (a lease
  * of a process that ended is stale until the Store's next call). Call it
- * before the process exits; a later call opens its Store again. Answers
- * how many Stores it closed. Outside the call table. */
+ * before the process exits; a later call opens its Store again. It also
+ * ends this process's idle Sandbox daemon sessions inside a short bound, so
+ * the exit is not a dropped connection in a daemon's log. Answers how many
+ * Stores it closed. Outside the call table. */
 export function close() {
   return native.close();
 }

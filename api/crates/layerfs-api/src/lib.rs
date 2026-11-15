@@ -66,6 +66,10 @@ pub use layerfs_control::{
     InitError, InitFailure, InitRequest, InitStep, InstallError, InstallFailure, InstallWork,
     Installed, ProjectApi, ProjectError, SealedProject, SourceRefusal,
 };
+/// Ends this process's idle Sandbox daemon sessions inside a bound
+/// (layerfs-project#181): what a one-shot process calls when its call is
+/// over, beside [`close_idle`].
+pub use layerfs_sandbox::registry::{end_idle_sessions, SESSION_END};
 pub use layerfs_sandbox::{daemon, OperationCause, OperationFailure, SdkError, SdkResult};
 pub use layerfs_sandbox::{
     BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,

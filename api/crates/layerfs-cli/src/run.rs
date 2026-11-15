@@ -214,6 +214,10 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
     // sqlite Store leaves no write-ahead log behind (lane K2: a later
     // `store push` refused it)
     layerfs_api::close_idle(std::time::Duration::ZERO);
+    // and its idle Sandbox daemon connections end their sessions, so this
+    // process's exit is not a dropped connection in the daemon's log and
+    // retained failures (layerfs-project#181). Bounded; the result is ready.
+    layerfs_api::end_idle_sessions(layerfs_api::SESSION_END);
     if switches.events {
         return crate::framed::finish(outcome, framing_failed);
     }
