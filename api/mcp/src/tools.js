@@ -31,6 +31,11 @@ const COMMON = {
     description: "a whole number; send a decimal string to keep one beyond ±(2^53-1) exact",
   },
   bool: { type: "boolean" },
+  image: {
+    type: "string",
+    minLength: 1,
+    description: "a sha256: image digest, a Docker image id, or a Docker reference such as postgres:17-bookworm",
+  },
   size: {
     oneOf: [{ type: "integer" }, { type: "string", minLength: 1 }],
     description: "a size in bytes, or text such as \"512M\" or \"8G\"",

@@ -1,9 +1,9 @@
-//! `InUse` from `project.remove` and `store.disconnect` fills
-//! `detail.related` with `{kind, name}` entries (#536 §10b refusal detail):
-//! the project's Sandboxes, and another process's lease on the Store.
+//! `InUse` from `store.disconnect` fills `detail.related` with
+//! `{kind, name}` entries (#536 §10b refusal detail): another process's
+//! lease on the Store.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
-use layerfs_home::home::{paths, private_dir, write_entity, write_record};
+use layerfs_home::home::{paths, private_dir, write_entity};
 use std::path::PathBuf;
 
 fn t(s: &str) -> SdkValue {
@@ -32,36 +32,6 @@ fn related(refusal: &SdkRefusal) -> Vec<(String, String)> {
 fn refused(run: impl FnOnce(&mut Events<'_>) -> layerfs_home::outcome::Outcome) -> SdkRefusal {
     let mut sink = |_| {};
     run(&mut Events::new(&mut sink)).unwrap_err()
-}
-
-#[test]
-fn project_remove_names_the_project_s_sandboxes() {
-    let home = home("project");
-    let store = SdkValue::map([
-        ("name", t("shop")),
-        ("kind", t("sqlite")),
-        ("machine", t("native")),
-    ]);
-    write_entity(&paths::store_record(&home, "shop"), &store).unwrap();
-    let project = SdkValue::map([("name", t("api"))]);
-    write_entity(&paths::project_record(&home, "shop", "api"), &project).unwrap();
-    for name in ["sa", "sb"] {
-        let sandbox = SdkValue::map([
-            ("v", SdkValue::Int(1)),
-            ("name", t(name)),
-            ("project", t("shop/api")),
-            ("machine", t("native")),
-        ]);
-        write_record(&paths::sandbox_record(&home, name), &sandbox).unwrap();
-    }
-    let project = layerfs_home::names::ProjectRef::parse("shop/api").unwrap();
-    let refusal = refused(|events| layerfs_control::project::remove(&home, events, &project));
-    assert_eq!(refusal.code, "InUse", "{refusal:?}");
-    let sandbox = |n: &str| ("sandbox".to_owned(), n.to_owned());
-    assert_eq!(related(&refusal), [sandbox("sa"), sandbox("sb")]);
-    // nothing was removed
-    assert!(paths::project_record(&home, "shop", "api").is_file());
-    let _ = std::fs::remove_dir_all(&home);
 }
 
 #[test]

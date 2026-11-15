@@ -22,6 +22,9 @@ use super::schema;
 use super::session::connection::{Session, SqlWork};
 use super::session::rows;
 use crate::backend::records::BackendError;
+use crate::compact_metrics::{
+    self, CompactOutcome, CompactPhase, CompactRefusal, CompactRunObservation,
+};
 use crate::{KeptWaste, MarkResult, SqliteHandles};
 use layerfs_content::ObjectId;
 use layerfs_history::error::{HistoryError, HistoryResult};
@@ -33,7 +36,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// The sidecar record suffix (§11: SQLite keeps its phase outside the sealed
 /// database).
@@ -42,6 +45,11 @@ const OP_SUFFIX: &str = ".compact-op";
 const COMPACT_SUFFIX: &str = ".compact";
 /// The §6.3 visited scratch database.
 const VISITED_SUFFIX: &str = ".compact-visited";
+/// Upper bound on the rollback-journal header: SQLite pads it to the
+/// filesystem's sector size and writes a header for each transaction. Two
+/// sectors cover the prune and rewrite headers.
+const JOURNAL_HEADER_BOUND: u64 = 8192;
+
 /// The full SQLite artifact set of §9, without the variable `-mj*` journals.
 const ARTIFACT_SUFFIXES: [&str; 7] = [
     COMPACT_SUFFIX,
@@ -123,6 +131,12 @@ pub enum CompactFailpoint {
     AfterSeal,
     /// Inside the build, before the visited scratch or the copy is written.
     BeforeCopy,
+    /// Inside the build, immediately before `VACUUM INTO` starts the copy.
+    /// SQLite runs that copy as one uninterruptible call, so a real-process
+    /// `SIGKILL` cannot land inside it; the real-kill arm stops here with the
+    /// visited scratch present and the staged file not yet created. The
+    /// in-process `DuringCopy` arm keeps the torn-target state.
+    BeforeVacuum,
     /// Inside the build, after `VACUUM INTO` produced `<store>.compact` and
     /// before the copy is pruned: the state a crash during the copy leaves.
     DuringCopy,
@@ -161,6 +175,7 @@ impl CompactFailpoint {
         match self {
             Self::BeforeSeal | Self::BeforeSealRead | Self::AfterSeal => "mark",
             Self::BeforeCopy
+            | Self::BeforeVacuum
             | Self::DuringCopy
             | Self::AfterBuild
             | Self::CapacityAtBuild
@@ -736,6 +751,31 @@ fn live_page_metrics(session: &Arc<Session>) -> HistoryResult<(u64, u64)> {
         .map_err(Into::into)
 }
 
+/// The rollback-journal upper bound of one transaction on a `pages`-page file:
+/// one record per modified page (`page_size + 8` bytes: page number, page image
+/// and checksum) plus the header allowance. A page is journaled at most once
+/// per transaction, so the staged copy's page count bounds both the prune and
+/// the rewrite journal, and the bound never under-reports the observed file.
+const fn journal_bound_bytes(pages: u64, page_size: u64) -> u64 {
+    pages
+        .saturating_mul(page_size.saturating_add(8))
+        .saturating_add(JOURNAL_HEADER_BOUND)
+}
+
+/// The staged file's page count and page size, before the prune frees pages.
+fn file_page_extent(connection: &Connection) -> HistoryResult<(u64, u64)> {
+    let pages: i64 = connection
+        .query_row("PRAGMA page_count", params![], |row| row.get(0))
+        .map_err(db_error)?;
+    let page: i64 = connection
+        .query_row("PRAGMA page_size", params![], |row| row.get(0))
+        .map_err(db_error)?;
+    Ok((
+        u64::try_from(pages).map_err(|_| HistoryError::Integrity("page count"))?,
+        u64::try_from(page).map_err(|_| HistoryError::Integrity("page size"))?,
+    ))
+}
+
 fn file_page_metrics(connection: &Connection) -> HistoryResult<(u64, u64)> {
     let free: i64 = connection
         .query_row("PRAGMA freelist_count", params![], |row| row.get(0))
@@ -852,6 +892,10 @@ CREATE TABLE live_pack (pack_id INTEGER PRIMARY KEY) STRICT, WITHOUT ROWID;",
 struct Built {
     target: PathBuf,
     target_bytes: u64,
+    /// The staged copy's extent right after `VACUUM INTO`, before the prune.
+    staged_bytes: u64,
+    /// The rollback-journal upper bound the staged page count implies.
+    journal_bound_bytes: u64,
     visited_bytes: u64,
     logical: u64,
     canonical: u64,
@@ -861,8 +905,24 @@ struct Built {
 }
 
 impl Built {
+    /// §11 peak temporary bytes: the run's whole artifact footprint below the
+    /// rename, as a documented upper bound rather than a sampled peak.
+    ///
+    /// The staged copy is the whole sealed Store (`VACUUM INTO`), so it keeps
+    /// the source extent until the rewrite's final truncate. The rewrite then
+    /// writes the new Store into SQLite's temp database (the process temp
+    /// directory, unlinked) while rewriting the staged file in place, and both
+    /// the prune and the rewrite journal the pages they overwrite. The journal
+    /// term bounds either journal by one record per staged page
+    /// (`page_size + 8` bytes each: page number, image and checksum) plus the
+    /// header allowance, so it never under-reports the observed journal. The
+    /// sum over-reports the measured 50 GB peak by a few percent; §13 already
+    /// marks the report an estimate.
     fn peak_temp_bytes(&self) -> u64 {
-        self.target_bytes.saturating_add(self.visited_bytes)
+        self.staged_bytes
+            .saturating_add(self.journal_bound_bytes)
+            .saturating_add(self.target_bytes)
+            .saturating_add(self.visited_bytes)
     }
 }
 
@@ -882,19 +942,32 @@ fn table_present(connection: &Connection, name: &str) -> HistoryResult<bool> {
     Ok(found == 1)
 }
 
+/// The sealed Store and the mark a staged build is measured against.
+struct BuildInput<'a> {
+    facts: &'a SealedFacts,
+    mark: &'a MarkResult,
+    tuple: &'a MarkTuple,
+    packs: &'a BTreeMap<ObjectId, i64>,
+    layout: crate::SqlitePackLayout,
+    synchronous: i64,
+}
+
 /// The §7 steps 2–5: build the staged Store, copy only retained rows, compact
 /// it, and switch it to WAL.
 fn build(
-    facts: &SealedFacts,
-    mark: &MarkResult,
-    tuple: &MarkTuple,
-    packs: &BTreeMap<ObjectId, i64>,
-    layout: crate::SqlitePackLayout,
-    synchronous: i64,
+    input: BuildInput<'_>,
     capacity: bool,
     request: &CompactRequest,
     op: &RunOp,
 ) -> HistoryResult<Built> {
+    let BuildInput {
+        facts,
+        mark,
+        tuple,
+        packs,
+        layout,
+        synchronous,
+    } = input;
     let store = &facts.path;
     let target = compact_path(store);
     let visited = visited_path(store);
@@ -913,6 +986,9 @@ fn build(
         return Err(io_error(std::io::Error::from_raw_os_error(28)));
     }
 
+    // A real-process crash arm stops here: the visited scratch is written and
+    // `VACUUM INTO` has not started. See `BeforeVacuum`.
+    stop_at(request, CompactFailpoint::BeforeVacuum, op, store)?;
     let source = open_immutable(store)?;
     let target_text = target
         .to_str()
@@ -925,6 +1001,9 @@ fn build(
         .map_err(|(_, error)| db_error(error))?;
     // The copy produced the staged file but has not pruned or verified it.
     stop_at(request, CompactFailpoint::DuringCopy, op, store)?;
+    // The staged copy holds the source's whole extent until the final
+    // `VACUUM` truncates it; §11 counts it in the peak temp.
+    let staged_bytes = std::fs::metadata(&target).map_err(io_error)?.len();
 
     let connection = Connection::open_with_flags(
         &target,
@@ -939,6 +1018,10 @@ fn build(
             "PRAGMA journal_mode=DELETE; PRAGMA synchronous={synchronous};"
         ))
         .map_err(db_error)?;
+    // The prune and the rewrite journal the pages they overwrite; one record
+    // per staged page bounds either journal before the staged file shrinks.
+    let (staged_pages, page_size) = file_page_extent(&connection)?;
+    let journal_bound_bytes = journal_bound_bytes(staged_pages, page_size);
     // The copied published-pack rows may be deleted in the artifact; the live
     // immutability triggers are restored before the file is verified.
     // `sqlite_sequence` is the acquisition operation counter: the copy keeps
@@ -1157,6 +1240,8 @@ metadata=(SELECT COALESCE(SUM(length),0) FROM pack WHERE domain=0) WHERE id=1;",
     Ok(Built {
         target,
         target_bytes,
+        staged_bytes,
+        journal_bound_bytes,
         visited_bytes,
         logical: u64::try_from(totals.0).unwrap_or(0),
         canonical: u64::try_from(totals.1).unwrap_or(0),
@@ -1166,20 +1251,33 @@ metadata=(SELECT COALESCE(SUM(length),0) FROM pack WHERE domain=0) WHERE id=1;",
     })
 }
 
+/// The staged Store and the mark a verification reads it against.
+struct VerifyInput<'a> {
+    store: &'a Path,
+    built: &'a Built,
+    mark: &'a MarkResult,
+    tuple: &'a MarkTuple,
+    layout: crate::SqlitePackLayout,
+    acquisition: crate::SqliteAcquisitionSchema,
+}
+
 /// The §7 step 6 verification through an `immutable=1` reader: schema identity,
 /// foreign keys, row counts against the mark, both live-heads digests, the
 /// allocator tuple and the recomputed totals. `quick_check` and the full doctor
 /// stay separate commands.
 fn verify(
-    store: &Path,
-    built: &Built,
-    mark: &MarkResult,
-    tuple: &MarkTuple,
-    layout: crate::SqlitePackLayout,
-    acquisition: crate::SqliteAcquisitionSchema,
+    input: VerifyInput<'_>,
     request: &CompactRequest,
     op: &RunOp,
 ) -> HistoryResult<()> {
+    let VerifyInput {
+        store,
+        built,
+        mark,
+        tuple,
+        layout,
+        acquisition,
+    } = input;
     let connection = open_immutable(&built.target)?;
     schema::check(
         &connection,
@@ -1461,6 +1559,7 @@ fn settle_leftover(
     history: &crate::HistoryProvider,
     store: &Path,
     _generation: u64,
+    metrics: &mut RunMetrics,
 ) -> HistoryResult<()> {
     let Some(op) = RunOp::read(store) else {
         if artifact_paths(store)
@@ -1482,6 +1581,7 @@ fn settle_leftover(
     if std::fs::symlink_metadata(op_path(store)).is_ok() {
         std::fs::remove_file(op_path(store)).map_err(io_error)?;
     }
+    metrics.leftover_settled = true;
     Ok(())
 }
 
@@ -1517,6 +1617,30 @@ impl Drop for WriterGuard {
     }
 }
 
+/// Set by the real-process crash harness (T12.2's second arm): when present,
+/// a reached failpoint connects to this Unix socket, writes one readiness
+/// byte and blocks until the harness SIGKILLs the process. Production callers
+/// never set it, so a failpoint keeps its in-process behaviour.
+const CRASH_GATE_ENV: &str = "LAYERFS_COMPACT_CRASH_GATE";
+
+/// Holds a reached failpoint until the test harness kills this process. The
+/// variable being absent is a no-op: the in-process stop applies.
+#[cfg(unix)]
+fn crash_gate() -> HistoryResult<()> {
+    use std::io::{Read, Write};
+    use std::os::unix::net::UnixStream;
+    let Some(path) = std::env::var_os(CRASH_GATE_ENV) else {
+        return Ok(());
+    };
+    let mut gate = UnixStream::connect(path).map_err(io_error)?;
+    gate.write_all(b"R").map_err(io_error)?;
+    gate.flush().map_err(io_error)?;
+    // The harness never releases the gate: it SIGKILLs this process here.
+    let mut release = [0u8; 1];
+    let _ = gate.read(&mut release);
+    Ok(())
+}
+
 /// A test-only crash stop: records the phase and leaves the state a crash
 /// would leave.
 fn stop_at(
@@ -1531,6 +1655,8 @@ fn stop_at(
     let mut stopped = op.clone();
     stopped.phase = point.phase().to_owned();
     stopped.write(store)?;
+    #[cfg(unix)]
+    crash_gate()?;
     Err(HistoryError::UnknownOutcome)
 }
 
@@ -1660,9 +1786,21 @@ impl SqliteHandles {
     /// directory-fsync failure is installed-but-uncertain: the new file and the
     /// op record are kept for the next `store.compact` to judge (§9).
     pub fn compact(self, request: &CompactRequest) -> HistoryResult<CompactReceipt> {
+        let mut metrics = RunMetrics::start();
+        let result = self.compact_measured(request, &mut metrics);
+        metrics.finish(&result);
+        result
+    }
+
+    /// The measured body of [`Self::compact`]; `metrics` observes it.
+    fn compact_measured(
+        self,
+        request: &CompactRequest,
+        metrics: &mut RunMetrics,
+    ) -> HistoryResult<CompactReceipt> {
         #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         {
-            let _ = request;
+            let _ = (request, metrics);
             return Err(HistoryError::Unsupported("SQLite Store compaction"));
         }
         #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -1689,7 +1827,8 @@ impl SqliteHandles {
             let live = live_tuple(&session)?;
             let generation = u64::try_from(live.generation)
                 .map_err(|_| HistoryError::Integrity("Store generation"))?;
-            settle_leftover(&history, &store, generation)?;
+            metrics.generation_before = generation;
+            settle_leftover(&history, &store, generation, metrics)?;
 
             let op_id = request.op_id;
             let mut op = RunOp {
@@ -1715,11 +1854,17 @@ impl SqliteHandles {
                 request.owner_boot.as_deref(),
             )
             .with_phase(Some("mark"));
-            history.gc_register(&intent)?;
+            if let Err(error) = history.gc_register(&intent) {
+                // A definite admission refusal started nothing: the run's op
+                // record must not outlive it as a false leftover (§9).
+                let _ = std::fs::remove_file(op_path(&store));
+                return Err(error);
+            }
             // §8: the registration, the mark and the totals read are one
             // admitted sequence. A definite failure here releases the intent
             // before the artifact set and the op record go, so the Store is
             // left exactly as it was and no later call meets BusyOp.
+            metrics.begin_phase(CompactPhase::Mark);
             let admitted =
                 (|| -> HistoryResult<(MarkResult, MarkTuple, u64, u64, CompactKeptWaste, u64)> {
                     let mark = history.mark()?;
@@ -1750,6 +1895,7 @@ impl SqliteHandles {
                 }
             };
             let rebuild = total > 0 && dead.saturating_mul(10) >= total;
+            metrics.end_phase();
 
             if !rebuild {
                 // §3 `none`: mark only. The intent is cleared and the op record
@@ -1792,9 +1938,7 @@ impl SqliteHandles {
             // a live intent would refuse every later GC operation. The held
             // writer lane still excludes writers through the install, and a
             // crash leaves the op record for the next run to settle.
-            if let Err(error) = history.gc_release(&op_id) {
-                return Err(error);
-            }
+            history.gc_release(&op_id)?;
             drop(history);
             drop(storage);
             let mut guard = WriterGuard::new(lane.into_writer());
@@ -1836,16 +1980,19 @@ impl SqliteHandles {
             }
             stop_at(request, CompactFailpoint::AfterSeal, &op, &store)?;
 
+            metrics.begin_phase(CompactPhase::Build);
             op.phase = "build".to_owned();
             op.write(&store)?;
             let capacity = request.failpoint == Some(CompactFailpoint::CapacityAtBuild);
             let built = match build(
-                &facts,
-                &mark,
-                &tuple,
-                &object_packs,
-                layout,
-                synchronous,
+                BuildInput {
+                    facts: &facts,
+                    mark: &mark,
+                    tuple: &tuple,
+                    packs: &object_packs,
+                    layout,
+                    synchronous,
+                },
                 capacity,
                 request,
                 &op,
@@ -1861,19 +2008,23 @@ impl SqliteHandles {
             };
             stop_at(request, CompactFailpoint::AfterBuild, &op, &store)?;
             stop_at(request, CompactFailpoint::AfterWalSwitch, &op, &store)?;
+            metrics.end_phase();
 
+            metrics.begin_phase(CompactPhase::Verify);
             op.phase = "verify".to_owned();
             if let Err(error) = op.write(&store) {
                 abort_before_install(&store);
                 return Err(error);
             }
             if let Err(error) = verify(
-                &store,
-                &built,
-                &mark,
-                &tuple,
-                layout,
-                acquisition_schema,
+                VerifyInput {
+                    store: &store,
+                    built: &built,
+                    mark: &mark,
+                    tuple: &tuple,
+                    layout,
+                    acquisition: acquisition_schema,
+                },
                 request,
                 &op,
             ) {
@@ -1884,7 +2035,9 @@ impl SqliteHandles {
                 return Err(error);
             }
             stop_at(request, CompactFailpoint::AfterVerify, &op, &store)?;
+            metrics.end_phase();
 
+            metrics.begin_phase(CompactPhase::Install);
             if let Some(hook) = request.before_install_hook {
                 hook(&facts.path);
             }
@@ -1940,9 +2093,109 @@ impl SqliteHandles {
     }
 }
 
+/// The phase clock and §11 values one measured `compact` run observes.
+struct RunMetrics {
+    started: Instant,
+    phase: Option<(CompactPhase, Instant)>,
+    phase_nanos: Vec<(CompactPhase, u64)>,
+    generation_before: u64,
+    generation_after: u64,
+    dead_bytes_bound: u64,
+    dead_bytes_refined: u64,
+    kept_waste: CompactKeptWaste,
+    residue_bytes: u64,
+    leftover_settled: bool,
+}
+
+impl RunMetrics {
+    fn start() -> Self {
+        Self {
+            started: Instant::now(),
+            phase: None,
+            phase_nanos: Vec::new(),
+            generation_before: 0,
+            generation_after: 0,
+            dead_bytes_bound: 0,
+            dead_bytes_refined: 0,
+            kept_waste: CompactKeptWaste::default(),
+            residue_bytes: 0,
+            leftover_settled: false,
+        }
+    }
+
+    /// Ends the current phase and starts `phase`; a phase is inclusive wall
+    /// time, never an exclusive CPU decomposition.
+    fn begin_phase(&mut self, phase: CompactPhase) {
+        self.end_phase();
+        self.phase = Some((phase, Instant::now()));
+    }
+
+    fn end_phase(&mut self) {
+        if let Some((phase, started)) = self.phase.take() {
+            self.phase_nanos.push((
+                phase,
+                u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX),
+            ));
+        }
+    }
+
+    /// Records this run once, whatever its result. The outcome and refusal
+    /// come from the typed error, so a `Busy`/`Unresolved` refusal is counted
+    /// without changing the error the caller receives.
+    fn finish(mut self, result: &HistoryResult<CompactReceipt>) {
+        self.end_phase();
+        let total_nanos =
+            u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        let (outcome, refusal) = match result {
+            Ok(receipt) => {
+                self.generation_after = receipt.generation_after;
+                self.dead_bytes_bound = receipt.dead_bytes_bound;
+                self.dead_bytes_refined = receipt.dead_bytes_refined;
+                self.kept_waste = receipt.kept_waste.clone();
+                self.residue_bytes = receipt.residue.bytes;
+                let outcome = match receipt.path {
+                    CompactPath::Rebuild => CompactOutcome::Rebuild,
+                    CompactPath::None => CompactOutcome::None,
+                };
+                (outcome, None)
+            }
+            Err(error) => {
+                if !error.unknown() {
+                    self.generation_after = self.generation_before;
+                }
+                (
+                    if error.unknown() {
+                        CompactOutcome::Uncertain
+                    } else {
+                        CompactOutcome::Failed
+                    },
+                    match error {
+                        HistoryError::Busy => Some(CompactRefusal::Busy),
+                        HistoryError::Unresolved(_) => Some(CompactRefusal::Unresolved),
+                        _ => None,
+                    },
+                )
+            }
+        };
+        compact_metrics::record_run(&CompactRunObservation {
+            outcome,
+            generation_before: self.generation_before,
+            generation_after: self.generation_after,
+            dead_bytes_bound: self.dead_bytes_bound,
+            dead_bytes_refined: self.dead_bytes_refined,
+            kept_waste: self.kept_waste,
+            residue_bytes: self.residue_bytes,
+            phase_nanos: self.phase_nanos,
+            total_nanos,
+            leftover_settled: self.leftover_settled,
+            refusal,
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::io_error;
+    use super::{journal_bound_bytes, io_error, Built};
     use layerfs_history::HistoryError;
 
     /// §7 step 3 on a bounded filesystem: `ENOSPC`, `EDQUOT` and `EFBIG` are
@@ -1963,5 +2216,45 @@ mod tests {
     fn another_io_error_is_integrity() {
         let error = io_error(std::io::Error::from_raw_os_error(5));
         assert!(matches!(error, HistoryError::Integrity(_)), "{error:?}");
+    }
+
+    /// §11 `peakTempBytes` on the 50 GB arm (T-G66): the staged copy holds the
+    /// source extent, the rewrite holds that copy beside the new Store, and the
+    /// rollback journal is bounded by the staged page count. The receipt must
+    /// cover the measured 143.1 GB pre-rebuild peak and the 44.6 GB journal the
+    /// old `new + visited` formula dropped.
+    #[test]
+    fn peak_temp_covers_the_staged_copy_and_the_rollback_journal() {
+        let page_size = 4096;
+        // 50,862,854,144 B staged copy = the sealed Store's page count.
+        let staged_pages = 12_417_689;
+        let staged_bytes = staged_pages * page_size;
+        let target_bytes = 45_763_203_072;
+        let visited_bytes = 20_365_312;
+        let journal = journal_bound_bytes(staged_pages, page_size);
+        assert_eq!(journal, 50_962_203_848);
+        let built = Built {
+            target: std::path::PathBuf::new(),
+            target_bytes,
+            staged_bytes,
+            journal_bound_bytes: journal,
+            visited_bytes,
+            logical: 0,
+            canonical: 0,
+            stored: 0,
+            metadata: 0,
+            free_bytes: 0,
+        };
+        let peak = built.peak_temp_bytes();
+        assert_eq!(peak, 147_608_626_376);
+        assert!(peak >= target_bytes + journal + visited_bytes);
+        assert!(
+            peak >= target_bytes + 44_630_503_928 + visited_bytes,
+            "the bound must cover the 50 GB arm's observed 44.6 GB journal"
+        );
+        assert!(
+            peak >= 143_100_000_000,
+            "the bound must cover the measured 143.1 GB sampled 50 GB peak"
+        );
     }
 }

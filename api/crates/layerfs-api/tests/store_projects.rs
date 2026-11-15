@@ -7,7 +7,10 @@ use layerfs_content::{
     file::FileView,
     filesystem::{FilesystemRead, FilesystemRootId, LogicalPath},
 };
-use layerfs_history::{BranchId, HistoryCatalog, HistoryCatalogConfig, HistoryName, LayerStackId};
+use layerfs_history::{
+    error::{HolderKind, HolderState, NameSource},
+    BranchId, HistoryCatalog, HistoryCatalogConfig, HistoryName, LayerStackId,
+};
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::StoragePolicy;
 use layerfs_telemetry::timer::Timing;
@@ -124,7 +127,13 @@ fn an_empty_store_holds_two_projects_and_refuses_a_taken_name() {
     assert_ne!(shop.initialized.root, api.initialized.root);
     assert_eq!(shop.branch.effective_root, shop.initialized.root);
     let taken = add(&path, source(&directory, "again", b"x"), "shop", 30);
-    assert!(matches!(taken, Err(InitError::Exists)), "{taken:?}");
+    let Err(InitError::NameTaken(state)) = taken else {
+        panic!("a held project name is NameTaken: {taken:?}");
+    };
+    assert_eq!(state.holder.kind, HolderKind::Project);
+    assert_eq!(state.holder.name, "shop");
+    assert_eq!(state.holder.state, HolderState::Live);
+    assert_eq!(state.source, NameSource::Store);
 
     let handles = SqliteHandles::open_writable(store(&path), BINDING, CURSOR).unwrap();
     let names: Vec<_> = projects(&handles.history)

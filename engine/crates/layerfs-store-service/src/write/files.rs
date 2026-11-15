@@ -223,7 +223,7 @@ fn change(
     let tree = TreeTable::open(&*reader, FilesystemRootId(base.effective_root))
         .map_err(args::content)?;
     let removed = |path: &str| -> Result<Option<SdkRefusal>, SdkRefusal> {
-        let exists = snapshot::entry(&*reader, &tree, path)?.is_some();
+        let exists = snapshot::entry(&reader, &tree, path)?.is_some();
         Ok(exists
             .then(|| visibility.hidden(path))
             .flatten()

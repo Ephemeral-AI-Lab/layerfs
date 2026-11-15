@@ -18,7 +18,7 @@
 //!
 //! The worker op is `project.delete`; its frame is
 //! `{store, stack_id, deleted_ms?, project?, op_id?, store_record?}`. The two
-//! optional context fields are the same ones `project.remove` sends: the
+//! optional context fields are the ones the retired `project.remove` call sent: the
 //! worker opens the Store under its own root with the caller's `store_record`,
 //! and the project name lets its reply and its own home entry name the
 //! project. The worker saves the legacy own-project identity, writes the
@@ -330,6 +330,13 @@ fn removed(store: &str, project: &str, deleted_ms: i64, home_entry_removed: bool
     ])
 }
 
+/// The side effects and the project-scope admission one finishing attempt
+/// runs against: together, so `mark_and_finish` stays a small call.
+struct Finish<'a> {
+    effects: &'a mut dyn Effects,
+    admission: Admission,
+}
+
 /// The mutating part of `delete_with` after the project scope is admitted:
 /// the identity save, the sidecar, the marker and the entry removal (spec §4).
 fn mark_and_finish(
@@ -339,9 +346,12 @@ fn mark_and_finish(
     stack: LayerStackId,
     intent: Option<Intent>,
     mut deleted_ms: i64,
-    effects: &mut impl Effects,
-    admission: Admission,
+    finish: Finish<'_>,
 ) -> Outcome {
+    let Finish {
+        effects,
+        admission,
+    } = finish;
     effects.prepare()?;
     let mut current = match intent {
         Some(intent) => intent,
@@ -466,7 +476,16 @@ pub fn delete_with(
         }
     };
     let attempt = mark_and_finish(
-        home, store, project, stack, intent, deleted_ms, effects, admission,
+        home,
+        store,
+        project,
+        stack,
+        intent,
+        deleted_ms,
+        Finish {
+            effects: &mut *effects,
+            admission,
+        },
     );
     let released = effects.release(admission);
     match attempt {

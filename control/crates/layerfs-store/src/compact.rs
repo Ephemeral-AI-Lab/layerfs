@@ -15,25 +15,71 @@ use crate::open_args::OpenArgs;
 use crate::place::{self, Executor};
 #[cfg(feature = "postgresql")]
 use crate::postgresql;
-use crate::record::{self, StoreRecord, StoreRef};
+use crate::record::{StoreRecord, StoreRef};
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::events::Events;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_persistence::compact_metrics::{self, CompactRefusal};
 #[cfg(feature = "postgresql")]
 use layerfs_persistence::PostgresHandles;
 use layerfs_persistence::{
-    CompactReport, CompactRequest, PersistenceConfig, SqliteHandles,
+    CompactFailpoint, CompactReport, CompactRequest, PersistenceConfig, SqliteHandles,
     SqlitePersistenceProfile,
 };
 use layerfs_store_service::history::{admission, lookup};
 use std::path::Path;
 
+/// The T-G65 crash harness's gate: the real `layerfs store compact` process it
+/// starts carries this socket, and the SQLite engine stops at the failpoint
+/// below instead of reporting an unknown outcome. Ordinary callers set
+/// neither variable, so a run carries no failpoint.
+const CRASH_GATE_ENV: &str = "LAYERFS_COMPACT_CRASH_GATE";
+/// The stop point the crash harness names; honored only beside the gate.
+const CRASH_FAILPOINT_ENV: &str = "LAYERFS_COMPACT_CRASH_FAILPOINT";
+
+/// The failpoint the crash harness named, or `None` in every ordinary run.
+///
+/// A failpoint alone would stop the run in-process; the gate makes the stop
+/// observable to the harness, which then `SIGKILL`s this process. Requiring
+/// both keeps the hook inert for production callers and for builds without
+/// the engine's Unix-socket gate.
+#[cfg(unix)]
+fn crash_failpoint() -> Option<CompactFailpoint> {
+    std::env::var_os(CRASH_GATE_ENV)?;
+    match std::env::var(CRASH_FAILPOINT_ENV).ok()?.as_str() {
+        "BeforeSeal" => Some(CompactFailpoint::BeforeSeal),
+        "AfterSeal" => Some(CompactFailpoint::AfterSeal),
+        "BeforeVacuum" => Some(CompactFailpoint::BeforeVacuum),
+        "AfterBuild" => Some(CompactFailpoint::AfterBuild),
+        "DuringVerify" => Some(CompactFailpoint::DuringVerify),
+        "BeforeInstall" => Some(CompactFailpoint::BeforeInstall),
+        "DuringRename" => Some(CompactFailpoint::DuringRename),
+        "AfterInstall" => Some(CompactFailpoint::AfterInstall),
+        "DuringSettle" => Some(CompactFailpoint::DuringSettle),
+        _ => None,
+    }
+}
+
+/// No gate, no failpoint: a stop would hang the run in-process.
+#[cfg(not(unix))]
+fn crash_failpoint() -> Option<CompactFailpoint> {
+    None
+}
+
 /// `store.compact(name)`: reclaim one sqlite Store's dead bytes, answering
 /// the §11 report.
 pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
     let home = home.to_path_buf();
-    let (_lease, record) = lease::claim(&home, store)?;
+    // A live operation is `Busy`, a dead owner's record `Unresolved`; the
+    // refusal is a bounded metric label and never changes what is returned.
+    let (_lease, record) = match lease::claim(&home, store) {
+        Ok(claimed) => claimed,
+        Err(refusal) => {
+            note_refusal(&refusal);
+            return Err(refusal);
+        }
+    };
     let store_ref = record.store_ref()?.clone();
     if matches!(store_ref, StoreRef::Postgres { .. }) {
         return compact_postgresql(&record, &home, store);
@@ -76,6 +122,7 @@ pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
             owner_pid: Some(std::process::id()),
             owner_pid_start,
             owner_pid_boot,
+            failpoint: crash_failpoint(),
             ..CompactRequest::default()
         })
         .map_err(lookup::history)?;
@@ -85,7 +132,7 @@ pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
 }
 
 /// `store.compact` of a PostgreSQL Store in a build without the `postgresql`
-/// feature is `Unsupported`.
+/// feature: no engine is linked, so the call is `Unsupported`.
 #[cfg(not(feature = "postgresql"))]
 fn compact_postgresql(_record: &StoreRecord, _home: &Path, _store: &str) -> Outcome {
     Err(refused(
@@ -97,9 +144,12 @@ fn compact_postgresql(_record: &StoreRecord, _home: &Path, _store: &str) -> Outc
 /// The §8 PostgreSQL path: dial the Store's recorded URL, open its schema as
 /// this home's authority, and run Phase M/A/B/C. The Store is usable at
 /// G + 1 from the swap on; a lost reply is judged by the next call (§9).
+///
+/// Only built with the `postgresql` feature; the stub above answers
+/// `Unsupported` without it.
 #[cfg(feature = "postgresql")]
 fn compact_postgresql(record: &StoreRecord, home: &Path, store: &str) -> Outcome {
-    let url = record::url(record)?;
+    let url = crate::record::url(record)?;
     let id = identity::identity(&OpenArgs {
         home: Some(home.to_path_buf()),
         store: Some(store.to_owned()),
@@ -139,12 +189,24 @@ fn compact_postgresql(record: &StoreRecord, home: &Path, store: &str) -> Outcome
 /// failure with its own text.
 fn open_refusal(error: layerfs_storage::port::PersistenceError) -> SdkRefusal {
     use layerfs_storage::port::PersistenceError;
-    match error {
+    let refusal = match error {
         PersistenceError::Busy => refused("Busy", "the Store is held by another writer"),
         PersistenceError::Refused { status } => refused(
             "Busy",
             format!("the Store refused the compaction: {status}"),
         ),
         other => failed(other),
+    };
+    note_refusal(&refusal);
+    refusal
+}
+
+/// Counts a Busy/Unresolved refusal of a call that never reached a run; the
+/// measured SQLite run records the refusals it produces itself.
+fn note_refusal(refusal: &SdkRefusal) {
+    match refusal.code.as_str() {
+        "Busy" => compact_metrics::record_refusal(CompactRefusal::Busy),
+        "Unresolved" => compact_metrics::record_refusal(CompactRefusal::Unresolved),
+        _ => {}
     }
 }

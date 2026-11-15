@@ -41,7 +41,6 @@ fn idle(_home: &Path, _name: &str) -> Result<(), SdkRefusal> {
 fn related() -> Related {
     Related {
         store_idle: idle,
-        can_remove_project: idle,
     }
 }
 

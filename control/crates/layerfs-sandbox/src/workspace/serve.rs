@@ -13,11 +13,11 @@ use crate::daemon::values;
 use crate::host::Host;
 use crate::internal::workspace;
 use crate::lifecycle::{operation, WORKSPACES};
-use crate::record::{DaemonRecord, WorkspaceRecord};
+use crate::record::{DaemonRecord, SandboxRecord, WorkspaceRecord};
 use crate::registry::{sandbox, sandbox_live, Mount};
 use crate::OperationCause;
 use crate::Unmounted;
-use layerfs_bridge::control::{CommitControl, Reply, SdkRefusal, SdkValue};
+use layerfs_bridge::control::{CommitControl, MountPlace, Reply, SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, CommitId, WorkspaceId};
 use layerfs_home::helpers::{lock, random, required};
 use layerfs_home::names::WorkspaceName;
@@ -102,7 +102,14 @@ pub fn mount(host: &Host, branch: Option<&str>, name: Option<&str>) -> Outcome {
     let id = WorkspaceId::from_authority(random()?).map_err(failed)?;
     let mounted = {
         let mut control = crate::daemon::trace::control(&state.controls)?;
-        workspace(&mut control).mount_named(id, (project, branch))
+        // This Sandbox's record names the machine it runs on; the daemon
+        // that binds the mount registers both names beside its Workspace.
+        let machine =
+            SandboxRecord::read_in(&directory, sandbox)?.map(|record| record.machine().to_owned());
+        let place = MountPlace::new(Some(state.id.as_str()), machine.as_deref());
+        workspace(&mut control)
+            .placed(place.sandbox.as_deref(), place.machine.as_deref())
+            .mount_named(id, (project, branch))
     };
     let mounted = mounted.map_err(|failure| match (&failure.bound, &failure.failure.cause) {
         // the daemon's lookup refusal, nothing bound: the call's answer

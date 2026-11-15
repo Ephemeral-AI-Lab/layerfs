@@ -61,8 +61,18 @@ fn owners(
             versions: budget.work,
             bytes: budget.bytes,
         };
-        let page =
-            blame::blame(store, reader, snap, path, visibility, Ok(from), Ok(2000), &mut limits)?;
+        let page = blame::blame(
+            store,
+            reader,
+            snap,
+            path,
+            visibility,
+            blame::Window {
+                from: Ok(from),
+                count: Ok(2000),
+            },
+            &mut limits,
+        )?;
         budget.work = limits.versions;
         budget.bytes = limits.bytes;
         exact &= !page.get_bool("comparisonCoarse")

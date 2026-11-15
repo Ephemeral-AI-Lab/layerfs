@@ -4,6 +4,7 @@ use super::{
     NamedBindRequest, Store,
 };
 use crate::OwnerClient;
+use layerfs_bridge::control::MountPlace;
 use layerfs_content::filesystem::{
     attributes::{read_portable, AttributeReadWork},
     directory::decode_directory_page,
@@ -24,7 +25,19 @@ impl Store {
         owner: OwnerClient,
         request: BindRequest,
     ) -> Result<BindSuccess, BindRefusal> {
-        self.bind_with(owner, BindIntent::Id(request), false)
+        self.bind_with(owner, BindIntent::Id(request), MountPlace::default(), false)
+    }
+    /// [`Self::bind`] of a mount whose caller knows the Sandbox and machine
+    /// its daemon serves: the registered holder reports them beside the
+    /// Workspace. An unknown place is the plain [`Self::bind`].
+    #[allow(clippy::result_large_err)]
+    pub fn bind_placed(
+        self: &Arc<Self>,
+        owner: OwnerClient,
+        request: BindRequest,
+        place: MountPlace,
+    ) -> Result<BindSuccess, BindRefusal> {
+        self.bind_with(owner, BindIntent::Id(request), place, false)
     }
     /// [`Self::bind`] of the Branch a project and Branch name select (#64),
     /// found on the Workspace's own reader with its snapshot in one read.
@@ -46,7 +59,23 @@ impl Store {
                 request: BindIntent::Named(request),
             });
         }
-        self.bind_with(owner, BindIntent::Named(request), false)
+        self.bind_with(
+            owner,
+            BindIntent::Named(request),
+            MountPlace::default(),
+            false,
+        )
+    }
+    /// [`Self::bind_named`] of a mount whose caller knows the Sandbox and
+    /// machine its daemon serves.
+    #[allow(clippy::result_large_err)]
+    pub fn bind_named_placed(
+        self: &Arc<Self>,
+        owner: OwnerClient,
+        request: NamedBindRequest,
+        place: MountPlace,
+    ) -> Result<BindSuccess, BindRefusal> {
+        self.bind_with(owner, BindIntent::Named(request), place, false)
     }
     /// [`Self::bind`] for an SDK call's private Workspace: its reader comes
     /// from, and returns to, the Store's idle readers (#352 F-025 fix 4).
@@ -56,13 +85,25 @@ impl Store {
         owner: OwnerClient,
         request: BindRequest,
     ) -> Result<BindSuccess, BindRefusal> {
-        self.bind_with(owner, BindIntent::Id(request), true)
+        self.bind_with(owner, BindIntent::Id(request), MountPlace::default(), true)
+    }
+    /// [`Self::bind_private`] of a caller that knows the Sandbox and
+    /// machine the Workspace belongs to.
+    #[allow(clippy::result_large_err)]
+    pub fn bind_private_placed(
+        self: &Arc<Self>,
+        owner: OwnerClient,
+        request: BindRequest,
+        place: MountPlace,
+    ) -> Result<BindSuccess, BindRefusal> {
+        self.bind_with(owner, BindIntent::Id(request), place, true)
     }
     #[allow(clippy::result_large_err)]
     fn bind_with(
         self: &Arc<Self>,
         owner: OwnerClient,
         request: BindIntent,
+        place: MountPlace,
         pooled: bool,
     ) -> Result<BindSuccess, BindRefusal> {
         let mut phase = BindPhase::Snapshot;
@@ -94,7 +135,7 @@ impl Store {
             // Admission before any root demand: a live removal is `Busy`, an
             // uncertain owner `Unresolved`, and the intent lives until this
             // Workspace's unmount deletes it.
-            let intent = crate::history::admission::mount_intent(workspace, &captured);
+            let intent = crate::history::admission::mount_intent(workspace, &captured, &place);
             match self.history().gc_register(&intent) {
                 Ok(()) => gc_op = Some(intent.op_id),
                 // A provider without admission cannot exclude a removal; it

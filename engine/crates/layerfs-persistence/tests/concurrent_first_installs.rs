@@ -1,6 +1,13 @@
 //! F-036: two writers, each with its own opened Store handle as a daemon has,
 //! save the same new content at the same time. Both Saves complete and every
 //! object reads back, whichever writer won each first-wins registration.
+//!
+//! Delta selection can propose a copy the other writer just published, so the
+//! candidate's chain can name the very object this Save is storing: the two
+//! writers can each pick the other's copy as a base, and storing both would
+//! close a delta cycle (`Integrity("dependency cycle")` at the first read).
+//! Selection refuses that edge (`DepthCache::cost_avoiding`) and stores the
+//! object FULL, so the graph stays acyclic whichever registrations win.
 #![cfg(target_os = "linux")]
 mod support;
 use layerfs_content::{AdvisoryPredecessors, FinalizedObject, ObjectRole};

@@ -37,6 +37,17 @@ const CALLS: &[(&[&str], &str, &str)] = &[
 ];
 
 #[test]
+fn project_remove_is_a_usage_error() {
+    let home = tempdir("gc-remove");
+    let (code, out, err) = run_code(&home, &["project", "remove", "shop/api"]);
+    assert_eq!(code, Some(2), "{out} {err}");
+    assert!(err.contains("no call `project remove`"), "{err}");
+    assert!(out.is_empty(), "{out}");
+    assert!(!home.join("store").exists(), "no call reached a home");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
 fn help_lists_each_gc_call_with_its_usage() {
     let home = tempdir("gc-help");
     let (code, out, err) = run_code(&home, &["help"]);

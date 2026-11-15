@@ -7,6 +7,7 @@ use crate::project::discovery::Project;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
 use layerfs_bridge::sdk_values::hex;
+use layerfs_history::error::{HolderKind, HolderState, NameHolder, NameSource, NameTakenState};
 use layerfs_history::{BranchId, HistoryName, LayerStackId};
 use layerfs_home::helpers::random;
 use layerfs_home::home::paths;
@@ -14,6 +15,7 @@ use layerfs_home::names::StoreName;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_persistence::{PersistenceConfig, SealedStore, SqlitePersistenceProfile};
 use layerfs_project::store::{AddRequest, InitError, ProjectApi};
+use layerfs_store_service::history::lookup;
 use layerfs_project::{InitCounters, ProjectError};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -75,7 +77,7 @@ pub fn make_entry(home: &Path, store: &str, name: &str) -> Result<PathBuf> {
     let entry = layerfs_home::home::paths::project_dir(home, store, name);
     std::fs::create_dir(&entry).map_err(|error| {
         if error.kind() == std::io::ErrorKind::AlreadyExists {
-            refused("Exists", format!("project {name} exists in Store {store}"))
+            home_name_taken(store, name)
         } else {
             failed(error)
         }
@@ -83,6 +85,20 @@ pub fn make_entry(home: &Path, store: &str, name: &str) -> Result<PathBuf> {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o700)).map_err(failed)?;
     Ok(entry)
+}
+
+/// A project name the caller's home already records: `NameTaken` with its
+/// `home` source, decided before the Store is asked anything.
+pub(crate) fn home_name_taken(store: &str, name: &str) -> SdkRefusal {
+    let state = NameTakenState::new(
+        NameHolder::new(HolderKind::Project, name, HolderState::Live),
+        NameSource::Home,
+    );
+    lookup::refuse(
+        "NameTaken",
+        format!("project {name} exists in Store {store}"),
+        lookup::name_taken_detail(&state),
+    )
 }
 
 /// `project.init`'s add of folder `source` as the new project `name` of
@@ -143,10 +159,7 @@ pub fn add_project(request: &ProjectAdd) -> Outcome {
     }
     let home = discovery::home_of(Some(&request.home))?;
     if name == store && legacy(&home, store)? {
-        return Err(refused(
-            "Exists",
-            format!("Store {store} already has a project named {name}"),
-        ));
+        return Err(home_name_taken(store, name));
     }
     let entry = make_entry(&home, store, name)?;
     let _guard = discovery::guard(&entry)?;
@@ -213,9 +226,10 @@ pub fn add_project(request: &ProjectAdd) -> Outcome {
 /// diagnosis.
 pub fn add_failure(error: InitError, entry: Option<&Path>, name: &str, store: &str) -> SdkRefusal {
     let refusal = match &error {
-        InitError::Exists => refused(
-            "Exists",
+        InitError::NameTaken(state) => lookup::refuse(
+            "NameTaken",
             format!("Store {store} already has a project named {name}"),
+            lookup::name_taken_detail(state),
         ),
         InitError::NoAcquisition => refused(
             "Unsupported",

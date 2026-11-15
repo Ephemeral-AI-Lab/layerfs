@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The `store` calls: create, connect, inspect, move and remove the databases that hold every project's history, within the [SDK](README.md).
+The `store` calls: create, connect, inspect, move, remove and compact the databases that hold every project's history, within the [SDK](README.md).
 
 | | |
 | --- | --- |
@@ -24,6 +24,7 @@ The `store` calls: create, connect, inspect, move and remove the databases that 
         |     (back to native)             detach <machine>
         v                                     v
      remove (file + projects)              disconnect (data stays)
+     compact (reclaim dead bytes)
 ```
 
 | Call | Kind | Returns |
@@ -39,6 +40,7 @@ The `store` calls: create, connect, inspect, move and remove the databases that 
 | [`store.push`](#storepush) | sqlite | `{ store, from, to, bytes, heads }` |
 | [`store.pull`](#storepull) | sqlite | `{ store, from, to, bytes, heads }` |
 | [`store.remove`](#storeremove) | sqlite | `{ removed: name }` |
+| [`store.compact`](#storecompact) | sqlite | `{ kind: "Compacted", ... }`, the §11 report |
 | [`store.disconnect`](#storedisconnect) | PostgreSQL | `{ disconnected: name }` |
 
 A sqlite Store is made with the Disposable profile (WAL,
@@ -128,7 +130,14 @@ leases are ignored, not removed
 password reference is resolved here and the server dialed once; a
 PostgreSQL Store is never `down` (an unreachable server shows in `server`)
 ([`status.rs`](../../../../control/crates/layerfs-store/src/status.rs)). It is
-the call an `Unresolved` refusal names. Errors: `NotFound`; `InvalidInput` (a
+the call an `Unresolved` refusal names. When a compaction runs on a sqlite
+Store, `op` is read from `<store>.compact-op`; on a PostgreSQL Store it is
+the Store-side `gc_op` row with its `gc_intent`, read by one status query
+with no Store session and no artifact read. Either way `state` is `busy`
+while the owner lives and `unresolved` once it is gone, `uncertain` stays
+the record's own fact, and `phases` names the backend's order (`mark`,
+`build`, `verify`, `install` on sqlite; `mark`, `build`, `swap`, `cleanup`
+on PostgreSQL). Errors: `NotFound`; `InvalidInput` (a
 record of unknown kind); `Unavailable` (a 1.1.0 Store whose machine is not
 known; `layerfs import-env` fixes it).
 
@@ -371,6 +380,39 @@ uncertain. Errors: `InvalidInput` (a sqlite Store; use `store.remove`);
 `InUse` (another process holds its lease, a Sandbox of one of its projects is
 recorded, or a call in this process is running on it,
 [`open.rs`](../../../../control/crates/layerfs-store/src/open.rs)); `Failed`.
+
+### store.compact
+
+Reclaims one sqlite Store's dead bytes by rebuilding it from its live history
+(spec §3, §7): the only byte-reclaiming call, with no confirm, force or dry
+run and no automatic collection. It writes its operation intent before the
+first checkpoint, verifies the rebuilt Store, and installs it by rename; a
+definite failure before the rename keeps the old Store and the generation `G`,
+while an installed-but-uncertain reply stays at `G + 1` and is reported, never
+deleted. A Store with less than 10% wholly dead packs takes the `none` path:
+it marks only, writes nothing and reports `dead_bytes_refined ==
+dead_bytes_bound`.
+
+```text
+JS      await layerfs.store.compact(name)
+Python  layerfs.store.compact(name)
+CLI     layerfs store compact <name>
+```
+
+Returns `{ kind: "Compacted", path, generation: {before, after}, ... }`
+with the report's snake_case fields: `dead_bytes_bound`,
+`dead_bytes_refined`, `logical_discarded`, `backend_reusable`,
+`physical_shrink`, `kept_waste {dead_in_retained_packs_bytes, delta_bases
+{bytes, references}, inode_blocks_bytes}`, `peak_temp_bytes`, `residue`,
+`estimate` and `zero_reason`; a capped field is `{value, cap}`.
+
+| Error | When | Source |
+| --- | --- | --- |
+| `NoSuchStore`, `Unsupported` | a missing Store, a PostgreSQL Store, a non-private Store directory, or an unsupported filesystem | [`compact.rs`](../../../../control/crates/layerfs-store/src/compact.rs) |
+| `MountsActive`, `Busy`, `Unresolved` | a mount, long-lived client or operation holds the Store, or a dead owner left an uncertain one | spec §5 |
+| `StaleStore`, `Conflict` | a connection bypassed admission, or the sealed identity changed | spec §7, §10 |
+| `Capacity` | a real allocation refusal during the rebuild; the old Store is kept | spec §7 |
+| `Unknown` | the reply was lost around install; read `store.status` and the op before any second call | spec §9 |
 
 ## Family errors
 

@@ -24,7 +24,7 @@ pub fn revision(
             let branch = r
                 .meta
                 .branch
-                .map(|id| store.history().branch(id))
+                .map(|id| store.history().branch_any(id))
                 .transpose()
                 .map_err(args::history)?
                 .flatten();

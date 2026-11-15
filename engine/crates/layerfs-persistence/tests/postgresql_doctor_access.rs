@@ -91,9 +91,7 @@ fn namespace_phase_transport_loss_is_unknown_and_releases_its_snapshot() {
     let before = f.fingerprint();
     let mut selection = f.selection.clone();
     let application = f.selection.schema.clone();
-    selection
-        .url
-        .push_str(&format!("&application_name={application}"));
+    selection.url = conninfo::with_option(&selection.url, "application_name", &application);
     let reader = PostgresHandles::open_diagnostic(
         &selection,
         BINDING,
@@ -230,9 +228,8 @@ fn configured_unix_then_tcp_fallback_preserves_saved_options() {
         "{out:?}"
     );
     let mut random = f.selection.clone();
-    random
-        .url
-        .push_str("&load_balance_hosts=random&host=127.0.0.1,127.0.0.1");
+    random.url = conninfo::with_option(&random.url, "load_balance_hosts", "random");
+    random.url = conninfo::with_option(&random.url, "host", "127.0.0.1,127.0.0.1");
     let out = connection(&random, BINDING);
     assert!(
         has(&out, "store.connection.configuration", Outcome::Unknown),

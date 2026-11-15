@@ -92,6 +92,17 @@ pub trait HistoryCatalog: Send + Sync {
     /// Stacks in name order.
     fn layer_stacks(&self, page: &Page) -> HistoryResult<PageResult<LayerStackRecord>>;
 
+    /// The typed `NameTaken` state for a LayerStack (project) name, live or
+    /// deleted, read without resolving the Stack (spec 4.4). The default
+    /// reports none; a provider that keeps the collision query overrides it,
+    /// so `project.init` refuses a held name before it scans anything.
+    fn layer_stack_name_taken(
+        &self,
+        _name: &HistoryName,
+    ) -> HistoryResult<Option<crate::error::NameTakenState>> {
+        Ok(None)
+    }
+
     /// The stack named `name`, if any. A provider answers through its name
     /// index; this default pages through the stacks in name order.
     fn layer_stack_named(&self, name: &HistoryName) -> HistoryResult<Option<LayerStackRecord>> {
@@ -113,6 +124,15 @@ pub trait HistoryCatalog: Send + Sync {
 
     /// One Branch by identity.
     fn branch(&self, id: BranchId) -> HistoryResult<Option<BranchRecord>>;
+
+    /// One Branch by identity without the visibility filter (spec 4.2). Only
+    /// rendering and identity keep a retired Branch's name this way; every
+    /// caller-facing lookup resolves through [`HistoryCatalog::branch`]. A
+    /// provider that keeps retired rows overrides this; the default reads the
+    /// filtered row.
+    fn branch_any(&self, id: BranchId) -> HistoryResult<Option<BranchRecord>> {
+        self.branch(id)
+    }
 
     /// One Branch by its name in a stack, through the name index: the
     /// stack's other Branches are not read.

@@ -13,7 +13,6 @@ pub mod parts;
 pub mod postgres_init;
 #[doc(hidden)]
 pub mod record;
-pub mod remove;
 pub mod send;
 pub mod staged;
 pub mod tree;

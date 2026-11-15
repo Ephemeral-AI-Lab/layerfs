@@ -6,6 +6,7 @@ use crate::sqlite::family::{fields_map, record_of, step_on};
 use crate::sqlite::transfer::step::StoreStep;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_persistence::compact_metrics::{self, CompactStatusState};
 use std::path::Path;
 
 /// `store.status`: who holds it, the operation on it (`op`, as H6 shows it),
@@ -15,20 +16,22 @@ use std::path::Path;
 ///
 /// While a compaction runs, or after a dead owner left one, `op` is that run's
 /// projection and `state` is `busy`/`unresolved` (§11); `phases` names the
-/// backend's ordered phases. The compaction record is read from
-/// `<store>.compact-op` alone: the Store database and its artifacts are never
-/// opened for it.
+/// backend's ordered phases. A sqlite compaction record is read from
+/// `<store>.compact-op` alone, and a PostgreSQL one from the Store-side
+/// `gc_op` with its `gc_intent` on one status query (T10.5): neither opens
+/// the Store database, changes a schema, nor reads an artifact.
 pub fn status(home: &Path, name: &str) -> Outcome {
     let record = record_of(home, name)?;
     let (holders, _) = lease::read_holders(home, name)?;
     let mut down = None;
     let mut more = Vec::new();
     let store_ref = record.store_ref()?;
-    let mut compaction = SdkValue::Null;
+    let compaction: SdkValue;
     if let StoreRef::Postgres { .. } = store_ref {
         more.push(("server", crate::postgresql::connect::status(&record)));
-        // A PostgreSQL compaction's op lives in the Store's `gc_op`; T9 reads
-        // it here with its rebuild. This path reads no file.
+        // T10.5: a PostgreSQL compaction's op is the Store's `gc_op` row read
+        // with its `gc_intent`; this path opens no Store and reads no file.
+        compaction = crate::postgresql::connect::compact_status(&record);
     } else {
         more.push(("machine", SdkValue::text(store_ref.machine()?)));
         // the file's size where it lives, starting nothing (P4), and the
@@ -67,6 +70,15 @@ pub fn status(home: &Path, name: &str) -> Outcome {
     let state = compaction
         .get_text("state")
         .unwrap_or_else(|| record.state(down.is_some(), &holders).as_str());
+    // The status path observes an unsettled run by its bounded state label,
+    // never by a Store name or phase path.
+    if compaction.get("id").is_some() {
+        match state {
+            "busy" => compact_metrics::record_status(CompactStatusState::Busy),
+            "unresolved" => compact_metrics::record_status(CompactStatusState::Unresolved),
+            _ => {}
+        }
+    }
     let mut fields = vec![
         ("name", SdkValue::text(name)),
         ("kind", SdkValue::text(store_ref.kind().as_str())),

@@ -38,6 +38,10 @@ struct Case {
     installed: bool,
     target: bool,
     visited: bool,
+    /// A real `SIGKILL` before the seal ends the process with the writer
+    /// session's WAL on disk (`-wal`, `-shm`); the in-process matrix stops and
+    /// drops cleanly, so only the real-process `BeforeSeal` arm sets this.
+    live_sidecars: bool,
 }
 
 fn create_store() -> (Temp, SqliteHandles, PathBuf) {
@@ -313,26 +317,12 @@ fn assert_no_sidecars(store: &Path, case: Case) {
     }
 }
 
-fn exercise(case: Case) {
-    let (_temp, handles, path) = create_store();
-    let live = filesystem_root(&handles, 1);
-    let stack = initialize(&handles, 1, live);
-    let dead = whole_file(&handles, b"a pack no retained root reaches");
-    let live_bytes = object_bytes(&handles, live);
-    let before = generation(&handles);
-
-    let op = [41u8; 16];
-    let error = handles
-        .compact(&request_at(op, case.failpoint))
-        .unwrap_err();
-    assert!(
-        matches!(error, layerfs_history::HistoryError::UnknownOutcome),
-        "{error:?}"
-    );
-
+/// Asserts the operation record and the artifact set the failpoint leaves
+/// beside the live Store, before any handle reopens it.
+fn assert_crash_state(case: Case, store: &Path, before: u64, op: [u8; 16]) {
     // `store.status` (T10.1) projects the recorded operation, its phase and
     // its uncertain outcome; the engine reads them from the op record.
-    let status = compact_op_status(&path).expect("the op record remains");
+    let status = compact_op_status(store).expect("the op record remains");
     assert_eq!(status.op_id, op);
     assert_eq!(status.generation, i64::try_from(before).unwrap());
     assert_eq!(status.phase, case.phase, "phase at {case:?}");
@@ -343,20 +333,65 @@ fn exercise(case: Case) {
 
     // The exact artifact set the point leaves beside the live Store.
     assert_eq!(
-        compact_path(&path).exists(),
+        compact_path(store).exists(),
         case.target,
         "staged Store at {case:?}"
     );
     assert_eq!(
-        visited_path(&path).exists(),
+        visited_path(store).exists(),
         case.visited,
         "visited scratch at {case:?}"
     );
-    assert!(op_path(&path).exists(), "op record at {case:?}");
-    assert_no_sidecars(&path, case);
-    assert_no_sidecars(&compact_path(&path), case);
+    assert!(op_path(store).exists(), "op record at {case:?}");
+    if case.live_sidecars {
+        // A real kill before the seal ends the process with the writer
+        // session's WAL still on disk: the next open replays it, and the crash
+        // state itself keeps both sidecars, exactly as a killed daemon does.
+        assert!(
+            with_suffix(store, "-wal").exists(),
+            "the killed session's WAL at {case:?}"
+        );
+        assert!(
+            with_suffix(store, "-shm").exists(),
+            "the killed session's shared memory at {case:?}"
+        );
+        assert!(
+            !with_suffix(store, "-journal").exists(),
+            "no rollback journal at {case:?}"
+        );
+    } else {
+        assert_no_sidecars(store, case);
+    }
+    assert_no_sidecars(&compact_path(store), case);
+}
 
-    let reopened = reopen(&path);
+/// The fixtures one crash case needs to prove its recovery.
+struct Recovery<'a> {
+    case: Case,
+    store: &'a Path,
+    before: u64,
+    live: ObjectId,
+    live_bytes: &'a [u8],
+    dead: ObjectId,
+    stack: LayerStackRecord,
+    op: [u8; 16],
+}
+
+/// Reopens the crashed Store, asserts the §9 state (wholly old or wholly new,
+/// live data readable, exact artifacts) and then proves the next
+/// `store.compact` settles or rebuilds and leaves a clean Store.
+fn assert_recovery(recovery: Recovery<'_>) {
+    let Recovery {
+        case,
+        store,
+        before,
+        live,
+        live_bytes,
+        dead,
+        stack,
+        op,
+    } = recovery;
+    let reopened = reopen(store);
 
     // The admission intent is released before the seal (T-G5), so only a
     // crash before that release still leaves it; a rebuilt Store was copied
@@ -380,7 +415,7 @@ fn exercise(case: Case) {
     );
     assert!(located(&reopened, live), "live root at {case:?}");
     assert_eq!(
-        object_bytes(&reopened, live),
+        object_bytes(&reopened, live).as_slice(),
         live_bytes,
         "live bytes readable at {case:?}"
     );
@@ -397,7 +432,7 @@ fn exercise(case: Case) {
     // A crash during the copy can tear the staged file. The next run must
     // remove the recorded set instead of trusting it.
     if case.failpoint == CompactFailpoint::DuringCopy {
-        let target = compact_path(&path);
+        let target = compact_path(store);
         std::fs::OpenOptions::new()
             .write(true)
             .open(&target)
@@ -410,11 +445,11 @@ fn exercise(case: Case) {
     // Put one back to prove the next run removes the whole set.
     if case.failpoint == CompactFailpoint::DuringSettle {
         std::fs::write(
-            with_suffix(&compact_path(&path), "-journal"),
+            with_suffix(&compact_path(store), "-journal"),
             b"partial settle",
         )
         .unwrap();
-        std::fs::write(visited_path(&path), b"partial settle").unwrap();
+        std::fs::write(visited_path(store), b"partial settle").unwrap();
     }
 
     // The next run judges the leftover and reaches a clean state: a rebuild
@@ -435,17 +470,17 @@ fn exercise(case: Case) {
         receipt.residue
     );
 
-    assert!(compact_op_status(&path).is_none(), "op settled at {case:?}");
-    assert!(!compact_path(&path).exists(), "target removed at {case:?}");
-    assert!(!visited_path(&path).exists(), "visited removed at {case:?}");
-    assert!(!op_path(&path).exists(), "op removed at {case:?}");
-    assert_no_sidecars(&path, case);
+    assert!(compact_op_status(store).is_none(), "op settled at {case:?}");
+    assert!(!compact_path(store).exists(), "target removed at {case:?}");
+    assert!(!visited_path(store).exists(), "visited removed at {case:?}");
+    assert!(!op_path(store).exists(), "op removed at {case:?}");
+    assert_no_sidecars(store, case);
 
-    let final_handles = reopen(&path);
+    let final_handles = reopen(store);
     assert_eq!(generation(&final_handles), before + 1, "final generation");
     assert!(located(&final_handles, live), "final live root");
     assert_eq!(
-        object_bytes(&final_handles, live),
+        object_bytes(&final_handles, live).as_slice(),
         live_bytes,
         "final bytes"
     );
@@ -454,6 +489,36 @@ fn exercise(case: Case) {
     // Closure and the full doctor both pass on the settled Store.
     final_handles.history.mark().unwrap();
     clean(&final_handles);
+}
+
+fn exercise(case: Case) {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    let stack = initialize(&handles, 1, live);
+    let dead = whole_file(&handles, b"a pack no retained root reaches");
+    let live_bytes = object_bytes(&handles, live);
+    let before = generation(&handles);
+
+    let op = [41u8; 16];
+    let error = handles
+        .compact(&request_at(op, case.failpoint))
+        .unwrap_err();
+    assert!(
+        matches!(error, layerfs_history::HistoryError::UnknownOutcome),
+        "{error:?}"
+    );
+
+    assert_crash_state(case, &path, before, op);
+    assert_recovery(Recovery {
+        case,
+        store: &path,
+        before,
+        live,
+        live_bytes: &live_bytes,
+        dead,
+        stack,
+        op,
+    });
 }
 
 macro_rules! crash_at {
@@ -466,6 +531,7 @@ macro_rules! crash_at {
                 installed: $installed,
                 target: $target,
                 visited: $visited,
+                live_sidecars: false,
             });
         }
     };
@@ -575,3 +641,317 @@ crash_at!(
     false,
     false
 );
+
+/// The same §9 crash points, but the compaction runs in a **separate process**
+/// that the parent `SIGKILL`s while it is stopped inside the failpoint. This
+/// is the crash arm the in-process matrix above cannot claim: no Rust `Drop`,
+/// no connection close and no guard release runs after the kill.
+///
+/// The child re-executes this test binary by name and reopens the fixture
+/// Store the parent built. The parent learns the child reached the point from
+/// a Unix-socket gate (no sleeps), then kills it, then makes the same
+/// assertions as `assert_crash_state` / `assert_recovery`.
+///
+/// Nine points are covered: the mark phase (`BeforeSeal`, `AfterSeal`); the
+/// copy (`BeforeVacuum`, immediately before `VACUUM INTO` because SQLite runs
+/// that copy as one uninterruptible call, so a kill cannot be injected inside
+/// it); verification (`DuringVerify`); the rename boundary (`DuringRename`);
+/// and the earlier build, install and settle points.
+///
+/// Linux only: `SIGKILL` delivery and `ExitStatusExt::signal` are asserted
+/// through the Unix process API. On other Unix targets the test below prints
+/// a skip line instead of claiming coverage.
+#[cfg(target_os = "linux")]
+mod real_process {
+    use super::*;
+    use std::io::Read;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::{Child, Command, Stdio};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{Duration, Instant};
+
+    /// The operation identity the child records and the parent asserts.
+    const OP: [u8; 16] = [43u8; 16];
+    const STORE_ENV: &str = "LAYERFS_COMPACT_CRASH_STORE";
+    const FAILPOINT_ENV: &str = "LAYERFS_COMPACT_CRASH_FAILPOINT";
+    const GATE_ENV: &str = "LAYERFS_COMPACT_CRASH_GATE";
+
+    /// A short socket path: `Temp` lives under the (ext4) sandbox run
+    /// directory, whose absolute path exceeds `SUN_LEN`.
+    fn gate_socket() -> PathBuf {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        PathBuf::from(format!(
+            "/tmp/layerfs-compact-gate-{}-{}.sock",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ))
+    }
+
+    fn parse_failpoint(text: &str) -> CompactFailpoint {
+        match text {
+            "BeforeSeal" => CompactFailpoint::BeforeSeal,
+            "AfterSeal" => CompactFailpoint::AfterSeal,
+            "BeforeVacuum" => CompactFailpoint::BeforeVacuum,
+            "DuringVerify" => CompactFailpoint::DuringVerify,
+            "DuringRename" => CompactFailpoint::DuringRename,
+            "AfterBuild" => CompactFailpoint::AfterBuild,
+            "BeforeInstall" => CompactFailpoint::BeforeInstall,
+            "AfterInstall" => CompactFailpoint::AfterInstall,
+            "DuringSettle" => CompactFailpoint::DuringSettle,
+            other => panic!("unknown failpoint {other}"),
+        }
+    }
+
+    /// The child body. A normal test run returns immediately; the parent
+    /// re-executes this test by name with the fixture variables set.
+    #[test]
+    fn sigkill_at_failpoint() {
+        let Some(store) = std::env::var_os(STORE_ENV) else {
+            return;
+        };
+        let point = parse_failpoint(
+            &std::env::var(FAILPOINT_ENV).expect("a failpoint for the crash child"),
+        );
+        let handles = reopen(Path::new(&store));
+        let outcome = handles.compact(&request_at(OP, point));
+        panic!("the parent did not SIGKILL the run: {outcome:?}");
+    }
+
+    /// Kills the child on every path out of the test, including a panic.
+    struct KillOnDrop(Option<Child>);
+
+    impl KillOnDrop {
+        fn new(child: Child) -> Self {
+            Self(Some(child))
+        }
+
+        fn child_mut(&mut self) -> &mut Child {
+            self.0.as_mut().expect("a running child")
+        }
+
+        fn kill(&mut self) -> std::process::ExitStatus {
+            let mut child = self.0.take().expect("a running child");
+            child.kill().expect("SIGKILL the crash child");
+            child.wait().expect("the crash child exits")
+        }
+    }
+
+    impl Drop for KillOnDrop {
+        fn drop(&mut self) {
+            if let Some(mut child) = self.0.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+
+    /// Waits for the child's gate connection. `yield_now` keeps the bounded
+    /// wait from sleeping and still notices a child that ended early.
+    fn wait_for_gate(
+        listener: &std::os::unix::net::UnixListener,
+        child: &mut Child,
+    ) -> std::os::unix::net::UnixStream {
+        let deadline = Instant::now() + Duration::from_secs(60);
+        loop {
+            match listener.accept() {
+                Ok((stream, _)) => return stream,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    if let Some(status) = child.try_wait().expect("the crash child's status") {
+                        panic!("the crash child ended before the gate: {status}");
+                    }
+                    assert!(
+                        Instant::now() < deadline,
+                        "the crash child never reached the gate"
+                    );
+                    std::thread::yield_now();
+                }
+                Err(error) => panic!("crash gate accept: {error}"),
+            }
+        }
+    }
+
+    fn exercise_sigkill(case: Case) {
+        let (_temp, handles, path) = create_store();
+        let live = filesystem_root(&handles, 1);
+        let stack = initialize(&handles, 1, live);
+        let dead = whole_file(&handles, b"a pack no retained root reaches");
+        let live_bytes = object_bytes(&handles, live);
+        let before = generation(&handles);
+
+        // The child owns the writable Store alone; the parent keeps only the
+        // fixture paths and the expected bytes.
+        drop(handles);
+
+        let gate = gate_socket();
+        let listener =
+            std::os::unix::net::UnixListener::bind(&gate).expect("the crash gate socket");
+        listener
+            .set_nonblocking(true)
+            .expect("a nonblocking crash gate");
+        let child = Command::new(std::env::current_exe().expect("the test binary"))
+            .args([
+                "--exact",
+                "real_process::sigkill_at_failpoint",
+                "--nocapture",
+            ])
+            .env(STORE_ENV, &path)
+            .env(FAILPOINT_ENV, format!("{:?}", case.failpoint))
+            .env(GATE_ENV, &gate)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("a separate crash process");
+        let mut child = KillOnDrop::new(child);
+
+        let mut gate_stream = wait_for_gate(&listener, child.child_mut());
+        gate_stream
+            .set_read_timeout(Some(Duration::from_secs(60)))
+            .expect("a bounded gate read");
+        let mut ready = [0u8; 1];
+        gate_stream
+            .read_exact(&mut ready)
+            .expect("the child reached the crash gate");
+        assert_eq!(ready[0], b'R', "the child stopped at the crash gate");
+
+        // The real crash: SIGKILL while the child is still inside the run.
+        let status = child.kill();
+        assert_eq!(
+            status.signal(),
+            Some(9),
+            "the crash child was SIGKILLed: {status:?}"
+        );
+        drop(gate_stream);
+        let _ = std::fs::remove_file(&gate);
+
+        assert_crash_state(case, &path, before, OP);
+        assert_recovery(Recovery {
+            case,
+            store: &path,
+            before,
+            live,
+            live_bytes: &live_bytes,
+            dead,
+            stack,
+            op: OP,
+        });
+    }
+
+    macro_rules! sigkill_at {
+        ($name:ident, $failpoint:expr, $phase:literal, $installed:literal, $target:literal, $visited:literal, $live_sidecars:literal) => {
+            #[test]
+            fn $name() {
+                exercise_sigkill(Case {
+                    failpoint: $failpoint,
+                    phase: $phase,
+                    installed: $installed,
+                    target: $target,
+                    visited: $visited,
+                    live_sidecars: $live_sidecars,
+                });
+            }
+        };
+    }
+
+    // The mark phase: the open session and admission intent at `BeforeSeal`
+    // (the real kill leaves the writer's WAL sidecars), and the sealed,
+    // intent-released Store at `AfterSeal`.
+    sigkill_at!(
+        sigkill_before_seal,
+        CompactFailpoint::BeforeSeal,
+        "mark",
+        false,
+        false,
+        false,
+        true
+    );
+    sigkill_at!(
+        sigkill_after_seal,
+        CompactFailpoint::AfterSeal,
+        "mark",
+        false,
+        false,
+        false,
+        false
+    );
+    // The copy: SQLite runs `VACUUM INTO` as one call that cannot be
+    // interrupted deterministically, so this arm stops immediately before it.
+    // The in-process `DuringCopy` arm keeps the torn-target state; this real
+    // kill proves the crash after the visited scratch exists and before the
+    // staged file does.
+    sigkill_at!(
+        sigkill_during_copy,
+        CompactFailpoint::BeforeVacuum,
+        "build",
+        false,
+        false,
+        true,
+        false
+    );
+    // The verify pass and the rename boundary, at the same failpoints the
+    // in-process matrix uses.
+    sigkill_at!(
+        sigkill_during_verify,
+        CompactFailpoint::DuringVerify,
+        "verify",
+        false,
+        true,
+        true,
+        false
+    );
+    sigkill_at!(
+        sigkill_during_rename,
+        CompactFailpoint::DuringRename,
+        "install",
+        true,
+        false,
+        true,
+        false
+    );
+
+    sigkill_at!(
+        sigkill_after_build,
+        CompactFailpoint::AfterBuild,
+        "build",
+        false,
+        true,
+        true,
+        false
+    );
+    sigkill_at!(
+        sigkill_before_install,
+        CompactFailpoint::BeforeInstall,
+        "verify",
+        false,
+        true,
+        true,
+        false
+    );
+    sigkill_at!(
+        sigkill_after_install,
+        CompactFailpoint::AfterInstall,
+        "install",
+        true,
+        false,
+        true,
+        false
+    );
+    sigkill_at!(
+        sigkill_during_settle,
+        CompactFailpoint::DuringSettle,
+        "install",
+        true,
+        false,
+        false,
+        false
+    );
+}
+
+#[cfg(not(target_os = "linux"))]
+#[test]
+fn real_process_sigkill_skipped_outside_linux() {
+    eprintln!(
+        "skipped: the real-process SIGKILL compaction test requires Linux, not {}",
+        std::env::consts::OS
+    );
+}

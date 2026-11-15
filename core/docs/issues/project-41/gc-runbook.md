@@ -88,7 +88,10 @@ installed → it records the outcome. A dead owner's op is adopted; only a live 
   `commit.branch_id` keeps `NameTaken` (§4.4); `remove_file` reversal does not unhide
   at-or-below versions; `rebuild` install is irreversible (§9). Content recovery is
   `backup.create`/`backup.restore` from before compaction (SQLite; the server's backup for PG);
-  no undo copy is kept (§9, #155 D-24).
+  no undo copy is kept (§9, #155 D-24). The 2026-11-15 branch cutover keeps its
+  pre-change home and Store in `/home/dell/lfs-work/backup-20261115-180517`
+  (earlier `backup-20261115-180149`); restore that backup rather than editing
+  markers (see §7).
 - `project.remove` is gone; an old client gets `InvalidInput` (§4, §10).
 
 ## 5. Known gaps at this baseline
@@ -112,3 +115,67 @@ installed → it records the outcome. A dead owner's op is adopted; only a live 
 4. Compare artifact/schema with the op; leave anything a record names to the next compact (`G` removes, `G+1` records).
 5. Never hand-edit `gc_intent`, `gc_dead`, markers or `project_epoch`; never unlink `-wal`/`-shm`; never drop a schema `gc_op` names.
 6. To re-use a name after a removal, re-create after the frontier (or after a rebuild frees it); don't delete markers. Escalate if old content must be restored.
+
+## 7. Branch retirement (`branch.remove`, live since 2026-11-15)
+
+`branch.remove` is live on the 2.0.0 build `4e65ebbae` (host CLI `1dc15838…`,
+bundle `layerfs` `c4737445…`, daemon `b8dd0766…`, helper `3d033ec0…`);
+`layerfs help branch` lists it, and a probe on a missing name returns
+`NoSuchBranch` (exit 125). The call is a marker write, not a delete: it hides
+the Branch, keeps its rows and its name until a later `store.compact` rebuild
+collects the marker, and never touches `main` (`ReservedName`).
+
+**Preflight.**
+
+1. `layerfs sandbox list <project>` is empty, or every listed Sandbox belongs
+   to a task you have agreed to exclude; a mounted Branch is `MountsActive`.
+2. `layerfs doctor` is `{"ok":true,"findings":[]}`; `machine status docker` is
+   `running`.
+3. Take a backup; the cutover used
+   `/home/dell/lfs-work/backup-20261115-180517` (bundle, host, daemon, helper,
+   `bundle.json`, `worker.json` and the Store volume; the earlier one is
+   `backup-20261115-180149`). Keep it until the retired names are no longer
+   needed.
+4. Page the inventory: `layerfs branch list <project> --page-size 100
+   --page-pos <next_page_pos>`; the last page has `has_more: false`. Record the
+   names and the count before and after.
+5. Build the retire list: an empty Branch (`head: null`), or an explicitly
+   reviewed superseded Branch (typically a `-merged`/`-integ`/`-final`/
+   `-publish` variant) whose content is already on `main` or no longer needed;
+   `layerfs branch diff <project> main <branch> --paths-only` shows the paths.
+   Never include `main`, a running task's Branch, or a Branch with a live
+   mount.
+
+**Procedure.**
+
+- For each name: `layerfs branch remove <project> <branch>`. One call per
+  Branch; there is no batch, force or dry-run form. `Busy` is another
+  operation holding the Store scope (wait, call once more); `MountsActive` is
+  a live mount; `NoSuchBranch` means already gone; `ReservedName` is `main`.
+  Record every refusal.
+- Verify: the retired name reads `NoSuchBranch`, a re-fork is `NameTaken` with
+  the holder's `state: "retired"`, `branch list` no longer shows it, and the
+  `main` head is unchanged.
+- **Soft name retention.** The name is not reusable until a rebuild collects
+  the `branch_retired` rows; plan around that and never hand-delete markers
+  (§4). `store.compact` below is the only supported reclaim.
+
+**Reclaim (optional, later).** `layerfs store compact <name>` only when the
+Store is idle (no mounts, daemon or other op). A rebuild copies retained rows
+into a fresh Store and installs `G + 1`; only then are retired names and their
+rows collected. A `none` outcome (<10 % wholly dead) keeps everything, and the
+retired names stay taken. Follow the compaction procedure in §6 and the
+rollback limits in §4.
+
+**Rollback.** Restore the whole home and Store from the pre-cutover backup
+above (or `backup.restore` from a `backup.create` taken during the window);
+markers cannot be undone by dropping tables (§4). The 2026-11-15 cutover was
+not rolled back: no call failed, and `main` and `Cargo.toml` were byte-identical
+before and after.
+
+**2026-11-15 result.** 145 Branches retired (20 empty at cutover + 125
+superseded), 0 refusals; 162 remained by choice (unknown or non-empty,
+deliberately untouched). `main` stayed `32977da5…` (root `56dbe645…`),
+`layerfs doctor` stayed clean, and no Sandbox/Workspace of the cleanup was
+left running. The new build's one-way GC schema migration grew the sqlite
+Store 1,111,203,840 -> 1,111,310,336 B on first open.

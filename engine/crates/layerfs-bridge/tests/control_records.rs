@@ -57,6 +57,19 @@ fn commands_are_bounded_exact_and_reject_every_truncated_prefix() {
             project: "project".into(),
             branch: "Not A Name".into(),
         },
+        // #G4: a mount that knows where it runs travels with both names
+        Request::MountPlaced {
+            workspace: token.workspace,
+            branch: binding.branch.id,
+            place: MountPlace::new(Some("sbx-1"), Some("docker")),
+        },
+        // a name the caller knows alone still travels exactly
+        Request::MountNamedPlaced {
+            workspace: token.workspace,
+            project: "project".into(),
+            branch: "work".into(),
+            place: MountPlace::new(None, Some("machine-1")),
+        },
         Request::Commit(CommitControl {
             token,
             force: false,

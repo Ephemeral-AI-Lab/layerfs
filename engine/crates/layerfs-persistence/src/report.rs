@@ -13,6 +13,11 @@ use crate::backend::sqlite::compact::{
 /// leaves its record at the phase it reached.
 pub const SQLITE_COMPACT_PHASES: [&str; 4] = ["mark", "build", "verify", "install"];
 
+/// The PostgreSQL §8 compaction phases, in order: Phase M mark, Phase A
+/// build, Phase B swap and Phase C cleanup. These are the values a
+/// PostgreSQL `gc_op` row records, distinct from the SQLite §7 phases.
+pub const POSTGRES_COMPACT_PHASES: [&str; 4] = ["mark", "build", "swap", "cleanup"];
+
 /// The generation a compaction started at and, when it installed a rebuild,
 /// the one it left (`none` keeps both equal).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
