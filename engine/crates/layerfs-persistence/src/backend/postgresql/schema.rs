@@ -9,10 +9,15 @@
 //! tables are absent: group-row layouts are SQLite physical choices. A
 //! schema made by [`create`] also has Init's acquisition tables (#533 step
 //! 10b, `acquisition.sql`), recorded in its schema source; one an earlier
-//! release imported from SQLite has none and refuses acquisition. A merge's
+//! release imported from SQLite has none and refuses acquisition. A Store
+//! written before the GC tables gains them at its first writable open
+//! ([`add_gc`]); any other schema mismatch is still refused. A merge's
 //! records live in the writer connection's temporary tables
 //! (`merge_records.rs`), not here.
-use super::session::{connection::Session, transaction::Transaction};
+use super::session::{
+    connection::Session,
+    transaction::{Mode, Transaction},
+};
 use crate::backend::records::{BackendError, Param};
 use crate::PostgresCheck;
 use layerfs_history::{CatalogId, HistoryCatalogConfig};
@@ -22,7 +27,18 @@ use postgres::SimpleQueryRow;
 #[path = "schema_diagnostic.rs"]
 mod diagnostic;
 
-pub(crate) const SCHEMA: &str = include_str!("../../../sql/postgresql/schema.sql");
+pub(crate) const SCHEMA: &str = concat!(
+    include_str!("../../../sql/postgresql/schema.sql"),
+    include_str!("../../../sql/postgresql/gc.sql")
+);
+/// The Store tables a schema had before the GC tables ([`GC`]) were appended.
+const PRE_GC_SCHEMA: &str = include_str!("../../../sql/postgresql/schema.sql");
+/// The `history_meta` position column as `schema.sql` writes it; it sits on
+/// its own line, so removing the line leaves the text an older Store recorded.
+const NEXT_SERIAL: &str = " next_history_serial bigint NOT NULL DEFAULT 1,\n";
+/// The GC marker, position and admission tables; a Store written before them
+/// gains them at open ([`add_gc`]).
+const GC: &str = include_str!("../../../sql/postgresql/gc.sql");
 /// Init's acquisition tables, created after [`SCHEMA`] in a new schema.
 const ACQUISITION: &str = include_str!("../../../sql/postgresql/acquisition.sql");
 /// The acquisition tables, in name order.
@@ -32,8 +48,37 @@ const ACQUISITION_TABLES: [&str; 3] = ["init_entry", "init_host_file", "init_ope
 /// (#91) and object locations in narrow rows under an 8-byte-prefix index
 /// (#90); a version 1 schema is refused at open, never converted.
 pub(crate) const SCHEMA_VERSION: i64 = 2;
-/// Every table of one Store schema.
-pub(crate) const TABLES: [&str; 19] = [
+/// Every table of one Store schema, in name order.
+pub(crate) const TABLES: [&str; 26] = [
+    "absorbed",
+    "binding_hint_block",
+    "branch",
+    "branch_retired",
+    "commit",
+    "commit_lineage",
+    "content_signature",
+    "file_digest",
+    "gc_dead",
+    "gc_intent",
+    "gc_op",
+    "history_meta",
+    "inode_value_block",
+    "layer",
+    "layer_lineage",
+    "layer_stack",
+    "layer_stack_retired",
+    "object_location",
+    "pack",
+    "path_removed",
+    "project_epoch",
+    "reach",
+    "scope_allocator",
+    "store_lane",
+    "store_policy",
+    "store_totals",
+];
+/// The tables a Store schema had before the GC tables were appended.
+const PRE_GC_TABLES: [&str; 19] = [
     "absorbed",
     "binding_hint_block",
     "branch",
@@ -75,6 +120,24 @@ fn source(acquisition: bool) -> String {
         true => format!("{SCHEMA}{ACQUISITION}"),
         false => SCHEMA.to_owned(),
     }
+}
+
+/// The recorded schema source of a Store written before the GC tables.
+fn pre_gc_source(acquisition: bool) -> String {
+    match acquisition {
+        true => format!("{PRE_GC_SCHEMA}{ACQUISITION}"),
+        false => PRE_GC_SCHEMA.to_owned(),
+    }
+}
+
+/// The current source before [`NEXT_SERIAL`] was written.
+fn source_without_next_serial(acquisition: bool) -> String {
+    source(acquisition).replacen(NEXT_SERIAL, "", 1)
+}
+
+/// The pre-GC source before [`NEXT_SERIAL`] was written.
+fn pre_gc_source_without_next_serial(acquisition: bool) -> String {
+    pre_gc_source(acquisition).replacen(NEXT_SERIAL, "", 1)
 }
 
 /// Creates the new schema `tx.schema` with the Store and acquisition tables,
@@ -124,6 +187,140 @@ pub(crate) fn create(
         ],
     )?;
     Ok(())
+}
+
+/// Adds the GC marker, position and admission tables to a Store written
+/// before them, then records the current schema: an additive migration under
+/// the same conditions as the SQLite Store's `add_gc`. A schema that already
+/// has `gc_intent` is left alone; a recorded source, table set or definition
+/// that is not the pre-GC schema is refused, never migrated.
+pub(crate) fn add_gc(session: &Session) -> Result<(), PersistenceError> {
+    // A Store that already has the GC tables is left alone: one statement,
+    // no transaction and no lane wait.
+    let present = session.run_as::<_, BackendError>(Mode::Statement, |tx| {
+        let sql = format!(
+            "SELECT 1 FROM information_schema.tables WHERE table_schema='{}' AND table_name='gc_intent' AND table_type='BASE TABLE'",
+            tx.schema
+        );
+        Ok(!tx.query(&sql, vec![])?.is_empty())
+    })?;
+    if present {
+        return Ok(());
+    }
+    session.run_as(Mode::Write, |tx| -> Result<(), PersistenceError> {
+        // Re-check under the lane: another process may have migrated first.
+        let present = tx.query(
+            "SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='gc_intent' AND table_type='BASE TABLE'",
+            vec![],
+        )?;
+        if !present.is_empty() {
+            return Ok(());
+        }
+        let rows = tx.query(
+            "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
+            vec![],
+        )?;
+        let [row] = rows.as_slice() else {
+            return Err(BackendError::Integrity.into());
+        };
+        let recorded_source: String = row.get(0)?;
+        let acquisition = if recorded_source == pre_gc_source(false)
+            || recorded_source == pre_gc_source_without_next_serial(false)
+        {
+            false
+        } else if recorded_source == pre_gc_source(true)
+            || recorded_source == pre_gc_source_without_next_serial(true)
+        {
+            true
+        } else {
+            return Err(BackendError::Integrity.into());
+        };
+        let tables = tx.query(TABLE_NAMES, vec![])?;
+        let actual: Vec<String> = tables.iter().map(|r| r.get(0)).collect::<Result<_, _>>()?;
+        let mut expected = PRE_GC_TABLES.to_vec();
+        if acquisition {
+            expected.extend(ACQUISITION_TABLES);
+        }
+        expected.sort_unstable();
+        if !actual.iter().map(String::as_str).eq(expected) {
+            return Err(BackendError::Integrity.into());
+        }
+        if row.get::<String>(1)? != definition(tx)? {
+            return Err(BackendError::Integrity.into());
+        }
+        tx.batch(GC)?;
+        let definition = definition(tx)?;
+        tx.query(
+            "UPDATE history_meta SET schema_source=$1,schema_definition=$2 WHERE id=1",
+            vec![Param::Text(source(acquisition)), Param::Text(definition)],
+        )?;
+        Ok(())
+    })
+}
+
+/// Adds the position column `history_meta.next_history_serial` (T1.4) to a
+/// Store written before it, then records the current schema: an additive
+/// migration under the same conditions as [`add_gc`]. A schema that already
+/// has the column is left alone; a recorded source or definition that is not
+/// one of the earlier schemas is refused, never migrated. PostgreSQL has no
+/// `commit`/`layer` serial columns yet, so only the column and one
+/// `project_epoch` row per project are recorded here; the serial backfill is
+/// SQLite's.
+pub(crate) fn add_position_state(session: &Session) -> Result<(), PersistenceError> {
+    // A Store that already has the column is left alone: one statement, no
+    // transaction and no lane wait.
+    let present = session.run_as::<_, BackendError>(Mode::Statement, |tx| {
+        let sql = format!(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema='{}' AND table_name='history_meta' AND column_name='next_history_serial'",
+            tx.schema
+        );
+        Ok(!tx.query(&sql, vec![])?.is_empty())
+    })?;
+    if present {
+        return Ok(());
+    }
+    session.run_as(Mode::Write, |tx| -> Result<(), PersistenceError> {
+        // Re-check under the lane: another process may have migrated first.
+        let present = tx.query(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='history_meta' AND column_name='next_history_serial'",
+            vec![],
+        )?;
+        if !present.is_empty() {
+            return Ok(());
+        }
+        let rows = tx.query(
+            "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
+            vec![],
+        )?;
+        let [row] = rows.as_slice() else {
+            return Err(BackendError::Integrity.into());
+        };
+        let recorded_source: String = row.get(0)?;
+        let acquisition = if recorded_source == source(false)
+            || recorded_source == source_without_next_serial(false)
+        {
+            false
+        } else if recorded_source == source(true)
+            || recorded_source == source_without_next_serial(true)
+        {
+            true
+        } else {
+            return Err(BackendError::Integrity.into());
+        };
+        if row.get::<String>(1)? != definition(tx)? {
+            return Err(BackendError::Integrity.into());
+        }
+        tx.batch("ALTER TABLE history_meta ADD COLUMN next_history_serial bigint NOT NULL DEFAULT 1;")?;
+        tx.batch(
+            "INSERT INTO project_epoch(layer_stack_id, epoch) SELECT s.layer_stack_id, 0 FROM layer_stack s WHERE NOT EXISTS (SELECT 1 FROM project_epoch e WHERE e.layer_stack_id = s.layer_stack_id);",
+        )?;
+        let definition = definition(tx)?;
+        tx.query(
+            "UPDATE history_meta SET schema_source=$1,schema_definition=$2 WHERE id=1",
+            vec![Param::Text(source(acquisition)), Param::Text(definition)],
+        )?;
+        Ok(())
+    })
 }
 
 /// What an open's check read: the catalog's incarnation, whether the schema

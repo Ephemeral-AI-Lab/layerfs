@@ -70,6 +70,7 @@ CREATE TABLE history_meta (
  binding_key bytea NOT NULL CHECK (octet_length(binding_key) BETWEEN 1 AND 128),
  identity_format bigint NOT NULL CHECK (identity_format = 3),
  schema_version bigint NOT NULL CHECK (schema_version = 2),
+ next_history_serial bigint NOT NULL DEFAULT 1,
  schema_source text NOT NULL,
  schema_definition text NOT NULL
 );

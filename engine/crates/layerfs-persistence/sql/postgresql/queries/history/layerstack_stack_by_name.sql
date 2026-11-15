@@ -1,1 +1,1 @@
-SELECT layer_stack_id, name, scope_id, profile_id, head_layer_id FROM {s}.layer_stack WHERE name = $1;
+SELECT layer_stack_id, name, scope_id, profile_id, head_layer_id FROM {s}.layer_stack WHERE name = $1 AND NOT EXISTS (SELECT 1 FROM {s}.layer_stack_retired r WHERE r.layer_stack_id = {s}.layer_stack.layer_stack_id);

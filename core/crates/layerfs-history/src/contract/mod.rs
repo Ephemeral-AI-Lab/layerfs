@@ -2,5 +2,6 @@
 pub mod catalog;
 pub mod error;
 pub mod identity;
+pub mod path;
 pub mod query;
 pub mod records;

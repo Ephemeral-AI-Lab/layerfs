@@ -219,32 +219,18 @@ before the lane; only the final `merge_branch` publish holds it.
 
 ### branch.publish
 
-Makes a Branch's head, or one of its Commits, `main`'s next Layer. By
-default it refuses to drop work: if `main` gained a Layer since the Branch
-forked, the publish is refused `HeadMoved` and nothing is written (#691).
-Merge the Branch with `main` into a new Branch and publish that, or pass
-`force` to overwrite `main` deliberately.
+Makes a Branch's head, or one of its Commits, `main`'s next Layer. It
+overwrites: Layers added to `main` since the Branch's base are reported, not
+merged.
 
 ```text
-JS      await layerfs.branch.publish(project, branch, commit?, { expected_base, expected_head, force })
-Python  layerfs.branch.publish(project, branch, commit=None, *, expected_base=None, expected_head=None, force=None)
-CLI     layerfs branch publish <project> <branch> [<commit>] [--expected-base <expected-base>] [--expected-head <expected-head>] [--force]
+JS      await layerfs.branch.publish(project, branch, commit?)
+Python  layerfs.branch.publish(project, branch, commit=None)
+CLI     layerfs branch publish <project> <branch> [<commit>]
 ```
 
 `branch` must be a side Branch (`main` is `NoSuchBranch`); `commit` is a
 66-hex Commit id (a Layer id is `InvalidInput`), default the head.
-
-| Option | Kind | Rule |
-| --- | --- | --- |
-| `expected_base` | Layer id | `main`'s head must still be this Layer |
-| `expected_head` | Commit id | the Branch's head must still be this Commit |
-| `force` | bool | publish over Layers `main` gained since the fork; they are reported in `overwrote` |
-
-Without `force`, a publish goes ahead when `main` is still at the Branch's
-fork point, when `main`'s head is this Branch's own earlier publication and
-the Commit contains it (publishing again at milestones), or when `main`
-already holds the Commit's tree (`NoChanges`). A Branch made by merging with
-`main` has `main`'s head as its base, so it publishes as a fast-forward.
 
 ```text
 Added:     { kind: "Added", source: { branch, commit },
@@ -255,12 +241,9 @@ NoChanges: { kind: "NoChanges", head_layer } (its tree equals main's head)
 ```
 
 The add is a compare-and-set on `main`'s head and the Branch's base:
-`HeadMoved` when either moved, or when a check above refuses, never retried.
-Its `detail` has `expectedBase`/`actualBase` (or `expectedHead`/`actualHead`).
-Other errors: `NoCommit` (no saved Commit), `NotInHistory` (the Commit is not
-on the Branch). After `Unknown`, publishing the same Commit again answers
-`UpToDate` if it landed, even when `main` has moved on since or
-`expected_base` names the head read before the first attempt.
+`HeadMoved` when either moved, never retried. Other errors: `NoCommit` (no
+saved Commit), `NotInHistory` (the Commit is not on the Branch). After
+`Unknown`, publishing the same Commit again answers `UpToDate` if it landed.
 
 ### branch.diff
 

@@ -206,6 +206,8 @@ pub(crate) fn new_commit(
         second_parent,
         meta,
     };
+    // Every new Commit takes the next Store serial in this transaction.
+    let serial = super::position::next_serial(tx)?;
     // The insert names a new identity; an existing one is then verified.
     let inserted = tx
         .execute(
@@ -232,6 +234,7 @@ pub(crate) fn new_commit(
                     .map_err(|_| HistoryError::Capacity("metadata bytes"))?,
                 super::facts::encode(&record.meta.lww, &record.meta.units)?,
                 record.meta.displaced.map(|id| id.to_bytes().to_vec()),
+                i64::try_from(serial).map_err(|_| HistoryError::Capacity("history serials"))?,
             ],
         )
         .map_err(sql)?;
