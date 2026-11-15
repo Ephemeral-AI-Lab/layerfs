@@ -181,7 +181,7 @@ pub use crate::control_sdk::{
 };
 pub use crate::control_types::{
     Activity, Answer, Call, CleanupObservation, ControlCode, ControlRefusal, LocalObservation,
-    Reply, Request, WorkspaceStatus, WorkspaceToken, HISTORY_WINDOW,
+    MountPlace, Reply, Request, WorkspaceStatus, WorkspaceToken, HISTORY_WINDOW,
 };
 pub use crate::control_unmount::{DirtyReport, UnmountControl};
 

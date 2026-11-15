@@ -340,25 +340,9 @@ class Calls(unittest.TestCase):
             layerfs.FAMILIES,
             ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs"],
         )
-        self.assertEqual(len(layerfs.TABLE), 73)
+        self.assertEqual(len(layerfs.TABLE), 76)
         for spec in layerfs.TABLE:
             self.assertTrue(callable(getattr(getattr(layerfs, spec["family"]), spec["call"])))
-        # the options the Publish change added are in the table the Python
-        # front end is built from, so `publish(expected_base=...)` is a keyword
-        # option rather than an unknown one (#691)
-        publish = next(
-            spec
-            for spec in layerfs.TABLE
-            if (spec["family"], spec["call"]) == ("branch", "publish")
-        )
-        self.assertEqual(
-            [(opt["name"], opt["kind"], opt["optional"]) for opt in publish["options"]],
-            [
-                ("expected_base", "name", True),
-                ("expected_head", "name", True),
-                ("force", "bool", True),
-            ],
-        )
         with self.assertRaises(layerfs.LayerFSError) as caught:
             layerfs.client(home=temp("bogus")).store.get("shop", bogus=1)
         self.assertEqual(caught.exception.code, "InvalidInput")

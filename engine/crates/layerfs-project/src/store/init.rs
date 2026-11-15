@@ -2,8 +2,8 @@
 use crate as layerfs_project;
 use layerfs_bridge::provision::{check_destination, ProviderKind, StoreManifest, StoreProfile};
 use layerfs_history::{
-    BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig,
-    HistoryError, HistoryName, InitStatistics, LayerStackId,
+    error::NameTakenState, BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryCatalog,
+    HistoryCatalogConfig, HistoryError, HistoryName, InitStatistics, LayerStackId,
 };
 use layerfs_persistence::{
     PersistenceConfig, SealedStore, SqliteAcquisitionSchema, SqliteHandles,
@@ -77,9 +77,10 @@ pub enum InitError {
     Project(ProjectError),
     /// First Branch publication.
     History(HistoryError),
-    /// Adding a project (#506): the Store already has a project of that
-    /// name; nothing was written.
-    Exists,
+    /// Adding a project (#506): the Store still holds that project name.
+    /// It is `NameTaken` whether the holder is live, retired or deleted;
+    /// nothing was written.
+    NameTaken(Box<NameTakenState>),
     /// Adding a project (#506): the Store was made without the acquisition
     /// tables (schema versions 16 to 18), refused before anything was
     /// scanned or written. LayerFS adds no tables to an existing Store.

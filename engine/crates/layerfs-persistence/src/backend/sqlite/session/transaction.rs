@@ -148,6 +148,7 @@ impl Session {
             if state.quarantined {
                 return Err(BackendError::Unknown.into());
             }
+            self.check_identity().map_err(E::from)?;
             // An earlier uncertain transaction may still exist. It cannot be
             // inherited by an independently owned snapshot or guessed complete.
             if !state.connection.is_autocommit() {
@@ -207,6 +208,7 @@ impl Session {
             if state.quarantined {
                 return Err(BackendError::Unknown.into());
             }
+            self.check_identity().map_err(E::from)?;
             // An earlier uncertain transaction cannot be inherited or guessed done.
             if !state.connection.is_autocommit() {
                 state.quarantined = true;
@@ -249,6 +251,7 @@ impl Session {
             if s.quarantined {
                 return Err(BackendError::Unknown.into());
             }
+            self.check_identity().map_err(E::from)?;
             // A held publication lane already owns the writer for its nested work.
             if writable && !turn.nested {
                 // State owns this before BEGIN, including across a poisoned unwind.

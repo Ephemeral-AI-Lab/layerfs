@@ -10,8 +10,8 @@
 //! build sends nothing more and closes. Then a request `{ op, args }`, read with at most
 //! [`REQUEST_WAIT`] between bytes. `worker.ping` answers who it is;
 //! `store.call`, `store.file`, `store.reach`, `sandbox.host`, `project.stage`,
-//! `project.init`, `project.export` and `project.remove` run one operation on
-//! this machine,
+//! `project.init`, `project.export`, `project.delete` and `project.list` run
+//! one operation on this machine,
 //! with `home` set to the worker's own root (the machine's data disk),
 //! never a path the caller sends. Answers are
 //! `{ value }` or `{ refused }`, after any `{ event }` frames.
@@ -28,10 +28,15 @@ use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::{
     read_frame, read_frame_within, write_frame, Hello, HELLO_WAIT, MAX_HELLO,
 };
+use layerfs_store::project::delete::{admit_project, delete_project, release_project};
 use layerfs_store::project::discovery::home_of;
 use layerfs_store::project::export::in_worker as export_in_worker;
-use layerfs_store::project::frame::{ExportFrame, InitFrame, RemoveFrame, StageFrame};
-use layerfs_store::project::{init::in_worker, remove::remove_project, staged};
+use layerfs_store::project::frame::{
+    DeleteAdmitFrame, DeleteFrame, DeleteReleaseFrame, ExportFrame, InitFrame, ListingFrame,
+    StageFrame,
+};
+use layerfs_store::project::listing::list_projects;
+use layerfs_store::project::{init::in_worker, staged};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -268,12 +273,29 @@ fn run(
             },
             layerfs_sandbox::workspace::dispatch::call,
         ),
-        // drops one project from the Store under this worker's root (2.0):
-        // `{ store, project, store_record }`
-        "project.remove" => {
+        // retires one project in the Store under this worker root and
+        // removes the worker own entry (2.0, T4.5b): `{ store, stack_id,
+        // deleted_ms?, project?, op_id?, store_record? }`
+        "project.delete" => {
             let root = home_of(Some(root))?;
-            remove_project(&root, &RemoveFrame::decode(&args)?)
+            delete_project(&root, &DeleteFrame::decode(&args)?)
         }
+        // registers the caller's project-scope admission before its sidecar
+        // and marker (2.0, T4.6): `{ store, stack_id, op_id, store_record? }`
+        "project.delete.admit" => {
+            let root = home_of(Some(root))?;
+            admit_project(&root, &DeleteAdmitFrame::decode(&args)?)
+        }
+        // releases the caller's project-scope admission after the marker
+        // (2.0, T4.6): `{ store, op_id, store_record? }`
+        "project.delete.release" => {
+            let root = home_of(Some(root))?;
+            release_project(&root, &DeleteReleaseFrame::decode(&args)?)
+        }
+        // reads the Store's own filtered project listing under this worker
+        // root, the same `layerfs_project::store::projects` a local Store
+        // uses (2.0, T4.5c): `{ store, store_record? }`
+        "project.list" => list_projects(root, &ListingFrame::decode(&args)?),
         // writes or discards one part of a caller's folder copy under this
         // worker's root (#536 H11a)
         "project.stage" => staged::run(root, &StageFrame::decode(args)?),

@@ -118,6 +118,8 @@ pub(crate) enum BackendError {
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Cancelled,
     ReadOnly,
+    /// §10: the Store path no longer names the file this handle opened.
+    Stale,
     Capacity,
     Integrity,
     /// A SQLite Store of schema version 1 (before #91): refused at open with
@@ -158,6 +160,8 @@ impl From<BackendError> for layerfs_history::HistoryError {
                 Self::OwnershipUnavailable
             }
             BackendError::ReadOnly => Self::ContinuityUnavailable,
+            // §10: the file was replaced or moved under this handle.
+            BackendError::Stale => Self::StaleStore,
             BackendError::Capacity => Self::Capacity("persistence"),
             BackendError::Integrity => Self::Integrity("persistence"),
             BackendError::SchemaVersion1 => Self::Integrity(SCHEMA_VERSION_1),

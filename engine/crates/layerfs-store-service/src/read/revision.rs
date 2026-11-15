@@ -3,12 +3,13 @@ use super::{
     file_facts, query,
     revision_pages::{self, Boundary, Key},
     snapshot,
+    visibility::Visibility,
 };
 use crate::history::{lookup as args, saved};
 use crate::operator::files::{entry, revision};
 use crate::store::{Store, StorePorts};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_history::NodeId;
+use layerfs_history::{LayerStackId, NodeId};
 use std::sync::Arc;
 
 fn parent(
@@ -35,6 +36,7 @@ pub struct Request<'a> {
     pub page: query::ResultPage,
     pub branch: &'a str,
     pub continuation: Option<&'a str>,
+    pub stack: LayerStackId,
 }
 
 /// A complete page or Capacity: never advance past unreturned matches.
@@ -50,12 +52,21 @@ pub fn list(
         mut page,
         branch,
         continuation,
+        stack,
     } = request;
     let provenance = match traversal {
         "provenance" => true,
         "branch" => false,
         _ => return Err(args::invalid("traversal must be provenance or branch")),
     };
+    // §4.3: a hidden anchor refuses; a hidden older version ends the walk
+    // instead of being skipped over.
+    let visibility = Visibility::for_stack(store, stack, Visibility::node_serial(store, start));
+    if entry(reader, args::root(store, start)?, path)?.is_some() {
+        if let Some(frontier) = visibility.hidden_at(path, visibility.serial()) {
+            return Err(Visibility::refusal(path, frontier));
+        }
+    }
     let key = Key {
         start,
         path,
@@ -120,11 +131,35 @@ pub fn list(
         examined += 1;
         let previous = parent(store, node, provenance)?;
         let now = entry(reader, args::root(store, node)?, path)?;
+        // A node the marker hides is never a returned version: the walk stops
+        // at the first one rather than listing it or walking past it.
+        if now.is_some()
+            && visibility
+                .hidden_at(path, Visibility::node_serial(store, node))
+                .is_some()
+        {
+            break;
+        }
+        let mut hidden_before = false;
         let before = previous
-            .map(|p| entry(reader, args::root(store, p)?, path))
+            .map(|p| {
+                let found = entry(reader, args::root(store, p)?, path)?;
+                if found.is_some()
+                    && visibility
+                        .hidden_at(path, Visibility::node_serial(store, p))
+                        .is_some()
+                {
+                    hidden_before = true;
+                    Ok(None)
+                } else {
+                    Ok(found)
+                }
+            })
             .transpose()?
             .flatten();
-        next = if !provenance && branch != "main" && matches!(previous, Some(NodeId::Layer(_))) {
+        next = if hidden_before
+            || (!provenance && branch != "main" && matches!(previous, Some(NodeId::Layer(_))))
+        {
             None
         } else {
             previous

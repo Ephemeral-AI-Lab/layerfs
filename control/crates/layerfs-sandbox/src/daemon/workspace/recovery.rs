@@ -12,7 +12,15 @@ impl WorkspaceApi<'_> {
         workspace: WorkspaceId,
         branch: BranchId,
     ) -> Result<BoundWorkspace, Box<OperationFailure>> {
-        let request = Request::Mount { workspace, branch };
+        let request = if self.place.known() {
+            Request::MountPlaced {
+                workspace,
+                branch,
+                place: self.place.clone(),
+            }
+        } else {
+            Request::Mount { workspace, branch }
+        };
         match self.exchange(request.clone())? {
             Reply::Bound { token, binding } => Ok(BoundWorkspace { token, binding }),
             reply => Err(OperationFailure::unexpected(request, reply)),
@@ -27,10 +35,19 @@ impl WorkspaceApi<'_> {
         project: &str,
         branch: &str,
     ) -> Result<BoundWorkspace, Box<OperationFailure>> {
-        let request = Request::MountNamed {
-            workspace,
-            project: project.to_owned(),
-            branch: branch.to_owned(),
+        let request = if self.place.known() {
+            Request::MountNamedPlaced {
+                workspace,
+                project: project.to_owned(),
+                branch: branch.to_owned(),
+                place: self.place.clone(),
+            }
+        } else {
+            Request::MountNamed {
+                workspace,
+                project: project.to_owned(),
+                branch: branch.to_owned(),
+            }
         };
         match self.exchange(request.clone())? {
             Reply::Bound { token, binding } => Ok(BoundWorkspace { token, binding }),

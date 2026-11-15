@@ -97,6 +97,29 @@ pub fn init_observed(
     counters: Arc<InitCounters>,
 ) -> ProjectResult<Initialized> {
     use std::os::unix::fs::MetadataExt;
+    // Admission: an Init shares the project scope with removals and is
+    // visible as a holder until it finishes or fails.
+    let op = admission_op_id(request.stack);
+    let intent = layerfs_history::records::GcIntent::shared(
+        op,
+        layerfs_history::records::GcIntentKind::Init,
+        layerfs_history::records::GcScopeKind::Project,
+        request.stack.as_slice(),
+    )
+    .named(Some(request.name.as_str()), None);
+    let admitted = match catalog.gc_register(&intent) {
+        Ok(()) => true,
+        // A catalog without admission cannot exclude a removal; Init still
+        // proceeds, as it did before #41 T6.
+        Err(layerfs_history::HistoryError::Unsupported(_)) => false,
+        Err(error) => return Err(ProjectError::History(error)),
+    };
+    let mut admission = InitAdmission {
+        catalog,
+        op_id: op,
+        admitted,
+        released: false,
+    };
     counters.step(InitStep::Scan);
     let mut progress = ImportProgress::observed(request.deadline, counters);
     progress.tick()?;
@@ -164,6 +187,7 @@ pub fn init_observed(
             })
             .map_err(ProjectError::History)
     })?;
+    admission.release().map_err(ProjectError::History)?;
     Ok(Initialized {
         stack,
         root,
@@ -247,4 +271,52 @@ pub fn init_observed(
     _counters: Arc<InitCounters>,
 ) -> ProjectResult<Initialized> {
     Err(ProjectError::Unsupported)
+}
+
+/// One fresh 16-byte Init admission identity.
+fn admission_op_id(stack: LayerStackId) -> [u8; 16] {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos());
+    let mut seed = Vec::with_capacity(56);
+    seed.extend_from_slice(stack.as_slice());
+    seed.extend_from_slice(&std::process::id().to_le_bytes());
+    seed.extend_from_slice(&now.to_le_bytes());
+    seed.extend_from_slice(&NEXT.fetch_add(1, Ordering::Relaxed).to_le_bytes());
+    let identity = ObjectId::for_bytes(&seed);
+    let mut op = [0u8; 16];
+    op.copy_from_slice(&identity.as_bytes()[..16]);
+    op
+}
+
+/// Releases one Init's admission intent on success, and on drop after a
+/// failure (best effort: the original failure is the reported one).
+struct InitAdmission<'a> {
+    catalog: &'a dyn HistoryCatalog,
+    op_id: [u8; 16],
+    admitted: bool,
+    released: bool,
+}
+
+impl InitAdmission<'_> {
+    fn release(&mut self) -> Result<(), layerfs_history::HistoryError> {
+        self.released = true;
+        if !self.admitted {
+            return Ok(());
+        }
+        match self.catalog.gc_release(&self.op_id) {
+            Ok(()) | Err(layerfs_history::HistoryError::Unsupported(_)) => Ok(()),
+            Err(error) => Err(error),
+        }
+    }
+}
+
+impl Drop for InitAdmission<'_> {
+    fn drop(&mut self) {
+        if !self.released && self.admitted {
+            let _ = self.catalog.gc_release(&self.op_id);
+        }
+    }
 }

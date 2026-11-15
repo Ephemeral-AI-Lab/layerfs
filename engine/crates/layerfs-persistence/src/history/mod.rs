@@ -1,4 +1,5 @@
 //! Shared history operations over typed persistence transactions.
+mod admission;
 mod allocation;
 mod ancestry;
 mod bindings;
@@ -6,16 +7,25 @@ mod branch;
 mod catalog;
 mod commit;
 mod digests;
+mod epoch;
 mod hints;
+mod kept;
 mod layerstack;
 mod lineage;
 mod lineage_backfill;
 mod merge;
+mod objects;
+mod paths;
+mod position;
 mod provider;
 mod removal;
 mod rows;
 mod transaction;
+pub use kept::{KeptHistory, KeptNode, KeptNodeId};
 pub(crate) use lineage_backfill::backfill_lineage;
+#[cfg(feature = "postgresql")]
+pub use objects::GcTuple;
+pub use objects::{KeptObjects, KeptWaste, MarkResult};
 pub use provider::HistoryProvider;
 pub(crate) use rows::{
     branch_row as diagnostic_branch, commit_graph_row as diagnostic_commit_graph,

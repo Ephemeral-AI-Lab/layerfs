@@ -106,8 +106,7 @@ pub struct BranchMerge {
     pub units: Option<SdkValue>,
 }
 
-/// `branch.publish(project, branch, commit, { expected_base, expected_head,
-/// force })`.
+/// `branch.publish(project, branch, commit)`.
 #[derive(Clone, Debug, Default)]
 pub struct BranchPublish {
     /// The project.
@@ -116,12 +115,15 @@ pub struct BranchPublish {
     pub branch: String,
     /// The Commit, else its head.
     pub commit: Option<String>,
-    /// The base Layer the caller expects the Branch and main to be at.
-    pub expected_base: Option<String>,
-    /// The Branch head Commit the caller expects.
-    pub expected_head: Option<String>,
-    /// Publish over a moved main, as before.
-    pub force: Option<bool>,
+}
+
+/// `branch.remove(project, branch)`.
+#[derive(Clone, Debug, Default)]
+pub struct BranchRemove {
+    /// The project.
+    pub project: String,
+    /// The Branch.
+    pub branch: String,
 }
 
 /// `branch.diff(project, from_branch, to_branch, { paths_only, page_size,
@@ -185,6 +187,23 @@ pub fn merge(home: &Path, events: &mut Events<'_>, request: &BranchMerge) -> Out
 /// `branch.publish`: a Branch moved to a Commit.
 pub fn publish(home: &Path, events: &mut Events<'_>, request: &BranchPublish) -> Outcome {
     on_project(home, events, &request.project, StoreOp::Publish(request))
+}
+
+/// `branch.remove`: one Branch hidden by its Store marker. The result names
+/// the project as the caller gave it, `<store>/<project>`: the Store sees
+/// only the project's name within it and echoes that alone.
+pub fn remove(home: &Path, events: &mut Events<'_>, request: &BranchRemove) -> Outcome {
+    let value = on_project(
+        home,
+        events,
+        &request.project,
+        StoreOp::BranchRemove(request),
+    )?;
+    Ok(layerfs_home::home::with_field(
+        value,
+        "project",
+        SdkValue::text(&request.project),
+    ))
 }
 
 /// `branch.diff`: the changes between two Branches.

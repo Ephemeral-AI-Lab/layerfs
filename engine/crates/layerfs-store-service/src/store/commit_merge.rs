@@ -160,10 +160,31 @@ impl BoundWorkspace {
         let policy = self.store.policy().construction();
         let capacities = policy.capacities();
         let hints = super::CatalogHints::new(&*self.store.history);
+        // §4.3: a side at or below the frontier loses the entries its
+        // markers hide before the three-way merge, so a hidden side is absent
+        // and a post-frontier re-creation on the other side is an addition.
+        let base = crate::removal::derive_root(
+            &self.store,
+            bound.branch.stack,
+            &*ports,
+            save,
+            crate::removal::node_of(bound),
+            FilesystemRootId(bound.effective_root),
+        )
+        .map_err(crate::removal::commit_error)?;
+        let other = crate::removal::derive_root(
+            &self.store,
+            current.branch.stack,
+            &*ports,
+            save,
+            crate::removal::node_of(current),
+            FilesystemRootId(current.effective_root),
+        )
+        .map_err(crate::removal::commit_error)?;
         let input = MergeInput {
-            base: FilesystemRootId(bound.effective_root),
+            base,
             ours,
-            theirs: FilesystemRootId(current.effective_root),
+            theirs: other,
             labels: ["workspace", &theirs],
             rules_from: RulesFrom::Theirs,
             policy,

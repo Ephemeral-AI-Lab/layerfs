@@ -68,6 +68,40 @@ impl Session {
     }
 }
 
+impl Session {
+    /// One `PRAGMA wal_checkpoint(TRUNCATE)` for a caller that already holds the
+    /// Store's writer lane (§7 step 1). No lane and no turn are taken here; a
+    /// nonzero `busy` is reported, never retried.
+    pub(crate) fn checkpoint_holding(&self) -> Result<(), BackendError> {
+        if !self.writable {
+            return Err(BackendError::ReadOnly);
+        }
+        let _pass = self.background.as_ref().map(|pass| pass.hold());
+        let mut state = self.state.lock().map_err(|_| BackendError::Unknown)?;
+        super::thread_work::attributed(&mut state, |state| {
+            if state.quarantined || !state.connection.is_autocommit() {
+                state.quarantined = true;
+                return Err(BackendError::Unknown);
+            }
+            let rows = query::run(
+                &state.connection,
+                "PRAGMA wal_checkpoint(TRUNCATE)",
+                vec![],
+                &state.work,
+            )?;
+            if !state.connection.is_autocommit() {
+                state.quarantined = true;
+                return Err(BackendError::Unknown);
+            }
+            let busy = rows.first().ok_or(BackendError::Integrity)?.get::<i64>(0)?;
+            if busy != 0 {
+                return Err(BackendError::Busy);
+            }
+            Ok(())
+        })
+    }
+}
+
 /// The length of the Store's `-wal` file; zero when there is none.
 pub(crate) fn wal_bytes(path: &std::path::Path) -> Result<u64, BackendError> {
     let mut wal = path.as_os_str().to_os_string();

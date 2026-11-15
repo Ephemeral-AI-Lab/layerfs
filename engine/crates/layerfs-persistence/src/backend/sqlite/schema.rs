@@ -15,6 +15,33 @@ pub(crate) const LINEAGE: &str = include_str!("../../../sql/sqlite/lineage.sql")
 pub(crate) const SCRATCH: &str = include_str!("../../../sql/sqlite/merge_scratch.sql");
 /// Whole-content file digests (#364); a Store written before them gains them at open.
 pub(crate) const DIGESTS: &str = include_str!("../../../sql/sqlite/file_digest.sql");
+/// GC markers, positions and admission records; a Store written before them
+/// gains them at open.
+pub(crate) const GC: &str = include_str!("../../../sql/sqlite/gc.sql");
+/// The position columns T1.2a/T1.4 append, as `("table", "column", ALTER)`;
+/// a Store written before them gains them at open.
+pub(crate) const POSITION_COLUMNS: [(&str, &str, &str); 4] = [
+    (
+        "\"commit\"",
+        "history_serial",
+        "ALTER TABLE \"commit\" ADD COLUMN history_serial INTEGER NOT NULL DEFAULT 0",
+    ),
+    (
+        "layer",
+        "history_serial",
+        "ALTER TABLE layer ADD COLUMN history_serial INTEGER NOT NULL DEFAULT 0",
+    ),
+    (
+        "store_policy",
+        "trace_salt",
+        "ALTER TABLE store_policy ADD COLUMN trace_salt BLOB NOT NULL DEFAULT (X'0000000000000000000000000000000000000000000000000000000000000000') CHECK(length(trace_salt)=32)",
+    ),
+    (
+        "history_meta",
+        "next_history_serial",
+        "ALTER TABLE history_meta ADD COLUMN next_history_serial INTEGER NOT NULL DEFAULT 1",
+    ),
+];
 const UNIT_INDEX: &str = include_str!("../../../sql/sqlite/objects_units_index.sql");
 const UNITS: &str = include_str!("../../../sql/sqlite/objects_units.sql");
 const ACQUISITION: &str = include_str!("../../../sql/sqlite/acquisition/schema.sql");
@@ -34,6 +61,7 @@ pub(super) fn scripts((layout, acquisition): Selection) -> Vec<String> {
         LINEAGE.to_owned(),
         SCRATCH.to_owned(),
         DIGESTS.to_owned(),
+        GC.to_owned(),
     ];
     if acquisition == crate::SqliteAcquisitionSchema::Tables {
         scripts.push(ACQUISITION.to_owned());
@@ -59,6 +87,165 @@ pub(crate) fn definition(c: &Connection, w: &RefCell<SqlWork>) -> Result<String,
         }
     }
     Ok(s)
+}
+/// The `history_meta` next serial column as `history.sql` writes it; it sits
+/// on its own line, so removing the line leaves the text an older Store
+/// recorded.
+fn next_history_serial_column() -> &'static str {
+    let start = HISTORY
+        .find("    next_history_serial INTEGER NOT NULL DEFAULT 1")
+        .expect("history schema holds the next serial column");
+    let end = start + HISTORY[start..].find('\n').expect("column line ends") + 1;
+    &HISTORY[start..end]
+}
+
+/// The `kept_node` table as `gc.sql` writes it: one appended statement at the
+/// end of the GC script, so removing exactly this text leaves the source a
+/// Store written before T7.1 recorded.
+fn kept_node_table() -> &'static str {
+    let start = GC
+        .find("CREATE TABLE kept_node (")
+        .expect("the GC schema holds kept_node");
+    let end = start + GC[start..].find(";\n").expect("kept_node ends") + 2;
+    &GC[start..end]
+}
+
+/// The `commit` and `layer` position column as `history.sql` writes it; it
+/// appears once in each of the two tables.
+fn history_serial_column() -> &'static str {
+    let start = HISTORY
+        .find("    history_serial INTEGER NOT NULL DEFAULT 0")
+        .expect("history schema holds the position column");
+    let end = start + HISTORY[start..].find('\n').expect("column line ends") + 1;
+    &HISTORY[start..end]
+}
+
+/// The `store_policy` position salt column as `metadata.sql` writes it,
+/// together with the comma that ends `next_ordinal`: it was appended as the
+/// table's last column, so a Store written before it recorded neither the
+/// line nor the comma.
+fn trace_salt_column() -> &'static str {
+    let start = METADATA
+        .find(",\n trace_salt BLOB NOT NULL DEFAULT")
+        .expect("metadata schema holds the salt column");
+    // The search starts past the comma and newline; the newline that ends the
+    // column is kept, since it is also the one before the table's closing
+    // `) STRICT;` that the pre-T1.2a text held.
+    let line = start + 2;
+    let end = line + METADATA[line..].find('\n').expect("column line ends");
+    &METADATA[start..end]
+}
+
+/// `source` as a Store written before the position columns recorded it: the
+/// two `history_serial` columns, `store_policy.trace_salt` and
+/// `history_meta.next_history_serial` removed. The table migrations compare
+/// against this so a Store from before those columns still matches its
+/// recorded source.
+fn without_position_columns(source: String) -> String {
+    source
+        .replacen(history_serial_column(), "", 2)
+        .replacen(trace_salt_column(), "", 1)
+        .replacen(next_history_serial_column(), "", 1)
+}
+
+/// The ALTERs and salt backfill an old Store needs; existing rows keep serial
+/// 0 and the Store keeps one random salt.
+fn add_position_columns(tx: &Transaction<'_>) -> Result<(), BackendError> {
+    for (_, _, alter) in POSITION_COLUMNS.iter().take(3) {
+        tx.query(alter, vec![])?;
+    }
+    tx.query(
+        "UPDATE store_policy SET trace_salt=randomblob(32) WHERE id=1",
+        vec![],
+    )?;
+    Ok(())
+}
+
+/// The serials and epochs a Store written before T1.4 needs: Commits take the
+/// next Store serials in `(created_ms, commit_id)` order, then each project's
+/// genesis Layer takes the next one in stack-id order; every other Layer
+/// republishes its source Commit and carries that Commit's serial. Existing
+/// serials are kept, `project_epoch` gets one zero row per project and
+/// `next_history_serial` never falls below `MAX(serial) + 1`.
+fn backfill_position_state(tx: &Transaction<'_>) -> Result<(), BackendError> {
+    let next: i64 = tx
+        .query(
+            "SELECT next_history_serial FROM history_meta WHERE id=1",
+            vec![],
+        )?
+        .first()
+        .ok_or(BackendError::Integrity)?
+        .get(0)?;
+    let commit_max: i64 = tx
+        .query(
+            "SELECT COALESCE(MAX(history_serial),0) FROM \"commit\"",
+            vec![],
+        )?
+        .first()
+        .ok_or(BackendError::Integrity)?
+        .get(0)?;
+    let layer_max: i64 = tx
+        .query("SELECT COALESCE(MAX(history_serial),0) FROM layer", vec![])?
+        .first()
+        .ok_or(BackendError::Integrity)?
+        .get(0)?;
+    let base = next.max(commit_max.max(layer_max) + 1);
+    tx.query(
+        &format!(
+            "WITH ordered(commit_id,serial) AS ( \
+               SELECT commit_id,{base}+ROW_NUMBER() OVER (ORDER BY created_ms,commit_id)-1 \
+               FROM \"commit\" WHERE history_serial=0) \
+             UPDATE \"commit\" SET history_serial=( \
+               SELECT ordered.serial FROM ordered \
+               WHERE ordered.commit_id=\"commit\".commit_id) \
+             WHERE history_serial=0"
+        ),
+        vec![],
+    )?;
+    let after_commits: i64 = tx
+        .query(
+            "SELECT COALESCE(MAX(history_serial),0)+1 FROM \"commit\"",
+            vec![],
+        )?
+        .first()
+        .ok_or(BackendError::Integrity)?
+        .get(0)?;
+    tx.query(
+        &format!(
+            "WITH ordered(layer_id,serial) AS ( \
+               SELECT layer_id,{after_commits}+ROW_NUMBER() OVER ( \
+                 ORDER BY layer_stack_id,layer_id)-1 \
+               FROM layer WHERE history_serial=0 AND parent_layer_id IS NULL) \
+             UPDATE layer SET history_serial=( \
+               SELECT ordered.serial FROM ordered \
+               WHERE ordered.layer_id=layer.layer_id) \
+             WHERE history_serial=0 AND parent_layer_id IS NULL"
+        ),
+        vec![],
+    )?;
+    tx.query(
+        "UPDATE layer SET history_serial=( \
+           SELECT \"commit\".history_serial FROM \"commit\" \
+           WHERE \"commit\".layer_stack_id=layer.layer_stack_id \
+             AND \"commit\".commit_id=layer.source_commit_id) \
+         WHERE history_serial=0 AND source_commit_id IS NOT NULL",
+        vec![],
+    )?;
+    tx.query(
+        "INSERT INTO project_epoch(layer_stack_id,epoch) \
+         SELECT s.layer_stack_id,0 FROM layer_stack s \
+         WHERE NOT EXISTS ( \
+           SELECT 1 FROM project_epoch e WHERE e.layer_stack_id=s.layer_stack_id)",
+        vec![],
+    )?;
+    tx.query(
+        "UPDATE history_meta SET next_history_serial=MAX(next_history_serial,( \
+           SELECT COALESCE(MAX(history_serial),0)+1 FROM ( \
+             SELECT history_serial FROM \"commit\" \
+             UNION ALL SELECT history_serial FROM layer))) WHERE id=1",
+        vec![],
+    )?;
+    Ok(())
 }
 pub(crate) fn check(
     c: &Connection,
@@ -91,8 +278,16 @@ pub(crate) fn check(
         "commit_lineage",
         "content_signature",
         "file_digest",
+        "gc_dead",
+        "gc_intent",
+        "gc_op",
+        "project_epoch",
+        "branch_retired",
+        "layer_stack_retired",
+        "path_removed",
         "history_meta",
         "inode_value_block",
+        "kept_node",
         "layer",
         "layer_lineage",
         "layer_stack",
@@ -137,12 +332,53 @@ impl super::session::connection::Session {
    for script in scripts(selection) { tx.bootstrap(&script)?; }
    tx.query(&format!("PRAGMA application_id={APPLICATION_ID}"),vec![])?;
    tx.query(&format!("PRAGMA user_version={version}"),vec![])?;
-   tx.query(&format!("INSERT INTO store_policy(id,schema_version,format_profile,small_file_threshold_bytes,whole_file_delta_max_depth,chunk_delta_max_depth,metadata_delta_max_depth) VALUES(1,{version},?1,?2,?3,?4,?5)"),vec![Param::I64(i64::from(policy.format_profile())),Param::I64(policy.small_file_threshold_bytes() as i64),Param::I64(i64::from(policy.whole_file_delta_max_depth())),Param::I64(i64::from(policy.chunk_delta_max_depth())),Param::I64(i64::from(policy.metadata_delta_max_depth()))])?;
+   tx.query(&format!("INSERT INTO store_policy(id,schema_version,format_profile,small_file_threshold_bytes,whole_file_delta_max_depth,chunk_delta_max_depth,metadata_delta_max_depth,trace_salt) VALUES(1,{version},?1,?2,?3,?4,?5,randomblob(32))"),vec![Param::I64(i64::from(policy.format_profile())),Param::I64(policy.small_file_threshold_bytes() as i64),Param::I64(i64::from(policy.whole_file_delta_max_depth())),Param::I64(i64::from(policy.chunk_delta_max_depth())),Param::I64(i64::from(policy.metadata_delta_max_depth()))])?;
    let definition=definition(tx.connection,tx.work)?;
    tx.query(&format!("INSERT INTO history_meta(id,catalog_id,catalog_incarnation,binding_key,identity_format,schema_version,schema_source,schema_definition) VALUES(1,?1,?2,?3,3,{version},?4,?5)"),vec![Param::Bytes(catalog_id.as_slice().to_vec()),Param::I64(history.incarnation as i64),Param::Bytes(history.binding_key.clone()),Param::Text(source(selection)),Param::Text(definition)])?;
    Ok(())
   })?;
         Ok(())
+    }
+    /// Adds the three position columns T1.2a introduced to a Store written
+    /// before them: `commit.history_serial`, `layer.history_serial` (default 0)
+    /// and `store_policy.trace_salt` (32 random bytes). It is an additive
+    /// migration (REBUILD.md kind 2) under the same recorded-schema gate as
+    /// [`Self::add_binding_hints`]; because it runs before the GC tables are
+    /// added, the recorded source it matches is the live one with `GC` stripped.
+    pub(crate) fn add_gc_columns(&self) -> Result<(), BackendError> {
+        self.run::<_, BackendError>(true, |tx| {
+            let present = tx.query(
+                "SELECT 1 FROM pragma_table_info('commit') WHERE name='history_serial'",
+                vec![],
+            )?;
+            if !present.is_empty() {
+                return Ok(());
+            }
+            let rows = tx.query(
+                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
+                vec![],
+            )?;
+            let Some(row) = rows.first() else {
+                return Ok(());
+            };
+            let current = without_position_columns(source((self.layout, self.acquisition)))
+                .replacen(GC, "", 1);
+            if row.get::<String>(0)? != current
+                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
+            {
+                return Ok(());
+            }
+            add_position_columns(tx)?;
+            let definition = definition(tx.connection, tx.work)?;
+            tx.query(
+                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
+                vec![
+                    Param::Text(source((self.layout, self.acquisition)).replacen(GC, "", 1)),
+                    Param::Text(definition),
+                ],
+            )?;
+            Ok(())
+        })
     }
     /// Adds the binding hint table (#352 `49499abac`, blocks since #91) to a Store written
     /// before it existed, then records the current schema: an additive
@@ -169,10 +405,11 @@ impl super::session::connection::Session {
             };
             // The schema this migration records is the one before the
             // lineage and merge tables; later migrations add those.
-            let current = source((self.layout, self.acquisition))
+            let current = without_position_columns(source((self.layout, self.acquisition)))
                 .replacen(DIGESTS, "", 1)
                 .replacen(SCRATCH, "", 1)
-                .replacen(LINEAGE, "", 1);
+                .replacen(LINEAGE, "", 1)
+                .replacen(GC, "", 1);
             let table = HISTORY
                 .find("CREATE TABLE binding_hint_block (")
                 .and_then(|start| Some((start, start + HISTORY[start..].find(";\n")? + 2)))
@@ -216,9 +453,10 @@ impl super::session::connection::Session {
             let Some(row) = rows.first() else {
                 return Ok(());
             };
-            let current = source((self.layout, self.acquisition))
+            let current = without_position_columns(source((self.layout, self.acquisition)))
                 .replacen(DIGESTS, "", 1)
-                .replacen(SCRATCH, "", 1);
+                .replacen(SCRATCH, "", 1)
+                .replacen(GC, "", 1);
             if row.get::<String>(0)? != current.replacen(LINEAGE, "", 1)
                 || row.get::<String>(1)? != definition(tx.connection, tx.work)?
             {
@@ -253,7 +491,9 @@ impl super::session::connection::Session {
             let Some(row) = rows.first() else {
                 return Ok(());
             };
-            let current = source((self.layout, self.acquisition)).replacen(DIGESTS, "", 1);
+            let current = without_position_columns(source((self.layout, self.acquisition)))
+                .replacen(DIGESTS, "", 1)
+                .replacen(GC, "", 1);
             if row.get::<String>(0)? != current.replacen(SCRATCH, "", 1)
                 || row.get::<String>(1)? != definition(tx.connection, tx.work)?
             {
@@ -288,13 +528,127 @@ impl super::session::connection::Session {
             let Some(row) = rows.first() else {
                 return Ok(());
             };
-            let current = source((self.layout, self.acquisition));
+            let current = without_position_columns(source((self.layout, self.acquisition)))
+                .replacen(GC, "", 1);
             if row.get::<String>(0)? != current.replacen(DIGESTS, "", 1)
                 || row.get::<String>(1)? != definition(tx.connection, tx.work)?
             {
                 return Ok(());
             }
             tx.bootstrap(DIGESTS)?;
+            let definition = definition(tx.connection, tx.work)?;
+            tx.query(
+                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
+                vec![Param::Text(current), Param::Text(definition)],
+            )?;
+            Ok(())
+        })
+    }
+    /// Adds the GC marker, position and admission tables to a Store written
+    /// before them, then records the current schema: an additive migration
+    /// under the same conditions as [`Self::add_binding_hints`].
+    pub(crate) fn add_gc(&self) -> Result<(), BackendError> {
+        self.run::<_, BackendError>(true, |tx| {
+            let present = tx.query(
+                "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='gc_intent'",
+                vec![],
+            )?;
+            if !present.is_empty() {
+                return Ok(());
+            }
+            let rows = tx.query(
+                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
+                vec![],
+            )?;
+            let Some(row) = rows.first() else {
+                return Ok(());
+            };
+            let current = source((self.layout, self.acquisition));
+            if row.get::<String>(0)? != current.replacen(GC, "", 1)
+                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
+            {
+                return Ok(());
+            }
+            tx.bootstrap(GC)?;
+            let definition = definition(tx.connection, tx.work)?;
+            tx.query(
+                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
+                vec![Param::Text(current), Param::Text(definition)],
+            )?;
+            Ok(())
+        })
+    }
+    /// Adds the `kept_node` history-closure table (T7.1) to a Store written
+    /// before it, then records the current schema: an additive migration
+    /// (REBUILD.md kind 2) under the same conditions as
+    /// [`Self::add_binding_hints`]. The table is empty until a mark writes it.
+    pub(crate) fn add_kept_node(&self) -> Result<(), BackendError> {
+        self.run::<_, BackendError>(true, |tx| {
+            let present = tx.query(
+                "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='kept_node'",
+                vec![],
+            )?;
+            if !present.is_empty() {
+                return Ok(());
+            }
+            let rows = tx.query(
+                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
+                vec![],
+            )?;
+            let Some(row) = rows.first() else {
+                return Ok(());
+            };
+            let current = source((self.layout, self.acquisition));
+            let recorded = row.get::<String>(0)?;
+            let without = current.replacen(kept_node_table(), "", 1);
+            let earlier = without.replacen(next_history_serial_column(), "", 1);
+            if (recorded != earlier && recorded != without)
+                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
+            {
+                return Ok(());
+            }
+            tx.bootstrap(kept_node_table())?;
+            let definition = definition(tx.connection, tx.work)?;
+            tx.query(
+                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
+                vec![Param::Text(current), Param::Text(definition)],
+            )?;
+            Ok(())
+        })
+    }
+    /// Adds the position state T1.4 introduced (`history_meta.next_history_serial`,
+    /// appended NOT NULL DEFAULT 1) and backfills the `commit`/`layer` serials
+    /// and `project_epoch` rows in the same write transaction: an additive
+    /// migration (REBUILD.md kind 2) under the same recorded-schema gate as
+    /// [`Self::add_gc_columns`]. `recorded == current` also matches a Store an
+    /// earlier step of this same open just brought forward, because those steps
+    /// record the current source before this column is appended.
+    pub(crate) fn add_position_state(&self) -> Result<(), BackendError> {
+        self.run::<_, BackendError>(true, |tx| {
+            let present = tx.query(
+                "SELECT 1 FROM pragma_table_info('history_meta') WHERE name='next_history_serial'",
+                vec![],
+            )?;
+            if !present.is_empty() {
+                return Ok(());
+            }
+            let rows = tx.query(
+                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
+                vec![],
+            )?;
+            let Some(row) = rows.first() else {
+                return Ok(());
+            };
+            let current = source((self.layout, self.acquisition));
+            let before = current.replacen(next_history_serial_column(), "", 1);
+            let recorded = row.get::<String>(0)?;
+            if (recorded != before && recorded != current)
+                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
+            {
+                return Ok(());
+            }
+            tx.query(POSITION_COLUMNS[3].2, vec![])?;
+            backfill_position_state(tx)?;
             let definition = definition(tx.connection, tx.work)?;
             tx.query(
                 "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",

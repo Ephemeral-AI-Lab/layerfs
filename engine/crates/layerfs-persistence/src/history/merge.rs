@@ -12,9 +12,8 @@ use layerfs_history::error::{HistoryError, HistoryResult, Missing, MovedState};
 use layerfs_history::identity::NodeId;
 use layerfs_history::records::{BranchMergeRequest, BranchSnapshot, MergeHead, MergeSide};
 
-use super::rows::{one, sql};
+use super::rows::sql;
 
-const BRANCH_NAME_TAKEN: &str = "branch_branch_name_taken";
 const INSERT_BRANCH: &str = "branch_insert_branch";
 
 /// The node one side is at now.
@@ -72,19 +71,15 @@ pub(crate) fn merge_branch(
             _ => HistoryError::Integrity("merge side"),
         });
     }
-    if super::branch::branch(tx, request.branch)?.is_some() {
-        return Err(HistoryError::Integrity("Branch identity"));
+    if super::branch::branch_any(tx, request.branch)?.is_some() {
+        return Err(super::branch::taken(tx, request.stack, &request.name)?);
     }
-    if one(
-        tx,
-        BRANCH_NAME_TAKEN,
-        params![request.stack.as_slice(), request.name.as_str()],
-        |_| Ok(()),
-    )?
-    .is_some()
-    {
-        return Err(HistoryError::Integrity("Branch name"));
+    if let Some(state) = super::branch::name_taken(tx, request.stack, &request.name)? {
+        return Err(HistoryError::NameTaken(Box::new(state)));
     }
+    // Spec 5: read the project epoch at the start of this write transaction;
+    // `confirm` below re-checks it before the transaction commits.
+    let fence = super::epoch::open(tx, request.stack)?;
     let (base, head) = match &request.head {
         MergeHead::Node(NodeId::Layer(layer)) => (*layer, None),
         MergeHead::Node(NodeId::Commit(commit)) => {
@@ -140,6 +135,8 @@ pub(crate) fn merge_branch(
         ],
     )
     .map_err(sql)?;
-    super::branch::branch_snapshot(tx, request.branch)?
-        .ok_or(HistoryError::Integrity("Branch insertion"))
+    let snapshot = super::branch::branch_snapshot(tx, request.branch)?
+        .ok_or(HistoryError::Integrity("Branch insertion"))?;
+    fence.confirm(tx)?;
+    Ok(snapshot)
 }

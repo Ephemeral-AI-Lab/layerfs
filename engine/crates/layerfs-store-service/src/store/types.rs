@@ -70,6 +70,8 @@ pub struct BindRefusal {
 pub enum CloseError {
     Owner(OwnerError),
     Reader(Arc<PortError>),
+    /// The mount admission intent could not be released.
+    Intent(HistoryError),
 }
 impl fmt::Display for CloseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

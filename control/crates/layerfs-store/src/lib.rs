@@ -14,6 +14,7 @@ pub mod backup;
 pub mod call;
 #[doc(hidden)]
 pub mod calls;
+pub mod compact;
 pub mod diagnostic;
 #[doc(hidden)]
 pub mod identity;
@@ -26,6 +27,7 @@ pub mod open_args;
 #[doc(hidden)]
 pub mod place;
 pub mod postgresql;
+pub mod report;
 #[doc(hidden)]
 pub mod project;
 #[doc(hidden)]

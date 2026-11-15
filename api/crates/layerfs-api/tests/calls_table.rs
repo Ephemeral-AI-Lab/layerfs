@@ -1,4 +1,4 @@
-//! The call table and its dispatcher (#533 step 2): 73 calls in ten
+//! The call table and its dispatcher (#533 step 2): 76 calls in ten
 //! families, arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::{families, json, keys, size, Call, Kind};
@@ -51,9 +51,9 @@ fn code(name: &str, args: SdkValue) -> String {
 }
 
 #[test]
-fn the_table_has_ten_families_and_73_calls() {
+fn the_table_has_ten_families_and_76_calls() {
     let all: Vec<&Call> = layerfs_api::calls();
-    assert_eq!(all.len(), 73);
+    assert_eq!(all.len(), 76);
     // each family holds only its own calls, and has at least one
     for family in families() {
         assert!(!family.calls().is_empty(), "{}", family.name);
@@ -66,7 +66,7 @@ fn the_table_has_ten_families_and_73_calls() {
     let mut names: Vec<_> = all.iter().map(|c| c.name()).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 73, "call names are unique");
+    assert_eq!(names.len(), 76, "call names are unique");
     // an optional positional is only ever followed by optional ones (D7)
     for c in &all {
         let first_optional = c.args.iter().position(|a| a.optional);
@@ -75,7 +75,7 @@ fn the_table_has_ten_families_and_73_calls() {
         }
     }
     let counts: Vec<usize> = families().iter().map(|f| f.calls().len()).collect();
-    assert_eq!(counts, [6, 8, 3, 15, 4, 6, 12, 12, 5, 2]);
+    assert_eq!(counts, [7, 9, 3, 15, 4, 6, 12, 13, 5, 2]);
 }
 
 #[test]
@@ -96,6 +96,17 @@ fn unknown_calls_and_arguments_are_refused_before_any_effect() {
         ])
     )
     .starts_with("InvalidInput"));
+}
+
+#[test]
+fn project_remove_is_retired() {
+    // spec 4: the hard delete leaves the table; a caller gets `InvalidInput`
+    // naming it, never a silent hard delete
+    assert!(layerfs_api::find("project.remove").is_none());
+    assert_eq!(
+        code("project.remove", map(&[("project", t("shop/api"))])),
+        "InvalidInput: no call named `project.remove`"
+    );
 }
 
 #[test]
@@ -134,97 +145,6 @@ fn branch_family() {
             ("project", t("shop/api")),
             ("name", t("fix")),
             ("from_branch", t("main")),
-        ]),
-    );
-    assert!(!reached.starts_with("InvalidInput"), "{reached}");
-}
-
-#[test]
-fn branch_publish_declares_its_expected_base_options() {
-    // The shell, Node and Python front ends build their arguments from this
-    // table, so these options (and their shapes) are the CLI's and SDK's.
-    let call = layerfs_api::calls()
-        .into_iter()
-        .find(|call| call.family == "branch" && call.call == "publish")
-        .expect("branch.publish is in the table");
-    let declared: Vec<(&str, Kind, bool)> = call
-        .options
-        .iter()
-        .map(|option| (option.name, option.kind, option.optional))
-        .collect();
-    assert_eq!(
-        declared,
-        vec![
-            ("expected_base", Kind::Name, true),
-            ("expected_head", Kind::Name, true),
-            ("force", Kind::Bool, true),
-        ]
-    );
-    assert_eq!(
-        call.help,
-        "a Branch's head or Commit as main's next Layer, refusing a stale base"
-    );
-}
-
-#[test]
-fn branch_publish_expectations_are_plumbed() {
-    for (name, value, why) in [
-        (
-            "expected_base",
-            SdkValue::Int(1),
-            "`expected_base` must be text",
-        ),
-        (
-            "expected_base",
-            SdkValue::Bool(true),
-            "`expected_base` must be text",
-        ),
-        (
-            "expected_head",
-            SdkValue::Bool(true),
-            "`expected_head` must be text",
-        ),
-        (
-            "expected_head",
-            SdkValue::Int(1),
-            "`expected_head` must be text",
-        ),
-        ("force", t("yes"), "`force` must be true or false"),
-        ("force", SdkValue::Int(1), "`force` must be true or false"),
-    ] {
-        let refused = code(
-            "branch.publish",
-            map(&[
-                ("project", t("shop/api")),
-                ("branch", t("work")),
-                (name, value),
-            ]),
-        );
-        assert!(refused.contains(why), "{name}: {refused}");
-    }
-    // A misspelled option is not read as an argument of the call.
-    let typo = code(
-        "branch.publish",
-        map(&[
-            ("project", t("shop/api")),
-            ("branch", t("work")),
-            ("expectedBase", t("00")),
-        ]),
-    );
-    assert!(
-        typo.starts_with("InvalidInput: branch.publish: unknown argument `expectedBase`"),
-        "{typo}"
-    );
-    // A well-shaped expectation reaches the call instead of being refused by
-    // argument checking.
-    let reached = code(
-        "branch.publish",
-        map(&[
-            ("project", t("shop/api")),
-            ("branch", t("work")),
-            ("expected_base", t("00")),
-            ("expected_head", t("00")),
-            ("force", SdkValue::Bool(true)),
         ]),
     );
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
@@ -534,4 +454,29 @@ fn sandbox_images_are_named_by_the_image_kind() {
     let prune = layerfs_api::find("machine.prune").unwrap();
     assert!(prune.args[1].optional);
     assert_eq!(prune.options[0].name, "unused");
+}
+
+#[test]
+fn the_four_gc_calls_take_only_ids() {
+    // T11.1: the four GC calls, each one resource identifier and no option.
+    use layerfs_api::Kind;
+    let expected: &[(&str, &[(&str, Kind)])] = &[
+        (
+            "branch.remove",
+            &[("project", Kind::Project), ("branch", Kind::Name)],
+        ),
+        ("project.delete", &[("project", Kind::Project)]),
+        (
+            "project.remove_file",
+            &[("project", Kind::Project), ("path", Kind::Text)],
+        ),
+        ("store.compact", &[("name", Kind::Name)]),
+    ];
+    for &(name, args) in expected {
+        let spec = layerfs_api::find(name).unwrap_or_else(|| panic!("{name} is missing"));
+        let given: Vec<(&str, Kind)> = spec.args.iter().map(|arg| (arg.name, arg.kind)).collect();
+        assert_eq!(given.as_slice(), args, "{name}");
+        assert!(spec.args.iter().all(|arg| !arg.optional), "{name}");
+        assert!(spec.options.is_empty(), "{name} takes no option");
+    }
 }

@@ -2,6 +2,7 @@
 use super::{
     blame, file_facts, query,
     snapshot::{self, Snap},
+    visibility::Visibility,
 };
 use crate::history::lookup as args;
 use crate::store::{Store, StorePorts};
@@ -47,6 +48,7 @@ fn owners(
     reader: &StorePorts,
     snap: &Snap,
     path: &str,
+    visibility: &Visibility,
     budget: &mut AttributionBudget,
 ) -> Result<Owners, SdkRefusal> {
     let (mut lines, mut from, mut exact) = (BTreeMap::new(), 1u64, true);
@@ -59,7 +61,18 @@ fn owners(
             versions: budget.work,
             bytes: budget.bytes,
         };
-        let page = blame::blame(store, reader, snap, path, Ok(from), Ok(2000), &mut limits)?;
+        let page = blame::blame(
+            store,
+            reader,
+            snap,
+            path,
+            visibility,
+            blame::Window {
+                from: Ok(from),
+                count: Ok(2000),
+            },
+            &mut limits,
+        )?;
         budget.work = limits.versions;
         budget.bytes = limits.bytes;
         exact &= !page.get_bool("comparisonCoarse")
@@ -102,7 +115,7 @@ fn identity(owner: &SdkValue) -> Option<(&str, &str)> {
 pub fn align(
     store: &Arc<Store>,
     reader: &StorePorts,
-    sides: ((&Snap, &str), (&Snap, &str)),
+    sides: ((&Snap, &str, &Visibility), (&Snap, &str, &Visibility)),
     texts: (&str, &str),
     include: bool,
 ) -> Result<Aligned, SdkRefusal> {
@@ -119,12 +132,12 @@ pub fn align(
 fn align_bounded(
     store: &Arc<Store>,
     reader: &StorePorts,
-    sides: ((&Snap, &str), (&Snap, &str)),
+    sides: ((&Snap, &str, &Visibility), (&Snap, &str, &Visibility)),
     texts: (&str, &str),
     include: bool,
     budget: &mut AttributionBudget,
 ) -> Result<Aligned, SdkRefusal> {
-    let ((left, left_path), (right, right_path)) = sides;
+    let ((left, left_path, left_seen), (right, right_path, right_seen)) = sides;
     let diff = lines(texts.0, texts.1);
     if diff.len() as u64 > query::MAXIMUM_QUERY_WORK {
         return Err(query::capacity("diff row budget reached"));
@@ -135,12 +148,12 @@ fn align_bounded(
         exact: true,
     };
     let before = if include && !texts.0.is_empty() {
-        owners(store, reader, left, left_path, budget)?
+        owners(store, reader, left, left_path, left_seen, budget)?
     } else {
         empty()
     };
     let after = if include && !texts.1.is_empty() {
-        owners(store, reader, right, right_path, budget)?
+        owners(store, reader, right, right_path, right_seen, budget)?
     } else {
         empty()
     };
@@ -314,10 +327,12 @@ pub fn compare_bounded(
     let (Some(a), Some(b)) = (snapshot::text(reader, a)?, snapshot::text(reader, b)?) else {
         return Ok(unsupported("binary"));
     };
+    let left_seen = Visibility::for_snap(store, left);
+    let right_seen = Visibility::for_snap(store, right);
     Ok(align_bounded(
         store,
         reader,
-        ((left, path), (right, path)),
+        ((left, path, &left_seen), (right, path, &right_seen)),
         (&a, &b),
         true,
         budget,

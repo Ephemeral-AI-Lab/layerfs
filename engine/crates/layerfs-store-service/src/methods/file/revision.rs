@@ -20,6 +20,7 @@ pub fn revision(service: &StoreService, args: &SdkValue) -> Answer {
             page: query::result_page(args)?,
             branch,
             continuation: args.get_text("continuation"),
+            stack: stack.id,
         },
     )
 }

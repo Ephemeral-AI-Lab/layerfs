@@ -12,6 +12,30 @@ pub(crate) fn statement(key: &str) -> Result<&'static str, BackendError> {
         "statistics_totals" => Ok(include_str!(
             "../../../../sql/postgresql/queries/history/statistics_totals.sql"
         )),
+        "gc_epoch_read" => Ok(include_str!(
+            "../../../../sql/postgresql/queries/history/gc_epoch_read.sql"
+        )),
+        "gc_epoch_share" => Ok(include_str!(
+            "../../../../sql/postgresql/queries/history/gc_epoch_share.sql"
+        )),
+        "gc_lock_xact_shared" => Ok(include_str!(
+            "../../../../sql/postgresql/queries/history/gc_lock_xact_shared.sql"
+        )),
+        "gc_lock_xact_exclusive" => Ok(include_str!(
+            "../../../../sql/postgresql/queries/history/gc_lock_xact_exclusive.sql"
+        )),
+        "gc_lock_session_shared" => Ok(include_str!(
+            "../../../../sql/postgresql/queries/history/gc_lock_session_shared.sql"
+        )),
+        "gc_lock_session_exclusive" => Ok(include_str!(
+            "../../../../sql/postgresql/queries/history/gc_lock_session_exclusive.sql"
+        )),
+        "gc_unlock_session_shared" => Ok(include_str!(
+            "../../../../sql/postgresql/queries/history/gc_unlock_session_shared.sql"
+        )),
+        "gc_unlock_session_exclusive" => Ok(include_str!(
+            "../../../../sql/postgresql/queries/history/gc_unlock_session_exclusive.sql"
+        )),
         other => crate::backend::sqlite::session::query::history(other),
     }
 }

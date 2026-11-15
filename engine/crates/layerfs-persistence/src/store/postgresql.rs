@@ -1,7 +1,10 @@
 //! A PostgreSQL Store (#506): explicit creation and open.
 //!
 //! The same shared history and Metadata semantics as the SQLite Store run
-//! over the PostgreSQL engine. Opening never creates or migrates a schema;
+//! over the PostgreSQL engine. Opening never creates a schema; a writable
+//! open adds the GC tables, and the position columns with their serial
+//! backfill, to a Store written before them (additive, as on SQLite), and
+//! every other mismatch is refused.
 //! [`PostgresHandles::create`] makes a new empty one with Init's acquisition
 //! tables (#533 step 10b). Projects reach it only by Init; nothing converts
 //! a SQLite Store (step 10c).
@@ -177,6 +180,12 @@ impl PostgresHandles {
         }
         CatalogId::derive(binding).map_err(|_| PersistenceError::Malformed)?;
         let session = Arc::new(Session::connect(selection, writable)?);
+        if writable {
+            schema::add_gc(&session)?;
+            schema::add_kept_node(&session)?;
+            schema::add_position_state(&session)?;
+            schema::add_position_columns(&session)?;
+        }
         Self::validated(session, selection.check, Some(binding), cursor_key)
             .map(|(_, handles)| handles)
     }

@@ -92,6 +92,11 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
       server.client.callTool({ name: "not_a_tool", arguments: {} }),
       (error) => error.code === -32602 && /unknown tool/.test(error.message),
     );
+    // retired in 2.0 (spec 4): the old tool name does not exist
+    await assert.rejects(
+      server.client.callTool({ name: "project_remove", arguments: { project: "shop/api" } }),
+      (error) => error.code === -32602 && /unknown tool/.test(error.message),
+    );
     await assert.rejects(
       server.client.callTool({ name: "store_create", arguments: { name: 5 } }),
       (error) => error.code === -32602 && /name.*must be text/.test(error.message),
@@ -122,7 +127,7 @@ test("a real workflow, refusals, progress, scope and the two profiles", async ()
     for (const name of names("admin").filter((name) => !names("work").includes(name))) {
       assert.ok(!workNames.has(name), `${name} is an admin tool in the work profile`);
     }
-    for (const prefix of ["store_", "machine_", "backup_", "project_init", "project_remove", "sandbox_create", "sandbox_close"]) {
+    for (const prefix of ["store_", "machine_", "backup_", "project_init", "project_delete", "project_remove_file", "branch_remove", "sandbox_create", "sandbox_close"]) {
       assert.ok(![...workNames].some((name) => name.startsWith(prefix)), `${prefix} in the work profile`);
     }
     const scopedRead = await call(work.client, "file_read", { project: "shop/api", branch: "feat", path: "/sub/b.txt" });

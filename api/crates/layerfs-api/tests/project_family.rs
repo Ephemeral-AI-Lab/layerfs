@@ -3,7 +3,7 @@
 //! it, the Store pushed to a worker machine and read there, then the project
 //! removed.
 use layerfs_api::home::{self, paths, write_record};
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 
@@ -335,7 +335,15 @@ fn init_files_branches_move_and_remove() {
     );
     assert_eq!(content(&read), "newer\n", "read through the worker");
 
-    ok(&home, "project.remove", &[p()]);
+    // `project.delete` retires the project in the Store under `box` and
+    // removes both entries; its history stays until a compaction.
+    let deleted = ok(&home, "project.delete", &[p()]);
+    assert_eq!(deleted.get_text("kind"), Some("Removed"));
+    assert_eq!(deleted.get_text("project"), Some("shop/api"));
+    assert_eq!(
+        deleted.get("home_entry_removed"),
+        Some(&SdkValue::Bool(true))
+    );
     assert_eq!(
         call(&home, "project.get", &[p()]).unwrap_err().0,
         "NoSuchProject"
@@ -386,6 +394,177 @@ fn a_private_home_may_be_passable_and_nothing_more() {
         init(name).unwrap_or_else(|e| panic!("{passable:o}: {e:?}"));
     }
     set(&home, 0o700);
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(folder);
+}
+
+fn refused(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkRefusal {
+    let args = SdkValue::Map(
+        args.iter()
+            .map(|(n, v)| ((*n).to_owned(), v.clone()))
+            .collect(),
+    );
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).expect_err("the call is refused")
+}
+
+fn private_home(tag: &str) -> PathBuf {
+    let home = tempdir(tag);
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
+    home::open(&home).unwrap();
+    home
+}
+
+/// A `project.init` name collision is the typed `NameTaken`: the home record
+/// first, and the Store's own holder when the home has no record for it.
+#[test]
+fn project_init_name_collision_reports_holder_and_source() {
+    let home = private_home("name-taken");
+    let folder = tempdir("name-taken-folder");
+    std::fs::write(folder.join("README"), b"held\n").unwrap();
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    ok(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/api")),
+            ("folder", t(&folder.display().to_string())),
+        ],
+    );
+
+    let home_taken = refused(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/api")),
+            ("folder", t(&folder.display().to_string())),
+        ],
+    );
+    assert_eq!(home_taken.code, "NameTaken", "{}", home_taken.message);
+    let holder = home_taken.detail.get("holder").expect("holder detail");
+    assert_eq!(holder.get_text("kind"), Some("project"));
+    assert_eq!(holder.get_text("name"), Some("api"));
+    assert_eq!(holder.get_text("state"), Some("live"));
+    assert_eq!(home_taken.detail.get_text("source"), Some("home"));
+
+    // A home that no longer records the project meets the Store's own holder.
+    std::fs::remove_dir_all(paths::project_dir(&home, "shop", "api")).unwrap();
+    let store_taken = refused(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/api")),
+            ("folder", t(&folder.display().to_string())),
+        ],
+    );
+    assert_eq!(store_taken.code, "NameTaken", "{}", store_taken.message);
+    let holder = store_taken.detail.get("holder").expect("holder detail");
+    assert_eq!(holder.get_text("kind"), Some("project"));
+    assert_eq!(holder.get_text("name"), Some("api"));
+    assert_eq!(holder.get_text("state"), Some("live"));
+    assert_eq!(store_taken.detail.get_text("source"), Some("store"));
+
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(folder);
+}
+
+/// A Layer keeps the name of the Branch it was published from after that
+/// Branch is retired: provenance rendering is not a caller-facing lookup.
+#[test]
+fn a_retired_source_branch_still_renders_on_its_layers() {
+    let home = private_home("retired-source");
+    let folder = tempdir("retired-source-folder");
+    std::fs::write(folder.join("base.txt"), b"base\n").unwrap();
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    ok(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/api")),
+            ("folder", t(&folder.display().to_string())),
+        ],
+    );
+    ok(
+        &home,
+        "branch.fork",
+        &[
+            ("project", t("shop/api")),
+            ("name", t("work")),
+            ("from_branch", t("main")),
+        ],
+    );
+    ok(
+        &home,
+        "file.write",
+        &[
+            ("project", t("shop/api")),
+            ("branch", t("work")),
+            ("path", t("/new.txt")),
+            ("content", t("new\n")),
+            ("message", t("new")),
+        ],
+    );
+    ok(
+        &home,
+        "branch.publish",
+        &[("project", t("shop/api")), ("branch", t("work"))],
+    );
+
+    let main = ok(
+        &home,
+        "commit.list",
+        &[("project", t("shop/api")), ("branch", t("main"))],
+    );
+    let SdkValue::List(layers) = main.get("items").expect("items") else {
+        panic!("{main:?}")
+    };
+    let id = layers[0].get_text("id").expect("layer id").to_owned();
+    assert_eq!(layers[0].get_text("source_branch"), Some("work"), "{main:?}");
+
+    ok(
+        &home,
+        "branch.remove",
+        &[("project", t("shop/api")), ("branch", t("work"))],
+    );
+
+    // `layer.list` still renders the provenance ...
+    let main = ok(
+        &home,
+        "commit.list",
+        &[("project", t("shop/api")), ("branch", t("main"))],
+    );
+    let SdkValue::List(layers) = main.get("items").expect("items") else {
+        panic!("{main:?}")
+    };
+    assert_eq!(
+        layers[0].get_text("source_branch"),
+        Some("work"),
+        "layer.list: {main:?}"
+    );
+    // ... and so does `layer.get` ...
+    let got = ok(
+        &home,
+        "commit.get",
+        &[
+            ("project", t("shop/api")),
+            ("branch", t("main")),
+            ("commit", t(&id)),
+        ],
+    );
+    assert_eq!(
+        got.get_text("source_branch"),
+        Some("work"),
+        "layer.get: {got:?}"
+    );
+    // ... while a caller-facing lookup of the retired Branch stays refused.
+    let (code, message) = call(
+        &home,
+        "branch.get",
+        &[("project", t("shop/api")), ("branch", t("work"))],
+    )
+    .unwrap_err();
+    assert_eq!(code, "NoSuchBranch", "{message}");
+
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }

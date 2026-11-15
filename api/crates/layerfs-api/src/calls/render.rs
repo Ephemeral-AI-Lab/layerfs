@@ -9,9 +9,46 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::Outcome;
 
 /// The `Text` arguments logged only as `<N bytes>`: exec command text,
-/// Commit messages, edit strings, Store passwords and connection URLs that
-/// may embed `user:pass@`. A new call with such an argument adds its name.
-pub const REDACTED: [&str; 6] = ["command", "message", "old", "new", "password", "url"];
+/// Commit messages, edit strings, Store passwords, connection URLs that may
+/// embed `user:pass@`, every path argument (`path`, `left_path`,
+/// `right_path`, `from_path`, `to_path`, `path_prefix`) and a glob or grep
+/// `pattern`. A path is counted in its normalized form ([`PATHS`]), so a
+/// `project.remove_file` or `file.*` path never enters the call log (#41
+/// §4.3). A new call with such an argument adds its name.
+pub const REDACTED: [&str; 13] = [
+    "command",
+    "message",
+    "old",
+    "new",
+    "password",
+    "url",
+    "path",
+    "left_path",
+    "right_path",
+    "from_path",
+    "to_path",
+    "path_prefix",
+    "pattern",
+];
+
+/// The arguments that name a path: they log the length of the normalized
+/// path, one leading `/` stripped, so `/a` and `a` count the same and a root
+/// `/` counts as 0 (#41 §4.3). A `pattern` is not a path and keeps every
+/// byte it has.
+const PATHS: [&str; 6] = [
+    "path",
+    "left_path",
+    "right_path",
+    "from_path",
+    "to_path",
+    "path_prefix",
+];
+
+/// A path argument's logged byte length: the §4.3 normalization (strip one
+/// leading `/`) applied before counting.
+fn path_len(text: &str) -> usize {
+    text.strip_prefix('/').unwrap_or(text).len()
+}
 
 /// The most characters a logged value keeps.
 const CUT: usize = 200;
@@ -46,6 +83,7 @@ fn word(name: &str, kind: Kind, value: &SdkValue) -> Option<SdkValue> {
         (Kind::Content, SdkValue::Text(text)) => bytes(text.len()),
         (Kind::Content, SdkValue::Bytes(raw)) => bytes(raw.len()),
         (Kind::Content | Kind::Json, value) => bytes(layerfs_home::json::print(value).len()),
+        (Kind::Text, SdkValue::Text(text)) if PATHS.contains(&name) => bytes(path_len(text)),
         (Kind::Text, SdkValue::Text(text)) if REDACTED.contains(&name) => bytes(text.len()),
         (_, SdkValue::Text(text)) => SdkValue::Text(cut(text)),
         (_, SdkValue::Int(n)) => SdkValue::Text(n.to_string()),
@@ -186,4 +224,57 @@ pub fn line(
         fields.push(("tag".to_owned(), SdkValue::text(tag)));
     }
     SdkValue::Map(fields)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_path_argument_name_is_redacted() {
+        for name in [
+            "path",
+            "left_path",
+            "right_path",
+            "from_path",
+            "to_path",
+            "path_prefix",
+            "pattern",
+        ] {
+            assert!(REDACTED.contains(&name), "{name} is not redacted");
+        }
+        for name in ["project", "branch", "name", "commit", "content", "changes"] {
+            assert!(!REDACTED.contains(&name), "{name} is redacted");
+        }
+    }
+
+    #[test]
+    fn a_path_logs_the_byte_length_of_its_normalized_form() {
+        // `/a` and `a` are the same path (§4.3), so they log the same count;
+        // the root `/` normalizes to the empty relative path.
+        for (text, len) in [
+            ("/base.txt", 8),
+            ("base.txt", 8),
+            ("/a", 1),
+            ("a", 1),
+            ("/", 0),
+        ] {
+            let value = SdkValue::text(text);
+            assert_eq!(
+                word("path", Kind::Text, &value),
+                Some(SdkValue::text(format!("<{len} bytes>"))),
+                "{text}"
+            );
+        }
+        // A glob pattern is not a path and keeps every byte it has.
+        assert_eq!(
+            word("pattern", Kind::Text, &SdkValue::text("*.txt")),
+            Some(SdkValue::text("<5 bytes>"))
+        );
+        // Text that is not a path is still its own (cut) text.
+        assert_eq!(
+            word("branch", Kind::Text, &SdkValue::text("/main")),
+            Some(SdkValue::text("/main"))
+        );
+    }
 }
