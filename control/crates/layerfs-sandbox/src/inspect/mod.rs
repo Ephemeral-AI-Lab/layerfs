@@ -20,12 +20,18 @@
 //! `open::hold`, `daemon::pool` or `route`'s host operations. Admission and
 //! deadlines are `owner`'s; the caller's wait for a worker is
 //! `place::READ`.
+mod files;
 mod log;
 mod overlay;
 mod owner;
+mod roots;
 mod route;
 
 pub use crate::deploy::Side;
+pub use files::{
+    sandbox_files, sandbox_page, FilesRequest, DEPTH, ENTRIES, MAX_DEPTH, MAX_ENTRIES, MAX_WINDOW,
+    WINDOW,
+};
 pub use log::{machine_log, sandbox_log, Window};
 pub use overlay::overlay_sizes;
 pub use owner::{admit, on_owner, running, Budget, HARD, PERMITS, SOFT};

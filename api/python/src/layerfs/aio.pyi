@@ -375,6 +375,19 @@ class AsyncSandboxFamily:
         """a Sandbox and its Workspaces"""
     async def close(self, name: str, *, force: bool | None = None, log_tag: str | None = None) -> Result:
         """stop a Sandbox"""
+    async def files(
+        self,
+        sandbox: str,
+        path: str | None = None,
+        *,
+        depth: int | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        length: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a Sandbox's files: its roots, or a folder or file under its home"""
 
 class AsyncWorkspaceFamily:
     async def mount(self, sandbox: str, branch: str, *, name: str | None = None, log_tag: str | None = None) -> Result:

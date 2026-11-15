@@ -280,6 +280,15 @@ export interface SandboxCloseOptions extends CallOptions {
   force?: boolean;
 }
 
+/** Options of `sandbox.files`; an unknown option is refused. */
+export interface SandboxFilesOptions extends CallOptions {
+  depth?: WholeNumber;
+  cursor?: string;
+  limit?: WholeNumber;
+  offset?: WholeNumber;
+  length?: WholeNumber;
+}
+
 /** Options of `workspace.mount`; an unknown option is refused. */
 export interface WorkspaceMountOptions extends CallOptions {
   name?: string;
@@ -515,6 +524,9 @@ export interface SandboxFamily {
   get(name: string, options?: SandboxGetOptions): Promise<Result>;
   /** stop a Sandbox */
   close(name: string, options?: SandboxCloseOptions): Promise<Result>;
+  /** a Sandbox's files: its roots, or a folder or file under its home */
+  files(sandbox: string, options: SandboxFilesOptions): Promise<Result>;
+  files(sandbox: string, path?: string | null, options?: SandboxFilesOptions): Promise<Result>;
 }
 
 export interface WorkspaceFamily {

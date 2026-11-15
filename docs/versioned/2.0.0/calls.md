@@ -536,6 +536,60 @@ not answer within 8 s is `Unavailable`. `logs machine` on a machine with no
 worker (`native`) is `Unsupported`. The MCP server lists neither. Run for
 this manual on a scratch home: `layerfs logs sandbox s1`, then `--cursor`.
 
+### `sandbox`: `files`
+
+One more read for a UI: what is in a Sandbox (layerfs-project#178). It is
+in the `sandbox` family, after `close`; this page's count above predates
+it. The whole call is in the
+[architecture guide](../../architecture/api/sdk/sandbox.md#sandboxfiles).
+
+| Call | Positionals | Options | Does |
+| --- | --- | --- | --- |
+| `files` | `sandbox`, `[path]` | `depth`, `cursor`, `limit`, `offset`, `length` (int) | a Sandbox's roots, one page of a folder under its home, or one window of a file there |
+
+```bash
+layerfs sandbox files s1                       # its roots: Workspaces, home, log
+layerfs sandbox files s1 "$HOME_PATH" --depth 2 --limit 100
+layerfs sandbox files s1 "$HOME_PATH/notes.txt" --offset 0 --length 4096
+```
+
+- With no path it answers the Sandbox's roots, each with a `role`: one
+  `workspace` per mounted Workspace (kind `mount`, with the Workspace's id
+  in `workspace`; taken from the Workspace records and never opened),
+  `home` (the folder that is `HOME` for its commands) and `log` (its
+  daemon's log, which `logs sandbox` reads).
+  ```text
+  {"kind":"folder","entries":[{"path":"/…/workspaces/1","depth":1,"kind":"mount","size":null,"mode":null,"mtime":null,"role":"workspace","workspace":"5f…"},{"path":"/…/tmp","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794000000000,"role":"home"},{"path":"/…/daemon.log","depth":1,"kind":"file","size":10,"mode":420,"mtime":1794000000000,"role":"log"}],"next":null,"has_more":false}
+  ```
+- With the path of a folder it answers one page of its entries: names in
+  byte order, a folder's entries after it, down `depth` levels (1 by
+  default, 32 at most), at most `limit` entries (500 by default, 1000 at
+  most). `next` is the path of the page's last entry; while `has_more`,
+  pass it as `cursor` for the entries after it. `reason` says why a page
+  ended early: `limit`, or `deadline` when the read used its four seconds.
+  An entry's `kind` is `file`, `folder`, `symlink` (with its `target`,
+  never followed), `mount`, `restricted` or `other`; `size` (regular files
+  only), `mode` (permission bits) and `mtime` (milliseconds) come from the
+  entry's own `stat`.
+- With the path of a file it answers one window: `{kind: "file", size,
+  offset, content, binary, next}`, 256 KiB from `offset` by default,
+  `length` at most 1 MiB. `content` is text: bytes that are not UTF-8 are
+  U+FFFD and control characters other than line breaks and tabs are escaped
+  (`\u{1b}`). `binary` is true when the window holds a NUL byte; `content`
+  is then empty. `next` is the next window's offset, `null` at the end.
+- A path is absolute, as the Sandbox's commands see it, and under the
+  Sandbox's home; anything else is `InvalidInput`, as are a path with
+  `..`, a symbolic link on the way or at the end, a FIFO, a socket, a
+  device, a mount point, a file LayerFS keeps private (`store.sqlite*`) and
+  a file with several names that the Sandbox's commands do not own. A path
+  that is not there is `NotFound`.
+- It takes no lock, asks no daemon, starts nothing and writes nothing, the
+  call log included; a Sandbox whose daemon has ended keeps its home
+  readable. At most two inspection reads run on a machine at a time
+  (`Busy`); a machine that is stopped or does not answer within 8 s is
+  `Unavailable`. The MCP server does not list it. Run for this manual on a
+  scratch home: the three commands above.
+
 ## `layerfs doctor`
 
 A top-level command beside `import-env`, outside the call table (#536 H7);

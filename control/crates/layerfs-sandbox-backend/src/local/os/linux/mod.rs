@@ -5,6 +5,8 @@
 //! native Sandbox recorded before 2.0 has its mounts detached lazily with
 //! them. Only facts live here; the Sandbox lifecycle is shared with macOS
 //! in [`super`]. `seccomp` is the filter every namespaces command runs
-//! under, the crate's one audited `unsafe` module.
+//! under, the crate's one audited `unsafe` module. `confined` is the open
+//! and `stat` of an inspection read (layerfs-project#178).
+pub(crate) mod confined;
 pub(crate) mod mounts;
 pub(crate) mod seccomp;

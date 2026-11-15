@@ -4,7 +4,9 @@
 //! `umount -f`; `linux` supplies the `mountinfo` table and a lazy
 //! `MNT_DETACH`. Process identity (`LocalProcess`) is
 //! `layerfs_bridge::process` (layerfs-project#112). The host_process and
-//! namespaces backends build on it.
+//! namespaces backends build on it. `confined` is what an inspection read
+//! uses of the filesystem (layerfs-project#178).
+pub mod confined;
 mod create;
 pub(crate) mod groups;
 pub(crate) mod listener;

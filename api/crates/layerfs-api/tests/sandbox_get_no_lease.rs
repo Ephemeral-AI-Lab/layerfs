@@ -1057,3 +1057,80 @@ fn a_get_sizes_each_workspace_s_overlay_file_by_path() {
         std::fs::remove_dir_all(scratch).unwrap();
     }
 }
+
+/// Sandbox `s1` on machine `box`, its daemon reached from this host
+/// through a forward to `endpoint`: the home keeps its record, its keys
+/// and one Workspace record per listed `items`, and names no run folder.
+fn forwarded_on_box(home: &Path, endpoint: SocketAddr, items: &[SdkValue]) {
+    forwarded_sandbox(home, endpoint, items);
+    let path = paths::sandbox_record(home, "s1");
+    let record = read_record(&path).unwrap().unwrap();
+    let forward = map(&[("address", t(&endpoint.to_string())), ("machine", t("box"))]);
+    let daemon = map(&[("name", t("lfs-x-s1")), ("forward", forward)]);
+    let record = home::with_field(record, "machine", t("box"));
+    write_record(&path, &home::with_field(record, "daemon", daemon)).unwrap();
+}
+
+#[test]
+fn a_forwarded_get_sizes_its_overlays_in_its_machine_or_leaves_them_null() {
+    let items: Vec<SdkValue> = (1..=4).map(item).collect();
+    let (endpoint, _seen) = daemon(items.clone(), false);
+    let scratch = tempdir("forwarded-sizes");
+    let (home, root) = (scratch.join("home"), scratch.join("data"));
+    home::open(&home).unwrap();
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
+    // the machine's worker answers: the run folder and the overlay files
+    // are under its root, the Workspace records are in the home
+    home_records(&home, "box", "docker", Some((worker(&root), "k")));
+    forwarded_on_box(&home, endpoint, &items);
+    sandbox_named(&root, "lfs-x-s1", endpoint, &[]);
+    let overlay = paths::run_root(&root).join("lfs-x-s1/overlay");
+    std::fs::create_dir_all(&overlay).unwrap();
+    std::fs::write(overlay.join("overlay.sqlite"), vec![0; 4096]).unwrap();
+    std::fs::write(overlay.join("1.sqlite"), vec![1; 8192]).unwrap();
+    std::fs::write(overlay.join("2.sqlite"), vec![2; 20_480]).unwrap();
+    assert!(!paths::run_root(&home).join("lfs-x-s1").exists());
+    settle(&home);
+    let _push = pushing(&home);
+    let before = (files(&home), files(&root));
+
+    let got = get(&home).unwrap();
+    assert_eq!(got.get_text("state"), Some("running"), "{got:?}");
+    let ids: Vec<SdkValue> = (items.iter())
+        .map(|item| item.get("workspace").unwrap().clone())
+        .collect();
+    assert_eq!(each(&got, "workspace"), ids, "{got:?}");
+    let sizes = vec![
+        SdkValue::Int(8192),
+        SdkValue::Int(20_480),
+        SdkValue::Null,
+        SdkValue::Null,
+    ];
+    assert_eq!(each(&got, "overlay_bytes"), sizes, "{got:?}");
+    assert_eq!((files(&home), files(&root)), before);
+    assert!(!paths::lease_dir(&home, "shop").exists());
+    assert!(!paths::lease_dir(&root, "shop").exists());
+
+    // the worker stops answering (its port takes a connection and says
+    // nothing): the get is still answered, every size null
+    let silent = TcpListener::bind("127.0.0.1:0").unwrap();
+    write_record(
+        &paths::worker_record(&home, "box"),
+        &map(&[
+            ("address", t(&silent.local_addr().unwrap().to_string())),
+            ("secret", t("k")),
+        ]),
+    )
+    .unwrap();
+    let before = files(&home);
+    let at = std::time::Instant::now();
+    let got = get(&home).unwrap();
+    assert!(at.elapsed() < Duration::from_secs(15), "{:?}", at.elapsed());
+    assert_eq!(got.get_text("state"), Some("running"), "{got:?}");
+    running(&got, &items);
+    assert_eq!(each(&got, "overlay_bytes"), vec![SdkValue::Null; 4]);
+    assert_eq!(files(&home), before);
+    drop(silent);
+    std::fs::remove_dir_all(scratch).unwrap();
+}

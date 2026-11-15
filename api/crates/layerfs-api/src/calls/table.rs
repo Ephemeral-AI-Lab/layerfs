@@ -66,12 +66,24 @@ pub struct Call {
     pub help: &'static str,
     /// Runs it with its checked arguments.
     pub run: Run,
+    /// Whether it writes no line to the home's call log: a read a UI
+    /// polls (`sandbox.files`), which would fill the log and writes
+    /// nothing else either (layerfs-project#178, #179 B.1).
+    pub quiet: bool,
 }
 
 impl Call {
     /// `family.call`.
     pub fn name(&self) -> String {
         format!("{}.{}", self.family, self.call)
+    }
+
+    /// This call, writing no call-log line.
+    pub const fn quiet(self) -> Self {
+        Call {
+            quiet: true,
+            ..self
+        }
     }
 
     /// The positional or option named `name`.
@@ -134,6 +146,15 @@ pub const PAGE: [Arg; 2] = [opt("page_size", Int), opt("page_pos", Int)];
 /// The window options of a log read by cursor (`logs.machine`,
 /// `logs.sandbox`).
 pub const WINDOW: [Arg; 3] = [opt("cursor", Text), opt("before", Text), opt("limit", Int)];
+/// The options of a files read (`sandbox.files`): a folder page's
+/// `depth`, `cursor` and `limit`, a file window's `offset` and `length`.
+pub const FILES: [Arg; 5] = [
+    opt("depth", Int),
+    opt("cursor", Text),
+    opt("limit", Int),
+    opt("offset", Int),
+    opt("length", Int),
+];
 /// A Commit message.
 pub const MESSAGE: Arg = opt("message", Text);
 /// The progress function of a long call.
@@ -162,6 +183,7 @@ pub const fn call(
         options,
         help,
         run,
+        quiet: false,
     }
 }
 
