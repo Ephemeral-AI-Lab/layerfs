@@ -186,10 +186,7 @@ fn sdk_publish(fixture: &Fixture, branch: &str) -> (Work, SdkValue) {
     // ask for it: a default publish now refuses to skip main's Layers.
     let published = fixture.call(
         "branch.publish",
-        vec![
-            ("branch", text(branch)),
-            ("force", SdkValue::Bool(true)),
-        ],
+        vec![("branch", text(branch)), ("force", SdkValue::Bool(true))],
     );
     assert_eq!(published.get_text("kind"), Some("Added"), "{published:?}");
     (fixture.since(before), published)
