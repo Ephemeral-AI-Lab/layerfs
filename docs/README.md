@@ -109,7 +109,9 @@ Issue #671 removed all of `core/docs/` from the tree: issue records and their
 receipts, the numbered architecture papers, benchmark notes, the old API
 notes and proposals. The maintained design reference is
 [`docs/architecture/`](architecture/README.md); the fuser patch decision
-records moved to [`engine/patches/fuser-0.18.0/records/`](../engine/patches/fuser-0.18.0/records/).
+records remain at [the pre-fork dependency snapshot](https://github.com/Ephemeral-AI-Lab/layerfs/tree/8cfb6e273470d0bb2a4ec5a9256fcf4972441eb5/engine/patches/fuser-0.18.0/records/).
+The current [FUSE dependency](architecture/engine/kernel-routes/fuse.md#fuser-git-dependency)
+is a pinned Git fork; the local vendor and patch mechanism have been removed.
 Nothing was rewritten in history. Every removed file is at commit
 [`af2ad92bce`](https://github.com/Ephemeral-AI-Lab/layerfs/tree/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs),
 and links that pointed into it now use pinned URLs at that commit.

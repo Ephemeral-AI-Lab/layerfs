@@ -5,14 +5,17 @@
 > **Authority.** This is the only GC design document in the tree. It replaces the
 > six-file set merged by #658 (removed by #671; last text in the #677 branch).
 > The contract it states is the frozen set of layerfs-project#42 (items 1–13,
-> 2026-11-13) as amended by #42 items 14–26 (2026-11-14). Where this file and
-> an older document disagree, this file wins; a change to a contract sentence
-> needs a new decision entry on #42 first.
+> 2026-11-13) as amended by #42 items 14–26 (2026-11-14) and 27–44
+> (2026-11-15, implementation choices). Where this file and an older document
+> disagree, this file wins; a change to a contract sentence needs a new
+> decision entry on #42 first.
 >
 > **Scope.** layerfs-project#41 and its sub-issues #42–#52. The durability
-> profile (#155 §7) is outside this contract (#42 item 26).
+> profile (#155 §7) is outside this contract (#42 item 26). GC is developed
+> and measured under the Disposable profile (#42 item 42).
 >
-> **Source.** Every code reference is to `layerfs_v2_0_0` at `e8fa0a7e00`.
+> **Source.** Code references are to `layerfs_v2_0_0` at `e8fa0a7e00`; those
+> added by items 27–44 were checked at `8cfb6e2734`.
 
 ## 1. Requirements (owner policy, #41)
 
@@ -40,7 +43,7 @@
 | # | Decision | Section |
 |---|---|---|
 | S1 | Reachability is computed per Store, over every project in it | §6 |
-| S2 | Exclusion reuses the Store lock, lease and op record; PostgreSQL adds advisory locks (#42 item 20) | §5 |
+| S2 | Exclusion reuses the Store lock, lease and op record; PostgreSQL adds advisory locks (#42 items 20, 33, 34) | §5 |
 | S4 | No object age; collection depends only on reachability | §6 |
 | S5 | The unit that frees bytes is the pack. A rebuild copies only retained rows into a fresh Store; a published `pack` row is never updated or deleted in place | §7, §8 |
 | S6 | A SQLite Store compacts on the machine where it lives (`place::plan`, `control/crates/layerfs-store/src/place.rs:40-49`) | §7 |
@@ -49,14 +52,29 @@
 | 7 | Removal markers live in marker tables; `branch` and `layer_stack` stay append-only | §4 |
 | 14 | Compaction collects history rows no retained root reaches; Commits of a removed Branch that nothing retains become `NotFound` | §6.1 |
 | 15 | A name held by a removed Branch or deleted project returns `NameTaken` until compaction removes the row; then it is free. `NameRetired` is not added | §4.4 |
-| 16 | `remove_file` hides a path across the project's history at once and lets compaction reclaim what only that path reached; reads through it return `Removed` | §4.3, §6.2 |
+| 16 | `remove_file` hides a path across the project's history at once and lets compaction reclaim what only that path reached; reads through it return `Removed` (details: item 35) | §4.3, §6.2 |
 | 17 | `store.compact` has two paths, `none` and `rebuild`; there is no light path. C3 has no caller in 2.0 | §3 |
 | 18 | A leftover is judged by the Store generation; no `OrphanArtifact`, no leftover cap | §9 |
 | 19 | API codes follow #41 (`MountsActive`, `Busy`); one `StaleStore` for both backends | §10 |
-| 20 | PostgreSQL presence is a session advisory lock per opener connection; the fence is the generation check carried in each statement | §5.2 |
+| 20 | PostgreSQL presence is a session advisory lock; the fence is the generation check carried in each statement (who holds presence: item 34) | §5.2 |
 | 21 | PostgreSQL compaction builds in batches, then swaps two tables in one short transaction | §8 |
 | 22 | SQLite compaction is its own module: the walk is fused with the copy, the visited set is a temp-file table, verification is cheap by default | §6.3, §7 |
 | 23 | Removed: the `pinned` set, the per-transaction SQLite generation check, the capacity pre-check, the extra report fields | §6, §7, §11 |
+| 27 | One visit level: anything reached by a logical or base edge is kept with all its references | §6.2 |
+| 28 | `merged_from_id` and `displaced_id` are history edges | §6.1 |
+| 29 | A retired Branch is collected as a unit; the history closure is a fixpoint | §6.1 |
+| 30 | Compaction verifies with `live_heads_digest`; `heads_digest` is unchanged | §7, §8 |
+| 31 | No views: filtered statements plus a guard test; PostgreSQL gets an additive step at open | §4.1, §4.2 |
+| 32 | `project.remove` is retired; compaction reuses its removal statements | §4, §7, §8 |
+| 33 | Admission at project and Branch scope (project op, intent record before bind, PostgreSQL keys at three scopes) | §5 |
+| 34 | PostgreSQL presence locks only on long-lived sessions; SDK calls keep working through transaction poolers | §5.2 |
+| 35 | `remove_file` marker with a frontier; whiteout at mount; object-ID reads not path-aware; purge best effort | §4.3 |
+| 36 | No format change for the PostgreSQL mark until #52 measures it | §6.2 |
+| 37 | All `inode_value_block` rows are kept in 2.0 | §6.4 |
+| 38 | The rebuild clears `binding_hint_block` | §6.4 |
+| 39 | All four calls are admin-profile and refused under a folder scope | §10 |
+| 40 | Compaction writes its phase into the op; `store.status` shows it | §11 |
+| 41 | A started rebuild completes | §3 |
 
 Out of this release: object age (Q3), repacking partly dead packs (reported,
 not performed), in-place deletion of packs on either backend, a read-available
@@ -71,6 +89,9 @@ compaction window (A'), pruning (#46).
 
 The 10% value is a starting point, set after the first measurement (#52).
 Below it a rebuild would copy at least nine live bytes for each byte freed.
+The choice is made on the bound known after the metadata walk; a rebuild that
+has started completes even if the refined share falls below 10%, and the
+report gives both numbers (#42 item 41).
 There is no path that deletes rows in place: it would free no payload, touch
 most index pages of the hash-keyed tables and need its own deletion contract.
 
@@ -83,21 +104,34 @@ bump the Store generation.
 | Call | Marker table | Effect |
 |---|---|---|
 | `branch.remove(name)` | `branch_retired(branch_id, removed_ms)` | Hidden from listings and name resolution; fork, merge, publish and mount refused; `main` → `ReservedName` |
-| `project.delete(name)` | `layer_stack_retired(layer_stack_id, deleted_ms)` | Project hidden; its data stays until compaction; the Store stays addressable |
-| `project.remove_file(project, path)` | `path_removed(layer_stack_id, path, removed_ms)` | §4.3 |
+| `project.delete(name)` | `layer_stack_retired(layer_stack_id, deleted_ms)` | Project hidden; its home entry is removed; its data stays until compaction; the Store stays addressable |
+| `project.remove_file(project, path)` | `path_removed(layer_stack_id, path, frontier, removed_ms)` | §4.3 |
+
+`project.delete` is the only project removal: the hard-deleting
+`project.remove` is retired, and compaction reuses its `removal_*` statements
+(`engine/crates/layerfs-persistence/src/history/removal.rs`) to drop a deleted
+project's history (#42 item 32).
 
 ### 4.1 Representation
 
-The marker tables are added at open by an additive migration under the
-current schema identity, as `add_file_digests` was (#42 item 6). 1.0 Stores
-are converted offline. `branch` and `layer_stack` keep their full unique name
-indexes.
+The marker tables are added at open by an additive step under the current
+schema identity (#42 item 6). On SQLite this is one more `add_*` step, as
+`add_file_digests` was; the existing steps, the table list and
+`tools/store_blocks.py` are updated with it. PostgreSQL has no such step today
+(its open check requires the exact table set and recorded definition,
+`backend/postgresql/schema.rs:158-252`), so new Stores get the tables in
+`schema.sql` and an additive step at open creates them and rewrites the
+recorded definition for older Stores (#42 item 31). 1.0 Stores are converted
+offline. `branch` and `layer_stack` keep their full unique name indexes.
 
 ### 4.2 Visibility filter
 
-Every query that lists or resolves a Branch or project goes through one
-`*_live` view over the anti-join with the marker tables. A query that bypasses
-it would resurrect a removed Branch. The list is a #42 deliverable; the
+No views: views count as schema on both backends. Every statement that lists
+or resolves a Branch or project carries a `NOT EXISTS` filter against the
+marker tables, and a guard test fails on any statement that reads `branch` or
+`layer_stack` without it unless the statement is on an allow-list (the name
+check and the fork/merge identity checks read retired rows on purpose). A
+statement that bypasses the filter would resurrect a removed Branch. The
 minimum is the Branch and project listings and name lookups
 (`branch_snapshot`, `branch_snapshot_named`, `layerstack_stack_by_name`),
 fork, merge, publish and mount resolution, and the project listing
@@ -109,18 +143,30 @@ home.
 
 ### 4.3 `remove_file`
 
-- The marker names a path in one project. From the write on, every Commit of
-  that project behaves the same way for that path, before and after any
-  compaction:
+- The marker names a path in one project and a **frontier**: the stack's
+  history serial when the marker was written. It applies to the Commits and
+  Layers at or below the frontier, the same way before and after any
+  compaction (#42 item 35):
   - a read that resolves through the path returns `Removed`;
   - a listing omits the entry and says that entries were removed (shape owned
     by #47/#51);
-  - a new mount of any of the project's Commits does not show the path.
-- History rows and IDs are unchanged. Because the answer is `Removed`, not
-  different bytes, an old ID never silently resolves to changed contents.
+  - a mount of a Branch whose head is at or below the frontier applies a
+    whiteout for the path, so the next Commit records a real deletion.
+- Commits after the frontier never inherit the path, and creating a file at
+  the same path later is an ordinary write that stays visible.
+- Reads by object ID are not path-aware: they return the bytes until
+  compaction collects them, then `NotFound`; never different bytes.
+- History rows and IDs are unchanged. Because the answer is `Removed` or
+  `NotFound`, not different bytes, an old ID never silently resolves to
+  changed contents.
 - The call reports no freed bytes; compaction reports what it reclaimed (§6.2).
 - The path is scoped to one project. The same bytes reached from another
   project, another path, or as a delta base of a live object stay.
+- Physical removal is best effort, and the documentation says so: a pack
+  shared with live objects is not repacked, and below the threshold
+  compaction writes nothing. A guaranteed purge (a targeted repack) is a
+  follow-up, not part of 2.0.0.
+- Traces record a hash of the path, not the path.
 - If #47 cannot deliver the path-aware walk in 2.0.0, the call ships as
   visibility only and its documentation says plainly that it frees nothing.
 
@@ -148,37 +194,58 @@ name is never reused while its old rows exist. So:
 | Operation | Refused while | Code |
 |---|---|---|
 | `branch.remove` | a mount or Sandbox of that Branch exists | `MountsActive` |
-| `project.delete`, `project.remove_file` | any mount of the project (any Branch, any historical Commit), or another user of the project | `MountsActive`, `Busy` |
+| `project.delete`, `project.remove_file` | any mount of the project (any Branch), or another user of the project | `MountsActive`, `Busy` |
 | `store.compact` | any mount, client or operation on the Store, or unfinished Init/merge rows (#155 D-6) | `MountsActive`, `Busy` |
+
+Mounts take a Branch; there is no mount of a historical Commit. A Sandbox on a
+machine that cannot be reached is `Busy`: its inactivity cannot be proven.
 
 The check and the exclusion are one atomic step: a new conflicting user is
 refused from the check until the operation completes.
 
 ### 5.1 SQLite
 
-The existing Store lock, lease and op record (`control/crates/layerfs-store/src/lease.rs`,
-`record.rs`, `control/crates/layerfs-home/src/op.rs`). A live lease, reported
-by the lease code as `InUse`, is returned as `Busy` at the API.
+- **Store scope:** the existing Store lock, lease and op record
+  (`control/crates/layerfs-store/src/lease.rs`, `record.rs`,
+  `control/crates/layerfs-home/src/op.rs`). A live lease, reported by the
+  lease code as `InUse`, is returned as `Busy` at the API.
+- **Project scope:** a project-level `op` on the project record, with the
+  same begin/settle pattern as the Store op
+  (`control/crates/layerfs-store/src/sqlite/family.rs:161-200`); Sandbox
+  create and mount check it (#42 item 33).
+- **Branch scope:** a mount writes its Workspace intent record under the home
+  lock *before* bind, and removes it if bind fails. A removal checks the
+  records and writes its marker under the same lock, so a mount and a removal
+  can never both succeed; a bind that starts after the marker is refused by
+  the filtered statements (§4.2).
 
 ### 5.2 PostgreSQL
 
-Leases are files in one home and cannot see another machine. So:
+Leases are files in one home and cannot see another machine. So (#42 items
+33, 34):
 
-- **Presence.** Every opener holds `pg_advisory_lock_shared(key)` on its own
-  connection for the connection's lifetime, with
-  `key = blake3("layerfs/advisory/v1\0" ‖ catalog_id)[..8]` (#42 item 12a).
-  Compaction takes `pg_try_advisory_lock(key)` on its own connection; failure
-  is `Busy`, naming the holders (`pid`, `client_addr`, `backend_start`).
-  This also makes an idle opener, such as a remote daemon with a mount,
-  visible.
+- **Presence.** Advisory keys at three scopes, `key(scope) =
+  blake3("layerfs/advisory/v1\0" ‖ catalog_id ‖ scope)[..8]` with scope the
+  Store, a project or a Branch (#42 item 12a, extended). Long-lived sessions
+  hold them shared on their own connection: the daemon for each mount (Store,
+  project and Branch keys), and compaction's own connection. A removal tries
+  the exclusive project or Branch key; compaction tries the exclusive Store
+  key. Failure is `Busy` or `MountsActive`, naming the holders (`pid`,
+  `client_addr`, `backend_start`). This makes an idle remote daemon with a
+  mount visible.
+- **One-shot SDK calls** hold no presence lock. They rely on the fence below,
+  and on the swap's `ACCESS EXCLUSIVE NOWAIT` (§8): a transaction still open
+  at swap time makes the swap abandon.
 - **Fence.** The generation check rides in the statements a client already
   sends: in the `BEGIN` batch of a transaction, and as a joined column of
   `history_meta.catalog_incarnation` in the reads that run without a
   transaction (`Mode::Immutable`/`Statement` skip `BEGIN`:
   `engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs:263-268`).
   No extra round trip. A mismatch is `StaleStore`.
-- **Connections.** An opener needs a direct or session-pooled connection;
-  transaction pooling cannot hold a session lock and is `Unsupported`.
+- **Connections.** Mounts and compaction need a direct or session-pooled
+  connection; transaction pooling cannot hold a session lock and is
+  `Unsupported` for them. One-shot SDK calls keep working through transaction
+  poolers.
 - **Dead clients.** A client whose TCP connection died holds its lock until
   the server notices. The guide documents `tcp_keepalives_idle`,
   `client_connection_check_interval` and `pg_terminate_backend`.
@@ -194,14 +261,21 @@ A recursive query from the retained roots over the history edges:
 
 - Branch (not retired) → `head_commit_id`, `base_layer_id`, `forked_from_id`
 - Stack (not retired) → `head_layer_id`, published Layers
-- Commit → `parent_commit_id`, `second_parent_id`, `base_layer_id`
+- Commit → `parent_commit_id`, `second_parent_id`, `base_layer_id`,
+  `merged_from_id`, `displaced_id`
 - Layer → `parent_layer_id`, `source_commit_id`
 
-`merged_from_id` and `displaced_id` are identity values, not roots (#155
-D-10). A fork keeps its source's history up to the fork point. History rows
-outside the closure are collected by the rebuild (§7, §8); this is required
-because the full doctor qualifies every Commit and Layer root it finds
-(`engine/crates/layerfs-persistence/src/diagnostic/history.rs:155-198`).
+`merged_from_id` and `displaced_id` are followed because doctor requires
+their targets (`diagnostic/history.rs:40,146`; #42 item 28). A retired Branch
+is collected as a unit: if a retained row references it (`commit.branch_id`,
+`layer.source_branch_id`), its row stays and so does its head chain, because
+`branch.head_commit_id` is a foreign key; the closure is the fixpoint of this
+rule (#42 item 29). Every history edge is stack-local, so a live stack keeps
+all its Layers and only Commits and retired Branch rows can go; a deleted
+project goes whole. A fork keeps its source's history up to the fork point.
+History rows outside the closure are collected by the rebuild (§7, §8); this
+is required because the full doctor qualifies every Commit and Layer root it
+finds (`engine/crates/layerfs-persistence/src/diagnostic/history.rs:155-198`).
 
 ### 6.2 Object closure
 
@@ -211,11 +285,18 @@ because the full doctor qualifies every Commit and Layer root it finds
   with `ChainBases::base_of` (`core/crates/layerfs-storage/src/encoding/delta/read.rs`).
   Do not reuse `qualify`: it skips file mappings, symlink targets and
   attribute trees and ignores delta bases.
-- Two visit levels: *base-only* (needed only as a delta base) and *full*. A
-  base-only object is upgraded if later reached fully.
-- `remove_file`: when descending a root of a project with `path_removed`
-  rows, the walk does not enter a removed path. An object stays live if any
-  other path, project or delta chain reaches it.
+- One visit level (#42 item 27): an object reached by a logical edge or a
+  base edge is kept with all of its references, because the full doctor
+  checks the references of every stored object
+  (`engine/crates/layerfs-persistence/src/diagnostic/scan.rs:129-224`).
+  Objects kept only because they are bases are reported in `keptWaste`.
+- `remove_file`: when descending a root at or below a marker's frontier, the
+  walk does not enter the removed path. An object stays live if any other
+  path, project or delta chain reaches it.
+- On PostgreSQL the base edges live inside pack groups, so a remote server
+  sends about the live payload to the client during the mark. No format
+  change is made for this until #52 measures it; the fallback is a nullable
+  `object_location.base_id` filled at publish (#42 item 36).
 - Window by window, sort lookups by object ID before locating them.
 - Whole files and chunks have no logical references; only their delta base
   is needed. Reading it still loads and authenticates the whole group
@@ -224,7 +305,7 @@ because the full doctor qualifies every Commit and Layer root it finds
 
 ### 6.3 Visited set
 
-A scratch table `visited(object_id PRIMARY KEY, level, pack_id) WITHOUT ROWID`
+A scratch table `visited(object_id PRIMARY KEY, pack_id) WITHOUT ROWID`
 in a temporary file owned by the compaction connection (`temp_store=FILE`):
 bounded memory, no second persistent database. Session connections keep
 `temp_store=2` (`engine/crates/layerfs-persistence/src/backend/sqlite/session/profile.rs:88`).
@@ -236,9 +317,14 @@ On PostgreSQL, a temporary table.
 - `none` or `rebuild` from §3, using the bytes of packs that hold no live
   object after the metadata walk (an upper bound that §7 step 4 refines).
 - Dead rows: `object_location`, `content_signature`, `file_digest` (keep a
-  row only if its root is retained, #155 R-4), `inode_value_block` (a block
-  is dead when every ordinal in it is dead), history rows outside §6.1, and
+  row only if its root is retained, #155 R-4), history rows outside §6.1, and
   retired `branch`/`layer_stack` rows (§4.4).
+- Kept in 2.0: every `inode_value_block` row; the ordinals of pooled leaves
+  are private to core, and the blocks are small. The report gives their bytes
+  (#42 item 37).
+- Cleared: `binding_hint_block`. The hints are advisory and not per project,
+  and they hold the file names of deleted projects and removed paths (#42
+  item 38).
 
 ## 7. SQLite rebuild
 
@@ -257,20 +343,28 @@ Runs as one operation on the Store's machine (S6).
    - Payload sweep: live packs in descending `pack_id`. Copy each live pack
      once, add the delta bases of its live records to `visited`. A base found
      in a pack already passed goes on a late list and is copied at the end.
-     (#48 confirms the base-before-delta ordering this relies on.)
+     A base is not guaranteed to sit in a lower `pack_id` (first-wins
+     locators can move forward,
+     `core/crates/layerfs-storage/src/store/source.rs:9-13`), so the late
+     list is an indexed table, not an exception path.
    - `pack_unit` for the copied packs, as a complete unit set
      (`engine/crates/layerfs-persistence/src/backend/sqlite/objects/units_read.rs:55-75`).
    - `object_location` by an ordered join with `visited`.
    - `content_signature` entries that name a copied object; `file_digest`,
-     `inode_value_block`, history and catalog tables per §6.4;
-     `history_meta` with `catalog_incarnation = G + 1`.
+     `inode_value_block`, history and catalog tables per §6.4, with a deleted
+     project's rows left out by the `removal_*` statements' selection;
+     `sqlite_sequence`, `store_policy` and `scope_allocator` copied;
+     `binding_hint_block` left empty; `history_meta` with
+     `catalog_incarnation = G + 1`.
    - `store_totals`: `logical` is rebuilt by the history triggers and must
      equal the old value minus the collected history rows' `logical`;
      `canonical`, `stored` and `metadata` are summed.
 5. Switch the new file to WAL and run the sidecar checks
    (`engine/crates/layerfs-persistence/src/backend/sqlite/snapshot.rs:101-140`).
-6. Verify: a real Session open (`validate`), `heads_digest` before and after
-   (`engine/crates/layerfs-persistence/src/backend/sqlite/heads.rs:83`), row counts against the mark,
+6. Verify: a real Session open (`validate`), `live_heads_digest` before and
+   after (a new function beside `heads_digest`,
+   `engine/crates/layerfs-persistence/src/backend/sqlite/heads.rs:83`, over
+   non-retired Branches and stacks only; #42 item 30), row counts against the mark,
    `foreign_key_check`, the catalog allocator and totals checks. No sha256 of
    either file. `quick_check` and the full doctor stay separate commands.
 7. Install: re-read `G`; check `(catalog_id, incarnation, dev, ino)` and that
@@ -308,13 +402,15 @@ tables. `content_signature` (at most 8192 rows, no foreign key:
 **Phase B — swap (one short transaction).**
 
 5. `LOCK TABLE` the Store's tables `ACCESS EXCLUSIVE NOWAIT`.
-6. Re-check `catalog_incarnation = G`, the heads digest, and that
-   `store_policy.next_pack_id` and the ordinal allocator have not moved.
-   Any change abandons the round with no writes (`Conflict`).
-7. Delete dead rows in place: `content_signature`, `file_digest`,
-   `inode_value_block`, history rows and retired name rows (§6.4). `logical`
-   in `store_totals` is reduced by the collected history rows, as
-   `removal_totals` does today
+6. Re-check `catalog_incarnation = G`, `live_heads_digest` (PostgreSQL gains
+   one; it has no heads digest today), and that `store_policy.next_pack_id`
+   and the ordinal allocator have not moved. Any change abandons the round
+   with no writes (`Conflict`).
+7. Delete dead rows in place: `content_signature`, `file_digest`, history
+   rows (a deleted project's through the `removal_*` statements, which already
+   run on PostgreSQL) and retired name rows; clear `binding_hint_block`;
+   `inode_value_block` is kept (§6.4). `logical` in `store_totals` is reduced
+   by the collected history rows, as `removal_totals` does today
    (`engine/crates/layerfs-persistence/src/history/removal.rs`); `canonical`,
    `stored` and `metadata` are recomputed.
 8. Copy the old tables' owner and ACL onto the new ones.
@@ -323,7 +419,10 @@ tables. `content_signature` (at most 8192 rows, no foreign key:
    there, bound to the Store schema's `pack_immutable()` so doctor sees
    `EXECUTE FUNCTION pack_immutable()`
    (`diagnostic/postgresql_contract_expected.rs:213`).
-10. `catalog_incarnation = G + 1`; `SET LOCAL synchronous_commit` to the
+10. Verify inside the transaction: row counts against the mark,
+    `live_heads_digest` unchanged, and the doctor contract query (tables,
+    constraints, indexes, trigger) clean. A failure rolls back.
+11. `catalog_incarnation = G + 1`; `SET LOCAL synchronous_commit` to the
     Store's setting or `local`, whichever is stronger; `COMMIT`. Then drop
     the empty scratch schema.
 
@@ -370,12 +469,19 @@ tables. `content_signature` (at most 8192 rows, no foreign key:
 | `StaleStore` | new; one `HistoryError` variant with an explicit mapping arm, because the `_ => "Failed"` wildcard (`engine/crates/layerfs-store-service/src/history/lookup.rs:54,64`) would hide it |
 | `Removed` | new; reading a path removed by `remove_file` |
 
-New `HistoryCatalog` methods get default `Unsupported` bodies so the eight
-implementations need not change at once (C9).
+- A project create whose name is held returns `NameTaken` (today it returns
+  `Exists`), the same as a Branch create or fork.
+- New `HistoryCatalog` methods get default `Unsupported` bodies so the eight
+  implementations need not change at once (C9).
+- All four calls belong to the MCP admin profile and are refused under a
+  folder scope (`api/crates/layerfs-api/src/calls/scope.rs`; #42 item 39).
 
 ## 11. Report
 
-`store.compact` returns, and `store.status` shows while running:
+While compaction runs, it writes its phase (`mark`, `build`, `verify`,
+`install`) into the op, and `store.status` shows it with the op's other fields
+(`control/crates/layerfs-home/src/op.rs:189-201`); there is no `PROGRESS`
+option (#42 item 40). `store.compact` returns:
 
 | Field | Meaning |
 |---|---|
@@ -384,7 +490,7 @@ implementations need not change at once (C9).
 | `logicalDiscarded` | canonical bytes of collected objects |
 | `backendReusable` | SQLite: the old file's free pages; PostgreSQL: 0 for rebuilt tables |
 | `physicalShrink` | SQLite: old file size minus new; PostgreSQL: `pg_total_relation_size` delta |
-| `keptWaste` | bytes of dead objects in retained packs, and bytes kept only as delta bases |
+| `keptWaste` | bytes of dead objects in retained packs, bytes kept only as delta bases (with their references), and the kept `inode_value_block` bytes |
 
 A zero is always explained. Estimates are marked.
 
@@ -401,12 +507,17 @@ A zero is always explained. Estimates are marked.
 - **Regression:** after compaction, a Save of bytes whose `file_digest` row
   named a collected root succeeds.
 - **Fences:** a connection that bypassed admission gets `StaleStore`; a second
-  compaction gets `Busy`; a remote PostgreSQL opener blocks compaction with
-  `Busy` naming it.
-- **Names:** `NameTaken` after removal, a free name after compaction collects
-  the row, `ReservedName` for `main`.
-- **`remove_file`:** `Removed` before and after compaction; bytes reclaimed
-  only when no other path, project or delta chain uses them.
+  compaction gets `Busy`; a remote PostgreSQL daemon with a mount blocks
+  compaction and the matching removal, naming itself; a one-shot SDK
+  transaction open at swap time makes the swap abandon.
+- **Admission races:** a mount and a removal of the same Branch started
+  together never both succeed.
+- **Names:** `NameTaken` after removal (Branch and project), a free name after
+  compaction collects the row, `ReservedName` for `main`.
+- **`remove_file`:** `Removed` for Commits at or below the frontier, before and
+  after compaction; the next Commit of a mounted older head records the
+  deletion; a file created later at the path is visible; bytes reclaimed only
+  when no other path, project or delta chain uses them.
 - **Speed and space** (one sample per arm, declared caches, generated
   fixtures): downtime per GB of live data and per GB freed, bytes written,
   peak disk, `ACCESS EXCLUSIVE` duration on PostgreSQL. The rebuild's build

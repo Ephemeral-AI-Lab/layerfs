@@ -236,7 +236,6 @@ def inputs(record):
         "Cargo.toml",
         "Cargo.lock",
         "core/crates",
-        "engine/vendor",
         "engine/crates",
         "control/crates",
         "api/crates",
