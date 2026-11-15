@@ -19,9 +19,9 @@ const MOST: usize = 1024;
 /// The overlay file sizes of the Workspaces with `namespaces` (each
 /// Workspace record's `namespace`) of Sandbox `sandbox` on machine
 /// `machine`, read where its run folder is: `{ overlay_sizes: [{
-/// namespace, bytes }] }`, with no entry for a Workspace that has no
-/// overlay file there. Refusals are an inspect request's: `Busy`,
-/// `Unavailable`, `NoSuchSandbox`.
+/// namespace, bytes }] }`, `bytes` null for a Workspace that has no
+/// overlay file there ([`crate::run_folder::sizes`]). Refusals are an
+/// inspect request's: `Busy`, `Unavailable`, `NoSuchSandbox`.
 pub fn overlay_sizes(
     home: &std::path::Path,
     machine: &str,
@@ -59,17 +59,6 @@ pub(super) fn serve(side: &Side<'_>, args: &SdkValue) -> Outcome {
     let sandbox = args.get_text("sandbox").unwrap_or("");
     // the read: one `lstat` per Workspace, in the run folder the Sandbox's
     // daemon record on this side names
-    let folder = super::run_folder(side, sandbox)?.join("overlay");
-    let size = |namespace: &i64| {
-        let found = std::fs::symlink_metadata(folder.join(format!("{namespace}.sqlite"))).ok()?;
-        let bytes = i64::try_from(found.len())
-            .ok()
-            .filter(|_| found.is_file())?;
-        Some(SdkValue::map([
-            ("namespace", SdkValue::Int(*namespace)),
-            ("bytes", SdkValue::Int(bytes)),
-        ]))
-    };
-    let sizes = namespaces.iter().filter_map(size).collect();
-    Ok(SdkValue::map([("overlay_sizes", SdkValue::List(sizes))]))
+    let run = super::run_folder(side, sandbox)?;
+    Ok(crate::run_folder::sizes(&run, &namespaces))
 }

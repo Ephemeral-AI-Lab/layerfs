@@ -376,11 +376,12 @@ fn overlay_sizes_are_read_by_stat_without_opening_a_file() {
     // a link is not a Workspace's overlay file, whatever it points at
     std::os::unix::fs::symlink(overlay.join("1.sqlite"), overlay.join("4.sqlite")).unwrap();
     let asked = [1, 2, 3, 4];
-    // the answer, as a worker sends it and the home side answers it
+    // the answer, as a worker sends it and the home side answers it: null
+    // for a Workspace with no overlay file (2) and for the link (4)
     let sizes = inspect::overlay_sizes(&home, "native", "s1", &asked).unwrap();
     assert_eq!(
         layerfs_home::json::print(&sizes),
-        r#"{"overlay_sizes":[{"namespace":1,"bytes":8192},{"namespace":3,"bytes":0}]}"#
+        r#"{"overlay_sizes":[{"namespace":1,"bytes":8192},{"namespace":2,"bytes":null},{"namespace":3,"bytes":0},{"namespace":4,"bytes":null}]}"#
     );
     // the request by its kind is the same read
     let request = SdkValue::map([

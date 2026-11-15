@@ -572,14 +572,15 @@ fn a_forwarded_sandbox_s_run_folder_is_read_in_its_machine() {
     let (before, guest) = (files(&home), files(&root));
     let log = call(&home, "logs.sandbox", &[("sandbox", t("s1"))]).unwrap();
     assert_eq!(texts(&log), ["in the guest"]);
-    // the sizes of the Workspaces the home's records name
+    // the sizes of the Workspaces the home's records name, null for one
+    // with no overlay file in the machine
     let record = layerfs_sandbox::record::sandbox(&home, "s1")
         .unwrap()
         .unwrap();
     let sizes = layerfs_sandbox::inspect::overlay_sizes(&home, record.machine(), "s1", &namespaces);
     assert_eq!(
         layerfs_api::json::print(&sizes.unwrap()),
-        r#"{"overlay_sizes":[{"namespace":1,"bytes":4096},{"namespace":5,"bytes":12288}]}"#
+        r#"{"overlay_sizes":[{"namespace":1,"bytes":4096},{"namespace":2,"bytes":null},{"namespace":5,"bytes":12288}]}"#
     );
     assert_eq!(files(&home), before);
     assert_eq!(files(&root), guest);
