@@ -1,7 +1,7 @@
 //! The one entry of the library: `call(home, name, args, events)`. Every
 //! front end (the `layerfs` binary, Node and Python) makes exactly this
 //! call, so results and errors are the same by construction. A machine's
-//! worker serves its requests through `worker_server::run`, not here, so
+//! worker serves its requests through `worker_server` (`ops::run`), not here, so
 //! one call is dispatched, and logged, once.
 //!
 //! A call runs once. Its arguments are checked against the table before any

@@ -8,7 +8,7 @@ boundary, within [Machines](README.md).
 
 | | |
 | --- | --- |
-| Source | [`layerfs-machine/src/worker/`](../../../../control/crates/layerfs-machine/src/worker), [`layerfs-control/src/worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs), [`layerfs-platform/src/setup/`](../../../../control/crates/layerfs-platform/src/setup), [`reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs), [`layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
+| Source | [`layerfs-machine/src/worker/`](../../../../control/crates/layerfs-machine/src/worker), [`layerfs-control/src/worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) and [`worker_server/`](../../../../control/crates/layerfs-control/src/worker_server), [`layerfs-platform/src/setup/`](../../../../control/crates/layerfs-platform/src/setup), [`reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs), [`layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
 
 A worker is one `layerfs worker` process per machine whose kernel the
 caller cannot open a sqlite Store on. It runs the library's host
@@ -85,14 +85,14 @@ until `machine.stop`: it never stops by itself
 ```text
  caller (client.rs)                          worker (worker_server.rs)
    | connect 127.0.0.1:<port>  (<= 10 s)         |
-   |--- {secret} -------------------------------->| reads <= 4 KiB, <= 10 s
+   |--- {secret} -------------------------------->| reads <= 4 KiB, <= 10 s in all
    |<-- {ready:true, protocol, bundle} ----------| or {refused: Denied}
    |    other protocol or bundle: send nothing   |
    |--- {op, args, home_id?, trace_step?} ------->| <= 30 s between bytes
    |         from here nothing is resent         | runs op once,
-   |<-- {event} ... (progress, output) ----------|   home = its root
-   |<-- {value} | {refused} (+ steps?) ----------|
-   x  connection closes: one request each        x
+   |<-- {event} ... (progress, output) ----------|   home = its root; each send
+   |<-- {value} | {refused} (+ steps?) ----------|   <= 30 s without progress
+   x  closes first, once it has the answer       x waits <= 30 s for that close
 ```
 
 ```text
@@ -109,7 +109,7 @@ until `machine.stop`: it never stops by itself
 | Build check | same protocol and same bundle hash as the bundle this build deploys; a worker outside a sealed bundle is checked by protocol alone | same, `Hello::expected` |
 | Byte values | travel raw in attached frames, never base64; a plain frame's `{"base64": ..}` still reads as bytes | [`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs) |
 | Oversize frame | `TooLarge` from its length, before its body is read; a malformed attached frame `Failed` | same |
-| Concurrency | one thread per connection; one request per connection | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
+| Concurrency | one thread per connection; one request per connection; no cap on connections ([below](#one-connection-never-stops-the-worker)) | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
 | Diagnostic connection | an allowlisted hello and ping (`doctor.sandbox`, `store.diagnose`) under one absolute deadline; never starts a worker | [`worker/diagnostic.rs`](../../../../control/crates/layerfs-machine/src/worker/diagnostic.rs) |
 
 | Outcome | Error | Request sent? |
@@ -117,14 +117,16 @@ until `machine.stop`: it never stops by itself
 | connect, secret or hello fails | `Unavailable` (`Unreached`) | no |
 | wrong secret | `Denied` (`Unreached`) | no |
 | worker of another build | `Unavailable`, `detail {worker, expected}`, naming `layerfs machine stop` then `start` | no |
+| the worker closes before the hello (it had no thread for the connection) | `Unavailable` (`Unreached`) | no |
 | request write fails part way | `Unknown`, "it was not resent" | maybe |
-| answer lost | `Unknown`, "it may have run, and was not resent" | yes |
+| answer lost (the connection closed: the operation panicked, or the caller read nothing for 30 s) | `Unknown`, "it may have run, and was not resent" | yes |
+| a read-only operation panicked before its first event | `Failed`, naming `worker.log` | yes |
 
 Only `Unreached` lets the caller start a machine before it sends. A ping
 waits at most 10 s; other operations wait as long as they run
 ([`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs)).
 
-## Server (`worker_server.rs`)
+## Server (`worker_server.rs`, `worker_server/`)
 
 | Operation | Runs on the machine |
 | --- | --- |
@@ -141,6 +143,83 @@ The worker uses its own root as the home and the Store file under it as
 the Store's path, whatever the caller sent. The root is not a home:
 `home_id` lends it the caller's id
 ([Home](../home/README.md)).
+
+### One connection never stops the worker
+
+A worker serves every Store and Sandbox call of its machine, and on
+`docker` it is the container's main process. A failed accept, a panic or a
+peer that stalls ends at most its own connection (layerfs-project#177).
+Nothing here is a retry: no request is read twice and none is resent.
+
+```text
+ accept loop (worker_server.rs)             one thread (worker_server/connection.rs)
+   accept ---- ok ----> thread ---- ok ---->  hello: all of it <= 10 s
+     |                    |                   request: <= 30 s between bytes
+     | EMFILE ENFILE      | the OS has no     catch_unwind( run op; events )
+     | ENOBUFS ENOMEM     | thread: log,        each send <= 30 s without progress;
+     | ECONNABORTED EINTR | drop the stream     first failed send: nothing more
+     |   log, 50 ms,      v                     is written, both sides closed
+     |   accept again    (caller: Unavailable,  answer, then wait <= 30 s for
+     v                    nothing was sent)     the caller's close
+   any other error (EBADF, EINVAL, ENOTSOCK): log, serve returns, the worker exits
+```
+
+| Rule | Detail | Source |
+| --- | --- | --- |
+| Accept | the six errors above say nothing about the listener: one log line, a 50 ms pause, the next `accept`. Any other error ends `serve` (`layerfs worker` then exits "the worker stopped") | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs), `passing` |
+| Thread | `std::thread::Builder::spawn`; when the OS has none, the stream is dropped before its hello, so the caller is `Unavailable` and sent nothing | same, `Server::spawn` |
+| Log | `layerfs worker: …` on stderr (`worker.log`). At most one line per kind of accept failure, and one for threads, every 10 s; the next line of a kind says how many went unlogged | same, `Limited` |
+| Hello | one deadline of 10 s (`HELLO_WAIT`) for the whole first frame, however many reads it takes; a peer that trickles bytes is closed at it | [`worker_server/connection.rs`](../../../../control/crates/layerfs-control/src/worker_server/connection.rs), `Until` |
+| Write | a write timeout of 30 s (`REQUEST_WAIT`) on every accepted stream. It bounds one send that makes no progress, not a frame: a caller that still reads is never cut | same, `exchange` |
+| Closed writer | after the first failed or timed-out send, every later event fails at once without touching the socket, no answer is written, and the stream is shut down so the caller reads `Unknown` at once | same, `Wire` |
+| Stalled caller | `store.file` and `sandbox.host` ignore the failed event and end their step; `project.export` returns at its next part, closes the Store and releases its lease; the thread then ends | [`worker_server/ops.rs`](../../../../control/crates/layerfs-control/src/worker_server/ops.rs), [`export/route.rs`](../../../../control/crates/layerfs-store/src/project/export/route.rs) |
+| After the answer | the worker waits at most 30 s for the caller's close, once | `Wire::answer` |
+| Panic | `catch_unwind` around each connection. One line `<op> panicked: <message>` (300 characters at most; never arguments, a secret or a request), then the connection closes with no answer: `Unknown` (layerfs-project#179 D7) | `connection::serve` |
+| Panic, read-only | `worker.ping`, `machine.images`, `store.reach`, `doctor.sandbox` and `store.diagnose` answer `Failed` instead, only if no frame was started after the request | `ops::READ_ONLY` |
+
+**No connection cap, and no bound on frame memory** (decided in
+layerfs-project#177). A cap must make a connection wait, never refuse it
+`Busy`: `project.init` sends four parts at once and a refused part fails
+the Init. But a waiting cap would put new calls behind commands that run
+for hours, each of which holds a connection, so one slow command could hold
+up every Store call of the machine. What bounds a connection instead:
+
+| Peer | Holds | For at most |
+| --- | --- | --- |
+| before the secret matches | one thread, one descriptor, 4 KiB | 10 s |
+| with the secret, sending its request | one thread, one frame of up to 512 MiB | 30 s without a byte |
+| with the secret, reading nothing | one thread, what its operation holds | 30 s without progress |
+| past the worker's descriptor limit | a place in the listen queue | until a descriptor is free |
+
+Frames past the hello come only from a process that holds the secret: the
+home's owner. Its largest ordinary load is four 8 MiB parts at once, so a
+byte budget would guard only against the owner's own process; it is not
+added. If one is, it waits as a cap would.
+
+Mutexes a panic could poison (a poisoned lock used to refuse every later
+call, "binding state poisoned"). Each is recovered (`into_inner`), because
+its holders leave it whole at every point they can panic:
+
+| Mutex | What a holder does with the guard | Decision |
+| --- | --- | --- |
+| `SANDBOXES` ([`registry.rs`](../../../../control/crates/layerfs-sandbox/src/registry.rs)) | one map lookup, insert or remove per guard; a replaced or removed Sandbox may be dropped there (`try_wait`, closing connections) | recovered, also where [`force.rs`](../../../../control/crates/layerfs-sandbox/src/force.rs) takes it directly: the map operation is complete before anything is dropped |
+| a Sandbox's `mounts` (same) | one lookup, insert or remove, or the whole map replaced after a refresh built outside the guard | recovered: entries are plain values |
+| `OUTPUTS` ([`output.rs`](../../../../control/crates/layerfs-sandbox/src/output.rs)) | insert, remove, or look up and clone a file handle | recovered |
+| `Controls.pool` ([`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs)) | pops or pushes an idle connection, changes `open` or `limit`; dialling runs outside the guard | recovered in `lend` as its `Lease` drop already did; a failed connection is now closed after the guard is released |
+| `STORES` ([`service.rs`](../../../../control/crates/layerfs-store/src/service.rs)) | `acquire` opens the Store under the guard (I/O that may panic), then inserts it; counts change in one step | recovered: a panic while opening leaves no entry |
+| discovery `HELD` ([`discovery.rs`](../../../../control/crates/layerfs-store/src/project/discovery.rs)) | set lookup, insert or remove, and the bounded wait | recovered at its third site as at the other two |
+| `OPEN` ([`open.rs`](../../../../control/crates/layerfs-store/src/open.rs)) | — | already recovered; unchanged |
+
+The first three and `STORES` are taken through `layerfs_home::helpers::lock`,
+which is now the lock of such a table and never refuses. Recovery does not
+undo what a panic leaves outside a guard: a Store that `with_service` opened
+stays counted as open, and a pool slot counted before a dial stays counted.
+
+The fault tests use the `worker-fault` cargo feature of `layerfs-control`
+(`worker_server::fault`: the next accept or thread fails, an operation
+panics, hangs or floods events, shorter waits). No shipped build turns it
+on and no environment variable stands in for it; the boundary guard allows
+it in the worker server's files alone and refuses a manifest that enables it.
 
 ### Lifecycle
 
