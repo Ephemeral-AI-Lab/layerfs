@@ -59,8 +59,21 @@ impl HistoryCatalog for HistoryProvider {
         self.read_statement(|tx| layerstack::layer_stack_named(tx, name))
     }
 
+    // The collision statement reads the retired/deleted holder on purpose.
+    fn layer_stack_name_taken(
+        &self,
+        name: &HistoryName,
+    ) -> HistoryResult<Option<layerfs_history::error::NameTakenState>> {
+        self.read(|tx| layerstack::name_taken(tx, name))
+    }
+
     fn branch(&self, id: BranchId) -> HistoryResult<Option<BranchRecord>> {
         self.read(|tx| branch::branch(tx, id))
+    }
+
+    // One statement, no visibility filter: rendering keeps a retired Branch.
+    fn branch_any(&self, id: BranchId) -> HistoryResult<Option<BranchRecord>> {
+        self.read_statement(|tx| branch::branch_any(tx, id))
     }
 
     fn branch_named(

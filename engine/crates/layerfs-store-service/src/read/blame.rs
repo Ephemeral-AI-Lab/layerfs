@@ -129,6 +129,12 @@ pub struct Limits {
     pub bytes: u64,
 }
 
+/// The line window a blame page covers.
+pub struct Window {
+    pub from: Arg<u64>,
+    pub count: Arg<u64>,
+}
+
 /// The origin Commit of each line of the regular file at `path`, from line
 /// `from` on, along persisted first parents.
 pub fn blame(
@@ -137,8 +143,7 @@ pub fn blame(
     snap: &Snap,
     path: &str,
     visibility: &Visibility,
-    from: Arg<u64>,
-    count: Arg<u64>,
+    window: Window,
     limits: &mut Limits,
 ) -> Answer {
     let tip = snapshot::existing(reader, snap, path)?;
@@ -152,8 +157,8 @@ pub fn blame(
             SdkValue::Null,
         ));
     }
-    let from = from?;
-    let count = count?;
+    let from = window.from?;
+    let count = window.count?;
     if count == 0 || count > window::LINES as u64 {
         return Err(args::invalid("lineCount must be in 1..=2000"));
     }

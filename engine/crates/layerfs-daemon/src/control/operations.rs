@@ -9,7 +9,7 @@ use crate::store::{
     CommitError, CommitFailure, CommitOptions, CommitSuccess, NamedBindRequest,
 };
 use layerfs_bridge::control::{
-    Activity, ConflictReport, ControlCode, MergedCommit, Reply, Request, WorkspaceToken,
+    Activity, ConflictReport, ControlCode, MergedCommit, MountPlace, Reply, Request, WorkspaceToken,
 };
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_content::merge::{Conflict, ConflictKind};
@@ -102,9 +102,20 @@ impl Service {
                         workspace: *workspace,
                         branch: *branch,
                     };
-                    self.mount(BindIntent::Id(request), timing)
+                    self.mount(BindIntent::Id(request), MountPlace::default(), timing)
                 })
             }
+            Request::MountPlaced {
+                workspace,
+                branch,
+                place,
+            } => crate::telemetry::timed("sandbox.mount.bind", |timing| {
+                let request = BindRequest {
+                    workspace: *workspace,
+                    branch: *branch,
+                };
+                self.mount(BindIntent::Id(request), place.clone(), timing)
+            }),
             Request::MountNamed {
                 workspace,
                 project,
@@ -115,7 +126,20 @@ impl Service {
                     project: project.clone(),
                     branch: branch.clone(),
                 };
-                self.mount(BindIntent::Named(request), timing)
+                self.mount(BindIntent::Named(request), MountPlace::default(), timing)
+            }),
+            Request::MountNamedPlaced {
+                workspace,
+                project,
+                branch,
+                place,
+            } => crate::telemetry::timed("sandbox.mount.bind", |timing| {
+                let request = NamedBindRequest {
+                    workspace: *workspace,
+                    project: project.clone(),
+                    branch: branch.clone(),
+                };
+                self.mount(BindIntent::Named(request), place.clone(), timing)
             }),
             Request::Status(token) => self.status(*token),
             Request::Cleanup(token) => self.cleanup(*token),
@@ -146,6 +170,7 @@ impl Service {
     pub(crate) fn mount(
         &self,
         intent: BindIntent,
+        place: MountPlace,
         timing: &layerfs_telemetry::timer::TimingScope<'_, layerfs_telemetry::timer::Active>,
     ) -> Result<Success, Failure> {
         let workspace = intent.workspace();
@@ -177,8 +202,11 @@ impl Service {
             entries.insert(workspace, Entry::Binding);
         }
         let bound = match crate::telemetry::phase(timing, "store.bind", || match intent {
-            BindIntent::Id(request) => self.store.bind(self.owner.clone(), request),
-            BindIntent::Named(request) => self.store.bind_named(self.owner.clone(), request),
+            BindIntent::Id(request) => self.store.bind_placed(self.owner.clone(), request, place),
+            BindIntent::Named(request) => {
+                self.store
+                    .bind_named_placed(self.owner.clone(), request, place)
+            }
         }) {
             Ok(value) => value,
             Err(value) => {

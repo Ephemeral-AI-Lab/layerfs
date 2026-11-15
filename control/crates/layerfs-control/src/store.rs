@@ -27,7 +27,6 @@ pub fn compact(home: &Path, events: &mut Events<'_>, name: &StoreName) -> Outcom
 /// Who uses a Store or a project, read from the Sandbox records.
 pub const RELATED: Related = Related {
     store_idle: inventory::store_idle,
-    can_remove_project: inventory::can_remove_project,
 };
 
 /// `store.remove`: a sqlite Store no Sandbox uses, with its file.

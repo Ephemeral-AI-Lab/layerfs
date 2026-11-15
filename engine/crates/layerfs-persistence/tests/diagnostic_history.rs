@@ -191,9 +191,9 @@ fn a_retained_commit_branch_reference_must_exist_in_its_stack() {
     let f = graph();
     clean(&f.audit(true));
     f.raw()
-        .execute_batch(&format!(
-            "PRAGMA foreign_keys=OFF; UPDATE \"commit\" SET branch_id=CAST(X'11'||zeroblob(16) AS BLOB)"
-        ))
+        .execute_batch(
+            "PRAGMA foreign_keys=OFF; UPDATE \"commit\" SET branch_id=CAST(X'11'||zeroblob(16) AS BLOB)",
+        )
         .unwrap();
     let out = f.audit(true);
     failure(&out, "store.history.branches");

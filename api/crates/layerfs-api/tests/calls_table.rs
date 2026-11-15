@@ -1,4 +1,4 @@
-//! The call table and its dispatcher (#533 step 2): 77 calls in ten
+//! The call table and its dispatcher (#533 step 2): 76 calls in ten
 //! families, arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::{families, json, keys, size, Call, Kind};
@@ -51,9 +51,9 @@ fn code(name: &str, args: SdkValue) -> String {
 }
 
 #[test]
-fn the_table_has_ten_families_and_77_calls() {
+fn the_table_has_ten_families_and_76_calls() {
     let all: Vec<&Call> = layerfs_api::calls();
-    assert_eq!(all.len(), 77);
+    assert_eq!(all.len(), 76);
     // each family holds only its own calls, and has at least one
     for family in families() {
         assert!(!family.calls().is_empty(), "{}", family.name);
@@ -66,7 +66,7 @@ fn the_table_has_ten_families_and_77_calls() {
     let mut names: Vec<_> = all.iter().map(|c| c.name()).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 77, "call names are unique");
+    assert_eq!(names.len(), 76, "call names are unique");
     // an optional positional is only ever followed by optional ones (D7)
     for c in &all {
         let first_optional = c.args.iter().position(|a| a.optional);
@@ -75,7 +75,7 @@ fn the_table_has_ten_families_and_77_calls() {
         }
     }
     let counts: Vec<usize> = families().iter().map(|f| f.calls().len()).collect();
-    assert_eq!(counts, [8, 9, 3, 15, 4, 6, 12, 13, 5, 2]);
+    assert_eq!(counts, [7, 9, 3, 15, 4, 6, 12, 13, 5, 2]);
 }
 
 #[test]
@@ -96,6 +96,17 @@ fn unknown_calls_and_arguments_are_refused_before_any_effect() {
         ])
     )
     .starts_with("InvalidInput"));
+}
+
+#[test]
+fn project_remove_is_retired() {
+    // spec 4: the hard delete leaves the table; a caller gets `InvalidInput`
+    // naming it, never a silent hard delete
+    assert!(layerfs_api::find("project.remove").is_none());
+    assert_eq!(
+        code("project.remove", map(&[("project", t("shop/api"))])),
+        "InvalidInput: no call named `project.remove`"
+    );
 }
 
 #[test]

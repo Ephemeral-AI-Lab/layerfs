@@ -94,6 +94,12 @@ postgresql_compact` — 8 passed on PostgreSQL 17.12 (Debian, server on
 `127.0.0.1:55432`); `--lib` 4 passed; the SQLite suite
 (`--test sqlite_compact`) passed (17 when T9 branched, 20 on the rebased main with the T12 fixtures); `sqlite_compact_crash` passed 13.
 
+> **T-G28/T-G60 follow-up.** `sqlite_compact_crash` grew to 23 tests with the
+> real-process SIGKILL arms (9 arms after T-G60), so the 13 passed here is the
+> T9 baseline. The
+> original `Gaps` bullet below still says those rows remain `open`; the current
+> matrix has them `partial`/`deferred`. This page keeps the T9 counts.
+
 ## Gaps (not contract changes)
 
 - **AC-41/AC-42/AC-43/AC-44/AC-60 remain `open`** in the acceptance matrix:

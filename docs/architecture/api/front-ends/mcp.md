@@ -98,12 +98,12 @@ Each call belongs to exactly one bucket, `work` (listed by both profiles) or
 | Bucket | Calls |
 | --- | --- |
 | `work` | the `branch`, `commit`, `file` and `workspace` families; `project.list`, `project.get`, `project.export`, `sandbox.list`, `sandbox.get` |
-| `admin` | `project.init`, `project.remove`, `sandbox.create`, `sandbox.close`; the `machine`, `store`, `backup` and `logs` families |
+| `admin` | `project.init`, `project.delete`, `project.remove_file`, `branch.remove`, `store.compact`, `sandbox.create`, `sandbox.close`; the `machine`, `store`, `backup` and `logs` families |
 
 `work` lets an agent read a project, work on Branches and files (each write
 is one explicit Commit), run in a mounted Workspace and export a snapshot.
 `admin` adds the calls that start workers, move whole Stores, hold
-credentials, delete records or change the shape of the home. A new call with
+credentials, retire or compact records, or change the shape of the home. A new call with
 no bucket fails `tools()`, generation and the test rather than appearing
 silently. Regenerate the table below with
 `node api/mcp/scripts/gen-profiles.mjs` (`--check` compares; both need the
@@ -111,16 +111,17 @@ built addon).
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
-73 calls: 38 in `work`, 35 in `admin` only; `--profile admin` lists all 73.
+76 calls: 38 in `work`, 38 in `admin` only; `--profile admin` lists all 76.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
 | `project.init` | admin | admin | import a host folder into a Store; administration |
-| `project.list` | work | work, admin | read a project's record or its entry counts, or export one (work); importing and removing a project are administration |
-| `project.get` | work | work, admin | read a project's record or its entry counts, or export one (work); importing and removing a project are administration |
-| `project.stats` | work | work, admin | read a project's record or its entry counts, or export one (work); importing and removing a project are administration |
+| `project.list` | work | work, admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
+| `project.get` | work | work, admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
+| `project.stats` | work | work, admin | read a project's record or its entry counts, or export one (work); importing, deleting or hiding a path in a project is administration |
 | `project.export` | work | work, admin | export a Branch snapshot to a local folder under a launch-time --export-root; a folder scope refuses it |
-| `project.remove` | admin | admin | remove a project from its Store; administration |
+| `project.delete` | admin | admin | retire a project in its Store and remove its home entry; administration; a folder scope refuses it |
+| `project.remove_file` | admin | admin | hide one absolute path from every node at or below its marker frontier; administration; a folder scope refuses it |
 | `branch.list` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
 | `branch.get` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
 | `branch.commits` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
@@ -129,6 +130,7 @@ built addon).
 | `branch.merge` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
 | `branch.publish` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
 | `branch.diff` | work | work, admin | work on Branches: list, read, fork, merge, publish and diff |
+| `branch.remove` | admin | admin | retire one Branch in its Store; administration; a folder scope refuses it |
 | `commit.list` | work | work, admin | read a Branch's Commit history |
 | `commit.get` | work | work, admin | read a Branch's Commit history |
 | `commit.diff` | work | work, admin | read a Branch's Commit history |
@@ -180,6 +182,7 @@ built addon).
 | `store.push` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.pull` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.remove` | admin | admin | create, connect, transfer and remove Stores; administration |
+| `store.compact` | admin | admin | reclaim one sqlite Store's dead bytes; administration; a folder scope refuses it |
 | `store.disconnect` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `backup.connect` | admin | admin | upload and restore a Store on a bucket; administration |
 | `backup.disconnect` | admin | admin | upload and restore a Store on a bucket; administration |

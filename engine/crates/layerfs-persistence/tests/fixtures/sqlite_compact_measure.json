@@ -1,0 +1,16 @@
+{
+  "schema": "t12.3a-sqlite-compact-measure/1",
+  "runs": 3,
+  "micros": [26738, 28201, 28681],
+  "medianMicros": 28201,
+  "minMicros": 26738,
+  "maxMicros": 28681,
+  "deadBytesBound": 1100,
+  "physicalShrink": 20480,
+  "peakTempBytes": 758240,
+  "liveRoots": 20,
+  "deadPacks": 20,
+  "profile": "SqlitePersistenceProfile::Disposable (WAL/OFF)",
+  "platform": "linux-x86_64",
+  "rustc": "rustc 1.85.1 (4eb161250 2025-03-15)"
+}

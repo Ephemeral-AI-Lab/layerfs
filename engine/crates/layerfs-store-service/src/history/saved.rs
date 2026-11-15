@@ -18,7 +18,7 @@ pub fn reference(store: &Arc<Store>, node: NodeId) -> Result<SdkValue> {
             let branch = record
                 .meta
                 .branch
-                .map(|id| store.published(|history| history.branch(id)))
+                .map(|id| store.published(|history| history.branch_any(id)))
                 .transpose()
                 .map_err(args::published)?
                 .flatten()
@@ -83,7 +83,7 @@ pub fn record(store: &Arc<Store>, node: NodeId) -> Result<SdkValue> {
                 .transpose()?;
             let source_branch = r
                 .source_branch
-                .map(|id| store.published(|history| history.branch(id)))
+                .map(|id| store.published(|history| history.branch_any(id)))
                 .transpose()
                 .map_err(args::published)?
                 .flatten();

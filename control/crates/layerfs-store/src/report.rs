@@ -28,7 +28,7 @@ pub fn compact_report(report: &CompactReport) -> SdkValue {
                     .residue
                     .artifacts
                     .iter()
-                    .map(|artifact| SdkValue::text(artifact))
+                    .map(SdkValue::text)
                     .collect(),
             ),
         ),

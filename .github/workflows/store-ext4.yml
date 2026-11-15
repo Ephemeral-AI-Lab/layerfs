@@ -1,0 +1,203 @@
+# Store lane: the Store suites, on a filesystem that carries SQLite's locks.
+#
+# A Store opens only on a directory that is private, owned by the test user and
+# on a local filesystem whose locks reach every opener: ext4, xfs or btrfs on
+# Linux (engine/crates/layerfs-store-service/src/kernel_guard.rs). The Store
+# suites keep their Stores in TMPDIR and in $CARGO_TARGET_DIR/tmp, so both must
+# be on such a filesystem, and an overlay checkout or a tmpfs /tmp is refused.
+# tools/ci/test_store_ext4.sh refuses any other directory before cargo starts
+# and points TMPDIR, CARGO_TARGET_DIR and CARGO_HOME at the one it is given;
+# this lane only provides that directory. See
+# docs/architecture/engine/store/testing.md.
+#
+# It adds no test selection of its own: every target it runs is already in the
+# push or nightly lane chosen by tools/ci_tests.py. It runs them under the
+# environment contract their guard requires.
+#
+# Reports only, like the other lanes (AGENTS.md §4): never a required check.
+# The runner's /mnt is a separate ext4 data disk while /tmp is tmpfs, so the
+# prepare step asserts the filesystem: a runner image whose /mnt is not ext4
+# fails there, with its own message, instead of as a guard refusal inside a
+# suite.
+name: store-ext4
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "core/**"
+      - "engine/**"
+      - "control/**"
+      - "api/crates/**"
+      - "!api/crates/layerfs-node/**"
+      - "Cargo.*"
+      - ".config/**"
+      - "tools/ci/**"
+      - ".cargo/**"
+      - ".github/workflows/store-ext4.yml"
+      - "!**/*.md"
+  pull_request:
+    # off for pull requests into layerfs_v2_0_0, like the other lanes
+    branches-ignore: [layerfs_v2_0_0]
+    paths:
+      - "core/**"
+      - "engine/**"
+      - "control/**"
+      - "api/crates/**"
+      - "!api/crates/layerfs-node/**"
+      - "Cargo.*"
+      - ".config/**"
+      - "tools/ci/**"
+      - ".cargo/**"
+      - ".github/workflows/store-ext4.yml"
+      - "!**/*.md"
+  schedule:
+    # After nightly.yml's 04:23 UTC run; the two lanes never share runner time.
+    - cron: "47 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: store-ext4-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  # CI needs no debugger: smaller objects, much shorter links.
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  # Link the test binaries with mold instead of GNU ld, as ci.yml's test job
+  # does. Scoped to this target, so the repository's aarch64 rustflags
+  # (.cargo/config.toml) stay.
+  CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
+  # The harness requires this and validates it before cargo starts. /mnt is the
+  # runner's ext4 data disk; never /tmp, which is tmpfs there.
+  LAYERFS_TEST_TMPDIR: /mnt/layerfs-store-tests
+
+jobs:
+  quick:
+    name: store ext4 (--quick)
+    # The push lane: one or two targets per suite, across the four suites.
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: rustup toolchain install 1.85.1 --profile minimal
+      - name: Install mold
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends mold
+          mold --version
+      - name: Prepare the ext4 test directory
+        run: |
+          # /mnt belongs to root on the runner image and the tests run as the
+          # runner, so hand the directory over before the harness probes it.
+          sudo mkdir -p "$LAYERFS_TEST_TMPDIR"
+          sudo chown "$(id -u):$(id -g)" "$LAYERFS_TEST_TMPDIR"
+          fs="$(findmnt -n -o FSTYPE --target "$LAYERFS_TEST_TMPDIR")"
+          echo "LAYERFS_TEST_TMPDIR=$LAYERFS_TEST_TMPDIR ($fs)"
+          df -h "$LAYERFS_TEST_TMPDIR"
+          case "$fs" in
+            ext4|xfs|btrfs) ;;
+            *)
+              echo "::error title=unsupported filesystem::$LAYERFS_TEST_TMPDIR is on $fs; the Store guard admits only ext4, xfs or btrfs"
+              exit 1
+              ;;
+          esac
+      # No Swatinem/rust-cache here: the harness moves CARGO_HOME and
+      # CARGO_TARGET_DIR onto LAYERFS_TEST_TMPDIR, so the checkout-scoped cache
+      # the other lanes restore is never read. The cold build is the price of
+      # running the suites where their guard admits them.
+      - name: Run the Store suites (--quick)
+        run: tools/ci/test_store_ext4.sh --quick
+
+  full-postgresql:
+    name: store ext4 (--full, PostgreSQL 17)
+    # The scheduled and manual lane: every Store suite, with the PostgreSQL
+    # cases on. A manual dispatch runs this job only, which is the full sweep.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      # A libpq connection string, not a URL (testing.md). A service
+      # container's published port is 127.0.0.1 on the runner. The server is
+      # scratch -- each PostgreSQL test creates and drops its own schema -- and
+      # lives only for this job. Setting this adds `--features postgresql` to
+      # every suite in the harness.
+      LAYERFS_TEST_POSTGRES_URL: host=127.0.0.1 port=5432 user=postgres dbname=postgres sslmode=disable
+      # The full-mode doctor calls amcheck's verify_heapam and bt_index_check;
+      # the step below creates it in this database. The physical doctor's two
+      # extra servers (an amcheck-free database and a physical standby) are
+      # not available in this job; see testing.md. Set so the diagnostic test
+      # asserts relation coverage is Pass instead of only printing it.
+      LAYERFS_TEST_EXPECT_AMCHECK: "1"
+    services:
+      postgres:
+        # PostgreSQL 17 is the supported version for these cases: the schema
+        # needs 16 or newer for STORAGE PLAIN, and the suites are qualified on
+        # 17.x (docs/architecture/engine/store/testing.md).
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+          # Trust authentication: a throwaway server, reachable from this job's
+          # steps only, and the tests create and drop their own schemas.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username=postgres --dbname=postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: rustup toolchain install 1.85.1 --profile minimal
+      - name: Install mold
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends mold
+          mold --version
+      - name: Prepare the ext4 test directory
+        run: |
+          sudo mkdir -p "$LAYERFS_TEST_TMPDIR"
+          sudo chown "$(id -u):$(id -g)" "$LAYERFS_TEST_TMPDIR"
+          fs="$(findmnt -n -o FSTYPE --target "$LAYERFS_TEST_TMPDIR")"
+          echo "LAYERFS_TEST_TMPDIR=$LAYERFS_TEST_TMPDIR ($fs)"
+          df -h "$LAYERFS_TEST_TMPDIR"
+          case "$fs" in
+            ext4|xfs|btrfs) ;;
+            *)
+              echo "::error title=unsupported filesystem::$LAYERFS_TEST_TMPDIR is on $fs; the Store guard admits only ext4, xfs or btrfs"
+              exit 1
+              ;;
+          esac
+      # The service health check gates this job on the server answering. The
+      # engine never installs extensions: a full-mode audit calls amcheck's
+      # verify_heapam and bt_index_check and reports every relation as
+      # Unknown when the extension is absent, while the compaction suite
+      # asserts a clean full audit. A fresh cluster therefore needs these
+      # contrib extensions before any suite connects (T-G14). The server is
+      # scratch, and this is the one database every suite reaches.
+      - name: Create the PostgreSQL extensions
+        run: |
+          set -euo pipefail
+          # The runner image does not ship psql; the distro client reaches the
+          # PostgreSQL 17 service container.
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends postgresql-client
+          psql --version
+          psql "$LAYERFS_TEST_POSTGRES_URL" -X -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE EXTENSION IF NOT EXISTS amcheck;
+          CREATE EXTENSION IF NOT EXISTS pgstattuple;
+          SQL
+          # Fail here, with a readable list, rather than as five Unknown
+          # relation checks inside a compaction suite.
+          psql "$LAYERFS_TEST_POSTGRES_URL" -X -A -t -v ON_ERROR_STOP=1 \
+            -c "SELECT extname FROM pg_catalog.pg_extension WHERE extname IN ('amcheck','pgstattuple') ORDER BY extname"
+      # The suites own their schemas; the harness reports the mode it took.
+      - name: Run the Store suites (--full)
+        run: tools/ci/test_store_ext4.sh --full

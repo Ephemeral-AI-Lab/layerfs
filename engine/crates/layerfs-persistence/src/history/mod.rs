@@ -23,7 +23,9 @@ mod rows;
 mod transaction;
 pub use kept::{KeptHistory, KeptNode, KeptNodeId};
 pub(crate) use lineage_backfill::backfill_lineage;
-pub use objects::{GcTuple, KeptObjects, KeptWaste, MarkResult};
+#[cfg(feature = "postgresql")]
+pub use objects::GcTuple;
+pub use objects::{KeptObjects, KeptWaste, MarkResult};
 pub use provider::HistoryProvider;
 pub(crate) use rows::{
     branch_row as diagnostic_branch, commit_graph_row as diagnostic_commit_graph,

@@ -1182,7 +1182,6 @@ fn rebuild_fixture() -> (Temp, SqliteHandles, FixtureIds) {
         .collect();
     let mut delta_bases_sorted = vec![base1, base2];
     delta_bases_sorted.sort();
-    let mut objects_dead = objects_dead;
     objects_dead.push(dead_group.id());
     objects_dead.extend([
         root_a4,

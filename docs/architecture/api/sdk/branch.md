@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The `branch` calls: list and read a project's Branches and their saved history, fork, merge, publish to `main`, and compare two Branches, within the [SDK](README.md).
+The `branch` calls: list and read a project's Branches and their saved history, fork, merge, publish to `main`, compare two Branches and retire one, within the [SDK](README.md).
 
 | | |
 | --- | --- |
@@ -35,6 +35,7 @@ The `branch` calls: list and read a project's Branches and their saved history, 
 | [`branch.merge`](#branchmerge) | `branch.merge` | write |
 | [`branch.publish`](#branchpublish) | `branch.publish` | write |
 | [`branch.diff`](#branchdiff) | `branch.diff_branches` | saved read |
+| [`branch.remove`](#branchremove) | `branch.remove` | write |
 
 Each entry forwards a typed request to `layerfs_store::calls::branch`, which
 renames the table's snake_case fields to the Store method's
@@ -286,6 +287,31 @@ not fit are omitted explicitly (`file.diff` gives the bounded view); content
 comparison and attribution are each bounded to 64 MiB per request
 ([`read/branch_compare.rs`](../../../../engine/crates/layerfs-store-service/src/read/branch_compare.rs),
 [`read/compare.rs`](../../../../engine/crates/layerfs-store-service/src/read/compare.rs)).
+
+### branch.remove
+
+Retires one Branch in its Store (spec §4). Its row is hidden from listings and
+name resolution; fork, merge, publish and mount of it are refused, its Commits
+and objects stay until a later [`store.compact`](store.md#storecompact), and
+`main` is `ReservedName`.
+
+```text
+JS      await layerfs.branch.remove(project, branch)
+Python  layerfs.branch.remove(project, branch)
+CLI     layerfs branch remove <project> <branch>
+```
+
+Returns `{ kind: "Removed", project, branch, removed_ms }`. A repeat is
+`NoSuchBranch` (only `project.delete` is retry-idempotent); a concurrent
+remove is `Busy` with phase `"retire"`.
+
+| Error | When | Source |
+| --- | --- | --- |
+| `ReservedName` | the Branch is `main` | [`methods/branch/remove.rs`](../../../../engine/crates/layerfs-store-service/src/methods/branch/remove.rs) |
+| `NoSuchStore`, `NoSuchBranch` | the Store or Branch is missing (or already retired) | same |
+| `MountsActive` | a mount of the Branch is live | [`history/admission.rs`](../../../../engine/crates/layerfs-store-service/src/history/admission.rs) |
+| `Busy`, `Unresolved` | another user or operation holds the Branch, or a dead owner left an uncertain one | spec §5.1 |
+| `Unknown` | worker route: the answer was lost | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 ## Saved queries
 

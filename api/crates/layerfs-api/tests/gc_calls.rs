@@ -246,6 +246,33 @@ fn project_delete_reports_removal_and_retires_the_entry() {
     let _ = std::fs::remove_dir_all(folder);
 }
 
+/// A project name a `project.delete` retired is still held: a second
+/// `project.init` is `NameTaken` with the `deleted` holder, refused before
+/// the folder is scanned.
+#[test]
+fn project_init_after_delete_is_nametaken_deleted() {
+    let (home, folder) = project();
+    ok(&home, "project.delete", &[p()]);
+    let refusal = layerfs_api::call(
+        Some(&home),
+        "project.init",
+        map(&[
+            ("project", t("shop/api")),
+            ("folder", t(&folder.display().to_string())),
+        ]),
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert_eq!(refusal.code, "NameTaken", "{}", refusal.message);
+    let holder = refusal.detail.get("holder").expect("holder detail");
+    assert_eq!(holder.get_text("kind"), Some("project"), "{refusal:?}");
+    assert_eq!(holder.get_text("name"), Some("api"));
+    assert_eq!(holder.get_text("state"), Some("deleted"));
+    assert_eq!(refusal.detail.get_text("source"), Some("store"));
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(folder);
+}
+
 #[test]
 fn store_compact_refuses_an_unknown_store_and_reports_a_run() {
     let home = tempdir("compact-none");

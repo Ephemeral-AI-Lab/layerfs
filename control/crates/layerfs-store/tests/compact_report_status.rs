@@ -160,6 +160,32 @@ fn the_report_wire_is_the_snake_case_contract_shape() {
 }
 
 #[test]
+fn status_emits_bounded_busy_and_unresolved_metrics() {
+    let home = store_home();
+    let name = StoreName::parse("s").unwrap();
+    let capture = layerfs_persistence::compact_metrics::CompactMetricsCapture::start();
+    // Idle: no compaction record, so no `compact.status` sample.
+    let _ = layerfs_store::sqlite::family::status(&home, &name).unwrap();
+    // A live owner is `busy`; a gone one is `unresolved`.
+    sidecar(&home, "build", std::process::id());
+    let _ = layerfs_store::sqlite::family::status(&home, &name).unwrap();
+    sidecar(&home, "build", 99_999_999);
+    let _ = layerfs_store::sqlite::family::status(&home, &name).unwrap();
+    let metrics = capture.finish();
+    let value = |state: &str| {
+        metrics
+            .samples()
+            .iter()
+            .find(|sample| sample.name == "compact.status" && sample.label("state") == Some(state))
+            .map_or(0, |sample| sample.value)
+    };
+    assert_eq!(value("busy"), 1);
+    assert_eq!(value("unresolved"), 1);
+    assert_eq!(value("idle"), 0, "an idle status is not a compaction op");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
 fn status_projects_the_sidecar_phase_and_state() {
     let home = store_home();
     let name = StoreName::parse("s").unwrap();

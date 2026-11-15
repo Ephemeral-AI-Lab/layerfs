@@ -76,41 +76,67 @@ fn a_one_shot_commit_after_remove_stays_absent() {
 }
 
 #[test]
-fn a_workspace_commit_bound_before_the_marker_materializes_it() {
-    // Bound first, then the marker is written before the Commit: the mount
-    // saw no whiteout, so the Commit path itself must remove the inherited
-    // entry rather than silently resurrect it.
+fn a_marker_under_a_live_mount_is_refused_and_materializes_after_it_closes() {
+    // Admission refuses  while any mount intent holds the
+    // project, so a marker can never appear under a live Workspace. The Commit
+    // path still has to materialize a marker written before the Workspace
+    // binds, which the second Workspace below commits through.
     let fixture = Fixture::new("t55-workspace", |source| {
-        fs::write(source.join("a"), "a\n").unwrap();
+        fs::write(source.join("a"), "a
+").unwrap();
         1
     });
     fixture.fork("work");
     fixture.workspace_commit("work", &[Change::Create("/w", b"w")], 31, || {
-        remove(&fixture, "/a");
+        let refusal = fixture
+            .try_call("project.remove_file", vec![("path", text("/a"))])
+            .expect_err("a marker under a live mount");
+        assert_eq!(refusal.code, "MountsActive", "{refusal:?}");
+        let holders = match refusal.detail.get("holders") {
+            Some(SdkValue::List(holders)) => holders,
+            other => panic!("MountsActive detail without holders: {other:?}"),
+        };
+        assert_eq!(holders.len(), 1, "{holders:?}");
+        assert_eq!(holders[0].get_text("kind"), Some("mount"), "{holders:?}");
+        assert_eq!(
+            holders[0].get_text("workspace"),
+            Some("1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f"),
+            "{holders:?}"
+        );
     });
+    remove(&fixture, "/a");
+    // A Workspace bound after the marker materializes the whiteout into its
+    // overlay: a Commit of a change elsewhere must not resurrect /a.
+    fixture.workspace_commit("work", &[Change::Create("/v", b"v")], 33, || {});
     absent(&fixture, "work", "/a");
     assert_eq!(visible(&fixture, "work", "/w"), "w");
+    assert_eq!(visible(&fixture, "work", "/v"), "v");
     let listed = fixture.call(
         "fs.list",
         vec![("branch", text("work")), ("path", text("/"))],
     );
-    assert!(!paths(&listed).contains(&"/a"));
+    let names = paths(&listed);
+    assert!(!names.contains(&"/a"), "{names:?}");
+    assert!(names.contains(&"/w") && names.contains(&"/v"), "{names:?}");
     fixture.cleanup();
 }
 
 #[test]
-fn a_workspace_commit_keeps_a_re_creation_written_before_the_marker() {
-    // The workspace rewrote the inherited file, then the marker was written,
-    // then the Commit: the rewrite is a re-creation and stays visible.
+fn a_workspace_commit_keeps_a_re_creation_above_the_marker() {
+    // The marker comes first, as admission requires while no mount is live.
+    // The Workspace then binds below the frontier, materializes the whiteout,
+    // and writes the path again above it: the re-creation stays visible.
     let fixture = Fixture::new("t55-workspace-recreate", |source| {
-        fs::write(source.join("a"), "a\n").unwrap();
+        fs::write(source.join("a"), "a
+").unwrap();
         1
     });
     fixture.fork("work");
-    fixture.workspace_commit("work", &[Change::Write("/a", b"again\n")], 32, || {
-        remove(&fixture, "/a");
-    });
-    assert_eq!(visible(&fixture, "work", "/a"), "again\n");
+    remove(&fixture, "/a");
+    fixture.workspace_commit("work", &[Change::Create("/a", b"again
+")], 32, || {});
+    assert_eq!(visible(&fixture, "work", "/a"), "again
+");
     fixture.cleanup();
 }
 

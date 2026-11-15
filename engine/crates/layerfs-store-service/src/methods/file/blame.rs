@@ -17,8 +17,10 @@ pub fn blame(service: &StoreService, args: &SdkValue) -> Answer {
         &snap,
         &path,
         &seen,
-        line(args, "fromLine", 1),
-        line(args, "lineCount", 2000),
+        blame::Window {
+            from: line(args, "fromLine", 1),
+            count: line(args, "lineCount", 2000),
+        },
         &mut blame::Limits {
             versions: crate::read::query::MAXIMUM_QUERY_WORK,
             bytes: 64 * 1024 * 1024,

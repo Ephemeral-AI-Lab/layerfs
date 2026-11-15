@@ -88,6 +88,16 @@ without killing the process.
 the collected history rows' `logical` bytes; `parallel` note: `estimate` is
 always true until #52 measures the arms.
 
+`peakTempBytes` is the §11 peak temporary space as a documented upper bound
+(T-G72): `staged_bytes + journal_bound + target_bytes + visited_bytes`. The
+staged copy holds the sealed Store's whole extent until the rewrite truncates
+it (`VACUUM INTO`); the rewrite holds SQLite's unlinked temp database (the new
+file) beside it and journals the pages it overwrites; the journal bound is one
+rollback-journal record per staged page (`page_size + 8` B) plus 8192 B of
+header. The 50 GB arm's bound is 147.609 GB against a 143.1 GB sampled temp
+peak; the old `new + visited` receipt (45.784 GB) dropped the 44.6 GB
+rollback journal (T-G66 finding, T-G72 fix). Upstream issue: [Ephemeral-AI-Lab/layerfs#695](https://github.com/Ephemeral-AI-Lab/layerfs/issues/695).
+
 ## Tests
 
 `engine/crates/layerfs-persistence/tests/sqlite_compact.rs`:
@@ -105,6 +115,12 @@ always true until #52 measures the arms.
 - `AfterInstall` leaves the installed Store at `G + 1` and the op record; the
   next call judges it and settles;
 - generation increases once per installed rebuild.
+
+T-G72 (`tests/sqlite_compact_capacity.rs`): a moderate fixture samples the
+staged copy, the rollback journal and SQLite's unlinked rewrite temp database
+from a second thread and asserts the receipt bounds the new file plus the
+journal and the whole sampled footprint; `compact.rs`'s unit test pins the
+50 GB arithmetic.
 
 Runs: `cargo test -p layerfs-persistence --offline` (all binaries pass),
 `cargo check --workspace --offline` passes. `kernel_guard` in
@@ -132,7 +148,10 @@ the guard refuses direct Store access; it is unrelated to this change.
   and a live intent that outlived its op record refused every later GC call
   `BusyOp`. The op record is kept only when the release itself fails, as the
   next run's recovery breadcrumb (§9).
-- Peak temp is the new file plus the visited scratch; journal/WAL sizes
-  after the checkpoint are zero and are not added.
+- ~~Peak temp is the new file plus the visited scratch; journal/WAL sizes
+  after the checkpoint are zero and are not added.~~ T-G72: `peakTempBytes`
+  bounds the pre-truncate staged copy, the new file (the rewrite's temp
+  database), the prune/rewrite rollback journal and the visited scratch. It is
+  an estimate and over-reports the sampled peak by a few percent.
 - The mark runs before the seal under the same lane (the spec's step 1.5 runs
   it after the seal); the sealed tuple re-read makes the window explicit.

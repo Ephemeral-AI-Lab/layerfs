@@ -313,3 +313,27 @@ pub fn status(record: &StoreRecord) -> SdkValue {
     crate::postgresql::open::status(&url, &[SCHEMA.to_owned()])
         .unwrap_or_else(|refusal| SdkValue::map([("unavailable", SdkValue::Text(refusal.message))]))
 }
+
+/// The Store's compaction operation as `store.status` (T10.5) renders it:
+/// `{id, name, phase, started, uncertain, state, phases}`, or null when the
+/// Store has none. One status query reads the Store-side `gc_op` and the
+/// compaction `gc_intent`; no Store session is opened, no schema is changed
+/// and no artifact or scratch schema is read. An unreachable server or a
+/// query failure is null here: the `server` field already reports reach.
+pub fn compact_status(record: &StoreRecord) -> SdkValue {
+    #[cfg(feature = "postgresql")]
+    {
+        let Ok(url) = url(record) else {
+            return SdkValue::Null;
+        };
+        match layerfs_persistence::postgresql_compact_status(&url, SCHEMA) {
+            Ok(Some(op)) => crate::report::compact_status(&op.status()),
+            _ => SdkValue::Null,
+        }
+    }
+    #[cfg(not(feature = "postgresql"))]
+    {
+        let _ = record;
+        SdkValue::Null
+    }
+}

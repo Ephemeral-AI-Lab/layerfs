@@ -346,7 +346,7 @@ pub fn list_layers(store: &Arc<Store>, stack: &LayerStackRecord, limit: usize, p
                 Some(id) => match names.get(&id) {
                     Some(name) => Some(name.clone()),
                     None => catalog
-                        .branch(id)
+                        .branch_any(id)
                         .map_err(history)?
                         .map(|branch| branch.name.as_str().to_owned()),
                 },

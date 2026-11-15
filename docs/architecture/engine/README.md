@@ -46,7 +46,7 @@ crate except `layerfs-project`.
 
 | Topic | Crates | What it covers | Pages |
 | --- | --- | --- | --- |
-| [Store](store/README.md) | `layerfs-persistence` | The one global Store: every project's history and immutable objects in one SQLite file or one PostgreSQL schema, written by one writer at a time. | [SQLite](store/sqlite.md), [PostgreSQL](store/postgresql.md), [Diagnostics](store/diagnostics.md) |
+| [Store](store/README.md) | `layerfs-persistence` | The one global Store: every project's history and immutable objects in one SQLite file or one PostgreSQL schema, written by one writer at a time. | [SQLite](store/sqlite.md), [PostgreSQL](store/postgresql.md), [Diagnostics](store/diagnostics.md), [Testing](store/testing.md) |
 | [Store calls](store-calls/README.md) | `layerfs-store-service` | Typed reads, file changes and Branch history over the Store, run once in the process that opened it, and the SDK facade that names them. | [Reads](store-calls/reads.md) |
 | [Project Init](project-init/README.md) | `layerfs-project` | Turning one native directory into a project's first LayerStack and Branch: import, construction, then seal and install or a live add. | — |
 | [Overlay](overlay/README.md) | `layerfs-overlay`, `layerfs-store-service` `overlay/` | Each Workspace's own disposable SQLite file and in-memory open state, the Workspace roster and its one lock. | [Payload](overlay/payload.md), [Lifetimes](overlay/lifetimes.md) |

@@ -438,7 +438,7 @@ fn an_installed_but_unsettled_run_is_judged_at_g_plus_one() {
 
 #[test]
 fn the_report_projects_every_section_11_field() {
-    let (_temp, handles, path) = create_store();
+    let (_temp, handles, _path) = create_store();
     let live = filesystem_root(&handles, 1);
     initialize(&handles, 1, live);
     let _ = whole_file(&handles, b"dead");
