@@ -101,13 +101,11 @@ from it and a test compares them.
 - Stored and displayed values do not follow internal renames: the
   `host_process` backend is stored and shown as `"native"` (#535 G6).
 
-All control product code follows the
+Control follows the engine guide's
 [production size and responsibility rules](../engine/AGENTS.md#production-file-size-and-responsibility)
-and [checks and completion rules](../engine/AGENTS.md#checks-and-completion):
-production files at most 999 lines, `lib.rs`/`mod.rs` at most 200 lines of
-declarations and re-exports, no tests or fixtures in `src/`, bounded test
-commands, locked dependencies, per-commit production LOC and the
-Disposable-only profile. The unsafe allowance in control stays the one file
+and [checks](../engine/AGENTS.md#checks-and-completion), and the root guide's
+[rules you must not break](../AGENTS.md#rules-you-must-not-break). The unsafe
+allowance in control stays the one file
 the guard names: the Linux `local/os/linux/seccomp.rs` of
 `layerfs-sandbox-backend`. The macOS process facts (`proc_pidinfo`) moved
 with `LocalProcess` to the bridge's audited `process/darwin.rs` (#112).

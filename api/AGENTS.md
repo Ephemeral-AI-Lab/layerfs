@@ -43,12 +43,12 @@ ordinary daemon binary before running tests that launch it.
 `LAYERFS_TEST_DAEMON` may select an explicit binary; otherwise the tests
 locate the sibling Cargo output. The owner keeps `layerfs-node` out of CI.
 
-All API product code follows the
+API code follows the engine guide's
 [production size and responsibility rules](../engine/AGENTS.md#production-file-size-and-responsibility)
-and [checks and completion rules](../engine/AGENTS.md#checks-and-completion),
-including bounded test commands, build-before-run, locked dependencies, ARM64
-flags, per-commit LOC and the Disposable-only profile. Preserve the existing
-unsafe-code boundaries; do not add test hooks or inline tests to production src.
+and [checks](../engine/AGENTS.md#checks-and-completion), and the root guide's
+[rules you must not break](../AGENTS.md#rules-you-must-not-break). Preserve the
+existing unsafe-code boundaries; do not add test hooks or inline tests to
+production src.
 Do not add a call, argument or result name in JavaScript: change the call's
 entry in `crates/layerfs-api/src/<family>/<call>.rs` and the package follows.
 `layerfs-api/src` holds only `lib.rs`, the call machinery `calls/` (table
@@ -56,5 +56,4 @@ shape, checks, scope, keys, dispatcher, `Context`; layerfs-project#107) and
 one folder per family: its `mod.rs` (the family's calls in help order) and
 one file per call (its table entry and the function that runs it: one call
 of a control crate's per-op function, never an op name as a string). A
-test pins this shape (`tests/calls_table.rs`). CI reports and does not gate a
-push.
+test pins this shape (`tests/calls_table.rs`).

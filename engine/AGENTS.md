@@ -8,40 +8,45 @@ product mental model or campaign-specific benchmark procedures.
 
 ## Scope and ownership
 
-- Engine owns Bridge, daemon, FUSE, NFS, mount ports, Overlay, Persistence,
-  Project, Store service and Workspace. Core owns content,
-  history, storage and telemetry. The library `layerfs-api` and its front ends
-  (`layerfs-cli`, `layerfs-node`, `layerfs-python`) are API crates under
-  `api/crates`; see the [API guide](../api/AGENTS.md). No engine crate may
-  depend on them. Since #535 (owner, 2026-11-03, D1, D4) Sandbox and network
-  code leave the engine for the connect layer, renamed the
-  [control layer](../control/AGENTS.md) by layerfs-project#101 (D-6):
-  the Sandbox runtime (now `layerfs-sandbox-backend`), the machine layer (now
-  `layerfs-platform`) and remote storage (now `layerfs-bucket`, with
-  `layerfs-store-service`'s `remote/`) moved out in #535 phase 1. The engine keeps
-  persistence (SQLite and PostgreSQL, D2), the daemon, the overlay,
-  Workspaces and the kernel routes (FUSE and NFS as peers over
-  `layerfs-mount-ports`, D3). No engine crate may depend on a control crate.
-- `layerfs-store-service` owns the SDK Store calls in `src/methods/` (#536
-  H3): the method table (`methods::call`), its argument reader and one file
-  per `file.*`/`branch.*` call. `read`, `write` and `history` know no SDK
-  method names; `methods/` is the facade over them. Their tests live in
-  store-service's `tests/` (`concurrent_commits`, `lane_merge` and
+| Crate | Owns | Architecture |
+| --- | --- | --- |
+| `layerfs-bridge` | the process facts the home and the Sandbox driver share (`process`), wire and native records, native install and control channels | [Bridge](../docs/architecture/engine/bridge/README.md) |
+| `layerfs-daemon` | mounted Workspaces, their overlay connections and locks, mount/Ready/unmount, Commit composition, the direct Store adapter | [Daemon](../docs/architecture/engine/daemon/README.md) |
+| `layerfs-fuse`, `layerfs-nfs`, `layerfs-mount-ports` | the kernel routes: FUSE and NFS as peers over the shared mount ports (#535 D3) | [Kernel routes](../docs/architecture/engine/kernel-routes/README.md) |
+| `layerfs-overlay` | each Workspace's own overlay SQLite file | [Overlay](../docs/architecture/engine/overlay/README.md) |
+| `layerfs-persistence` | global Store writes, SQLite and PostgreSQL (#535 D2) | [Store](../docs/architecture/engine/store/README.md) |
+| `layerfs-project` | native import; Project Store Init and install (`layerfs-project::store`) | [Project Init](../docs/architecture/engine/project-init/README.md) |
+| `layerfs-store-service` | the SDK Store calls (`src/methods/`) over `read`, `write` and `history` | [Store calls](../docs/architecture/engine/store-calls/README.md) |
+| `layerfs-workspace` | the Workspace view and captured construction (`CapturedNamespace`) | [Workspace](../docs/architecture/engine/workspace/README.md), [Commit](../docs/architecture/engine/commit/README.md) |
+
+- Core owns content, history, storage and telemetry. The API crates
+  (`layerfs-api`, `layerfs-cli`, `layerfs-node`, `layerfs-python`, under
+  `api/crates`; see the [API guide](../api/AGENTS.md)) and the
+  [control crates](../control/AGENTS.md) sit above the engine: **no engine
+  crate may depend on an API or control crate.** Since #535 (owner,
+  2026-11-03, D1, D4) Sandbox and network code live in the control layer
+  (renamed from connect by layerfs-project#101, D-6): the Sandbox runtime
+  (now `layerfs-sandbox-backend`), the machine layer (now `layerfs-platform`)
+  and remote storage (now `layerfs-bucket`, with `layerfs-store-service`'s
+  `remote/`) moved out in #535 phase 1.
+- `layerfs-store-service`'s `src/methods/` (#536 H3) holds the method table
+  (`methods::call`), its argument reader and one file per `file.*`/`branch.*`
+  call; `read`, `write` and `history` know no SDK method names, and `methods/`
+  is the facade over them. Their tests
+  live in store-service's `tests/` (`concurrent_commits`, `lane_merge` and
   `merge_report`, which need a daemon, in `layerfs-daemon`'s).
-- Project Store Init and install belong to `layerfs-project::store`; `layerfs-api`
-  retains its public re-exports. Its SDK-facing daemon integration tests
-  include daemon and Sandbox test fixtures from this layer.
-  The v0.1.6 reference under
-  root `crates/` and the archived `core/reference-tests` were retired by R9c
-  (2026-10-10) and are absent at HEAD; recover them at
-  local tag `reference-v0.1.6-final` (`d296981ac`, `crates` tree `498dd1917812`).
-  Neither was a dependency, source include or fallback; do not restore them.
+- `layerfs-api` retains its public re-exports of Project Store Init and
+  install. Its SDK-facing daemon integration tests include daemon and Sandbox
+  test fixtures from this layer.
 - [Cargo.toml](../Cargo.toml) decides membership. Add a member only with a
   real product boundary and implementation; a directory or an old test does
   not establish one.
 - Retired code stays retired: the seven `*-legacy` directories and
-  `layerfs-server` (R7-retire), and the v0.1.6 reference and
-  `core/reference-tests` (R9c). The boundary guard refuses their return. Do
+  `layerfs-server` (R7-retire), and the v0.1.6 reference under root `crates/`
+  and `core/reference-tests` (R9c, 2026-10-10; recover them at local tag
+  `reference-v0.1.6-final`, `d296981ac`, `crates` tree `498dd1917812`). Neither
+  was a dependency, source include or fallback. The boundary guard refuses
+  their return. Do
   not restore predecessor code to supply a feature; pinned read-only SDK
   views (303/08 O-10), for example, are deferred, not dropped, and a kept
   feature needs a new design on the SQLite overlay.
@@ -313,10 +318,10 @@ fixtures, examples and tools do not contribute to production LOC.
   the allocation owner, and is never invoked on a live shared daemon Store; see
   the [seal boundary](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/60-shared-store-foundation.md).
   See the [foundation checkpoint](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/PRE-S8-F1-F4-20261007.md).
-- Target (owner direction 2026-10-07): the same Store opened directly by every
-  Linux daemon from a shared volume, several writer processes, no host in the
-  data path, using only Disposable/WAL/OFF. A contended
-  write still has one SQL attempt and exact failure/unknown custody. Owner
+- Several writer processes open the same Store directly, with no host in the
+  data path (owner direction 2026-10-07; routes in the
+  [root guide](../AGENTS.md#where-calls-run)). A contended write still has one
+  SQL attempt and exact failure/unknown custody. Owner
   clarification2026-10-12 requires one ongoing Commit per Workspace and allows
   concurrent Commits on different Workspaces. Bounded before-effect admission
   now queues SQL work within a Session and coordinates short Linux writer jobs
@@ -333,13 +338,10 @@ fixtures, examples and tools do not contribute to production LOC.
   [integration contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/06-cluster-one-integration.md) and its
   [deepest-file plan](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/SERVERLESS-STORE-PLAN-20261007.md); do not
   extend the host-mediated SDK runtime, Bridge data codec or daemon upstream.
-- Store concurrency (owner decision 2026-10-18): one global database and one
-  writer at a time are the design, not a limitation to engineer around. Keep
-  the existing admission, directory lock and publication lane; shorten what
-  runs inside the lane (only head check, merge and publish) instead of adding
-  writers or databases. Judge speed on uncontended calls; contention must stay
-  correct, bounded and exact. See the
-  [Store concurrency model](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/83-store-concurrency-model.md).
+- Store concurrency (owner decision 2026-10-18) is the root rule
+  [one global database, one writer, short holds](../AGENTS.md#where-calls-run):
+  keep the admission, directory lock and publication lane, and shorten what
+  runs inside the lane instead of adding writers or databases.
 - The daemon overlay is a separate owner/profile from global persistence:
   one local database file per mounted Workspace, opened MEMORY/OFF/EXCLUSIVE by
   one connection behind that Workspace's lock. Workspaces share no overlay
@@ -369,17 +371,15 @@ python3 -B tools/check_product_boundary.py
 python3 -B -m unittest discover -s tools -p 'test_*.py'
 ```
 
-Every test invocation obeys the repository's
-[2-minute test ceiling](../AGENTS.md#4-code-build-and-docs): run it under an
-explicit timeout of at most 120 s, per package when the whole suite cannot fit,
-and treat reaching the ceiling as a hang to diagnose, not a run to wait for.
+Through the [parallel worktree launcher](../docs/general/parallel-worktrees.md),
+run the same checks per package with `tools/worktree.py cargo` (it refuses
+workspace aggregates): tests on Linux where they need a Linux Store or mount,
+Clippy on macOS when the Linux build image has no Clippy. The 2-minute test
+ceiling, the delete-rather-than-nurse rule for refactors and the frozen
+fs-bench-pro are [root rules](../AGENTS.md#4-code-build-and-docs).
 
-Migrations and refactors follow the root
-[delete-rather-than-nurse rule](../AGENTS.md#4-code-build-and-docs): delete a
-test that is tricky to adapt, keep or move only cheap tests of surviving
-behaviour, and re-cover any still-valid fix or contract on the new code.
-fs-bench-pro (in layerfs-benchmark) is frozen and left broken (owner, 2026-10-18):
-do not build, run, check or repair it.
+A bug fix adds a test that fails on the parent commit and passes on the fix;
+run it once against the parent's source and report the result.
 
 For docs-only changes, check links/anchors, status/claim accuracy and whitespace;
 report why Rust/runtime checks are inapplicable. For tooling/harness changes run
@@ -393,14 +393,11 @@ or runtime proof. Review ordinary macros, helpers, dependency/target declaration
 and generated inputs; extend scanners for new shipped formats. An excluded
 FUSE/daemon package is not exercised by passing active-workspace tests.
 
-CI reports after a push and never gates it (see the
-[root rule](../AGENTS.md#4-code-build-and-docs)); test lane selection is
-[tools/ci_tests.py](../tools/ci_tests.py). When a test target is renamed, moved or
-measured at 5 s or more, update its `SLOW` list; Linux-only daemon targets and the named API mount targets go to
-the nightly mount lane. There is no pre-push gate;
-`tools/preflight.sh` is retired. Do not disable discovery or recreate an
-equivalent wrapper. Report exact checks, failures and gaps. A scan or proposal
-alone does not establish implementation.
+Test lane selection is [tools/ci_tests.py](../tools/ci_tests.py). When a test
+target is renamed, moved or measured at 5 s or more, update its `SLOW` list;
+Linux-only daemon targets and the named API mount targets go to the nightly
+mount lane. Do not disable discovery. Report exact checks, failures and gaps;
+a scan or proposal alone does not establish implementation.
 
 ### Build flags are part of the check
 
