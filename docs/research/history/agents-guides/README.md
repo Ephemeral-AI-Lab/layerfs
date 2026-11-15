@@ -10,6 +10,12 @@ contract. Current behaviour is in the
 the [root](../../../../AGENTS.md) and [engine](../../../../engine/AGENTS.md)
 guides. Only relative links were rewritten for the new location.
 
+A second pass on 2026-11-16 condensed the guides' wording without moving more
+text here; the guides as they stood before it are at commit
+[`84743424f1`](https://github.com/Ephemeral-AI-Lab/layerfs/tree/84743424f1/AGENTS.md),
+and before any reorganization at
+[`99ffd262a3`](https://github.com/Ephemeral-AI-Lab/layerfs/tree/99ffd262a3/AGENTS.md).
+
 ## Engine scope and ownership: implementation status (S6 to R9c)
 
 From `engine/AGENTS.md`, "Scope and ownership", as of `layerfs_v2_0_0` at

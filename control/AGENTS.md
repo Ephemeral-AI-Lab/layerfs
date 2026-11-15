@@ -88,16 +88,11 @@ from it and a test compares them.
 
 ## Rules that stay
 
-- sqlite Store calls run in a process on the Store's kernel (in process on
-  `native`, else that machine's worker); PostgreSQL Store calls and bucket
-  I/O run in the caller's process (#533 G2). A sqlite Store is on exactly one
-  machine; a PostgreSQL Store's Sandboxes run on the machines it is attached to
-  (`store.attach`, each checked from that machine; supersedes #535 G3).
-- Workers listen on loopback behind a secret; one attempt per call, no
-  retry, no replay; an uncertain outcome is reported, never resent.
-- A PostgreSQL password is resolved only in the caller, travels only in one
-  worker request and the Sandbox's private daemon setup file, and is never
-  written into a record, log, trace or `Debug` output.
+- The routes, worker and Store-kind rules are the root guide's
+  [Where calls run](../AGENTS.md#where-calls-run); control code implements
+  them in `place.rs` and `support.rs`.
+- A PostgreSQL password is never written into a record, log, trace or
+  `Debug` output.
 - Stored and displayed values do not follow internal renames: the
   `host_process` backend is stored and shown as `"native"` (#535 G6).
 
