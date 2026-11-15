@@ -28,5 +28,7 @@ pub(crate) mod sandbox;
 pub(crate) use adapter::ADAPTER;
 #[cfg(target_os = "macos")]
 pub use provider::HostProcessProvider;
+#[cfg(target_os = "windows")]
+pub use provider_windows::HostProcessProvider;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use sandbox::Sandbox;

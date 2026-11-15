@@ -29,7 +29,7 @@ mod runtime;
 pub mod steps;
 pub mod stop;
 mod types;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub use backend::host_process;
 #[cfg(target_os = "linux")]
 pub use backend::namespaces::{self, NamespaceProvider};
@@ -37,12 +37,9 @@ pub use backend::namespaces::{self, NamespaceProvider};
 pub mod local;
 #[cfg(target_os = "macos")]
 pub use backend::host_process::HostProcessProvider;
-#[cfg(target_os = "windows")]
-pub use backend::host_process::provider_windows::HostProcessProvider;
 pub use helper_spec::HelperSpec;
 pub use postgres_url::PostgresUrl;
 pub use runtime::{LaunchFailure, Sandbox};
-#[cfg(unix)]
 pub use runtime::Runtime;
 pub use stop::{Cancelled, ExecSlot, Stop};
 

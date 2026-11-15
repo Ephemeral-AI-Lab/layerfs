@@ -5,11 +5,12 @@
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use crate::backend::host_process;
 #[cfg(target_os = "linux")]
+#[cfg(target_os = "linux")]
 use crate::backend::namespaces::{self, NamespaceProvider};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use crate::backend::adapter;
 use crate::types::kind::Backend;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use crate::host_process::HostProcessProvider;
 use crate::{
     Bind, ExecExit, LaunchPhase, LaunchRequest, LocalRecord, ProviderCapabilities,
@@ -32,6 +33,10 @@ pub enum Runtime {
     /// commands entering them as a nonroot identity (Linux).
     #[cfg(target_os = "linux")]
     Namespaces(NamespaceProvider),
+    /// The Windows native runtime: directory Sandboxes, commands spawned
+    /// into them as this user; no daemon (A1, #454 for the WinFsp mount).
+    #[cfg(target_os = "windows")]
+    HostProcess(HostProcessProvider),
 }
 
 impl Runtime {
@@ -39,8 +44,6 @@ impl Runtime {
     pub fn backend(&self) -> Backend {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
-            #[cfg(target_os = "macos")]
             Self::HostProcess(_) => Backend::HostProcess,
             #[cfg(target_os = "linux")]
             Self::Namespaces(_) => Backend::Namespaces,
@@ -63,7 +66,7 @@ impl Runtime {
     pub fn local_directory(&self, name: &str) -> Result<Option<PathBuf>, RuntimeError> {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::HostProcess(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
             #[cfg(target_os = "macos")]
             Self::HostProcess(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
             #[cfg(target_os = "linux")]
@@ -76,7 +79,7 @@ impl Runtime {
     pub fn native_paths(&self, name: &str) -> Result<crate::local::LocalPaths, RuntimeError> {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::HostProcess(provider) => provider.paths(name),
             #[cfg(target_os = "macos")]
             Self::HostProcess(provider) => provider.paths(name),
             #[cfg(target_os = "linux")]
@@ -101,7 +104,7 @@ impl Runtime {
     ) -> Result<Sandbox, Box<LaunchFailure>> {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::HostProcess(provider) => provider.launch(request).map(Sandbox::Windows),
             #[cfg(target_os = "macos")]
             Self::HostProcess(_) if !binds.is_empty() => Err(Box::new(LaunchFailure {
                 phase: LaunchPhase::Validate,
@@ -127,7 +130,7 @@ impl Runtime {
     ) -> Result<Sandbox, Box<WireFailure>> {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::HostProcess(provider) => provider.reopen(id, record).map(Sandbox::Windows),
             #[cfg(target_os = "macos")]
             Self::HostProcess(provider) => provider.reopen(id, record).map(Sandbox::HostProcess),
             #[cfg(target_os = "linux")]
@@ -145,7 +148,7 @@ impl Runtime {
     ) -> Result<Sandbox, Box<WireFailure>> {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::HostProcess(provider) => provider.reopen(id, record).map(Sandbox::Windows),
             #[cfg(target_os = "macos")]
             Self::HostProcess(provider) => provider
                 .reopen_stopped(id, record)
