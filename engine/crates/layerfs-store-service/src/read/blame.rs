@@ -5,6 +5,7 @@
 //! and from the common prefix only where both texts end it.
 use super::{
     snapshot::{self, Snap},
+    visibility::Visibility,
     window,
 };
 use crate::{
@@ -135,11 +136,15 @@ pub fn blame(
     reader: &StorePorts,
     snap: &Snap,
     path: &str,
+    visibility: &Visibility,
     from: Arg<u64>,
     count: Arg<u64>,
     limits: &mut Limits,
 ) -> Answer {
     let tip = snapshot::existing(reader, snap, path)?;
+    if let Some(frontier) = visibility.hidden(path) {
+        return Err(Visibility::refusal(path, frontier));
+    }
     if tip.value.kind != InodeKind::RegularFile {
         return Err(args::refuse(
             "NotFile",
@@ -207,13 +212,25 @@ pub fn blame(
         limits.versions -= 1;
         let (_, parent, value) = revision(store, node)?;
         versions += 1;
-        let older = parent
-            .map(|p| revision(store, p))
-            .transpose()?
-            .map(|r| entry(reader, r.0, path))
-            .transpose()?
-            .flatten()
-            .filter(|e| e.value.kind == InodeKind::RegularFile);
+        // §4.3: a hidden older version is absent; blame stops there and
+        // attributes the remaining lines to the newest visible version.
+        let older = match parent {
+            Some(p) => {
+                let found = entry(reader, revision(store, p)?.0, path)?
+                    .filter(|e| e.value.kind == InodeKind::RegularFile);
+                match found {
+                    Some(_)
+                        if visibility
+                            .hidden_at(path, Visibility::node_serial(store, p))
+                            .is_some() =>
+                    {
+                        None
+                    }
+                    other => other,
+                }
+            }
+            None => None,
+        };
         if tracks.iter().all(|t| t.owner.is_some()) {
             break;
         }

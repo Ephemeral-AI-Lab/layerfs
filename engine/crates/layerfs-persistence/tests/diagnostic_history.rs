@@ -184,3 +184,29 @@ fn valid_forced_history_and_removed_project_retained_objects_pass() {
         .iter()
         .any(|o| o.id == "store.objects.summary" && o.message.starts_with("1 winning")));
 }
+
+#[test]
+fn a_retained_commit_branch_reference_must_exist_in_its_stack() {
+    // A random tagged 17-byte id: no branch row at all.
+    let f = graph();
+    clean(&f.audit(true));
+    f.raw()
+        .execute_batch(&format!(
+            "PRAGMA foreign_keys=OFF; UPDATE \"commit\" SET branch_id=CAST(X'11'||zeroblob(16) AS BLOB)"
+        ))
+        .unwrap();
+    let out = f.audit(true);
+    failure(&out, "store.history.branches");
+
+    // A real Branch of another stack: the foreign key holds, the stack does not.
+    let f = graph();
+    let other = init(&f, 2);
+    let cross = fork(&f, other.id, 3, ForkSource::Layer(other.head_layer));
+    clean(&f.audit(true));
+    f.raw().execute("PRAGMA foreign_keys=OFF", []).unwrap();
+    f.raw()
+        .execute("UPDATE \"commit\" SET branch_id=?1", [cross.as_slice()])
+        .unwrap();
+    let out = f.audit(true);
+    failure(&out, "store.history.branches");
+}

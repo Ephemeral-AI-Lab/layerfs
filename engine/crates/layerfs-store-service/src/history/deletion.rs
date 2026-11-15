@@ -10,8 +10,8 @@
 use crate::history::lookup;
 use crate::store::Store;
 use layerfs_bridge::control::SdkRefusal;
-use layerfs_history::error::Missing;
-use layerfs_history::{HistoryError, LayerStackId};
+use layerfs_history::records::GcDeletion;
+use layerfs_history::LayerStackId;
 use std::sync::Arc;
 
 /// What the Store side of project.delete found or did.
@@ -52,38 +52,13 @@ pub fn delete_stack(
     deleted_ms: i64,
 ) -> Result<Deletion, SdkRefusal> {
     let history = store.history();
-    if let Some(recorded) = history.stack_deleted_ms(stack).map_err(lookup::history)? {
-        return Ok(Deletion::Retired {
-            deleted_ms: recorded,
-        });
-    }
-    let live = history
-        .layer_stack(stack)
+    let intent = crate::history::admission::project_removal_from_id(stack);
+    match history
+        .gc_delete_stack(stack, deleted_ms, &intent)
         .map_err(lookup::history)?
-        .is_some();
-    if !live {
-        // A concurrent attempt may have marked it after the read above.
-        return Ok(
-            match history.stack_deleted_ms(stack).map_err(lookup::history)? {
-                Some(recorded) => Deletion::Retired {
-                    deleted_ms: recorded,
-                },
-                None => Deletion::Absent,
-            },
-        );
-    }
-    match history.mark_stack_deleted(stack, deleted_ms) {
-        Ok(()) => Ok(Deletion::Marked { deleted_ms }),
-        // Another attempt marked it between the read and the write; reuse its
-        // deleted_ms rather than fail a retry that lost only a reply.
-        Err(HistoryError::Missing(Missing::LayerStack)) => Ok(
-            match history.stack_deleted_ms(stack).map_err(lookup::history)? {
-                Some(recorded) => Deletion::Retired {
-                    deleted_ms: recorded,
-                },
-                None => Deletion::Absent,
-            },
-        ),
-        Err(error) => Err(lookup::history(error)),
+    {
+        GcDeletion::Retired { deleted_ms } => Ok(Deletion::Retired { deleted_ms }),
+        GcDeletion::Marked { deleted_ms } => Ok(Deletion::Marked { deleted_ms }),
+        GcDeletion::Absent => Ok(Deletion::Absent),
     }
 }

@@ -16,17 +16,19 @@ pub fn list(service: &StoreService, args: &SdkValue) -> Answer {
             return Err(refusal);
         }
     }
+    let removed = seen.hidden_children(&reader, &snap, &path)?;
     let answer = if args.get("page").is_some() {
         paged_reads::list(
             &service.store,
             &reader,
             &snap,
             &path,
+            &seen,
             query::result_page(args)?,
         )
     } else {
-        reads::list(&reader, &snap, &path, paging(args))
+        reads::list(&reader, &snap, &path, &seen, paging(args))
     }
-    .map(|value| visibility::filter(value, &seen));
+    .map(|value| visibility::settle(value, &seen, removed));
     paged_reads::pin(&service.store, &snap, answer)
 }

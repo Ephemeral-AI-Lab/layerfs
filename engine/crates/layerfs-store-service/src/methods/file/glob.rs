@@ -17,6 +17,7 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
             return Err(refusal);
         }
     }
+    let removed = seen.hidden_matches(&reader, &snap, &path, pattern)?;
     if args.get("page").is_some() {
         return paged_reads::pin(
             &service.store,
@@ -27,16 +28,17 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
                 &snap,
                 pattern,
                 &path,
+                &seen,
                 query::result_page(args)?,
             )
-            .map(|value| visibility::filter(value, &seen)),
+            .map(|value| visibility::settle(value, &seen, removed)),
         );
     }
     let (limit, pos) = paging(args)?;
     paged_reads::pin(
         &service.store,
         &snap,
-        reads::glob(&reader, &snap, pattern, &path, limit, pos)
-            .map(|value| visibility::filter(value, &seen)),
+        reads::glob(&reader, &snap, pattern, &path, &seen, limit, pos)
+            .map(|value| visibility::settle(value, &seen, removed)),
     )
 }

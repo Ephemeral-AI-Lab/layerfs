@@ -181,6 +181,20 @@ impl BoundWorkspace {
                             })
                         }
                     };
+                // §4.3: the candidate is a new node above the frontier, so
+                // an entry inherited unchanged from the bound base must be
+                // removed explicitly; a re-creation keeps its new inode.
+                let candidate = phase(timing, "removals", || {
+                    crate::removal::materialize_commit(
+                        &self.store,
+                        snapshot.branch.stack,
+                        &save,
+                        FilesystemRootId(local),
+                        crate::removal::node_of(&snapshot),
+                        candidate,
+                    )
+                    .map_err(crate::removal::commit_error)
+                })?;
                 // Two-stage merge (#355). The head is read and merged with
                 // before the publication lane, so the merge's records and its
                 // whole build stay outside it. In the lane the head is read

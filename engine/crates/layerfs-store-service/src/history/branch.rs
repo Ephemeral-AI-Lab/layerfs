@@ -205,7 +205,10 @@ pub fn fork(
     let from = from.unwrap_or(MAIN);
     let source = if from == MAIN {
         ForkSource::Layer(stack.head_layer)
-    } else if let Ok(branch) = args::branch(store, stack, from) {
+    } else if layerfs_history::HistoryName::new(from).is_ok() {
+        // A checked history name is a Branch and is never retried as a node
+        // identity; an absent or removed one is `NoSuchBranch` (spec 4.4).
+        let branch = args::branch(store, stack, from)?;
         match branch.head_commit {
             Some(commit) => ForkSource::Commit {
                 branch: branch.id,
@@ -227,13 +230,8 @@ pub fn fork(
         }
     };
     let name = args::name(name)?;
-    if args::branch(store, stack, name.as_str()).is_ok() {
-        return Err(refuse(
-            "NameTaken",
-            format!("Branch {} already exists", name.as_str()),
-            SdkValue::Null,
-        ));
-    }
+    // A live, retired or deleted holder reaches the typed `NameTaken` from
+    // the catalog's collision query instead of a Null detail pre-check.
     let snapshot = store
         .history()
         .fork(&ForkRequest {
@@ -381,6 +379,30 @@ pub fn merge(
     message: Option<&str>,
     units: &[MergeUnit],
 ) -> Answer {
+    let admission = crate::history::admission::SharedIntent::begin(
+        store.history(),
+        layerfs_history::records::GcIntentKind::Merge,
+        stack,
+        Some(name),
+    )?;
+    match merge_inner(store, stack, left, right, name, message, units) {
+        Ok(value) => {
+            admission.release()?;
+            Ok(value)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn merge_inner(
+    store: &Arc<Store>,
+    stack: &LayerStackRecord,
+    left: &str,
+    right: &str,
+    name: &str,
+    message: Option<&str>,
+    units: &[MergeUnit],
+) -> Answer {
     if left == right {
         return Err(invalid("merge takes two different sources"));
     }
@@ -389,13 +411,6 @@ pub fn merge(
         return Err(refuse(
             "ReservedName",
             "\"main\" names the project's main line",
-            SdkValue::Null,
-        ));
-    }
-    if args::branch(store, stack, name).is_ok() {
-        return Err(refuse(
-            "NameTaken",
-            format!("Branch {name} already exists"),
             SdkValue::Null,
         ));
     }
@@ -480,14 +495,21 @@ pub fn merge(
     let policy = store.policy().construction();
     let capacities = policy.capacities();
     let hints = crate::store::CatalogHints::new(catalog);
-    let (base_root, ours) = (
-        FilesystemRootId(root(store, base_node)?),
-        FilesystemRootId(root(store, ln)?),
-    );
+    // §4.3: derive each side at the position it records, so a marker hides
+    // inherited entries on a side at or below the frontier while a
+    // post-frontier re-creation stays and wins the merge.
+    let reader = store.ports(stack.scope);
+    let derive = |node, root| {
+        crate::removal::derive_root(store, stack.id, &*reader, &save, node, root)
+            .map_err(crate::removal::refusal)
+    };
+    let base_root = derive(base_node, FilesystemRootId(root(store, base_node)?))?;
+    let ours = derive(ln, FilesystemRootId(root(store, ln)?))?;
+    let theirs = derive(rn, FilesystemRootId(root(store, rn)?))?;
     let mut sides = super::units::Sides {
         base: base_root,
         ours,
-        theirs: FilesystemRootId(root(store, rn)?),
+        theirs,
         policy,
         capacities: &capacities,
     };

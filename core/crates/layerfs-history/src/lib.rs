@@ -26,16 +26,17 @@ pub use contract::query;
 pub use contract::records;
 
 pub use catalog::{HistoryCatalog, HistoryCatalogConfig, NamedSnapshot, PublishLane};
-pub use error::{HistoryError, HistoryResult};
+pub use error::{GcHolder, HistoryError, HistoryResult, MountHolders, OpConflict};
 pub use identity::{
     BranchId, CatalogId, CommitId, HistoryName, LayerId, LayerStackId, NodeId, WorkspaceId,
 };
 pub use records::{
     AddLayerOutcome, AddLayerRequest, BindingHint, BranchMergeRequest, BranchRecord,
     BranchSnapshot, CommitHistoryRequest, CommitMeta, CommitOutcome, CommitRecord, CommitRequest,
-    CommitStatistics, CommitVia, FileDigest, ForkRequest, ForkSource, InitStatistics,
-    LayerHistoryRequest, LayerRecord, LayerStackRecord, MergeCommit, MergeHead, MergeSide, Page,
-    PageResult, PathRemovalKind, PathRemovalOutcome, PathRemovalRecord, PathRemovalRequest,
-    RecordKind, Reservation, ReserveRequest, StackInitialization, StoreStatistics,
-    FILE_DIGEST_WINDOW, MAXIMUM_MESSAGE_BYTES, MAXIMUM_PAGE_RECORDS,
+    CommitStatistics, CommitVia, FileDigest, ForkRequest, ForkSource, GcDeletion, GcIntent,
+    GcIntentKind, GcScopeKind, InitStatistics, LayerHistoryRequest, LayerRecord, LayerStackRecord,
+    MergeCommit, MergeHead, MergeSide, Page, PageResult, PathRemovalKind, PathRemovalOutcome,
+    PathRemovalRecord, PathRemovalRequest, RecordKind, Reservation, ReserveRequest,
+    StackInitialization, StoreStatistics, FILE_DIGEST_WINDOW, MAXIMUM_MESSAGE_BYTES,
+    MAXIMUM_PAGE_RECORDS,
 };

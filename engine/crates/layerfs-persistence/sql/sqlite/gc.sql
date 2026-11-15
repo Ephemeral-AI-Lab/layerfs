@@ -80,3 +80,17 @@ CREATE TABLE gc_dead (
     id BLOB NOT NULL,
     PRIMARY KEY (kind, id)
 ) STRICT, WITHOUT ROWID;
+CREATE TABLE kept_node (
+    layer_stack_id BLOB NOT NULL
+        CHECK (length(layer_stack_id) = 17 AND substr(layer_stack_id, 1, 1) = X'31'),
+    kind TEXT NOT NULL CHECK (kind IN ('commit','layer','branch','stack')),
+    node_id BLOB NOT NULL,
+    serial INTEGER NOT NULL DEFAULT 0 CHECK (serial >= 0),
+    PRIMARY KEY (layer_stack_id, kind, node_id),
+    CHECK (
+        (kind = 'commit' AND length(node_id) = 33 AND substr(node_id, 1, 1) = X'12')
+        OR (kind = 'layer' AND length(node_id) = 33 AND substr(node_id, 1, 1) = X'32')
+        OR (kind = 'branch' AND length(node_id) = 17 AND substr(node_id, 1, 1) = X'11')
+        OR (kind = 'stack' AND length(node_id) = 17 AND substr(node_id, 1, 1) = X'31')
+    )
+) STRICT, WITHOUT ROWID;

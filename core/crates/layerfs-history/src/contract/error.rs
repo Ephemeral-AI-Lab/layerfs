@@ -7,6 +7,7 @@
 //! that persistence did not answer and therefore proves nothing about rollback.
 
 use crate::identity::{CommitId, LayerId};
+use crate::records::GcIntentKind;
 
 /// A related record kind, used for a typed absence.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -153,6 +154,12 @@ pub enum HistoryError {
     StaleStore,
     /// Immediate metadata admission was refused; the caller may retry later.
     Busy,
+    /// A mount or Sandbox holds the scope; the holders are the ones observed.
+    MountsActive(Box<MountHolders>),
+    /// A live operation holds the scope; its entity, phase and op are reported.
+    BusyOp(Box<OpConflict>),
+    /// A dead or uncertain owner's operation holds the scope.
+    Unresolved(Box<OpConflict>),
     /// The content authority this catalog is bound to is not available.
     OwnershipUnavailable,
     /// A declared bound, count or counter is exhausted.
@@ -213,6 +220,25 @@ impl std::fmt::Display for HistoryError {
             Self::Conflict(what) => write!(formatter, "conflict: {what}"),
             Self::StaleStore => formatter.write_str("stale Store"),
             Self::Busy => formatter.write_str("busy"),
+            Self::MountsActive(state) => {
+                write!(
+                    formatter,
+                    "mounts active: {} holder(s)",
+                    state.holders.len()
+                )
+            }
+            Self::BusyOp(state) => write!(
+                formatter,
+                "busy: {} at {}",
+                state.kind.as_str(),
+                state.entity
+            ),
+            Self::Unresolved(state) => write!(
+                formatter,
+                "unresolved: {} at {}",
+                state.kind.as_str(),
+                state.entity
+            ),
             Self::OwnershipUnavailable => formatter.write_str("ownership unavailable"),
             Self::Capacity(what) => write!(formatter, "capacity: {what}"),
             Self::Integrity(what) => write!(formatter, "integrity: {what}"),
@@ -268,6 +294,89 @@ impl RemovedState {
     /// Builds the context of a `Removed` refusal.
     pub fn new(paths: Vec<RemovedPath>) -> Self {
         Self { paths }
+    }
+}
+
+/// One admission holder: a live mount or operation in the scope.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GcHolder {
+    /// What kind of holder it is (`mount`, `init`, `merge`, ...).
+    pub kind: GcIntentKind,
+    /// The project, Branch or Store the holder is on.
+    pub entity: String,
+    /// The holder's Workspace, when it has one.
+    pub workspace: Option<String>,
+    /// The holder's Sandbox, when it has one.
+    pub sandbox: Option<String>,
+    /// The holder's machine, when it has one.
+    pub machine: Option<String>,
+    /// The holder operation identity, hex encoded.
+    pub op: String,
+}
+
+impl GcHolder {
+    /// Builds one holder report.
+    #[must_use]
+    pub fn new(kind: GcIntentKind, entity: impl Into<String>, op: impl Into<String>) -> Self {
+        Self {
+            kind,
+            entity: entity.into(),
+            workspace: None,
+            sandbox: None,
+            machine: None,
+            op: op.into(),
+        }
+    }
+}
+
+/// The holders that refuse a removal or compaction with `MountsActive`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MountHolders {
+    /// Every live or uncertain holder observed in the scope.
+    pub holders: Vec<GcHolder>,
+}
+
+impl MountHolders {
+    /// Builds the refusal context.
+    #[must_use]
+    pub fn new(holders: Vec<GcHolder>) -> Self {
+        Self { holders }
+    }
+}
+
+/// The live or uncertain operation that refuses a call with `Busy` or
+/// `Unresolved`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OpConflict {
+    /// The conflicting operation kind.
+    pub kind: GcIntentKind,
+    /// The project, Branch or Store it is on.
+    pub entity: String,
+    /// Its phase, when recorded.
+    pub phase: Option<String>,
+    /// Its operation identity, hex encoded.
+    pub op: String,
+    /// Whether its owner is uncertain.
+    pub uncertain: bool,
+}
+
+impl OpConflict {
+    /// Builds the refusal context.
+    #[must_use]
+    pub fn new(
+        kind: GcIntentKind,
+        entity: impl Into<String>,
+        phase: Option<String>,
+        op: impl Into<String>,
+        uncertain: bool,
+    ) -> Self {
+        Self {
+            kind,
+            entity: entity.into(),
+            phase,
+            op: op.into(),
+            uncertain,
+        }
     }
 }
 

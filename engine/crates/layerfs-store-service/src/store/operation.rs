@@ -6,11 +6,13 @@ use layerfs_workspace::{CanonicalClient, Workspace, WorkspaceResult};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
 pub struct BoundWorkspace {
-    pub(super) store: Arc<Store>,
+    pub(crate) store: Arc<Store>,
     pub(super) owner: OwnerClient,
     pub(super) snapshot: Mutex<BranchSnapshot>,
     pub(super) identity: WorkspaceId,
     pub(super) workspace: Arc<Workspace>,
+    /// The mount admission intent this Workspace must delete on unmount.
+    pub(super) gc_op: Option<[u8; 16]>,
     pub(super) committing: AtomicBool,
     pub(super) producer: super::producer::Producer,
     /// A conflicted merge installed locally and not yet committed.
@@ -32,7 +34,14 @@ impl BoundWorkspace {
         self.producer.hand_to(&self.store.idle_producer);
         self.store
             .close_reader(self.identity)
-            .map_err(super::CloseError::Reader)
+            .map_err(super::CloseError::Reader)?;
+        if let Some(op) = self.gc_op {
+            self.store
+                .history()
+                .gc_release(&op)
+                .map_err(super::CloseError::Intent)?;
+        }
+        Ok(())
     }
     pub fn operation(&self) -> WorkspaceResult<StoreOperation> {
         let ports = self.store.ports_for(self.snapshot()?.scope, self.identity);
@@ -56,6 +65,17 @@ impl BoundWorkspace {
     }
     pub fn route(&self) -> layerfs_workspace::Route {
         self.workspace.route()
+    }
+    /// The `history_serial` of one Commit or Layer, for `remove_file`
+    /// visibility in operator reads; absent is 0, as the resolver reports.
+    pub fn node_serial(&self, node: layerfs_history::NodeId) -> u64 {
+        match self
+            .store
+            .published(|history| history.node_history_serial(node))
+        {
+            Ok(Some(serial)) => serial,
+            _ => 0,
+        }
     }
 }
 impl StoreOperation {

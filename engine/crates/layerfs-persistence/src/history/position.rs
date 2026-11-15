@@ -37,8 +37,10 @@ pub(crate) fn next_serial(tx: &Transaction<'_>) -> HistoryResult<u64> {
 
 /// The largest `history_serial` in one Stack, for the `UpToDate` test.
 pub(crate) fn stack_high_water(tx: &Transaction<'_>, stack: LayerStackId) -> HistoryResult<u64> {
-    one(tx, STACK_HIGH_WATER, [stack.as_slice()], |row| unsigned(row, 0))?
-        .ok_or(HistoryError::Integrity("history position"))
+    one(tx, STACK_HIGH_WATER, [stack.as_slice()], |row| {
+        unsigned(row, 0)
+    })?
+    .ok_or(HistoryError::Integrity("history position"))
 }
 
 /// The `history_serial` one Commit or Layer records, when it exists.

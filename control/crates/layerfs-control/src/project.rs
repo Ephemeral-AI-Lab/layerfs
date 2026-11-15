@@ -11,3 +11,10 @@ use std::path::Path;
 pub fn remove(home: &Path, events: &mut Events<'_>, project: &ProjectRef) -> Outcome {
     layerfs_store::project::family::remove(home, events, project, crate::store::RELATED)
 }
+
+/// `project.delete(project)`: retires the project in its Store and removes
+/// the caller home entry (spec §4). Add the API and MCP call-table entry in
+/// T11; this is the service/control layer behind that dispatch.
+pub fn delete(home: &Path, events: &mut Events<'_>, project: &ProjectRef) -> Outcome {
+    layerfs_store::project::delete::delete(home, events, project)
+}

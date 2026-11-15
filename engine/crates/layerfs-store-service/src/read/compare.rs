@@ -8,6 +8,7 @@
 //! for a two-file difference to show.
 use super::reads::REPLY_BUDGET;
 use super::snapshot::{self, answer, existing, kind_name, Kind, Snap};
+use super::visibility::Visibility;
 use crate::history::lookup::{self as args, invalid, refuse, Answer, Arg};
 use crate::store::{CatalogHints, Store, StorePorts};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -281,7 +282,11 @@ fn changes(
         None => ChangeWalk::full(&memo, &left.tree, &right.tree, first.as_ref()),
     }
     .map_err(args::content)?;
-    emit(reader, &mut walk, &request)
+    // §4.3: a hidden entry is absent on its own side, so a removed path is an
+    // \`Added\`/\`Removed\` change, never a spurious \`Modified\`.
+    let left_seen = Visibility::for_snap(store, left);
+    let right_seen = Visibility::for_snap(store, right);
+    emit(reader, &mut walk, &request, &left_seen, &right_seen)
 }
 
 /// The component of `cursor` right below directory `path`, when `cursor`
@@ -310,6 +315,8 @@ fn emit(
     reader: &StorePorts,
     walk: &mut ChangeWalk<'_>,
     request: &Request,
+    left_seen: &Visibility,
+    right_seen: &Visibility,
 ) -> Result<(Vec<SdkValue>, Next), SdkRefusal> {
     let (limit, pos) = (request.limit, request.pos);
     let skip = if request.cursor.is_some() { 0 } else { pos };
@@ -317,7 +324,14 @@ fn emit(
     let mut work = layerfs_content::filesystem::attributes::AttributeReadWork::default();
     let mut last = None;
     while let Some(pair) = walk.next_pair().map_err(args::content)? {
-        let (path, before, after) = &pair;
+        let (path, raw_before, raw_after) = &pair;
+        let before = (*raw_before).filter(|_| left_seen.hidden(path).is_none());
+        let after = (*raw_after).filter(|_| right_seen.hidden(path).is_none());
+        // Both hidden: the path is absent on both sides, not a change.
+        if before.is_none() && after.is_none() {
+            walk.enter(&pair).map_err(args::content)?;
+            continue;
+        }
         if let Some(cursor) = &request.cursor {
             if order(path, cursor) != std::cmp::Ordering::Greater {
                 let on_path = cursor == path
@@ -362,7 +376,7 @@ fn emit(
                         &mut work,
                     )
                     .map_err(args::content)?
-                        && same_content(reader, x, y)?);
+                        && same_content(reader, &x, &y)?);
                 !same
             }
             _ => before != after,
@@ -385,8 +399,8 @@ fn emit(
                 let listed = PathChange {
                     path: path.clone(),
                     kind,
-                    left: *before,
-                    right: *after,
+                    left: before,
+                    right: after,
                 };
                 if let Some(item) = change(reader, &listed, &mut budget, request.hunks)? {
                     items.push(item);

@@ -71,3 +71,14 @@ CREATE TABLE gc_dead (
     id BYTEA NOT NULL,
     PRIMARY KEY (kind, id)
 );
+CREATE TABLE kept_node (
+    layer_stack_id BYTEA NOT NULL CHECK (length(layer_stack_id) = 17),
+    kind TEXT NOT NULL CHECK (kind IN ('commit','layer','branch','stack')),
+    node_id BYTEA NOT NULL,
+    serial BIGINT NOT NULL DEFAULT 0 CHECK (serial >= 0),
+    PRIMARY KEY (layer_stack_id, kind, node_id),
+    CHECK (
+        (kind IN ('commit','layer') AND length(node_id) = 33)
+        OR (kind IN ('branch','stack') AND length(node_id) = 17)
+    )
+);

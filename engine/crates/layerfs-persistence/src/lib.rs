@@ -29,7 +29,7 @@ pub use config::{
     PersistenceConfig, PostgresCheck, PostgresSelection, SqliteAcquisitionSchema, SqlitePackLayout,
     SqlitePersistenceProfile, SynchronousCommit,
 };
-pub use history::HistoryProvider;
+pub use history::{HistoryProvider, KeptHistory, KeptNode, KeptNodeId, KeptObjects, KeptWaste, MarkResult};
 pub(crate) use storage::provider as storage_provider;
 pub(crate) use storage::publication;
 pub use storage_provider::StorageProvider;
