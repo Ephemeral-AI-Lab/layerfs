@@ -186,8 +186,16 @@ try {
   }
   if (machine === "docker" && !shared) {
     // this home's own worker container and data volume, never another's
+    // the name its record keeps (`vm_name`); a record from before
+    // layerfs-project#180 has none and means `lfs-<id8>-docker`
     const id = JSON.parse(readFileSync(join(home, "layerfs.json"), "utf8")).id.slice(0, 8);
-    for (const args of [["rm", "-f", `lfs-${id}-docker`], ["volume", "rm", `lfs-${id}-docker-data`]]) {
+    let worker = `lfs-${id}-docker`;
+    try {
+      worker = JSON.parse(readFileSync(join(home, "machine", "docker", "record.json"), "utf8")).vm_name ?? worker;
+    } catch {
+      // no record: nothing was started under another name
+    }
+    for (const args of [["rm", "-f", worker], ["volume", "rm", `${worker}-data`]]) {
       try {
         execFileSync("docker", args, { stdio: "ignore" });
       } catch {

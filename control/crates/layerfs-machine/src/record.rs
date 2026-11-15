@@ -21,6 +21,31 @@ pub const CREATE: &str = "machine.create";
 /// A VM machine's remove.
 pub const REMOVE: &str = "machine.remove";
 
+/// A machine name as provider names take it: every character that is not
+/// an ASCII letter or digit becomes `-`.
+fn plain(name: &str) -> String {
+    name.chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect()
+}
+
+/// The provider's name for a new machine's VM or worker container:
+/// `layerfs-<home id8>-<machine>`, so two homes on one host never share
+/// one (O33; `layerfs-` since layerfs-project#180). Recorded as `vm_name`
+/// when the machine is made; read back by [`MachineRecord::provider_name`].
+pub fn vm_name(home_id: &str, name: &str) -> String {
+    let prefix = layerfs_home::names::provider_prefix(home_id);
+    format!("{prefix}{}", plain(name))
+}
+
+/// The name [`vm_name`] gave before layerfs-project#180,
+/// `lfs-<home id8>-<machine>`: what a record without `vm_name` means. No
+/// new machine is named so.
+pub fn legacy_vm_name(home_id: &str, name: &str) -> String {
+    let prefix = layerfs_home::names::legacy_provider_prefix(home_id);
+    format!("{prefix}{}", plain(name))
+}
+
 /// One machine's record as read (fields kept whole and in order).
 #[derive(Clone, Debug)]
 pub struct MachineRecord {
@@ -50,16 +75,35 @@ impl MachineRecord {
             .ok_or_else(|| refused("NotFound", format!("no machine named {name}")))
     }
 
-    /// A built-in machine's first record: its name, platform and now.
-    pub fn built_in(name: &str) -> Self {
-        Self::from_record(
+    /// A built-in machine's first record, in the home with id `home_id`:
+    /// its name, platform and now, and for `docker` the name of its worker
+    /// container (`vm_name`), recorded like every created machine's
+    /// (layerfs-project#180). `native` has no provider name.
+    pub fn built_in(name: &str, home_id: &str) -> Self {
+        let record = Self::from_record(
             name,
             SdkValue::map([
                 ("name", SdkValue::text(name)),
                 ("platform", SdkValue::text(name)),
                 ("created", SdkValue::Int(home::now_ms())),
             ]),
-        )
+        );
+        match name {
+            "native" => record,
+            _ => record.with("vm_name", SdkValue::text(vm_name(home_id, name))),
+        }
+    }
+
+    /// The name the machine's provider knows it by (its VM or worker
+    /// container; its volume is `<name>-data`): the record's `vm_name`,
+    /// else, for a record written before every creation recorded one (an
+    /// existing home's `docker`), the name the formula of that time gives,
+    /// [`legacy_vm_name`]. So an existing machine keeps its container,
+    /// volume and Stores under any later formula.
+    pub fn provider_name(&self, home_id: &str) -> String {
+        self.text("vm_name")
+            .map(str::to_owned)
+            .unwrap_or_else(|| legacy_vm_name(home_id, &self.name))
     }
 
     /// The machine's name (its folder's).

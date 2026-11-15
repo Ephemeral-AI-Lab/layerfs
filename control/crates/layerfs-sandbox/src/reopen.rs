@@ -102,8 +102,11 @@ pub fn recorded(host: &Host, id: &str, value: &DaemonRecord) -> Result<Recorded>
     }
 }
 /// A local record is used only where this deployment puts that Sandbox:
-/// its directory must be exactly `<LAYERFS_LOCAL_DIR>/<prefix><id>`
-/// and named so, so a damaged, edited or stale record (another
+/// its own `name` must be exactly one this deployment gives Sandbox `id`
+/// (`<prefix><id>`, or under the earlier prefix a Sandbox made before
+/// layerfs-project#180 keeps; [`crate::lifecycle::recorded_names`]) and its
+/// directory exactly `<LAYERFS_LOCAL_DIR>/<that name>`, so a damaged,
+/// edited or stale record (another
 /// LAYERFS_LOCAL_DIR or prefix) never points a delete elsewhere. A record
 /// without `boot` was written before boot ids were kept: its daemon is
 /// matched by id and start time as then, and never signalled.
@@ -130,16 +133,25 @@ fn local(directory: PathBuf, record: LocalRecord, value: &DaemonRecord) -> Resul
 /// A record's directory and physical facts, checked against where this
 /// deployment puts that Sandbox: under its LAYERFS_LOCAL_DIR when it sets
 /// one, else (#529: the record decides, so a caller of another backend has
-/// none) beside the record's own directory, which must still carry the
-/// name this deployment gives Sandbox `id` and be owned by this record
+/// none) beside the record's own directory, which must still carry a
+/// name this deployment gives Sandbox `id` (the record's own, one of
+/// [`crate::lifecycle::recorded_names`]) and be owned by this record
 /// ([`crate::launch::local::owned`]).
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_record_of(host: &Host, id: &str, value: &DaemonRecord) -> Result<(PathBuf, LocalRecord)> {
     let directory = PathBuf::from(helpers::required(value.directory(), "directory")?);
-    let expected = crate::launch::local::directory(host.deploy(), id, directory.parent())?;
-    // the Sandbox's own directory name, exactly as this deployment names it
+    // the Sandbox's own name, exactly one this deployment gives it (a new
+    // Sandbox's, or the earlier prefix's): nothing is stripped from it
     let name = helpers::required(value.name(), "name")?;
-    if directory != expected || expected.file_name().and_then(|n| n.to_str()) != Some(name) {
+    let names = crate::lifecycle::recorded_names(host.deploy(), id)?;
+    let named = names.iter().any(|candidate| candidate == name);
+    let expected = crate::launch::local::directory(
+        host.deploy(),
+        id,
+        if named { name } else { &names[0] },
+        directory.parent(),
+    )?;
+    if !named || directory != expected {
         return Err(refused(
             "InvalidInput",
             format!(

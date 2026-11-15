@@ -78,9 +78,17 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
 
 - Defaults: 2 CPUs, 4 GiB memory, 20 GiB disk. Sizes are bytes, or text
   with `K`, `M` or `G`.
-- Each VM machine has one VM named `lfs-<first 8 digits of the home
-  id>-<name>`, one data disk mounted at `/layerfs/data` that holds many
-  Stores, and one worker.
+- Each VM machine has one VM named `layerfs-<first 8 digits of the home
+  id>-<name>` (a machine made before the `layerfs-` prefix keeps its
+  recorded `lfs-...` name), one data disk mounted at `/layerfs/data` that
+  holds many Stores, and one worker. A VM name keeps no punctuation, so a
+  name that differs from another machine's only in `.`, `_` or `-` is
+  refused `Exists`; a new machine's name is at most 46 characters (the VM
+  name is at most 63, and the prefix takes 17). Lima itself refuses an
+  instance whose socket path `<Lima home>/<VM name>/ssh.sock.<16 digits>`
+  reaches 104 characters, so with a long home folder a `lima` machine's
+  name must be shorter still (`limactl create` says so, and the machine
+  is not created).
 - `image` is the image its Sandboxes run in. The default Sandbox image (owner
   decision O36) is LayerFS's runtime image
   `layerfs-352-runtime:node24-https-apt-20261024` (image digest

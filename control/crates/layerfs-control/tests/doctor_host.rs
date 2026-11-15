@@ -204,7 +204,7 @@ fn arbitrary_version_value_is_not_echoed_and_timeout_is_incomplete() {
 fn runtime_mount_and_log_subtrees_are_outside_record_fingerprinting() {
     use std::os::unix::fs::PermissionsExt;
     let home = home(3);
-    layerfs_machine::record::MachineRecord::built_in("native")
+    layerfs_machine::record::MachineRecord::built_in("native", "0123456789abcdef0123456789abcdef")
         .write(&home)
         .unwrap();
     let runtime = paths::machine_dir(&home, "native").join("run");

@@ -70,7 +70,9 @@ hold a password or a bucket key. They are not settings; see
   carries `"v": 1` as its first field; call results never show it.
 - **`layerfs.json`** holds `{"layout": 3, "id": "<32 hex digits>"}`. The id
   is written once. The `docker` machine names its worker container with it (O33),
-  VM names carry its first 8 digits (`lfs-<id8>-<machine>`), and backups
+  VM, container and volume names and Sandbox run folders carry its first 8
+  digits (`layerfs-<id8>-<name>`; ones made before the `layerfs-` prefix
+  keep their recorded `lfs-<id8>-<name>`), and backups
   record it as where they were exported from. A home of a newer layout is
   refused `Unsupported`; a layout 2 home is converted once
   ([below](#a-layout-2-home)).

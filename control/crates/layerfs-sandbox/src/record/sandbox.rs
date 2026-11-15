@@ -370,7 +370,8 @@ impl SandboxRecord {
     /// or a started Sandbox of the docker machine with no `runtime` (a
     /// record converted from before runtimes were kept). The name is the
     /// one its daemon record keeps, else the one the docker backend gave
-    /// it, `lfs-<home id prefix>-<name>`. `None` for every other record.
+    /// it, `lfs-<home id prefix>-<name>` (that backend's prefix, kept for
+    /// its records only). `None` for every other record.
     pub fn retired_container(&self, home: &Path) -> Result<Option<String>> {
         let runtime = self.runtime();
         let retired = runtime == Some("docker")
@@ -390,7 +391,8 @@ impl SandboxRecord {
                     Ok(layerfs_home::home::layout::Layout::Previous(file)) => file.id,
                     _ => layerfs_home::home::opened(home)?.id,
                 };
-                format!("lfs-{}-{}", &id[..8.min(id.len())], self.name)
+                let prefix = layerfs_home::names::legacy_provider_prefix(&id);
+                format!("{prefix}{}", self.name)
             }
         }))
     }
