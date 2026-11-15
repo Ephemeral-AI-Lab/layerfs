@@ -1,5 +1,5 @@
 // The `layerfs` package (#533 step 14): one client per home (and optional
-// folder scope, O32), ten families built from the library's call table.
+// folder scope, O32), eleven families built from the library's call table.
 // Each function takes its positionals in the table's order, then an options
 // object; every call is one call into the library, made once. Any call's
 // options may also carry `log_tag`, the tag of its call log line (#659).
@@ -14,7 +14,7 @@ import { LayerFSError } from "./errors.js";
 
 /** The table: `[{ family, call, args, options, help }]`. */
 export const table = decode(native.table());
-/** The ten families, in help order. */
+/** The eleven families, in help order. */
 export const families = [...new Set(table.map((c) => c.family))];
 
 const FUNCTION = "function";
@@ -113,7 +113,10 @@ export function client({ home, scope } = {}) {
  * `ok` is false when a finding is an error. Explicit `{ target, name?, timeout?,
  * quick?, write_test? }` selects one scope and adds checks/complete/coverage;
  * empty options retain the legacy report. Explicit backup write_test may create
- * and delete its own temporary S3 object version. Outside the call table. */
+ * and delete its own temporary S3 object version. Outside the call table.
+ * The report also lists what interrupted operations left (`leftovers`, and
+ * `leftover` on such a finding); `doctor.fix(id)`, the `doctor` family's one
+ * call, removes one of them under its guard. */
 export async function doctor({ home, ...options } = {}) {
   const answer = decode(await native.doctor(home ?? null, encode(options)));
   if (answer.refused) throw new LayerFSError(answer.refused.code, answer.refused.message, answer.refused.detail);
@@ -133,5 +136,9 @@ export function close() {
 
 const fallback = client();
 export const { project, branch, commit, file, sandbox, workspace, machine, store, backup, logs } = fallback;
+// the package's `doctor` is the report, and carries the `doctor` family's
+// calls: `layerfs.doctor()` and `layerfs.doctor.fix(id)`. A client made by
+// `client()` has the family alone: `lfs.doctor.fix(id)`.
+Object.assign(doctor, fallback.doctor);
 export { LayerFSError };
 export default { ...fallback, client, close, doctor, table, families, LayerFSError };

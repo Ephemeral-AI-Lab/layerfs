@@ -107,6 +107,7 @@ pub fn help(topic: &[&str]) -> ExitCode {
             "layerfs doctor store integrity <store> [--quick]",
             "layerfs doctor store connection <store>",
             "layerfs doctor backup connection <bucket> [--write-test]",
+            "layerfs doctor fix <id>\n",
         ],
         ["host"] => &["layerfs doctor host"],
         ["machine"] => &["layerfs doctor machine <machine>"],
@@ -130,6 +131,9 @@ pub fn help(topic: &[&str]) -> ExitCode {
         }
     }
     text.push_str("\nObservations only; Store integrity is full by default. Connection checks do not prove integrity.\n");
+    if topic.is_empty() {
+        text.push_str("`doctor fix <id>` alone changes something: it removes one leftover the report listed, under its guard.\n");
+    }
     text.push_str("Timeouts use ms/s/m/h (e.g. 500ms, 10s, 2m). Inspect complete and check coverage; a report exits 0 even with findings.\n");
     output::print(&text)
 }

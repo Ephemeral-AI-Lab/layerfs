@@ -4,6 +4,7 @@
 //   Python  `layerfs.TABLE`, the sync functions and the `layerfs.aio` coroutines
 //   CLI     `layerfs help <family>`, one usage line per call
 //   MCP     the generated tool list of api/mcp, and the profile that lists it
+//           (a call of the `none` bucket, the doctor family, is no tool: "no")
 //   node api/scripts/gen-coverage.mjs          rewrite the generated block
 //   node api/scripts/gen-coverage.mjs --check  exit 1 when the block is not what the front ends give,
 //                                              or when a front end disagrees with the Node table
@@ -78,8 +79,13 @@ export async function collect({ python, cli }) {
     if (help.error || help.status !== 0) throw new Error(`layerfs help ${family} failed: ${help.error ?? help.stderr}`);
     for (const line of help.stdout.split("\n")) {
       const found = line.match(/^layerfs (\S+) (\S+)(.*)$/);
+      if (!found) continue;
       // a call's shell name has `-` for its `_` (`workspace exec-cancel`)
-      if (found) view.cli[`${found[1]}.${found[2].replaceAll("-", "_")}`] = usage(found[3]);
+      const name = `${found[1]}.${found[2].replaceAll("-", "_")}`;
+      // `layerfs help doctor` also lists the report's own forms (`doctor
+      // host`, `doctor machine <machine>`, ...), which are no calls
+      if (family === "doctor" && !node.table.some((spec) => nameOf(spec) === name)) continue;
+      view.cli[name] = usage(found[3]);
     }
   }
   return view;
@@ -152,14 +158,16 @@ export function render(view) {
         ? "the MCP tool's schema or description differs from the table"
         : bucket === null
           ? "no MCP profile bucket"
+          : bucket === "none"
+            ? (listed.work || listed.admin ? "an MCP profile lists a call that is no tool" : null)
           : bucket === "work" && !(listed.work && listed.admin)
             ? "the MCP work profile does not list it"
             : bucket === "admin" && (listed.work || !listed.admin)
               ? (listed.work ? "the MCP work profile lists an admin call" : "the MCP admin profile does not list it")
               : null;
-    if (mcpProblem === null) counts.mcp += 1;
-    else problems.push(`${name}: ${mcpProblem}`);
-    const mcp = mcpProblem === null ? (bucket === "work" ? "yes" : "admin") : "NO";
+    if (mcpProblem !== null) problems.push(`${name}: ${mcpProblem}`);
+    else if (bucket !== "none") counts.mcp += 1;
+    const mcp = mcpProblem !== null ? "NO" : bucket === "work" ? "yes" : bucket === "none" ? "no (no tool)" : "admin";
     const notes = [
       spec.args.some(piped) ? "stdin/--from" : "",
       spec.options.some((o) => o.name === "on_progress") ? "--progress" : "",

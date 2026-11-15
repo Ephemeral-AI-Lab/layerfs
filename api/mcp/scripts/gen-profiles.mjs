@@ -19,10 +19,11 @@ export function render(table) {
   const rows = renderRows(table);
   const work = table.filter((spec) => bucketOf(spec) === "work").length;
   const admin = table.filter((spec) => bucketOf(spec) === "admin").length;
+  const none = table.filter((spec) => bucketOf(spec) === "none").length;
   const blocks = [
     BEGIN,
     "",
-    `${table.length} calls: ${work} in \`work\`, ${admin} in \`admin\` only; \`--profile admin\` lists all ${table.length}.`,
+    `${table.length} calls: ${work} in \`work\`, ${admin} in \`admin\` only, ${none} no tool; \`--profile admin\` lists ${work + admin}.`,
     "",
     "| Call | Bucket | Profiles that list it | Why |",
     "| --- | --- | --- | --- |",

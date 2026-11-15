@@ -134,7 +134,8 @@ waits at most 10 s; other operations wait as long as they run
 | `store.call` | one Store method on `store/<name>/store.sqlite` under the root, holding the Store's lease there |
 | `store.file` | one step of a Store push, pull, remove, stat or backup, with `progress` events for hashing steps |
 | `store.reach` | `store.attach`'s check of this machine's connection to a PostgreSQL Store |
-| `store.diagnose`, `doctor.sandbox` | doctor's read-only observations |
+| `store.diagnose`, `doctor.sandbox` | doctor's read-only observations; `doctor.sandbox` with `leftovers: true` is the bounded walk for what interrupted operations left under the root |
+| `doctor.fix` | removes one such leftover, named by kind and name (never a path), under its guard ([Checks](../doctor/checks.md#leftovers)) |
 | `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`, decoded into its typed request first |
 | `project.stage`, `project.init`, `project.export`, `project.remove` | write one part of a folder copy; add it as a project; stream a pinned snapshot back; drop a project |
 | anything else | `InvalidInput`, "the worker has no operation …" |

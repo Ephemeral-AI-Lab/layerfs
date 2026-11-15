@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Every call a program can make: **73 calls in 10 families**, the same names and arguments in JavaScript, Python and the `layerfs` command, one page per family.
+Every call a program can make: **74 calls in 11 families**, the same names and arguments in JavaScript, Python and the `layerfs` command, one page per family.
 
 | | |
 | --- | --- |
@@ -13,7 +13,7 @@ Every call a program can make: **73 calls in 10 families**, the same names and a
 | Used by | [Front ends](../front-ends/README.md) |
 | Flows | [A call, end to end](../../flows/call.md) |
 
-The count is `layerfs_api::calls()`: ten `Family` entries in
+The count is `layerfs_api::calls()`: eleven `Family` entries in
 [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families`, each
 listing its calls in its `mod.rs`. The guard
 [`inventory.mjs`](../../../../api/node/test/branch-file/inventory.mjs) checks
@@ -59,6 +59,7 @@ built table.
 | [`store`](store.md) | [`list`](store.md#storelist), [`get`](store.md#storeget), [`status`](store.md#storestatus), [`stats`](store.md#storestats), [`create`](store.md#storecreate), [`connect`](store.md#storeconnect), [`attach`](store.md#storeattach), [`detach`](store.md#storedetach), [`push`](store.md#storepush), [`pull`](store.md#storepull), [`remove`](store.md#storeremove), [`disconnect`](store.md#storedisconnect) | the caller's process; sqlite file steps in the Store machine's worker | [`store/`](../../../../api/crates/layerfs-api/src/store) |
 | [`backup`](backup.md) | [`connect`](backup.md#backupconnect), [`disconnect`](backup.md#backupdisconnect), [`list`](backup.md#backuplist), [`create`](backup.md#backupcreate), [`restore`](backup.md#backuprestore) | the caller's process; `create` stages on the Store's machine | [`backup/`](../../../../api/crates/layerfs-api/src/backup) |
 | [`logs`](logs.md) | [`list`](logs.md#logslist), [`reset`](logs.md#logsreset) | the caller's process, home files only | [`logs/`](../../../../api/crates/layerfs-api/src/logs) |
+| [`doctor`](doctor.md) | [`fix`](doctor.md#doctorfix) | the machine its id names: the caller's process on `native`, else that machine's worker | [`doctor/`](../../../../api/crates/layerfs-api/src/doctor) |
 
 "Where the Store's calls run" is the caller's process for a PostgreSQL Store
 and for a sqlite Store on a locally executing machine (`native`, except on
@@ -83,7 +84,7 @@ in the [API layer page](../README.md#calling-conventions).
 
 | Rule | Enforced by |
 | --- | --- |
-| One file per call under its family, and the family's `mod.rs` lists them in help order | `the_source_is_one_file_per_call_under_its_family` in [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) |
+| One file per call under its family, and the family's `mod.rs` lists them in help order (`doctor/` also holds the report's `options.rs` and `run.rs`, which are outside the table) | `the_source_is_one_file_per_call_under_its_family` in [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) |
 | Every front end exposes exactly the table's calls with the table's arguments | the generated [coverage matrix](../calls/coverage.md), checked by [`coverage.mjs`](../../../../api/node/test/coverage.mjs) |
 | These pages name every call once, under `### family.call`, and state the count above | [`inventory.mjs`](../../../../api/node/test/branch-file/inventory.mjs) |
 | A call runs once; nothing retries or replays it | [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) |
@@ -103,7 +104,7 @@ in the [API layer page](../README.md#calling-conventions).
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
 | [`inventory.mjs`](../../../../api/node/test/branch-file/inventory.mjs) | `perl -e 'alarm 120; exec @ARGV' node --test api/node/test/branch-file/inventory.mjs` | macOS or Linux, with the built addon (`npm --prefix api run build:native`) and `target/debug/layerfs` | the count line and one heading per call match the built table; branch and file CLI help exposes every option |
-| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host | 73 calls in ten families; one source file per call; unknown calls and arguments refused before any effect |
+| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host | 74 calls in eleven families; one source file per call; unknown calls and arguments refused before any effect |
 | [`file-history.mjs`](../../../../api/node/examples/file-history.mjs) | `node api/node/examples/file-history.mjs` | macOS or Linux, with the built addon | a Store, Init, file writes and history reads |
 
 ## Pages
@@ -120,3 +121,4 @@ in the [API layer page](../README.md#calling-conventions).
 | [store](store.md) | sqlite and PostgreSQL Stores |
 | [backup](backup.md) | buckets and Store backups |
 | [logs](logs.md) | the home's call log |
+| [doctor](doctor.md) | `doctor.fix`: remove one leftover the report listed |

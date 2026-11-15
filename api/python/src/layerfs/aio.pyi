@@ -602,6 +602,10 @@ class AsyncLogsFamily:
     async def reset(self, *, log_tag: str | None = None) -> Result:
         """clear this home's call log"""
 
+class AsyncDoctorFamily:
+    async def fix(self, id: str, *, log_tag: str | None = None) -> Result:
+        """remove one leftover `layerfs doctor` listed, under its guard"""
+
 class AsyncClient:
     project: AsyncProjectFamily
     branch: AsyncBranchFamily
@@ -613,6 +617,7 @@ class AsyncClient:
     store: AsyncStoreFamily
     backup: AsyncBackupFamily
     logs: AsyncLogsFamily
+    doctor: AsyncDoctorFamily
     def __init__(self, home: str | PathLike[str] | None = None, scope: Scope | Mapping[str, str | None] | None = None) -> None: ...
 
 def client(home: str | PathLike[str] | None = None, scope: Scope | Mapping[str, str | None] | None = None) -> AsyncClient: ...
@@ -627,5 +632,6 @@ machine: AsyncMachineFamily
 store: AsyncStoreFamily
 backup: AsyncBackupFamily
 logs: AsyncLogsFamily
+doctor: AsyncDoctorFamily
 
-__all__ = ['AsyncClient', 'LayerFSError', 'client', 'project', 'branch', 'commit', 'file', 'sandbox', 'workspace', 'machine', 'store', 'backup', 'logs']
+__all__ = ['AsyncClient', 'LayerFSError', 'client', 'project', 'branch', 'commit', 'file', 'sandbox', 'workspace', 'machine', 'store', 'backup', 'logs', 'doctor']

@@ -1,4 +1,4 @@
-"""LayerFS for Python (#533 step 16): the ten families of the one call
+"""LayerFS for Python (#533 step 16): the eleven families of the one call
 table, synchronous; ``layerfs.aio`` has the same calls as coroutines (O19).
 
     import layerfs
@@ -33,7 +33,9 @@ def doctor(home=None, *, target=None, name=None, timeout=None, quick=None, write
     outcomes and completeness. timeout uses positive ms/s/m/h duration strings.
     quick applies only to store.integrity; write_test only to backup.connection.
     Explicit backup write_test may create and delete its own temporary S3 version.
-    Outside the call table."""
+    Outside the call table. The report also lists what interrupted operations
+    left (``leftovers``, and ``leftover`` on such a finding); ``doctor.fix(id)``,
+    the ``doctor`` family's one call, removes one of them under its guard."""
     options = {key: value for key, value in {"target": target, "name": name, "timeout": timeout, "quick": quick, "write_test": write_test}.items() if value is not None}
     answer = decode(_native.doctor(path_text(home), encode(options)))
     refused = answer.get("refused")
@@ -64,6 +66,10 @@ machine = _default.machine
 store = _default.store
 backup = _default.backup
 logs = _default.logs
+# the module's `doctor` is the report, and carries the `doctor` family's
+# calls: `layerfs.doctor()` and `layerfs.doctor.fix(id)`. A client made by
+# `client()` has the family alone: `lfs.doctor.fix(id)`.
+doctor.fix = _default.doctor.fix
 
 __all__ = [
     "FAMILIES",

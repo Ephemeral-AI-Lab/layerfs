@@ -3,13 +3,15 @@
 // small exception lists below. `tools()` is the one generated tool list the
 // server, the documentation table and the coverage column use.
 //
-// Assignment rule (each call lands in exactly one bucket, none excluded):
+// Assignment rule (each call lands in exactly one bucket):
 //   work   the families an agent works in (branch, commit, file, workspace)
 //          plus the read-only project and Sandbox calls named below
 //   admin  every other call: project create/remove, Sandbox create/close,
 //          and the machine, store, backup and logs families
-// The `admin` launch profile exposes the union, so `admin` adds the
-// administrative calls to the `work` set.
+//   none   the doctor family: like `layerfs doctor` itself, which is no
+//          tool, its repair call is a person's, in neither profile
+// The `admin` launch profile exposes the union of work and admin, so `admin`
+// adds the administrative calls to the `work` set.
 
 /** The profile names, in help order. `work` is the default. */
 export const PROFILES = ["work", "admin"];
@@ -26,6 +28,9 @@ const ADMIN_CALLS = new Set(["project.init", "project.remove", "sandbox.create",
 /** Families whose every call belongs to the `admin` profile. */
 const ADMIN_FAMILIES = new Set(["machine", "store", "backup", "logs"]);
 
+/** Families that are no MCP tool in any profile. */
+const NO_TOOL_FAMILIES = new Set(["doctor"]);
+
 /** Why a family's calls sit where they do; one line per family, in the doc. */
 const WHY = {
   project: "read a project's record or its entry counts, or export one (work); importing and removing a project are administration",
@@ -38,13 +43,15 @@ const WHY = {
   store: "create, connect, transfer and remove Stores; administration",
   backup: "upload and restore a Store on a bucket; administration",
   logs: "read and clear the home's call log; administration",
+  doctor: "remove a leftover the doctor's report listed; like `layerfs doctor` itself, a person's repair and no MCP tool",
 };
 
 const nameOf = (spec) => `${spec.family}.${spec.call}`;
 
 /**
- * The profile bucket of one table entry: `"work"` or `"admin"`, or `null` when
- * this file has not classified the call (a new family or a renamed call).
+ * The profile bucket of one table entry: `"work"`, `"admin"` or `"none"` (no
+ * tool in either profile), or `null` when this file has not classified the
+ * call (a new family or a renamed call).
  */
 export function bucketOf(spec) {
   const name = nameOf(spec);
@@ -52,6 +59,7 @@ export function bucketOf(spec) {
   if (WORK_FAMILIES.has(spec.family)) return "work";
   if (ADMIN_CALLS.has(name)) return "admin";
   if (ADMIN_FAMILIES.has(spec.family)) return "admin";
+  if (NO_TOOL_FAMILIES.has(spec.family)) return "none";
   return null;
 }
 
@@ -67,7 +75,7 @@ export function whyOf(spec) {
 
 /**
  * The table entries a launch profile exposes: `work` its own bucket, `admin`
- * both buckets. Throws when a call has no bucket, so a new call cannot appear
+ * the work and admin buckets; a call of the `none` bucket is in neither. Throws when a call has no bucket, so a new call cannot appear
  * in a profile silently.
  */
 export function tools(table, profile = "work") {
@@ -76,6 +84,7 @@ export function tools(table, profile = "work") {
   for (const spec of table) {
     const bucket = bucketOf(spec);
     if (bucket === null) throw new Error(`${nameOf(spec)}: no profile bucket; add it to api/mcp/src/profiles.js`);
+    if (bucket === "none") continue;
     if (profile === "admin" || bucket === "work") out.push(spec);
   }
   return out;
@@ -101,6 +110,7 @@ export function check(table) {
 export function renderRows(table) {
   return table.map((spec) => {
     const bucket = bucketOf(spec);
-    return `| \`${nameOf(spec)}\` | ${bucket ?? "UNCLASSIFIED"} | ${bucket === "work" ? "work, admin" : "admin"} | ${whyOf(spec)} |`;
+    const listed = bucket === "work" ? "work, admin" : bucket === "none" ? "none" : "admin";
+    return `| \`${nameOf(spec)}\` | ${bucket ?? "UNCLASSIFIED"} | ${listed} | ${whyOf(spec)} |`;
   });
 }

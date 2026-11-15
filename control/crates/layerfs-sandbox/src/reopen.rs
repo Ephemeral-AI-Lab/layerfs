@@ -195,7 +195,7 @@ fn local_parts(value: &DaemonRecord) -> Result<(PathBuf, LocalRecord)> {
 /// The daemon (native) or init (namespaces) process a local record names:
 /// its id, start time and boot. A record from before boot ids has none.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-fn recorded_process(value: &DaemonRecord) -> Result<LocalProcess> {
+pub fn recorded_process(value: &DaemonRecord) -> Result<LocalProcess> {
     let pid = value
         .pid()
         .ok_or_else(|| refused("InvalidInput", "local Sandbox record pid"))?;

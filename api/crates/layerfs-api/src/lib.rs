@@ -7,8 +7,9 @@
 //! re-exported here. The `branch`, `commit` and `file`
 //! calls reach the Store engine's SDK facade (layerfs-store-service
 //! `methods/`) in the caller's process, the only route for Store calls
-//! (#352 F-020). Explicit doctor options live outside the call table and
-//! bypass normal home initialization/migration.
+//! (#352 F-020). The doctor's report and its explicit options live outside
+//! the call table and bypass normal home initialization/migration; its one
+//! table call is `doctor.fix`.
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
@@ -75,7 +76,7 @@ pub use layerfs_sandbox::{
     BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
 };
 
-/// The ten families, in the order help lists them: 73 calls, the same
+/// The eleven families, in the order help lists them: 74 calls, the same
 /// from the `layerfs` binary, Node and Python.
 pub fn families() -> Families {
     &[
@@ -118,6 +119,10 @@ pub fn families() -> Families {
         Family {
             name: "logs",
             list: logs::calls,
+        },
+        Family {
+            name: "doctor",
+            list: doctor::calls,
         },
     ]
 }

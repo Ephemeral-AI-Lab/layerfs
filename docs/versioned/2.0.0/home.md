@@ -133,7 +133,10 @@ hold a password or a bucket key. They are not settings; see
   to **`log/exec.jsonl`**. The Workspace's folder goes with its terminal
   unmount.
 - **`log/uncertain.jsonl`** lists every outcome that is not known
-  (`Unknown`), with what was kept.
+  (`Unknown`), with what was kept. A `project init` whose answer was lost
+  names the folder copy that may remain on the machine (`machine`, `copy`,
+  `deadline`), which is what lets `layerfs doctor fix` remove that copy
+  later.
 
 A machine's own disk (a VM's data disk) is mounted at
 `/layerfs/data` inside the machine. It holds `store/<name>/store.sqlite`

@@ -11,8 +11,8 @@
 //! build sends nothing more and closes. Then a request `{ op, args }`, read with at most
 //! [`REQUEST_WAIT`] between bytes. `worker.ping` answers who it is;
 //! `store.call`, `store.file`, `store.reach`, `sandbox.host`, `project.stage`,
-//! `project.init`, `project.export` and `project.remove` run one operation on
-//! this machine (`ops`),
+//! `project.init`, `project.export`, `project.remove` and `doctor.fix` run
+//! one operation on this machine (`ops`),
 //! with `home` set to the worker's own root (the machine's data disk),
 //! never a path the caller sends. Answers are
 //! `{ value }` or `{ refused }`, after any `{ event }` frames.

@@ -88,7 +88,24 @@ export interface DoctorReport {
   mode?: "full" | "quick" | "observation" | "write-test";
   observed_at_ms?: number;
   duration_ms?: number;
-  findings: { severity: string; entity: { kind: string; name: string }; message: string; fix: string | null }[];
+  findings: { severity: string; entity: { kind: string; name: string }; message: string; fix: string | null; leftover?: DoctorLeftover }[];
+  /** The legacy report: each machine walked for leftovers. */
+  leftovers?: { machine: string; complete: boolean; image_locks: number; unmount_markers: number }[];
+}
+/** What an interrupted operation left, on a finding of the legacy report;
+ * `doctor.fix(id)` removes it when `fixable`. */
+export interface DoctorLeftover {
+  machine: string;
+  kind: "run-folder" | "empty-root" | "init-copy" | "backup-staging" | "image-tmp" | "image-part";
+  path: string;
+  /** null when the walk's bound ended before it was measured */
+  bytes: number | null;
+  /** seconds since it last changed */
+  age: number;
+  id: string;
+  fixable: boolean;
+  /** a folder copy: ms since the epoch from which `doctor.fix` removes it */
+  not_before?: number;
 }
 
 
@@ -596,6 +613,11 @@ export interface LogsFamily {
   reset(options?: CallOptions): Promise<Result>;
 }
 
+export interface DoctorFamily {
+  /** remove one leftover `layerfs doctor` listed, under its guard */
+  fix(id: string, options?: CallOptions): Promise<Result>;
+}
+
 export interface Client {
   readonly home: string | undefined;
   readonly scope: Scope | undefined;
@@ -609,6 +631,7 @@ export interface Client {
   readonly store: StoreFamily;
   readonly backup: BackupFamily;
   readonly logs: LogsFamily;
+  readonly doctor: DoctorFamily;
 }
 
 /** The call table: one entry per call. */
@@ -620,6 +643,10 @@ export const families: readonly string[];
 export function client(options?: ClientOptions): Client;
 /** Diagnoses without LayerFS state changes; explicit backup write_test uses its own temporary S3 version. */
 export function doctor(options?: DoctorOptions): Promise<DoctorReport>;
+/** The `doctor` family's calls, on the package's report function. */
+export namespace doctor {
+  const fix: DoctorFamily["fix"];
+}
 /** Closes every Store this process holds open with no call running; answers how many. Outside the call table. */
 export function close(): number;
 

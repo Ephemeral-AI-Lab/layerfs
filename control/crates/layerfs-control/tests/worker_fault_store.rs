@@ -1,7 +1,9 @@
 //! A panic and a stalled caller on a worker that holds a real Store
 //! (layerfs-project#177): the Store and the Sandbox tables answer the next
-//! call, and a stalled `project.export` gives up the Store's lease. Empty
-//! without the `worker-fault` cargo feature:
+//! call, and a stalled `project.export` gives up the Store's lease. And a
+//! `project.init` whose answer is lost names its folder copy in the home's
+//! uncertain log, which is what lets `doctor.fix` remove that copy later
+//! (layerfs-project#180). Empty without the `worker-fault` cargo feature:
 //!
 //! `cargo test -p layerfs-control --features worker-fault --test worker_fault_store`
 #![cfg(feature = "worker-fault")]
@@ -129,5 +131,59 @@ fn a_stalled_export_ends_and_gives_up_the_store() {
     let value = value.unwrap_or_else(|| panic!("no answer after {count} frames: {last:?}"));
     assert_eq!(value.get_int("bytes"), Some((24 << 20) + 14), "{value:?}");
     assert!(count >= 3, "a prepare event and the parts: {count}");
+    placed.remove();
+}
+
+#[test]
+fn a_lost_init_names_its_copy_for_doctor() {
+    let (placed, faults) = with("lostinit", Faults::default());
+    let folder = worker_store::folder(&placed.scratch, 4096);
+    // the copy is staged, then the worker's Init dies before it answers
+    faults.on("project.init", OpFault::Panic);
+    let before = layerfs_home::home::now_ms();
+    let lost = worker_store::init(&placed.home, "web", &folder)
+        .0
+        .unwrap_err();
+    assert_eq!(lost.code, "Unknown", "{lost:?}");
+
+    // one line of the uncertain log names the machine, the copy and the
+    // deadline: when the request went out plus the Init's timeout
+    let log = paths::log_dir(&placed.home).join("uncertain.jsonl");
+    let text = std::fs::read_to_string(&log).unwrap();
+    let lines: Vec<SdkValue> = (text.lines())
+        .map(|line| layerfs_home::json::parse(line).unwrap())
+        .collect();
+    assert_eq!(lines.len(), 1, "{text}");
+    let line = &lines[0];
+    assert_eq!(line.get_text("call"), Some("project.init"));
+    assert_eq!(line.get_text("store"), Some("shop"));
+    assert_eq!(line.get_text("project"), Some("web"));
+    assert_eq!(line.get_text("machine"), Some("box"));
+    assert_eq!(line.get_text("phase"), Some("install"));
+    let copy = line.get_text("copy").unwrap();
+    assert!(lost.message.contains(&format!("init-{copy}")), "{lost:?}");
+    let deadline = line.get_int("deadline").unwrap();
+    assert!(deadline > before, "{line:?}");
+    let staged = placed.root.join("incoming").join(format!("init-{copy}"));
+    assert!(staged.join("README.md").is_file(), "the copy is there");
+
+    // doctor lists it as removable an hour after that deadline, and until
+    // then `doctor.fix` leaves it
+    let report = layerfs_control::doctor::doctor(&placed.home).unwrap();
+    let Some(SdkValue::List(findings)) = report.get("findings") else {
+        panic!("{report:?}");
+    };
+    let left: Vec<&SdkValue> = (findings.iter())
+        .filter_map(|finding| finding.get("leftover"))
+        .collect();
+    assert_eq!(left.len(), 1, "{findings:?}");
+    let id = format!("box:init-copy:{copy}");
+    assert_eq!(left[0].get_text("id"), Some(id.as_str()));
+    assert_eq!(left[0].get_text("path"), staged.to_str());
+    assert!(left[0].get_bool("fixable"), "{left:?}");
+    assert_eq!(left[0].get_int("not_before"), Some(deadline + 3_600_000));
+    let early = layerfs_control::doctor::leftover_fix::fix(&placed.home, &id).unwrap_err();
+    assert_eq!(early.code, "InUse", "{early:?}");
+    assert!(staged.join("README.md").is_file());
     placed.remove();
 }

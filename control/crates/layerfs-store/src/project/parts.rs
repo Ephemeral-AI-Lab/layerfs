@@ -11,7 +11,7 @@
 //! discards the copy with one more request, unless a part's answer was
 //! lost: that part may still be written, so the copy is left and named.
 use super::frame::{StageFrame, StageStep};
-use super::send::{left, Copy};
+use super::send::{left, log_left, Copy, Left};
 use crate::place::Worker;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
@@ -66,6 +66,8 @@ impl Drop for Reply {
 /// The parts of one copy sent so far.
 pub struct Parts {
     worker: Worker,
+    home: std::path::PathBuf,
+    timeout_ms: i64,
     store: String,
     name: String,
     machine: String,
@@ -90,6 +92,8 @@ impl Parts {
         let (to, answers) = mpsc::channel();
         Self {
             worker: worker.clone(),
+            home: copy.home.to_owned(),
+            timeout_ms: copy.timeout_ms,
             store: copy.store.to_owned(),
             name: copy.name.to_owned(),
             machine: copy.machine.to_owned(),
@@ -222,6 +226,7 @@ impl Parts {
         let left = left(&self.machine, &self.id);
         if refusal.code == "Unknown" {
             refusal.message = format!("{}; its copy may remain at {left}", refusal.message);
+            self.log_left(&refusal.message);
             return Err(refusal);
         }
         if self.uncertain {
@@ -229,6 +234,7 @@ impl Parts {
                 "{}; another part's answer was lost, so its copy was not discarded and may remain at {left}",
                 refusal.message
             );
+            self.log_left(&refusal.message);
             return Err(refusal);
         }
         if !self.asked {
@@ -240,8 +246,25 @@ impl Parts {
                 "{}; its copy was not discarded ({}) and may remain at {left}",
                 refusal.message, why.message
             );
+            self.log_left(&refusal.message);
         }
         Err(refusal)
+    }
+
+    /// Names the copy that may remain in the home's `log/uncertain.jsonl`.
+    /// Every part was answered or given up by now, so no request of this
+    /// copy goes out after this moment: its deadline counts from here.
+    fn log_left(&self, message: &str) {
+        let left = Left {
+            store: &self.store,
+            project: &self.name,
+            machine: &self.machine,
+            copy: &self.id,
+            phase: "send",
+            sent_ms: layerfs_home::home::now_ms(),
+            timeout_ms: self.timeout_ms,
+        };
+        log_left(&self.home, &left, message);
     }
 }
 

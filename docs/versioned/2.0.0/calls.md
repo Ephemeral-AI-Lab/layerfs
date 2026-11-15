@@ -550,9 +550,50 @@ layerfs doctor --text     # a count line, then each finding and its fix
   start`, a worker that does not answer one naming `machine start`).
 - Not checked: partial copies and leftover layout 2 folders on other
   machines (no worker operation reports them).
+- It also lists what interrupted operations left on disk, on `native` and
+  on each running machine (one bounded walk each: 20,000 entries or 2 s; a
+  stopped machine is not asked). Each is a warning on its machine whose
+  finding also holds `leftover: { machine, kind, path, bytes, age, id,
+  fixable }` (`age` in seconds since it last changed; `bytes` null when the
+  walk's bound ended first), and the report's `leftovers` has one row per
+  machine walked: `{ machine, complete, image_locks, unmount_markers }`. The
+  kinds: `run-folder` (a Sandbox run folder no Sandbox record names),
+  `empty-root` (an empty `<name>.root` whose run folder is gone),
+  `init-copy` (a `project init` folder copy, `incoming/init-*`),
+  `backup-staging` (`backup.staging`, `store.sqlite.backup`), `image-tmp`
+  and `image-part` (an interrupted image unpack or load). Image lock files
+  and unmount markers are only counted: LayerFS keeps them.
 - Exit 0 once the report is made, whatever it finds; 2 for any argument
   but `--text`; 125 when the home cannot be named (`LAYERFS_HOME` not
   absolute).
+
+### `layerfs doctor fix <id>`
+
+The one `doctor` command that changes something, and a call of the table
+(`doctor.fix`; `layerfs.doctor.fix(id)` in Node and Python). It removes the
+one leftover whose `id` the report gave (`<machine>:<kind>:<name>`, never a
+path), once, on that machine, under that kind's guard:
+
+```bash
+layerfs doctor fix native:image-part:<64 hex>
+# {"kind":"image-part","path":"…/machine/native/run/images/.recv-<64 hex>.part","removed":true,"bytes":50,"machine":"native","id":"native:image-part:<64 hex>"}
+```
+
+| Kind | Removed when (else `InUse`, nothing removed) |
+| --- | --- |
+| `run-folder` | no Sandbox record names it, its `owner` marker is there and older than a minute, no daemon of it runs and nothing is mounted at or under it or its `.root` |
+| `empty-root` | its run folder is gone and it is not a mount point; `rmdir` only |
+| `init-copy` | a line of `log/uncertain.jsonl` names the machine and the copy, and its deadline (when the lost request went out, plus the Init's `timeoutMs`) passed more than an hour ago; a copy no line names is only reported (`InvalidInput`) |
+| `backup-staging` | no `backup create` of that Store is running (its `backup.lock` is taken for the removal) |
+| `image-tmp` | no unpack of that image is running (its lock is taken; the lock file stays) |
+| `image-part` | it has not been written for an hour |
+
+Other refusals: `NotFound` (no leftover has that id now), `InvalidInput`
+(an image lock or an unmount marker, which are never removed), `Unavailable`
+(the machine is stopped) and `Unknown` (the worker's answer was lost: run
+`layerfs doctor` again to see). The MCP server has no tool for it. Run on
+macOS `native` against leftovers made by hand; not run on a VM machine for
+this manual.
 
 ## Results
 

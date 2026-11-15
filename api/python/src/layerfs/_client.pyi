@@ -591,6 +591,10 @@ class LogsFamily:
     def reset(self, *, log_tag: str | None = None) -> Result:
         """clear this home's call log"""
 
+class DoctorFamily:
+    def fix(self, id: str, *, log_tag: str | None = None) -> Result:
+        """remove one leftover `layerfs doctor` listed, under its guard"""
+
 class Client:
     home: str | None
     scope: Scope | Mapping[str, str | None] | None
@@ -604,6 +608,7 @@ class Client:
     store: StoreFamily
     backup: BackupFamily
     logs: LogsFamily
+    doctor: DoctorFamily
     def __init__(self, home: str | PathLike[str] | None = None, scope: Scope | Mapping[str, str | None] | None = None) -> None: ...
 
 def client(home: str | PathLike[str] | None = None, scope: Scope | Mapping[str, str | None] | None = None) -> Client: ...

@@ -1,4 +1,4 @@
-//! The call table and its dispatcher (#533 step 2): 73 calls in ten
+//! The call table and its dispatcher (#533 step 2): 74 calls in eleven
 //! families, arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::{families, json, keys, size, Call, Kind};
@@ -51,9 +51,9 @@ fn code(name: &str, args: SdkValue) -> String {
 }
 
 #[test]
-fn the_table_has_ten_families_and_73_calls() {
+fn the_table_has_eleven_families_and_74_calls() {
     let all: Vec<&Call> = layerfs_api::calls();
-    assert_eq!(all.len(), 73);
+    assert_eq!(all.len(), 74);
     // each family holds only its own calls, and has at least one
     for family in families() {
         assert!(!family.calls().is_empty(), "{}", family.name);
@@ -66,7 +66,7 @@ fn the_table_has_ten_families_and_73_calls() {
     let mut names: Vec<_> = all.iter().map(|c| c.name()).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 73, "call names are unique");
+    assert_eq!(names.len(), 74, "call names are unique");
     // an optional positional is only ever followed by optional ones (D7)
     for c in &all {
         let first_optional = c.args.iter().position(|a| a.optional);
@@ -75,7 +75,7 @@ fn the_table_has_ten_families_and_73_calls() {
         }
     }
     let counts: Vec<usize> = families().iter().map(|f| f.calls().len()).collect();
-    assert_eq!(counts, [6, 8, 3, 15, 4, 6, 12, 12, 5, 2]);
+    assert_eq!(counts, [6, 8, 3, 15, 4, 6, 12, 12, 5, 2, 1]);
 }
 
 #[test]
@@ -443,6 +443,24 @@ fn sizes_and_keys() {
 }
 
 #[test]
+fn doctor_family() {
+    assert!(code("doctor.fix", SdkValue::Null).contains("`id` is required"));
+    assert!(code(
+        "doctor.fix",
+        map(&[("id", t("native:image-part:00")), ("path", t("/etc"))])
+    )
+    .starts_with("InvalidInput: doctor.fix: unknown argument `path`"));
+    // reached: an id that names nothing is not found, and one of a kind
+    // that is only counted is refused
+    let reached = code("doctor.fix", map(&[("id", t("native:run-folder:../x"))]));
+    assert!(reached.starts_with("NotFound: "), "{reached}");
+    let lock = format!("native:image-lock:{}.2", "ab".repeat(32));
+    let reached = code("doctor.fix", map(&[("id", t(&lock))]));
+    assert!(reached.starts_with("InvalidInput: "), "{reached}");
+    assert!(reached.contains("only reported"), "{reached}");
+}
+
+#[test]
 fn an_explicit_home_must_be_absolute() {
     let mut events = Vec::new();
     let refused = layerfs_api::call(
@@ -472,14 +490,8 @@ fn the_source_is_one_file_per_call_under_its_family() {
     let mut expected: Vec<String> = families().iter().map(|f| f.name.to_owned()).collect();
     expected.push("lib.rs".to_owned());
     expected.push("calls".to_owned());
-    // Explicit doctor stays outside the normal table/home dispatcher.
-    expected.push("doctor".to_owned());
     expected.sort();
     assert_eq!(names(&src), expected);
-    assert_eq!(
-        names(&src.join("doctor")),
-        ["mod.rs", "options.rs", "run.rs"]
-    );
     for family in families() {
         let mut files: Vec<String> = family
             .calls()
@@ -487,6 +499,12 @@ fn the_source_is_one_file_per_call_under_its_family() {
             .map(|c| format!("{}.rs", c.call))
             .collect();
         files.push("mod.rs".to_owned());
+        if family.name == "doctor" {
+            // the report itself (explicit options and its run) stays
+            // outside the table and the home dispatcher, beside the family's
+            // one call
+            files.extend(["options.rs".to_owned(), "run.rs".to_owned()]);
+        }
         files.sort();
         assert_eq!(names(&src.join(family.name)), files, "{}", family.name);
     }

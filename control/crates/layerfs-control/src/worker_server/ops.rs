@@ -57,6 +57,8 @@ pub(super) fn run(
         "machine.images" => layerfs_sandbox::images::in_worker(root, args),
         "machine.prune" => layerfs_sandbox::images::prune_in_worker(root, args),
         "doctor.sandbox" => crate::doctor::diagnose_worker_sandbox(root, args),
+        // removes one leftover under this root, under its guard (#180)
+        "doctor.fix" => crate::doctor::leftover_fix::fix_in_worker(root, &args),
         "store.diagnose" => crate::doctor::diagnose_store_in_worker(root, args, events),
         // `store.attach`'s check of this machine's connection to a
         // PostgreSQL Store: the caller sends the record and what it dials
