@@ -71,7 +71,7 @@ output to `/layerfs/data/log/worker.log` (`$LAYERFS_WORKER_LOG`; folder
 | Rule | Detail |
 | --- | --- |
 | Rotation | only by a launcher, only at a start, only when the log is past 16 MiB. A smaller log is appended to, so a failed start or a restart loop keeps the lines of the run before, and a reader's position in the log holds across restarts |
-| While the worker runs | never rotated: a rename would not move the worker's descriptor. The log grows until the next start (start-only is the rule for 2.0, as for `forward.log`) |
+| While the worker runs | never rotated: a rename would not move the worker's descriptor. The log grows until the next start (start-only is the rule for 2.0). `forward.log`, which a machine's forwards share, is the one log copied and emptied in place, when a forward starts |
 | Content | the worker's own lines (`layerfs worker: …`) and a panic's message. Never a request's arguments, the secret, or a PostgreSQL URL |
 | `docker` | the container's own output (what the entry says before it becomes the worker) is bounded too: `--log-driver local --log-opt max-size=16m --log-opt max-file=2`, always the three together, since `--log-opt max-size` alone fails `docker run` where the Engine's default driver is journald |
 

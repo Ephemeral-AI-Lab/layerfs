@@ -26,6 +26,10 @@ pub const HOST_PROCESS: &str = "host_process";
 pub const CGROUP_V1: &str = "cgroup_v1";
 /// Why a Sandbox's `usage` is null: its group is not there (it ended).
 pub const NO_CGROUP: &str = "no_cgroup";
+/// Why some values of a Sandbox's `usage` are null: its group has no
+/// `memory.current` or no `pids.current`, because the group above it gives
+/// its children no memory or pids controller.
+pub const NO_CONTROLLER: &str = "no_controller";
 /// Why a Sandbox's `daemon` and `usage` are null: the side that runs it
 /// did not answer.
 pub const NOT_OBSERVED: &str = "not_observed";
@@ -122,9 +126,10 @@ pub fn usage(daemon: &DaemonRecord, root: &Path) -> (SdkValue, Option<&'static s
 /// memory_current, memory_peak, pids }` from `cpu.stat` (`usage_usec`),
 /// `memory.current`, `memory.peak` and `pids.current`, each null when its
 /// file is not there (a controller the group does not have, or
-/// `memory.peak` before Linux 5.19). Null with [`CGROUP_V1`] when `root`
-/// is not a v2 hierarchy, and with [`NO_CGROUP`] when the group is not
-/// there or `id` is no group's name.
+/// `memory.peak` before Linux 5.19), and [`NO_CONTROLLER`] as the reason
+/// when `memory.current` or `pids.current` is the one missing. Null with
+/// [`CGROUP_V1`] when `root` is not a v2 hierarchy, and with [`NO_CGROUP`]
+/// when the group is not there or `id` is no group's name.
 pub fn usage_in(root: &Path, id: &str) -> (SdkValue, Option<&'static str>) {
     if !root.join("cgroup.controllers").is_file() {
         return (SdkValue::Null, Some(CGROUP_V1));
@@ -144,17 +149,20 @@ pub fn usage_in(root: &Path, id: &str) -> (SdkValue, Option<&'static str>) {
             .find_map(|line| line.strip_prefix("usage_usec "))
             .map(str::to_owned)
     });
+    let (memory, pids) = (text("memory.current"), text("pids.current"));
+    let reason = (memory.is_none() || pids.is_none()).then_some(NO_CONTROLLER);
     let usage = SdkValue::map([
         ("cpu_usec", number(cpu)),
-        ("memory_current", number(text("memory.current"))),
+        ("memory_current", number(memory)),
         ("memory_peak", number(text("memory.peak"))),
-        ("pids", number(text("pids.current"))),
+        ("pids", number(pids)),
     ]);
-    (usage, None)
+    (usage, reason)
 }
 
 /// What a monitoring read shows of the process `daemon` names: `{ daemon,
-/// usage }`, with `usage_reason` when `usage` is null. `sandbox.get`
+/// usage }`, with `usage_reason` when `usage` or one of its values is
+/// null for a known cause. `sandbox.get`
 /// shows these three fields as they are.
 pub fn observed(daemon: &DaemonRecord) -> Vec<(String, SdkValue)> {
     let (usage, reason) = usage(daemon, Path::new(CGROUP_ROOT));

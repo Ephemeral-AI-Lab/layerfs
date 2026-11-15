@@ -86,8 +86,10 @@ pub fn run_root(root: &Path) -> PathBuf {
 }
 
 /// `log/`: `uncertain.jsonl` (never rotated) and the logs that rotate
-/// once to `<name>.1.jsonl`: `leases`, `init-failures`,
-/// `migration-failures`, `import-env` and, under a worker's root, `exec`.
+/// once to `<name>.1.jsonl`: `leases`, `migration-failures`, `import-env`
+/// and, on the side that keeps a Sandbox's command records, `exec`.
+/// `init-failures` has no writer in 2.0: it is only copied from a 1.1.0
+/// home.
 pub fn log_dir(home: &Path) -> PathBuf {
     home.join("log")
 }

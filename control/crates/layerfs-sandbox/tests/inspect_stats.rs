@@ -226,14 +226,15 @@ fn usage_is_a_namespaces_sandbox_s_cgroup_v2_files() {
         print(process::usage(&spaced, &root)),
         ("null".to_owned(), Some("no_cgroup"))
     );
-    // a group with none of the files: every value null, and no reason
+    // a group with none of the files: every value null, and the reason
+    // names the controllers it lacks
     let group = root.join("layerfs").join(&id);
     std::fs::create_dir_all(&group).unwrap();
     assert_eq!(
         print(process::usage(&spaced, &root)),
         (
             r#"{"cpu_usec":null,"memory_current":null,"memory_peak":null,"pids":null}"#.to_owned(),
-            None
+            Some("no_controller")
         )
     );
     // the files as the kernel writes them; `memory.peak` absent (before 5.19)
@@ -242,6 +243,16 @@ fn usage_is_a_namespaces_sandbox_s_cgroup_v2_files() {
         "usage_usec 1234567\nuser_usec 1000000\nsystem_usec 234567\n",
     )
     .unwrap();
+    // as on a machine whose `layerfs` group enables no controller for its
+    // children: the processor time is there, memory and processes are not
+    assert_eq!(
+        print(process::usage(&spaced, &root)),
+        (
+            r#"{"cpu_usec":1234567,"memory_current":null,"memory_peak":null,"pids":null}"#
+                .to_owned(),
+            Some("no_controller")
+        )
+    );
     std::fs::write(group.join("memory.current"), "52428800\n").unwrap();
     std::fs::write(group.join("pids.current"), "7\n").unwrap();
     assert_eq!(

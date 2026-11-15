@@ -3,7 +3,7 @@
 > **Status:** Proposal; target LayerFS 2.0.0; not a released contract.
 
 Part of the [2.0.0 manual](README.md). Source:
-`engine/crates/layerfs-api/src/home/` on branch `issue533-v2`.
+`control/crates/layerfs-home/src/home/`.
 
 The home is LayerFS's control center. Every record a host process needs is
 in it: machines, Stores, projects, Sandboxes and buckets. Only host

@@ -9,7 +9,7 @@ one file per call under its family in
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 61 calls in nine families. `layerfs help` lists them, and
+There are 79 calls in eleven families. `layerfs help` lists them, and
 `layerfs help <family> [<call>]` prints one family or one call.
 
 ## How a call is written
@@ -73,7 +73,7 @@ Sandbox names (H §7.6).
 | size | bytes as a number, or text with `K`, `M` or `G` (`512M`, `8G`) | a word |
 | function | a callback (Node, Python only) | — |
 
-## The 61 calls
+## The calls
 
 `[x]` is an optional positional. Every family's results are snake_case.
 
@@ -293,8 +293,9 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   - `overlay_bytes`: the size of the Workspace's overlay file, read from
     its folder entry (the file is not opened). It includes the size of
     the empty overlay and only grows until the Workspace is unmounted.
-    `null` when it could not be read; it is always `null` for a Sandbox
-    on a `lima` machine whose daemon this host reaches directly.
+    `null` when it could not be read. For a Sandbox on a `lima` machine
+    whose daemon this host reaches directly, the sizes are read by that
+    machine's worker, and are `null` when it does not answer.
   Both come from files, with no daemon call. A machine whose worker runs
   an earlier build answers Workspaces without these two fields.
   ```text
@@ -303,13 +304,18 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 - `get` also answers the Sandbox's daemon process and what its cgroup has
   used (#164), read with `overlay_bytes` on the side that runs the Sandbox,
   with no daemon call and no further round trip:
-  - `daemon`: `{pid, started_at}`, with `started_at` in ms since the
-    epoch while the process runs and `null` once it has ended; `null`
+  - `daemon`: `{pid, started_at}` of the process the Sandbox's record
+    names (the daemon of a `native` Sandbox; the supervisor a
+    `namespaces` Sandbox's daemon runs under), with `started_at` in ms
+    since the epoch, to about a second, while the process runs and
+    `null` once it has ended; `null`
     when its machine did not answer.
   - `usage`: `{cpu_usec, memory_current, memory_peak, pids}` of the
     Sandbox's own cgroup, the daemon and every command in it; a value the
-    kernel does not keep there is `null`. `usage` is `null`, with
-    `usage_reason`, for a `native` Sandbox, which is a plain process
+    kernel does not keep there is `null`, and when that is the memory
+    or the process count `usage_reason` is `no_controller` (so on the
+    machines of this build, where only `cpu_usec` is kept). `usage` is
+    `null`, with `usage_reason`, for a `native` Sandbox, which is a plain process
     (`host_process`), on a machine without cgroup v2 (`cgroup_v1`), when
     the cgroup is not there (`no_cgroup`) and when the machine did not
     answer (`not_observed`).
