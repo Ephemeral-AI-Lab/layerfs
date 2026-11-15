@@ -359,7 +359,7 @@ impl Sandbox {
     pub fn scratch_directory(&self) -> String {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::Windows(stub) => stub.directory.join("tmp").display().to_string(),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.tmp().display().to_string(),
             #[cfg(target_os = "linux")]
@@ -371,7 +371,14 @@ impl Sandbox {
     pub fn local_record(&self) -> Option<LocalRecord> {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::Windows(stub) => stub.directory.file_name().map(|name| LocalRecord {
+                name: name.to_string_lossy().into_owned(),
+                pid: 0,
+                start_time: 0,
+                boot: None,
+                port: 0,
+                labels: stub.labels.clone(),
+            }),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.local_record(),
             #[cfg(target_os = "linux")]
@@ -383,7 +390,7 @@ impl Sandbox {
     pub fn record(&self) -> Option<SandboxRecord> {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::Windows(_) => self.local_record().map(SandboxRecord::Local),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(_) => self.local_record().map(SandboxRecord::Local),
             #[cfg(target_os = "linux")]
