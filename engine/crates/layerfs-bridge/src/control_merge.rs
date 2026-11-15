@@ -13,6 +13,14 @@ use layerfs_history::{CommitId, CommitOutcome, MAXIMUM_MESSAGE_BYTES};
 
 /// Longest path or line carried.
 pub const TEXT_FIELD_LIMIT: usize = 4096;
+
+/// Encoded bytes `put_lines` spends on these lines: each line's clipped text
+/// and its two-byte length.
+fn lines_len(lines: &[String]) -> usize {
+    lines.iter().fold(0usize, |sum, line| {
+        sum.saturating_add(line.len().min(TEXT_FIELD_LIMIT) + 2)
+    })
+}
 /// Bytes a report keeps free for its own trailer.
 const RESERVE: usize = 1024;
 
@@ -220,7 +228,15 @@ pub(crate) fn put_report(out: &mut Writer, value: &ConflictReport) -> Result<(),
         put_text(out, &clip(&conflict.path))?;
         let kind = KINDS.iter().position(|kind| *kind == conflict.kind);
         out.byte(kind.map_or(0, |index| index as u8 + 1))?;
-        let hunks = conflict.hunks.iter().take_while(|_| fits(out, 64)).count();
+        let hunks = conflict
+            .hunks
+            .iter()
+            .scan(0usize, |size, hunk| {
+                *size += 8 + lines_len(&hunk.ours) + lines_len(&hunk.theirs);
+                Some(*size)
+            })
+            .take_while(|size| fits(out, *size))
+            .count();
         truncated |= hunks < conflict.hunks.len();
         out.put(&(hunks as u16).to_be_bytes())?;
         for hunk in &conflict.hunks[..hunks] {
