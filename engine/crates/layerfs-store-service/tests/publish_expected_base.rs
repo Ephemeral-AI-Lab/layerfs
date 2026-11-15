@@ -4,7 +4,8 @@
 //! base and the head it read. A refused publish writes nothing, leaves main
 //! and the Branch alone, and `force` keeps the old overwrite-only behavior. A
 //! merged Branch still fast-forwards, and a Branch may publish again over its
-//! own Layer.
+//! own Layer. A Commit already published stays `UpToDate` and a tree main
+//! already holds stays `NoChanges` after main moved.
 #[path = "support/installed_store.rs"]
 #[allow(dead_code)]
 mod installed;
@@ -69,10 +70,7 @@ fn two_branches(label: &str) -> Fixture {
 #[test]
 fn a_stale_base_publish_is_refused_and_main_is_unchanged() {
     let fixture = two_branches("publish-stale-base");
-    let a = fixture.call(
-        "branch.publish",
-        vec![("branch", SdkValue::text("feat-a"))],
-    );
+    let a = fixture.call("branch.publish", vec![("branch", SdkValue::text("feat-a"))]);
     assert_eq!(a.get_text("kind"), Some("Added"));
     let a_layer = published_field(&a, "id");
     let main_before = main_head(&fixture);
@@ -81,14 +79,13 @@ fn a_stale_base_publish_is_refused_and_main_is_unchanged() {
     let b_head = branch_field(&fixture, "feat-b", "head").expect("feat-b's head");
 
     let refusal = fixture
-        .try_call(
-            "branch.publish",
-            vec![("branch", SdkValue::text("feat-b"))],
-        )
+        .try_call("branch.publish", vec![("branch", SdkValue::text("feat-b"))])
         .expect_err("a Branch forked before main moved is refused");
     assert_eq!(refusal.code, "HeadMoved");
     assert!(
-        refusal.message.contains("merge main into feat-b"),
+        refusal
+            .message
+            .contains("merge feat-b with main into a new Branch"),
         "the refusal says how to recover: {}",
         refusal.message
     );
@@ -101,7 +98,10 @@ fn a_stale_base_publish_is_refused_and_main_is_unchanged() {
         refusal.detail.get_text("expectedBase"),
         Some(b_base.as_str())
     );
-    assert_eq!(refusal.detail.get_text("actualBase"), Some(a_layer.as_str()));
+    assert_eq!(
+        refusal.detail.get_text("actualBase"),
+        Some(a_layer.as_str())
+    );
 
     // main did not move, and never received B's tree.
     assert_eq!(main_head(&fixture), main_before);
@@ -123,10 +123,7 @@ fn a_stale_base_publish_is_refused_and_main_is_unchanged() {
 #[test]
 fn matching_expectations_publish_and_wrong_ones_are_refused() {
     let fixture = two_branches("publish-expected-base");
-    let a = fixture.call(
-        "branch.publish",
-        vec![("branch", SdkValue::text("feat-a"))],
-    );
+    let a = fixture.call("branch.publish", vec![("branch", SdkValue::text("feat-a"))]);
     let a_layer = published_field(&a, "id");
     let b_head = branch_field(&fixture, "feat-b", "head").expect("feat-b's head");
 
@@ -219,10 +216,7 @@ fn matching_expectations_publish_and_wrong_ones_are_refused() {
 #[test]
 fn force_keeps_the_overwrite_behavior() {
     let fixture = two_branches("publish-force");
-    let a = fixture.call(
-        "branch.publish",
-        vec![("branch", SdkValue::text("feat-a"))],
-    );
+    let a = fixture.call("branch.publish", vec![("branch", SdkValue::text("feat-a"))]);
     let a_layer = published_field(&a, "id");
 
     let forced = fixture.call(
@@ -248,10 +242,7 @@ fn force_keeps_the_overwrite_behavior() {
 
     // A Commit that is already published is UpToDate before the stale check,
     // as it was before the fix.
-    let again = fixture.call(
-        "branch.publish",
-        vec![("branch", SdkValue::text("feat-b"))],
-    );
+    let again = fixture.call("branch.publish", vec![("branch", SdkValue::text("feat-b"))]);
     assert_eq!(again.get_text("kind"), Some("UpToDate"));
     fixture.cleanup();
 }
@@ -259,10 +250,7 @@ fn force_keeps_the_overwrite_behavior() {
 #[test]
 fn publishing_a_merged_branch_is_a_fast_forward() {
     let fixture = two_branches("publish-merged");
-    let a = fixture.call(
-        "branch.publish",
-        vec![("branch", SdkValue::text("feat-a"))],
-    );
+    let a = fixture.call("branch.publish", vec![("branch", SdkValue::text("feat-a"))]);
     let a_layer = published_field(&a, "id");
     let merged = fixture.call(
         "branch.merge",
@@ -303,24 +291,104 @@ fn a_branch_publishes_again_over_its_own_layer() {
     });
     fixture.fork("work");
     fixture.apply("work", vec![write("/work.txt", "one\n")]);
-    let first = fixture.call(
-        "branch.publish",
-        vec![("branch", SdkValue::text("work"))],
-    );
+    let first = fixture.call("branch.publish", vec![("branch", SdkValue::text("work"))]);
     assert_eq!(first.get_text("kind"), Some("Added"));
     assert_eq!(first.get_int("overwroteCount"), Some(0));
     let first_layer = published_field(&first, "id");
 
     fixture.apply("work", vec![write("/work.txt", "two\n")]);
-    let second = fixture.call(
-        "branch.publish",
-        vec![("branch", SdkValue::text("work"))],
-    );
+    let second = fixture.call("branch.publish", vec![("branch", SdkValue::text("work"))]);
     assert_eq!(second.get_text("kind"), Some("Added"));
     assert_eq!(second.get_int("overwroteCount"), Some(0));
     assert_eq!(published_field(&second, "parent"), first_layer);
     let names = main_paths(&fixture);
     assert!(names.contains(&"/work.txt".to_owned()), "{names:?}");
+    fixture.cleanup();
+}
+
+#[test]
+fn a_repeated_publish_after_main_moved_is_up_to_date() {
+    // A lost reply leaves the publication in place; asking again after main
+    // moved on reports that Layer, not a stale base.
+    let fixture = two_branches("publish-repeat-after-move");
+    let a = fixture.call("branch.publish", vec![("branch", SdkValue::text("feat-a"))]);
+    let a_layer = published_field(&a, "id");
+    let a_base = a.get_text("basedOn").expect("A's base").to_owned();
+    fixture.fork("feat-c");
+    fixture.apply("feat-c", vec![write("/c.txt", "from C\n")]);
+    let c = fixture.call("branch.publish", vec![("branch", SdkValue::text("feat-c"))]);
+    let c_layer = published_field(&c, "id");
+
+    let again = fixture.call("branch.publish", vec![("branch", SdkValue::text("feat-a"))]);
+    assert_eq!(again.get_text("kind"), Some("UpToDate"));
+    assert_eq!(again.get_text("layer"), Some(a_layer.as_str()));
+    // The base the caller read before its first attempt is stale now; the
+    // answer is still the Layer that attempt published.
+    let pinned = fixture.call(
+        "branch.publish",
+        vec![
+            ("branch", SdkValue::text("feat-a")),
+            ("expectedBase", SdkValue::text(a_base.as_str())),
+        ],
+    );
+    assert_eq!(pinned.get_text("kind"), Some("UpToDate"));
+    assert_eq!(pinned.get_text("layer"), Some(a_layer.as_str()));
+    assert_eq!(main_head(&fixture), c_layer, "nothing was published");
+    fixture.cleanup();
+}
+
+#[test]
+fn a_tree_main_already_holds_is_no_changes() {
+    // A second Branch at the same Commit as the first: once the first is
+    // published, the second drops nothing, so it answers NoChanges instead of
+    // a stale-base refusal.
+    let fixture = Fixture::new("publish-same-tree", |source| {
+        std::fs::write(source.join("seed.txt"), "seed\n").unwrap();
+        1
+    });
+    fixture.fork("same-a");
+    fixture.apply("same-a", vec![write("/same.txt", "same\n")]);
+    let a_head = branch_field(&fixture, "same-a", "head").expect("same-a's head");
+    fixture.call(
+        "branch.fork",
+        vec![
+            ("name", SdkValue::text("same-b")),
+            ("from", SdkValue::text(a_head.as_str())),
+        ],
+    );
+    let a = fixture.call("branch.publish", vec![("branch", SdkValue::text("same-a"))]);
+    let a_layer = published_field(&a, "id");
+    let b = fixture.call("branch.publish", vec![("branch", SdkValue::text("same-b"))]);
+    assert_eq!(b.get_text("kind"), Some("NoChanges"), "{b:?}");
+    assert_eq!(b.get_text("headLayer"), Some(a_layer.as_str()));
+    assert_eq!(main_head(&fixture), a_layer);
+    fixture.cleanup();
+}
+
+#[test]
+fn expected_head_is_the_branch_head_even_with_a_named_commit() {
+    let fixture = two_branches("publish-expected-head-named");
+    let b_head = branch_field(&fixture, "feat-b", "head").expect("feat-b's head");
+    fixture.apply("feat-b", vec![write("/b2.txt", "B again\n")]);
+    let b_now = branch_field(&fixture, "feat-b", "head").expect("feat-b's new head");
+    // The caller names the Commit it read and expects it to be the head; the
+    // refusal reports the Branch's real head, not the named Commit.
+    let refusal = fixture
+        .try_call(
+            "branch.publish",
+            vec![
+                ("branch", SdkValue::text("feat-b")),
+                ("commit", SdkValue::text(b_head.as_str())),
+                ("expectedHead", SdkValue::text(b_head.as_str())),
+            ],
+        )
+        .expect_err("the Branch head moved past the expected Commit");
+    assert_eq!(refusal.code, "HeadMoved");
+    assert_eq!(
+        refusal.detail.get_text("expectedHead"),
+        Some(b_head.as_str())
+    );
+    assert_eq!(refusal.detail.get_text("actualHead"), Some(b_now.as_str()));
     fixture.cleanup();
 }
 

@@ -138,14 +138,18 @@ folder is in place. Events arrive at most every 200 ms.
 | `get` | `project`, `branch` | — | one Branch and its head Commit |
 | `fork` | `project`, `name`, `from_branch`, `[from_commit]` | — | a new Branch from another Branch's head or Commit |
 | `merge` | `project`, `name`, `a`, `b` | `message`, `units` (JSON) | merges two Branches into a new one |
-| `publish` | `project`, `branch`, `[commit]` | — | a Branch's head or Commit as `main`'s next Layer |
+| `publish` | `project`, `branch`, `[commit]` | `expected_base`, `expected_head`, `force` | a Branch's head or Commit as `main`'s next Layer, refusing a stale base |
 | `diff` | `project`, `from_branch`, `to_branch` | `paths_only`, `page_size`, `page_pos`, `cursor` | files that differ between two Branches' heads |
 
 Run: `fork` answers `{kind: "Forked", branch, base, head}`; `publish`
 answers `{kind: "Added", source, published_layer, based_on, overwrote_count,
 overwrote, overwrote_has_more}`; `merge` answers `{kind: "Merged",
 fast_forward, branch, head, root, sources, merge_base, conflicts, lww,
-units, …}`.
+units, …}`. `publish` is refused `HeadMoved` when `main` gained a Layer since
+the Branch forked (merge with `main` into a new Branch and publish that), or
+when `main` or the Branch head is not the `expected_base` or `expected_head`
+given; `force` overwrites instead. A Commit already published answers
+`UpToDate`, and a tree `main` already holds answers `NoChanges`.
 
 ### `commit` (3)
 
