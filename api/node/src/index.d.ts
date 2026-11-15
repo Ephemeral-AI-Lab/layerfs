@@ -131,6 +131,13 @@ export interface BranchMergeOptions extends CallOptions {
   units?: Value;
 }
 
+/** Options of `branch.publish`; an unknown option is refused. */
+export interface BranchPublishOptions extends CallOptions {
+  expected_base?: string;
+  expected_head?: string;
+  force?: boolean;
+}
+
 /** Options of `branch.diff`; an unknown option is refused. */
 export interface BranchDiffOptions extends CallOptions {
   paths_only?: boolean;
@@ -320,6 +327,11 @@ export interface MachineStartOptions extends CallOptions {
   on_progress?: ProgressHandler;
 }
 
+/** Options of `machine.stop`; an unknown option is refused. */
+export interface MachineStopOptions extends CallOptions {
+  force?: boolean;
+}
+
 /** Options of `machine.create`; an unknown option is refused. */
 export interface MachineCreateOptions extends CallOptions {
   cpus?: WholeNumber;
@@ -423,9 +435,9 @@ export interface BranchFamily {
   fork(project: string, name: string, from_branch: string, from_commit?: string | null, options?: CallOptions): Promise<Result>;
   /** merge two Branches into a new one */
   merge(project: string, name: string, a: string, b: string, options?: BranchMergeOptions): Promise<Result>;
-  /** a Branch's head or Commit as main's next Layer */
-  publish(project: string, branch: string, options: CallOptions): Promise<Result>;
-  publish(project: string, branch: string, commit?: string | null, options?: CallOptions): Promise<Result>;
+  /** a Branch's head or Commit as main's next Layer, refusing a stale base */
+  publish(project: string, branch: string, options: BranchPublishOptions): Promise<Result>;
+  publish(project: string, branch: string, commit?: string | null, options?: BranchPublishOptions): Promise<Result>;
   /** files that differ between two Branches' heads */
   diff(project: string, from_branch: string, to_branch: string, options?: BranchDiffOptions): Promise<Result>;
 }
@@ -525,7 +537,7 @@ export interface MachineFamily {
   /** start a stopped machine and its worker; a running one answers at once */
   start(name: string, options?: MachineStartOptions): Promise<Result>;
   /** stop a machine's worker and VM; its disks stay */
-  stop(name: string, options?: CallOptions): Promise<Result>;
+  stop(name: string, options?: MachineStopOptions): Promise<Result>;
   /** create an enabled VM machine (apple-container, lima) */
   create(name: string, platform: string, options?: MachineCreateOptions): Promise<Result>;
   /** delete a VM machine and its disk; one of a removed platform is only forgotten */
