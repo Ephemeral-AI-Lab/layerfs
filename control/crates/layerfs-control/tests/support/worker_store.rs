@@ -19,9 +19,11 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 /// The worker's secret in these tests.
 pub const SECRET: &str = "k";
 
-/// A new empty directory of this test process.
+/// A new empty directory of this test process, under the build's own
+/// temporary folder: a Store made in it needs a filesystem the kernel
+/// guard admits, which a container's `/tmp` (overlayfs) is not.
 pub fn scratch(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
         "layerfs-wk-{tag}-{}-{}",
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)
@@ -156,10 +158,14 @@ pub fn sandbox_call(endpoint: &Endpoint) -> Result<SdkValue, SdkRefusal> {
     worker::call(endpoint, "sandbox.host", sandbox_args(), &mut |_| {})
 }
 
-/// The arguments of [`sandbox_call`].
+/// The arguments of [`sandbox_call`]: a Workspace status, which settles
+/// the records as every operation does but `sandbox.get`'s two reads
+/// (layerfs-project#181), with the Sandbox's name and the Workspace's path
+/// where a caller sends them (`more`), so the worker's Sandbox table is
+/// asked for the Sandbox and answers `NoSuchSandbox`.
 pub fn sandbox_args() -> SdkValue {
     SdkValue::map([
-        ("op", t("sandbox.list_workspaces")),
+        ("op", t("backend.daemon.workspace.status")),
         ("store", t("shop")),
         ("project", t("api")),
         (
@@ -167,7 +173,10 @@ pub fn sandbox_args() -> SdkValue {
             SdkValue::map([("name", t("shop")), ("kind", t("sqlite"))]),
         ),
         ("project_record", SdkValue::map([("name", t("api"))])),
-        ("sandbox", t("one")),
+        (
+            "more",
+            SdkValue::map([("sandbox", t("one")), ("path", t("/w"))]),
+        ),
     ])
 }
 

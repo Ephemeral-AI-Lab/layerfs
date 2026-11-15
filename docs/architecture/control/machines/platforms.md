@@ -55,16 +55,26 @@ runs `namespaces` Sandboxes inside it, as a VM's worker does.
    docker run -d --pull never --name <vm> --init --privileged
      --cgroupns private --label layerfs.role=machine-worker
      --label layerfs.bundle=<hash>
+     --log-driver local --log-opt max-size=16m --log-opt max-file=2
      macOS: -p 127.0.0.1::7070            LISTEN 0.0.0.0:7070
      Linux: --network host --add-host host.docker.internal:host-gateway
                                           LISTEN 127.0.0.1:<free port>
      -v <vm>-data:/layerfs/data -v <bundle>:/layerfs/bundle:ro
-     --tmpfs /layerfs/state:mode=0700 --entrypoint sh <image> -c ENTRY
-   ENTRY: mkdir /layerfs/data/{store,sandbox} 0755; wait <= 60 s for
-          the secret; exec /layerfs/bundle/layerfs worker
+     --tmpfs /layerfs/state:mode=0700
+     -e LAYERFS_WORKER_LOG=/layerfs/data/log/worker.log
+     --entrypoint sh <image> -c ENTRY
+   ENTRY: mkdir /layerfs/data/{store,sandbox} 0755; the log's folder and
+          its one rotation; echo $$ > /layerfs/state/worker.pid; wait
+          <= 60 s for the secret;
+          exec /layerfs/bundle/layerfs worker >> "$LAYERFS_WORKER_LOG" 2>&1
    macOS: docker port <vm> 7070/tcp -> host port
    docker exec: write /layerfs/state/secret (0600, stdin); ready <= 60 s
+   a worker that ended (container exited): docker cp its worker.log out
 ```
+
+The worker's output goes to `/layerfs/data/log/worker.log` on the data
+volume, not to `docker logs`
+([the worker's log](workers-and-reach.md#the-workers-log)).
 
 | Call | Answer |
 | --- | --- |

@@ -10,7 +10,7 @@ use super::network::published_port;
 use super::unix::{guest, inspect, run};
 use crate::error::{Code, MachineError};
 use crate::setup::{tool, worker};
-use crate::spec::{Bundle, Running, Spec, DATA, STATE, WORKER_PORT};
+use crate::spec::{Bundle, Running, Spec, DATA, STATE, WORKER_LOG, WORKER_PORT};
 use std::path::Path;
 use std::time::Duration;
 
@@ -21,14 +21,50 @@ const LOAD: Duration = Duration::from_secs(300);
 const ROLE: &str = "layerfs.role=machine-worker";
 /// The container's main process makes the data volume's folders as a VM
 /// guest's preparation does (`setup::worker`, without its user-namespace
-/// limit), waits (bounded) for its secret, then becomes the worker.
-const ENTRY: &str = r#"set -e
+/// limit) and the worker's log as every launcher does
+/// ([`worker::log_start`]), writes its pid (the worker's, once it becomes
+/// it) where the readiness look reads it, waits (bounded) for its secret,
+/// then becomes the worker, whose output is appended to that log: on the
+/// data volume, it stays when the next start replaces the container.
+fn entry() -> String {
+    format!(
+        r#"set -e
 umask 022
 mkdir -p /layerfs/data/store /layerfs/data/sandbox
 chmod 755 /layerfs/data /layerfs/data/store /layerfs/data/sandbox
+{}
+echo $$ > /layerfs/state/worker.pid
 i=0
 while [ ! -s /layerfs/state/secret ]; do i=$((i+1)); [ $i -le 600 ] || exit 1; sleep 0.1; done
-exec /layerfs/bundle/layerfs worker"#;
+exec /layerfs/bundle/layerfs worker >> "$LAYERFS_WORKER_LOG" 2>&1"#,
+        worker::log_start()
+    )
+}
+
+/// The end of the worker's log when its container no longer runs: a worker
+/// that ends stops its container, which `docker exec` cannot enter, so the
+/// log is copied out of the stopped container (`docker cp` reads its data
+/// volume) into the machine's folder, read and removed. `None` while the
+/// container runs.
+fn ended(spec: &Spec) -> Option<String> {
+    let (state, _) = inspect(spec).ok()??;
+    if !matches!(state.as_str(), "exited" | "dead") {
+        return None;
+    }
+    let copy = spec.work_dir.join("worker.log.ended");
+    let _ = std::fs::create_dir_all(&spec.work_dir);
+    let from = format!("{}:{WORKER_LOG}", spec.vm_name);
+    let what = "copying the ended worker's log";
+    let copied = copy
+        .to_str()
+        .is_some_and(|to| run(spec, &["cp", &from, to], what).is_ok_and(|out| out.ok()));
+    let said = match copied {
+        true => tool::tail(&copy, 8),
+        false => format!("its container is {state} and its log could not be copied out"),
+    };
+    let _ = std::fs::remove_file(&copy);
+    Some(said)
+}
 
 /// A fresh worker container: an earlier one of ours is replaced (its Store
 /// volume stays); a container of that name that is not a worker is refused.
@@ -60,6 +96,8 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
     let volume = format!("{}-data:{DATA}", spec.vm_name);
     let bundle_label = format!("layerfs.bundle={}", bundle.hash);
     let secret_file = format!("LAYERFS_WORKER_SECRET={STATE}/secret");
+    let log = format!("LAYERFS_WORKER_LOG={WORKER_LOG}");
+    let entry = entry();
     let tmpfs = format!("{STATE}:mode=0700");
     // On a Linux Engine the worker shares the host's network and listens on
     // a host loopback port. Docker Desktop's worker publishes its port.
@@ -75,6 +113,10 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
         "run", "-d", "--pull", "never", "--name", &spec.vm_name, "--init",
         "--privileged", "--cgroupns", "private",
         "--label", ROLE, "--label", &bundle_label,
+        // what the entry says before it becomes the worker is bounded too.
+        // Always the three together: `--log-opt max-size` alone fails
+        // `docker run` where the Engine's default driver is journald
+        "--log-driver", "local", "--log-opt", "max-size=16m", "--log-opt", "max-file=2",
     ];
     if host_network {
         // a Linux Engine has no `host.docker.internal` of its own: a Store
@@ -90,7 +132,8 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
     #[rustfmt::skip]
     args.extend([
         "-v", &volume, "-v", &bundle_mount, "--tmpfs", &tmpfs,
-        "-e", &listen, "-e", &secret_file, "--entrypoint", "sh", image, "-c", ENTRY,
+        "-e", &listen, "-e", &secret_file, "-e", &log,
+        "--entrypoint", "sh", image, "-c", &entry,
     ]);
     run(spec, &args, "starting the worker container")?.answer("starting the worker container")?;
     let port = if host_network {
@@ -115,7 +158,7 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
     let address = worker::loopback(port);
     // a host-network worker listens on the host port it was given
     let guest_port = if host_network { port } else { WORKER_PORT };
-    worker::ready(spec, &guest, guest_port, address)?;
+    worker::ready(spec, &guest, guest_port, address, &|| ended(spec))?;
     Ok(Running {
         endpoint: crate::spec::Endpoint { address, secret },
         lasting: spec.state,

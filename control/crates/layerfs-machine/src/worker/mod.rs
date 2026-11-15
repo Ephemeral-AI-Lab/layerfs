@@ -22,7 +22,8 @@ mod frame;
 mod hello;
 
 pub use client::{
-    call, hello, ping, request, send, Endpoint, EventSink, Unreached, HELLO_WAIT, PING_WAIT,
+    call, hello, ping, request, send, send_within, Budget, Endpoint, EventSink, Unreached,
+    HELLO_WAIT, PING_WAIT,
 };
 pub use diagnostic::{diagnostic_connect, DiagnosticOperation, DiagnosticWorker};
 pub use frame::{

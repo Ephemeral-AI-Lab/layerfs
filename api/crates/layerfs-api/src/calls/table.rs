@@ -131,6 +131,9 @@ use Kind::{Bool, Function, Int, Text};
 
 /// The paging options of a list call.
 pub const PAGE: [Arg; 2] = [opt("page_size", Int), opt("page_pos", Int)];
+/// The window options of a log read by cursor (`logs.machine`,
+/// `logs.sandbox`).
+pub const WINDOW: [Arg; 3] = [opt("cursor", Text), opt("before", Text), opt("limit", Int)];
 /// A Commit message.
 pub const MESSAGE: Arg = opt("message", Text);
 /// The progress function of a long call.

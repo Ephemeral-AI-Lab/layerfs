@@ -34,17 +34,22 @@ pub fn namespaces(listed: &SdkValue) -> Vec<i64> {
 /// read.
 pub fn read(directory: &Path, namespaces: &[i64]) -> Option<SdkValue> {
     let daemon = crate::files::started(directory).ok()??;
-    let run = Path::new(daemon.directory()?);
+    Some(sizes(Path::new(daemon.directory()?), namespaces))
+}
+
+/// The read of run folder `run` itself: `{ overlay_sizes: [{ namespace,
+/// bytes }] }`, one entry for each of `namespaces`, its `bytes` null when
+/// that Workspace has no overlay file there. Also what the inspect kind
+/// `overlay_sizes` answers for a Sandbox whose records are in the home
+/// ([`crate::inspect::overlay_sizes`]).
+pub(crate) fn sizes(run: &Path, namespaces: &[i64]) -> SdkValue {
     let sizes = namespaces.iter().map(|namespace| {
         SdkValue::map([
             ("namespace", SdkValue::Int(*namespace)),
             ("bytes", overlay_bytes(run, *namespace)),
         ])
     });
-    Some(SdkValue::map([(
-        "overlay_sizes",
-        SdkValue::List(sizes.collect()),
-    )]))
+    SdkValue::map([("overlay_sizes", SdkValue::List(sizes.collect()))])
 }
 
 /// The size of `<run folder>/overlay/<namespace>.sqlite`, from its `lstat`

@@ -158,16 +158,17 @@ export function render(view) {
         ? "the MCP tool's schema or description differs from the table"
         : bucket === null
           ? "no MCP profile bucket"
-          : bucket === "none"
-            ? (listed.work || listed.admin ? "an MCP profile lists a call that is no tool" : null)
-          : bucket === "work" && !(listed.work && listed.admin)
-            ? "the MCP work profile does not list it"
-            : bucket === "admin" && (listed.work || !listed.admin)
-              ? (listed.work ? "the MCP work profile lists an admin call" : "the MCP admin profile does not list it")
-              : null;
+          : bucket === "ui" || bucket === "none"
+            ? (listed.work || listed.admin ? (bucket === "ui" ? "an MCP profile lists a UI-only call" : "an MCP profile lists a call that is no tool") : null)
+            : bucket === "work" && !(listed.work && listed.admin)
+              ? "the MCP work profile does not list it"
+              : bucket === "admin" && (listed.work || !listed.admin)
+                ? (listed.work ? "the MCP work profile lists an admin call" : "the MCP admin profile does not list it")
+                : null;
     if (mcpProblem !== null) problems.push(`${name}: ${mcpProblem}`);
-    else if (bucket !== "none") counts.mcp += 1;
-    const mcp = mcpProblem !== null ? "NO" : bucket === "work" ? "yes" : bucket === "none" ? "no (no tool)" : "admin";
+    else if (bucket !== "ui" && bucket !== "none") counts.mcp += 1;
+    // a UI-only call (layerfs-project#178 D2) and the doctor's repair call are in no profile by design
+    const mcp = mcpProblem !== null ? "NO" : bucket === "work" ? "yes" : bucket === "ui" ? "no (UI only)" : bucket === "none" ? "no (no tool)" : "admin";
     const notes = [
       spec.args.some(piped) ? "stdin/--from" : "",
       spec.options.some((o) => o.name === "on_progress") ? "--progress" : "",
@@ -177,10 +178,11 @@ export function render(view) {
     return `| \`${name}\` | ${shape(spec.args) || "-"} | ${options || "-"} | ${node} | ${py} | ${coroutine} | ${cli}${cli === "yes" && notes.length ? ` (${notes.join(", ")})` : ""} | ${mcp} |`;
   });
   const families = [...new Set(table.map((s) => s.family))];
+  const ui = table.filter((s) => bucketOf(s) === "ui").length;
   const lines = [
     BEGIN,
     "",
-    `${table.length} calls in ${families.length} families, counted from the Node table. Calls present: Node ${counts.node}, Python ${counts.python}, Python \`aio\` ${counts.aio}, CLI ${counts.cli}, MCP ${counts.mcp} (${work.size} in \`work\`, ${admin.size - work.size} admin only).`,
+    `${table.length} calls in ${families.length} families, counted from the Node table. Calls present: Node ${counts.node}, Python ${counts.python}, Python \`aio\` ${counts.aio}, CLI ${counts.cli}, MCP ${counts.mcp} (${work.size} in \`work\`, ${admin.size - work.size} admin only; ${ui} UI only, in no profile).`,
     "",
     `Argument names that are Python keywords: ${view.python.keywords.length === 0 ? "none" : view.python.keywords.join(", ")}.`,
     "",

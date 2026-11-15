@@ -28,6 +28,13 @@ pub enum OpFault {
     },
 }
 
+/// The operation name [`Faults::on`] takes for a fault an `inspect` request
+/// meets on its helper thread, under its permit (layerfs-project#178): a
+/// `Hang` there is a stuck read, a `Panic` a read that panicked. A fault
+/// under the name `inspect` is met before admission, on the connection's
+/// own thread, as every operation's is.
+pub const INSPECT_HELPER: &str = "inspect.helper";
+
 /// One worker's switches and what a test reads back from it.
 #[derive(Debug)]
 pub struct Faults {
@@ -147,6 +154,12 @@ impl Faults {
     pub(super) fn serving(self: &Arc<Self>) -> Serving {
         self.serving.fetch_add(1, Ordering::SeqCst);
         Serving(self.clone())
+    }
+
+    /// What an inspect request meets on its helper thread
+    /// ([`INSPECT_HELPER`]); it sends no events.
+    pub(super) fn in_helper(&self) {
+        self.before(INSPECT_HELPER, &mut |_| Ok(()));
     }
 
     /// What a request of `op` meets before it runs; its events go to

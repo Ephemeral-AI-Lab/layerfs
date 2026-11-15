@@ -68,6 +68,8 @@ SLOW = {
     ("layerfs-store-service", "sdk_list_entries"): 7.6,
     ("layerfs-store-service", "history_diff_oracle"): 6.0,
     ("layerfs-store-service", "sdk_text_scan"): 7.0,
+    # Inspect admission waits out the 6 s hard deadline (layerfs-project#178), 2026-11-16.
+    ("layerfs-sandbox", "inspect_admission"): 11.58,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run
@@ -100,6 +102,7 @@ HEAVY = {
 FEATURED = {
     ("layerfs-control", "worker_fault"): ("worker-fault", 4.87),
     ("layerfs-control", "worker_fault_store"): ("worker-fault", 3.26),
+    ("layerfs-control", "worker_fault_inspect"): ("worker-fault", 19.16),
 }
 
 # SDK timings are recorded above without adding the owner-excluded API to CI.

@@ -106,7 +106,8 @@ not prove descendants ended.
    overlay/overlay.sqlite            in a 0700 dir (daemon's template)
    overlay/upper/  work/       0700  namespaces only: root's writable layer
    workspaces/                       Workspace mounts
-   daemon.log                  0600  daemon stdout + stderr
+   daemon.log                  0600  daemon stdout + stderr; new with the
+                                     directory, never rotated (below)
    tmp/                        1777  commands' scratch and HOME
    groups/                     0700  native: one empty file per group
    bin/layerfs-daemon, layerfs-sandbox-helper   namespaces only, 0755
@@ -126,6 +127,7 @@ not prove descendants ended.
 | --- | --- | --- |
 | Root | Absolute, this user's, not group or other writable, `o+x`. `Local::new` (namespaces) also needs every ancestor `o+x`, since commands run as another identity; `Local::native` does not (a macOS home is 0750). | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs) |
 | Process identity | `LocalProcess { pid, start, boot }`: all three must match to count as alive; it lives in the bridge's `process` module. | [`process/identity.rs`](../../../../engine/crates/layerfs-bridge/src/process/identity.rs) |
+| `daemon.log` | Made new (`O_EXCL`) with the Sandbox's directory by each start, which refuses a directory that exists, and removed with it at close: a daemon never opens a log an earlier one wrote, so there is no `daemon.1.log`. Nothing rotates it while the daemon runs (a rename would not move the daemon's descriptor, and its launcher waits for the listener line from the file's start); it grows until the Sandbox closes. With tracing off the daemon writes one line for each control connection that ends without `EndSession` (a caller that closes it) and for each reclaimed slot or expired request, none for a mount, exec or Commit itself. Rotating it while the daemon runs is not built in 2.0 (layerfs-project#180, live writers). | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs), [`backend/namespaces/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/create.rs) |
 | Search path | Linux: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`. macOS: this process's `PATH`, else that plus `/opt/homebrew/bin`. | [`local/search.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/search.rs) |
 | OS facts | `local/os/linux`: `mountinfo`, lazy `MNT_DETACH`, the seccomp filter. `local/os/macos`: the `mount` table, `umount -f`. `seccomp.rs` is the crate's only `unsafe`. | [`local/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/mod.rs), [`lib.rs`](../../../../control/crates/layerfs-sandbox-backend/src/lib.rs) |
 

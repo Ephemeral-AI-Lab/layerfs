@@ -306,14 +306,29 @@ pub fn host(home: &Path, record: &SandboxRecord, target: &Target, message: Messa
 /// `sandbox.get`'s Workspace list of forwarded Sandbox `record`: a daemon
 /// that cannot be reached is [`Unreached`], which the get reports as down.
 /// The commands `running` in each Workspace come from this home's exec
-/// records. Each `overlay_bytes` is null: the run folder is in the
-/// Sandbox's machine, and a get asks that machine's worker nothing. An
-/// answer of that side ([`crate::run_folder::read`], run there) is put on
-/// this list with [`crate::run_folder::merged`].
+/// records. Each `overlay_bytes` comes from the Sandbox's machine, where
+/// its run folder is: one bounded inspect request to that machine's worker
+/// ([`crate::inspect::overlay_sizes`], no lease, no daemon), put on the
+/// list with [`crate::run_folder::merged`]. A worker that refuses or does
+/// not answer leaves them null; the list is answered either way.
 pub fn list(home: &Path, record: &SandboxRecord) -> std::result::Result<Outcome, Unreached> {
     match served(home, record, Call::ListWorkspaces { path: None }) {
         Err(refusal) if refusal.code == "Unavailable" => Err(Unreached(refusal)),
-        other => Ok(other),
+        Err(refusal) => Ok(Err(refusal)),
+        Ok(listed) => {
+            let namespaces = crate::run_folder::namespaces(&listed);
+            let sizes = match namespaces.is_empty() {
+                true => None,
+                false => crate::inspect::overlay_sizes(
+                    home,
+                    record.machine(),
+                    record.name(),
+                    &namespaces,
+                )
+                .ok(),
+            };
+            Ok(Ok(crate::run_folder::merged(listed, sizes.as_ref())))
+        }
     }
 }
 

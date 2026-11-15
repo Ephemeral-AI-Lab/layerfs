@@ -47,6 +47,8 @@ pub mod image_load;
 pub mod image_tar;
 #[doc(hidden)]
 pub mod images;
+/// Inspection: logs and sizes read on one route for every machine kind.
+pub mod inspect;
 #[doc(hidden)]
 pub mod launch;
 #[doc(hidden)]

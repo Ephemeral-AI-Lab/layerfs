@@ -32,7 +32,7 @@ request carries what its operation needs. Which calls take a worker is the
             0600 via stdin; end an earlier worker; start detached as root:
             LAYERFS_WORKER_LISTEN=<bind>:7070
             LAYERFS_WORKER_SECRET=/layerfs/state/secret
-            >> /layerfs/state/worker.log
+            >> /layerfs/data/log/worker.log   (rotated first, see below)
  4 ready    guest /proc/net/tcp listens on the port AND host 127.0.0.1:<port>
             accepts; every 200 ms, at most 60 s
  5 the caller writes worker.json {address, secret, started} and record.json
@@ -42,11 +42,38 @@ request carries what its operation needs. Which calls take a worker is the
 | --- | --- | --- |
 | 2 | the guest keeps user namespaces: `Unsupported` | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
 | 2 | an unchanged Sandbox image is never recopied; an interrupted copy is never sealed | [`setup/artifacts.rs`](../../../../control/crates/layerfs-platform/src/setup/artifacts.rs) |
-| 4 | a worker that ends meanwhile: `Failed` with the last 8 lines of `worker.log` | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
+| 4 | a worker that ends meanwhile: `Failed` with the last 8 lines of `worker.log`. On `docker` the worker's end stops its container, which `docker exec` cannot enter: the log is copied out of the stopped container (`docker cp`, which reads its data volume) into `machine/docker/worker.log.ended`, read and removed | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs), [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
 
 The `docker` machine does steps 2 and 3 in its own container start (bundle
-mounted read-only, entry script makes the folders, no sysctl write);
+mounted read-only, entry script makes the folders and the log and writes
+`/layerfs/state/worker.pid`, no sysctl write);
 step 4 is shared ([Platforms](platforms.md#docker-platformsdocker)).
+
+### The worker's log
+
+`layerfs worker` writes its log to its stderr and cannot redirect it
+itself, so on every machine kind the launcher's shell appends the worker's
+output to `/layerfs/data/log/worker.log` (`$LAYERFS_WORKER_LOG`; folder
+0700, file 0600), on the data disk: it stays across restarts and, on
+`docker`, across the containers each start makes
+(layerfs-project#178 step 0).
+
+```text
+ launcher (VM launch script, docker's entry), once no earlier worker runs
+   mkdir -p /layerfs/data/log
+   /layerfs/state/worker.log of an older build, when there is no log yet
+       -> moved to /layerfs/data/log/worker.log
+   worker.log larger than 16 MiB -> mv -f to worker.1.log (replaces it)
+   append "layerfs worker: launched <UTC time>"
+   start the worker with  >> /layerfs/data/log/worker.log 2>&1
+```
+
+| Rule | Detail |
+| --- | --- |
+| Rotation | only by a launcher, only at a start, only when the log is past 16 MiB. A smaller log is appended to, so a failed start or a restart loop keeps the lines of the run before, and a reader's position in the log holds across restarts |
+| While the worker runs | never rotated: a rename would not move the worker's descriptor. The log grows until the next start (start-only is the rule for 2.0, as for `forward.log`) |
+| Content | the worker's own lines (`layerfs worker: …`) and a panic's message. Never a request's arguments, the secret, or a PostgreSQL URL |
+| `docker` | the container's own output (what the entry says before it becomes the worker) is bounded too: `--log-driver local --log-opt max-size=16m --log-opt max-file=2`, always the three together, since `--log-opt max-size` alone fails `docker run` where the Engine's default driver is journald |
 
 | `Guest` | Host command | Source |
 | --- | --- | --- |
@@ -137,6 +164,7 @@ waits at most 10 s; other operations wait as long as they run
 | `store.diagnose`, `doctor.sandbox` | doctor's read-only observations; `doctor.sandbox` with `leftovers: true` is the bounded walk for what interrupted operations left under the root |
 | `doctor.fix` | removes one such leftover, named by kind and name (never a path), under its guard ([Checks](../doctor/checks.md#leftovers)) |
 | `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`, decoded into its typed request first |
+| `inspect` | one read-only inspect request `{ kind, .. }` (a window of `worker.log` or of a Sandbox's `daemon.log`, overlay file sizes) on a helper thread, two at a time, answered within 6 s ([Inspection](../sandboxes/inspect.md)) |
 | `project.stage`, `project.init`, `project.export`, `project.remove` | write one part of a folder copy; add it as a project; stream a pinned snapshot back; drop a project |
 | anything else | `InvalidInput`, "the worker has no operation …" |
 
@@ -169,14 +197,14 @@ Nothing here is a retry: no request is read twice and none is resent.
 | --- | --- | --- |
 | Accept | the six errors above say nothing about the listener: one log line, a 50 ms pause, the next `accept`. Any other error ends `serve` (`layerfs worker` then exits "the worker stopped") | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs), `passing` |
 | Thread | `std::thread::Builder::spawn`; when the OS has none, the stream is dropped before its hello, so the caller is `Unavailable` and sent nothing | same, `Server::spawn` |
-| Log | `layerfs worker: …` on stderr (`worker.log`). At most one line per kind of accept failure, and one for threads, every 10 s; the next line of a kind says how many went unlogged | same, `Limited` |
+| Log | `layerfs worker: …` on stderr, which its launcher appends to `/layerfs/data/log/worker.log` ([above](#the-workers-log)). At most one line per kind of accept failure, and one for threads, every 10 s; the next line of a kind says how many went unlogged | same, `Limited` |
 | Hello | one deadline of 10 s (`HELLO_WAIT`) for the whole first frame, however many reads it takes; a peer that trickles bytes is closed at it | [`worker_server/connection.rs`](../../../../control/crates/layerfs-control/src/worker_server/connection.rs), `Until` |
 | Write | a write timeout of 30 s (`REQUEST_WAIT`) on every accepted stream. It bounds one send that makes no progress, not a frame: a caller that still reads is never cut | same, `exchange` |
 | Closed writer | after the first failed or timed-out send, every later event fails at once without touching the socket, no answer is written, and the stream is shut down so the caller reads `Unknown` at once | same, `Wire` |
 | Stalled caller | `store.file` and `sandbox.host` ignore the failed event and end their step; `project.export` returns at its next part, closes the Store and releases its lease; the thread then ends | [`worker_server/ops.rs`](../../../../control/crates/layerfs-control/src/worker_server/ops.rs), [`export/route.rs`](../../../../control/crates/layerfs-store/src/project/export/route.rs) |
 | After the answer | the worker waits at most 30 s for the caller's close, once | `Wire::answer` |
 | Panic | `catch_unwind` around each connection. One line `<op> panicked: <message>` (300 characters at most; never arguments, a secret or a request), then the connection closes with no answer: `Unknown` (layerfs-project#179 D7) | `connection::serve` |
-| Panic, read-only | `worker.ping`, `machine.images`, `store.reach`, `doctor.sandbox` and `store.diagnose` answer `Failed` instead, only if no frame was started after the request | `ops::READ_ONLY` |
+| Panic, read-only | `worker.ping`, `machine.images`, `store.reach`, `doctor.sandbox`, `store.diagnose` and `inspect` answer `Failed` instead, only if no frame was started after the request | `ops::READ_ONLY` |
 
 **No connection cap, and no bound on frame memory** (decided in
 layerfs-project#177). A cap must make a connection wait, never refuse it
@@ -285,7 +313,7 @@ process reaches it, so Workspace calls skip the worker
 
 | Step | Bound |
 | --- | --- |
-| port 0 refused `InvalidInput`; pick a free host port; `tool::detach` the `ssh`, stderr to `<work_dir>/forward.log` | 10 s to start |
+| port 0 refused `InvalidInput`; pick a free host port; `tool::detach` the `ssh`, stderr appended to `<work_dir>/forward.log`, which the machine's forwards share. A log past 16 MiB is first copied to `forward.1.log` and emptied in place: it is never renamed, since the other forwards hold it open and would go on writing into the renamed file (a line one of them writes between the copy and the emptying is lost) | 10 s to start |
 | wait, then check the pid runs with `127.0.0.1:<port>:` on its command line; dead is `Failed` with the log's last 3 lines, not retried | 600 ms |
 | `forward_close`: only if the marker is still on the pid's command line; SIGTERM, then SIGKILL | 3 s |
 

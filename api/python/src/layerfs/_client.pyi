@@ -590,6 +590,26 @@ class LogsFamily:
         """the calls made against this home, newest first"""
     def reset(self, *, log_tag: str | None = None) -> Result:
         """clear this home's call log"""
+    def machine(
+        self,
+        machine: str,
+        *,
+        cursor: str | None = None,
+        before: str | None = None,
+        limit: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a machine's worker log: its last lines, or the lines after or before a cursor"""
+    def sandbox(
+        self,
+        sandbox: str,
+        *,
+        cursor: str | None = None,
+        before: str | None = None,
+        limit: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a Sandbox's daemon log: its last lines, or the lines after or before a cursor"""
 
 class DoctorFamily:
     def fix(self, id: str, *, log_tag: str | None = None) -> Result:

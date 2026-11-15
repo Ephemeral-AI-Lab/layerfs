@@ -601,6 +601,26 @@ class AsyncLogsFamily:
         """the calls made against this home, newest first"""
     async def reset(self, *, log_tag: str | None = None) -> Result:
         """clear this home's call log"""
+    async def machine(
+        self,
+        machine: str,
+        *,
+        cursor: str | None = None,
+        before: str | None = None,
+        limit: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a machine's worker log: its last lines, or the lines after or before a cursor"""
+    async def sandbox(
+        self,
+        sandbox: str,
+        *,
+        cursor: str | None = None,
+        before: str | None = None,
+        limit: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a Sandbox's daemon log: its last lines, or the lines after or before a cursor"""
 
 class AsyncDoctorFamily:
     async def fix(self, id: str, *, log_tag: str | None = None) -> Result:

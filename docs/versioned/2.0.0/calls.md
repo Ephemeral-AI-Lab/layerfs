@@ -514,6 +514,28 @@ not tell. Not run for this manual (from source and tests).
 
 See [backups](machines-and-stores.md#backups). Not run for this manual.
 
+### `logs`: `machine` and `sandbox`
+
+Two reads for a UI that shows a log and follows it (layerfs-project#178).
+They are in the `logs` family, which this page's count above predates; the
+whole family is in the
+[architecture guide](../../architecture/api/sdk/logs.md).
+
+| Call | Positionals | Options | Does |
+| --- | --- | --- | --- |
+| `machine` | `machine` | `cursor`, `before`, `limit` (int) | one window of a machine's worker log |
+| `sandbox` | `sandbox` | `cursor`, `before`, `limit` (int) | one window of a Sandbox's daemon log |
+
+Each answers `{ lines: [{ text, continued? }], cursor, before?, has_more }`:
+with no option the last `limit` lines (200 by default, 1000 at most), with
+`cursor` the lines written after it, with `before` the lines before it.
+Control characters in `text` are escaped (`\u{1b}`). They take no lock,
+start nothing, write nothing and add no line to the call log; at most two
+run on a machine at a time (`Busy`), and a machine that is stopped or does
+not answer within 8 s is `Unavailable`. `logs machine` on a machine with no
+worker (`native`) is `Unsupported`. The MCP server lists neither. Run for
+this manual on a scratch home: `layerfs logs sandbox s1`, then `--cursor`.
+
 ## `layerfs doctor`
 
 A top-level command beside `import-env`, outside the call table (#536 H7);

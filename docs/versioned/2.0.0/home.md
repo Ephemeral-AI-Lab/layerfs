@@ -54,6 +54,7 @@ hold a password or a bucket key. They are not settings; see
   trace/                       trace files
   log/                         migration.json, migration-2.json, import-env.jsonl,
                                uncertain.jsonl, init-failures.jsonl, exec.jsonl, ...
+                               (<name>.1.jsonl: a rotated log; rotate.lock)
 ```
 
 - **Records** are one JSON value each, written to a private temporary file
@@ -136,7 +137,12 @@ hold a password or a bucket key. They are not settings; see
   (`Unknown`), with what was kept. A `project init` whose answer was lost
   names the folder copy that may remain on the machine (`machine`, `copy`,
   `deadline`), which is what lets `layerfs doctor fix` remove that copy
-  later.
+  later. It is never rotated.
+- **Log sizes.** Every other `log/*.jsonl` file rotates once past 16 MiB
+  to `log/<name>.1.jsonl`, replacing the one before, as the call log
+  does. A machine's `forward.log` rotates to `forward.1.log` when a
+  forward starts, and a machine's worker log when its worker starts; a
+  log is never rotated while the process that writes it runs.
 
 A machine's own disk (a VM's data disk) is mounted at
 `/layerfs/data` inside the machine. It holds `store/<name>/store.sqlite`
@@ -144,7 +150,10 @@ with a thin `store/<name>/record.json` (`{"v":1,"name","kind"}`, written
 only when it changed), and `sandbox/<name>/` for the Sandboxes on that
 machine (`record.json`: `v`, `name`, `project`, `backend`, `runtime_id`
 and `daemon`; `control.json`; `workspace/`), with their local directories
-under `machine/native/run/`. On its first start from a layout 3 bundle the
+under `machine/native/run/`. The worker's own output is in
+`/layerfs/data/log/worker.log` on every machine kind, docker included
+(private to root; a start that finds it past 16 MiB renames it to
+`worker.1.log` first). On its first start from a layout 3 bundle the
 worker deletes what an earlier bundle left there, once, and logs each
 deletion: numbered Sandbox folders (`store/*/project/*/sandboxes/`),
 `machine/*/sandbox/`, old local directories in

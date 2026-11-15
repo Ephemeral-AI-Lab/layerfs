@@ -39,7 +39,11 @@ fn after_a_panic_in_a_store_call_the_next_calls_work() {
     let folder = worker_store::folder(&placed.scratch, 4096);
     worker_store::init(&placed.home, "web", &folder).0.unwrap();
     let before = worker_store::stats(&placed.home).unwrap();
+    // a Workspace status of a Sandbox that is not there: the worker settles
+    // its records and its Sandbox table refuses it
     let sandbox = worker_store::sandbox_call(&placed.endpoint).unwrap_err();
+    assert_eq!(sandbox.code, "NoSuchSandbox", "{sandbox:?}");
+    assert!(paths::project_record(&placed.root, "shop", "api").is_file());
 
     faults.on("store.call", OpFault::Panic);
     let lost = worker_store::stats(&placed.home).unwrap_err();

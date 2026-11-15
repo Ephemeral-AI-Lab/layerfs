@@ -1,5 +1,6 @@
 //! The worker's operations: what each request's `op` runs on this machine,
 //! and which of them are read-only.
+use super::Server;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_store::project::discovery::home_of;
@@ -12,9 +13,10 @@ use std::path::Path;
 /// `Failed` after a panic, and only when no event byte was written yet;
 /// any other operation's panic closes the connection, so its caller
 /// reports `Unknown` (layerfs-project#179 D7). A new read-only operation
-/// (layerfs-project#178's `inspect`) is added here.
-const READ_ONLY: [&str; 5] = [
+/// is added here.
+const READ_ONLY: [&str; 6] = [
     "worker.ping",
+    layerfs_sandbox::inspect::OP,
     "machine.images",
     "store.reach",
     "doctor.sandbox",
@@ -26,14 +28,35 @@ pub(super) fn read_only(op: &str) -> bool {
     READ_ONLY.contains(&op)
 }
 
-/// Runs operation `op` once with `args`, under the worker's root `root`.
-/// What it reports while it runs goes to `events`.
+/// One inspect request (layerfs-project#178): a read of this machine or
+/// of one of its Sandboxes, under this process's inspect admission and
+/// deadlines, on a helper thread. It sends no events and changes nothing.
+#[cfg(not(feature = "worker-fault"))]
+fn inspect(server: &Server, args: SdkValue) -> Outcome {
+    layerfs_sandbox::inspect::in_worker(&server.root, args)
+}
+
+/// [`inspect`] with the fault switch of its helper thread: what
+/// `inspect::in_worker` does, with the switch met first, under the permit.
+#[cfg(feature = "worker-fault")]
+fn inspect(server: &Server, args: SdkValue) -> Outcome {
+    use layerfs_sandbox::inspect::{admit, serve, Side};
+    let (root, faults) = (server.root.clone(), server.faults.clone());
+    admit(move |budget| {
+        faults.in_helper();
+        serve(&Side::Worker(&root), &args, budget)
+    })
+}
+
+/// Runs operation `op` once with `args`, under the root of worker
+/// `server`. What it reports while it runs goes to `events`.
 pub(super) fn run(
     op: &str,
     args: SdkValue,
-    root: &Path,
+    server: &Server,
     events: &mut dyn FnMut(SdkValue) -> std::result::Result<(), SdkRefusal>,
 ) -> Outcome {
+    let root: &Path = &server.root;
     match op {
         "worker.ping" => {
             let mut fields = vec![
@@ -54,6 +77,7 @@ pub(super) fn run(
                     .collect(),
             ))
         }
+        layerfs_sandbox::inspect::OP => inspect(server, args),
         "machine.images" => layerfs_sandbox::images::in_worker(root, args),
         "machine.prune" => layerfs_sandbox::images::prune_in_worker(root, args),
         "doctor.sandbox" => crate::doctor::diagnose_worker_sandbox(root, args),

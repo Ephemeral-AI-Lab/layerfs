@@ -33,7 +33,9 @@ is in [Migration](migration.md).
    sandbox/<n>/  record.json  control.json (0600)  lock  serve.lock
                  workspace/<id>.json  <id>.unmount  <id>.unmount-lock
    backup/<b>/record.json     provider, url, prefix, region, key ref
-   log/                       *.jsonl logs, conversion reports
+   log/                       *.jsonl logs (each rotates once to
+                              <name>.1.jsonl, uncertain.jsonl never),
+                              rotate.lock, conversion reports
    trace/calls.jsonl          the call log; calls.1.jsonl  calls.lock
 
  write_record(path, value)
@@ -61,6 +63,7 @@ id its caller sent
 | Streams events | one event stream per running call: progress, a worker's events, command output | [`events.rs`](../../../../control/crates/layerfs-home/src/events.rs) |
 | Names this process | pid, kernel start time and boot id, so a reused pid does not keep an `op`, lease or forward alive | [`process.rs`](../../../../control/crates/layerfs-home/src/process.rs) |
 | Writes traces and the call log | `LAYERFS_TRACE` lines and `trace/calls.jsonl` | [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs), [`logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs) |
+| Reads a log by cursor | one window of a log file and the one file it rotates to: its last lines, or the lines after or before a cursor that names the file's identity; shared by `logs.list` (identity and cursor text) and the inspect route | [`tail.rs`](../../../../control/crates/layerfs-home/src/tail.rs), [Inspection](../sandboxes/inspect.md#the-cursor) |
 | Prints JSON | whole numbers only; non-UTF-8 bytes as `{"base64": ..}`; worker frames carry byte values as attachments | [`json.rs`](../../../../control/crates/layerfs-home/src/json.rs) |
 
 ### Entities
@@ -192,6 +195,7 @@ independent of `LAYERFS_TRACE`.
 | Password reference unset or unreadable | `Unavailable`; a password that is not a reference is `InvalidInput` | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) |
 | Home of a newer layout | `Unsupported` | [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs) |
 | Call log size | rotates past 16 MiB to the one `calls.1.jsonl` under a non-blocking `flock` on `calls.lock`; `logs.reset` waits for that lock, truncates in place and removes the rotated file | [`logs.rs`](../../../../control/crates/layerfs-home/src/logs.rs) |
+| Other log sizes | `log/*.jsonl` (`leases`, `init-failures`, `migration-failures`, `import-env`; `exec` under a worker's root): a writer opens, appends one line and closes, and a log then past 16 MiB rotates once to `<name>.1.jsonl` under a non-blocking `flock` on `log/rotate.lock`; a writer that does not get the lock skips it. `log/uncertain.jsonl` never rotates: it is the only record of uncertain outcomes. `machine/<m>/forward.log` rotates to `forward.1.log` when a forward starts, and a machine's `/layerfs/data/log/worker.log` to `worker.1.log` when its worker starts ([workers](../machines/workers-and-reach.md#the-workers-log)); neither rotates while its writer runs. A Sandbox's `daemon.log` is new with its folder and goes with it; it is not rotated | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs), [`log_file.rs`](../../../../engine/crates/layerfs-bridge/src/log_file.rs) |
 | `logs.list` page | default 100, at most 1000 lines; a cursor after a rotation or reset is stale (`InvalidInput`); a torn line is counted in `skipped` | same |
 
 ## Demonstration

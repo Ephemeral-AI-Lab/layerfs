@@ -14,13 +14,20 @@ const nameOf = (spec) => `${spec.family}.${spec.call}`;
 
 test("every call is in exactly one bucket, and admin adds the work bucket", () => {
   assert.deepEqual(check(table), []);
-  assert.equal(table.length, 74);
+  assert.equal(table.length, 76);
   const buckets = table.map(bucketOf);
   assert.equal(buckets.filter((bucket) => bucket === "work").length, 38);
   assert.equal(buckets.filter((bucket) => bucket === "admin").length, 35);
+  assert.ok(buckets.every((bucket) => bucket === "work" || bucket === "admin" || bucket === "ui" || bucket === "none"));
   // `doctor.fix`, like `layerfs doctor` itself, is no tool in either profile
   assert.deepEqual(table.filter((spec) => bucketOf(spec) === "none").map(nameOf), ["doctor.fix"]);
-  assert.ok(buckets.every((bucket) => bucket === "work" || bucket === "admin" || bucket === "none"));
+  // the monitoring calls a UI polls are offered to no agent (layerfs-project#178 D2)
+  const ui = table.filter((spec) => bucketOf(spec) === "ui").map(nameOf);
+  assert.deepEqual(ui, ["logs.machine", "logs.sandbox"]);
+  for (const profile of ["work", "admin"]) {
+    const listed = tools(table, profile).map(nameOf);
+    for (const name of [...ui, "doctor.fix"]) assert.ok(!listed.includes(name), `${name} is in the ${profile} profile`);
+  }
 
   const work = tools(table, "work").map(nameOf);
   const admin = tools(table, "admin").map(nameOf);
