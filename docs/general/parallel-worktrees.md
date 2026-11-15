@@ -209,3 +209,16 @@ record, so its target path must be updated first. Never scan or migrate another
 worktree's records. Keep an active cache warm and release the old cache through
 the cleanup procedure at handoff; retain records, sealed bundles and failed-run
 evidence.
+
+## After a fuser revision change
+
+After rebasing across #686 (fuser from its Git fork), or any later fuser `rev`
+change, run `prepare` again for each platform before offline builds. A Cargo
+home prepared earlier has no checkout of that revision and fails `--offline`.
+
+## Clippy on the Linux build image
+
+A Linux build image may lack the Clippy component (the stock
+`rust:1.85.1-bookworm` image does), and `cargo` then refuses with
+`'cargo-clippy' is not installed`. Run Clippy through `--platform macos`, and
+keep Linux for the tests that need a Linux Store or mount.
