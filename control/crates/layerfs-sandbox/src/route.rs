@@ -31,7 +31,9 @@ fn host_args(
     (sandbox, message): (Option<String>, Message),
 ) -> Result<Host> {
     let prefix = format!("lfs-{}-", &layerfs_home::home::opened(home)?.id[..8]);
-    let backend = if cfg!(target_os = "macos") {
+    // Windows runs the A1 host_process port (directory Sandboxes); the
+    // WinFsp mount home is the A2 batch.
+    let backend = if cfg!(any(target_os = "macos", target_os = "windows")) {
         "native"
     } else {
         "namespaces"
