@@ -18,6 +18,9 @@ Usage (from the repository root):
   ci_tests.py filter fast|nightly    nextest filterset expression
   ci_tests.py targets fast|nightly   `--test NAME` arguments for cargo
   ci_tests.py mount-targets          `--test NAME` arguments for cargo
+  ci_tests.py featured               one line `<package>\t<feature>\t--test NAME...`
+                                     for each group of targets that are empty
+                                     without a cargo feature of their package
   ci_tests.py executables            read `cargo test --no-run --message-format
                                      json` on stdin, print `<dir>\\t<exe>` for
                                      each mount test binary
@@ -89,6 +92,16 @@ HEAVY = {
     ("layerfs-content", "filesystem_sorted_localized"): 5.0,
 }
 
+# (package, test target): the cargo feature of that package the target needs. Without
+# it the target builds empty (`#![cfg(feature = ...)]`), so both lanes pass over it;
+# the nightly run builds and runs each group alone, with only that package's feature
+# on, so no other binary is ever built with it. `worker-fault` is the worker's fault
+# switches (layerfs-project#177): run seconds on the macOS host, 2026-11-16.
+FEATURED = {
+    ("layerfs-control", "worker_fault"): ("worker-fault", 4.87),
+    ("layerfs-control", "worker_fault_store"): ("worker-fault", 3.26),
+}
+
 # SDK timings are recorded above without adding the owner-excluded API to CI.
 # stalled_unmount's timing is recorded above; it runs in the mount lane.
 NIGHTLY = {
@@ -141,7 +154,16 @@ def fast_targets(meta):
 
 def missing_listed(meta):
     known = {(package, name) for package, name, _ in test_targets(meta)}
-    return sorted(NIGHTLY - known)
+    return sorted((NIGHTLY | set(FEATURED)) - known)
+
+
+def featured_groups():
+    """Yield (package, feature, `--test NAME` flags) for each package and feature."""
+    groups = {}
+    for (package, name), (feature, _) in FEATURED.items():
+        groups.setdefault((package, feature), set()).add((package, name))
+    for (package, feature), pairs in sorted(groups.items()):
+        yield package, feature, test_flags(pairs)
 
 
 def ids(pairs):
@@ -199,6 +221,9 @@ def main(argv):
         print(test_flags(lane_targets(argv[1], meta)))
     elif argv[0] == "mount-targets":
         print(test_flags(mount_targets(meta)))
+    elif argv[0] == "featured":
+        for package, feature, flags in featured_groups():
+            print(f"{package}\t{feature}\t{flags}")
     elif argv[0] == "executables":
         for directory, exe in executables(sys.stdin, mount_targets(meta), meta):
             print(f"{directory}\t{exe}")

@@ -88,9 +88,10 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
         .stopped()
         .delete()
         .map_err(|error| after_stop(failed(error)))?;
+    // the table is whole after a holder's panic (layerfs-project#177)
     crate::registry::SANDBOXES
         .lock()
-        .map_err(|_| after_stop(refused("Failed", "the Sandbox table's lock was poisoned")))?
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
         .remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(|error| after_stop(failed(error)))?;
     Ok(SdkValue::map([
