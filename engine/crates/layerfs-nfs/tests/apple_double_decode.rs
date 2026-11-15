@@ -1296,6 +1296,218 @@ fn a_hard_link_keeps_the_companion_under_its_other_names() {
     fs::remove_dir_all(base).unwrap();
 }
 
+/// `name` and its `._<name>` companion holding a whole image, as `cp` leaves
+/// them: the main file's handle, the companion's, and the bytes written.
+fn pair(c: &mut Client, root: &[u8], name: &[u8], seed: u32) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+    let main = c.touch(root, name, 0o644).unwrap();
+    c.write(&main.handle, 0, b"the data file").unwrap();
+    let mut paired = b"._".to_vec();
+    paired.extend_from_slice(name);
+    let ad = c.touch(root, &paired, 0o644).unwrap();
+    let whole = image([seed as u8; 32], &[(b"user.kept", pattern(seed, 64))]);
+    c.write(&ad.handle, 0, &whole).unwrap();
+    (main.handle, ad.handle, whole)
+}
+
+#[test]
+fn a_removed_name_still_reaches_the_companion_of_its_inode() {
+    let base = temp("removed-name");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    // `cp a`, then `ln a b`: one inode behind two names, the attributes under
+    // `._a`. This is the matrix's g2 order: `ln`, `rm` of the original before
+    // the linked name was read once.
+    let (a, ad, whole) = pair(&mut c, &root, b"a", 13);
+    c.link(&a, &root, b"b").unwrap();
+    c.remove(&root, b"a").unwrap();
+    assert_eq!(server.held().companions, 1, "b still names the inode");
+    assert_eq!(c.lookup(&root, b"a").map(|_| ()), Err(NOENT));
+
+    // The name is gone, the inode is not: `._a` is still the attributes of the
+    // file `b` names. A client that still holds `._a`, or asks for it again
+    // once its `actimeo` expired, reads them there instead of finding nothing.
+    let (named, attr) = c.lookup(&root, b"._a").unwrap();
+    assert_eq!(
+        named, ad,
+        "a name of the inode that is gone still answers its `._` name"
+    );
+    assert_eq!(attr.size as usize, whole.len());
+    assert_eq!(c.read_all(&named, 64 * 1024), whole);
+    assert_eq!(
+        server.held().companions_unreachable,
+        0,
+        "the name key reaches it"
+    );
+    let (linked, attr) = c.lookup(&root, b"._b").unwrap();
+    assert_eq!(linked, ad, "the surviving name answers it too");
+    assert_eq!(attr.size as usize, whole.len());
+    assert_eq!(c.read_all(&linked, 64 * 1024), whole);
+    assert_eq!(server.held().companions, 1);
+
+    drop(c);
+    let released = server.stop();
+    assert_eq!(released.companions, 1, "the last name stays to the export");
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_name_the_link_read_before_its_removal_keeps_its_companion_name() {
+    let base = temp("removed-name-read");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    // The matrix's g3 order: `ln`, one read of the linked name and of its `._`
+    // name, then `rm` of the original.
+    let (a, ad, whole) = pair(&mut c, &root, b"a", 14);
+    c.link(&a, &root, b"b").unwrap();
+    let (read, _) = c.lookup(&root, b"._b").unwrap();
+    assert_eq!(read, ad, "the linked name reaches the inode's companion");
+    assert_eq!(c.lookup(&root, b"b").unwrap().0, a);
+    c.remove(&root, b"a").unwrap();
+
+    // Every name of the inode keeps answering, the removed one included.
+    let (named, _) = c.lookup(&root, b"._a").unwrap();
+    assert_eq!(named, ad);
+    assert_eq!(c.read_all(&named, 64 * 1024), whole);
+    assert_eq!(c.lookup(&root, b"._b").unwrap().0, ad);
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_name_asked_right_after_its_removal_still_reaches_the_companion() {
+    let base = temp("removed-name-after");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    // The matrix's g5 order: `ln`, `rm` of the original, the linked name read
+    // right after, and then the removed name's `._` name.
+    let (a, ad, whole) = pair(&mut c, &root, b"a", 15);
+    c.link(&a, &root, b"b").unwrap();
+    c.remove(&root, b"a").unwrap();
+    let (linked, _) = c.lookup(&root, b"b").unwrap();
+    assert_eq!(linked, a, "b is the inode's remaining name");
+    let (named, _) = c.lookup(&root, b"._a").unwrap();
+    assert_eq!(named, ad);
+    assert_eq!(c.read_all(&named, 64 * 1024), whole);
+    assert_eq!(c.lookup(&root, b"._b").unwrap().0, ad);
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn a_new_file_under_a_removed_name_does_not_reach_the_old_companion() {
+    let base = temp("removed-name-reused");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    let (a, ad, whole) = pair(&mut c, &root, b"a", 16);
+    c.link(&a, &root, b"b").unwrap();
+    c.remove(&root, b"a").unwrap();
+
+    // Another inode takes the freed name. The `._a` name the old companion
+    // still holds is the one the inode that had it answers, not this file `a`
+    // is now: `Companions::resolve` takes a name key only for the inode the
+    // companion belongs to.
+    let fresh = c.touch(&root, b"a", 0o644).unwrap();
+    c.write(&fresh.handle, 0, b"the new data file").unwrap();
+    assert_eq!(
+        c.lookup(&root, b"._a").map(|_| ()),
+        Err(NOENT),
+        "the new file `a` has no attributes yet"
+    );
+    // The old attributes are still the file `b` names, and the old body is
+    // untouched by the file that took the name.
+    let (kept, _) = c.lookup(&root, b"._b").unwrap();
+    assert_eq!(kept, ad);
+    assert_eq!(c.read_all(&kept, 64 * 1024), whole);
+
+    // A companion created under the name is the new inode's: it starts empty
+    // and never reads the old body.
+    let new_ad = c.touch(&root, b"._a", 0o644).unwrap();
+    assert_ne!(new_ad.handle, ad, "another companion for another inode");
+    assert_eq!(c.getattr(&new_ad.handle).unwrap().size, 0);
+    let fresh_whole = image([0x17; 32], &[(b"user.new", pattern(17, 32))]);
+    c.write(&new_ad.handle, 0, &fresh_whole).unwrap();
+    assert_eq!(c.read_all(&new_ad.handle, 64 * 1024), fresh_whole);
+    assert_eq!(server.held().companions, 2);
+    assert_eq!(c.lookup(&root, b"._b").unwrap().0, ad);
+    assert_eq!(c.read_all(&ad, 64 * 1024), whole);
+
+    // The old inode's last name takes only the old companion and the `._a`
+    // name it held, so the new file's attributes stay.
+    c.remove(&root, b"b").unwrap();
+    assert_eq!(server.held().companions, 1, "only the new file's companion");
+    assert_eq!(c.getattr(&ad), Err(STALE));
+    assert_eq!(c.lookup(&root, b"._b").map(|_| ()), Err(NOENT));
+    assert_eq!(c.lookup(&root, b"._a").unwrap().0, new_ad.handle);
+    assert_eq!(c.read_all(&new_ad.handle, 64 * 1024), fresh_whole);
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn the_last_name_of_a_hard_link_reclaims_its_companion_and_every_name_key() {
+    let base = temp("removed-name-last");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    let (a, ad, whole) = pair(&mut c, &root, b"a", 18);
+    c.link(&a, &root, b"b").unwrap();
+    c.remove(&root, b"a").unwrap();
+    assert_eq!(c.lookup(&root, b"._a").unwrap().0, ad);
+    assert_eq!(c.read_all(&ad, 64 * 1024), whole);
+
+    // The inode's last name goes: the companion goes with it, and so does the
+    // `._a` name key it kept for the name that went first.
+    c.remove(&root, b"b").unwrap();
+    assert_eq!(server.held().companions, 0);
+    assert_eq!(server.held().companions_unreachable, 0);
+    assert_eq!(c.getattr(&ad), Err(STALE));
+    assert_eq!(c.lookup(&root, b"._a").map(|_| ()), Err(NOENT));
+    assert_eq!(c.lookup(&root, b"._b").map(|_| ()), Err(NOENT));
+
+    drop(c);
+    let released = server.stop();
+    assert_eq!(
+        (released.companions, released.companions_unreachable),
+        (0, 0)
+    );
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
 #[test]
 fn a_linked_companion_name_is_another_name_of_the_same_companion() {
     let base = temp("companion-link");

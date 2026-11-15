@@ -44,6 +44,7 @@ impl Kernel {
             companion_bytes: companions.resident_bytes,
             companions_slotted: companions.slotted,
             companions_decoded: companions.decoded,
+            companions_unreachable: companions.unreachable,
             files: table.files.len(),
             directories: table.directories.len(),
             lookups: table.lookups.len(),
@@ -85,6 +86,12 @@ pub struct Released {
     pub companions_slotted: usize,
     /// Of the companions held, those kept decoded.
     pub companions_decoded: usize,
+    /// Of the companions held, those no name reaches: neither the name a
+    /// companion records nor another name of its inode finds it. It is what a
+    /// status read and the release line both report, so a client that lost
+    /// attributes can be told whether the export still held the body with no
+    /// way to ask for it.
+    pub companions_unreachable: usize,
     /// AppleDouble companions created, over the export's life.
     pub names_detached: u64,
     /// References collected beyond the bound, over the export's life.

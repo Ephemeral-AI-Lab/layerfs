@@ -185,7 +185,14 @@ the export.
 A companion whose main inode the export knows belongs to that inode rather than
 to one name: hard links share it, main-file RENAME keeps it under the new name
 and existing aliases, and only the inode's last name (or its silly rename)
-drops it. It can hold several of the inode's `._` names at once: a LINK of a
+drops it. A name of the inode that goes does not take its `._` name with it:
+after `rm a` of a file that `b` still names, `._a` still answers the inode's
+companion, because the `._` name key stays until the inode's last name (a
+client whose `actimeo` expired may ask either name). A new file that takes the
+freed name reaches the old companion nowhere: `Companions::resolve` takes a
+name key only for the inode its companion belongs to, so `._a` answers that new
+inode's companion, or `NFS3ERR_NOENT` while it has none. It can hold several of
+the inode's `._` names at once: a LINK of a
 companion name (`._a` to `._b`, which a client that carries the attributes to
 a new name sends) adds one, answering `NFS3ERR_EXIST` for a name already held
 and `NFS3ERR_ACCES` for a name of the Workspace, and a REMOVE of one of those
@@ -268,7 +275,10 @@ companions no name reaches - neither the name a companion records nor another
 name of its inode finds it - which is the shape a lost attribute takes when the
 body is still held but a client cannot ask for it; a zero beside a client that
 lost attributes says the loss was a missing companion rather than a lost name.
-It is counted once, at release, over the companions held.
+The same count is in the holdings a status read reports
+(`Released::companions_unreachable`), so the two never disagree; it walks the
+companion index, like the release line and the reclamation walk, and only those
+diagnostics read it.
 
 The requests one real client makes can be read from an optional trace
 ([`trace.rs`](../../../../engine/crates/layerfs-nfs/src/trace.rs)): with
@@ -284,9 +294,20 @@ says whether it would truncate it (`existing-truncate`), a SETATTR of a `._`
 file is traced by handle, `BIND` shows a main name the kernel table
 re-attributed to an inode that has a companion (`alias` while that inode keeps
 several names, `unbound` when the one it held is all it has), and `UNPAIR`
-shows a main name whose paired `._` name the export dropped. It is off unless
+shows what a main name that went left behind: `name-kept` when the companion
+belongs to its inode and keeps the `._` name, `companion-dropped` when the
+companion goes with it. It is off unless
 the variable is exactly `1`, is read once per process, and changes no state;
 the lines are written under the lock the request already holds.
+
+On the `native` route the daemon is started with `env_clear` and an empty
+environment (`control/crates/layerfs-sandbox-backend/src/local/create.rs`), so
+it does not inherit `LAYERFS_NFS_TRACE=1` from the shell that created the
+Sandbox: a trace run there needs `machine update native --daemon` pointed at a
+wrapper that exports the variable and `exec`s the real daemon (measured on
+macOS 27.2 for #636, where the plain variable gave 0 trace lines and the wrapper
+55 and 77 on the two matrices). Other routes start the daemon through a worker
+or container, where the environment is passed differently.
 
 ## Mount (`mount.rs`, daemon `export.rs`)
 

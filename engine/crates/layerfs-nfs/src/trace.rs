@@ -17,6 +17,11 @@
 //! is off every hook costs one `OnceLock` load. Lines go to the daemon's
 //! standard error, like the release line, and are written under whatever lock
 //! the request already holds.
+//!
+//! A `native` Sandbox's daemon is spawned after `env_clear`, so it does not
+//! inherit this variable from the shell that created the Sandbox; tracing one
+//! means pointing the machine's daemon at a wrapper that exports it and
+//! `exec`s the real daemon (see `docs/architecture/engine/kernel-routes/nfs.md`).
 use crate::attributes::Status;
 use std::sync::OnceLock;
 

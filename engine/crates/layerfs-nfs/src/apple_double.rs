@@ -46,9 +46,11 @@
 //! decoded body over until the next write or resize needs room; that one then
 //! spills the least recently touched bodies, decoded ones included, to the
 //! export's own scratch directory (see [`crate::apple_double_spill`]). Removing
-//! or replacing a main file drops its paired `._<name>` companion, or only that
-//! name when the companion is its inode's, which goes with the inode's last
-//! name. When [`HELD`] is reached, orphan companions whose main inode or main
+//! or replacing a main file drops its paired `._<name>` companion when no main
+//! inode owns it; a companion that belongs to an inode goes with the inode, so
+//! `._<name>` still answers for that inode after the name went, and only the
+//! inode's last name takes the companion and every `._` name it holds. When
+//! [`HELD`] is reached, orphan companions whose main inode or main
 //! file the export no longer knows are reclaimed first, and only if [`HELD`]
 //! live companions still remain does `CREATE` answer `NFS3ERR_NOSPC`.
 use crate::{
@@ -185,6 +187,9 @@ pub(crate) struct Holding {
     pub slotted: usize,
     pub resident_bytes: usize,
     pub decoded: usize,
+    /// The companions no name reaches, so that a status read and the release
+    /// line report the same number.
+    pub unreachable: usize,
 }
 
 /// The companions of one export.
@@ -534,9 +539,12 @@ impl Companions {
     /// The companions no name of the export reaches: neither the name it
     /// records nor another name of its inode finds it. Such a companion holds
     /// its body with no way for a client to ask for it, which is one of the two
-    /// shapes a lost attribute takes (the other is no companion at all). It is
-    /// counted once, when the export releases, so a file of reports from a real
-    /// client can say which shape a loss had.
+    /// shapes a lost attribute takes (the other is no companion at all). A
+    /// companion reached only through its main inode - one whose `._` name the
+    /// client removed, or whose main file went under that name - is reachable,
+    /// which is why a name key kept for an inode's companion is not a leak.
+    /// Counted with the other holdings, by who reports them: the release line
+    /// says which shape a loss had, and a status read says so while serving.
     fn unreachable(&self) -> usize {
         self.files
             .iter()
@@ -558,6 +566,7 @@ impl Companions {
             slotted: self.slots.len(),
             resident_bytes: self.resident_bytes,
             decoded: self.decoded,
+            unreachable: self.unreachable(),
         }
     }
 }
@@ -974,13 +983,24 @@ impl Kernel {
         remembered + table.aliases.get(&inode).map_or(0, Vec::len) > 1
     }
     /// The main file `name` in `parent` was removed, silly-renamed or replaced
-    /// by `RENAME`: drops the companion held under `._<name>`, or only that
-    /// name when the companion belongs to an inode, which goes with the
-    /// inode's last name instead (see [`Kernel::companion_drop_inode`]). A
-    /// plain non-replacing `RENAME` of a main file only cleans the destination
-    /// name `to/new_name` (via `finish_unlink`) and leaves `from/name` alone so
-    /// a client that renames `a -> b` and then renames `._a -> ._b` can still
-    /// move the companion across.
+    /// by `RENAME`: drops the companion held under `._<name>` when no main
+    /// inode owns it, and leaves an inode's companion to the inode - it goes
+    /// with the inode's last name instead (see
+    /// [`Kernel::companion_drop_inode`]), which is also where the `._` names it
+    /// held go (`Companions::unindex`). A plain non-replacing `RENAME` of a
+    /// main file only cleans the destination name `to/new_name` (via
+    /// `finish_unlink`) and leaves `from/name` alone so a client that renames
+    /// `a -> b` and then renames `._a -> ._b` can still move the companion
+    /// across.
+    ///
+    /// The `._` name stays after its main name for as long as the inode does,
+    /// because the inode's FinderInfo and attributes are the file's: `/rm a`
+    /// on a file `b` still names leaves `._a` answering the companion of the
+    /// inode, rather than reporting attributes that the file `b` still has as
+    /// gone. A new file under that name reaches the old companion nowhere:
+    /// [`Companions::resolve`] takes a name key only for the inode its
+    /// companion belongs to, so the answer falls back to that inode's
+    /// companion, which a new file does not have.
     pub(crate) fn companion_drop_for(&self, parent: u64, name: &[u8]) {
         if crate::names::apple_double(name) {
             return;
@@ -1006,15 +1026,13 @@ impl Kernel {
                 Trace::Name,
                 Some(serial),
                 match of_inode {
-                    true => "name-dropped",
+                    true => "name-kept",
                     false => "companion-dropped",
                 },
             );
-            if of_inode {
-                companions.drop_name(serial, &named);
-                None
-            } else {
-                companions.take_serial(serial)
+            match of_inode {
+                true => None,
+                false => companions.take_serial(serial),
             }
         };
         unlink_paths(spilled);
@@ -1193,24 +1211,25 @@ impl Kernel {
     /// Drops every companion and removes the export's spill directory; returns
     /// what the index held.
     pub(crate) fn companions_release(&self) -> Holding {
-        let (held, dir, unreachable) = {
+        let (holding, dir) = {
             let mut companions = self.companions();
+            let holding = companions.holding();
             let dir = companions.spill_dir.take();
-            let unreachable = companions.unreachable();
-            (std::mem::take(&mut *companions), dir, unreachable)
+            drop(std::mem::take(&mut *companions));
+            (holding, dir)
         };
         if let Some(dir) = dir {
             drop(fs::remove_dir_all(dir));
         }
-        let holding = held.holding();
         if holding.held > 0 {
             eprintln!(
-                "layerfs-nfs: AppleDouble companions released: export={:?} held={} slotted={} decoded={} resident_bytes={} unreachable={unreachable}",
+                "layerfs-nfs: AppleDouble companions released: export={:?} held={} slotted={} decoded={} resident_bytes={} unreachable={}",
                 self.mount(),
                 holding.held,
                 holding.slotted,
                 holding.decoded,
-                holding.resident_bytes
+                holding.resident_bytes,
+                holding.unreachable
             );
         }
         holding
