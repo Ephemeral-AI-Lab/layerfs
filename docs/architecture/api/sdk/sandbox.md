@@ -2,13 +2,13 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The `sandbox` calls: start, list, read and stop a named Sandbox, one project's Workspace daemon on a machine, within the [SDK](README.md).
+The `sandbox` calls: start, list, read and stop a named Sandbox, one project's Workspace daemon on a machine, and read the files in it, within the [SDK](README.md).
 
 | | |
 | --- | --- |
-| Source | [`api/crates/layerfs-api/src/sandbox`](../../../../api/crates/layerfs-api/src/sandbox), [`layerfs-sandbox/src`](../../../../control/crates/layerfs-sandbox/src) (`family.rs`, `create.rs`, `list.rs`, `get.rs`, `close.rs`, `lifecycle.rs`) |
-| Runs by default | `list`: the caller's process, home records only. `create`, `get`, `close`: records and locks in the caller's process, then the Sandbox's machine: this process for a local machine, else the machine's worker (`sandbox.host`); `get` may dial a forwarded daemon directly |
-| Design | [Sandboxes](../../control/sandboxes/README.md), [daemon channel and exec](../../control/sandboxes/daemon-channel-and-exec.md), [backends](../../control/sandboxes/backends.md) |
+| Source | [`api/crates/layerfs-api/src/sandbox`](../../../../api/crates/layerfs-api/src/sandbox), [`layerfs-sandbox/src`](../../../../control/crates/layerfs-sandbox/src) (`family.rs`, `create.rs`, `list.rs`, `get.rs`, `close.rs`, `lifecycle.rs`, `inspect/files.rs`, `inspect/roots.rs`) |
+| Runs by default | `list`: the caller's process, home records only. `create`, `get`, `close`: records and locks in the caller's process, then the Sandbox's machine: this process for a local machine, else the machine's worker (`sandbox.host`); `get` may dial a forwarded daemon directly. `files`: where the Sandbox's run folder is, on the [inspect route](../../control/sandboxes/inspect.md), with no lock, lease or daemon |
+| Design | [Sandboxes](../../control/sandboxes/README.md), [inspection](../../control/sandboxes/inspect.md), [daemon channel and exec](../../control/sandboxes/daemon-channel-and-exec.md), [backends](../../control/sandboxes/backends.md) |
 
 ## Calls
 
@@ -16,6 +16,7 @@ The `sandbox` calls: start, list, read and stop a named Sandbox, one project's W
  project.init --> create <project> <name> [machine]  (starts the daemon)
                      |
                      +--> list / get                (records, Workspaces)
+                     +--> files                     (its roots, its home; a read)
                      +--> workspace.mount ... unmount
                      v
                   close <name>   (ends the daemon; clears an unresolved
@@ -28,6 +29,7 @@ The `sandbox` calls: start, list, read and stop a named Sandbox, one project's W
 | [`sandbox.list`](#sandboxlist) | `{ items: [record], next_page_pos }` |
 | [`sandbox.get`](#sandboxget) | the record, live `state`, one page of `workspaces` (each with `running` and `overlay_bytes`), `workspace_capacity`, `down_reason?`, `down?`, `daemon_capacity?` |
 | [`sandbox.close`](#sandboxclose) | how it ended |
+| [`sandbox.files`](#sandboxfiles) | `{ kind: "folder", entries, next, has_more, reason? }` or `{ kind: "file", size, offset, content, binary, next }` |
 
 The **record** is `SandboxRecord::to_sdk`
 ([`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs)):
@@ -197,6 +199,85 @@ is as it was ([`close.rs`](../../../../control/crates/layerfs-sandbox/src/close.
 | `Failed` | the stop or delete failed; a failed stop is not followed by a delete |
 | `Unknown` | the machine's answer was lost: the Sandbox may be stopped or not; or with `force` a command's cancel was not confirmed (`detail.execs`) |
 
+### sandbox.files
+
+Reads what is in a Sandbox: its roots, one page of a folder of its home, or
+one window of a file there. It is a read for a UI that shows a tree
+(layerfs-project#178): no lock, no lease, no daemon call, nothing written,
+no call-log line (the call is `quiet`), and the MCP server does not list it.
+
+```text
+JS      await layerfs.sandbox.files(sandbox, path?, { depth, cursor, limit, offset, length })
+Python  layerfs.sandbox.files(sandbox, path=None, *, depth=None, cursor=None, limit=None, offset=None, length=None)
+CLI     layerfs sandbox files <sandbox> [<path>] [--depth <depth>] [--cursor <cursor>] [--limit <limit>] [--offset <offset>] [--length <length>]
+```
+
+| Argument | Kind | Rule |
+| --- | --- | --- |
+| `path` (optional) | Text | none: the roots. Else an absolute path as the Sandbox's commands see it, with no `..`, under the Sandbox's home |
+| `depth` option | Int | how many levels of a folder a page walks: 1 (default) to 32 |
+| `limit` option | Int | the most entries of a page: 1 to 1000, default 500 |
+| `cursor` option | Text | a page's `next`: the entries after it. An entry's path under `path`, at most `depth` levels down |
+| `offset`, `length` options | Int | a file window: from byte `offset` (default 0), at most `length` bytes (1 to 1 MiB, default 256 KiB) |
+
+An option that does not apply to what `path` is (a `limit` for a file, an
+`offset` for a folder) is checked for its range and not used.
+
+**The roots** (no `path`): a folder page that is never continued, each entry
+with a `role`, in this order.
+
+| `role` | Entry | From |
+| --- | --- | --- |
+| `workspace` | one per mounted Workspace: `kind: "mount"`, `path` its mount (`<run folder>/workspaces/<n>`), `workspace` its id; `size`, `mode` and `mtime` null. Ordered by path, `2` before `10` | the Workspace records on the side that keeps them (the home for `native` and for a Sandbox whose daemon the home reaches directly, which sends them with the request; else the worker's root). The mount is never `stat`ed or opened: a stopped daemon cannot hang the answer |
+| `home` | `kind: "folder"`, `path` `<run folder>/tmp`: `HOME` for the Sandbox's commands | the run folder |
+| `log` | `kind: "file"`, `path` `<run folder>/daemon.log`, with its `size`. It is read with [`logs.sandbox`](logs.md#logssandbox), not with this call | the run folder |
+
+A view of the whole root a Sandbox's commands see is not built yet: when it
+is, the roots gain `/` with role `root` on the machines that have it, and a
+client shows that view only when the answer offers it.
+
+**A folder** answers `{ kind: "folder", entries, next, has_more, reason? }`.
+`entries` is a flat list in tree order: names in byte order, and a folder's
+own entries right after it, down `depth` levels. `next` is the path of the
+last entry (null for an empty first page); while `has_more`, the same call
+with `cursor: next` answers the entries after it, whatever was added or
+removed in between. `reason` is `limit` (the page is full) or `deadline`
+(the read used its 4 s; the page holds what it had, which may be nothing).
+
+| Entry field | Meaning |
+| --- | --- |
+| `path` | the entry's absolute path, usable as `path` or `cursor` |
+| `depth` | 1 for an entry of the folder asked for, 2 for an entry of one of its folders |
+| `kind` | `file`; `folder`; `symlink` (with `target`, what it names; never followed or entered); `mount` (another filesystem is mounted there; with `fs`, its type, when the mount table gave it; never `stat`ed where the table names it, never entered); `restricted` (LayerFS keeps it private: listed, never entered or read); `other` (a FIFO, socket or device). `system` and `unreadable` are kinds of the views not built yet |
+| `size` | bytes, for a regular file (a `restricted` one included); else null |
+| `mode` | the permission bits as a number (`0o644` is 420); null for a `mount` the table named |
+| `mtime` | last modification, milliseconds since 1970; null as `mode` |
+
+A name that is not UTF-8 is not listed.
+
+**A file** answers `{ kind: "file", size, offset, content, binary, next }`.
+`content` is the window as text: bytes that are not UTF-8 are U+FFFD, and
+every control character but a line break and a tab is written as its escape
+(`\r`, `\u{1b}`), as a log line's are. A window that would end inside a
+character ends before it, so windows read from each `next` join to the
+file's text. `binary` is true when the window holds a NUL byte: `content`
+is then empty, and a client shows the file's `size` instead. `next` is the
+offset of the following window, null at the end of the file. Only the
+window is read: a sparse 10 GiB file answers a window near its end at once.
+
+| Error | When |
+| --- | --- |
+| `InvalidInput` | an option outside its range; a `cursor` with no `path`, or not an entry of the folder; a path that is not absolute, holds a `..`, or is outside the Sandbox's home (its run folder's `config/`, `overlay/`, `daemon.log` and Workspace mounts included); a symbolic link on the way or at the end, wherever it leads; a FIFO, socket or device; a mount point or a path in one; a `restricted` entry or a path in one (`store.sqlite*`); a regular file with several names that the Sandbox's command user (the numeric uid of its daemon record, else 501) does not own |
+| `NotFound` | nothing is at the path |
+| `NoSuchSandbox` | no Sandbox of that name, or its machine holds no run folder for it |
+| `Unavailable` | the Sandbox's machine is stopped or its worker did not answer in 8 s; the read ran past 6 s. Nothing starts a machine |
+| `Busy` | two inspection reads already run on that machine; read again |
+| `Unsupported` | a Linux kernel before 5.6 (no `openat2`); nothing else is tried |
+
+A Sandbox whose daemon has ended is read as before while its run folder is
+there. Which calls open what, and what a page costs, is in
+[inspection](../../control/sandboxes/inspect.md#files).
+
 ## Family errors
 
 `InvalidInput` (a bad name, a folder scope), `NoSuchStore`,
@@ -214,6 +295,6 @@ After `Unknown` from `create` or `close`, a line goes to
 
 ## Related
 
-- [workspace family](workspace.md), [machine family](machine.md).
+- [workspace family](workspace.md), [machine family](machine.md), [logs family](logs.md).
 - [Sandboxes](../../control/sandboxes/README.md) and [backends](../../control/sandboxes/backends.md).
 - [Errors and events](../calls/errors-and-events.md).

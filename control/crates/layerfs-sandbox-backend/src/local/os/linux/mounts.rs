@@ -65,6 +65,24 @@ pub(crate) fn filesystem(path: &Path) -> io::Result<String> {
     })
 }
 
+/// Every mount of the table at `table` (`/proc/self/mountinfo`, or another
+/// process's `mountinfo` for its namespace): its mount point and its
+/// filesystem type, in table order. Reading the table touches no mount.
+pub(crate) fn table(table: &Path) -> io::Result<Vec<(PathBuf, String)>> {
+    let text = std::fs::read_to_string(table)?;
+    let mut found = Vec::new();
+    for line in text.lines() {
+        let fields: Vec<&str> = line.split(' ').collect();
+        let Some(separator) = fields.iter().position(|field| *field == "-") else {
+            continue;
+        };
+        if let (Some(point), Some(kind)) = (fields.get(4), fields.get(separator + 1)) {
+            found.push((PathBuf::from(unescape(point)), (*kind).to_owned()));
+        }
+    }
+    Ok(found)
+}
+
 fn unescape(text: &str) -> String {
     let bytes = text.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());

@@ -20,4 +20,6 @@ nix = { version = "=0.31.3", features = [
     "user",
     "sched",
     "process",
+    # readdir on a descriptor, for inspection listings (layerfs-project#178)
+    "dir",
 ] }

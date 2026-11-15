@@ -29,7 +29,7 @@ const WORK_CALLS = new Set(["project.list", "project.get", "project.stats", "pro
 const ADMIN_CALLS = new Set(["project.init", "project.remove", "sandbox.create", "sandbox.close"]);
 
 /** Monitoring calls for a UI, which no profile lists (layerfs-project#178 D2). */
-const UI_CALLS = new Set(["logs.machine", "logs.sandbox"]);
+const UI_CALLS = new Set(["logs.machine", "logs.sandbox", "sandbox.files"]);
 
 /** Families whose every call belongs to the `admin` profile. */
 const ADMIN_FAMILIES = new Set(["machine", "store", "backup", "logs"]);
@@ -72,7 +72,7 @@ export function bucketOf(spec) {
 
 /** Why this call is in its bucket: a line for the generated documentation table. */
 export function whyOf(spec) {
-  if (UI_CALLS.has(nameOf(spec))) return "a monitoring read a UI polls (a machine's worker log, a Sandbox's daemon log); offered to no agent";
+  if (UI_CALLS.has(nameOf(spec))) return "a monitoring read a UI polls (a machine's worker log, a Sandbox's daemon log, a Sandbox's files); offered to no agent";
   if (spec.family === "project" && spec.call === "init") return "import a host folder into a Store; administration";
   if (spec.family === "project" && spec.call === "remove") return "remove a project from its Store; administration";
   if (spec.family === "sandbox" && spec.call === "create") return "start a Sandbox process; administration";

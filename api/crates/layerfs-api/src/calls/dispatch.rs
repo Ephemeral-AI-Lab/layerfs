@@ -10,7 +10,8 @@
 //! output and the progress of `project.init`, `project.export`, `store.push`,
 //! `store.pull`, `backup.create` and `backup.restore`. Result keys are
 //! snake_case in every front end. When it ends, one line goes to the home's
-//! call log (#659), except for the `logs` calls and with `LAYERFS_LOGS=0`.
+//! call log (#659), except for the `logs` calls, a call its table entry
+//! marks `quiet`, and with `LAYERFS_LOGS=0`.
 use super::{check, render, table, table::Family, Context};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::{refused, Outcome};
@@ -92,7 +93,7 @@ pub fn call_scoped(
     events: &mut dyn FnMut(SdkValue),
     client: Client,
 ) -> Outcome {
-    let mut log = Log::start(name, client, take_tag(&mut args));
+    let mut log = Log::start(families, name, client, take_tag(&mut args));
     let outcome = layerfs_home::trace::stepped(name, || {
         scoped(families, home_path, scope, name, args, events, &mut log)
     });
@@ -103,13 +104,14 @@ pub fn call_scoped(
 /// Logs `refusal` for a call refused before its arguments could be read
 /// (a front end's bad input), as dispatch would have.
 pub fn refuse_early(
+    families: &'static [Family],
     home_path: Option<&Path>,
     name: &str,
     client: Client,
     refusal: layerfs_bridge::control::SdkRefusal,
 ) -> Outcome {
     let outcome = Err(refusal);
-    Log::start(name, client, None).finish(home_path, &outcome);
+    Log::start(families, name, client, None).finish(home_path, &outcome);
     outcome
 }
 
@@ -139,8 +141,18 @@ struct Log<'n> {
 }
 
 impl<'n> Log<'n> {
-    fn start(name: &'n str, client: Client, tag: Option<Option<String>>) -> Self {
-        let on = layerfs_home::logs::enabled() && name.split('.').next() != Some("logs");
+    /// A call named `name` writes its line unless the log is off, it is
+    /// one of the `logs` family (a name the table does not hold included),
+    /// or its entry in `families` is `quiet`.
+    fn start(
+        families: &'static [Family],
+        name: &'n str,
+        client: Client,
+        tag: Option<Option<String>>,
+    ) -> Self {
+        let quiet = name.split('.').next() == Some("logs")
+            || table::find(families, name).is_some_and(|call| call.quiet);
+        let on = layerfs_home::logs::enabled() && !quiet;
         let tag = tag.unwrap_or_else(|| {
             std::env::var("LAYERFS_LOGS_TAG")
                 .ok()

@@ -101,7 +101,7 @@ either)
 | --- | --- |
 | `work` | the `branch`, `commit`, `file` and `workspace` families; `project.list`, `project.get`, `project.export`, `sandbox.list`, `sandbox.get` |
 | `admin` | `project.init`, `project.remove`, `sandbox.create`, `sandbox.close`; the `machine`, `store` and `backup` families; `logs.list`, `logs.reset` |
-| `ui` (no profile) | `logs.machine`, `logs.sandbox` |
+| `ui` (no profile) | `sandbox.files`, `logs.machine`, `logs.sandbox` |
 | `none` | the `doctor` family (`doctor.fix`): like `layerfs doctor` itself, which is outside the table and no tool, removing a leftover is a person's repair |
 
 `work` lets an agent read a project, work on Branches and files (each write
@@ -115,7 +115,7 @@ built addon).
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
-76 calls: 38 in `work`, 35 in `admin` only, 2 in no profile (`ui`), 1 no tool; `--profile admin` lists 73.
+77 calls: 38 in `work`, 35 in `admin` only, 3 in no profile (`ui`), 1 no tool; `--profile admin` lists 73.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
@@ -155,6 +155,7 @@ built addon).
 | `sandbox.list` | work | work, admin | read a Sandbox and its Workspaces (work); starting and closing one is administration |
 | `sandbox.get` | work | work, admin | read a Sandbox and its Workspaces (work); starting and closing one is administration |
 | `sandbox.close` | admin | admin | stop a Sandbox; administration |
+| `sandbox.files` | ui | none | a monitoring read a UI polls (a machine's worker log, a Sandbox's daemon log, a Sandbox's files); offered to no agent |
 | `workspace.mount` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
 | `workspace.exec` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
 | `workspace.exec_cancel` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
@@ -192,8 +193,8 @@ built addon).
 | `backup.restore` | admin | admin | upload and restore a Store on a bucket; administration |
 | `logs.list` | admin | admin | read and clear the home's call log; administration |
 | `logs.reset` | admin | admin | read and clear the home's call log; administration |
-| `logs.machine` | ui | none | a monitoring read a UI polls (a machine's worker log, a Sandbox's daemon log); offered to no agent |
-| `logs.sandbox` | ui | none | a monitoring read a UI polls (a machine's worker log, a Sandbox's daemon log); offered to no agent |
+| `logs.machine` | ui | none | a monitoring read a UI polls (a machine's worker log, a Sandbox's daemon log, a Sandbox's files); offered to no agent |
+| `logs.sandbox` | ui | none | a monitoring read a UI polls (a machine's worker log, a Sandbox's daemon log, a Sandbox's files); offered to no agent |
 | `doctor.fix` | none | none | remove a leftover the doctor's report listed; like `layerfs doctor` itself, a person's repair and no MCP tool |
 
 <!-- END GENERATED -->

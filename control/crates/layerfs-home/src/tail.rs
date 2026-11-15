@@ -321,7 +321,7 @@ fn pieces(bytes: &[u8], start: u64, more: bool, closed: bool) -> (Vec<Piece>, u6
 /// How many of `bytes` come before a UTF-8 character their end cuts: a
 /// window never ends inside a character, so the pieces of a line put
 /// together are the line.
-fn whole_characters(bytes: &[u8]) -> usize {
+pub fn whole_characters(bytes: &[u8]) -> usize {
     let len = bytes.len();
     for back in 1..=len.min(3) {
         let byte = bytes[len - back];
@@ -342,9 +342,17 @@ fn whole_characters(bytes: &[u8]) -> usize {
 /// `bytes` as one line of text: what is not UTF-8 is U+FFFD, and every
 /// control character is written as its escape (`\t`, `\r`, `\u{1b}`).
 fn text(bytes: &[u8]) -> String {
+    escaped(bytes, &[])
+}
+
+/// `bytes` as text a terminal or a page can show as it is: what is not
+/// UTF-8 is U+FFFD, and every control character but those of `kept` (a
+/// file's line breaks, which a log's lines do not hold) is written as its
+/// escape (`\r`, `\u{1b}`).
+pub fn escaped(bytes: &[u8], kept: &[char]) -> String {
     let mut out = String::with_capacity(bytes.len());
     for c in String::from_utf8_lossy(bytes).chars() {
-        if c.is_control() {
+        if c.is_control() && !kept.contains(&c) {
             out.extend(c.escape_default());
         } else {
             out.push(c);

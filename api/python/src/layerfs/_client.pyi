@@ -377,6 +377,19 @@ class SandboxFamily:
         """a Sandbox and its Workspaces"""
     def close(self, name: str, *, force: bool | None = None, log_tag: str | None = None) -> Result:
         """stop a Sandbox"""
+    def files(
+        self,
+        sandbox: str,
+        path: str | None = None,
+        *,
+        depth: int | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        length: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a Sandbox's files: its roots, or a folder or file under its home"""
 
 class WorkspaceFamily:
     def mount(self, sandbox: str, branch: str, *, name: str | None = None, log_tag: str | None = None) -> Result:
