@@ -7,17 +7,22 @@
 //! waiting, truncates `calls.jsonl` in place and removes `calls.1.jsonl`.
 //! A line that cannot be written is dropped: it changes no outcome and is
 //! not retried. `LAYERFS_LOGS=0` turns the log off for the process.
+//!
+//! The lines of `log/*.jsonl` rotate the same way ([`rotate`], under
+//! `log/rotate.lock`; layerfs-project#180), all but `log/uncertain.jsonl`.
 use crate::home::{flock, paths};
 use crate::json;
 use crate::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::log_file;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::os::unix::fs::{DirBuilderExt, FileExt, MetadataExt, OpenOptionsExt};
 use std::path::Path;
 
-/// The size past which `calls.jsonl` rotates to `calls.1.jsonl`.
-pub const ROTATE_AT: u64 = 16 << 20;
+/// The size past which `calls.jsonl` rotates to `calls.1.jsonl`, as every
+/// log does.
+pub const ROTATE_AT: u64 = log_file::ROTATE_AT;
 /// The page `logs.list` answers when no limit is given.
 pub const DEFAULT_LIMIT: i64 = 100;
 /// The largest page `logs.list` answers.
@@ -71,35 +76,34 @@ pub fn append(home: &Path, line: &SdkValue) {
     let size = file.metadata().map_or(0, |meta| meta.len());
     drop(file);
     if size > ROTATE_AT {
-        rotate(home);
+        rotate(&paths::calls_lock(home), &paths::calls_file(home));
     }
 }
 
-/// Renames `calls.jsonl` to `calls.1.jsonl` when this process gets the
-/// lock without waiting; a writer that does not get it skips rotation.
-fn rotate(home: &Path) {
-    let Ok(lock) = open_lock(home) else {
+/// Renames the log `file` to its `.1` (`calls.jsonl` to `calls.1.jsonl`)
+/// when it is past [`ROTATE_AT`] and this process gets the lock file
+/// `lock` without waiting; a writer that does not get it skips rotation.
+/// For logs whose writers open, append one line and close.
+pub(crate) fn rotate(lock: &Path, file: &Path) {
+    let Ok(lock) = open_lock(lock) else {
         return;
     };
     if !matches!(flock::try_lock(&lock, true), Ok(true)) {
         return;
     }
     // another holder may have rotated it since this writer's append
-    let current = paths::calls_file(home);
-    if fs::metadata(&current).is_ok_and(|meta| meta.len() > ROTATE_AT) {
-        let _ = fs::rename(&current, paths::calls_rotated(home));
-    }
+    let _ = log_file::rotate(file, ROTATE_AT);
     flock::unlock(&lock);
 }
 
-fn open_lock(home: &Path) -> std::io::Result<File> {
+fn open_lock(lock: &Path) -> std::io::Result<File> {
     OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
         .mode(0o600)
-        .open(paths::calls_lock(home))
+        .open(lock)
 }
 
 /// Clears the call log: truncates `calls.jsonl` in place and removes
@@ -109,7 +113,7 @@ pub fn reset(home: &Path) -> Result<u64, SdkRefusal> {
     if !paths::trace_dir(home).is_dir() {
         return Ok(0);
     }
-    let lock = open_lock(home).map_err(failed)?;
+    let lock = open_lock(&paths::calls_lock(home)).map_err(failed)?;
     flock::lock(&lock).map_err(failed)?;
     let cleared = clear(home);
     flock::unlock(&lock);

@@ -35,7 +35,7 @@ pub use setup::{
 };
 pub use spec::{
     parse_size, Bundle, Endpoint, Forward, Lasting, Running, Spec, Tools, BUNDLE, DATA, IMAGE,
-    STATE, WORKER_PORT,
+    STATE, WORKER_LOG, WORKER_PORT,
 };
 pub use support::{
     platforms, sandbox_allowed, support, support_json, CallSite, PostgresqlSupport, StoreKind,

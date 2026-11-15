@@ -210,7 +210,7 @@ impl Op {
     pub fn log_uncertain(&self, home: &Path, entity: &str, name: &str, message: &str) {
         let _ = home::log_line(
             home,
-            "uncertain.jsonl",
+            home::records::UNCERTAIN,
             &SdkValue::map([
                 ("at", SdkValue::Int(home::now_ms())),
                 ("op", SdkValue::text(self.id())),
