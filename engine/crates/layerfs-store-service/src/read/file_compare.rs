@@ -4,6 +4,7 @@ use super::{
     compare::{self, Selector},
     file_facts, query,
     snapshot::{self, Snap},
+    visibility::Visibility,
 };
 use crate::{
     history::{lookup as args, saved},
@@ -28,6 +29,8 @@ struct Side {
     path: String,
     snap: Snap,
     entry: Option<EntryFacts>,
+    /// The governing marker frontier when this side is hidden at its node.
+    hidden: Option<u64>,
     text: Option<String>,
 }
 
@@ -50,28 +53,51 @@ fn side(
             "saved file selector belongs to another project",
         ));
     }
-    let entry = if allow_missing {
-        snapshot::entry(reader, &snap.tree, &selector.path)?
+    // §4.3: a side is visible, hidden or absent; a hidden side is treated as
+    // absent for the comparison but keeps its own `Removed` side object and
+    // never refuses, even when `allowMissing` is false.
+    let raw = snapshot::entry(reader, &snap.tree, &selector.path)?;
+    let hidden = if raw.is_some() {
+        Visibility::for_snap(store, &snap).hidden(&selector.path)
+    } else {
+        None
+    };
+    let entry = if hidden.is_some() {
+        None
+    } else if allow_missing {
+        raw
     } else {
         Some(snapshot::existing(reader, &snap, &selector.path)?)
     };
-    if entry.is_some_and(|e| e.value.kind == InodeKind::Directory) {
+    if hidden.is_none() && entry.is_some_and(|e| e.value.kind == InodeKind::Directory) {
         return Err(args::refuse(
             "IsDirectory",
             format!("{} is a directory", selector.path),
             SdkValue::map([("path", SdkValue::text(&selector.path))]),
         ));
     }
-    let text = snapshot::text(reader, entry)?;
+    let text = if hidden.is_some() {
+        None
+    } else {
+        snapshot::text(reader, entry)?
+    };
     Ok(Side {
         path: selector.path,
         snap,
         entry,
+        hidden,
         text,
     })
 }
 
 fn label(side: &Side) -> SdkValue {
+    if let Some(frontier) = side.hidden {
+        return SdkValue::map([
+            ("removed", SdkValue::Bool(true)),
+            ("path", SdkValue::text(&side.path)),
+            ("frontier_serial", SdkValue::Int(frontier as i64)),
+        ]);
+    }
     if side.entry.is_none() {
         return SdkValue::Null;
     }
@@ -83,6 +109,9 @@ fn label(side: &Side) -> SdkValue {
 }
 
 fn omitted(reader: &StorePorts, side: &Side) -> Result<Option<&'static str>, SdkRefusal> {
+    if side.hidden.is_some() {
+        return Ok(None);
+    }
     Ok(match side.entry {
         None => None,
         Some(e) if e.value.kind != InodeKind::RegularFile => Some("unsupported_type"),
@@ -103,7 +132,13 @@ pub fn diff(
     let reader = snapshot::reader(store, stack);
     let left = side(store, stack, &reader, left, options.allow_missing)?;
     let right = side(store, stack, &reader, right, options.allow_missing)?;
-    if left.entry.is_none() && right.entry.is_none() {
+    // Only a genuinely absent side is `NoSuchPath`; a hidden side is the
+    // `Removed` state, and two hidden sides are a removal with both objects.
+    if left.entry.is_none()
+        && right.entry.is_none()
+        && left.hidden.is_none()
+        && right.hidden.is_none()
+    {
         return Err(args::refuse(
             "NoSuchPath",
             "both file comparison paths are absent",
@@ -134,10 +169,15 @@ pub fn diff(
     let left_text = left.text.as_deref().unwrap_or("");
     let right_text = right.text.as_deref().unwrap_or("");
     let mut aligned = if reason.is_none() && options.extended {
+        let left_seen = Visibility::for_snap(store, &left.snap);
+        let right_seen = Visibility::for_snap(store, &right.snap);
         attribution::align(
             store,
             &reader,
-            ((&left.snap, &left.path), (&right.snap, &right.path)),
+            (
+                (&left.snap, &left.path, &left_seen),
+                (&right.snap, &right.path, &right_seen),
+            ),
             (left_text, right_text),
             options.include_attribution,
         )?
@@ -159,7 +199,12 @@ pub fn diff(
             },
         }
     };
-    if options.include_attribution && left.snap.node == right.snap.node && left.path == right.path {
+    if options.include_attribution
+        && left.hidden.is_none()
+        && right.hidden.is_none()
+        && left.snap.node == right.snap.node
+        && left.path == right.path
+    {
         aligned.summary = attribution::AttributionSummary {
             changed: Some(false),
             count: Some(0),
@@ -189,10 +234,13 @@ pub fn diff(
         &left_text.split('\n').collect::<Vec<_>>(),
         &right_text.split('\n').collect::<Vec<_>>(),
     );
+    // The visible/hidden/absent table: a hidden side is absent for the
+    // change kind, and two hidden sides are a removal, never a refusal.
     let change_kind = match (left.entry, right.entry) {
-        (None, _) => "Added",
-        (_, None) => "Removed",
-        _ => {
+        (None, Some(_)) => "Added",
+        (Some(_), None) => "Removed",
+        (None, None) => "Removed",
+        (Some(_), Some(_)) => {
             if content || metadata || identity || aligned.summary.changed == Some(true) {
                 "Modified"
             } else {

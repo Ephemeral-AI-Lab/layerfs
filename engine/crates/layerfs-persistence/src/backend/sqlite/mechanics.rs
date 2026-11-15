@@ -15,6 +15,9 @@ impl HistoryStatements for Transaction<'_> {
     fn history(&self, key: &str, params: Vec<Param>) -> Result<Vec<Record>, BackendError> {
         Transaction::history(self, key, params)
     }
+    fn mechanics(&self) -> &dyn Mechanics {
+        self
+    }
 }
 
 impl Mechanics for Transaction<'_> {

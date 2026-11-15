@@ -20,9 +20,10 @@ use crate::error::HistoryResult;
 use crate::identity::{BranchId, CatalogId, CommitId, HistoryName, LayerId, LayerStackId, NodeId};
 use crate::records::{
     AddLayerOutcome, AddLayerRequest, BranchMergeRequest, BranchRecord, BranchSnapshot,
-    CommitHistoryRequest, CommitOutcome, CommitRecord, CommitRequest, ForkRequest,
-    LayerHistoryRequest, LayerRecord, LayerStackRecord, Page, PageResult, PathRemovalOutcome,
-    PathRemovalRecord, PathRemovalRequest, Reservation, ReserveRequest, StackInitialization,
+    CommitHistoryRequest, CommitOutcome, CommitRecord, CommitRequest, ForkRequest, GcDeletion,
+    GcIntent, GcScopeKind, LayerHistoryRequest, LayerRecord, LayerStackRecord, Page, PageResult,
+    PathRemovalOutcome, PathRemovalRecord, PathRemovalRequest, Reservation, ReserveRequest,
+    StackInitialization,
 };
 /// Checked inputs that establish one catalog binding.
 #[derive(Clone, Eq, PartialEq)]
@@ -390,6 +391,80 @@ pub trait HistoryCatalog: Send + Sync {
         Err(crate::error::HistoryError::Unsupported(
             "unreachable history removal",
         ))
+    }
+
+    /// Registers one admission intent (§5) in its own write transaction.
+    ///
+    /// The default refuses: a provider without admission cannot make the
+    /// `MountsActive`/`Busy`/`Unresolved` promise.
+    fn gc_register(&self, _intent: &GcIntent) -> HistoryResult<()> {
+        Err(crate::error::HistoryError::Unsupported("GC admission"))
+    }
+
+    /// Releases one admission intent, deleting its row.
+    ///
+    /// The default refuses; a provider that never registered one is unaffected.
+    fn gc_release(&self, _op_id: &[u8; 16]) -> HistoryResult<()> {
+        Err(crate::error::HistoryError::Unsupported("GC admission"))
+    }
+
+    /// Marks one admission intent uncertain, so a later call reports
+    /// `Unresolved` until its owner settles it.
+    fn gc_mark_uncertain(&self, _op_id: &[u8; 16]) -> HistoryResult<()> {
+        Err(crate::error::HistoryError::Unsupported("GC admission"))
+    }
+
+    /// `branch.remove`: admits at Branch scope and writes the marker in one
+    /// write transaction.
+    fn gc_remove_branch(
+        &self,
+        branch: BranchId,
+        removed_ms: i64,
+        _intent: &GcIntent,
+    ) -> HistoryResult<()> {
+        // A provider without admission still writes the marker; the Store
+        // service only adds admission where the provider keeps intents.
+        self.mark_branch_removed(branch, removed_ms)
+    }
+
+    /// `project.delete`: admits at project scope and writes the marker in one
+    /// write transaction, preserving the same-home retry classification.
+    fn gc_delete_stack(
+        &self,
+        stack: LayerStackId,
+        deleted_ms: i64,
+        _intent: &GcIntent,
+    ) -> HistoryResult<GcDeletion> {
+        if let Some(deleted_ms) = self.stack_deleted_ms(stack)? {
+            return Ok(GcDeletion::Retired { deleted_ms });
+        }
+        if self.layer_stack(stack)?.is_some() {
+            self.mark_stack_deleted(stack, deleted_ms)?;
+            return Ok(GcDeletion::Marked { deleted_ms });
+        }
+        Ok(match self.stack_deleted_ms(stack)? {
+            Some(deleted_ms) => GcDeletion::Retired { deleted_ms },
+            None => GcDeletion::Absent,
+        })
+    }
+
+    /// `project.remove_file`: admits at project scope and advances the marker
+    /// in one write transaction.
+    fn gc_remove_path(
+        &self,
+        request: &PathRemovalRequest,
+        _intent: &GcIntent,
+    ) -> HistoryResult<PathRemovalOutcome> {
+        self.remove_path(request)
+    }
+
+    /// The live intents recorded at one scope, for `store.status` and tests.
+    fn gc_intents(
+        &self,
+        _scope_kind: GcScopeKind,
+        _scope_id: &[u8],
+    ) -> HistoryResult<Vec<GcIntent>> {
+        Err(crate::error::HistoryError::Unsupported("GC admission"))
     }
 }
 

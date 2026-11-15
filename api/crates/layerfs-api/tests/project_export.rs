@@ -1600,3 +1600,73 @@ fn export_progress_events_follow_time_not_entry_count() {
         let _ = std::fs::remove_dir_all(d);
     }
 }
+
+#[test]
+fn export_omits_a_path_hidden_by_remove_file() {
+    let home = private_home("removed-home");
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    let source = tempdir("removed-src");
+    std::fs::write(source.join("a.txt"), "a\n").unwrap();
+    std::fs::write(source.join("b.txt"), "b\n").unwrap();
+    std::fs::create_dir(source.join("dir")).unwrap();
+    std::fs::write(source.join("dir/c.txt"), "c\n").unwrap();
+    ok(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/app")),
+            ("folder", t(&source.display().to_string())),
+        ],
+    );
+
+    // The marker is written through the Store engine, the route the fs calls
+    // use; `project.remove_file` is not on this crate's call table yet.
+    layerfs_store::service::with_service(
+        &layerfs_store::open_args::OpenArgs {
+            home: Some(home.clone()),
+            store: Some("shop".to_owned()),
+            store_path: Some(paths::store_file(&home, "shop").display().to_string()),
+            ..Default::default()
+        },
+        |service| {
+            let call = layerfs_bridge::control::SdkCall {
+                method: "project.remove_file".to_owned(),
+                args: SdkValue::map([
+                    ("project", t("app")),
+                    ("path", t("/a.txt")),
+                ]),
+            };
+            layerfs_store_service::methods::call(service, &call)
+        },
+    )
+    .unwrap();
+
+    let out_parent = tempdir("removed-out");
+    let dest = out_parent.join("exported");
+    let res = ok(
+        &home,
+        "project.export",
+        &[
+            ("project", t("shop/app")),
+            ("destination", t(&dest.display().to_string())),
+        ],
+    );
+
+    // §4.3: a hidden entry is omitted from the exported folder and counts.
+    assert!(
+        !dest.join("a.txt").exists(),
+        "a hidden path must not be exported"
+    );
+    assert_eq!(std::fs::read_to_string(dest.join("b.txt")).unwrap(), "b\n");
+    assert_eq!(
+        std::fs::read_to_string(dest.join("dir/c.txt")).unwrap(),
+        "c\n"
+    );
+    assert_eq!(res.get_int("files"), Some(2));
+    assert_eq!(res.get_int("directories"), Some(1));
+    assert_eq!(res.get_int("symlinks"), Some(0));
+
+    for d in [home, source, out_parent] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}

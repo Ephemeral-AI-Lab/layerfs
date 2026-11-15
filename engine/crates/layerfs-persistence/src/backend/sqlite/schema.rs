@@ -18,6 +18,30 @@ pub(crate) const DIGESTS: &str = include_str!("../../../sql/sqlite/file_digest.s
 /// GC markers, positions and admission records; a Store written before them
 /// gains them at open.
 pub(crate) const GC: &str = include_str!("../../../sql/sqlite/gc.sql");
+/// The position columns T1.2a/T1.4 append, as `("table", "column", ALTER)`;
+/// a Store written before them gains them at open.
+pub(crate) const POSITION_COLUMNS: [(&str, &str, &str); 4] = [
+    (
+        "\"commit\"",
+        "history_serial",
+        "ALTER TABLE \"commit\" ADD COLUMN history_serial INTEGER NOT NULL DEFAULT 0",
+    ),
+    (
+        "layer",
+        "history_serial",
+        "ALTER TABLE layer ADD COLUMN history_serial INTEGER NOT NULL DEFAULT 0",
+    ),
+    (
+        "store_policy",
+        "trace_salt",
+        "ALTER TABLE store_policy ADD COLUMN trace_salt BLOB NOT NULL DEFAULT (X'0000000000000000000000000000000000000000000000000000000000000000') CHECK(length(trace_salt)=32)",
+    ),
+    (
+        "history_meta",
+        "next_history_serial",
+        "ALTER TABLE history_meta ADD COLUMN next_history_serial INTEGER NOT NULL DEFAULT 1",
+    ),
+];
 const UNIT_INDEX: &str = include_str!("../../../sql/sqlite/objects_units_index.sql");
 const UNITS: &str = include_str!("../../../sql/sqlite/objects_units.sql");
 const ACQUISITION: &str = include_str!("../../../sql/sqlite/acquisition/schema.sql");
@@ -75,6 +99,17 @@ fn next_history_serial_column() -> &'static str {
     &HISTORY[start..end]
 }
 
+/// The `kept_node` table as `gc.sql` writes it: one appended statement at the
+/// end of the GC script, so removing exactly this text leaves the source a
+/// Store written before T7.1 recorded.
+fn kept_node_table() -> &'static str {
+    let start = GC
+        .find("CREATE TABLE kept_node (")
+        .expect("the GC schema holds kept_node");
+    let end = start + GC[start..].find(";\n").expect("kept_node ends") + 2;
+    &GC[start..end]
+}
+
 /// The `commit` and `layer` position column as `history.sql` writes it; it
 /// appears once in each of the two tables.
 fn history_serial_column() -> &'static str {
@@ -85,12 +120,19 @@ fn history_serial_column() -> &'static str {
     &HISTORY[start..end]
 }
 
-/// The `store_policy` position salt column as `metadata.sql` writes it.
+/// The `store_policy` position salt column as `metadata.sql` writes it,
+/// together with the comma that ends `next_ordinal`: it was appended as the
+/// table's last column, so a Store written before it recorded neither the
+/// line nor the comma.
 fn trace_salt_column() -> &'static str {
     let start = METADATA
-        .find(" trace_salt BLOB NOT NULL DEFAULT")
+        .find(",\n trace_salt BLOB NOT NULL DEFAULT")
         .expect("metadata schema holds the salt column");
-    let end = start + METADATA[start..].find('\n').expect("column line ends") + 1;
+    // The search starts past the comma and newline; the newline that ends the
+    // column is kept, since it is also the one before the table's closing
+    // `) STRICT;` that the pre-T1.2a text held.
+    let line = start + 2;
+    let end = line + METADATA[line..].find('\n').expect("column line ends");
     &METADATA[start..end]
 }
 
@@ -109,18 +151,9 @@ fn without_position_columns(source: String) -> String {
 /// The ALTERs and salt backfill an old Store needs; existing rows keep serial
 /// 0 and the Store keeps one random salt.
 fn add_position_columns(tx: &Transaction<'_>) -> Result<(), BackendError> {
-    tx.query(
-        "ALTER TABLE \"commit\" ADD COLUMN history_serial INTEGER NOT NULL DEFAULT 0",
-        vec![],
-    )?;
-    tx.query(
-        "ALTER TABLE layer ADD COLUMN history_serial INTEGER NOT NULL DEFAULT 0",
-        vec![],
-    )?;
-    tx.query(
-        "ALTER TABLE store_policy ADD COLUMN trace_salt BLOB NOT NULL DEFAULT (X'0000000000000000000000000000000000000000000000000000000000000000') CHECK(length(trace_salt)=32)",
-        vec![],
-    )?;
+    for (_, _, alter) in POSITION_COLUMNS.iter().take(3) {
+        tx.query(alter, vec![])?;
+    }
     tx.query(
         "UPDATE store_policy SET trace_salt=randomblob(32) WHERE id=1",
         vec![],
@@ -254,6 +287,7 @@ pub(crate) fn check(
         "path_removed",
         "history_meta",
         "inode_value_block",
+        "kept_node",
         "layer",
         "layer_lineage",
         "layer_stack",
@@ -544,6 +578,44 @@ impl super::session::connection::Session {
             Ok(())
         })
     }
+    /// Adds the `kept_node` history-closure table (T7.1) to a Store written
+    /// before it, then records the current schema: an additive migration
+    /// (REBUILD.md kind 2) under the same conditions as
+    /// [`Self::add_binding_hints`]. The table is empty until a mark writes it.
+    pub(crate) fn add_kept_node(&self) -> Result<(), BackendError> {
+        self.run::<_, BackendError>(true, |tx| {
+            let present = tx.query(
+                "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='kept_node'",
+                vec![],
+            )?;
+            if !present.is_empty() {
+                return Ok(());
+            }
+            let rows = tx.query(
+                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
+                vec![],
+            )?;
+            let Some(row) = rows.first() else {
+                return Ok(());
+            };
+            let current = source((self.layout, self.acquisition));
+            let recorded = row.get::<String>(0)?;
+            let without = current.replacen(kept_node_table(), "", 1);
+            let earlier = without.replacen(next_history_serial_column(), "", 1);
+            if (recorded != earlier && recorded != without)
+                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
+            {
+                return Ok(());
+            }
+            tx.bootstrap(kept_node_table())?;
+            let definition = definition(tx.connection, tx.work)?;
+            tx.query(
+                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
+                vec![Param::Text(current), Param::Text(definition)],
+            )?;
+            Ok(())
+        })
+    }
     /// Adds the position state T1.4 introduced (`history_meta.next_history_serial`,
     /// appended NOT NULL DEFAULT 1) and backfills the `commit`/`layer` serials
     /// and `project_epoch` rows in the same write transaction: an additive
@@ -575,10 +647,7 @@ impl super::session::connection::Session {
             {
                 return Ok(());
             }
-            tx.query(
-                "ALTER TABLE history_meta ADD COLUMN next_history_serial INTEGER NOT NULL DEFAULT 1",
-                vec![],
-            )?;
+            tx.query(POSITION_COLUMNS[3].2, vec![])?;
             backfill_position_state(tx)?;
             let definition = definition(tx.connection, tx.work)?;
             tx.query(

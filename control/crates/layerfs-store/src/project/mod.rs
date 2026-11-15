@@ -1,12 +1,14 @@
 //! Public Project organization over host Init, and a project's home entry
 //! and discovery records (`discovery`).
 pub mod add;
+pub mod delete;
 pub mod discovery;
 pub mod export;
 #[doc(hidden)]
 pub mod family;
 pub mod frame;
 pub mod init;
+pub mod listing;
 pub mod parts;
 pub mod postgres_init;
 #[doc(hidden)]

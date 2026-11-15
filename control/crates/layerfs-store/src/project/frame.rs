@@ -1,8 +1,11 @@
 //! The `project` worker frames (layerfs-project#109): `project.init`,
-//! `project.remove`, `project.stage` and `project.export`, each encoded by the caller and
+//! `project.remove`, `project.list` (T4.5c), `project.stage` and
+//! `project.export`, each encoded by the caller and
 //! decoded once in the worker, in the order the worker always refused them.
 //! The worker sets the home to its own root; a frame names none.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::sdk_values::{hex, unhex};
+use layerfs_history::LayerStackId;
 use layerfs_home::helpers::required;
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::refused;
@@ -91,6 +94,18 @@ fn staged_id(frame: &SdkValue) -> Result<String> {
         ));
     }
     Ok(id.to_owned())
+}
+
+/// The LayerStack identity a `stack_id` field holds: its 17 bytes in hex.
+fn stack_id(text: &str) -> Result<LayerStackId> {
+    let bytes =
+        unhex(text).ok_or_else(|| refused("InvalidInput", "`stack_id` must be hex digits"))?;
+    LayerStackId::from_slice(&bytes).map_err(|_| {
+        refused(
+            "InvalidInput",
+            "`stack_id` must be a LayerStack identity (17 bytes)",
+        )
+    })
 }
 
 impl InitFrame {
@@ -224,5 +239,196 @@ impl ExportFrame {
             branch: frame.get_text("branch").map(str::to_owned),
             store_record: frame.get("store_record").cloned(),
         })
+    }
+}
+
+/// `project.delete`: retire Stack `stack` of Store `store` (here, or in its
+/// worker, spec §4). The caller writes `deleted_ms` to its durable intent
+/// before the call and resends it on a retry; `project` and `store_record`
+/// are the caller context for the worker own entry and its Store open.
+#[derive(Clone, Debug)]
+pub struct DeleteFrame {
+    /// The Store.
+    pub store: StoreName,
+    /// The project, as sent; the worker names its own entry with it.
+    pub project: Option<String>,
+    /// The LayerStack id the caller recorded (never a name).
+    pub stack: LayerStackId,
+    /// The `deleted_ms` the marker should hold; `None` lets the worker take
+    /// the current time.
+    pub deleted_ms: Option<i64>,
+    /// The Store record.
+    pub store_record: Option<SdkValue>,
+}
+
+/// `project.delete` worker reply: `{kind: "Removed", project, stack_id,
+/// deleted_ms}`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DeleteReply {
+    /// The project the worker own entry named (or the Store name).
+    pub project: String,
+    /// The LayerStack the marker names.
+    pub stack: LayerStackId,
+    /// The stored `deleted_ms` (a retry reuses it).
+    pub deleted_ms: i64,
+}
+
+impl DeleteFrame {
+    /// The `project.delete` frame: `{ store, stack_id, deleted_ms?, project?,
+    /// store_record? }`, each optional field sent when set.
+    pub fn encode(&self) -> SdkValue {
+        let mut fields = vec![
+            ("store", SdkValue::text(self.store.as_str())),
+            ("stack_id", SdkValue::text(hex(&self.stack.to_bytes()))),
+        ];
+        fields.extend(self.deleted_ms.map(|ms| ("deleted_ms", SdkValue::Int(ms))));
+        fields.extend(
+            self.project
+                .as_deref()
+                .map(|p| ("project", SdkValue::text(p))),
+        );
+        fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
+        map(fields)
+    }
+
+    /// A `project.delete` frame: no Store, a bad Store name, no Stack id, or
+    /// a Stack id that is not a LayerStack identity are refused.
+    pub fn decode(frame: &SdkValue) -> Result<Self> {
+        let store = StoreName::parse(required(frame.get_text("store"), "store")?)?;
+        let stack = stack_id(required(frame.get_text("stack_id"), "stack_id")?)?;
+        Ok(Self {
+            store,
+            project: frame.get_text("project").map(str::to_owned),
+            stack,
+            deleted_ms: frame.get_int("deleted_ms"),
+            store_record: frame.get("store_record").cloned(),
+        })
+    }
+}
+
+impl DeleteReply {
+    /// The reply a worker sends.
+    pub fn encode(&self) -> SdkValue {
+        map(vec![
+            ("kind", SdkValue::text("Removed")),
+            ("project", SdkValue::text(&self.project)),
+            ("stack_id", SdkValue::text(hex(&self.stack.to_bytes()))),
+            ("deleted_ms", SdkValue::Int(self.deleted_ms)),
+        ])
+    }
+
+    /// The reply fields; `kind` must be `Removed`.
+    pub fn decode(frame: &SdkValue) -> Result<Self> {
+        if frame.get_text("kind") != Some("Removed") {
+            return Err(refused(
+                "Failed",
+                "the worker project.delete reply is not `Removed`",
+            ));
+        }
+        let project = frame
+            .get_text("project")
+            .ok_or_else(|| refused("InvalidInput", "reply has no `project`"))?
+            .to_owned();
+        let stack = stack_id(required(frame.get_text("stack_id"), "stack_id")?)?;
+        let deleted_ms = frame
+            .get_int("deleted_ms")
+            .ok_or_else(|| refused("InvalidInput", "reply has no `deleted_ms`"))?;
+        Ok(Self {
+            project,
+            stack,
+            deleted_ms,
+        })
+    }
+}
+
+/// `project.list` in a worker (T4.5c): Store `store`'s filtered project
+/// listing, the same `layerfs_project::store::projects` a local or
+/// PostgreSQL Store is read with, so a project retired in the Store is
+/// hidden here too. A worker's root does not hold the caller's home
+/// entries; the caller intersects this listing with them (`project.list`,
+/// `project.get`).
+#[derive(Clone, Debug)]
+pub struct ListingFrame {
+    /// The Store to list.
+    pub store: StoreName,
+    /// The Store's record: it opens the Store under the worker's root.
+    pub store_record: Option<SdkValue>,
+}
+
+/// One project a worker's Store listing names.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ListedProject {
+    /// Its name in the Store.
+    pub name: String,
+    /// Its LayerStack.
+    pub stack: LayerStackId,
+}
+
+/// `project.list` worker reply: `{ kind: "Listed", projects: [{ name,
+/// stack_id }] }`, in the Store's name order.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ListingReply {
+    /// The Store's live projects.
+    pub projects: Vec<ListedProject>,
+}
+
+impl ListingFrame {
+    /// The `project.list` frame: `{ store, store_record? }`.
+    pub fn encode(&self) -> SdkValue {
+        let mut fields = vec![("store", SdkValue::text(self.store.as_str()))];
+        fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
+        map(fields)
+    }
+
+    /// A `project.list` frame: no Store, then a bad Store name are refused.
+    pub fn decode(frame: &SdkValue) -> Result<Self> {
+        Ok(Self {
+            store: StoreName::parse(required(frame.get_text("store"), "store")?)?,
+            store_record: frame.get("store_record").cloned(),
+        })
+    }
+}
+
+impl ListingReply {
+    /// The reply a worker sends.
+    pub fn encode(&self) -> SdkValue {
+        let projects = self
+            .projects
+            .iter()
+            .map(|project| {
+                map(vec![
+                    ("name", SdkValue::text(&project.name)),
+                    ("stack_id", SdkValue::text(hex(&project.stack.to_bytes()))),
+                ])
+            })
+            .collect();
+        map(vec![
+            ("kind", SdkValue::text("Listed")),
+            ("projects", SdkValue::List(projects)),
+        ])
+    }
+
+    /// The reply fields; `kind` must be `Listed`, and every project names
+    /// its Store name and its LayerStack identity.
+    pub fn decode(frame: &SdkValue) -> Result<Self> {
+        if frame.get_text("kind") != Some("Listed") {
+            return Err(refused(
+                "Failed",
+                "the worker project.list reply is not `Listed`",
+            ));
+        }
+        let Some(SdkValue::List(items)) = frame.get("projects") else {
+            return Err(refused("InvalidInput", "reply has no `projects` list"));
+        };
+        let mut projects = Vec::with_capacity(items.len());
+        for item in items {
+            let name = item
+                .get_text("name")
+                .ok_or_else(|| refused("InvalidInput", "reply project has no `name`"))?
+                .to_owned();
+            let stack = stack_id(required(item.get_text("stack_id"), "stack_id")?)?;
+            projects.push(ListedProject { name, stack });
+        }
+        Ok(Self { projects })
     }
 }

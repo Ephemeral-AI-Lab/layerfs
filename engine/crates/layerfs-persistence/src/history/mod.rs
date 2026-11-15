@@ -1,4 +1,5 @@
 //! Shared history operations over typed persistence transactions.
+mod admission;
 mod allocation;
 mod ancestry;
 mod bindings;
@@ -7,16 +8,20 @@ mod catalog;
 mod commit;
 mod digests;
 mod hints;
+mod kept;
 mod layerstack;
 mod lineage;
 mod lineage_backfill;
 mod merge;
+mod objects;
 mod paths;
 mod position;
 mod provider;
 mod removal;
 mod rows;
 mod transaction;
+pub use kept::{KeptHistory, KeptNode, KeptNodeId};
+pub use objects::{KeptObjects, KeptWaste, MarkResult};
 pub(crate) use lineage_backfill::backfill_lineage;
 pub use provider::HistoryProvider;
 pub(crate) use rows::{

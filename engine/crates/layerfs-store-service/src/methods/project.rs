@@ -95,14 +95,18 @@ pub fn remove_file(service: &StoreService, args: &SdkValue) -> Answer {
         .map_or(0, |elapsed| {
             i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX)
         });
+    let intent = crate::history::admission::project_removal(&stack);
     let outcome = service
         .store
         .history()
-        .remove_path(&PathRemovalRequest {
-            stack: stack.id,
-            path: normalized.as_bytes().to_vec(),
-            removed_ms,
-        })
+        .gc_remove_path(
+            &PathRemovalRequest {
+                stack: stack.id,
+                path: normalized.as_bytes().to_vec(),
+                removed_ms,
+            },
+            &intent,
+        )
         .map_err(lookup::history)?;
     Ok(SdkValue::map([
         (

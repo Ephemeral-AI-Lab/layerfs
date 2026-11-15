@@ -16,6 +16,9 @@ use layerfs_storage::{
 use postgres::types::ToSql;
 
 impl HistoryStatements for Transaction<'_> {
+    fn mechanics(&self) -> &dyn Mechanics {
+        self
+    }
     fn history(&self, key: &str, params: Vec<Param>) -> Result<Vec<Record>, BackendError> {
         match history::statements::qualified(key) {
             Some(sql) => self.query(&sql.replace("{s}", self.schema), params),
