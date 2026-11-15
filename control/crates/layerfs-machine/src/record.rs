@@ -319,6 +319,7 @@ impl MachineRecord {
                     ("sqlite", SdkValue::Bool(false)),
                     ("postgresql_sandbox", SdkValue::Bool(false)),
                     ("reason", SdkValue::text(reason)),
+                    ("log", SdkValue::Bool(false)),
                 ]);
                 let name = self.platform_name().unwrap_or_default();
                 (name, "-", supports, "unsupported")

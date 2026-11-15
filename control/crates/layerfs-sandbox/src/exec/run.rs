@@ -34,6 +34,8 @@ pub struct Exec<'a> {
     /// The Workspace's id, from a caller that keeps its record and the
     /// command's (#535 G4): no record is kept on this side.
     pub workspace: Option<&'a str>,
+    /// The log tag of the call that asked for it, for the command's record.
+    pub tag: Option<&'a str>,
 }
 
 /// One command to its end: exit code, stdout, stderr and its stop handle's
@@ -112,7 +114,8 @@ pub fn exec(host: &Host, exec: &Exec<'_>) -> Outcome {
                 .find(|(_, record)| record.path() == Some(directory.as_str()))
                 .and_then(|(_, record)| record.name().map(str::to_owned));
             // its stop handle is recorded once the command runs in it
-            let record = ExecRecord::new(&id, &workspace, (&directory, named.as_deref()));
+            let record = ExecRecord::new(&id, &workspace, (&directory, named.as_deref()))
+                .started_by(exec.tag, command);
             let unreached = &mut crate::exec::cancel::unreached;
             Some(Running::start(
                 &state.directory,

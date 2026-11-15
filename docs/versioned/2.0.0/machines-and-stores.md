@@ -28,7 +28,9 @@ the [contract](../../architecture/control/machines/platforms.md#removed-platform
 - "Platform" is only a machine's kind. A caller never chooses how a
   Sandbox runs; the kind decides.
 - `machine list` answers every machine, each with `supports` (`sqlite`,
-  `postgresql_sandbox` and the `reason` when not), its platform's row of the
+  `postgresql_sandbox` and the `reason` when not, and `log`: whether the
+  machine has a worker whose log can be read, which is never the case on
+  `native`), its platform's row of the
   support table, and its live `state` as `machine status` reads it
   (`native` is always `ready`; the built-in `docker` shows `stopped` until
   `machine start docker`). `machine platforms` answers each platform on this host:

@@ -58,6 +58,14 @@ fn machines_over_records() {
     for machine in machines {
         let supports = machine.get("supports").unwrap();
         assert!(supports.get("sqlite").is_some(), "{machine:?}");
+        // a worker log exists only where the machine's calls go to a
+        // worker: `docker` here, never `native` (layerfs-project#178)
+        let worker = machine.get_text("name") == Some("docker");
+        assert_eq!(
+            supports.get("log"),
+            Some(&SdkValue::Bool(worker)),
+            "{machine:?}"
+        );
     }
     // the support table for this host, each row with its live probe
     let platforms = call(&home, "machine.platforms", &[]).unwrap();
@@ -75,6 +83,10 @@ fn machines_over_records() {
 
     let native = call(&home, "machine.get", &[("name", t("native"))]).unwrap();
     assert_eq!(native.get_text("platform"), Some("native"));
+    let log = |machine: &SdkValue| machine.get("supports").and_then(|s| s.get("log")).cloned();
+    assert_eq!(log(&native), Some(SdkValue::Bool(false)), "{native:?}");
+    let docker = call(&home, "machine.get", &[("name", t("docker"))]).unwrap();
+    assert_eq!(log(&docker), Some(SdkValue::Bool(true)), "{docker:?}");
     assert_eq!(
         call(&home, "machine.get", &[("name", t("nope"))])
             .unwrap_err()

@@ -63,6 +63,8 @@ pub mod reopen;
 #[doc(hidden)]
 pub mod route;
 #[doc(hidden)]
+pub mod run_folder;
+#[doc(hidden)]
 pub mod runtime;
 #[doc(hidden)]
 pub mod unmount_guard;

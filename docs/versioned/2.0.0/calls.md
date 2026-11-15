@@ -279,6 +279,27 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   Sandbox with no id. Each Workspace carries `ws`
   (`<sandbox>:<name>` when named, else `<sandbox>:<path>`), `name` (or
   `null`) and `path`, beside the daemon's fields.
+- `get` also answers `workspace_capacity`, how many Workspaces one Sandbox
+  holds at once (16), whatever the Sandbox's state, and for each Workspace:
+  - `running`: the commands running in it now, oldest first, whichever
+    client started them: `[{exec_id, started, tag, program}]`. `started`
+    is ms since the epoch; `tag` is the log tag of the `workspace exec`
+    call that started it (`log_tag`, else `LAYERFS_LOGS_TAG`) or `null`;
+    `program` is the command's first word that is not a `NAME=value`
+    assignment, or `null`. No argument and no environment value is shown.
+    A command that ended is not listed, nor is one whose client is gone
+    (the next cancel, unmount or close ends that one). `null` when the
+    command records could not be read.
+  - `overlay_bytes`: the size of the Workspace's overlay file, read from
+    its folder entry (the file is not opened). It includes the size of
+    the empty overlay and only grows until the Workspace is unmounted.
+    `null` when it could not be read; it is always `null` for a Sandbox
+    on a `lima` machine whose daemon this host reaches directly.
+  Both come from files, with no daemon call. A machine whose worker runs
+  an earlier build answers Workspaces without these two fields.
+  ```text
+  {"name":"s1","project":"shop/api","machine":"native",…,"state":"running","workspaces":[{"workspace":"5f…","namespace":1,"branch":"dev",…,"path":"/…/workspaces/1","name":"w","ws":"s1:w","running":[{"exec_id":"exec-9c0f6f0d2a1b4e77","started":1794000000000,"tag":"dsh:s9:t1","program":"npm"}],"overlay_bytes":188416}],"daemon_capacity":{…},"workspace_capacity":16,"next_page_pos":null}
+  ```
 - `list` and `get` start no machine (#535 P4). `get` on a Sandbox whose
   machine is down answers its record with `workspaces: []` and
   `down_reason`, the reason its worker was not reached.
@@ -389,7 +410,7 @@ form.
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `list` | — | — | every machine, with what it supports (`supports`) |
+| `list` | — | — | every machine, with what it supports (`supports`: `sqlite`, `postgresql_sandbox`, `reason`, and `log`, whether it has a worker whose log can be read; never on `native`) |
 | `platforms` | — | — | the platforms this host and build support: backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox runs and why not, readiness and options (#535; the rows of `control/SUPPORT.json`) |
 | `get` | `name` | — | a machine's record |
 | `images` | `name` | — | the Sandbox images the machine holds (`images`: `id`, `refs`, `size`, `architecture`, `source` `bundle`/`machine`/`imported`, `sandboxes`, `last_used`), its `default`, `free` bytes and `architecture`; and the host's tagged Docker images it could copy (`docker`, `available`: `id`, `refs`, `size`, `os`, `architecture`, `usable`, `reason`, `need`, `fits`). macOS `native` answers `mode: "host"` with none. Never starts a machine |
@@ -406,7 +427,7 @@ Run:
 
 ```console
 $ layerfs machine list
-{"machines":[{"name":"docker","platform":"docker","backend":"namespaces","state":"ready","cpus":null,"memory":null,"disk":null,"supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"stores":[],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","state":"ready",…,"stores":["shop"],"sandboxes":[]}]}
+{"machines":[{"name":"docker","platform":"docker","backend":"namespaces","state":"ready","cpus":null,"memory":null,"disk":null,"supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null,"log":true},"stores":[],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","state":"ready",…,"stores":["shop"],"sandboxes":[]}]}
 
 $ layerfs machine platforms
 {"host":"macos","platforms":[{"platform":"native","how":"built_in","backend":"native","kernel":"nfs","sqlite":"in_process","postgresql":{"store_calls":"in_process","sandbox":true,"reason":null},"ready":true,"missing":[],"version":null,"options":[],"description":"…"},…,{"platform":"lima","how":"created","backend":"namespaces","kernel":"fuse","sqlite":"worker","postgresql":{"store_calls":"in_process","sandbox":true,"reason":null},"ready":true,"missing":[],"version":"limactl version 2.2.1","options":[{"name":"cpus","kind":"int"},…],"description":"…"},…]}

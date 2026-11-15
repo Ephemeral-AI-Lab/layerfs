@@ -9,14 +9,19 @@ use std::path::{Path, PathBuf};
 pub struct Context<'a> {
     /// The home every record lives in.
     pub home: PathBuf,
+    /// The tag of the call's log line, if it has one (`log_tag`, else
+    /// `LAYERFS_LOGS_TAG`): `workspace.exec` keeps it in its command's
+    /// record.
+    pub tag: Option<String>,
     events: Events<'a>,
 }
 
 impl<'a> Context<'a> {
-    /// A call's context: its home and its one event stream.
-    pub fn new(home: PathBuf, events: &'a mut dyn FnMut(SdkValue)) -> Self {
+    /// A call's context: its home, its log tag and its one event stream.
+    pub fn new(home: PathBuf, tag: Option<String>, events: &'a mut dyn FnMut(SdkValue)) -> Self {
         Context {
             home,
+            tag,
             events: Events::new(events),
         }
     }

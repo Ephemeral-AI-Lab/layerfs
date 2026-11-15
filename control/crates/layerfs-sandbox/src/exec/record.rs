@@ -4,15 +4,18 @@
 //! that keeps that record (the home on `native` and for a Sandbox it reaches
 //! directly, a worker's root on every other machine).
 //!
-//! `{ v, id, workspace, path, name, owner, route, stop, started, cancel? }`:
-//! its owner process (pid, kernel start time, boot, as an `op` names its
-//! owner), its route (`local`, or `machine:<name>` when the command runs in
-//! that machine's worker) and its stop handle (`{ cgroup: { path } }` or
-//! `{ group: { pgid, leader } }`, null until known). A cancel marks it
-//! (`cancel`, when) before it signals. It is created new under the Sandbox
-//! lock when the command starts (a duplicate id is refused without a scan)
-//! and removed when the command ends ([`Running`]). A record whose owner is
-//! gone is stale.
+//! `{ v, id, workspace, path, name, owner, route, stop, started, tag?,
+//! program?, cancel? }`: its owner process (pid, kernel start time, boot, as
+//! an `op` names its owner), its route (`local`, or `machine:<name>` when
+//! the command runs in that machine's worker), its stop handle
+//! (`{ cgroup: { path } }` or `{ group: { pgid, leader } }`, null until
+//! known), the log tag of the call that started it and the program its
+//! command starts with ([`program`]; each written only when there is one,
+//! so never in a record from before layerfs-project#178). A cancel marks
+//! it (`cancel`, when) before it signals. It is created new under the
+//! Sandbox lock when the command starts (a duplicate id is refused without
+//! a scan) and removed when the command ends ([`Running`]). A record whose
+//! owner is gone is stale: [`running`] leaves it out.
 use crate::exec::id::ExecId;
 use crate::record::lock_in;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -57,6 +60,48 @@ pub struct ExecRecord {
     pub started: i64,
     /// When a cancel marked it, if one did.
     pub cancel: Option<i64>,
+    /// The log tag of the call that started it, if it had one.
+    pub tag: Option<String>,
+    /// The program its command starts with ([`program`]).
+    pub program: Option<String>,
+}
+
+/// The longest [`program`] a record keeps, in characters.
+const PROGRAM_MAX: usize = 64;
+
+/// The program bash `command` starts with, for its record and
+/// `sandbox.get`'s `running`: its first word that is not a variable
+/// assignment (`NAME=value`), cut to [`PROGRAM_MAX`] characters. Words
+/// are split as bash splits them, so a quoted value with spaces stays one
+/// word: no argument and no environment value is ever kept.
+pub fn program(command: &str) -> Option<String> {
+    let mut words = vec![String::new()];
+    let (mut quote, mut escaped) = (None, false);
+    for c in command.chars() {
+        match (quote, c) {
+            _ if escaped => escaped = false,
+            (Some('\''), '\'') | (Some('"'), '"') => quote = None,
+            (Some('\''), _) => {}
+            (_, '\\') => escaped = true,
+            (None, '\'' | '"') => quote = Some(c),
+            (None, c) if c.is_whitespace() => {
+                words.push(String::new());
+                continue;
+            }
+            _ => {}
+        }
+        words.last_mut()?.push(c);
+    }
+    let assigned = |word: &str| {
+        word.split_once('=').is_some_and(|(name, _)| {
+            !name.is_empty()
+                && !name.starts_with(|c: char| c.is_ascii_digit())
+                && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        })
+    };
+    let first = (words.iter()).find(|word| !word.is_empty() && !assigned(word))?;
+    let kept = first.chars().filter(|c| !c.is_control());
+    Some(kept.take(PROGRAM_MAX).collect())
 }
 
 /// The folder of Workspace `workspace`'s records in Sandbox folder `dir`.
@@ -84,7 +129,29 @@ impl ExecRecord {
             stop: None,
             started: now_ms(),
             cancel: None,
+            tag: None,
+            program: None,
         }
+    }
+
+    /// The record of a command `command` that the call tagged `tag`
+    /// started: its tag when a log line may carry it
+    /// (`layerfs_home::logs::tag`) and its [`program`].
+    pub fn started_by(mut self, tag: Option<&str>, command: &str) -> Self {
+        self.tag = tag.and_then(layerfs_home::logs::tag);
+        self.program = program(command);
+        self
+    }
+
+    /// The command as `sandbox.get` lists it under its Workspace's
+    /// `running`: `{ exec_id, started, tag, program }`, nothing more.
+    pub fn shown(&self) -> SdkValue {
+        SdkValue::map([
+            ("exec_id", SdkValue::text(&self.id)),
+            ("started", SdkValue::Int(self.started)),
+            ("tag", SdkValue::opt_text(self.tag.clone())),
+            ("program", SdkValue::opt_text(self.program.clone())),
+        ])
     }
 
     /// This process's identity fields, as a record names its owner.
@@ -121,6 +188,10 @@ impl ExecRecord {
             ),
             ("started", SdkValue::Int(self.started)),
         ];
+        // written only when there is one, so a record from before the
+        // fields is put back byte for byte by a cancel that rewrites it
+        fields.extend(self.tag.as_deref().map(|tag| ("tag", text(tag))));
+        fields.extend(self.program.as_deref().map(|p| ("program", text(p))));
         fields.extend(self.cancel.map(|at| ("cancel", SdkValue::Int(at))));
         SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect())
     }
@@ -142,6 +213,8 @@ impl ExecRecord {
             stop: value.get("stop").and_then(stop_of),
             started: value.get_int("started")?,
             cancel: value.get_int("cancel"),
+            tag: text("tag"),
+            program: text("program"),
         })
     }
 }
@@ -220,6 +293,22 @@ pub fn listed(dir: &Path, workspace: Option<&str>) -> Result<Vec<(PathBuf, ExecR
         }
     }
     Ok(found)
+}
+
+/// The commands still running in Sandbox folder `dir`, oldest first: every
+/// record whose owner process is the one it names and still runs
+/// ([`ExecRecord::owned`]), the rule `sandbox.close` and
+/// `workspace.unmount` refuse `Busy` by ([`super::cancel::settle`]). A
+/// stale record (its owner gone) is left out and left alone: this is a
+/// read, and the next cancel, unmount or close ends it. `None` when the
+/// records cannot be read.
+pub fn running(dir: &Path) -> Option<Vec<ExecRecord>> {
+    let mut live: Vec<ExecRecord> = (listed(dir, None).ok()?.into_iter())
+        .map(|(_, record)| record)
+        .filter(ExecRecord::owned)
+        .collect();
+    live.sort_by(|a, b| (a.started, &a.id).cmp(&(b.started, &b.id)));
+    Some(live)
 }
 
 fn entries(dir: &Path) -> Result<Vec<PathBuf>> {
