@@ -20,7 +20,10 @@ pub struct GetRequest {
 
 /// One Workspace its Sandbox's daemon lists (#536 C3).
 pub struct ListedWorkspace {
-    /// The daemon's item, as it answered it.
+    /// The daemon's item, as it answered it, with what the side that keeps
+    /// the Workspace's record added (layerfs-project#178): the commands
+    /// `running` in it and its `overlay_bytes`. A worker from before those
+    /// fields answers neither, and the item then has neither.
     pub item: SdkValue,
     /// Its kernel path: the item's `path`, or the daemon's `directory`
     /// from a worker that does not give it.
@@ -100,6 +103,10 @@ pub struct Got {
     /// Its daemon's control-capacity read model (#540), when a running
     /// Sandbox answered the bounded read (#543).
     pub daemon_capacity: Option<CapacityModel>,
+    /// How many Workspaces a Sandbox holds at once: control's own constant
+    /// ([`crate::lifecycle::WORKSPACES`]), not a daemon setting, so it is
+    /// there whatever the Sandbox's state (layerfs-project#178, D10).
+    pub workspace_capacity: u32,
 }
 
 /// Its record with one page of its Workspaces. Reading never clears an
@@ -165,6 +172,7 @@ pub fn get(home: &Path, events: &mut Events<'_>, request: &GetRequest) -> Result
         down,
         next,
         daemon_capacity,
+        workspace_capacity: crate::lifecycle::WORKSPACES,
     })
 }
 

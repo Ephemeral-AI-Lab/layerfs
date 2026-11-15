@@ -28,7 +28,9 @@ the [contract](../../architecture/control/machines/platforms.md#removed-platform
 - "Platform" is only a machine's kind. A caller never chooses how a
   Sandbox runs; the kind decides.
 - `machine list` answers every machine, each with `supports` (`sqlite`,
-  `postgresql_sandbox` and the `reason` when not), its platform's row of the
+  `postgresql_sandbox` and the `reason` when not, and `log`: whether the
+  machine has a worker whose log can be read, which is never the case on
+  `native`), its platform's row of the
   support table, and its live `state` as `machine status` reads it
   (`native` is always `ready`; the built-in `docker` shows `stopped` until
   `machine start docker`). `machine platforms` answers each platform on this host:
@@ -84,11 +86,14 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
   holds many Stores, and one worker. A VM name keeps no punctuation, so a
   name that differs from another machine's only in `.`, `_` or `-` is
   refused `Exists`; a new machine's name is at most 46 characters (the VM
-  name is at most 63, and the prefix takes 17). Lima itself refuses an
-  instance whose socket path `<Lima home>/<VM name>/ssh.sock.<16 digits>`
-  reaches 104 characters, so with a long home folder a `lima` machine's
-  name must be shorter still (`limactl create` says so, and the machine
-  is not created).
+  name is at most 63, and the prefix takes 17). A `lima` machine's name
+  is usually shorter still: Lima refuses an instance whose socket path
+  `<Lima home>/<VM name>/ssh.sock.<16 digits>` reaches 104 characters
+  (the Lima home is `LIMA_HOME`, else `~/.lima`, with its links
+  resolved). `machine create` checks this before anything is made and
+  refuses a longer name `InvalidInput`, stating the longest name that
+  fits on this host: 59 characters less the length of the Lima home's
+  path (39 where that is the 20-character `/Users/<name>/.lima`).
 - `image` is the image its Sandboxes run in. The default Sandbox image (owner
   decision O36) is LayerFS's runtime image
   `layerfs-352-runtime:node24-https-apt-20261024` (image digest

@@ -7,8 +7,8 @@ use super::guest::Guest;
 use super::worker;
 use crate::adapter::{adapter, refused};
 use crate::error::{Code, MachineError};
-use crate::platform::{HostOs, Route};
-use crate::spec::{Bundle, Forward, Running, Spec};
+use crate::platform::{HostOs, Platform, Route};
+use crate::spec::{Bundle, Forward, NameLimit, Running, Spec};
 use std::path::Path;
 use std::time::Instant;
 
@@ -43,6 +43,13 @@ pub struct Status {
     pub free_disk: Option<u64>,
     pub tool_version: Option<String>,
     pub down_reason: Option<String>,
+}
+
+/// The provider's own limit on the name of a `platform` VM on this host,
+/// beyond the plain-name rule; `None` where it has none. Read from the
+/// provider's settings: the provider is asked nothing and nothing is made.
+pub fn name_limit(platform: Platform) -> Option<NameLimit> {
+    adapter(platform).name_limit()
 }
 
 /// Makes a new VM machine and starts its worker. A create that fails before

@@ -305,6 +305,11 @@ pub fn host(home: &Path, record: &SandboxRecord, target: &Target, message: Messa
 
 /// `sandbox.get`'s Workspace list of forwarded Sandbox `record`: a daemon
 /// that cannot be reached is [`Unreached`], which the get reports as down.
+/// The commands `running` in each Workspace come from this home's exec
+/// records. Each `overlay_bytes` is null: the run folder is in the
+/// Sandbox's machine, and a get asks that machine's worker nothing. An
+/// answer of that side ([`crate::run_folder::read`], run there) is put on
+/// this list with [`crate::run_folder::merged`].
 pub fn list(home: &Path, record: &SandboxRecord) -> std::result::Result<Outcome, Unreached> {
     match served(home, record, Call::ListWorkspaces { path: None }) {
         Err(refusal) if refusal.code == "Unavailable" => Err(Unreached(refusal)),

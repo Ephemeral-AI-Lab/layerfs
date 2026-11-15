@@ -40,6 +40,7 @@ fn a_frame_keeps_the_untyped_request_s_fields_and_order() {
         spool: false,
         exec_id: None,
         workspace: None,
+        tag: None,
     };
     assert_eq!(
         print(&encode(&sent(exec, Message::Null)).unwrap()),
@@ -86,6 +87,7 @@ fn a_frame_reads_back_to_its_request() {
             spool: true,
             exec_id: Some("e1".to_owned()),
             workspace: Some("ab".repeat(32)),
+            tag: Some("dsh:s1".to_owned()),
         },
         Call::ExecCancel {
             path: Some("w2".to_owned()),

@@ -46,7 +46,7 @@ The **summary** is `MachineRecord::to_sdk`
 ([`record.rs`](../../../../control/crates/layerfs-machine/src/record.rs)):
 
 ```text
-{ name, platform, backend, supports: { sqlite, postgresql_sandbox, reason },
+{ name, platform, backend, supports: { sqlite, postgresql_sandbox, reason, log },
   state, cpus, memory, disk, stores: [name], postgresql: [name],
   sandboxes: [name], image?, docker?, wsl?, daemon?, os_image?, error?,
   ssh?, host?, vm_name? }
@@ -57,6 +57,7 @@ The **summary** is `MachineRecord::to_sdk`
 | `platform` | `native`, `docker`, `apple-container` or `lima`; an older home's record may still name the removed `firecracker`, `microsandbox` or `ssh` |
 | `backend` | the Sandbox backend on this host: `native`, `namespaces` (also on `docker`), or `-` (always for a removed platform) |
 | `supports` | the platform's support row on this host; a removed platform supports nothing, with the removal as `reason` |
+| `supports.log` | whether the machine has a worker log to read (layerfs-project#178): its calls go to a worker and the support table refuses it nothing on this host, so it is a worker this build starts. True for `docker`, `lima` and `apple-container` where they run; false on every `native` (its calls run in the caller's process; on Windows its WSL2 worker is not designed) and for a removed platform. Clients read this field and never test platform names (`Supports::log`, [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs)) |
 | `cpus`, `memory`, `disk` | the recorded size (bytes for memory and disk); null on a built-in machine |
 | `stores`, `postgresql`, `sandboxes` | sqlite Stores on it, PostgreSQL Stores attached to it, Sandboxes recorded on it ([`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs)) |
 | `error` | the probe's reason when `unknown`; the removal for a removed platform; a failed create's error |
@@ -383,7 +384,12 @@ new home's first call. A record without `vm_name` (an existing home's
 `docker`) means `lfs-<home id prefix>-<name>`, the formula before
 layerfs-project#180, so it keeps its container and volume. Under the home
 lock a create refuses `InvalidInput` a name longer than 46 characters (a VM
-name is at most 63, the prefix takes 17) and `Exists` a name whose VM name,
+name is at most 63, the prefix takes 17), then a name whose VM name is
+longer than the platform's provider takes on this host
+(`layerfs_platform::name_limit`, the adapters' `name_limit`: only `lima` has
+one, since `limactl create` refuses an instance whose
+`<Lima home>/<VM name>/ssh.sock.<16 digits>` reaches 104 characters; the
+message states the longest name that fits), and `Exists` a name whose VM name,
 under either formula, is another machine's. The name is claimed with an
 `op` `create` under the home lock; the boot runs under `start.lock` only.
 

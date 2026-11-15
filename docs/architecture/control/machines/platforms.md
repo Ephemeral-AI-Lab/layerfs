@@ -211,7 +211,10 @@ Windows column is table data, not a built host (`#![cfg(unix)]`).
 `machine create` and `sandbox create` refuse `Unsupported` with the row's
 reason; `sandbox create` wraps it as "a Sandbox of <kind> Store <s> cannot
 run on machine <m> (<platform>): <reason>". `machine.list` and `get` give
-each machine its row's `supports: {sqlite, postgresql_sandbox, reason}`.
+each machine its row's `supports: {sqlite, postgresql_sandbox, reason, log}`;
+`log` is true where the row's sqlite call site is a worker and the table
+refuses the platform nothing on the host (a worker this build starts, so a
+worker log exists), false on every `native`.
 
 ### SUPPORT.json
 

@@ -92,12 +92,11 @@ pub fn call_scoped(
     events: &mut dyn FnMut(SdkValue),
     client: Client,
 ) -> Outcome {
-    let log = Log::start(name, client, take_tag(&mut args));
-    let mut argv = None;
+    let mut log = Log::start(name, client, take_tag(&mut args));
     let outcome = layerfs_home::trace::stepped(name, || {
-        scoped(families, home_path, scope, name, args, events, &mut argv)
+        scoped(families, home_path, scope, name, args, events, &mut log)
     });
-    log.finish(home_path, argv, &outcome);
+    log.finish(home_path, &outcome);
     outcome
 }
 
@@ -110,7 +109,7 @@ pub fn refuse_early(
     refusal: layerfs_bridge::control::SdkRefusal,
 ) -> Outcome {
     let outcome = Err(refusal);
-    Log::start(name, client, None).finish(home_path, None, &outcome);
+    Log::start(name, client, None).finish(home_path, &outcome);
     outcome
 }
 
@@ -132,6 +131,8 @@ struct Log<'n> {
     name: &'n str,
     client: Client,
     tag: Option<String>,
+    /// The call as the caller asked it, once its arguments were checked.
+    argv: Option<Vec<SdkValue>>,
     at: i64,
     started: Instant,
     on: bool,
@@ -149,15 +150,16 @@ impl<'n> Log<'n> {
             name,
             client,
             tag,
+            argv: None,
             at: layerfs_home::home::now_ms(),
             started: Instant::now(),
             on,
         }
     }
 
-    /// Appends the line once the call has its outcome; `argv` is none for a
-    /// call refused before its arguments were checked.
-    fn finish(self, home_path: Option<&Path>, argv: Option<Vec<SdkValue>>, outcome: &Outcome) {
+    /// Appends the line once the call has its outcome; its `argv` is none
+    /// for a call refused before its arguments were checked.
+    fn finish(self, home_path: Option<&Path>, outcome: &Outcome) {
         if !self.on {
             return;
         }
@@ -165,7 +167,7 @@ impl<'n> Log<'n> {
             return;
         };
         let ms = i64::try_from(self.started.elapsed().as_millis()).unwrap_or(i64::MAX);
-        let argv = argv.unwrap_or_else(|| render::bare(self.name));
+        let argv = (self.argv).unwrap_or_else(|| render::bare(self.name));
         let line = render::line(
             self.at,
             ms,
@@ -186,13 +188,13 @@ fn scoped(
     name: &str,
     args: SdkValue,
     events: &mut dyn FnMut(SdkValue),
-    argv: &mut Option<Vec<SdkValue>>,
+    log: &mut Log<'_>,
 ) -> Outcome {
     let spec = table::find(families, name)
         .ok_or_else(|| refused("InvalidInput", format!("no call named `{name}`")))?;
     let mut args = SdkValue::Map(check::check(spec, args)?);
     // logged as the caller asked, before the scope rewrites the arguments
-    *argv = Some(render::argv(spec, &args, scope));
+    log.argv = Some(render::argv(spec, &args, scope));
     if let Some(scope) = scope {
         args = scope.apply(name, args)?;
     }
@@ -211,7 +213,7 @@ fn scoped(
         scope.owns(&home, name, &args)?;
     }
     layerfs_home::trace::step("dispatch");
-    let mut context = Context::new(home, events);
+    let mut context = Context::new(home, log.tag.clone(), events);
     let value = (spec.run)(&mut context, &args)?;
     // a scoped `branch.list` names its Branches relative to the namespace
     // in the family (it pages through them there)

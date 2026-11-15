@@ -8,7 +8,7 @@ use crate::reach::{dial, Loopback};
 use crate::setup::forward::shared;
 use crate::setup::guest::Guest;
 use crate::setup::Status;
-use crate::spec::{Bundle, Forward, Running, Spec, Tools};
+use crate::spec::{Bundle, Forward, NameLimit, Running, Spec, Tools};
 
 pub(crate) struct Native;
 pub(crate) static ADAPTER: Native = Native;
@@ -20,6 +20,9 @@ impl Adapter for Native {
     }
     fn guest(&self, spec: &Spec) -> Result<Guest, MachineError> {
         Err(refused(spec, "runs in-process; its files are the host's"))
+    }
+    fn name_limit(&self) -> Option<NameLimit> {
+        None
     }
     fn create(&self, spec: &Spec, _bundle: &Bundle) -> Result<Running, MachineError> {
         Err(refused(spec, "is built in and never created"))

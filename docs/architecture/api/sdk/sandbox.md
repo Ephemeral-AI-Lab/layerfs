@@ -26,7 +26,7 @@ The `sandbox` calls: start, list, read and stop a named Sandbox, one project's W
 | --- | --- |
 | [`sandbox.create`](#sandboxcreate) | the Sandbox record, `state: "running"`, `forward_failed?` |
 | [`sandbox.list`](#sandboxlist) | `{ items: [record], next_page_pos }` |
-| [`sandbox.get`](#sandboxget) | the record, live `state`, one page of `workspaces`, `down_reason?`, `down?`, `daemon_capacity?` |
+| [`sandbox.get`](#sandboxget) | the record, live `state`, one page of `workspaces` (each with `running` and `overlay_bytes`), `workspace_capacity`, `down_reason?`, `down?`, `daemon_capacity?` |
 | [`sandbox.close`](#sandboxclose) | how it ended |
 
 The **record** is `SandboxRecord::to_sdk`
@@ -115,17 +115,31 @@ CLI     layerfs sandbox get <name> [--page-size <page-size>] [--page-pos <page-p
 { ...record, state,
   workspaces: [ { ws, name, path, workspace, namespace, branch, base,
                   base_layer, root, activity, mounted, directory,
-                  head_moved_since_mount, dirty?, pending_merge, revision } ],
-  next_page_pos, down_reason?, down?, daemon_capacity? }
+                  head_moved_since_mount, dirty?, pending_merge, revision,
+                  running: [ { exec_id, started, tag, program } ] | null,
+                  overlay_bytes: <int> | null } ],
+  workspace_capacity, next_page_pos, down_reason?, down?, daemon_capacity? }
 ```
 
 | Field | Meaning | Source |
 | --- | --- | --- |
 | `state` | derived with the machine's answer: `lost` when the record has an id, no close intent, and the machine runs no such Sandbox (`sandbox.close` clears it) | [`record/sandbox.rs`](../../../../control/crates/layerfs-sandbox/src/record/sandbox.rs) |
 | `workspaces[].ws` | `<sandbox>:<name>` when the mount was named, else `<sandbox>:<path>`; the rest is the daemon's read model | [`get.rs`](../../../../control/crates/layerfs-sandbox/src/get.rs), [`operator/inspect.rs`](../../../../engine/crates/layerfs-store-service/src/operator/inspect.rs) |
+| `workspaces[].running` | the commands running in the Workspace now, oldest first, whichever client started them: the exec records of the side that keeps the Workspace's record (the home on `native` and for a forwarded Sandbox, the worker root otherwise) whose owner process is the one recorded and still runs (pid, start time and boot), the rule `unmount` and `close` refuse `Busy` by. `started` is ms since the epoch; `tag` is the log tag of the `workspace.exec` call that started it (`log_tag`, else `LAYERFS_LOGS_TAG`) or null; `program` is the command's first word that is not a `NAME=value` assignment, at most 64 characters, or null: never an argument or an environment value. A command that ended has no record; a stale record (its owner gone) is not listed and not touched. `null` when the records could not be read. A record written before these fields lists with `tag` and `program` null | [`exec/record.rs`](../../../../control/crates/layerfs-sandbox/src/exec/record.rs) `running`, `program`; [`dispatch.rs`](../../../../control/crates/layerfs-sandbox/src/dispatch.rs) `listed` |
+| `workspaces[].overlay_bytes` | the size in bytes of the Workspace's overlay file, `<run folder>/overlay/<namespace>.sqlite`, from its `lstat` on the side that has the run folder; the file is never opened. A high-water mark: it includes the template's size and grows until unmount (the overlay is never vacuumed). `null` where that side did not answer: always for a forwarded Sandbox in this build (its run folder is in its machine), and when the file is not there | [`run_folder.rs`](../../../../control/crates/layerfs-sandbox/src/run_folder.rs) |
+| `workspace_capacity` | how many Workspaces one Sandbox holds at once: control's constant `WORKSPACES` (16), which a mount into a full Sandbox is refused `Capacity` by. Not a daemon setting, so it is there whatever the Sandbox's state | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
 | `down_reason` | the worker or forwarded daemon was not reached, or the daemon's control pool had no vacant slot; `workspaces` is then `[]` | `get.rs` |
 | `down` | partial counts from the daemon's pre-handshake capacity notice: `code`, `resource`, `pool_vacant`, `reserved_vacant`, `retained`; absent when the refusal carried none | [`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs) `unanswered` |
 | `daemon_capacity` | the daemon's `backend.daemon.connection_failures` read model, read once, best effort, within 2 s on the connection the Workspace list lent; absent when not read | [`daemon/capacity.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/capacity.rs), [`control_capacity.rs`](../../../../engine/crates/layerfs-bridge/src/control_capacity.rs) |
+
+`running`, `overlay_bytes` and `workspace_capacity` (layerfs-project#178)
+add no daemon call, lock, lease, Store open or write to a get: `running`
+and `overlay_bytes` are put on each Workspace where the Workspace list is
+answered ([`dispatch.rs`](../../../../control/crates/layerfs-sandbox/src/dispatch.rs)
+`listed`), from files read by path. A machine whose worker predates them
+answers Workspaces without `running` and `overlay_bytes`; the get shows
+them without, so a client reads an absent field as "not known" and a
+present `null` as "not observed".
 
 A machine that is down is not an error: it is `down_reason`. A Sandbox with
 an uncertain `op` is shown, not refused; `get` is the call `Unresolved`

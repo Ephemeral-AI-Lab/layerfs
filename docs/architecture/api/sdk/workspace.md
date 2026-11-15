@@ -113,7 +113,10 @@ Output reaches the caller after the command ends; how it is spooled, paged
 and ordered is in [errors and events](../calls/errors-and-events.md#workspaceexec-output).
 While the command runs, its record
 `sandbox/<name>/workspace/<id>/exec/<exec id>.json` lets any process cancel
-it and makes `unmount` and `sandbox.close` refuse `Busy` unless `force`; a
+it, makes `unmount` and `sandbox.close` refuse `Busy` unless `force`, and
+is what `sandbox.get` lists under the Workspace's `running`, with the
+call's log tag (`Context::tag`: `log_tag`, else `LAYERFS_LOGS_TAG`) and the
+command's program; a
 record whose owner process is gone is stale, ended and removed by the next
 call that finds it, logged in `log/exec.jsonl`
 ([`exec/record.rs`](../../../../control/crates/layerfs-sandbox/src/exec/record.rs)).

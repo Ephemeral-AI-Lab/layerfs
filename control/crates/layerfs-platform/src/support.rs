@@ -59,6 +59,12 @@ pub struct Supports {
     pub sqlite: bool,
     pub postgresql_sandbox: bool,
     pub reason: Option<&'static str>,
+    /// Whether the machine has a worker log to read (layerfs-project#178):
+    /// its calls go to a worker and the table refuses it nothing on this
+    /// host, so it is a worker this build starts. False on every `native`:
+    /// its calls run in the caller's process, and on Windows, where they
+    /// would go to a WSL2 worker, the table refuses it.
+    pub log: bool,
 }
 
 const OTHER_HOST: &str = "LayerFS names no host other than macOS, Linux and Windows";
@@ -156,6 +162,7 @@ impl SupportRow {
             sqlite: sqlite.is_ok(),
             postgresql_sandbox: self.postgresql.sandbox,
             reason: self.postgresql.reason,
+            log: sqlite.is_ok() && self.sqlite == Some(CallSite::Worker),
         }
     }
 }

@@ -7,7 +7,7 @@ use crate::probe::{macos_missing, tool_version};
 use crate::reach::{dial, Loopback};
 use crate::setup::guest::Guest;
 use crate::setup::Status;
-use crate::spec::{Bundle, Forward, Running, Spec, Tools};
+use crate::spec::{Bundle, Forward, NameLimit, Running, Spec, Tools};
 
 /// The address a lima guest reaches the host's loopback at (#535 §7.3): the
 /// gateway of Lima's default user-mode network, which the guest's
@@ -26,6 +26,9 @@ impl Adapter for Lima {
     }
     fn guest(&self, spec: &Spec) -> Result<Guest, MachineError> {
         guest(spec)
+    }
+    fn name_limit(&self) -> Option<NameLimit> {
+        super::limit::name_limit()
     }
     fn create(&self, spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
         create(spec, bundle)

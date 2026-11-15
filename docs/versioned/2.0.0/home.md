@@ -126,8 +126,10 @@ hold a password or a bucket key. They are not settings; see
   are written new when a command starts and removed when it ends, on the
   side that keeps the Workspace's record: here on `native` and for a
   Sandbox reached directly; in the machine's worker otherwise. Each names
-  its owning process, its route (`local` or `machine:<name>`) and how it
-  is stopped. A record whose owner is gone is stale: the next exec of its
+  its owning process, its route (`local` or `machine:<name>`), how it
+  is stopped, the log tag of the call that started it and the program its
+  command starts with (never its arguments); `sandbox get` lists the ones
+  still running. A record whose owner is gone is stale: the next exec of its
   id, cancel, unmount or close ends its command, removes it and appends it
   to **`log/exec.jsonl`**. The Workspace's folder goes with its terminal
   unmount.

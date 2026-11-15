@@ -6,6 +6,14 @@
 //! from a daemon that predates the Workspaces-only option, and its record
 //! alone for a stopped machine.
 //!
+//! The fields of layerfs-project#178 ride the same reads and add none:
+//! `workspace_capacity` (16, whatever the Sandbox's state), each Workspace's
+//! `running` (the commands another client started, from the exec records on
+//! the side that keeps them, with their `tag` and `program`; one that ended
+//! or whose owner is gone is not listed) and `overlay_bytes` (the size of
+//! its overlay file where that side has the run folder, by path alone; null
+//! for a forwarded Sandbox). A get still changes no file on either side.
+//!
 //! Nothing runs: a stand-in daemon answers the Workspace list and the
 //! capacity model, and the worker is this build's own server on a scratch
 //! root. Each home has a Store record and no Store file, so a get that
@@ -116,7 +124,8 @@ fn snake(name: &str) -> String {
 
 /// What `sandbox.get` shows for the daemon's `items`: each item as the
 /// daemon answered it (its keys in snake_case, as the call surface shows
-/// every result), with its `path`, `name` and `ws`.
+/// every result), with its `path`, `name` and `ws`, no command `running`
+/// in it and no `overlay_bytes` (these fixtures have no run folder).
 fn shown(items: &[SdkValue]) -> Vec<BTreeMap<String, SdkValue>> {
     items
         .iter()
@@ -134,6 +143,8 @@ fn shown(items: &[SdkValue]) -> Vec<BTreeMap<String, SdkValue>> {
             fields.insert("path".to_owned(), t(&path));
             fields.insert("name".to_owned(), SdkValue::opt_text(name));
             fields.insert("ws".to_owned(), t(&ws));
+            fields.insert("running".to_owned(), SdkValue::List(Vec::new()));
+            fields.insert("overlay_bytes".to_owned(), SdkValue::Null);
             fields
         })
         .collect()
@@ -452,6 +463,7 @@ fn running(got: &SdkValue, items: &[SdkValue]) {
         .unwrap_or_else(|| panic!("{got:?}"));
     let admission = capacity.get("admission").unwrap();
     assert_eq!(admission.get_int("pool_vacant"), Some(7), "{capacity:?}");
+    assert_eq!(got.get_int("workspace_capacity"), Some(16), "{got:?}");
     // what only reopens the Sandbox is never shown
     assert!(got.get("daemon").is_none(), "{got:?}");
 }
@@ -789,6 +801,8 @@ fn a_stopped_machine_s_get_is_its_record_and_touches_nothing() {
         .unwrap_or_else(|| panic!("{got:?}"));
     assert!(why.contains("layerfs machine start box"), "{why}");
     assert!(got.get("daemon_capacity").is_none(), "{got:?}");
+    // control's own constant: there whatever answered
+    assert_eq!(got.get_int("workspace_capacity"), Some(16), "{got:?}");
     assert_eq!(got.get("next_page_pos"), Some(&SdkValue::Null), "{got:?}");
     assert_eq!(files(&home), before, "a get changed a file in the home");
     untouched(&home);
@@ -811,8 +825,235 @@ fn a_stopped_machine_s_get_is_its_record_and_touches_nothing() {
     assert_eq!(got.get_text("state"), Some("gone"), "{got:?}");
     assert_eq!(got.get("workspaces"), Some(&SdkValue::List(Vec::new())));
     assert!(got.get("daemon_capacity").is_none(), "{got:?}");
+    assert_eq!(got.get_int("workspace_capacity"), Some(16), "{got:?}");
     assert_eq!(seen.connections.load(Ordering::SeqCst), 0, "{got:?}");
     assert_eq!(files(&home), before, "a get changed a file in the home");
     untouched(&home);
     std::fs::remove_dir_all(home).unwrap();
+}
+
+/// The three sides a get's Workspace list is built on.
+const SIDES: [&str; 3] = ["native", "worker", "forwarded"];
+
+/// Sandbox `s1` with Workspaces `items` on `side`: the scratch folder to
+/// remove, the home, and the root that keeps the Sandbox's Workspace and
+/// exec records (the home itself, but a worker's root on `worker`).
+fn on_side(side: &str, tag: &str, items: &[SdkValue]) -> (PathBuf, PathBuf, PathBuf) {
+    let (endpoint, _seen) = daemon(items.to_vec(), false);
+    let scratch = tempdir(&format!("{tag}-{side}"));
+    let (home, root) = (scratch.join("home"), scratch.join("data"));
+    let id = home::open(&home).unwrap().id;
+    match side {
+        "native" => {
+            home_records(&home, "native", "native", None);
+            local_sandbox(&home, &id, endpoint, items);
+            (scratch, home.clone(), home)
+        }
+        "worker" => {
+            std::fs::create_dir_all(&root).unwrap();
+            std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
+            home_records(&home, "box", "docker", Some((worker(&root), "k")));
+            worker_sandbox(&home);
+            local_sandbox(&root, &id, endpoint, items);
+            (scratch, home, root)
+        }
+        _ => {
+            let nowhere: SocketAddr = "127.0.0.1:1".parse().unwrap();
+            home_records(&home, "native", "native", Some((nowhere, "5e")));
+            forwarded_sandbox(&home, endpoint, items);
+            (scratch, home.clone(), home)
+        }
+    }
+}
+
+/// Field `name` of each Workspace `got` lists, in order.
+fn each(got: &SdkValue, name: &str) -> Vec<SdkValue> {
+    (workspaces(got).iter())
+        .map(|workspace| {
+            workspace
+                .get(name)
+                .cloned()
+                .unwrap_or_else(|| panic!("no {name}"))
+        })
+        .collect()
+}
+
+/// Another client: a process that is not this one, which owns a command's
+/// record as the client that started the command does while it runs.
+struct Client(std::process::Child);
+
+impl Client {
+    fn start() -> Self {
+        let sleep = std::process::Command::new("/bin/sleep").arg("60").spawn();
+        Client(sleep.expect("/bin/sleep starts"))
+    }
+
+    /// How a record names it its owner: its id, start time and boot.
+    fn owner(&self) -> SdkValue {
+        let me = layerfs_bridge::process::LocalProcess::observe(self.0.id()).unwrap();
+        map(&[
+            ("pid", SdkValue::Int(i64::from(me.pid))),
+            ("pid_start", t(&me.start.to_string())),
+            ("pid_boot", t(&format!("{:032x}", me.boot.unwrap()))),
+        ])
+    }
+
+    /// Ends it, as a client that crashed: its records stay.
+    fn end(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+impl Drop for Client {
+    fn drop(&mut self) {
+        self.end();
+    }
+}
+
+/// One command `sandbox.get` lists under `running`.
+fn command(exec_id: &str, started: i64, tag: Option<&str>, program: Option<&str>) -> SdkValue {
+    map(&[
+        ("exec_id", t(exec_id)),
+        ("started", SdkValue::Int(started)),
+        ("tag", SdkValue::opt_text(tag.map(str::to_owned))),
+        ("program", SdkValue::opt_text(program.map(str::to_owned))),
+    ])
+}
+
+#[test]
+fn a_get_lists_the_commands_another_client_runs_in_each_workspace() {
+    use layerfs_sandbox::exec::id::ExecId;
+    use layerfs_sandbox::exec::record::{file, ExecRecord, Route};
+    for side in SIDES {
+        let items: Vec<SdkValue> = (1..=4).map(item).collect();
+        let (scratch, home, root) = on_side(side, "running", &items);
+        let folder = paths::sandbox_dir(&root, "s1");
+        let mut other = Client::start();
+        // the record `workspace.exec` keeps while its command runs, in the
+        // Workspace `n`, owned by `owner`; `old` leaves out the fields a
+        // record had none of before layerfs-project#178
+        let record = |n: i64, id: &str, started: i64, owner: SdkValue, old: bool| {
+            let workspace = format!("{n:064x}");
+            let exec = ExecId::parse(id).unwrap();
+            let (tag, line) = match id {
+                "e-tagged" => (Some("dsh:s9:t1"), "CI=1 npm test -- --token=zq9"),
+                _ => (None, "sleep 60"),
+            };
+            let mut made =
+                ExecRecord::new(&exec, &workspace, ("/workspaces", None)).started_by(tag, line);
+            made.started = started;
+            made.owner = owner;
+            if side == "forwarded" {
+                made.route = Route::Machine("native".to_owned());
+            }
+            let SdkValue::Map(fields) = made.encode() else {
+                panic!()
+            };
+            let fields = (fields.into_iter())
+                .filter(|(name, _)| !(old && matches!(name.as_str(), "tag" | "program")));
+            let path = file(&folder, &workspace, id);
+            layerfs_home::home::write_entity(&path, &SdkValue::Map(fields.collect())).unwrap();
+            path
+        };
+        let tagged = record(2, "e-tagged", 2_000, other.owner(), false);
+        record(2, "e-plain", 1_000, other.owner(), false);
+        record(3, "e-before", 3_000, other.owner(), true);
+        // a command whose owner is gone: its record is stale
+        let stale = record(1, "e-stale", 500, map(&[("pid", SdkValue::Int(0))]), false);
+        settle(&home);
+        let _push = pushing(&home);
+        let before = (files(&home), files(&root));
+
+        let got = get(&home).unwrap();
+        assert_eq!(got.get_text("state"), Some("running"), "{side}: {got:?}");
+        assert_eq!(got.get_int("workspace_capacity"), Some(16), "{side}");
+        let none = SdkValue::List(Vec::new());
+        assert_eq!(
+            each(&got, "running"),
+            [
+                none.clone(),
+                SdkValue::List(vec![
+                    command("e-plain", 1_000, None, Some("sleep")),
+                    command("e-tagged", 2_000, Some("dsh:s9:t1"), Some("npm")),
+                ]),
+                SdkValue::List(vec![command("e-before", 3_000, None, None)]),
+                none.clone(),
+            ],
+            "{side}: {got:?}"
+        );
+        // nothing of a command but its program is shown
+        let text = format!("{got:?}");
+        for kept_out in ["zq9", "token", "CI=1"] {
+            assert!(!text.contains(kept_out), "{side}: {kept_out}");
+        }
+        // a read: every record is as it was, the stale one included
+        assert_eq!((files(&home), files(&root)), before, "{side}");
+        untouched(&home);
+
+        // a command that ended: its owner removed its record
+        std::fs::remove_file(&tagged).unwrap();
+        let got = get(&home).unwrap();
+        assert_eq!(
+            each(&got, "running")[1],
+            SdkValue::List(vec![command("e-plain", 1_000, None, Some("sleep"))]),
+            "{side}: {got:?}"
+        );
+
+        // the other client is gone: what it left is stale, listed no more
+        // and still there for the cancel, unmount or close that ends it
+        other.end();
+        let got = get(&home).unwrap();
+        assert_eq!(each(&got, "running"), vec![none; 4], "{side}: {got:?}");
+        assert!(stale.exists() && file(&folder, &format!("{:064x}", 3), "e-before").exists());
+        std::fs::remove_dir_all(scratch).unwrap();
+    }
+}
+
+#[test]
+fn a_get_sizes_each_workspace_s_overlay_file_by_path() {
+    for side in SIDES {
+        let items: Vec<SdkValue> = (1..=4).map(item).collect();
+        let (scratch, home, root) = on_side(side, "overlay", &items);
+        // the run folder the Sandbox's record names on the side that runs
+        // it; a forwarded Sandbox's is in its machine, not in this home
+        let record = read_record(&paths::sandbox_record(&root, "s1")).unwrap();
+        let named = record
+            .unwrap()
+            .get("daemon")
+            .unwrap()
+            .get_text("directory")
+            .map(PathBuf::from);
+        assert_eq!(named.is_none(), side == "forwarded", "{side}");
+        let run = named.unwrap_or_else(|| paths::run_root(&root).join("lfs-x-s1"));
+        let overlay = run.join("overlay");
+        std::fs::create_dir_all(&overlay).unwrap();
+        std::fs::write(overlay.join("overlay.sqlite"), vec![0; 4096]).unwrap();
+        std::fs::write(overlay.join("1.sqlite"), vec![1; 8192]).unwrap();
+        // one nobody can open: its size is read from its folder entry
+        std::fs::write(overlay.join("2.sqlite"), vec![2; 20_480]).unwrap();
+        let closed = std::fs::Permissions::from_mode(0o000);
+        std::fs::set_permissions(overlay.join("2.sqlite"), closed).unwrap();
+        // a link is not followed, and Workspace 4 has no file
+        std::os::unix::fs::symlink(overlay.join("1.sqlite"), overlay.join("3.sqlite")).unwrap();
+        settle(&home);
+        let _push = pushing(&home);
+        let before = (files(&home), files(&root));
+
+        let got = get(&home).unwrap();
+        assert_eq!(got.get_text("state"), Some("running"), "{side}: {got:?}");
+        let sizes = match side {
+            "forwarded" => vec![SdkValue::Null; 4],
+            _ => vec![
+                SdkValue::Int(8192),
+                SdkValue::Int(20_480),
+                SdkValue::Null,
+                SdkValue::Null,
+            ],
+        };
+        assert_eq!(each(&got, "overlay_bytes"), sizes, "{side}: {got:?}");
+        assert_eq!((files(&home), files(&root)), before, "{side}");
+        assert!(!paths::lease_dir(&home, "shop").exists(), "{side}");
+        std::fs::remove_dir_all(scratch).unwrap();
+    }
 }

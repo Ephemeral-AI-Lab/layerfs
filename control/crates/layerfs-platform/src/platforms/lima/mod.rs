@@ -1,6 +1,7 @@
 //! `lima` (`limactl`, `vmType: vz`, macOS only).
 mod adapter;
 mod create;
+mod limit;
 mod observe;
 mod power;
 mod profile;

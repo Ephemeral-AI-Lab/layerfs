@@ -123,7 +123,8 @@ pub enum Call {
     /// `workspace.exec(path, command, { exec_id })`; `directory` and the
     /// Workspace's id (`workspace`) from a caller that keeps the
     /// Workspace's record and the command's (#535 G4); `spool` sends every
-    /// non-empty stream to its file.
+    /// non-empty stream to its file; `tag` is the log tag of the call that
+    /// asked for it, kept in the command's record (layerfs-project#178).
     Exec {
         path: Option<String>,
         directory: Option<String>,
@@ -131,6 +132,7 @@ pub enum Call {
         spool: bool,
         exec_id: Option<String>,
         workspace: Option<String>,
+        tag: Option<String>,
     },
     /// `workspace.exec_cancel(path, exec_id, { grace_ms })`; the
     /// Workspace's id (`workspace`) from a caller that keeps the command's

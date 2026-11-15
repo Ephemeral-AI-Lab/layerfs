@@ -12,6 +12,11 @@
 //!   name, and refuses `InvalidInput` a name over 46 characters, both
 //!   before the provider is asked for anything; a 46-character name
 //!   reaches the provider as a 63-character VM name.
+//! - A `lima` machine's name must also leave Lima's socket path
+//!   `<Lima home>/<VM name>/ssh.sock.<16 digits>` shorter than 104
+//!   characters: one character more is refused `InvalidInput` stating this
+//!   host's limit, before the provider is asked for anything, and the
+//!   longest name that fits reaches the provider.
 //! - `sandbox.create` refuses a name ending in `.root`.
 #![cfg(all(feature = "machine", target_os = "macos"))]
 use layerfs_api::home::{self, paths, read_record, write_record};
@@ -130,6 +135,9 @@ fn provider_names_and_their_refusals() {
     std::fs::write(bundle.join("bundle.json"), r#"{"hash":"abcd"}"#).unwrap();
     std::env::set_var("LAYERFS_BUNDLE", &bundle);
     std::env::set_var("XDG_CACHE_HOME", tempdir("cache"));
+    // a Lima home short enough for a 63-character VM name; no such folder
+    // exists and the stand-in makes none
+    std::env::set_var("LIMA_HOME", "/lfs-no-lima");
 
     // --- a new home: `docker` records its worker's name, with `layerfs-`
     let fresh = tempdir("new");
@@ -246,8 +254,66 @@ fn provider_names_and_their_refusals() {
     let line = format!("limactl create --name {vm} --tty=false -");
     assert!(asked.contains(&line), "{asked:?}");
 
+    // --- Lima's own limit: `<Lima home>/<VM name>/ssh.sock.<16 digits>`
+    // must stay under 104 characters. This home (32 characters, no such
+    // folder) leaves a VM name 103 - (32 + 2 + 25) = 44 and a machine name 27.
+    let lima_home = format!("/lfs-no-lima/{}", "h".repeat(19));
+    std::env::set_var("LIMA_HOME", &lima_home);
+    let made = effects(&tools);
+    let long = "v".repeat(28);
+    let (code, message) = create(&home, &long);
+    assert_eq!(code, "InvalidInput", "{message}");
+    let path = format!("`{lima_home}/<VM name>/ssh.sock.<16 digits>`");
+    for part in [
+        "28 characters",
+        "on this host a lima machine's name is at most 27",
+        path.as_str(),
+        "shorter than 104",
+        "takes 17",
+    ] {
+        assert!(message.contains(part), "{part}: {message}");
+    }
+    assert!(!paths::machine_dir(&home, &long).exists());
+    assert_eq!(effects(&tools), made, "a refused create asked the provider");
+
+    let longest = "w".repeat(27);
+    let (code, message) = create(&home, &longest);
+    assert_eq!(code, "Failed", "{message}");
+    let vm = format!("layerfs-{id8}-{longest}");
+    assert_eq!(
+        format!("{lima_home}/{vm}/ssh.sock.1234567890123456").len(),
+        103
+    );
+    let asked = effects(&tools);
+    let line = format!("limactl create --name {vm} --tty=false -");
+    assert!(asked.contains(&line), "{asked:?}");
+
+    // a Lima home that exists counts with its links resolved, as Lima
+    // counts it (`/var/...` is `/private/var/...`); a temporary folder's
+    // path leaves no room for the 46-character name
+    let real_home = tempdir("lima");
+    std::env::set_var("LIMA_HOME", &real_home);
+    let resolved = std::fs::canonicalize(&real_home).unwrap();
+    let room = 103usize.saturating_sub(resolved.as_os_str().len() + 2 + 25 + 17);
+    assert!(room < 46, "the temporary folder {resolved:?} is too short");
+    let made = effects(&tools);
+    let name = "z".repeat(46);
+    let (code, message) = create(&home, &name);
+    assert_eq!(code, "InvalidInput", "{message}");
+    let fits = match room {
+        0 => "no lima machine name fits on this host".to_owned(),
+        room => format!("a lima machine's name is at most {room}:"),
+    };
+    let path = format!("`{}/<VM name>/", resolved.display());
+    for part in [fits.as_str(), path.as_str()] {
+        assert!(message.contains(part), "{part}: {message}");
+    }
+    assert!(!paths::machine_dir(&home, &name).exists());
+    assert_eq!(effects(&tools), made, "a refused create asked the provider");
+
+    std::env::remove_var("LIMA_HOME");
     std::env::remove_var("LAYERFS_BUNDLE");
-    for dir in [home, old, tools, bundle] {
+    for dir in [home, old, tools, bundle, real_home] {
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
