@@ -226,7 +226,8 @@ concurrent GUARDED creates of one name yield one serial and one
 `NFS3ERR_EXIST`. The name index is lossy (its own bound, a name never looked
 up, a client-side rename), so a candidate whose main inode the export does not
 know costs one read-only lookup of its main file in the engine, outside both
-locks: a file that is there binds the companion back to that inode and keeps
+locks - and a companion it holds several names of is reached by any of them, so
+one whose name the index holds is no candidate at all: a file that is there binds the companion back to that inode and keeps
 its attributes, `NFS3ERR_NOENT` - or `NFS3ERR_STALE`/`NFS3ERR_NOTDIR`, a main
 file whose directory the engine no longer has, which cannot hold it either -
 makes it an orphan, and a lookup that cannot answer any other way leaves it

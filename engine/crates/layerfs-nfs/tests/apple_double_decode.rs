@@ -1478,3 +1478,47 @@ fn a_companion_of_a_removed_directory_is_reclaimed() {
     assert_eq!(outstanding, 0);
     fs::remove_dir_all(base).unwrap();
 }
+
+#[test]
+fn a_companion_reached_by_one_of_its_names_is_not_an_orphan() {
+    let base = temp("orphan-alias");
+    let tree = base.join("tree");
+    source(&tree);
+    let mut rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    rig.companions_held = 1;
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    c.mkdir(&root, b"d", 0o755).unwrap();
+    let d = c.lookup(&root, b"d").unwrap().0;
+    // Nothing names `ghost`, so this companion starts with no main inode and
+    // takes the one slot.
+    let ghost = c.touch(&d, b"._ghost", 0o644).unwrap();
+    let body = pattern(82, 64);
+    c.write(&ghost.handle, 0, &body).unwrap();
+    assert_eq!(server.held().companions_slotted, 1);
+
+    // The client links the companion name, then creates the main file of the
+    // linked name: one of the companion's names now has a main file the export
+    // knows.
+    c.link(&ghost.handle, &d, b"._kept").unwrap();
+    c.touch(&d, b"kept", 0o644).unwrap();
+    assert_eq!(c.read_all(&ghost.handle, 4096), body);
+
+    // A CREATE at the bound reclaims first. The companion is reached by
+    // `._kept`, whose main file the export knows, so it is no orphan: nothing
+    // is dropped and the CREATE is refused.
+    c.touch(&root, b"y", 0o644).unwrap();
+    assert_eq!(c.touch(&root, b"._y", 0o644).map(|_| ()), Err(NOSPC));
+    assert_eq!(server.held().companions, 1);
+    assert_eq!(c.read_all(&ghost.handle, 4096), body);
+    let (kept, attr) = c.lookup(&d, b"._kept").unwrap();
+    assert_eq!(kept, ghost.handle);
+    assert_eq!(attr.size as usize, body.len());
+
+    drop(c);
+    let released = server.stop();
+    let (_, outstanding) = rig.stop(released);
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}

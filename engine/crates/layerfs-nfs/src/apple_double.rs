@@ -625,12 +625,23 @@ impl Kernel {
                         main: None,
                     });
                 }
-                let main = file.named.1.strip_prefix(b"._")?;
-                let main = (file.named.0, main.to_vec());
-                // A name the index does hold reaches the companion; one it does
-                // not hold only makes it a candidate, since that index is
-                // lossy.
-                (!table.by_name.contains_key(&main)).then_some(Orphan {
+                // A name the index does hold reaches the companion; one it
+                // does not hold only makes it a candidate, since that index is
+                // lossy. Any of the names it holds reaches it, so one whose
+                // main file the export knows keeps it, and the first name whose
+                // main it does not know is the one the lookup asks about.
+                let mut candidate = None;
+                for named in std::iter::once(&file.named).chain(&file.also) {
+                    let Some(main) = named.1.strip_prefix(b"._") else {
+                        continue;
+                    };
+                    let main = (named.0, main.to_vec());
+                    if table.by_name.contains_key(&main) {
+                        return None;
+                    }
+                    candidate.get_or_insert(main);
+                }
+                candidate.map(|main| Orphan {
                     serial: *serial,
                     inode: None,
                     main: Some(main),
