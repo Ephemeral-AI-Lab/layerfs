@@ -552,7 +552,10 @@ cache states and budgets are evidence contracts, not product runtime limits.
 Owner direction 2026-11-15 supersedes the earlier crates.io-only and local-patch
 rules: use [Ephemeral-AI-Lab/fuser](https://github.com/Ephemeral-AI-Lab/fuser)
 directly as a Git dependency. The selected revision is
-`7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4` (package version 0.18.0).
+`7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4` (package version 0.18.0), kept
+reachable by the fork's tag `v0.18.0-layerfs.1`. Repository rulesets on the fork
+forbid deleting or force-pushing `fuser-0.18.0` and moving or deleting
+`v*-layerfs.*` tags; tag every new pinned revision the same way.
 The fork owns its timestamp correction, observable receive-loop lifecycle and
 negotiated receive buffers. These changes are independent of LayerFS; maintain
 them in that repository, not through a second copy or local patch here.
@@ -562,11 +565,15 @@ and commit in the root lockfile. Do not use a floating branch/tag, a registry
 fallback, `[patch]`, `[replace]` or a local vendored fuser. A revision change
 updates the manifest, lockfile and the
 [FUSE architecture page](../docs/architecture/engine/kernel-routes/fuse.md#fuser-git-dependency)
-together. Use locked builds; fail explicitly when the selected source is unavailable.
+together, needs owner approval ([code review policy](../docs/policy/code-review.md)),
+and needs a fresh `tools/worktree.py prepare` in each worktree before its offline
+builds. Use locked builds; fail explicitly when the selected source is unavailable.
 
 The fork's own repository maintains its code and tests; LayerFS uses ordinary
-locked dependency builds and integration tests, without a dedicated fuser source
-checker. The earlier source pins, owner decisions,
+locked dependency builds and integration tests. The boundary guard
+(`tools/check_product_boundary.py`) refuses a fuser source other than the fork at
+a full `rev`, a `[patch]`/`[replace]`/`paths` override and a lock entry that
+differs from the manifest; it does not check the fork's code. The earlier source pins, owner decisions,
 Docker acceptance and Linux fractional signed-minimum FAIL remain unchanged in
 [the historical records](https://github.com/Ephemeral-AI-Lab/layerfs/tree/8cfb6e273470d0bb2a4ec5a9256fcf4972441eb5/engine/patches/fuser-0.18.0).
 Switching the dependency does not relabel that evidence or extend its scope.
