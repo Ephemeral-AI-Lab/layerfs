@@ -33,6 +33,9 @@ impl Adapter for AppleContainer {
     fn name_limit(&self) -> Option<NameLimit> {
         None
     }
+    fn data_volume(&self, spec: &Spec) -> Option<String> {
+        Some(crate::setup::vm::data_volume(spec))
+    }
     fn create(&self, spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
         create(spec, bundle)
     }

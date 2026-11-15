@@ -99,8 +99,8 @@ monitoring reads a UI polls, which no agent is offered)
 | Bucket | Calls |
 | --- | --- |
 | `work` | the `branch`, `commit`, `file` and `workspace` families; `project.list`, `project.get`, `project.export`, `sandbox.list`, `sandbox.get` |
-| `admin` | `project.init`, `project.remove`, `sandbox.create`, `sandbox.close`; the `machine`, `store` and `backup` families; `logs.list`, `logs.reset` |
-| `ui` (no profile) | `logs.machine`, `logs.sandbox` |
+| `admin` | `project.init`, `project.remove`, `sandbox.create`, `sandbox.close`; the `machine` (but `machine.stats`), `store` and `backup` families; `logs.list`, `logs.reset` |
+| `ui` (no profile) | `machine.stats`, `logs.machine`, `logs.sandbox` |
 
 `work` lets an agent read a project, work on Branches and files (each write
 is one explicit Commit), run in a mounted Workspace and export a snapshot.
@@ -113,7 +113,7 @@ built addon).
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
-75 calls: 38 in `work`, 35 in `admin` only, 2 in no profile (`ui`); `--profile admin` lists 73.
+76 calls: 38 in `work`, 35 in `admin` only, 3 in no profile (`ui`); `--profile admin` lists 73.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
@@ -166,6 +166,7 @@ built addon).
 | `machine.load` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.prune` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.status` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
+| `machine.stats` | ui | none | a monitoring read a UI polls (a machine's stats or worker log, a Sandbox's daemon log); offered to no agent |
 | `machine.start` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.stop` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.create` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
@@ -190,8 +191,8 @@ built addon).
 | `backup.restore` | admin | admin | upload and restore a Store on a bucket; administration |
 | `logs.list` | admin | admin | read and clear the home's call log; administration |
 | `logs.reset` | admin | admin | read and clear the home's call log; administration |
-| `logs.machine` | ui | none | a monitoring read a UI polls (a machine's worker log, a Sandbox's daemon log); offered to no agent |
-| `logs.sandbox` | ui | none | a monitoring read a UI polls (a machine's worker log, a Sandbox's daemon log); offered to no agent |
+| `logs.machine` | ui | none | a monitoring read a UI polls (a machine's stats or worker log, a Sandbox's daemon log); offered to no agent |
+| `logs.sandbox` | ui | none | a monitoring read a UI polls (a machine's stats or worker log, a Sandbox's daemon log); offered to no agent |
 
 <!-- END GENERATED -->
 

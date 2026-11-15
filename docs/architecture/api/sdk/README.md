@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Every call a program can make: **75 calls in 10 families**, the same names and arguments in JavaScript, Python and the `layerfs` command, one page per family.
+Every call a program can make: **76 calls in 10 families**, the same names and arguments in JavaScript, Python and the `layerfs` command, one page per family.
 
 | | |
 | --- | --- |
@@ -104,7 +104,7 @@ in the [API layer page](../README.md#calling-conventions).
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
 | [`inventory.mjs`](../../../../api/node/test/branch-file/inventory.mjs) | `perl -e 'alarm 120; exec @ARGV' node --test api/node/test/branch-file/inventory.mjs` | macOS or Linux, with the built addon (`npm --prefix api run build:native`) and `target/debug/layerfs` | the count line and one heading per call match the built table; branch and file CLI help exposes every option |
-| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host | 75 calls in ten families; one source file per call; unknown calls and arguments refused before any effect |
+| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host | 76 calls in ten families; one source file per call; unknown calls and arguments refused before any effect |
 | [`file-history.mjs`](../../../../api/node/examples/file-history.mjs) | `node api/node/examples/file-history.mjs` | macOS or Linux, with the built addon | a Store, Init, file writes and history reads |
 
 ## Pages

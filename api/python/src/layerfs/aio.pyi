@@ -361,6 +361,7 @@ class AsyncSandboxFamily:
         *,
         page_size: int | None = None,
         page_pos: int | None = None,
+        live: bool | None = None,
         log_tag: str | None = None,
     ) -> Result:
         """every Sandbox in the home, or one project's"""
@@ -452,6 +453,8 @@ class AsyncMachineFamily:
         """remove a Sandbox image from a machine, or every unused one"""
     async def status(self, name: str, *, log_tag: str | None = None) -> Result:
         """a machine's live state, free disk and tool version"""
+    async def stats(self, machine: str, *, log_tag: str | None = None) -> Result:
+        """a machine's observed processors, memory and data disk, its Stores' sizes and live Sandboxes"""
     async def start(
         self,
         name: str,

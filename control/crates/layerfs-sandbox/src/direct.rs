@@ -307,27 +307,23 @@ pub fn host(home: &Path, record: &SandboxRecord, target: &Target, message: Messa
 /// that cannot be reached is [`Unreached`], which the get reports as down.
 /// The commands `running` in each Workspace come from this home's exec
 /// records. Each `overlay_bytes` comes from the Sandbox's machine, where
-/// its run folder is: one bounded inspect request to that machine's worker
-/// ([`crate::inspect::overlay_sizes`], no lease, no daemon), put on the
+/// its run folder is, and so do the daemon process fields (`daemon`,
+/// `usage`, `usage_reason`; layerfs-project#164): one bounded inspect
+/// request to that machine's worker ([`crate::inspect::overlay_sizes`], no
+/// lease, no daemon), sent for a Sandbox with no Workspace too, put on the
 /// list with [`crate::run_folder::merged`]. A worker that refuses or does
-/// not answer leaves them null; the list is answered either way.
+/// not answer leaves the sizes null and the process not observed; the list
+/// is answered either way.
 pub fn list(home: &Path, record: &SandboxRecord) -> std::result::Result<Outcome, Unreached> {
     match served(home, record, Call::ListWorkspaces { path: None }) {
         Err(refusal) if refusal.code == "Unavailable" => Err(Unreached(refusal)),
         Err(refusal) => Ok(Err(refusal)),
         Ok(listed) => {
             let namespaces = crate::run_folder::namespaces(&listed);
-            let sizes = match namespaces.is_empty() {
-                true => None,
-                false => crate::inspect::overlay_sizes(
-                    home,
-                    record.machine(),
-                    record.name(),
-                    &namespaces,
-                )
-                .ok(),
-            };
-            Ok(Ok(crate::run_folder::merged(listed, sizes.as_ref())))
+            let read =
+                crate::inspect::overlay_sizes(home, record.machine(), record.name(), &namespaces)
+                    .unwrap_or_else(|_| crate::run_folder::not_observed());
+            Ok(Ok(crate::run_folder::merged(listed, Some(&read))))
         }
     }
 }

@@ -28,11 +28,28 @@ pub(super) fn read_only(op: &str) -> bool {
     READ_ONLY.contains(&op)
 }
 
+/// Who worker `server` is, as `machine.stats` shows it
+/// (layerfs-project#164): `{ version, pid, started_at, protocol, bundle }`,
+/// `started_at` taken once when it began to serve.
+fn about(server: &Server) -> SdkValue {
+    let said = |field: &str| server.ready.get(field).cloned().unwrap_or_default();
+    SdkValue::map([
+        ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
+        ("pid", SdkValue::Int(i64::from(std::process::id()))),
+        ("started_at", SdkValue::Int(server.started)),
+        ("protocol", said("protocol")),
+        ("bundle", said("bundle")),
+    ])
+}
+
 /// One inspect request (layerfs-project#178): a read of this machine or
 /// of one of its Sandboxes, under this process's inspect admission and
 /// deadlines, on a helper thread. It sends no events and changes nothing.
+/// The request carries who this worker is (`worker`, [`about`]), set here
+/// whatever the caller sent.
 #[cfg(not(feature = "worker-fault"))]
 fn inspect(server: &Server, args: SdkValue) -> Outcome {
+    let args = layerfs_home::home::with_field(args, "worker", about(server));
     layerfs_sandbox::inspect::in_worker(&server.root, args)
 }
 
@@ -41,6 +58,7 @@ fn inspect(server: &Server, args: SdkValue) -> Outcome {
 #[cfg(feature = "worker-fault")]
 fn inspect(server: &Server, args: SdkValue) -> Outcome {
     use layerfs_sandbox::inspect::{admit, serve, Side};
+    let args = layerfs_home::home::with_field(args, "worker", about(server));
     let (root, faults) = (server.root.clone(), server.faults.clone());
     admit(move |budget| {
         faults.in_helper();

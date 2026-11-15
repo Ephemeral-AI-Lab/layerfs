@@ -213,7 +213,7 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
 | `create` | `project`, `name`, `machine` (optional) | `image` | starts a named Sandbox of a project on a machine; with none, its sqlite Store's machine, or `native` for a PostgreSQL Store |
-| `list` | `[project]` | `page_size`, `page_pos` | every Sandbox in the home, or one project's |
+| `list` | `[project]` | `page_size`, `page_pos`, `live` | every Sandbox in the home, or one project's; with `live`, whether each one's daemon process runs now |
 | `get` | `name` | `page_size`, `page_pos` | a Sandbox and its Workspaces |
 | `close` | `name` | `force` | stops a Sandbox |
 
@@ -299,6 +299,35 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   an earlier build answers Workspaces without these two fields.
   ```text
   {"name":"s1","project":"shop/api","machine":"native",…,"state":"running","workspaces":[{"workspace":"5f…","namespace":1,"branch":"dev",…,"path":"/…/workspaces/1","name":"w","ws":"s1:w","running":[{"exec_id":"exec-9c0f6f0d2a1b4e77","started":1794000000000,"tag":"dsh:s9:t1","program":"npm"}],"overlay_bytes":188416}],"daemon_capacity":{…},"workspace_capacity":16,"next_page_pos":null}
+  ```
+- `get` also answers the Sandbox's daemon process and what its cgroup has
+  used (#164), read with `overlay_bytes` on the side that runs the Sandbox,
+  with no daemon call and no further round trip:
+  - `daemon`: `{pid, started_at}`, with `started_at` in ms since the
+    epoch while the process runs and `null` once it has ended; `null`
+    when its machine did not answer.
+  - `usage`: `{cpu_usec, memory_current, memory_peak, pids}` of the
+    Sandbox's own cgroup, the daemon and every command in it; a value the
+    kernel does not keep there is `null`. `usage` is `null`, with
+    `usage_reason`, for a `native` Sandbox, which is a plain process
+    (`host_process`), on a machine without cgroup v2 (`cgroup_v1`), when
+    the cgroup is not there (`no_cgroup`) and when the machine did not
+    answer (`not_observed`).
+  ```text
+  {"name":"s1",…,"state":"running","workspaces":[],"daemon_capacity":{…},"workspace_capacity":16,"daemon":{"pid":37823,"started_at":1794776690403},"usage":null,"usage_reason":"host_process","next_page_pos":null}
+  ```
+- `list --live` adds `live` to each Sandbox of the page (#164): `true`
+  when the process its daemon record names still runs, `false` when it has
+  ended, `null` with `live_reason` when that is not known
+  (`machine_stopped`, `deadline`, or the refusal its machine's request
+  met, as `unavailable`). `state` is unchanged: it comes from records, so
+  a Sandbox whose daemon died reads `state: "running"`, `live: false`
+  until `get` or `close`. Each machine among the page's Sandboxes is asked
+  once; a machine that does not answer fails no list. Without `--live`
+  the answer has no such field.
+  ```text
+  $ layerfs sandbox list --live
+  {"items":[{"name":"s1","project":"shop/api","machine":"native",…,"state":"running","live":true}],"next_page_pos":null}
   ```
 - `list` and `get` start no machine (#535 P4). `get` on a Sandbox whose
   machine is down answers its record with `workspaces: []` and
@@ -406,7 +435,7 @@ form.
   Routes.
 - Not run for this manual.
 
-### `machine` (12)
+### `machine` (13)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -417,6 +446,7 @@ form.
 | `load` | `name`, `image` | `on_progress` | copies an image to the machine as `sandbox create --image` does, without a Sandbox: `{id, refs, size, reused}` |
 | `prune` | `name`, `image`? | `unused` | removes one unpacked image, or with `unused` every one no Sandbox uses but the machine's default: `{removed, freed}` (`freed` measured on the filesystem); an image in use is `InUse` |
 | `status` | `name` | — | a machine's live state, free disk and tool version; `op` while a create or remove holds it (#536 H6) |
+| `stats` | `machine` | — | what a machine has and uses now: processors, memory and data disk, each sqlite Store's size, how many of its Sandboxes have a running daemon (#164). For a UI that polls: it writes no call-log line |
 | `start` | `name` | — | starts a stopped machine and its worker and waits until ready; a running one, and `native`, answer at once (#535 P1) |
 | `stop` | `name` | — | stops a machine's worker and, where it has one, its VM; disks stay; `InUse` while Sandboxes run on it (#535 P1) |
 | `create` | `name`, `platform` | `cpus`, `memory` (size), `disk` (size), `image` | creates an enabled VM machine (`apple-container`, `lima`) |
@@ -436,6 +466,34 @@ $ layerfs machine status native
 {"name":"native","platform":"native","state":"running","free_disk":null,"tool_version":null,"down_reason":null,"stores":["shop"]}
 ```
 
+- `stats` answers `{machine, platform, observed_at, worker, resources,
+  data_disk, stores, sandboxes, complete}` (#164):
+  - `worker`: the machine's worker process, `{version, pid, started_at,
+    protocol, bundle}`; `null` on `native`, whose calls run in the caller.
+  - `resources`: `{cpus, memory_total, memory_used, disk_total,
+    disk_used, disk_free, scope}`, in bytes, observed now. `scope` says
+    whose processors and memory they are: `host` (`native`), `vm` (`lima`,
+    `apple-container`) or `engine_host` (`docker`: the Docker Engine's
+    kernel, a VM on macOS and Windows). A value that was not read is
+    `null` and `reason` names it.
+  - `data_disk`: `{path, fs, scope, volume, inodes_free}`, the filesystem
+    the `disk_*` values measure: `host_fs` (`native`, and `docker` on
+    Linux), `vm_disk` (`docker` on macOS and Windows, one disk every
+    image and volume shares) or `volume` (a VM machine's own disk), with
+    the provider's name of it.
+  - `stores`: `[{name, bytes, allocated}]` of the machine's sqlite
+    Stores, the length and the blocks of `store.sqlite` and its `-wal`.
+    The files are not opened.
+  - `sandboxes`: `{recorded, live}`: the Sandboxes recorded on the
+    machine and how many have a running daemon.
+  - `complete`: `false`, with `reason: "deadline"`, when the Stores or
+    Sandboxes were not all read within 4 s; the rest is answered.
+  It starts nothing and takes no lock: a stopped machine is `Unavailable`
+  and a machine an operation holds is still answered.
+  ```text
+  $ layerfs machine stats native
+  {"machine":"native","platform":"native","observed_at":1794776707857,"worker":null,"resources":{"cpus":14,"memory_total":38654705664,"memory_used":31340068864,"disk_total":994662584320,"disk_used":641705943040,"disk_free":352956641280,"scope":"host"},"data_disk":{"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs","volume":null,"inodes_free":3446842200},"stores":[{"name":"shop","bytes":217088,"allocated":217088}],"sandboxes":{"recorded":12,"live":10},"complete":true}
+  ```
 - `start` and `stop` answer the machine's summary as `get` does. They are
   the only lifecycle calls (#535 D11): no other call starts a machine, and
   nothing stops one when it is unused. `stop` is refused `InUse` while

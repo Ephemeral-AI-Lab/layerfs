@@ -24,6 +24,9 @@ impl Adapter for Native {
     fn name_limit(&self) -> Option<NameLimit> {
         None
     }
+    fn data_volume(&self, _spec: &Spec) -> Option<String> {
+        None
+    }
     fn create(&self, spec: &Spec, _bundle: &Bundle) -> Result<Running, MachineError> {
         Err(refused(spec, "is built in and never created"))
     }

@@ -52,6 +52,14 @@ pub fn name_limit(platform: Platform) -> Option<NameLimit> {
     adapter(platform).name_limit()
 }
 
+/// The provider's name of the volume or disk that holds the data of the
+/// machine `spec` describes: a docker or Apple Container volume
+/// (`<vm_name>-data`), a Lima disk; `None` on `native`, whose data is the
+/// home's. From the spec alone: the provider is asked nothing.
+pub fn data_volume(spec: &Spec) -> Option<String> {
+    adapter(spec.kind).data_volume(spec)
+}
+
 /// Makes a new VM machine and starts its worker. A create that fails before
 /// the VM exists removes what it made; once it exists, the error has
 /// `vm_exists` and the VM is kept for inspection. `Unknown` keeps everything.

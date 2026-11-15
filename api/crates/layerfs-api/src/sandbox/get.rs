@@ -24,7 +24,10 @@ pub(crate) const CALL: Call = call(
 /// not answer (`down_reason`, with the partial `down` counts when the
 /// daemon's capacity notice carried them, #649), the daemon's
 /// `daemon_capacity` read model when the Sandbox answered it (#540), its
-/// `workspace_capacity` (how many Workspaces a Sandbox holds, always) and
+/// `workspace_capacity` (how many Workspaces a Sandbox holds, always), its
+/// daemon process as its machine saw it (`daemon`: `{ pid, started_at }`,
+/// `usage`: its cgroup's `{ cpu_usec, memory_current, memory_peak, pids }`
+/// or null with `usage_reason`; layerfs-project#164) and
 /// `next_page_pos`. The library reads it best effort and bounded, so this
 /// layer only shows what it got.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
@@ -45,6 +48,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         next,
         daemon_capacity,
         workspace_capacity,
+        process,
     } = get(home, events, &request)?;
     let workspaces = workspaces.into_iter().map(|listed| {
         let item = with_field(listed.item, "path", SdkValue::Text(listed.path));
@@ -65,6 +69,9 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     }
     let capacity = SdkValue::Int(i64::from(workspace_capacity));
     let shown = with_field(shown, "workspace_capacity", capacity);
+    let shown = (process.into_iter()).fold(shown, |shown, (field, value)| {
+        with_field(shown, &field, value)
+    });
     let next = super::list::next_page_pos(next);
     Ok(with_field(shown, "next_page_pos", next))
 }

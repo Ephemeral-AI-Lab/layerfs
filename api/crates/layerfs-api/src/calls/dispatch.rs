@@ -141,6 +141,10 @@ struct Log<'n> {
 impl<'n> Log<'n> {
     fn start(name: &'n str, client: Client, tag: Option<Option<String>>) -> Self {
         let on = layerfs_home::logs::enabled() && name.split('.').next() != Some("logs");
+        // MERGE(layerfs-project#164): `machine.stats` is a monitoring read a
+        // UI polls and writes no call-log line; fold this one line into the
+        // `quiet` flag on `Call` when #178 step 3 lands it.
+        let on = on && name != "machine.stats";
         let tag = tag.unwrap_or_else(|| {
             std::env::var("LAYERFS_LOGS_TAG")
                 .ok()

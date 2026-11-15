@@ -30,6 +30,9 @@ impl Adapter for Lima {
     fn name_limit(&self) -> Option<NameLimit> {
         super::limit::name_limit()
     }
+    fn data_volume(&self, spec: &Spec) -> Option<String> {
+        Some(super::observe::disk_name(&spec.vm_name))
+    }
     fn create(&self, spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
         create(spec, bundle)
     }

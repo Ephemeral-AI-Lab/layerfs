@@ -5,12 +5,16 @@
 //! in its machine).
 //!
 //! One read per Sandbox ([`read`]) answers one map,
-//! `{ overlay_sizes: [{ namespace, bytes }] }`, which [`merged`] puts on the
-//! listed Workspaces as `overlay_bytes`. Another datum of the same folder
-//! is one more field of that map, read in the same call. Everything is
+//! `{ overlay_sizes: [{ namespace, bytes }], daemon, usage, usage_reason? }`.
+//! [`merged`] puts the sizes on the listed Workspaces as `overlay_bytes`
+//! and the daemon process fields (layerfs-project#164) on the listing
+//! itself, where `sandbox.get` takes them. Another datum of the same
+//! folder is one more field of that map, read in the same call. Everything is
 //! found by path: no lock, no lease, no daemon, and no file is opened (an
 //! overlay database least of all: closing a descriptor on it would drop
 //! its owner's locks).
+use crate::inspect::process;
+use crate::record::DaemonRecord;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::with_field;
 use std::path::Path;
@@ -34,14 +38,41 @@ pub fn namespaces(listed: &SdkValue) -> Vec<i64> {
 /// read.
 pub fn read(directory: &Path, namespaces: &[i64]) -> Option<SdkValue> {
     let daemon = crate::files::started(directory).ok()??;
-    Some(sizes(Path::new(daemon.directory()?), namespaces))
+    let run = daemon.directory()?.to_owned();
+    Some(observed(&daemon, Path::new(&run), namespaces))
+}
+
+/// The whole read of the Sandbox `daemon` records, whose run folder is
+/// `run`: [`sizes`], and what this kernel says of the daemon process
+/// ([`process::observed`]: `daemon`, `usage` and, when that is null,
+/// `usage_reason`; layerfs-project#164). Also what the inspect kind
+/// `overlay_sizes` answers.
+pub(crate) fn observed(daemon: &DaemonRecord, run: &Path, namespaces: &[i64]) -> SdkValue {
+    let mut fields = match sizes(run, namespaces) {
+        SdkValue::Map(fields) => fields,
+        _ => Vec::new(),
+    };
+    fields.extend(process::observed(daemon));
+    SdkValue::Map(fields)
+}
+
+/// What a caller puts in place of a read the side with the run folder did
+/// not answer: no sizes, and the daemon process not observed.
+pub fn not_observed() -> SdkValue {
+    SdkValue::Map(process::not_observed())
+}
+
+/// The daemon process fields a listing answer holds ([`merged`] put them
+/// there): none from a side whose build has none.
+pub fn process_of(listed: &SdkValue) -> Vec<(String, SdkValue)> {
+    (process::FIELDS.iter())
+        .filter_map(|field| Some(((*field).to_owned(), listed.get(field)?.clone())))
+        .collect()
 }
 
 /// The read of run folder `run` itself: `{ overlay_sizes: [{ namespace,
 /// bytes }] }`, one entry for each of `namespaces`, its `bytes` null when
-/// that Workspace has no overlay file there. Also what the inspect kind
-/// `overlay_sizes` answers for a Sandbox whose records are in the home
-/// ([`crate::inspect::overlay_sizes`]).
+/// that Workspace has no overlay file there.
 pub(crate) fn sizes(run: &Path, namespaces: &[i64]) -> SdkValue {
     let sizes = namespaces.iter().map(|namespace| {
         SdkValue::map([
@@ -69,7 +100,9 @@ fn overlay_bytes(run: &Path, namespace: i64) -> SdkValue {
 /// `listed` with each Workspace's `overlay_bytes` from `read`, what the
 /// side that has the run folder answered ([`read`]): null for a Workspace
 /// it gave no size for, and for every Workspace when it did not answer
-/// (`None`).
+/// (`None`). The daemon process fields `read` holds (`daemon`, `usage`,
+/// `usage_reason`) become fields of the listing; a `read` without them
+/// (a worker of an earlier build) adds none.
 pub fn merged(listed: SdkValue, read: Option<&SdkValue>) -> SdkValue {
     let sizes = match read.and_then(|read| read.get("overlay_sizes")) {
         Some(SdkValue::List(sizes)) => sizes.as_slice(),
@@ -89,7 +122,7 @@ pub fn merged(listed: SdkValue, read: Option<&SdkValue>) -> SdkValue {
         let bytes = bytes_of(&item);
         with_field(item, "overlay_bytes", bytes)
     };
-    SdkValue::Map(
+    let merged = SdkValue::Map(
         (fields.into_iter())
             .map(|(field, value)| match (field.as_str(), value) {
                 ("workspaces", SdkValue::List(items)) => (
@@ -99,5 +132,9 @@ pub fn merged(listed: SdkValue, read: Option<&SdkValue>) -> SdkValue {
                 (_, value) => (field, value),
             })
             .collect(),
-    )
+    );
+    let seen = read.map(process_of).unwrap_or_default();
+    (seen.into_iter()).fold(merged, |merged, (field, value)| {
+        with_field(merged, &field, value)
+    })
 }

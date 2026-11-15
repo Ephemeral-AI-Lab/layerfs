@@ -267,6 +267,7 @@ export interface SandboxCreateOptions extends CallOptions {
 export interface SandboxListOptions extends CallOptions {
   page_size?: WholeNumber;
   page_pos?: WholeNumber;
+  live?: boolean;
 }
 
 /** Options of `sandbox.get`; an unknown option is refused. */
@@ -548,6 +549,8 @@ export interface MachineFamily {
   prune(name: string, image?: string | null, options?: MachinePruneOptions): Promise<Result>;
   /** a machine's live state, free disk and tool version */
   status(name: string, options?: CallOptions): Promise<Result>;
+  /** a machine's observed processors, memory and data disk, its Stores' sizes and live Sandboxes */
+  stats(machine: string, options?: CallOptions): Promise<Result>;
   /** start a stopped machine and its worker; a running one answers at once */
   start(name: string, options?: MachineStartOptions): Promise<Result>;
   /** stop a machine's worker and VM; its disks stay */

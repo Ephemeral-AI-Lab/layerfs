@@ -49,6 +49,9 @@ impl Adapter for Docker {
     fn name_limit(&self) -> Option<NameLimit> {
         None
     }
+    fn data_volume(&self, spec: &Spec) -> Option<String> {
+        Some(crate::setup::vm::data_volume(spec))
+    }
     fn create(&self, spec: &Spec, _bundle: &Bundle) -> Result<Running, MachineError> {
         Err(refused(spec, "is built in and never created"))
     }
