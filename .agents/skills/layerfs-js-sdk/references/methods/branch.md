@@ -125,10 +125,14 @@ reply, never out of the merge. For an incomplete summary, page
 
 ## `branch.publish`
 
-`branch.publish(project, branch, commit?)`
+`branch.publish(project, branch, commit?, { expected_base, expected_head, force })`
 
 Makes `main` show the Branch's head, or the given Commit, by adding a Layer
-to `main`.
+to `main`. It refuses (`HeadMoved`) when `main` gained a Layer since your
+Branch forked, so another agent's work is never dropped by accident.
+`expected_base` (a Layer id) and `expected_head` (a Commit id) refuse unless
+`main` and your Branch are still where you read them; `force: true`
+overwrites `main` on purpose.
 
 ```bash
 layerfs branch publish shop/api work
@@ -143,29 +147,29 @@ layerfs branch publish shop/api work
 
 | `kind` | Meaning |
 | --- | --- |
-| `Added` | `main` now shows that Commit; `published_layer` is the new Layer; `overwrote` lists `main` Layers that were skipped |
-| `UpToDate` | `main` already shows it (`{ kind, layer }`) |
-| `NoChanges` | Nothing to publish (1.1.0 shape; not seen in this pass) |
+| `Added` | `main` now shows that Commit; `published_layer` is the new Layer; `overwrote` lists `main` Layers that a `force` publish skipped |
+| `UpToDate` | That Commit is already published (`{ kind, layer }`), even if `main` moved on since |
+| `NoChanges` | `main` already holds that tree (`{ kind, head_layer }`) |
 
 | Code | Meaning | Do |
 | --- | --- | --- |
 | `NoCommit` | The Branch has no Commit yet | Commit something first |
 | `NoSuchBranch` | No such Branch | Check the name |
-| `HeadMoved` | `main` moved during the call | Merge `main` in (below), then publish again |
-| `InvalidInput` | `commit` is not a full Commit id | Pass a full id |
+| `HeadMoved` | `main` moved since your Branch forked (or since `expected_base`), or the Branch head is not `expected_head`; `detail` has `expectedBase`/`actualBase` or `expectedHead`/`actualHead` | Merge with `main` into a new Branch (below), then publish that |
+| `InvalidInput` | `commit` is not a full Commit id, or an expected id names the wrong kind | Pass a full id |
 
-**Publishing replaces `main`'s view** with your Commit. Layers published to
-`main` after your Branch's base that your Commit doesn't contain are skipped:
-they stay in history and `overwrote` lists them. If someone else may have
-published since you forked, merge `main` in first, check the result, then
-publish the merged Branch:
+**Publishing replaces `main`'s view** with your Commit, so it is refused when
+`main` has Layers your Commit doesn't contain. Publishing your own Branch
+again at milestones is fine. If someone else published since you forked,
+merge `main` in (a merge makes a new Branch), check the result, then publish
+the merged Branch:
 
 ```js
 const P = "shop/api";
 const m = await layerfs.branch.merge(P, "work-release", "work", "main", { message: "merge main before publish" });
 // mount m.branch in a Sandbox and run the tests here, then:
 const p = await layerfs.branch.publish(P, m.branch);
-if (p.kind === "Added" && p.overwrote.length) console.log("warning: skipped", p.overwrote);
+// a merge with main publishes as a fast-forward: nothing is skipped
 ```
 
 ## `branch.diff`

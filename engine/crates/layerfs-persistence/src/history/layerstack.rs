@@ -380,7 +380,7 @@ pub(crate) fn add_layer(
     Ok(AddLayerOutcome::Added { layer })
 }
 
-fn published_source(
+pub(crate) fn published_source(
     tx: &Transaction<'_>,
     branch: layerfs_history::identity::BranchId,
     commit: layerfs_history::identity::CommitId,

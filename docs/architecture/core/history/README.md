@@ -112,7 +112,7 @@ database. `HistoryCatalogConfig` holds `binding_key` (1–128 bytes, hashed into
 
 | Kind | Methods |
 | --- | --- |
-| Point reads | `layer_stack[_named]`, `branch[_named]`, `branch_snapshot`, `commit`, `layer` |
+| Point reads | `layer_stack[_named]`, `branch[_named]`, `branch_snapshot`, `commit`, `layer`, `published_layer` (the Layer a Branch's Commit was published as) |
 | Paged reads | `layer_stacks`, `branches`, `commit_history`, `layer_history`, `overwritten` |
 | Ancestry | `merge_base`, `is_ancestor` |
 | Writes | `initialize_layerstack`, `fork`, `commit_branch`, `add_layer`, `merge_branch`, `remove_layerstack`, `reserve_inodes` |
