@@ -105,9 +105,12 @@ class AsyncBranchFamily:
         branch: str,
         commit: str | None = None,
         *,
+        expected_base: str | None = None,
+        expected_head: str | None = None,
+        force: bool | None = None,
         log_tag: str | None = None,
     ) -> Result:
-        """a Branch's head or Commit as main's next Layer"""
+        """a Branch's head or Commit as main's next Layer, refusing a stale base"""
     async def diff(
         self,
         project: str,
@@ -457,7 +460,7 @@ class AsyncMachineFamily:
         log_tag: str | None = None,
     ) -> Result:
         """start a stopped machine and its worker; a running one answers at once"""
-    async def stop(self, name: str, *, log_tag: str | None = None) -> Result:
+    async def stop(self, name: str, *, force: bool | None = None, log_tag: str | None = None) -> Result:
         """stop a machine's worker and VM; its disks stay"""
     async def create(
         self,
