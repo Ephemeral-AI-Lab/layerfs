@@ -6,7 +6,7 @@ The FUSE route of [Kernel routes](README.md): one Workspace over one `/dev/fuse`
 
 | | |
 | --- | --- |
-| Source | [`layerfs-fuse/src`](../../../../engine/crates/layerfs-fuse/src) (`session/`, `dispatch/`, `request/`, `mount/`, `coherence/`), [`engine/patches/fuser-0.18.0`](../../../../engine/patches/fuser-0.18.0), [`engine/vendor/fuser-0.18.0`](../../../../engine/vendor/fuser-0.18.0) |
+| Source | [`layerfs-fuse/src`](../../../../engine/crates/layerfs-fuse/src) (`session/`, `dispatch/`, `request/`, `mount/`, `coherence/`), [fuser fork](https://github.com/Ephemeral-AI-Lab/fuser/blob/7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4) |
 
 `attributes`, `mount`, `request` and `session` are `#[cfg(target_os = "linux")]`;
 `coherence` and `dispatch` build everywhere
@@ -142,47 +142,38 @@ READ/WRITE frames ([`accounting.rs`](../../../../engine/crates/layerfs-fuse/src/
 
 All in [`syscalls.rs`](../../../../engine/crates/layerfs-fuse/src/mount/syscalls.rs).
 
-## Authorized fuser patches (`engine/patches/fuser-0.18.0`)
+## Fuser Git dependency
 
-```text
- fuser-0.18.0.crate (crates.io, sha256 b82b6597...cfd, 85 files)
-   1 signed-timestamps.patch  src/time.rs
-   2 session-lifecycle.patch  src/lib.rs, src/session.rs, CHANGELOG.md,
-                              + src/session/lifecycle.rs     (86 files)
-   3 receive-buffer.patch     src/read_buf.rs, src/session.rs,
-                              src/session/lifecycle.rs
- -> engine/vendor/fuser-0.18.0 <- [patch.crates-io] in the root Cargo.toml
-```
+`layerfs-fuse` uses the organization's [fuser fork](https://github.com/Ephemeral-AI-Lab/fuser)
+at fixed revision [`7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4`](https://github.com/Ephemeral-AI-Lab/fuser/blob/7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4),
+package version 0.18.0. The dependency is declared directly in
+[its manifest](../../../../engine/crates/layerfs-fuse/Cargo.toml); the
+[root lockfile](../../../../Cargo.lock) records that Git source and commit.
+There is no local vendor, patch application or crates.io override. The branch
+name is not the dependency identity and no published package is required.
 
-`layerfs-fuse` depends on `fuser =0.18.0`
-([`Cargo.toml`](../../../../engine/crates/layerfs-fuse/Cargo.toml)); the root
-manifest redirects it to the checked-in vendor copy and excludes that copy
-from the workspace ([`Cargo.toml`](../../../../Cargo.toml)). No other
-dependency is patched. The binding rules are in the
-[engine guide](../../../../engine/AGENTS.md); the patch record is
-[`engine/patches/fuser-0.18.0/README.md`](../../../../engine/patches/fuser-0.18.0/README.md).
+The fork owns three changes independently of LayerFS:
 
-| Patch | What it changes | Used by LayerFS | Diff, provenance |
-| --- | --- | --- | --- |
-| Signed timestamps | `system_time_from_time` counts nanoseconds forward from a negative whole second, as a `timespec` does (`(-1, 500_000_000)` is epoch − 0.5 s); nanoseconds clamp to `999_999_999`; from upstream commit `e48279f` | Signed mtimes; the adapter's own `timestamp` follows the same rule ([`attributes.rs`](../../../../engine/crates/layerfs-fuse/src/attributes.rs)) | [`signed-timestamps.patch`](../../../../engine/patches/fuser-0.18.0/signed-timestamps.patch), [`provenance.json`](../../../../engine/patches/fuser-0.18.0/provenance.json) |
-| Session lifecycle | Additive `Session::into_runner` -> `SessionRunner` + `SessionMonitor`; phases `Prepared`, `Starting`, `Serving` (every loop created and entered), `Stopping`, `Joined`; `SessionOutcome` keeps the startup error, every receiver's join result (panics included) and cleanup. `Session::run` is unchanged | `attach` (`wait_ready`), the fence watcher and the drain `Join` wait (`wait_for_change`), `SessionFacts` ([`startup.rs`](../../../../engine/crates/layerfs-fuse/src/session/startup.rs), [`state.rs`](../../../../engine/crates/layerfs-fuse/src/session/state.rs)) | [`session-lifecycle.patch`](../../../../engine/patches/fuser-0.18.0/session-lifecycle.patch), [`lifecycle-provenance.json`](../../../../engine/patches/fuser-0.18.0/lifecycle-provenance.json) |
-| Receive buffer | `negotiated_size(max_write) = max_write + 4096`; each receive loop allocates that instead of `MAX_WRITE_SIZE + 4096` (16 MiB + 4 KiB); the INIT buffer keeps fuser's size | 2 loops × (128 KiB + 4 KiB) per mount | [`receive-buffer.patch`](../../../../engine/patches/fuser-0.18.0/receive-buffer.patch), [`receive-buffer-provenance.json`](../../../../engine/patches/fuser-0.18.0/receive-buffer-provenance.json) |
+| Change | Behavior | Used here |
+| --- | --- | --- |
+| [Signed timestamps](https://github.com/Ephemeral-AI-Lab/fuser/blob/7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4/src/time.rs) | Count nanoseconds forward from a negative whole second and avoid signed-minimum negation overflow. | Signed mtimes; the adapter's own [timestamp conversion](../../../../engine/crates/layerfs-fuse/src/attributes.rs) follows the same rule. |
+| [Session lifecycle](https://github.com/Ephemeral-AI-Lab/fuser/blob/7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4/src/session/lifecycle.rs) | Additive `Session::into_runner`, `SessionRunner` and `SessionMonitor`; all-loop startup observation and retained original receiver joins and cleanup outcomes. `Session::run` remains available. | [Attach and the fence watcher](../../../../engine/crates/layerfs-fuse/src/session/startup.rs), [session facts](../../../../engine/crates/layerfs-fuse/src/session/state.rs) and [drain](../../../../engine/crates/layerfs-fuse/src/session/drain.rs). |
+| [Receive buffer](https://github.com/Ephemeral-AI-Lab/fuser/blob/7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4/src/read_buf.rs) | Receive loops allocate `max_write + 4096` after INIT; the handshake keeps the maximum buffer. | Two loops, each negotiated to 128 KiB + 4 KiB, rather than 16 MiB + 4 KiB. |
 
-No `SessionMonitor` deadline cancels, detaches, retries or disposes the
-runner; a deadline only returns the current snapshot. The kernel never sends
-a write larger than the negotiated `max_write`, so the smaller buffer holds
-every request.
+A monitor deadline returns a snapshot; it does not cancel, detach, retry or
+release the runner. Mount and connection disposition still belong to the caller.
+The smaller receive buffer follows the negotiated write limit, not a total
+file or Workspace capacity limit.
 
-[`tools/check_fuser_integrity.py`](../../../../tools/check_fuser_integrity.py)
-(`python3 -B tools/check_fuser_integrity.py`, run before a native fuser build)
-reads files only: only the root manifest may redirect fuser, only its locks
-hold the patched entry, each provenance record and patch matches its pinned
-SHA-256, and every vendor file matches the archive except the pinned changed
-or added files. The provenance JSON files are byte-pinned by that script, so
-they change only together with its constants. Rebuilding the vendor copy is:
-extract the archive, then apply the three patches in order with
-`patch --batch --forward -p1`. Third-party source is outside first-party
-production LOC.
+The fork's own repository maintains its code and tests. LayerFS uses ordinary
+locked dependency builds and its integration tests; no local patch/source checker
+is required. A revision change updates the manifest, lock and this page together.
+
+The earlier local-patch mechanism and its source/verification records remain
+[available at the deletion-parent snapshot](https://github.com/Ephemeral-AI-Lab/layerfs/tree/8cfb6e273470d0bb2a4ec5a9256fcf4972441eb5/engine/patches/fuser-0.18.0).
+Their original verdicts, including the Linux fractional signed-minimum FAIL and
+its owner acceptance, are unchanged. Moving the source to the fork does not
+re-run or broaden those proofs.
 
 ## Related
 

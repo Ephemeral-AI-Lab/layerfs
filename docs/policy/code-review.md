@@ -17,7 +17,7 @@ repeat them:
 | Tests built with `--no-run` first, then each run under a 120-second wall timeout | root `AGENTS.md` §4 |
 | Production LOC in every commit | root `AGENTS.md` §Production LOC comparison |
 | 999/200-line ceilings, no tests in `src/`, unsafe allowlist | [engine guide](../../engine/AGENTS.md#production-file-size-and-responsibility) |
-| fuser patch authority and provenance | [engine guide](../../engine/AGENTS.md#fuser-provenance-and-authorized-patch-checks) |
+| fuser Git source and revision | [engine guide](../../engine/AGENTS.md#fuser-git-source) |
 | When architecture docs must change | [architecture doc update policy](architecture-doc-update.md) |
 | Release waivers | [release policy](../general/release-policy.md) |
 | CI reports and never gates | root `AGENTS.md` §4 |
@@ -36,7 +36,7 @@ whatever layer it sits in. When in doubt, use the higher tier.
 | Tier | Paths | What review protects |
 | --- | --- | --- |
 | **P0** | `core/crates/**` except `layerfs-telemetry`; the `risk:format` set in core and engine | canonical identity, content correctness, encoding and packing, history, the cost of the algorithms, the Store bytes a later release must read |
-| **P1** | `engine/crates/**`, `engine/vendor/**`, `engine/patches/**`, `core/crates/layerfs-telemetry/**` (its call-log encoding is in `risk:format`); the `risk:format` set in control and tools (records, migration); the `risk:store`, `risk:wire`, `risk:kernel`, `risk:delete`, `risk:security` and `risk:deps` sets; the guard tools | Store integrity and custody, Commit capture, overlay custody, FUSE/NFS ownership and caches, record and wire compatibility, deletion, secrets and isolation |
+| **P1** | `engine/crates/**`, `core/crates/layerfs-telemetry/**` (its call-log encoding is in `risk:format`); the `risk:format` set in control and tools (records, migration); the `risk:store`, `risk:wire`, `risk:kernel`, `risk:delete`, `risk:security` and `risk:deps` sets; the guard tools | Store integrity and custody, Commit capture, overlay custody, FUSE/NFS ownership and caches, record and wire compatibility, deletion, secrets and isolation |
 | **P2** | `control/crates/**`, `control/SUPPORT.json`, `.github/**`, `.config/**`, release tools (`tools/linux_bundle.py`, `tools/machine_image*`); owner-only documents; the contract docs set | machines and workers, Sandbox launch, CI, the rules agents follow and documents they treat as instructions |
 | **P3** | `api/**`, `plugins/**`, `.agents/**` (except skills), other `docs/**` and `tools/**`, `README.md` | the call table, argument checks, front ends, packaging, text |
 
@@ -53,8 +53,8 @@ The owner approves a PR, at any tier, when it:
 - falls in the `risk:format`, `risk:store`, `risk:delete` or `risk:security` set;
 - changes an owner-only path: every `AGENTS.md`, `docs/policy/**`,
   `docs/general/{agent-measurement-policy,benchmark_rules,release-policy,documentation-policy}.md`,
-  `engine/vendor/**`, `engine/patches/**`, `.config/nextest.toml`, or a guard
-  tool (`tools/{check_product_boundary,check_fuser_integrity,production_loc,ci_tests}.py`);
+  `.config/nextest.toml`, or a guard
+  tool (`tools/{check_product_boundary,production_loc,ci_tests}.py`);
 - adds a dependency;
 - adds a loop around a fallible call, a busy handler, a resend or an
   error-driven fallback (normally refused as a retry);
@@ -76,7 +76,7 @@ diff contains only what the code claims.
 | --- | --- | --- | --- |
 | **D1 editorial** | only Markdown text changes: wording, links, formatting | tier P3; the author may self-merge with a review record | the contract docs set; owner-only paths; a doc that states a new invariant, limit, format or design (that is reviewed at the tier it describes) |
 | **D2 comment-only** | only comments or rustdoc change | P3 evidence | a removed code line (commenting code out is a code change); a `SAFETY` comment |
-| **D3 test-only** | only `tests/`, `examples/`, `benches/` change | no measurement or mount proof unless the test is one; the same reviewer | golden and fixture files in the `risk:format` set; a changed expected value or weakened assertion (a contract change); `engine/vendor/**`; a file that names Durable |
+| **D3 test-only** | only `tests/`, `examples/`, `benches/` change | no measurement or mount proof unless the test is one; the same reviewer | golden and fixture files in the `risk:format` set; a changed expected value or weakened assertion (a contract change); a file that names Durable |
 | **D4 generated** | blocks from `gen-coverage.mjs` or `gen-profiles.mjs` | the block is not read; the generator's `--check` passes | |
 | **D5 relocation-only** | files moved or renamed with no behaviour change | LOC labelled relocation; tests run | a move mixed with a behaviour change (land the move as its own commit) |
 
@@ -100,7 +100,7 @@ applies.
 | --- | --- | --- | --- | --- |
 | Approver | the owner | any maintainer other than the author; the owner for a gate risk | any maintainer other than the author; the owner for a gate risk | one maintainer; D1 may be self-merged |
 | Reading depth | every changed production line; every changed assertion, fixture and golden; callers of every changed public port | every changed line in gate-risk and lock code, read end to end; the rest by diff; tests read for weakened or deleted assertions | every line of custody, secret, worker-protocol, isolation and deletion code; the rest by diff | the diff; call-table entries and refusal text in full |
-| The reviewer runs again | the boundary guard; the covering tests on Linux | the boundary guard; one covering test of the reviewer's choice; the fuser check when the vendored fuser changed | the boundary guard | nothing |
+| The reviewer runs again | the boundary guard; the covering tests on Linux | the boundary guard; one covering test of the reviewer's choice | the boundary guard | nothing |
 
 - **The review record** is a PR comment or review, by any account, that starts
   `Review record` and gives the reviewed head commit, the tier, what was read,
@@ -149,7 +149,6 @@ the author's word plus whatever the reviewer runs again.
 | `Durable: NOT_RUN — disabled by owner until explicit reauthorization`; new Stores select Disposable explicitly | C: `risk:store` | C: `risk:store` | C: `risk:store` | — |
 | A test that protected data survives | C: `risk:delete` | C: `risk:delete` | C: `risk:delete` | C: `risk:delete` |
 | Lock order and hold described; nothing in the publication lane grows with tree, history or Branch count | C: locks or lane changed | C: same | C: same | — |
-| fuser: `python3 -B tools/check_fuser_integrity.py` | — | C: vendored fuser changed | — | — |
 | Deleted tests listed, with surviving behaviour covered again | C | C | C | C |
 | Dependency: why no existing crate covers it | C | C | C | C |
 
@@ -312,10 +311,10 @@ and their new path.
 | `risk:format` | `core/crates/layerfs-content/src/object/**`, `core/crates/layerfs-content/src/**/*{codec,wire}.rs`, `core/crates/layerfs-storage/src/{encoding,pack}/**`, `core/crates/layerfs-telemetry/src/output/encode.rs`, `engine/crates/layerfs-persistence/sql/**`, `engine/crates/layerfs-persistence/src/backend/{records.rs,*/schema*.rs}`, `engine/crates/layerfs-persistence/src/blocks/**`, `control/crates/layerfs-home/src/{json.rs,home/records.rs,home/fields.rs}`, `control/crates/layerfs-machine/src/record.rs`, `control/crates/layerfs-sandbox/src/{record/**,exec/record.rs}`, `control/crates/layerfs-store/src/{record.rs,project/record.rs,backup/record.rs}`, `control/crates/layerfs-control/src/migrate/**`, `tools/store_blocks.py`; fixtures and goldens: `**/tests/fixtures/**`, `**/*.sqlite`, `**/*.bin`, `engine/crates/layerfs-persistence/tests/old_format_open.rs`, `core/crates/layerfs-content/tests/{object_identity,filesystem_codec,fixture_seal}.rs`, `core/crates/layerfs-storage/tests/{object_key,physical_formats,codec_frames}.rs` |
 | `risk:store` | `engine/crates/layerfs-persistence/src/**`, `engine/crates/layerfs-store-service/src/{store,write,history}/**`, `engine/crates/layerfs-workspace/src/construction/**`, `engine/crates/layerfs-project/src/store/**`, `engine/crates/layerfs-daemon/src/install.rs`, `engine/crates/layerfs-overlay/{sql,src/database}/**`, `control/crates/layerfs-store/src/{open,open_args,lease,identity,place}.rs`, `control/crates/layerfs-store/src/{sqlite,postgresql,backup}/**`, `control/crates/layerfs-store/src/project/{init,postgres_init,add}.rs`, `control/crates/layerfs-bucket/src/backup/**`, `control/crates/layerfs-sandbox/src/daemon/**` |
 | `risk:wire` | `engine/crates/layerfs-bridge/src/{wire,daemon_wire,provision_wire,initial_record}.rs`, `engine/crates/layerfs-bridge/src/{control_,sdk_}*.rs`, `engine/crates/layerfs-bridge/src/duplex/**`, `control/crates/layerfs-machine/src/worker/{frame,hello,client}.rs`, `control/crates/layerfs-sandbox/src/host/frame.rs`, `control/crates/layerfs-store/src/project/frame.rs`, `api/crates/layerfs-cli/src/framed.rs` |
-| `risk:kernel` | `engine/crates/layerfs-{fuse,nfs,mount-ports}/**`, `engine/vendor/**`, `engine/patches/**` |
+| `risk:kernel` | `engine/crates/layerfs-{fuse,nfs,mount-ports}/**`; the fuser source pin in `Cargo.lock` |
 | `risk:delete` | `tools/cleanup*`, `control/crates/layerfs-store/src/project/remove.rs`, `control/crates/layerfs-machine/src/remove.rs`, `control/crates/layerfs-bucket/src/bucket/**`, `engine/crates/layerfs-overlay/src/maintenance/{garbage,orphan}.rs`, `engine/crates/layerfs-daemon/src/control/cleanup.rs`, `core/crates/layerfs-telemetry/src/output/retention.rs` |
 | `risk:security` | `control/crates/layerfs-home/src/secrets.rs`, `control/crates/layerfs-bucket/src/bucket/{credentials.rs,s3_api/sign.rs}`, `control/crates/layerfs-sandbox-backend/src/postgres_url.rs`, `control/crates/layerfs-sandbox-backend/src/{backend/namespaces,local/os/linux}/**`, `control/crates/layerfs-control/src/worker_server.rs`, `control/crates/layerfs-machine/src/worker/{hello,client}.rs`, `engine/crates/layerfs-bridge/src/{duplex/handshake.rs,process/**}`, `engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/file_control.rs`, `core/crates/layerfs-storage/src/encoding/codec.rs`; new `unsafe` or FFI anywhere (found by the boundary guard and the risky-lines scan, not by path) |
-| `risk:deps` | `Cargo.lock`, `**/package-lock.json`, `.cargo/**`, `engine/{vendor,patches}/**`; and dependency, feature or build-flag hunks in any `Cargo.toml`, `package.json` or `pyproject.toml` |
+| `risk:deps` | `Cargo.lock`, `**/package-lock.json`, `.cargo/**`; and dependency, feature or build-flag hunks in any `Cargo.toml`, `package.json` or `pyproject.toml` |
 | `perf` | `core/crates/layerfs-content/src/file/construction/**`, `core/crates/layerfs-storage/src/{encoding,save,pack}/**`, `engine/crates/layerfs-store-service/src/store/commit*.rs`, `engine/crates/layerfs-persistence/src/backend/*/lane/**`, `engine/crates/layerfs-workspace/src/construction/**`, `engine/crates/layerfs-fuse/src/dispatch/**`, `engine/crates/layerfs-overlay/src/payload/**` |
 | contract docs | `docs/architecture/**/README.md`, `docs/general/{cluster_one_handbook,cas_cdc_deltaencoding_handbook}.md`, `.agents/skills/**` |
 
