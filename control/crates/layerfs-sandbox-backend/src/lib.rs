@@ -14,7 +14,6 @@
 // two prctl calls); the macOS process facts (proc_pidinfo) moved with
 // LocalProcess to layerfs_bridge::process (layerfs-project#112)
 #![deny(unsafe_code)]
-#[cfg(unix)]
 mod backend;
 #[cfg(unix)]
 pub use backend::namespaces::rootfs;

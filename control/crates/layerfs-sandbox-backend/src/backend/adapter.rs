@@ -4,7 +4,9 @@
 //! `ADAPTER`: what is fixed per backend (its stored name, description and
 //! capabilities). Launch and reopen stay on the providers the public
 //! `Runtime` enum holds; `LaunchRequest` binds arrive in a later phase.
-use super::{host_process, namespaces, Backend};
+#[cfg(target_os = "linux")]
+use super::namespaces;
+use super::{host_process, Backend};
 use crate::ProviderCapabilities;
 
 /// What is fixed for one Sandbox backend.
@@ -22,6 +24,9 @@ pub(crate) trait BackendAdapter: Sync {
 pub(crate) fn adapter(backend: Backend) -> &'static dyn BackendAdapter {
     match backend {
         Backend::HostProcess => &host_process::ADAPTER,
+        #[cfg(target_os = "linux")]
         Backend::Namespaces => &namespaces::ADAPTER,
+        #[cfg(not(target_os = "linux"))]
+        Backend::Namespaces => unreachable!("the namespaces backend is Linux only"),
     }
 }

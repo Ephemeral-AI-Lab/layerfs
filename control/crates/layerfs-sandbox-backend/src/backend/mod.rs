@@ -9,4 +9,5 @@ mod kind;
 pub(crate) use adapter::adapter;
 pub use kind::Backend;
 pub mod host_process;
+#[cfg(target_os = "linux")]
 pub mod namespaces;
