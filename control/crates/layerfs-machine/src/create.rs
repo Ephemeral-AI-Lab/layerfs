@@ -22,8 +22,21 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// A new machine's name: valid, not built in, not taken.
-fn new_name(home: &Path, name: &str) -> Result<()> {
+/// The longest name `machine.create` takes. A provider takes a VM name of
+/// at most 63 characters (`layerfs-platform`'s plain-name rule, checked for
+/// every platform but `native`), and `layerfs-<home id8>-` takes 17 of
+/// them. Every platform `machine.create` makes is held to it; a machine
+/// made earlier with a longer name keeps its recorded VM name.
+const NEW_NAME_MAX: usize = 46;
+
+/// A new machine's name: valid, not built in, short enough for its VM name
+/// and not taken, here or at the provider. A VM name keeps no punctuation
+/// (`a.b` and `a_b` both give `...-a-b`), so the second such machine is
+/// refused `Exists`: the new machine's VM name, under today's formula or
+/// the one before layerfs-project#180, must be no other machine's (its
+/// recorded `vm_name`, else that earlier formula's). Checked under the
+/// home lock, before any effect.
+fn new_name(home: &Path, id: &str, name: &str) -> Result<()> {
     layerfs_home::names::MachineName::parse(name)?;
     if layerfs_home::names::BUILT_IN.contains(&name) {
         return Err(refused(
@@ -31,8 +44,38 @@ fn new_name(home: &Path, name: &str) -> Result<()> {
             format!("{name} is a built-in machine"),
         ));
     }
+    if name.len() > NEW_NAME_MAX {
+        return Err(refused(
+            "InvalidInput",
+            format!(
+                "machine name `{name}` has {} characters; a new machine's name is at most \
+                 {NEW_NAME_MAX}: its VM name is at most 63 characters and its prefix \
+                 `layerfs-<home id8>-` takes 17",
+                name.len()
+            ),
+        ));
+    }
     if paths::machine_dir(home, name).exists() {
         return Err(refused("Exists", format!("a machine named {name} exists")));
+    }
+    let wanted = [
+        record::vm_name(id, name),
+        super::record::legacy_vm_name(id, name),
+    ];
+    for other in paths::names(&home.join("machine")).map_err(failed)? {
+        let Some(theirs) = MachineRecord::read(home, &other)? else {
+            continue;
+        };
+        let taken = theirs.provider_name(id);
+        if wanted.contains(&taken) {
+            return Err(refused(
+                "Exists",
+                format!(
+                    "machine {other} (VM name {taken}) and {name} differ only in punctuation, \
+                     which a VM name does not keep; choose another name"
+                ),
+            ));
+        }
     }
     Ok(())
 }
@@ -123,7 +166,7 @@ pub fn create(
     // claim the name under the lock; the VM is made outside it
     let spec = {
         let _lock = lock::take(&home)?;
-        new_name(&home, name)?;
+        new_name(&home, &id, name)?;
         record.write(&home)?;
         record::spec(&home, &id, &record)
     };

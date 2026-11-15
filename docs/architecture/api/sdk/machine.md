@@ -376,9 +376,16 @@ CLI     layerfs machine create <name> <platform> [--cpus <cpus>] [--memory <memo
 | `os_image` option | Text | the VM's operating-system image (an installed OCI reference for Apple Container, an image location for Lima); default an installed prepared image, else the provider's stock image; recorded and answered as `os_image` |
 | `on_progress` option | Function | the `machine.start` stages, plus `{ phase: "create", machine }` |
 
-The record keeps `vm_name` (`lfs-<home id prefix>-<name>`, so two homes
-never share a VM). The name is claimed with an `op` `create` under the home
-lock; the boot runs under `start.lock` only.
+The record keeps `vm_name` (`layerfs-<home id prefix>-<name>`, so two homes
+never share a VM; every character of the name that is not a letter or digit
+becomes `-`). The built-in `docker` machine's record keeps one too, from a
+new home's first call. A record without `vm_name` (an existing home's
+`docker`) means `lfs-<home id prefix>-<name>`, the formula before
+layerfs-project#180, so it keeps its container and volume. Under the home
+lock a create refuses `InvalidInput` a name longer than 46 characters (a VM
+name is at most 63, the prefix takes 17) and `Exists` a name whose VM name,
+under either formula, is another machine's. The name is claimed with an
+`op` `create` under the home lock; the boot runs under `start.lock` only.
 
 | Adapter outcome | Record afterwards |
 | --- | --- |

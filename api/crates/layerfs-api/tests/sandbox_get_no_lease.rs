@@ -313,9 +313,16 @@ fn keys(endpoint: SocketAddr) -> SdkValue {
 /// Sandbox `s1` in `root` (the home, or a worker's root) as the side that
 /// runs it records it: a native daemon process (this test's own, so it is
 /// found alive) listening at `endpoint`, under the name the home with id
-/// `home_id` gives it, with one Workspace record per listed `items`.
+/// `home_id` gave it before layerfs-project#180 (`lfs-<id8>-s1`, which a
+/// Sandbox made then keeps), with one Workspace record per listed `items`.
 fn local_sandbox(root: &Path, home_id: &str, endpoint: SocketAddr, items: &[SdkValue]) {
     let name = format!("lfs-{}-s1", &home_id[..8]);
+    sandbox_named(root, &name, endpoint, items);
+}
+
+/// [`local_sandbox`], under the run-folder name `name`.
+fn sandbox_named(root: &Path, name: &str, endpoint: SocketAddr, items: &[SdkValue]) {
+    let name = name.to_owned();
     let me = layerfs_bridge::process::LocalProcess::observe(std::process::id()).unwrap();
     let daemon = DaemonRecord::local(Local {
         platform: "macos".to_owned(),
@@ -555,6 +562,51 @@ fn a_daemon_from_before_the_option_gives_the_same_answer() {
     for field in ["branches", "commits", "layers", "store", "version", "kind"] {
         assert!(!answers[1].0.iter().any(|name| name == field), "{field}");
     }
+}
+
+/// A get reopens a Sandbox by the run-folder name its record holds, on
+/// this process's side and on a worker's: the name a new Sandbox gets
+/// (`layerfs-<id8>-s1`) like the earlier one every other test here records
+/// (layerfs-project#180). A record under any other name is refused, with
+/// nothing it names used.
+#[test]
+fn a_get_reopens_a_sandbox_under_the_name_its_record_holds() {
+    let items = vec![item(1)];
+    // native: this process reopens it
+    let (endpoint, seen) = daemon(items.clone(), false);
+    let home = tempdir("named-native");
+    let id = home::open(&home).unwrap().id;
+    home_records(&home, "native", "native", None);
+    sandbox_named(&home, &format!("layerfs-{}-s1", &id[..8]), endpoint, &items);
+    running(&get(&home).unwrap(), &items);
+    asked_workspaces_only(&seen);
+    std::fs::remove_dir_all(home).unwrap();
+
+    // a machine's worker reopens it under its root, with the caller's id
+    let (endpoint, seen) = daemon(items.clone(), false);
+    let scratch = tempdir("named-worker");
+    let (home, root) = (scratch.join("home"), scratch.join("data"));
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let id = home::open(&home).unwrap().id;
+    home_records(&home, "box", "docker", Some((worker(&root), "k")));
+    worker_sandbox(&home);
+    sandbox_named(&root, &format!("layerfs-{}-s1", &id[..8]), endpoint, &items);
+    running(&get(&home).unwrap(), &items);
+    asked_workspaces_only(&seen);
+    std::fs::remove_dir_all(scratch).unwrap();
+
+    // neither name: refused before the daemon is asked
+    let (endpoint, seen) = daemon(items.clone(), false);
+    let home = tempdir("named-other");
+    let id = home::open(&home).unwrap().id;
+    home_records(&home, "native", "native", None);
+    sandbox_named(&home, &format!("other-{}-s1", &id[..8]), endpoint, &items);
+    let (code, message) = get(&home).unwrap_err();
+    assert_eq!(code, "InvalidInput", "{message}");
+    assert!(message.contains("neither used nor deleted"), "{message}");
+    assert_eq!(seen.connections.load(Ordering::SeqCst), 0);
+    std::fs::remove_dir_all(home).unwrap();
 }
 
 /// A worker serving `root` behind secret `k`, once it answers.

@@ -33,7 +33,7 @@ fn host_args(
     (sandbox, message): (Option<String>, Message),
     root: RunRoot,
 ) -> Result<Host> {
-    let prefix = format!("lfs-{}-", &layerfs_home::home::opened(home)?.id[..8]);
+    let id = layerfs_home::home::opened(home)?.id;
     let backend = if cfg!(target_os = "macos") {
         "native"
     } else {
@@ -60,7 +60,8 @@ fn host_args(
     let deploy = Deploy {
         sandbox: Some(backend.to_owned()),
         local_dir: Some(local.display().to_string()),
-        container_prefix: Some(prefix),
+        container_prefix: Some(layerfs_home::names::provider_prefix(&id)),
+        legacy_prefix: Some(layerfs_home::names::legacy_provider_prefix(&id)),
         ..settings
     };
     Ok(Host {

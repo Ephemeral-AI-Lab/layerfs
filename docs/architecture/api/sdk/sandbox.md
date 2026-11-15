@@ -52,7 +52,7 @@ CLI     layerfs sandbox create <project> <name> [<machine>] [--image <image>] [-
 
 | Argument | Kind | Rule |
 | --- | --- | --- |
-| `name` | Name | unique across the home; not `native` or `docker` (built-in machine names) |
+| `name` | Name | unique across the home; not `native` or `docker` (built-in machine names); not ending in `.root` (`<name>.root` is a Sandbox's private root in the run folder) |
 | `machine` (optional) | Name | default a sqlite Store's machine, else `native`; a sqlite Store's Sandbox must run on that machine, and the support table's `sandbox_allowed` must accept the platform and Store kind |
 | `image` option | Image | a digest, Docker image Id or Docker reference: one the machine holds (unpacked, or in its archive) starts at once; any other is copied from the host's Docker first, as [`machine.load`](machine.md#machineload) does (progress `inspect`, `export`, `send`, `unpack`, then `start`). Default the machine record's image (not on `docker`), else the archive's; refused on macOS `native` ([`deploy.rs`](../../../../control/crates/layerfs-sandbox/src/deploy.rs), [`image_load.rs`](../../../../control/crates/layerfs-sandbox/src/image_load.rs)) |
 
@@ -73,7 +73,7 @@ first. Nothing starts a stopped machine.
 
 | Error | When |
 | --- | --- |
-| `InvalidInput` | `native`/`docker` as the name; an image Docker does not have |
+| `InvalidInput` | `native`/`docker` as the name, or a name ending in `.root`; an image Docker does not have |
 | `NoSpace` | copying the image needs `2 × size × 1.05` bytes and the machine has fewer (`detail { need, free }`) |
 | `Unavailable` | the machine is stopped (`detail { what: "machine" }`) or Docker cannot be read (`detail { what: "docker" }`) |
 | `NotFound` | no machine of that name |

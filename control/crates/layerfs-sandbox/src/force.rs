@@ -12,6 +12,7 @@ use std::path::Path;
 /// The host operation's view of `native` Sandbox `sandbox` from its own
 /// records alone: no Store, project or daemon is resolved.
 pub fn native_host(home: &Path, sandbox: &str) -> Result<Host, SdkRefusal> {
+    let id = home::opened(home)?.id;
     Ok(Host {
         home: home.to_path_buf(),
         store: String::new(),
@@ -21,7 +22,10 @@ pub fn native_host(home: &Path, sandbox: &str) -> Result<Host, SdkRefusal> {
         store_path: None,
         deploy: Some(Deploy {
             local_dir: Some(paths::run_root(home).display().to_string()),
-            container_prefix: Some(format!("lfs-{}-", &home::opened(home)?.id[..8])),
+            // a Sandbox made before layerfs-project#180 is found by the
+            // earlier prefix its record keeps
+            container_prefix: Some(layerfs_home::names::provider_prefix(&id)),
+            legacy_prefix: Some(layerfs_home::names::legacy_provider_prefix(&id)),
             ..Deploy::default()
         }),
         postgresql: None,

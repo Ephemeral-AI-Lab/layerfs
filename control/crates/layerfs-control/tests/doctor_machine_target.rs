@@ -18,6 +18,8 @@ use std::time::{Duration, Instant};
 struct Fixture {
     root: PathBuf,
     home: PathBuf,
+    /// The home's id, which a built-in machine's first record is made with.
+    id: String,
     path: Option<std::ffi::OsString>,
 }
 impl Fixture {
@@ -26,12 +28,13 @@ impl Fixture {
             std::env::temp_dir().join(format!("lfs-doctor-machine-target-{}", std::process::id()));
         std::fs::create_dir_all(root.join("bin")).unwrap();
         let home = root.join("home");
-        home::ensure(&home).unwrap();
+        let id = home::ensure(&home).unwrap().id;
         let previous = std::env::var_os("PATH");
         std::env::set_var("PATH", root.join("bin"));
         Self {
             root,
             home,
+            id,
             path: previous,
         }
     }
@@ -105,14 +108,18 @@ fn machine_target_reports_dependencies_and_preserves_home() {
         "machine.record",
         "fail",
     );
-    MachineRecord::built_in("native").write(&f.home).unwrap();
+    MachineRecord::built_in("native", &f.id)
+        .write(&f.home)
+        .unwrap();
     #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
     let native = f.report("native", Duration::from_secs(1));
     #[cfg(target_os = "macos")]
     outcome(&native, "machine.provider", "pass");
     #[cfg(target_os = "macos")]
     outcome(&native, "machine.worker", "skipped");
-    MachineRecord::built_in("docker").write(&f.home).unwrap();
+    MachineRecord::built_in("docker", &f.id)
+        .write(&f.home)
+        .unwrap();
     outcome(
         &f.report("docker", Duration::from_secs(1)),
         "machine.provider",
@@ -241,7 +248,7 @@ fn machine_target_reports_dependencies_and_preserves_home() {
         SdkValue::text(sensitive),
         SdkValue::map([("secret", SdkValue::text(sensitive))]),
     ] {
-        MachineRecord::built_in("native")
+        MachineRecord::built_in("native", &f.id)
             .with("state", state)
             .write(&f.home)
             .unwrap();
@@ -250,7 +257,7 @@ fn machine_target_reports_dependencies_and_preserves_home() {
         assert!(!format!("{report:?}").contains(sensitive));
     }
     for state in ["running", "stopped", "failed"] {
-        MachineRecord::built_in("native")
+        MachineRecord::built_in("native", &f.id)
             .with("state", SdkValue::text(state))
             .write(&f.home)
             .unwrap();
@@ -272,7 +279,7 @@ fn machine_target_reports_dependencies_and_preserves_home() {
         ("owner", SdkValue::map([("pid", SdkValue::Int(0))])),
         ("uncertain", SdkValue::Bool(true)),
     ]);
-    MachineRecord::built_in("native")
+    MachineRecord::built_in("native", &f.id)
         .with("op", malformed_op)
         .write(&f.home)
         .unwrap();

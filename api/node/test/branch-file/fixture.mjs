@@ -17,7 +17,10 @@ function docker(args) {
 function releaseStoppedWorker(home) {
   const { id } = JSON.parse(readFileSync(join(home, "layerfs.json"), "utf8"));
   assert.match(id, /^[0-9a-f]{32}$/);
-  const name = `lfs-${id.slice(0, 8)}-docker`;
+  // the name its record keeps (`vm_name`); a record from before
+  // layerfs-project#180 has none and means `lfs-<id8>-docker`
+  const record = JSON.parse(readFileSync(join(home, "machine", "docker", "record.json"), "utf8"));
+  const name = record.vm_name ?? `lfs-${id.slice(0, 8)}-docker`;
   const [owned] = JSON.parse(docker(["inspect", name]));
   assert.equal(owned.Name, `/${name}`);
   assert.equal(owned.State.Running, false);

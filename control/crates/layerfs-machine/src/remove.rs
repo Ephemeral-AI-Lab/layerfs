@@ -65,12 +65,7 @@ fn forget(home: &Path, name: &MachineName, reason: &str, related: Related) -> Ou
     let record = MachineRecord::of(home, name)?;
     record.not_running()?;
     (related.can_remove)(home, name)?;
-    let vm = || -> Result<String> {
-        match record.text("vm_name") {
-            Some(vm) => Ok(vm.to_owned()),
-            None => Ok(record::vm_name(&home_id(home)?, name)),
-        }
-    };
+    let vm = || -> Result<String> { Ok(record.provider_name(&home_id(home)?)) };
     let left = match record.platform_name() {
         Some("microsandbox") => {
             let vm = vm()?;
