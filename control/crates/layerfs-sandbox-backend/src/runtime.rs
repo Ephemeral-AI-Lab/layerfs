@@ -171,12 +171,22 @@ pub enum Sandbox {
     Windows(WindowsStub),
 }
 
-/// The Windows records face: an id and root that flow in records.
+/// The Windows host-process face: its directory tree under the runtime root
+/// and its labels. No daemon runs (the in-process route); exec spawns
+/// commands straight into the directory (A1; the WinFsp mount is A2).
 #[cfg(windows)]
 #[derive(Debug)]
 pub struct WindowsStub {
     pub id: crate::types::SandboxId,
     pub root: std::path::PathBuf,
+    /// Its Sandbox directory (the runtime root plus its name).
+    pub directory: std::path::PathBuf,
+    /// Its labels, as recorded at launch.
+    pub labels: Vec<(String, String)>,
+    /// Whether its stop completed.
+    pub stopped: bool,
+    /// Whether its directory was deleted.
+    pub deleted: bool,
 }
 
 impl Sandbox {
@@ -184,7 +194,7 @@ impl Sandbox {
     pub fn backend(&self) -> Backend {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::Windows(_) => Backend::HostProcess,
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(_) => Backend::HostProcess,
             #[cfg(target_os = "linux")]
@@ -195,7 +205,7 @@ impl Sandbox {
     pub fn identity(&self) -> ContainerId {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::Windows(stub) => stub.id.clone().into(),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.identity(),
             #[cfg(target_os = "linux")]
