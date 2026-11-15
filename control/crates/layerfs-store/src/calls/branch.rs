@@ -106,7 +106,8 @@ pub struct BranchMerge {
     pub units: Option<SdkValue>,
 }
 
-/// `branch.publish(project, branch, commit)`.
+/// `branch.publish(project, branch, commit, { expected_base, expected_head,
+/// force })`.
 #[derive(Clone, Debug, Default)]
 pub struct BranchPublish {
     /// The project.
@@ -115,6 +116,12 @@ pub struct BranchPublish {
     pub branch: String,
     /// The Commit, else its head.
     pub commit: Option<String>,
+    /// The base Layer the caller expects the Branch and main to be at.
+    pub expected_base: Option<String>,
+    /// The Branch head Commit the caller expects.
+    pub expected_head: Option<String>,
+    /// Publish over a moved main, as before.
+    pub force: Option<bool>,
 }
 
 /// `branch.diff(project, from_branch, to_branch, { paths_only, page_size,

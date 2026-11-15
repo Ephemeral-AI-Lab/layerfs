@@ -140,6 +140,40 @@ fn branch_family() {
 }
 
 #[test]
+fn branch_publish_expectations_are_plumbed() {
+    // The shell, Node and Python front ends build their arguments from this
+    // table, so these options (and their shapes) are the CLI's and SDK's.
+    for (name, value, why) in [
+        ("expected_base", SdkValue::Int(1), "`expected_base` must be text"),
+        ("expected_head", SdkValue::Bool(true), "`expected_head` must be text"),
+        ("force", t("yes"), "`force` must be true or false"),
+    ] {
+        let refused = code(
+            "branch.publish",
+            map(&[
+                ("project", t("shop/api")),
+                ("branch", t("work")),
+                (name, value),
+            ]),
+        );
+        assert!(refused.contains(why), "{name}: {refused}");
+    }
+    // A well-shaped expectation reaches the call instead of being refused by
+    // argument checking.
+    let reached = code(
+        "branch.publish",
+        map(&[
+            ("project", t("shop/api")),
+            ("branch", t("work")),
+            ("expected_base", t("00")),
+            ("expected_head", t("00")),
+            ("force", SdkValue::Bool(true)),
+        ]),
+    );
+    assert!(!reached.starts_with("InvalidInput"), "{reached}");
+}
+
+#[test]
 fn commit_family() {
     assert!(code(
         "commit.list",
