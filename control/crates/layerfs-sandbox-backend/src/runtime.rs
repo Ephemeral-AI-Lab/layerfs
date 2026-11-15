@@ -219,7 +219,9 @@ impl Sandbox {
     pub fn endpoint(&self) -> Result<SocketAddr, Box<WireFailure>> {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::Windows(_) => Err(WireFailure::local(RuntimeError::Unsupported(
+                "the Windows Sandbox has no daemon endpoint (A1; the WinFsp mount is A2, #454)",
+            ))),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.endpoint(),
             #[cfg(target_os = "linux")]
@@ -269,7 +271,10 @@ impl Sandbox {
     pub fn exec_stop(&self, workspace: &str, exec: &str) -> Option<Stop> {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::Windows(_) => {
+                let _ = (workspace, exec);
+                None
+            }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(_) => {
                 let _ = (workspace, exec);
@@ -285,7 +290,8 @@ impl Sandbox {
     pub fn track(&self, pid: u32, start_time: u64) -> Result<(), Box<WireFailure>> {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            // no process group owns it; a command ends with its own child
+            Self::Windows(_) => Ok(()),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.track(pid, start_time),
             // its cgroup owns every process the Sandbox started, whatever
@@ -298,7 +304,12 @@ impl Sandbox {
     pub fn log_tail(&self, lines: u16, cap: usize) -> Result<Vec<u8>, Box<WireFailure>> {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::Windows(stub) => {
+                let log = std::fs::read(stub.directory.join("daemon.log"))
+                    .map_err(|e| WireFailure::local(RuntimeError::Io(e)))?;
+                let from = log.len().saturating_sub(cap as usize);
+                Ok(log[from..].to_vec())
+            }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.log_tail(lines, cap),
             #[cfg(target_os = "linux")]
@@ -309,7 +320,13 @@ impl Sandbox {
     pub fn inspect(&self) -> Result<SandboxInspection, Box<WireFailure>> {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::Windows(stub) => Ok(SandboxInspection {
+                identity: stub.id.clone().into(),
+                running: !stub.stopped && !stub.deleted,
+                exit_code: None,
+                process_id: None,
+                scratch_bytes: None,
+            }),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => {
                 sandbox.reap();
@@ -338,7 +355,10 @@ impl Sandbox {
     pub fn stop(&mut self, timeout_seconds: u16) -> Result<(), Box<WireFailure>> {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::Windows(stub) => {
+                stub.stopped = true;
+                Ok(())
+            }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.stop(timeout_seconds),
             #[cfg(target_os = "linux")]
@@ -349,7 +369,13 @@ impl Sandbox {
     pub fn delete(&mut self) -> Result<(), Box<WireFailure>> {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::Windows(stub) => {
+                std::fs::remove_dir_all(&stub.directory)
+                    .map_err(|e| WireFailure::local(RuntimeError::Io(e)))?;
+                stub.deleted = true;
+                stub.stopped = true;
+                Ok(())
+            }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.delete(),
             #[cfg(target_os = "linux")]
