@@ -34,7 +34,7 @@ mod types;
 pub use backend::host_process;
 #[cfg(target_os = "linux")]
 pub use backend::namespaces::{self, NamespaceProvider};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub mod local;
 #[cfg(target_os = "macos")]
 pub use backend::host_process::HostProcessProvider;
