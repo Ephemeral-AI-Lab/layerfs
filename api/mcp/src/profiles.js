@@ -9,7 +9,7 @@
 //   admin  every other call an agent may make: project create/remove,
 //          Sandbox create/close, and the machine, store, backup and logs
 //          families
-//   ui     the monitoring calls a UI polls (layerfs-project#178 D2): in no
+//   ui     the monitoring calls a UI polls (layerfs-project#178 D2, #164): in no
 //          profile, so no agent is offered them
 //   none   the doctor family: like `layerfs doctor` itself, which is no
 //          tool, its repair call is a person's, in neither profile
@@ -28,8 +28,8 @@ const WORK_CALLS = new Set(["project.list", "project.get", "project.stats", "pro
 /** Administrative calls of the project and sandbox families. */
 const ADMIN_CALLS = new Set(["project.init", "project.remove", "sandbox.create", "sandbox.close"]);
 
-/** Monitoring calls for a UI, which no profile lists (layerfs-project#178 D2). */
-const UI_CALLS = new Set(["logs.machine", "logs.sandbox", "sandbox.files"]);
+/** Monitoring calls for a UI, which no profile lists (layerfs-project#178 D2, #164). */
+const UI_CALLS = new Set(["machine.stats", "logs.machine", "logs.sandbox", "sandbox.files"]);
 
 /** Families whose every call belongs to the `admin` profile. */
 const ADMIN_FAMILIES = new Set(["machine", "store", "backup", "logs"]);
@@ -72,7 +72,7 @@ export function bucketOf(spec) {
 
 /** Why this call is in its bucket: a line for the generated documentation table. */
 export function whyOf(spec) {
-  if (UI_CALLS.has(nameOf(spec))) return "a monitoring read a UI polls (a machine's worker log, a Sandbox's daemon log, a Sandbox's files); offered to no agent";
+  if (UI_CALLS.has(nameOf(spec))) return "a monitoring read a UI polls (a machine's stats or worker log, a Sandbox's daemon log or files); offered to no agent";
   if (spec.family === "project" && spec.call === "init") return "import a host folder into a Store; administration";
   if (spec.family === "project" && spec.call === "remove") return "remove a project from its Store; administration";
   if (spec.family === "sandbox" && spec.call === "create") return "start a Sandbox process; administration";

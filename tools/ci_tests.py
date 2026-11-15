@@ -70,6 +70,8 @@ SLOW = {
     ("layerfs-store-service", "sdk_text_scan"): 7.0,
     # Inspect admission waits out the 6 s hard deadline (layerfs-project#178), 2026-11-16.
     ("layerfs-sandbox", "inspect_admission"): 11.58,
+    # Two requests wait out the 4 s soft budget (layerfs-project#164), 2026-11-16.
+    ("layerfs-sandbox", "inspect_stats"): 8.30,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run

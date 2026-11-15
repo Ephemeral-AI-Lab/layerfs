@@ -164,7 +164,7 @@ waits at most 10 s; other operations wait as long as they run
 | `store.diagnose`, `doctor.sandbox` | doctor's read-only observations; `doctor.sandbox` with `leftovers: true` is the bounded walk for what interrupted operations left under the root |
 | `doctor.fix` | removes one such leftover, named by kind and name (never a path), under its guard ([Checks](../doctor/checks.md#leftovers)) |
 | `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`, decoded into its typed request first |
-| `inspect` | one read-only inspect request `{ kind, .. }` (a window of `worker.log` or of a Sandbox's `daemon.log`, overlay file sizes) on a helper thread, two at a time, answered within 6 s ([Inspection](../sandboxes/inspect.md)) |
+| `inspect` | one read-only inspect request `{ kind, .. }` (a window of `worker.log` or of a Sandbox's `daemon.log`, overlay file sizes with the Sandbox's process and usage, the machine's stats, which Sandboxes' daemons run) on a helper thread, two at a time, answered within 6 s; the operation adds `worker: { version, pid, started_at, protocol, bundle }` to the request ([Inspection](../sandboxes/inspect.md)) |
 | `project.stage`, `project.init`, `project.export`, `project.remove` | write one part of a folder copy; add it as a project; stream a pinned snapshot back; drop a project |
 | anything else | `InvalidInput`, "the worker has no operation …" |
 

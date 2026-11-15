@@ -578,10 +578,23 @@ fn a_forwarded_sandbox_s_run_folder_is_read_in_its_machine() {
         .unwrap()
         .unwrap();
     let sizes = layerfs_sandbox::inspect::overlay_sizes(&home, record.machine(), "s1", &namespaces);
+    let sizes = sizes.unwrap();
     assert_eq!(
-        layerfs_api::json::print(&sizes.unwrap()),
-        r#"{"overlay_sizes":[{"namespace":1,"bytes":4096},{"namespace":2,"bytes":null},{"namespace":5,"bytes":12288}]}"#
+        layerfs_api::json::print(sizes.get("overlay_sizes").unwrap()),
+        r#"[{"namespace":1,"bytes":4096},{"namespace":2,"bytes":null},{"namespace":5,"bytes":12288}]"#
     );
+    // with them, the daemon process the worker's record names
+    // (layerfs-project#164): this test's own, a host process
+    let SdkValue::Map(fields) = &sizes else {
+        panic!("{sizes:?}")
+    };
+    let names: Vec<&str> = fields.iter().map(|(name, _)| name.as_str()).collect();
+    assert_eq!(names, ["overlay_sizes", "daemon", "usage", "usage_reason"]);
+    assert_eq!(
+        sizes.get("daemon").unwrap().get_int("pid"),
+        Some(i64::from(std::process::id()))
+    );
+    assert_eq!(sizes.get_text("usage_reason"), Some("host_process"));
     assert_eq!(files(&home), before);
     assert_eq!(files(&root), guest);
     std::fs::remove_dir_all(scratch).unwrap();

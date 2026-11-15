@@ -26,8 +26,8 @@ The `sandbox` calls: start, list, read and stop a named Sandbox, one project's W
 | Call | Returns |
 | --- | --- |
 | [`sandbox.create`](#sandboxcreate) | the Sandbox record, `state: "running"`, `forward_failed?` |
-| [`sandbox.list`](#sandboxlist) | `{ items: [record], next_page_pos }` |
-| [`sandbox.get`](#sandboxget) | the record, live `state`, one page of `workspaces` (each with `running` and `overlay_bytes`), `workspace_capacity`, `down_reason?`, `down?`, `daemon_capacity?` |
+| [`sandbox.list`](#sandboxlist) | `{ items: [record], next_page_pos }`; with `live`, each item also `live`, `live_reason?` |
+| [`sandbox.get`](#sandboxget) | the record, live `state`, one page of `workspaces` (each with `running` and `overlay_bytes`), `workspace_capacity`, `daemon`, `usage`, `usage_reason?`, `down_reason?`, `down?`, `daemon_capacity?` |
 | [`sandbox.close`](#sandboxclose) | how it ended |
 | [`sandbox.files`](#sandboxfiles) | `{ kind: "folder", entries, next, has_more, reason? }` or `{ kind: "file", size, offset, content, binary, next }` |
 
@@ -90,9 +90,9 @@ first. Nothing starts a stopped machine.
 The Sandboxes this home records, or one project's, from records alone.
 
 ```text
-JS      await layerfs.sandbox.list(project?, { page_size, page_pos })
-Python  layerfs.sandbox.list(project=None, *, page_size=None, page_pos=None)
-CLI     layerfs sandbox list [<project>] [--page-size <page-size>] [--page-pos <page-pos>]
+JS      await layerfs.sandbox.list(project?, { page_size, page_pos, live })
+Python  layerfs.sandbox.list(project=None, *, page_size=None, page_pos=None, live=None)
+CLI     layerfs sandbox list [<project>] [--page-size <page-size>] [--page-pos <page-pos>] [--live]
 ```
 
 `page_size` is clamped to 1..=1000 (default 50); a negative `page_pos`
@@ -101,6 +101,28 @@ Each item is the record (`View::List`). No machine, worker or daemon is
 asked, so `state` is `running` for any started Sandbox even when its machine
 is down, and never `lost`; `sandbox.get` asks
 ([`list.rs`](../../../../control/crates/layerfs-sandbox/src/list.rs)).
+
+With `live` (layerfs-project#164) each item of the page also says whether
+its daemon process runs now. `state` is unchanged, and without the option
+the answer is what it was, byte for byte.
+
+| Field | Meaning | Source |
+| --- | --- | --- |
+| `live` | `true`: the process the Sandbox's daemon record names is that process (pid, start time and boot) and runs. `false`: it has ended, or the side that runs the Sandbox has no record or no daemon record of it. `null`: not known | [`inspect/live.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/live.rs), [`inspect/process.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/process.rs) `live` |
+| `live_reason` | only with `live: null`: `machine_stopped` (its machine has a worker and records none running), `deadline` (the request's soft budget ended before its turn), `no_pid` (the daemon record names no process), `record_unreadable`, `not_answered` (the machine's answer did not name it), or the code of the refusal the machine's request met, in snake_case (`unavailable`, `busy`, `invalid_input` from a worker of a build without the kind) | `live.rs` `Live` |
+
+The check is one [inspect](../../control/sandboxes/inspect.md) request per
+machine among the page's Sandboxes, kind `sandboxes_live`, asked at once
+when there are several: in this process on `native`, else of the machine's
+worker, which reads its own records (a forwarded Sandbox included). No
+daemon is asked, nothing starts a machine and a machine that does not answer
+is `live: null`, never an error of the list. `--live` is a `sandbox.list`
+like any other in the call log.
+
+```text
+$ layerfs sandbox list --live
+{"items":[{"name":"s1","project":"shop/api","machine":"native",…,"state":"running","live":true},{"name":"s2","project":"shop/api","machine":"dev",…,"state":"running","live":null,"live_reason":"machine_stopped"}],"next_page_pos":null}
+```
 
 ### sandbox.get
 
@@ -120,7 +142,10 @@ CLI     layerfs sandbox get <name> [--page-size <page-size>] [--page-pos <page-p
                   head_moved_since_mount, dirty?, pending_merge, revision,
                   running: [ { exec_id, started, tag, program } ] | null,
                   overlay_bytes: <int> | null } ],
-  workspace_capacity, next_page_pos, down_reason?, down?, daemon_capacity? }
+  workspace_capacity,
+  daemon: { pid, started_at } | null,
+  usage: { cpu_usec, memory_current, memory_peak, pids } | null,
+  usage_reason?, next_page_pos, down_reason?, down?, daemon_capacity? }
 ```
 
 | Field | Meaning | Source |
@@ -130,6 +155,9 @@ CLI     layerfs sandbox get <name> [--page-size <page-size>] [--page-pos <page-p
 | `workspaces[].running` | the commands running in the Workspace now, oldest first, whichever client started them: the exec records of the side that keeps the Workspace's record (the home on `native` and for a forwarded Sandbox, the worker root otherwise) whose owner process is the one recorded and still runs (pid, start time and boot), the rule `unmount` and `close` refuse `Busy` by. `started` is ms since the epoch; `tag` is the log tag of the `workspace.exec` call that started it (`log_tag`, else `LAYERFS_LOGS_TAG`) or null; `program` is the command's first word that is not a `NAME=value` assignment, at most 64 characters, or null: never an argument or an environment value. A command that ended has no record; a stale record (its owner gone) is not listed and not touched. `null` when the records could not be read. A record written before these fields lists with `tag` and `program` null | [`exec/record.rs`](../../../../control/crates/layerfs-sandbox/src/exec/record.rs) `running`, `program`; [`dispatch.rs`](../../../../control/crates/layerfs-sandbox/src/dispatch.rs) `listed` |
 | `workspaces[].overlay_bytes` | the size in bytes of the Workspace's overlay file, `<run folder>/overlay/<namespace>.sqlite`, from its `lstat` on the side that has the run folder; the file is never opened. A high-water mark: it includes the template's size and grows until unmount (the overlay is never vacuumed). `null` where that side did not answer: always for a forwarded Sandbox in this build (its run folder is in its machine), and when the file is not there | [`run_folder.rs`](../../../../control/crates/layerfs-sandbox/src/run_folder.rs) |
 | `workspace_capacity` | how many Workspaces one Sandbox holds at once: control's constant `WORKSPACES` (16), which a mount into a full Sandbox is refused `Capacity` by. Not a daemon setting, so it is there whatever the Sandbox's state | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
+| `daemon` | the daemon process as the side that runs it sees it: `pid`, and `started_at` in ms since the epoch while that process still runs (`null` once it has ended, or when the start time could not be turned into a time). macOS records the start exactly; Linux derives it from the boot time and clock ticks, to about a second. `null` when that side did not answer (a stopped machine, a worker that was not reached) or records no process | [`inspect/process.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/process.rs) `shown`, `started_at` |
+| `usage` | what the Sandbox's own cgroup (`/sys/fs/cgroup/layerfs/<id>`, a `namespaces` Sandbox) has used: `cpu_usec` (`cpu.stat` `usage_usec`), `memory_current`, `memory_peak`, `pids` (`pids.current`), each from one small file and each `null` where the kernel keeps no such file there (a controller that is not delegated to the cgroup). It covers the daemon and every command run in the Sandbox. `null` with `usage_reason` otherwise | `process.rs` `usage` |
+| `usage_reason` | only with `usage: null`: `host_process` (a `native` Sandbox is a plain process with no cgroup of its own), `cgroup_v1` (the machine has no cgroup v2 tree), `no_cgroup` (the Sandbox's cgroup is not there, as after its daemon ended), `not_observed` (the side that runs it did not answer) | `process.rs` |
 | `down_reason` | the worker or forwarded daemon was not reached, or the daemon's control pool had no vacant slot; `workspaces` is then `[]` | `get.rs` |
 | `down` | partial counts from the daemon's pre-handshake capacity notice: `code`, `resource`, `pool_vacant`, `reserved_vacant`, `retained`; absent when the refusal carried none | [`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs) `unanswered` |
 | `daemon_capacity` | the daemon's `backend.daemon.connection_failures` read model, read once, best effort, within 2 s on the connection the Workspace list lent; absent when not read | [`daemon/capacity.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/capacity.rs), [`control_capacity.rs`](../../../../engine/crates/layerfs-bridge/src/control_capacity.rs) |
@@ -142,6 +170,17 @@ answered ([`dispatch.rs`](../../../../control/crates/layerfs-sandbox/src/dispatc
 answers Workspaces without `running` and `overlay_bytes`; the get shows
 them without, so a client reads an absent field as "not known" and a
 present `null` as "not observed".
+
+`daemon` and `usage` (layerfs-project#164) add none either, and no round
+trip: they are read with `overlay_bytes`, by the side that has the run
+folder, and ride the same answer
+([`run_folder.rs`](../../../../control/crates/layerfs-sandbox/src/run_folder.rs)
+`observed`). For a forwarded Sandbox that is the one `overlay_sizes`
+inspect request a get already sends, now sent with no Workspaces too. A
+Sandbox whose Workspace list was not answered shows the home's own record of
+its process on `native` (a `pid`, `started_at: null` once it has ended) and
+`daemon: null`, `usage: null`, `usage_reason: "not_observed"` elsewhere. A
+worker that predates the fields answers without them and the get shows none.
 
 A machine that is down is not an error: it is `down_reason`. A Sandbox with
 an uncertain `op` is shown, not refused; `get` is the call `Unresolved`

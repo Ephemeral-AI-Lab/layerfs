@@ -52,6 +52,14 @@ different string and is not what records store.
 | Process boundary | named process groups | cgroup v2 directory |
 | Source | [`host_process/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/adapter.rs) | [`namespaces/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/adapter.rs) |
 
+Neither backend isolates the network (layerfs-project#164, #551): a
+`native` Sandbox's commands use this host's network, and a `namespaces`
+Sandbox unshares mount, pid and IPC namespaces but no network namespace, so
+its commands use the network of the kernel that runs it (the VM, or the
+`docker` machine's container). No call option, record or answer has an
+`isolation` or `scheduling` field; `isolation` above is this in-memory
+capability only.
+
 Capabilities "describe support, not qualification"
 ([`types/capabilities.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/capabilities.rs)).
 

@@ -13,7 +13,7 @@ The `machine` calls: list, inspect, create, start, stop, update and remove the m
 ## Calls
 
 ```text
- reads (start nothing):  list   platforms   get   status   images
+ reads (start nothing):  list   platforms   get   status   stats   images
  Sandbox images:         load (copy from the host's Docker)   prune
 
  built in: native, docker ---------------------- update (image, docker,
@@ -36,6 +36,7 @@ The `machine` calls: list, inspect, create, start, stop, update and remove the m
 | [`machine.load`](#machineload) | `{ id, refs, size, reused }` |
 | [`machine.prune`](#machineprune) | `{ removed: [id], freed }` |
 | [`machine.status`](#machinestatus) | `{ name, platform, state, free_disk, tool_version, down_reason, stores, op? }` |
+| [`machine.stats`](#machinestats) | `{ machine, platform, observed_at, worker, resources, data_disk, stores, sandboxes, complete, reason? }` |
 | [`machine.start`](#machinestart) | summary, once the worker answers |
 | [`machine.stop`](#machinestop) | summary, `state: "stopped"`; with `force`, also `forced`, `stopped_sandboxes`, `unknown` |
 | [`machine.create`](#machinecreate) | summary, `state: "running"` |
@@ -266,6 +267,64 @@ failed probe is the call's error: `Unavailable`, `Denied`, `Failed`, or
 `Unknown` when a provider command did not end in time
 ([`setup/tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs));
 a read changes nothing. An `unresolved` machine is cleared by `machine.remove`.
+
+### machine.stats
+
+What a machine has and uses now: its processors, memory and data disk, each
+sqlite Store's size and how many of its Sandboxes have a running daemon
+(layerfs-project#164). A monitoring read for a UI that polls: it is in the
+MCP server's `ui` bucket, not in an agent profile, and writes no call-log
+line.
+
+```text
+JS      await layerfs.machine.stats(machine)
+Python  layerfs.machine.stats(machine)
+CLI     layerfs machine stats <machine>
+```
+
+```text
+{ machine, platform, observed_at,
+  worker: { version, pid, started_at, protocol, bundle } | null,
+  resources: { cpus, memory_total, memory_used,
+               disk_total, disk_used, disk_free, scope, reason? },
+  data_disk: { path, fs, scope, volume, inodes_free },
+  stores: [ { name, bytes, allocated } ],
+  sandboxes: { recorded, live },
+  complete, reason? }
+```
+
+| Field | Meaning | Source |
+| --- | --- | --- |
+| `observed_at` | ms since the epoch on the side that answered | [`inspect/stats.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/stats.rs) `serve` |
+| `worker` | the machine's worker process: its build's `version`, `pid`, `started_at` (ms since the epoch, when it began to serve), worker `protocol` and the `bundle` it was installed from. `null` on a machine whose calls run in the caller's process (`native`) | [`worker_server/ops.rs`](../../../../control/crates/layerfs-control/src/worker_server/ops.rs) `about` |
+| `resources.cpus` | the processors the answering process may run on | [`inspect/host.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/host.rs) |
+| `resources.memory_total`, `memory_used` | bytes. Linux: `MemTotal` and `MemTotal - MemAvailable` of `/proc/meminfo`. macOS: `hw.memsize`, and that less the free, file-backed and purgeable pages, from one run of `/usr/sbin/sysctl` | `host.rs` |
+| `resources.disk_total`, `disk_used`, `disk_free` | one `statvfs` of the filesystem that holds the machine's data. `disk_used` is the total less every free block; `disk_free` is what the answering process may use, so the two can sum to less than the total where blocks are reserved | [`home/capacity.rs`](../../../../control/crates/layerfs-home/src/home/capacity.rs) `filesystem` |
+| `resources.scope` | whose processors and memory they are: `host` (`native`), `vm` (`lima`, `apple-container`), `engine_host` (`docker`: the kernel the Engine runs on, a VM on macOS and Windows) | `stats.rs` `scopes` |
+| `resources.reason` | which values are null and why: `memory_not_read`, `disk_not_read`, joined by `, `; absent when all were read | `stats.rs` |
+| `data_disk.path`, `fs` | the folder whose filesystem was measured, as the answering side names it (the home, or the worker's root), and its type (`apfs`, `ext4`, `xfs`, `btrfs`, `overlay`, ..., else the magic number in hex) | `capacity.rs` |
+| `data_disk.scope` | what that filesystem is: `host_fs` (`native`; `docker` on a Linux host, where a volume is a folder of the host's filesystem), `vm_disk` (`docker` on macOS and Windows: the Engine VM's one disk, shared with every image and volume), `volume` (`lima`, `apple-container`: the machine's own disk) | `stats.rs` `scopes` |
+| `data_disk.volume` | the provider's name of the volume or disk, from the machine's record; `null` on `native` | [`adapter.rs`](../../../../control/crates/layerfs-platform/src/adapter.rs) `data_volume` |
+| `data_disk.inodes_free` | file slots free; `null` where the filesystem counts none | `capacity.rs` |
+| `stores[]` | the sqlite Stores the home records on the machine: `bytes` is the length of `store.sqlite` plus its `-wal`, `allocated` their blocks, each from one `lstat`; no Store file is opened. A sparse file shows in the difference; a clone counts in full. Both `null` when the file is not there, or when the deadline came first | `stats.rs` `store_bytes` |
+| `sandboxes.recorded`, `live` | the Sandboxes the home records on the machine, and how many of them have a daemon process that still runs (the check of `sandbox.list`'s `live`); `live` is `null` when the deadline came first | [`inspect/live.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/live.rs) |
+| `complete`, `reason` | `false` with `reason: "deadline"` when the request's soft budget (4 s) ended the Store or Sandbox part early; what was read is answered | `stats.rs` |
+
+It is one [inspect](../../control/sandboxes/inspect.md) request, kind
+`machine_stats`: in this process on `native`, else one request to the
+machine's worker. It takes no lock or lease, opens no Store, asks no daemon
+and no provider tool, starts nothing and writes nothing. PostgreSQL Stores
+are not listed: their data is not on a machine.
+
+```text
+$ layerfs machine stats native
+{"machine":"native","platform":"native","observed_at":1794776707857,"worker":null,"resources":{"cpus":14,"memory_total":38654705664,"memory_used":31340068864,"disk_total":994662584320,"disk_used":641705943040,"disk_free":352956641280,"scope":"host"},"data_disk":{"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs","volume":null,"inodes_free":3446842200},"stores":[{"name":"shop","bytes":217088,"allocated":217088}],"sandboxes":{"recorded":12,"live":10},"complete":true}
+```
+
+Errors: `NotFound` (no such machine); `Unavailable` (the machine is stopped or its worker
+did not answer within 8 s; nothing starts it); `Busy` (two inspect requests
+already run in that process); `InvalidInput` (a worker of a build without
+the kind, or over 4096 Stores or Sandboxes on one machine).
 
 ### machine.start
 

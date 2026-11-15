@@ -89,6 +89,8 @@ struct Server {
     root: PathBuf,
     /// What it answers every secret with, read once.
     ready: SdkValue,
+    /// When it began to serve, in milliseconds since the epoch.
+    started: i64,
     waits: Waits,
     #[cfg(feature = "worker-fault")]
     faults: Arc<fault::Faults>,
@@ -167,6 +169,7 @@ impl Server {
             secret,
             root,
             ready: Hello::own().to_frame(),
+            started: layerfs_home::home::now_ms(),
             waits: Waits::SHIPPED,
             #[cfg(feature = "worker-fault")]
             faults: Arc::default(),

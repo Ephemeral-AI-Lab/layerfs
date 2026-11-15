@@ -30,8 +30,9 @@ pub use options::{OptKind, OptSpec};
 pub use platform::{ExecutorKind, HostOs, How, KernelRoute, Platform, Profile, Route};
 pub use probe::{native_missing, probe, Probe};
 pub use setup::{
-    cached_image, copy_in, copy_out, create, forward, forward_close, load_image, name_limit,
-    provider_within, reach, remove, start, status, status_within, stop, stop_force, State, Status,
+    cached_image, copy_in, copy_out, create, data_volume, forward, forward_close, load_image,
+    name_limit, provider_within, reach, remove, start, status, status_within, stop, stop_force,
+    State, Status,
 };
 pub use spec::{
     parse_size, Bundle, Endpoint, Forward, Lasting, NameLimit, Running, Spec, Tools, BUNDLE, DATA,

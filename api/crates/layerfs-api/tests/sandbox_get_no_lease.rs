@@ -14,6 +14,13 @@
 //! its overlay file where that side has the run folder, by path alone; null
 //! for a forwarded Sandbox). A get still changes no file on either side.
 //!
+//! The fields of layerfs-project#164 ride them too: `daemon` (`{ pid,
+//! started_at }` of the process the daemon record names, `started_at` null
+//! once it is gone) and `usage` (the Sandbox's cgroup, null with
+//! `usage_reason` for a host-process Sandbox), read on the side that runs
+//! the Sandbox; a forwarded Sandbox's come from its machine's worker with
+//! its overlay sizes, in the one inspect request.
+//!
 //! Nothing runs: a stand-in daemon answers the Workspace list and the
 //! capacity model, and the worker is this build's own server on a scratch
 //! root. Each home has a Store record and no Store file, so a get that
@@ -42,6 +49,15 @@ const DAEMON_INSTANCE: [u8; 32] = [3; 32];
 
 /// Names the homes of one test process apart.
 static HOMES: AtomicUsize = AtomicUsize::new(0);
+
+/// The turn of a test whose get makes an inspect request (a forwarded
+/// Sandbox's): the two inspect permits are the process's, and a request
+/// refused `Busy` would leave what it reads not observed.
+static INSPECTS: Mutex<()> = Mutex::new(());
+
+fn inspect_turn() -> std::sync::MutexGuard<'static, ()> {
+    INSPECTS.lock().unwrap_or_else(|poison| poison.into_inner())
+}
 
 fn tempdir(tag: &str) -> PathBuf {
     let sequence = HOMES.fetch_add(1, Ordering::Relaxed);
@@ -464,8 +480,18 @@ fn running(got: &SdkValue, items: &[SdkValue]) {
     let admission = capacity.get("admission").unwrap();
     assert_eq!(admission.get_int("pool_vacant"), Some(7), "{capacity:?}");
     assert_eq!(got.get_int("workspace_capacity"), Some(16), "{got:?}");
-    // what only reopens the Sandbox is never shown
-    assert!(got.get("daemon").is_none(), "{got:?}");
+    // what only reopens the Sandbox is never shown: `daemon` is the process
+    // a monitoring read saw (layerfs-project#164), `{ pid, started_at }`,
+    // or null when the side that runs it did not say; never the record's
+    // directory, port, runtime id or forward
+    match got.get("daemon") {
+        Some(SdkValue::Map(fields)) => {
+            let names: Vec<&str> = fields.iter().map(|(name, _)| name.as_str()).collect();
+            assert_eq!(names, ["pid", "started_at"], "{got:?}");
+        }
+        Some(SdkValue::Null) => {}
+        other => panic!("{other:?} in {got:?}"),
+    }
 }
 
 /// Every list the stand-in answered asked for the Workspaces alone, named
@@ -762,6 +788,7 @@ fn forwarded_sandbox(home: &Path, endpoint: SocketAddr, items: &[SdkValue]) {
 
 #[test]
 fn a_forwarded_sandbox_s_get_takes_no_lease_and_writes_nothing() {
+    let _turn = inspect_turn();
     for count in [0, 1, 4] {
         let items: Vec<SdkValue> = (1..=count).map(item).collect();
         let (endpoint, seen) = daemon(items.clone(), false);
@@ -923,6 +950,7 @@ fn command(exec_id: &str, started: i64, tag: Option<&str>, program: Option<&str>
 
 #[test]
 fn a_get_lists_the_commands_another_client_runs_in_each_workspace() {
+    let _turn = inspect_turn();
     use layerfs_sandbox::exec::id::ExecId;
     use layerfs_sandbox::exec::record::{file, ExecRecord, Route};
     for side in SIDES {
@@ -1012,6 +1040,7 @@ fn a_get_lists_the_commands_another_client_runs_in_each_workspace() {
 
 #[test]
 fn a_get_sizes_each_workspace_s_overlay_file_by_path() {
+    let _turn = inspect_turn();
     for side in SIDES {
         let items: Vec<SdkValue> = (1..=4).map(item).collect();
         let (scratch, home, root) = on_side(side, "overlay", &items);
@@ -1133,4 +1162,176 @@ fn a_forwarded_get_sizes_its_overlays_in_its_machine_or_leaves_them_null() {
     assert_eq!(files(&home), before);
     drop(silent);
     std::fs::remove_dir_all(scratch).unwrap();
+}
+
+/// `sandbox.get`'s `daemon`, `usage` and `usage_reason` as JSON text.
+fn process(got: &SdkValue) -> (String, String, Option<String>) {
+    let text = |field: &str| {
+        let value = got
+            .get(field)
+            .unwrap_or_else(|| panic!("no {field}: {got:?}"));
+        layerfs_api::json::print(value)
+    };
+    (
+        text("daemon"),
+        text("usage"),
+        got.get_text("usage_reason").map(str::to_owned),
+    )
+}
+
+/// The record in `root` of Sandbox `s1`, with its `daemon` changed by `change`.
+fn redaemon(root: &Path, change: impl FnOnce(SdkValue) -> SdkValue) {
+    let path = paths::sandbox_record(root, "s1");
+    let record = read_record(&path).unwrap().unwrap();
+    let daemon = change(record.get("daemon").unwrap().clone());
+    write_record(&path, &home::with_field(record, "daemon", daemon)).unwrap();
+}
+
+#[test]
+fn a_get_shows_the_daemon_process_as_the_side_that_runs_it_sees_it() {
+    let me = layerfs_bridge::process::LocalProcess::observe(std::process::id()).unwrap();
+    for side in ["native", "worker"] {
+        let items = vec![item(1)];
+        let (scratch, home, root) = on_side(side, "process", &items);
+        settle(&home);
+        let _push = pushing(&home);
+        let before = (files(&home), files(&root));
+        let got = get(&home).unwrap();
+        running(&got, &items);
+        // the record names this test's process: a host process, since when
+        let daemon = got.get("daemon").unwrap();
+        assert_eq!(daemon.get_int("pid"), Some(i64::from(me.pid)), "{side}");
+        let started = daemon.get_int("started_at").unwrap();
+        let now = home::now_ms();
+        assert!(
+            started <= now + 2_000 && started > now - 86_400_000,
+            "{started}"
+        );
+        assert_eq!(
+            (got.get("usage"), got.get_text("usage_reason")),
+            (Some(&SdkValue::Null), Some("host_process")),
+            "{side}: {got:?}"
+        );
+        assert_eq!((files(&home), files(&root)), before, "{side}");
+        untouched(&home);
+
+        // a namespaces Sandbox's usage is its cgroup's: this kernel has no
+        // such group (or no cgroup v2 at all), and the get says which
+        redaemon(&root, |daemon| {
+            home::with_field(daemon, "runtime", t("namespaces"))
+        });
+        let got = get(&home).unwrap();
+        let v2 = Path::new("/sys/fs/cgroup/cgroup.controllers").is_file();
+        let why = if v2 { "no_cgroup" } else { "cgroup_v1" };
+        assert_eq!(
+            (got.get("usage"), got.get_text("usage_reason")),
+            (Some(&SdkValue::Null), Some(why)),
+            "{side}: {got:?}"
+        );
+        std::fs::remove_dir_all(scratch).unwrap();
+    }
+}
+
+#[test]
+fn a_get_of_a_sandbox_whose_daemon_ended_says_its_process_is_gone() {
+    // a process that ended, as the daemon record names it
+    let mut other = Client::start();
+    let owner = other.owner();
+    other.end();
+    let dead = |daemon: SdkValue| {
+        let daemon = home::with_field(daemon, "pid", owner.get("pid").unwrap().clone());
+        let start = owner.get("pid_start").unwrap().clone();
+        let daemon = home::with_field(daemon, "start", start);
+        home::with_field(daemon, "boot", owner.get("pid_boot").unwrap().clone())
+    };
+    let pid = owner.get_int("pid").unwrap();
+
+    // native: the list is refused, and this home's own record answers
+    let (scratch, home, root) = on_side("native", "ended", &[item(1)]);
+    redaemon(&root, dead);
+    settle(&home);
+    let before = files(&home);
+    let got = get(&home).unwrap();
+    assert_eq!(got.get_text("state"), Some("lost"), "{got:?}");
+    assert_eq!(
+        process(&got),
+        (
+            format!(r#"{{"pid":{pid},"started_at":null}}"#),
+            "null".to_owned(),
+            Some("host_process".to_owned())
+        )
+    );
+    assert_eq!(files(&home), before, "a get changed a file in the home");
+    std::fs::remove_dir_all(scratch).unwrap();
+
+    // a worker's: its list is refused there, and the home holds no daemon
+    // record of its own, so the process is not observed by this get
+    // (`sandbox.list`'s `live` asks the worker for it)
+    let (scratch, home, root) = on_side("worker", "ended", &[item(1)]);
+    redaemon(&root, dead);
+    settle(&home);
+    let got = get(&home).unwrap();
+    assert_eq!(got.get_text("state"), Some("lost"), "{got:?}");
+    assert_eq!(
+        process(&got),
+        (
+            "null".to_owned(),
+            "null".to_owned(),
+            Some("not_observed".to_owned())
+        )
+    );
+    std::fs::remove_dir_all(scratch).unwrap();
+
+    // a stopped machine: not observed either
+    let home = tempdir("ended-stopped");
+    home::open(&home).unwrap();
+    home_records(&home, "box", "docker", None);
+    worker_sandbox(&home);
+    let got = get(&home).unwrap();
+    assert_eq!(process(&got).2.as_deref(), Some("not_observed"), "{got:?}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_forwarded_sandbox_s_process_comes_from_its_machine_s_worker() {
+    let _turn = inspect_turn();
+    for count in [0, 2] {
+        let items: Vec<SdkValue> = (1..=count).map(item).collect();
+        let (endpoint, _seen) = daemon(items.clone(), false);
+        let scratch = tempdir(&format!("forwarded-process-{count}"));
+        let (home, root) = (scratch.join("home"), scratch.join("data"));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let id = home::open(&home).unwrap().id;
+        home_records(&home, "box", "docker", Some((worker(&root), "k")));
+        // the home reaches the daemon directly and keeps its Workspace
+        // records; the daemon record with the process and the run folder
+        // are the worker's
+        forwarded_sandbox(&home, endpoint, &items);
+        let path = paths::sandbox_record(&home, "s1");
+        let record = read_record(&path).unwrap().unwrap();
+        let record = home::with_field(record, "machine", t("box"));
+        let forward = map(&[("address", t(&endpoint.to_string())), ("machine", t("box"))]);
+        let daemon = map(&[("name", t("lfs-x-s1")), ("forward", forward)]);
+        write_record(&path, &home::with_field(record, "daemon", daemon)).unwrap();
+        local_sandbox(&root, &id, endpoint, &[]);
+        let run = paths::run_root(&root).join(format!("lfs-{}-s1", &id[..8]));
+        std::fs::create_dir_all(run.join("overlay")).unwrap();
+        settle(&home);
+        let _push = pushing(&home);
+        let before = (files(&home), files(&root));
+        let got = get(&home).unwrap();
+        running(&got, &items);
+        let daemon = got.get("daemon").unwrap();
+        assert_eq!(
+            daemon.get_int("pid"),
+            Some(i64::from(std::process::id())),
+            "{count}: {got:?}"
+        );
+        assert!(daemon.get_int("started_at").is_some(), "{got:?}");
+        assert_eq!(got.get_text("usage_reason"), Some("host_process"));
+        assert_eq!((files(&home), files(&root)), before, "{count}");
+        untouched(&home);
+        std::fs::remove_dir_all(scratch).unwrap();
+    }
 }

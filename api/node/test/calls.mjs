@@ -14,9 +14,9 @@ const temp = (tag) => {
   return dir;
 };
 
-test("the table: eleven families, 77 calls, each a function", () => {
+test("the table: eleven families, 78 calls, each a function", () => {
   assert.deepEqual(families, ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs", "doctor"]);
-  assert.equal(table.length, 77);
+  assert.equal(table.length, 78);
   for (const spec of table) assert.equal(typeof layerfs[spec.family][spec.call], "function", `${spec.family}.${spec.call}`);
 });
 

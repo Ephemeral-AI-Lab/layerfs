@@ -21,6 +21,10 @@ pub(crate) trait Adapter: Sync {
     /// settings alone; `None`: only the plain-name rule. Asks the provider
     /// nothing.
     fn name_limit(&self) -> Option<NameLimit>;
+    /// The provider's name of the volume or disk that holds the machine's
+    /// data (`/layerfs/data`), from the spec alone; `None`: the machine
+    /// has none of its own. Asks the provider nothing.
+    fn data_volume(&self, spec: &Spec) -> Option<String>;
     /// Makes the machine and starts its worker.
     fn create(&self, spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError>;
     /// Deletes the machine.
