@@ -1,7 +1,7 @@
 //! The inspect route: where a request runs ([`ask`]), the worker's side of
 //! it ([`in_worker`]), the one match on its kind ([`serve`]) and how a
 //! side finds a Sandbox's run folder ([`run_folder`]).
-use super::{admit, files, live, log, on_owner, overlay, stats, Budget, Side};
+use super::{admit, files, live, log, machine, on_owner, overlay, stats, Budget, Side};
 use crate::record::SandboxRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
@@ -47,6 +47,7 @@ pub fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Outcome {
         log::SANDBOX_LOG => log::sandbox(side, request),
         overlay::KIND => overlay::serve(side, request),
         files::SANDBOX_FILES => files::sandbox_page(side, request, &|| budget.spent()),
+        machine::KIND => machine::machine_page(side, request, &|| budget.spent()),
         // layerfs-project#164
         stats::KIND => stats::serve(side, request, budget),
         live::KIND => live::serve(side, request, budget),

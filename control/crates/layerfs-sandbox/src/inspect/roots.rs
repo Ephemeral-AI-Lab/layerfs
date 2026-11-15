@@ -6,6 +6,9 @@
 //! records and are never `stat`ed, so a stopped daemon's mount cannot hang
 //! the answer; `home` and `log` are entries of the run folder.
 //!
+//! [`machine`] is the no-path answer of `machine.files`: the machine's
+//! LayerFS folders ([`folders`]) ranked by role, then `/`.
+//!
 //! [`kept`] is the one place a path is judged against LayerFS's own
 //! layout: every listing and every read asks it, for the path and for each
 //! folder above it.
@@ -17,7 +20,7 @@ use layerfs_home::home::paths;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_sandbox_backend::local::confined::{Base, Kind, View};
 use std::ffi::OsStr;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 /// The commands' `HOME` in a run folder (the backends' `tmp`).
 pub(super) const HOME: &str = "tmp";
@@ -28,7 +31,9 @@ const WORKSPACES: &str = "workspaces";
 /// The uid a Sandbox's commands run as when its record names none.
 const COMMAND_UID: u32 = 501;
 /// The most Workspaces a request sends.
-const MOST: usize = 1024;
+pub(super) const MOST: usize = 1024;
+/// The folder beside a worker's root that holds its secret and its pid.
+const STATE: &str = "state";
 
 /// What LayerFS keeps of a path.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,7 +64,8 @@ pub(super) enum Kept {
 ///   `lock` and `*.lock` (locks), a Store's `open/` (its leases), and
 ///   `log/worker.log` with `worker.1.log` (logs).
 ///
-/// A view that shows `/layerfs/state` adds its `secret` here.
+/// Beside a worker's root (`/layerfs/data`), `state/secret`: the secret
+/// its callers prove themselves with.
 pub(super) fn kept(root: &Path, path: &Path) -> Kept {
     let inside = path.strip_prefix(root).ok();
     let names: Vec<&OsStr> = (inside.unwrap_or(path).components())
@@ -74,7 +80,13 @@ pub(super) fn kept(root: &Path, path: &Path) -> Kept {
         return Kept::Restricted;
     }
     if inside.is_none() {
-        return Kept::Open;
+        // the worker's secret, in the folder beside a worker's root
+        let state = root.parent().map(|layerfs| layerfs.join(STATE));
+        let secret = state.is_some_and(|state| path.strip_prefix(state) == Ok(Path::new("secret")));
+        return match secret {
+            true => Kept::Restricted,
+            false => Kept::Open,
+        };
     }
     let named = |at: usize, name: &str| names.get(at).is_some_and(|found| *found == name);
     if named(0, "machine") && named(1, "native") && named(2, "run") && names.len() > 4 {
@@ -125,6 +137,95 @@ pub(super) fn recorded(directory: &Path) -> Outcome {
         }
     }
     Ok(SdkValue::List(sent))
+}
+
+/// The Workspace records of every Sandbox recorded under `root`, as
+/// [`recorded`] answers one Sandbox's; a folder that cannot be read has
+/// none.
+pub(super) fn recorded_under(root: &Path) -> SdkValue {
+    let names = paths::names(&root.join("sandbox")).unwrap_or_default();
+    let mut all = Vec::new();
+    for name in names {
+        if let Ok(SdkValue::List(items)) = recorded(&paths::sandbox_dir(root, &name)) {
+            all.extend(items);
+        }
+    }
+    SdkValue::List(all)
+}
+
+/// The LayerFS folders of the machine `side` serves, in the order a
+/// client shows them, each with its role. On a worker's root
+/// (`/layerfs/data`): the root itself (`data`), in it `store` (`stores`),
+/// `sandbox` (`sandbox_records`), `machine/native/run` (`run_folders`)
+/// with its `images` (`images`), `incoming` (`staging`) and `log`
+/// (`logs`), then beside it `state` (`state`), `bundle` (`bundle`) and
+/// `image` (`image`). In a home, which is its owner's own computer:
+/// `store`, `sandbox`, `machine/native/run` and `log` only.
+pub(super) fn folders(side: &Side<'_>) -> Vec<(PathBuf, &'static str)> {
+    let (Side::Home(root) | Side::Worker(root)) = side;
+    let run = paths::run_root(root);
+    let mut folders = vec![
+        (root.join("store"), "stores"),
+        (root.join("sandbox"), "sandbox_records"),
+        (run.clone(), "run_folders"),
+    ];
+    match side {
+        Side::Home(_) => folders.push((paths::log_dir(root), "logs")),
+        Side::Worker(_) => {
+            folders.insert(0, (root.to_path_buf(), "data"));
+            folders.push((run.join("images"), "images"));
+            folders.push((root.join("incoming"), "staging"));
+            folders.push((paths::log_dir(root), "logs"));
+            if let Some(layerfs) = root.parent() {
+                folders.push((layerfs.join(STATE), "state"));
+                folders.push((layerfs.join("bundle"), "bundle"));
+                folders.push((layerfs.join("image"), "image"));
+            }
+        }
+    }
+    folders
+}
+
+/// The roots of the machine `side` serves, the no-path answer of
+/// `machine.files`: each LayerFS folder that is there, with its `role`
+/// (`data` with `free_bytes`, what its filesystem has left), then on a
+/// worker's side `/` (`machine`). Each is opened as a folder and `stat`ed
+/// through its descriptor, whatever filesystem it is on; one that is a
+/// link or no folder is left out. The answer is a folder page that is
+/// never continued.
+pub(super) fn machine(side: &Side<'_>) -> Outcome {
+    let mut listed = folders(side);
+    if let Side::Worker(_) = side {
+        listed.push((PathBuf::from("/"), "machine"));
+    }
+    let mut entries = Vec::new();
+    for (folder, role) in listed {
+        let opened =
+            Base::open(&folder, View::Beneath).and_then(|base| base.open_at(Path::new("")));
+        let Ok(opened) = opened else { continue };
+        let mut root = entry(&folder.to_string_lossy(), 1, "folder", Some(&opened.stat));
+        root.push(("role".to_owned(), SdkValue::text(role)));
+        if role == "data" {
+            let free = layerfs_home::home::filesystem(&folder).ok();
+            let free = free.and_then(|disk| i64::try_from(disk.free).ok());
+            root.push((
+                "free_bytes".to_owned(),
+                free.map_or(SdkValue::Null, SdkValue::Int),
+            ));
+        }
+        entries.push(SdkValue::Map(root));
+    }
+    Ok(page_of(entries))
+}
+
+/// A folder page that is never continued.
+fn page_of(entries: Vec<SdkValue>) -> SdkValue {
+    SdkValue::map([
+        ("kind", SdkValue::text("folder")),
+        ("entries", SdkValue::List(entries)),
+        ("next", SdkValue::Null),
+        ("has_more", SdkValue::Bool(false)),
+    ])
 }
 
 /// The roots of Sandbox `name`, whose run folder on `side` is `run`: one
@@ -182,10 +283,5 @@ pub(super) fn sandbox(side: &Side<'_>, name: &str, run: &Path, sent: Option<&Sdk
             entries.push(SdkValue::Map(root));
         }
     }
-    Ok(SdkValue::map([
-        ("kind", SdkValue::text("folder")),
-        ("entries", SdkValue::List(entries)),
-        ("next", SdkValue::Null),
-        ("has_more", SdkValue::Bool(false)),
-    ]))
+    Ok(page_of(entries))
 }

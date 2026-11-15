@@ -67,7 +67,7 @@ pub struct Call {
     /// Runs it with its checked arguments.
     pub run: Run,
     /// Whether it writes no line to the home's call log: a read a UI
-    /// polls (`sandbox.files`), which would fill the log and writes
+    /// polls (`sandbox.files`, `machine.files`), which would fill the log and writes
     /// nothing else either (layerfs-project#178, #179 B.1).
     pub quiet: bool,
 }
@@ -146,8 +146,9 @@ pub const PAGE: [Arg; 2] = [opt("page_size", Int), opt("page_pos", Int)];
 /// The window options of a log read by cursor (`logs.machine`,
 /// `logs.sandbox`).
 pub const WINDOW: [Arg; 3] = [opt("cursor", Text), opt("before", Text), opt("limit", Int)];
-/// The options of a files read (`sandbox.files`): a folder page's
-/// `depth`, `cursor` and `limit`, a file window's `offset` and `length`.
+/// The options of a files read (`sandbox.files`, `machine.files`): a
+/// folder page's `depth`, `cursor` and `limit`, a file window's `offset`
+/// and `length`.
 pub const FILES: [Arg; 5] = [
     opt("depth", Int),
     opt("cursor", Text),

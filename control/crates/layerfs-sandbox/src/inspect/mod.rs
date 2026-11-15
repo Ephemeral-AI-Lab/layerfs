@@ -28,6 +28,7 @@ mod files;
 mod host;
 mod live;
 mod log;
+mod machine;
 mod overlay;
 mod owner;
 pub mod process;
@@ -42,6 +43,7 @@ pub use files::{
 };
 pub use live::{sandboxes_live, Live, MACHINE_STOPPED};
 pub use log::{machine_log, sandbox_log, Window};
+pub use machine::{machine_files, machine_page};
 pub use overlay::overlay_sizes;
 pub use owner::{admit, on_owner, running, Budget, HARD, PERMITS, SOFT};
 pub use route::{ask, in_worker, serve, OP};

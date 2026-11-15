@@ -7,13 +7,13 @@ The `machine` calls: list, inspect, create, start, stop, update and remove the m
 | | |
 | --- | --- |
 | Source | [`api/crates/layerfs-api/src/machine`](../../../../api/crates/layerfs-api/src/machine), [`layerfs-control/src/machine.rs`](../../../../control/crates/layerfs-control/src/machine.rs), [`layerfs-machine/src`](../../../../control/crates/layerfs-machine/src), [`layerfs-platform/src`](../../../../control/crates/layerfs-platform/src) |
-| Runs by default | every call in the caller's process, through the platform adapter (provider CLI or Docker); none is sent to a worker. The guest worker is built without the `machine` feature, so there every machine call is `Unsupported` before any effect |
+| Runs by default | every call in the caller's process, through the platform adapter (provider CLI or Docker); none is sent to a worker but the two reads `stats` and `files`, each one inspect request served where the machine's data is. The guest worker is built without the `machine` feature, so there every machine call is `Unsupported` before any effect |
 | Design | [Machines](../../control/machines/README.md), [platforms](../../control/machines/platforms.md), [workers and reach](../../control/machines/workers-and-reach.md) |
 
 ## Calls
 
 ```text
- reads (start nothing):  list   platforms   get   status   stats   images
+ reads (start nothing):  list   platforms   get   status   stats   files   images
  Sandbox images:         load (copy from the host's Docker)   prune
 
  built in: native, docker ---------------------- update (image, docker,
@@ -37,6 +37,7 @@ The `machine` calls: list, inspect, create, start, stop, update and remove the m
 | [`machine.prune`](#machineprune) | `{ removed: [id], freed }` |
 | [`machine.status`](#machinestatus) | `{ name, platform, state, free_disk, tool_version, down_reason, stores, op? }` |
 | [`machine.stats`](#machinestats) | `{ machine, platform, observed_at, worker, resources, data_disk, stores, sandboxes, complete, reason? }` |
+| [`machine.files`](#machinefiles) | `{ kind: "folder", entries, next, has_more, reason? }` or `{ kind: "file", size, offset, content, binary, next }` |
 | [`machine.start`](#machinestart) | summary, once the worker answers |
 | [`machine.stop`](#machinestop) | summary, `state: "stopped"`; with `force`, also `forced`, `stopped_sandboxes`, `unknown` |
 | [`machine.create`](#machinecreate) | summary, `state: "running"` |
@@ -325,6 +326,80 @@ Errors: `NotFound` (no such machine); `Unavailable` (the machine is stopped or i
 did not answer within 8 s; nothing starts it); `Busy` (two inspect requests
 already run in that process); `InvalidInput` (a worker of a build without
 the kind, or over 4096 Stores or Sandboxes on one machine).
+
+### machine.files
+
+Reads what is on a machine: its LayerFS folders, one page of a folder or one
+window of a file (layerfs-project#178). A read for a UI that shows a tree:
+no lock, no lease, no daemon call, nothing written, no call-log line (the
+call is `quiet`), and the MCP server does not list it. Its options, a folder
+page, a file window and their fields are those of
+[`sandbox.files`](sandbox.md#sandboxfiles); what differs is where a path may
+lead.
+
+```text
+JS      await layerfs.machine.files(machine, path?, { depth, cursor, limit, offset, length })
+Python  layerfs.machine.files(machine, path=None, *, depth=None, cursor=None, limit=None, offset=None, length=None)
+CLI     layerfs machine files <machine> [<path>] [--depth <depth>] [--cursor <cursor>] [--limit <limit>] [--offset <offset>] [--length <length>]
+```
+
+**The roots** (no `path`): a folder page that is never continued. Each entry
+is a folder with a `role`, in this order; a folder that is not there is left
+out. LayerFS owns the order and the paths, so a client shows roles and never
+writes a path of its own.
+
+| `role` | Folder on docker, Lima and Apple Container | Folder on `native` |
+| --- | --- | --- |
+| `data` | `/layerfs/data`, the worker's root, with `free_bytes`: what its filesystem has left | — |
+| `stores` | `/layerfs/data/store` | `<home>/store` |
+| `sandbox_records` | `/layerfs/data/sandbox` | `<home>/sandbox` |
+| `run_folders` | `/layerfs/data/machine/native/run`: one folder per Sandbox | `<home>/machine/native/run` |
+| `images` | `/layerfs/data/machine/native/run/images`: the Sandbox image cache | — (inside `run_folders`) |
+| `staging` | `/layerfs/data/incoming`: folder copies of a `project.init` | — |
+| `logs` | `/layerfs/data/log` | `<home>/log` |
+| `state` | `/layerfs/state`: the worker's pid and secret | — |
+| `bundle` | `/layerfs/bundle`: the installed build | — |
+| `image` | `/layerfs/image`: a custom Sandbox image copied in (never on docker) | — |
+| `machine` | `/`: the whole machine | — |
+
+A client offers a second view ("whole filesystem") only when the answer has
+the `machine` root. `native` has none: that machine is its owner's own
+computer, and a path outside its LayerFS folders is `InvalidInput`.
+
+**A path** is absolute, with no `..`, and is read in one of two views
+([`inspect/machine.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/machine.rs)):
+
+| | In a LayerFS folder (`data`, `state`, `bundle`, `image`; on `native` its four) | Anywhere else, from `/` |
+| --- | --- | --- |
+| Links | none is followed, on the way or at the end | one on the way resolves inside the machine's root (`/lib` of a merged-`/usr` system); the last name is never followed |
+| Mounts | none is entered: `mount` | entered when its type is `ext4`, `xfs`, `btrfs`, `zfs`, `f2fs`, `overlay` or `tmpfs`; any other (`fuse.*`, `nfs`, `cifs`, `9p`, `virtiofs`, `fakeowner`, `sshfs`, an unknown one) is `mount` with its `fs`, never `stat`ed or entered |
+| What is opened | everything but what LayerFS keeps private | a file others may read (`o+r`) and a folder others may list and search (`o+rx`), under folders that are so too; the rest is `unreadable` |
+| `system` | — | `/proc`, `/sys`, `/dev`, `/run`: listed, never `stat`ed or entered |
+| `restricted` | `store.sqlite*`; a run folder's `config/` and `overlay/`; `control.json`, `worker.json`; `lock`, `*.lock`; a Store's `open/`; `/layerfs/state/secret` | `store.sqlite*` |
+| LayerFS folders | listed with their `role` | listed with their `role` and not entered: each is read by its own path, whatever filesystem it is on |
+| Workspace mounts | an entry of a run folder's `workspaces/` is `mount`, with `workspace` (its id) from the Workspace records; never `stat`ed | — |
+
+`worker.log`, `worker.1.log` and a run folder's `daemon.log` are listed as
+files with `role: "log"` and read with the [`logs`](logs.md) calls.
+
+```text
+$ layerfs machine files native
+{"kind":"folder","entries":[{"path":"/Users/me/.layerfs/store","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"stores"},{"path":"/Users/me/.layerfs/sandbox","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"sandbox_records"},{"path":"/Users/me/.layerfs/machine/native/run","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"run_folders"},{"path":"/Users/me/.layerfs/log","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"logs"}],"next":null,"has_more":false}
+```
+
+| Error | When |
+| --- | --- |
+| `InvalidInput` | an option outside its range; a `cursor` with no `path`, or not an entry of the folder; a path that is not absolute or holds a `..`; on `native`, a path outside the LayerFS folders; a `restricted`, `unreadable`, `system` or `mount` entry, or a path in one; a link at the end, or, in a LayerFS folder, on the way; a FIFO, socket or device; a path a link leads into a mount that is not entered |
+| `NotFound` | no machine of that name; nothing is at the path |
+| `Unavailable` | the machine is stopped or its worker did not answer in 8 s; the read ran past 6 s. Nothing starts a machine |
+| `Busy` | two inspection reads already run on that machine; read again |
+| `Unsupported` | a Linux kernel before 5.6 (no `openat2`), or before 5.8 for a path read from `/` (no mount id in `statx`); nothing else is tried |
+
+It is one [inspect](../../control/sandboxes/inspect.md#files) request, kind
+`machine_files`: in this process on `native`, else one request to the
+machine's worker, which runs as root on Lima and Apple Container and in the
+worker container on docker; the world-readable rule makes the answer the
+same whoever it runs as.
 
 ### machine.start
 

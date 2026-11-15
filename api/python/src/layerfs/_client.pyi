@@ -463,6 +463,19 @@ class MachineFamily:
         """a machine's live state, free disk and tool version"""
     def stats(self, machine: str, *, log_tag: str | None = None) -> Result:
         """a machine's observed processors, memory and data disk, its Stores' sizes and live Sandboxes"""
+    def files(
+        self,
+        machine: str,
+        path: str | None = None,
+        *,
+        depth: int | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        length: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a machine's files: its LayerFS folders by role, or a folder or file of the machine"""
     def start(
         self,
         name: str,

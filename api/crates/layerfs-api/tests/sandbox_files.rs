@@ -392,14 +392,14 @@ fn the_table_lists_the_call_quiet_with_a_path_and_its_options() {
     assert_eq!(args, [("sandbox", false), ("path", true)]);
     let options: Vec<_> = call.options.iter().map(|a| a.name).collect();
     assert_eq!(options, ["depth", "cursor", "limit", "offset", "length"]);
-    // it and `machine.stats` (layerfs-project#164) carry the flag; the
-    // `logs` calls are skipped by family
+    // it, `machine.stats` (layerfs-project#164) and `machine.files` carry
+    // the flag; the `logs` calls are skipped by family
     let quiet: Vec<_> = layerfs_api::calls()
         .into_iter()
         .filter(|call| call.quiet)
         .map(|call| call.name())
         .collect();
-    assert_eq!(quiet, ["sandbox.files", "machine.stats"]);
+    assert_eq!(quiet, ["sandbox.files", "machine.stats", "machine.files"]);
     let table = layerfs_api::json::parse(&layerfs_api::table_json()).unwrap();
     let SdkValue::List(calls) = table else {
         panic!()

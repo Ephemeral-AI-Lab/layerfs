@@ -3,6 +3,9 @@
 //! `openat2` on Linux, a walk of `O_NOFOLLOW` opens on macOS. A path stays
 //! beneath its base; no link is followed, whether it leads out or not; a
 //! FIFO is never waited on; only a regular file or a folder is answered.
+//! And the whole-root view (step 4): links resolve inside the base, the
+//! last name is never followed, and an open ends only in a mount its
+//! caller allowed by id, with the mount table given as text.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_sandbox_backend::local::confined::{self, Base, Kind, Refused, View};
 use std::ffi::OsStr;
@@ -208,8 +211,190 @@ fn the_mount_table_names_mounts_and_an_open_never_crosses_onto_one() {
 
 #[cfg(target_os = "macos")]
 #[test]
-fn macos_has_no_mount_table_read_yet() {
-    // `getfsstat(MNT_NOWAIT)` has no safe wrapper in this crate's
-    // dependencies; a walk tells a mount point by its device
-    assert!(confined::mounts().unwrap().is_empty());
+fn macos_reads_its_mount_table_from_one_bounded_run_of_mount() {
+    // `/sbin/mount`, given half a second: `getfsstat(MNT_NOWAIT)` has no
+    // safe wrapper in this crate's dependencies
+    let started = Instant::now();
+    let table = confined::mounts().unwrap();
+    assert!(started.elapsed() < Duration::from_secs(2));
+    let fs_at = |point: &str| {
+        let found = table.iter().find(|mount| mount.point == Path::new(point));
+        found.map(|mount| mount.fs.clone())
+    };
+    assert_eq!(fs_at("/").as_deref(), Some("apfs"), "{table:?}");
+    assert_eq!(fs_at("/dev").as_deref(), Some("devfs"), "{table:?}");
+    assert!(table.iter().all(|mount| mount.id.is_none()));
+
+    // the lines `mount` prints, one mount each
+    let said = "/dev/disk3s1s1 on / (apfs, sealed, local, read-only, journaled)\n\
+        devfs on /dev (devfs, local, nobrowse)\n\
+        map auto_home on /System/Volumes/Data/home (autofs, automounted, nobrowse)\n\
+        localhost:/x on /Users/me/a b/workspaces/1 (nfs, nodev, nosuid, mounted by me)\n\
+        not a mount line\n";
+    let parsed: Vec<(String, String)> = (confined::parse_mounts(said).into_iter())
+        .map(|mount| (mount.point.display().to_string(), mount.fs))
+        .collect();
+    let expected = [
+        ("/", "apfs"),
+        ("/dev", "devfs"),
+        ("/System/Volumes/Data/home", "autofs"),
+        ("/Users/me/a b/workspaces/1", "nfs"),
+    ];
+    assert_eq!(
+        parsed,
+        expected.map(|(point, fs)| (point.to_owned(), fs.to_owned()))
+    );
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn macos_opens_a_whole_root_view_as_it_opens_beneath() {
+    // no link is resolved here in either view, and `enter` wants a folder
+    let dir = scratch("inroot");
+    std::fs::create_dir_all(dir.join("usr/lib")).unwrap();
+    std::fs::write(dir.join("usr/lib/x"), "lib").unwrap();
+    symlink("usr/lib", dir.join("lib")).unwrap();
+    let base = Base::open(&dir, View::InRoot).unwrap();
+    assert_eq!(base.mount(), None);
+    assert_eq!(open(&base, "usr/lib/x").unwrap().stat.size, 3);
+    assert!(matches!(open(&base, "lib/x"), Err(Refused::Symlink)));
+    assert!(matches!(
+        base.enter(Path::new("lib")),
+        Err(Refused::Symlink)
+    ));
+    assert_eq!(
+        base.enter(Path::new("usr/lib")).unwrap().stat.kind,
+        Kind::Folder
+    );
+    assert!(matches!(
+        base.enter(Path::new("usr/lib/x")),
+        Err(Refused::Missing)
+    ));
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_root_view_resolves_links_inside_its_base_and_never_follows_the_last_name() {
+    let dir = scratch("inroot");
+    let root = dir.join("root");
+    std::fs::create_dir_all(root.join("usr/lib")).unwrap();
+    std::fs::write(root.join("usr/lib/x"), "lib").unwrap();
+    std::fs::write(dir.join("outside"), "outside").unwrap();
+    // a merged-/usr image's links, relative and absolute; a link that
+    // climbs out, and one to a file
+    symlink("usr/lib", root.join("lib")).unwrap();
+    symlink("/usr/lib", root.join("lib64")).unwrap();
+    symlink("../../outside", root.join("usr/climb")).unwrap();
+    symlink(dir.join("outside"), root.join("abs")).unwrap();
+    symlink("x", root.join("usr/lib/y")).unwrap();
+
+    let base = Base::open(&root, View::InRoot).unwrap();
+    assert!(base.mount().is_some());
+    for path in ["usr/lib/x", "lib/x", "lib64/x"] {
+        let file = open(&base, path).unwrap();
+        assert_eq!((file.stat.kind, file.stat.size), (Kind::File, 3), "{path}");
+        assert_eq!(file.stat.mount, base.mount());
+    }
+    // the last name is never followed, whatever it names
+    for path in ["lib", "lib64", "usr/lib/y", "lib/y", "abs", "usr/climb"] {
+        assert!(matches!(open(&base, path), Err(Refused::Symlink)), "{path}");
+    }
+    // a folder a path leads through is entered through its link
+    for path in ["lib", "lib64", "usr/lib", ""] {
+        let folder = base.enter(Path::new(path)).unwrap();
+        assert_eq!(folder.stat.kind, Kind::Folder, "{path}");
+    }
+    assert_eq!(names(&base.enter(Path::new("lib")).unwrap()), ["x", "y"]);
+    assert!(matches!(
+        base.enter(Path::new("usr/lib/x")),
+        Err(Refused::Missing)
+    ));
+    // a link out resolves inside the base, where there is nothing: the
+    // base is the root of every path
+    for path in ["usr/climb", "abs"] {
+        let entered = base.enter(Path::new(path));
+        assert!(matches!(entered, Err(Refused::Missing)), "{path}");
+    }
+    assert!(matches!(open(&base, "../outside"), Err(Refused::Outside)));
+    // the same tree beneath: no link at all
+    let beneath = Base::open(&root, View::Beneath).unwrap();
+    for path in ["lib/x", "lib64/x"] {
+        assert!(
+            matches!(open(&beneath, path), Err(Refused::Symlink)),
+            "{path}"
+        );
+    }
+    assert!(matches!(
+        beneath.enter(Path::new("lib")),
+        Err(Refused::Symlink)
+    ));
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_root_view_ends_only_in_the_mounts_its_caller_allowed_by_id() {
+    // `/proc` is a mount every Linux has, of another id than `/`
+    let root = Base::open(Path::new("/"), View::InRoot).unwrap();
+    let slash = open(&root, "").unwrap();
+    let own = root.mount().unwrap();
+    assert_eq!(slash.stat.mount, Some(own));
+    // an entry's `statx` names the mount at it, with no open of it
+    let proc = slash.stat_of(OsStr::new("proc")).unwrap();
+    let proc_id = proc.mount.unwrap();
+    assert_ne!(proc_id, own);
+    assert!(slash.stat.apart_from(&proc));
+    assert!(!slash
+        .stat
+        .apart_from(&slash.stat_of(OsStr::new("etc")).unwrap()));
+
+    // the kernel's table names that id at `/proc`
+    let table = confined::mounts().unwrap();
+    let named = (table.iter().rev()).find(|mount| mount.point == Path::new("/proc"));
+    assert_eq!(named.and_then(|mount| mount.id), Some(proc_id), "{table:?}");
+
+    // not allowed: refused, directly and through a link that leads there
+    let dir = scratch("mountid");
+    symlink("/proc", dir.join("link")).unwrap();
+    let through = dir.strip_prefix("/").unwrap().join("link");
+    assert!(matches!(open(&root, "proc/version"), Err(Refused::Mount)));
+    assert!(matches!(open(&root, "proc"), Err(Refused::Mount)));
+    assert!(matches!(root.enter(&through), Err(Refused::Mount)));
+    assert!(matches!(
+        root.open_at(&through.join("version")),
+        Err(Refused::Mount)
+    ));
+
+    // a mount table given as text: only the mounts it names are allowed
+    let line = |id: u64, point: &str, fs: &str| {
+        format!("{id} 1 0:22 / {point} rw,nosuid shared:5 - {fs} {fs} rw\n")
+    };
+    let other = confined::parse_mounts(&line(proc_id + 1_000_000, "/proc", "proc"));
+    let mut closed = Base::open(Path::new("/"), View::InRoot).unwrap();
+    closed.cross(other.iter().filter_map(|mount| mount.id));
+    assert!(matches!(open(&closed, "proc/version"), Err(Refused::Mount)));
+    let text = format!(
+        "{}{}",
+        line(own, "/", "overlay"),
+        line(proc_id, "/a\\040b/proc", "proc")
+    );
+    let parsed = confined::parse_mounts(&text);
+    assert_eq!(parsed.len(), 2);
+    assert_eq!(parsed[1].point, Path::new("/a b/proc"));
+    assert_eq!(
+        (parsed[1].id, parsed[1].fs.as_str()),
+        (Some(proc_id), "proc")
+    );
+    let mut allowed = Base::open(Path::new("/"), View::InRoot).unwrap();
+    allowed.cross(parsed.iter().filter_map(|mount| mount.id));
+    let version = open(&allowed, "proc/version").unwrap();
+    assert_eq!(version.stat.mount, Some(proc_id));
+    assert_eq!(
+        allowed.open_at(&through.join("version")).unwrap().stat.kind,
+        Kind::File
+    );
+    // and never a magic link, allowed mount or not
+    assert!(open(&allowed, "proc/self/root/etc").is_err());
+    std::fs::remove_dir_all(dir).unwrap();
 }

@@ -3,8 +3,9 @@
 //! process facts, `proc_pidinfo`/`sysctl`, are `layerfs_bridge::process`).
 //! Only facts live here; the Sandbox lifecycle is shared with Linux in
 //! [`super`]. `confined` is the open and `stat` of an inspection read
-//! (layerfs-project#178).
+//! (layerfs-project#178), whose mount table is `mount` run under a
+//! deadline (`darwin::mount_table`).
 pub(crate) mod confined;
 mod darwin;
 pub(crate) mod mounts;
-pub(crate) use darwin::{force_unmount, mount_points};
+pub(crate) use darwin::{force_unmount, mount_line, mount_points, mount_table};

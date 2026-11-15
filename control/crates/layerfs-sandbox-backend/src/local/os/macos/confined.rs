@@ -5,9 +5,13 @@
 //! way or at the end. Each folder on the way must be on the base's device,
 //! and the descriptor at the end must still have a path under the base's
 //! (`F_GETPATH`), which a folder moved out during the walk does not.
-use crate::local::confined::{Refused, View};
+//!
+//! Both views open this way. macOS runs no machine's worker and no
+//! Sandbox with a root of its own, so [`View::InRoot`] has nothing to
+//! resolve links in here, and a link is refused in it as in the other.
+use crate::local::confined::{Kind, Refused, Stat, View};
 use nix::fcntl::{fcntl, openat, AtFlags, FcntlArg, OFlag};
-use nix::sys::stat::{fstat, fstatat, FileStat, Mode};
+use nix::sys::stat::{fstat, fstatat, Mode};
 use std::ffi::OsStr;
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::path::{Path, PathBuf};
@@ -20,8 +24,15 @@ pub(crate) fn path_of(opened: BorrowedFd<'_>) -> std::io::Result<PathBuf> {
 }
 
 /// Opens `relative` (only names; empty for the base itself) from `base`.
-pub(crate) fn open(base: BorrowedFd<'_>, relative: &Path, view: View) -> Result<OwnedFd, Refused> {
-    let View::Beneath = view;
+/// A folder a path leads through (`_through`) is opened as any entry is:
+/// no link is resolved here, and its caller checks that it is a folder.
+pub(crate) fn open(
+    base: BorrowedFd<'_>,
+    relative: &Path,
+    view: View,
+    _through: bool,
+) -> Result<OwnedFd, Refused> {
+    let (View::Beneath | View::InRoot) = view;
     let flags = OFlag::O_RDONLY | OFlag::O_NONBLOCK | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC;
     let device = fstat(base)?.st_dev;
     let mut at = openat(base, ".", flags | OFlag::O_DIRECTORY, Mode::empty())?;
@@ -45,9 +56,22 @@ pub(crate) fn open(base: BorrowedFd<'_>, relative: &Path, view: View) -> Result<
 
 /// The `stat` of entry `name` of `folder`, or of `folder` itself for an
 /// empty name.
-pub(crate) fn stat(folder: BorrowedFd<'_>, name: &OsStr) -> nix::Result<FileStat> {
-    match name.is_empty() {
-        true => fstat(folder),
-        false => fstatat(folder, name, AtFlags::AT_SYMLINK_NOFOLLOW),
-    }
+pub(crate) fn stat(folder: BorrowedFd<'_>, name: &OsStr) -> nix::Result<Stat> {
+    let found = match name.is_empty() {
+        true => fstat(folder)?,
+        false => fstatat(folder, name, AtFlags::AT_SYMLINK_NOFOLLOW)?,
+    };
+    Ok(Stat {
+        kind: Kind::of_mode(u32::from(found.st_mode)),
+        size: u64::try_from(found.st_size).unwrap_or(0),
+        mode: u32::from(found.st_mode) & 0o7777,
+        mtime_ms: (found.st_mtime)
+            .saturating_mul(1000)
+            .saturating_add(found.st_mtime_nsec / 1_000_000),
+        owner: found.st_uid,
+        links: u64::from(found.st_nlink),
+        // a device number is an `i32` here
+        device: u64::from(found.st_dev as u32),
+        mount: None,
+    })
 }

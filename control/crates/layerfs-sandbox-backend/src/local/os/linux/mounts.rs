@@ -65,22 +65,23 @@ pub(crate) fn filesystem(path: &Path) -> io::Result<String> {
     })
 }
 
-/// Every mount of the table at `table` (`/proc/self/mountinfo`, or another
-/// process's `mountinfo` for its namespace): its mount point and its
-/// filesystem type, in table order. Reading the table touches no mount.
-pub(crate) fn table(table: &Path) -> io::Result<Vec<(PathBuf, String)>> {
-    let text = std::fs::read_to_string(table)?;
+/// Every mount a `mountinfo` table's text names (this process's, or
+/// another process's for its namespace): its id, its mount point and its
+/// filesystem type, in table order. Reading a table touches no mount.
+pub(crate) fn table(text: &str) -> Vec<(u64, PathBuf, String)> {
     let mut found = Vec::new();
     for line in text.lines() {
         let fields: Vec<&str> = line.split(' ').collect();
         let Some(separator) = fields.iter().position(|field| *field == "-") else {
             continue;
         };
-        if let (Some(point), Some(kind)) = (fields.get(4), fields.get(separator + 1)) {
-            found.push((PathBuf::from(unescape(point)), (*kind).to_owned()));
+        let id = fields.first().and_then(|id| id.parse().ok());
+        if let (Some(id), Some(point), Some(kind)) = (id, fields.get(4), fields.get(separator + 1))
+        {
+            found.push((id, PathBuf::from(unescape(point)), (*kind).to_owned()));
         }
     }
-    Ok(found)
+    found
 }
 
 fn unescape(text: &str) -> String {

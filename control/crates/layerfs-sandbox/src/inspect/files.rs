@@ -1,7 +1,8 @@
 //! The Files walker (layerfs-project#178): one page of a folder or one
 //! window of a file, read beneath a base folder and nowhere else. The
-//! inspect kind `sandbox_files` is its first view, a Sandbox's home; a
-//! view is a [`Scope`], and [`answer`] serves any of them.
+//! inspect kind `sandbox_files` is its first view, a Sandbox's home, and
+//! `machine_files` (`machine.rs`) the views of a machine; a view is a
+//! [`Scope`] with its [`Rules`], and [`answer`] serves any of them.
 //!
 //! A folder page is a flat list in tree order: names in byte order, a
 //! folder's entries after it, to `depth` levels. Its cursor is the path of
@@ -13,16 +14,20 @@
 //! is read with one `pread` of at most `length` bytes.
 //!
 //! Every open and `stat` is `layerfs_sandbox_backend::local::confined`'s:
-//! no link is followed, no other mount entered, no special file read. A
-//! mount point is told from the mount table and what LayerFS keeps private
-//! from `roots::kept`, both before any `stat`.
+//! no link leads out of the base, no mount is entered but one the view
+//! crosses, no special file is read. A mount point is told from the mount
+//! table and what LayerFS keeps private from `roots::kept`, both before
+//! any `stat`.
 use super::roots::{self, Kept};
 use super::Side;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::with_field;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_home::tail;
-use layerfs_sandbox_backend::local::confined::{self, Base, Kind, Opened, Refused, Stat, View};
+use layerfs_sandbox_backend::local::confined::{
+    self, Base, Kind, Mount, Opened, Refused, Stat, View,
+};
+use std::cell::OnceCell;
 use std::collections::BinaryHeap;
 use std::ffi::OsStr;
 use std::ops::ControlFlow;
@@ -86,7 +91,7 @@ impl FilesRequest {
     /// that is not absolute or holds a `..`, or a cursor with no folder.
     /// An option that does not apply to what the path turns out to be (a
     /// `limit` for a file, an `offset` for a folder) is not used.
-    fn check(&self, call: &str) -> Result<(), SdkRefusal> {
+    pub(super) fn check(&self, call: &str) -> Result<(), SdkRefusal> {
         let invalid = |what: String| Err(refused("InvalidInput", format!("{call}: {what}")));
         let within = |name: &str, value: Option<i64>, least: i64, most: i64| match value {
             Some(value) if value < least || value > most => {
@@ -114,9 +119,10 @@ impl FilesRequest {
         Ok(())
     }
 
-    /// The inspect request for this read of Sandbox `sandbox`.
-    fn request(&self, sandbox: &str) -> SdkValue {
-        let mut fields = vec![("sandbox".to_owned(), SdkValue::text(sandbox))];
+    /// The inspect request for this read of what `field` names: the
+    /// `sandbox` or the `machine` called `name`.
+    pub(super) fn request(&self, field: &str, name: &str) -> SdkValue {
+        let mut fields = vec![(field.to_owned(), SdkValue::text(name))];
         let texts = [("path", &self.path), ("cursor", &self.cursor)];
         for (name, value) in texts {
             fields.extend(value.clone().map(|v| (name.to_owned(), SdkValue::Text(v))));
@@ -144,7 +150,7 @@ impl FilesRequest {
 pub fn sandbox_files(home: &Path, name: &str, request: &FilesRequest) -> Outcome {
     request.check(CALL)?;
     let record = crate::family::sandbox_of(home, name)?;
-    let mut args = request.request(name);
+    let mut args = request.request("sandbox", name);
     // the Workspace records of a Sandbox whose daemon the home reaches
     // directly are here, and its run folder is in its machine: they go
     // with the request
@@ -184,8 +190,86 @@ pub fn sandbox_page(side: &Side<'_>, args: &SdkValue, spent: &dyn Fn() -> bool) 
         ));
     };
     let owner = Some(roots::command_uid(side, name));
-    let scope = Scope::open(CALL, root, &home, owner)?;
+    let scope = Scope::open(CALL, root, &home, owner, Rules::beneath())?;
     answer(&scope, relative, &request, spent)
+}
+
+/// The filesystem types whose mounts a view that crosses mounts enters:
+/// local disks and memory, which answer without another host or process.
+/// A mount of any other type (`fuse.*`, `nfs`, `cifs`, `9p`, `virtiofs`,
+/// `fakeowner`, `sshfs`, one this list does not know) is listed as a
+/// `mount` with its type and never entered.
+const CROSSED: [&str; 7] = ["ext4", "xfs", "btrfs", "zfs", "f2fs", "overlay", "tmpfs"];
+
+/// What a view judges beyond what LayerFS keeps private.
+pub(super) struct Rules {
+    /// How an open resolves a path from the base, and whether it may end
+    /// in another mount.
+    pub(super) view: View,
+    /// The entries of the base that are the kernel's own (`proc`, `sys`):
+    /// listed as `system`, never `stat`ed, entered or read.
+    pub(super) system: &'static [&'static str],
+    /// Only what every user of the machine may read is opened: a file
+    /// others may read, a folder others may list and search. Anything
+    /// else is `unreadable`: listed, never opened.
+    pub(super) world: bool,
+    /// The LayerFS folders in the base, each relative to it, with its
+    /// role: an entry that is one is listed with it.
+    pub(super) roles: Vec<(PathBuf, &'static str)>,
+    /// Those folders are read as bases of their own: this view lists
+    /// them and enters none.
+    pub(super) apart: bool,
+}
+
+impl Rules {
+    /// A folder read beneath itself, with no rule of its own.
+    pub(super) fn beneath() -> Self {
+        Self {
+            view: View::Beneath,
+            system: &[],
+            world: false,
+            roles: Vec::new(),
+            apart: false,
+        }
+    }
+
+    /// Whether `relative` is one of the base's system entries.
+    fn system(&self, relative: &Path) -> bool {
+        let mut names = relative.components();
+        match (names.next(), names.next()) {
+            (Some(Component::Normal(name)), None) => {
+                self.system.iter().any(|system| name == *system)
+            }
+            _ => false,
+        }
+    }
+
+    /// The role of the LayerFS folder at `relative`, if it is one.
+    fn role(&self, relative: &Path) -> Option<&'static str> {
+        let found = self.roles.iter().find(|(folder, _)| folder == relative);
+        found.map(|(_, role)| *role)
+    }
+
+    /// Whether this view may open `stat`'s entry at all.
+    fn opens(&self, stat: &Stat) -> bool {
+        !self.world
+            || match stat.kind {
+                Kind::File => stat.mode & 0o004 != 0,
+                Kind::Folder => stat.mode & 0o005 == 0o005,
+                _ => true,
+            }
+    }
+}
+
+/// One mount point under a view's base.
+struct Point {
+    /// Where, relative to the base.
+    at: PathBuf,
+    /// Its filesystem type.
+    fs: String,
+    /// The view enters it: its entries are listed and read as its
+    /// folder's are.
+    crossed: bool,
 }
 
 /// One view: a base folder, how its paths are shown, and what is judged
@@ -201,41 +285,129 @@ pub(super) struct Scope<'a> {
     /// its path under the base.
     shown: PathBuf,
     base: Base,
-    /// The mount points under the base, each relative to it, with its
-    /// filesystem type.
-    mounts: Vec<(PathBuf, String)>,
+    /// The mount points under the base: at each, the mount a path
+    /// reaches.
+    mounts: Vec<Point>,
     /// Whose files may have more than one name: a regular file with
     /// several names owned by anyone else is not read. `None` where the
     /// rule does not apply.
     owner: Option<u32>,
+    rules: Rules,
+    /// The Workspace records a request carried, `[{ id, path }]`.
+    sent: Option<&'a SdkValue>,
+    /// Each recorded Workspace's mount path and id, read when a listing
+    /// first meets a Workspace mount.
+    workspaces: OnceCell<Vec<(String, String)>>,
 }
 
 impl<'a> Scope<'a> {
-    /// The view of folder `shown` beneath itself, on the side whose root
-    /// is `root`.
+    /// The view of folder `shown` under `rules`, on the side whose root
+    /// is `root`, with this process's mount table.
     pub(super) fn open(
         call: &'static str,
         root: &'a Path,
         shown: &Path,
         owner: Option<u32>,
+        rules: Rules,
     ) -> Result<Self, SdkRefusal> {
-        let base = Base::open(shown, View::Beneath).map_err(|why| refusal(call, shown, why))?;
+        let base = Base::open(shown, rules.view).map_err(|why| refusal(call, shown, why))?;
         // the table names real paths, as the base's own descriptor does
         let real = base.path().map_err(failed)?;
-        let mounts = (confined::mounts().map_err(failed)?.into_iter())
-            .filter_map(|mount| {
-                let under = mount.point.strip_prefix(&real).ok()?;
-                (!under.as_os_str().is_empty()).then(|| (under.to_owned(), mount.fs))
-            })
-            .collect();
-        Ok(Self {
+        let table = confined::mounts().map_err(failed)?;
+        Ok(Self::over(
+            call, root, shown, base, &real, table, owner, rules,
+        ))
+    }
+
+    /// The view of `base`, shown as `shown`, whose mount namespace's
+    /// `table` names it `real`. A view that crosses mounts
+    /// (`View::InRoot`) enters a mount only when its type is one of
+    /// [`CROSSED`], it is not in a system entry, a LayerFS folder read
+    /// apart, a path LayerFS keeps or a mount that is not entered itself;
+    /// `base` is told each such mount's id, and refuses what it opens in
+    /// any other.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn over(
+        call: &'static str,
+        root: &'a Path,
+        shown: &Path,
+        mut base: Base,
+        real: &Path,
+        table: Vec<Mount>,
+        owner: Option<u32>,
+        rules: Rules,
+    ) -> Self {
+        // at one point, the last mount of the table is the one reached
+        let mut tops: Vec<(PathBuf, Option<u64>, String)> = Vec::new();
+        for mount in table {
+            let Ok(under) = mount.point.strip_prefix(real) else {
+                continue;
+            };
+            if !under.as_os_str().is_empty() {
+                tops.retain(|(point, ..)| point != under);
+                tops.push((under.to_owned(), mount.id, mount.fs));
+            }
+        }
+        // a mount point before the mounts under it
+        tops.sort_by_key(|(point, ..)| point.components().count());
+        let mut mounts: Vec<Point> = Vec::new();
+        for (at, id, fs) in tops {
+            let first: PathBuf = at.components().take(1).collect();
+            let apart = rules.apart && rules.roles.iter().any(|(role, _)| at.starts_with(role));
+            let crossed = rules.view == View::InRoot
+                && CROSSED.contains(&fs.as_str())
+                && !rules.system(&first)
+                && !apart
+                && roots::kept(root, &shown.join(&at)) == Kept::Open
+                && !(mounts.iter()).any(|above| !above.crossed && at.starts_with(&above.at));
+            if crossed {
+                base.cross(id);
+            }
+            mounts.push(Point { at, fs, crossed });
+        }
+        Self {
             call,
             root,
             shown: shown.to_owned(),
             base,
             mounts,
             owner,
-        })
+            rules,
+            sent: None,
+            workspaces: OnceCell::new(),
+        }
+    }
+
+    /// Takes the Workspace records a request carried from the side that
+    /// keeps them (`[{ id, path }]`), beside this side's own.
+    pub(super) fn with_workspaces(mut self, sent: Option<&'a SdkValue>) -> Self {
+        self.sent = sent;
+        self
+    }
+
+    /// The id of the Workspace mounted at `path`, from the Workspace
+    /// records: those the request carried and those under this side's
+    /// root, read once and only when a listing meets a Workspace mount.
+    fn workspace(&self, path: &Path) -> Option<String> {
+        let recorded = self.workspaces.get_or_init(|| {
+            let pair = |item: &SdkValue| {
+                Some((
+                    item.get_text("path")?.to_owned(),
+                    item.get_text("id")?.to_owned(),
+                ))
+            };
+            let mut all: Vec<(String, String)> = match self.sent {
+                Some(SdkValue::List(items)) => items.iter().filter_map(pair).collect(),
+                _ => Vec::new(),
+            };
+            if let SdkValue::List(items) = roots::recorded_under(self.root) {
+                all.extend(items.iter().filter_map(pair));
+            }
+            all
+        });
+        let path = path.to_str()?;
+        let found = recorded.iter().find(|(mounted, _)| mounted == path);
+        found.map(|(_, id)| id.clone())
     }
 
     fn invalid(&self, path: &Path, why: &str) -> SdkRefusal {
@@ -250,12 +422,17 @@ impl<'a> Scope<'a> {
     /// private are told from the path, before any `stat`; a mount point
     /// and a Workspace mount are never `stat`ed at all.
     fn class(&self, folder: &Opened, relative: &Path, name: &OsStr) -> Class {
-        if let Some((_, fs)) = self.mounts.iter().find(|(point, _)| point == relative) {
-            return Class::Mount(Some(fs.clone()));
+        if self.rules.system(relative) {
+            return Class::System;
         }
-        let kept = roots::kept(self.root, &self.shown.join(relative));
+        let point = self.mounts.iter().find(|point| point.at == relative);
+        if let Some(point) = point.filter(|point| !point.crossed) {
+            return Class::Mount(Some(point.fs.clone()), None);
+        }
+        let shown = self.shown.join(relative);
+        let kept = roots::kept(self.root, &shown);
         if kept == Kept::Workspace {
-            return Class::Mount(None);
+            return Class::Mount(None, self.workspace(&shown));
         }
         let stat = match folder.stat_of(name) {
             Ok(stat) => stat,
@@ -264,10 +441,18 @@ impl<'a> Scope<'a> {
         match kept {
             Kept::Restricted => Class::Restricted(stat),
             Kept::Log => Class::Log(stat),
-            // on another device than its folder: a mount the table did not name
-            _ if stat.device != folder.stat.device => Class::Mount(None),
+            // in another mount than its folder, and the table did not name it
+            _ if point.is_none() && folder.stat.apart_from(&stat) => Class::Mount(None, None),
+            // a LayerFS folder read apart is judged by its own view
+            _ if !self.rules.opens(&stat) && self.enters(relative) => Class::Unreadable(stat),
             _ => Class::Entry(stat),
         }
+    }
+
+    /// Whether a walk enters the folder at `relative`: not a LayerFS
+    /// folder this view lists as a base of its own.
+    fn enters(&self, relative: &Path) -> bool {
+        !(self.rules.apart && self.rules.role(relative).is_some())
     }
 
     /// Refuses a regular file with several names that its view's owner
@@ -287,8 +472,13 @@ impl<'a> Scope<'a> {
 
 /// What a listing found an entry to be.
 enum Class {
-    /// A mount point, with its filesystem type when the table gave it.
-    Mount(Option<String>),
+    /// The kernel's own (`/proc`, `/sys`): never `stat`ed.
+    System,
+    /// A mount point that is not entered, with its filesystem type when
+    /// the table gave it and, for a Workspace's, the Workspace's id.
+    Mount(Option<String>, Option<String>),
+    /// Not for every user of the machine to read.
+    Unreadable(Stat),
     /// Kept private by LayerFS.
     Restricted(Stat),
     /// A log a `logs` call reads.
@@ -336,6 +526,7 @@ pub(super) fn refusal(call: &str, path: &Path, why: Refused) -> SdkRefusal {
         Refused::Outside => invalid(
             "leaves the folder it is read in (another mount, or a folder moved meanwhile); it is not read",
         ),
+        Refused::Mount => invalid("is in a mount this view does not enter; it is not read"),
         Refused::Special(kind) => invalid(&format!(
             "is {}; only files and folders are read",
             special(kind)
@@ -370,17 +561,31 @@ pub(super) fn answer(
     let mut above = PathBuf::new();
     for name in relative.parent().into_iter().flat_map(Path::components) {
         above.push(name);
-        if scope.mounts.iter().any(|(point, _)| *point == above) {
+        if scope.rules.system(&above) {
+            return Err(scope.invalid(&path, "is in a system folder; it is listed, not read"));
+        }
+        if (scope.mounts.iter()).any(|point| point.at == above && !point.crossed) {
             return Err(scope.invalid(&path, "is in a mount; a mount is listed, not read"));
         }
         if roots::kept(scope.root, &scope.shown.join(&above)) != Kept::Open {
             return Err(scope.invalid(&path, "is in a folder that is listed, not read"));
         }
+        if scope.rules.world {
+            let folder =
+                (scope.base.enter(&above)).map_err(|why| refusal(scope.call, &path, why))?;
+            if !scope.rules.opens(&folder.stat) {
+                return Err(scope.invalid(&path, NOT_FOR_ALL_ABOVE));
+            }
+        }
     }
     if let (Some(parent), Some(name)) = (relative.parent(), relative.file_name()) {
-        let folder = (scope.base.open_at(parent)).map_err(|why| refusal(scope.call, &path, why))?;
+        let folder = (scope.base.enter(parent)).map_err(|why| refusal(scope.call, &path, why))?;
         match scope.class(&folder, relative, name) {
-            Class::Mount(_) => {
+            Class::System => {
+                return Err(scope.invalid(&path, "is a system folder; it is listed, not read"))
+            }
+            Class::Unreadable(_) => return Err(scope.invalid(&path, NOT_FOR_ALL)),
+            Class::Mount(..) => {
                 return Err(scope.invalid(&path, "is a mount point; a mount is listed, not read"))
             }
             Class::Restricted(_) => {
@@ -399,6 +604,10 @@ pub(super) fn answer(
         }
     }
     let opened = (scope.base.open_at(relative)).map_err(|why| refusal(scope.call, &path, why))?;
+    // what was opened, not what was listed before the open
+    if !scope.rules.opens(&opened.stat) {
+        return Err(scope.invalid(&path, NOT_FOR_ALL));
+    }
     match opened.stat.kind {
         Kind::Folder => page(scope, &opened, relative, request, spent),
         _ => {
@@ -408,6 +617,9 @@ pub(super) fn answer(
         }
     }
 }
+
+const NOT_FOR_ALL: &str = "is not world-readable; it is listed, not read";
+const NOT_FOR_ALL_ABOVE: &str = "is in a folder that is not world-readable; it is not read";
 
 /// One window of `file`: `{ kind: "file", size, offset, content, binary,
 /// next }`. `content` is the window as text: what is not UTF-8 is U+FFFD
@@ -543,7 +755,7 @@ impl Walk<'_> {
             let entered = matches!(
                 self.scope.class(folder, &inside, name),
                 Class::Entry(stat) if stat.kind == Kind::Folder
-            );
+            ) && self.scope.enters(&inside);
             if entered && level < self.depth {
                 self.enter(&inside, level + 1, &after[1..])?;
             }
@@ -570,11 +782,15 @@ impl Walk<'_> {
             let class = self.scope.class(folder, &inside, OsStr::new(&name));
             let (mut shown, entered) = match &class {
                 Class::Gone => continue,
-                Class::Mount(fs) => {
+                Class::System => (entry(&path, level, "system", None), false),
+                Class::Mount(fs, workspace) => {
                     let mut shown = entry(&path, level, "mount", None);
-                    shown.extend(fs.clone().map(|fs| ("fs".to_owned(), SdkValue::Text(fs))));
+                    let text = |value: &Option<String>| value.clone().map(SdkValue::Text);
+                    shown.extend(text(fs).map(|fs| ("fs".to_owned(), fs)));
+                    shown.extend(text(workspace).map(|id| ("workspace".to_owned(), id)));
                     (shown, false)
                 }
+                Class::Unreadable(stat) => (entry(&path, level, "unreadable", Some(stat)), false),
                 Class::Restricted(stat) => (entry(&path, level, "restricted", Some(stat)), false),
                 Class::Log(stat) => (entry(&path, level, "file", Some(stat)), false),
                 Class::Entry(stat) => {
@@ -586,10 +802,13 @@ impl Walk<'_> {
                     };
                     (
                         entry(&path, level, kind, Some(stat)),
-                        stat.kind == Kind::Folder,
+                        stat.kind == Kind::Folder && self.scope.enters(&inside),
                     )
                 }
             };
+            if let Some(role) = self.scope.rules.role(&inside) {
+                shown.push(("role".to_owned(), SdkValue::text(role)));
+            }
             match &class {
                 Class::Log(_) => shown.push(("role".to_owned(), SdkValue::text("log"))),
                 Class::Entry(stat) if stat.kind == Kind::Symlink => {
@@ -611,7 +830,9 @@ impl Walk<'_> {
     /// Walks the folder at `relative`, if it opens as one.
     fn enter(&mut self, relative: &Path, level: usize, after: &[&OsStr]) -> ControlFlow<()> {
         match self.scope.base.open_at(relative) {
-            Ok(folder) if folder.stat.kind == Kind::Folder => {
+            Ok(folder)
+                if folder.stat.kind == Kind::Folder && self.scope.rules.opens(&folder.stat) =>
+            {
                 self.folder(&folder, relative, level, after)
             }
             // gone, replaced, or not to be opened: it has no entries here

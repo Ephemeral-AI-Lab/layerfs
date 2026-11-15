@@ -969,6 +969,7 @@ version = "2.0.0"
 dependencies = [
  "layerfs-bridge",
  "nix",
+ "rustix",
  "sha2 0.11.0",
 ]
 

@@ -349,6 +349,15 @@ export interface MachinePruneOptions extends CallOptions {
   unused?: boolean;
 }
 
+/** Options of `machine.files`; an unknown option is refused. */
+export interface MachineFilesOptions extends CallOptions {
+  depth?: WholeNumber;
+  cursor?: string;
+  limit?: WholeNumber;
+  offset?: WholeNumber;
+  length?: WholeNumber;
+}
+
 /** Options of `machine.start`; an unknown option is refused. */
 export interface MachineStartOptions extends CallOptions {
   on_progress?: ProgressHandler;
@@ -580,6 +589,9 @@ export interface MachineFamily {
   status(name: string, options?: CallOptions): Promise<Result>;
   /** a machine's observed processors, memory and data disk, its Stores' sizes and live Sandboxes */
   stats(machine: string, options?: CallOptions): Promise<Result>;
+  /** a machine's files: its LayerFS folders by role, or a folder or file of the machine */
+  files(machine: string, options: MachineFilesOptions): Promise<Result>;
+  files(machine: string, path?: string | null, options?: MachineFilesOptions): Promise<Result>;
   /** start a stopped machine and its worker; a running one answers at once */
   start(name: string, options?: MachineStartOptions): Promise<Result>;
   /** stop a machine's worker and VM; its disks stay */

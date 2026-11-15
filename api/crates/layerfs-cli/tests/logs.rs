@@ -6,7 +6,9 @@
 //! daemon log read by cursor on a native home, their refusals, and no
 //! call-log line. And `layerfs sandbox files` (#178 step 3), a quiet call:
 //! its usage, a Sandbox's roots, a folder page, a file window, its
-//! refusals, and no call-log line either.
+//! refusals, and no call-log line either. And `layerfs machine files`
+//! (#178 step 4), quiet too: the roots of `native`, a page, a window, and
+//! a path outside its LayerFS folders refused.
 mod common;
 use common::{layerfs, run, tempdir, text};
 use layerfs_api::json;
@@ -323,6 +325,114 @@ fn the_cli_reads_a_sandbox_s_files_and_logs_no_line() {
         (&["sandbox", "files", "s1", &name("nothing")], "NotFound"),
         (
             &["sandbox", "files", "s1", &home_path, "--limit", "0"],
+            "InvalidInput",
+        ),
+    ] {
+        let (exit, _, err) = run_cli(&home, words);
+        assert_eq!(exit, Some(125), "{words:?}: {err}");
+        assert!(err.contains(&format!("\"{code}\"")), "{words:?}: {err}");
+    }
+    // none of it wrote a call-log line: only `sandbox list` did
+    assert_eq!(lines(&home).len(), 1);
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn the_cli_reads_a_machine_s_files_and_logs_no_line() {
+    let home = tempdir("machine-files");
+    // the home's first call: it is logged, as `machine files` is not
+    assert_eq!(cli(&home, &["sandbox", "list"], None).0, Some(0));
+    let usage = "layerfs machine files <machine> [<path>] [--depth <depth>] [--cursor <cursor>] [--limit <limit>] [--offset <offset>] [--length <length>]\n";
+    let (code, out, _) = run_cli(&home, &["help", "machine", "files"]);
+    assert_eq!(code, Some(0));
+    assert!(out.starts_with(usage), "{out}");
+    let (_, family, _) = run_cli(&home, &["help", "machine"]);
+    assert!(family.contains(usage), "{family}");
+    // a wrong command line is exit 2 and calls nothing
+    for usage in [
+        &["machine", "files"][..],
+        &["machine", "files", "native", "--depth", "deep"],
+        &["machine", "files", "native", "/a", "/b"],
+        &["machine", "files", "native", "--bogus"],
+    ] {
+        assert_eq!(run_cli(&home, usage).0, Some(2), "{usage:?}");
+    }
+
+    let folder = native_sandbox(&home, "listening\n");
+    for part in ["tmp", "config"] {
+        std::fs::create_dir_all(folder.join(part)).unwrap();
+    }
+    std::fs::write(folder.join("tmp/a.txt"), "alpha\n").unwrap();
+    std::fs::write(folder.join("config/x"), "key").unwrap();
+    // only the folders that are there are listed: a home with no Store
+    // yet has no `store`
+    let (_, early, _) = run_cli(&home, &["machine", "files", "native"]);
+    assert!(!early.contains("\"stores\""), "{early}");
+    for part in ["log", "store"] {
+        std::fs::create_dir_all(home.join(part)).unwrap();
+    }
+    let read = |words: &[&str]| {
+        let mut line = vec!["machine", "files", "native"];
+        line.extend(words);
+        let (code, out, err) = run_cli(&home, &line);
+        assert_eq!(code, Some(0), "{words:?}: {err}");
+        json::parse(out.trim()).unwrap()
+    };
+    let each = |answer: &SdkValue, field: &str| -> Vec<String> {
+        let Some(SdkValue::List(entries)) = answer.get("entries") else {
+            panic!("{answer:?}")
+        };
+        entries
+            .iter()
+            .map(|entry| entry.get_text(field).unwrap_or("-").to_owned())
+            .collect()
+    };
+    // no path: the LayerFS folders of the home, by role, and no `/`
+    let roots = read(&[]);
+    assert_eq!(
+        each(&roots, "role"),
+        ["stores", "sandbox_records", "run_folders", "logs"]
+    );
+    let run_root = each(&roots, "path")[2].clone();
+    assert_eq!(Path::new(&run_root), folder.parent().unwrap());
+    // a folder page, continued from its `next`
+    let run = folder.display().to_string();
+    let name = |path: &str| format!("{run}/{path}");
+    let page = read(&[&run, "--limit", "2"]);
+    assert_eq!(each(&page, "path"), [name("config"), name("daemon.log")]);
+    assert_eq!(each(&page, "kind"), ["restricted", "file"]);
+    assert_eq!(each(&page, "role"), ["-", "log"]);
+    assert_eq!(page.get_text("reason"), Some("limit"));
+    let next = page.get_text("next").unwrap().to_owned();
+    let rest = read(&[&run, "--cursor", &next, "--depth", "2"]);
+    assert!(each(&rest, "path").contains(&name("tmp/a.txt")), "{rest:?}");
+    assert_eq!(rest.get("has_more"), Some(&SdkValue::Bool(false)));
+    // a file window
+    let window = read(&[&name("tmp/a.txt"), "--offset", "1", "--length", "3"]);
+    assert_eq!(
+        json::print(&window),
+        r#"{"kind":"file","size":6,"offset":1,"content":"lph","binary":false,"next":4}"#
+    );
+
+    // refusals are JSON on stderr, exit 125
+    for (words, code) in [
+        (&["machine", "files", "nobody"][..], "NotFound"),
+        (
+            &["machine", "files", "native", "/etc/hosts"],
+            "InvalidInput",
+        ),
+        (&["machine", "files", "native", "/"], "InvalidInput"),
+        (
+            &["machine", "files", "native", &name("config/x")],
+            "InvalidInput",
+        ),
+        (&["machine", "files", "native", "relative"], "InvalidInput"),
+        (
+            &["machine", "files", "native", &name("nothing")],
+            "NotFound",
+        ),
+        (
+            &["machine", "files", "native", &run, "--limit", "0"],
             "InvalidInput",
         ),
     ] {

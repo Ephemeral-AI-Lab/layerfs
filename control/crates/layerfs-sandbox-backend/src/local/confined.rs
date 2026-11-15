@@ -1,10 +1,15 @@
 //! Reads of a folder tree that stay inside it (layerfs-project#178 security
 //! rules 1 to 3 and 8): a [`Base`] folder, opens of paths beneath it that
-//! never follow a link or leave it ([`Base::open_at`]), a `stat` that
-//! follows nothing ([`Opened::stat_of`]) and this process's mount table
-//! ([`mounts`]). An inspection read uses nothing else of the filesystem, so
-//! what a platform must supply is exactly these three, in
+//! never leave it ([`Base::open_at`], [`Base::enter`]), a `stat` that
+//! follows nothing ([`Opened::stat_of`]) and a mount table ([`mounts`],
+//! [`parse_mounts`]). An inspection read uses nothing else of the
+//! filesystem, so what a platform must supply is exactly these three, in
 //! `os/{linux,macos}/confined.rs` and `mounts.rs`.
+//!
+//! A [`View`] says how far an open goes: [`View::Beneath`] follows no link
+//! and enters no other mount; [`View::InRoot`] resolves links inside the
+//! base, as a process whose root the base is would, and ends only in the
+//! mounts its caller allowed ([`Base::cross`]).
 //!
 //! Every open is read-only and `O_NONBLOCK`, so a FIFO put in a file's
 //! place is never waited on, and is followed by a `stat` of the descriptor:
@@ -14,7 +19,7 @@ use super::os;
 use nix::dir::Dir;
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
-use nix::sys::stat::{FileStat, Mode, SFlag};
+use nix::sys::stat::{Mode, SFlag};
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::io::{self, Seek, SeekFrom};
@@ -26,8 +31,16 @@ use std::path::{Component, Path, PathBuf};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum View {
     /// Beneath the base and nowhere else: no symbolic link on the way or
-    /// at the end, no magic link, no other mount. A Sandbox's home.
+    /// at the end, no magic link, no other mount. A Sandbox's home, a
+    /// LayerFS folder of a machine.
     Beneath,
+    /// Inside the base as a root (a machine's `/`, a Sandbox's root): a
+    /// symbolic link on the way resolves inside it (an image's `/lib` is a
+    /// link to `usr/lib`), the last name is never followed, no magic link
+    /// is, and what is opened must be in a mount the caller allowed
+    /// ([`Base::cross`]), which its `statx` mount id says. macOS has no
+    /// such resolution: there this view opens as [`View::Beneath`] does.
+    InRoot,
 }
 
 /// What an entry is, from its `stat` alone.
@@ -66,13 +79,31 @@ pub struct Stat {
     pub links: u64,
     /// The device of the filesystem that holds it.
     pub device: u64,
+    /// The id of the mount it is in, as the mount table numbers mounts
+    /// (`statx` `STATX_MNT_ID`, Linux 5.8); none on macOS or an older
+    /// kernel.
+    pub mount: Option<u64>,
 }
 
 impl Stat {
-    // the fields of `stat` differ in width between Linux and macOS
+    /// Whether this and `entry`, an entry of this folder, are in two
+    /// mounts: by their mount ids where the kernel gives them, else by
+    /// their devices. (A device alone is not a mount on Linux: a file of an
+    /// overlay's lower layer, or a btrfs subvolume, has its own.)
+    pub fn apart_from(&self, entry: &Stat) -> bool {
+        match (self.mount, entry.mount) {
+            (Some(folder), Some(entry)) => folder != entry,
+            _ => self.device != entry.device,
+        }
+    }
+}
+
+impl Kind {
+    /// What the type bits of a `stat` mode say.
+    // the mode's width differs between Linux and macOS
     #[allow(clippy::unnecessary_cast, clippy::useless_conversion)]
-    pub(crate) fn of(found: &FileStat) -> Self {
-        let kind = match SFlag::from_bits_truncate(found.st_mode) & SFlag::S_IFMT {
+    pub(crate) fn of_mode(mode: u32) -> Self {
+        match SFlag::from_bits_truncate(mode as nix::libc::mode_t) & SFlag::S_IFMT {
             SFlag::S_IFREG => Kind::File,
             SFlag::S_IFDIR => Kind::Folder,
             SFlag::S_IFLNK => Kind::Symlink,
@@ -80,17 +111,6 @@ impl Stat {
             SFlag::S_IFSOCK => Kind::Socket,
             SFlag::S_IFCHR | SFlag::S_IFBLK => Kind::Device,
             _ => Kind::Other,
-        };
-        Self {
-            kind,
-            size: u64::try_from(found.st_size).unwrap_or(0),
-            mode: (found.st_mode as u32) & 0o7777,
-            mtime_ms: (found.st_mtime as i64)
-                .saturating_mul(1000)
-                .saturating_add((found.st_mtime_nsec as i64) / 1_000_000),
-            owner: found.st_uid,
-            links: found.st_nlink as u64,
-            device: found.st_dev as u64,
         }
     }
 }
@@ -105,6 +125,9 @@ pub enum Refused {
     /// The path leaves the base: a `..`, another mount, or a folder moved
     /// out while it was walked.
     Outside,
+    /// What was opened is in a mount the view does not read: one its
+    /// caller did not allow ([`Base::cross`]).
+    Mount,
     /// It is neither a regular file nor a folder.
     Special(Kind),
     /// This kernel cannot make a confined open; the reason.
@@ -134,20 +157,50 @@ impl From<Errno> for Refused {
 pub struct Base {
     folder: OwnedFd,
     view: View,
+    /// [`View::InRoot`]: the ids of the mounts an open may end in. The
+    /// base's own, and those its caller added.
+    crossed: Vec<u64>,
 }
 
 impl Base {
     /// Opens `folder` as a base for `view`. The path is the caller's own
-    /// (a folder LayerFS made); its last component is not followed when it
-    /// is a link.
+    /// (a folder LayerFS made, or `/`); its last component is not followed
+    /// when it is a link.
     pub fn open(folder: &Path, view: View) -> Result<Self, Refused> {
         let flags = OFlag::O_RDONLY
             | OFlag::O_DIRECTORY
             | OFlag::O_NOFOLLOW
             | OFlag::O_NONBLOCK
             | OFlag::O_CLOEXEC;
-        let folder = nix::fcntl::open(folder, flags, Mode::empty())?;
-        Ok(Self { folder, view })
+        Self::over(nix::fcntl::open(folder, flags, Mode::empty())?, view)
+    }
+
+    /// A base over the folder `folder` holds, for `view`. An
+    /// [`View::InRoot`] base starts with its own mount as the only one an
+    /// open may end in; a Linux kernel that names no mount id (before 5.8)
+    /// has no such view.
+    pub fn over(folder: OwnedFd, view: View) -> Result<Self, Refused> {
+        let own = os::confined::stat(folder.as_fd(), OsStr::new(""))?.mount;
+        if view == View::InRoot && own.is_none() && cfg!(target_os = "linux") {
+            return Err(Refused::Unsupported(NO_MOUNT_ID.to_owned()));
+        }
+        Ok(Self {
+            folder,
+            view,
+            crossed: own.into_iter().collect(),
+        })
+    }
+
+    /// The id of the mount the base is in, where the kernel gives one.
+    pub fn mount(&self) -> Option<u64> {
+        self.crossed.first().copied()
+    }
+
+    /// Lets opens of an [`View::InRoot`] base end in the mounts `mounts`
+    /// name by id too: the ones its caller read from the mount table of
+    /// the base's namespace and judged safe to read.
+    pub fn cross(&mut self, mounts: impl IntoIterator<Item = u64>) {
+        self.crossed.extend(mounts);
     }
 
     /// The base's real path, as the mount table names paths: read from
@@ -158,9 +211,24 @@ impl Base {
 
     /// Opens `relative` beneath the base, read-only: the base itself for an
     /// empty path. A path with a `..` or a root is [`Refused::Outside`]
-    /// before any system call. What is opened is `stat`ed through its
-    /// descriptor, and only a regular file or a folder is answered.
+    /// before any system call. Its last name is never followed. What is
+    /// opened is `stat`ed through its descriptor, and only a regular file
+    /// or a folder is answered; in an [`View::InRoot`] base, only one in a
+    /// mount its caller allowed.
     pub fn open_at(&self, relative: &Path) -> Result<Opened, Refused> {
+        self.opened(relative, false)
+    }
+
+    /// Opens the folder at `relative` as a path leads through it: as
+    /// [`Base::open_at`], but in an [`View::InRoot`] base a link at the
+    /// end is resolved inside the base like one on the way (`/lib` of a
+    /// merged-`/usr` image is entered as `usr/lib`). Anything but a folder
+    /// is [`Refused::Missing`].
+    pub fn enter(&self, relative: &Path) -> Result<Opened, Refused> {
+        self.opened(relative, true)
+    }
+
+    fn opened(&self, relative: &Path, through: bool) -> Result<Opened, Refused> {
         let mut clean = PathBuf::new();
         for component in relative.components() {
             match component {
@@ -169,17 +237,31 @@ impl Base {
                 _ => return Err(Refused::Outside),
             }
         }
-        let opened = os::confined::open(self.folder.as_fd(), &clean, self.view)?;
-        let stat = Stat::of(&os::confined::stat(opened.as_fd(), OsStr::new(""))?);
-        match stat.kind {
-            Kind::File | Kind::Folder => Ok(Opened {
-                file: File::from(opened),
-                stat,
-            }),
-            other => Err(Refused::Special(other)),
+        let opened = os::confined::open(self.folder.as_fd(), &clean, self.view, through)?;
+        let stat = os::confined::stat(opened.as_fd(), OsStr::new(""))?;
+        if self.view == View::InRoot && cfg!(target_os = "linux") {
+            match stat.mount {
+                None => return Err(Refused::Unsupported(NO_MOUNT_ID.to_owned())),
+                Some(mount) if !self.crossed.contains(&mount) => return Err(Refused::Mount),
+                Some(_) => {}
+            }
         }
+        match stat.kind {
+            Kind::Folder => {}
+            Kind::File if !through => {}
+            Kind::File => return Err(Refused::Missing),
+            other => return Err(Refused::Special(other)),
+        }
+        Ok(Opened {
+            file: File::from(opened),
+            stat,
+        })
     }
 }
+
+/// Why a Linux kernel before 5.8 has no [`View::InRoot`].
+const NO_MOUNT_ID: &str =
+    "this kernel's statx names no mount id (Linux 5.8), which a read across mounts needs";
 
 /// A regular file or a folder opened beneath a [`Base`].
 #[derive(Debug)]
@@ -196,7 +278,7 @@ impl Opened {
         if name.is_empty() {
             return Err(Refused::Missing);
         }
-        Ok(Stat::of(&os::confined::stat(self.file.as_fd(), name)?))
+        Ok(os::confined::stat(self.file.as_fd(), name)?)
     }
 
     /// What symbolic link `name` of this folder names; it is not followed.
@@ -229,9 +311,12 @@ impl Opened {
     }
 }
 
-/// One mount of this process's mount namespace.
+/// One mount of a mount namespace.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Mount {
+    /// Its id in the kernel's table, which a `statx` of what is in it
+    /// names (Linux); none on macOS.
+    pub id: Option<u64>,
     /// Where it is mounted.
     pub point: PathBuf,
     /// Its filesystem type (`ext4`, `fuse.layerfs`, `nfs`).
@@ -243,21 +328,42 @@ pub struct Mount {
 /// this list and never `stat`s it, so a mount whose server is stopped
 /// cannot hang the listing of the folder that holds it (rule 8).
 ///
-/// Linux reads `/proc/self/mountinfo`. macOS has no table here yet: its
-/// table is `getfsstat(MNT_NOWAIT)`, which no dependency of this crate
-/// wraps safely, so this answers no mounts there and a walk tells a mount
-/// point only by its device, after a `stat` of it.
+/// Linux reads `/proc/self/mountinfo`. macOS runs `/sbin/mount` once, for
+/// at most half a second (`getfsstat(MNT_NOWAIT)` is the system call for
+/// it, and no dependency of this crate wraps it without `unsafe`); a run
+/// that fails or does not end in time answers no mounts, and a walk then
+/// tells a mount point only by its device, after a `stat` of it.
 pub fn mounts() -> io::Result<Vec<Mount>> {
     #[cfg(target_os = "linux")]
     {
-        let table = os::mounts::table(Path::new("/proc/self/mountinfo"))?;
-        Ok(table
-            .into_iter()
-            .map(|(point, fs)| Mount { point, fs })
-            .collect())
+        Ok(parse_mounts(&std::fs::read_to_string(
+            "/proc/self/mountinfo",
+        )?))
     }
     #[cfg(target_os = "macos")]
     {
-        Ok(Vec::new())
+        Ok(os::mount_table()
+            .map(|table| parse_mounts(&table))
+            .unwrap_or_default())
     }
+}
+
+/// The mounts a mount table's text names, in table order: a `mountinfo`
+/// file on Linux (this process's, or another process's for its
+/// namespace), the output of `/sbin/mount` on macOS. Where several mounts
+/// are at one point, the last is the one a path reaches.
+pub fn parse_mounts(table: &str) -> Vec<Mount> {
+    #[cfg(target_os = "linux")]
+    let found = (os::mounts::table(table).into_iter()).map(|(id, point, fs)| Mount {
+        id: Some(id),
+        point,
+        fs,
+    });
+    #[cfg(target_os = "macos")]
+    let found = (table.lines().filter_map(os::mount_line)).map(|(point, fs)| Mount {
+        id: None,
+        point,
+        fs,
+    });
+    found.collect()
 }

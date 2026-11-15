@@ -287,7 +287,7 @@ removed in between. `reason` is `limit` (the page is full) or `deadline`
 | --- | --- |
 | `path` | the entry's absolute path, usable as `path` or `cursor` |
 | `depth` | 1 for an entry of the folder asked for, 2 for an entry of one of its folders |
-| `kind` | `file`; `folder`; `symlink` (with `target`, what it names; never followed or entered); `mount` (another filesystem is mounted there; with `fs`, its type, when the mount table gave it; never `stat`ed where the table names it, never entered); `restricted` (LayerFS keeps it private: listed, never entered or read); `other` (a FIFO, socket or device). `system` and `unreadable` are kinds of the views not built yet |
+| `kind` | `file`; `folder`; `symlink` (with `target`, what it names; never followed or entered); `mount` (another filesystem is mounted there; with `fs`, its type, when the mount table gave it; never `stat`ed where the table names it, never entered); `restricted` (LayerFS keeps it private: listed, never entered or read); `other` (a FIFO, socket or device). `system` and `unreadable` are kinds of a machine's `/` ([`machine.files`](machine.md#machinefiles)) |
 | `size` | bytes, for a regular file (a `restricted` one included); else null |
 | `mode` | the permission bits as a number (`0o644` is 420); null for a `mount` the table named |
 | `mtime` | last modification, milliseconds since 1970; null as `mode` |

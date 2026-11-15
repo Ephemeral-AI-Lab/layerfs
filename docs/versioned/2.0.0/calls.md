@@ -435,7 +435,7 @@ form.
   Routes.
 - Not run for this manual.
 
-### `machine` (13)
+### `machine` (14)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -447,6 +447,7 @@ form.
 | `prune` | `name`, `image`? | `unused` | removes one unpacked image, or with `unused` every one no Sandbox uses but the machine's default: `{removed, freed}` (`freed` measured on the filesystem); an image in use is `InUse` |
 | `status` | `name` | — | a machine's live state, free disk and tool version; `op` while a create or remove holds it (#536 H6) |
 | `stats` | `machine` | — | what a machine has and uses now: processors, memory and data disk, each sqlite Store's size, how many of its Sandboxes have a running daemon (#164). For a UI that polls: it writes no call-log line |
+| `files` | `machine`, `[path]` | `depth`, `cursor`, `limit`, `offset`, `length` (int) | a machine's LayerFS folders by role, one page of a folder, or one window of a file (#178). For a UI that shows a tree: it writes no call-log line |
 | `start` | `name` | — | starts a stopped machine and its worker and waits until ready; a running one, and `native`, answer at once (#535 P1) |
 | `stop` | `name` | — | stops a machine's worker and, where it has one, its VM; disks stay; `InUse` while Sandboxes run on it (#535 P1) |
 | `create` | `name`, `platform` | `cpus`, `memory` (size), `disk` (size), `image` | creates an enabled VM machine (`apple-container`, `lima`) |
@@ -493,6 +494,34 @@ $ layerfs machine status native
   ```text
   $ layerfs machine stats native
   {"machine":"native","platform":"native","observed_at":1794776707857,"worker":null,"resources":{"cpus":14,"memory_total":38654705664,"memory_used":31340068864,"disk_total":994662584320,"disk_used":641705943040,"disk_free":352956641280,"scope":"host"},"data_disk":{"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs","volume":null,"inodes_free":3446842200},"stores":[{"name":"shop","bytes":217088,"allocated":217088}],"sandboxes":{"recorded":12,"live":10},"complete":true}
+  ```
+- `files` reads what is on a machine (#178); its options, pages and file
+  windows are those of [`sandbox files`](#sandbox-files), and the whole call
+  is in the
+  [architecture guide](../../architecture/api/sdk/machine.md#machinefiles).
+  - With no path it answers the machine's roots, each a folder with a
+    `role`, in the order a client shows them: `data` (the worker's root
+    `/layerfs/data`, with `free_bytes`), `stores`, `sandbox_records`,
+    `run_folders`, `images`, `staging`, `logs`, then `state`, `bundle`,
+    `image`, and last `/` with role `machine`. Only folders that are there
+    are listed. On `native` the roots are the home's `store`, `sandbox`,
+    `machine/native/run` and `log`, and there is no `/`: a path outside
+    them is `InvalidInput`.
+  - In a LayerFS folder no link is followed and no mount entered, and what
+    LayerFS keeps private is `restricted`: listed with its size, never
+    read (`store.sqlite*`, a run folder's `config/` and `overlay/`,
+    `control.json`, `worker.json`, locks and leases, the worker's
+    `secret`). A run folder's `workspaces/` entries are `mount`, with the
+    Workspace's id, and are never touched.
+  - From `/`, `/proc`, `/sys`, `/dev` and `/run` are `system`; a mount is
+    entered only when it is a local disk or memory (`ext4`, `xfs`, `btrfs`,
+    `zfs`, `f2fs`, `overlay`, `tmpfs`), else it is `mount` with its `fs`;
+    and only what every user of the machine may read is opened, the rest
+    is `unreadable` (`/etc/shadow`, `/root`). A link on the way resolves
+    inside the machine (`/lib/...` opens on a merged-`/usr` system).
+  ```text
+  $ layerfs machine files native
+  {"kind":"folder","entries":[{"path":"/Users/me/.layerfs/store","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"stores"},{"path":"/Users/me/.layerfs/sandbox","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"sandbox_records"},{"path":"/Users/me/.layerfs/machine/native/run","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"run_folders"},{"path":"/Users/me/.layerfs/log","depth":1,"kind":"folder","size":null,"mode":493,"mtime":1794781376540,"role":"logs"}],"next":null,"has_more":false}
   ```
 - `start` and `stop` answer the machine's summary as `get` does. They are
   the only lifecycle calls (#535 D11): no other call starts a machine, and
