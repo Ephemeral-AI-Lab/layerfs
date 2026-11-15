@@ -494,6 +494,7 @@ checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 [[package]]
 name = "fuser"
 version = "0.18.0"
+source = "git+https://github.com/Ephemeral-AI-Lab/fuser.git?rev=7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4#7393bca050fcbd0ed2a03f7e79bec0f8bd9755c4"
 dependencies = [
  "bitflags",
  "libc",

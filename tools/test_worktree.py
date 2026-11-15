@@ -28,7 +28,6 @@ class WorktreeTests(unittest.TestCase):
         self.repo.mkdir()
         for folder in (
             "core/crates/example/src",
-            "engine/vendor",
             "engine/crates/example/src",
             "api/crates/layerfs-api/src",
             ".cargo",
