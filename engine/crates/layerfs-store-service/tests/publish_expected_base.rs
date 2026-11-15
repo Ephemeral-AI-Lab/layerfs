@@ -323,3 +323,154 @@ fn a_branch_publishes_again_over_its_own_layer() {
     assert!(names.contains(&"/work.txt".to_owned()), "{names:?}");
     fixture.cleanup();
 }
+
+/// main's published Layers, newest first.
+fn main_layers(fixture: &Fixture) -> Vec<String> {
+    let page = fixture.call(
+        "branch.list_commits",
+        vec![
+            ("branch", SdkValue::text("main")),
+            ("pageSize", SdkValue::Int(100)),
+        ],
+    );
+    support::items(&page)
+        .iter()
+        .map(|item| item.get_text("id").expect("a Layer id").to_owned())
+        .collect()
+}
+
+#[test]
+fn two_threads_publishing_one_expected_base_race_cleanly() {
+    use std::sync::Barrier;
+
+    // Each round forks two Branches from main, then both threads publish with
+    // main's head pinned as `expectedBase`. Whichever thread reaches the
+    // Store's write transaction first adds the only Layer; the other finds the
+    // stack head already moved, by the compare-and-swap in `add_layer` (or by
+    // the read above it) and is refused `HeadMoved`. A barrier starts the two
+    // calls together; no sleep orders them, and either thread may win.
+    const ROUNDS: usize = 20;
+    let fixture = Fixture::new("publish-two-threads", |source| {
+        std::fs::write(source.join("seed.txt"), "seed\n").unwrap();
+        1
+    });
+    for round in 0..ROUNDS {
+        let a = format!("race-a-{round}");
+        let b = format!("race-b-{round}");
+        let a_file = format!("/a-{round}.txt");
+        let b_file = format!("/b-{round}.txt");
+        let a_text = format!("A {round}\n");
+        let b_text = format!("B {round}\n");
+        let base = main_head(&fixture);
+        fixture.fork(&a);
+        fixture.fork(&b);
+        fixture.apply(&a, vec![write(&a_file, a_text.clone())]);
+        fixture.apply(&b, vec![write(&b_file, b_text.clone())]);
+        let a_head = branch_field(&fixture, &a, "head").expect("race-a's head");
+        let b_head = branch_field(&fixture, &b, "head").expect("race-b's head");
+        let layers_before = main_layers(&fixture);
+
+        let barrier = Barrier::new(2);
+        let publish = |branch: &str, head: &str| {
+            fixture.try_call(
+                "branch.publish",
+                vec![
+                    ("branch", SdkValue::text(branch)),
+                    ("expectedBase", SdkValue::text(base.as_str())),
+                    ("expectedHead", SdkValue::text(head)),
+                ],
+            )
+        };
+        let (a_result, b_result) = std::thread::scope(|scope| {
+            let a_thread = scope.spawn(|| {
+                barrier.wait();
+                publish(&a, &a_head)
+            });
+            let b_thread = scope.spawn(|| {
+                barrier.wait();
+                publish(&b, &b_head)
+            });
+            (a_thread.join().unwrap(), b_thread.join().unwrap())
+        });
+
+        // Exactly one publication wins; the other is refused before any write.
+        let a_won = a_result.is_ok();
+        assert!(
+            a_won ^ b_result.is_ok(),
+            "round {round}: exactly one publish must win: a={a_result:?} b={b_result:?}"
+        );
+        let (winner_answer, loser_refusal) = if a_won {
+            (a_result.as_ref().unwrap(), b_result.as_ref().unwrap_err())
+        } else {
+            (b_result.as_ref().unwrap(), a_result.as_ref().unwrap_err())
+        };
+        let (winner_file, winner_text, loser_file, loser_head, loser_name) = if a_won {
+            (&a_file, &a_text, &b_file, &b_head, &b)
+        } else {
+            (&b_file, &b_text, &a_file, &a_head, &a)
+        };
+
+        assert_eq!(
+            winner_answer.get_text("kind"),
+            Some("Added"),
+            "round {round}"
+        );
+        assert_eq!(
+            winner_answer.get_text("basedOn"),
+            Some(base.as_str()),
+            "round {round}"
+        );
+        assert_eq!(
+            winner_answer.get_int("overwroteCount"),
+            Some(0),
+            "round {round}"
+        );
+        let winner_layer = published_field(winner_answer, "id");
+
+        assert_eq!(loser_refusal.code, "HeadMoved", "round {round}");
+        assert_eq!(
+            loser_refusal.detail.get_text("expectedBase"),
+            Some(base.as_str()),
+            "round {round}"
+        );
+        assert_eq!(
+            loser_refusal.detail.get_text("actualBase"),
+            Some(winner_layer.as_str()),
+            "round {round}"
+        );
+
+        // No write from the refused thread: main moved once, to the winner's
+        // Layer, and has exactly one new Layer.
+        assert_eq!(main_head(&fixture), winner_layer, "round {round}");
+        let layers_after = main_layers(&fixture);
+        assert_eq!(layers_after.len(), layers_before.len() + 1, "round {round}");
+        assert_eq!(layers_after[0], winner_layer, "round {round}");
+        assert_eq!(
+            &layers_after[1..],
+            &layers_before[..],
+            "round {round}: main gained exactly the winner's Layer"
+        );
+
+        // The winner's file is in main; the loser's is not, and its Branch
+        // did not move.
+        let read = fixture.call(
+            "fs.read",
+            vec![
+                ("branch", SdkValue::text("main")),
+                ("path", SdkValue::text(winner_file.as_str())),
+            ],
+        );
+        assert_eq!(read.get_text("text"), Some(winner_text.as_str()));
+        let names = main_paths(&fixture);
+        assert!(
+            !names.iter().any(|path| path == loser_file),
+            "round {round}: the refused Branch's file reached main: {names:?}"
+        );
+        assert_eq!(
+            branch_field(&fixture, loser_name, "head").as_deref(),
+            Some(loser_head.as_str()),
+            "round {round}: the refused Branch did not move"
+        );
+    }
+    fixture.cleanup();
+}

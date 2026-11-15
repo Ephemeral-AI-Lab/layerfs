@@ -2,7 +2,7 @@
 //! the same names and order the call's args map gave before, an absent
 //! option not sent.
 use layerfs_bridge::control::SdkValue;
-use layerfs_store::calls::branch::{BranchDiff, BranchFork, BranchMerge};
+use layerfs_store::calls::branch::{BranchDiff, BranchFork, BranchMerge, BranchPublish};
 use layerfs_store::calls::file::{FileApply, FileDiff, FileRead, FileWrite, Side};
 use layerfs_store::calls::{Change, Content, DiffOptions, Page, StoreOp};
 
@@ -263,5 +263,39 @@ fn saved_query_selectors_and_numbered_pages_are_forwarded_without_resolving_head
             "pageSize",
             "page"
         ]
+    );
+}
+
+#[test]
+fn a_publish_sends_its_expected_base_head_and_force() {
+    // The API layer's snake_case options reach the Store as the camelCase
+    // names its method reads (#691); an absent expectation is not sent.
+    let publish = BranchPublish {
+        branch: t("work"),
+        commit: Some(t("cc")),
+        expected_base: Some(t("aa")),
+        expected_head: Some(t("bb")),
+        force: Some(false),
+        ..BranchPublish::default()
+    };
+    let op = StoreOp::Publish(&publish);
+    assert_eq!(op.method(), "branch.publish");
+    assert_eq!(
+        op.engine_args(),
+        vec![
+            (t("branch"), SdkValue::text("work")),
+            (t("commit"), SdkValue::text("cc")),
+            (t("expectedBase"), SdkValue::text("aa")),
+            (t("expectedHead"), SdkValue::text("bb")),
+            (t("force"), SdkValue::Bool(false)),
+        ]
+    );
+    let plain = BranchPublish {
+        branch: t("work"),
+        ..BranchPublish::default()
+    };
+    assert_eq!(
+        StoreOp::Publish(&plain).engine_args(),
+        vec![(t("branch"), SdkValue::text("work"))]
     );
 }
