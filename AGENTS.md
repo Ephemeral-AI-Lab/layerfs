@@ -514,3 +514,6 @@ direction is `core < engine < control < api`, including dev dependencies and
 test includes; nothing in engine depends on control. Workstream names do not change this layering.
 After rebasing across #463, update each selected worktree's own target registration and prepare again
 for the root `target/` path; never migrate another worktree's resource record.
+After rebasing across #686 (fuser from its Git fork), or any later fuser `rev` change, run
+`tools/worktree.py prepare` again for each platform before offline builds; a Cargo
+home prepared earlier has no checkout of that revision and fails `--offline`.

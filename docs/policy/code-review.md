@@ -56,6 +56,10 @@ The owner approves a PR, at any tier, when it:
   `.config/nextest.toml`, or a guard
   tool (`tools/{check_product_boundary,production_loc,ci_tests}.py`);
 - adds a dependency;
+- changes the fuser source: its `git` or `rev` in
+  `engine/crates/layerfs-fuse/Cargo.toml` or its `Cargo.lock` entry. The new
+  revision's fork diff is read in full and a native FUSE mount test runs on
+  Linux, because the fork's code is reviewed nowhere in this repository;
 - adds a loop around a fallible call, a busy handler, a resend or an
   error-driven fallback (normally refused as a retry);
 - weakens a guard, an allowlist, a pin or a test lane;

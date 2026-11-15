@@ -377,6 +377,58 @@ def dependency_violations(source):
     return found
 
 
+# fuser comes from the owner-selected fork at one full revision (#686). Changing
+# that revision needs owner approval (docs/policy/code-review.md); this check
+# only refuses the ways a build could silently take other fuser source.
+FUSER_GIT = "https://github.com/Ephemeral-AI-Lab/fuser.git"
+FUSER_SOURCE = f"fuser must come from {FUSER_GIT} at a full 40-hex `rev`"
+
+
+def is_fuser(alias, specification):
+    """By dependency alias, `package` rename, or a `[replace]` key `fuser:<version>`."""
+    name = specification.get("package", alias) if isinstance(specification, dict) else alias
+    return name.split(":", 1)[0] == "fuser"
+
+
+def fuser_specifications(manifest):
+    kinds = ("dependencies", "build-dependencies", "dev-dependencies")
+    tables = [manifest, *manifest.get("target", {}).values()]
+    return [
+        spec
+        for table in tables
+        for kind in kinds
+        for alias, spec in table.get(kind, {}).items()
+        if is_fuser(alias, spec)
+    ]
+
+
+def fuser_source_violations(manifests, lock, config):
+    """`manifests` maps a relative path to its parsed Cargo.toml; `config` is the parsed .cargo/config.toml or {}."""
+    found, revisions = [], set()
+    for name, document in sorted({**manifests, ".cargo/config.toml": config}.items()):
+        overrides = [document.get("replace", {}), *document.get("patch", {}).values()]
+        if any(is_fuser(alias, spec) for table in overrides for alias, spec in table.items()):
+            found.append((name, "fuser [patch]/[replace] override"))
+        for spec in fuser_specifications(document):
+            pinned = (
+                isinstance(spec, dict) and spec.get("git") == FUSER_GIT and not {"branch", "tag", "path"} & set(spec)
+            )
+            if not pinned or not re.fullmatch(r"[0-9a-f]{40}", spec.get("rev", "")):
+                found.append((name, FUSER_SOURCE))
+            else:
+                revisions.add(spec["rev"])
+    sources = config.get("source", {}).items()
+    if config.get("paths") or any(FUSER_GIT.removesuffix(".git") in f"{key} {value}" for key, value in sources):
+        found.append((".cargo/config.toml", "Cargo path or source override can replace fuser"))
+    if len(revisions) > 1:
+        found.append(("Cargo.toml", f"fuser manifests disagree on `rev`: {sorted(revisions)}"))
+    allowed = {f"git+{FUSER_GIT}?rev={rev}#{rev}" for rev in revisions}
+    for package in lock.get("package", []):
+        if package.get("name") == "fuser" and package.get("source") not in allowed:
+            found.append(("Cargo.lock", f"locked fuser source {package.get('source')!r} is not the manifest's pin"))
+    return found
+
+
 # #535 D11 (owner, 2026-11-03): machine lifecycle is manual. No worker or VM
 # idle stop, Sandbox daemon idle close or on-demand machine start returns;
 # `machine.start` and `machine.stop` are the only lifecycle entry points.
@@ -582,6 +634,14 @@ def main():
         for line, reason in dependency_violations(manifest.read_text()):
             print(f"{manifest.relative_to(root)}:{line}: {reason}")
             failures += 1
+    parsed = {
+        str(path.relative_to(root)): tomllib.loads(path.read_text()) for path in manifests | {root / "Cargo.toml"}
+    }
+    config = root / ".cargo/config.toml"
+    config = tomllib.loads(config.read_text()) if config.is_file() else {}
+    for name, reason in fuser_source_violations(parsed, tomllib.loads((root / "Cargo.lock").read_text()), config):
+        print(f"{name}:1: {reason}")
+        failures += 1
     for package in packages:
         for path in sorted((package / "tests").rglob("*.rs")):
             for line, reason in test_path_violations(path, path.read_text(), packages):

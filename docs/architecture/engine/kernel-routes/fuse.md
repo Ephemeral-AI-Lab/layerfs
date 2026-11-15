@@ -150,7 +150,10 @@ package version 0.18.0. The dependency is declared directly in
 [its manifest](../../../../engine/crates/layerfs-fuse/Cargo.toml); the
 [root lockfile](../../../../Cargo.lock) records that Git source and commit.
 There is no local vendor, patch application or crates.io override. The branch
-name is not the dependency identity and no published package is required.
+name is not the dependency identity and no published package is required. The
+fork's tag [`v0.18.0-layerfs.1`](https://github.com/Ephemeral-AI-Lab/fuser/tree/v0.18.0-layerfs.1)
+keeps the revision reachable; fork rulesets refuse branch force-pushes and tag
+moves or deletions.
 
 The fork owns three changes independently of LayerFS:
 
@@ -166,8 +169,15 @@ The smaller receive buffer follows the negotiated write limit, not a total
 file or Workspace capacity limit.
 
 The fork's own repository maintains its code and tests. LayerFS uses ordinary
-locked dependency builds and its integration tests; no local patch/source checker
-is required. A revision change updates the manifest, lock and this page together.
+locked dependency builds and its integration tests. The boundary guard
+([`check_product_boundary.py`](../../../../tools/check_product_boundary.py))
+refuses any fuser source other than the fork at a full `rev`, a fuser
+`[patch]`, `[replace]` or Cargo `paths` override, and a lock entry that differs
+from the manifest; it does not check the fork's code. A revision change updates
+the manifest, lock and this page together, is owner-approved with a native
+mount test ([code review policy](../../../policy/code-review.md)), and needs a
+fresh `prepare` before offline worktree builds, since a prepared Cargo home holds
+only the revisions it fetched.
 
 The earlier local-patch mechanism and its source/verification records remain
 [available at the deletion-parent snapshot](https://github.com/Ephemeral-AI-Lab/layerfs/tree/8cfb6e273470d0bb2a4ec5a9256fcf4972441eb5/engine/patches/fuser-0.18.0).
