@@ -8,7 +8,7 @@ supersessions govern; a closed handoff or historical receipt is not a new assign
 
 ## Product scope and current workstreams
 
-**Implement both workstreams through the core, engine and API layers.** The v0.1.6
+**Implement both workstreams through the core, engine, control and API layers.** The v0.1.6
 reference implementation that lived under root `crates/` was retired on
 2026-10-10 (R9c) and is absent at HEAD. It was never a dependency, source
 include or fallback for core, and must not return as a second product. Its last
@@ -198,9 +198,10 @@ session's own thread checkpoints the WAL off the commit path (owner approval,
   G3):** a machine holds any number of sqlite Stores, and every PostgreSQL
   Store is usable from it. A sqlite Store is on exactly one machine; a
   PostgreSQL Store's calls still run in the caller's process, and it is
-  usable from every machine where the support table (`layerfs-platform`
-  `support.rs`, `control/SUPPORT.json`) marks the platform supported;
-  elsewhere it is refused with the table's reason. The password is resolved only in the
+  usable from the machines it is attached to (`store.attach`, each checked
+  from that machine; supersedes #535 G3), where the support table
+  (`layerfs-platform` `support.rs`, `control/SUPPORT.json`) marks the
+  platform supported; elsewhere it is refused with the table's reason. The password is resolved only in the
   caller and travels only in one worker request and the Sandbox's private
   daemon setup file. This supersedes #533 O3/G13 ("VMs and ssh later").
   See [#533](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/README.md), [#535](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/535/README.md)
@@ -216,8 +217,9 @@ session's own thread checkpoints the WAL off the commit path (owner approval,
   Docker, Lima and Apple Container retain their existing support rules. See
   the [restriction contract](docs/architecture/control/machines/platforms.md#removed-platforms-platform_policyrs).
 - **One global database, one writer, short holds (owner decision 2026-10-18).**
-  All committed state lives in one SQLite Store file; no sharding, second
-  database, concurrent-writer engine or objects outside it. Writes go one at a
+  All of a Store's committed state lives in one database: one SQLite file,
+  or one PostgreSQL database for a PostgreSQL Store (#506); no sharding,
+  second database, concurrent-writer engine or objects outside it. Writes go one at a
   time: SQLite's single-writer rule, the Linux directory lock across writer
   processes, the in-process admission queue and the publication lane (head
   check, merge, publish as one step). These locks stay; they replace `Busy`
@@ -386,7 +388,7 @@ remain binding; moving them out of this file does not weaken them.
   no `fsync`/`fdatasync`/`sync_data`/`sync_all` on disposable Workspace backing,
   and no space is reserved ahead of use on it.
   Memory hints are hints, not evidence of resident bounds.
-- New core/engine/API production files obey the 999-line ceiling and 200-line
+- New core/engine/control/API production files obey the 999-line ceiling and 200-line
   declaration/delegation ceiling for `lib.rs`/`mod.rs`. Product-only source,
   external tests and guard coverage are detailed in the layer guides.
 - Format changed Python tools with Ruff; `ruff.toml` names the pinned version,

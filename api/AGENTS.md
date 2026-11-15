@@ -21,7 +21,9 @@ public surface:
   `node/layerfs.node` by `scripts/build-native.mjs`; the package loads that
   file or the one `LAYERFS_NATIVE` names, nothing else.
 - `crates/layerfs-python`: the PyO3 module `layerfs._native`.
-- `node/`: the one published JavaScript package, `layerfs`.
+- `node/`: the SDK for Node, `@layerfs/node`.
+- `cli/`: the `layerfs` command's package, `@layerfs/cli`.
+- `mcp/`: the MCP server over stdio, `@layerfs/mcp` (private).
 - `python/`: the Python package `layerfs`.
 
 The packages are thin shells over the table: each function is one library

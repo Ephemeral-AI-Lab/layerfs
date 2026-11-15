@@ -8,8 +8,8 @@ product mental model or campaign-specific benchmark procedures.
 
 ## Scope and ownership
 
-- Engine owns Bridge, daemon, FUSE, NFS, Overlay, Persistence, Project,
-  Persistence, Project, Store service and Workspace. Core owns content,
+- Engine owns Bridge, daemon, FUSE, NFS, mount ports, Overlay, Persistence,
+  Project, Store service and Workspace. Core owns content,
   history, storage and telemetry. The library `layerfs-api` and its front ends
   (`layerfs-cli`, `layerfs-node`, `layerfs-python`) are API crates under
   `api/crates`; see the [API guide](../api/AGENTS.md). No engine crate may
@@ -242,13 +242,12 @@ executors, interactive shells and ordinary Sandbox execution.
 Sandbox setup or the external executor establishes command identity, mount
 visibility and protection of Store, Overlay and daemon credentials. Ordinary
 runtime execution owns standard I/O, exit status and caller-requested cancellation.
-SDK public organization is the eleven operations documented in
-[the implemented SDK surface](../docs/general/sdk.md), with operation files under
-[layerfs-api/src](../api/crates/layerfs-api/src). Project offers init/fork/
-branches/commits; Sandbox offers create/close; Workspace offers mount/exec/
-commit/status/unmount. Shared control/recovery/diagnostic plumbing lives in
-base/ and the hidden internal module. Optional WorkspaceApi.exec selects the
-mounted directory and delegates the existing Sandbox launcher;
+The SDK is the one call table in
+[layerfs-api/src](../api/crates/layerfs-api/src), one file per call under its
+family folder ([the calls](../docs/versioned/2.0.0/calls.md)); see the
+[API guide](../api/AGENTS.md). `workspace.exec` checks the mounted directory
+and runs the command through the Sandbox runtime
+([where each call runs](../docs/architecture/control/README.md#where-each-call-runs));
 the daemon has no exec/supervisor, launcher mode, per-Exec cgroups, command
 registration or custom Exec stream/status/cancellation protocol.
 
@@ -288,7 +287,7 @@ Moving blocking OwnerClient calls behind a port does not establish deferred serv
 
 ### Shared construction and completion boundaries
 
-Source checked at `5747f0119`, guidance updated 2026-10-08. Namespace Init and
+Guidance updated 2026-10-08; names and paths rechecked 2026-11-16. Namespace Init and
 daemon construction share Content, Storage and Persistence through their public
 ports. Their input adapters and publication lifecycles have distinct owners:
 
@@ -332,8 +331,10 @@ See [captured-file construction](crates/layerfs-workspace/src/construction/captu
 
 Keep completion boundaries explicit: `Save::finish()` completes object storage;
 Init then initializes history, while Commit calls `commit_branch` against its
-expected head before local base installation. SDK Init subsequently calls `SqliteHandles::seal()` to
-checkpoint, close and hand off one Store file. The macOS allocation correction
+expected head before local base installation. Init into an existing Store is a
+live add through the Store's own writer (2.0, #533); only the Init that creates
+a Store file calls `SqliteHandles::seal()` to checkpoint, close and hand off
+that file. The macOS allocation correction
 runs only at this sole-owner Store seal; it is not a Content/pack format change
 or live-daemon maintenance. Linux daemons keep their shared Store open. The
 [seal proof](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/SEAL-ALLOCATION-STRIDE1-20261007.md) retains its exact
@@ -356,8 +357,8 @@ diagnostic groups, the scaling checks and the current candidate list.
 
 ## Product source and external verification
 
-The Rust `src/` directories in core, engine and api contain production code
-exclusively, including
+The Rust `src/` directories in core, engine, control and api contain
+production code exclusively, including
 included/generated implementation. Runtime SQL and other shipped implementation
 have the same ownership rules.
 
@@ -369,7 +370,7 @@ remain legitimate. Put API documentation with the API; examples outside src.
 
 | Content | Location |
 | --- | --- |
-| Product implementation | Core/engine crate `src/`, API Rust/JavaScript `src/` and required runtime source |
+| Product implementation | Core/engine/control crate `src/`, API Rust/JavaScript/Python `src/` and required runtime source |
 | Public-API tests and their helpers/fixtures | Package `tests/` |
 | Runnable examples | Package `examples/` |
 | Package benchmarks | Package `benches/` |
@@ -426,7 +427,10 @@ fixtures, examples and tools do not contribute to production LOC.
   application invocation may execute it. Select Disposable explicitly rather than
   relying on a default argument. Disposable claims process-crash survival only.
   Open verifies WAL and never converts an
-  existing Store. Select profile/layout before open; Postgres stays unavailable.
+  existing Store. Select profile/layout before open. A PostgreSQL Store (#506)
+  has no profile; its write setting is `synchronous_commit` (default `off`),
+  recorded by `store.connect`; see
+  [PostgreSQL](../docs/architecture/engine/store/postgresql.md).
   Owner supersession2026-10-07 keeps WAL throughout Init and Commit; no private
   MEMORY import or journal promotion remains. Owner approval, 2026-11-07:
   Disposable runs `wal_autocheckpoint=0`; each writable Disposable session's
