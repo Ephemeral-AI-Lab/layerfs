@@ -233,7 +233,7 @@ impl Sandbox {
     ) -> Result<ExecExit, Box<WireFailure>> {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::Windows(stub) => crate::backend::host_process::exec_windows::run(&stub.directory, request),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.run(request, stdout, stderr),
             #[cfg(target_os = "linux")]
@@ -252,7 +252,7 @@ impl Sandbox {
     ) -> Result<ExecExit, Box<WireFailure>> {
         match self {
             #[cfg(windows)]
-            _ => unreachable!("the Windows stub face has no runtime arm"),
+            Self::Windows(stub) => crate::backend::host_process::exec_windows::run(&stub.directory, request),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.run_in(request, Some(slot), stdout, stderr),
             #[cfg(target_os = "linux")]

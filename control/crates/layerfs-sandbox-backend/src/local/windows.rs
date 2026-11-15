@@ -44,6 +44,11 @@ impl Local {
         Ok(Self { root: root.to_owned(), name: None })
     }
 
+    /// The runtime root.
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
+    }
+
     /// Names this Sandbox under the root.
     pub fn naming(mut self, name: &str) -> Result<Self, RuntimeError> {
         if name.is_empty() || name.contains('/') || name.contains('\\') || name.contains(':') {

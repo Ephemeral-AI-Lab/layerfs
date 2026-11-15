@@ -18,9 +18,11 @@ mod adapter;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod exec;
 #[cfg(target_os = "windows")]
-mod exec_windows;
+pub(crate) mod exec_windows;
 #[cfg(target_os = "macos")]
 mod provider;
+#[cfg(target_os = "windows")]
+pub(crate) mod provider_windows;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) mod sandbox;
 pub(crate) use adapter::ADAPTER;
