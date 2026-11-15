@@ -23,7 +23,6 @@ use layerfs_home::helpers;
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::Unreached;
-use layerfs_store::lease;
 use layerfs_store::resolve::{self, Target};
 use std::net::SocketAddr;
 use std::path::Path;
@@ -320,15 +319,16 @@ pub fn capacity(home: &Path, record: &SandboxRecord) -> Outcome {
     served(home, record, Call::Capacity)
 }
 
-/// Host `call` on forwarded Sandbox `record` in this process, under the
-/// Store's lease (the Sandbox half of `workspace::direct::call`).
+/// Host `call` on forwarded Sandbox `record` in this process (the Sandbox
+/// half of `workspace::direct::call`). Both calls it serves are
+/// `sandbox.get`'s reads, which ask only the daemon: it takes no Store
+/// lease, opens no Store and writes nothing (layerfs-project#181).
 fn served(home: &Path, record: &SandboxRecord, call: Call) -> Outcome {
     let home = home.to_path_buf();
     if let Some(machine) = layerfs_machine::record::MachineRecord::read(&home, record.machine())? {
         machine.not_held()?;
     }
     let target = resolve::target(&home, record.project().unwrap_or(""))?;
-    let _lease = lease::hold(&home, &target.store)?;
     dispatch::call(host(&home, record, &target, Message::Absent), call)
 }
 

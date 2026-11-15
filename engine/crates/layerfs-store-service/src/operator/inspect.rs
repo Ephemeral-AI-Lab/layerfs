@@ -9,6 +9,10 @@
 //! says older Layers were left out. `version` is a digest of the answer, so a
 //! caller polling with `since` gets `unchanged` until something it shows
 //! changes: a Commit, merge, publish, fork, mount, unmount or Workspace write.
+//!
+//! A daemon asked with `history: false` answers the Workspace half alone
+//! ([`workspaces`]): `{ kind, version, workspaces }`, for a caller that polls
+//! it and shows no history (`sandbox.get`, layerfs-project#181).
 use crate::history::lookup::{self as args, commit_value, hex, layer_value, Answer};
 use crate::history::MAIN;
 use crate::store::Store;
@@ -16,6 +20,7 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_history::{
     BranchId, BranchSnapshot, CommitHistoryRequest, CommitId, LayerId, MAXIMUM_PAGE_RECORDS,
 };
+use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashSet};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
@@ -258,19 +263,51 @@ pub fn snapshot(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) ->
         ("moreLayers".to_owned(), SdkValue::Bool(more_layers)),
         ("workspaces".to_owned(), SdkValue::List(workspaces)),
     ];
+    Ok(versioned(args, body))
+}
+
+/// The Workspace half alone, for a caller that asked with `history: false`:
+/// this daemon's Workspaces on the project, each exactly as [`snapshot`]
+/// lists it. It reads the project's stack and, for each Branch a Workspace
+/// is mounted on, that Branch's record by id (its name and current head):
+/// no Branch page, Layer chain, Commit or Store statistic. `version` is a
+/// digest of the Workspaces alone.
+pub fn workspaces(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) -> Answer {
+    let stack = super::args::project(store, args)?;
+    let mut names = BTreeMap::new();
+    let mut items = Vec::new();
+    for view in views {
+        let id = view.binding.branch.id;
+        if view.binding.branch.stack != stack.id {
+            continue;
+        }
+        if let Entry::Vacant(unread) = names.entry(id) {
+            if let Some(branch) = store.history().branch(id).map_err(args::history)? {
+                unread.insert((branch.name.as_str().to_owned(), branch.head_commit));
+            }
+        }
+        items.push(workspace_value(view, &names));
+    }
+    let body = vec![("workspaces".to_owned(), SdkValue::List(items))];
+    Ok(versioned(args, body))
+}
+
+/// `body` under its `kind` and `version` (a digest of it), or `unchanged`
+/// when `since` names that version.
+fn versioned(args: &SdkValue, body: Vec<(String, SdkValue)>) -> SdkValue {
     let mut hasher = DefaultHasher::new();
     body.hash(&mut hasher);
     let version = format!("{:016x}", hasher.finish());
     if args.get_text("since") == Some(version.as_str()) {
-        return Ok(SdkValue::map([
+        return SdkValue::map([
             ("kind", SdkValue::text("unchanged")),
             ("version", SdkValue::Text(version)),
-        ]));
+        ]);
     }
     let mut fields = vec![
         ("kind".to_owned(), SdkValue::text("ok")),
         ("version".to_owned(), SdkValue::Text(version)),
     ];
     fields.extend(body);
-    Ok(SdkValue::Map(fields))
+    SdkValue::Map(fields)
 }

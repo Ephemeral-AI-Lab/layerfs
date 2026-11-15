@@ -34,7 +34,8 @@ pub fn call(host: Host, call: Call) -> Outcome {
 }
 
 /// `sandbox.list_workspaces`: the daemon's read model without its history
-/// half, `{ kind, version, workspaces }`; the SDK pages and shapes them.
+/// half, `{ kind, version, workspaces }`, which is all a daemon asked with
+/// `history: false` answers; the SDK pages and shapes them.
 /// Each Workspace gains its `path` (the daemon's `directory`) and the
 /// `name` its record in Sandbox folder `directory` gives it, or null.
 fn listed(answer: SdkValue, directory: &std::path::Path) -> Outcome {
@@ -82,12 +83,16 @@ fn daemon_backend(host: &Host, call: &Call) -> Outcome {
     }
     let op = call.op().name();
     // the daemon's own request (its protocol, `Request::Sdk`) is the host
-    // request's one args map
+    // request's one args map. `history: false` asks for its Workspaces
+    // alone (layerfs-project#181): `listed` keeps nothing else, so the
+    // daemon reads no Branch page, Layer or Commit for it. A daemon from
+    // before the option ignores it and answers the whole model.
     let args = match host.to_args(call) {
         SdkValue::Map(fields) => SdkValue::Map(
             fields
                 .into_iter()
                 .filter(|(name, _)| !matches!(name.as_str(), "sandbox" | "deploy"))
+                .chain([("history".to_owned(), SdkValue::Bool(false))])
                 .collect(),
         ),
         other => other,

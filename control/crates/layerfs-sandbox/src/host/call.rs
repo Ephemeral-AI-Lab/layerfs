@@ -63,6 +63,14 @@ impl Op {
             .find(|(op, _)| *op == self)
             .map_or("", |(_, name)| name)
     }
+
+    /// Whether it only asks the Sandbox's daemon, as `sandbox.get`'s two
+    /// reads do (its Workspace list and its capacity model): such an
+    /// operation takes no Store lease, opens no Store and writes no record
+    /// or folder on the side that runs it (layerfs-project#181).
+    pub fn asks_daemon_only(self) -> bool {
+        matches!(self, Self::ListWorkspaces | Self::Capacity)
+    }
 }
 
 /// A Commit `message` as a request carries it. The untyped request checked

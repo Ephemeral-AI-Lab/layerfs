@@ -18,9 +18,11 @@ fn tempdir(tag: &str) -> PathBuf {
     dir
 }
 
+/// One Sandbox operation that keeps the records (a Workspace status;
+/// `sandbox.get`'s two reads write none, layerfs-project#181).
 fn sandbox_call(endpoint: &Endpoint, created: i64) {
     let args = SdkValue::map([
-        ("op", SdkValue::text("sandbox.list_workspaces")),
+        ("op", SdkValue::text("backend.daemon.workspace.status")),
         ("store", SdkValue::text("shop")),
         ("project", SdkValue::text("api")),
         (

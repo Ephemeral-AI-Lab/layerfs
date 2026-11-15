@@ -22,13 +22,16 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// The host Sandbox operations' request for project `<store>/<project>`,
 /// naming Sandbox `sandbox` with `message`, run with the deploy `settings`
 /// [`deploy::resolve`] gave; a PostgreSQL Store's `postgresql` is the one
-/// the caller resolved and reached ([`reached`]).
+/// the caller resolved and reached ([`reached`]). `root` says whether the
+/// request makes its side's run root: one that only asks the daemon
+/// ([`Op::asks_daemon_only`]) names it and changes nothing.
 fn host_args(
     home: &Path,
     (store, project, record): (&str, &str, &StoreRecord),
     (kind, postgresql): (StoreKind, Option<PgSelection>),
     settings: Deploy,
     (sandbox, message): (Option<String>, Message),
+    root: RunRoot,
 ) -> Result<Host> {
     let prefix = format!("lfs-{}-", &layerfs_home::home::opened(home)?.id[..8]);
     let backend = if cfg!(target_os = "macos") {
@@ -40,7 +43,7 @@ fn host_args(
     // the runtime requires; one directory per Sandbox beside the
     // image cache it shares
     let local = paths::run_root(home);
-    {
+    if root == RunRoot::Made {
         use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
         std::fs::DirBuilder::new()
             .recursive(true)
@@ -48,11 +51,11 @@ fn host_args(
             .create(&local)
             .map_err(failed)?;
         std::fs::set_permissions(&local, std::fs::Permissions::from_mode(0o755)).map_err(failed)?;
-    }
-    // namespaces commands run as another identity: the home's folders
-    // above the root must let them pass (a macOS native command does not)
-    if backend == "namespaces" {
-        home::traversable(home, &local)?;
+        // namespaces commands run as another identity: the home's folders
+        // above the root must let them pass (a macOS native command does not)
+        if backend == "namespaces" {
+            home::traversable(home, &local)?;
+        }
     }
     let deploy = Deploy {
         sandbox: Some(backend.to_owned()),
@@ -73,6 +76,15 @@ fn host_args(
         message,
         started: None,
     })
+}
+
+/// Whether a host request makes its side's run root ([`host_args`]).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RunRoot {
+    /// Made, with its modes set, before the operation runs.
+    Made,
+    /// Named as it is found: nothing is created or changed.
+    AsFound,
 }
 
 /// A PostgreSQL Store's `postgresql` argument for a Sandbox on `machine`
@@ -320,12 +332,28 @@ fn host_op(
             }
             let held = postgresql.is_some();
             let how = deploy::resolve(&Side::Home(&home), &choice)?;
+            // `sandbox.get`'s reads ask only the Sandbox's daemon
+            // (layerfs-project#181): no run root is made, no Store lease
+            // taken and no Store opened, so a polled get never holds the
+            // Store; the daemon needs no PostgreSQL selection for them
+            if op.asks_daemon_only() {
+                let host = host_args(
+                    &home,
+                    (&target.store, &target.project, &target.record),
+                    (kind, None),
+                    how,
+                    (sandbox, message),
+                    RunRoot::AsFound,
+                )?;
+                return local(host, call);
+            }
             let host = host_args(
                 &home,
                 (&target.store, &target.project, &target.record),
                 (kind, postgresql),
                 how,
                 (sandbox, message),
+                RunRoot::Made,
             )?;
             // the host code reads the project's Branches through its open
             // Store, which this process leases. A PostgreSQL Store opens no
@@ -388,7 +416,8 @@ fn host_op(
 /// decoded by [`crate::host::decode`]): the caller sends the Store's and
 /// project's records; the worker keeps a thin record of the Store (#536 §6)
 /// and the project's record under its root, with the Store on this
-/// machine's own `native`.
+/// machine's own `native`. An operation that only asks the daemon
+/// ([`Op::asks_daemon_only`]) returns before the records and the Store open.
 pub fn in_worker(
     root: &Path,
     sent: Sent,
@@ -414,6 +443,23 @@ pub fn in_worker(
     layerfs_home::names::ProjectName::parse(project)?;
     let record = store_record.with("machine", SdkValue::text("native"));
     let kind = record.kind()?;
+    // `sandbox.get`'s reads ask only the Sandbox's daemon
+    // (layerfs-project#181): this side writes neither record, makes no run
+    // root and opens no Store for them; the records a create wrote stay as
+    // they are
+    if op.asks_daemon_only() {
+        let how = deploy::resolve(&Side::Worker(root), &choice)?;
+        let host = host_args(
+            root,
+            (store, project, &record),
+            (kind, None),
+            how,
+            (sandbox, message),
+            RunRoot::AsFound,
+        )?;
+        layerfs_home::trace::step("host_args");
+        return runner(host, call);
+    }
     // written only when it changed (#535 R5): most calls find it as it is
     let thin = StoreRecord::from_record(
         store,
@@ -469,6 +515,7 @@ pub fn in_worker(
         (kind, postgresql),
         how,
         (sandbox, message),
+        RunRoot::Made,
     )?;
     layerfs_home::trace::step("host_args");
     // a PostgreSQL Store opens no Store service here (#65); its reads run
