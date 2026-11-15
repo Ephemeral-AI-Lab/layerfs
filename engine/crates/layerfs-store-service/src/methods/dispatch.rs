@@ -29,6 +29,7 @@ pub fn call(service: &StoreService, call: &SdkCall) -> Answer {
         "branch.get_commit" => branch::get_commit(service, args),
         "branch.merge" => branch::merge(service, args),
         "branch.publish" => branch::publish(service, args),
+        "branch.remove" => branch::remove(service, args),
         "branch.diff_commits" => branch::diff_commits(service, args),
         "branch.diff_branches" => branch::diff_branches(service, args),
         "fs.read" => fs::read(service, args),

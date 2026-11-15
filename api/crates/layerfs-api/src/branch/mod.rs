@@ -1,4 +1,4 @@
-//! The `branch` family: 8 calls, one file each.
+//! The `branch` family: 9 calls, one file each.
 mod commits;
 mod diff;
 mod fork;
@@ -7,6 +7,7 @@ mod get_commit;
 mod list;
 mod merge;
 mod publish;
+mod remove;
 
 use crate::calls::Calls;
 
@@ -21,5 +22,6 @@ pub(crate) fn calls() -> Calls {
         merge::CALL,
         publish::CALL,
         diff::CALL,
+        remove::CALL,
     ]
 }

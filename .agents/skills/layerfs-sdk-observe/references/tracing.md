@@ -19,12 +19,16 @@ Python, direct `layerfs_api::call`) appends one line to
 and `LAYERFS_TRACE` / `LAYERFS_TRACE_STEP` do not affect it.
 
 ```json
-{"v":1,"at":1793000004120,"ms":212,"client":"node","argv":["file","write","demo/app","main","/index.ts","<5321 bytes>"],"outcome":"ok","kind":"Committed","commit":"<66 hex>","tag":"dsh:s_4d2a:a91e"}
+{"v":1,"at":1793000004120,"ms":212,"client":"node","argv":["file","write","demo/app","main","<8 bytes>","<5321 bytes>"],"outcome":"ok","kind":"Committed","commit":"<66 hex>","tag":"dsh:s_4d2a:a91e"}
 ```
 
 It keeps 1.1.0's redaction rule (values cut to 200 characters; contents,
-JSON, commands, messages, edit strings, passwords and URLs as byte counts)
-and drops the daemon telemetry: no `sizes`, `scope` or `daemon`. `argv` is
+JSON, commands, messages, edit strings, passwords and URLs as byte counts;
+a path argument as the byte count of its normalized form, one leading `/`
+stripped, so `/a` and `a` are both `<1 bytes>`; a glob or grep `pattern` by
+its own bytes) and drops the daemon telemetry: no `sizes`, `scope` or
+`daemon`. A refusal is logged as its code only: its message and `detail` are
+never traced, so a `Removed` path stays out of the line. `argv` is
 the call as CLI words (`argv[0]`/`argv[1]` are the family and call),
 `outcome` is `"ok"` or the refusal code, `kind` and `commit`/`layer` come
 from the result, `client` is `cli`/`node`/`python`/`rust`, and `tag` is the

@@ -1,6 +1,7 @@
-//! The `store` family: 12 calls, one file each (H1: push and pull replace
+//! The `store` family: 13 calls, one file each (H1: push and pull replace
 //! move; attach and detach supersede #536 C4).
 mod attach;
+mod compact;
 mod connect;
 mod create;
 mod detach;
@@ -29,6 +30,7 @@ pub(crate) fn calls() -> Calls {
         push::CALL,
         pull::CALL,
         remove::CALL,
+        compact::CALL,
         disconnect::CALL,
     ]
 }

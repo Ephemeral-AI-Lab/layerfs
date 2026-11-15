@@ -95,6 +95,9 @@ pub(crate) fn commit_branch(
     if stack.profile != request.profile || stack.scope != request.scope {
         return Err(HistoryError::Integrity("Commit context"));
     }
+    // Spec 5: read the project epoch at the start of this write transaction;
+    // `confirm` below re-checks it before the transaction commits.
+    let fence = super::epoch::open(tx, branch.stack)?;
     let moved =
         branch.base_layer != request.expected_base || branch.head_commit != request.expected_head;
     if moved && (!request.force || branch.base_layer != request.expected_base) {
@@ -162,6 +165,7 @@ pub(crate) fn commit_branch(
     if advanced != 1 {
         return Err(HistoryError::Integrity("Branch advance"));
     }
+    fence.confirm(tx)?;
     let displaced = branch.head_commit.filter(|_| moved);
     Ok(CommitOutcome::Committed {
         record: Box::new(record),

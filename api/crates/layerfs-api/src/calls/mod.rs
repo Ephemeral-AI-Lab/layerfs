@@ -18,6 +18,7 @@ pub use check::size;
 pub use context::Context;
 pub use dispatch::{call, call_scoped, home, Client};
 pub use layerfs_home::json;
+pub use render::REDACTED;
 pub use scope::Scope;
 pub use table::{find, table_json, Arg, Call, CallRef, Calls, Families, Family, Kind, Run};
 pub use text::call_json;

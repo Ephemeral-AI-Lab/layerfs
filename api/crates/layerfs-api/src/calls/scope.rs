@@ -151,6 +151,11 @@ impl Scope {
             | ("file", "revision") => {
                 return Err(out("history"));
             }
+            // GC retires or compacts a whole entity, never one folder:
+            // a scope refuses these instead of widening them (§10).
+            ("branch", "remove") | ("project", "delete" | "remove_file") | ("store", "compact") => {
+                return Err(out(name));
+            }
             ("file", _) => {
                 bound(&args)?;
                 let paths: &[&str] = match call {

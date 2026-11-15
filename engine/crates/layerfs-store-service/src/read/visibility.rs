@@ -132,7 +132,10 @@ impl Visibility {
 
     /// The number of hidden entries directly inside `dir` whose entries exist
     /// at this snapshot: the `removed_count` of a listing, independent of the
-    /// page. A marker on a path below a direct child is not counted here.
+    /// page. A listing returns `dir`'s direct entries, so a marker below one
+    /// of them is not a hidden result and is not counted; a glob counts the
+    /// matched hidden entries at any depth (`hidden_matches`). Each call
+    /// therefore counts exactly the entries its own result would omit.
     pub fn hidden_children(
         &self,
         reader: &StorePorts,
@@ -168,8 +171,12 @@ impl Visibility {
     }
 
     /// The number of hidden entries at or below `path` that the glob `pattern`
-    /// matches: the `removed_count` of a glob, independent of the page. Only
-    /// hidden subtrees are walked, so a snapshot with no marker counts nothing.
+    /// matches: the `removed_count` of a glob, independent of the page. It
+    /// counts every hidden entry the glob would otherwise return, at any depth
+    /// under the query root, not only the root's direct children: the pattern
+    /// decides which descendants are results. A listing's `hidden_children`
+    /// does the same for its direct entries. Only hidden subtrees are walked,
+    /// so a snapshot with no marker counts nothing.
     pub fn hidden_matches(
         &self,
         reader: &StorePorts,
@@ -212,6 +219,10 @@ impl Visibility {
                 found.insert(full.clone());
             }
             if entry.value.kind == InodeKind::Directory {
+                // A hidden directory's descendants are hidden by the same
+                // governing frontier and are glob results whenever the pattern
+                // reaches them, so walk the hidden subtree and count each
+                // match; `found` deduplicates a marker on a descendant.
                 walked.push(relative.to_owned());
                 walk::walk_within(reader, snap, &full, None, |child, _| {
                     if rule.matches_path(child) {

@@ -38,6 +38,17 @@ impl Session {
     }
 }
 
+impl LaneHold {
+    /// Takes the cross-process writer lock out of the hold and releases the
+    /// connection turn, so a seal can consume the session while the lane is
+    /// still held (§7 step 1). The caller becomes the lane's owner.
+    pub(crate) fn into_writer(mut self) -> Writer {
+        self.writer
+            .take()
+            .expect("a held Store lane owns its writer")
+    }
+}
+
 impl Drop for LaneHold {
     fn drop(&mut self) {
         if let Some(writer) = self.writer.take() {
