@@ -506,4 +506,3 @@ what is built.
 The historical cache-credit failure and its immutable ledger remain linked in
 [the measurement workflow](docs/general/agent-measurement-policy.md#5-why-these-rules-exist-worked-example).
 Historical explanation is retained outside default implementation routing.
-

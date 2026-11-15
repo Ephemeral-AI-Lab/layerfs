@@ -283,7 +283,7 @@ From `AGENTS.md`, "LayerFS mental model", as of `layerfs_v2_0_0` at
   feature flag brings one back; that requires a later explicit owner
   decision and source change. Historical evidence is unchanged. Native,
   Docker, Lima and Apple Container retain their existing support rules. See
-  the [restriction contract](docs/architecture/control/machines/platforms.md#removed-platforms-platform_policyrs).
+  the [restriction contract](../../../../docs/architecture/control/machines/platforms.md#removed-platforms-platform_policyrs).
 
 ## Root guide: rebase notes
 
