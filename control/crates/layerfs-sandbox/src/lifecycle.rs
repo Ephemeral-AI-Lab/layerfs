@@ -167,12 +167,15 @@ pub fn start(
     {
         crate::launch::local::start((host, platform), directory, store, backend)
     }
+    // Windows: the A1 port built the host_process runtime (directory
+    // Sandboxes, exec); a full create needs its daemon control channel
+    // (Controls holds a live Control), which the WinFsp/A2 batch brings.
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         drop((directory, store, backend, platform));
         Err(refused(
             "Unsupported",
-            "a Sandbox runs on Linux (namespaces) or macOS (native)",
+            "sandbox.create lands with the WinFsp batch (A2): the A1 port runs exec in directory Sandboxes, and the create chain needs its daemon control channel",
         ))
     }
 }
