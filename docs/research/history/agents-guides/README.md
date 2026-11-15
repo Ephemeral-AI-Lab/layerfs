@@ -192,3 +192,106 @@ driver reaches through the product constructor
 ([product Commit](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/architecture/79-product-commit.md)). See the
 [reviewed ownership](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md).
 Moving blocking OwnerClient calls behind a port does not establish deferred service.
+
+## Root guide: Store routes as first written
+
+From `AGENTS.md`, "LayerFS mental model", as of `layerfs_v2_0_0` at
+`7a6da3e4f8`. The current rules are in the root guide's "Where calls run".
+
+- Target (owner direction 2026-10-07, Store calls revised 2026-10-18): every
+  daemon opens the global Store directly from a volume the daemons share and
+  reads, saves and publishes in-process. Project Init adds a project to an
+  existing Store as a live add (2.0, #533). **sqlite Store calls run in a
+  process on the Store's kernel; postgresql Store calls, and bucket (s3) I/O,
+  run in the caller's process on any OS (owner, 2026-11-02, #533 G2).** A
+  sqlite Store's openers share one kernel and a local filesystem holding the
+  Store (ext4, xfs, btrfs on Linux; apfs, hfs on macOS); a process on another
+  kernel reaches it only through that machine's worker. Anywhere else sqlite
+  Store calls fail `Unsupported`, with no fallback; the daemon does not serve
+  Store calls. Workspace calls (mount, Exec, Commit,
+  status, unmount) go to the daemon. Do not revive `layerfs-server` or build a
+  host/server adapter in the data path; the host-mediated SDK runtime is
+  retired, not extended. See the
+  [integration contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/06-cluster-one-integration.md)
+  and [direct Store access](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/352/DIRECT_STORE.md).
+  **Exception (owner, 2026-10-20, revised the same day): dsh Live on macOS
+  only.** The dsh-layerfs plugin may give macOS processes a ported SDK with
+  the SDK's API whose calls run in one long-lived worker per LayerFS box: a
+  Linux container running the real SDK, which opens each project's Store
+  directly and keeps it and its daemon connections open while the project is
+  in use (closed after a quiet minute). The worker listens on loopback only,
+  behind a secret. The product SDK and daemon do not change. (Widened to any
+  integration on 2026-10-24; see below.)
+- **Additional exception (owner, 2026-10-22): dsh Live on Windows.** The
+  Windows dsh-layerfs adapter may forward its SDK binding calls to one
+  authenticated loopback worker per LayerFS home in a selected WSL2 Linux
+  distribution. The worker opens the shared Store directly on that
+  distribution's local ext4/xfs/btrfs filesystem and uses its Docker Engine
+  for Sandbox daemons. Windows owns the UI, bindings and traces; Linux owns
+  native handles and project discovery. This is independent of the macOS
+  adapter and changes neither the product SDK nor the daemon. A lost reply
+  is never replayed, and an uncertain Init retains its Linux home and volume.
+- **Additional exception (owner, 2026-11-01, #527 D5; renamed 2026-11-02,
+  #533 G2): the `native` machine on macOS.** For a Store on the `native`
+  machine on macOS, the library runs in the caller's own process and opens the project's Store directly on a local apfs or hfs
+  directory (`kernel_guard` admits those two there, #427). Its Sandboxes are
+  daemon processes serving loopback NFS to this Mac's own client, one user,
+  no container (see the agent guide's native Sandboxes). Every opener is a
+  process on this one Mac, so the one-kernel, local-filesystem rule holds;
+  network and other filesystems are still refused. The Docker, worker and
+  `vm:` routes on macOS are unchanged.
+- **Plugin-neutral LayerFS (owner, 2026-10-24; revised 2026-11-02, #533
+  G2).** LayerFS is agnostic to dsh and every other plugin. The `layerfs`
+  package routes by the home's records: a call's route comes from its
+  Store's and machine's records, so one process uses Stores on several
+  machines at once, and the worker routes above are open to any caller of
+  the package. LayerFS reads `LAYERFS_HOME` and the trace settings only.
+  There is no adapter name, no integration check and no code that names a
+  plugin. An integration that can set only its own prefixed names, such as
+  dsh's `DSH_*`, maps them itself. The worker's rules above (loopback,
+  secret, one attempt, no replay) are unchanged.
+- **Machines (owner 2026-11-02, #533 G2; replaces the 2026-10-31 VM
+  placement, V1).** A VM machine holds many Stores, with one worker per
+  machine. Machines are created, removed and started by the `machine` calls,
+  and the routes come from the home's records (`machine/<name>/record.json`,
+  `store/<name>/record.json`). `native` and `docker` are built in; VM kinds
+  (`apple-container`, `lima`) are created by name. Each VM
+  machine's data disk is mounted at
+  `/layerfs/data` and holds `store/<name>/store.sqlite` per Store. Its
+  worker runs as root behind its own secret, reached through one loopback
+  port on the host, with one attempt per call and no replay, the same rules
+  as the macOS and Windows routes. Guests never read the home: the caller
+  sends each worker call the settings it needs and writes every record.
+  **Every machine uses both Store kinds (owner, 2026-11-03, #535 D9, G1,
+  G3):** a machine holds any number of sqlite Stores, and every PostgreSQL
+  Store is usable from it. A sqlite Store is on exactly one machine; a
+  PostgreSQL Store's calls still run in the caller's process, and it is
+  usable from the machines it is attached to (`store.attach`, each checked
+  from that machine; supersedes #535 G3), where the support table
+  (`layerfs-platform` `support.rs`, `control/SUPPORT.json`) marks the
+  platform supported; elsewhere it is refused with the table's reason. The password is resolved only in the
+  caller and travels only in one worker request and the Sandbox's private
+  daemon setup file. This supersedes #533 O3/G13 ("VMs and ssh later").
+  See [#533](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/README.md), [#535](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/535/README.md)
+  and the [proposal](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/proposals/host-platform-connections.md).
+- **Removed platforms (owner, 2026-11-08; supersedes the layerfs-project#7
+  restriction of 2026-11-06): Firecracker, Microsandbox and SSH machines are
+  removed.** Their code is gone and no platform is disabled with its code
+  kept. An old record of one is shown as unsupported with the reason
+  (``platform `<name>` was removed in LayerFS 2.0``), every other call on it
+  is refused, and `machine remove` only forgets it. No runtime setting or
+  feature flag brings one back; that requires a later explicit owner
+  decision and source change. Historical evidence is unchanged. Native,
+  Docker, Lima and Apple Container retain their existing support rules. See
+  the [restriction contract](docs/architecture/control/machines/platforms.md#removed-platforms-platform_policyrs).
+
+## Root guide: rebase notes
+
+From the end of `AGENTS.md`; the steps now live in the
+[parallel worktree guide](../../../general/parallel-worktrees.md).
+
+After rebasing across #463, update each selected worktree's own target registration and prepare again
+for the root `target/` path; never migrate another worktree's resource record.
+After rebasing across #686 (fuser from its Git fork), or any later fuser `rev` change, run
+`tools/worktree.py prepare` again for each platform before offline builds; a Cargo
+home prepared earlier has no checkout of that revision and fails `--offline`.

@@ -5,8 +5,45 @@
 Repository-wide instructions for LayerFS. Also read the applicable [core](core/AGENTS.md), [engine](engine/AGENTS.md),
 [control](control/AGENTS.md) and [API](api/AGENTS.md) guides for implementation in those layers. Current owner instructions and documented
 supersessions govern; a closed handoff or historical receipt is not a new assignment.
+Each rule has one home: a layer guide adds only what differs in its layer and
+links here for the rest. How the guides reached their current wording is in
+the [archived guide history](docs/research/history/agents-guides/README.md).
 
-## Product scope and current workstreams
+## Rules you must not break
+
+Each line is a summary; the linked section is the rule.
+
+| Rule | Where |
+| --- | --- |
+| Disposable / WAL / synchronous=OFF is the only SQLite Store profile; Durable execution is `NOT_RUN` | [Active persistence profile](#active-persistence-profile--owner-direction-2026-10-07) |
+| One attempted operation: no automatic retry, busy handler, refresh or replay | [§4](#4-code-build-and-docs) |
+| Build tests with `--no-run` first; every test command stops at 120 s, and reaching it is a hang | [§4](#4-code-build-and-docs) |
+| CI reports and never gates; verify your own change and report checks and gaps | [§4](#4-code-build-and-docs) |
+| No new dependency an existing crate covers; no third-party patch, fork or vendor except the fuser Git fork | [§4](#4-code-build-and-docs) |
+| Refactors delete tests that are tricky to adapt; never weaken a surviving assertion | [§4](#4-code-build-and-docs) |
+| Architecture docs change in the same commit as the code | [§4](#4-code-build-and-docs) |
+| Every commit records production LOC, split by core, engine, control and api | [Production LOC](#production-loc-comparison-for-every-commit) |
+| A warm cache never credits a measured phase; one sample per case | [§1](#1-a-warm-cache-must-never-credit-a-measured-phase), [§3](#3-running-a-measurement) |
+| fs-bench-pro is frozen and left broken; do not edit, build, run or repair it | [Read the current contract](#read-the-current-contract-for-the-task) |
+| Retired stays retired: the v0.1.6 reference, `layerfs-server`, standalone HTML/TUI pages, the `dsh-layerfs-demo` bundle | [Layers and workstreams](#layers-and-workstreams), [Where calls run](#where-calls-run) |
+
+## Layers and workstreams
+
+| Layer | Crates (root manifest) | Guide |
+| --- | --- | --- |
+| core | `layerfs-content`, `layerfs-history`, `layerfs-storage`, `layerfs-telemetry` | [core](core/AGENTS.md) |
+| engine | `layerfs-bridge`, `layerfs-daemon`, `layerfs-fuse`, `layerfs-mount-ports`, `layerfs-nfs`, `layerfs-overlay`, `layerfs-persistence`, `layerfs-project`, `layerfs-store-service`, `layerfs-workspace` | [engine](engine/AGENTS.md) |
+| control | entities `layerfs-home`, `layerfs-machine`, `layerfs-store`, `layerfs-sandbox` (with its `workspace/` module); drivers `layerfs-platform`, `layerfs-bucket`, `layerfs-sandbox-backend`; and `layerfs-control` | [control](control/AGENTS.md) |
+| api | the call surface `layerfs-api`, the `layerfs` command `layerfs-cli`, the Node binding `layerfs-node`, the PyO3 module `layerfs-python`; plus the JavaScript and Python packages under `api/` | [API](api/AGENTS.md) |
+
+The dependency direction is `core < engine < control < api`, including dev
+dependencies and test includes; nothing in engine depends on control.
+Workstream names do not change this layering. The control layer
+(`control/crates`, renamed from `connect/` by the owner 2026-11-06,
+layerfs-project#101 D-6; #535 D4) holds the management code and the crates
+that reach a machine or the network. All product layers follow the
+[production source rules](engine/AGENTS.md#production-file-size-and-responsibility)
+and [checks and completion rules](engine/AGENTS.md#checks-and-completion).
 
 **Implement both workstreams through the core, engine, control and API layers.** The v0.1.6
 reference implementation that lived under root `crates/` was retired on
@@ -130,92 +167,53 @@ session's own thread checkpoints the WAL off the commit path (owner approval,
   captured generation's retired rows) follows its answer (owner approval,
   2026-11-07). Terminal unmount drains requests, closes the Workspace's
   overlay connection and deletes its file. Neither deletes global history.
-- Target (owner direction 2026-10-07, Store calls revised 2026-10-18): every
-  daemon opens the global Store directly from a volume the daemons share and
-  reads, saves and publishes in-process. Project Init adds a project to an
-  existing Store as a live add (2.0, #533). **sqlite Store calls run in a
-  process on the Store's kernel; postgresql Store calls, and bucket (s3) I/O,
-  run in the caller's process on any OS (owner, 2026-11-02, #533 G2).** A
-  sqlite Store's openers share one kernel and a local filesystem holding the
-  Store (ext4, xfs, btrfs on Linux; apfs, hfs on macOS); a process on another
-  kernel reaches it only through that machine's worker. Anywhere else sqlite
-  Store calls fail `Unsupported`, with no fallback; the daemon does not serve
-  Store calls. Workspace calls (mount, Exec, Commit,
-  status, unmount) go to the daemon. Do not revive `layerfs-server` or build a
-  host/server adapter in the data path; the host-mediated SDK runtime is
-  retired, not extended. See the
-  [integration contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/06-cluster-one-integration.md)
-  and [direct Store access](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/352/DIRECT_STORE.md).
-  **Exception (owner, 2026-10-20, revised the same day): dsh Live on macOS
-  only.** The dsh-layerfs plugin may give macOS processes a ported SDK with
-  the SDK's API whose calls run in one long-lived worker per LayerFS box: a
-  Linux container running the real SDK, which opens each project's Store
-  directly and keeps it and its daemon connections open while the project is
-  in use (closed after a quiet minute). The worker listens on loopback only,
-  behind a secret. The product SDK and daemon do not change. (Widened to any
-  integration on 2026-10-24; see below.)
-- **Additional exception (owner, 2026-10-22): dsh Live on Windows.** The
-  Windows dsh-layerfs adapter may forward its SDK binding calls to one
-  authenticated loopback worker per LayerFS home in a selected WSL2 Linux
-  distribution. The worker opens the shared Store directly on that
-  distribution's local ext4/xfs/btrfs filesystem and uses its Docker Engine
-  for Sandbox daemons. Windows owns the UI, bindings and traces; Linux owns
-  native handles and project discovery. This is independent of the macOS
-  adapter and changes neither the product SDK nor the daemon. A lost reply
-  is never replayed, and an uncertain Init retains its Linux home and volume.
-- **Additional exception (owner, 2026-11-01, #527 D5; renamed 2026-11-02,
-  #533 G2): the `native` machine on macOS.** For a Store on the `native`
-  machine on macOS, the library runs in the caller's own process and opens the project's Store directly on a local apfs or hfs
-  directory (`kernel_guard` admits those two there, #427). Its Sandboxes are
-  daemon processes serving loopback NFS to this Mac's own client, one user,
-  no container (see the agent guide's native Sandboxes). Every opener is a
-  process on this one Mac, so the one-kernel, local-filesystem rule holds;
-  network and other filesystems are still refused. The Docker, worker and
-  `vm:` routes on macOS are unchanged.
-- **Plugin-neutral LayerFS (owner, 2026-10-24; revised 2026-11-02, #533
-  G2).** LayerFS is agnostic to dsh and every other plugin. The `layerfs`
-  package routes by the home's records: a call's route comes from its
-  Store's and machine's records, so one process uses Stores on several
-  machines at once, and the worker routes above are open to any caller of
-  the package. LayerFS reads `LAYERFS_HOME` and the trace settings only.
-  There is no adapter name, no integration check and no code that names a
-  plugin. An integration that can set only its own prefixed names, such as
-  dsh's `DSH_*`, maps them itself. The worker's rules above (loopback,
-  secret, one attempt, no replay) are unchanged.
-- **Machines (owner 2026-11-02, #533 G2; replaces the 2026-10-31 VM
-  placement, V1).** A VM machine holds many Stores, with one worker per
-  machine. Machines are created, removed and started by the `machine` calls,
-  and the routes come from the home's records (`machine/<name>/record.json`,
-  `store/<name>/record.json`). `native` and `docker` are built in; VM kinds
-  (`apple-container`, `lima`) are created by name. Each VM
-  machine's data disk is mounted at
-  `/layerfs/data` and holds `store/<name>/store.sqlite` per Store. Its
-  worker runs as root behind its own secret, reached through one loopback
-  port on the host, with one attempt per call and no replay, the same rules
-  as the macOS and Windows routes. Guests never read the home: the caller
-  sends each worker call the settings it needs and writes every record.
-  **Every machine uses both Store kinds (owner, 2026-11-03, #535 D9, G1,
-  G3):** a machine holds any number of sqlite Stores, and every PostgreSQL
-  Store is usable from it. A sqlite Store is on exactly one machine; a
-  PostgreSQL Store's calls still run in the caller's process, and it is
-  usable from the machines it is attached to (`store.attach`, each checked
-  from that machine; supersedes #535 G3), where the support table
-  (`layerfs-platform` `support.rs`, `control/SUPPORT.json`) marks the
-  platform supported; elsewhere it is refused with the table's reason. The password is resolved only in the
-  caller and travels only in one worker request and the Sandbox's private
-  daemon setup file. This supersedes #533 O3/G13 ("VMs and ssh later").
-  See [#533](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/README.md), [#535](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/535/README.md)
+
+## Where calls run
+
+The route of every call, with its source, is in
+[Where each call runs](docs/architecture/control/README.md#where-each-call-runs);
+machines and platforms are in [Platforms](docs/architecture/control/machines/platforms.md)
+and workers in [Workers and reach](docs/architecture/control/machines/workers-and-reach.md).
+The rules behind them:
+
+- **Store calls never run in the daemon.** Every daemon opens the global Store
+  directly and reads, saves and publishes in-process (owner, 2026-10-07;
+  revised 2026-10-18). A sqlite Store's calls run in a process on the Store's
+  kernel: the caller on a local `native` machine, else that machine's worker.
+  PostgreSQL Store calls and bucket (s3) I/O run in the caller's process on
+  any OS (owner, 2026-11-02, #533 G2). Workspace calls (mount, Exec, Commit,
+  status, unmount) go to the daemon. Project Init into an existing Store is a
+  live add (2.0, #533).
+- **One kernel, local filesystem.** A sqlite Store's openers share one kernel
+  and a local ext4, xfs or btrfs (Linux) or apfs or hfs (macOS) filesystem
+  (`kernel_guard`, #427); another kernel reaches it only through that
+  machine's worker. Anywhere else sqlite Store calls fail `Unsupported`, with
+  no fallback.
+- **Routes come from the home's records** (machines, owner 2026-11-02, #533
+  G2; `native` on macOS, 2026-11-01, #527 D5; `native` on Windows through a
+  WSL2 worker, 2026-10-22). Both Store kinds work on every machine (owner,
+  2026-11-03, #535 D9): a sqlite Store is on exactly one machine, and a
+  PostgreSQL Store is usable from the machines it is attached to
+  (`store.attach`) where the support table allows.
+- **Workers**: loopback only, behind a secret; one attempt per call, no retry,
+  no replay of a lost reply; an uncertain outcome is reported, never resent.
+- **Secrets**: a PostgreSQL password is resolved only in the caller and travels
+  only in one worker request and the Sandbox's private daemon setup file.
+- **Plugin-neutral** (owner, 2026-10-24): LayerFS reads `LAYERFS_HOME` and the
+  trace settings only; no adapter name, integration check or code that names
+  a plugin. An integration maps its own prefixed names (such as `DSH_*`).
+- **Removed stays removed** (owner, 2026-11-08): Firecracker, Microsandbox and
+  SSH machines are gone with their code; no setting or flag brings one back
+  without a new owner decision and source change. Do not revive
+  `layerfs-server` or a host/server adapter in the data path.
+- Design references: the
+  [integration contract](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/06-cluster-one-integration.md),
+  [direct Store access](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/352/DIRECT_STORE.md),
+  [#533](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/README.md), [#535](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/535/README.md)
   and the [proposal](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/proposals/host-platform-connections.md).
-- **Removed platforms (owner, 2026-11-08; supersedes the layerfs-project#7
-  restriction of 2026-11-06): Firecracker, Microsandbox and SSH machines are
-  removed.** Their code is gone and no platform is disabled with its code
-  kept. An old record of one is shown as unsupported with the reason
-  (``platform `<name>` was removed in LayerFS 2.0``), every other call on it
-  is refused, and `machine remove` only forgets it. No runtime setting or
-  feature flag brings one back; that requires a later explicit owner
-  decision and source change. Historical evidence is unchanged. Native,
-  Docker, Lima and Apple Container retain their existing support rules. See
-  the [restriction contract](docs/architecture/control/machines/platforms.md#removed-platforms-platform_policyrs).
+  The route decisions as first written, including the dsh Live workers on
+  macOS and Windows, are in the
+  [archived guide history](docs/research/history/agents-guides/README.md#root-guide-store-routes-as-first-written).
 - **One global database, one writer, short holds (owner decision 2026-10-18).**
   All of a Store's committed state lives in one database: one SQLite file,
   or one PostgreSQL database for a PostgreSQL Store (#506); no sharding,
@@ -239,32 +237,23 @@ session's own thread checkpoints the WAL off the commit path (owner approval,
 
 ## Read the current contract for the task
 
-Before implementation or integration, read both root handbooks and the
-[architecture guide](docs/architecture/README.md): the layer page and every
-topic the change touches (for cluster two: [Workspace](docs/architecture/engine/workspace/README.md),
-[Overlay](docs/architecture/engine/overlay/README.md), [Commit](docs/architecture/engine/commit/README.md),
-[Kernel routes](docs/architecture/engine/kernel-routes/README.md), [Daemon](docs/architecture/engine/daemon/README.md)
-and [Bridge](docs/architecture/engine/bridge/README.md)). The former #303 contracts and the
+| Task | Read first |
+| --- | --- |
+| Any implementation or integration | the [cluster-one handbook](docs/general/cluster_one_handbook.md), the [CAS/CDC/delta handbook](docs/general/cas_cdc_deltaencoding_handbook.md) and the [architecture guide](docs/architecture/README.md): the layer page and every topic the change touches |
+| Cluster two | also [Workspace](docs/architecture/engine/workspace/README.md), [Overlay](docs/architecture/engine/overlay/README.md), [Commit](docs/architecture/engine/commit/README.md), [Kernel routes](docs/architecture/engine/kernel-routes/README.md), [Daemon](docs/architecture/engine/daemon/README.md) and [Bridge](docs/architecture/engine/bridge/README.md) |
+| Documentation or a release | the [documentation policy](docs/general/documentation-policy.md) and [release policy](docs/general/release-policy.md) |
+| Opening, reviewing or triaging a pull request or issue | the [code review and triage policy](docs/policy/code-review.md) |
+| A measurement | the [agent measurement workflow](docs/general/agent-measurement-policy.md), [benchmark rules](docs/general/benchmark_rules.md), [report template](docs/general/benchmark_agent_report.md) and the owning harness/family contract |
+| Benchmarks | the [layerfs-benchmark](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark) repository (moved out of `benchmark/` on 2026-10-23); routing is its [fs-bench-pro/AGENTS.md](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/fs-bench-pro/AGENTS.md) |
+
+The former #303 contracts and the
 [optimization investigation](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/303/fuse-optimization-investigation.md)
 are archived research; they do not silently select new algorithms, profiles or capabilities.
-
 Completed/superseded Stage 0–6 prompts are historical references, not default
 routing. Preserve canonical compatibility and evidence, but do not resume old
 loops, reopen closed rows or run old campaigns unless the current task selects
 that work. Do not choose authority by issue number alone.
 
-For documentation/release work, read the
-[documentation policy](docs/general/documentation-policy.md) and
-[release policy](docs/general/release-policy.md).
-For opening, reviewing or triaging a pull request or issue, read the
-[code review and triage policy](docs/policy/code-review.md).
-For measurements, read the [agent measurement workflow](docs/general/agent-measurement-policy.md),
-[benchmark rules](docs/general/benchmark_rules.md),
-[report template](docs/general/benchmark_agent_report.md) and owning harness/family contract.
-Benchmark suites, harnesses and released data live in the
-[layerfs-benchmark](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark) repository, moved out of
-`benchmark/` on 2026-10-23. Benchmark routing is its
-[fs-bench-pro/AGENTS.md](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/fs-bench-pro/AGENTS.md).
 **fs-bench-pro is frozen and left broken (owner, 2026-10-18).** Do not edit,
 build, run or repair it, and leave it out of workspace builds and checks. Its
 call sites broken by #352 F-020 (`ProjectApi` fork and commits,
@@ -437,6 +426,28 @@ to this number. This is a source-size comparison, not a performance claim.
   commits, give a comparison for each. A test/docs-only commit still reports
   the unchanged production total and delta 0; it does not report a fictitious
   zero-sized product or add test/documentation LOC to the headline.
+- **Split the result by scope.** Under the headline, give one line for each of
+  `core`, `engine`, `control` and `api`, in that order:
+  `<scope> <before> -> <after> (<signed delta>)`. List all four even when a
+  scope is unchanged, so the four lines visibly sum to the headline. After a
+  changed scope, name each crate or package whose count moved, with its
+  signed delta; omit unchanged crates. Then give the `reference absent` line
+  and the method. Scopes and crate assignment are the ones
+  `tools/production_loc.py --detail` prints; do not regroup them by hand.
+  When code moves between scopes or crates, label the matching minus and plus
+  as a relocation, not as growth or simplification. A pull request or handoff
+  with several commits gives this block for each commit, and one block for
+  the whole range against its base. For example:
+
+  ```text
+  Production LOC: 163,645 -> 163,685 (delta +40)
+    core     39,787 -> 39,795 (+8)   layerfs-history +8
+    engine   74,997 -> 75,029 (+32)  layerfs-persistence +7, layerfs-store-service +25
+    control  42,777 -> 42,777 (0)
+    api       6,084 ->  6,084 (0)
+    reference absent (retired R9c; last counted 65,417 at tree 498dd1917812)
+    Method: tools/production_loc.py --detail on parent 99ffd262a3 and the staged tree
+  ```
 
 LOC growth is allowed when justified by the product change; this rule does not
 require every commit to shrink. Never remove required validation, compress code
@@ -496,26 +507,3 @@ The historical cache-credit failure and its immutable ledger remain linked in
 [the measurement workflow](docs/general/agent-measurement-policy.md#5-why-these-rules-exist-worked-example).
 Historical explanation is retained outside default implementation routing.
 
-
-All product layers follow the detailed
-[production source rules](engine/AGENTS.md#production-file-size-and-responsibility)
-and [checks and completion rules](engine/AGENTS.md#checks-and-completion).
-The root manifest builds four core crates, ten engine crates, eight control
-crates under `control/crates` (the entity crates `layerfs-home`,
-`layerfs-machine`, `layerfs-store` and `layerfs-sandbox` with its
-`workspace/` module; the drivers `layerfs-platform`, `layerfs-bucket` and
-`layerfs-sandbox-backend`; and `layerfs-control`) and four API crates under
-`api/crates`: the call surface `layerfs-api`, the `layerfs` command
-`layerfs-cli`, the Node binding `layerfs-node` and the PyO3 module
-`layerfs-python`. `api/` also holds the published JavaScript and Python
-packages. The control layer (`control/crates`, renamed from `connect/` by the
-owner 2026-11-06, layerfs-project#101 D-6; #535 D4) holds the management code
-and the crates that reach a machine or the network; see the
-[control guide](control/AGENTS.md). The dependency
-direction is `core < engine < control < api`, including dev dependencies and
-test includes; nothing in engine depends on control. Workstream names do not change this layering.
-After rebasing across #463, update each selected worktree's own target registration and prepare again
-for the root `target/` path; never migrate another worktree's resource record.
-After rebasing across #686 (fuser from its Git fork), or any later fuser `rev` change, run
-`tools/worktree.py prepare` again for each platform before offline builds; a Cargo
-home prepared earlier has no checkout of that revision and fails `--offline`.
