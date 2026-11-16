@@ -17,9 +17,7 @@ pub mod install_types;
 // this crate contributes install/install_types only.
 #[cfg(unix)]
 mod operator;
-#[cfg(unix)]
 mod service;
-#[cfg(unix)]
 pub use service::{request as mount_request, Mounted};
 #[cfg(unix)]
 pub mod telemetry;
