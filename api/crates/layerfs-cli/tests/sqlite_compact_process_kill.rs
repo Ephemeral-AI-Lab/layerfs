@@ -354,7 +354,7 @@ sigkill_at!(
     "mark",
     false,
     false,
-    false,
+    true,
     true
 );
 sigkill_at!(
@@ -363,7 +363,7 @@ sigkill_at!(
     "mark",
     false,
     false,
-    false,
+    true,
     false
 );
 // The build: immediately before `VACUUM INTO` (SQLite runs that copy as one
