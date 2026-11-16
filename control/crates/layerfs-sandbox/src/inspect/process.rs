@@ -270,10 +270,12 @@ fn group_usage(group: &Path) -> (SdkValue, Option<&'static str>) {
 /// commands run in, `layerfs-sandbox-backend` `namespaces/cgroup.rs`
 /// `exec_path`), at most [`MOST_GROUPS`], read as [`usage_in`] reads a
 /// Sandbox's. A Workspace with no group is not listed: no command runs in
-/// it ([`NO_COMMAND`]). The Sandbox's group gives its Workspace groups no
-/// memory or pids controller (it holds processes of its own, so cgroup v2
-/// lets it give none), so their `memory_*`, `pids` and `oom_kills` are
-/// null with [`NO_CONTROLLER`] on such a kernel; `cpu_usec` is always read.
+/// it ([`NO_COMMAND`]). The Sandbox's group holds no process (its own are
+/// in its leaf `init`, which is no Workspace's), so it gives its Workspace
+/// groups the memory and pids controllers it has; a Sandbox an earlier
+/// build started holds processes in its group, which then gives them none,
+/// and their `memory_*`, `pids` and `oom_kills` are null with
+/// [`NO_CONTROLLER`]. `cpu_usec` is always read.
 /// When no Workspace of the Sandbox can have a group, `workspace_usage`
 /// is null and `workspace_usage_reason` says why, with the words
 /// [`usage`] uses: [`HOST_PROCESS`], [`NOT_SUPPORTED`], [`CGROUP_V1`],

@@ -289,7 +289,8 @@ fn prepare(
         sandbox: paths.local.directory.clone(),
         daemon: paths.bin.clone(),
         config: paths.local.config.clone(),
-        cgroup: cgroup::path(id),
+        // the leaf, so the Sandbox's own group never holds a process
+        cgroup: cgroup::leaf(&cgroup::path(id)),
         lower: image.directory().to_owned(),
         upper: paths.upper.clone(),
         work: paths.work.clone(),
