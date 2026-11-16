@@ -1029,6 +1029,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-winfsp"
+version = "2.0.0"
+dependencies = [
+ "layerfs-bridge",
+ "layerfs-content",
+ "layerfs-daemon",
+ "layerfs-history",
+ "layerfs-mount-ports",
+ "layerfs-overlay",
+ "layerfs-persistence",
+ "layerfs-project",
+ "layerfs-storage",
+ "layerfs-store-service",
+ "layerfs-telemetry",
+ "layerfs-workspace",
+]
+
+[[package]]
 name = "layerfs-workspace"
 version = "2.0.0"
 dependencies = [
