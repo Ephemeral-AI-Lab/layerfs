@@ -463,10 +463,11 @@ pub enum CommitOutcome {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AddLayerOutcome {
     /// A new immutable Layer was inserted on the stack head and the stack
-    /// advanced. Publication is overwrite-only: the Layer's
-    /// `overwrote_count` counts the stack's Layers since the Branch's base
-    /// that the published Commit does not contain; they stay in history and
-    /// `HistoryCatalog::overwritten` lists them.
+    /// advanced. `add_layer` itself is overwrite-only (the SDK's
+    /// `branch.publish` refuses a stale base before calling it, unless
+    /// `force`): the Layer's `overwrote_count` counts the stack's Layers
+    /// since the Branch's base that the published Commit does not contain;
+    /// they stay in history and `HistoryCatalog::overwritten` lists them.
     Added {
         /// The new Layer.
         layer: LayerRecord,

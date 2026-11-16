@@ -60,7 +60,7 @@ never written.
 | 4 | `branch.merge` checks its arguments first, then fast-forwards when one side is an ancestor of the other. | [SDK: `branch.merge`](../api/sdk/branch.md#branchmerge), [Store calls: Branch history](../engine/store-calls/README.md#branch-history) |
 | 5 | Otherwise it finds the merge base, decides merge units, and builds the merged tree with `/.lww` rules in one Save. | [Compare and merge: merge](../core/compare-and-merge/merge.md), [Compare and merge](../core/compare-and-merge/README.md) |
 | 6 | A conflict drops the Save and creates nothing; a clean merge writes the new Branch at a merge Commit in one transaction that checks both sides are unchanged. | [Store: history calls](../engine/store/README.md#history-calls), [History: operations](../core/history/README.md#operations) |
-| 7 | `branch.publish` adds the Branch head (or a named Commit) as a new `main` Layer by compare-and-set on the stack head and Branch base. Publication is overwrite-only: skipped Layers are counted and listed, not merged. | [SDK: `branch.publish`](../api/sdk/branch.md#branchpublish), [Store calls: Branch history](../engine/store-calls/README.md#branch-history) |
+| 7 | `branch.publish` adds the Branch head (or a named Commit) as a new `main` Layer by compare-and-set on the stack head and Branch base. A publish that would skip a Layer `main` gained since the Branch's base is refused `HeadMoved`; a Branch merged with `main` has `main`'s head as its base and publishes as a fast-forward. Only `force` overwrites, and its skipped Layers are counted and listed, not merged. | [SDK: `branch.publish`](../api/sdk/branch.md#branchpublish), [Store calls: Branch history](../engine/store-calls/README.md#branch-history) |
 
 ## Related
 
