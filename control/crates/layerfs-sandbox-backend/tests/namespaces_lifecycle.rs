@@ -971,3 +971,44 @@ fn a_command_group_left_running_is_removed_with_its_sandbox() {
     sandbox.delete().unwrap();
     assert!(!sandbox_group.exists());
 }
+
+/// The `layerfs` directory gives Sandbox groups the memory and pids
+/// controllers it has and does not give yet, in one write, and nothing
+/// else (layerfs-project#182 L4); a write the kernel refuses (here a
+/// `cgroup.subtree_control` that cannot be opened for writing, as EBUSY or
+/// ENOENT are on a real hierarchy) is an error the caller only reports.
+/// Stand-in files in a scratch folder: needs neither root nor cgroup v2.
+#[test]
+fn the_layerfs_group_gives_only_the_controllers_it_has() {
+    let base = std::env::temp_dir().join(format!("lfs-give-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&base);
+    fs::create_dir_all(&base).unwrap();
+    let give = |controllers: &str, given: &str| -> (std::io::Result<()>, String) {
+        fs::write(base.join("cgroup.controllers"), controllers).unwrap();
+        fs::write(base.join("cgroup.subtree_control"), given).unwrap();
+        let outcome = layerfs_sandbox_backend::namespaces::give_controllers(&base);
+        (
+            outcome,
+            fs::read_to_string(base.join("cgroup.subtree_control")).unwrap(),
+        )
+    };
+    // both listed, neither given: one write of both
+    let (outcome, written) = give("cpuset cpu io memory hugetlb pids rdma\n", "");
+    assert!(outcome.is_ok());
+    assert_eq!(written, "+memory +pids");
+    // only what is listed, and never what is given already
+    assert_eq!(give("cpu memory\n", "").1, "+memory");
+    assert_eq!(give("cpu memory pids\n", "pids\n").1, "+memory");
+    // nothing to give: nothing written
+    assert_eq!(give("cpu io\n", "cpu\n").1, "cpu\n");
+    assert_eq!(give("memory pids\n", "memory pids\n").1, "memory pids\n");
+    // a refused write is an error, and the files are as they were
+    fs::write(base.join("cgroup.controllers"), "memory pids\n").unwrap();
+    fs::remove_file(base.join("cgroup.subtree_control")).unwrap();
+    fs::create_dir(base.join("cgroup.subtree_control")).unwrap();
+    assert!(layerfs_sandbox_backend::namespaces::give_controllers(&base).is_err());
+    // a group with no controller list (no cgroup v2 there) is an error too
+    fs::remove_file(base.join("cgroup.controllers")).unwrap();
+    assert!(layerfs_sandbox_backend::namespaces::give_controllers(&base).is_err());
+    fs::remove_dir_all(&base).unwrap();
+}

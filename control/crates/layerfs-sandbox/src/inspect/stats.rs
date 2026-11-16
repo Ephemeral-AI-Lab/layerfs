@@ -9,8 +9,12 @@
 //! (`scope`) and the provider's name of the data volume.
 //!
 //! Every value is one `statvfs`, `stat` or small kernel file: no walk, no
-//! provider tool, no daemon, and no Store file is opened.
-use super::live::{self, DEADLINE};
+//! provider tool, no daemon, and no Store file is opened. A Sandbox's row
+//! (layerfs-project#182 L2) is its daemon record, its process's `/proc`
+//! entry and its cgroup's small files on the side that runs it, never
+//! anything inside the Sandbox's own root or namespaces.
+use super::live::{self, Checked, DEADLINE};
+use super::process::{self, NOT_OBSERVED};
 use super::{host, Budget, Side};
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::{self, paths};
@@ -29,15 +33,24 @@ pub(super) const KIND: &str = "machine_stats";
 /// - `worker`: `{ version, pid, started_at, protocol, bundle }` of the
 ///   machine's worker; null on a machine whose calls run in this process.
 /// - `resources`: `{ cpus, memory_total, memory_used, disk_total,
-///   disk_used, disk_free, scope }`, observed, in bytes; `scope` says whose
-///   processors and memory they are (`host`, `vm`, `engine_host`). A value
-///   that was not read is null, and `reason` says why.
+///   disk_used, disk_free, cpu_busy_usec, cpu_total_usec, scope }`,
+///   observed, sizes in bytes; `cpu_*` are the machine's processor time
+///   busy and in all since boot, in microseconds (`/proc/stat`; a client
+///   divides the two deltas of two reads); `scope` says whose processors
+///   and memory they are (`host`, `vm`, `engine_host`). A value that was
+///   not read is null, and `reason` (comma-joined words) says why:
+///   `memory_not_read` for `memory_*`, `disk_not_read` for `disk_*`,
+///   `cpu_unsupported` or `cpu_not_read` for `cpu_*`.
 /// - `data_disk`: `{ path, fs, scope, volume, inodes_free }`: the
 ///   filesystem the `disk_*` values measure, what it is (`volume`,
 ///   `vm_disk`, `host_fs`) and the provider's name of the volume or disk.
 /// - `stores`: `[{ name, bytes, allocated }]` of the sqlite Stores on the
 ///   machine, from `stat` of `store.sqlite` and its `-wal`.
-/// - `sandboxes`: `{ recorded, live }`.
+/// - `sandboxes`: `{ recorded, live, items }`; `items` holds one row per
+///   recorded Sandbox, `{ name, live, live_reason?, started_at, usage,
+///   usage_reason? }` (`usage` as `sandbox.get`'s). A row the soft budget
+///   did not reach stays, null with `deadline`. A worker of an older build
+///   answers no `items`, and none is shown.
 /// - `complete`: false with `reason: "deadline"` when the soft budget
 ///   ended the Store or Sandbox part early.
 ///
@@ -86,7 +99,15 @@ pub fn machine_stats(home: &Path, machine: &MachineName) -> Outcome {
         ("volume", SdkValue::opt_text(volume(home, record.as_ref()))),
         ("inodes_free", of_disk("inodes_free")),
     ]);
-    let live = part("sandboxes").get("live").cloned().unwrap_or_default();
+    let seen = part("sandboxes");
+    let mut sandboxes = vec![
+        ("recorded".to_owned(), SdkValue::Int(recorded)),
+        (
+            "live".to_owned(),
+            seen.get("live").cloned().unwrap_or_default(),
+        ),
+    ];
+    sandboxes.extend((seen.get("items").cloned()).map(|items| ("items".to_owned(), items)));
     let mut shown = vec![
         ("machine", SdkValue::text(name)),
         ("platform", SdkValue::Text(platform)),
@@ -95,10 +116,7 @@ pub fn machine_stats(home: &Path, machine: &MachineName) -> Outcome {
         ("resources", resources),
         ("data_disk", data_disk),
         ("stores", part("stores")),
-        (
-            "sandboxes",
-            SdkValue::map([("recorded", SdkValue::Int(recorded)), ("live", live)]),
-        ),
+        ("sandboxes", SdkValue::Map(sandboxes)),
         ("complete", part("complete")),
     ];
     shown.extend(answer.get("reason").cloned().map(|why| ("reason", why)));
@@ -149,8 +167,8 @@ fn volume(_: &Path, _: Option<&MachineRecord>) -> Option<String> {
 
 /// The request on the side that holds the machine's data, rooted at the
 /// home or the worker's root: `{ observed_at, worker, resources,
-/// data_disk: { path, fs, inodes_free }, stores, sandboxes: { live },
-/// complete, reason? }`. `worker` is what the worker's `inspect` operation
+/// data_disk: { path, fs, inodes_free }, stores, sandboxes: { live, items
+/// }, complete, reason? }`. `worker` is what the worker's `inspect` operation
 /// put on the request (who it is and since when); this process is no
 /// worker on `Side::Home`.
 pub(super) fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Outcome {
@@ -168,10 +186,12 @@ pub(super) fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Out
     let size = |bytes: Option<u64>| int(bytes.and_then(|bytes| i64::try_from(bytes).ok()));
     let memory = host::memory();
     let disk = home::filesystem(root).ok();
+    let (kernel, cpu_reason) = host::cpu();
     let mut reasons: Vec<&str> = memory.reason.into_iter().collect();
     if disk.is_none() {
         reasons.push("disk_not_read");
     }
+    reasons.extend(cpu_reason);
     let mut resources = vec![
         ("cpus", int(host::cpus())),
         ("memory_total", int(memory.total)),
@@ -179,6 +199,8 @@ pub(super) fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Out
         ("disk_total", size(disk.as_ref().map(|disk| disk.total))),
         ("disk_used", size(disk.as_ref().map(|disk| disk.used))),
         ("disk_free", size(disk.as_ref().map(|disk| disk.free))),
+        ("cpu_busy_usec", int(kernel.busy_usec)),
+        ("cpu_total_usec", int(kernel.total_usec)),
     ];
     if !reasons.is_empty() {
         resources.push(("reason", SdkValue::Text(reasons.join(", "))));
@@ -212,10 +234,20 @@ pub(super) fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Out
             ])
         })
         .collect();
-    let (checked, all) = live::checked(root, &sandboxes, budget);
+    let cgroups = Path::new(process::CGROUP_ROOT);
+    let (checked, all) = live::checked(root, &sandboxes, budget, |daemon| {
+        (
+            process::start_of(daemon, kernel.boot),
+            process::usage(daemon, cgroups),
+        )
+    });
     complete &= all;
-    let running = checked.iter().filter(|(live, _)| *live == Some(true));
+    let running = checked.iter().filter(|((live, _), _)| *live == Some(true));
     let live = all.then(|| i64::try_from(running.count()).unwrap_or(i64::MAX));
+    let items = sandboxes
+        .iter()
+        .zip(checked)
+        .map(|(name, row)| item(name, row));
 
     let mut answer = vec![
         ("observed_at", SdkValue::Int(home::now_ms())),
@@ -230,7 +262,13 @@ pub(super) fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Out
         ),
         ("data_disk", data_disk),
         ("stores", SdkValue::List(stores)),
-        ("sandboxes", SdkValue::map([("live", int(live))])),
+        (
+            "sandboxes",
+            SdkValue::map([
+                ("live", int(live)),
+                ("items", SdkValue::List(items.collect())),
+            ]),
+        ),
         ("complete", SdkValue::Bool(complete)),
     ];
     if !complete {
@@ -241,6 +279,37 @@ pub(super) fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Out
             .map(|(field, value)| (field.to_owned(), value))
             .collect(),
     ))
+}
+
+/// What a Sandbox's row read: when its daemon process started, and its
+/// usage with why that is null.
+type Read = (Option<i64>, (SdkValue, Option<&'static str>));
+
+/// Sandbox `name`'s row: `{ name, live, live_reason?, started_at, usage,
+/// usage_reason? }`. With no daemon record read (the budget ended first,
+/// the record is unreadable or names no daemon) its process is not
+/// observed: `started_at` and `usage` are null, and `usage_reason` is the
+/// check's reason (`deadline`, `record_unreadable`), else `not_observed`.
+fn item(name: &str, ((live, why), read): (Checked, Option<Read>)) -> SdkValue {
+    let mut fields = vec![
+        ("name".to_owned(), SdkValue::text(name)),
+        (
+            "live".to_owned(),
+            live.map_or(SdkValue::Null, SdkValue::Bool),
+        ),
+    ];
+    fields.extend(why.map(|why| ("live_reason".to_owned(), SdkValue::text(why))));
+    let (started, (usage, usage_reason)) = match read {
+        Some(read) => read,
+        None => (None, (SdkValue::Null, Some(why.unwrap_or(NOT_OBSERVED)))),
+    };
+    fields.push((
+        "started_at".to_owned(),
+        started.map_or(SdkValue::Null, SdkValue::Int),
+    ));
+    fields.push(("usage".to_owned(), usage));
+    fields.extend(usage_reason.map(|why| ("usage_reason".to_owned(), SdkValue::text(why))));
+    SdkValue::Map(fields)
 }
 
 /// The size of sqlite Store `store` under `root`: `store.sqlite` plus its
