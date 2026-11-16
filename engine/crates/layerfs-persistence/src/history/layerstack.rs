@@ -352,6 +352,9 @@ pub(crate) fn add_layer(
     if commit.stack != request.stack {
         return Err(HistoryError::Integrity("Commit ownership"));
     }
+    // Spec 5: read the project epoch at the start of this write transaction;
+    // `confirm` below re-checks it before the transaction commits.
+    let fence = super::epoch::open(tx, request.stack)?;
     if let Some(id) = published_source(tx, request.branch, request.commit)? {
         let stored = layer(tx, id)?.ok_or(HistoryError::Integrity("Layer provenance"))?;
         if stored.stack != request.stack
@@ -455,6 +458,7 @@ pub(crate) fn add_layer(
             actual: LayerId::from_slice(&actual)?,
         });
     }
+    fence.confirm(tx)?;
     Ok(AddLayerOutcome::Added { layer })
 }
 

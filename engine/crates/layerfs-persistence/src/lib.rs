@@ -15,6 +15,10 @@ pub use backend::postgresql::status::{
     status as postgresql_status, PostgresStatus, PostgresStatusError,
 };
 pub use backend::sqlite::acquisition::AcquisitionProvider;
+pub use backend::sqlite::compact::{
+    CompactFailpoint, CompactKeptWaste, CompactPath, CompactReceipt, CompactRequest,
+    CompactResidue, CompactZeroReason,
+};
 pub use backend::sqlite::heads::{heads_digest, read_heads};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use backend::sqlite::lifecycle::headroom::STORE_HEADROOM_BYTES;

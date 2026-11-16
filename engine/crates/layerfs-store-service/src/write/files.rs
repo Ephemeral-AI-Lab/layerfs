@@ -123,6 +123,12 @@ pub fn commit(
                     crate::store::CommitError::History(layerfs_history::HistoryError::Busy) => {
                         "Busy"
                     }
+                    // Spec 5: the project epoch moved (a removal raced this
+                    // write) or is gone after compaction; the Commit is
+                    // refused with the spec's `Conflict`, nothing written.
+                    crate::store::CommitError::History(
+                        layerfs_history::HistoryError::Conflict(_),
+                    ) => "Conflict",
                     crate::store::CommitError::History(
                         layerfs_history::HistoryError::Capacity(_),
                     ) => "Capacity",

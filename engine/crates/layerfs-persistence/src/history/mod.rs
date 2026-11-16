@@ -7,6 +7,7 @@ mod branch;
 mod catalog;
 mod commit;
 mod digests;
+mod epoch;
 mod hints;
 mod kept;
 mod layerstack;

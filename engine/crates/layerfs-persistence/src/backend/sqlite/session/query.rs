@@ -249,6 +249,9 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "gc_branch_stack_any" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_branch_stack_any.sql"
         )),
+        "gc_epoch_read" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_epoch_read.sql"
+        )),
         "gc_epoch_share" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_epoch_share.sql"
         )),

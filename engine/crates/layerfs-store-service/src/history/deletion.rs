@@ -10,7 +10,7 @@
 use crate::history::lookup;
 use crate::store::Store;
 use layerfs_bridge::control::SdkRefusal;
-use layerfs_history::records::GcDeletion;
+use layerfs_history::records::{GcDeletion, GcIntent};
 use layerfs_history::LayerStackId;
 use std::sync::Arc;
 
@@ -51,10 +51,23 @@ pub fn delete_stack(
     stack: LayerStackId,
     deleted_ms: i64,
 ) -> Result<Deletion, SdkRefusal> {
-    let history = store.history();
     let intent = crate::history::admission::project_removal_from_id(stack);
+    delete_stack_with(store, stack, deleted_ms, &intent)
+}
+
+/// [`delete_stack`] under an admission intent the caller already registered.
+/// The marker's own admission scan excludes this operation identity, so the
+/// caller's row is reused and released once instead of being seen as another
+/// removal. A provider without admission writes the marker as before.
+pub fn delete_stack_with(
+    store: &Arc<Store>,
+    stack: LayerStackId,
+    deleted_ms: i64,
+    intent: &GcIntent,
+) -> Result<Deletion, SdkRefusal> {
+    let history = store.history();
     match history
-        .gc_delete_stack(stack, deleted_ms, &intent)
+        .gc_delete_stack(stack, deleted_ms, intent)
         .map_err(lookup::history)?
     {
         GcDeletion::Retired { deleted_ms } => Ok(Deletion::Retired { deleted_ms }),
