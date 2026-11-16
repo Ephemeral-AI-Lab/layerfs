@@ -154,8 +154,9 @@ pub fn sandbox_files(home: &Path, name: &str, request: &FilesRequest) -> Outcome
     let mut args = request.request("sandbox", name);
     // the Workspace records of a Sandbox whose daemon the home reaches
     // directly are here, and its run folder is in its machine: they go
-    // with the request
-    if request.path.is_none() && crate::direct::forwarded(&record) {
+    // with the request, for the roots and for a listing that meets a
+    // Workspace mount
+    if crate::direct::forwarded(&record) {
         args = with_field(args, "workspaces", roots::recorded(&record.dir(home))?);
     }
     super::ask(home, record.machine(), SANDBOX_FILES, args)

@@ -518,15 +518,13 @@ fn a_worker_reads_its_sandbox_s_files_and_neither_side_changes() {
     std::fs::remove_dir_all(scratch).unwrap();
 }
 
-#[test]
-fn a_forwarded_sandbox_s_roots_list_the_workspaces_the_home_records() {
-    let _turn = serial();
-    let (scratch, home, root) = boxed("forwarded");
-    // the home reaches the daemon directly and keeps the Workspace
-    // records; the run folder is in the machine, which keeps none
+/// Sandbox `s1` on machine `box` as the home records one whose daemon it
+/// reaches directly: the home keeps its Workspace records, and the run
+/// folder is in the machine, which keeps none.
+fn forwarded_sandbox(home: &Path) {
     let forward = map(&[("address", t("127.0.0.1:1")), ("machine", t("box"))]);
     write_record(
-        &paths::sandbox_record(&home, "s1"),
+        &paths::sandbox_record(home, "s1"),
         &map(&[
             ("name", t("s1")),
             ("project", t("shop/api")),
@@ -540,6 +538,49 @@ fn a_forwarded_sandbox_s_roots_list_the_workspaces_the_home_records() {
         ]),
     )
     .unwrap();
+}
+
+/// A listing in a forwarded Sandbox's root names its Workspace mounts
+/// from the home's records too: they go with a request that has a path,
+/// not only with the roots read.
+#[test]
+fn a_forwarded_sandbox_s_root_names_the_workspaces_the_home_records() {
+    let _turn = serial();
+    let (scratch, home, root) = boxed("forwarded-root");
+    forwarded_sandbox(&home);
+    // this process stands in for the Sandbox's init: its root is `/`
+    let folder = sandbox_as(&root, "namespaces");
+    let mounts = folder.join("workspaces");
+    for n in ["2", "10"] {
+        std::fs::create_dir(mounts.join(n)).unwrap();
+    }
+    let ten = workspace(&home, 10, &mounts.join("10"));
+    let two = workspace(&home, 2, &mounts.join("2"));
+    assert!(!paths::workspace_dir(&root, "s1").exists());
+    settle(&home);
+    let asked = [("sandbox", t("s1")), ("path", t(mounts.to_str().unwrap()))];
+    let listed = call(&home, "sandbox.files", &asked);
+    if cfg!(target_os = "linux") && home::flock::euid() == 0 {
+        assert_eq!(
+            shown(&listed.unwrap(), &folder),
+            [
+                row("workspaces/10", "mount", "-", &ten),
+                row("workspaces/2", "mount", "-", &two),
+            ]
+        );
+    } else {
+        let (code, message) = listed.unwrap_err();
+        assert_eq!(code, "Unsupported", "{message}");
+        println!("NOT_RUN a forwarded Sandbox's root listing: {message}");
+    }
+    std::fs::remove_dir_all(scratch).unwrap();
+}
+
+#[test]
+fn a_forwarded_sandbox_s_roots_list_the_workspaces_the_home_records() {
+    let _turn = serial();
+    let (scratch, home, root) = boxed("forwarded");
+    forwarded_sandbox(&home);
     let folder = local_sandbox(&root);
     let ten = workspace(&home, 10, &folder.join("workspaces/10"));
     let two = workspace(&home, 2, &folder.join("workspaces/2"));
