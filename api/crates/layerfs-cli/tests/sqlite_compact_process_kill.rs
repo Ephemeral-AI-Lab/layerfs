@@ -366,11 +366,11 @@ sigkill_at!(
     true,
     false
 );
-// The build: immediately before `VACUUM INTO` (SQLite runs that copy as one
-// uninterruptible call), and after the staged Store is built.
+// The build: immediately before the fresh file's first write, and after the
+// staged Store is built.
 sigkill_at!(
-    sigkill_before_vacuum,
-    "BeforeVacuum",
+    sigkill_before_load,
+    "BeforeLoad",
     "build",
     false,
     false,

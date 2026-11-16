@@ -317,7 +317,6 @@ impl SqliteHandles {
                 BuildInput {
                     facts: &facts,
                     tuple: &tuple,
-                    layout,
                     synchronous,
                 },
                 capacity,

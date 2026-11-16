@@ -31,14 +31,23 @@
   and the PostgreSQL-only rows are deferred to T12.3b by name.
 - **T-G61 capacity follow-up.** A separate opt-in test,
   `sqlite_compact_capacity.rs#capacity_measure` (ignored by default), measured a
-  real **9.987 GB** Store: `none` at 8.88% dead (three runs, median 149.318 s)
-  and `rebuild` at 10.00% dead (three runs, median 246.371 s; mark 149.089 s,
-  build 94.317 s, verify 0.312 s, install 1.916 s; dead 1.011 GB, shrink
-  1.017 GB; the T-G72 peak bound is 29.481 GB, the old formula 9.144 GB),
-  plus one WAL/FULL rebuild (284.078 s). The numbers are in
-  `tests/fixtures/sqlite_compact_capacity_measure.json`. T-G66 then measured
-  the 50 GB arm once per path (see the runbook disk-headroom section); the
-  30% arm remains [E].
+  real **9.987 GB** Store. On the superseded whole-Store `VACUUM INTO` build:
+  `none` at 8.88% dead (three runs, median 149.318 s) and `rebuild` at 10.00%
+  dead (three runs, median 246.371 s; mark 149.089 s, build 94.317 s, verify
+  0.312 s, install 1.916 s; dead 1.011 GB, shrink 1.017 GB; the T-G72 packed
+  peak bound 29.481 GB, the old `new + visited` formula 9.144 GB), plus a
+  WAL/FULL control (284.078 s).
+  Re-measured on this branch with the fresh-copy build on the same fixture:
+  `rebuild` median 118.438 s (mark 74.462-75.704 s, build 18.190-19.209 s,
+  quick-check verify 4.330-4.377 s, install 19.197-23.673 s; dead 1.011 GB,
+  shrink 1.016-1.018 GB, peak **9.144 GB** = the fresh Store + visited) and
+  `none` median 88.439 s (82.0-149.9 s; this Sandbox shares the host with other
+  runs). The fresh build phase is about 5x shorter (18-19 s against 92-104 s);
+  the verify adds a ~4 s `quick_check` page scan and the install pays a
+  ~19 s `sync_all` for the freshly written 9.1 GB, both inside the 118 s total.
+  The numbers are in `tests/fixtures/sqlite_compact_capacity_measure.json`.
+  T-G66 measured the 50 GB arm once per path on the old build (see the runbook
+  disk-headroom section); the 30% arm remains [E].
 
 ## Matrix (SQLite half)
 
@@ -100,7 +109,7 @@
 | AC-54 | both | E2 | partial | restore_install.rs#a_folder_made_unprivate_during_the_download_is_refused_before_the_install; restored_records.rs#a_restored_project_reads_as_a_sandbox_reads_it | Restore install guards and restored records are named; restore before/after a removal and the stale-entry listing arm are partial. The restore-window arm needs a lock-capable filesystem (ext4/xfs/btrfs), so on this Sandbox it reports Unsupported while the other two cases pass. |
 | AC-55 | both | E2 | executed | this runner #arm_error_codes; this runner #arm_checkpoint_busy; sqlite_compact.rs#a_stray_staged_name_is_refused_and_not_deleted | Exact SQLite texts asserted: Busy, Conflict("Store sidecar at install"), Exists("unrecorded compaction artifact"), Capacity("disk space"); the full engine/API message matrix stays partial. |
 | AC-56 | both | E3 | partial | sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript; sqlite_compact_golden.json | The literal SQLite vector is pinned (absent head 33 zero bytes); the shared PostgreSQL literal and the three-run E3 shape are deferred. |
-| AC-57 | both | E3 | partial | this runner #arm_measurement; sqlite_compact_measure.json; T-G61 sqlite_compact_capacity.rs#capacity_measure; sqlite_compact_capacity_measure.json | The tiny three-run arm is median 28.2 ms. T-G61 measured a real 9.987 GB Store with 3 runs per arm: `none` at 8.88% dead (median 149.318 s) and `rebuild` at 10.00% dead (median 246.371 s, mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s), plus one WAL/FULL rebuild at 284.078 s; profile, host and toolchain are declared in the fixture, and the warm page cache is declared below. T-G66 later measured the 50 GB arm once per path; the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]. |
+| AC-57 | both | E3 | partial | this runner #arm_measurement; sqlite_compact_measure.json; T-G61 sqlite_compact_capacity.rs#capacity_measure; sqlite_compact_capacity_measure.json | The tiny three-run arm is median 32.1 ms. T-G61 measured a real 9.987 GB Store on the whole-Store `VACUUM INTO` build (3 runs per arm): `none` at 8.88% dead median 149.318 s and `rebuild` at 10.00% dead median 246.371 s (mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s), plus a WAL/FULL control at 284.078 s. Re-measured on this branch with the fresh-copy build on the same 9.987 GB fixture: `rebuild` median 118.438 s (mark 74.462-75.704 s / build 18.190-19.209 s / quick-check verify 4.330-4.377 s / install 19.197-23.673 s), peak 9.144 GB; `none` median 88.439 s (82.0-149.9 s; this Sandbox shares the host). T-G66 later measured the 50 GB arm once per path; the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]. |
 | AC-58 | SQLite | E2 | covered | sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript; sqlite_compact_crash.rs#crash_before_copy; sqlite_compact_crash.rs#crash_during_copy | none deletes the scratch and leaves no .compact; rebuild keeps the visited scratch through the build; step 2 writes only on rebuild. |
 | AC-59 | SQLite | E2 | executed | this runner #arm_checkpoint_busy; this runner #arm_seal; sqlite_compact.rs#a_store_replaced_between_seal_and_install_is_stale | busy != 0 refuses Busy and the WAL is never unlinked; a successful seal records (size, mtime, counter) as fenced by the StaleStore arm. |
 | AC-60 | PG | E2 | deferred (T12.3b) | - | PostgreSQL synchronous standby handling: T12.3b. |
@@ -138,7 +147,8 @@
   range in `engine/crates/layerfs-persistence/tests/fixtures/
   sqlite_compact_measure.json` (refresh with `UPDATE_MEASURE=1`). The separate
   T-G61 `sqlite_compact_capacity.rs#capacity_measure` measures a real 9.987 GB
-  Store (three `none` + three `rebuild` runs, one WAL/FULL control) into
+  Store (three `none` + three `rebuild` runs; `CAPACITY_DURABLE=1` adds a
+  WAL/FULL control) into
   `sqlite_compact_capacity_measure.json`; it is opt-in because the fixture is
   ~10 GB and the ignored test is not part of a normal suite.
 
@@ -167,8 +177,9 @@
 - AC-56: the SQLite literal vector is pinned by the T12.1 golden; the shared
   PostgreSQL literal is deferred.
 - AC-57: three-run measurement arm executed on this Sandbox (small fixture),
-  plus T-G61's real 9.987 GB capacity fixture with three runs per arm
-  (`none` 149.318 s median, `rebuild` 246.371 s median, phase sums recorded).
+  plus the real 9.987 GB capacity fixture with three runs per arm
+  (`none` 88.439 s median, fresh `rebuild` 118.438 s median; the superseded
+  whole-Store build recorded 149.318 s / 246.371 s median on the same fixture).
   Its 50 GB projection, the 30% arm, PG `ACCESS EXCLUSIVE` duration and the
   plain `VACUUM INTO` comparison are deferred/[E].
 
@@ -190,6 +201,14 @@ AC-51 does not depend on the projection alone.
   `/var/tmp/g61big`; the test ran 1678 s. Caches: the ~10 GB Store fits in the
   135 GB page cache and no cache drop ran between the three runs of an arm;
   the mark is CPU-bound at ~62 MB/s, not cache-bound.
+
+- Fresh-copy re-measurement (this branch): Docker Sandbox `fxfresh`
+  (Linux x86_64, 88 vCPU, 135 GB RAM, ext4 `/dev/sda2` run directory),
+  rustc 1.85.1, release profile, `SqlitePersistenceProfile::Disposable`
+  (WAL/OFF), `CAPACITY_MEASURE=1 UPDATE_CAPACITY=1`, TMPDIR on the ext4 run
+  directory; the test ran 870 s and reused the same 9.987 GB fixture shape.
+  The Sandbox shares its host with other runs: the three `none` marks span
+  82.0-149.9 s while the three `rebuild` marks stay 74.5-75.7 s.
 - Docker Sandbox `t123csbx` (Linux x86_64, tmpfs `/tmp`, overlayfs
   `/var/tmp`), rustc 1.85.1, `SqlitePersistenceProfile::Disposable`
   (WAL/OFF), `CARGO_TARGET_DIR=/tmp/target-t123c`.

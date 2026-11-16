@@ -1,4 +1,12 @@
-//! §7 steps 3–4: the staged rebuild, its capacity inputs and the §11 peak bound.
+//! §7 steps 2–5: the fresh-copy rebuild, its capacity inputs and the §11 peak
+//! bound.
+//!
+//! The rebuild writes a new file beside the Store: the sealed Store's schema
+//! (as `sqlite_master` holds it, so `schema_source`/`schema_definition` stay
+//! identical), then only the rows the mark retained, and only then the
+//! secondary indexes and triggers. There is no staged whole-Store copy and no
+//! in-place rewrite: `VACUUM INTO` + delete + `VACUUM` would write the retained
+//! bytes about four times over (measured), while this path writes them once.
 
 use super::op::compact_path;
 use super::op::hex;
@@ -10,9 +18,8 @@ use super::types::io_error;
 use super::types::CompactFailpoint;
 use super::types::CompactRequest;
 use super::types::MarkTuple;
-use super::types::JOURNAL_HEADER_BOUND;
 use super::verify::file_free_bytes;
-use super::verify::open_immutable;
+use super::verify::immutable_uri;
 use crate::backend::records::BackendError;
 use crate::backend::sqlite::lifecycle::seal::SealedFacts;
 use crate::backend::sqlite::session::connection::Session;
@@ -22,21 +29,20 @@ use rusqlite::params;
 use rusqlite::Connection;
 use rusqlite::OpenFlags;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-/// §11 peak temporary bytes for a rebuild: the staged copy's extent, the
-/// rollback-journal bound, the new Store's extent and the visited scratch.
-pub fn peak_temp_bytes(
-    staged_bytes: u64,
-    journal_bound_bytes: u64,
-    target_bytes: u64,
-    visited_bytes: u64,
-) -> u64 {
-    staged_bytes
-        .saturating_add(journal_bound_bytes)
-        .saturating_add(target_bytes)
-        .saturating_add(visited_bytes)
+/// The bulk load's page cache: 256 MiB, so the retained packs stream through
+/// memory instead of the default 2 MiB cache.
+const CACHE_KIB: i64 = 262_144;
+
+/// §11 peak temporary bytes for a rebuild: the fresh Store and the `visited`
+/// scratch. The fresh path stages no whole-Store copy, writes no prune
+/// journal and opens no rewrite temp database, so it has no other artifact to
+/// count.
+pub fn peak_temp_bytes(target_bytes: u64, visited_bytes: u64) -> u64 {
+    target_bytes.saturating_add(visited_bytes)
 }
 
 pub(crate) fn pack_lengths(session: &Arc<Session>) -> HistoryResult<BTreeMap<i64, u64>> {
@@ -72,39 +78,10 @@ pub(crate) fn live_page_metrics(session: &Arc<Session>) -> HistoryResult<(u64, u
         .map_err(Into::into)
 }
 
-/// The rollback-journal upper bound of one transaction on a `pages`-page file:
-/// one record per modified page (`page_size + 8` bytes: page number, page image
-/// and checksum) plus the header allowance. A page is journaled at most once
-/// per transaction, so the staged copy's page count bounds both the prune and
-/// the rewrite journal, and the bound never under-reports the observed file.
-pub const fn journal_bound_bytes(pages: u64, page_size: u64) -> u64 {
-    pages
-        .saturating_mul(page_size.saturating_add(8))
-        .saturating_add(JOURNAL_HEADER_BOUND)
-}
-
-/// The staged file's page count and page size, before the prune frees pages.
-pub(crate) fn file_page_extent(connection: &Connection) -> HistoryResult<(u64, u64)> {
-    let pages: i64 = connection
-        .query_row("PRAGMA page_count", params![], |row| row.get(0))
-        .map_err(db_error)?;
-    let page: i64 = connection
-        .query_row("PRAGMA page_size", params![], |row| row.get(0))
-        .map_err(db_error)?;
-    Ok((
-        u64::try_from(pages).map_err(|_| HistoryError::Integrity("page count"))?,
-        u64::try_from(page).map_err(|_| HistoryError::Integrity("page size"))?,
-    ))
-}
-
-/// What the staged rebuild produced, for the report and the install fence.
+/// What the fresh-copy rebuild produced, for the report and the install fence.
 pub(crate) struct Built {
     pub(crate) target: PathBuf,
     pub(crate) target_bytes: u64,
-    /// The staged copy's extent right after `VACUUM INTO`, before the prune.
-    pub(crate) staged_bytes: u64,
-    /// The rollback-journal upper bound the staged page count implies.
-    pub(crate) journal_bound_bytes: u64,
     pub(crate) visited_bytes: u64,
     pub(crate) logical: u64,
     pub(crate) canonical: u64,
@@ -114,32 +91,14 @@ pub(crate) struct Built {
 }
 
 impl Built {
-    /// §11 peak temporary bytes: the run's whole artifact footprint below the
-    /// rename, as a documented upper bound rather than a sampled peak.
-    ///
-    /// The staged copy is the whole sealed Store (`VACUUM INTO`), so it keeps
-    /// the source extent until the rewrite's final truncate. The rewrite then
-    /// writes the new Store into SQLite's temp database (the process temp
-    /// directory, unlinked) while rewriting the staged file in place, and both
-    /// the prune and the rewrite journal the pages they overwrite. The journal
-    /// term bounds either journal by one record per staged page
-    /// (`page_size + 8` bytes each: page number, image and checksum) plus the
-    /// header allowance, so it never under-reports the observed journal. The
-    /// sum over-reports the measured 50 GB peak by a few percent; §13 already
-    /// marks the report an estimate.
+    /// §11 peak temporary bytes: the fresh Store plus the `visited` scratch,
+    /// as a documented upper bound rather than a sampled peak. The staged
+    /// fresh file grows to exactly `target_bytes`, and the mark's scratch is
+    /// deleted at the settle, so the run's whole artifact footprint never
+    /// exceeds their sum. §13 already marks the report an estimate.
     pub(crate) fn peak_temp_bytes(&self) -> u64 {
-        peak_temp_bytes(
-            self.staged_bytes,
-            self.journal_bound_bytes,
-            self.target_bytes,
-            self.visited_bytes,
-        )
+        peak_temp_bytes(self.target_bytes, self.visited_bytes)
     }
-}
-
-/// Escaped SQL text literal for an `ATTACH` path (the statement cannot bind).
-pub(crate) fn quote(text: &str) -> String {
-    text.replace('\'', "''")
 }
 
 pub(crate) fn table_present(connection: &Connection, name: &str) -> HistoryResult<bool> {
@@ -157,12 +116,272 @@ pub(crate) fn table_present(connection: &Connection, name: &str) -> HistoryResul
 pub(crate) struct BuildInput<'a> {
     pub(crate) facts: &'a SealedFacts,
     pub(crate) tuple: &'a MarkTuple,
-    pub(crate) layout: crate::SqlitePackLayout,
     pub(crate) synchronous: i64,
 }
 
-/// The §7 steps 2–5: build the staged Store, copy only retained rows, compact
-/// it, and switch it to WAL.
+/// How one table's rows enter the fresh file.
+enum Copy {
+    /// Every row (catalog, allocators, markers the closure keeps).
+    All,
+    /// The rows a filter keeps; the filter reads `src` and the mark scratch.
+    Where(&'static str),
+    /// The table's DDL is created, the table itself stays empty: transient
+    /// working rows and the dead set are never carried across a rebuild.
+    Empty,
+}
+
+/// The retained-row filter per table, in the order the copy runs. Every
+/// referenced table is copied before the tables whose foreign keys name it, so
+/// the immediate constraints hold; the deferred history constraints are
+/// checked at COMMIT.
+///
+/// `history_meta` and `store_totals` are copied whole and then brought to the
+/// rebuild's values in the same transaction. `gc_intent` keeps only this run's
+/// admission intent, so the installed Store carries the row the settle clears.
+fn copy_rule(table: &str) -> Copy {
+    match table {
+        "pack" | "pack_unit" => {
+            // A pack is one unit: a pack with any live object is copied whole.
+            Copy::Where("pack_id IN (SELECT pack_id FROM scratch.live_pack)")
+        }
+        "object_location" | "content_signature" => {
+            Copy::Where("object_id IN (SELECT object_id FROM scratch.visited)")
+        }
+        "file_digest" => Copy::Where("root IN (SELECT object_id FROM scratch.visited)"),
+        "layer_stack" => {
+            Copy::Where("layer_stack_id IN (SELECT node_id FROM src.kept_node WHERE kind='stack')")
+        }
+        "layer" => Copy::Where("layer_id IN (SELECT node_id FROM src.kept_node WHERE kind='layer')"),
+        "commit" => {
+            Copy::Where("commit_id IN (SELECT node_id FROM src.kept_node WHERE kind='commit')")
+        }
+        "branch" => {
+            Copy::Where("branch_id IN (SELECT node_id FROM src.kept_node WHERE kind='branch')")
+        }
+        "layer_lineage" => {
+            Copy::Where("layer_id IN (SELECT node_id FROM src.kept_node WHERE kind='layer')")
+        }
+        "commit_lineage" => {
+            Copy::Where("commit_id IN (SELECT node_id FROM src.kept_node WHERE kind='commit')")
+        }
+        "absorbed" => Copy::Where(
+            "run IN (SELECT run FROM src.commit_lineage WHERE commit_id IN \
+(SELECT node_id FROM src.kept_node WHERE kind='commit'))",
+        ),
+        "reach" => Copy::Where(
+            "key IN (SELECT node_id FROM src.kept_node WHERE kind='stack' \
+UNION SELECT run FROM src.commit_lineage WHERE commit_id IN \
+(SELECT node_id FROM src.kept_node WHERE kind='commit'))",
+        ),
+        "branch_retired" => {
+            Copy::Where("branch_id IN (SELECT node_id FROM src.kept_node WHERE kind='branch')")
+        }
+        "layer_stack_retired" | "path_removed" | "project_epoch" => {
+            Copy::Where("layer_stack_id IN (SELECT node_id FROM src.kept_node WHERE kind='stack')")
+        }
+        "inode_value_block" | "kept_node" | "scope_allocator" | "store_policy" | "store_totals"
+        | "history_meta" => Copy::All,
+        "gc_intent" => Copy::Empty,
+        "gc_op" | "gc_dead" | "merge_operation" | "merge_record" | "init_operation"
+        | "init_entry" | "init_host_file" | "binding_hint_block" => Copy::Empty,
+        _ => Copy::All,
+    }
+}
+
+/// The retained-row copy, in foreign-key order. Tables the sealed Store does
+/// not have (an older layout) are absent; [`copy_rows`] skips them.
+const COPY_ORDER: [&str; 30] = [
+    "pack",
+    "pack_unit",
+    "object_location",
+    "content_signature",
+    "file_digest",
+    "inode_value_block",
+    "layer_stack",
+    "layer",
+    "commit",
+    "branch",
+    "layer_lineage",
+    "commit_lineage",
+    "absorbed",
+    "reach",
+    "branch_retired",
+    "layer_stack_retired",
+    "path_removed",
+    "project_epoch",
+    "kept_node",
+    "scope_allocator",
+    "store_policy",
+    "store_totals",
+    "history_meta",
+    "gc_intent",
+    "merge_operation",
+    "merge_record",
+    "init_operation",
+    "init_entry",
+    "init_host_file",
+    "binding_hint_block",
+];
+
+/// Quotes a table name for the generated `INSERT ... SELECT`.
+fn identifier(table: &str) -> String {
+    format!("\"{}\"", table.replace('"', "\"\""))
+}
+
+/// The schema objects one rebuild copies from `sqlite_master`, in creation
+/// order: the tables the bulk load fills, then the indexes and triggers built
+/// after it.
+struct SchemaObjects {
+    tables: Vec<String>,
+    secondary: Vec<String>,
+}
+
+fn schema_objects(connection: &Connection) -> HistoryResult<SchemaObjects> {
+    let mut statement = connection
+        .prepare(
+            "SELECT type,sql FROM src.sqlite_master \
+WHERE sql IS NOT NULL AND substr(name,1,7)!='sqlite_' ORDER BY rowid",
+        )
+        .map_err(db_error)?;
+    let mut rows = statement.query(params![]).map_err(db_error)?;
+    let mut tables = Vec::new();
+    let mut secondary = Vec::new();
+    while let Some(row) = rows.next().map_err(db_error)? {
+        let kind: String = row.get(0).map_err(db_error)?;
+        let sql: String = row.get(1).map_err(db_error)?;
+        match kind.as_str() {
+            "table" => tables.push(sql),
+            "index" | "trigger" | "view" => secondary.push(sql),
+            _ => return Err(HistoryError::Integrity("staged Store schema object")),
+        }
+    }
+    Ok(SchemaObjects { tables, secondary })
+}
+
+/// Copies the retained rows of every table the sealed Store has, in
+/// [`COPY_ORDER`], then recomputes the totals and advances the generation.
+fn copy_rows(
+    connection: &Connection,
+    op: &RunOp,
+    generation: i64,
+    target_tables: &BTreeSet<String>,
+) -> HistoryResult<()> {
+    connection
+        .execute_batch("BEGIN IMMEDIATE")
+        .map_err(db_error)?;
+    let copied = (|| -> HistoryResult<()> {
+        // §7 step 4: the totals trigger invariant holds before the copy. The
+        // rewrite of `store_totals` below trusts it.
+        let before: (i64, i64) = connection
+            .query_row(
+                "SELECT (SELECT logical FROM src.store_totals WHERE id=1),\
+(SELECT COALESCE(SUM(logical),0) FROM src.\"commit\")+\
+(SELECT COALESCE(SUM(logical),0) FROM src.layer)",
+                params![],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(db_error)?;
+        if before.0 != before.1 {
+            return Err(HistoryError::Integrity(
+                "Store totals disagree with the history rows",
+            ));
+        }
+        for table in COPY_ORDER {
+            if !target_tables.contains(table) {
+                continue;
+            }
+            let name = identifier(table);
+            let statement = if table == "gc_intent" {
+                format!(
+                    "INSERT INTO main.{name} SELECT * FROM src.{name} WHERE op_id=x'{}'",
+                    hex(&op.op_id)
+                )
+            } else {
+                match copy_rule(table) {
+                    Copy::All => format!("INSERT INTO main.{name} SELECT * FROM src.{name}"),
+                    Copy::Where(filter) => {
+                        format!("INSERT INTO main.{name} SELECT * FROM src.{name} WHERE {filter}")
+                    }
+                    Copy::Empty => continue,
+                }
+            };
+            connection.execute_batch(&statement).map_err(db_error)?;
+        }
+        // `sqlite_sequence` is the acquisition operation counter: the copy
+        // keeps every row the source had, so the counter never falls (§4.1).
+        if target_tables.contains("sqlite_sequence") {
+            let source_sequence: i64 = connection
+                .query_row(
+                    "SELECT count(*) FROM src.sqlite_master \
+WHERE type='table' AND name='sqlite_sequence'",
+                    params![],
+                    |row| row.get(0),
+                )
+                .map_err(db_error)?;
+            if source_sequence == 1 {
+                connection
+                    .execute_batch(
+                        "INSERT INTO main.sqlite_sequence(name,seq) \
+SELECT name,seq FROM src.sqlite_sequence",
+                    )
+                    .map_err(db_error)?;
+            }
+        }
+        // §7 step 4: `store_totals` is a whole row, so the `init_*` columns
+        // keep the source values; only the four derived sums are rewritten.
+        connection
+            .execute_batch(&format!(
+                "UPDATE main.store_totals SET \
+logical=(SELECT COALESCE(SUM(logical),0) FROM main.\"commit\")+\
+(SELECT COALESCE(SUM(logical),0) FROM main.layer),\
+canonical=(SELECT COALESCE(SUM(canonical_length),0) FROM main.object_location),\
+stored=(SELECT COALESCE(SUM(length),0) FROM main.pack),\
+metadata=(SELECT COALESCE(SUM(length),0) FROM main.pack WHERE domain=0) WHERE id=1;\
+UPDATE main.history_meta SET catalog_incarnation={generation} WHERE id=1;"
+            ))
+            .map_err(db_error)?;
+        Ok(())
+    })();
+    match copied {
+        Ok(()) => connection.execute_batch("COMMIT").map_err(db_error),
+        Err(error) => {
+            let _ = connection.execute_batch("ROLLBACK");
+            Err(error)
+        }
+    }
+}
+
+/// The tables the fresh file has, after the schema copy created them.
+fn main_tables(connection: &Connection) -> HistoryResult<BTreeSet<String>> {
+    let mut statement = connection
+        .prepare("SELECT name FROM main.sqlite_master WHERE type='table'")
+        .map_err(db_error)?;
+    let mut rows = statement.query(params![]).map_err(db_error)?;
+    let mut found = BTreeSet::new();
+    while let Some(row) = rows.next().map_err(db_error)? {
+        found.insert(row.get::<_, String>(0).map_err(db_error)?);
+    }
+    Ok(found)
+}
+
+/// The source page settings the fresh file must preserve (§7 step 2).
+fn page_settings(connection: &Connection) -> HistoryResult<(i64, i64, i64, i64)> {
+    let read = |pragma: &str| -> HistoryResult<i64> {
+        connection
+            .query_row(pragma, params![], |row| row.get(0))
+            .map_err(db_error)
+    };
+    Ok((
+        read("PRAGMA src.page_size")?,
+        read("PRAGMA src.auto_vacuum")?,
+        read("PRAGMA src.user_version")?,
+        read("PRAGMA src.application_id")?,
+    ))
+}
+
+/// §7 steps 2–5: create the fresh Store, copy only retained rows, then build
+/// the secondary indexes and triggers, recompute the totals, and switch the
+/// file to WAL.
 pub(crate) fn build(
     input: BuildInput<'_>,
     capacity: bool,
@@ -172,7 +391,6 @@ pub(crate) fn build(
     let BuildInput {
         facts,
         tuple,
-        layout,
         synchronous,
     } = input;
     let store = &facts.path;
@@ -189,259 +407,139 @@ pub(crate) fn build(
         .len();
     stop_at(request, CompactFailpoint::BeforeCopy, op, store)?;
     if capacity {
-        // §7 step 3 on a bounded filesystem: `VACUUM INTO` has already created
-        // the staged file when the write meets ENOSPC. The abort path removes
-        // it and the live Store is unchanged.
+        // §7 step 3 on a bounded filesystem: the fresh file has already been
+        // created when the write meets ENOSPC. The abort path removes it and
+        // the live Store is unchanged.
         std::fs::write(&target, b"staged").map_err(io_error)?;
         return Err(io_error(std::io::Error::from_raw_os_error(28)));
     }
 
     // A real-process crash arm stops here: the visited scratch is written and
-    // `VACUUM INTO` has not started. See `BeforeVacuum`.
-    stop_at(request, CompactFailpoint::BeforeVacuum, op, store)?;
-    let source = open_immutable(store)?;
-    let target_text = target
-        .to_str()
-        .ok_or(HistoryError::InvalidInput("compaction path"))?;
-    source
-        .execute("VACUUM INTO ?1", params![target_text])
-        .map_err(db_error)?;
-    source.close().map_err(|(_, error)| db_error(error))?;
-    // The copy produced the staged file but has not pruned or verified it.
-    stop_at(request, CompactFailpoint::DuringCopy, op, store)?;
-    // The staged copy holds the source's whole extent until the final
-    // `VACUUM` truncates it; §11 counts it in the peak temp.
-    let staged_bytes = std::fs::metadata(&target).map_err(io_error)?.len();
+    // the fresh file has not been created. `BeforeLoad` is the build's first
+    // write, so the arm proves the crash before the staged name exists.
+    stop_at(request, CompactFailpoint::BeforeLoad, op, store)?;
 
+    // §7 step 2: a raw connection on a new file. The source is attached
+    // `immutable=1` so the sealed file stays byte-identical and no sidecar
+    // appears beside it; the mark's scratch is attached from the same file the
+    // mark wrote.
     let connection = Connection::open_with_flags(
         &target,
-        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        OpenFlags::SQLITE_OPEN_READ_WRITE
+            | OpenFlags::SQLITE_OPEN_CREATE
+            | OpenFlags::SQLITE_OPEN_URI
+            | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
     .map_err(db_error)?;
     connection
         .busy_timeout(std::time::Duration::ZERO)
         .map_err(db_error)?;
     connection
-        .execute_batch(&format!(
-            "PRAGMA journal_mode=DELETE; PRAGMA synchronous={synchronous};"
-        ))
-        .map_err(db_error)?;
-    // The prune and the rewrite journal the pages they overwrite; one record
-    // per staged page bounds either journal before the staged file shrinks.
-    let (staged_pages, page_size) = file_page_extent(&connection)?;
-    let journal_bound_bytes = journal_bound_bytes(staged_pages, page_size);
-    // The copied published-pack rows may be deleted in the artifact; the live
-    // immutability triggers are restored before the file is verified.
-    // §7 step 4 asks for `foreign_keys=ON` outside the transaction (inside it
-    // the pragma is a no-op). The pruning keeps `foreign_keys=OFF` — an
-    // explicit, tested deviation: with enforcement on, SQLite's deferred
-    // constraint counter survives this delete order and the COMMIT is refused
-    // `SQLITE_CONSTRAINT_FOREIGNKEY` even though `pragma_foreign_key_check`
-    // reports the final row set clean. The verification's
-    // `pragma_foreign_key_check` proves that same final state, so the pragma is
-    // not the only guard.
-    // `sqlite_sequence` is the acquisition operation counter: the copy keeps
-    // every row the source had, and the sequence never falls (§4.1, §7).
-    let sequences: Vec<(String, i64)> = if table_present(&connection, "sqlite_sequence")? {
-        let mut statement = connection
-            .prepare("SELECT name,seq FROM sqlite_sequence")
-            .map_err(db_error)?;
-        let mut rows = statement.query(params![]).map_err(db_error)?;
-        let mut found = Vec::new();
-        while let Some(row) = rows.next().map_err(db_error)? {
-            found.push((
-                row.get::<_, String>(0).map_err(db_error)?,
-                row.get::<_, i64>(1).map_err(db_error)?,
-            ));
-        }
-        found
-    } else {
-        Vec::new()
-    };
-    let triggers: Vec<String> = {
-        let mut statement = connection
-            .prepare(
-                "SELECT sql FROM sqlite_schema \
-WHERE type='trigger' AND name LIKE '%immutable%' AND sql IS NOT NULL",
-            )
-            .map_err(db_error)?;
-        let mut rows = statement.query(params![]).map_err(db_error)?;
-        let mut found = Vec::new();
-        while let Some(row) = rows.next().map_err(db_error)? {
-            found.push(row.get::<_, String>(0).map_err(db_error)?);
-        }
-        found
-    };
-    connection
-        .execute_batch(
-            "DROP TRIGGER IF EXISTS pack_immutable_update;\
-DROP TRIGGER IF EXISTS pack_immutable_delete;\
-DROP TRIGGER IF EXISTS pack_unit_immutable_update;\
-DROP TRIGGER IF EXISTS pack_unit_immutable_delete;\
-PRAGMA foreign_keys=OFF;\
-PRAGMA defer_foreign_keys=ON;",
+        .execute(
+            "ATTACH DATABASE ?1 AS src",
+            params![immutable_uri(store)],
         )
         .map_err(db_error)?;
     connection
-        .execute_batch(&format!(
-            "ATTACH DATABASE '{}' AS scratch;",
-            quote(
+        .execute(
+            "ATTACH DATABASE ?1 AS scratch",
+            params![
                 visited
                     .to_str()
                     .ok_or(HistoryError::InvalidInput("compaction path"))?
-            )
+            ],
+        )
+        .map_err(db_error)?;
+    let (page_size, auto_vacuum, user_version, application_id) = page_settings(&connection)?;
+    connection
+        .execute_batch(&format!(
+            "PRAGMA page_size={page_size};PRAGMA auto_vacuum={auto_vacuum};\
+PRAGMA journal_mode=OFF;PRAGMA synchronous=OFF;PRAGMA foreign_keys=OFF;\
+PRAGMA temp_store=MEMORY;PRAGMA cache_size=-{CACHE_KIB};\
+PRAGMA user_version={user_version};PRAGMA application_id={application_id};"
         ))
         .map_err(db_error)?;
 
-    let units = layout.uses_units();
-    let acquisition_tables = table_present(&connection, "init_operation")?;
-    connection
-        .execute_batch("BEGIN IMMEDIATE")
-        .map_err(db_error)?;
-    let staged = (|| -> HistoryResult<()> {
-        // §7 step 4: the totals trigger invariant holds before the copy.
-        let before: (i64, i64) = connection
-            .query_row(
-                "SELECT (SELECT logical FROM store_totals WHERE id=1),\
-(SELECT COALESCE(SUM(logical),0) FROM \"commit\")+\
-(SELECT COALESCE(SUM(logical),0) FROM layer)",
-                params![],
-                |row| Ok((row.get(0)?, row.get(1)?)),
+    // §7 step 2: the schema as the sealed Store records it, so the installed
+    // file's `schema_definition` stays byte-identical. Only the tables are
+    // created now; indexes and triggers wait for the bulk load.
+    let schema = schema_objects(&connection)?;
+    for sql in &schema.tables {
+        connection.execute_batch(sql).map_err(db_error)?;
+    }
+    let (restored_page, restored_auto_vacuum): (i64, i64) = match (
+        connection.query_row("PRAGMA main.page_size", params![], |row| row.get(0)),
+        connection.query_row("PRAGMA main.auto_vacuum", params![], |row| row.get(0)),
+    ) {
+        (Ok(page), Ok(auto)) => (page, auto),
+        (Err(error), _) | (_, Err(error)) => return Err(db_error(error)),
+    };
+    if restored_page != page_size || restored_auto_vacuum != auto_vacuum {
+        return Err(HistoryError::Integrity("staged Store page settings"));
+    }
+
+    // The fresh file now carries the schema and no rows: the state a crash
+    // inside the bulk load leaves (the in-process arm tears this file, and the
+    // next run removes the whole recorded set instead of trusting it).
+    stop_at(request, CompactFailpoint::DuringCopy, op, store)?;
+    let target_tables = main_tables(&connection)?;
+    copy_rows(&connection, op, tuple.generation + 1, &target_tables)?;
+
+    // §7 step 4: the secondary indexes and the immutability/logical triggers
+    // are built after the bulk load, so the load writes no index page and fires
+    // no trigger.
+    for sql in &schema.secondary {
+        connection.execute_batch(sql).map_err(db_error)?;
+    }
+    // The installed Store's schema definition must match the recorded one, or
+    // its next open refuses; the DDL text is copied verbatim, so a mismatch is
+    // a rebuild bug.
+    let definition: String = {
+        let mut statement = connection
+            .prepare(
+                "SELECT type,name,sql FROM main.sqlite_master \
+WHERE sql IS NOT NULL AND substr(name,1,7)!='sqlite_' ORDER BY type,name",
             )
             .map_err(db_error)?;
-        if before.0 != before.1 {
-            return Err(HistoryError::Integrity(
-                "Store totals disagree with the history rows",
-            ));
+        let mut rows = statement.query(params![]).map_err(db_error)?;
+        let mut text = String::new();
+        while let Some(row) = rows.next().map_err(db_error)? {
+            let kind: String = row.get(0).map_err(db_error)?;
+            let name: String = row.get(1).map_err(db_error)?;
+            let sql: String = row.get(2).map_err(db_error)?;
+            text.push_str(&kind);
+            text.push('\n');
+            text.push_str(&name);
+            text.push('\n');
+            text.push_str(&sql);
+            text.push('\n');
         }
-        let mut deletes = format!(
-            "DELETE FROM object_location WHERE object_id NOT IN \
-(SELECT object_id FROM scratch.visited);\
-DELETE FROM content_signature WHERE object_id NOT IN \
-(SELECT object_id FROM scratch.visited);\
-DELETE FROM file_digest WHERE root NOT IN (SELECT object_id FROM scratch.visited);\
-DELETE FROM binding_hint_block;\
-DELETE FROM \"commit\" WHERE commit_id NOT IN \
-(SELECT node_id FROM kept_node WHERE kind='commit');\
-DELETE FROM layer WHERE layer_id NOT IN \
-(SELECT node_id FROM kept_node WHERE kind='layer');\
-DELETE FROM branch WHERE branch_id NOT IN \
-(SELECT node_id FROM kept_node WHERE kind='branch');\
-DELETE FROM layer_stack WHERE layer_stack_id NOT IN \
-(SELECT node_id FROM kept_node WHERE kind='stack');\
-DELETE FROM layer_lineage WHERE layer_id NOT IN \
-(SELECT node_id FROM kept_node WHERE kind='layer');\
-DELETE FROM commit_lineage WHERE commit_id NOT IN \
-(SELECT node_id FROM kept_node WHERE kind='commit');\
-DELETE FROM absorbed WHERE run NOT IN (SELECT run FROM commit_lineage);\
-DELETE FROM reach WHERE key NOT IN \
-(SELECT layer_stack_id FROM layer_stack UNION SELECT run FROM commit_lineage);\
-DELETE FROM branch_retired WHERE branch_id NOT IN \
-(SELECT node_id FROM kept_node WHERE kind='branch');\
-DELETE FROM layer_stack_retired WHERE layer_stack_id NOT IN \
-(SELECT layer_stack_id FROM layer_stack);\
-DELETE FROM path_removed WHERE layer_stack_id NOT IN \
-(SELECT layer_stack_id FROM layer_stack);\
-DELETE FROM project_epoch WHERE layer_stack_id NOT IN \
-(SELECT layer_stack_id FROM layer_stack);\
-DELETE FROM merge_record;\
-DELETE FROM merge_operation;\
-DELETE FROM gc_intent WHERE op_id<>x'{}';\
-DELETE FROM gc_dead;\
-DELETE FROM gc_op;",
-            hex(&op.op_id)
-        );
-        if units {
-            deletes.push_str(
-                "DELETE FROM pack_unit WHERE pack_id NOT IN \
-(SELECT pack_id FROM scratch.live_pack);",
-            );
-        }
-        deletes.push_str(
-            "DELETE FROM pack WHERE pack_id NOT IN (SELECT pack_id FROM scratch.live_pack);",
-        );
-        if acquisition_tables {
-            for table in ["init_operation", "init_entry", "init_host_file"] {
-                deletes.push_str(&format!("DELETE FROM {table};"));
-            }
-        }
-        for trigger in &triggers {
-            deletes.push_str(trigger.trim_end_matches(';'));
-            deletes.push_str(";\n");
-        }
-        deletes.push_str(&format!(
-            "UPDATE history_meta SET catalog_incarnation={} WHERE id=1;\
-UPDATE store_totals SET \
-logical=(SELECT COALESCE(SUM(logical),0) FROM \"commit\")+\
-(SELECT COALESCE(SUM(logical),0) FROM layer),\
-canonical=(SELECT COALESCE(SUM(canonical_length),0) FROM object_location),\
-stored=(SELECT COALESCE(SUM(length),0) FROM pack),\
-metadata=(SELECT COALESCE(SUM(length),0) FROM pack WHERE domain=0) WHERE id=1;",
-            tuple.generation + 1
-        ));
-        connection.execute_batch(&deletes).map_err(db_error)?;
-        Ok(())
-    })();
-    match staged {
-        Ok(()) => {
-            connection.execute_batch("COMMIT").map_err(db_error)?;
-        }
-        Err(error) => {
-            let _ = connection.execute_batch("ROLLBACK");
-            let _ = connection.execute_batch("DETACH DATABASE scratch");
-            let _ = connection.close();
-            return Err(error);
-        }
-    }
-    connection
-        .execute_batch("DETACH DATABASE scratch")
+        text
+    };
+    let recorded: String = connection
+        .query_row(
+            "SELECT schema_definition FROM main.history_meta WHERE id=1",
+            params![],
+            |row| row.get(0),
+        )
         .map_err(db_error)?;
-    // Reclaim the deleted pages: a wholly live Store, no freelist.
-    connection.execute_batch("VACUUM").map_err(db_error)?;
-    if !sequences.is_empty() && table_present(&connection, "sqlite_sequence")? {
-        connection
-            .execute_batch("DELETE FROM sqlite_sequence")
-            .map_err(db_error)?;
-        let mut statement = connection
-            .prepare("INSERT INTO sqlite_sequence(name,seq) VALUES(?1,?2)")
-            .map_err(db_error)?;
-        for (name, seq) in &sequences {
-            statement.execute(params![name, seq]).map_err(db_error)?;
-        }
-        drop(statement);
-        // §4.1/§7: the acquisition operation counter never falls. The copy
-        // keeps every row the source had, so a restored sequence below the
-        // source one is a rebuild bug, never a smaller Store.
-        for (name, seq) in &sequences {
-            let restored: i64 = connection
-                .query_row(
-                    "SELECT seq FROM sqlite_sequence WHERE name=?1",
-                    params![name],
-                    |row| row.get(0),
-                )
-                .map_err(db_error)?;
-            if restored < *seq {
-                return Err(HistoryError::Integrity("staged Store sqlite_sequence fell"));
-            }
-        }
+    if recorded != definition {
+        return Err(HistoryError::Integrity(
+            "staged Store schema definition differs from the recorded one",
+        ));
     }
     let totals: (i64, i64, i64, i64) = connection
         .query_row(
-            "SELECT logical,canonical,stored,metadata FROM store_totals WHERE id=1",
+            "SELECT logical,canonical,stored,metadata FROM main.store_totals WHERE id=1",
             params![],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .map_err(db_error)?;
-    connection.close().map_err(|(_, error)| db_error(error))?;
-
-    // §7 step 5: switch to WAL, checkpoint, and leave no sidecar.
-    let connection = Connection::open_with_flags(
-        &target,
-        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )
-    .map_err(db_error)?;
+    // §7 step 5: the same raw connection switches the fresh file to WAL, so the
+    // mode switch runs under `journal_mode=OFF` and writes no rollback journal
+    // beside the staged name; then checkpoint and leave no sidecar.
     connection
-        .busy_timeout(std::time::Duration::ZERO)
+        .execute_batch("DETACH DATABASE src;DETACH DATABASE scratch;")
         .map_err(db_error)?;
     let mode: String = connection
         .query_row("PRAGMA journal_mode=wal", params![], |row| row.get(0))
@@ -473,8 +571,6 @@ metadata=(SELECT COALESCE(SUM(length),0) FROM pack WHERE domain=0) WHERE id=1;",
     Ok(Built {
         target,
         target_bytes,
-        staged_bytes,
-        journal_bound_bytes,
         visited_bytes,
         logical: u64::try_from(totals.0).unwrap_or(0),
         canonical: u64::try_from(totals.1).unwrap_or(0),
