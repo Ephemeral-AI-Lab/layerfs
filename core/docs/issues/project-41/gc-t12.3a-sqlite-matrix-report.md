@@ -79,7 +79,7 @@
 | AC-24 | both | E2 | covered | gc_backfill.rs#commits_layers_and_epochs_are_backfilled_in_deterministic_order; gc_backfill.rs#existing_serials_are_kept_and_new_ones_start_above_the_maximum | Serials backfilled, next_history_serial never falls. |
 | AC-25 | both | E2 | covered | sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript | Retained branch_retired/layer_stack_retired markers survive; collected rows take their markers. |
 | AC-26 | both | E2 | covered | project_delete.rs#retry_classifies_retired_live_and_absent; project_delete.rs#deleting_a_project_hides_it_and_marks_once | Hidden, entry present, retry returns the stored deleted_ms. |
-| AC-27 | both | E2 | covered | project_delete.rs#paging_skips_a_hidden_project; project_delete.rs#every_layer_stack_lookup_carries_the_marker_filter | Stale home entries stay out of list/lookup. |
+| AC-27 | both | E2 | covered | project_delete.rs#paging_skips_a_hidden_project; visibility_guard.rs#every_statement_reading_branch_or_layer_stack_is_filtered_or_allow_listed | Stale home entries stay out of list/lookup. |
 | AC-28 | PG | E2 | deferred (T12.3b) | - | PostgreSQL Phase C cleanup and its failpoints: T12.3b. |
 | AC-29 | both | E2 | covered | admission.rs#a_live_operation_is_busy_and_an_uncertain_owner_is_unresolved; admission.rs#a_mount_blocks_all_three_removals_until_released | Owner liveness and Unresolved settlement; machine_stopped and the other-home intent are partial. |
 | AC-30 | both | E2 | partial | branch_removal.rs#a_live_holder_is_reported_for_branch_and_project_names; gc_calls.rs#wrong_kinds_and_unknown_options_are_refused_before_any_effect | Holder detail and refusal codes are named; the full exact-message matrix (AC-55) is partial. |

@@ -141,44 +141,6 @@ fn paging_skips_a_hidden_project() {
 }
 
 #[test]
-fn every_layer_stack_lookup_carries_the_marker_filter() {
-    for (file, sql) in [
-        (
-            "layerstack_stack_by_id.sql",
-            include_str!("../sql/sqlite/queries/history/layerstack_stack_by_id.sql"),
-        ),
-        (
-            "layerstack_stack_by_name.sql",
-            include_str!("../sql/sqlite/queries/history/layerstack_stack_by_name.sql"),
-        ),
-        (
-            "layerstack_stack_first_page.sql",
-            include_str!("../sql/sqlite/queries/history/layerstack_stack_first_page.sql"),
-        ),
-        (
-            "layerstack_stack_next_page.sql",
-            include_str!("../sql/sqlite/queries/history/layerstack_stack_next_page.sql"),
-        ),
-    ] {
-        assert!(sql.contains("layer_stack_retired"), "{file}: {sql}");
-        assert!(sql.contains("NOT EXISTS"), "{file}: {sql}");
-    }
-    // PostgreSQL overrides the by-name statement because it names the schema
-    // in one statement; it carries the same filter.
-    let postgresql = include_str!("../sql/postgresql/queries/history/layerstack_stack_by_name.sql");
-    assert!(postgresql.contains("layer_stack_retired"), "{postgresql}");
-    assert!(postgresql.contains("NOT EXISTS"), "{postgresql}");
-    // The name-collision check is allow-listed: it must see a retired holder
-    // so project.init/fork can answer NameTaken with its state.
-    let taken = include_str!("../sql/sqlite/queries/history/layerstack_stack_name_taken.sql");
-    assert!(taken.contains("layer_stack_retired"), "{taken}");
-    assert!(
-        taken.contains("CASE WHEN"),
-        "the holder state is returned: {taken}"
-    );
-}
-
-#[test]
 fn doctor_accepts_a_retired_stack() {
     use layerfs_persistence::diagnostic::Outcome;
     let fixture = support::doctor::Fixture::new();

@@ -8,8 +8,8 @@
 > table indexes them, and this file is retired.
 
 **Why.** The #41 implementation and the #711 fix-branch integration need a
-different reading than the frozen sentences in thirteen places: eight contract
-amendments (A1–A8, mostly refusal detail shapes, one additive sidecar field,
+different reading than the frozen sentences in fourteen places: nine contract
+amendments (A1–A9, mostly refusal detail shapes, one additive sidecar field,
 four `gc_op` columns and the snake_case rendering rule) and five SQLite
 implementation deviations (D1–D5) that the frozen text either forbids or does
 not describe. `gc-spec-gaps.md` (one of the implementation notes moved out of
@@ -19,7 +19,7 @@ complete list, and it changes no product behaviour.
 
 The seven A entries before A8 were written directly into the frozen file
 while #41 was implemented and were backed out before review (commit
-`122a168502`); A8 is added by this note for the same sign-off. The five D
+`122a168502`); A8 and A9 are added by this note for the same sign-off. The five D
 entries are present in the shipped SQLite code and are recorded here so the
 contract and the implementation do not drift apart.
 
@@ -30,7 +30,7 @@ frozen whole-lane exclusion; its measurements live under
 
 ---
 
-## A. Contract amendments (8)
+## A. Contract amendments (9)
 
 ### A1. §4.1 `project.delete` sidecar gains `op_id` (additive)
 
@@ -161,6 +161,35 @@ frozen whole-lane exclusion; its measurements live under
   `engine/crates/layerfs-persistence/sql/postgresql/gc.sql`. The wire keys
   stay snake_case (`logical_discarded`, `backend_reusable`, `zero_reasons`)
   under A7.
+
+### A9. §4.2: the retry's Stack read is the marker plus the filtered by-id lookup
+
+- **Frozen:** §4.2 allow-lists `layerstack_stack_by_id_retired` as "the retry's
+  live/absent read by the caller's recorded stack id", and keeps the ordinary
+  `layerstack_stack_by_id` filtered.
+- **Proposed:** no statement of that name is shipped. The `project.delete`
+  same-home retry resolves the caller's recorded Stack id with two statements
+  that already exist: `layerstack_deleted_ms` (the marker's `deleted_ms`, or
+  none) and the filtered `layerstack_stack_by_id` (the live row, or absent). A
+  retired Stack reuses its marker's `deleted_ms`, a live Stack redoes the
+  marker, and an absent one finishes the entry. No unfiltered by-id statement
+  is needed: the filtered read is the live/absent half the frozen sentence
+  names, and a retired or deleted project must not resolve there.
+- **Reason:** the frozen name describes one statement that the shipped code
+  splits into two. The split keeps every ordinary Stack lookup filtered and
+  returns the same retired/live/absent classification the frozen sentence
+  describes, so no behaviour changes and no resurrection path is added.
+- **Alternative recorded, not adopted:** add a dedicated
+  `layerstack_stack_by_id_retired` statement. It duplicates
+  `layerstack_stack_by_id`'s row shape only to return the same absence the
+  filtered read already returns, and it would need its own allow-list
+  justification.
+- **Where:** `engine/crates/layerfs-persistence/src/history/admission/removal.rs`
+  (`delete_stack`), `.../src/history/layerstack.rs` (`stack_deleted_ms`,
+  `layer_stack`), and `control/crates/layerfs-store/src/project/delete.rs`
+  (the retry path).
+  `engine/crates/layerfs-persistence/tests/visibility_guard.rs` pins the two
+  statements and the statement set.
 
 ---
 
@@ -421,8 +450,8 @@ rotational (HDD) backing — not NVMe** (88 vCPU across two Xeon E5-2699C v4,
 
 ## Request
 
-Please record A1–A8 as #42 items (or amend the frozen text) and accept or
+Please record A1–A9 as #42 items (or amend the frozen text) and accept or
 reject D1–D5 individually when the owner signs off, and accept G7 as the
 record of a deferred design (it changes no contract text). Until then the
-implementation follows the frozen text except where A8 and D1–D5 are named,
+implementation follows the frozen text except where A8, A9 and D1–D5 are named,
 and the spec file in this branch is byte-identical to the frozen version.
