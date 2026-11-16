@@ -766,3 +766,98 @@ fn a_page_over_several_machines_asks_each_once_and_keeps_its_order() {
     assert_eq!(first.get_int("next_page_pos"), Some(2));
     std::fs::remove_dir_all(scratch).unwrap();
 }
+
+/// `machine.space` on a worker's machine: one request to its worker, which
+/// walks its own root; the home adds the platform and the disk's scope.
+/// Neither side changes, no lease is taken, it is answered while a
+/// `machine.stop` holds the machine and a push holds the Store, and it
+/// writes no call-log line.
+#[test]
+fn a_worker_answers_its_machine_s_space_and_writes_nothing() {
+    let _turn = serial();
+    let (scratch, home, root) = boxed("space");
+    store_files(&root);
+    worker_sandbox(&home, "s1", "box", false);
+    worker_sandbox(&home, "s2", "box", false);
+    local_sandbox(&root, "s1", "native", me());
+    let run = paths::run_root(&root).join("layerfs-0a1b2c3d-s1");
+    std::fs::create_dir_all(run.join("overlay").join("upper")).unwrap();
+    std::fs::write(run.join("overlay").join("1.sqlite"), vec![3u8; 65_536]).unwrap();
+    std::fs::write(
+        run.join("overlay").join("upper").join("f"),
+        vec![4u8; 32_768],
+    )
+    .unwrap();
+    std::fs::create_dir_all(run.join("workspaces").join("1")).unwrap();
+    std::fs::write(
+        run.join("workspaces").join("1").join("never"),
+        vec![5u8; 1 << 20],
+    )
+    .unwrap();
+    settle(&home);
+    held(&home, "box");
+    let _push = pushing(&home);
+    let (before, guest) = (files(&home, false), files(&root, false));
+
+    let got = call(&home, "machine.space", &[("machine", t("box"))]).unwrap();
+    assert_eq!(
+        keys(&got),
+        [
+            "machine",
+            "platform",
+            "observed_at",
+            "disk",
+            "layerfs",
+            "outside",
+            "parts",
+            "stores",
+            "sandboxes",
+            "unreadable",
+            "complete"
+        ],
+        "{got:?}"
+    );
+    assert_eq!(got.get_text("platform"), Some("docker"));
+    let disk = got.get("disk").unwrap();
+    assert_eq!(keys(disk), ["total", "used", "free", "path", "fs", "scope"]);
+    assert_eq!(disk.get_text("path"), root.to_str());
+    let holds = match cfg!(target_os = "linux") {
+        true => "host_fs",
+        false => "vm_disk",
+    };
+    assert_eq!(disk.get_text("scope"), Some(holds));
+    let SdkValue::List(stores) = got.get("stores").unwrap() else {
+        panic!("{got:?}")
+    };
+    assert_eq!(stores.len(), 1);
+    assert!(stores[0].get_int("bytes").unwrap() >= 65_536 + 12_288);
+    let SdkValue::List(rows) = got.get("sandboxes").unwrap() else {
+        panic!("{got:?}")
+    };
+    // `s1` read from the worker's record, `s2` it has none of
+    assert_eq!(rows[0].get_text("name"), Some("s1"));
+    assert!(rows[0].get_int("overlays").unwrap() >= 65_536, "{rows:?}");
+    assert!(rows[0].get_int("writes").unwrap() >= 32_768, "{rows:?}");
+    assert!(rows[0].get_int("bytes").unwrap() < 1 << 20, "{rows:?}");
+    assert_eq!(rows[1].get_text("reason"), Some("no_run_folder"));
+    let layerfs = got.get_int("layerfs").unwrap();
+    assert_eq!(
+        got.get_int("outside"),
+        Some((disk.get_int("used").unwrap() - layerfs).max(0))
+    );
+    assert_eq!(got.get("complete"), Some(&SdkValue::Bool(true)));
+
+    assert_eq!(
+        files(&home, false),
+        before,
+        "machine.space changed the home"
+    );
+    assert_eq!(files(&root, false), guest, "machine.space changed the root");
+    no_lease(&home);
+    no_lease(&root);
+
+    // refusals: a name no machine has, and one that is no name
+    let (code, _) = call(&home, "machine.space", &[("machine", t("../x"))]).unwrap_err();
+    assert_eq!(code, "InvalidInput");
+    std::fs::remove_dir_all(scratch).unwrap();
+}

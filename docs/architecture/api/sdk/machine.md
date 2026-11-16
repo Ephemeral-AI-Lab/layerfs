@@ -7,13 +7,13 @@ The `machine` calls: list, inspect, create, start, stop, update and remove the m
 | | |
 | --- | --- |
 | Source | [`api/crates/layerfs-api/src/machine`](../../../../api/crates/layerfs-api/src/machine), [`layerfs-control/src/machine.rs`](../../../../control/crates/layerfs-control/src/machine.rs), [`layerfs-machine/src`](../../../../control/crates/layerfs-machine/src), [`layerfs-platform/src`](../../../../control/crates/layerfs-platform/src) |
-| Runs by default | every call in the caller's process, through the platform adapter (provider CLI or Docker); none is sent to a worker but the two reads `stats` and `files`, each one inspect request served where the machine's data is. The guest worker is built without the `machine` feature, so there every machine call is `Unsupported` before any effect |
+| Runs by default | every call in the caller's process, through the platform adapter (provider CLI or Docker); none is sent to a worker but the three reads `stats`, `space` and `files`, each one inspect request served where the machine's data is. The guest worker is built without the `machine` feature, so there every machine call is `Unsupported` before any effect |
 | Design | [Machines](../../control/machines/README.md), [platforms](../../control/machines/platforms.md), [workers and reach](../../control/machines/workers-and-reach.md) |
 
 ## Calls
 
 ```text
- reads (start nothing):  list   platforms   get   status   stats   files   images
+ reads (start nothing):  list   platforms   get   status   stats   space   files   images
  Sandbox images:         load (copy from the host's Docker)   prune
 
  built in: native, docker ---------------------- update (image, docker,
@@ -37,6 +37,7 @@ The `machine` calls: list, inspect, create, start, stop, update and remove the m
 | [`machine.prune`](#machineprune) | `{ removed: [id], freed }` |
 | [`machine.status`](#machinestatus) | `{ name, platform, state, free_disk, tool_version, down_reason, stores, op? }` |
 | [`machine.stats`](#machinestats) | `{ machine, platform, observed_at, worker, resources, data_disk, stores, sandboxes, complete, reason? }` |
+| [`machine.space`](#machinespace) | `{ machine, platform, observed_at, disk, layerfs, outside, parts, stores, sandboxes, unreadable, complete, reason? }` |
 | [`machine.files`](#machinefiles) | `{ kind: "folder", entries, next, has_more, reason? }` or `{ kind: "file", size, offset, content, binary, next }` |
 | [`machine.start`](#machinestart) | summary, once the worker answers |
 | [`machine.stop`](#machinestop) | summary, `state: "stopped"`; with `force`, also `forced`, `stopped_sandboxes`, `unknown` |
@@ -333,6 +334,70 @@ Errors: `NotFound` (no such machine); `Unavailable` (the machine is stopped or i
 did not answer within 8 s; nothing starts it); `Busy` (two inspect requests
 already run in that process); `InvalidInput` (a worker of a build without
 the kind, or over 4096 Stores or Sandboxes on one machine).
+
+### machine.space
+
+Where a machine's data disk goes: how much of it each part of LayerFS's
+own data takes, and how much of what the filesystem uses is not
+LayerFS's. One bounded walk of LayerFS's folders, read where the data is,
+for a UI that warns before a disk fills.
+
+```text
+JS      await layerfs.machine.space(machine)
+Python  layerfs.machine.space(machine)
+CLI     layerfs machine space <machine>
+```
+
+```text
+{ machine, platform, observed_at,
+  disk: { total, used, free, path, fs, scope },
+  layerfs, outside,
+  parts: { stores, sandboxes, images, other_runs, logs, other },
+  stores: [ { name, bytes } ],
+  sandboxes: [ { name, bytes, overlays, writes, home, log, runtime, reason? } ],
+  unreadable, complete, reason? }
+```
+
+Every size is the blocks a part takes (`st_blocks` × 512), so a sparse file
+counts what it holds and a file with several names counts once; a clone
+counts in full, since `stat` cannot see sharing.
+
+| Field | Meaning | Source |
+| --- | --- | --- |
+| `disk` | the filesystem [`machine.stats`](#machinestats) measures (`total`, `used`, `free` from one `statvfs`, the folder measured, its type) and its `scope` (`host_fs`, `vm_disk`, `volume`, as `data_disk.scope`); `null` values with `disk_not_read` | [`inspect/space.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/space.rs) `serve` |
+| `layerfs` | the sum of `parts` | `space.rs` |
+| `outside` | `disk.used` less `layerfs`, never below 0: what the filesystem uses that is not LayerFS's data. On a `vm_disk` (docker on macOS and Windows) that is Docker's images, build cache and other volumes; on `native` the rest of the host's disk, a VM machine's own disk image included. `null` unless the walk and the disk read are both complete | `space.rs` |
+| `parts.stores` | the folders of the sqlite Stores the home records on the machine (`store/<name>/`: the Store file, its `-wal`, staged snapshots and records) | `space.rs` |
+| `parts.sandboxes` | the run folders of the Sandboxes the home records on the machine, the sum of `sandboxes[].bytes` | `space.rs` `sandbox` |
+| `parts.images` | the Sandbox image cache, `machine/native/run/images/` (unpacked images, archives, parts) | `space.rs` |
+| `parts.other_runs` | the run root's other entries: run folders no listed Sandbox names (a create in flight, or what `layerfs doctor` reports as a leftover) | `space.rs` `other_runs` |
+| `parts.logs` | `log/` (the worker log, command records) and `trace/` (the call log) | `space.rs` |
+| `parts.other` | `incoming/` (folder copies of `project.init`), `backup/` and `sandbox/` (records) | `space.rs` |
+| `stores[]` | one row per Store in `parts.stores`, `bytes` its folder | `space.rs` |
+| `sandboxes[]` | one row per recorded Sandbox, from the run folder its daemon record names on the side that runs it: `overlays` (its Workspaces' overlay databases in `overlay/`), `writes` (its own writable layer `overlay/upper` and `work`: what its commands wrote outside Workspaces), `home` (`tmp/`, `HOME` for its commands), `log` (`daemon.log*`), `runtime` (its copies of the daemon, helper and runtime layer, its config, the folder itself). With no run folder measured the sizes are `null` and `reason` says why: `no_run_folder` (no daemon record or folder on that side), `outside_run_root` (the record names a folder elsewhere; it is not read), `record_unreadable`, `deadline`. A row the walk's bound ended inside keeps what it counted, with `reason: "deadline"` | `space.rs` `sandbox` |
+| `unreadable` | folders that could not be listed; what is under them is not in the numbers | `space.rs` |
+| `complete`, `reason` | `complete: false` when the walk stopped at 250,000 entries or the request's soft budget (4 s): every number is then at least what was counted, a part not reached is `null`, and `outside` is `null`. `reason` joins `deadline`, `unreadable`, `disk_not_read` | `space.rs` |
+
+It is one [inspect](../../control/sandboxes/inspect.md) request, kind
+`machine_space`: in this process on `native`, else one request to the
+machine's worker. The walk takes no lock or lease and dials no daemon; it
+opens no file (each size is one `lstat`, each folder one listing), follows
+no link and enters no other device. A run folder's `workspaces/` (its
+Workspace mount points) and a private root `<name>.root` are neither
+entered nor `stat`ed, so a stopped daemon cannot hang it, and the home
+itself is never listed: what an integration keeps there (`runtime/`,
+`secret/`, ...) is not counted. It writes nothing, the call log included.
+A Sandbox's `/tmp` and `/dev/shm` are memory, not disk: they show in
+[`sandbox.get`](sandbox.md#sandboxget) `usage.memory_file`.
+
+```text
+$ layerfs machine space native
+{"machine":"native","platform":"native","observed_at":1794817324800,"disk":{"total":994662584320,"used":677787914240,"free":316874670080,"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs"},"layerfs":14168064,"outside":677773746176,"parts":{"stores":2277376,"sandboxes":11833344,"images":0,"other_runs":0,"logs":8192,"other":49152},"stores":[{"name":"shop","bytes":2277376}],"sandboxes":[{"name":"web","bytes":11833344,"overlays":8675328,"writes":0,"home":3145728,"log":4096,"runtime":8192}],"unreadable":0,"complete":true}
+```
+
+Errors: as [`machine.stats`](#machinestats): `NotFound`, `Unavailable`,
+`Busy`, and `InvalidInput` (a worker of a build without the kind, or over
+4096 Stores or Sandboxes on one machine).
 
 ### machine.files
 

@@ -1,5 +1,5 @@
-//! The `machine` family: 14 calls, one file each (O11: update; #535: platforms, start, stop;
-//! layerfs-project#164: stats; layerfs-project#178: files).
+//! The `machine` family: 15 calls, one file each (O11: update; #535: platforms, start, stop;
+//! layerfs-project#164: stats; layerfs-project#178: files; space).
 mod create;
 mod files;
 mod get;
@@ -9,6 +9,7 @@ mod load;
 mod platforms;
 mod prune;
 mod remove;
+mod space;
 mod start;
 mod stats;
 mod status;
@@ -28,6 +29,7 @@ pub(crate) fn calls() -> Calls {
         prune::CALL,
         status::CALL,
         stats::CALL,
+        space::CALL,
         files::CALL,
         start::CALL,
         stop::CALL,
