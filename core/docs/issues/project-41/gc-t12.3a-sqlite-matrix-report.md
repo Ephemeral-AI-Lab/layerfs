@@ -9,35 +9,30 @@
 ## Scope and counts
 
 - Rows: 60 (AC-01..AC-60); backend split: both 47, SQLite-only 6, PG-only 7.
-- Executed here: 8; covered by a named existing test/fixture: 29; partial: 16; deferred to T12.3b: 7; SQLite gaps: 0.
+- Executed here: 8; covered by a named existing test/fixture: 30; partial: 16; deferred to T12.3b: 6; SQLite gaps: 0.
 - **T-G28/T-G60 follow-up.** T-G28 later added the real-process SIGKILL arms
   and T-G60 extended them to mark, copy, verify and rename, so
   `sqlite_compact_crash` now has 23 crash tests (9 real-process SIGKILL arms and the
-  child placeholder), not the 13 recorded below; the binary also runs one
+  child placeholder), not the 13-test T12.3c snapshot; the binary also runs one
   lifecycle guard (`unfinished_init_or_merge_rows_refuse_compaction`), which
   is not a crash arm. Those arms still kill a
   re-executed test child, so T-G65 added
   `api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs`: 8 SIGKILL
   arms on the built `layerfs store compact` process at mark, build, verify and
   install, so AC-01 is `covered`.
-- **Count reconciliation.** The T12.3c run recorded executed 8 / covered
-  29 / partial 16 / deferred 7, and the table below keeps that data.
-  T-G38/T-G54 moved AC-44 to `covered`, so the current #52 dispositions
-  are executed 8 / covered 30 / partial 16 / deferred 6; the 29/7 above
-  is the T12.3c snapshot, not a live gap.
 - A `covered`/`partial` row names a file and test function that this runner
   asserts exists; an `executed` row names an arm this binary really runs.
 - A cross-backend row records its SQLite half only; every PostgreSQL half
   and the PostgreSQL-only rows are deferred to T12.3b by name.
-- **T-G61 capacity follow-up.** A separate opt-in test,
-  `sqlite_compact_capacity.rs#capacity_measure` (ignored by default), measured a
+- **T-G61 capacity_measure run (fixture A: 9.987 GB pack).** The opt-in
+  `sqlite_compact_capacity.rs#capacity_measure` (ignored by default) measured a
   real **9.987 GB** Store. On the superseded whole-Store `VACUUM INTO` build:
   `none` at 8.88% dead (three runs, median 149.318 s) and `rebuild` at 10.00%
   dead (three runs, median 246.371 s; mark 149.089 s, build 94.317 s, verify
   0.312 s, install 1.916 s; dead 1.011 GB, shrink 1.017 GB; the T-G72 packed
   peak bound 29.481 GB, the old `new + visited` formula 9.144 GB), plus a
   WAL/FULL control (284.078 s).
-  Re-measured on this branch with the fresh-copy build on the same fixture:
+  Re-measured on this branch with the fresh-copy build on the same fixture A:
   `rebuild` median 118.438 s (mark 74.462-75.704 s, build 18.190-19.209 s,
   quick-check verify 4.330-4.377 s, install 19.197-23.673 s; dead 1.011 GB,
   shrink 1.016-1.018 GB, peak **9.144 GB** = the fresh Store + visited) and
@@ -45,15 +40,34 @@
   runs). The fresh build phase is about 5x shorter (18-19 s against 92-104 s);
   the verify adds a ~4 s `quick_check` page scan and the install pays a
   ~19 s `sync_all` for the freshly written 9.1 GB, both inside the 118 s total.
-  The numbers are in `tests/fixtures/sqlite_compact_capacity_measure.json`.
-  T-G66 measured the 50 GB arm once per path on the old build (see the runbook
-  disk-headroom section); the 30% arm remains [E].
+  The same-fixture comparison is **246.371 s -> 118.438 s = 2.08x**; the
+  numbers are in `tests/fixtures/sqlite_compact_capacity_measure.json`.
+- **gc_bench medium run (fixture B: 9.789 GB live / 10.731 GB pack).** The
+  separate `examples/gc_bench.rs` medium scale (16 projects x 52 Layers,
+  75,524 live objects, 8.8% dead) ran three times per arm on 2026-11-16 and
+  its receipt is committed as
+  `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`: `rebuild`
+  median **133.076 s** (runs 132.274-134.601 s, 1.75% relative range; mark
+  82.050 s, build 23.469 s, verify 6.060 s, install 21.011 s; peak temp
+  9.836 GB, shrink 1.093 GB) and `none` median 82.683 s. Fixture B is a
+  different generated Store from fixture A, so 133.076 s is **not** the other
+  side of the 246.371 s -> 118.438 s comparison; the earlier 1.85x mixed the
+  two fixtures and is withdrawn. Section 13 fields: the creation profile
+  declares `SqlitePersistenceProfile::Disposable` (journal_mode WAL,
+  synchronous OFF, page_size 4096) and the caches (warm; `drop_caches` refused
+  6/6, overlayfs TMPDIR); bytes written is the per-run `processIo.writeBytes`
+  median (9,839,857,664 B rebuild, 7,086,080 B none). The SQLite version and
+  WAL bytes are **not recorded** by the gc-bench/1 receipt (recorded
+  deviation), and the page_size/synchronous_commit values are declared from
+  the creation profile rather than sampled with PRAGMA at run time.
+- T-G66 measured the 50 GB arm once per path on the old build (#42 item 44;
+  see the runbook disk-headroom section); the 30% arm remains [E].
 
 ## Matrix (SQLite half)
 
 | Case | Backend | Matrix tier | Disposition | Evidence | Note |
 |---|---|---|---|---|---|
-| AC-01 | both | E2 | covered | sqlite_compact_crash.rs#crash_before_seal; sqlite_compact_crash.rs#crash_during_copy; sqlite_compact_crash.rs#crash_after_verify; sqlite_compact_crash.rs#crash_after_install; sqlite_compact_crash.rs#crash_during_settle | The SQLite section 9 crash matrix through named failpoints; a real kill -9 of a separate daemon process is T12.2's in-process stop points, not run here. |
+| AC-01 | both | E2 | covered | sqlite_compact_crash.rs#crash_before_seal; sqlite_compact_crash.rs#crash_during_copy; sqlite_compact_crash.rs#crash_after_verify; sqlite_compact_crash.rs#crash_after_install; sqlite_compact_crash.rs#crash_during_settle; sqlite_compact_crash.rs#sigkill_before_seal; sqlite_compact_crash.rs#sigkill_after_seal; sqlite_compact_crash.rs#sigkill_during_copy; sqlite_compact_crash.rs#sigkill_during_verify; sqlite_compact_crash.rs#sigkill_during_rename; sqlite_compact_crash.rs#sigkill_after_build; sqlite_compact_crash.rs#sigkill_before_install; sqlite_compact_crash.rs#sigkill_after_install; sqlite_compact_crash.rs#sigkill_during_settle; sqlite_compact_process_kill.rs#sigkill_before_seal; sqlite_compact_process_kill.rs#sigkill_after_seal; sqlite_compact_process_kill.rs#sigkill_before_load; sqlite_compact_process_kill.rs#sigkill_after_build; sqlite_compact_process_kill.rs#sigkill_during_verify; sqlite_compact_process_kill.rs#sigkill_before_install; sqlite_compact_process_kill.rs#sigkill_after_install; sqlite_compact_process_kill.rs#sigkill_during_settle | The SQLite section 9 crash matrix through named failpoints; the 9 sigkill_at! arms in sqlite_compact_crash.rs and the CLI test's 8 SIGKILL arms on the built layerfs store compact process at mark, build, verify and install; no daemon serves Store calls. |
 | AC-02 | both | E2 | partial | sqlite_compact.rs#a_wholly_dead_pack_is_rebuilt_away; sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript | The SQLite arm runs through the suite; the converted 1.0 Store arm and the PostgreSQL backend matrix are deferred to T12.3b. |
 | AC-03 | both | E2 | covered | sqlite_compact_crash.rs#crash_before_seal; sqlite_compact_crash.rs#crash_after_wal_switch; sqlite_compact_crash.rs#crash_before_install; sqlite_compact_crash.rs#crash_after_install | SQLite mark/build/verify/install and WAL-switch stop points; lost COMMIT and power-loss arms belong to the PostgreSQL/fsync halves. |
 | AC-04 | both | E3 | partial | sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript; this runner #arm_random_store_shapes | Deterministic closure fixture plus a seeded six-history reachability property arm; the full random fork/commit/merge/publish/removal generator is not built here. |
@@ -90,16 +104,16 @@
 | AC-35 | PG | E2 | deferred (T12.3b) | - | PostgreSQL advisory-key refcount: T12.3b. |
 | AC-36 | both | E2 | covered | project_delete_worker.rs#a_lost_worker_reply_is_unknown_and_keeps_the_sidecar_for_the_retry; project_delete.rs#a_retired_retry_reuses_the_intent_deleted_ms_and_finishes_the_entry; project_delete.rs#an_absent_stack_finishes_a_stale_entry | A lost marker reply is `Unknown` with the sidecar kept; the retry resolves retired, live or absent. The PostgreSQL half is T12.3b. |
 | AC-37 | both | E2 | partial | gc_trace.rs#the_redacted_set_covers_every_path_bearing_call; gc_trace.rs#the_trace_key_is_salted_by_the_store_policy_salt | Redaction and the keyed hash are named; salt backfill on an upgraded Store is partial. |
-| AC-38 | both | E2 | covered | sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript; sqlite_compact_crash.rs#crash_during_settle | The SQLite artifact set is removed exactly; the PostgreSQL schema/name arms are T12.3b. |
+| AC-38 | both | E2 | covered | sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript; sqlite_compact_crash.rs#crash_during_settle; sqlite_compact.rs#the_whole_artifact_set_is_removed_by_the_next_run | The full SQLite artifact set is removed exactly: the staged file and its -wal/-shm/-journal, the visited scratch and its journal, the incomplete op record and the -mj* super-journals; the PostgreSQL schema/name arms are T12.3b. |
 | AC-39 | both | E2 | covered | gc_backfill.rs#commits_layers_and_epochs_are_backfilled_in_deterministic_order | One project_epoch row per stack, gc_op not copied, next_history_serial never lowered. |
 | AC-40 | both | E2 | covered | sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript; kept_objects.rs#the_digest_is_stable_and_moves_with_a_head | SQLite live_heads_digest is identical before/after and moves with a head; PostgreSQL agreement is deferred. |
 | AC-41 | PG | E2 | deferred (T12.3b) | - | PostgreSQL Phase M mark transfer: T12.3b. The §11 `markBytes` transfer is measured in the walking mark and recorded as the `compact.mark_bytes` metric (asserted by `postgresql_compact_fixtures.rs`; see AC-52). |
 | AC-42 | PG | E2 | deferred (T12.3b) | - | PostgreSQL reserved pack/Phase B: T12.3b. |
 | AC-43 | PG | E2 | deferred (T12.3b) | - | PostgreSQL Phase C cleanup resume: T12.3b. |
-| AC-44 | PG | E2 | deferred (T12.3b) | - | PostgreSQL privileges and lost COMMIT reply: T12.3b. |
+| AC-44 | PG | E2 | covered | postgresql_compact.rs#a_fully_privileged_role_compacts; postgresql_compact.rs#a_role_without_create_on_the_database_is_refused_as_unsupported; postgresql_compact.rs#a_role_without_create_on_the_store_schema_is_refused_as_unsupported; postgresql_compact.rs#a_role_without_temp_is_refused_as_unsupported; postgresql_compact.rs#a_role_without_pg_read_all_stats_is_refused_as_unsupported; postgresql_compact.rs#a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1 | PostgreSQL privilege preflight (database/schema CREATE, TEMP, pg_read_all_stats, the fully privileged control) and the lost-COMMIT reply resumed by the next compact; T-G38/T-G54. |
 | AC-45 | SQLite | E1 | covered | sqlite_compact.rs#group_rows_layout_opens_compacts_and_takes_none; sqlite_compact.rs#group_rows_indexed_layout_opens_compacts_and_takes_none; sqlite_compact.rs#acquisition_layout_opens_compacts_and_clears_working_rows; sqlite_group_rows.rs#explicit_creation_reopens_declared_units_and_keeps_sparse_canonical_order | Monolithic/GroupRows/GroupRowsIndexed and the acquisition variants compact; working rows are cleared. |
 | AC-46 | SQLite | E2 | executed | this runner #arm_sidecar_at_install; sqlite_compact.rs#a_store_replaced_between_seal_and_install_is_stale; sqlite_compact.rs#a_store_replaced_under_an_open_handle_is_stale_at_the_next_transaction | Sealed-state/sidecar change at install gives Conflict with no writes; a replaced Store gives StaleStore. The in-flight-transaction exclusion is a documented lane limit, not probed. |
-| AC-47 | SQLite | E2 | covered | sqlite_compact_crash.rs#crash_during_copy; sqlite_compact_crash.rs#crash_during_settle; sqlite_compact.rs#a_stray_staged_name_is_refused_and_not_deleted; sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript | Crash leaves the full set, the next compact removes it, none leaves no artifact, a stray name is Exists. |
+| AC-47 | SQLite | E2 | covered | sqlite_compact_crash.rs#crash_during_copy; sqlite_compact_crash.rs#crash_during_settle; sqlite_compact.rs#a_stray_staged_name_is_refused_and_not_deleted; sqlite_compact.rs#the_whole_artifact_set_is_removed_by_the_next_run; sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript | A crash leaves the full set (the fixture now creates .compact-wal, .compact-shm, .compact-visited-journal and a .compact-mj* super-journal too), the next compact removes every one and recovers, none leaves no artifact, a stray name is Exists. |
 | AC-48 | both | E2 | covered | sqlite_compact.rs#nine_percent_wholly_dead_bytes_take_the_none_path; sqlite_compact.rs#ten_percent_wholly_dead_bytes_rebuild_at_the_threshold; sqlite_compact.rs#thirty_percent_wholly_dead_bytes_rebuild_above_the_threshold; sqlite_compact.rs#an_empty_store_takes_the_none_path; sqlite_compact.rs#a_capacity_failure_leaves_the_store_unchanged | 9/10/30 percent, empty-store zeroReason, capacity abort; verify-failure and re-refine arms are partial. |
 | AC-49 | both | E2 | executed | this runner #arm_mount_during_compaction_is_busy; this runner #arm_commit_during_rebuild; admission.rs#a_concurrent_mount_and_branch_remove_have_one_winner | SQLite half executed: a mount during compact is `BusyOp` with the compaction; compaction returns `MountsActive` when the mount wins; a Commit racing the rebuild gets `StaleStore` or lands, and its retry is never lost. The PG Phase A/Phase C arms are T12.3b. |
 | AC-50 | both | E2 | covered | calls_scope.rs#a_scope_refuses_every_call_it_does_not_cover; gc_calls.rs#the_four_gc_calls_take_ids_only | Folder scope refuses the four calls; the admin profile is the only allowance. |
@@ -109,7 +123,7 @@
 | AC-54 | both | E2 | partial | restore_install.rs#a_folder_made_unprivate_during_the_download_is_refused_before_the_install; restored_records.rs#a_restored_project_reads_as_a_sandbox_reads_it | Restore install guards and restored records are named; restore before/after a removal and the stale-entry listing arm are partial. The restore-window arm needs a lock-capable filesystem (ext4/xfs/btrfs), so on this Sandbox it reports Unsupported while the other two cases pass. |
 | AC-55 | both | E2 | executed | this runner #arm_error_codes; this runner #arm_checkpoint_busy; sqlite_compact.rs#a_stray_staged_name_is_refused_and_not_deleted | Exact SQLite texts asserted: Busy, Conflict("Store sidecar at install"), Exists("unrecorded compaction artifact"), Capacity("disk space"); the full engine/API message matrix stays partial. |
 | AC-56 | both | E3 | partial | sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript; sqlite_compact_golden.json | The literal SQLite vector is pinned (absent head 33 zero bytes); the shared PostgreSQL literal and the three-run E3 shape are deferred. |
-| AC-57 | both | E3 | partial | this runner #arm_measurement; sqlite_compact_measure.json; T-G61 sqlite_compact_capacity.rs#capacity_measure; sqlite_compact_capacity_measure.json | The tiny three-run arm is median 32.1 ms. T-G61 measured a real 9.987 GB Store on the whole-Store `VACUUM INTO` build (3 runs per arm): `none` at 8.88% dead median 149.318 s and `rebuild` at 10.00% dead median 246.371 s (mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s), plus a WAL/FULL control at 284.078 s. Re-measured on this branch with the fresh-copy build on the same 9.987 GB fixture: `rebuild` median 118.438 s (mark 74.462-75.704 s / build 18.190-19.209 s / quick-check verify 4.330-4.377 s / install 19.197-23.673 s), peak 9.144 GB; `none` median 88.439 s (82.0-149.9 s; this Sandbox shares the host); profile, host and toolchain are declared in the fixture, and the warm page cache is declared below. The §11 `markBytes` transfer is recorded per PostgreSQL run as `compact.mark_bytes`. T-G66 later measured the 50 GB arm once per path; the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]. |
+| AC-57 | both | E3 | partial | this runner #arm_measurement; sqlite_compact_measure.json; T-G61 sqlite_compact_capacity.rs#capacity_measure; sqlite_compact_capacity_measure.json; sqlite_compact_capacity_measure_gc_bench.json | The tiny three-run arm is median 32.1 ms. T-G61 measured a real 9.987 GB Store on the whole-Store `VACUUM INTO` build (3 runs per arm): `none` at 8.88% dead median 149.318 s and `rebuild` at 10.00% dead median 246.371 s (mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s), plus a WAL/FULL control at 284.078 s. Re-measured on this branch with the fresh-copy build on the same 9.987 GB fixture: `rebuild` median 118.438 s (mark 74.462-75.704 s / build 18.190-19.209 s / quick-check verify 4.330-4.377 s / install 19.197-23.673 s), peak 9.144 GB; `none` median 88.439 s (82.0-149.9 s; this Sandbox shares the host); profile, host and toolchain are declared in the fixture, and the warm page cache is declared below. The §11 `markBytes` transfer is recorded per PostgreSQL run as `compact.mark_bytes`. The separate gc_bench medium fixture (9.789 GB live / 10.731 GB pack) measured `rebuild` median 133.076 s in three runs (receipt: `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`), a different generated Store from the 9.987 GB capacity_measure fixture; the same-fixture comparison is 246.371 s -> 118.438 s = 2.08x, and the earlier 1.85x (133.076 s against 246.371 s) mixed the two fixtures and is withdrawn. The gc-bench/1 receipt declares the Disposable profile (WAL/OFF, page_size 4096) and the cache, records bytes written as `processIo.writeBytes`, and does not record the SQLite version or WAL bytes (recorded deviation). T-G66 later measured the 50 GB arm once per path (#42 item 44); the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]. |
 | AC-58 | SQLite | E2 | covered | sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript; sqlite_compact_crash.rs#crash_before_copy; sqlite_compact_crash.rs#crash_during_copy | none rolls its mark transaction back (no kept_node row, no gc_intent row, no committed WAL frame), deletes the scratch and leaves no .compact; rebuild commits the mark and keeps the visited scratch through the build; step 2 writes only on rebuild. |
 | AC-59 | SQLite | E2 | executed | this runner #arm_checkpoint_busy; this runner #arm_seal; sqlite_compact.rs#a_store_replaced_between_seal_and_install_is_stale | busy != 0 refuses Busy and the WAL is never unlinked; a successful seal records (size, mtime, counter) as fenced by the StaleStore arm. |
 | AC-60 | PG | E2 | deferred (T12.3b) | - | PostgreSQL synchronous standby handling: T12.3b. |
@@ -150,7 +164,9 @@
   Store (three `none` + three `rebuild` runs; `CAPACITY_DURABLE=1` adds a
   WAL/FULL control) into
   `sqlite_compact_capacity_measure.json`; it is opt-in because the fixture is
-  ~10 GB and the ignored test is not part of a normal suite.
+  ~10 GB and the ignored test is not part of a normal suite. The gc_bench
+  medium fixture B arm (three runs) is the committed
+  `sqlite_compact_capacity_measure_gc_bench.json` receipt, not fixture A.
 
 ## Deferred to T12.3b (PostgreSQL)
 
@@ -159,7 +175,6 @@
 - AC-41 - PostgreSQL Phase M mark transfer: T12.3b. The §11 `markBytes` transfer is measured in the walking mark and recorded as the `compact.mark_bytes` metric (asserted by `postgresql_compact_fixtures.rs`; see AC-52).
 - AC-42 - PostgreSQL reserved pack/Phase B: T12.3b.
 - AC-43 - PostgreSQL Phase C cleanup resume: T12.3b.
-- AC-44 - PostgreSQL privileges and lost COMMIT reply: T12.3b.
 - AC-60 - PostgreSQL synchronous standby handling: T12.3b.
 - The PostgreSQL half of every `both` row (digest agreement, artifact
   names, Phase M/B/C, standby, lost reply, 50 GB arms).
@@ -177,9 +192,12 @@
 - AC-56: the SQLite literal vector is pinned by the T12.1 golden; the shared
   PostgreSQL literal is deferred.
 - AC-57: three-run measurement arm executed on this Sandbox (small fixture),
-  plus the real 9.987 GB capacity fixture with three runs per arm
+  the real 9.987 GB capacity_measure fixture A with three runs per arm
   (`none` 88.439 s median, fresh `rebuild` 118.438 s median; the superseded
-  whole-Store build recorded 149.318 s / 246.371 s median on the same fixture).
+  whole-Store build recorded 149.318 s / 246.371 s median on fixture A, so
+  the same-fixture ratio is 2.08x), and the separate gc_bench medium fixture B
+  (`none` 82.683 s, `rebuild` 133.076 s median; receipt
+  `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`).
   Its 50 GB projection, the 30% arm, PG `ACCESS EXCLUSIVE` duration and the
   plain `VACUUM INTO` comparison are deferred/[E].
 
@@ -202,6 +220,13 @@ AC-51 does not depend on the projection alone.
   135 GB page cache and no cache drop ran between the three runs of an arm;
   the mark is CPU-bound at ~62 MB/s, not cache-bound.
 
+- gc_bench medium run (fixture B, this branch): 88 vCPU Intel Xeon
+  E5-2699C v4, Linux 7.0.0-43-generic, `TMPDIR` on overlayfs, rustc 1.85.1
+  release, the `Disposable` (WAL/OFF) profile, declared host class
+  R730/PERC/rotational (detected unknown/ssd-or-unknown), warm page cache
+  (`drop_caches` refused 6/6), three runs per arm, fixture build 154.509 s.
+  Receipt: `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`.
+
 - Fresh-copy re-measurement (this branch): Docker Sandbox `fxfresh`
   (Linux x86_64, 88 vCPU, 135 GB RAM, ext4 `/dev/sda2` run directory),
   rustc 1.85.1, release profile, `SqlitePersistenceProfile::Disposable`
@@ -213,15 +238,15 @@ AC-51 does not depend on the projection alone.
   `/var/tmp`), rustc 1.85.1, `SqlitePersistenceProfile::Disposable`
   (WAL/OFF), `CARGO_TARGET_DIR=/tmp/target-t123c`.
 - Verified here: `sqlite_compact_matrix` (1 test); the persistence suites
-  `sqlite_compact` (20), `sqlite_compact_crash` (13),
-  `sqlite_compact_fixtures` (1), `admission` (5), `path_removal` (3),
-  `branch_removal` (3), `project_delete` (5), `epoch_fence` (7),
-  `gc_backfill` (4), `kept_objects` (5); the Store-service path suites
-  `sdk_path_merge_removal` (5), `sdk_mount_bind_failure` (1),
+  `sqlite_compact` (27), `sqlite_compact_crash` (24),
+  `sqlite_compact_fixtures` (1), `admission` (8), `path_removal` (4),
+  `branch_removal` (4), `project_delete` (5), `epoch_fence` (7),
+  `gc_backfill` (5), `kept_objects` (6); the Store-service path suites
+  `sdk_path_merge_removal` (6), `sdk_mount_bind_failure` (1),
   `sdk_path_whiteouts` (7), `sdk_path_hidden_semantics` (2),
   `sdk_path_removal` (2); and `layerfs-control --features postgresql
-  project_delete_worker` (5), `layerfs-store --features postgresql
-  project_delete` (15) and `compact_report_status` (3).
+  project_delete_worker` (6), `layerfs-store --features postgresql
+  project_delete` (16) and `compact_report_status` (4).
   All of those pass on the merged branch.
 - The control `restore_install` arm that opens a Store needs ext4/xfs/btrfs;
   this Sandbox has no such direct filesystem, so that one case reports

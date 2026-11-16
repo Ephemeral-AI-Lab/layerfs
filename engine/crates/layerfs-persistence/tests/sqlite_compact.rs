@@ -1118,6 +1118,62 @@ fn an_incomplete_op_record_is_removed_rather_than_refused() {
     clean(&reopen(&path));
 }
 
+/// #52 F52-3: §9 names the whole SQLite artifact set, not just `.compact`.
+/// The staged file's `-wal`, `-shm` and `-journal`, the visited scratch's
+/// `-journal`, the incomplete op record and every `-mj*` super-journal are
+/// created together, and the next run removes all of them and recovers.
+#[test]
+fn the_whole_artifact_set_is_removed_by_the_next_run() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let before = generation(&handles);
+    let mut artifacts = Vec::new();
+    for suffix in [
+        ".compact",
+        ".compact-journal",
+        ".compact-wal",
+        ".compact-shm",
+        ".compact-visited",
+        ".compact-visited-journal",
+        ".compact-op.tmp",
+        ".compact-mj0001",
+    ] {
+        let mut name = path.as_os_str().to_os_string();
+        name.push(suffix);
+        artifacts.push(PathBuf::from(name));
+    }
+    for artifact in &artifacts {
+        std::fs::write(artifact, b"a crash left this artifact").unwrap();
+    }
+    write_op_record(&path, before);
+    assert!(
+        artifacts.iter().all(|artifact| artifact.exists()),
+        "the fixture creates the full artifact set"
+    );
+
+    let receipt = handles.compact(&request(0x78)).unwrap();
+    assert_eq!(receipt.path, CompactPath::None);
+    assert!(
+        receipt.residue.artifacts.is_empty(),
+        "the settle reports no residue: {:?}",
+        receipt.residue
+    );
+    for artifact in &artifacts {
+        assert!(
+            !artifact.exists(),
+            "{} must be removed by the next run",
+            artifact.display()
+        );
+    }
+    assert!(!op_path(&path).exists(), "the op record is settled");
+
+    let recovered = reopen(&path);
+    assert_eq!(generation(&recovered), before, "the Store recovered");
+    assert!(located(&recovered, live), "the live root still reads");
+    clean(&recovered);
+}
+
 /// #711 finding 5: §9 judges a leftover by the generation it names. A record at
 /// neither `G` nor `G-1` does not describe this Store, so it is refused and
 /// nothing it names is deleted.

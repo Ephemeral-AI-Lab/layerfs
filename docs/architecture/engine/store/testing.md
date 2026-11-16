@@ -255,7 +255,11 @@ tests need only `LAYERFS_TEST_POSTGRES_URL`, `amcheck` and the supported
 runs this harness in the repository's report-only CI. It adds no test
 selection: every target it runs is already in the push or nightly lane that
 [`tools/ci_tests.py`](../../../../tools/ci_tests.py) chooses; it runs them where
-their guard admits a Store. Like the other lanes it is not a required check, an
+their guard admits a Store. It is the one lane that also runs for pull requests
+into any base, including `layerfs_v2_0_0`, the 2.0 release base; every other
+lane runs only for `main`, so a PR into the 2.0 base carries this Store
+evidence and no other lane.
+Like the other lanes it is not a required check, an
 agent does not wait for it, and a green run is not verification of a change
 ([AGENTS.md](../../../../AGENTS.md) §4).
 

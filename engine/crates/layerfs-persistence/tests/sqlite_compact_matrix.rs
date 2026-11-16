@@ -987,8 +987,25 @@ const MATRIX: [Row; 60] = [
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_during_copy",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_after_verify",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_after_install",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_during_settle"],
-        note: "The SQLite section 9 crash matrix through named failpoints; a real kill -9 of a separate daemon process is T12.2's in-process stop points, not run here." },
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_during_settle",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_before_seal",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_after_seal",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_during_copy",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_during_verify",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_during_rename",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_after_build",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_before_install",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_after_install",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#sigkill_during_settle",
+                    "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs#sigkill_before_seal",
+                    "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs#sigkill_after_seal",
+                    "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs#sigkill_before_load",
+                    "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs#sigkill_after_build",
+                    "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs#sigkill_during_verify",
+                    "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs#sigkill_before_install",
+                    "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs#sigkill_after_install",
+                    "api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs#sigkill_during_settle"],
+        note: "The SQLite section 9 crash matrix through named failpoints; the 9 sigkill_at! arms in sqlite_compact_crash.rs and the CLI test's 8 SIGKILL arms on the built layerfs store compact process at mark, build, verify and install; no daemon serves Store calls." },
     Row { id: "AC-02", backend: Backend::Both, tier: "E2", status: Status::Partial,
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact.rs#a_wholly_dead_pack_is_rebuilt_away",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript"],
@@ -1129,8 +1146,9 @@ const MATRIX: [Row; 60] = [
         note: "Redaction and the keyed hash are named; salt backfill on an upgraded Store is partial." },
     Row { id: "AC-38", backend: Backend::Both, tier: "E2", status: Status::Covered,
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
-                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_during_settle"],
-        note: "The SQLite artifact set is removed exactly; the PostgreSQL schema/name arms are T12.3b." },
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_during_settle",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#the_whole_artifact_set_is_removed_by_the_next_run"],
+        note: "The full SQLite artifact set is removed exactly: the staged file and its -wal/-shm/-journal, the visited scratch and its journal, the incomplete op record and the -mj* super-journals; the PostgreSQL schema/name arms are T12.3b." },
     Row { id: "AC-39", backend: Backend::Both, tier: "E2", status: Status::Covered,
         evidence: &["engine/crates/layerfs-persistence/tests/gc_backfill.rs#commits_layers_and_epochs_are_backfilled_in_deterministic_order"],
         note: "One project_epoch row per stack, gc_op not copied, next_history_serial never lowered." },
@@ -1144,8 +1162,14 @@ const MATRIX: [Row; 60] = [
         evidence: &[], note: "PostgreSQL reserved pack/Phase B: T12.3b." },
     Row { id: "AC-43", backend: Backend::Pg, tier: "E2", status: Status::Deferred,
         evidence: &[], note: "PostgreSQL Phase C cleanup resume: T12.3b." },
-    Row { id: "AC-44", backend: Backend::Pg, tier: "E2", status: Status::Deferred,
-        evidence: &[], note: "PostgreSQL privileges and lost COMMIT reply: T12.3b." },
+    Row { id: "AC-44", backend: Backend::Pg, tier: "E2", status: Status::Covered,
+        evidence: &["engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_fully_privileged_role_compacts",
+                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_role_without_create_on_the_database_is_refused_as_unsupported",
+                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_role_without_create_on_the_store_schema_is_refused_as_unsupported",
+                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_role_without_temp_is_refused_as_unsupported",
+                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_role_without_pg_read_all_stats_is_refused_as_unsupported",
+                    "engine/crates/layerfs-persistence/tests/postgresql_compact.rs#a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1"],
+        note: "PostgreSQL privilege preflight (database/schema CREATE, TEMP, pg_read_all_stats, the fully privileged control) and the lost-COMMIT reply resumed by the next compact; T-G38/T-G54." },
     Row { id: "AC-45", backend: Backend::Sqlite, tier: "E1", status: Status::Covered,
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact.rs#group_rows_layout_opens_compacts_and_takes_none",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#group_rows_indexed_layout_opens_compacts_and_takes_none",
@@ -1161,8 +1185,9 @@ const MATRIX: [Row; 60] = [
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_during_copy",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_during_settle",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#a_stray_staged_name_is_refused_and_not_deleted",
+                    "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#the_whole_artifact_set_is_removed_by_the_next_run",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript"],
-        note: "Crash leaves the full set, the next compact removes it, none leaves no artifact, a stray name is Exists." },
+        note: "A crash leaves the full set (the fixture now creates .compact-wal, .compact-shm, .compact-visited-journal and a .compact-mj* super-journal too), the next compact removes every one and recovers, none leaves no artifact, a stray name is Exists." },
     Row { id: "AC-48", backend: Backend::Both, tier: "E2", status: Status::Covered,
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact.rs#nine_percent_wholly_dead_bytes_take_the_none_path",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#ten_percent_wholly_dead_bytes_rebuild_at_the_threshold",
@@ -1210,8 +1235,9 @@ const MATRIX: [Row; 60] = [
         evidence: &["runner#arm_measurement",
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_measure.json",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_capacity.rs#capacity_measure",
-                    "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure.json"],
-        note: "The tiny three-run arm is median 32.1 ms. T-G61 measured a real 9.987 GB Store on the whole-Store `VACUUM INTO` build (3 runs per arm): `none` at 8.88% dead median 149.318 s and `rebuild` at 10.00% dead median 246.371 s (mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s), plus a WAL/FULL control at 284.078 s. Re-measured on this branch with the fresh-copy build on the same 9.987 GB fixture: `rebuild` median 118.438 s (mark 74.462-75.704 s / build 18.190-19.209 s / quick-check verify 4.330-4.377 s / install 19.197-23.673 s), peak 9.144 GB; `none` median 88.439 s (82.0-149.9 s; this Sandbox shares the host); profile, host and toolchain are declared in the fixture, and the warm page cache is declared below. The §11 `markBytes` transfer is recorded per PostgreSQL run as `compact.mark_bytes`. T-G66 later measured the 50 GB arm once per path; the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]." },
+                    "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure.json",
+                    "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json"],
+        note: "The tiny three-run arm is median 32.1 ms. T-G61 measured a real 9.987 GB Store on the whole-Store `VACUUM INTO` build (3 runs per arm): `none` at 8.88% dead median 149.318 s and `rebuild` at 10.00% dead median 246.371 s (mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s), plus a WAL/FULL control at 284.078 s. Re-measured on this branch with the fresh-copy build on the same 9.987 GB fixture: `rebuild` median 118.438 s (mark 74.462-75.704 s / build 18.190-19.209 s / quick-check verify 4.330-4.377 s / install 19.197-23.673 s), peak 9.144 GB; `none` median 88.439 s (82.0-149.9 s; this Sandbox shares the host); profile, host and toolchain are declared in the fixture, and the warm page cache is declared below. The §11 `markBytes` transfer is recorded per PostgreSQL run as `compact.mark_bytes`. The separate gc_bench medium fixture (9.789 GB live / 10.731 GB pack) measured `rebuild` median 133.076 s in three runs (receipt: `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`), a different generated Store from the 9.987 GB capacity_measure fixture; the same-fixture comparison is 246.371 s -> 118.438 s = 2.08x, and the earlier 1.85x (133.076 s against 246.371 s) mixed the two fixtures and is withdrawn. The gc-bench/1 receipt declares the Disposable profile (WAL/OFF, page_size 4096) and the cache, records bytes written as `processIo.writeBytes`, and does not record the SQLite version or WAL bytes (recorded deviation). T-G66 later measured the 50 GB arm once per path (#42 item 44); the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]." },
     Row { id: "AC-58", backend: Backend::Sqlite, tier: "E2", status: Status::Covered,
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_before_copy",
@@ -1358,7 +1384,7 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  child placeholder), not the 13 recorded below; the binary also runs one"
+        "  child placeholder), not the 13-test T12.3c snapshot; the binary also runs one"
     )
     .unwrap();
     writeln!(
@@ -1381,27 +1407,6 @@ fn generate_report() -> String {
     writeln!(out, "  install, so AC-01 is `covered`.").unwrap();
     writeln!(
         out,
-        "- **Count reconciliation.** The T12.3c run recorded executed 8 / covered"
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "  29 / partial 16 / deferred 7, and the table below keeps that data."
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "  T-G38/T-G54 moved AC-44 to `covered`, so the current #52 dispositions"
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "  are executed 8 / covered 30 / partial 16 / deferred 6; the 29/7 above"
-    )
-    .unwrap();
-    writeln!(out, "  is the T12.3c snapshot, not a live gap.").unwrap();
-    writeln!(
-        out,
         "- A `covered`/`partial` row names a file and test function that this runner"
     )
     .unwrap();
@@ -1422,12 +1427,12 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "- **T-G61 capacity follow-up.** A separate opt-in test,"
+        "- **T-G61 capacity_measure run (fixture A: 9.987 GB pack).** The opt-in"
     )
     .unwrap();
     writeln!(
         out,
-        "  `sqlite_compact_capacity.rs#capacity_measure` (ignored by default), measured a"
+        "  `sqlite_compact_capacity.rs#capacity_measure` (ignored by default) measured a"
     )
     .unwrap();
     writeln!(
@@ -1458,7 +1463,7 @@ fn generate_report() -> String {
     writeln!(out, "  WAL/FULL control (284.078 s).").unwrap();
     writeln!(
         out,
-        "  Re-measured on this branch with the fresh-copy build on the same fixture:"
+        "  Re-measured on this branch with the fresh-copy build on the same fixture A:"
     )
     .unwrap();
     writeln!(
@@ -1498,15 +1503,114 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  The numbers are in `tests/fixtures/sqlite_compact_capacity_measure.json`."
+        "  The same-fixture comparison is **246.371 s -> 118.438 s = 2.08x**; the"
     )
     .unwrap();
     writeln!(
         out,
-        "  T-G66 measured the 50 GB arm once per path on the old build (see the runbook"
+        "  numbers are in `tests/fixtures/sqlite_compact_capacity_measure.json`."
     )
     .unwrap();
-    writeln!(out, "  disk-headroom section); the 30% arm remains [E].").unwrap();
+    writeln!(
+        out,
+        "- **gc_bench medium run (fixture B: 9.789 GB live / 10.731 GB pack).** The"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  separate `examples/gc_bench.rs` medium scale (16 projects x 52 Layers,"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  75,524 live objects, 8.8% dead) ran three times per arm on 2026-11-16 and"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  its receipt is committed as"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`: `rebuild`"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  median **133.076 s** (runs 132.274-134.601 s, 1.75% relative range; mark"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  82.050 s, build 23.469 s, verify 6.060 s, install 21.011 s; peak temp"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  9.836 GB, shrink 1.093 GB) and `none` median 82.683 s. Fixture B is a"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  different generated Store from fixture A, so 133.076 s is **not** the other"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  side of the 246.371 s -> 118.438 s comparison; the earlier 1.85x mixed the"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  two fixtures and is withdrawn. Section 13 fields: the creation profile"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  declares `SqlitePersistenceProfile::Disposable` (journal_mode WAL,"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  synchronous OFF, page_size 4096) and the caches (warm; `drop_caches` refused"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  6/6, overlayfs TMPDIR); bytes written is the per-run `processIo.writeBytes`"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  median (9,839,857,664 B rebuild, 7,086,080 B none). The SQLite version and"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  WAL bytes are **not recorded** by the gc-bench/1 receipt (recorded"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  deviation), and the page_size/synchronous_commit values are declared from"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  the creation profile rather than sampled with PRAGMA at run time."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "- T-G66 measured the 50 GB arm once per path on the old build (#42 item 44;"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  see the runbook disk-headroom section); the 30% arm remains [E]."
+    )
+    .unwrap();
     writeln!(out).unwrap();
     writeln!(out, "## Matrix (SQLite half)").unwrap();
     writeln!(out).unwrap();
@@ -1693,7 +1797,17 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  ~10 GB and the ignored test is not part of a normal suite."
+        "  ~10 GB and the ignored test is not part of a normal suite. The gc_bench"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  medium fixture B arm (three runs) is the committed"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  `sqlite_compact_capacity_measure_gc_bench.json` receipt, not fixture A."
     )
     .unwrap();
     writeln!(out).unwrap();
@@ -1762,7 +1876,7 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  plus the real 9.987 GB capacity fixture with three runs per arm"
+        "  the real 9.987 GB capacity_measure fixture A with three runs per arm"
     )
     .unwrap();
     writeln!(
@@ -1772,7 +1886,22 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  whole-Store build recorded 149.318 s / 246.371 s median on the same fixture)."
+        "  whole-Store build recorded 149.318 s / 246.371 s median on fixture A, so"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  the same-fixture ratio is 2.08x), and the separate gc_bench medium fixture B"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  (`none` 82.683 s, `rebuild` 133.076 s median; receipt"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`)."
     )
     .unwrap();
     writeln!(
@@ -1847,6 +1976,37 @@ fn generate_report() -> String {
     writeln!(out).unwrap();
     writeln!(
         out,
+        "- gc_bench medium run (fixture B, this branch): 88 vCPU Intel Xeon"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  E5-2699C v4, Linux 7.0.0-43-generic, `TMPDIR` on overlayfs, rustc 1.85.1"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  release, the `Disposable` (WAL/OFF) profile, declared host class"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  R730/PERC/rotational (detected unknown/ssd-or-unknown), warm page cache"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  (`drop_caches` refused 6/6), three runs per arm, fixture build 154.509 s."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  Receipt: `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`."
+    )
+    .unwrap();
+    writeln!(out).unwrap();
+    writeln!(
+        out,
         "- Fresh-copy re-measurement (this branch): Docker Sandbox `fxfresh`"
     )
     .unwrap();
@@ -1896,25 +2056,25 @@ fn generate_report() -> String {
         "- Verified here: `sqlite_compact_matrix` (1 test); the persistence suites"
     )
     .unwrap();
-    writeln!(out, "  `sqlite_compact` (20), `sqlite_compact_crash` (13),").unwrap();
+    writeln!(out, "  `sqlite_compact` (27), `sqlite_compact_crash` (24),").unwrap();
     writeln!(
         out,
-        "  `sqlite_compact_fixtures` (1), `admission` (5), `path_removal` (3),"
+        "  `sqlite_compact_fixtures` (1), `admission` (8), `path_removal` (4),"
     )
     .unwrap();
     writeln!(
         out,
-        "  `branch_removal` (3), `project_delete` (5), `epoch_fence` (7),"
+        "  `branch_removal` (4), `project_delete` (5), `epoch_fence` (7),"
     )
     .unwrap();
     writeln!(
         out,
-        "  `gc_backfill` (4), `kept_objects` (5); the Store-service path suites"
+        "  `gc_backfill` (5), `kept_objects` (6); the Store-service path suites"
     )
     .unwrap();
     writeln!(
         out,
-        "  `sdk_path_merge_removal` (5), `sdk_mount_bind_failure` (1),"
+        "  `sdk_path_merge_removal` (6), `sdk_mount_bind_failure` (1),"
     )
     .unwrap();
     writeln!(
@@ -1929,12 +2089,12 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  project_delete_worker` (5), `layerfs-store --features postgresql"
+        "  project_delete_worker` (6), `layerfs-store --features postgresql"
     )
     .unwrap();
     writeln!(
         out,
-        "  project_delete` (15) and `compact_report_status` (3)."
+        "  project_delete` (16) and `compact_report_status` (4)."
     )
     .unwrap();
     writeln!(out, "  All of those pass on the merged branch.").unwrap();
