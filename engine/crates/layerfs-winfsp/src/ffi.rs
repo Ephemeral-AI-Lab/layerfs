@@ -63,7 +63,7 @@ pub struct FSP_FILE_SYSTEM_INTERFACE {
     pub Rename: Option<unsafe extern "system" fn() -> NTSTATUS>,
     pub GetSecurity: Option<unsafe extern "system" fn() -> NTSTATUS>,
     pub SetSecurity: Option<unsafe extern "system" fn() -> NTSTATUS>,
-    pub ReadDirectory: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub ReadDirectory: Option<unsafe extern "system" fn(*mut FSP_FILE_SYSTEM, *mut c_void, *const u16, *const c_void, *mut c_void, u32, *mut u32) -> NTSTATUS>,
     pub ResolveReparsePoints: Option<unsafe extern "system" fn() -> NTSTATUS>,
     pub GetReparsePoint: Option<unsafe extern "system" fn() -> NTSTATUS>,
     pub SetReparsePoint: Option<unsafe extern "system" fn() -> NTSTATUS>,

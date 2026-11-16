@@ -6,3 +6,7 @@ description = "The Workspace filesystem face on Windows: WinFsp callbacks over t
 
 [dependencies]
 layerfs-mount-ports = { path = "../layerfs-mount-ports" }
+layerfs-overlay = { path = "../layerfs-overlay" }
+
+[dev-dependencies]
+layerfs-overlay = { path = "../layerfs-overlay" }

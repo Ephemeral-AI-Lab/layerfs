@@ -37,6 +37,7 @@ pub use contract::indexed_operation_record::{
     IndexedOperationRecordChange, IndexedOperationRecordKey, IndexedOperationRecordScope,
     OperationRecordExpectedValue,
 };
+pub use contract::kernel::mint_windows;
 pub use contract::kernel::{
     KernelApplied, KernelDecision, KernelEffect, KernelMount, KernelMountState, KernelObservation,
 };
