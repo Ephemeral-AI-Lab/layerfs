@@ -42,7 +42,7 @@ check and proves a missing, renamed or extra call is reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-76 calls in 10 families, counted from the Node table. Calls present: Node 76, Python 76, Python `aio` 76, CLI 76, MCP 76 (38 in `work`, 38 admin only).
+82 calls in 11 families, counted from the Node table. Calls present: Node 82, Python 82, Python `aio` 82, CLI 82, MCP 76 (38 in `work`, 38 admin only; 5 UI only, in no profile).
 
 Argument names that are Python keywords: none.
 
@@ -88,6 +88,7 @@ Front-end problems: none.
 | `sandbox.list` | ?project | page_size, page_pos | yes | yes | yes | yes | yes |
 | `sandbox.get` | name | page_size, page_pos | yes | yes | yes | yes | yes |
 | `sandbox.close` | name | force | yes | yes | yes | yes | admin |
+| `sandbox.files` | sandbox, ?path | depth, cursor, limit, offset, length | yes | yes | yes | yes | no (UI only) |
 | `workspace.mount` | sandbox, branch | name | yes | yes | yes | yes | yes |
 | `workspace.exec` | ws, command | message, stream, stdout(), stderr(), exec_id, on_progress() | yes | yes | yes | yes (--progress, --stream) | yes |
 | `workspace.exec_cancel` | ws, exec_id | grace_ms | yes | yes | yes | yes | yes |
@@ -101,6 +102,8 @@ Front-end problems: none.
 | `machine.load` | name, image | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `machine.prune` | name, ?image | unused | yes | yes | yes | yes | admin |
 | `machine.status` | name | - | yes | yes | yes | yes | admin |
+| `machine.stats` | machine | - | yes | yes | yes | yes | no (UI only) |
+| `machine.files` | machine, ?path | depth, cursor, limit, offset, length | yes | yes | yes | yes | no (UI only) |
 | `machine.start` | name | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `machine.stop` | name | force | yes | yes | yes | yes | admin |
 | `machine.create` | name, platform | cpus, memory, disk, image, os_image, on_progress() | yes | yes | yes | yes (--progress) | admin |
@@ -126,6 +129,9 @@ Front-end problems: none.
 | `backup.restore` | store, bucket, ?file | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `logs.list` | - | op, project, client, tag, outcome, since, cursor, limit | yes | yes | yes | yes | admin |
 | `logs.reset` | - | - | yes | yes | yes | yes | admin |
+| `logs.machine` | machine | cursor, before, limit | yes | yes | yes | yes | no (UI only) |
+| `logs.sandbox` | sandbox | cursor, before, limit | yes | yes | yes | yes | no (UI only) |
+| `doctor.fix` | id | - | yes | yes | yes | yes | no (no tool) |
 
 <!-- END GENERATED -->
 
