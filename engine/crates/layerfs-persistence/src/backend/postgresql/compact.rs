@@ -1632,18 +1632,7 @@ fn round(
     let scratch = scratch_name(&request.op_id);
     let mark_dead = persist_mark(session, schema, &mark, &tuple, &scratch, request)?;
     let generation = u64::try_from(tuple.generation).unwrap_or(0);
-    let kept = CompactKeptWaste {
-        dead_in_retained_packs_bytes: mark.objects().waste().dead_in_retained_packs_bytes(),
-        delta_bases_bytes: mark.objects().waste().delta_bases_bytes(),
-        delta_base_references: mark
-            .objects()
-            .waste()
-            .delta_base_references()
-            .iter()
-            .map(|id| *id.as_bytes())
-            .collect(),
-        inode_blocks_bytes: mark.objects().waste().inode_blocks_bytes(),
-    };
+    let kept = CompactKeptWaste::from_waste(mark.objects().waste());
     let rebuild = stored > 0 && dead_bytes.saturating_mul(THRESHOLD) >= stored;
     if !rebuild {
         metrics.end_phase();

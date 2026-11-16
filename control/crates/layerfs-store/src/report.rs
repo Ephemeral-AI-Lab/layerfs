@@ -13,12 +13,25 @@ use layerfs_persistence::{CompactReport, CompactStatus};
 #[must_use]
 pub fn compact_report(report: &CompactReport) -> SdkValue {
     let int = |value: u64| SdkValue::Int(i64::try_from(value).unwrap_or(i64::MAX));
-    let references = report
+    let references: Vec<SdkValue> = report
         .kept_waste
         .delta_base_references
         .iter()
         .map(|id| SdkValue::text(layerfs_bridge::sdk_values::hex(id)))
         .collect();
+    // §11/S7: a capped field carries its cap. A list cut at the cap renders as
+    // `{value, cap}`; every other report keeps the plain identity list.
+    let references = if report.kept_waste.delta_base_references_capped {
+        SdkValue::map([
+            ("value", SdkValue::List(references)),
+            (
+                "cap",
+                int(layerfs_persistence::DELTA_BASE_REFERENCES_CAP as u64),
+            ),
+        ])
+    } else {
+        SdkValue::List(references)
+    };
     let mut residue = vec![
         ("bytes".to_owned(), int(report.residue.bytes)),
         (
@@ -73,7 +86,7 @@ pub fn compact_report(report: &CompactReport) -> SdkValue {
                         "delta_bases",
                         SdkValue::map([
                             ("bytes", int(report.kept_waste.delta_bases_bytes)),
-                            ("references", SdkValue::List(references)),
+                            ("references", references),
                         ]),
                     ),
                     ("inode_blocks_bytes", int(report.kept_waste.inode_blocks_bytes)),

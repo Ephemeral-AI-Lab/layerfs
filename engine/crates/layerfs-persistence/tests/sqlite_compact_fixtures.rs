@@ -594,7 +594,6 @@ fn assert_no_artifacts(store: &Path) {
         ".compact-shm",
         ".compact-visited",
         ".compact-visited-journal",
-        ".compact-vacuum",
         ".compact-op",
         ".compact-op.tmp",
     ] {
@@ -921,7 +920,10 @@ fn empty_none_case() -> Json {
     assert_eq!(receipt.dead_bytes_refined, 0);
     assert_eq!(receipt.logical_discarded, 0);
     assert_eq!(receipt.physical_shrink, 0);
-    assert_eq!(receipt.peak_temp_bytes, 0);
+    assert!(
+        receipt.peak_temp_bytes > 0,
+        "the none path's visited scratch counts in peakTempBytes (§6.3)"
+    );
     assert!(receipt.estimate);
     assert!(receipt.kept_waste.is_empty());
     assert_eq!(receipt.residue.bytes, 0);
@@ -936,6 +938,16 @@ fn empty_none_case() -> Json {
         .iter()
         .any(|zero| zero.field == "deadBytesRefined" && zero.reason == "empty-store"));
     assert_no_artifacts(&path);
+    assert_eq!(
+        scalar0(&path, "SELECT count(*) FROM kept_node"),
+        0,
+        "the none path leaves no mark state"
+    );
+    assert_eq!(
+        scalar0(&path, "SELECT count(*) FROM gc_intent"),
+        0,
+        "the none path leaves no admission intent"
+    );
     let reopened = reopen(&path);
     assert_eq!(generation(&reopened), generation_before);
     assert_doctor_clean(&reopened);
@@ -987,7 +999,10 @@ fn no_dead_none_case() -> Json {
         "the none path collects nothing"
     );
     assert_eq!(receipt.physical_shrink, 0);
-    assert_eq!(receipt.peak_temp_bytes, 0);
+    assert!(
+        receipt.peak_temp_bytes > 0,
+        "the none path's visited scratch counts in peakTempBytes (§6.3)"
+    );
     assert!(receipt.estimate);
     assert!(receipt.residue.artifacts.is_empty());
     assert_eq!(receipt.residue.bytes, 0);

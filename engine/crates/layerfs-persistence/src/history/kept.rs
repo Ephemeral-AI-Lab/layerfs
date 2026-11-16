@@ -178,6 +178,15 @@ impl KeptHistory {
 }
 
 impl HistoryProvider {
+    /// Clears the transient §6.1 `kept_node` rows a mark wrote.
+    ///
+    /// A `store.compact` that takes the §3 `none` path calls this before it
+    /// replies, so the live Store carries no mark state afterwards: `kept_node`
+    /// is a working table, empty before and after every compaction.
+    pub fn clear_kept_node(&self) -> HistoryResult<()> {
+        self.write(clear)
+    }
+
     /// Recomputes the §6.1 history closure into `kept_node` and returns it.
     ///
     /// It runs in one write transaction: `kept_node` is cleared and refilled,
@@ -268,6 +277,12 @@ pub(super) fn remove_unreachable(
         tx.execute(key, params![])?;
     }
     Ok(count)
+}
+
+/// Empties the §6.1 working table without recomputing the closure.
+pub(super) fn clear(tx: &Transaction<'_>) -> HistoryResult<()> {
+    tx.execute(CLEAR, Vec::<Param>::new())?;
+    Ok(())
 }
 
 fn kept_node(row: &Record) -> HistoryResult<KeptNode> {

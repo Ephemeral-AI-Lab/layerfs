@@ -89,6 +89,7 @@ impl KeptWaste {
 pub struct KeptObjects {
     objects: Vec<ObjectId>,
     packs: Vec<i64>,
+    locators: BTreeMap<ObjectId, i64>,
     waste: KeptWaste,
 }
 
@@ -101,6 +102,14 @@ impl KeptObjects {
     /// Every pack holding a reached object, in ascending pack order.
     pub fn packs(&self) -> &[i64] {
         &self.packs
+    }
+
+    /// The winning locator pack of every reached object, in the same identity
+    /// order as [`Self::objects`] (§6.2). A rebuild's visited scratch joins
+    /// against it, so `object_location` is read once by the mark, not again by
+    /// the scratch writer.
+    pub fn locators(&self) -> &BTreeMap<ObjectId, i64> {
+        &self.locators
     }
 
     /// The bytes the mark keeps without a retained root needing them.
@@ -251,6 +260,11 @@ fn mark(tx: &Transaction<'_>) -> HistoryResult<MarkResult> {
     let objects = KeptObjects {
         objects: closure.visited.keys().copied().collect(),
         packs: closure.packs(),
+        locators: closure
+            .visited
+            .iter()
+            .map(|(id, location)| (*id, location.pack_id))
+            .collect(),
         waste,
     };
     Ok(MarkResult {
