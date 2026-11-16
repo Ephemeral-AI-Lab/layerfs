@@ -4,8 +4,11 @@
 //! exported from the host's Docker as one flat root filesystem tar
 //! ([`crate::image_tar`]), sent in 1 MiB frames and unpacked once there
 //! ([`crate::image_artifact`]). The machine is asked first, so an image it
-//! holds needs neither Docker nor a byte sent. Progress phases are
-//! `inspect`, `export`, `send` (`done`/`total` bytes) and `unpack`.
+//! holds needs neither Docker nor a byte sent. One copy per image and machine
+//! at a time: the second one waits in [`ImageLock`], and a copy whose owner
+//! died is taken over at once (#175 R01). Progress phases are `inspect`,
+//! `lock` (`waiting: "lock"` while another copy holds it), `export`, `send`
+//! (`done`/`total` bytes) and `unpack`.
 use crate::deploy::Side;
 use crate::docker::{self, Docker, Failure, Inspected};
 use crate::image_artifact::{self as cache, CHUNK};
@@ -13,36 +16,80 @@ use crate::image_tar::Filtered;
 use crate::images::{refused_with, stopped};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
+use layerfs_home::home::{self, private_dir, read_record, write_record};
 use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::process;
 use layerfs_store::place::Worker;
 use sha2::{Digest, Sha256};
+use std::fs::{File, OpenOptions};
 use std::io::Read;
-use std::path::Path;
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// How long a copy waits for another caller's copy of the same image.
-const WAIT: Duration = Duration::from_secs(600);
 /// A leftover export container older than this is removed by the next copy.
 const STALE_SECS: u64 = 3600;
+/// How often a waiting copy looks at the lock again: one look every 200 ms
+/// reacts to a released or taken-over lock, and to a killed waiter, at once.
+const LOCK_POLL: Duration = Duration::from_millis(200);
+/// How often a waiting copy says so: the longest silence of a wait is this.
+const WAIT_REPORT: Duration = Duration::from_secs(1);
 
-/// The side an image is copied to.
-pub enum Target<'a> {
-    /// A machine's worker.
-    Worker(&'a mut Worker),
-    /// This process (native Linux), with the home at the path.
-    Local(&'a Path),
+/// The side an image is copied to: the image cache of `machine`, reached
+/// through its worker or in this process (native Linux), and the `home` that
+/// keeps the copy's lock.
+pub struct Target<'a> {
+    home: &'a Path,
+    machine: &'a str,
+    place: Place<'a>,
 }
 
-impl Target<'_> {
+/// Where the bytes are written.
+pub enum Place<'a> {
+    /// This process, whose root is the home at the path.
+    Local,
+    /// The machine's worker.
+    Worker(&'a mut Worker),
+}
+
+impl<'a> Target<'a> {
+    /// A copy into this process's own image cache (`native` on Linux).
+    pub fn local(home: &'a Path, machine: &'a str) -> Self {
+        Target {
+            home,
+            machine,
+            place: Place::Local,
+        }
+    }
+
+    /// A copy into `machine`'s image cache through its worker.
+    pub fn worker(home: &'a Path, machine: &'a str, worker: &'a mut Worker) -> Self {
+        Target {
+            home,
+            machine,
+            place: Place::Worker(worker),
+        }
+    }
+
+    /// The home that keeps this copy's lock.
+    pub fn home(&self) -> &Path {
+        self.home
+    }
+
+    /// The machine whose image cache the copy fills.
+    pub fn machine(&self) -> &str {
+        self.machine
+    }
+
     /// One `image.artifact` step there.
     fn step(&mut self, args: SdkValue) -> Outcome {
-        match self {
-            Target::Worker(worker) => worker
+        match &mut self.place {
+            Place::Worker(worker) => worker
                 .attempt("image.artifact", args, &mut |_| {})
                 .map_err(|unreached| stopped(unreached.0))?,
-            Target::Local(home) => cache::step(&Side::Home(home), &args),
+            Place::Local => cache::step(&Side::Home(self.home), &args),
         }
     }
 
@@ -173,18 +220,25 @@ pub fn load(
             ]),
         ));
     }
-    // another caller is sending the same image: wait for it (bounded)
-    let start = Instant::now();
-    while !held(&probe) && probe.get_bool("receiving") && start.elapsed() < WAIT {
-        std::thread::sleep(Duration::from_secs(1));
-        probe = target.probe(Some(id), None, archive)?;
-    }
     if held(&probe) {
         let size = kept(&probe).or(Some(inspected.size));
         return Ok(reused(id, refs.clone(), size));
     }
-    let hex = &id["sha256:".len()..];
-    let container = format!("layerfs-export-{hex}");
+    // one copy at a time of this image on this machine (#175 R01): a second
+    // copy waits here, and takes over at once from one whose owner died
+    let machine = target.machine().to_owned();
+    let _lock = ImageLock::take(target.home(), &machine, id, events)?;
+    // under the lock: the copy that held it may have published the image
+    probe = target.probe(Some(id), None, archive)?;
+    if held(&probe) {
+        let size = kept(&probe).or(Some(inspected.size));
+        return Ok(reused(id, refs.clone(), size));
+    }
+    // capacity before the first effect on the machine (#175 R03): no export
+    // container, no staged byte and no cache folder; a resumed copy counts
+    // the bytes it already staged once
+    capacity(&machine, &probe, id, inspected.size)?;
+    let container = container(&machine, id);
     phase(events, "export", None);
     remove_stale(docker, &container);
     created(docker, &container, id)?;
@@ -203,23 +257,9 @@ pub fn load(
         .ok()
         .and_then(|out| out.trim().parse::<u64>().ok())
         .filter(|n| *n > 0);
-    // the larger of what the layers unpack to and the container's root
-    let size = unpacked.unwrap_or(0).max(inspected.size);
-    let estimate = Some(size).filter(|n| *n > 0);
-    let free = probe.get_int("free").map(|n| n.max(0) as u64);
-    if let Some(free) = free {
-        let need = docker::need(size);
-        if need > free {
-            return Err(refused_with(
-                "NoSpace",
-                format!("copying image {image} needs {need} bytes on the machine; {free} are free"),
-                SdkValue::map([
-                    ("need", SdkValue::Int(need as i64)),
-                    ("free", SdkValue::Int(free as i64)),
-                ]),
-            ));
-        }
-    }
+    // the container's root refines the progress estimate only: the capacity
+    // decision above is taken before anything is created
+    let estimate = Some(unpacked.unwrap_or(0).max(inspected.size)).filter(|n| *n > 0);
     let staged = probe.get_int("offset").unwrap_or(0).max(0) as u64;
     let prefix = probe.get_text("prefix_sha256").map(str::to_owned);
     let (sent, sha256) = match send(
@@ -265,6 +305,164 @@ fn reused(id: &str, refs: Vec<String>, size: Option<u64>) -> Loaded {
         size,
         reused: true,
     }
+}
+
+/// The lock of one image on one machine, in the home:
+/// `<home>/run/image-lock/<machine>/<hex>.lock`, an exclusive `flock` held
+/// for the whole copy, with its owner recorded beside it in `<hex>.json`
+/// (pid, its kernel start time and boot, the machine and the image; #175
+/// R01 and #176's intent).
+///
+/// The lock is the exclusion and the record is not: a waiter reads the record
+/// only to say whom it waits for. An owner that dies releases the kernel
+/// lock, so the next copy takes it over and resumes the staged part; a record
+/// whose pid another process now holds does not keep the lock, because the
+/// lock is not that process's. There is no deadline: a live owner is waited
+/// for as long as it lives and the wait says `waiting: "lock"` every second.
+/// Interrupting a waiting copy today means killing it, which leaves nothing
+/// to undo — a released kernel lock and at most its record, which the next
+/// copy replaces; a wait a shared Cancel can end is X01's, not this card's.
+pub struct ImageLock {
+    file: File,
+    record: PathBuf,
+}
+
+impl Drop for ImageLock {
+    fn drop(&mut self) {
+        // the copy is over; a copy that died left its record behind for the
+        // next owner to replace
+        let _ = std::fs::remove_file(&self.record);
+        layerfs_home::home::flock::unlock(&self.file);
+    }
+}
+
+impl ImageLock {
+    /// The folder of machine `machine`'s image locks in `home`.
+    pub fn dir(home: &Path, machine: &str) -> PathBuf {
+        home.join("run").join("image-lock").join(machine)
+    }
+
+    /// The lock file of `hex` on `machine`.
+    pub fn path(home: &Path, machine: &str, hex: &str) -> PathBuf {
+        Self::dir(home, machine).join(format!("{hex}.lock"))
+    }
+
+    /// The owner record beside it.
+    pub fn record_path(home: &Path, machine: &str, hex: &str) -> PathBuf {
+        Self::dir(home, machine).join(format!("{hex}.json"))
+    }
+
+    /// Takes the lock of image `id` on `machine`, waiting while a live copy
+    /// holds it and recording this copy as the owner. `events` say
+    /// `{phase: "lock", waiting: "lock", holder}` once a second meanwhile.
+    pub fn take(home: &Path, machine: &str, id: &str, events: &mut Events<'_>) -> Result<Self> {
+        let hex = hex_of(id).ok_or_else(|| refused("InvalidInput", "image id"))?;
+        let dir = Self::dir(home, machine);
+        private_dir(&dir)?;
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(Self::path(home, machine, hex))
+            .map_err(failed)?;
+        let mut reported: Option<Instant> = None;
+        loop {
+            if layerfs_home::home::flock::try_lock(&file, true).map_err(failed)? {
+                break;
+            }
+            if reported.is_none_or(|at| at.elapsed() >= WAIT_REPORT) {
+                let record = Self::record_path(home, machine, hex);
+                events.progress(SdkValue::map([
+                    ("phase", SdkValue::text("lock")),
+                    ("waiting", SdkValue::text("lock")),
+                    (
+                        "holder",
+                        read_record(&record)
+                            .ok()
+                            .flatten()
+                            .unwrap_or(SdkValue::Null),
+                    ),
+                ]));
+                reported = Some(Instant::now());
+            }
+            std::thread::sleep(LOCK_POLL);
+        }
+        let lock = Self {
+            file,
+            record: Self::record_path(home, machine, hex),
+        };
+        lock.record(machine, id)?;
+        Ok(lock)
+    }
+
+    /// Records this copy as the lock's owner before it does anything else.
+    fn record(&self, machine: &str, id: &str) -> Result<()> {
+        let now = home::now_ms();
+        let mut fields = process::identity();
+        fields.extend([
+            ("machine", SdkValue::text(machine)),
+            ("image", SdkValue::text(id)),
+            ("since", SdkValue::text(cache::utc(now))),
+            ("since_ms", SdkValue::Int(now)),
+        ]);
+        let record = SdkValue::Map(
+            fields
+                .into_iter()
+                .map(|(name, value)| (name.to_owned(), value))
+                .collect(),
+        );
+        write_record(&self.record, &record)
+    }
+}
+
+/// The export container of image `id` for `machine`: one per image and
+/// machine, so two machines copying the same image neither share nor remove
+/// each other's container. Nothing runs in it.
+fn container(machine: &str, id: &str) -> String {
+    format!("layerfs-export-{machine}-{}", &id["sha256:".len()..])
+}
+
+/// `id`'s 64 hex digits, the name of its files under the cache and the lock.
+fn hex_of(id: &str) -> Option<&str> {
+    cache::digest(id).then(|| &id["sha256:".len()..])
+}
+
+/// Refuses `Capacity` before the copy creates anything on the machine or in
+/// the home (#175 R03): `needed` is what the copy still has to find room for
+/// — the bytes already staged for a resumed copy are on the machine's
+/// filesystem and are counted once — `free` is what it has, and `where` names
+/// the filesystem that was measured.
+fn capacity(machine: &str, probe: &SdkValue, id: &str, size: u64) -> Result<()> {
+    // a machine that does not say how much room it has cannot be refused
+    let Some(free) = probe.get_int("free").map(|n| n.max(0) as u64) else {
+        return Ok(());
+    };
+    let staged = probe.get_int("offset").unwrap_or(0).max(0) as u64;
+    let needed = docker::need(size).saturating_sub(staged);
+    if needed <= free {
+        return Ok(());
+    }
+    let at = probe.get_text("root").unwrap_or(machine);
+    let staged_note = if staged > 0 {
+        format!(" ({staged} bytes are already staged and are not counted again)")
+    } else {
+        String::new()
+    };
+    let int = |n: u64| SdkValue::Int(n.min(i64::MAX as u64) as i64);
+    Err(refused_with(
+        "Capacity",
+        format!(
+            "machine {machine} needs {needed} more bytes in {at} to copy image {id}; {free} are free{staged_note}"
+        ),
+        SdkValue::map([
+            ("needed", int(needed)),
+            ("free", int(free)),
+            ("where", SdkValue::text(at)),
+        ]),
+    ))
 }
 
 /// The export container `name` of image `id`: the one a failed copy kept
@@ -447,10 +645,20 @@ pub fn machine_load(
     let docker = Docker::of(home)?;
     let archive = choice.archive.as_deref();
     let loaded = match &mut executor {
-        Executor::Local => load(&docker, events, &mut Target::Local(home), archive, image)?,
-        Executor::Worker(worker) => {
-            load(&docker, events, &mut Target::Worker(worker), archive, image)?
-        }
+        Executor::Local => load(
+            &docker,
+            events,
+            &mut Target::local(home, machine),
+            archive,
+            image,
+        )?,
+        Executor::Worker(worker) => load(
+            &docker,
+            events,
+            &mut Target::worker(home, machine, worker),
+            archive,
+            image,
+        )?,
     };
     Ok(loaded.to_value())
 }

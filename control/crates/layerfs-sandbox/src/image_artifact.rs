@@ -7,7 +7,9 @@
 //! size, architecture, source, config and the time a Sandbox last used it.
 //! The host keeps nothing; Docker is the source. A staged file is resumed
 //! from its length when its bytes are a prefix of the next export
-//! (`probe`'s `prefix_sha256`).
+//! (`probe`'s `prefix_sha256`). Whether another copy is still writing it is
+//! the copy's own lock in the home (`image_load::ImageLock`), never the
+//! staged file's age.
 use crate::deploy::{self, Side};
 use crate::host::Deploy;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -20,13 +22,9 @@ use std::fs::{self, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
 
 /// The largest frame of image bytes one `write` carries.
 pub const CHUNK: usize = 1 << 20;
-/// How recently a staged file must have grown for `probe` to say another
-/// caller is still sending it.
-const RECEIVING: Duration = Duration::from_secs(30);
 
 /// Whether a value is a full lowercase digest, `sha256:<64 hex>`.
 pub fn digest(value: &str) -> bool {
@@ -320,13 +318,18 @@ pub fn step(side: &Side<'_>, args: &SdkValue) -> Outcome {
 
 /// Whether this machine holds image `id` (unpacked, or in the archive its
 /// Sandboxes read), or which image a sidecar names `ref` by; its
-/// architecture, free bytes, and how much of `id` is staged.
+/// architecture, the image cache measured for free bytes and where it is,
+/// and how much of `id` is staged.
 fn probe(side: &Side<'_>, cache: &Path, id: Option<&str>, args: &SdkValue) -> Outcome {
     let mut out = vec![
         ("architecture".to_owned(), SdkValue::text(architecture())),
         (
             "free".to_owned(),
             free(cache).map_or(SdkValue::Null, |n| SdkValue::Int(n as i64)),
+        ),
+        (
+            "root".to_owned(),
+            SdkValue::text(cache.to_string_lossy().as_ref()),
         ),
     ];
     let id = match (id, args.get_text("ref")) {
@@ -354,17 +357,11 @@ fn probe(side: &Side<'_>, cache: &Path, id: Option<&str>, args: &SdkValue) -> Ou
     let staged = part(cache, hex);
     if let Ok(meta) = fs::symlink_metadata(&staged) {
         if meta.file_type().is_file() {
-            let recent = meta
-                .modified()
-                .ok()
-                .and_then(|m| SystemTime::now().duration_since(m).ok())
-                .is_some_and(|age| age < RECEIVING);
             out.push(("offset".to_owned(), SdkValue::Int(meta.len() as i64)));
             out.push((
                 "prefix_sha256".to_owned(),
                 SdkValue::text(sha256_file(&staged)?),
             ));
-            out.push(("receiving".to_owned(), SdkValue::Bool(recent)));
         }
     }
     Ok(SdkValue::Map(out))

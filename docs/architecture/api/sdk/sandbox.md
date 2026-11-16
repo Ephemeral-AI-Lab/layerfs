@@ -76,7 +76,7 @@ first. Nothing starts a stopped machine.
 | Error | When |
 | --- | --- |
 | `InvalidInput` | `native`/`docker` as the name, or a name ending in `.root`; an image Docker does not have |
-| `NoSpace` | copying the image needs `2 × size × 1.05` bytes and the machine has fewer (`detail { need, free }`) |
+| `Capacity` | copying the image needs `2 × size × 1.05` bytes, less what a resumed copy already staged, and the machine has fewer (`detail { needed, free, where }`) |
 | `Unavailable` | the machine is stopped (`detail { what: "machine" }`) or Docker cannot be read (`detail { what: "docker" }`) |
 | `NotFound` | no machine of that name |
 | `NoStore` | the project has no installed Store |

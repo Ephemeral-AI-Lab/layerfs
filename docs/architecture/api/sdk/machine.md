@@ -205,24 +205,34 @@ CLI     layerfs machine load <name> <image> [--progress]
 
 `image` is a digest, Docker image Id or Docker reference. The machine is
 asked first: an image it holds is `reused: true` and needs neither Docker nor
-a byte sent. Otherwise `docker image inspect` resolves it; the host keeps an
-export container `layerfs-export-<hex>` (removed once the machine publishes
-the image), streams `docker export` without the init layer's files
-(`.dockerenv`, `etc/hosts`, `etc/hostname`, `etc/resolv.conf`, `etc/mtab`,
-`dev/*`) and device or FIFO entries in 1 MiB `image.artifact` frames to
-`.recv-<hex>.part`, and the machine checks its size and sha256, unpacks it
+a byte sent. Otherwise `docker image inspect` resolves it; one copy of that Id
+on that machine at a time holds `<home>/run/image-lock/<machine>/<hex>.lock`
+(an exclusive `flock` with the owner's `pid`, `pid_start` and `pid_boot`
+beside it), so a second copy waits — `{phase: "lock", waiting: "lock",
+holder}` each second, with no deadline — and then reuses what the first
+published; a copy whose owner died takes the lock over at once, because the
+kernel released it, and a record naming a reused pid holds nothing. The
+machine's free bytes are checked before anything is created on either side:
+`Capacity` `{needed, free, where}` refuses a machine too small for the copy,
+with no export container, no staged byte and no cache folder, `needed`
+counting the bytes a resumed copy already staged once and `where` the
+filesystem `probe` measured. Only then does the host create the export
+container `layerfs-export-<machine>-<hex>` (one per image and machine,
+removed once the machine publishes the image) and stream `docker export`
+without the init layer's files (`.dockerenv`, `etc/hosts`, `etc/hostname`,
+`etc/resolv.conf`, `etc/mtab`, `dev/*`) and device or FIFO entries in 1 MiB
+`image.artifact` frames to `.recv-<hex>.part`; the machine checks its size and sha256, unpacks it
 once into `<hex>.2/`, writes the sidecar and deletes the staged tar. A staged
-tar left by a stopped copy is resumed when its bytes hash as this export's
-prefix, else restarted; one still growing (under 30 s old) is another
-caller's copy, which this one waits for. `NoSpace`'s `need` counts the
-larger of the layers' unpacked size and the export container's root
-(`SizeRootFs`); `size` is the bytes sent, else the sidecar's, else the
-layers' unpacked size. Progress: `inspect`, `export`, `send` (`done`,
-`total`: an estimate, never below `done`, until the last `send` event, whose
-`done` and `total` are both the bytes sent), `unpack`. Errors: `Unsupported` `{reason: "host"}`
+tar left by a copy that is not running is resumed when its bytes hash as this
+export's prefix, else restarted; `size` is the bytes sent, else the sidecar's,
+else the layers' unpacked size, and the export container's `SizeRootFs` only
+refines the progress estimate. Progress: `inspect`, `lock`, `export`, `send`
+(`done`, `total`: an estimate, never below `done`, until the last `send`
+event, whose `done` and `total` are both the bytes sent), `unpack`. Errors:
+`Unsupported` `{reason: "host"}`
 (macOS `native`), `{reason: "arch" | "os", value}`; `InvalidInput` (Docker
-has no such image); `Unavailable` `{what: "docker" | "machine"}`; `NoSpace`
-`{need, free}`.
+has no such image); `Unavailable` `{what: "docker" | "machine"}`; `Capacity`
+`{needed, free, where}`.
 
 ### machine.prune
 

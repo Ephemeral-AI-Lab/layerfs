@@ -255,16 +255,19 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   (unpacked, or in its archive) starts at once; any other is resolved with
   `docker image inspect` through the `docker` machine's recorded socket
   (else Docker's default context), refused `Unsupported`
-  `{reason: "arch", value}` for another architecture, `NoSpace`
-  `{need, free}` when `2 × size × 1.05` is over the machine's free bytes
-  (`size`: what the image's layers unpack to, the sum of `docker history`'s
-  layer sizes, or the export container's root if larger),
+  `{reason: "arch", value}` for another architecture, `Capacity`
+  `{needed, free, where}` when `2 × size × 1.05`, less the bytes a resumed
+  copy already staged, is over the machine's free bytes (`size`: what the
+  image's layers unpack to, the sum of `docker history`'s layer sizes),
   and otherwise exported once (`docker create` + `docker export`, without
   the init layer's files), sent in 1 MiB frames and unpacked on the
   machine under `machines/native/run/images/<hex>.2/` with a sidecar
   `<hex>.2.json`; the staged tar is deleted. Docker unreachable is
   `Unavailable` `{what: "docker"}`, the machine stopped `Unavailable`
-  `{what: "machine"}`. `--progress` reports `inspect`, `export`, `send`
+  `{what: "machine"}`. One copy of an image on one machine at a time: a
+  second waits for the first (phase `lock`, `waiting: "lock"`, the holder
+  in `holder`), then reuses what it published. `--progress` reports
+  `inspect`, `lock`, `export`, `send`
   (`done`, `total`; `total` is an estimate until the last `send` event,
   which has `done` equal to `total`, the bytes sent), `unpack` and `start`. The record keeps the image's id,
   and every create sets its sidecar's `last_used`. The worker container's own
@@ -886,7 +889,7 @@ Codes seen in the 2.0 library include:
 | `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret |
 | `Conflict` | a merge or Commit conflict; for `backup.restore`, the Store changed since its last backup or restore |
 | `Binary` | `file.read` of a file that is not text |
-| `Capacity` | a Sandbox's Workspace limit; a `store push` or `store pull` target without room for the Store (`detail.needed`, `detail.free`) |
+| `Capacity` | a Sandbox's Workspace limit; a `store push` or `store pull` target without room for the Store (`detail.needed`, `detail.free`); copying an image to a machine without room for it (`detail.needed`, `detail.free`, `detail.where`) |
 | `Failed` | it was tried and did not happen; whatever exists is kept |
 | `Unknown` | the outcome is not known; both sides are kept and logged in `log/uncertain.jsonl`, and the entity keeps an uncertain `op` (later calls on it are `Unresolved`) |
 
