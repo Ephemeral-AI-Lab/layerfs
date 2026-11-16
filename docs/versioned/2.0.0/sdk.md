@@ -9,7 +9,7 @@ Part of the [2.0.0 manual](README.md). Sources:
 [api/python/README.md](../../../api/python/README.md).
 
 Both packages are named `layerfs` (O15). Each is a thin front end over the
-same Rust library. Each builds its nine families from the library's call
+same Rust library. Each builds its eleven families from the library's call
 table, so neither names a call in its own code, and both take the same
 arguments as the `layerfs` command. Every call is one call into the
 library, made once.
@@ -49,7 +49,7 @@ const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", fo
   content to write may be a string or a `Buffer`.
 - A refusal throws `LayerFSError` with `code`, `message` and `detail`.
 - `table` is the call table, `[{ family, call, args, options, help }]`;
-  `families` lists the nine families.
+  `families` lists the eleven families.
 - `layerfs.doctor({ home })` (also a named export) is
   [`layerfs doctor`](calls.md#layerfs-doctor), outside the table: it
   resolves to `{ ok, findings: [{ severity, entity: { kind, name }, message,
@@ -136,7 +136,7 @@ asyncio.run(main())
 
 See [`project.export`](../../architecture/api/sdk/project.md#projectexport)
 for destination validation, fidelity, routing, refusal codes and result fields.
-The table has 61 calls, five in the `project` family.
+The table has 83 calls, seven in the `project` family.
 
 ```js
 // /exports exists; the destination is absent or empty on this host.

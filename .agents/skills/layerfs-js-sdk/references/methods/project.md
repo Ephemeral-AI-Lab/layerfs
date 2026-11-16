@@ -12,6 +12,7 @@ always named with its Store: `<store>/<project>`, such as `shop/api`. A bare
 project.init(project, folder, { timeout, on_progress })
 project.list(store?, { page_size, page_pos })
 project.get(project)
+project.stats(project, branch?, commit?)
 project.export(project, destination, { branch, on_progress })
 project.delete(project)
 project.remove_file(project, path)
@@ -119,6 +120,25 @@ The project's record: its Store, the Store's kind and machine.
 ```json
 {"project":"shop/api","store":"shop","name":"api","kind":"sqlite","machine":"native","created":1793574061265}
 ```
+
+## `project.stats`
+
+`project.stats(project, branch?, commit?)`
+
+Entry counts of one pinned saved tree: `main` unless `branch` is given, and
+that Branch's saved head unless `commit` is. Uncommitted Workspace changes
+are not counted.
+
+```json
+{"project":"shop/api","at":{"id":"12ad2061f04f…","kind":"Commit","branch":"work","root":"f55fa9660a73…"},
+ "files":12,"directories":3,"symlinks":0,"others":0,"logical":18432,"complete":true}
+```
+
+The root directory is excluded, hard links count per path and symlinks are
+not followed; `logical` is the pinned tree's recorded regular-file bytes. The
+walk shares the saved-read budget of 10,000 entries: past it the answer is
+partial with `complete: false` and a `reason`, never a silent cap. A bad
+`branch`/`commit` is `NoSuchBranch`/`NoSuchCommit`.
 
 ## `project.delete`
 

@@ -9,7 +9,8 @@
 
 ```js
 workspace.mount(sandbox, branch, { name })
-workspace.exec(ws, command, { message, stream, stdout, stderr })
+workspace.exec(ws, command, { message, stream, stdout, stderr, exec_id, on_progress })
+workspace.exec_cancel(ws, exec_id, { grace_ms })
 workspace.commit(ws, { message, force })
 workspace.unmount(ws, { discard, force })
 workspace.status(ws)
@@ -96,7 +97,7 @@ mounted; `ws` is then `<sandbox>:<name>`.
 
 ## `workspace.exec`
 
-`workspace.exec(ws, command, { message, stream, stdout, stderr })`
+`workspace.exec(ws, command, { message, stream, stdout, stderr, exec_id, on_progress })`
 
 Runs one command with `bash -c` in the Workspace and waits for it to end. The
 working directory is the Workspace root, so use relative paths
@@ -128,6 +129,11 @@ tests, `f67d5a9f6f`, `771823d728`, `94671c974c`, `37f1bbd2b9`):
 - Output over 1 MiB arrives only this way, 1 MiB per piece; without a
   function, `stream` or `--stream` those bytes are not kept.
 
+`exec_id` (1–64 of `A-Z a-z 0-9 . _ -`, not starting with `.` or `-`) names
+the running command; it defaults to `exec-<16 hex>` and must be unique among
+the Workspace's running commands (`Exists` otherwise). `on_progress` receives
+one event before the command starts: `{ exec: { id } }`.
+
 **Limits**
 
 - No timeout: put `timeout 110` inside the command.
@@ -154,8 +160,27 @@ const run = await layerfs.workspace.exec(ws, `printf '%s' ${b64} | base64 -d > s
 ```
 
 **Refusals:** `NoSuchSandbox` (the Sandbox is gone: its Workspaces are gone
-too; mount again elsewhere), `NotMounted`, `Unknown` (the exit code is not
+too; mount again elsewhere), `NotMounted`, `Exists` (that `exec_id` is
+running in this Workspace), `Unknown` (the exit code is not
 known: the command may or may not have run; stop).
+
+## `workspace.exec_cancel`
+
+`workspace.exec_cancel(ws, exec_id, { grace_ms })`
+
+Ends a running command from any process: SIGTERM to everything it started,
+then SIGKILL after `grace_ms` (default 5000, not negative; 0 sends SIGKILL
+right after SIGTERM). One explicit attempt; there is no operation timeout.
+
+| Answer | Meaning |
+| --- | --- |
+| `{ outcome: "cancelled", signal }` | `SIGTERM` when the command was gone within the grace, else `SIGKILL`; a command not yet running is marked and answered `SIGKILL`, and its owner ends it once it runs |
+| `{ outcome: "ended" }` | no record, or nothing left; with no record, a pending mark is kept for 30 s and cancels a command registered with that id in that time |
+| `{ outcome: "unknown" }` | the worker was not reached or did not answer; call again once it answers |
+
+A cancelled `workspace.exec` answers `kind: "cancelled"` and its code is
+128 + the signal. Error: `Failed` (a record that does not read, or the signal
+could not be sent).
 
 ## `workspace.commit`
 

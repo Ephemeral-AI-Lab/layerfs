@@ -25,8 +25,9 @@ Commit, merge, and publish to `main`.
   Stores: a sqlite Store is one file on one machine, a postgresql Store is a
   database. Backups of sqlite Stores go to r2 or MinIO buckets. See
   [machines, Stores and backups](machines-and-stores.md).
-- **One call table.** 61 calls in nine families: `project`, `branch`,
-  `commit`, `file`, `sandbox`, `workspace`, `machine`, `store` and `backup`.
+- **One call table.** 83 calls in eleven families: `project`, `branch`,
+  `commit`, `file`, `sandbox`, `workspace`, `machine`, `store`, `backup`,
+  `logs` and `doctor`.
   The `layerfs` command, the Node package and the Python package are thin
   front ends over one Rust library and take the same arguments. See
   [the calls](calls.md).
@@ -42,7 +43,7 @@ Commit, merge, and publish to `main`.
    Python.
 2. [The home](home.md): the layout of `LAYERFS_HOME`, the one-time
    conversion of a 1.1.0 home, and `layerfs import-env`.
-3. [The calls](calls.md): all 61 calls with their positionals and options,
+3. [The calls](calls.md): all 83 calls with their positionals and options,
    results, errors and exit codes, and the shell switches.
 4. [Machines, Stores and backups](machines-and-stores.md): machine kinds,
    manual start and stop, sqlite and postgresql Stores, push and
@@ -63,7 +64,7 @@ Commit, merge, and publish to `main`.
 The code wins over every document below where they differ.
 
 - [The call table](../../../api/crates/layerfs-api/src/), one file per call
-  under its family (`<family>/<call>.rs`): the 61 calls, their arguments and
+  under its family (`<family>/<call>.rs`): the 83 calls, their arguments and
   options.
 - [The #533 work order](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/README.md) and
   [its decisions log](https://github.com/Ephemeral-AI-Lab/layerfs/blob/af2ad92bce866b4e3e11365f016b12806828a53b/core/docs/issues/533/DECISIONS.md): owner

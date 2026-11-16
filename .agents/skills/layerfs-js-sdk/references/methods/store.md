@@ -11,11 +11,15 @@
 store.list()
 store.get(name)
 store.status(name)
+store.stats(name)
 store.create(name)
 store.connect(name, url, { password, synchronous_commit })
+store.attach(name, machine, { url, password })
+store.detach(name, machine)
 store.push(name, machine, { on_progress })
 store.pull(name, { on_progress })
 store.remove(name)
+store.compact(name)
 store.disconnect(name)
 ```
 
@@ -54,15 +58,35 @@ machine is stopped, or whose worker does not answer, is `state: "down"` with
 `down_reason` and `file.unavailable`. `state` is `idle`, `in_use`, `busy`
 (a live `op`), `down` or `unresolved` (a gone process's uncertain `op`).
 
+`store.stats(name)` is the Store-wide counters, read in constant work with no
+history, tree or object scan:
+
+```json
+{"name":"shop","kind":"sqlite","history_logical":18432,"canonical":217088,"stored":217088,
+ "metadata":32768,"file":212992,"free":0,
+ "init":{"entries":3,"files":2,"bytes":18432,"canonical":18432,"stored":18432,"metadata":4096,"millis":12}}
+```
+
+`history_logical` sums saved-tree bytes over Commit and Layer records (each
+publication counts its tree again); `canonical` and `stored` are allocated
+immutable content, not reclaimed by `project.delete`; `metadata` is accounted
+metadata plus database overhead; `file` is database pages, not the file
+length; `free` is SQLite free-page bytes (`null` for PostgreSQL). A sqlite
+Store on another machine is read through its worker; a stopped worker is
+`Unavailable`.
+
 ## Changes
 
 | Call | What it does | Notes |
 | --- | --- | --- |
 | `create(name)` | An empty sqlite Store on `native` | Live result: the record above, with `projects: []`. `Exists` for a taken name |
 | `connect(name, url, …)` | Attaches a PostgreSQL database | `url` is `postgresql://<user>@<host>:<port>/<database>[?sslmode=…]` without a password (one in the user part or in any query parameter whose name contains `password` is `InvalidInput`); `password` is a reference, `env:LAYERFS_<NAME>` or `file:/path`. `synchronous_commit` defaults to `off`. The same database under a second name is `Exists` |
+| `attach(name, machine, …)` | Lets a machine run Sandboxes of a PostgreSQL Store | Checks from that machine that it reaches the database and its role may write; `url` and `password` replace the Store's for that machine, either alone. `InvalidInput` for sqlite; `Unsupported` when the platform runs no PostgreSQL Sandboxes; `Unavailable` (not reached, machine stopped); `Denied` (login or privilege); `Conflict` while the Store is disconnected or reconnected |
+| `detach(name, machine)` | Stops a machine running Sandboxes of a PostgreSQL Store | Dials nothing; detaching `native` is allowed. `InvalidInput` (sqlite, or not attached there); `InUse` while a Sandbox of the Store is recorded on the machine |
 | `push(name, machine, …)` | Sends a sqlite Store's file from `native` to `machine` | `InvalidInput` unless the Store is on `native` (pull it first). Progress `{ phase, done, total }` on `on_progress` / `--progress`: `done` and `total` are bytes during `send`, null in the other phases (`check`, `snapshot`, `verify`, `install`, `record`, `retire`). `InUse` while the Store is held (Sandbox records, processes with it open; `detail.related` lists them as `{ kind, name }`); `Capacity` when the target has less free disk than the Store plus a headroom of 1 GiB (or a tenth of the Store), checked before anything changes; `Unavailable` naming `layerfs machine start <m>` for a stopped machine; while it runs, Store calls and operations on it are `Busy`, from the caller's process too. An uncertain push whose process is gone (it ended during install or record, or a step's answer was lost) leaves every later call `Unresolved`, naming `store status` and the push that clears it: a new `push` (or `pull`) first deletes the copy on the machine the record does not name, then runs. A push whose `retire` did not finish leaves the Store in use on `machine` and `last_transfer.retired: false`; the next `pull` deletes the old copy first |
 | `pull(name, …)` | Brings a sqlite Store's file from its machine to `native` | `InvalidInput` when it is already on `native`; otherwise as `push`. Between two machines: `pull`, then `push` |
 | `remove(name)` | Deletes a sqlite Store with every project in it | Returns `{ removed }`. `NotFound` for an unknown name (live); `Unavailable` for a Store whose machine is unknown; `Busy` while a live process pushes, pulls or removes it. It clears an `Unresolved` Store. Backups stay |
+| `compact(name)` | Rebuilds the Store from its live history, reclaiming dead bytes | The only byte-reclaiming call: no confirm, force or dry run. Returns `{ kind: "Compacted", path, generation, … }` with `dead_bytes_bound`, `dead_bytes_refined`, `logical_discarded`, `backend_reusable`, `physical_shrink`, `kept_waste`, `peak_temp_bytes`, `residue`, `estimate` and `zero_reason`. A Store with under 10% dead packs takes the `none` path and only marks. A sqlite Store on another machine is `Unsupported` (local-only route). `MountsActive`, `Busy`, `Unresolved`, `StaleStore`, `Conflict`, `Capacity`, `Unknown` |
 | `disconnect(name)` | Forgets a PostgreSQL Store; its data stays | `InUse` while another process holds the Store (its calls hold it while it stays open) or a Sandbox of it runs; `detail.related` lists them as `{ kind: "lease", name: <pid> }` and `{ kind: "sandbox", name }` |
 
 Pushing or pulling a Store moves where its Sandboxes can run: a Sandbox of a sqlite Store
