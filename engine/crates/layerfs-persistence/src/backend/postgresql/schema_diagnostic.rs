@@ -31,6 +31,7 @@ commit new_stored bigint NO
 commit new_metadata bigint NO
 commit lww bytea NO
 commit displaced_id bytea YES
+commit history_serial bigint NO
 commit_lineage commit_id bytea NO
 commit_lineage run bytea NO
 commit_lineage depth bigint NO
@@ -134,6 +135,7 @@ layer source_branch_id bytea YES
 layer logical bigint NO
 layer overwrote bytea NO
 layer source_commit_id bytea YES
+layer history_serial bigint NO
 layer_lineage layer_id bytea NO
 layer_lineage layer_stack_id bytea NO
 layer_lineage height bigint NO
@@ -179,6 +181,7 @@ store_policy chunk_delta_max_depth bigint NO
 store_policy metadata_delta_max_depth bigint NO
 store_policy next_pack_id bigint NO
 store_policy next_ordinal bigint NO
+store_policy trace_salt bytea NO
 store_totals id bigint NO
 store_totals logical bigint NO
 store_totals canonical bigint NO

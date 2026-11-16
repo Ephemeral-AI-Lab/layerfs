@@ -13,7 +13,10 @@
 use super::params;
 use super::transaction::Transaction;
 use layerfs_content::ObjectId;
-use layerfs_history::error::{HistoryError, HistoryResult, Missing, MovedState};
+use layerfs_history::error::{
+    HistoryError, HistoryResult, HolderKind, HolderState, Missing, MovedState, NameHolder,
+    NameSource, NameTakenState,
+};
 use layerfs_history::identity::{CatalogId, HistoryName, LayerId, LayerStackId};
 use layerfs_history::records::{
     AddLayerOutcome, AddLayerRequest, LayerHistoryRequest, LayerRecord, LayerStackRecord, Page,
@@ -63,8 +66,8 @@ pub(crate) fn initialize_layerstack(
     if layer_stack(tx, request.stack)?.is_some() {
         return Err(HistoryError::Integrity("LayerStack identity"));
     }
-    if one(tx, STACK_NAME_TAKEN, [request.name.as_str()], |_| Ok(()))?.is_some() {
-        return Err(HistoryError::Integrity("LayerStack name"));
+    if let Some(state) = name_taken(tx, &request.name)? {
+        return Err(HistoryError::NameTaken(Box::new(state)));
     }
     let genesis = LayerId::derive(request.stack, None, request.genesis_root);
     let serial = super::position::next_serial(tx)?;
@@ -100,6 +103,26 @@ pub(crate) fn initialize_layerstack(
     layer_stack(tx, request.stack)?.ok_or(HistoryError::Integrity("LayerStack insertion"))
 }
 
+/// The typed `NameTaken` state for a project name, live or deleted.
+pub(crate) fn name_taken(
+    tx: &Transaction<'_>,
+    name: &HistoryName,
+) -> HistoryResult<Option<NameTakenState>> {
+    one(tx, STACK_NAME_TAKEN, [name.as_str()], |row| {
+        let name = cell::<String>(row, 0)?;
+        let deleted = cell::<i64>(row, 1)? != 0;
+        let state = if deleted {
+            HolderState::Deleted
+        } else {
+            HolderState::Live
+        };
+        Ok(NameTakenState::new(
+            NameHolder::new(HolderKind::Project, name, state),
+            NameSource::Store,
+        ))
+    })
+}
+
 /// Reads one stack by identity.
 pub(crate) fn layer_stack(
     tx: &Transaction<'_>,
@@ -128,8 +151,12 @@ pub(crate) fn mark_stack_deleted(
     if layer_stack(tx, stack)?.is_none() {
         return Err(HistoryError::Missing(Missing::LayerStack));
     }
-    tx.execute(BUMP_PROJECT_EPOCH, [stack.as_slice()])
+    let bumped = tx
+        .execute(BUMP_PROJECT_EPOCH, [stack.as_slice()])
         .map_err(sql)?;
+    if bumped != 1 {
+        return Err(HistoryError::Conflict("project epoch"));
+    }
     let marked = tx
         .execute(INSERT_RETIRED, params![stack.as_slice(), deleted_ms])
         .map_err(sql)?;

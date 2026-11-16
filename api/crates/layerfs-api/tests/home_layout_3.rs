@@ -87,11 +87,20 @@ fn home_with(tag: &str, extra: &[(&str, SdkValue)]) -> PathBuf {
     let home = tempdir(tag);
     home::open(&home).unwrap();
     call(&home, "store.create", &[("name", t("shop"))]).unwrap();
-    write_record(
-        &paths::project_record(&home, "shop", "app"),
-        &SdkValue::map([("name", t("app")), ("created", SdkValue::Int(1))]),
+    // a real project, so the §4.2 home↔Store intersection lists and gets it
+    // across the conversion
+    let source = tempdir(&format!("{tag}-source"));
+    std::fs::write(source.join("README.md"), "app\n").unwrap();
+    call(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/app")),
+            ("folder", t(&source.display().to_string())),
+        ],
     )
     .unwrap();
+    let _ = std::fs::remove_dir_all(source);
     write_record(
         &paths::machine_record(&home, "dev"),
         &SdkValue::map([

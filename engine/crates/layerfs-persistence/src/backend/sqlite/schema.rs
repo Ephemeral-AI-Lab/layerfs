@@ -18,6 +18,30 @@ pub(crate) const DIGESTS: &str = include_str!("../../../sql/sqlite/file_digest.s
 /// GC markers, positions and admission records; a Store written before them
 /// gains them at open.
 pub(crate) const GC: &str = include_str!("../../../sql/sqlite/gc.sql");
+/// The position columns T1.2a/T1.4 append, as `("table", "column", ALTER)`;
+/// a Store written before them gains them at open.
+pub(crate) const POSITION_COLUMNS: [(&str, &str, &str); 4] = [
+    (
+        "\"commit\"",
+        "history_serial",
+        "ALTER TABLE \"commit\" ADD COLUMN history_serial INTEGER NOT NULL DEFAULT 0",
+    ),
+    (
+        "layer",
+        "history_serial",
+        "ALTER TABLE layer ADD COLUMN history_serial INTEGER NOT NULL DEFAULT 0",
+    ),
+    (
+        "store_policy",
+        "trace_salt",
+        "ALTER TABLE store_policy ADD COLUMN trace_salt BLOB NOT NULL DEFAULT (X'0000000000000000000000000000000000000000000000000000000000000000') CHECK(length(trace_salt)=32)",
+    ),
+    (
+        "history_meta",
+        "next_history_serial",
+        "ALTER TABLE history_meta ADD COLUMN next_history_serial INTEGER NOT NULL DEFAULT 1",
+    ),
+];
 const UNIT_INDEX: &str = include_str!("../../../sql/sqlite/objects_units_index.sql");
 const UNITS: &str = include_str!("../../../sql/sqlite/objects_units.sql");
 const ACQUISITION: &str = include_str!("../../../sql/sqlite/acquisition/schema.sql");
@@ -85,12 +109,19 @@ fn history_serial_column() -> &'static str {
     &HISTORY[start..end]
 }
 
-/// The `store_policy` position salt column as `metadata.sql` writes it.
+/// The `store_policy` position salt column as `metadata.sql` writes it,
+/// together with the comma that ends `next_ordinal`: it was appended as the
+/// table's last column, so a Store written before it recorded neither the
+/// line nor the comma.
 fn trace_salt_column() -> &'static str {
     let start = METADATA
-        .find(" trace_salt BLOB NOT NULL DEFAULT")
+        .find(",\n trace_salt BLOB NOT NULL DEFAULT")
         .expect("metadata schema holds the salt column");
-    let end = start + METADATA[start..].find('\n').expect("column line ends") + 1;
+    // The search starts past the comma and newline; the newline that ends the
+    // column is kept, since it is also the one before the table's closing
+    // `) STRICT;` that the pre-T1.2a text held.
+    let line = start + 2;
+    let end = line + METADATA[line..].find('\n').expect("column line ends");
     &METADATA[start..end]
 }
 
@@ -109,18 +140,9 @@ fn without_position_columns(source: String) -> String {
 /// The ALTERs and salt backfill an old Store needs; existing rows keep serial
 /// 0 and the Store keeps one random salt.
 fn add_position_columns(tx: &Transaction<'_>) -> Result<(), BackendError> {
-    tx.query(
-        "ALTER TABLE \"commit\" ADD COLUMN history_serial INTEGER NOT NULL DEFAULT 0",
-        vec![],
-    )?;
-    tx.query(
-        "ALTER TABLE layer ADD COLUMN history_serial INTEGER NOT NULL DEFAULT 0",
-        vec![],
-    )?;
-    tx.query(
-        "ALTER TABLE store_policy ADD COLUMN trace_salt BLOB NOT NULL DEFAULT (X'0000000000000000000000000000000000000000000000000000000000000000') CHECK(length(trace_salt)=32)",
-        vec![],
-    )?;
+    for (_, _, alter) in POSITION_COLUMNS.iter().take(3) {
+        tx.query(alter, vec![])?;
+    }
     tx.query(
         "UPDATE store_policy SET trace_salt=randomblob(32) WHERE id=1",
         vec![],
@@ -575,10 +597,7 @@ impl super::session::connection::Session {
             {
                 return Ok(());
             }
-            tx.query(
-                "ALTER TABLE history_meta ADD COLUMN next_history_serial INTEGER NOT NULL DEFAULT 1",
-                vec![],
-            )?;
+            tx.query(POSITION_COLUMNS[3].2, vec![])?;
             backfill_position_state(tx)?;
             let definition = definition(tx.connection, tx.work)?;
             tx.query(

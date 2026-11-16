@@ -206,6 +206,10 @@ impl HistoryCatalog for HistoryProvider {
         self.write(|tx| merge::merge_branch(tx, request))
     }
 
+    fn mark_branch_removed(&self, branch: BranchId, removed_ms: i64) -> HistoryResult<()> {
+        self.write(|tx| super::removal::mark_branch_removed(tx, branch, removed_ms))
+    }
+
     fn reserve_inodes(&self, request: &ReserveRequest) -> HistoryResult<Reservation> {
         self.write(|tx| allocation::reserve_inodes(tx, self.catalog_id, request))
     }
@@ -230,5 +234,47 @@ impl HistoryCatalog for HistoryProvider {
 
     fn node_history_serial(&self, node: NodeId) -> HistoryResult<Option<u64>> {
         self.read_statement(|tx| super::position::node_serial(tx, node))
+    }
+
+    fn gc_register(&self, intent: &GcIntent) -> HistoryResult<()> {
+        super::admission::register(self, intent)
+    }
+
+    fn gc_release(&self, op_id: &[u8; 16]) -> HistoryResult<()> {
+        super::admission::release(self, op_id)
+    }
+
+    fn gc_mark_uncertain(&self, op_id: &[u8; 16]) -> HistoryResult<()> {
+        super::admission::mark_uncertain(self, op_id)
+    }
+
+    fn gc_remove_branch(
+        &self,
+        branch: BranchId,
+        removed_ms: i64,
+        intent: &GcIntent,
+    ) -> HistoryResult<()> {
+        super::admission::remove_branch(self, branch, removed_ms, intent)
+    }
+
+    fn gc_delete_stack(
+        &self,
+        stack: LayerStackId,
+        deleted_ms: i64,
+        intent: &GcIntent,
+    ) -> HistoryResult<GcDeletion> {
+        super::admission::delete_stack(self, stack, deleted_ms, intent)
+    }
+
+    fn gc_remove_path(
+        &self,
+        request: &PathRemovalRequest,
+        intent: &GcIntent,
+    ) -> HistoryResult<PathRemovalOutcome> {
+        super::admission::remove_path(self, request, intent)
+    }
+
+    fn gc_intents(&self, scope_kind: GcScopeKind, scope_id: &[u8]) -> HistoryResult<Vec<GcIntent>> {
+        super::admission::intents(self, scope_kind, scope_id)
     }
 }

@@ -3,6 +3,8 @@
 //! decoded once in the worker, in the order the worker always refused them.
 //! The worker sets the home to its own root; a frame names none.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::sdk_values::{hex, unhex};
+use layerfs_history::LayerStackId;
 use layerfs_home::helpers::required;
 use layerfs_home::names::StoreName;
 use layerfs_home::outcome::refused;
@@ -223,6 +225,121 @@ impl ExportFrame {
             project,
             branch: frame.get_text("branch").map(str::to_owned),
             store_record: frame.get("store_record").cloned(),
+        })
+    }
+}
+
+/// `project.delete`: retire Stack `stack` of Store `store` (here, or in its
+/// worker, spec §4). The caller writes `deleted_ms` to its durable intent
+/// before the call and resends it on a retry; `project` and `store_record`
+/// are the caller context for the worker own entry and its Store open.
+#[derive(Clone, Debug)]
+pub struct DeleteFrame {
+    /// The Store.
+    pub store: StoreName,
+    /// The project, as sent; the worker names its own entry with it.
+    pub project: Option<String>,
+    /// The LayerStack id the caller recorded (never a name).
+    pub stack: LayerStackId,
+    /// The `deleted_ms` the marker should hold; `None` lets the worker take
+    /// the current time.
+    pub deleted_ms: Option<i64>,
+    /// The Store record.
+    pub store_record: Option<SdkValue>,
+}
+
+/// `project.delete` worker reply: `{kind: "Removed", project, stack_id,
+/// deleted_ms}`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DeleteReply {
+    /// The project the worker own entry named (or the Store name).
+    pub project: String,
+    /// The LayerStack the marker names.
+    pub stack: LayerStackId,
+    /// The stored `deleted_ms` (a retry reuses it).
+    pub deleted_ms: i64,
+}
+
+impl DeleteFrame {
+    /// The `project.delete` frame: `{ store, stack_id, deleted_ms?, project?,
+    /// store_record? }`, each optional field sent when set.
+    pub fn encode(&self) -> SdkValue {
+        let mut fields = vec![
+            ("store", SdkValue::text(self.store.as_str())),
+            ("stack_id", SdkValue::text(hex(&self.stack.to_bytes()))),
+        ];
+        fields.extend(self.deleted_ms.map(|ms| ("deleted_ms", SdkValue::Int(ms))));
+        fields.extend(
+            self.project
+                .as_deref()
+                .map(|p| ("project", SdkValue::text(p))),
+        );
+        fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
+        map(fields)
+    }
+
+    /// A `project.delete` frame: no Store, a bad Store name, no Stack id, or
+    /// a Stack id that is not a LayerStack identity are refused.
+    pub fn decode(frame: &SdkValue) -> Result<Self> {
+        let store = StoreName::parse(required(frame.get_text("store"), "store")?)?;
+        let text = required(frame.get_text("stack_id"), "stack_id")?;
+        let bytes =
+            unhex(text).ok_or_else(|| refused("InvalidInput", "`stack_id` must be hex digits"))?;
+        let stack = LayerStackId::from_slice(&bytes).map_err(|_| {
+            refused(
+                "InvalidInput",
+                "`stack_id` must be a LayerStack identity (17 bytes)",
+            )
+        })?;
+        Ok(Self {
+            store,
+            project: frame.get_text("project").map(str::to_owned),
+            stack,
+            deleted_ms: frame.get_int("deleted_ms"),
+            store_record: frame.get("store_record").cloned(),
+        })
+    }
+}
+
+impl DeleteReply {
+    /// The reply a worker sends.
+    pub fn encode(&self) -> SdkValue {
+        map(vec![
+            ("kind", SdkValue::text("Removed")),
+            ("project", SdkValue::text(&self.project)),
+            ("stack_id", SdkValue::text(hex(&self.stack.to_bytes()))),
+            ("deleted_ms", SdkValue::Int(self.deleted_ms)),
+        ])
+    }
+
+    /// The reply fields; `kind` must be `Removed`.
+    pub fn decode(frame: &SdkValue) -> Result<Self> {
+        if frame.get_text("kind") != Some("Removed") {
+            return Err(refused(
+                "Failed",
+                "the worker project.delete reply is not `Removed`",
+            ));
+        }
+        let project = frame
+            .get_text("project")
+            .ok_or_else(|| refused("InvalidInput", "reply has no `project`"))?
+            .to_owned();
+        let text = required(frame.get_text("stack_id"), "stack_id")?;
+        let bytes =
+            unhex(text).ok_or_else(|| refused("InvalidInput", "`stack_id` must be hex digits"))?;
+        let stack = LayerStackId::from_slice(&bytes).map_err(|_| {
+            refused(
+                "InvalidInput",
+                "`stack_id` must be a LayerStack identity (17 bytes)",
+            )
+        })?;
+        let deleted_ms = frame
+            .get_int("deleted_ms")
+            .ok_or_else(|| refused("InvalidInput", "reply has no `deleted_ms`"))?;
+        Ok(Self {
+            project,
+            stack,
+            deleted_ms,
         })
     }
 }

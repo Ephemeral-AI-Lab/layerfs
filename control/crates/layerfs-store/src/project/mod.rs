@@ -1,6 +1,7 @@
 //! Public Project organization over host Init, and a project's home entry
 //! and discovery records (`discovery`).
 pub mod add;
+pub mod delete;
 pub mod discovery;
 pub mod export;
 #[doc(hidden)]

@@ -67,6 +67,7 @@ impl Store {
     ) -> Result<BindSuccess, BindRefusal> {
         let mut phase = BindPhase::Snapshot;
         let mut snapshot = None;
+        let mut gc_op: Option<[u8; 16]> = None;
         let workspace = request.workspace();
         crate::telemetry::timed("bind.reader", |_| self.readers.mount(workspace, pooled)).map_err(
             |error| BindRefusal {
@@ -90,6 +91,18 @@ impl Store {
                 }
             })?;
             snapshot = Some(captured.clone());
+            // Admission before any root demand: a live removal is `Busy`, an
+            // uncertain owner `Unresolved`, and the intent lives until this
+            // Workspace's unmount deletes it.
+            let intent = crate::history::admission::mount_intent(workspace, &captured);
+            match self.history().gc_register(&intent) {
+                Ok(()) => gc_op = Some(intent.op_id),
+                // A provider without admission cannot exclude a removal; it
+                // is a test double or a legacy wrapper, never this service's
+                // real Store provider.
+                Err(layerfs_history::HistoryError::Unsupported(_)) => {}
+                Err(error) => return Err(BindError::History(error)),
+            }
             phase = BindPhase::Root;
             let ports = self.ports_for(captured.scope, workspace);
             let client = ports.client();
@@ -110,20 +123,42 @@ impl Store {
                 Ok((route, owner.workspace_client(route)?))
             })
             .map_err(BindError::Owner)?;
-            Ok(BindSuccess {
-                workspace: BoundWorkspace {
-                    store: self.clone(),
-                    owner,
-                    snapshot: std::sync::Mutex::new(captured),
-                    identity: workspace,
-                    workspace: Arc::new(Workspace::bind(route, base)),
-                    committing: std::sync::atomic::AtomicBool::new(false),
-                    producer: Default::default(),
-                    pending: std::sync::Mutex::new(None),
-                },
-            })
+            let bound = BoundWorkspace {
+                store: self.clone(),
+                owner,
+                snapshot: std::sync::Mutex::new(captured),
+                identity: workspace,
+                workspace: Arc::new(Workspace::bind(route, base)),
+                gc_op,
+                committing: std::sync::atomic::AtomicBool::new(false),
+                producer: Default::default(),
+                pending: std::sync::Mutex::new(None),
+            };
+            // §4.3: a mount of a node at or below a marker frontier applies
+            // the whiteout, so its view hides the path and its next Commit
+            // records a real deletion.
+            if bound.materialize_removals().is_err() {
+                let _ = bound.owner.close(route);
+                if let Some(op) = bound.gc_op {
+                    let _ = self.history().gc_release(&op);
+                }
+                return Err(BindError::Content {
+                    error: ContentError::ProviderFailure {
+                        what: "path removal whiteout",
+                    },
+                    provider: None,
+                });
+            }
+            Ok(BindSuccess { workspace: bound })
         })();
         result.map_err(|error| {
+            let error = match gc_op.map(|op| self.history().gc_release(&op)) {
+                Some(Err(cause)) => BindError::Cleanup {
+                    original: Box::new(error),
+                    cause: Arc::new(super::PortError::History(cause)),
+                },
+                _ => error,
+            };
             let error = match self.close_reader(workspace) {
                 Ok(()) => error,
                 Err(cause) => BindError::Cleanup {

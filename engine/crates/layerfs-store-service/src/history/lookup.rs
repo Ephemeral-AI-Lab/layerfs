@@ -50,6 +50,9 @@ pub fn history(error: HistoryError) -> SdkRefusal {
         HistoryError::InvalidInput(_) => "InvalidInput",
         HistoryError::NotInHistory(_) => "NotInHistory",
         HistoryError::Busy => "Busy",
+        HistoryError::MountsActive(_) => "MountsActive",
+        HistoryError::BusyOp(_) => "Busy",
+        HistoryError::Unresolved(_) => "Unresolved",
         HistoryError::Capacity(_) => "Capacity",
         HistoryError::NameTaken(_) => "NameTaken",
         HistoryError::Removed(_) => "Removed",
@@ -62,6 +65,8 @@ pub fn history(error: HistoryError) -> SdkRefusal {
     let detail = match error.cause() {
         HistoryError::NameTaken(state) => name_taken_detail(state),
         HistoryError::Removed(state) => removed_detail(state),
+        HistoryError::MountsActive(state) => mounts_detail(state),
+        HistoryError::BusyOp(state) | HistoryError::Unresolved(state) => op_detail(state),
         _ => SdkValue::Null,
     };
     refuse(code, message, detail)
@@ -106,6 +111,63 @@ fn name_taken_detail(state: &NameTakenState) -> SdkValue {
                 _ => "unknown",
             }),
         ),
+    ])
+}
+
+fn mounts_detail(state: &layerfs_history::MountHolders) -> SdkValue {
+    let holders = state
+        .holders
+        .iter()
+        .map(|holder| {
+            SdkValue::map([
+                ("kind", SdkValue::text(holder.kind.as_str())),
+                ("entity", SdkValue::text(&holder.entity)),
+                (
+                    "workspace",
+                    holder
+                        .workspace
+                        .as_ref()
+                        .map_or(SdkValue::Null, |value| SdkValue::text(value)),
+                ),
+                (
+                    "sandbox",
+                    holder
+                        .sandbox
+                        .as_ref()
+                        .map_or(SdkValue::Null, |value| SdkValue::text(value)),
+                ),
+                (
+                    "machine",
+                    holder
+                        .machine
+                        .as_ref()
+                        .map_or(SdkValue::Null, |value| SdkValue::text(value)),
+                ),
+                ("op", SdkValue::text(&holder.op)),
+            ])
+        })
+        .collect();
+    SdkValue::map([("holders", SdkValue::List(holders))])
+}
+
+fn op_detail(state: &layerfs_history::OpConflict) -> SdkValue {
+    SdkValue::map([
+        (
+            "entity",
+            SdkValue::map([
+                ("kind", SdkValue::text(state.kind.as_str())),
+                ("name", SdkValue::text(&state.entity)),
+            ]),
+        ),
+        (
+            "phase",
+            state
+                .phase
+                .as_ref()
+                .map_or(SdkValue::Null, |value| SdkValue::text(value)),
+        ),
+        ("op", SdkValue::text(&state.op)),
+        ("uncertain", SdkValue::Bool(state.uncertain)),
     ])
 }
 

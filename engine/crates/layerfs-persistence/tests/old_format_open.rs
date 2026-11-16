@@ -13,9 +13,11 @@ const DIGESTS: &str = include_str!("../sql/sqlite/file_digest.sql");
 const GC: &str = include_str!("../sql/sqlite/gc.sql");
 
 /// The three position columns T1.2a added, as the schemas write them; the old
-/// format this fixture builds lacks them.
+/// format this fixture builds lacks them. `trace_salt` was appended as
+/// `store_policy`\s last column, so its line carries the comma that ends
+/// `next_ordinal`: a Store written before it recorded neither line nor comma.
 const HISTORY_SERIAL: &str = "    history_serial INTEGER NOT NULL DEFAULT 0,\n";
-const TRACE_SALT: &str = " trace_salt BLOB NOT NULL DEFAULT (X'0000000000000000000000000000000000000000000000000000000000000000') CHECK(length(trace_salt)=32)\n";
+const TRACE_SALT: &str = ",\n trace_salt BLOB NOT NULL DEFAULT (X'0000000000000000000000000000000000000000000000000000000000000000') CHECK(length(trace_salt)=32)";
 /// The `history_meta` next serial column as `history.sql` writes it (T1.4).
 const NEXT_SERIAL: &str = "    next_history_serial INTEGER NOT NULL DEFAULT 1,\n";
 
@@ -69,6 +71,10 @@ fn make_old(path: &std::path::Path) {
         .replacen(DIGESTS, "", 1)
         .replacen(GC, "", 1);
     assert_ne!(old, source, "the history schema holds the table");
+    assert!(
+        old.contains("4294967296)\n) STRICT;"),
+        "a pre-T1.2a Store recorded no comma after the last store_policy column"
+    );
     sql.execute(
         "UPDATE history_meta SET schema_source=?1, schema_definition=?2",
         rusqlite::params![old, definition(&sql)],

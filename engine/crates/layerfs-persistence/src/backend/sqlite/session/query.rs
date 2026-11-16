@@ -45,6 +45,12 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "branch_branch_by_id" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/branch_branch_by_id.sql"
         )),
+        "branch_branch_by_id_any" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/branch_branch_by_id_any.sql"
+        )),
+        "branch_retire_insert" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/branch_retire_insert.sql"
+        )),
         "branch_branch_by_name" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/branch_branch_by_name.sql"
         )),
@@ -206,6 +212,45 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         )),
         "paths_advance_epoch" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/paths_advance_epoch.sql"
+        )),
+        "gc_intent_insert" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_insert.sql"
+        )),
+        "gc_intent_get" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_get.sql"
+        )),
+        "gc_intent_release" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_release.sql"
+        )),
+        "gc_intent_uncertain" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_uncertain.sql"
+        )),
+        "gc_intent_list" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_list.sql"
+        )),
+        "gc_intent_ops_branch" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_ops_branch.sql"
+        )),
+        "gc_intent_ops_project" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_ops_project.sql"
+        )),
+        "gc_intent_ops_store" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_ops_store.sql"
+        )),
+        "gc_intent_all_branch" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_all_branch.sql"
+        )),
+        "gc_intent_all_project" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_all_project.sql"
+        )),
+        "gc_intent_all_store" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_intent_all_store.sql"
+        )),
+        "gc_branch_stack_any" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_branch_stack_any.sql"
+        )),
+        "gc_epoch_share" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_epoch_share.sql"
         )),
         _ => Err(BackendError::Integrity),
     }

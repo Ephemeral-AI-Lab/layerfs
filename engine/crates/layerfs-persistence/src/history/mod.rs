@@ -1,4 +1,5 @@
 //! Shared history operations over typed persistence transactions.
+mod admission;
 mod allocation;
 mod ancestry;
 mod bindings;
