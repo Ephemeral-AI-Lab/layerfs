@@ -265,6 +265,7 @@ and its `os/` files: the confined open, the `stat`, and the mount table.
 | A folder a path leads through (`Base::enter`) | `O_DIRECTORY` in place of `O_NOFOLLOW`: in `InRoot` a link at the end resolves as one on the way | as `open_at`; it must be a folder |
 | After the open | a `stat` of the descriptor: only a regular file or a folder is answered; a FIFO opens at once and is refused | the same |
 | `stat` of an entry (`Opened::stat_of`) | `statx` (rustix) with `AT_SYMLINK_NOFOLLOW \| AT_NO_AUTOMOUNT \| AT_STATX_DONT_SYNC`, `AT_EMPTY_PATH` for a descriptor, asking `STATX_BASIC_STATS \| STATX_MNT_ID`. Every `stat` of the walker is this call | `fstatat(AT_SYMLINK_NOFOLLOW)`, `fstat` for a descriptor |
+| Names of a folder (`Opened::names`) | `getdents64` (rustix `RawDir`): no `fstat` of the folder, which libc's `fdopendir` would make | `readdir` (`nix::dir::Dir`) |
 | Two mounts (`Stat::apart_from`) | by mount id: a file of an overlay's lower layer or a btrfs subvolume has its own device and is no mount | by device |
 | Another process's root (`confined::root_of`) | `/proc/<pid>` opened as a folder, then `root`, `mountinfo` and `stat` through it; root only | `Unsupported`: no Sandbox has a root of its own |
 | Mount table (`confined::mounts`, `parse_mounts`) | `/proc/self/mountinfo`, read as a file: each mount's id, point and type | one run of `/sbin/mount` per files request with a path: fixed path, no environment but `LC_ALL=C`, no input, 500 ms, then killed and reaped (`darwin::mount_table`). A run that fails or is late answers no table, and a mount is then told by its device after a `stat` |
@@ -273,7 +274,7 @@ and its `os/` files: the confined open, the `stat`, and the mount table.
 dependency of `layerfs-sandbox-backend` wraps it without `unsafe`, and the
 crate's one `unsafe` module stays `seccomp.rs`. `mount` reads the same
 table and asks no mounted server. `rustix` is a Linux-only dependency of
-the crate for `statx`, which `nix` does not wrap.
+the crate for `statx`, which `nix` does not wrap, and for `RawDir`.
 
 ## Invariants
 

@@ -16,7 +16,6 @@
 //! only a regular file or a folder is answered. Nothing here takes a lock
 //! or writes.
 use super::os;
-use nix::dir::Dir;
 use nix::errno::Errno;
 use nix::fcntl::OFlag;
 use nix::sys::stat::{Mode, SFlag};
@@ -294,20 +293,14 @@ impl Opened {
 
     /// Hands `each` the name of every entry of this folder, in the order
     /// the filesystem lists them, until it answers `false`. Names only: no
-    /// entry is `stat`ed.
+    /// entry is `stat`ed, and on Linux neither is the folder.
     pub fn names(&self, each: &mut dyn FnMut(&[u8]) -> bool) -> io::Result<()> {
         // the listing shares this descriptor's position: from the start
         let mut listed = self.file.try_clone()?;
         listed.seek(SeekFrom::Start(0))?;
-        let mut folder = Dir::from_fd(OwnedFd::from(listed))?;
-        for entry in folder.iter() {
-            let entry = entry?;
-            let name = entry.file_name().to_bytes();
-            if name != b"." && name != b".." && !each(name) {
-                break;
-            }
-        }
-        Ok(())
+        os::confined::names(OwnedFd::from(listed), &mut |name| {
+            name == b"." || name == b".." || each(name)
+        })
     }
 
     /// The path of what this holds, as the kernel names it now: where a

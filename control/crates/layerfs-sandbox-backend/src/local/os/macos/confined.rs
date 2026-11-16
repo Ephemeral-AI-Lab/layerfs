@@ -10,6 +10,7 @@
 //! Sandbox with a root of its own, so [`View::InRoot`] has nothing to
 //! resolve links in here, and a link is refused in it as in the other.
 use crate::local::confined::{Kind, Refused, Stat, View};
+use nix::dir::Dir;
 use nix::fcntl::{fcntl, openat, AtFlags, FcntlArg, OFlag};
 use nix::sys::stat::{fstat, fstatat, Mode};
 use std::ffi::OsStr;
@@ -74,4 +75,16 @@ pub(crate) fn stat(folder: BorrowedFd<'_>, name: &OsStr) -> nix::Result<Stat> {
         device: u64::from(found.st_dev as u32),
         mount: None,
     })
+}
+
+/// Hands `each` every name of the folder `listed` holds, until it answers
+/// `false`.
+pub(crate) fn names(listed: OwnedFd, each: &mut dyn FnMut(&[u8]) -> bool) -> std::io::Result<()> {
+    let mut folder = Dir::from_fd(listed)?;
+    for entry in folder.iter() {
+        if !each(entry?.file_name().to_bytes()) {
+            break;
+        }
+    }
+    Ok(())
 }

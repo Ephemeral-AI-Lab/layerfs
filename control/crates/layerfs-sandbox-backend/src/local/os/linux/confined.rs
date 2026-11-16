@@ -12,7 +12,7 @@ use crate::local::confined::{Kind, Refused, Stat, View};
 use nix::errno::Errno;
 use nix::fcntl::{open as open_path, openat, openat2, OFlag, OpenHow, ResolveFlag};
 use nix::sys::stat::Mode;
-use rustix::fs::{statx, AtFlags, StatxFlags};
+use rustix::fs::{statx, AtFlags, RawDir, StatxFlags};
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::Read;
@@ -134,4 +134,20 @@ pub(crate) fn process_root(pid: u32) -> Result<(OwnedFd, String, Option<u64>), R
         .and_then(|(_, rest)| rest.split_ascii_whitespace().nth(19))
         .and_then(|ticks| ticks.parse().ok());
     Ok((root, table, start))
+}
+
+/// Hands `each` every name of the folder `listed` holds, until it answers
+/// `false`: read with `getdents64` alone. libc's `fdopendir` would `fstat`
+/// the folder first, a `stat` that is not this file's `statx`.
+pub(crate) fn names(listed: OwnedFd, each: &mut dyn FnMut(&[u8]) -> bool) -> std::io::Result<()> {
+    let mut space = Vec::with_capacity(32 * 1024);
+    let mut folder = RawDir::new(listed, space.spare_capacity_mut());
+    while let Some(entry) = folder.next() {
+        let entry =
+            entry.map_err(|errno| std::io::Error::from_raw_os_error(errno.raw_os_error()))?;
+        if !each(entry.file_name().to_bytes()) {
+            break;
+        }
+    }
+    Ok(())
 }
