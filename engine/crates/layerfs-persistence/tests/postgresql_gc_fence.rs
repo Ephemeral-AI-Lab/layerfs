@@ -603,6 +603,20 @@ fn branch_rows(schema: &Schema) -> i64 {
         .get(0)
 }
 
+/// Branch rows a caller can still see: `branch.remove` is a soft marker, so a
+/// retired Branch keeps its row until compaction.
+fn live_branch_rows(schema: &Schema) -> i64 {
+    schema
+        .admin()
+        .query_one(
+            "SELECT count(*) FROM branch b \
+             WHERE NOT EXISTS (SELECT 1 FROM branch_retired r WHERE r.branch_id = b.branch_id)",
+            &[],
+        )
+        .unwrap()
+        .get(0)
+}
+
 /// Finding 4: the fence opens before the Branch read, so a Branch retired
 /// between the write's resource read and its fence is visible on the re-read.
 /// Reading the Branch first let the Commit land on a retired Branch.
@@ -877,7 +891,7 @@ fn two_concurrent_branch_removes_in_one_project_are_ordered() {
     assert_eq!(left.unwrap_or(()), ());
     assert_eq!(right.unwrap_or(()), ());
     assert_eq!(epoch(&mut schema.admin(), project_id), 2);
-    assert_eq!(branch_rows(&schema), 0, "both Branches are retired");
+    assert_eq!(live_branch_rows(&schema), 0, "both Branches are retired");
 }
 
 /// A shared Store may be admitted from another machine whose boot and PID
