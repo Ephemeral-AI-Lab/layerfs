@@ -9,7 +9,7 @@ use std::path::Path;
 /// Starts the Sandbox the call names: its directory under the deploy
 /// root, its daemon record naming the Windows native runtime. No
 /// process starts - the in-process control face owns the lifecycle.
-pub(super) fn start(host: &Host, directory: &Path, id: &str) -> Result<(), layerfs_bridge::control::SdkRefusal> {
+pub(super) fn start(host: &Host, directory: &Path, id: &str) -> Result<std::path::PathBuf, layerfs_bridge::control::SdkRefusal> {
     let Some(deploy) = host.deploy() else {
         return Err(layerfs_home::outcome::refused("InvalidInput", "missing deploy"));
     };
@@ -33,5 +33,5 @@ pub(super) fn start(host: &Host, directory: &Path, id: &str) -> Result<(), layer
         ("sandbox".to_owned(), SdkValue::text(id)),
         ("name".to_owned(), SdkValue::text(sandbox_dir.to_string_lossy().into_owned())),
     ]);
-    Ok(())
+    Ok(sandbox_dir)
 }

@@ -190,7 +190,9 @@ pub fn start(
     {
         drop((store, backend, platform));
         let id = host.sandbox().map(|s| s.to_string()).unwrap_or_default();
-        crate::lifecycle_windows::start(host, directory, &id)?;
+        let made = crate::lifecycle_windows::start(host, directory, &id)?;
+        // A refused live state leaves no half-made Sandbox behind.
+        let _ = std::fs::remove_dir_all(made);
         Err(refused(
             "Unsupported",
             "the Sandbox directory and record are created; its live state waits on the Controls face the daemon-assembly batch completes (#454)",
