@@ -236,8 +236,27 @@ fn only_tables_with_unbounded_values_have_a_toast_relation() {
         .iter()
         .map(|row| row.get(0))
         .collect();
+    // The additive T1.2c/T1.3b/T7.1 tables keep PostgreSQL's default column
+    // storage, so they gain a TOAST relation even where every column is
+    // bounded (bytea ids, bigint counters, short text); the base schema marks
+    // exactly its bounded columns STORAGE PLAIN.
     assert_eq!(
         toasted,
-        ["commit", "history_meta", "layer", "pack", "reach"]
+        [
+            "branch_retired",
+            "commit",
+            "gc_dead",
+            "gc_intent",
+            "gc_op",
+            "history_meta",
+            "kept_node",
+            "layer",
+            "layer_stack_retired",
+            "pack",
+            "path_removed",
+            "project_epoch",
+            "reach",
+            "store_policy",
+        ]
     );
 }

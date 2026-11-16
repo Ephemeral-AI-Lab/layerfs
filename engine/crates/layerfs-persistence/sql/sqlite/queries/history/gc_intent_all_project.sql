@@ -6,7 +6,7 @@ WHERE state <> 'done'
       scope_kind = 'store'
       OR (scope_kind = 'project' AND scope_id = $1)
       OR (scope_kind = 'branch' AND (
-          ($2 IS NOT NULL AND project = $2)
+          (project = $2)
           OR scope_id IN (SELECT branch_id FROM branch WHERE layer_stack_id = $1)
       ))
   )

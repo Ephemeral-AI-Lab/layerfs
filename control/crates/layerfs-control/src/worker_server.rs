@@ -10,8 +10,8 @@
 //! build sends nothing more and closes. Then a request `{ op, args }`, read with at most
 //! [`REQUEST_WAIT`] between bytes. `worker.ping` answers who it is;
 //! `store.call`, `store.file`, `store.reach`, `sandbox.host`, `project.stage`,
-//! `project.init`, `project.export`, `project.remove`, `project.delete` and
-//! `project.list` run one operation on this machine,
+//! `project.init`, `project.export`, `project.delete` and `project.list` run
+//! one operation on this machine,
 //! with `home` set to the worker's own root (the machine's data disk),
 //! never a path the caller sends. Answers are
 //! `{ value }` or `{ refused }`, after any `{ event }` frames.
@@ -33,10 +33,10 @@ use layerfs_store::project::discovery::home_of;
 use layerfs_store::project::export::in_worker as export_in_worker;
 use layerfs_store::project::frame::{
     DeleteAdmitFrame, DeleteFrame, DeleteReleaseFrame, ExportFrame, InitFrame, ListingFrame,
-    RemoveFrame, StageFrame,
+    StageFrame,
 };
 use layerfs_store::project::listing::list_projects;
-use layerfs_store::project::{init::in_worker, remove::remove_project, staged};
+use layerfs_store::project::{init::in_worker, staged};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -273,12 +273,6 @@ fn run(
             },
             layerfs_sandbox::workspace::dispatch::call,
         ),
-        // drops one project from the Store under this worker's root (2.0):
-        // `{ store, project, store_record }`
-        "project.remove" => {
-            let root = home_of(Some(root))?;
-            remove_project(&root, &RemoveFrame::decode(&args)?)
-        }
         // retires one project in the Store under this worker root and
         // removes the worker own entry (2.0, T4.5b): `{ store, stack_id,
         // deleted_ms?, project?, op_id?, store_record? }`

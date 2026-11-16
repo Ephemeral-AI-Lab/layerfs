@@ -114,7 +114,6 @@ fn a_scope_refuses_every_call_it_does_not_cover() {
     let uncovered: &[(&str, &[(&str, SdkValue)])] = &[
         ("store.remove", &[("name", t("shop"))]),
         ("store.list", &[]),
-        ("project.remove", &[("project", t("shop/api"))]),
         (
             "branch.remove",
             &[("project", t("shop/api")), ("branch", t("main"))],

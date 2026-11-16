@@ -1,5 +1,5 @@
 //! The `project` worker frames (layerfs-project#109): `project.init`,
-//! `project.remove`, `project.list` (T4.5c), `project.stage`,
+//! `project.list` (T4.5c), `project.stage`,
 //! `project.export`, `project.delete` (T4.5b) and its admission ops, each
 //! encoded by the caller and
 //! decoded once in the worker, in the order the worker always refused them.
@@ -26,18 +26,6 @@ pub struct InitFrame {
     pub staged: String,
     /// Init's time limit in milliseconds.
     pub timeout_ms: Option<i64>,
-    /// The Store's record.
-    pub store_record: Option<SdkValue>,
-}
-
-/// `project.remove`: drop project `project` from Store `store` (here, or in
-/// its worker).
-#[derive(Clone, Debug)]
-pub struct RemoveFrame {
-    /// The Store.
-    pub store: StoreName,
-    /// The project's name in it.
-    pub project: String,
     /// The Store's record.
     pub store_record: Option<SdkValue>,
 }
@@ -141,30 +129,6 @@ impl InitFrame {
             staged: staged_id(frame)?,
             name: frame.get_text("name").map(str::to_owned),
             timeout_ms: frame.get_int("timeoutMs"),
-            store_record: frame.get("store_record").cloned(),
-        })
-    }
-}
-
-impl RemoveFrame {
-    /// The `project.remove` frame: `{ store, project, store_record }`.
-    pub fn encode(&self) -> SdkValue {
-        let mut fields = vec![
-            ("store", SdkValue::text(self.store.as_str())),
-            ("project", SdkValue::text(&self.project)),
-        ];
-        fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
-        map(fields)
-    }
-
-    /// A `project.remove` frame: no Store, no project, then a bad Store
-    /// name are refused.
-    pub fn decode(frame: &SdkValue) -> Result<Self> {
-        let store = required(frame.get_text("store"), "store")?;
-        let project = required(frame.get_text("project"), "project")?.to_owned();
-        Ok(Self {
-            store: StoreName::parse(store)?,
-            project,
             store_record: frame.get("store_record").cloned(),
         })
     }

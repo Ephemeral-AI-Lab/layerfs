@@ -18,7 +18,7 @@
 //!
 //! The worker op is `project.delete`; its frame is
 //! `{store, stack_id, deleted_ms?, project?, op_id?, store_record?}`. The two
-//! optional context fields are the same ones `project.remove` sends: the
+//! optional context fields are the ones the retired `project.remove` call sent: the
 //! worker opens the Store under its own root with the caller's `store_record`,
 //! and the project name lets its reply and its own home entry name the
 //! project. The worker saves the legacy own-project identity, writes the

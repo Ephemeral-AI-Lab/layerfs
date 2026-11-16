@@ -231,14 +231,19 @@ fn init_into_a_worker_s_store_copies_the_caller_s_folder() {
     let stat = store_call(&home, "file.stat", "shop/web", "/link");
     assert_eq!(stat.get_text("type"), Some("symlink"), "{stat:?}");
 
-    let again = call(
-        &home,
+    let again = layerfs_api::call(
+        Some(&home),
         "project.init",
         init_args("shop/web", &folder),
         &mut |_| {},
     )
     .unwrap_err();
-    assert_eq!(again.0, "Exists", "{}", again.1);
+    assert_eq!(again.code, "NameTaken", "{}", again.message);
+    let holder = again.detail.get("holder").expect("holder detail");
+    assert_eq!(holder.get_text("kind"), Some("project"), "{again:?}");
+    assert_eq!(holder.get_text("name"), Some("web"));
+    assert_eq!(holder.get_text("state"), Some("live"));
+    assert_eq!(again.detail.get_text("source"), Some("home"));
 
     open_up(&folder);
     let (missing, plain) = (missing.parent().unwrap(), plain.parent().unwrap());

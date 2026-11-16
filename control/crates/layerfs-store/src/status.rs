@@ -6,6 +6,7 @@ use crate::sqlite::family::{fields_map, record_of, step_on};
 use crate::sqlite::transfer::step::StoreStep;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
+use layerfs_persistence::compact_metrics::{self, CompactStatusState};
 use std::path::Path;
 
 /// `store.status`: who holds it, the operation on it (`op`, as H6 shows it),
@@ -67,6 +68,15 @@ pub fn status(home: &Path, name: &str) -> Outcome {
     let state = compaction
         .get_text("state")
         .unwrap_or_else(|| record.state(down.is_some(), &holders).as_str());
+    // The status path observes an unsettled run by its bounded state label,
+    // never by a Store name or phase path.
+    if compaction.get("id").is_some() {
+        match state {
+            "busy" => compact_metrics::record_status(CompactStatusState::Busy),
+            "unresolved" => compact_metrics::record_status(CompactStatusState::Unresolved),
+            _ => {}
+        }
+    }
     let mut fields = vec![
         ("name", SdkValue::text(name)),
         ("kind", SdkValue::text(store_ref.kind().as_str())),

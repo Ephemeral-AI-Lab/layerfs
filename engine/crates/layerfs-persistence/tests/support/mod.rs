@@ -140,3 +140,6 @@ pub mod sqlite {
 }
 
 pub mod doctor;
+
+#[cfg(feature = "postgresql")]
+pub mod pg;

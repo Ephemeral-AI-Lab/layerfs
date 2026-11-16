@@ -3,6 +3,7 @@
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
 mod backend;
+pub mod compact_metrics;
 pub mod diagnostic;
 mod storage;
 mod store;

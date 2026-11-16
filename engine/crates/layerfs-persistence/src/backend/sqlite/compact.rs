@@ -22,6 +22,9 @@ use super::schema;
 use super::session::connection::{Session, SqlWork};
 use super::session::rows;
 use crate::backend::records::BackendError;
+use crate::compact_metrics::{
+    self, CompactOutcome, CompactPhase, CompactRefusal, CompactRunObservation,
+};
 use crate::{KeptWaste, MarkResult, SqliteHandles};
 use layerfs_content::ObjectId;
 use layerfs_history::error::{HistoryError, HistoryResult};
@@ -33,7 +36,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// The sidecar record suffix (§11: SQLite keeps its phase outside the sealed
 /// database).
@@ -1461,6 +1464,7 @@ fn settle_leftover(
     history: &crate::HistoryProvider,
     store: &Path,
     _generation: u64,
+    metrics: &mut RunMetrics,
 ) -> HistoryResult<()> {
     let Some(op) = RunOp::read(store) else {
         if artifact_paths(store)
@@ -1482,6 +1486,7 @@ fn settle_leftover(
     if std::fs::symlink_metadata(op_path(store)).is_ok() {
         std::fs::remove_file(op_path(store)).map_err(io_error)?;
     }
+    metrics.leftover_settled = true;
     Ok(())
 }
 
@@ -1660,9 +1665,21 @@ impl SqliteHandles {
     /// directory-fsync failure is installed-but-uncertain: the new file and the
     /// op record are kept for the next `store.compact` to judge (§9).
     pub fn compact(self, request: &CompactRequest) -> HistoryResult<CompactReceipt> {
+        let mut metrics = RunMetrics::start();
+        let result = self.compact_measured(request, &mut metrics);
+        metrics.finish(&result);
+        result
+    }
+
+    /// The measured body of [`Self::compact`]; `metrics` observes it.
+    fn compact_measured(
+        self,
+        request: &CompactRequest,
+        metrics: &mut RunMetrics,
+    ) -> HistoryResult<CompactReceipt> {
         #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         {
-            let _ = request;
+            let _ = (request, metrics);
             return Err(HistoryError::Unsupported("SQLite Store compaction"));
         }
         #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -1689,7 +1706,8 @@ impl SqliteHandles {
             let live = live_tuple(&session)?;
             let generation = u64::try_from(live.generation)
                 .map_err(|_| HistoryError::Integrity("Store generation"))?;
-            settle_leftover(&history, &store, generation)?;
+            metrics.generation_before = generation;
+            settle_leftover(&history, &store, generation, metrics)?;
 
             let op_id = request.op_id;
             let mut op = RunOp {
@@ -1720,6 +1738,7 @@ impl SqliteHandles {
             // admitted sequence. A definite failure here releases the intent
             // before the artifact set and the op record go, so the Store is
             // left exactly as it was and no later call meets BusyOp.
+            metrics.begin_phase(CompactPhase::Mark);
             let admitted =
                 (|| -> HistoryResult<(MarkResult, MarkTuple, u64, u64, CompactKeptWaste, u64)> {
                     let mark = history.mark()?;
@@ -1750,6 +1769,7 @@ impl SqliteHandles {
                 }
             };
             let rebuild = total > 0 && dead.saturating_mul(10) >= total;
+            metrics.end_phase();
 
             if !rebuild {
                 // §3 `none`: mark only. The intent is cleared and the op record
@@ -1836,6 +1856,7 @@ impl SqliteHandles {
             }
             stop_at(request, CompactFailpoint::AfterSeal, &op, &store)?;
 
+            metrics.begin_phase(CompactPhase::Build);
             op.phase = "build".to_owned();
             op.write(&store)?;
             let capacity = request.failpoint == Some(CompactFailpoint::CapacityAtBuild);
@@ -1861,7 +1882,9 @@ impl SqliteHandles {
             };
             stop_at(request, CompactFailpoint::AfterBuild, &op, &store)?;
             stop_at(request, CompactFailpoint::AfterWalSwitch, &op, &store)?;
+            metrics.end_phase();
 
+            metrics.begin_phase(CompactPhase::Verify);
             op.phase = "verify".to_owned();
             if let Err(error) = op.write(&store) {
                 abort_before_install(&store);
@@ -1884,7 +1907,9 @@ impl SqliteHandles {
                 return Err(error);
             }
             stop_at(request, CompactFailpoint::AfterVerify, &op, &store)?;
+            metrics.end_phase();
 
+            metrics.begin_phase(CompactPhase::Install);
             if let Some(hook) = request.before_install_hook {
                 hook(&facts.path);
             }
@@ -1937,6 +1962,106 @@ impl SqliteHandles {
                 history_rows,
             ))
         }
+    }
+}
+
+/// The phase clock and §11 values one measured `compact` run observes.
+struct RunMetrics {
+    started: Instant,
+    phase: Option<(CompactPhase, Instant)>,
+    phase_nanos: Vec<(CompactPhase, u64)>,
+    generation_before: u64,
+    generation_after: u64,
+    dead_bytes_bound: u64,
+    dead_bytes_refined: u64,
+    kept_waste: CompactKeptWaste,
+    residue_bytes: u64,
+    leftover_settled: bool,
+}
+
+impl RunMetrics {
+    fn start() -> Self {
+        Self {
+            started: Instant::now(),
+            phase: None,
+            phase_nanos: Vec::new(),
+            generation_before: 0,
+            generation_after: 0,
+            dead_bytes_bound: 0,
+            dead_bytes_refined: 0,
+            kept_waste: CompactKeptWaste::default(),
+            residue_bytes: 0,
+            leftover_settled: false,
+        }
+    }
+
+    /// Ends the current phase and starts `phase`; a phase is inclusive wall
+    /// time, never an exclusive CPU decomposition.
+    fn begin_phase(&mut self, phase: CompactPhase) {
+        self.end_phase();
+        self.phase = Some((phase, Instant::now()));
+    }
+
+    fn end_phase(&mut self) {
+        if let Some((phase, started)) = self.phase.take() {
+            self.phase_nanos.push((
+                phase,
+                u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX),
+            ));
+        }
+    }
+
+    /// Records this run once, whatever its result. The outcome and refusal
+    /// come from the typed error, so a `Busy`/`Unresolved` refusal is counted
+    /// without changing the error the caller receives.
+    fn finish(mut self, result: &HistoryResult<CompactReceipt>) {
+        self.end_phase();
+        let total_nanos =
+            u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        let (outcome, refusal) = match result {
+            Ok(receipt) => {
+                self.generation_after = receipt.generation_after;
+                self.dead_bytes_bound = receipt.dead_bytes_bound;
+                self.dead_bytes_refined = receipt.dead_bytes_refined;
+                self.kept_waste = receipt.kept_waste.clone();
+                self.residue_bytes = receipt.residue.bytes;
+                let outcome = match receipt.path {
+                    CompactPath::Rebuild => CompactOutcome::Rebuild,
+                    CompactPath::None => CompactOutcome::None,
+                };
+                (outcome, None)
+            }
+            Err(error) => {
+                if !error.unknown() {
+                    self.generation_after = self.generation_before;
+                }
+                (
+                    if error.unknown() {
+                        CompactOutcome::Uncertain
+                    } else {
+                        CompactOutcome::Failed
+                    },
+                    match error {
+                        HistoryError::Busy => Some(CompactRefusal::Busy),
+                        HistoryError::Unresolved(_) => Some(CompactRefusal::Unresolved),
+                        _ => None,
+                    },
+                )
+            }
+        };
+        compact_metrics::record_run(&CompactRunObservation {
+            outcome,
+            generation_before: self.generation_before,
+            generation_after: self.generation_after,
+            dead_bytes_bound: self.dead_bytes_bound,
+            dead_bytes_refined: self.dead_bytes_refined,
+            kept_waste: self.kept_waste,
+            residue_bytes: self.residue_bytes,
+            phase_nanos: self.phase_nanos,
+            total_nanos,
+            leftover_settled: self.leftover_settled,
+            refusal,
+        });
     }
 }
 

@@ -73,7 +73,8 @@ pub fn history(error: HistoryError) -> SdkRefusal {
     refuse(code, message, detail)
 }
 
-fn name_taken_detail(state: &NameTakenState) -> SdkValue {
+/// The `NameTaken` detail: the holder and where it is held.
+pub fn name_taken_detail(state: &NameTakenState) -> SdkValue {
     SdkValue::map([
         (
             "holder",

@@ -13,7 +13,8 @@ project.init(project, folder, { timeout, on_progress })
 project.list(store?, { page_size, page_pos })
 project.get(project)
 project.export(project, destination, { branch, on_progress })
-project.remove(project)
+project.delete(project)
+project.remove_file(project, path)
 ```
 
 ## `project.init`
@@ -119,23 +120,41 @@ The project's record: its Store, the Store's kind and machine.
 {"project":"shop/api","store":"shop","name":"api","kind":"sqlite","machine":"native","created":1793574061265}
 ```
 
-## `project.remove`
+## `project.delete`
 
-`project.remove(project)`
+`project.delete(project)`
 
-Removes one project from its Store. Its Branches, Commits and `main` go with
-it; there is no undo. The live result:
+Retires one project in its Store and removes its home entry (spec §4). The
+project disappears from `project.list` and `project.get`; its Layers,
+Branches, Commits and stored content stay until a later `store.compact`, and
+the Store stays addressable. The live result:
 
 ```json
-{"stack":"3104401f11fb…","packs_kept":true,"project":"shop/api"}
+{"kind":"Removed","project":"shop/api","deleted_ms":1793574061265,"home_entry_removed":true}
 ```
 
-`packs_kept: true`: the project's records are gone, but its stored content
-stays in the Store file. Removing a project from a PostgreSQL Store is
-`Unsupported` in this build. While a Sandbox of the project is recorded it is
-refused `InUse`; `detail.related` lists each as `{ kind: "sandbox", name }`
-(close them first). To delete a whole Store with every project in it, use
-`store.remove`.
+The Store marker is the commit point. If the home entry cannot be removed the
+call still succeeds with `home_entry_removed: false` and keeps a durable
+intent, so the same call retried from the same home reuses `deleted_ms` and
+finishes the entry. A mount of the project is refused `MountsActive`, another
+user or operation `Busy`/`Unresolved`.
 
-An agent working on a project never needs `remove`; it is for whoever owns the
-home.
+## `project.remove_file`
+
+`project.remove_file(project, path)`
+
+Hides one absolute project path from every node at or below its marker
+frontier (spec §4.3). It writes a marker only; no bytes are freed. The path is
+normalized (one leading `/` stripped) and must be a canonical absolute POSIX
+path. The live result:
+
+```json
+{"kind":"Removed","project":"shop/api","path":"docs/old.md","frontier_serial":42,"removed_ms":1793574061265}
+```
+
+`kind` is `UpToDate` when no project node is above this path's marker
+frontier. Later reads and stats of the path are refused `Removed`; a Commit
+after the frontier that writes the path again is visible.
+
+An agent working on a project never needs `delete` or `remove_file`; they are
+for whoever owns the home.

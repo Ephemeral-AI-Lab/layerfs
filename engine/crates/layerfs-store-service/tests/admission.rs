@@ -50,6 +50,9 @@ fn a_mount_refuses_every_removal_through_the_service() {
     };
     assert_eq!(holders[0].get_text("kind"), Some("mount"));
     assert_eq!(holders[0].get_text("sandbox"), Some("sandbox-9"));
+    assert_eq!(holders[0].get_text("machine"), Some("machine-9"));
+    let workspace = lookup::hex(&[9; 32]);
+    assert_eq!(holders[0].get_text("workspace"), Some(workspace.as_str()));
 
     let refused = deletion::delete_stack(&fixture.service.store, stack.id, 1_000)
         .expect_err("the mount holds");

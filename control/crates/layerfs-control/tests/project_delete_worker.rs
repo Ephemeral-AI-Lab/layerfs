@@ -153,7 +153,7 @@ fn the_worker_path_admits_before_the_sidecar_and_releases_after_the_marker() {
         store: StoreName::parse("shop").unwrap(),
         name: "app".to_owned(),
         source,
-        timeout_ms: None,
+        timeout_ms: Some(60_000),
         store_record: None,
     })
     .unwrap();

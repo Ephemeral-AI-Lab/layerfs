@@ -1283,7 +1283,7 @@ fn shared_store_lease_and_concurrent_remove_admission() {
     // 2. During an in-flight `project.export`:
     //    - same-Store `file.read` and a second concurrent `project.export` succeed;
     //    - exclusive Store operations (`store.remove`, `store.push`) are refused `InUse`;
-    //    - `project.remove` drops the catalog stack while packs stay (`packs_kept: true`),
+    //    - `project.delete` retires the Stack (its marker keeps packs/objects),
     //      leaving the in-flight pinned export intact while refusing later exports.
     let first_dest = area.join("first");
     let second_dest = area.join("second");
@@ -1336,10 +1336,14 @@ fn shared_store_lease_and_concurrent_remove_admission() {
                 .unwrap_err();
                 assert_eq!(push_code, "InUse", "{push_msg}");
 
-                // `project.remove` drops the LayerStack while keeping packs/objects;
-                // the already-pinned export continues without corruption.
-                let removed = ok(&home, "project.remove", &[("project", t("shop/app"))]);
-                assert_eq!(removed.get("packs_kept"), Some(&SdkValue::Bool(true)));
+                // `project.delete` retires the LayerStack and removes the home
+                // entry; the already-pinned export continues without corruption.
+                let removed = ok(&home, "project.delete", &[("project", t("shop/app"))]);
+                assert_eq!(removed.get_text("kind"), Some("Removed"));
+                assert_eq!(
+                    removed.get("home_entry_removed"),
+                    Some(&SdkValue::Bool(true))
+                );
             }
         },
     )
@@ -1350,7 +1354,7 @@ fn shared_store_lease_and_concurrent_remove_admission() {
     assert_same_tree(&source, &second_dest);
     let _ = std::fs::remove_file(&other_lease);
 
-    // After `project.remove`, a new export is refused `NoSuchProject`
+    // After `project.delete`, a new export is refused `NoSuchProject`
     let after_rm_dest = area.join("after-rm");
     let (code, _) = call(
         &home,
@@ -1364,12 +1368,13 @@ fn shared_store_lease_and_concurrent_remove_admission() {
     assert_eq!(code, "NoSuchProject");
     assert!(!after_rm_dest.exists());
 
-    // Re-init `shop/app` and verify Store-level `Busy` and `Unresolved` admission
+    // Re-init a new project (`shop/app` stays a retired name) and verify
+    // Store-level `Busy` and `Unresolved` admission.
     ok(
         &home,
         "project.init",
         &[
-            ("project", t("shop/app")),
+            ("project", t("shop/app2")),
             ("folder", t(&source.display().to_string())),
         ],
     );
@@ -1394,7 +1399,7 @@ fn shared_store_lease_and_concurrent_remove_admission() {
         &home,
         "project.export",
         &[
-            ("project", t("shop/app")),
+            ("project", t("shop/app2")),
             ("destination", t(&busy_dest.display().to_string())),
         ],
     )
@@ -1419,7 +1424,7 @@ fn shared_store_lease_and_concurrent_remove_admission() {
         &home,
         "project.export",
         &[
-            ("project", t("shop/app")),
+            ("project", t("shop/app2")),
             ("destination", t(&busy_dest.display().to_string())),
         ],
     )

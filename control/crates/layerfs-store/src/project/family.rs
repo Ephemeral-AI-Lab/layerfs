@@ -5,22 +5,19 @@
 //! `native` or a PostgreSQL Store, in the machine's worker for a sqlite
 //! Store on any other machine (#536 H11). The folder is always on the
 //! caller's host: for a worker this process copies it to the machine
-//! first (H11a). Records in the home list projects; `remove` drops one
-//! project's history from its Store.
+//! first (H11a). Records in the home list projects.
 use crate::calls::Page;
 use crate::lease;
 use crate::open_args::OpenArgs;
 use crate::place::{self, Executor, Worker};
 use crate::project::add::{add_project, ProjectAdd};
-use crate::project::discovery::home_of;
-use crate::project::frame::{InitFrame, ListingFrame, ListingReply, RemoveFrame};
+use crate::project::frame::{InitFrame, ListingFrame, ListingReply};
 use crate::project::postgres_init::PgProjectAdd;
 use crate::project::record::ProjectRecord;
 use crate::record::{StoreRecord, StoreRef};
 use crate::resolve;
 use crate::service;
 use crate::sqlite::family::progress;
-use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
 use layerfs_home::home::paths;
@@ -331,10 +328,7 @@ fn init_on_worker(
         timeout,
     } = call;
     if paths::project_record(&home, store, name).exists() {
-        return Err(refused(
-            "Exists",
-            format!("Store {store} already has a project named {name}"),
-        ));
+        return Err(crate::project::add::home_name_taken(store.as_str(), name));
     }
     let total = send::measure(Path::new(folder), name)?;
     let copy = send::Copy {
@@ -399,10 +393,7 @@ fn init_postgresql(
     let home = home.to_path_buf();
     let path = paths::project_record(&home, store, name);
     if path.exists() {
-        return Err(refused(
-            "Exists",
-            format!("Store {store} already has a project named {name}"),
-        ));
+        return Err(crate::project::add::home_name_taken(store.as_str(), name));
     }
     let add = PgProjectAdd {
         add: ProjectAdd {
@@ -425,50 +416,4 @@ fn init_postgresql(
         }
     }
     Ok(out)
-}
-
-/// `project.remove(project)`: drops the project's Layers, Branches and
-/// Commits from its Store in one write, then its record. Its Sandboxes must
-/// be closed first; the other projects stay.
-pub fn remove(
-    home: &Path,
-    events: &mut Events<'_>,
-    project: &ProjectRef,
-    related: Related,
-) -> Outcome {
-    let text = project.to_string();
-    let home = home.to_path_buf();
-    let target = resolve::target(&home, &text)?;
-    target.record.unblocked()?;
-    (related.can_remove_project)(&home, &text)?;
-    let request = RemoveFrame {
-        store: project.store.clone(),
-        project: target.project.clone(),
-        store_record: Some(target.record.to_record().clone()),
-    };
-    if let StoreRef::Postgres { .. } = target.store_ref {
-        return Err(refused(
-            "Unsupported",
-            "removing a project from a PostgreSQL Store is not built",
-        ));
-    }
-    let removed = match place::plan(&home, &target.store_ref)? {
-        Executor::Local => {
-            let _lease = lease::hold(&home, &target.store)?;
-            crate::project::remove::remove_project(&home_of(Some(&home))?, &request)?
-        }
-        Executor::Worker(mut worker) => {
-            let _lease = lease::hold(&home, &target.store)?;
-            worker.call("project.remove", request.encode(), &mut |e| events.event(e))?
-        }
-    };
-    let entry = paths::project_dir(&home, &target.store, &target.project);
-    if entry.exists() {
-        std::fs::remove_dir_all(&entry).map_err(failed)?;
-    }
-    Ok(layerfs_home::home::with_field(
-        removed,
-        "project",
-        SdkValue::text(text),
-    ))
 }

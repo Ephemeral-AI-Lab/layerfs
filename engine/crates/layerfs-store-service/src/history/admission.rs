@@ -66,10 +66,13 @@ pub fn project_removal_at(stack: LayerStackId, op: [u8; 16]) -> GcIntent {
 }
 
 /// A mount intent at Branch scope, naming its project identity for the
-/// PostgreSQL key derivation.
+/// PostgreSQL key derivation. The Workspace is always placed; the Sandbox
+/// and machine are placed only when the caller that mounted knows them
+/// (a daemon mount does; a private Store-call Workspace does not).
 pub fn mount_intent(
     workspace: layerfs_history::WorkspaceId,
     snapshot: &layerfs_history::BranchSnapshot,
+    place: &layerfs_bridge::control::MountPlace,
 ) -> GcIntent {
     let body: [u8; 32] = workspace.as_slice().try_into().unwrap_or([0u8; 32]);
     GcIntent::shared(
@@ -80,7 +83,11 @@ pub fn mount_intent(
     )
     .in_project(snapshot.branch.stack.as_slice())
     .named(None, Some(snapshot.branch.name.as_str()))
-    .placed(Some(body), None, None)
+    .placed(
+        Some(body),
+        place.sandbox.as_deref(),
+        place.machine.as_deref(),
+    )
 }
 
 /// A short-lived shared intent (Init or merge), released on success or drop.

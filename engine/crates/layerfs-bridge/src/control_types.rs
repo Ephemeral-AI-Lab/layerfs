@@ -13,6 +13,37 @@ pub struct WorkspaceToken {
     /// Original local namespace returned by the owner; never reused by this daemon.
     pub namespace: i64,
 }
+/// The Sandbox and machine a mount belongs to, when the caller knows them.
+/// The holder report of a live mount shows them beside its Workspace; a
+/// caller that knows neither leaves both absent and the report keeps the
+/// Workspace alone.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct MountPlace {
+    /// The Sandbox the mounting daemon serves, when known.
+    pub sandbox: Option<String>,
+    /// The machine that Sandbox runs on, when known.
+    pub machine: Option<String>,
+}
+
+impl MountPlace {
+    /// The place a caller names, by the names it knows (`None` when not).
+    /// An empty name is no name: only a real one is reported.
+    #[must_use]
+    pub fn new(sandbox: Option<&str>, machine: Option<&str>) -> Self {
+        let known = |name: Option<&str>| name.filter(|name| !name.is_empty()).map(str::to_owned);
+        Self {
+            sandbox: known(sandbox),
+            machine: known(machine),
+        }
+    }
+
+    /// True when either name is known: a mount then reports what it knows.
+    #[must_use]
+    pub fn known(&self) -> bool {
+        self.sandbox.is_some() || self.machine.is_some()
+    }
+}
+
 /// One explicitly requested control operation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Request {
@@ -57,6 +88,28 @@ pub enum Request {
         project: String,
         /// The Branch's name in that project, as the caller gave it.
         branch: String,
+    },
+    /// [`Request::Mount`] whose caller knows the Sandbox and machine its
+    /// daemon serves: a live mount's holders then show all three.
+    MountPlaced {
+        /// New authority incarnation.
+        workspace: WorkspaceId,
+        /// Selected Branch.
+        branch: BranchId,
+        /// The Sandbox and machine the mount belongs to, as known.
+        place: MountPlace,
+    },
+    /// [`Request::MountNamed`] whose caller knows the Sandbox and machine
+    /// its daemon serves.
+    MountNamedPlaced {
+        /// New authority incarnation.
+        workspace: WorkspaceId,
+        /// The project's name, as the caller gave it.
+        project: String,
+        /// The Branch's name in that project, as the caller gave it.
+        branch: String,
+        /// The Sandbox and machine the mount belongs to, as known.
+        place: MountPlace,
     },
     /// One SDK call answered by a value or a typed SDK refusal.
     Sdk(crate::control_sdk::SdkCall),

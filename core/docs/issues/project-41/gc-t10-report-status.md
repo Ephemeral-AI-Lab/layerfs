@@ -74,8 +74,47 @@ backend-only field, so PostgreSQL reports its zeros through the same keys
 wire change. `store.status` reads the Store-side `gc_op` at the same point in
 `status.rs`; nothing is read from a file there.
 
+## Metrics and SLO signals (T10.3)
+
+`engine/crates/layerfs-persistence/src/compact_metrics.rs` publishes the
+compaction observations from the real `store.compact` and `store.status`
+paths:
+
+- counters: `compact.runs`, `compact.operations{outcome}`,
+  `compact.refusals{code}`, `compact.settles{kind}`,
+  `compact.retries{reason}`, `compact.status{state}` and
+  `compact.slo{objective,result}` (`residue_free`, `generation`);
+- duration aggregates: `compact.phase.duration_ns{phase,statistic}` for
+  `mark`/`build`/`verify`/`install` and `compact.duration_ns{statistic}`, each
+  with `count`, `sum` and `max`;
+- the last successful run's §11 gauges: `compact.dead_bytes{kind}`,
+  `compact.kept_waste{part}`, `compact.kept_waste_bytes`,
+  `compact.residue_bytes` and `compact.generation{which}`.
+
+Labels come only from closed enums: outcome, phase, refusal code, settle kind,
+retry reason, status state, SLO objective/result, statistic and report key. A
+Store name, path, operation id or artifact name is never a label, so metric
+cardinality is fixed. A `none` run times only `mark`; a rebuild times all four
+phases; a failure or unknown run records its outcome and total but publishes
+no report gauge; a run that settles an earlier leftover adds `leftover` to
+`compact.settles` and `compact.retries`. A `Busy`/`Unresolved` refusal that
+stops the call before a run is counted once by the control path, and a refusal
+the measured run itself produces is counted by that run.
+
+The registry follows the telemetry crate's rules (fixed low-cardinality
+labels, recording never changes a result). `store.compact` has no new public
+metrics call: `snapshot()` reads the process totals and
+`CompactMetricsCapture` captures one thread, which the tests use.
+
 ## Tests
 
+- `engine/crates/layerfs-persistence/tests/compact_metrics.rs`: a successful
+  rebuild (all four phase durations, outcome, dead/kept-waste/residue/generation
+  gauges and both SLO checks), the `none` path (only `mark` timed, generation
+  kept), a stopped `AfterBuild` run followed by the leftover settle
+  (`uncertain` outcome, then `rebuild` + `retries{leftover}` +
+  `settles{leftover}`), and a definite failure with no report gauge. Every
+  capture also asserts closed label keys and values.
 - `engine/crates/layerfs-persistence/tests/sqlite_compact.rs`:
   `the_report_projects_every_section_11_field`,
   `the_empty_store_report_explains_its_zeros`,
@@ -86,10 +125,14 @@ wire change. `store.status` reads the Store-side `gc_op` at the same point in
 - `control/crates/layerfs-store/tests/compact_report_status.rs`: the report
   wire is the snake_case contract shape (including `zero_reasons` and the
   `delta_bases.references` hex), and `store.status` projects an idle Store,
-  a live owner's record and a leftover one (`op`, `state`, `phases`).
+  a live owner's record and a leftover one (`op`, `state`, `phases`), and the
+  `compact.status{state}` metric of each read.
 
 ## Gaps
 
+- The compaction metrics are emitted into the process registry only; no SDK
+  call or CLI command renders `snapshot()` yet.
+- T9's PostgreSQL rebuild has no metrics of its own yet.
 - T9's PostgreSQL rebuild and its `gc_op` status read are not implemented;
   the trait and the status comment are the only PostgreSQL pieces.
 - The `{value, cap}` capped-field shape is not produced: the SQLite receipt

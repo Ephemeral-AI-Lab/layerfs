@@ -15,7 +15,7 @@ use crate::store::{live_open::Opened, InitError};
 use crate::{InitCounters, InitStep, Initialized, ProjectError};
 use layerfs_history::{
     BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig,
-    HistoryName, HistoryResult, LayerStackId, LayerStackRecord, Page,
+    HistoryError, HistoryName, HistoryResult, LayerStackId, LayerStackRecord, Page,
 };
 use layerfs_persistence::{
     SealedStore, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile, StoreSelection,
@@ -132,11 +132,14 @@ pub(crate) fn add(
         disposable(&request.store)?;
         let handles = Opened::writable(&request.store, &request.binding, request.cursor_key)?;
         let history = handles.history();
-        let taken = history
-            .layer_stack_named(&request.stack_name)
-            .map_err(InitError::History)?;
-        if taken.is_some() {
-            return Err(InitError::Exists);
+        // A held name (live, retired or deleted) is refused before the folder
+        // is scanned or any object written. The publication re-checks it, so
+        // a collision that appears meanwhile is refused the same way.
+        if let Some(state) = history
+            .layer_stack_name_taken(&request.stack_name)
+            .map_err(InitError::History)?
+        {
+            return Err(InitError::NameTaken(Box::new(state)));
         }
         let storage = Storage::new(handles.storage()).map_err(InitError::Storage)?;
         let imported = crate::init_observed(
@@ -195,6 +198,11 @@ fn refused_acquisition(error: ProjectError) -> InitError {
         ProjectError::Acquisition(AcquisitionError::Persistence(PersistenceError::Refused {
             status,
         })) if status == "acquisition working rows remain" => InitError::Busy,
+        // The catalog's collision query read the holder (live, retired or
+        // deleted) and wrote nothing: keep its typed state for the SDK.
+        ProjectError::History(HistoryError::NameTaken(state)) => {
+            InitError::NameTaken(state.clone())
+        }
         _ => InitError::Project(error),
     }
 }
