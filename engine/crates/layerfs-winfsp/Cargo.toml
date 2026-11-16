@@ -12,4 +12,11 @@ layerfs-content = { path = "../../../core/crates/layerfs-content" }
 layerfs-daemon = { path = "../layerfs-daemon" }
 
 [dev-dependencies]
+layerfs-project = { path = "../layerfs-project" }
+layerfs-store-service = { path = "../layerfs-store-service" }
+layerfs-bridge = { path = "../layerfs-bridge" }
+layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
+layerfs-history = { path = "../../../core/crates/layerfs-history" }
+layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
+layerfs-persistence = { path = "../layerfs-persistence" }
 layerfs-overlay = { path = "../layerfs-overlay" }
