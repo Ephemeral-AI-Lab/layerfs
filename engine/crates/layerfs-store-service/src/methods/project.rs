@@ -90,6 +90,14 @@ pub fn remove_file(service: &StoreService, args: &SdkValue) -> Answer {
     let requested = text(args, "path")?;
     let normalized = layerfs_history::path::NormalizedPath::new(requested)
         .map_err(|why| invalid(format!("path: {why}")))?;
+    // A path whose non-final component is a symlink or another non-directory
+    // is ill-typed, not a path to hide: resolve it against the project's
+    // preserved tree (the stack head Layer, which `main` names) and refuse it
+    // before writing a marker. The grammar errors above stay separate.
+    let reader = crate::read::snapshot::reader(&service.store, &stack);
+    let snap = crate::read::snapshot::resolve(&service.store, &stack, &reader, "main")?;
+    let absolute = format!("/{}", normalized.as_str());
+    let _ = crate::read::snapshot::entry(&reader, &snap.tree, &absolute)?;
     let removed_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| {

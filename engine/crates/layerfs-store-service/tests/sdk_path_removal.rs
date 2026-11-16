@@ -133,3 +133,65 @@ fn the_remove_file_path_grammar_is_refused() {
     }
     fixture.cleanup();
 }
+
+#[test]
+fn a_non_directory_component_is_refused_while_a_leaf_symlink_is_hidden() {
+    let fixture = Fixture::new("sdk-path-symlink", |source| {
+        fs::create_dir(source.join("d")).unwrap();
+        fs::write(source.join("d/f"), "f\n").unwrap();
+        fs::write(source.join("a.txt"), "a\n").unwrap();
+        std::os::unix::fs::symlink("a.txt", source.join("link")).unwrap();
+        std::os::unix::fs::symlink("d", source.join("dlink")).unwrap();
+        5
+    });
+    fixture.fork("work");
+
+    // A component before the last that is not a directory is ill-typed, not a
+    // path to hide: the marker is refused and nothing is written.
+    for path in ["/link/f", "/dlink/f", "/a.txt/f"] {
+        let refusal = fixture
+            .try_call("project.remove_file", vec![("path", text(path))])
+            .expect_err("a non-directory component");
+        assert_eq!(refusal.code, "InvalidInput", "{path}: {refusal:?}");
+    }
+    // Reads and stats through that component answer the same way.
+    for method in ["fs.read", "fs.stat"] {
+        for path in ["/link/f", "/dlink/f", "/a.txt/f"] {
+            let refusal = fixture
+                .try_call(
+                    method,
+                    vec![("branch", text("work")), ("path", text(path))],
+                )
+                .expect_err("a read below a non-directory");
+            assert_eq!(refusal.code, "InvalidInput", "{method} {path}: {refusal:?}");
+        }
+    }
+
+    // A symlink as the final component is an ordinary entry: it stays
+    // visible until it is removed, then it is hidden like any other path.
+    let present = fixture.call(
+        "fs.stat",
+        vec![("branch", text("work")), ("path", text("/link"))],
+    );
+    assert_eq!(present.get_text("type"), Some("symlink"), "{present:?}");
+    let removed = remove(&fixture, "/link");
+    assert_eq!(removed.get_text("kind"), Some("Removed"));
+    for method in ["fs.read", "fs.stat"] {
+        let refusal = fixture
+            .try_call(
+                method,
+                vec![("branch", text("work")), ("path", text("/link"))],
+            )
+            .expect_err("a hidden leaf symlink");
+        assert_eq!(refusal.code, "Removed", "{method}: {refusal:?}");
+    }
+    let listed = fixture.call(
+        "fs.list",
+        vec![("branch", text("work")), ("path", text("/"))],
+    );
+    let names = paths(&listed);
+    assert!(!names.contains(&"/link"), "{names:?}");
+    assert!(names.contains(&"/dlink"), "{names:?}");
+    assert_eq!(listed.get_int("removed_count"), Some(1), "{listed:?}");
+    fixture.cleanup();
+}
