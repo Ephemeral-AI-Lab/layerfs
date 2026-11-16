@@ -2121,7 +2121,8 @@ fn finish_init(port: &dyn Acquisition, owner: Owner, files: u64) {
     assert_eq!(port.work(owner), Err(AcquisitionError::Stale));
 }
 
-/// A statement trigger on `commit` — the cleanup batch's first table — parks
+/// A statement trigger on `content_signature` — the first table the batched
+/// Phase C always deletes from, whether or not a dead layer stack exists — parks
 /// Phase C until the test unlocks [`PARK_KEY`], so the Init really begins after
 /// the `unfinished_work` check and while the cleanup transaction is open.
 fn park_phase_c(schema: &Schema) {
@@ -2132,7 +2133,7 @@ fn park_phase_c(schema: &Schema) {
              LANGUAGE plpgsql AS $fn$ BEGIN \
                PERFORM pg_advisory_xact_lock({key}); RETURN NULL; \
              END $fn$;\
-             CREATE TRIGGER lfs_test_park_phase_c BEFORE DELETE ON {s}.\"commit\" \
+             CREATE TRIGGER lfs_test_park_phase_c BEFORE DELETE ON {s}.content_signature \
               FOR EACH STATEMENT EXECUTE FUNCTION {s}.lfs_test_park_phase_c();",
             s = schema.selection.schema,
             key = PARK_KEY,
@@ -2143,7 +2144,7 @@ fn park_phase_c(schema: &Schema) {
 fn unpark_phase_c(schema: &Schema) {
     let mut client = schema.client();
     let _ = client.batch_execute(&format!(
-        "DROP TRIGGER IF EXISTS lfs_test_park_phase_c ON {s}.\"commit\";\
+        "DROP TRIGGER IF EXISTS lfs_test_park_phase_c ON {s}.content_signature;\
          DROP FUNCTION IF EXISTS {s}.lfs_test_park_phase_c();",
         s = schema.selection.schema,
     ));
@@ -2152,7 +2153,7 @@ fn unpark_phase_c(schema: &Schema) {
 /// Waits until the compaction's own backend is parked on [`PARK_KEY`], so the
 /// Init starts after `unfinished_work` and before the batch's init deletes.
 fn wait_for_phase_c_park(schema: &Schema) {
-    let pattern = format!("%{}.\"commit\"%", schema.selection.schema);
+    let pattern = format!("%{}.content_signature%", schema.selection.schema);
     let mut client = schema.client();
     for _ in 0..4_800 {
         let parked: i64 = client
@@ -2196,7 +2197,7 @@ fn phase_c_never_deletes_a_live_init() {
     let before = generation(&setup);
     let files = 8_u64;
 
-    // Park Phase C: the cleanup batch's first statement deletes from `commit`,
+    // Park Phase C: the batched cleanup's first signature delete always runs,
     // and the statement trigger waits on a key this connection holds.
     let mut control = schema.client();
     control
