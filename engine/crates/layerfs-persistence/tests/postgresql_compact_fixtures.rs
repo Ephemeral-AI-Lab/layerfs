@@ -11,9 +11,10 @@
 //! hints checked (AC-43). A marker test covers the PostgreSQL `project_epoch`
 //! bump and fence (AC-24, AC-39).
 //!
-//! Genuinely unreachable arms are named in
-//! `core/docs/issues/project-41/gc-t12.3b-postgresql-acceptance.md` with the
-//! reason (real standby, killed-backend lost COMMIT, a save racing the swap).
+//! Genuinely unreachable arms are named with the reason (real standby,
+//! killed-backend lost COMMIT, a save racing the swap) in the PostgreSQL
+//! acceptance record on layerfs-project#52 and PR #711; the T12.3b note that
+//! used to hold them was moved out of the tree.
 //!
 //! Needs a writable PostgreSQL server: set `LAYERFS_TEST_POSTGRES_URL` (for
 //! example `host=127.0.0.1 port=55432 user=postgres dbname=postgres

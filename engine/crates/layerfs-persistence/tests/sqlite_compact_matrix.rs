@@ -27,9 +27,9 @@
 //! three-run measurement fixture. A normal run asserts both files are current
 //! and shape-valid.
 //!
-//! This page adds no contract: the frozen spec section 12 and the acceptance
-//! matrix win. Where a row is cross-backend, its PostgreSQL half is deferred
-//! by name.
+//! This page adds no contract: the frozen spec section 12 and the AC-01..AC-60
+//! dispositions tracked on layerfs-project#52 win. Where a row is
+//! cross-backend, its PostgreSQL half is deferred by name.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 mod support;
 
@@ -1173,7 +1173,7 @@ const MATRIX: [Row; 60] = [
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_measure.json",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_capacity.rs#capacity_measure",
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure.json"],
-        note: "The tiny three-run arm is median 28.2 ms. T-G61 measured a real 9.987 GB Store with 3 runs per arm: `none` at 8.88% dead (median 149.318 s) and `rebuild` at 10.00% dead (median 246.371 s, mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s), plus one WAL/FULL rebuild at 284.078 s; profile, host and toolchain are declared in the fixture, and the warm page cache is declared below. The section 13 50 GB arms, the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]." },
+        note: "The tiny three-run arm is median 28.2 ms. T-G61 measured a real 9.987 GB Store with 3 runs per arm: `none` at 8.88% dead (median 149.318 s) and `rebuild` at 10.00% dead (median 246.371 s, mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s), plus one WAL/FULL rebuild at 284.078 s; profile, host and toolchain are declared in the fixture, and the warm page cache is declared below. T-G66 later measured the 50 GB arm once per path; the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]." },
     Row { id: "AC-58", backend: Backend::Sqlite, tier: "E2", status: Status::Covered,
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_before_copy",
@@ -1269,12 +1269,12 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "> [`gc-acceptance-matrix.md`](gc-acceptance-matrix.md) AC-01..AC-60 win; this"
+        "> AC-01..AC-60 dispositions (layerfs-project#52) win; this page records"
     )
     .unwrap();
     writeln!(
         out,
-        "> page records evidence and adds no contract. Regenerate with"
+        "> evidence and adds no contract. Regenerate with"
     )
     .unwrap();
     writeln!(
@@ -1314,12 +1314,22 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  `sqlite_compact_crash` now has {crash_tests} tests ({crash_sigkill_arms} real-process SIGKILL arms and the"
+        "  `sqlite_compact_crash` now has {crash_tests} crash tests ({crash_sigkill_arms} real-process SIGKILL arms and the"
     )
     .unwrap();
     writeln!(
         out,
-        "  child placeholder), not the 13 recorded below. Those arms still kill a"
+        "  child placeholder), not the 13 recorded below; the binary also runs one"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  lifecycle guard (`unfinished_init_or_merge_rows_refuse_compaction`), which"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  is not a crash arm. Those arms still kill a"
     )
     .unwrap();
     writeln!(
@@ -1339,12 +1349,32 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  install, so AC-01 is `covered` (the matrix now reads covered 30 / partial"
+        "  install, so AC-01 is `covered`."
     )
     .unwrap();
     writeln!(
         out,
-        "  16). This page keeps the T12.3c run's original counts."
+        "- **Count reconciliation.** The T12.3c run recorded executed 8 / covered"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  29 / partial 16 / deferred 7, and the table below keeps that data."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  T-G38/T-G54 moved AC-44 to `covered`, so the current #52 dispositions"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  are executed 8 / covered 30 / partial 16 / deferred 6; the 29/7 above"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  is the T12.3c snapshot, not a live gap."
     )
     .unwrap();
     writeln!(
@@ -1394,17 +1424,27 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  1.017 GB, peak temp 9.144 GB), plus one WAL/FULL rebuild (284.078 s). The"
+        "  1.017 GB; the T-G72 peak bound is 29.481 GB, the old formula 9.144 GB),"
     )
     .unwrap();
     writeln!(
         out,
-        "  numbers are in `tests/fixtures/sqlite_compact_capacity_measure.json`; the"
+        "  plus one WAL/FULL rebuild (284.078 s). The numbers are in"
     )
     .unwrap();
     writeln!(
         out,
-        "  50 GB arms and the 30% arm remain [E]."
+        "  `tests/fixtures/sqlite_compact_capacity_measure.json`. T-G66 then measured"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  the 50 GB arm once per path (see the runbook disk-headroom section); the"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  30% arm remains [E]."
     )
     .unwrap();
     writeln!(out).unwrap();

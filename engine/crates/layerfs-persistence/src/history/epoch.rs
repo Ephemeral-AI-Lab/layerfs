@@ -12,8 +12,8 @@
 //! The refusal code is `Conflict`: §10's table names it for the sealed tuple
 //! and for a missing `project_epoch` row, and §12's marker-epoch case says a
 //! one-shot write racing `branch.remove`/`project.delete` gets `Conflict` and
-//! leaves no Commit. It carries no detail (§10; gc-spec-gaps G1 fixes the
-//! empty detail for every `Conflict`).
+//! leaves no Commit. It carries no detail: every service `Conflict` uses the
+//! empty detail `{}` (§10).
 //!
 //! On SQLite both reads run inside the one `BEGIN IMMEDIATE` transaction that
 //! also writes the Commit/Layer, so a marker can never interleave between them
