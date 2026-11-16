@@ -1091,7 +1091,7 @@ const MATRIX: [Row; 60] = [
         note: "Hidden, entry present, retry returns the stored deleted_ms." },
     Row { id: "AC-27", backend: Backend::Both, tier: "E2", status: Status::Covered,
         evidence: &["engine/crates/layerfs-persistence/tests/project_delete.rs#paging_skips_a_hidden_project",
-                    "engine/crates/layerfs-persistence/tests/project_delete.rs#every_layer_stack_lookup_carries_the_marker_filter"],
+                    "engine/crates/layerfs-persistence/tests/visibility_guard.rs#every_statement_reading_branch_or_layer_stack_is_filtered_or_allow_listed"],
         note: "Stale home entries stay out of list/lookup." },
     Row { id: "AC-28", backend: Backend::Pg, tier: "E2", status: Status::Deferred,
         evidence: &[], note: "PostgreSQL Phase C cleanup and its failpoints: T12.3b." },
