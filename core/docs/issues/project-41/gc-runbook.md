@@ -111,13 +111,14 @@ installed → it records the outcome. A dead owner's op is adopted; only a live 
   and frees no bytes; objects reachable only via the path are retained (§6.2, decisions 16/35).
 - **No path-level physical reclaim:** path-aware walk and per-entry page pruning are follow-ups; `keptWaste` has no page component (§6.2).
 - 1.0 Stores convert offline (§4.1); no online migration.
-- **Three SQLite deviations from the frozen text remain** (D1, D3, D4), plus
-  the settled D2 build decision; all are recorded in
+- **Four SQLite deviations from the frozen text remain** (D1, D3, D4, D5),
+  plus the settled D2 build decision; all are recorded in
   [`gc-42-decisions.md`](gc-42-decisions.md): the fresh bulk load runs with
   `foreign_keys=OFF`; the rebuild is the fresh-copy build (no whole-Store copy,
   no `VACUUM`, peak old + new, §8 — it now follows S5); `none` writes only a
   transient visited scratch and rolls its mark transaction back; the settle
-  records a `cleanup` phase.
+  records a `cleanup` phase; `store.compact` is local-only, and a Store pushed
+  to another machine is compacted there or pushed back.
 
 ## 6. First 10 minutes
 
