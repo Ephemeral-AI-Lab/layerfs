@@ -1,9 +1,11 @@
-//! `project.delete` on a worker-backed Store (T4.6): the caller admits the
-//! project scope through the worker before it writes its sidecar and sends
-//! the marker. A live mount in the worker's Store refuses the call with
-//! `MountsActive` (holders reported) and a live operation with `Busy`, with
-//! no sidecar, no marker and no leaked admission row; the successful path
-//! releases the admission after the marker.
+//! `project.delete` on a worker-backed Store (T4.6): the caller writes its
+//! sidecar naming the admission, then admits the project scope through the
+//! worker and sends the marker. A live mount in the worker's Store refuses
+//! the call with `MountsActive` (holders reported) and a live operation with
+//! `Busy`, keeping the pending sidecar, writing no marker and leaking no
+//! admission row; a pending retry then redos the marker and keeps the
+//! caller and worker entries, and the next call finishes them. The
+//! successful path releases the admission after the marker.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
@@ -128,7 +130,7 @@ fn remove(home: &Path) -> Result<SdkValue, SdkRefusal> {
 }
 
 #[test]
-fn the_worker_path_admits_before_the_sidecar_and_releases_after_the_marker() {
+fn the_worker_path_writes_the_sidecar_then_admits_and_releases_after_the_marker() {
     // a home with Store `shop` and project `app`, created locally. A
     // sandbox filesystem cannot hold a directly opened Store; the fake-home
     // cases in the `layerfs-store` tests cover the same home path, and this
@@ -204,7 +206,8 @@ fn the_worker_path_admits_before_the_sidecar_and_releases_after_the_marker() {
 
     let worker = worker_open(&root, &record);
 
-    // a live mount in the worker's Store: `MountsActive`, no sidecar, no marker
+    // a live mount in the worker's Store: `MountsActive`, a pending sidecar,
+    // no marker
     let mount = GcIntent::shared(
         [9; 16],
         GcIntentKind::Mount,
@@ -230,11 +233,14 @@ fn the_worker_path_admits_before_the_sidecar_and_releases_after_the_marker() {
     };
     assert_eq!(holders[0].get_text("kind"), Some("mount"));
     assert_eq!(holders[0].get_text("sandbox"), Some("sandbox-9"));
+    let pending = layerfs_store::project::delete::Intent::read(&home, "shop", "app")
+        .unwrap()
+        .expect("the pending sidecar precedes the admission");
     assert_eq!(
-        layerfs_store::project::delete::Intent::read(&home, "shop", "app").unwrap(),
-        None,
-        "no sidecar was written"
+        pending.state,
+        layerfs_store::project::delete::IntentState::Pending
     );
+    let sidecar_op = pending.op.expect("the sidecar names its admission");
     assert!(paths::project_dir(&home, "shop", "app").is_dir());
     assert_eq!(project_names(&worker), vec!["app".to_owned()], "no marker");
     assert!(
@@ -263,8 +269,12 @@ fn the_worker_path_admits_before_the_sidecar_and_releases_after_the_marker() {
     let refusal = remove(&home).expect_err("another removal holds the project");
     assert_eq!(refusal.code, "Busy", "{refusal:?}");
     assert_eq!(
-        layerfs_store::project::delete::Intent::read(&home, "shop", "app").unwrap(),
-        None
+        layerfs_store::project::delete::Intent::read(&home, "shop", "app")
+            .unwrap()
+            .expect("the pending sidecar stays")
+            .op,
+        Some(sidecar_op),
+        "the retry reuses the same admission identity"
     );
     assert_eq!(
         intents(&worker, stack).len(),
@@ -273,8 +283,23 @@ fn the_worker_path_admits_before_the_sidecar_and_releases_after_the_marker() {
     );
     assert!(paths::project_dir(&home, "shop", "app").is_dir());
 
-    // the holder ends: the delete succeeds through the worker and releases
-    // the admission it took, with the sidecar unlinked
+    // the worker's own copy of the project entry: the deferred call must
+    // keep it, and the finishing call removes it.
+    home::write_record(
+        &paths::project_record(&root, "shop", "app"),
+        &SdkValue::map([
+            ("v", SdkValue::Int(1)),
+            ("name", text("app")),
+            ("stack", text(&hex(&stack.to_bytes()))),
+            ("created", SdkValue::Int(1)),
+        ]),
+    )
+    .unwrap();
+    std::fs::create_dir_all(paths::project_dir(&root, "shop", "app")).unwrap();
+
+    // the holder ends. The sidecar is still pending, so this call retries
+    // without a confirmed marker: it writes the marker, settles the sidecar
+    // and keeps the caller and worker entries.
     with_service(&worker, |service| {
         service.store.history().gc_release(&[7; 16]).unwrap();
         Ok(())
@@ -282,8 +307,37 @@ fn the_worker_path_admits_before_the_sidecar_and_releases_after_the_marker() {
     .unwrap();
     let outcome = remove(&home).unwrap();
     assert_eq!(outcome.get_text("kind"), Some("Removed"));
+    assert!(
+        !outcome.get_bool("home_entry_removed"),
+        "a pending retry settles without finishing the entry"
+    );
+    assert_eq!(outcome.get_int("deleted_ms"), Some(pending.deleted_ms));
+    assert!(paths::project_dir(&home, "shop", "app").is_dir());
+    assert!(
+        paths::project_dir(&root, "shop", "app").is_dir(),
+        "the worker keeps its own entry"
+    );
+    let settled = layerfs_store::project::delete::Intent::read(&home, "shop", "app")
+        .unwrap()
+        .expect("the sidecar is marked");
+    assert_eq!(
+        settled.state,
+        layerfs_store::project::delete::IntentState::Marked
+    );
+    assert_eq!(settled.deleted_ms, pending.deleted_ms);
+    assert!(
+        intents(&worker, stack).is_empty(),
+        "the admission was released"
+    );
+    assert!(project_names(&worker).is_empty(), "the project is retired");
+
+    // The marker is confirmed now: the next call removes both entries and
+    // unlinks the sidecar.
+    let outcome = remove(&home).unwrap();
+    assert_eq!(outcome.get_text("kind"), Some("Removed"));
     assert!(outcome.get_bool("home_entry_removed"));
     assert!(!paths::project_dir(&home, "shop", "app").exists());
+    assert!(!paths::project_dir(&root, "shop", "app").exists());
     assert_eq!(
         layerfs_store::project::delete::Intent::read(&home, "shop", "app").unwrap(),
         None
@@ -292,7 +346,6 @@ fn the_worker_path_admits_before_the_sidecar_and_releases_after_the_marker() {
         intents(&worker, stack).is_empty(),
         "the admission was released"
     );
-    assert!(project_names(&worker).is_empty(), "the project is retired");
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -370,7 +423,7 @@ fn admitted_for(stack: LayerStackId) -> SdkValue {
     )])
 }
 
-fn removed_for(stack: LayerStackId, deleted_ms: i64) -> SdkValue {
+fn removed_for(stack: LayerStackId, deleted_ms: i64, retired: bool) -> SdkValue {
     SdkValue::map([(
         "value",
         SdkValue::map([
@@ -378,6 +431,7 @@ fn removed_for(stack: LayerStackId, deleted_ms: i64) -> SdkValue {
             ("project", text("app")),
             ("stack_id", text(&hex(&stack.to_bytes()))),
             ("deleted_ms", SdkValue::Int(deleted_ms)),
+            ("retired", SdkValue::Bool(retired)),
         ]),
     )])
 }
@@ -436,7 +490,7 @@ fn caller_home(tag: &str, address: &str, stack: LayerStackId) -> PathBuf {
 }
 
 #[test]
-fn a_fake_workers_mounts_active_refusal_writes_no_sidecar_and_no_marker() {
+fn a_fake_workers_mounts_active_refusal_keeps_a_pending_sidecar_and_writes_no_marker() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap().to_string();
     let stack = LayerStackId::from_authority([3; 16]);
@@ -448,22 +502,34 @@ fn a_fake_workers_mounts_active_refusal_writes_no_sidecar_and_no_marker() {
             ("entity", text("main")),
         ])]),
     )]);
-    let seen = fake_worker(listener, move |request| {
-        assert_eq!(op_of(request), "project.delete.admit");
-        refused("MountsActive", holders.clone())
+    let seen = fake_worker(listener, move |request| match op_of(request) {
+        "project.delete.admit" => refused("MountsActive", holders.clone()),
+        "project.delete.release" => released_for(request),
+        other => panic!("unexpected op {other}"),
     });
 
     let refusal = remove(&home).expect_err("the fake worker's Store has a live mount");
     assert_eq!(refusal.code, "MountsActive", "{refusal:?}");
-    // the caller wrote no sidecar and sent no marker: only the admission frame
+    // The caller wrote its sidecar before admitting and sent no marker; the
+    // refused admission registered nothing, so the caller settles the
+    // identity it wrote and keeps the pending sidecar for a retry.
+    let pending = layerfs_store::project::delete::Intent::read(&home, "shop", "app")
+        .unwrap()
+        .expect("the pending sidecar precedes the admission");
     assert_eq!(
-        layerfs_store::project::delete::Intent::read(&home, "shop", "app").unwrap(),
-        None
+        pending.state,
+        layerfs_store::project::delete::IntentState::Pending
     );
+    assert!(pending.op.is_some(), "the sidecar names its admission");
     assert!(paths::project_dir(&home, "shop", "app").is_dir());
     let requests = seen.lock().unwrap();
-    assert_eq!(requests.len(), 1, "{requests:?}");
-    assert_eq!(op_of(&requests[0]), "project.delete.admit");
+    let ops: Vec<&str> = requests.iter().map(op_of).collect();
+    assert_eq!(
+        ops,
+        ["project.delete.admit", "project.delete.release"],
+        "{requests:?}"
+    );
+    assert_eq!(sent_op(&requests[0]), sent_op(&requests[1]));
     drop(requests);
     let _ = std::fs::remove_dir_all(home);
 }
@@ -520,7 +586,7 @@ fn a_fake_workers_success_removes_the_entry_and_releases_the_admission() {
     let home = caller_home("fake-ok", &address, stack);
     let seen = fake_worker(listener, move |request| match op_of(request) {
         "project.delete.admit" => admitted_for(stack),
-        "project.delete" => removed_for(stack, 42),
+        "project.delete" => removed_for(stack, 42, false),
         "project.delete.release" => released_for(request),
         other => panic!("unexpected op {other}"),
     });
@@ -548,6 +614,11 @@ fn a_fake_workers_success_removes_the_entry_and_releases_the_admission() {
     let op = sent_op(&requests[0]);
     assert_eq!(sent_op(&requests[1]), op);
     assert_eq!(sent_op(&requests[2]), op);
+    assert_eq!(
+        args_of(&requests[1]).get_bool("pending_retry"),
+        false,
+        "a fresh delete is no retry"
+    );
     drop(requests);
     let _ = std::fs::remove_dir_all(home);
 }
@@ -558,6 +629,79 @@ fn hex_decode(text: &str) -> Vec<u8> {
         .step_by(2)
         .map(|at| u8::from_str_radix(&text[at..at + 2], 16).unwrap())
         .collect()
+}
+
+#[test]
+fn a_fake_workers_pending_retry_settles_the_marker_and_keeps_the_entry() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let stack = LayerStackId::from_authority([8; 16]);
+    let home = caller_home("fake-settle", &address, stack);
+    // The sidecar written by the crashed attempt, before its admission.
+    let op = [0x3c; 16];
+    let pending = layerfs_store::project::delete::Intent {
+        store: "shop".to_owned(),
+        project: "app".to_owned(),
+        stack,
+        deleted_ms: 77,
+        attempt_ms: 1,
+        state: layerfs_store::project::delete::IntentState::Pending,
+        op: Some(op),
+    };
+    layerfs_store::project::delete::Intent::write(&home, &pending).unwrap();
+
+    let attempt = Arc::new(AtomicU32::new(0));
+    let count = attempt.clone();
+    let seen = fake_worker_with(listener, move |request| match op_of(request) {
+        "project.delete.admit" => Some(admitted_for(stack)),
+        "project.delete" if count.fetch_add(1, Ordering::SeqCst) == 0 => {
+            Some(removed_for(stack, 77, false))
+        }
+        "project.delete" => Some(removed_for(stack, 77, true)),
+        "project.delete.release" => Some(released_for(request)),
+        other => panic!("unexpected op {other}"),
+    });
+
+    // The first call is the pending retry: it redos the marker with the
+    // sidecar's deleted_ms, keeps the entry and leaves the sidecar marked.
+    let outcome = remove(&home).unwrap();
+    assert_eq!(outcome.get_text("kind"), Some("Removed"));
+    assert!(!outcome.get_bool("home_entry_removed"));
+    assert_eq!(outcome.get_int("deleted_ms"), Some(77));
+    assert!(paths::project_dir(&home, "shop", "app").is_dir());
+    let settled = layerfs_store::project::delete::Intent::read(&home, "shop", "app")
+        .unwrap()
+        .expect("the sidecar is marked");
+    assert_eq!(
+        settled.state,
+        layerfs_store::project::delete::IntentState::Marked
+    );
+    {
+        let requests = seen.lock().unwrap();
+        let marker = requests
+            .iter()
+            .find(|request| op_of(request) == "project.delete")
+            .expect("the marker frame");
+        assert_eq!(sent_op(marker), hex(&op));
+        assert!(args_of(marker).get_bool("pending_retry"));
+    }
+
+    // The marker is confirmed: the next call finishes the entry.
+    let outcome = remove(&home).unwrap();
+    assert!(outcome.get_bool("home_entry_removed"));
+    assert!(!paths::project_dir(&home, "shop", "app").exists());
+    assert_eq!(
+        layerfs_store::project::delete::Intent::read(&home, "shop", "app").unwrap(),
+        None
+    );
+    let requests = seen.lock().unwrap();
+    let markers: Vec<&SdkValue> = requests
+        .iter()
+        .filter(|request| op_of(request) == "project.delete")
+        .collect();
+    assert!(!args_of(markers[1]).get_bool("pending_retry"));
+    drop(requests);
+    let _ = std::fs::remove_dir_all(home);
 }
 
 #[test]
@@ -576,7 +720,7 @@ fn a_lost_worker_reply_is_unknown_and_keeps_the_sidecar_for_the_retry() {
             if count.fetch_add(1, Ordering::SeqCst) == 0 {
                 None
             } else {
-                Some(removed_for(stack, 42))
+                Some(removed_for(stack, 42, true))
             }
         }
         "project.delete.release" => Some(released_for(request)),

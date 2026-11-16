@@ -227,7 +227,7 @@ fn scan(
     // §4.3: the base walk is path-aware, so a path the markers hide at the
     // base node is absent from `changes` instead of a `Removed` row against
     // the mount's whiteout. The live side keeps a local re-creation.
-    let seen = Visibility::for_snap(&service.store, &snap);
+    let seen = Visibility::for_snap(&service.store, &snap)?;
     let mut base = VisibleBase {
         walker: Walker::new(op.ports(), &snap, "/")?,
         seen: &seen,

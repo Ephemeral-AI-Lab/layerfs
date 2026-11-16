@@ -284,8 +284,8 @@ fn changes(
     .map_err(args::content)?;
     // §4.3: a hidden entry is absent on its own side, so a removed path is an
     // \`Added\`/\`Removed\` change, never a spurious \`Modified\`.
-    let left_seen = Visibility::for_snap(store, left);
-    let right_seen = Visibility::for_snap(store, right);
+    let left_seen = Visibility::for_snap(store, left)?;
+    let right_seen = Visibility::for_snap(store, right)?;
     emit(reader, &mut walk, &request, &left_seen, &right_seen)
 }
 

@@ -107,7 +107,7 @@ CLI     layerfs project list [<store>] [--page-size <page-size>] [--page-pos <pa
 
 | Argument | Kind | Rule |
 | --- | --- | --- |
-| `store` (optional) | Name | its record must exist, else `NotFound`; omitted: every Store in the home |
+| `store` (optional) | Name | its record must exist, else `NoSuchStore`; omitted: every Store in the home |
 | `page_size` option | Int | clamped to 1..=1000, default 50; never refused |
 | `page_pos` option | Int | items to skip; negative is taken as 0 |
 
@@ -116,8 +116,9 @@ project name; `next_page_pos` is null after the last page. There is no
 `has_more`. The whole listing is built from home folders, then paged in
 memory; a project folder without `record.json` is listed with
 `created: null` ([`project/family.rs`](../../../../control/crates/layerfs-store/src/project/family.rs) `list`).
-Errors: `InvalidInput` (bad Store name), `NotFound`, `Failed` (a home folder
-cannot be read).
+Errors: `InvalidInput` (bad Store name), `NoSuchStore` (a named Store the home
+does not record), `Busy`/`Unknown` (a named Store that cannot be listed),
+`Failed` (a home folder cannot be read).
 
 ### project.get
 
@@ -250,9 +251,13 @@ Returns `{ kind: "Removed", project, deleted_ms, home_entry_removed }`. The
 Store marker is the commit point: if the home entry cannot be removed the
 call still succeeds with `home_entry_removed: false` and keeps its durable
 intent `store/<store>/delete/<project>.json`, so a repeat from the same home
-reuses `deleted_ms` and finishes the entry. The call is idempotent only
-through that intent; it never resolves the name again. A lost worker reply
-is `Unknown` and keeps the intent.
+reuses `deleted_ms` and finishes the entry. A retry of an intent written
+before its admission (the row may still be live and no marker confirmed)
+redoes the marker with the intent's `deleted_ms`, keeps the caller and
+worker entries, marks the intent and answers `home_entry_removed: false`;
+the next call finds the marker confirmed and finishes the entries. The call
+is idempotent only through that intent; it never resolves the name again. A
+lost worker reply is `Unknown` and keeps the intent.
 
 | Error | When | Source |
 | --- | --- | --- |

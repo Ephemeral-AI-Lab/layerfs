@@ -3,7 +3,7 @@
 mod support;
 
 use layerfs_history::error::Missing;
-use layerfs_history::path::NormalizedPath;
+use layerfs_history::path::{path_key, trace_key, NormalizedPath};
 use layerfs_history::records::{
     CommitMeta, CommitOutcome, CommitRecord, CommitRequest, CommitVia, ForkRequest, ForkSource,
     PathRemovalKind, PathRemovalRequest, StackInitialization,
@@ -75,6 +75,34 @@ fn remove(
             removed_ms: at,
         })
         .unwrap()
+}
+
+
+#[test]
+fn the_marker_key_is_the_store_salted_trace_hash() {
+    let temp = Temp::new("path-removal-key");
+    let history = support::create(&temp.join("store"));
+    let (shop, _) = project(&history, 1, "shop");
+    remove(&history, shop, "/a/b", REMOVED_AT);
+    // The row's key is `trace_key(trace_salt, stack, path)`, not a
+    // Store-independent `BLAKE3(path)` (§4.3, "traces record a hash of the
+    // path").
+    let connection = rusqlite::Connection::open(temp.join("store")).unwrap();
+    let key: Vec<u8> = connection
+        .query_row(
+            "SELECT path_key FROM path_removed WHERE layer_stack_id=?1",
+            rusqlite::params![shop.as_slice()],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let salt: Vec<u8> = connection
+        .query_row("SELECT trace_salt FROM store_policy WHERE id=1", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    let salt: [u8; 32] = salt.try_into().unwrap();
+    assert_eq!(key, trace_key(&salt, shop, b"a/b").to_vec());
+    assert_ne!(key, path_key(b"a/b").to_vec());
 }
 
 #[test]

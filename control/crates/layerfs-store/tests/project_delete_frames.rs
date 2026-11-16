@@ -31,6 +31,7 @@ fn the_frame_names_the_store_stack_and_optional_context() {
         stack,
         deleted_ms: Some(5),
         op_id: Some(op),
+        pending_retry: Some(true),
         store_record: Some(record.clone()),
     };
     let encoded = frame.encode();
@@ -42,6 +43,7 @@ fn the_frame_names_the_store_stack_and_optional_context() {
             ("deleted_ms", SdkValue::Int(5)),
             ("project", t("app")),
             ("op_id", t(&hex(&op))),
+            ("pending_retry", SdkValue::Bool(true)),
             ("store_record", record),
         ])
     );
@@ -51,6 +53,7 @@ fn the_frame_names_the_store_stack_and_optional_context() {
     assert_eq!(decoded.stack, stack);
     assert_eq!(decoded.deleted_ms, Some(5));
     assert_eq!(decoded.op_id, Some(op));
+    assert_eq!(decoded.pending_retry, Some(true));
     assert_eq!(decoded.store_record, frame.store_record);
 }
 
@@ -64,6 +67,7 @@ fn a_frame_with_only_the_store_and_stack_decodes() {
     let decoded = DeleteFrame::decode(&minimal).unwrap();
     assert_eq!((decoded.project, decoded.deleted_ms), (None, None));
     assert_eq!(decoded.op_id, None);
+    assert_eq!(decoded.pending_retry, None);
     assert_eq!(decoded.store_record, None);
     assert_eq!(decoded.stack, stack);
 }
@@ -160,6 +164,7 @@ fn the_reply_round_trips_and_requires_removed() {
         project: "app".to_owned(),
         stack,
         deleted_ms: 42,
+        retired: Some(true),
     };
     let encoded = reply.encode();
     assert_eq!(
@@ -169,9 +174,19 @@ fn the_reply_round_trips_and_requires_removed() {
             ("project", t("app")),
             ("stack_id", t(&hex(&stack.to_bytes()))),
             ("deleted_ms", SdkValue::Int(42)),
+            ("retired", SdkValue::Bool(true)),
         ])
     );
     assert_eq!(DeleteReply::decode(&encoded).unwrap(), reply);
+    // An older worker's reply without `retired` decodes as a fresh marker.
+    let older = DeleteReply::decode(&map(vec![
+        ("kind", t("Removed")),
+        ("project", t("app")),
+        ("stack_id", t(&hex(&stack.to_bytes()))),
+        ("deleted_ms", SdkValue::Int(42)),
+    ]))
+    .unwrap();
+    assert_eq!(older.retired, None);
     let other = map(vec![("kind", t("UpToDate"))]);
     assert_eq!(
         DeleteReply::decode(&other).unwrap_err().message,

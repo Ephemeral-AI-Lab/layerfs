@@ -109,8 +109,8 @@ pub fn diff(
     let exhausted = left.node == right.node || matches!(cached, Some(None));
     let after = cached.as_ref().and_then(|v| v.as_deref());
     let skip = if cached.is_some() { 0 } else { page.skip };
-    let left_seen = Visibility::for_snap(store, left);
-    let right_seen = Visibility::for_snap(store, right);
+    let left_seen = Visibility::for_snap(store, left)?;
+    let right_seen = Visibility::for_snap(store, right)?;
     let mut lw = if exhausted {
         None
     } else {

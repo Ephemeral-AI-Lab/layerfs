@@ -10,7 +10,7 @@ use layerfs_bridge::control::SdkValue;
 pub fn read(service: &StoreService, args: &SdkValue) -> Answer {
     let (stack, reader, snap) = snapshot_full(service, args)?;
     let path = path(args, "path")?;
-    let seen = visibility::Visibility::load(&service.store, &stack, &snap);
+    let seen = visibility::Visibility::load(&service.store, &stack, &snap)?;
     if snapshot::entry(&reader, &snap.tree, &path)?.is_some() {
         if let Some(refusal) = visibility::refuse(&path, &seen) {
             return Err(refusal);

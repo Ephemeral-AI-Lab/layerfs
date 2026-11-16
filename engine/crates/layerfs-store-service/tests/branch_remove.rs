@@ -8,7 +8,8 @@ mod installed;
 mod support;
 
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_store_service::history::{lookup, removal};
+use layerfs_bridge::sdk_values::hex;
+use layerfs_store_service::history::{admission, lookup, removal};
 use std::fs;
 use support::Fixture;
 
@@ -128,4 +129,64 @@ fn a_removed_branch_is_hidden_and_holds_its_name() {
         matches!(&refused.detail, SdkValue::Map(fields) if fields.is_empty()),
         "{refused:?}"
     );
+    // The other `ReservedName` sites use the same empty detail.
+    fixture.fork("other");
+    for (method, fields) in [
+        ("branch.fork", vec![("name", text("main"))]),
+        (
+            "branch.merge",
+            vec![
+                ("branch", text("main")),
+                ("with", text("other")),
+                ("name", text("main")),
+            ],
+        ),
+    ] {
+        let refused = fixture
+            .try_call(method, fields)
+            .expect_err("main is reserved");
+        assert_eq!(refused.code, "ReservedName", "{method}: {refused:?}");
+        assert!(
+            matches!(&refused.detail, SdkValue::Map(fields) if fields.is_empty()),
+            "{method}: {refused:?}"
+        );
+    }
+}
+
+#[test]
+fn a_concurrent_remove_reports_busy_with_the_retire_phase() {
+    let fixture = Fixture::new("branch-remove-busy", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    fixture.fork("gone");
+    let stack = project(&fixture);
+    let branch = lookup::branch(&fixture.service.store, &stack, "gone").expect("Branch gone");
+    // The row a concurrent `branch.remove` takes before it writes its
+    // marker, in its `retire` phase.
+    let holder = admission::branch_removal(&stack, &branch);
+    fixture
+        .service
+        .store
+        .history()
+        .gc_register(&holder)
+        .expect("register the concurrent removal");
+    let refused = removal::remove(&fixture.service.store, &stack, "gone")
+        .expect_err("the concurrent removal holds the Branch");
+    assert_eq!(refused.code, "Busy", "{refused:?}");
+    let entity = refused.detail.get("entity").expect("entity detail");
+    assert_eq!(entity.get_text("kind"), Some("removal"), "{entity:?}");
+    assert_eq!(entity.get_text("name"), Some("gone"), "{entity:?}");
+    assert_eq!(refused.detail.get_text("phase"), Some("retire"));
+    assert_eq!(
+        refused.detail.get_text("op"),
+        Some(hex(&holder.op_id).as_str())
+    );
+    fixture
+        .service
+        .store
+        .history()
+        .gc_release(&holder.op_id)
+        .expect("release");
+    fixture.cleanup();
 }

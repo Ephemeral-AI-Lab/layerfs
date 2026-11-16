@@ -10,7 +10,7 @@ use layerfs_bridge::control::SdkValue;
 pub fn blame(service: &StoreService, args: &SdkValue) -> Answer {
     let (stack, reader, snap) = snapshot_full(service, args)?;
     let path = path(args, "path")?;
-    let seen = visibility::Visibility::load(&service.store, &stack, &snap);
+    let seen = visibility::Visibility::load(&service.store, &stack, &snap)?;
     blame::blame(
         &service.store,
         &reader,

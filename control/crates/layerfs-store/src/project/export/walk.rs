@@ -69,14 +69,9 @@ pub(super) fn pin_snapshot(
     let root = lookup::root(&service.store, node)?;
     let reader = service.store.ports(stack.scope);
     let tree = TreeTable::open(reader.as_ref(), FilesystemRootId(root)).map_err(lookup::content)?;
-    let serial = match service
-        .store
-        .published(|history| history.node_history_serial(node))
-    {
-        Ok(Some(serial)) => serial,
-        _ => 0,
-    };
-    let visibility = Visibility::for_stack(&service.store, stack.id, serial);
+    // The pinned node's stack and serial, fail-closed: a marker read error
+    // must refuse the export rather than export a removed path.
+    let visibility = Visibility::for_node(&service.store, node)?;
     Ok(PinnedSnapshot {
         reader,
         label,

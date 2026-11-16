@@ -147,6 +147,10 @@ fn init_files_branches_move_and_remove() {
     assert_eq!(items.len(), 1);
     ok(&home, "project.get", &[("project", t("shop/api"))]);
 
+    // A named Store the home does not record is `NoSuchStore`, the same code
+    // every other project call reports (spec §4.2).
+    let refused = call(&home, "project.list", &[("store", t("nope"))]).unwrap_err();
+    assert_eq!(refused.0, "NoSuchStore", "{refused:?}");
     // project.list pages with `has_more` (#611)
     let web = tempdir("web");
     std::fs::write(web.join("index.html"), "<h1>shop</h1>\n").unwrap();

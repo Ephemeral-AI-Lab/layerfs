@@ -199,7 +199,7 @@ pub fn fork(
         return Err(refuse(
             "ReservedName",
             "\"main\" names the project's main line",
-            SdkValue::Null,
+            SdkValue::Map(Vec::new()),
         ));
     }
     let from = from.unwrap_or(MAIN);
@@ -411,7 +411,7 @@ fn merge_inner(
         return Err(refuse(
             "ReservedName",
             "\"main\" names the project's main line",
-            SdkValue::Null,
+            SdkValue::Map(Vec::new()),
         ));
     }
     let name = args::name(name)?;
