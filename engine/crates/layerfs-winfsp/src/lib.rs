@@ -11,7 +11,7 @@ pub mod directory;
 pub mod services;
 
 pub mod mount;
-pub use mount::{mount, Mounted};
+pub use mount::{mount, mount_workspace, Mounted};
 
 // The callbacks and the mount loop land with their steps; the skeleton
 // wires the crate into the workspace first.

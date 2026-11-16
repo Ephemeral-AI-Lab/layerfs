@@ -75,3 +75,47 @@ pub fn mount(
     }
     Ok(Mounted { raw, context: Some(context) })
 }
+
+/// The full operation table over the daemon services.
+pub fn interface() -> ffi::FSP_FILE_SYSTEM_INTERFACE {
+    ffi::FSP_FILE_SYSTEM_INTERFACE {
+        GetVolumeInfo: Some(crate::callbacks::get_volume_info),
+        SetVolumeLabel: None,
+        GetSecurityByName: Some(crate::callbacks::get_security_by_name),
+        Create: None,
+        Open: Some(crate::callbacks::open),
+        Overwrite: None,
+        Read: Some(crate::callbacks::read),
+        Write: Some(crate::callbacks::write),
+        Flush: None,
+        GetFileInfo: Some(crate::callbacks::get_file_info),
+        SetBasicInfo: None,
+        SetFileSize: None,
+        CanDelete: None,
+        Rename: None,
+        GetSecurity: None,
+        SetSecurity: None,
+        ReadDirectory: Some(crate::callbacks::read_directory),
+        ResolveReparsePoints: None,
+        GetReparsePoint: None,
+        SetReparsePoint: None,
+        DeleteReparsePoint: None,
+        GetStreamInfo: None,
+        GetDirInfoByName: None,
+        Control: None,
+    }
+}
+
+/// Mounts one Workspace: the daemon services carry it, every wired
+/// operation answers, and the mount point names a drive or directory.
+pub fn mount_workspace(
+    mount_point: &str,
+    workspace: std::sync::Arc<layerfs_daemon::store::BoundWorkspace>,
+) -> Result<Mounted, String> {
+    let context = Context {
+        services: std::sync::Arc::new(layerfs_daemon::Mounted(workspace)),
+        fence: layerfs_mount_ports::ports::Fence::default(),
+        mount: crate::services::mint_mount(),
+    };
+    mount(mount_point, interface(), context)
+}
