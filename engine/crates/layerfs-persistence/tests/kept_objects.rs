@@ -23,7 +23,9 @@ use layerfs_history::{
     CommitRequest, CommitVia, ForkRequest, ForkSource, HistoryCatalog, LayerRecord, LayerStackId,
     LayerStackRecord, StackInitialization,
 };
-use layerfs_persistence::SqliteHandles;
+use layerfs_persistence::{
+    CompactPath, CompactRequest, PersistenceConfig, SqliteHandles, SqlitePersistenceProfile,
+};
 use layerfs_storage::{
     encoding::{encode_full, encode_prefix, framed_record, raw_payload, CompressionWorkspace},
     location::{ObjectLocation, PackDomain},
@@ -32,6 +34,7 @@ use layerfs_storage::{
     save::SaveProfile,
     StorageCapacities,
 };
+use std::path::Path;
 use std::sync::Arc;
 use support::doctor::Fixture;
 use support::{branch_id, name, root};
@@ -121,6 +124,23 @@ fn whole_file(f: &Fixture, bytes: &[u8]) -> FinalizedObject {
         ObjectRole::WholeFile,
         encode_whole_file_payload(bytes).unwrap(),
     )
+}
+
+fn request(op: u8) -> CompactRequest {
+    CompactRequest {
+        op_id: [op; 16],
+        ..CompactRequest::default()
+    }
+}
+
+fn reopen(store: &Path) -> SqliteHandles {
+    SqliteHandles::open_writable(
+        PersistenceConfig::sqlite(store.to_path_buf())
+            .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        b"doctor-adversarial",
+        [71; 32],
+    )
+    .unwrap()
 }
 
 fn pack_of(f: &Fixture, id: ObjectId) -> i64 {
@@ -285,6 +305,64 @@ fn a_dead_record_in_a_retained_raw_group_is_exact_kept_waste() {
     assert!(
         mark.mark_bytes() > 0,
         "the walk reads the record's group extent"
+    );
+}
+
+/// A rebuild copies a retained pack whole but keeps `object_location` only for
+/// the reached records. The next mark must still attribute the dead record in
+/// the retained Raw group from the pack's own frames, not from a row a rebuild
+/// did not carry.
+#[test]
+fn a_dead_record_in_a_retained_raw_group_survives_a_rebuild() {
+    let f = Fixture::new();
+    let live = FinalizedObject::new(
+        ObjectRole::WholeFile,
+        encode_whole_file_payload(b"the reached record").unwrap(),
+    )
+    .unwrap();
+    let dead = FinalizedObject::new(
+        ObjectRole::WholeFile,
+        encode_whole_file_payload(b"the unreached record in the same group").unwrap(),
+    )
+    .unwrap();
+    let (pack, body) = publish_group_records(&f, &[live.clone(), dead.clone()]);
+    let header = layout::parse_header(&body).unwrap();
+    let view = layout::group_view(&body, header, 0).unwrap();
+    let expected = framed_record(&body[view.start..view.end], 1).unwrap().len() as u64;
+
+    let stack = initialize(&f.handles, 1, live.id());
+    fork(&f.handles, stack.id, branch_id(1), 1);
+
+    // Unreached whole-file packs make the §3 rebuild threshold.
+    for index in 0..12u8 {
+        let payload = vec![0xA0u8.wrapping_add(index); 4096];
+        let _ = whole_file(&f, &payload);
+    }
+
+    let before = f.handles.history.mark().unwrap();
+    assert_eq!(
+        before.objects().waste().dead_in_retained_packs_bytes(),
+        expected,
+        "the dead record is kept waste before the rebuild"
+    );
+
+    let store = f.temp.join("store.sqlite");
+    let receipt = f.handles.compact(&request(0x91)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    let reopened = reopen(&store);
+    let after = reopened.history.mark().unwrap();
+    assert_eq!(
+        after.objects().waste().dead_in_retained_packs_bytes(),
+        expected,
+        "the rebuilt Store no longer names the dead record, but its frames still count"
+    );
+    assert!(
+        after.objects().contains(live.id()),
+        "the reached record survives the rebuild"
+    );
+    assert!(
+        after.objects().packs().contains(&pack),
+        "the retained pack keeps its id"
     );
 }
 

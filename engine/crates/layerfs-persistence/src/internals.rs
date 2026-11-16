@@ -8,7 +8,7 @@
 pub use crate::backend::postgresql::compact::{decode_kept_waste, encode_kept_waste, report};
 #[cfg(feature = "postgresql")]
 pub use crate::backend::postgresql::compact::{
-    effective_rank, standby_satisfied, sync_name, sync_rank, Replica,
+    effective_rank, standby_satisfied, sync_name, sync_rank, takes_rebuild_path, Replica,
 };
 #[cfg(feature = "postgresql")]
 pub use crate::backend::postgresql::session::rows::sqlstate;

@@ -254,8 +254,8 @@ pub(crate) fn cleanup(
              DELETE FROM {schema}.layer_stack_retired lr WHERE NOT EXISTS (SELECT 1 FROM {schema}.layer_stack s WHERE s.layer_stack_id=lr.layer_stack_id);\
              DELETE FROM {schema}.path_removed pr WHERE NOT EXISTS (SELECT 1 FROM {schema}.layer_stack s WHERE s.layer_stack_id=pr.layer_stack_id);\
              DELETE FROM {schema}.project_epoch pe WHERE NOT EXISTS (SELECT 1 FROM {schema}.layer_stack s WHERE s.layer_stack_id=pe.layer_stack_id);\
-             DELETE FROM {schema}.content_signature cs WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='signature' AND d.id=int8send(cs.slot));\
-             DELETE FROM {schema}.file_digest fd WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='digest' AND d.id=fd.digest);\
+             DELETE FROM {schema}.content_signature cs WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='signature' AND d.id=int8send(cs.slot)) AND cs.stamp <= COALESCE((SELECT mark_stamp FROM {schema}.gc_op WHERE id=1),0);\
+             DELETE FROM {schema}.file_digest fd WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='digest' AND d.id=fd.root);\
              DELETE FROM {schema}.binding_hint_block;\
              DELETE FROM {schema}.init_operation;\
              DELETE FROM {schema}.init_entry;\

@@ -11,13 +11,12 @@ use super::op::read_generation;
 use super::op::scratch_name;
 use super::op::stage;
 use super::op::stop;
-use super::op::total_stored;
 use super::op::RunMetrics;
 use super::report::report;
 use super::swap::swap;
 use super::sync::effective_sync_rank;
 use super::sync::standby_precheck;
-use super::types::THRESHOLD;
+use super::types::takes_rebuild_path;
 use crate::backend::postgresql::access::compaction_missing;
 use crate::backend::postgresql::session::connection::Session;
 use crate::backend::records::Param;
@@ -50,14 +49,17 @@ pub(crate) fn round(
     // §11 `markBytes`: the distinct live-pack body bytes this mark read.
     metrics.mark_bytes = mark.mark_bytes();
     load_visited(session, schema, &mark)?;
-    let stored = u64::try_from(total_stored(session, schema)?).unwrap_or(0);
-    let live = u64::try_from(live_stored(session, schema)?).unwrap_or(0);
-    let dead_bytes = stored.saturating_sub(live);
+    // §3 decides over the mark's own snapshot, never a later Store total: a
+    // publication after the mark raises `pack` bytes, and reading them here
+    // would flip a `none` decision into a rebuild the mark never judged.
+    let stored = u64::try_from(tuple.stored).unwrap_or(0);
+    let live = live_stored(session, schema)?;
+    let dead_bytes = stored.saturating_sub(u64::try_from(live).unwrap_or(0));
     let scratch = scratch_name(&request.op_id);
     let mark_dead = persist_mark(session, schema, &mark, &tuple, &scratch, request)?;
     let generation = u64::try_from(tuple.generation).unwrap_or(0);
     let kept = CompactKeptWaste::from_waste(mark.objects().waste());
-    let rebuild = stored > 0 && dead_bytes.saturating_mul(THRESHOLD) >= stored;
+    let rebuild = takes_rebuild_path(tuple.stored, live);
     if !rebuild {
         metrics.end_phase();
         clear_round(session, schema)?;
