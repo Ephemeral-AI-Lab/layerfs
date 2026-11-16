@@ -115,7 +115,7 @@ CLI     layerfs store status <name>
 ```
 
 ```text
-{ name, kind, state, holders: [pid], op, down_reason, ... }
+{ name, kind, state, holders: [pid], op, phases, down_reason, ... }
  sqlite:     machine, file: { exists, free, bytes, wal_bytes, incoming_bytes }
                           | { unavailable }
  PostgreSQL: server: { reachable: true, server_version, latency_ms,
@@ -136,8 +136,8 @@ the Store-side `gc_op` row with its `gc_intent`, read by one status query
 with no Store session and no artifact read. Either way `state` is `busy`
 while the owner lives and `unresolved` once it is gone, `uncertain` stays
 the record's own fact, and `phases` names the backend's order (`mark`,
-`build`, `verify`, `install` on sqlite; `mark`, `build`, `swap`, `cleanup`
-on PostgreSQL). Errors: `NotFound`; `InvalidInput` (a
+`build`, `verify`, `install`, `cleanup` on sqlite; `mark`, `build`, `swap`,
+`cleanup` on PostgreSQL), `null` when no compaction record is read. Errors: `NotFound`; `InvalidInput` (a
 record of unknown kind); `Unavailable` (a 1.1.0 Store whose machine is not
 known; `layerfs import-env` fixes it).
 
@@ -414,7 +414,7 @@ with the report's snake_case fields: `dead_bytes_bound`,
 `dead_bytes_refined`, `logical_discarded`, `backend_reusable`,
 `physical_shrink`, `kept_waste {dead_in_retained_packs_bytes, delta_bases
 {bytes, references}, inode_blocks_bytes}`, `peak_temp_bytes`, `residue`,
-`estimate` and `zero_reason`; a field the backend capped would be `{value, cap}` (2.0 caps none).
+`estimate` and `zero_reasons`; `delta_bases.references` is `{value, cap}` when the identity list is cut at `DELTA_BASE_REFERENCES_CAP` (1024).
 `mark_bytes` is not a result field: PostgreSQL records the §11 `markBytes`
 transfer metric as `compact.mark_bytes` (a #52 measurement: the distinct
 live-pack body extents its Phase M walk reads, each pack counted once), and
