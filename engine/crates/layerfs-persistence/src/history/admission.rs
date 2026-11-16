@@ -558,13 +558,14 @@ fn scope_intents(tx: &Transaction<'_>, kind: u8, id: &[u8]) -> HistoryResult<Vec
     }
 }
 
-/// The live session holding one advisory key, as `pg_locks`/`pg_stat_activity`
-/// report it: pid, `client_addr` and `backend_start`.
+/// One live advisory-key holder as `pg_locks`/`pg_stat_activity` report it:
+/// pid, `client_addr` and `backend_start`.
 #[cfg(feature = "postgresql")]
-fn advisory_holder(
-    tx: &Transaction<'_>,
-    key: i64,
-) -> HistoryResult<Option<(i64, Option<String>, Option<String>)>> {
+type AdvisoryHolder = (i64, Option<String>, Option<String>);
+
+/// The live session holding one advisory key.
+#[cfg(feature = "postgresql")]
+fn advisory_holder(tx: &Transaction<'_>, key: i64) -> HistoryResult<Option<AdvisoryHolder>> {
     // PostgreSQL-only text: `statement()` resolves it through the PG set.
     let rows = tx.query("gc_advisory_holder", params![key])?;
     let Some(row) = rows.first() else {

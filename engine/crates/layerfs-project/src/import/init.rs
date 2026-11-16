@@ -24,7 +24,7 @@ use layerfs_storage::port::acquisition::Begin;
 use layerfs_storage::Save;
 use layerfs_storage::{read::Diagnostics, Storage};
 use layerfs_telemetry::timer::{Active, TimingScope};
-use std::{path::Path, sync::Arc, time::Instant};
+use std::{fmt::Write as _, path::Path, sync::Arc, time::Instant};
 /// Explicit host authority and inputs for one namespace Init.
 pub struct InitRequest<'a> {
     /// Host-visible regular directory, checked before construction.
@@ -281,10 +281,10 @@ pub fn init_observed(
 /// shared intents of one project from one process stay distinct.
 fn owner_tokens(op: [u8; 16]) -> (String, String) {
     let pid = std::process::id();
-    let suffix = op
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+    let mut suffix = String::with_capacity(op.len() * 2);
+    for byte in op {
+        let _ = write!(suffix, "{byte:02x}");
+    }
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
         let start = layerfs_bridge::process::stat(pid)
@@ -368,10 +368,8 @@ impl InitAdmission<'_> {
 
 impl Drop for InitAdmission<'_> {
     fn drop(&mut self) {
-        if !self.released && self.admitted {
-            if self.catalog.gc_release(&self.op_id).is_err() {
-                let _ = self.catalog.gc_mark_uncertain(&self.op_id);
-            }
+        if !self.released && self.admitted && self.catalog.gc_release(&self.op_id).is_err() {
+            let _ = self.catalog.gc_mark_uncertain(&self.op_id);
         }
     }
 }

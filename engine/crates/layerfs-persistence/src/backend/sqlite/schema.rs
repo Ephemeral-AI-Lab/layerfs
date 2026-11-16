@@ -235,19 +235,17 @@ fn backfill_position_state(tx: &Transaction<'_>) -> Result<(), BackendError> {
     // takes the next serials by its source Commit's creation order, then its
     // Stack and identity, so the assignment is the same on every Store.
     tx.query(
-        &format!(
-            "WITH ordered(layer_id,serial) AS ( \
-               SELECT l.layer_id, \
-                 (SELECT COALESCE(MAX(history_serial),0)+1 FROM layer) + ROW_NUMBER() OVER ( \
-                   ORDER BY COALESCE(c.created_ms,0),l.layer_stack_id,l.layer_id)-1 \
-               FROM layer l LEFT JOIN \"commit\" c \
-                 ON c.layer_stack_id=l.layer_stack_id AND c.commit_id=l.source_commit_id \
-               WHERE l.history_serial=0) \
-             UPDATE layer SET history_serial=( \
-               SELECT ordered.serial FROM ordered \
-               WHERE ordered.layer_id=layer.layer_id) \
-             WHERE history_serial=0"
-        ),
+        "WITH ordered(layer_id,serial) AS ( \
+           SELECT l.layer_id, \
+             (SELECT COALESCE(MAX(history_serial),0)+1 FROM layer) + ROW_NUMBER() OVER ( \
+               ORDER BY COALESCE(c.created_ms,0),l.layer_stack_id,l.layer_id)-1 \
+           FROM layer l LEFT JOIN \"commit\" c \
+             ON c.layer_stack_id=l.layer_stack_id AND c.commit_id=l.source_commit_id \
+           WHERE l.history_serial=0) \
+         UPDATE layer SET history_serial=( \
+           SELECT ordered.serial FROM ordered \
+           WHERE ordered.layer_id=layer.layer_id) \
+         WHERE history_serial=0",
         vec![],
     )?;
     tx.query(

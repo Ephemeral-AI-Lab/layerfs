@@ -614,9 +614,8 @@ fn a_fake_workers_success_removes_the_entry_and_releases_the_admission() {
     let op = sent_op(&requests[0]);
     assert_eq!(sent_op(&requests[1]), op);
     assert_eq!(sent_op(&requests[2]), op);
-    assert_eq!(
-        args_of(&requests[1]).get_bool("pending_retry"),
-        false,
+    assert!(
+        !args_of(&requests[1]).get_bool("pending_retry"),
         "a fresh delete is no retry"
     );
     drop(requests);

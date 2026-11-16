@@ -33,7 +33,11 @@ fn the_standby_predicate_waits_only_for_a_named_standby() {
         "FIRST 1 (s1)",
         &[replica("s1", "sync")]
     ));
-    assert!(standby_satisfied(3, "ANY 2 (s1,s2)", &[replica("s1", "quorum")]) == false);
+    assert!(!standby_satisfied(
+        3,
+        "ANY 2 (s1,s2)",
+        &[replica("s1", "quorum")]
+    ));
     assert!(standby_satisfied(
         3,
         "ANY 2 (s1,s2)",
