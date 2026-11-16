@@ -104,7 +104,7 @@ anywhere in the mounted tree.
 
 Every call made through `call_scoped` (and `call_json`, which uses it) ends
 with one line in `<home>/trace/calls.jsonl`, except the `logs` calls, a call
-whose entry is `quiet` (`sandbox.files`, `machine.files`, `machine.stats`: a client polls them, and a line per
+whose entry is `quiet` (`sandbox.files`, `machine.files`, `machine.stats`, `machine.space`: a client polls them, and a line per
 poll would bury the calls that changed something) and with `LAYERFS_LOGS=0`
 ([`dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs),
 [`render.rs`](../../../../api/crates/layerfs-api/src/calls/render.rs)):

@@ -323,13 +323,18 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
     since the epoch, to about a second, while the process runs and
     `null` once it has ended; `null`
     when its machine did not answer.
-  - `usage`: `{cpu_usec, memory_current, memory_peak, pids}` of the
-    Sandbox's own cgroup, the daemon and every command in it; a value the
+  - `usage`: `{cpu_usec, memory_current, memory_peak, memory_file, pids,
+    oom_kills}` of the Sandbox's own cgroup, the daemon and every command
+    in it (`memory_file`: file cache and tmpfs, inside `memory_current`;
+    `oom_kills`: out-of-memory kills in it and its Workspace and command
+    groups; #182); a value the
     kernel does not keep there is `null`, and when that is the memory
-    or the process count `usage_reason` is `no_controller` (so on the
-    machines of this build, where only `cpu_usec` is kept). `usage` is
+    or the process count `usage_reason` is `no_controller` (where the
+    machine gives Sandboxes no memory or pids controller; docker, Lima and
+    Apple Container machines of this build give both). `usage` is
     `null`, with `usage_reason`, for a `native` Sandbox, which is a plain process
-    (`host_process`), on a machine without cgroup v2 (`cgroup_v1`), when
+    (`host_process`), for a runtime this build reads no usage of
+    (`not_supported`), on a machine without cgroup v2 (`cgroup_v1`), when
     the cgroup is not there (`no_cgroup`) and when the machine did not
     answer (`not_observed`).
   ```text
@@ -454,7 +459,7 @@ form.
   Routes.
 - Not run for this manual.
 
-### `machine` (14)
+### `machine` (15)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -466,6 +471,7 @@ form.
 | `prune` | `name`, `image`? | `unused` | removes one unpacked image, or with `unused` every one no Sandbox uses but the machine's default: `{removed, freed}` (`freed` measured on the filesystem); an image in use is `InUse` |
 | `status` | `name` | — | a machine's live state, free disk and tool version; `op` while a create or remove holds it (#536 H6) |
 | `stats` | `machine` | — | what a machine has and uses now: processors, memory and data disk, each sqlite Store's size, how many of its Sandboxes have a running daemon (#164). For a UI that polls: it writes no call-log line |
+| `space` | `machine` | — | where a machine's data disk goes: each Store, each Sandbox's run folder, the image cache and LayerFS's logs, and what the disk uses that is not LayerFS's. For a UI: it writes no call-log line |
 | `files` | `machine`, `[path]` | `depth`, `cursor`, `limit`, `offset`, `length` (int) | a machine's LayerFS folders by role, one page of a folder, or one window of a file (#178). For a UI that shows a tree: it writes no call-log line |
 | `start` | `name` | — | starts a stopped machine and its worker and waits until ready; a running one, and `native`, answer at once (#535 P1) |
 | `stop` | `name` | — | stops a machine's worker and, where it has one, its VM; disks stay; `InUse` while Sandboxes run on it (#535 P1) |
@@ -487,15 +493,22 @@ $ layerfs machine status native
 ```
 
 - `stats` answers `{machine, platform, observed_at, worker, resources,
-  data_disk, stores, sandboxes, complete}` (#164):
+  data_disk, stores, sandboxes, complete}` (#164, #182). It answers the
+  present only; a client keeps its own history:
   - `worker`: the machine's worker process, `{version, pid, started_at,
     protocol, bundle}`; `null` on `native`, whose calls run in the caller.
   - `resources`: `{cpus, memory_total, memory_used, disk_total,
-    disk_used, disk_free, scope}`, in bytes, observed now. `scope` says
-    whose processors and memory they are: `host` (`native`), `vm` (`lima`,
-    `apple-container`) or `engine_host` (`docker`: the Docker Engine's
-    kernel, a VM on macOS and Windows). A value that was not read is
-    `null` and `reason` names it.
+    disk_used, disk_free, cpu_busy_usec, cpu_total_usec, scope}`, sizes in
+    bytes, observed now. `cpu_busy_usec` and `cpu_total_usec` are the
+    machine's processor time since boot in microseconds (`/proc/stat`;
+    steal counts as busy); the processor share between two reads is
+    Δbusy / Δtotal. They are `null` on macOS (`cpu_unsupported`). `scope`
+    says whose processors and memory they are: `host` (`native`), `vm`
+    (`lima`, `apple-container`) or `engine_host` (`docker`: the Docker
+    Engine's kernel, a VM on macOS and Windows). A value that was not read
+    is `null` and `reason` names it: `memory_not_read` (`memory_*`),
+    `disk_not_read` (`disk_*`), `cpu_unsupported` or `cpu_not_read`
+    (`cpu_*`), joined by `, `.
   - `data_disk`: `{path, fs, scope, volume, inodes_free}`, the filesystem
     the `disk_*` values measure: `host_fs` (`native`, and `docker` on
     Linux), `vm_disk` (`docker` on macOS and Windows, one disk every
@@ -504,15 +517,49 @@ $ layerfs machine status native
   - `stores`: `[{name, bytes, allocated}]` of the machine's sqlite
     Stores, the length and the blocks of `store.sqlite` and its `-wal`.
     The files are not opened.
-  - `sandboxes`: `{recorded, live}`: the Sandboxes recorded on the
-    machine and how many have a running daemon.
+  - `sandboxes`: `{recorded, live, items}`: the Sandboxes recorded on the
+    machine, how many have a running daemon, and one row per recorded
+    Sandbox, `{name, live, live_reason?, started_at, usage,
+    usage_reason?}`, with `usage` as `sandbox get`'s. A row the 4 s budget
+    did not reach is kept, `null` with `deadline`. A worker of an older
+    build answers no `items`.
   - `complete`: `false`, with `reason: "deadline"`, when the Stores or
     Sandboxes were not all read within 4 s; the rest is answered.
   It starts nothing and takes no lock: a stopped machine is `Unavailable`
   and a machine an operation holds is still answered.
   ```text
   $ layerfs machine stats native
-  {"machine":"native","platform":"native","observed_at":1794776707857,"worker":null,"resources":{"cpus":14,"memory_total":38654705664,"memory_used":31340068864,"disk_total":994662584320,"disk_used":641705943040,"disk_free":352956641280,"scope":"host"},"data_disk":{"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs","volume":null,"inodes_free":3446842200},"stores":[{"name":"shop","bytes":217088,"allocated":217088}],"sandboxes":{"recorded":12,"live":10},"complete":true}
+  {"machine":"native","platform":"native","observed_at":1794776707857,"worker":null,"resources":{"cpus":14,"memory_total":38654705664,"memory_used":31340068864,"disk_total":994662584320,"disk_used":641705943040,"disk_free":352956641280,"cpu_busy_usec":null,"cpu_total_usec":null,"scope":"host","reason":"cpu_unsupported"},"data_disk":{"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs","volume":null,"inodes_free":3446842200},"stores":[{"name":"shop","bytes":217088,"allocated":217088}],"sandboxes":{"recorded":1,"live":1,"items":[{"name":"web","live":true,"started_at":1794776100211,"usage":null,"usage_reason":"host_process"}]},"complete":true}
+  ```
+- `space` answers `{machine, platform, observed_at, disk, layerfs,
+  outside, parts, stores, sandboxes, unreadable, complete}`: one bounded
+  walk of LayerFS's own folders where the machine's data is, every size the
+  blocks it takes (a file with several names once).
+  - `disk`: `{total, used, free, path, fs, scope}`, the filesystem `stats`
+    measures. `layerfs` is the sum of `parts`, and `outside` is `used` less
+    `layerfs`: what the disk holds that is not LayerFS's (on `vm_disk`,
+    Docker's images, build cache and other volumes). It is `null` unless
+    the walk finished.
+  - `parts`: `{stores, sandboxes, images, other_runs, logs, other}`: the
+    Store folders, the Sandboxes' run folders, the image cache, run folders
+    no recorded Sandbox names, `log/` and `trace/`, and the records.
+  - `stores`: `[{name, bytes}]`; `sandboxes`: one row per recorded Sandbox,
+    `{name, bytes, overlays, writes, home, log, runtime}`: its Workspaces'
+    overlay databases, its own writable layer (what its commands wrote
+    outside Workspaces), its `HOME`, its daemon log and its copies of the
+    daemon and runtime. A row whose run folder was not measured has `null`
+    sizes and `reason` (`no_run_folder`, `outside_run_root`,
+    `record_unreadable`, `deadline`); a row the bound ended inside keeps
+    what it counted, with `deadline`.
+  - `complete`: `false`, with `reason: "deadline"`, when the walk stopped at
+    250,000 entries or 4 s; every number is then a lower bound. `unreadable`
+    counts folders it could not list (`reason` adds `unreadable`).
+  A Workspace mount point and a private root are never entered or
+  `stat`ed, no file is opened and the home itself is never listed. It
+  starts nothing and takes no lock.
+  ```text
+  $ layerfs machine space native
+  {"machine":"native","platform":"native","observed_at":1794817324800,"disk":{"total":994662584320,"used":677787914240,"free":316874670080,"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs"},"layerfs":14168064,"outside":677773746176,"parts":{"stores":2277376,"sandboxes":11833344,"images":0,"other_runs":0,"logs":8192,"other":49152},"stores":[{"name":"shop","bytes":2277376}],"sandboxes":[{"name":"web","bytes":11833344,"overlays":8675328,"writes":0,"home":3145728,"log":4096,"runtime":8192}],"unreadable":0,"complete":true}
   ```
 - `files` reads what is on a machine (#178); its options, pages and file
   windows are those of [`sandbox files`](#sandbox-files), and the whole call
