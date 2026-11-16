@@ -216,17 +216,6 @@ pub trait HistoryCatalog: Send + Sync {
         ))
     }
 
-    /// The Layer `commit` of `branch` was published as, if it was: the same
-    /// record `add_layer` answers `UpToDate` from. One bounded read.
-    fn published_layer(
-        &self,
-        branch: BranchId,
-        commit: CommitId,
-    ) -> HistoryResult<Option<LayerId>> {
-        let _ = (branch, commit);
-        Err(crate::error::HistoryError::Unsupported("published Layer"))
-    }
-
     /// Reads maintained Store totals; no full object/history scan.
     fn statistics(&self) -> HistoryResult<crate::records::StoreStatistics> {
         Err(crate::HistoryError::Unsupported("Store statistics"))
