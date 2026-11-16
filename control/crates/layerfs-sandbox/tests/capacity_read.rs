@@ -89,6 +89,9 @@ enum Behavior {
     /// Never: it trickles one byte every `TRICKLE` until the far side closes
     /// the socket (`Seen::fenced`).
     Trickle,
+    /// With the model, but a session's end gets no answer: the connection is
+    /// held open and silent until the far side closes it.
+    SilentEnd,
 }
 
 const TRICKLE: Duration = Duration::from_millis(400);
@@ -136,6 +139,11 @@ fn serve(stream: TcpStream, answer: Behavior, seen: &Seen) {
             }),
             Request::EndSession => {
                 seen.ended.store(true, Ordering::SeqCst);
+                if matches!(answer, Behavior::SilentEnd) {
+                    // bounded by this stand-in's own 10 s read wait
+                    let _ = channel.receive.receive();
+                    break;
+                }
                 Reply::SessionEnded
             }
             Request::Sdk(sdk) if sdk.method == OPERATION => {
@@ -301,6 +309,102 @@ fn the_worker_s_side_reads_the_capacity_model() {
     assert_eq!(model.admission.reserved_vacant, 1, "{answer:?}");
     assert_eq!(seen.queries.load(Ordering::SeqCst), 1);
     std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn an_exiting_process_ends_its_idle_sessions() {
+    let (endpoint, seen) = daemon(Behavior::Model);
+    let dial = dial(endpoint);
+    let first = dial.open().unwrap();
+    let controls = Controls::new(first, dial);
+    capacity::lent(&controls).unwrap();
+    assert!(!seen.ended.load(Ordering::SeqCst));
+    // the one idle connection is asked to end its session and closed: the
+    // daemon is not left reading a dropped socket (layerfs-project#181)
+    let ended = controls.end_idle(Instant::now() + Duration::from_secs(2));
+    assert_eq!(ended, 1);
+    assert!(seen.ended.load(Ordering::SeqCst), "no EndSession was sent");
+    // nothing is idle now, so a second end sends nothing
+    assert_eq!(
+        controls.end_idle(Instant::now() + Duration::from_secs(2)),
+        0
+    );
+    // and the pool is whole: a later call opens a connection of its own
+    let answer = capacity::lent(&controls).unwrap();
+    assert_eq!(CapacityModel::parse(&answer).admission.pool_vacant, 0);
+    assert_eq!(seen.connections.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn a_process_ends_the_sessions_of_the_sandboxes_it_reached() {
+    use layerfs_sandbox::registry::{end_idle_sessions, SandboxState, SANDBOXES, SESSION_END};
+    let (endpoint, seen) = daemon(Behavior::Model);
+    let dial = dial(endpoint);
+    let first = dial.open().unwrap();
+    // a forwarded Sandbox: its daemon is in a machine, never on this Mac
+    let directory = tempdir("registry");
+    let state = Arc::new(SandboxState {
+        id: "s1".to_owned(),
+        project: "shop/api".to_owned(),
+        name: "layerfs-00000000-s1".to_owned(),
+        directory: directory.clone(),
+        runtime: None,
+        identity: layerfs_sandbox_backend::CommandIdentity {
+            uid: 1000,
+            gid: 1000,
+        },
+        controls: Controls::new(first, dial),
+        mounts: Default::default(),
+    });
+    SANDBOXES.lock().unwrap().insert(directory.clone(), state);
+    let at = Instant::now();
+    assert_eq!(end_idle_sessions(SESSION_END), 1);
+    assert!(at.elapsed() < SESSION_END + Duration::from_millis(500));
+    assert!(seen.ended.load(Ordering::SeqCst), "no EndSession was sent");
+    assert_eq!(end_idle_sessions(SESSION_END), 0);
+    SANDBOXES.lock().unwrap().remove(&directory);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn ending_idle_sessions_leaves_a_lent_connection_alone() {
+    let (endpoint, seen) = daemon(Behavior::Model);
+    let dial = dial(endpoint);
+    let first = dial.open().unwrap();
+    let controls = Controls::new(first, dial);
+    let mut lease = controls.lend().unwrap().0;
+    assert_eq!(
+        controls.end_idle(Instant::now() + Duration::from_secs(2)),
+        0
+    );
+    assert!(!seen.ended.load(Ordering::SeqCst));
+    // the call that holds it still gets its answer on the same connection
+    operator::call(&mut lease, OPERATION, SdkValue::Null).unwrap();
+    assert_eq!(seen.connections.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn ending_idle_sessions_is_bounded_by_its_deadline() {
+    // a daemon that accepts the end and never answers it
+    let (endpoint, seen) = daemon(Behavior::SilentEnd);
+    let dial = dial(endpoint);
+    let first = dial.open().unwrap();
+    let controls = Controls::new(first, dial);
+    let at = Instant::now();
+    let ended = controls.end_idle(at + Duration::from_millis(250));
+    let elapsed = at.elapsed();
+    assert_eq!(ended, 0);
+    assert!(
+        elapsed < Duration::from_millis(1500),
+        "the end outlived its deadline: {elapsed:?}"
+    );
+    // a deadline that already passed sends nothing at all
+    let (endpoint, late) = daemon(Behavior::Model);
+    let dial = self::dial(endpoint);
+    let controls = Controls::new(dial.open().unwrap(), dial);
+    assert_eq!(controls.end_idle(Instant::now()), 0);
+    assert!(!late.ended.load(Ordering::SeqCst));
+    assert!(seen.ended.load(Ordering::SeqCst), "the end was never sent");
 }
 
 #[test]

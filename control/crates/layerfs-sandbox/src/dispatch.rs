@@ -34,9 +34,14 @@ pub fn call(host: Host, call: Call) -> Outcome {
 }
 
 /// `sandbox.list_workspaces`: the daemon's read model without its history
-/// half, `{ kind, version, workspaces }`; the SDK pages and shapes them.
+/// half, `{ kind, version, workspaces }`, which is all a daemon asked with
+/// `history: false` answers; the SDK pages and shapes them.
 /// Each Workspace gains its `path` (the daemon's `directory`) and the
-/// `name` its record in Sandbox folder `directory` gives it, or null.
+/// `name` its record in Sandbox folder `directory` gives it, or null; the
+/// commands `running` in it, from the exec records of that folder (null
+/// when they cannot be read); and its `overlay_bytes`, read by path where
+/// this side has the Sandbox's run folder, else null (`crate::run_folder`;
+/// layerfs-project#178). Neither asks the daemon, takes a lock or writes.
 fn listed(answer: SdkValue, directory: &std::path::Path) -> Outcome {
     let SdkValue::Map(fields) = answer else {
         return Err(refused(
@@ -51,13 +56,25 @@ fn listed(answer: SdkValue, directory: &std::path::Path) -> Outcome {
             .find(|(_, r)| path.is_some() && r.path() == path);
         SdkValue::opt_text(found.and_then(|(_, r)| r.name()).map(str::to_owned))
     };
+    let commands = crate::exec::record::running(directory);
+    let running_in = |workspace: Option<&str>| match &commands {
+        None => SdkValue::Null,
+        Some(commands) => SdkValue::List(
+            (commands.iter())
+                .filter(|command| Some(command.workspace.as_str()) == workspace)
+                .map(|command| command.shown())
+                .collect(),
+        ),
+    };
     let named = |item: SdkValue| {
         let path = item.get("directory").cloned().unwrap_or_default();
         let name = name_at(item.get_text("directory"));
+        let running = running_in(item.get_text("workspace"));
         let item = layerfs_home::home::with_field(item, "path", path);
-        layerfs_home::home::with_field(item, "name", name)
+        let item = layerfs_home::home::with_field(item, "name", name);
+        layerfs_home::home::with_field(item, "running", running)
     };
-    Ok(SdkValue::Map(
+    let listed = SdkValue::Map(
         fields
             .into_iter()
             .filter(|(name, _)| matches!(name.as_str(), "kind" | "version" | "workspaces"))
@@ -69,7 +86,9 @@ fn listed(answer: SdkValue, directory: &std::path::Path) -> Outcome {
                 (_, value) => (field, value),
             })
             .collect(),
-    ))
+    );
+    let read = crate::run_folder::read(directory, &crate::run_folder::namespaces(&listed));
+    Ok(crate::run_folder::merged(listed, read.as_ref()))
 }
 
 /// A daemon backend call through the named Sandbox of the project: its
@@ -82,12 +101,16 @@ fn daemon_backend(host: &Host, call: &Call) -> Outcome {
     }
     let op = call.op().name();
     // the daemon's own request (its protocol, `Request::Sdk`) is the host
-    // request's one args map
+    // request's one args map. `history: false` asks for its Workspaces
+    // alone (layerfs-project#181): `listed` keeps nothing else, so the
+    // daemon reads no Branch page, Layer or Commit for it. A daemon from
+    // before the option ignores it and answers the whole model.
     let args = match host.to_args(call) {
         SdkValue::Map(fields) => SdkValue::Map(
             fields
                 .into_iter()
                 .filter(|(name, _)| !matches!(name.as_str(), "sandbox" | "deploy"))
+                .chain([("history".to_owned(), SdkValue::Bool(false))])
                 .collect(),
         ),
         other => other,

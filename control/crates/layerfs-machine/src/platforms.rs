@@ -28,11 +28,13 @@ pub fn supports(platform: Platform) -> SdkValue {
         sqlite,
         postgresql_sandbox,
         reason,
+        log,
     } = adapters::support(platform, HostOs::current()).supports();
     SdkValue::map([
         ("sqlite", SdkValue::Bool(sqlite)),
         ("postgresql_sandbox", SdkValue::Bool(postgresql_sandbox)),
         ("reason", optional(reason)),
+        ("log", SdkValue::Bool(log)),
     ])
 }
 

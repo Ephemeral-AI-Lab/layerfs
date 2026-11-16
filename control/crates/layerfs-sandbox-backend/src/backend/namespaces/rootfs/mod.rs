@@ -99,6 +99,9 @@ mod tar;
 mod types;
 
 pub use archive::{holds, image_of, images, validate_import, ImageEntry};
-pub use cache::{cache, ensure, ensure_flat, ensure_held, lookup, remove, ImageHold};
+pub use cache::{
+    cache, ensure, ensure_flat, ensure_held, lookup, remove, remove_temporary, temporary_digest,
+    ImageHold, Temporary,
+};
 pub use types::ImageRoot;
 pub(crate) use types::{refuse, PATH_MAX};

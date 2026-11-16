@@ -280,6 +280,33 @@ pub(crate) fn detach(
         .map_err(|_| MachineError::new(Code::Failed, format!("a detached helper's pid {out:?}")))
 }
 
+/// How much of a log's end [`tail`] reads.
+const TAIL: u64 = 16 << 10;
+
+/// The last `lines` lines of the host file `log` as one line, read from
+/// its last 16 KiB only; "no reason given" for an empty or unreadable one.
+pub(crate) fn tail(log: &Path, lines: usize) -> String {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut bytes = Vec::new();
+    if let Ok(mut file) = std::fs::File::open(log) {
+        let size = file.metadata().map_or(0, |found| found.len());
+        if file
+            .seek(SeekFrom::Start(size.saturating_sub(TAIL)))
+            .is_ok()
+        {
+            let _ = file.take(TAIL).read_to_end(&mut bytes);
+        }
+    }
+    let text = String::from_utf8_lossy(&bytes);
+    let all: Vec<&str> = text.trim().lines().collect();
+    let said = all[all.len().saturating_sub(lines)..].join("; ");
+    if said.is_empty() {
+        "no reason given".into()
+    } else {
+        said
+    }
+}
+
 /// Whether `pid` runs and its command line holds `marker` (a recorded pid
 /// may since have been reused by another process).
 pub(crate) fn alive(tools: &Tools, pid: u32, marker: &str) -> bool {

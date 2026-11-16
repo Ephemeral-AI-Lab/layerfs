@@ -47,11 +47,16 @@ pub fn call(
 }
 
 /// Closes every Store this process holds open with no call running, which
-/// releases its leases (outside the call table), with the interpreter
-/// released. Returns how many Stores it closed.
+/// releases its leases (outside the call table), and ends its idle Sandbox
+/// daemon sessions inside a short bound (layerfs-project#181), with the
+/// interpreter released. Returns how many Stores it closed.
 #[pyfunction]
 pub fn close(py: Python<'_>) -> usize {
-    py.detach(|| layerfs_api::close_idle(std::time::Duration::ZERO))
+    py.detach(|| {
+        let closed = layerfs_api::close_idle(std::time::Duration::ZERO);
+        layerfs_api::end_idle_sessions(layerfs_api::SESSION_END);
+        closed
+    })
 }
 
 /// `layerfs doctor` (report-only, outside the call table) on `home` (else

@@ -1,6 +1,8 @@
 //! macOS mount facts the native runtime reads from `mountinfo` on Linux: the
 //! mount table (`mount`) and a forced unmount (`umount -f`). Each tool is one
 //! run with a fixed path and the C locale, read once; nothing is retried.
+//! An inspection read's table ([`mount_table`]) is the same tool under a
+//! deadline (layerfs-project#178 security rule 8).
 //! The process facts (`proc_pidinfo`, `sysctl`) are `layerfs_bridge::process`
 //! (layerfs-project#112), below the drivers and the home.
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
@@ -17,6 +19,29 @@ const UMOUNT: &str = "/sbin/umount";
 const UNMOUNT_WAIT: Duration = Duration::from_secs(60);
 const REAP_WAIT: Duration = Duration::from_secs(5);
 const OUTPUT: usize = 2048;
+/// How long an inspection read waits for `mount` to print the table.
+const TABLE_WAIT: Duration = Duration::from_millis(500);
+/// How long it then waits for a `mount` it killed to end.
+const TABLE_REAP: Duration = Duration::from_millis(500);
+/// The most of the table that is read.
+const TABLE: usize = 1 << 20;
+
+/// Children that were killed and whose exit was not seen in time: kept, so
+/// a later call can reap them.
+static RETAINED: Mutex<Vec<Child>> = Mutex::new(Vec::new());
+
+/// Reaps the retained children that have ended since.
+fn reap_retained() {
+    let mut held = RETAINED.lock().unwrap_or_else(|error| error.into_inner());
+    held.retain_mut(|child| !matches!(child.try_wait(), Ok(Some(_))));
+}
+
+fn retain(child: Child) {
+    RETAINED
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .push(child);
+}
 
 /// One tool's standard output, or its failure with what it said.
 fn output(program: &str, args: &[&str]) -> io::Result<(bool, String)> {
@@ -43,18 +68,86 @@ pub(crate) fn mount_points() -> io::Result<Vec<PathBuf>> {
 }
 
 fn mount_point(line: &str) -> Option<PathBuf> {
+    mount_line(line).map(|(point, _)| point)
+}
+
+/// One line of `mount`, `<what> on <point> (<type>, <options>)`: the mount
+/// point and its filesystem type.
+pub(crate) fn mount_line(line: &str) -> Option<(PathBuf, String)> {
     let (_, rest) = line.split_once(" on ")?;
-    let (point, _) = rest.rsplit_once(" (")?;
-    Some(PathBuf::from(point))
+    let (point, said) = rest.rsplit_once(" (")?;
+    let fs = said.split([',', ')']).next().unwrap_or("").trim();
+    Some((PathBuf::from(point), fs.to_owned()))
+}
+
+/// What `mount` prints, for an inspection read: one run with a fixed path,
+/// no environment but the C locale and no input, given [`TABLE_WAIT`] to
+/// end. A run that takes longer is killed and reaped, and is an error, as
+/// is one that fails; the caller then reads without a table. `mount`
+/// lists the kernel's table as it is (`getfsstat` with `MNT_NOWAIT`) and
+/// asks no mounted server, so it is not expected to wait; the deadline is
+/// for a host where it does.
+pub(crate) fn mount_table() -> io::Result<String> {
+    reap_retained();
+    let mut child = Command::new(MOUNT)
+        .env_clear()
+        .env("LC_ALL", "C")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+    // a pipe that cannot be read without waiting is not read
+    let mut pipe = child.stdout.take().and_then(|pipe| {
+        fcntl(&pipe, FcntlArg::F_SETFL(OFlag::O_NONBLOCK))
+            .ok()
+            .map(|_| pipe)
+    });
+    let mut text = Vec::new();
+    let mut read = |text: &mut Vec<u8>| {
+        let mut bytes = [0; 4096];
+        while let Some(Ok(count @ 1..)) = pipe.as_mut().map(|pipe| pipe.read(&mut bytes)) {
+            text.extend_from_slice(&bytes[..count.min(TABLE.saturating_sub(text.len()))]);
+        }
+    };
+    let deadline = Instant::now() + TABLE_WAIT;
+    let ended = loop {
+        read(&mut text);
+        match child.try_wait() {
+            Ok(Some(status)) => break Ok(status),
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(2)),
+            Ok(None) => {
+                break Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "mount took too long",
+                ))
+            }
+            Err(error) => break Err(error),
+        }
+    };
+    match ended {
+        Ok(status) if status.success() => {
+            read(&mut text);
+            Ok(String::from_utf8_lossy(&text).into_owned())
+        }
+        Ok(status) => Err(io::Error::other(format!("mount listing failed: {status}"))),
+        Err(error) => {
+            let _ = child.kill();
+            let deadline = Instant::now() + TABLE_REAP;
+            while !matches!(child.try_wait(), Ok(Some(_))) {
+                if Instant::now() >= deadline {
+                    retain(child);
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            Err(error)
+        }
+    }
 }
 
 /// Forces the mount at `point` off once; a point no longer mounted is done.
 pub(crate) fn force_unmount(point: &Path) -> io::Result<()> {
-    static RETAINED: Mutex<Vec<Child>> = Mutex::new(Vec::new());
-    {
-        let mut held = RETAINED.lock().unwrap_or_else(|error| error.into_inner());
-        held.retain_mut(|child| !matches!(child.try_wait(), Ok(Some(_))));
-    }
+    reap_retained();
     let mut child = Command::new(UMOUNT)
         .arg("-f")
         .arg(point)
@@ -108,10 +201,7 @@ pub(crate) fn force_unmount(point: &Path) -> io::Result<()> {
             let disposition = if reaped {
                 "exit reaped"
             } else {
-                RETAINED
-                    .lock()
-                    .unwrap_or_else(|error| error.into_inner())
-                    .push(child);
+                retain(child);
                 "exit not observed after 5s; child custody retained (possible kernel wait)"
             };
             return Err(io::Error::new(

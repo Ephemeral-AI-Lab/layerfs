@@ -4,14 +4,17 @@
 //! `layerfs-machine` `worker`.
 //!
 //! A connection starts with a small frame `{ secret }`: the worker reads at
-//! most [`MAX_HELLO`] bytes, waiting at most [`HELLO_WAIT`], and answers
+//! most [`MAX_HELLO`](layerfs_machine::worker::MAX_HELLO) bytes, all of them
+//! within one [`HELLO_WAIT`](layerfs_machine::worker::HELLO_WAIT), and answers
 //! `{ ready: true, protocol, bundle }` ([`Hello`]), or refuses a wrong
 //! secret and closes, before it reads anything larger. A caller of another
 //! build sends nothing more and closes. Then a request `{ op, args }`, read with at most
 //! [`REQUEST_WAIT`] between bytes. `worker.ping` answers who it is;
+//! `inspect` reads this machine or one of its Sandboxes (`layerfs-sandbox`
+//! `inspect`: at most two at once, each on a helper thread with deadlines);
 //! `store.call`, `store.file`, `store.reach`, `sandbox.host`, `project.stage`,
-//! `project.init`, `project.export` and `project.remove` run one operation on
-//! this machine,
+//! `project.init`, `project.export`, `project.remove` and `doctor.fix` run
+//! one operation on this machine (`ops`),
 //! with `home` set to the worker's own root (the machine's data disk),
 //! never a path the caller sends. Answers are
 //! `{ value }` or `{ refused }`, after any `{ event }` frames.
@@ -23,23 +26,26 @@
 //! A request with `trace_step: true` (a caller with `LAYERFS_TRACE_STEP`
 //! set) has its steps timed from when it was read, and its answer carries
 //! them as `steps: [{ step, us }]` beside `value` or `refused`.
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::outcome::{refused, Outcome};
-use layerfs_machine::worker::{
-    read_frame, read_frame_within, write_frame, Hello, HELLO_WAIT, MAX_HELLO,
-};
-use layerfs_store::project::discovery::home_of;
-use layerfs_store::project::export::in_worker as export_in_worker;
-use layerfs_store::project::frame::{ExportFrame, InitFrame, RemoveFrame, StageFrame};
-use layerfs_store::project::{init::in_worker, remove::remove_project, staged};
-use std::net::{TcpListener, TcpStream};
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
+//!
+//! One connection never stops or holds up the worker (layerfs-project#177).
+//! This file is the accept loop: a failed `accept` that says nothing about
+//! the listener, and a thread the OS cannot start, are logged and passed
+//! over. `connection` bounds what one peer can hold: the whole hello by
+//! one deadline, each send by [`REQUEST_WAIT`] without progress, and a
+//! panic in an operation by that connection alone.
+mod connection;
+#[cfg(feature = "worker-fault")]
+pub mod fault;
+mod ops;
 
-/// The longest the worker waits for the next byte of a request.
-pub const REQUEST_WAIT: Duration = Duration::from_secs(30);
+pub use connection::REQUEST_WAIT;
+use layerfs_bridge::control::SdkValue;
+use layerfs_machine::worker::{Hello, HELLO_WAIT};
+use std::io::Write;
+use std::net::{TcpListener, TcpStream};
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 /// What a worker served before it stopped.
 #[derive(Debug, Default)]
@@ -48,247 +54,211 @@ pub struct Served {
     pub requests: u64,
 }
 
+/// How long the worker waits, and how often it logs one kind of failure.
+#[derive(Clone, Copy, Debug)]
+struct Waits {
+    /// The whole hello: every byte of the secret's frame.
+    hello: Duration,
+    /// The next byte of a request.
+    request: Duration,
+    /// One send that makes no progress.
+    write: Duration,
+    /// The caller's close, once it has its answer.
+    close: Duration,
+    /// Between a failed `accept` and the next.
+    accept_pause: Duration,
+    /// Between two log lines of one kind of accept or thread failure.
+    log_every: Duration,
+}
+
+impl Waits {
+    const SHIPPED: Self = Self {
+        hello: HELLO_WAIT,
+        request: REQUEST_WAIT,
+        write: REQUEST_WAIT,
+        close: REQUEST_WAIT,
+        accept_pause: Duration::from_millis(50),
+        log_every: Duration::from_secs(10),
+    };
+}
+
+/// One worker: what every connection of it reads.
+struct Server {
+    secret: String,
+    /// Its own state root.
+    root: PathBuf,
+    /// What it answers every secret with, read once.
+    ready: SdkValue,
+    /// When it began to serve, in milliseconds since the epoch.
+    started: i64,
+    waits: Waits,
+    #[cfg(feature = "worker-fault")]
+    faults: Arc<fault::Faults>,
+}
+
 /// Serves `listener` until it fails or the process is ended (`machine.stop`;
 /// there is no idle stop, #535 D11). `root` is the worker's own state root.
+/// It returns only when the listener itself is unusable.
 pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::Result<Served> {
-    // the root holds Stores and records: private, as a home is (a machine's
-    // data disk mounts 0755), but passable by others (0701), since a
-    // namespaces Sandbox's commands run as another identity below it
-    {
-        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-        std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o701)
-            .create(&root)?;
-        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o701))?;
+    Server::new(secret, root).run(&listener)
+}
+
+/// [`serve`] with the switches and waits of `faults`.
+#[cfg(feature = "worker-fault")]
+pub fn serve_with(
+    listener: TcpListener,
+    secret: String,
+    root: PathBuf,
+    faults: Arc<fault::Faults>,
+) -> std::io::Result<Served> {
+    let mut server = Server::new(secret, root);
+    server.waits = faults.waits();
+    server.faults = faults;
+    server.run(&listener)
+}
+
+/// The name of an `accept` failure that says nothing about the listener:
+/// the process or the system is out of descriptors, buffers or memory, or
+/// the peer gave up before it was accepted. `None` for every other failure
+/// (`EBADF`, `EINVAL`, `ENOTSOCK`: the listener is not one), which ends
+/// [`serve`].
+fn passing(error: &std::io::Error) -> Option<&'static str> {
+    match error.raw_os_error()? {
+        libc::EMFILE => Some("EMFILE"),
+        libc::ENFILE => Some("ENFILE"),
+        libc::ENOBUFS => Some("ENOBUFS"),
+        libc::ENOMEM => Some("ENOMEM"),
+        libc::ECONNABORTED => Some("ECONNABORTED"),
+        libc::EINTR => Some("EINTR"),
+        _ => None,
     }
-    layerfs_home::home::guest::serve_root(&root);
-    layerfs_home::home::guest::retire_layout_2(&root);
-    let secret = Arc::new(secret);
-    let root = Arc::new(root);
-    // what it answers every secret with, read once
-    let ready = Arc::new(Hello::own().to_frame());
-    let served = Arc::new(AtomicU64::new(0));
-    for stream in listener.incoming() {
-        let stream = stream?;
-        let (secret, root, served) = (secret.clone(), root.clone(), served.clone());
-        let ready = ready.clone();
-        std::thread::spawn(move || {
-            if answer(stream, &secret, &ready, &root) {
-                served.fetch_add(1, Ordering::Relaxed);
+}
+
+/// When each kind of failure was last logged, and how many of it were not.
+struct Limited {
+    every: Duration,
+    kinds: Vec<(&'static str, Instant, u64)>,
+}
+
+impl Limited {
+    /// Whether a failure of `kind` is logged now: at most one line of a
+    /// kind in each `every`. `Some` holds how many of that kind went
+    /// unlogged since its last line.
+    fn due(&mut self, kind: &'static str) -> Option<u64> {
+        let now = Instant::now();
+        match self.kinds.iter_mut().find(|(known, ..)| *known == kind) {
+            None => {
+                self.kinds.push((kind, now, 0));
+                Some(0)
             }
-        });
-    }
-    Ok(Served {
-        requests: served.load(Ordering::Relaxed),
-    })
-}
-
-/// Equal secrets, compared in time independent of where they differ.
-fn same(a: &str, b: &str) -> bool {
-    a.len() == b.len()
-        && a.bytes()
-            .zip(b.bytes())
-            .fold(0u8, |acc, (x, y)| acc | (x ^ y))
-            == 0
-}
-
-fn answer(mut stream: TcpStream, secret: &str, ready: &SdkValue, root: &Path) -> bool {
-    let _ = stream.set_nodelay(true);
-    // the secret first, from a small frame: nothing larger is read, and
-    // nothing is waited for long, before it matches
-    if stream.set_read_timeout(Some(HELLO_WAIT)).is_err() {
-        return false;
-    }
-    let hello = match read_frame_within(&mut stream, MAX_HELLO) {
-        Ok(Some(hello)) => hello,
-        _ => return false,
-    };
-    if !same(hello.get_text("secret").unwrap_or(""), secret) {
-        let denied = refused("Denied", "the worker's secret does not match");
-        let _ = write_frame(&mut stream, &refusal_frame(denied));
-        return false;
-    }
-    if write_frame(&mut stream, ready).is_err()
-        || stream.set_read_timeout(Some(REQUEST_WAIT)).is_err()
-    {
-        return false;
-    }
-    let request = match read_frame(&mut stream) {
-        Ok(Some(request)) => request,
-        _ => return false,
-    };
-    let _ = stream.set_read_timeout(None);
-    let stepped = request.get("trace_step") == Some(&SdkValue::Bool(true));
-    if stepped {
-        layerfs_home::trace::steps_begin();
-    }
-    let _home = layerfs_home::home::guest::sent(request.get_text("home_id"));
-    let (op, args) = op_and_args(request);
-    let outcome = run(&op, args, root, &mut |event| {
-        write_frame(&mut stream, &SdkValue::map([("event", event)]))
-            .map_err(|e| refused("Failed", format!("worker event stream closed: {e}")))
-    });
-    let mut frame = match outcome {
-        Ok(value) => SdkValue::map([("value", value)]),
-        Err(refusal) => refusal_frame(refusal),
-    };
-    if stepped {
-        layerfs_home::trace::step("result");
-        let steps = layerfs_home::trace::steps_value(layerfs_home::trace::steps_take());
-        frame = layerfs_home::home::with_field(frame, "steps", steps);
-    }
-    let sent = write_frame(&mut stream, &frame).is_ok();
-    if sent {
-        await_close(&mut stream);
-    }
-    sent
-}
-
-/// Waits for the client to close first, once the answer is written. The
-/// client sends nothing after its request and closes when it has read the
-/// answer. Apple Container's published port drops what it still holds for
-/// the host when the guest side closes first, which cut the tail off large
-/// answers (an export's last parts). Reads only that close, at most one
-/// [`REQUEST_WAIT`]; a client that never closes then loses nothing worse
-/// than before.
-fn await_close(stream: &mut TcpStream) {
-    use std::io::Read;
-    if stream.set_read_timeout(Some(REQUEST_WAIT)).is_ok() {
-        let _ = stream.read(&mut [0u8; 1]);
-    }
-}
-
-/// A request's `op` and its `args` (moved out, not copied: they may hold a
-/// large part of a file).
-fn op_and_args(request: SdkValue) -> (String, SdkValue) {
-    let (mut op, mut args) = (String::new(), SdkValue::Null);
-    if let SdkValue::Map(fields) = request {
-        for (name, value) in fields {
-            match (name.as_str(), value) {
-                ("op", SdkValue::Text(text)) => op = text,
-                ("args", value) => args = value,
-                _ => {}
+            Some((_, at, unlogged)) if now.duration_since(*at) >= self.every => {
+                *at = now;
+                Some(std::mem::take(unlogged))
+            }
+            Some((_, _, unlogged)) => {
+                *unlogged += 1;
+                None
             }
         }
     }
-    (op, args)
 }
 
-fn refusal_frame(refusal: SdkRefusal) -> SdkValue {
-    SdkValue::map([(
-        "refused",
-        SdkValue::map([
-            ("code", SdkValue::Text(refusal.code)),
-            ("message", SdkValue::Text(refusal.message)),
-            ("detail", refusal.detail),
-        ]),
-    )])
-}
-
-fn run(
-    op: &str,
-    args: SdkValue,
-    root: &Path,
-    events: &mut dyn FnMut(SdkValue) -> std::result::Result<(), SdkRefusal>,
-) -> Outcome {
-    match op {
-        "worker.ping" => {
-            let mut fields = vec![
-                ("kind", SdkValue::text("worker")),
-                ("version", SdkValue::text(env!("CARGO_PKG_VERSION"))),
-                ("pid", SdkValue::Int(i64::from(std::process::id()))),
-            ];
-            if args.get("capacity") == Some(&SdkValue::Bool(true)) {
-                let available = layerfs_home::home::filesystem_available(root)
-                    .ok()
-                    .and_then(|bytes| i64::try_from(bytes).ok());
-                fields.push(("free_disk", available.map_or(SdkValue::Null, SdkValue::Int)));
-            }
-            Ok(SdkValue::Map(
-                fields
-                    .into_iter()
-                    .map(|(name, value)| (name.to_owned(), value))
-                    .collect(),
-            ))
-        }
-        "machine.images" => layerfs_sandbox::images::in_worker(root, args),
-        "machine.prune" => layerfs_sandbox::images::prune_in_worker(root, args),
-        "doctor.sandbox" => crate::doctor::diagnose_worker_sandbox(root, args),
-        "store.diagnose" => crate::doctor::diagnose_store_in_worker(root, args, events),
-        // `store.attach`'s check of this machine's connection to a
-        // PostgreSQL Store: the caller sends the record and what it dials
-        "store.reach" => crate::store::reach_in_worker(&args),
-        // one Store call, on the Store file under this worker's root (2.0)
-        "store.call" => {
-            let call = layerfs_store::call::CallFrame::decode(&args)?;
-            let store = call.store.as_str();
-            layerfs_home::names::StoreName::parse(store)?;
-            let file = layerfs_home::home::paths::store_file(root, store);
-            // the worker holds the Store's lease under its root while it
-            // keeps the Store open
-            let lease = layerfs_store::lease::hold_locked(root, store)?;
-            let open = layerfs_store::open_args::OpenArgs {
-                home: Some(root.to_path_buf()),
-                store_path: Some(file.display().to_string()),
-                ..call.open()
-            };
-            layerfs_store::open::run(&call.method, &open, call.fields, Some(lease))
-        }
-        // one step of a Store move or remove on this machine
-        "store.file" => {
-            let frame = layerfs_store::sqlite::transfer::step::StepFrame::decode(&args)?;
-            // a hashing step (snapshot, verify) reports its bytes as events
-            // the caller passes on (#536 §10b); a closed stream fails the
-            // answer's own write once the hash ends
-            layerfs_store::sqlite::transfer::steps::run_observed(
-                root,
-                &frame,
-                &mut |done, total| {
-                    let _ = events(SdkValue::map([(
-                        "progress",
-                        SdkValue::map([
-                            ("phase", SdkValue::text(frame.step.name())),
-                            ("done", SdkValue::Int(done as i64)),
-                            ("total", SdkValue::Int(total as i64)),
-                        ]),
-                    )]));
-                },
-            )
-        }
-        // a Sandbox image copied to this machine (`sandbox.create --image`,
-        // `machine.load`), one step at a time
-        "image.artifact" => layerfs_sandbox::image_artifact::in_worker(root, &args),
-        // a Sandbox or Workspace operation on this machine's own native
-        "sandbox.host" => layerfs_sandbox::route::in_worker(
+impl Server {
+    fn new(secret: String, root: PathBuf) -> Self {
+        Self {
+            secret,
             root,
-            layerfs_sandbox::host::decode(&args)?,
-            &mut |event| {
-                let _ = events(event);
-            },
-            layerfs_sandbox::workspace::dispatch::call,
-        ),
-        // drops one project from the Store under this worker's root (2.0):
-        // `{ store, project, store_record }`
-        "project.remove" => {
-            let root = home_of(Some(root))?;
-            remove_project(&root, &RemoveFrame::decode(&args)?)
+            ready: Hello::own().to_frame(),
+            started: layerfs_home::home::now_ms(),
+            waits: Waits::SHIPPED,
+            #[cfg(feature = "worker-fault")]
+            faults: Arc::default(),
         }
-        // writes or discards one part of a caller's folder copy under this
-        // worker's root (#536 H11a)
-        "project.stage" => staged::run(root, &StageFrame::decode(args)?),
-        // adds a folder copy the caller sent as a new project of a Store
-        // under this worker's root (#536 H11, H11a)
-        "project.init" => {
-            let root = home_of(Some(root))?;
-            in_worker(&root, &InitFrame::decode(&args)?)
+    }
+
+    /// One line of the worker's log (its stderr, `worker.log`). It never
+    /// holds a request's arguments or a secret.
+    fn log(&self, line: &str) {
+        let _ = writeln!(std::io::stderr(), "layerfs worker: {line}");
+        #[cfg(feature = "worker-fault")]
+        self.faults.logged(line);
+    }
+
+    fn accept(&self, listener: &TcpListener) -> std::io::Result<TcpStream> {
+        #[cfg(feature = "worker-fault")]
+        if let Some(error) = self.faults.accept_error() {
+            return Err(error);
         }
-        // streams one project's snapshot from a Store under this worker's
-        // root as folder-copy parts (#53)
-        "project.export" => export_in_worker(root, &ExportFrame::decode(&args)?, events),
-        _ => Err(refused(
-            "InvalidInput",
-            format!("the worker has no operation {op}"),
-        )),
+        listener.accept().map(|(stream, _)| stream)
+    }
+
+    /// Serves `stream` on a thread of its own. When the OS cannot start
+    /// one, the stream is dropped: its caller sees the connection close
+    /// before the hello, and nothing was sent.
+    fn spawn(self: &Arc<Self>, stream: TcpStream) -> std::io::Result<()> {
+        #[cfg(feature = "worker-fault")]
+        if let Some(error) = self.faults.spawn_error() {
+            return Err(error);
+        }
+        let server = self.clone();
+        std::thread::Builder::new()
+            .name("worker-request".to_owned())
+            .spawn(move || connection::serve(&server, stream))
+            .map(drop)
+    }
+
+    fn run(self, listener: &TcpListener) -> std::io::Result<Served> {
+        // the root holds Stores and records: private, as a home is (a machine's
+        // data disk mounts 0755), but passable by others (0701), since a
+        // namespaces Sandbox's commands run as another identity below it
+        {
+            use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+            std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o701)
+                .create(&self.root)?;
+            std::fs::set_permissions(&self.root, std::fs::Permissions::from_mode(0o701))?;
+        }
+        layerfs_home::home::guest::serve_root(&self.root);
+        layerfs_home::home::guest::retire_layout_2(&self.root);
+        let server = Arc::new(self);
+        let mut limited = Limited {
+            every: server.waits.log_every,
+            kinds: Vec::new(),
+        };
+        let unlogged = |more: u64| match more {
+            0 => String::new(),
+            more => format!("; {more} more since this was last logged"),
+        };
+        loop {
+            let stream = match server.accept(listener) {
+                Ok(stream) => stream,
+                Err(error) => {
+                    let Some(kind) = passing(&error) else {
+                        server.log(&format!(
+                            "accept failed ({error}); the listener is unusable, the worker stops"
+                        ));
+                        return Err(error);
+                    };
+                    if let Some(more) = limited.due(kind) {
+                        server.log(&format!(
+                            "accept failed ({kind}: {error}); still serving{}",
+                            unlogged(more)
+                        ));
+                    }
+                    // a pause, not a retry: nothing was received or is resent
+                    std::thread::sleep(server.waits.accept_pause);
+                    continue;
+                }
+            };
+            if let Err(error) = server.spawn(stream) {
+                if let Some(more) = limited.due("thread") {
+                    server.log(&format!(
+                        "no thread for a connection ({error}); it was closed unanswered, still serving{}",
+                        unlogged(more)
+                    ));
+                }
+            }
+        }
     }
 }

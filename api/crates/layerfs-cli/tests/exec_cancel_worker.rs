@@ -181,6 +181,7 @@ fn the_exec_id_is_the_first_event_and_travels_to_the_worker() {
             ("ws", t("d1:one")),
             ("command", t("true")),
             ("exec_id", t("build-7")),
+            ("log_tag", t("dsh:s9:t1")),
         ],
     );
     assert_eq!(first_id(&events).as_deref(), Some("build-7"));
@@ -195,6 +196,13 @@ fn the_exec_id_is_the_first_event_and_travels_to_the_worker() {
         .map(|f| f.get("more").unwrap().get_text("execId"))
         .collect();
     assert_eq!(sent, [Some("build-7"), Some(id.as_str())]);
+    // the call's log tag travels with it, for the record the worker keeps
+    // while the command runs (layerfs-project#178); a call with none sends none
+    let tags: Vec<_> = frames
+        .iter()
+        .map(|f| f.get("more").unwrap().get_text("tag"))
+        .collect();
+    assert_eq!(tags, [Some("dsh:s9:t1"), None]);
     // a bad caller-named id is refused before anything is sent
     let args = SdkValue::map([
         ("ws", t("d1:one")),

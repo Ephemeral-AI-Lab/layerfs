@@ -484,6 +484,7 @@ fn a_cancel_before_the_command_starts_is_answered_cancelled_and_its_owner_ends_i
             "e9",
         ],
     )
+    .env("LAYERFS_LOGS_TAG", "dsh:s9:t1")
     .stdout(Stdio::piped())
     .stderr(Stdio::piped())
     .spawn()
@@ -492,6 +493,10 @@ fn a_cancel_before_the_command_starts_is_answered_cancelled_and_its_owner_ends_i
     came.recv_timeout(Duration::from_secs(30)).unwrap();
     let recorded = read_record(&exec_file(&home, "e9")).unwrap().unwrap();
     assert_eq!(recorded.get("stop"), Some(&SdkValue::Null), "{recorded:?}");
+    // the home's record names the call's log tag and the command's
+    // program, nothing more of the command (layerfs-project#178)
+    assert_eq!(recorded.get_text("tag"), Some("dsh:s9:t1"), "{recorded:?}");
+    assert_eq!(recorded.get_text("program"), Some("sleep"), "{recorded:?}");
     // the cancel is answered at once, and only marks the record
     let (code, out, err) = cli(&home, &["workspace", "exec-cancel", "b1:one", "e9"]);
     assert_eq!(code, Some(0), "{err}");

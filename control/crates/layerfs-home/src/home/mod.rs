@@ -2,7 +2,7 @@
 //! `machine/`, `store/`, `backup/`, `trace/` and `log/`. Only host
 //! processes read or write it; guests never see it (§7.7).
 mod capacity;
-pub use capacity::filesystem_available;
+pub use capacity::{filesystem, filesystem_available, Filesystem};
 pub mod entity_lock;
 pub mod fields;
 pub mod flock;

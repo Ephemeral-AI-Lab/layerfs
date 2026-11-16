@@ -36,10 +36,12 @@ fn worker(root: &Path) -> Endpoint {
     panic!("the worker did not answer within 2 s");
 }
 
-/// One Sandbox operation for project `shop/api` with `store_record`.
+/// One Sandbox operation for project `shop/api` with `store_record`: a
+/// Workspace status, which keeps the records as every operation does but
+/// `sandbox.get`'s two reads (layerfs-project#181).
 fn sandbox_call(endpoint: &Endpoint, store_record: SdkValue) {
     let args = SdkValue::map([
-        ("op", SdkValue::text("sandbox.list_workspaces")),
+        ("op", SdkValue::text("backend.daemon.workspace.status")),
         ("store", SdkValue::text("shop")),
         ("project", SdkValue::text("api")),
         ("store_record", store_record),

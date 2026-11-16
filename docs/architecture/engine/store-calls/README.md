@@ -179,7 +179,7 @@ not in `methods::call`, and in this repository only tests call it.
 
 | Call | Answer | Source |
 | --- | --- | --- |
-| `project.get_history` | Branches, newest Commits and Layers, `version` digest (`unchanged` when `since` matches); 56 KiB answer, 12 KiB for Layers. The daemon's `sandbox.list_workspaces` uses the same snapshot with its Workspaces. | [`operator/inspect.rs`](../../../../engine/crates/layerfs-store-service/src/operator/inspect.rs) |
+| `project.get_history` | Branches, newest Commits and Layers, `version` digest (`unchanged` when `since` matches); 56 KiB answer, 12 KiB for Layers. The daemon's `sandbox.list_workspaces` uses the same snapshot with its Workspaces, or, asked with `history: false`, lists its Workspaces alone (`workspaces`) with none of the history read. | [`operator/inspect.rs`](../../../../engine/crates/layerfs-store-service/src/operator/inspect.rs) |
 | `project.get_storage`, `branch.list_commit_storage`, `project.list_overwritten` | Publication counters, per-Commit bytes, overwritten Layers; never scans the object catalog. | [`operator/store.rs`](../../../../engine/crates/layerfs-store-service/src/operator/store.rs) |
 | `fs.get_storage`, `fs.list_revisions` | A path's size and revisions along first parents; the count stops at 1000 (`revisionsMore`). | [`operator/files.rs`](../../../../engine/crates/layerfs-store-service/src/operator/files.rs) |
 

@@ -60,6 +60,16 @@ pub struct Bundle {
     pub hash: String,
 }
 
+/// A provider's own limit on a VM's name on this host, beyond the
+/// plain-name rule (63 characters): what [`crate::name_limit`] answers.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NameLimit {
+    /// The longest VM name the provider takes here, in bytes.
+    pub longest: usize,
+    /// The provider's rule, for a refusal's message.
+    pub why: String,
+}
+
 /// How the host reaches its tools.
 #[derive(Clone, Debug)]
 pub struct Tools {
@@ -120,6 +130,10 @@ pub const DATA: &str = "/layerfs/data";
 pub const BUNDLE: &str = "/layerfs/bundle";
 pub const STATE: &str = "/layerfs/state";
 pub const IMAGE: &str = "/layerfs/image";
+/// The worker's log on every machine kind: on the data disk, so it stays
+/// across restarts and, on docker, across the containers each start makes
+/// (`log/worker.log` under the worker's root; layerfs-project#178 step 0).
+pub const WORKER_LOG: &str = "/layerfs/data/log/worker.log";
 
 /// A size: bytes, or a number with `K`, `M`, `G` or `T` (binary units, as
 /// Lima reads them), optionally followed by `iB` or `B`.

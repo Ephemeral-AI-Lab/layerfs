@@ -43,6 +43,7 @@ pub fn call(host: Host, call: Call) -> Outcome {
             spool,
             exec_id,
             workspace,
+            tag,
             ..
         } => exec::exec(
             &host,
@@ -53,6 +54,7 @@ pub fn call(host: Host, call: Call) -> Outcome {
                 spool,
                 exec_id: exec_id.as_deref(),
                 workspace: workspace.as_deref(),
+                tag: tag.as_deref(),
             },
         ),
         Call::ExecCancel {
