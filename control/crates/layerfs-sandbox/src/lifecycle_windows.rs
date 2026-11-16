@@ -35,3 +35,34 @@ pub(super) fn start(host: &Host, directory: &Path, id: &str) -> Result<std::path
     ]);
     Ok(sandbox_dir)
 }
+
+/// The in-process control plane one Sandbox create assembles: the twin
+/// Service over an opened Store, served on loopback, and the Dial a
+/// Controls opens it with (#454).
+pub(super) struct Plane {
+    pub controls: crate::daemon::pool::Controls,
+}
+
+/// Opens the plane: the Store-backed Service on one loopback listener
+/// whose keypair the dial and the serve face agree on.
+pub(super) fn plane(
+    store: std::sync::Arc<layerfs_store_service::store::Store>,
+    capacity: usize,
+) -> Result<Plane, layerfs_bridge::control::SdkRefusal> {
+    let service = std::sync::Arc::new(layerfs_daemon::control::Service::new(store, capacity));
+    let caller = layerfs_bridge::duplex::generate_keypair()
+        .map_err(|error| layerfs_home::outcome::failed(error))?;
+    let (endpoint, peer) = service
+        .serve_loopback(caller.public)
+        .map_err(|error| layerfs_home::outcome::failed(error))?;
+    let dial = crate::daemon::pool::Dial {
+        endpoint,
+        secret: caller.private,
+        peer,
+        instance: [0_u8; 32],
+    };
+    let first = dial.open()?;
+    Ok(Plane {
+        controls: crate::daemon::pool::Controls::new(first, dial),
+    })
+}

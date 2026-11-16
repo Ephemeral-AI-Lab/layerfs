@@ -953,6 +953,7 @@ name = "layerfs-sandbox"
 version = "2.0.0"
 dependencies = [
  "layerfs-bridge",
+ "layerfs-daemon",
  "layerfs-history",
  "layerfs-home",
  "layerfs-machine",
@@ -960,6 +961,7 @@ dependencies = [
  "layerfs-project",
  "layerfs-sandbox-backend",
  "layerfs-store",
+ "layerfs-store-service",
  "libc",
  "sha2 0.11.0",
 ]
