@@ -1,0 +1,191 @@
+{
+  "arm": "ten_gib",
+  "build": {
+    "bytes": 8037335040,
+    "packs": 7665,
+    "seconds": 18.960292788004153
+  },
+  "checkpoint": {
+    "mib_s": 183.1733561805879,
+    "result": [
+      0,
+      0,
+      0
+    ],
+    "seconds": 38.43011572500109,
+    "wal_bytes_after": 0,
+    "wal_bytes_before": 7381317872
+  },
+  "comparison": {
+    "build_bytes": 8037335040,
+    "current_path_exclusion_seconds": 18.960292788004153,
+    "delta_bytes": 6689914880,
+    "install_only_fence_seconds": 80.65403998500551,
+    "install_only_shorter": false,
+    "install_over_current_ratio": 4.253839372988687,
+    "wal_bytes": 7381317872
+  },
+  "delta_gib": 6.2,
+  "fixture": {
+    "bytes": 10737418240,
+    "dead_bytes": 2700083200,
+    "dead_packs": 2575,
+    "objects": 81920,
+    "packs": 10240,
+    "seconds": 18.011344403988915
+  },
+  "frozen_fence": {
+    "current_tuple": [
+      14013,
+      16589,
+      81920,
+      17393778688,
+      17393778688
+    ],
+    "mark_tuple": [
+      7665,
+      10241,
+      81920,
+      10737418240,
+      10737418240
+    ],
+    "same_tuple": false,
+    "would_refuse_conflict": true
+  },
+  "mark": {
+    "bytes": 8037335040,
+    "high_water": [
+      7665,
+      10241,
+      81920,
+      10737418240,
+      10737418240
+    ],
+    "objects": 61320,
+    "packs": 7665,
+    "seconds": 0.18910397299623583
+  },
+  "remark_delta": {
+    "copy_seconds": 40.77603826500126,
+    "delta_bytes": 6689914880,
+    "delta_objects": 51033,
+    "delta_over_wal_bytes": 0.9063306845756175,
+    "delta_packs": 6380,
+    "delta_packs_over_writer_commits": 1.0050409577819786,
+    "delta_seconds": 41.6517633869953,
+    "install_serial": 14013,
+    "new_roots": 6348,
+    "scan_seconds": 0.8757251279894263
+  },
+  "size_gib": 10.0,
+  "verify": {
+    "extra": 0,
+    "fence_serial": 14013,
+    "missing": 0,
+    "objects_without_pack": 0,
+    "ok": true,
+    "seconds": 0.5721608730091248,
+    "source_objects": 112353,
+    "target_objects": 112353
+  },
+  "writer": {
+    "commits": 6348,
+    "dedupe_refs": 126,
+    "errors": [],
+    "max_ms": 9050.59014201106,
+    "mib": 6348,
+    "p50_ms": 2.7752699970733374,
+    "p99_ms": 4.298651008866727,
+    "rate_mib_s": 347.7142705024387,
+    "seconds": 18.256368917005602,
+    "wal_growth_mib_s": 385.650595386643,
+    "wal_peak_bytes": 7363342336,
+    "wal_samples": [
+      [
+        0.0,
+        0
+      ],
+      [
+        0.9,
+        330924032
+      ],
+      [
+        1.81,
+        722239488
+      ],
+      [
+        2.71,
+        1107056392
+      ],
+      [
+        3.61,
+        1478379632
+      ],
+      [
+        4.52,
+        1854696312
+      ],
+      [
+        5.42,
+        2223988736
+      ],
+      [
+        6.32,
+        2597396352
+      ],
+      [
+        7.22,
+        2969780224
+      ],
+      [
+        8.13,
+        3336627352
+      ],
+      [
+        9.03,
+        3692051512
+      ],
+      [
+        9.93,
+        3981893632
+      ],
+      [
+        10.84,
+        4322918296
+      ],
+      [
+        11.74,
+        4692987904
+      ],
+      [
+        12.64,
+        5070462976
+      ],
+      [
+        13.54,
+        5444284416
+      ],
+      [
+        14.45,
+        5810374232
+      ],
+      [
+        15.35,
+        6186627072
+      ],
+      [
+        16.25,
+        6563856312
+      ],
+      [
+        17.16,
+        6940045296
+      ],
+      [
+        18.06,
+        7303083192
+      ]
+    ]
+  },
+  "writers": 2
+}
