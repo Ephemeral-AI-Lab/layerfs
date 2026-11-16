@@ -60,9 +60,6 @@ pub struct DeltaCounters {
     pub absent_candidates: u64,
     /// Candidates present but ineligible under the depth or role policy.
     pub ineligible_candidates: u64,
-    /// Candidates whose stored chain names the object being stored: a
-    /// concurrent writer's copy depends on it. Stored FULL by policy.
-    pub cyclic_candidates: u64,
     /// Candidates refused because the resulting chain would exceed its budget.
     pub work_exceeded: u64,
     /// Candidates whose chain already reached the role's depth cap. Their chain
@@ -104,7 +101,6 @@ impl DeltaCounters {
             (&mut self.no_candidate, other.no_candidate),
             (&mut self.absent_candidates, other.absent_candidates),
             (&mut self.ineligible_candidates, other.ineligible_candidates),
-            (&mut self.cyclic_candidates, other.cyclic_candidates),
             (&mut self.work_exceeded, other.work_exceeded),
             (&mut self.depth_capped, other.depth_capped),
             (&mut self.rebased, other.rebased),
@@ -158,18 +154,6 @@ pub struct ChainCost {
     pub encoded: u64,
 }
 
-/// How a walk of one stored dependency chain ended.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ChainWalk {
-    /// The object is stored and its chain costs this.
-    Cost(ChainCost),
-    /// The object, or a base it names, is not stored.
-    Absent,
-    /// The chain names the object the caller is storing: that object cannot be
-    /// its base without closing a dependency cycle.
-    Cycle,
-}
-
 /// Bounded per-save cache of dependency depths and chain costs.
 #[derive(Debug, Default)]
 pub struct DepthCache {
@@ -221,59 +205,8 @@ impl DepthCache {
         connection: &dyn Source,
         workspace: &mut DecompressionWorkspace,
         id: ObjectId,
-        base_of: F,
-    ) -> StorageResult<Option<ChainCost>>
-    where
-        F: FnMut(
-            &dyn Source,
-            &mut DecompressionWorkspace,
-            &ObjectLocation,
-        ) -> StorageResult<ChainEdge>,
-    {
-        match self.walk(connection, workspace, id, None, base_of)? {
-            ChainWalk::Cost(cost) => Ok(Some(cost)),
-            ChainWalk::Absent => Ok(None),
-            // Without an object to avoid, a walk that names its own start is a
-            // cycle already stored.
-            ChainWalk::Cycle => Err(StorageError::Integrity("dependency cycle")),
-        }
-    }
-
-    /// `id`'s chain cost, or [`ChainWalk::Cycle`] when the chain names `avoid`
-    /// (the object the caller is about to store against it).
-    ///
-    /// Two writers can store the same new object at once. One writer's copy can
-    /// name the other writer's object as its base, so the candidate a selection
-    /// is about to use can name the object that selection is storing. Storing
-    /// that candidate as the new object's base would close a dependency cycle,
-    /// so the caller stores the object whole instead.
-    pub fn cost_avoiding<F>(
-        &mut self,
-        connection: &dyn Source,
-        workspace: &mut DecompressionWorkspace,
-        id: ObjectId,
-        avoid: ObjectId,
-        base_of: F,
-    ) -> StorageResult<ChainWalk>
-    where
-        F: FnMut(
-            &dyn Source,
-            &mut DecompressionWorkspace,
-            &ObjectLocation,
-        ) -> StorageResult<ChainEdge>,
-    {
-        self.walk(connection, workspace, id, Some(avoid), base_of)
-    }
-
-    /// One iterative, bounded walk from `id` to the root of its stored chain.
-    fn walk<F>(
-        &mut self,
-        connection: &dyn Source,
-        workspace: &mut DecompressionWorkspace,
-        id: ObjectId,
-        avoid: Option<ObjectId>,
         mut base_of: F,
-    ) -> StorageResult<ChainWalk>
+    ) -> StorageResult<Option<ChainCost>>
     where
         F: FnMut(
             &dyn Source,
@@ -293,18 +226,9 @@ impl DepthCache {
             if path.iter().any(|(id, _, _)| *id == current) {
                 return Err(StorageError::Integrity("dependency cycle"));
             }
-            if Some(current) == avoid {
-                return Ok(ChainWalk::Cycle);
-            }
-            // An avoid walk reads the chain from storage: a cost cached
-            // earlier in this Save can come from a plan the first-wins
-            // registration later replaced, and only the stored edges decide
-            // whether this candidate names the object being stored.
-            if avoid.is_none() {
-                if let Some(cost) = self.costs.get(&current).copied() {
-                    cached_edge = 1;
-                    break cost;
-                }
+            if let Some(cost) = self.costs.get(&current).copied() {
+                cached_edge = 1;
+                break cost;
             }
             // Past the first element `current` is a base a stored record names.
             let location = if path.is_empty() {
@@ -313,7 +237,7 @@ impl DepthCache {
                 connection.base_location(current, i64::MAX)?
             };
             let Some(location) = location else {
-                return Ok(ChainWalk::Absent);
+                return Ok(None);
             };
             path.push((current, location.canonical_length as u64, 0));
             // A chain of depth `d` has `d + 1` records, and the deepest supported
@@ -328,9 +252,6 @@ impl DepthCache {
                 last.2 = edge.width;
             }
             match edge.base {
-                // The record names the object being stored: its own copy may not
-                // be published yet, but the edge is already a cycle-to-be.
-                Some(base) if Some(base) == avoid => return Ok(ChainWalk::Cycle),
                 Some(base) => current = base,
                 None => {
                     break ChainCost {
@@ -370,7 +291,7 @@ impl DepthCache {
             self.record(*id, level);
             result = level;
         }
-        Ok(ChainWalk::Cost(result))
+        Ok(Some(result))
     }
 
     /// Records the depth and chain cost of one identity.
@@ -621,13 +542,13 @@ pub fn select(
                 input.counters.note_depth(role, 0);
                 return Ok(full);
             }
-            Some(candidate) => match probe(input, candidate, role, id)? {
-                true => Some(candidate),
+            Some(id) => match probe(input, id, role)? {
+                true => Some(id),
                 false => None,
             },
             None => None,
         },
-        _ => match acquisition(input, role, advisory, id)? {
+        _ => match acquisition(input, role, advisory)? {
             Some(id) => Some(id),
             // A payload no PREFIX record can beat asks the ring nothing: the
             // answer is FULL, as a trial would find (`prefix_cannot_win`).
@@ -637,10 +558,10 @@ pub fn select(
                 input.candidates.ensure_loaded(input.connection)?;
                 let found = input.candidates.propose(id, &sig);
                 match found {
-                    Some(proposal) => match probe(input, proposal, role, id)? {
+                    Some(id) => match probe(input, id, role)? {
                         true => {
-                            from_ring = Some((proposal, sig));
-                            Some(proposal)
+                            from_ring = Some((id, sig));
+                            Some(id)
                         }
                         false => None,
                     },
@@ -668,27 +589,9 @@ pub fn select(
     // A chunk's trial outcome is noted against the base it was offered, which
     // re-basing may replace (`LosingBases`).
     let offered = (role == ObjectRole::Chunk).then_some(base_id);
-    let Some(base_cost) = chain_cost(input, base_id, id)? else {
-        // The candidate's chain names this object: a concurrent writer already
-        // stored a copy that depends on it, so using it as a base would close a
-        // cycle. Store FULL by policy (the concurrent copy keeps the object).
-        input.counters.cyclic_candidates = input.counters.cyclic_candidates.saturating_add(1);
-        if lane == PackLane::WholeFile {
-            let sig = prehashed.unwrap_or_else(|| signature(raw));
-            input.candidates.ensure_loaded(input.connection)?;
-            input.candidates.insert(id, sig);
-        }
-        input.counters.note_depth(role, 0);
-        return Ok(full);
-    };
-    let Some((base_id, base_cost)) = trial_base(
-        input,
-        base_id,
-        base_cost,
-        canonical.len() as u64,
-        depth_cap,
-        id,
-    )?
+    let base_cost = chain_cost(input, base_id)?;
+    let Some((base_id, base_cost)) =
+        trial_base(input, base_id, base_cost, canonical.len() as u64, depth_cap)?
     else {
         return refused_by_budget(input, id, role, raw, prehashed, full);
     };
@@ -802,29 +705,18 @@ fn refused_by_budget(
     Ok(full)
 }
 
-/// Depth and work cost of a stored candidate's chain, from its records' sizes;
-/// `None` when the chain names `avoid`, the object being stored.
-fn chain_cost(
-    input: &mut SelectInput<'_>,
-    id: ObjectId,
-    avoid: ObjectId,
-) -> StorageResult<Option<ChainCost>> {
+/// Depth and work cost of a stored candidate's chain, from its records' sizes.
+fn chain_cost(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<ChainCost> {
     let mut bases = ChainBases::new(input.packs);
     let started = Instant::now();
-    let cost = input.depths.cost_avoiding(
+    let cost = input.depths.cost_of(
         input.connection,
         input.decode,
         id,
-        avoid,
         |connection, workspace, location| bases.edge(connection, workspace, location),
     );
     SaveProfile::charge(&mut input.profile.resolve.cost_ns, started);
-    match cost? {
-        ChainWalk::Cost(cost) => Ok(Some(cost)),
-        // `probe` admitted the candidate as stored; a dangling base is corrupt.
-        ChainWalk::Absent => Err(StorageError::Integrity("selected base is not stored")),
-        ChainWalk::Cycle => Ok(None),
-    }
+    cost?.ok_or(StorageError::Integrity("selected base is not stored"))
 }
 
 /// The base the one trial runs against, and its chain cost (#89).
@@ -842,7 +734,6 @@ fn trial_base(
     cost: ChainCost,
     target: u64,
     depth_cap: u8,
-    avoid: ObjectId,
 ) -> StorageResult<Option<(ObjectId, ChainCost)>> {
     let capped = cost.depth >= depth_cap;
     if capped {
@@ -857,9 +748,7 @@ fn trial_base(
     let root = chain_root(input.connection, input.packs, input.decode, id);
     SaveProfile::charge(&mut input.profile.resolve.cost_ns, started);
     let root = root?.object_id;
-    let Some(root_cost) = chain_cost(input, root, avoid)? else {
-        return Ok(None);
-    };
+    let root_cost = chain_cost(input, root)?;
     if root_cost.depth >= depth_cap {
         return Ok(None);
     }
@@ -915,13 +804,8 @@ fn note_stored(profile: &mut SaveProfile, record: &EncodedRecord) {
 /// Every rejected candidate is counted, whether it was absent or present but
 /// ineligible; neither ever becomes a failure of the operation. A candidate at
 /// the depth cap is eligible: selection re-bases it onto its chain root (#89).
-fn probe(
-    input: &mut SelectInput<'_>,
-    id: ObjectId,
-    role: ObjectRole,
-    avoid: ObjectId,
-) -> StorageResult<bool> {
-    if eligible(input, id, role, avoid)? {
+fn probe(input: &mut SelectInput<'_>, id: ObjectId, role: ObjectRole) -> StorageResult<bool> {
+    if eligible(input, id, role)? {
         return Ok(true);
     }
     input.counters.ineligible_candidates = input.counters.ineligible_candidates.saturating_add(1);
@@ -932,22 +816,16 @@ fn acquisition(
     input: &mut SelectInput<'_>,
     role: ObjectRole,
     advisory: &[ObjectId],
-    avoid: ObjectId,
 ) -> StorageResult<Option<ObjectId>> {
     for id in advisory {
-        if probe(input, *id, role, avoid)? {
+        if probe(input, *id, role)? {
             return Ok(Some(*id));
         }
     }
     Ok(None)
 }
 
-fn eligible(
-    input: &mut SelectInput<'_>,
-    id: ObjectId,
-    role: ObjectRole,
-    avoid: ObjectId,
-) -> StorageResult<bool> {
+fn eligible(input: &mut SelectInput<'_>, id: ObjectId, role: ObjectRole) -> StorageResult<bool> {
     let Some(location) = input.connection.location(id, i64::MAX)? else {
         input.counters.absent_candidates = input.counters.absent_candidates.saturating_add(1);
         return Ok(false);
@@ -957,25 +835,18 @@ fn eligible(
     }
     let mut bases = ChainBases::new(input.packs);
     let started = Instant::now();
-    let walk = input.depths.cost_avoiding(
+    let depth = input.depths.depth_of(
         input.connection,
         input.decode,
         id,
-        avoid,
         |connection, workspace, location| bases.edge(connection, workspace, location),
     );
     SaveProfile::charge(&mut input.profile.resolve.eligible_ns, started);
-    match walk? {
-        ChainWalk::Cost(_) => Ok(true),
-        ChainWalk::Absent => {
-            input.counters.absent_candidates = input.counters.absent_candidates.saturating_add(1);
-            Ok(false)
-        }
-        ChainWalk::Cycle => {
-            input.counters.cyclic_candidates = input.counters.cyclic_candidates.saturating_add(1);
-            Ok(false)
-        }
+    if depth?.is_none() {
+        input.counters.absent_candidates = input.counters.absent_candidates.saturating_add(1);
+        return Ok(false);
     }
+    Ok(true)
 }
 
 fn acquire(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<Vec<u8>> {
