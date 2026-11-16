@@ -1,1 +1,0 @@
-INSERT INTO path_removed(layer_stack_id,path_key,path,frontier_serial,removed_ms) VALUES($1,$2,$3,$4,$5) ON CONFLICT(layer_stack_id,path_key) DO UPDATE SET path=excluded.path, frontier_serial=excluded.frontier_serial, removed_ms=excluded.removed_ms;

@@ -181,7 +181,6 @@ impl PostgresHandles {
         let session = Arc::new(Session::connect(selection, writable)?);
         if writable {
             schema::add_gc(&session)?;
-            schema::add_position_state(&session)?;
         }
         Self::validated(session, selection.check, Some(binding), cursor_key)
             .map(|(_, handles)| handles)

@@ -155,27 +155,15 @@ fn scan(
 ) -> Result<()> {
     let binding = workspace.snapshot().map_err(args::failed)?;
     let root = binding.effective_root;
-    let node = binding.branch.head_commit.map_or(
-        layerfs_history::NodeId::Layer(binding.branch.base_layer),
-        layerfs_history::NodeId::Commit,
-    );
-    // The base node `history_serial`, as every `Snap` carries it for the
-    // `remove_file` visibility rule; 0 is the same unknown fallback that
-    // `snapshot::resolve` takes.
-    let serial = match service
-        .store
-        .published(|history| history.node_history_serial(node))
-    {
-        Ok(Some(serial)) => serial,
-        _ => 0,
-    };
     let snap = Snap {
         kind: Kind::Commit,
         label: "Workspace base".into(),
-        node,
+        node: binding.branch.head_commit.map_or(
+            layerfs_history::NodeId::Layer(binding.branch.base_layer),
+            layerfs_history::NodeId::Commit,
+        ),
         root,
         tree: TreeTable::open(op.ports(), FilesystemRootId(root)).map_err(args::content)?,
-        serial,
     };
     let pending = workspace
         .pending_conflicts()

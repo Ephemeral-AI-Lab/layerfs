@@ -1,8 +1,8 @@
-//! A Store written before `commit`/`layer.history_serial`,
-//! `store_policy.trace_salt` and `history_meta.next_history_serial` existed
-//! opens writable and gains them (T1.2b, T1.4): the additive steps match the
-//! recorded schema source and definition, give existing rows serial 0, the
-//! Store a random salt and the next serial 1, and record the current schema.
+//! A Store written before `commit`/`layer.history_serial` and
+//! `store_policy.trace_salt` existed opens writable and gains them (T1.2b):
+//! the ALTER step matches the recorded schema source and definition, gives
+//! existing rows serial 0 and the Store a random salt, and records the
+//! current schema.
 mod support;
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use support::*;
@@ -13,8 +13,6 @@ const GC: &str = include_str!("../sql/sqlite/gc.sql");
 const HISTORY_SERIAL: &str = "    history_serial INTEGER NOT NULL DEFAULT 0,\n";
 /// The `store_policy` column as `metadata.sql` writes it.
 const TRACE_SALT: &str = " trace_salt BLOB NOT NULL DEFAULT (X'0000000000000000000000000000000000000000000000000000000000000000') CHECK(length(trace_salt)=32)\n";
-/// The `history_meta` next serial column as `history.sql` writes it (T1.4).
-const NEXT_SERIAL: &str = "    next_history_serial INTEGER NOT NULL DEFAULT 1,\n";
 
 fn definition(sql: &rusqlite::Connection) -> String {
     let mut statement = sql
@@ -36,7 +34,6 @@ fn make_old(path: &std::path::Path) {
         "ALTER TABLE \"commit\" DROP COLUMN history_serial; \
          ALTER TABLE layer DROP COLUMN history_serial; \
          ALTER TABLE store_policy DROP COLUMN trace_salt; \
-         ALTER TABLE history_meta DROP COLUMN next_history_serial; \
          DROP TABLE branch_retired; DROP TABLE layer_stack_retired; DROP TABLE path_removed; \
          DROP TABLE project_epoch; DROP TABLE gc_intent; DROP TABLE gc_op; DROP TABLE gc_dead;",
     )
@@ -46,11 +43,9 @@ fn make_old(path: &std::path::Path) {
         .unwrap();
     assert_eq!(source.matches(HISTORY_SERIAL).count(), 2);
     assert_eq!(source.matches(TRACE_SALT).count(), 1);
-    assert_eq!(source.matches(NEXT_SERIAL).count(), 1);
     let old = source
         .replacen(HISTORY_SERIAL, "", 2)
         .replacen(TRACE_SALT, "", 1)
-        .replacen(NEXT_SERIAL, "", 1)
         .replacen(GC, "", 1);
     assert_ne!(old, source, "the current schema holds the columns and GC");
     sql.execute(

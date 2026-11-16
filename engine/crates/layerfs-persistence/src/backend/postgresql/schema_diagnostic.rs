@@ -89,7 +89,6 @@ history_meta catalog_incarnation bigint NO
 history_meta binding_key bytea NO
 history_meta identity_format bigint NO
 history_meta schema_version bigint NO
-history_meta next_history_serial bigint NO
 history_meta schema_source text NO
 history_meta schema_definition text NO
 init_entry operation_id bigint NO

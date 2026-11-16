@@ -206,33 +206,7 @@ impl HistoryCatalog for HistoryProvider {
         self.write(|tx| merge::merge_branch(tx, request))
     }
 
-    fn mark_branch_removed(&self, branch: BranchId, removed_ms: i64) -> HistoryResult<()> {
-        self.write(|tx| super::removal::mark_branch_removed(tx, branch, removed_ms))
-    }
-
     fn reserve_inodes(&self, request: &ReserveRequest) -> HistoryResult<Reservation> {
         self.write(|tx| allocation::reserve_inodes(tx, self.catalog_id, request))
-    }
-
-    fn mark_path_removed(
-        &self,
-        stack: LayerStackId,
-        path: &[u8],
-        frontier_serial: u64,
-        removed_ms: i64,
-    ) -> HistoryResult<()> {
-        self.write(|tx| super::paths::mark(tx, stack, path, frontier_serial, removed_ms))
-    }
-
-    fn remove_path(&self, request: &PathRemovalRequest) -> HistoryResult<PathRemovalOutcome> {
-        self.write(|tx| super::paths::remove_path(tx, request))
-    }
-
-    fn path_removals(&self, stack: LayerStackId) -> HistoryResult<Vec<PathRemovalRecord>> {
-        self.read(|tx| super::paths::markers(tx, stack))
-    }
-
-    fn node_history_serial(&self, node: NodeId) -> HistoryResult<Option<u64>> {
-        self.read_statement(|tx| super::position::node_serial(tx, node))
     }
 }

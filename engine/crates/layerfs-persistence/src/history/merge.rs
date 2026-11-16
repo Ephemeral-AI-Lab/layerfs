@@ -12,8 +12,9 @@ use layerfs_history::error::{HistoryError, HistoryResult, Missing, MovedState};
 use layerfs_history::identity::NodeId;
 use layerfs_history::records::{BranchMergeRequest, BranchSnapshot, MergeHead, MergeSide};
 
-use super::rows::sql;
+use super::rows::{one, sql};
 
+const BRANCH_NAME_TAKEN: &str = "branch_branch_name_taken";
 const INSERT_BRANCH: &str = "branch_insert_branch";
 
 /// The node one side is at now.
@@ -71,11 +72,18 @@ pub(crate) fn merge_branch(
             _ => HistoryError::Integrity("merge side"),
         });
     }
-    if super::branch::branch_any(tx, request.branch)?.is_some() {
-        return Err(super::branch::taken(tx, request.stack, &request.name)?);
+    if super::branch::branch(tx, request.branch)?.is_some() {
+        return Err(HistoryError::Integrity("Branch identity"));
     }
-    if let Some(state) = super::branch::name_taken(tx, request.stack, &request.name)? {
-        return Err(HistoryError::NameTaken(Box::new(state)));
+    if one(
+        tx,
+        BRANCH_NAME_TAKEN,
+        params![request.stack.as_slice(), request.name.as_str()],
+        |_| Ok(()),
+    )?
+    .is_some()
+    {
+        return Err(HistoryError::Integrity("Branch name"));
     }
     let (base, head) = match &request.head {
         MergeHead::Node(NodeId::Layer(layer)) => (*layer, None),

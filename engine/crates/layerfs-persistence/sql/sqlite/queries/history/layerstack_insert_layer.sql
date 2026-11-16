@@ -1,1 +1,1 @@
-INSERT INTO layer (layer_id,layer_stack_id,parent_layer_id,root_id,source_branch_id,source_commit_id,logical, overwrote, history_serial) VALUES ($1,$2,$3,$4,$5,$6,$7, $8, $9) RETURNING 1;
+INSERT INTO layer (layer_id,layer_stack_id,parent_layer_id,root_id,source_branch_id,source_commit_id,logical, overwrote) VALUES ($1,$2,$3,$4,$5,$6,$7, $8) RETURNING 1;

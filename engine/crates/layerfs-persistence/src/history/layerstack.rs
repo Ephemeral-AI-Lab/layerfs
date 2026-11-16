@@ -13,10 +13,7 @@
 use super::params;
 use super::transaction::Transaction;
 use layerfs_content::ObjectId;
-use layerfs_history::error::{
-    HistoryError, HistoryResult, HolderKind, HolderState, Missing, MovedState, NameHolder,
-    NameSource, NameTakenState,
-};
+use layerfs_history::error::{HistoryError, HistoryResult, Missing, MovedState};
 use layerfs_history::identity::{CatalogId, HistoryName, LayerId, LayerStackId};
 use layerfs_history::records::{
     AddLayerOutcome, AddLayerRequest, LayerHistoryRequest, LayerRecord, LayerStackRecord, Page,
@@ -66,11 +63,10 @@ pub(crate) fn initialize_layerstack(
     if layer_stack(tx, request.stack)?.is_some() {
         return Err(HistoryError::Integrity("LayerStack identity"));
     }
-    if let Some(state) = name_taken(tx, &request.name)? {
-        return Err(HistoryError::NameTaken(Box::new(state)));
+    if one(tx, STACK_NAME_TAKEN, [request.name.as_str()], |_| Ok(()))?.is_some() {
+        return Err(HistoryError::Integrity("LayerStack name"));
     }
     let genesis = LayerId::derive(request.stack, None, request.genesis_root);
-    let serial = super::position::next_serial(tx)?;
     tx.execute(
         INSERT_STACK,
         params![
@@ -95,32 +91,11 @@ pub(crate) fn initialize_layerstack(
             Option::<Vec<u8>>::None,
             i64::try_from(request.logical).map_err(|_| HistoryError::Capacity("logical bytes"))?,
             Vec::<u8>::new(),
-            i64::try_from(serial).map_err(|_| HistoryError::Capacity("history serials"))?,
         ],
     )
     .map_err(sql)?;
     super::lineage::record_layer(tx, genesis, request.stack, 0, 0)?;
     layer_stack(tx, request.stack)?.ok_or(HistoryError::Integrity("LayerStack insertion"))
-}
-
-/// The typed `NameTaken` state for a project name, live or deleted.
-pub(crate) fn name_taken(
-    tx: &Transaction<'_>,
-    name: &HistoryName,
-) -> HistoryResult<Option<NameTakenState>> {
-    one(tx, STACK_NAME_TAKEN, [name.as_str()], |row| {
-        let name = cell::<String>(row, 0)?;
-        let deleted = cell::<i64>(row, 1)? != 0;
-        let state = if deleted {
-            HolderState::Deleted
-        } else {
-            HolderState::Live
-        };
-        Ok(NameTakenState::new(
-            NameHolder::new(HolderKind::Project, name, state),
-            NameSource::Store,
-        ))
-    })
 }
 
 /// Reads one stack by identity.
@@ -407,9 +382,6 @@ pub(crate) fn add_layer(
         source_commit: Some(request.commit),
         logical: commit.meta.statistics.logical,
     };
-    // A Layer that republishes a Commit carries that Commit's serial.
-    let serial =
-        super::position::node_serial(tx, layerfs_history::NodeId::Commit(commit.id))?.unwrap_or(0);
     if !verify_layer(tx, &layer)? {
         tx.execute(
             INSERT_LAYER,
@@ -424,7 +396,6 @@ pub(crate) fn add_layer(
                 // Overwritten Layers are addressed by height (`overwritten`);
                 // only Layers published before #353 list them here.
                 Vec::<u8>::new(),
-                i64::try_from(serial).map_err(|_| HistoryError::Capacity("history serials"))?,
             ],
         )
         .map_err(sql)?;

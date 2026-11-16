@@ -205,10 +205,7 @@ pub fn fork(
     let from = from.unwrap_or(MAIN);
     let source = if from == MAIN {
         ForkSource::Layer(stack.head_layer)
-    } else if layerfs_history::HistoryName::new(from).is_ok() {
-        // A checked history name is a Branch and is never retried as a node
-        // identity; an absent or removed one is `NoSuchBranch` (spec 4.4).
-        let branch = args::branch(store, stack, from)?;
+    } else if let Ok(branch) = args::branch(store, stack, from) {
         match branch.head_commit {
             Some(commit) => ForkSource::Commit {
                 branch: branch.id,
@@ -230,8 +227,13 @@ pub fn fork(
         }
     };
     let name = args::name(name)?;
-    // A live, retired or deleted holder reaches the typed `NameTaken` from
-    // the catalog's collision query instead of a Null detail pre-check.
+    if args::branch(store, stack, name.as_str()).is_ok() {
+        return Err(refuse(
+            "NameTaken",
+            format!("Branch {} already exists", name.as_str()),
+            SdkValue::Null,
+        ));
+    }
     let snapshot = store
         .history()
         .fork(&ForkRequest {
@@ -387,6 +389,13 @@ pub fn merge(
         return Err(refuse(
             "ReservedName",
             "\"main\" names the project's main line",
+            SdkValue::Null,
+        ));
+    }
+    if args::branch(store, stack, name).is_ok() {
+        return Err(refuse(
+            "NameTaken",
+            format!("Branch {name} already exists"),
             SdkValue::Null,
         ));
     }

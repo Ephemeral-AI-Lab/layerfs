@@ -1,11 +1,7 @@
-//! `project.list_branches`, `project.stats` and `project.remove_file`.
-use crate::methods::args::{invalid, paging, project, text, Answer};
-use crate::{
-    history::{branch, lookup},
-    StoreService,
-};
+//! `project.list_branches`.
+use crate::methods::args::{invalid, paging, project, Answer};
+use crate::{history::branch, StoreService};
 use layerfs_bridge::control::SdkValue;
-use layerfs_history::{PathRemovalKind, PathRemovalRequest};
 
 /// `list_branches({ name?, pageSize?, pagePos? })`: every Branch with its id, base and head, and main, in name order.
 pub fn list_branches(service: &StoreService, args: &SdkValue) -> Answer {
@@ -81,46 +77,4 @@ pub fn stats(service: &StoreService, args: &SdkValue) -> Answer {
         &snap,
         crate::methods::args::text(args, "project")?,
     )
-}
-
-/// `project.remove_file({ project, path })`: hide one path from every node at
-/// or below the frontier. Visibility only; no byte is freed in 2.0.
-pub fn remove_file(service: &StoreService, args: &SdkValue) -> Answer {
-    let stack = project(service, args)?;
-    let requested = text(args, "path")?;
-    let normalized = layerfs_history::path::NormalizedPath::new(requested)
-        .map_err(|why| invalid(format!("path: {why}")))?;
-    let removed_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |elapsed| {
-            i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX)
-        });
-    let outcome = service
-        .store
-        .history()
-        .remove_path(&PathRemovalRequest {
-            stack: stack.id,
-            path: normalized.as_bytes().to_vec(),
-            removed_ms,
-        })
-        .map_err(lookup::history)?;
-    Ok(SdkValue::map([
-        (
-            "kind",
-            SdkValue::text(match outcome.kind {
-                PathRemovalKind::Removed => "Removed",
-                PathRemovalKind::UpToDate => "UpToDate",
-            }),
-        ),
-        ("project", SdkValue::text(text(args, "project")?)),
-        (
-            "path",
-            SdkValue::text(String::from_utf8_lossy(&outcome.path).as_ref()),
-        ),
-        (
-            "frontier_serial",
-            SdkValue::Int(outcome.frontier_serial as i64),
-        ),
-        ("removed_ms", SdkValue::Int(outcome.removed_ms)),
-    ]))
 }

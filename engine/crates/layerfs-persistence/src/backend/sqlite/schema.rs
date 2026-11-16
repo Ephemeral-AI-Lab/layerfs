@@ -64,17 +64,6 @@ pub(crate) fn definition(c: &Connection, w: &RefCell<SqlWork>) -> Result<String,
     }
     Ok(s)
 }
-/// The `history_meta` next serial column as `history.sql` writes it; it sits
-/// on its own line, so removing the line leaves the text an older Store
-/// recorded.
-fn next_history_serial_column() -> &'static str {
-    let start = HISTORY
-        .find("    next_history_serial INTEGER NOT NULL DEFAULT 1")
-        .expect("history schema holds the next serial column");
-    let end = start + HISTORY[start..].find('\n').expect("column line ends") + 1;
-    &HISTORY[start..end]
-}
-
 /// The `commit` and `layer` position column as `history.sql` writes it; it
 /// appears once in each of the two tables.
 fn history_serial_column() -> &'static str {
@@ -94,16 +83,14 @@ fn trace_salt_column() -> &'static str {
     &METADATA[start..end]
 }
 
-/// `source` as a Store written before the position columns recorded it: the
-/// two `history_serial` columns, `store_policy.trace_salt` and
-/// `history_meta.next_history_serial` removed. The table migrations compare
-/// against this so a Store from before those columns still matches its
-/// recorded source.
-fn without_position_columns(source: String) -> String {
+/// `source` as a Store written before the three position columns recorded it:
+/// the two `history_serial` columns and `store_policy.trace_salt` removed. The
+/// table migrations compare against this so a Store from before those columns
+/// still matches its recorded source.
+fn without_gc_columns(source: String) -> String {
     source
         .replacen(history_serial_column(), "", 2)
         .replacen(trace_salt_column(), "", 1)
-        .replacen(next_history_serial_column(), "", 1)
 }
 
 /// The ALTERs and salt backfill an old Store needs; existing rows keep serial
@@ -123,93 +110,6 @@ fn add_position_columns(tx: &Transaction<'_>) -> Result<(), BackendError> {
     )?;
     tx.query(
         "UPDATE store_policy SET trace_salt=randomblob(32) WHERE id=1",
-        vec![],
-    )?;
-    Ok(())
-}
-
-/// The serials and epochs a Store written before T1.4 needs: Commits take the
-/// next Store serials in `(created_ms, commit_id)` order, then each project's
-/// genesis Layer takes the next one in stack-id order; every other Layer
-/// republishes its source Commit and carries that Commit's serial. Existing
-/// serials are kept, `project_epoch` gets one zero row per project and
-/// `next_history_serial` never falls below `MAX(serial) + 1`.
-fn backfill_position_state(tx: &Transaction<'_>) -> Result<(), BackendError> {
-    let next: i64 = tx
-        .query(
-            "SELECT next_history_serial FROM history_meta WHERE id=1",
-            vec![],
-        )?
-        .first()
-        .ok_or(BackendError::Integrity)?
-        .get(0)?;
-    let commit_max: i64 = tx
-        .query(
-            "SELECT COALESCE(MAX(history_serial),0) FROM \"commit\"",
-            vec![],
-        )?
-        .first()
-        .ok_or(BackendError::Integrity)?
-        .get(0)?;
-    let layer_max: i64 = tx
-        .query("SELECT COALESCE(MAX(history_serial),0) FROM layer", vec![])?
-        .first()
-        .ok_or(BackendError::Integrity)?
-        .get(0)?;
-    let base = next.max(commit_max.max(layer_max) + 1);
-    tx.query(
-        &format!(
-            "WITH ordered(commit_id,serial) AS ( \
-               SELECT commit_id,{base}+ROW_NUMBER() OVER (ORDER BY created_ms,commit_id)-1 \
-               FROM \"commit\" WHERE history_serial=0) \
-             UPDATE \"commit\" SET history_serial=( \
-               SELECT ordered.serial FROM ordered \
-               WHERE ordered.commit_id=\"commit\".commit_id) \
-             WHERE history_serial=0"
-        ),
-        vec![],
-    )?;
-    let after_commits: i64 = tx
-        .query(
-            "SELECT COALESCE(MAX(history_serial),0)+1 FROM \"commit\"",
-            vec![],
-        )?
-        .first()
-        .ok_or(BackendError::Integrity)?
-        .get(0)?;
-    tx.query(
-        &format!(
-            "WITH ordered(layer_id,serial) AS ( \
-               SELECT layer_id,{after_commits}+ROW_NUMBER() OVER ( \
-                 ORDER BY layer_stack_id,layer_id)-1 \
-               FROM layer WHERE history_serial=0 AND parent_layer_id IS NULL) \
-             UPDATE layer SET history_serial=( \
-               SELECT ordered.serial FROM ordered \
-               WHERE ordered.layer_id=layer.layer_id) \
-             WHERE history_serial=0 AND parent_layer_id IS NULL"
-        ),
-        vec![],
-    )?;
-    tx.query(
-        "UPDATE layer SET history_serial=( \
-           SELECT \"commit\".history_serial FROM \"commit\" \
-           WHERE \"commit\".layer_stack_id=layer.layer_stack_id \
-             AND \"commit\".commit_id=layer.source_commit_id) \
-         WHERE history_serial=0 AND source_commit_id IS NOT NULL",
-        vec![],
-    )?;
-    tx.query(
-        "INSERT INTO project_epoch(layer_stack_id,epoch) \
-         SELECT s.layer_stack_id,0 FROM layer_stack s \
-         WHERE NOT EXISTS ( \
-           SELECT 1 FROM project_epoch e WHERE e.layer_stack_id=s.layer_stack_id)",
-        vec![],
-    )?;
-    tx.query(
-        "UPDATE history_meta SET next_history_serial=MAX(next_history_serial,( \
-           SELECT COALESCE(MAX(history_serial),0)+1 FROM ( \
-             SELECT history_serial FROM \"commit\" \
-             UNION ALL SELECT history_serial FROM layer))) WHERE id=1",
         vec![],
     )?;
     Ok(())
@@ -327,8 +227,8 @@ impl super::session::connection::Session {
             let Some(row) = rows.first() else {
                 return Ok(());
             };
-            let current = without_position_columns(source((self.layout, self.acquisition)))
-                .replacen(GC, "", 1);
+            let current =
+                without_gc_columns(source((self.layout, self.acquisition))).replacen(GC, "", 1);
             if row.get::<String>(0)? != current
                 || row.get::<String>(1)? != definition(tx.connection, tx.work)?
             {
@@ -371,7 +271,7 @@ impl super::session::connection::Session {
             };
             // The schema this migration records is the one before the
             // lineage and merge tables; later migrations add those.
-            let current = without_position_columns(source((self.layout, self.acquisition)))
+            let current = without_gc_columns(source((self.layout, self.acquisition)))
                 .replacen(DIGESTS, "", 1)
                 .replacen(SCRATCH, "", 1)
                 .replacen(LINEAGE, "", 1)
@@ -419,7 +319,7 @@ impl super::session::connection::Session {
             let Some(row) = rows.first() else {
                 return Ok(());
             };
-            let current = without_position_columns(source((self.layout, self.acquisition)))
+            let current = without_gc_columns(source((self.layout, self.acquisition)))
                 .replacen(DIGESTS, "", 1)
                 .replacen(SCRATCH, "", 1)
                 .replacen(GC, "", 1);
@@ -457,7 +357,7 @@ impl super::session::connection::Session {
             let Some(row) = rows.first() else {
                 return Ok(());
             };
-            let current = without_position_columns(source((self.layout, self.acquisition)))
+            let current = without_gc_columns(source((self.layout, self.acquisition)))
                 .replacen(DIGESTS, "", 1)
                 .replacen(GC, "", 1);
             if row.get::<String>(0)? != current.replacen(SCRATCH, "", 1)
@@ -494,8 +394,8 @@ impl super::session::connection::Session {
             let Some(row) = rows.first() else {
                 return Ok(());
             };
-            let current = without_position_columns(source((self.layout, self.acquisition)))
-                .replacen(GC, "", 1);
+            let current =
+                without_gc_columns(source((self.layout, self.acquisition))).replacen(GC, "", 1);
             if row.get::<String>(0)? != current.replacen(DIGESTS, "", 1)
                 || row.get::<String>(1)? != definition(tx.connection, tx.work)?
             {
@@ -536,50 +436,6 @@ impl super::session::connection::Session {
                 return Ok(());
             }
             tx.bootstrap(GC)?;
-            let definition = definition(tx.connection, tx.work)?;
-            tx.query(
-                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
-                vec![Param::Text(current), Param::Text(definition)],
-            )?;
-            Ok(())
-        })
-    }
-    /// Adds the position state T1.4 introduced (`history_meta.next_history_serial`,
-    /// appended NOT NULL DEFAULT 1) and backfills the `commit`/`layer` serials
-    /// and `project_epoch` rows in the same write transaction: an additive
-    /// migration (REBUILD.md kind 2) under the same recorded-schema gate as
-    /// [`Self::add_gc_columns`]. `recorded == current` also matches a Store an
-    /// earlier step of this same open just brought forward, because those steps
-    /// record the current source before this column is appended.
-    pub(crate) fn add_position_state(&self) -> Result<(), BackendError> {
-        self.run::<_, BackendError>(true, |tx| {
-            let present = tx.query(
-                "SELECT 1 FROM pragma_table_info('history_meta') WHERE name='next_history_serial'",
-                vec![],
-            )?;
-            if !present.is_empty() {
-                return Ok(());
-            }
-            let rows = tx.query(
-                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
-                vec![],
-            )?;
-            let Some(row) = rows.first() else {
-                return Ok(());
-            };
-            let current = source((self.layout, self.acquisition));
-            let before = current.replacen(next_history_serial_column(), "", 1);
-            let recorded = row.get::<String>(0)?;
-            if (recorded != before && recorded != current)
-                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
-            {
-                return Ok(());
-            }
-            tx.query(
-                "ALTER TABLE history_meta ADD COLUMN next_history_serial INTEGER NOT NULL DEFAULT 1",
-                vec![],
-            )?;
-            backfill_position_state(tx)?;
             let definition = definition(tx.connection, tx.work)?;
             tx.query(
                 "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",

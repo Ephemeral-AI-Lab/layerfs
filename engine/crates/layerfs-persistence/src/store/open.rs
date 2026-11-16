@@ -108,7 +108,6 @@ impl SqliteHandles {
             // before `add_gc` records the full schema.
             session.add_gc_columns()?;
             session.add_gc()?;
-            session.add_position_state()?;
         }
         let handles = Self::validated(session, directory, binding, cursor_key)?;
         if writable {

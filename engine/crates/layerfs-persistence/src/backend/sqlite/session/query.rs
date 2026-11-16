@@ -45,12 +45,6 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "branch_branch_by_id" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/branch_branch_by_id.sql"
         )),
-        "branch_branch_by_id_any" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/branch_branch_by_id_any.sql"
-        )),
-        "branch_retire_insert" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/branch_retire_insert.sql"
-        )),
         "branch_branch_by_name" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/branch_branch_by_name.sql"
         )),
@@ -188,30 +182,6 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         )),
         "removal_stack" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/removal_stack.sql"
-        )),
-        "position_high_water" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/position_high_water.sql"
-        )),
-        "position_stack_high_water" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/position_stack_high_water.sql"
-        )),
-        "position_next_serial" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/position_next_serial.sql"
-        )),
-        "position_node_serial" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/position_node_serial.sql"
-        )),
-        "paths_marker" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/paths_marker.sql"
-        )),
-        "paths_markers" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/paths_markers.sql"
-        )),
-        "paths_upsert" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/paths_upsert.sql"
-        )),
-        "paths_advance_epoch" => Ok(include_str!(
-            "../../../../sql/sqlite/queries/history/paths_advance_epoch.sql"
         )),
         _ => Err(BackendError::Integrity),
     }

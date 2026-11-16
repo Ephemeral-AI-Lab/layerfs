@@ -30,14 +30,6 @@ pub fn snapshot(
     Ok((reader, snap))
 }
 
-/// The project, its reader and the snapshot a read names, in that order.
-pub fn snapshot_full(
-    service: &StoreService,
-    args: &SdkValue,
-) -> Result<(LayerStackRecord, Arc<StorePorts>, Snap), SdkRefusal> {
-    crate::operator::args::snapshot(&service.store, args)
-}
-
 /// The required absolute path argument `name`, checked.
 pub fn path(args: &SdkValue, name: &str) -> Result<String, SdkRefusal> {
     files::path(text(args, name)?)

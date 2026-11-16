@@ -53,7 +53,6 @@ pub fn history(error: HistoryError) -> SdkRefusal {
         HistoryError::Capacity(_) => "Capacity",
         HistoryError::NameTaken(_) => "NameTaken",
         HistoryError::Removed(_) => "Removed",
-        HistoryError::Conflict(_) => "Conflict",
         HistoryError::StaleStore => "StaleStore",
         HistoryError::Unsupported(_) => "Unsupported",
         HistoryError::UnknownOutcome => "Unknown",
