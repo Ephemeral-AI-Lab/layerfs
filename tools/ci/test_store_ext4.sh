@@ -29,7 +29,9 @@
 #
 # Options
 #   --quick    a small cross-crate subset (heads, sqlite_publication,
-#              kernel_guard, commit_pipeline, create_directory, store_family)
+#              kernel_guard, commit_pipeline, create_directory,
+#              compact_report_status, store_family, calls_table, gc_calls,
+#              gc_trace, gc, sqlite_compact_process_kill)
 #   --full     every Store suite (the default)
 #   --list     print the cargo commands, run nothing
 #   --help     this text
@@ -357,8 +359,9 @@ fi
 if [ "$mode" = quick ]; then
   run_cargo layerfs-persistence --test heads --test sqlite_publication
   run_cargo layerfs-store-service --test kernel_guard --test commit_pipeline
-  run_cargo layerfs-store --test create_directory
-  run_cargo layerfs-api --test store_family
+  run_cargo layerfs-store --test create_directory --test compact_report_status
+  run_cargo layerfs-api --test store_family --test calls_table --test gc_calls --test gc_trace
+  run_cargo layerfs-cli --test gc --test sqlite_compact_process_kill
 else
   run_cargo layerfs-persistence
   run_cargo layerfs-store-service
@@ -372,6 +375,10 @@ else
   [ "${#api_store_targets[@]}" -gt 0 ] \
     || refuse "no api/crates/layerfs-api/tests/store_*.rs targets found; is $root the repository root?"
   run_cargo layerfs-api "${api_store_targets[@]}"
+  # The four GC calls, their trace and the scope refusal, and the CLI's GC
+  # commands plus the real-process compaction kill arms (T-G65).
+  run_cargo layerfs-api --test calls_table --test gc_calls --test gc_trace --test calls_scope
+  run_cargo layerfs-cli --test gc --test sqlite_compact_process_kill
 fi
 
 if [ "$list_only" -eq 1 ]; then

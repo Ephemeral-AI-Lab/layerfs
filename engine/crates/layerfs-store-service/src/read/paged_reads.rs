@@ -167,10 +167,7 @@ pub fn list(
         .map_err(args::content)?;
         let mut selected = Vec::new();
         for (name, serial) in &batch.entries {
-            if visibility
-                .hidden(&join(path, name))
-                .is_some()
-            {
+            if visibility.hidden(&join(path, name)).is_some() {
                 continue;
             }
             work.step()?;

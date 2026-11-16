@@ -117,10 +117,7 @@ fn hidden_rm_and_mv_sources_are_absent_while_cp_and_edit_are_removed() {
 
     // A hidden directory and its descendants are absent to `rm`/`mv` too.
     let refusal = fixture
-        .try_call(
-            "fs.rm",
-            vec![("branch", text("rm")), ("path", text("/d"))],
-        )
+        .try_call("fs.rm", vec![("branch", text("rm")), ("path", text("/d"))])
         .expect_err("hidden directory rm");
     assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
     let refusal = fixture

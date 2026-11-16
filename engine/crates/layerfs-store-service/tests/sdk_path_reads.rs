@@ -30,8 +30,8 @@ fn read(fixture: &Fixture, branch: &str, path: &str) -> Result<SdkValue, SdkRefu
 }
 
 fn visible(fixture: &Fixture, branch: &str, path: &str) -> String {
-    let value = read(fixture, branch, path)
-        .unwrap_or_else(|refusal| panic!("{branch}{path}: {refusal:?}"));
+    let value =
+        read(fixture, branch, path).unwrap_or_else(|refusal| panic!("{branch}{path}: {refusal:?}"));
     value.get_text("text").unwrap_or_default().to_owned()
 }
 
@@ -248,12 +248,8 @@ fn file_diff_reports_hidden_sides_as_removed_added_and_both() {
         3
     });
     fixture.fork("work");
-    let frontier_a = remove(&fixture, "/a")
-        .get_int("frontier_serial")
-        .unwrap();
-    let frontier_c = remove(&fixture, "/c")
-        .get_int("frontier_serial")
-        .unwrap();
+    let frontier_a = remove(&fixture, "/a").get_int("frontier_serial").unwrap();
+    let frontier_c = remove(&fixture, "/c").get_int("frontier_serial").unwrap();
 
     // Left visible, right hidden: Removed with a hidden right side object.
     let removed = fixture.call(
@@ -296,11 +292,7 @@ fn file_diff_reports_hidden_sides_as_removed_added_and_both() {
             ("right", selector("/c")),
         ],
     );
-    assert_eq!(
-        both.get_text("changeKind"),
-        Some("Removed"),
-        "{both:?}"
-    );
+    assert_eq!(both.get_text("changeKind"), Some("Removed"), "{both:?}");
     assert_eq!(
         both.get("left").unwrap().get_int("frontier_serial"),
         Some(frontier_a)
@@ -378,10 +370,7 @@ fn one_shot_edit_and_cp_from_a_hidden_path_refuse_removed() {
 
     // rm and mv-from treat it as absent (the tree has no entry there).
     let refusal = fixture
-        .try_call(
-            "fs.rm",
-            vec![("branch", text("rm")), ("path", text("/a"))],
-        )
+        .try_call("fs.rm", vec![("branch", text("rm")), ("path", text("/a"))])
         .expect_err("hidden rm");
     assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
     let refusal = fixture
@@ -587,22 +576,14 @@ fn branch_diff_treats_a_hidden_side_as_absent_on_both_routes() {
             ("page", SdkValue::Int(1)),
         ],
     );
-    assert_eq!(
-        kind_of(&extended).as_deref(),
-        Some("Added"),
-        "{extended:?}"
-    );
+    assert_eq!(kind_of(&extended).as_deref(), Some("Added"), "{extended:?}");
 
     // The reverse direction lists the same path as Removed on both routes.
     let legacy = fixture.call(
         "branch.diff_branches",
         vec![("from", text("right")), ("to", text("left"))],
     );
-    assert_eq!(
-        kind_of(&legacy).as_deref(),
-        Some("Removed"),
-        "{legacy:?}"
-    );
+    assert_eq!(kind_of(&legacy).as_deref(), Some("Removed"), "{legacy:?}");
     let extended = fixture.call(
         "branch.diff_branches",
         vec![

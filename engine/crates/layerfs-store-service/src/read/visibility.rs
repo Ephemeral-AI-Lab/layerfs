@@ -14,9 +14,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::merge::Rule;
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_history::error::{RemovedPath, RemovedState};
-use layerfs_history::{
-    HistoryError, LayerStackId, LayerStackRecord, NodeId, PathRemovalRecord,
-};
+use layerfs_history::{HistoryError, LayerStackId, LayerStackRecord, NodeId, PathRemovalRecord};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -185,8 +183,7 @@ impl Visibility {
                 continue;
             }
             let full = format!("/{relative}");
-            if snapshot::entry(reader, &snap.tree, &full)?.is_some()
-                && self.hidden(&full).is_some()
+            if snapshot::entry(reader, &snap.tree, &full)?.is_some() && self.hidden(&full).is_some()
             {
                 count += 1;
             }
@@ -225,10 +222,9 @@ impl Visibility {
             if Self::under(root, relative).is_none() {
                 continue;
             }
-            if walked
-                .iter()
-                .any(|hidden| layerfs_history::path::governs(hidden.as_bytes(), relative.as_bytes()))
-            {
+            if walked.iter().any(|hidden| {
+                layerfs_history::path::governs(hidden.as_bytes(), relative.as_bytes())
+            }) {
                 // Already counted when the governing hidden directory was walked.
                 continue;
             }

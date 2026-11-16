@@ -523,7 +523,11 @@ fn a_retired_source_branch_still_renders_on_its_layers() {
         panic!("{main:?}")
     };
     let id = layers[0].get_text("id").expect("layer id").to_owned();
-    assert_eq!(layers[0].get_text("source_branch"), Some("work"), "{main:?}");
+    assert_eq!(
+        layers[0].get_text("source_branch"),
+        Some("work"),
+        "{main:?}"
+    );
 
     ok(
         &home,

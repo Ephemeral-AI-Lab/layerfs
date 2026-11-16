@@ -166,12 +166,14 @@ fn commit(handles: &PostgresHandles, branch: BranchId, tag: u8) -> CommitRecord 
     let snapshot = handles.history.branch(branch).unwrap().unwrap();
     let expected_root = match snapshot.head_commit {
         Some(head) => handles.history.commit(head).unwrap().unwrap().root,
-        None => handles
-            .history
-            .layer(snapshot.base_layer)
-            .unwrap()
-            .unwrap()
-            .root,
+        None => {
+            handles
+                .history
+                .layer(snapshot.base_layer)
+                .unwrap()
+                .unwrap()
+                .root
+        }
     };
     match handles
         .history
@@ -308,7 +310,11 @@ fn an_empty_store_gains_the_columns_their_defaults_and_a_random_salt() {
                 &[&table, &column],
             )
             .unwrap();
-        assert_eq!(row.get::<_, String>(0), "NO", "{table}.{column} is NOT NULL");
+        assert_eq!(
+            row.get::<_, String>(0),
+            "NO",
+            "{table}.{column} is NOT NULL"
+        );
         assert_eq!(row.get::<_, String>(1), data_type, "{table}.{column} type");
         let default: Option<String> = row.get(2);
         assert!(default.is_some(), "{table}.{column} has a default");
@@ -380,10 +386,12 @@ fn commits_layers_and_the_next_serial_are_backfilled_once() {
 
     // Every republished tree carries the serial of the Commit it publishes.
     for row in trees.iter().filter(|row| row.2.is_some()) {
-        let source = row.3.as_deref().expect("a published Layer holds its Commit");
+        let source = row
+            .3
+            .as_deref()
+            .expect("a published Layer holds its Commit");
         assert_eq!(
-            row.4,
-            per_commit[source],
+            row.4, per_commit[source],
             "a Layer carries its source Commit serial"
         );
     }
@@ -400,7 +408,11 @@ fn commits_layers_and_the_next_serial_are_backfilled_once() {
     drop(admin);
     drop(schema.open().expect("an upgraded Store reopens"));
     let mut admin = schema.admin();
-    assert_eq!(salt(&mut admin), assigned_salt, "the salt is never replaced");
+    assert_eq!(
+        salt(&mut admin),
+        assigned_salt,
+        "the salt is never replaced"
+    );
     assert_eq!(next_serial(&mut admin), assigned_next);
 }
 
@@ -446,7 +458,10 @@ fn a_recorded_source_no_release_wrote_is_refused() {
     make_old(&schema);
     schema
         .admin()
-        .execute("UPDATE history_meta SET schema_source=schema_source||'x'", &[])
+        .execute(
+            "UPDATE history_meta SET schema_source=schema_source||'x'",
+            &[],
+        )
         .unwrap();
     let refused = match schema.open() {
         Ok(_) => panic!("a tampered source is refused"),

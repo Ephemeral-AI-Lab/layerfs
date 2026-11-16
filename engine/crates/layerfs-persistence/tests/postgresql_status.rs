@@ -203,7 +203,12 @@ fn every_postgresql_failpoint_projects_its_phase() {
     };
     for (tag, point, phase, op) in [
         ("cmark", CompactFailpoint::PostgresAfterMark, "mark", 0x61u8),
-        ("cbuild", CompactFailpoint::PostgresAfterBuild, "build", 0x62),
+        (
+            "cbuild",
+            CompactFailpoint::PostgresAfterBuild,
+            "build",
+            0x62,
+        ),
         ("cswap", CompactFailpoint::PostgresAfterSwap, "swap", 0x63),
     ] {
         let schema = Schema::new(url.clone(), tag);
@@ -221,7 +226,10 @@ fn every_postgresql_failpoint_projects_its_phase() {
         // The released `gc_intent` is gone, so the scratch name carries the
         // op identity the projection shows.
         assert_eq!(status.op_id, [op; 16], "{tag}: the artifact names the op");
-        assert!(!status.alive, "{tag}: the failed owner is not running the op");
+        assert!(
+            !status.alive,
+            "{tag}: the failed owner is not running the op"
+        );
         assert!(status.uncertain, "{tag}: a failed run stays uncertain");
         let projected = status.status();
         assert_eq!(projected.name, "store.compact");
@@ -230,15 +238,15 @@ fn every_postgresql_failpoint_projects_its_phase() {
         assert_eq!(projected.phase, phase);
         assert_eq!(projected.phases, &PHASES[..]);
         // The next call settles the leftover and removes the row.
-        let receipt = handles
-            .compact(&request(op.wrapping_add(1), None))
-            .unwrap();
+        let receipt = handles.compact(&request(op.wrapping_add(1), None)).unwrap();
         assert!(
             receipt.generation_after >= receipt.generation_before,
             "{tag}: settled"
         );
         assert!(
-            postgresql_compact_status(&url, &schema.name).unwrap().is_none(),
+            postgresql_compact_status(&url, &schema.name)
+                .unwrap()
+                .is_none(),
             "{tag}: a settled run projects no op"
         );
     }
@@ -254,9 +262,15 @@ fn a_completed_run_leaves_no_projection() {
     let _ = whole_file(&handles, b"t10.5 completed dead content");
     let before = handles.history.incarnation();
     let receipt = handles.compact(&request(0x71, None)).unwrap();
-    assert_eq!(receipt.generation_after, before + 1, "the rebuild installed");
+    assert_eq!(
+        receipt.generation_after,
+        before + 1,
+        "the rebuild installed"
+    );
     // `store.status` after a completed run: idle, with the intent released.
-    assert!(postgresql_compact_status(&url, &schema.name).unwrap().is_none());
+    assert!(postgresql_compact_status(&url, &schema.name)
+        .unwrap()
+        .is_none());
     let intents: i64 = schema
         .admin()
         .query_one(

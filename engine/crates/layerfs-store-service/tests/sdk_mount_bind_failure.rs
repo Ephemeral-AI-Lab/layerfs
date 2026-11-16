@@ -86,10 +86,7 @@ fn a_bind_failure_cleans_its_intent_and_leaves_no_mounts_active() {
         "a failed bind leaves no committed intent"
     );
     // No `MountsActive` remains: the removal is admitted.
-    fixture.call(
-        "project.remove_file",
-        vec![("path", SdkValue::text("/a"))],
-    );
+    fixture.call("project.remove_file", vec![("path", SdkValue::text("/a"))]);
 
     fixture.cleanup();
 }

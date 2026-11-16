@@ -15,8 +15,8 @@ use layerfs_home::names::StoreName;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_persistence::{PersistenceConfig, SealedStore, SqlitePersistenceProfile};
 use layerfs_project::store::{AddRequest, InitError, ProjectApi};
-use layerfs_store_service::history::lookup;
 use layerfs_project::{InitCounters, ProjectError};
+use layerfs_store_service::history::lookup;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 

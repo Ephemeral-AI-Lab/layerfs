@@ -12,7 +12,8 @@
 #
 # It adds no test selection of its own: every target it runs is already in the
 # push or nightly lane chosen by tools/ci_tests.py. It runs them under the
-# environment contract their guard requires.
+# environment contract their guard requires. This is the one lane that also
+# runs for pull requests into layerfs_v2_0_0, the 2.0 release base.
 #
 # Reports only, like the other lanes (AGENTS.md §4): never a required check.
 # The runner's /mnt is a separate ext4 data disk while /tmp is tmpfs, so the
@@ -37,8 +38,8 @@ on:
       - ".github/workflows/store-ext4.yml"
       - "!**/*.md"
   pull_request:
-    # off for pull requests into layerfs_v2_0_0, like the other lanes
-    branches-ignore: [layerfs_v2_0_0]
+    # PRs into layerfs_v2_0_0 run this lane. Unlike the faster lanes it is not
+    # off for that base: 2.0 releases land there and need the Store suites.
     paths:
       - "core/**"
       - "engine/**"

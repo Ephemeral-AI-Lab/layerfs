@@ -681,8 +681,14 @@ pub fn select(
         input.counters.note_depth(role, 0);
         return Ok(full);
     };
-    let Some((base_id, base_cost)) =
-        trial_base(input, base_id, base_cost, canonical.len() as u64, depth_cap, id)?
+    let Some((base_id, base_cost)) = trial_base(
+        input,
+        base_id,
+        base_cost,
+        canonical.len() as u64,
+        depth_cap,
+        id,
+    )?
     else {
         return refused_by_budget(input, id, role, raw, prehashed, full);
     };

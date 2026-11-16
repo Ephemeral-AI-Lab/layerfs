@@ -220,8 +220,8 @@ fn change(
         Visibility::node_serial(&workspace.store, node)?,
     )?;
     let reader: Arc<crate::store::StorePorts> = workspace.store.ports(base.scope);
-    let tree = TreeTable::open(&*reader, FilesystemRootId(base.effective_root))
-        .map_err(args::content)?;
+    let tree =
+        TreeTable::open(&*reader, FilesystemRootId(base.effective_root)).map_err(args::content)?;
     let removed = |path: &str| -> Result<Option<SdkRefusal>, SdkRefusal> {
         let exists = snapshot::entry(&reader, &tree, path)?.is_some();
         Ok(exists

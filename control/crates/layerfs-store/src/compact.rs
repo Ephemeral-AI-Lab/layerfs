@@ -1,11 +1,13 @@
-//! `store.compact`: one sqlite Store's §7 rebuild, run in this process.
+//! `store.compact`: one Store's §7 (SQLite) or §8 (PostgreSQL) rebuild, run
+//! in this process.
 //!
 //! The call takes the Store's lease, so a move or remove cannot start, and
 //! closes the Store this process holds open: a call still running on it is
 //! `InUse`, before any effect. It then opens the Store's own session, runs
 //! the §7 (SQLite) or §8 (PostgreSQL) compaction and answers the §11 report.
-//! A SQLite Store on another machine is `Unsupported` here: its rebuild runs
-//! in that machine's worker.
+//! A SQLite Store on another machine is `Unsupported` here: compaction is
+//! local-only and the worker has no compaction route; run it on that Store's
+//! machine.
 use crate::identity;
 #[cfg(feature = "postgresql")]
 use crate::identity::Kind;
@@ -67,7 +69,7 @@ fn crash_failpoint() -> Option<CompactFailpoint> {
     None
 }
 
-/// `store.compact(name)`: reclaim one sqlite Store's dead bytes, answering
+/// `store.compact(name)`: reclaim one Store's dead bytes, answering
 /// the §11 report.
 pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
     let home = home.to_path_buf();
@@ -89,7 +91,7 @@ pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
         Executor::Worker(_) => {
             return Err(refused(
                 "Unsupported",
-                format!("store.compact of Store {store} runs on its own machine, not this one"),
+                format!("store.compact of Store {store} is local-only: run it on that Store's machine (no worker route)"),
             ))
         }
     }

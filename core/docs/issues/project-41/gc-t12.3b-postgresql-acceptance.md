@@ -76,7 +76,7 @@ row and is not part of the PG half).
 | AC-38 | partial | E1 | The scratch name `lfs_gc_<op hex>` is recorded before CREATE and removed at the swap/settle: the four-failpoint test asserts `scratch_exists` per phase. Deferred: a remote machine removing the scratch schema and a stray schema refusing with `Exists`. |
 | AC-39 | **pass** | E1 | `postgresql_position_columns` 4/4 (one `project_epoch` row per stack, serials backfilled once, never lowered) plus the new fixture: the rebuild copies the epoch, `gc_op`/`gc_dead` are cleared on settle and not copied. |
 | AC-40 | **pass** | E2 | `the_live_heads_digest_vector_is_the_sqlite_literal` + `the_rebuild_report_and_markers_hold_on_postgresql` vs the T12.1 SQLite golden; the retired head moves the digest on both. |
-| AC-41 | partial | E1 | The depth-2 chain is kept only as delta bases, both reported in identity order; every retained pack keeps its `pack_id` and its `length` after the swap. Deferred: `markBytes` as a wire metric — it is a #52 metric and is not a `store.compact` result field (§11 matrix note), so there is nothing to assert in the receipt. |
+| AC-41 | partial | E1 | The depth-2 chain is kept only as delta bases, both reported in identity order; every retained pack keeps its `pack_id` and its `length` after the swap. Deferred: `markBytes` is a #52 metric and is not implemented in this PR: it is not a `store.compact` result field (§11 matrix note), so there is nothing to assert in the receipt. |
 | AC-42 | deferred | E0 | A Save reserved before the mark and published during Phase A must make the swap `Conflict`. The PG round has no pause point between build and swap (`stop()` returns immediately), so a publication cannot be interleaved deterministically; a wall-clock race would not be a fixed fixture. |
 | AC-43 | **pass** | E2 | After the swap and the resumed cleanup: the four `store_totals` equal their row sums, `pack`/`object_location` keep owner and the `pack_immutable` trigger bound to the schema function (and the trigger still refuses an update), `binding_hint_block` is cleared, there is no `inode` table on PG, the Store opens at `G+1` and passes the full doctor. |
 | AC-44 | deferred | E0 | Missing `CREATE`/`TEMP`/`pg_read_all_stats` needs roles the suite may create and a server it may reconfigure; a truly lost `COMMIT` reply needs a killed backend. The `PostgresAfterSwap` failpoint is the deterministic substitute and proves resume, not reply loss. |
@@ -146,5 +146,5 @@ not change that file; it only records the finding.
   compaction-layer; only their compaction-op liveness arm is here.
 - **AC-30/31/34/37** (error detail, trace, intent bind, redaction) are
   control-layer rows and are untouched.
-- `markBytes` (AC-41) is not a `store.compact` field, so the PG half cannot
-  assert it from the receipt.
+- `markBytes` (AC-41) is a #52 metric, not implemented in this PR and not a
+  `store.compact` field, so the PG half cannot assert it from the receipt.

@@ -182,7 +182,7 @@ built addon).
 | `store.push` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.pull` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `store.remove` | admin | admin | create, connect, transfer and remove Stores; administration |
-| `store.compact` | admin | admin | reclaim one sqlite Store's dead bytes; administration; a folder scope refuses it |
+| `store.compact` | admin | admin | reclaim one Store's dead bytes; administration; a folder scope refuses it |
 | `store.disconnect` | admin | admin | create, connect, transfer and remove Stores; administration |
 | `backup.connect` | admin | admin | upload and restore a Store on a bucket; administration |
 | `backup.disconnect` | admin | admin | upload and restore a Store on a bucket; administration |

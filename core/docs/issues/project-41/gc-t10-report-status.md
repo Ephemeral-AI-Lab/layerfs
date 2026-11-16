@@ -49,7 +49,10 @@ accounting).
 While a compaction runs, or after a dead owner left one, the call adds:
 
 - `op` — `{id, name, phase, started, uncertain}` from `<store>.compact-op`
-  (SQLite) / the Store's `gc_op` (PostgreSQL, T9);
+  (SQLite) / the Store's `gc_op` (PostgreSQL, T9). `id` is the recorded
+  16-byte operation id rendered as `op-<32 lowercase hex>`, the sidecar's
+  `op_id`/`gc_op`'s `gc_intent.op_id` (or the `lfs_gc_<hex>` scratch name when
+  the intent is released), never a row number or a new id;
 - `state` — `busy` while the owner lives, `unresolved` once it is gone
   (otherwise the existing `idle`/`in_use`/`busy`/`down` state). `uncertain`
   is the engine projection's own fact and is true for **every** record that
@@ -176,5 +179,5 @@ metrics call: `snapshot()` reads the process totals and
 - No control-level test joins `store.compact` and `store.status` in one run:
   the control case writes the rows a compaction leaves and checks the
   projection, while the persistence suites run the compactions themselves.
-- The `{value, cap}` capped-field shape is not produced: the SQLite receipt
-  has no cap today.
+- The `{value, cap}` capped-field shape is not produced: neither backend caps
+  a field in 2.0, so AC-52 does not claim it.

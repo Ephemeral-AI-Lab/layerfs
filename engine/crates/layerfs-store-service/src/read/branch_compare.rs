@@ -25,9 +25,7 @@ fn walker<'a>(
     after: Option<&str>,
     visibility: &Visibility,
 ) -> Result<Option<Walker<'a>>> {
-    if snapshot::entry(reader, &snap.tree, path)?.is_some()
-        && visibility.hidden(path).is_none()
-    {
+    if snapshot::entry(reader, &snap.tree, path)?.is_some() && visibility.hidden(path).is_none() {
         Walker::after(reader, snap, path, after).map(Some)
     } else {
         Ok(None)
@@ -122,10 +120,7 @@ pub fn diff(
         walker(reader, right, &prefix, after, &right_seen)?
     };
     let mut last = None;
-    let (mut l, mut r) = (
-        next(&mut lw, &left_seen)?,
-        next(&mut rw, &right_seen)?,
-    );
+    let (mut l, mut r) = (next(&mut lw, &left_seen)?, next(&mut rw, &right_seen)?);
     let (mut seen, mut examined, mut bytes, mut more) = (0u64, 0u64, 0usize, false);
     let mut items = Vec::new();
     let mut incomplete = false;
