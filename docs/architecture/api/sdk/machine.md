@@ -272,8 +272,10 @@ a read changes nothing. An `unresolved` machine is cleared by `machine.remove`.
 ### machine.stats
 
 What a machine has and uses now: its processors, memory and data disk, each
-sqlite Store's size and how many of its Sandboxes have a running daemon
-(layerfs-project#164). A monitoring read for a UI that polls: it is in the
+sqlite Store's size, how many of its Sandboxes have a running daemon and what
+each of them uses (layerfs-project#164, #182). It answers the present only:
+processor values are counters, and a client keeps its own history and turns
+two reads into a rate. A monitoring read for a UI that polls: it is in the
 MCP server's `ui` bucket, not in an agent profile, and writes no call-log
 line.
 
@@ -287,10 +289,13 @@ CLI     layerfs machine stats <machine>
 { machine, platform, observed_at,
   worker: { version, pid, started_at, protocol, bundle } | null,
   resources: { cpus, memory_total, memory_used,
-               disk_total, disk_used, disk_free, scope, reason? },
+               disk_total, disk_used, disk_free,
+               cpu_busy_usec, cpu_total_usec, scope, reason? },
   data_disk: { path, fs, scope, volume, inodes_free },
   stores: [ { name, bytes, allocated } ],
-  sandboxes: { recorded, live },
+  sandboxes: { recorded, live,
+               items: [ { name, live, live_reason?, started_at,
+                          usage, usage_reason? } ] },
   complete, reason? }
 ```
 
@@ -301,14 +306,16 @@ CLI     layerfs machine stats <machine>
 | `resources.cpus` | the processors the answering process may run on: where the worker runs in a container with a processor quota (`apple-container`), the quota, which can be less than the processors the guest kernel lists | [`inspect/host.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/host.rs) |
 | `resources.memory_total`, `memory_used` | bytes. Linux: `MemTotal` and `MemTotal - MemAvailable` of `/proc/meminfo`. macOS: `hw.memsize`, and that less the free, file-backed and purgeable pages, from one run of `/usr/sbin/sysctl` | `host.rs` |
 | `resources.disk_total`, `disk_used`, `disk_free` | one `statvfs` of the filesystem that holds the machine's data. `disk_used` is the total less every free block; `disk_free` is what the answering process may use, so the two can sum to less than the total where blocks are reserved. On a machine whose data is on its own volume or disk (`lima`, `apple-container`) these are that volume's sizes, not the whole VM's | [`home/capacity.rs`](../../../../control/crates/layerfs-home/src/home/capacity.rs) `filesystem` |
+| `resources.cpu_busy_usec`, `cpu_total_usec` | the machine's processor time since boot, in microseconds, from the first `cpu` line of `/proc/stat` (one read, which also gives the boot time every row's `started_at` uses): busy is user + nice + system + irq + softirq + steal, total is busy + idle + iowait, each in ticks of 1/100 s × 10,000. Guest time is inside user and nice already. Steal counts as busy: on a VM it is time the host took from it. The machine's processor share between two reads is Δbusy / Δtotal, which needs neither `cpus` nor a clock; it is of the kernel `scope` names, so on `docker` the whole Engine VM even where `cpus` is a container's quota. `null` on macOS (`cpu_unsupported`: its only source, `host_statistics`, needs `unsafe` code this crate forbids) and when the read failed (`cpu_not_read`) | `host.rs` `cpu`, [`inspect/process.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/process.rs) `KernelStat` |
 | `resources.scope` | whose processors and memory they are: `host` (`native`), `vm` (`lima`, `apple-container`), `engine_host` (`docker`: the kernel the Engine runs on, a VM on macOS and Windows) | `stats.rs` `scopes` |
-| `resources.reason` | which values are null and why: `memory_not_read`, `disk_not_read`, joined by `, `; absent when all were read | `stats.rs` |
+| `resources.reason` | which values are null and why, joined by `, `; absent when all were read. Each word names its fields: `memory_not_read` → `memory_*`; `disk_not_read` → `disk_*`; `cpu_unsupported`, `cpu_not_read` → `cpu_*`. A client shows a word it does not know as it is | `stats.rs` |
 | `data_disk.path`, `fs` | the folder whose filesystem was measured, as the answering side names it (the home, or the worker's root), and its type (`apfs`, `ext4`, `xfs`, `btrfs`, `overlay`, ..., else the magic number in hex) | `capacity.rs` |
 | `data_disk.scope` | what that filesystem is: `host_fs` (`native`; `docker` on a Linux host, where a volume is a folder of the host's filesystem), `vm_disk` (`docker` on macOS and Windows: the Engine VM's one disk, shared with every image and volume), `volume` (`lima`, `apple-container`: the machine's own disk) | `stats.rs` `scopes` |
 | `data_disk.volume` | the provider's name of the volume or disk, from the machine's record; `null` on `native` | [`adapter.rs`](../../../../control/crates/layerfs-platform/src/adapter.rs) `data_volume` |
 | `data_disk.inodes_free` | file slots free; `null` where the filesystem counts none | `capacity.rs` |
 | `stores[]` | the sqlite Stores the home records on the machine: `bytes` is the length of `store.sqlite` plus its `-wal`, `allocated` their blocks, each from one `lstat`; no Store file is opened. A sparse file shows in the difference; a clone counts in full. Both `null` when the file is not there, or when the deadline came first | `stats.rs` `store_bytes` |
 | `sandboxes.recorded`, `live` | the Sandboxes the home records on the machine, and how many of them have a daemon process that still runs (the check of `sandbox.list`'s `live`); `live` is `null` when the deadline came first | [`inspect/live.rs`](../../../../control/crates/layerfs-sandbox/src/inspect/live.rs) |
+| `sandboxes.items[]` | one row per recorded Sandbox, in the home's order, read by the side that runs it from its own daemon record, `/proc` and the Sandbox's cgroup (a forwarded Lima Sandbox by the machine's worker; no daemon is dialed): `live` and `live_reason` as `sandbox.list`'s `live`; `started_at`, ms since the epoch when its daemon record's process started (`null` when it is gone); `usage` and `usage_reason` exactly as [`sandbox.get`](sandbox.md#sandboxget)'s. With no daemon record read, `started_at` and `usage` are `null` and `usage_reason` is `not_observed`, or the row's own reason (`record_unreadable`). A row the soft budget did not reach stays, `live: null, live_reason: "deadline", usage: null, usage_reason: "deadline"`: an absent row would read as a closed Sandbox. A worker of an older build answers no `items`, and the field is absent | `stats.rs` `item`, `live.rs` `checked` |
 | `complete`, `reason` | `false` with `reason: "deadline"` when the request's soft budget (4 s) ended the Store or Sandbox part early; what was read is answered | `stats.rs` |
 
 It is one [inspect](../../control/sandboxes/inspect.md) request, kind
@@ -319,7 +326,7 @@ are not listed: their data is not on a machine.
 
 ```text
 $ layerfs machine stats native
-{"machine":"native","platform":"native","observed_at":1794776707857,"worker":null,"resources":{"cpus":14,"memory_total":38654705664,"memory_used":31340068864,"disk_total":994662584320,"disk_used":641705943040,"disk_free":352956641280,"scope":"host"},"data_disk":{"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs","volume":null,"inodes_free":3446842200},"stores":[{"name":"shop","bytes":217088,"allocated":217088}],"sandboxes":{"recorded":12,"live":10},"complete":true}
+{"machine":"native","platform":"native","observed_at":1794776707857,"worker":null,"resources":{"cpus":14,"memory_total":38654705664,"memory_used":31340068864,"disk_total":994662584320,"disk_used":641705943040,"disk_free":352956641280,"cpu_busy_usec":null,"cpu_total_usec":null,"scope":"host","reason":"cpu_unsupported"},"data_disk":{"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs","volume":null,"inodes_free":3446842200},"stores":[{"name":"shop","bytes":217088,"allocated":217088}],"sandboxes":{"recorded":1,"live":1,"items":[{"name":"web","live":true,"started_at":1794776100211,"usage":null,"usage_reason":"host_process"}]},"complete":true}
 ```
 
 Errors: `NotFound` (no such machine); `Unavailable` (the machine is stopped or its worker

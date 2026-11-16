@@ -3,14 +3,32 @@
 //! container (the docker machine's worker) these are the Engine host's;
 //! in a VM the VM's own.
 //!
-//! Linux reads `/proc/meminfo`. macOS has no such file: one run of
+//! Linux reads `/proc/meminfo`, and `/proc/stat` for the processor
+//! counters (layerfs-project#182 L1). macOS has no such files: one run of
 //! `/usr/sbin/sysctl` (the tool `layerfs_bridge::process` reads the boot
-//! id with) prints the five numbers, with no new system call binding.
+//! id with) prints the five memory numbers, with no new system call
+//! binding; its processor ticks need `host_statistics`, an `unsafe` call
+//! this crate forbids, so they are not read.
+use super::process::KernelStat;
 
 /// The processors this process may run on.
 pub(super) fn cpus() -> Option<i64> {
     let cpus = std::thread::available_parallelism().ok()?;
     i64::try_from(cpus.get()).ok()
+}
+
+/// The machine's processor counters and boot time ([`KernelStat`]), from
+/// one read of `/proc/stat`, with why the counters are null when they are:
+/// `cpu_not_read` when the read failed, `cpu_unsupported` on a system with
+/// no `/proc/stat` (macOS). In a container (the docker machine's worker)
+/// `/proc/stat` covers the whole Engine host.
+pub(super) fn cpu() -> (KernelStat, Option<&'static str>) {
+    if cfg!(target_os = "linux") {
+        let stat = KernelStat::read();
+        (stat, stat.busy_usec.is_none().then_some("cpu_not_read"))
+    } else {
+        (KernelStat::default(), Some("cpu_unsupported"))
+    }
 }
 
 /// Memory in bytes: all of it and what is in use, each `None` when it was

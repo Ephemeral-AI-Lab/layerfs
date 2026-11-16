@@ -20,9 +20,12 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `machine.stats`: `{ machine, platform, observed_at, worker,
 /// resources, data_disk, stores, sandboxes, complete, reason? }`, read in
-/// one bounded request where the machine's data is. It takes no lock or
-/// lease, starts nothing and writes nothing, the call log included
-/// (layerfs-project#164).
+/// one bounded request where the machine's data is. `resources` holds the
+/// machine's processor counters (`cpu_busy_usec`, `cpu_total_usec`, null
+/// with `cpu_unsupported` on macOS) and `sandboxes.items` one row per
+/// recorded Sandbox with its `usage` (layerfs-project#182). It takes no
+/// lock or lease, starts nothing, dials no daemon and writes nothing, the
+/// call log included (layerfs-project#164).
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     machine_stats(&context.home, &machine)

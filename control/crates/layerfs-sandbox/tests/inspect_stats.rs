@@ -4,8 +4,9 @@
 //! started; its cgroup's usage from a cgroup v2 folder given as an
 //! argument), the inspect kinds `sandboxes_live` and `machine_stats`
 //! (processors, memory, the data disk, Store sizes by `stat`, live
-//! Sandboxes), what a request past its soft budget answers, and many
-//! Sandboxes and Stores inside it.
+//! Sandboxes), the processor counters and boot time of `/proc/stat`, each
+//! Sandbox's row (layerfs-project#182 L2), what a request past its soft
+//! budget answers, and many Sandboxes and Stores inside it.
 //!
 //! Nothing runs but two short `sleep`s: Stores are files this test writes
 //! (never opened by the read), daemons are this test's own process or a
@@ -16,6 +17,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::process::LocalProcess;
 use layerfs_home::home::{self, paths, write_record};
 use layerfs_home::names::MachineName;
+use layerfs_sandbox::inspect::process::KernelStat;
 use layerfs_sandbox::inspect::{self, process, Side, HARD, SOFT};
 use layerfs_sandbox::record::{DaemonRecord, Local, SandboxRecord};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -152,6 +154,11 @@ fn names(names: &[&str]) -> SdkValue {
     SdkValue::List(names.iter().map(|name| t(name)).collect())
 }
 
+/// This kernel's boot time, as one read of `/proc/stat` gives it.
+fn boot() -> Option<u64> {
+    KernelStat::read().boot
+}
+
 fn refused(outcome: Result<SdkValue, SdkRefusal>) -> String {
     match outcome {
         Ok(value) => format!("ok {value:?}"),
@@ -164,7 +171,7 @@ fn a_daemon_process_is_live_by_id_start_and_boot_and_says_when_it_started() {
     let run = Path::new("/nowhere");
     let live = daemon(me(), "native", run);
     assert_eq!(process::live(&live), Ok(true));
-    let shown = process::shown(&live);
+    let shown = process::shown(&live, boot());
     assert_eq!(shown.get_int("pid"), Some(i64::from(std::process::id())));
     // this test started within the last day, and not in the future
     let started = shown.get_int("started_at").unwrap();
@@ -172,13 +179,14 @@ fn a_daemon_process_is_live_by_id_start_and_boot_and_says_when_it_started() {
         started <= now() + 2_000 && started > now() - 86_400_000,
         "{started}"
     );
-    assert_eq!(process::started_at(me().start), Some(started));
+    assert_eq!(process::started_at(me().start, boot()), Some(started));
+    assert_eq!(process::start_of(&live, boot()), Some(started));
 
     // a process that ended, and its id under another start time
     let gone = ended();
     let record = daemon(gone, "native", run);
     assert_eq!(process::live(&record), Ok(false));
-    let shown = process::shown(&record);
+    let shown = process::shown(&record, boot());
     assert_eq!(shown.get_int("pid"), Some(i64::from(gone.pid)));
     assert_eq!(shown.get("started_at"), Some(&SdkValue::Null), "{shown:?}");
     let reused = LocalProcess {
@@ -196,7 +204,7 @@ fn a_daemon_process_is_live_by_id_start_and_boot_and_says_when_it_started() {
     let none = DaemonRecord::from_record(&SdkValue::map([("name", t("lfs-x-s1"))]));
     assert_eq!(process::live(&none), Err("no_pid"));
     assert_eq!(
-        layerfs_home::json::print(&process::shown(&none)),
+        layerfs_home::json::print(&process::shown(&none, boot())),
         r#"{"pid":null,"started_at":null}"#
     );
 }
@@ -233,7 +241,7 @@ fn usage_is_a_namespaces_sandbox_s_cgroup_v2_files() {
     assert_eq!(
         print(process::usage(&spaced, &root)),
         (
-            r#"{"cpu_usec":null,"memory_current":null,"memory_peak":null,"pids":null}"#.to_owned(),
+            r#"{"cpu_usec":null,"memory_current":null,"memory_peak":null,"memory_file":null,"pids":null,"oom_kills":null}"#.to_owned(),
             Some("no_controller")
         )
     );
@@ -248,7 +256,7 @@ fn usage_is_a_namespaces_sandbox_s_cgroup_v2_files() {
     assert_eq!(
         print(process::usage(&spaced, &root)),
         (
-            r#"{"cpu_usec":1234567,"memory_current":null,"memory_peak":null,"pids":null}"#
+            r#"{"cpu_usec":1234567,"memory_current":null,"memory_peak":null,"memory_file":null,"pids":null,"oom_kills":null}"#
                 .to_owned(),
             Some("no_controller")
         )
@@ -258,20 +266,43 @@ fn usage_is_a_namespaces_sandbox_s_cgroup_v2_files() {
     assert_eq!(
         print(process::usage(&spaced, &root)),
         (
-            r#"{"cpu_usec":1234567,"memory_current":52428800,"memory_peak":null,"pids":7}"#
+            r#"{"cpu_usec":1234567,"memory_current":52428800,"memory_peak":null,"memory_file":null,"pids":7,"oom_kills":null}"#
                 .to_owned(),
             None
         )
     );
     std::fs::write(group.join("memory.peak"), "104857600\n").unwrap();
+    // `memory.stat` and `memory.events` as the kernel writes them: the
+    // values are their `file` and `oom_kill` lines, not a longer key that
+    // starts the same (`file_mapped`, `oom_kill_disable`-like names)
+    std::fs::write(
+        group.join("memory.stat"),
+        "anon 1000\nfile_mapped 99\nfile 8388608\nkernel 12\n",
+    )
+    .unwrap();
+    std::fs::write(
+        group.join("memory.events"),
+        "low 0\nhigh 0\nmax 3\noom 1\noom_kill 1\noom_group_kill 0\n",
+    )
+    .unwrap();
     assert_eq!(
         print(process::usage_in(&root, &id)),
         (
-            r#"{"cpu_usec":1234567,"memory_current":52428800,"memory_peak":104857600,"pids":7}"#
+            r#"{"cpu_usec":1234567,"memory_current":52428800,"memory_peak":104857600,"memory_file":8388608,"pids":7,"oom_kills":1}"#
                 .to_owned(),
             None
         )
     );
+    // a runtime that is neither `namespaces` nor the host-process one is
+    // not taken for a host process
+    for runtime in ["firecracker", ""] {
+        let other = daemon(me(), runtime, &root);
+        assert_eq!(
+            print(process::usage(&other, &root)),
+            ("null".to_owned(), Some("not_supported")),
+            "{runtime}"
+        );
+    }
     // an id that is no group's name reads nothing outside the hierarchy
     for id in ["", "..", "a/b", "../layerfs"] {
         assert_eq!(process::usage_in(&root, id).1, Some("no_cgroup"), "{id}");
@@ -448,7 +479,34 @@ fn machine_stats_of_native_is_read_in_this_process_with_no_worker() {
     assert!(int("disk_used") <= int("disk_total"));
     assert!(int("disk_free") <= int("disk_total"));
     assert_eq!(resources.get_text("scope"), Some("host"));
-    assert!(resources.get("reason").is_none(), "{resources:?}");
+    let SdkValue::Map(fields) = resources else {
+        panic!("{resources:?}")
+    };
+    let keys: Vec<&str> = fields.iter().map(|(name, _)| name.as_str()).collect();
+    let mut want = vec![
+        "cpus",
+        "memory_total",
+        "memory_used",
+        "disk_total",
+        "disk_used",
+        "disk_free",
+        "cpu_busy_usec",
+        "cpu_total_usec",
+        "scope",
+    ];
+    if cfg!(target_os = "linux") {
+        // the machine's processor time since boot, busy within all of it
+        assert!(int("cpu_busy_usec") > 0);
+        assert!(int("cpu_busy_usec") <= int("cpu_total_usec"));
+        assert!(resources.get("reason").is_none(), "{resources:?}");
+    } else {
+        // macOS has no `/proc/stat`: null, and the reason word says so
+        assert_eq!(resources.get("cpu_busy_usec"), Some(&SdkValue::Null));
+        assert_eq!(resources.get("cpu_total_usec"), Some(&SdkValue::Null));
+        assert_eq!(resources.get_text("reason"), Some("cpu_unsupported"));
+        want.push("reason");
+    }
+    assert_eq!(keys, want);
     let disk = home::filesystem(&home).unwrap();
     assert_eq!(int("disk_total"), disk.total as i64);
     let data_disk = stats.get("data_disk").unwrap();
@@ -490,10 +548,22 @@ fn machine_stats_of_native_is_read_in_this_process_with_no_worker() {
         layerfs_home::json::print(of("empty")),
         r#"{"name":"empty","bytes":null,"allocated":null}"#
     );
-    // the Sandboxes its records place here: the dead one is recorded, not live
+    // the Sandboxes its records place here: the dead one is recorded, not
+    // live; each has its row, in the records' order, and a host-process
+    // Sandbox has no cgroup usage
+    let sandboxes = stats.get("sandboxes").unwrap();
+    assert_eq!(sandboxes.get_int("recorded"), Some(2));
+    assert_eq!(sandboxes.get_int("live"), Some(1));
+    let started = process::started_at(me().start, boot()).unwrap();
     assert_eq!(
-        layerfs_home::json::print(stats.get("sandboxes").unwrap()),
-        r#"{"recorded":2,"live":1}"#
+        layerfs_home::json::print(sandboxes.get("items").unwrap()),
+        format!(
+            concat!(
+                r#"[{{"name":"dead","live":false,"started_at":null,"usage":null,"usage_reason":"host_process"}},"#,
+                r#"{{"name":"up","live":true,"started_at":{},"usage":null,"usage_reason":"host_process"}}]"#
+            ),
+            started
+        )
     );
 
     // the request by its kind, as a worker serves it: no scopes, no names
@@ -546,7 +616,7 @@ fn a_request_past_its_soft_budget_answers_what_it_has_and_says_so() {
             let request = SdkValue::map([
                 ("kind", t(kind)),
                 ("stores", names(&["shop"])),
-                ("sandboxes", names(&["up"])),
+                ("sandboxes", names(&["up", "s2", "s3"])),
             ]);
             inspect::serve(&Side::Home(&root), &request, budget)
         })
@@ -570,13 +640,25 @@ fn a_request_past_its_soft_budget_answers_what_it_has_and_says_so() {
         layerfs_home::json::print(stats.get("stores").unwrap()),
         r#"[{"name":"shop","bytes":null,"allocated":null}]"#
     );
+    // the Sandbox the budget did not reach keeps its row, null with why
     assert_eq!(
         layerfs_home::json::print(stats.get("sandboxes").unwrap()),
-        r#"{"live":null}"#
+        format!(
+            r#"{{"live":null,"items":[{}]}}"#,
+            ["up", "s2", "s3"]
+                .map(|name| format!(
+                    r#"{{"name":"{name}","live":null,"live_reason":"deadline","started_at":null,"usage":null,"usage_reason":"deadline"}}"#
+                ))
+                .join(",")
+        )
     );
     assert_eq!(
         layerfs_home::json::print(&late("sandboxes_live")),
-        r#"{"sandboxes":[{"name":"up","live":null,"reason":"deadline"}],"complete":false,"reason":"deadline"}"#
+        concat!(
+            r#"{"sandboxes":[{"name":"up","live":null,"reason":"deadline"},"#,
+            r#"{"name":"s2","live":null,"reason":"deadline"},"#,
+            r#"{"name":"s3","live":null,"reason":"deadline"}],"complete":false,"reason":"deadline"}"#
+        )
     );
     std::fs::remove_dir_all(home).unwrap();
 }
@@ -609,10 +691,18 @@ fn fifty_sandboxes_and_forty_stores_answer_inside_the_soft_budget() {
     assert!(listed(&stats, "stores")
         .iter()
         .all(|store| store.get_int("bytes") == Some(1 << 30)));
+    let sandboxes = stats.get("sandboxes").unwrap();
+    assert_eq!(sandboxes.get_int("recorded"), Some(50));
+    assert_eq!(sandboxes.get_int("live"), Some(40));
+    let items = listed(sandboxes, "items");
+    assert_eq!(items.len(), 50);
     assert_eq!(
-        layerfs_home::json::print(stats.get("sandboxes").unwrap()),
-        r#"{"recorded":50,"live":40}"#
+        (items.iter())
+            .filter(|item| item.get("live") == Some(&SdkValue::Bool(true)))
+            .count(),
+        40
     );
+    assert!(items.iter().all(|item| item.get("live_reason").is_none()));
     let records = layerfs_sandbox::record::sandboxes(&home).unwrap();
     let started = Instant::now();
     let live = inspect::sandboxes_live(&home, &records);
@@ -622,4 +712,106 @@ fn fifty_sandboxes_and_forty_stores_answer_inside_the_soft_budget() {
     assert_eq!(live.iter().filter(|l| l.live == Some(true)).count(), 40);
     assert_eq!(live.iter().filter(|l| l.live == Some(false)).count(), 10);
     std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn proc_stat_gives_processor_counters_in_microseconds_and_the_boot_time() {
+    // as a kernel writes it: user nice system idle iowait irq softirq steal
+    // guest guest_nice, in ticks of 1/100 s
+    let text = concat!(
+        "cpu  100 20 30 1000 50 5 6 7 40 2\n",
+        "cpu0 50 10 15 500 25 2 3 3 20 1\n",
+        "intr 12345\n",
+        "btime 1763251200\n",
+        "processes 99\n",
+    );
+    let stat = KernelStat::parse(text);
+    // busy = user + nice + system + irq + softirq + steal (guest is inside
+    // user and nice already); total = busy + idle + iowait
+    assert_eq!(stat.busy_usec, Some((100 + 20 + 30 + 5 + 6 + 7) * 10_000));
+    assert_eq!(stat.total_usec, Some((168 + 1000 + 50) * 10_000));
+    assert_eq!(stat.boot, Some(1_763_251_200));
+    // a line too short or not numbers: no counters, the boot time still read
+    for line in [
+        "cpu  1 2 3 4 5 6 7\n",
+        "cpu  1 2 x 4 5 6 7 8\n",
+        "cpu0 1 2 3 4 5 6 7 8\n",
+    ] {
+        let stat = KernelStat::parse(&format!("{line}btime 7\n"));
+        assert_eq!(
+            (stat.busy_usec, stat.total_usec, stat.boot),
+            (None, None, Some(7)),
+            "{line}"
+        );
+    }
+    assert_eq!(KernelStat::parse(""), KernelStat::default());
+    // a start in ticks since boot, placed by the boot time read with it
+    #[cfg(target_os = "linux")]
+    {
+        assert_eq!(process::started_at(250, Some(1_000)), Some(1_002_500));
+        assert_eq!(process::started_at(250, None), None);
+    }
+    // this kernel's own file, read once
+    let here = KernelStat::read();
+    if cfg!(target_os = "linux") {
+        assert!(here.busy_usec.unwrap() <= here.total_usec.unwrap());
+        assert!(here.boot.unwrap() > 1_000_000_000);
+    } else {
+        assert_eq!(here, KernelStat::default());
+    }
+}
+
+#[test]
+fn a_worker_s_rows_read_each_sandbox_s_record_on_its_side() {
+    let _turn = serial();
+    // a worker's root: a namespaces Sandbox, one whose record names no
+    // daemon, one whose record is not readable, one not recorded there
+    let root = scratch("rows");
+    let run = paths::run_root(&root);
+    sandbox(&root, "ns", "box", Some(&daemon(me(), "namespaces", &run)));
+    sandbox(&root, "fresh", "box", None);
+    let bad = paths::sandbox_record(&root, "bad");
+    std::fs::create_dir_all(bad.parent().unwrap()).unwrap();
+    std::fs::write(&bad, b"not a record").unwrap();
+    let request = SdkValue::map([
+        ("kind", t("machine_stats")),
+        ("sandboxes", names(&["ns", "fresh", "bad", "gone"])),
+    ]);
+    let served = {
+        let root = root.clone();
+        inspect::admit(move |budget| inspect::serve(&Side::Worker(&root), &request, budget))
+            .unwrap()
+    };
+    let rows = listed(served.get("sandboxes").unwrap(), "items");
+    let row = |at: usize| layerfs_home::json::print(&rows[at]);
+    // the namespaces Sandbox's usage is its cgroup on this kernel: none on
+    // macOS (no v2 hierarchy), and no group of that id on a Linux runner
+    let v2 = Path::new(process::CGROUP_ROOT)
+        .join("cgroup.controllers")
+        .is_file();
+    let why = if v2 { "no_cgroup" } else { "cgroup_v1" };
+    let started = process::started_at(me().start, boot()).unwrap();
+    assert_eq!(
+        row(0),
+        format!(
+            r#"{{"name":"ns","live":true,"started_at":{started},"usage":null,"usage_reason":"{why}"}}"#
+        )
+    );
+    assert_eq!(
+        row(1),
+        r#"{"name":"fresh","live":false,"started_at":null,"usage":null,"usage_reason":"not_observed"}"#
+    );
+    assert_eq!(
+        row(2),
+        concat!(
+            r#"{"name":"bad","live":null,"live_reason":"record_unreadable","#,
+            r#""started_at":null,"usage":null,"usage_reason":"record_unreadable"}"#
+        )
+    );
+    assert_eq!(
+        row(3),
+        r#"{"name":"gone","live":false,"started_at":null,"usage":null,"usage_reason":"not_observed"}"#
+    );
+    assert_eq!(served.get("sandboxes").unwrap().get_int("live"), Some(1));
+    std::fs::remove_dir_all(root).unwrap();
 }

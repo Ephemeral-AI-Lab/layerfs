@@ -371,15 +371,62 @@ const PARTS: [&str; 9] = [
     "sandboxes",
     "complete",
 ];
-const RESOURCES: [&str; 7] = [
+const RESOURCES: [&str; 9] = [
     "cpus",
     "memory_total",
     "memory_used",
     "disk_total",
     "disk_used",
     "disk_free",
+    "cpu_busy_usec",
+    "cpu_total_usec",
     "scope",
 ];
+
+/// `resources`' fields on this system: macOS reads no processor counters
+/// (layerfs-project#182 L1), so `cpu_*` are null and `reason` says so;
+/// Linux reads `/proc/stat`, busy within all of it.
+fn resources_read(resources: &SdkValue) {
+    let mut want = RESOURCES.to_vec();
+    if cfg!(target_os = "linux") {
+        let busy = resources.get_int("cpu_busy_usec").unwrap();
+        assert!(busy > 0 && busy <= resources.get_int("cpu_total_usec").unwrap());
+        assert!(resources.get("reason").is_none(), "{resources:?}");
+    } else {
+        assert_eq!(resources.get("cpu_busy_usec"), Some(&SdkValue::Null));
+        assert_eq!(resources.get("cpu_total_usec"), Some(&SdkValue::Null));
+        assert_eq!(resources.get_text("reason"), Some("cpu_unsupported"));
+        want.push("reason");
+    }
+    assert_eq!(keys(resources), want, "{resources:?}");
+}
+
+/// `sandboxes`' counts, and each row's name and `live` (layerfs-project#182
+/// L2): one row per recorded Sandbox, in the home's order.
+fn counts(got: &SdkValue) -> String {
+    let sandboxes = got.get("sandboxes").unwrap();
+    assert_eq!(
+        keys(sandboxes),
+        ["recorded", "live", "items"],
+        "{sandboxes:?}"
+    );
+    let SdkValue::List(items) = sandboxes.get("items").unwrap() else {
+        panic!("{sandboxes:?}")
+    };
+    assert_eq!(Some(items.len() as i64), sandboxes.get_int("recorded"));
+    let rows: Vec<String> = (items.iter())
+        .map(|item| {
+            let live = item.get("live").map(print).unwrap_or_default();
+            format!("{}={live}", item.get_text("name").unwrap())
+        })
+        .collect();
+    format!(
+        "{} of {}: {}",
+        print(sandboxes.get("live").unwrap()),
+        print(sandboxes.get("recorded").unwrap()),
+        rows.join(" ")
+    )
+}
 
 #[test]
 fn the_table_lists_machine_stats_and_the_live_option() {
@@ -429,7 +476,7 @@ fn native_stats_are_read_in_this_process_with_no_lock_and_nothing_written() {
     // no worker: its calls run in this process
     assert_eq!(got.get("worker"), Some(&SdkValue::Null));
     let resources = got.get("resources").unwrap();
-    assert_eq!(keys(resources), RESOURCES, "{resources:?}");
+    resources_read(resources);
     assert_eq!(resources.get_text("scope"), Some("host"));
     for field in &RESOURCES[..6] {
         assert!(
@@ -446,11 +493,22 @@ fn native_stats_are_read_in_this_process_with_no_lock_and_nothing_written() {
         print(got.get("stores").unwrap()),
         format!(r#"[{{"name":"shop","bytes":{bytes},"allocated":{allocated}}}]"#)
     );
-    // the dead daemon is recorded, not live
-    assert_eq!(
-        print(got.get("sandboxes").unwrap()),
-        r#"{"recorded":2,"live":1}"#
+    // the dead daemon is recorded, not live; each has its row, a host
+    // process with no cgroup usage
+    assert_eq!(counts(&got), "1 of 2: dead=false up=true");
+    let SdkValue::List(items) = got.get("sandboxes").unwrap().get("items").unwrap() else {
+        unreachable!()
+    };
+    for item in items {
+        assert_eq!(item.get("usage"), Some(&SdkValue::Null), "{item:?}");
+        assert_eq!(item.get_text("usage_reason"), Some("host_process"));
+    }
+    let up = items[1].get_int("started_at").unwrap();
+    assert!(
+        up <= home::now_ms() && up > home::now_ms() - 86_400_000,
+        "{up}"
     );
+    assert_eq!(items[0].get("started_at"), Some(&SdkValue::Null));
     assert_eq!(got.get("complete"), Some(&SdkValue::Bool(true)));
     assert!(got.get("reason").is_none());
     // nothing changed in the home: no record, lock, lease or call-log line
@@ -534,7 +592,7 @@ fn a_worker_answers_its_machine_s_stats_and_who_it_is_and_writes_nothing() {
     );
     // whose numbers they are: the Engine host's, and what holds the data
     let resources = got.get("resources").unwrap();
-    assert_eq!(keys(resources), RESOURCES, "{resources:?}");
+    resources_read(resources);
     assert_eq!(resources.get_text("scope"), Some("engine_host"));
     assert!(resources.get_int("memory_total").unwrap() > 0);
     let disk = got.get("data_disk").unwrap();
@@ -557,10 +615,8 @@ fn a_worker_answers_its_machine_s_stats_and_who_it_is_and_writes_nothing() {
         print(got.get("stores").unwrap()),
         format!(r#"[{{"name":"shop","bytes":{bytes},"allocated":{allocated}}}]"#)
     );
-    assert_eq!(
-        print(got.get("sandboxes").unwrap()),
-        r#"{"recorded":3,"live":1}"#
-    );
+    // the worker reads each row from its own records: `s3` it has none of
+    assert_eq!(counts(&got), "1 of 3: s1=true s2=false s3=false");
     assert_eq!(got.get("complete"), Some(&SdkValue::Bool(true)));
 
     // neither side changed: no record, lock, lease, log or call-log line
@@ -650,19 +706,13 @@ fn a_forwarded_sandbox_s_process_is_checked_in_its_machine() {
     settle(&home);
     let (before, guest) = (files(&home, true), files(&root, false));
     assert_eq!(live(&home), [seen("s1", Some(true), None)]);
-    assert_eq!(
-        print(stats(&home, "box").unwrap().get("sandboxes").unwrap()),
-        r#"{"recorded":1,"live":1}"#
-    );
+    assert_eq!(counts(&stats(&home, "box").unwrap()), "1 of 1: s1=true");
     assert_eq!(files(&home, true), before);
     assert_eq!(files(&root, false), guest);
     // its daemon ended in the machine
     local_sandbox(&root, "s1", "native", ended());
     assert_eq!(live(&home), [seen("s1", Some(false), None)]);
-    assert_eq!(
-        print(stats(&home, "box").unwrap().get("sandboxes").unwrap()),
-        r#"{"recorded":1,"live":0}"#
-    );
+    assert_eq!(counts(&stats(&home, "box").unwrap()), "0 of 1: s1=false");
     std::fs::remove_dir_all(scratch).unwrap();
 }
 
