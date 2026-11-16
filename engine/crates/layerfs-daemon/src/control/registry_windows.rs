@@ -141,21 +141,25 @@ impl Service {
     /// in-process daemon face (#454). Each accepted connection is one
     /// Control; the channel layer (its handshake and admission) runs
     /// unchanged over the loopback pair.
-    pub fn serve_loopback(self: &std::sync::Arc<Self>) -> std::io::Result<std::net::SocketAddr> {
+    pub fn serve_loopback(self: &std::sync::Arc<Self>, caller: [u8; 32]) -> std::io::Result<(std::net::SocketAddr, [u8; 32])> {
         let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
         let address = listener.local_addr()?;
+        // The listener keypair: its public half is what a caller expects.
+        let keys = layerfs_bridge::duplex::generate_keypair()
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "keypair"))?;
         let service = self.clone();
+        // One keypair per listener; the caller learns its public half
+        // (the returned value) and both sides expect their agreed peer.
+        let expected = caller;
         std::thread::spawn(move || {
             for stream in listener.incoming() {
                 let Ok(mut stream) = stream else { break };
                 let service = service.clone();
+                let private = keys.private;
+                let expected = expected;
                 std::thread::spawn(move || {
-                    let keys = match layerfs_bridge::duplex::generate_keypair() {
-                        Ok(keys) => keys,
-                        Err(_) => return,
-                    };
                     let mut connection =
-                        match layerfs_bridge::duplex::accept(stream, &keys.private, keys.public) {
+                        match layerfs_bridge::duplex::accept(stream, &private, expected) {
                             Ok(connection) => connection,
                             Err(_) => return,
                         };
@@ -163,6 +167,7 @@ impl Service {
                 });
             }
         });
-        Ok(address)
+        let server_public = keys.public;
+        Ok((address, server_public))
     }
 }
