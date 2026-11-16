@@ -294,7 +294,9 @@ remain binding; moving them out of this file does not weaken them.
   guards, Clippy and the fast tests) and a nightly lane (`nightly.yml`: slow and
   FUSE mount tests); `format.yml` checks the Ruff formatting below.
   [tools/ci_tests.py](tools/ci_tests.py) decides which tests go in
-  which lane. None is a required check, and nothing runs before a push. Do
+  which lane. CI runs only for `main`: pushes to it and pull requests into
+  it (owner, 2026-11-16); no other branch runs a lane. None is a required
+  check, and nothing runs before a push. Do
   not wait for CI, and do not treat a green run as
   verification of your change: verify the changed scope yourself with
   [product checks](engine/AGENTS.md#checks-and-completion) and report checks/gaps.

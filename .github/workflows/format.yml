@@ -12,6 +12,8 @@ on:
       - "ruff.toml"
       - ".github/workflows/format.yml"
   pull_request:
+    # CI runs only for main: pull requests into any other branch run nothing (owner, 2026-11-16)
+    branches: [main]
     paths:
       - "tools/**/*.py"
       - "ruff.toml"
