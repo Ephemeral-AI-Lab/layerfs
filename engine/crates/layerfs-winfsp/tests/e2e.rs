@@ -26,7 +26,11 @@ fn binds_and_mounts_a_workspace() {
         eprintln!("skipped: the WinFsp driver service is not installed (run fsptool install as admin)");
         return;
     }
-    let sdk = support::Fixture::new("winfsp-e2e", |source| {
+    // Unique per run: the fixture names its temp dir by pid+label,
+    // so a fixed label crashes a rerun at create_dir.
+    let label = format!("winfsp-e2e-{}", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
+    let sdk = support::Fixture::new(&label, |source| {
         std::fs::write(source.join("seed.txt"), b"seed").unwrap();
         1
     });
