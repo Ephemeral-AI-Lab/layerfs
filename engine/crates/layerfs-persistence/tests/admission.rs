@@ -353,19 +353,22 @@ fn a_missing_epoch_row_is_conflict_and_release_is_idempotent() {
 /// A mount whose owner is provably dead (the same boot and PID namespace, a
 /// pid that does not run) no longer blocks a removal: the removal adopts the
 /// row, while a live owner still reports a holder.
+/// A `pid`/start/namespace token no process runs under: pid `u32::MAX` is not
+/// assigned on this boot, and the namespace is this process's, so
+/// `OwnerView::dead` can prove the owner gone.
+#[cfg(target_os = "linux")]
+fn dead_runtime() -> String {
+    format!("pid:4294967295@0@ns:{}", this_namespace())
+}
+
+/// This boot's id with a unique suffix for one operation.
+#[cfg(target_os = "linux")]
+fn dead_boot(tag: u8) -> String {
+    format!("boot:{:032x}:ws:{tag}", this_boot())
+}
+
 #[cfg(target_os = "linux")]
 fn dead_mount(stack: LayerStackId, branch: BranchId, tag: u8) -> GcIntent {
-    let namespace = {
-        let target = std::fs::read_link("/proc/self/ns/pid").unwrap();
-        let text = target.to_str().unwrap();
-        text.strip_prefix("pid:[")
-            .unwrap()
-            .strip_suffix(']')
-            .unwrap()
-            .to_owned()
-    };
-    let boot = std::fs::read_to_string("/proc/sys/kernel/random/boot_id").unwrap();
-    let boot = u128::from_str_radix(boot.trim().replace('-', "").as_str(), 16).unwrap();
     GcIntent::shared(
         op(tag),
         GcIntentKind::Mount,
@@ -375,10 +378,7 @@ fn dead_mount(stack: LayerStackId, branch: BranchId, tag: u8) -> GcIntent {
     .in_project(stack.as_slice())
     .named(Some("proj"), Some("work"))
     .placed(Some([tag; 32]), Some("sandbox"), Some("machine"))
-    .owned(
-        Some(&format!("pid:4294967295@0@ns:{namespace}")),
-        Some(&format!("boot:{boot:032x}:ws:{tag}")),
-    )
+    .owned(Some(&dead_runtime()), Some(&dead_boot(tag)))
 }
 
 #[cfg(target_os = "linux")]
@@ -532,6 +532,93 @@ fn an_earlier_boot_is_settled_on_a_local_store() {
         .gc_intents(GcScopeKind::Branch, branch.as_slice())
         .unwrap()
         .is_empty());
+}
+
+/// A provably dead owner does not let an observer delete an uncertain row: the
+/// row stays `Unresolved` until the owning call (or an operator) releases it.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_dead_uncertain_owner_stays_unresolved_until_released() {
+    let temp = Temp::new("admission-dead-uncertain");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+    history
+        .gc_register(&dead_mount(project_id, branch, 27))
+        .expect("admit the dead mount");
+    history.gc_mark_uncertain(&op(27)).expect("mark uncertain");
+
+    // The owner is provably dead, but the row is uncertain: settling it would
+    // erase the evidence that its operation may not have finished.
+    let refusal = history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 28))
+        .expect_err("an uncertain dead owner is Unresolved, not adopted");
+    let HistoryError::Unresolved(state) = &refusal else {
+        panic!("{refusal:?}");
+    };
+    assert_eq!(state.op, hex16(&op(27)));
+    let listed = history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .expect("intents");
+    assert_eq!(listed.len(), 1);
+    assert!(
+        listed[0].uncertain,
+        "the removed call leaves the row uncertain"
+    );
+
+    // The owning call settles it; only then does the Branch go.
+    history.gc_release(&op(27)).expect("settle");
+    history
+        .gc_remove_branch(branch, 2_000, &removal(project_id, 29))
+        .expect("removal after settlement");
+    assert!(history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .expect("intents")
+        .is_empty());
+}
+
+/// A retry reuses the operation id with fresh owner evidence. The stored row
+/// must carry the retry's evidence: otherwise a concurrent GC call would
+/// settle the retried, live operation as dead instead of reporting `Busy`.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_retried_live_op_replaces_its_dead_predecessors_evidence() {
+    let temp = Temp::new("admission-retry");
+    let path = temp.join("store.sqlite");
+    let history = catalog(&temp);
+    let (project_id, _branch) = project(&history);
+
+    // The predecessor's process died while holding this operation identity.
+    let dead = init(project_id, 35).owned(Some(&dead_runtime()), Some(&dead_boot(35)));
+    history.gc_register(&dead).expect("admit the dead op");
+
+    // The same operation identity retries from this live process.
+    let live = init(project_id, 35);
+    history.gc_register(&live).expect("retry the op");
+
+    // A concurrent removal sees the retried owner, not the dead predecessor:
+    // the row holds the project scope and is `Busy`, never adopted.
+    let refusal = history
+        .gc_delete_stack(project_id, 1_000, &removal(project_id, 36))
+        .expect_err("a live retry holds the scope");
+    let HistoryError::BusyOp(state) = &refusal else {
+        panic!("{refusal:?}");
+    };
+    assert_eq!(state.kind, GcIntentKind::Init);
+    assert_eq!(state.entity, "proj");
+    assert_eq!(state.op, hex16(&op(35)));
+
+    // The stored row itself carries the retry's ownership evidence.
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let (runtime, boot): (String, String) = connection
+        .query_row(
+            "SELECT owner_runtime, owner_boot FROM gc_intent WHERE op_id = ?1",
+            [op(35).as_slice()],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(Some(runtime.as_str()), live.owner_runtime.as_deref());
+    assert_eq!(Some(boot.as_str()), live.owner_boot.as_deref());
+    history.gc_release(&op(35)).expect("release");
 }
 
 fn hex16(bytes: &[u8; 16]) -> String {

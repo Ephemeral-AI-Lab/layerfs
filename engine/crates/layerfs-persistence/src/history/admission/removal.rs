@@ -34,7 +34,7 @@ pub(crate) fn remove_branch(
             )?;
             let found: Vec<GcIntent> = found
                 .into_iter()
-                .filter(|intent| !owners.dead(intent, postgres))
+                .filter(|intent| !owners.settleable(intent, postgres))
                 .collect();
             if !found.is_empty() {
                 return Err(classify(&found));
@@ -104,7 +104,7 @@ pub(crate) fn delete_stack(
             )?;
             let found: Vec<GcIntent> = found
                 .into_iter()
-                .filter(|intent| !owners.dead(intent, postgres))
+                .filter(|intent| !owners.settleable(intent, postgres))
                 .collect();
             if !found.is_empty() {
                 return Err(classify(&found));
@@ -163,7 +163,7 @@ pub(crate) fn remove_path(
             )?;
             let found: Vec<GcIntent> = found
                 .into_iter()
-                .filter(|intent| !owners.dead(intent, postgres))
+                .filter(|intent| !owners.settleable(intent, postgres))
                 .collect();
             if !found.is_empty() {
                 return Err(classify(&found));

@@ -162,13 +162,13 @@ fn a_concurrent_remove_reports_busy_with_the_retire_phase() {
     fixture.fork("gone");
     let stack = project(&fixture);
     let branch = lookup::branch(&fixture.service.store, &stack, "gone").expect("Branch gone");
-    // The row a concurrent `branch.remove` takes before it writes its
-    // marker, in its `retire` phase.
+    // The row `branch.remove` takes before it writes its marker: its own
+    // retire-phase intent, registered in a separate write transaction so a
+    // concurrent remove can observe it. Pinning the same builder's row makes
+    // this test deterministic.
     let holder = admission::branch_removal(&stack, &branch);
-    fixture
-        .service
-        .store
-        .history()
+    let catalog = fixture.service.store.history();
+    catalog
         .gc_register(&holder)
         .expect("register the concurrent removal");
     let refused = removal::remove(&fixture.service.store, &stack, "gone")
@@ -182,11 +182,79 @@ fn a_concurrent_remove_reports_busy_with_the_retire_phase() {
         refused.detail.get_text("op"),
         Some(hex(&holder.op_id).as_str())
     );
-    fixture
-        .service
-        .store
-        .history()
-        .gc_release(&holder.op_id)
-        .expect("release");
+    // The refused call registered nothing of its own: the concurrent row is
+    // the only intent, still certain and live.
+    let listed = catalog
+        .gc_intents(
+            layerfs_history::records::GcScopeKind::Branch,
+            branch.id.as_slice(),
+        )
+        .expect("intents");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].op_id, holder.op_id);
+    assert!(!listed[0].uncertain);
+
+    catalog.gc_release(&holder.op_id).expect("release");
+    // A successful remove registers its own retire intent and releases it, so
+    // it leaves no admission row behind.
+    removal::remove(&fixture.service.store, &stack, "gone").expect("remove after release");
+    assert!(catalog
+        .gc_intents(
+            layerfs_history::records::GcScopeKind::Branch,
+            branch.id.as_slice(),
+        )
+        .expect("intents")
+        .is_empty());
+    fixture.cleanup();
+}
+
+/// The registration is exposed before the marker: a trigger on
+/// `branch_retired` records the live removal intent inside the marker
+/// transaction. On the parent commit no such row exists at that point, so the
+/// concurrent remove that F43-2 describes can never be `Busy`.
+#[test]
+fn a_remove_registers_its_retire_intent_before_the_marker() {
+    let fixture = Fixture::new("branch-remove-register", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    fixture.fork("gone");
+    let stack = project(&fixture);
+    let branch = lookup::branch(&fixture.service.store, &stack, "gone").expect("Branch gone");
+    let catalog = fixture.service.store.history();
+
+    let connection = rusqlite::Connection::open(&fixture.host.config.path).unwrap();
+    connection
+        .execute_batch(
+            "CREATE TABLE test_retire_seen (op_id BLOB NOT NULL, phase TEXT);
+             CREATE TRIGGER test_retire_seen_marker AFTER INSERT ON branch_retired
+             BEGIN
+                 INSERT INTO test_retire_seen (op_id, phase)
+                 SELECT op_id, phase FROM gc_intent
+                 WHERE kind = 'removal' AND scope_kind = 'branch'
+                   AND scope_id = NEW.branch_id;
+             END;",
+        )
+        .unwrap();
+    drop(connection);
+
+    removal::remove(&fixture.service.store, &stack, "gone").expect("remove");
+
+    let connection = rusqlite::Connection::open(&fixture.host.config.path).unwrap();
+    let (op_id, phase): (Vec<u8>, String) = connection
+        .query_row("SELECT op_id, phase FROM test_retire_seen", [], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
+        .expect("the marker transaction saw the retire intent");
+    assert_eq!(op_id.len(), 16);
+    assert_eq!(phase, "retire");
+    // The call released the intent after the marker.
+    assert!(catalog
+        .gc_intents(
+            layerfs_history::records::GcScopeKind::Branch,
+            branch.id.as_slice(),
+        )
+        .expect("intents")
+        .is_empty());
     fixture.cleanup();
 }
