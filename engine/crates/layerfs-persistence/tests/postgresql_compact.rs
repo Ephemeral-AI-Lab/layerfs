@@ -628,7 +628,7 @@ fn an_uncertain_intent_records_an_unresolved_refusal() {
         dead,
         GcIntentKind::Compaction,
         GcScopeKind::Store,
-        vec![0u8; 16],
+        vec![0u8; 32],
     )
     .with_phase(Some("mark"));
     handles.history.gc_register(&intent).unwrap();
