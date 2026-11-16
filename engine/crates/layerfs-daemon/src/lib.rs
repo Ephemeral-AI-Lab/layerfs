@@ -30,5 +30,4 @@ pub use layerfs_store_service::{
 
 pub mod control;
 
-#[cfg(unix)]
 pub mod application;

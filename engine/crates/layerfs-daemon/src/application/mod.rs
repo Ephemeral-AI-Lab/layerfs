@@ -12,16 +12,15 @@ mod config;
 mod connection;
 #[cfg(unix)]
 mod diagnostics;
-#[cfg(unix)]
 mod failure;
-#[cfg(unix)]
 mod filesystem;
 #[cfg(unix)]
 #[doc(hidden)]
 pub mod internals;
+#[cfg(any(unix, windows))]
 mod owner;
-#[cfg(unix)]
 mod retained;
+#[cfg(any(unix, windows))]
 mod serve;
 #[cfg(unix)]
 pub use cli::main;
@@ -29,8 +28,6 @@ pub use cli::main;
 pub use diagnostics::resources::{ResourceDiagnosticError, ResourceFailure, ResourceObservation};
 #[cfg(unix)]
 pub(crate) use diagnostics::{commit_parts, namespace_values, storage_values};
-#[cfg(unix)]
 pub use failure::{ApplicationError, ConnectionFailure};
-#[cfg(unix)]
 pub use owner::Application;
 pub use retained::{RetainedFailure, RetainedSnapshot};
