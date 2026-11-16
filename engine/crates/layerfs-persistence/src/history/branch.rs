@@ -295,9 +295,17 @@ pub(crate) fn branches(
 
 /// Creates one Branch that shares the selected ancestry.
 pub(crate) fn fork(tx: &Transaction<'_>, request: &ForkRequest) -> HistoryResult<BranchSnapshot> {
-    if super::layerstack::layer_stack(tx, request.stack)?.is_none() {
-        return Err(HistoryError::Missing(Missing::LayerStack));
-    }
+    // Spec 5: a fork is a write and takes the project epoch fence. The stack
+    // is read once to refuse a missing project with `Missing`, the fence
+    // opens, and the stack is read again so a removal that committed in the
+    // window is visible (its row is filtered); one that commits later changes
+    // the epoch `confirm` re-checks. Forking from a Branch a removal retires
+    // in that window is therefore never green-lit.
+    let _ = super::layerstack::layer_stack(tx, request.stack)?
+        .ok_or(HistoryError::Missing(Missing::LayerStack))?;
+    let fence = super::epoch::open(tx, request.stack)?;
+    let _ = super::layerstack::layer_stack(tx, request.stack)?
+        .ok_or(HistoryError::Missing(Missing::LayerStack))?;
     if branch_any(tx, request.branch)?.is_some() {
         return Err(taken(tx, request.stack, &request.name)?);
     }
@@ -344,5 +352,8 @@ pub(crate) fn fork(tx: &Transaction<'_>, request: &ForkRequest) -> HistoryResult
         ],
     )
     .map_err(sql)?;
-    branch_snapshot(tx, request.branch)?.ok_or(HistoryError::Integrity("Branch insertion"))
+    let snapshot =
+        branch_snapshot(tx, request.branch)?.ok_or(HistoryError::Integrity("Branch insertion"))?;
+    fence.confirm(tx)?;
+    Ok(snapshot)
 }

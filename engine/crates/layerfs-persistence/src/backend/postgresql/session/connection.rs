@@ -11,7 +11,7 @@ use std::{
     collections::HashMap,
     str::FromStr,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicI64, AtomicU64, Ordering},
         Mutex, OnceLock,
     },
     time::Instant,
@@ -116,6 +116,16 @@ pub(crate) struct Session {
     /// The lane connection's work, counted outside `state` because the lane
     /// is held and released without the session state's lock.
     pub(crate) lane_work: LaneWork,
+    /// The one backend a session advisory lock may be held on (spec §5.2 item
+    /// 34); `0` until the first lock statement names it. A transaction-pooling
+    /// proxy changes it between transactions, which is `Unsupported` for
+    /// mounts and compaction.
+    pub(crate) backend_pid: AtomicI64,
+    /// The `catalog_incarnation` this session opened at (spec §5.2, §10); the
+    /// generation fence in [`super::transaction::Session::run_as`] compares
+    /// every write transaction against it. `0` until an open's check set it,
+    /// which keeps the check's own pre-open reads unfenced.
+    pub(crate) incarnation: AtomicU64,
 }
 
 /// Connections opened and round trips made on the lane connection.
@@ -164,6 +174,8 @@ impl Session {
             policy: OnceLock::new(),
             connector,
             lane_work: LaneWork::default(),
+            backend_pid: AtomicI64::new(0),
+            incarnation: AtomicU64::new(0),
         })
     }
     pub(crate) fn connect(
@@ -192,6 +204,8 @@ impl Session {
             policy: OnceLock::new(),
             connector,
             lane_work: LaneWork::default(),
+            backend_pid: AtomicI64::new(0),
+            incarnation: AtomicU64::new(0),
         })
     }
 
@@ -234,6 +248,23 @@ impl Session {
             work.read_snapshots += 1;
         }
         Ok(groups)
+    }
+
+    /// Records the backend that took a session advisory lock. The first lock
+    /// statement sets it; every later statement must run on the same backend.
+    /// `false` means the connection is transaction-pooled and cannot hold the
+    /// lock across transactions (spec §5.2 item 34).
+    pub(crate) fn note_backend(&self, pid: i64) -> bool {
+        if pid <= 0 {
+            return false;
+        }
+        match self
+            .backend_pid
+            .compare_exchange(0, pid, Ordering::SeqCst, Ordering::SeqCst)
+        {
+            Ok(_) => true,
+            Err(current) => current == pid,
+        }
     }
 
     pub(crate) fn diagnostics(&self) -> Result<SqlWork, BackendError> {

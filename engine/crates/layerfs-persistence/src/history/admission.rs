@@ -310,18 +310,30 @@ fn register_in(tx: &Transaction<'_>, intent: &GcIntent, _postgres: bool) -> Hist
     Ok(())
 }
 
-/// The advisory keys a PostgreSQL intent names, Store key first.
+/// The advisory keys a PostgreSQL intent names, Store key first, each with the
+/// mode the registration takes it in.
+///
+/// The Store key is shared for every project- or Branch-scoped intent, even an
+/// exclusive removal: `project.delete` must not exclude mounts of other
+/// projects, and `branch.remove` excludes only its own Branch. Only a
+/// Store-scoped exclusive intent (compaction) takes the Store key exclusively.
+/// A Branch-scoped removal keeps the project key shared and takes only the
+/// Branch key exclusively; a project-scoped one takes the project key
+/// exclusively.
 #[cfg(feature = "postgresql")]
-fn advisory_keys(catalog: CatalogId, intent: &GcIntent) -> Vec<(u8, Vec<u8>)> {
-    let mut keys = vec![(1u8, catalog.as_slice().to_vec())];
+fn advisory_keys(catalog: CatalogId, intent: &GcIntent) -> Vec<(u8, Vec<u8>, bool)> {
+    let scope_shared = intent.kind.shared();
+    let store_shared = intent.scope_kind != GcScopeKind::Store || scope_shared;
+    let mut keys = vec![(1u8, catalog.as_slice().to_vec(), store_shared)];
     match intent.scope_kind {
         GcScopeKind::Store => {}
-        GcScopeKind::Project => keys.push((2, intent.scope_id.clone())),
+        GcScopeKind::Project => keys.push((2, intent.scope_id.clone(), scope_shared)),
         GcScopeKind::Branch => {
             if let Some(project) = &intent.project_id {
-                keys.push((2, project.clone()));
+                // A Branch-scope removal excludes the Branch, not the project.
+                keys.push((2, project.clone(), true));
             }
-            keys.push((3, intent.scope_id.clone()));
+            keys.push((3, intent.scope_id.clone(), scope_shared));
         }
     }
     keys
@@ -404,12 +416,11 @@ fn get_in(tx: &Transaction<'_>, op_id: &[u8; 16]) -> HistoryResult<Option<GcInte
     one(tx, GET, [op_id.as_slice()], intent_row)
 }
 
-/// The PostgreSQL advisory keys one release unlocks, and whether its intent
-/// was shared.
+/// The PostgreSQL advisory keys one release unlocks, each with the mode it
+/// was taken in.
 #[cfg(feature = "postgresql")]
 struct ReleaseKeys {
-    keys: Vec<(u8, Vec<u8>)>,
-    shared: bool,
+    keys: Vec<(u8, Vec<u8>, bool)>,
 }
 
 #[cfg(feature = "postgresql")]
@@ -426,8 +437,60 @@ fn keys_for_release(
     }
     Ok(ReleaseKeys {
         keys: advisory_keys(catalog, &intent),
-        shared: intent.kind.shared(),
     })
+}
+
+/// The exclusive Store key a compaction takes before it settles a leftover op,
+/// so two compactions can never settle the same `gc_op` at once. The
+/// registration that follows takes its own key level; dropping the claim
+/// leaves that level held for `gc_release`. This also proves the recorded
+/// owner of a leftover is not still inside the op: if it were, it would hold
+/// this key. On SQLite this is a no-op: the lane and the one write transaction
+/// are the exclusion.
+#[cfg(feature = "postgresql")]
+pub(crate) struct StoreClaim<'a> {
+    provider: &'a HistoryProvider,
+    held: bool,
+}
+
+#[cfg(feature = "postgresql")]
+impl HistoryProvider {
+    /// Takes this Store's exclusive advisory key without registering an intent
+    /// row, so a compaction can settle a leftover op under the key.
+    pub(crate) fn claim_store_exclusive(&self) -> HistoryResult<StoreClaim<'_>> {
+        if let Engine::Postgres(session) = &self.engine {
+            let keys = [(1u8, self.catalog_id.as_slice().to_vec(), false)];
+            session_lock(session, self.catalog_id, &keys)?;
+            return Ok(StoreClaim {
+                provider: self,
+                held: true,
+            });
+        }
+        Ok(StoreClaim {
+            provider: self,
+            held: false,
+        })
+    }
+}
+
+#[cfg(feature = "postgresql")]
+impl StoreClaim<'_> {
+    fn unlock(&mut self) {
+        if self.held {
+            if let Engine::Postgres(session) = &self.provider.engine {
+                let keys = [(1u8, self.provider.catalog_id.as_slice().to_vec(), false)];
+                let _ = session_unlock(session, self.provider.catalog_id, &keys);
+            }
+        }
+        self.held = false;
+    }
+}
+
+#[cfg(feature = "postgresql")]
+impl Drop for StoreClaim<'_> {
+    fn drop(&mut self) {
+        self.unlock();
+    }
 }
 
 /// Registers one shared (`mount`, `init`, `merge`) or exclusive
@@ -438,13 +501,12 @@ pub(crate) fn register(provider: &HistoryProvider, intent: &GcIntent) -> History
         #[cfg(feature = "postgresql")]
         Engine::Postgres(session) => {
             let keys = advisory_keys(provider.catalog_id, intent);
-            let shared = intent.kind.shared();
-            session_lock(session, provider.catalog_id, &keys, shared)?;
+            session_lock(session, provider.catalog_id, &keys)?;
             let result = session.run(true, |statements| {
                 register_in(&Transaction::new(statements), intent, true)
             });
             if result.is_err() {
-                let _ = session_unlock(session, provider.catalog_id, &keys, shared);
+                let _ = session_unlock(session, provider.catalog_id, &keys);
             }
             result
         }
@@ -464,8 +526,8 @@ pub(crate) fn release(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryRe
                 release_in(tx, op_id)?;
                 Ok(Some(keys_for_release(tx, provider.catalog_id, &intent)?))
             })?;
-            if let Some(ReleaseKeys { keys, shared }) = found {
-                let _ = session_unlock(session, provider.catalog_id, &keys, shared);
+            if let Some(ReleaseKeys { keys }) = found {
+                let _ = session_unlock(session, provider.catalog_id, &keys);
             }
             Ok(())
         }
@@ -658,6 +720,18 @@ pub(crate) fn remove_path(
                 });
             }
         }
+        // Spec 5: the PostgreSQL marker transaction bumps the project epoch
+        // BEFORE it reads the frontier `next_history_serial - 1`. A writer
+        // that read the old epoch is then either fenced by its `confirm`
+        // re-check or, if it committed first, included in this frontier read.
+        // SQLite's single `BEGIN IMMEDIATE` transaction already excludes a
+        // writer from the read, so it bumps after the marker there.
+        if postgres {
+            let advanced = tx.execute("paths_advance_epoch", [request.stack.as_slice()])?;
+            if advanced != 1 {
+                return Err(HistoryError::Conflict("project epoch"));
+            }
+        }
         let frontier = position::high_water(tx)?;
         paths::mark(
             tx,
@@ -666,7 +740,11 @@ pub(crate) fn remove_path(
             frontier,
             request.removed_ms,
         )?;
-        let advanced = tx.execute("paths_advance_epoch", [request.stack.as_slice()])?;
+        let advanced = if postgres {
+            1
+        } else {
+            tx.execute("paths_advance_epoch", [request.stack.as_slice()])?
+        };
         if advanced != 1 {
             return Err(HistoryError::Conflict("project epoch"));
         }
@@ -689,19 +767,22 @@ pub(crate) fn intents(
     provider.read(|tx| query(tx, LIST, params![scope_kind.as_str(), scope_id.to_vec()]))
 }
 
+/// The refusal a transaction-pooled connection gets for a session lock.
+#[cfg(feature = "postgresql")]
+const POOLED: &str = "transaction-pooled PostgreSQL connection";
+
 #[cfg(feature = "postgresql")]
 fn session_lock(
     session: &std::sync::Arc<crate::backend::postgresql::session::connection::Session>,
     catalog: CatalogId,
-    keys: &[(u8, Vec<u8>)],
-    shared: bool,
+    keys: &[(u8, Vec<u8>, bool)],
 ) -> HistoryResult<()> {
-    let mut taken: Vec<(u8, Vec<u8>)> = Vec::new();
-    for (kind, id) in keys {
+    let mut taken: Vec<(u8, Vec<u8>, bool)> = Vec::new();
+    for (kind, id, shared) in keys {
         let key = advisory_key(catalog, *kind, id);
         let found = session.read_statement(|statements| {
             Transaction::new(statements).query(
-                if shared {
+                if *shared {
                     LOCK_SESSION_SHARED
                 } else {
                     LOCK_SESSION_EXCLUSIVE
@@ -710,14 +791,23 @@ fn session_lock(
             )
         })?;
         if found.is_empty() {
-            let _ = session_unlock(session, catalog, &taken, shared);
-            return Err(if shared {
+            let _ = session_unlock(session, catalog, &taken);
+            return Err(if *shared {
                 HistoryError::MountsActive(Box::new(MountHolders::new(Vec::new())))
             } else {
                 HistoryError::Busy
             });
         }
-        taken.push((*kind, id.clone()));
+        // Spec §5.2 item 34: a session advisory lock only means presence if the
+        // same backend keeps it. The lock statement returns the backend that
+        // took it; a transaction-pooling proxy hands the next statement to a
+        // different one, so mounts and compaction are `Unsupported` there.
+        let pid: i64 = found[0].get(1)?;
+        if !session.note_backend(pid) {
+            let _ = session_unlock(session, catalog, &taken);
+            return Err(HistoryError::Unsupported(POOLED));
+        }
+        taken.push((*kind, id.clone(), *shared));
     }
     Ok(())
 }
@@ -726,14 +816,13 @@ fn session_lock(
 fn session_unlock(
     session: &std::sync::Arc<crate::backend::postgresql::session::connection::Session>,
     catalog: CatalogId,
-    keys: &[(u8, Vec<u8>)],
-    shared: bool,
+    keys: &[(u8, Vec<u8>, bool)],
 ) -> HistoryResult<()> {
-    for (kind, id) in keys {
+    for (kind, id, shared) in keys {
         let key = advisory_key(catalog, *kind, id);
-        let _ = session.read_statement(|statements| {
+        let found = session.read_statement(|statements| {
             Transaction::new(statements).query(
-                if shared {
+                if *shared {
                     UNLOCK_SESSION_SHARED
                 } else {
                     UNLOCK_SESSION_EXCLUSIVE
@@ -741,6 +830,12 @@ fn session_unlock(
                 params![key],
             )
         })?;
+        if let Some(row) = found.first() {
+            let pid: i64 = row.get(1)?;
+            if !session.note_backend(pid) {
+                return Err(HistoryError::Unsupported(POOLED));
+            }
+        }
     }
     Ok(())
 }

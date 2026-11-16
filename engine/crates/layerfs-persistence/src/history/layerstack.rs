@@ -340,6 +340,13 @@ pub(crate) fn add_layer(
     tx: &Transaction<'_>,
     request: &AddLayerRequest,
 ) -> HistoryResult<AddLayerOutcome> {
+    // Spec 5: the fence opens before the Branch and Commit reads. The stack
+    // is read once to refuse a missing project with `Missing`, then the
+    // fence, then the stack is read again so a removal that committed in the
+    // window is visible (its row is filtered) instead of the stale head
+    // being extended.
+    let _ = layer_stack(tx, request.stack)?.ok_or(HistoryError::Missing(Missing::LayerStack))?;
+    let fence = super::epoch::open(tx, request.stack)?;
     let stack =
         layer_stack(tx, request.stack)?.ok_or(HistoryError::Missing(Missing::LayerStack))?;
     let branch =
@@ -352,9 +359,6 @@ pub(crate) fn add_layer(
     if commit.stack != request.stack {
         return Err(HistoryError::Integrity("Commit ownership"));
     }
-    // Spec 5: read the project epoch at the start of this write transaction;
-    // `confirm` below re-checks it before the transaction commits.
-    let fence = super::epoch::open(tx, request.stack)?;
     if let Some(id) = published_source(tx, request.branch, request.commit)? {
         let stored = layer(tx, id)?.ok_or(HistoryError::Integrity("Layer provenance"))?;
         if stored.stack != request.stack
@@ -392,8 +396,9 @@ pub(crate) fn add_layer(
             actual: stack.head_layer,
         });
     }
-    // Overwrite-only: the new Layer sits on the stack head, whatever main
-    // gained since the Branch's base.
+    // Overwrite-only here: the new Layer sits on the stack head, whatever
+    // main gained since the Branch's base. `branch.publish` refuses that
+    // case before this call unless the caller passed `force` (#691).
     if commit.root == layer_root(tx, stack.head_layer)? {
         return Ok(AddLayerOutcome::NoChanges {
             head: stack.head_layer,
@@ -462,7 +467,7 @@ pub(crate) fn add_layer(
     Ok(AddLayerOutcome::Added { layer })
 }
 
-fn published_source(
+pub(crate) fn published_source(
     tx: &Transaction<'_>,
     branch: layerfs_history::identity::BranchId,
     commit: layerfs_history::identity::CommitId,

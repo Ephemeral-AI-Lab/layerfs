@@ -6,9 +6,12 @@ use super::{
 };
 use crate::backend::records::{BackendError, OutcomeError, Param, Record};
 use layerfs_telemetry::timer::waits::Wait;
-use postgres::{binary_copy::BinaryCopyInWriter, types::ToSql, types::Type, Row};
+use postgres::{
+    binary_copy::BinaryCopyInWriter, types::ToSql, types::Type, Row, SimpleQueryMessage,
+};
 use std::{
     cell::{Cell, RefCell},
+    sync::atomic::Ordering,
     time::Instant,
 };
 
@@ -268,9 +271,50 @@ impl Session {
             }
         };
         let schema = self.settings.schema.as_str();
+        // Spec §5.2: a write's generation check rides in the BEGIN batch, so it
+        // costs no extra round trip and the statement's `AccessShareLock` on
+        // `history_meta` holds until COMMIT: a swap that starts after this
+        // point meets `LOCK TABLE ... ACCESS EXCLUSIVE NOWAIT` and abandons.
+        let expected = matches!(mode, Mode::Write | Mode::Publish)
+            .then(|| self.incarnation.load(Ordering::SeqCst))
+            .filter(|generation| *generation != 0);
         let result = (|| {
             state.work.round_trips += 1;
-            if let Err(e) = state.client.batch_execute(&begin) {
+            if let Some(expected) = expected {
+                let check = format!(
+                    "{begin}; SELECT catalog_incarnation::text FROM {schema}.history_meta WHERE id=1"
+                );
+                match state.client.simple_query(&check) {
+                    Ok(messages) => {
+                        let mut actual: Option<&str> = None;
+                        for message in &messages {
+                            if let SimpleQueryMessage::Row(row) = message {
+                                actual = row.try_get(0).ok().flatten();
+                            }
+                        }
+                        let generation = actual
+                            .and_then(|text| text.parse::<u64>().ok())
+                            .ok_or(BackendError::Integrity)?;
+                        if generation != expected {
+                            if rollback(state).is_err() {
+                                state.quarantined = true;
+                                return Err(BackendError::Unknown.into());
+                            }
+                            state.work.rollbacks += 1;
+                            return Err(BackendError::Stale.into());
+                        }
+                    }
+                    Err(e) => {
+                        let error = e.backend();
+                        if error == BackendError::Unknown || rollback(state).is_err() {
+                            state.quarantined = true;
+                            return Err(BackendError::Unknown.into());
+                        }
+                        state.work.rollbacks += 1;
+                        return Err(error.into());
+                    }
+                }
+            } else if let Err(e) = state.client.batch_execute(&begin) {
                 let error = e.backend();
                 if error == BackendError::Unknown || rollback(state).is_err() {
                     state.quarantined = true;

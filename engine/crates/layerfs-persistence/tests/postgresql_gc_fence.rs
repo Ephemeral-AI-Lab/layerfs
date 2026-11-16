@@ -13,14 +13,16 @@ mod support;
 
 use layerfs_history::error::{HistoryError, Missing};
 use layerfs_history::records::{
-    GcDeletion, GcIntent, GcIntentKind, GcScopeKind, PathRemovalKind, PathRemovalRequest,
+    ForkRequest, ForkSource, GcDeletion, GcIntent, GcIntentKind, GcScopeKind, PathRemovalKind,
+    PathRemovalRequest,
 };
-use layerfs_history::{CatalogId, HistoryCatalog};
+use layerfs_history::{CatalogId, HistoryCatalog, LayerStackId};
 use support::pg::{
     commit, commit_request, counts, epoch, layer_request, merge_request, project, publish, url,
     Schema,
 };
 use support::root;
+use support::{branch_id, name};
 
 const CURSOR: [u8; 32] = [78; 32];
 
@@ -529,4 +531,297 @@ fn a_removal_first_refuses_the_later_commit_and_writes_nothing() {
         "{refused:?}"
     );
     assert_eq!(counts(&mut schema.admin()), before);
+}
+
+/// Runs `run` while this test holds `project_epoch` against readers, waits
+/// until the writer blocks on that lock (its fence read), then retires `stack`
+/// in the holding transaction before releasing it. The writer's resource
+/// pre-read and its fence read therefore straddle a committed removal — the
+/// exact window the fix closes.
+fn retire_under_fence<T, F>(schema: &Schema, stack: LayerStackId, run: F) -> T
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    let mut admin = schema.admin();
+    admin
+        .batch_execute("BEGIN; LOCK TABLE project_epoch IN ACCESS EXCLUSIVE MODE")
+        .expect("hold the epoch against readers");
+    let writer = std::thread::spawn(run);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    loop {
+        let waiting: i64 = admin
+            .query_one(
+                "SELECT count(*) FROM pg_locks l \
+                  WHERE l.relation = 'project_epoch'::regclass AND NOT l.granted",
+                &[],
+            )
+            .expect("lock waiters")
+            .get(0);
+        if waiting > 0 {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the writer never reached its fence read"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    admin
+        .execute(
+            "INSERT INTO layer_stack_retired(layer_stack_id, deleted_ms) VALUES ($1, 1)",
+            &[&stack.as_slice()],
+        )
+        .expect("retire the stack");
+    admin
+        .execute(
+            "INSERT INTO branch_retired(branch_id, removed_ms) \
+             SELECT branch_id, 1 FROM branch WHERE layer_stack_id = $1 \
+             ON CONFLICT DO NOTHING",
+            &[&stack.as_slice()],
+        )
+        .expect("retire the branches");
+    admin
+        .execute(
+            "UPDATE project_epoch SET epoch = epoch + 1 WHERE layer_stack_id = $1",
+            &[&stack.as_slice()],
+        )
+        .expect("bump the epoch");
+    admin.batch_execute("COMMIT").expect("release the epoch");
+    writer.join().expect("the writer thread")
+}
+
+fn branch_rows(schema: &Schema) -> i64 {
+    schema
+        .admin()
+        .query_one("SELECT count(*) FROM branch", &[])
+        .unwrap()
+        .get(0)
+}
+
+/// Finding 4: the fence opens before the Branch read, so a Branch retired
+/// between the write's resource read and its fence is visible on the re-read.
+/// Reading the Branch first let the Commit land on a retired Branch.
+#[test]
+fn a_commit_retired_in_the_fence_window_never_lands() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "fence_window_commit");
+    let binding = binding("fence_window_commit");
+    let handles = std::sync::Arc::new(schema.create(&binding, CURSOR));
+    let (shop, work, _genesis) = project(&handles.history, 1);
+    let _first = commit(&handles.history, work, 5);
+    let request = commit_request(&handles.history, work, root(6));
+    let before = counts(&mut schema.admin());
+
+    let writer = handles.clone();
+    let refused = retire_under_fence(&schema, shop, move || {
+        writer.history.commit_branch(&request)
+    })
+    .expect_err("a Commit cannot land on a Branch retired in the window");
+    assert!(
+        matches!(refused, HistoryError::Missing(Missing::Branch)),
+        "{refused:?}"
+    );
+    assert_eq!(
+        counts(&mut schema.admin()),
+        before,
+        "no Commit row was written"
+    );
+}
+
+/// The same window on the Layer publication: the stack is re-read after the
+/// fence, so a retired stack is `Missing` instead of being extended.
+#[test]
+fn a_publish_retired_in_the_fence_window_never_lands() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "fence_window_publish");
+    let binding = binding("fence_window_publish");
+    let handles = std::sync::Arc::new(schema.create(&binding, CURSOR));
+    let (shop, work, _genesis) = project(&handles.history, 1);
+    let _first = commit(&handles.history, work, 5);
+    let request = layer_request(&handles.history, shop, work);
+    let before = counts(&mut schema.admin());
+
+    let writer = handles.clone();
+    let refused = retire_under_fence(&schema, shop, move || writer.history.add_layer(&request))
+        .expect_err("a Layer cannot extend a stack retired in the window");
+    assert!(matches!(refused, HistoryError::Missing(_)), "{refused:?}");
+    assert_eq!(
+        counts(&mut schema.admin()),
+        before,
+        "no Layer row was written"
+    );
+}
+
+#[test]
+fn a_merge_retired_in_the_fence_window_never_starts() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "fence_window_merge");
+    let binding = binding("fence_window_merge");
+    let handles = std::sync::Arc::new(schema.create(&binding, CURSOR));
+    let (shop, work, genesis) = project(&handles.history, 1);
+    let first = commit(&handles.history, work, 5);
+    let request = merge_request(&handles.history, shop, work, first.id, genesis, 60);
+    let before = counts(&mut schema.admin());
+
+    let writer = handles.clone();
+    let refused = retire_under_fence(&schema, shop, move || writer.history.merge_branch(&request))
+        .expect_err("a merge cannot start on a stack retired in the window");
+    assert!(matches!(refused, HistoryError::Missing(_)), "{refused:?}");
+    assert_eq!(
+        counts(&mut schema.admin()),
+        before,
+        "no merge Commit or Branch was written"
+    );
+}
+
+#[test]
+fn a_fork_retired_in_the_fence_window_never_starts() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "fence_window_fork");
+    let binding = binding("fence_window_fork");
+    let handles = std::sync::Arc::new(schema.create(&binding, CURSOR));
+    let (shop, _work, genesis) = project(&handles.history, 1);
+    let request = ForkRequest {
+        stack: shop,
+        branch: branch_id(7),
+        name: name("late"),
+        source: ForkSource::Layer(genesis),
+    };
+    let before = branch_rows(&schema);
+
+    let writer = handles.clone();
+    let refused = retire_under_fence(&schema, shop, move || writer.history.fork(&request))
+        .expect_err("a fork cannot start on a stack retired in the window");
+    assert!(matches!(refused, HistoryError::Missing(_)), "{refused:?}");
+    assert_eq!(branch_rows(&schema), before, "no Branch row was written");
+}
+
+/// Finding 4: fork now takes the project fence at all; a project whose epoch
+/// row is gone is `Conflict`, like every other writer.
+#[test]
+fn a_fork_without_a_project_epoch_is_conflict() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "fence_fork_missing");
+    let binding = binding("fence_fork_missing");
+    let handles = schema.create(&binding, CURSOR);
+    let (shop, _work, genesis) = project(&handles.history, 1);
+    let request = ForkRequest {
+        stack: shop,
+        branch: branch_id(7),
+        name: name("late"),
+        source: ForkSource::Layer(genesis),
+    };
+    schema
+        .admin()
+        .execute(
+            "DELETE FROM project_epoch WHERE layer_stack_id=$1",
+            &[&shop.as_slice()],
+        )
+        .unwrap();
+    let refused = handles.history.fork(&request).unwrap_err();
+    assert!(
+        matches!(refused, HistoryError::Conflict("project epoch")),
+        "{refused:?}"
+    );
+}
+
+/// Finding 11: `project.delete` takes the Store key shared and only its own
+/// project key exclusively. A mount of another project must not refuse it, and
+/// the removal must still refuse a mount of its own project.
+#[test]
+fn a_project_removal_does_not_take_the_store_key_exclusively() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "keys_project");
+    let binding = binding("keys_project");
+    let handles = schema.create(&binding, CURSOR);
+    let (shop_a, work_a, _) = project(&handles.history, 1);
+    let (shop_b, _work_b, _) = project(&handles.history, 2);
+
+    // A live mount in project A takes the Store key shared. Project names are
+    // unique in a Store, so the two projects carry different names.
+    let mount_a = mount(shop_a, work_a, 1).named(Some("project-a"), Some("work-a"));
+    handles.history.gc_register(&mount_a).unwrap();
+    // Deleting project B registers Store shared + project B exclusive.
+    let removal_b = removal(shop_b, 2).named(Some("project-b"), None);
+    handles.history.gc_register(&removal_b).unwrap();
+    // The removal's own project is excluded...
+    let mount_b = mount(shop_b, branch_id(2), 3).named(Some("project-b"), Some("work-b"));
+    assert!(matches!(
+        handles.history.gc_register(&mount_b).unwrap_err(),
+        HistoryError::BusyOp(_) | HistoryError::Busy
+    ));
+    // ...but another project's mount is not: the Store key stayed shared.
+    let mount_a2 = mount(shop_a, work_a, 4).named(Some("project-a"), Some("work-a"));
+    handles.history.gc_register(&mount_a2).unwrap();
+    // The delete itself still admits with the other project mounted.
+    let marked = handles
+        .history
+        .gc_delete_stack(shop_b, 1_000, &removal_b)
+        .unwrap();
+    assert!(matches!(marked, GcDeletion::Marked { deleted_ms: 1_000 }));
+    handles.history.gc_release(&op(1)).unwrap();
+    handles.history.gc_release(&op(2)).unwrap();
+    handles.history.gc_release(&op(4)).unwrap();
+}
+
+/// Finding 8: PostgreSQL checks `catalog_incarnation` in every write
+/// transaction, so a session opened at `G` cannot publish at `G` after a swap
+/// has installed `G + 1`. The refused transaction writes nothing, and a fresh
+/// open at the installed generation works.
+#[test]
+fn a_write_from_a_session_opened_before_the_swap_is_stale() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "fence_generation");
+    let binding = binding("fence_generation");
+    let handles = schema.create(&binding, CURSOR);
+    let (shop, work, _) = project(&handles.history, 1);
+    let first = commit(&handles.history, work, 5);
+    let before = counts(&mut schema.admin());
+
+    // Stand in for compaction's Phase B swap: install `G + 1`.
+    schema
+        .admin()
+        .execute(
+            "UPDATE history_meta SET catalog_incarnation=catalog_incarnation+1 WHERE id=1",
+            &[],
+        )
+        .unwrap();
+
+    let refused = handles
+        .history
+        .commit_branch(&commit_request(&handles.history, work, root(6)))
+        .unwrap_err();
+    assert!(
+        matches!(refused, HistoryError::StaleStore),
+        "a Commit at the old generation is StaleStore: {refused:?}"
+    );
+    let refused = handles
+        .history
+        .fork(&ForkRequest {
+            stack: shop,
+            branch: branch_id(9),
+            name: name("stale"),
+            source: ForkSource::Commit {
+                branch: work,
+                commit: first.id,
+            },
+        })
+        .unwrap_err();
+    assert!(
+        matches!(refused, HistoryError::StaleStore),
+        "a fork at the old generation is StaleStore: {refused:?}"
+    );
+    assert_eq!(counts(&mut schema.admin()), before, "nothing was written");
+
+    // Reopening at the installed generation is the documented recovery.
+    let fresh = schema.open(&binding, CURSOR).unwrap();
+    let landed = fresh
+        .history
+        .commit_branch(&commit_request(&fresh.history, work, root(6)))
+        .unwrap();
+    assert!(matches!(
+        landed,
+        layerfs_history::records::CommitOutcome::Committed { .. }
+    ));
 }

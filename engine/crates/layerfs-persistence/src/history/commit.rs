@@ -88,6 +88,16 @@ pub(crate) fn commit_branch(
     tx: &Transaction<'_>,
     request: &CommitRequest,
 ) -> HistoryResult<CommitOutcome> {
+    // Spec 5: the project epoch is read before the resources the write
+    // depends on. The Branch is read once to learn its project, the fence
+    // opens, and the Branch is read again: a removal that committed before
+    // the fence is visible in the second read (its row is filtered), and one
+    // that commits after it changes the epoch `confirm` re-checks. Reading
+    // the Branch before the fence would let a removal land in that window
+    // unseen and the Commit land on a retired Branch.
+    let probe = super::branch::snapshot_rows(tx, request.branch)?
+        .ok_or(HistoryError::Missing(Missing::Branch))?;
+    let fence = super::epoch::open(tx, probe.branch.stack)?;
     let rows = super::branch::snapshot_rows(tx, request.branch)?
         .ok_or(HistoryError::Missing(Missing::Branch))?;
     let branch = rows.branch.clone();
@@ -95,9 +105,6 @@ pub(crate) fn commit_branch(
     if stack.profile != request.profile || stack.scope != request.scope {
         return Err(HistoryError::Integrity("Commit context"));
     }
-    // Spec 5: read the project epoch at the start of this write transaction;
-    // `confirm` below re-checks it before the transaction commits.
-    let fence = super::epoch::open(tx, branch.stack)?;
     let moved =
         branch.base_layer != request.expected_base || branch.head_commit != request.expected_head;
     if moved && (!request.force || branch.base_layer != request.expected_base) {

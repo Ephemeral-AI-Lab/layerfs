@@ -829,6 +829,110 @@ fn retained_roots_survive_a_rebuild_that_collects_a_deleted_project() {
     clean(&schema.open());
 }
 
+/// Finding 1: a non-owner grantee, a `PUBLIC` grant, a grant option and a
+/// column ACL all survive the swap. Replaying them before the drop wrote them
+/// on the table that was about to disappear, so the new table came back with
+/// an empty ACL (reproduced on PostgreSQL 17).
+#[test]
+fn a_rebuild_keeps_the_owner_and_every_acl_level() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "acl");
+    let handles = schema.create();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let _dead = whole_file(&handles, b"a pack the acl rebuild replaces");
+
+    let suffix = format!("{}_{}", std::process::id(), "acl");
+    let grantee = format!("lfs_acl_grantee_{suffix}");
+    let public = format!("lfs_acl_public_{suffix}");
+    let mut admin = postgres::Client::connect(&url, postgres::NoTls).unwrap();
+    for role in [&grantee, &public] {
+        admin
+            .batch_execute(&format!("DROP ROLE IF EXISTS {role}"))
+            .ok();
+        admin
+            .batch_execute(&format!("CREATE ROLE {role} NOLOGIN"))
+            .unwrap();
+    }
+    let s = schema.selection.schema.clone();
+    admin
+        .batch_execute(&format!(
+            "GRANT SELECT ON TABLE {s}.pack TO {grantee}; \
+             GRANT UPDATE ON TABLE {s}.object_location TO {grantee} WITH GRANT OPTION; \
+             GRANT SELECT (object_id) ON TABLE {s}.object_location TO {grantee}; \
+             GRANT SELECT ON TABLE {s}.pack TO PUBLIC"
+        ))
+        .unwrap();
+
+    handles.compact(&request(42)).unwrap();
+
+    let table_privilege =
+        |admin: &mut postgres::Client, role: &str, table: &str, privilege: &str| -> bool {
+            admin
+                .query_one(
+                    "SELECT has_table_privilege($1::name, $2, $3)",
+                    &[&role, &format!("{s}.{table}"), &privilege],
+                )
+                .unwrap()
+                .get(0)
+        };
+    assert!(
+        table_privilege(&mut admin, &grantee, "pack", "SELECT"),
+        "the non-owner grantee keeps SELECT on the rebuilt pack table"
+    );
+    assert!(
+        table_privilege(&mut admin, &grantee, "object_location", "UPDATE"),
+        "the non-owner grantee keeps UPDATE on the rebuilt object_location table"
+    );
+    assert!(
+        table_privilege(
+            &mut admin,
+            &grantee,
+            "object_location",
+            "UPDATE WITH GRANT OPTION"
+        ),
+        "the grant option survives"
+    );
+    assert!(
+        table_privilege(&mut admin, &public, "pack", "SELECT"),
+        "a PUBLIC grant survives"
+    );
+    let column: bool = admin
+        .query_one(
+            "SELECT has_column_privilege($1::name, $2, $3, $4)",
+            &[
+                &grantee,
+                &format!("{s}.object_location"),
+                &"object_id",
+                &"SELECT",
+            ],
+        )
+        .unwrap()
+        .get(0);
+    assert!(column, "the column ACL survives");
+    let owner: String = admin
+        .query_one(
+            "SELECT pg_get_userbyid(relowner)::text FROM pg_class \
+              WHERE oid = to_regclass($1)",
+            &[&format!("{s}.pack")],
+        )
+        .unwrap()
+        .get(0);
+    let current: String = admin
+        .query_one("SELECT current_user::text", &[])
+        .unwrap()
+        .get(0);
+    assert_eq!(owner, current, "the owner is unchanged");
+
+    clean(&schema.open());
+    for role in [&grantee, &public] {
+        admin.batch_execute(&format!("DROP OWNED BY {role}")).ok();
+        admin
+            .batch_execute(&format!("DROP ROLE IF EXISTS {role}"))
+            .ok();
+    }
+}
+
 #[test]
 fn a_lost_swap_reply_is_resumed_by_the_next_compact() {
     let Some(url) = url() else { return };
@@ -886,7 +990,7 @@ fn the_same_session_resumes_an_uncertain_round() {
 }
 
 #[test]
-fn a_stale_owner_backend_is_terminated_before_the_next_round() {
+fn an_idle_owner_backend_is_not_terminated_under_the_exclusive_key() {
     let Some(url) = url() else { return };
     let schema = Schema::new(&url, "terminate");
     schema.drop_scratch(9);
@@ -904,8 +1008,9 @@ fn a_stale_owner_backend_is_terminated_before_the_next_round() {
     ));
     let pid = schema.scalar("SELECT pid FROM {s}.gc_op WHERE id=1");
     assert!(pid > 0, "the op records its owner backend");
-    // The recorded owner is alive but idle: the next round terminates that
-    // (pid, backend_start) and adopts the op as a dead owner (§9, §12).
+    // The recorded owner is alive but idle. The next round takes the exclusive
+    // Store key first, which proves the owner is no longer inside the op, and
+    // adopts the leftover without terminating a healthy connection (§9, §12).
     let second = schema.open();
     let receipt = second.compact(&request(10)).unwrap();
     assert_eq!(receipt.path, CompactPath::Rebuild);
@@ -913,18 +1018,13 @@ fn a_stale_owner_backend_is_terminated_before_the_next_round() {
     assert_eq!(receipt.generation_after, before + 1);
     assert_eq!(db_generation(&schema), before + 1);
     assert_settled(&schema, 10);
-    let mut gone = false;
-    for _ in 0..50 {
-        if schema.scalar(&format!(
+    assert_eq!(
+        schema.scalar(&format!(
             "SELECT count(*) FROM pg_stat_activity WHERE pid={pid}"
-        )) == 0
-        {
-            gone = true;
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
-    assert!(gone, "the stale owner backend is terminated");
+        )),
+        1,
+        "the live owner backend is not terminated"
+    );
     clean(&schema.open());
 }
 
