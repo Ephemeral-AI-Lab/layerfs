@@ -16,8 +16,12 @@ def inspect(name):
 
 
 def identity(info):
-    return {key: info[key] for key in ("Id", "Created", "Image", "Config", "Mounts")} | {
-        "state": {key: info["State"][key] for key in ("Status", "Running", "StartedAt", "FinishedAt")}
+    # Docker reports Mounts in no fixed order; sort by destination (unique per
+    # container) so the same container compares equal across inspects.
+    mounts = sorted(info["Mounts"], key=lambda mount: mount["Destination"])
+    return {key: info[key] for key in ("Id", "Created", "Image", "Config")} | {
+        "Mounts": mounts,
+        "state": {key: info["State"][key] for key in ("Status", "Running", "StartedAt", "FinishedAt")},
     }
 
 
