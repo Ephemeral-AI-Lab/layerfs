@@ -167,6 +167,23 @@ fn op_detail(state: &layerfs_history::OpConflict) -> SdkValue {
         ),
         ("op", SdkValue::text(&state.op)),
         ("uncertain", SdkValue::Bool(state.uncertain)),
+        // The PostgreSQL holder, when the refusal names one (spec 10);
+        // null on SQLite and when the holder could not be read.
+        ("pid", state.pid.map_or(SdkValue::Null, SdkValue::Int)),
+        (
+            "client_addr",
+            state
+                .client_addr
+                .as_ref()
+                .map_or(SdkValue::Null, SdkValue::text),
+        ),
+        (
+            "backend_start",
+            state
+                .backend_start
+                .as_ref()
+                .map_or(SdkValue::Null, SdkValue::text),
+        ),
     ])
 }
 

@@ -181,7 +181,7 @@ impl Store {
             if bound.materialize_removals().is_err() {
                 let _ = bound.owner.close(route);
                 if let Some(op) = bound.gc_op {
-                    let _ = self.history().gc_release(&op);
+                    let _ = crate::history::admission::release_or_mark(self.history(), &op);
                 }
                 return Err(BindError::Content {
                     error: ContentError::ProviderFailure {
@@ -193,7 +193,9 @@ impl Store {
             Ok(BindSuccess { workspace: bound })
         })();
         result.map_err(|error| {
-            let error = match gc_op.map(|op| self.history().gc_release(&op)) {
+            let error = match gc_op
+                .map(|op| crate::history::admission::release_or_mark(self.history(), &op))
+            {
                 Some(Err(cause)) => BindError::Cleanup {
                     original: Box::new(error),
                     cause: Arc::new(super::PortError::History(cause)),

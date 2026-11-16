@@ -36,9 +36,7 @@ impl BoundWorkspace {
             .close_reader(self.identity)
             .map_err(super::CloseError::Reader)?;
         if let Some(op) = self.gc_op {
-            self.store
-                .history()
-                .gc_release(&op)
+            crate::history::admission::release_or_mark(self.store.history(), &op)
                 .map_err(super::CloseError::Intent)?;
         }
         Ok(())

@@ -348,10 +348,7 @@ fn mark_and_finish(
     mut deleted_ms: i64,
     finish: Finish<'_>,
 ) -> Outcome {
-    let Finish {
-        effects,
-        admission,
-    } = finish;
+    let Finish { effects, admission } = finish;
     effects.prepare()?;
     let mut current = match intent {
         Some(intent) => intent,
@@ -553,12 +550,14 @@ impl Effects for Local {
     }
 
     fn release(&mut self, admission: Admission) -> Result<()> {
-        service::with_service(&self.open, |service| {
-            match service.store.history().gc_release(&admission.op) {
+        service::with_service(
+            &self.open,
+            |service| match store_admission::release_or_mark(service.store.history(), &admission.op)
+            {
                 Ok(()) | Err(HistoryError::Unsupported(_)) => Ok(()),
                 Err(error) => Err(lookup::history(error)),
-            }
-        })
+            },
+        )
     }
 
     fn mark(&mut self, admission: Admission, deleted_ms: i64) -> Result<Deletion> {
@@ -722,13 +721,23 @@ fn listed_stack(open: &OpenArgs, name: &str) -> Result<Option<LayerStackId>> {
 /// removes the caller's home entry. The marker is the commit point; a home
 /// removal failure is success with `home_entry_removed: false`, and the
 /// durable intent lets a same-home retry finish it.
-pub fn delete(home: &Path, events: &mut Events<'_>, project: &ProjectRef) -> Outcome {
+pub fn delete(
+    home: &Path,
+    events: &mut Events<'_>,
+    project: &ProjectRef,
+    related: crate::related::Related,
+) -> Outcome {
     let _ = events;
     let home = home.to_path_buf();
     let store = project.store.as_str();
     let name = project.project.as_str();
     let record = StoreRecord::read(&home, store)?;
     let project_record = ProjectRecord::read(&home, store, name)?;
+    // §5: a recorded Sandbox is another user of the project, even with
+    // nothing mounted; refuse before the sidecar and the marker.
+    if record.is_some() || project_record.is_some() {
+        (related.can_remove_project)(&home, project.to_string().as_str())?;
+    }
     let stack = project_record.as_ref().and_then(stack_of);
     match record {
         Some(record) => {
@@ -865,7 +874,7 @@ pub fn release_project(root: &Path, frame: &DeleteReleaseFrame) -> Outcome {
     })?;
     let open = worker_open(root, frame.store.as_str(), None, store_record);
     service::with_service(&open, |service| {
-        match service.store.history().gc_release(&frame.op) {
+        match store_admission::release_or_mark(service.store.history(), &frame.op) {
             Ok(()) | Err(HistoryError::Unsupported(_)) => Ok(released(frame.op)),
             Err(error) => Err(lookup::history(error)),
         }

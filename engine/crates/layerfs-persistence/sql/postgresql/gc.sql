@@ -64,6 +64,7 @@ CREATE TABLE gc_op (
     artifact TEXT,
     pid BIGINT,
     backend_start TEXT,
+    usename TEXT,
     incarnation BIGINT
 );
 CREATE TABLE gc_dead (

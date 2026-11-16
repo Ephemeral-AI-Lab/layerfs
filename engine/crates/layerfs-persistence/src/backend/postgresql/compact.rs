@@ -26,7 +26,7 @@ use crate::compact_metrics::{
 };
 use crate::history::GcTuple;
 use crate::{MarkResult, PostgresHandles};
-use layerfs_history::error::{HistoryError, HistoryResult};
+use layerfs_history::error::{HistoryError, HistoryResult, OpConflict};
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::HistoryCatalog;
 use std::sync::Arc;
@@ -50,11 +50,13 @@ struct DeadTotals {
 #[derive(Clone, Debug)]
 struct OpRow {
     generation: i64,
+    phase: String,
     artifact: Option<String>,
     dead: DeadTotals,
     totals_applied: bool,
     pid: Option<i64>,
     backend_start: Option<String>,
+    usename: Option<String>,
 }
 
 /// What Phase A leaves for Phase B.
@@ -237,7 +239,7 @@ fn read_op(session: &Arc<Session>, schema: &str) -> HistoryResult<Option<OpRow>>
     stage(session, |tx| {
         let rows = tx.query(
             &format!(
-                "SELECT generation,artifact,dead_canonical,dead_stored,dead_metadata,dead_logical,totals_applied,pid,backend_start FROM {schema}.gc_op WHERE id=1"
+                "SELECT generation,phase,artifact,dead_canonical,dead_stored,dead_metadata,dead_logical,totals_applied,pid,backend_start,usename FROM {schema}.gc_op WHERE id=1"
             ),
             Vec::new(),
         )?;
@@ -246,16 +248,18 @@ fn read_op(session: &Arc<Session>, schema: &str) -> HistoryResult<Option<OpRow>>
         };
         Ok(Some(OpRow {
             generation: row.get(0)?,
-            artifact: row.get(1)?,
+            phase: row.get(1)?,
+            artifact: row.get(2)?,
             dead: DeadTotals {
-                canonical: row.get(2)?,
-                stored: row.get(3)?,
-                metadata: row.get(4)?,
-                logical: row.get(5)?,
+                canonical: row.get(3)?,
+                stored: row.get(4)?,
+                metadata: row.get(5)?,
+                logical: row.get(6)?,
             },
-            totals_applied: row.get::<i64>(6)? != 0,
-            pid: row.get(7)?,
-            backend_start: row.get(8)?,
+            totals_applied: row.get::<i64>(7)? != 0,
+            pid: row.get(8)?,
+            backend_start: row.get(9)?,
+            usename: row.get(10)?,
         }))
     })
 }
@@ -365,9 +369,9 @@ fn persist_mark(
         tx.query(
             &format!(
                 "INSERT INTO {schema}.gc_op \
-                 (id,generation,phase,scratch_schema,mark_serial,mark_pack_id,mark_digest,mark_totals,mark_stamp,started_ms,dead_canonical,dead_stored,dead_metadata,dead_logical,totals_applied,artifact,pid,backend_start,incarnation) \
-                 VALUES (1,$1,'mark',$2,$3,$4,$5,int8send($6)||int8send($7)||int8send($8)||int8send($9),$10,$11,0,0,0,$12,FALSE,$2,pg_backend_pid(),(SELECT backend_start::text FROM pg_stat_activity WHERE pid=pg_backend_pid()),$1) \
-                 ON CONFLICT (id) DO UPDATE SET generation=EXCLUDED.generation,phase=EXCLUDED.phase,scratch_schema=EXCLUDED.scratch_schema,mark_serial=EXCLUDED.mark_serial,mark_pack_id=EXCLUDED.mark_pack_id,mark_digest=EXCLUDED.mark_digest,mark_totals=EXCLUDED.mark_totals,mark_stamp=EXCLUDED.mark_stamp,started_ms=EXCLUDED.started_ms,dead_canonical=0,dead_stored=0,dead_metadata=0,dead_logical=EXCLUDED.dead_logical,totals_applied=FALSE,artifact=EXCLUDED.artifact,pid=EXCLUDED.pid,backend_start=EXCLUDED.backend_start,incarnation=EXCLUDED.incarnation"
+                 (id,generation,phase,scratch_schema,mark_serial,mark_pack_id,mark_digest,mark_totals,mark_stamp,started_ms,dead_canonical,dead_stored,dead_metadata,dead_logical,totals_applied,artifact,pid,backend_start,usename,incarnation) \
+                 VALUES (1,$1,'mark',$2,$3,$4,$5,int8send($6)||int8send($7)||int8send($8)||int8send($9),$10,$11,0,0,0,$12,FALSE,$2,pg_backend_pid(),(SELECT backend_start::text FROM pg_stat_activity WHERE pid=pg_backend_pid()),(SELECT usename::text FROM pg_stat_activity WHERE pid=pg_backend_pid()),$1) \
+                 ON CONFLICT (id) DO UPDATE SET generation=EXCLUDED.generation,phase=EXCLUDED.phase,scratch_schema=EXCLUDED.scratch_schema,mark_serial=EXCLUDED.mark_serial,mark_pack_id=EXCLUDED.mark_pack_id,mark_digest=EXCLUDED.mark_digest,mark_totals=EXCLUDED.mark_totals,mark_stamp=EXCLUDED.mark_stamp,started_ms=EXCLUDED.started_ms,dead_canonical=0,dead_stored=0,dead_metadata=0,dead_logical=EXCLUDED.dead_logical,totals_applied=FALSE,artifact=EXCLUDED.artifact,pid=EXCLUDED.pid,backend_start=EXCLUDED.backend_start,usename=EXCLUDED.usename,incarnation=EXCLUDED.incarnation"
             ),
             vec![
                 Param::I64(tuple.generation),
@@ -685,19 +689,129 @@ fn sync_name(rank: u8) -> &'static str {
 }
 
 /// §8 step 10: the swap waits iff the effective level is at least
-/// `remote_write` and `synchronous_standby_names` is non-empty; then a named
-/// standby must be streaming with `sync_state` sync or quorum.
-fn standby_satisfied(rank: u8, names: &str, streaming: i64) -> bool {
-    if rank < 2 || names.trim().is_empty() {
+/// `remote_write` and `synchronous_standby_names` names a quorum. The setting
+/// is parsed as PostgreSQL does: `FIRST n (names)`, `ANY n (names)`, a bare
+/// `names` list (which is `FIRST` with `n` equal to the listed names), and the
+/// lone `*` that matches any standby. A matching standby must be streaming
+/// with the `sync_state` that form assigns it, so one of an `ANY 2` pair is
+/// still refused.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct StandbyRequirement {
+    /// `FIRST` counts the named standbys in list order; `ANY` counts any
+    /// `count` of them. A bare list is `FIRST`.
+    first: bool,
+    count: usize,
+    /// The configured standby names, in priority order.
+    members: Vec<String>,
+    /// The lone `*`, which matches any standbys.
+    any_name: bool,
+}
+
+/// The pure parse of `synchronous_standby_names`; `None` when the setting is
+/// empty (no standby required).
+fn standby_requirement(names: &str) -> Option<StandbyRequirement> {
+    let names = names.trim();
+    if names.is_empty() {
+        return None;
+    }
+    let lower = names.to_ascii_lowercase();
+    let (first, rest) = if lower.starts_with("first") {
+        (true, names.get(5..).unwrap_or("").trim())
+    } else if lower.starts_with("any") {
+        (false, names.get(3..).unwrap_or("").trim())
+    } else {
+        (true, names)
+    };
+    // `FIRST n (list)` / `ANY n (list)`: a leading count, then the list.
+    let (count, list) = match rest.split_once(char::is_whitespace) {
+        Some((head, tail)) if head.bytes().all(|byte| byte.is_ascii_digit()) => {
+            match head.parse::<usize>() {
+                Ok(count) => (count, tail.trim()),
+                Err(_) => return None,
+            }
+        }
+        _ if rest.starts_with('(') => (1, rest),
+        _ => (0, rest),
+    };
+    let members: Vec<String> = list
+        .trim()
+        .trim_start_matches('(')
+        .trim_end_matches(')')
+        .split(',')
+        .map(str::trim)
+        .filter(|member| !member.is_empty())
+        .map(|member| member.trim_matches('"').to_owned())
+        .collect();
+    let any_name = members.len() == 1 && members[0] == "*";
+    let count = if count == 0 { members.len() } else { count };
+    Some(StandbyRequirement {
+        first,
+        count,
+        members,
+        any_name,
+    })
+}
+
+/// One `pg_stat_replication` row, as the predicate reads it.
+struct Replica {
+    name: String,
+    streaming: bool,
+    sync_state: String,
+}
+
+/// True when the streaming named standby is one PostgreSQL would count as
+/// synchronous for this form: `sync` for `FIRST`, `quorum` (or `sync`) for
+/// `ANY`.
+fn replica_counts(replica: &Replica, first: bool) -> bool {
+    if !replica.streaming {
+        return false;
+    }
+    if first {
+        replica.sync_state == "sync"
+    } else {
+        matches!(replica.sync_state.as_str(), "sync" | "quorum")
+    }
+}
+
+/// The §8 step 10 predicate, without a server: `rank` is the effective
+/// `synchronous_commit` strength, `names` the setting and `replicas` the
+/// rows `pg_stat_replication` reports.
+fn standby_satisfied(rank: u8, names: &str, replicas: &[Replica]) -> bool {
+    if rank < 2 {
         return true;
     }
-    streaming > 0
+    let Some(requirement) = standby_requirement(names) else {
+        return true;
+    };
+    if requirement.count == 0 {
+        return true;
+    }
+    if requirement.any_name {
+        let matched = replicas
+            .iter()
+            .filter(|replica| replica_counts(replica, requirement.first))
+            .count();
+        return matched >= requirement.count;
+    }
+    let mut matched = 0;
+    for member in &requirement.members {
+        matched += replicas
+            .iter()
+            .filter(|replica| replica.name == *member && replica_counts(replica, requirement.first))
+            .count();
+        if matched >= requirement.count {
+            return true;
+        }
+    }
+    false
 }
 
 /// The effective `synchronous_commit` and whether the standby predicate
-/// applies, read from the server and the Store's frozen setting.
+/// applies, read from the server and the Store's frozen setting. The read is
+/// a read-only snapshot: a write transaction has already applied the Store
+/// setting with `SET LOCAL`, so `current_setting` there would only echo it.
 fn effective_sync_rank(session: &Arc<Session>) -> HistoryResult<u8> {
-    stage(session, |tx| {
+    session.run_as(Mode::Read, |tx| {
         let rows = tx.query("SELECT current_setting('synchronous_commit')", Vec::new())?;
         let server: String = rows[0].get(0)?;
         let stored = session.settings.synchronous_commit.setting();
@@ -706,28 +820,58 @@ fn effective_sync_rank(session: &Arc<Session>) -> HistoryResult<u8> {
 }
 
 /// §8 step 10: the standby predicate checked before Phase M.
-fn standby_precheck(session: &Arc<Session>, rank: u8) -> HistoryResult<()> {
+fn standby_precheck(
+    session: &Arc<Session>,
+    rank: u8,
+    op_id: &[u8; 16],
+    phase: &str,
+) -> HistoryResult<()> {
     stage(session, |tx| {
         let rows = tx.query(
             "SELECT current_setting('synchronous_standby_names')",
             Vec::new(),
         )?;
         let names: String = rows[0].get(0)?;
-        standby_check(tx, rank, &names)
+        standby_check(tx, rank, &names, op_id, phase)
     })
 }
 
-fn standby_check(tx: &Transaction<'_>, rank: u8, names: &str) -> HistoryResult<()> {
+fn standby_check(
+    tx: &Transaction<'_>,
+    rank: u8,
+    names: &str,
+    op_id: &[u8; 16],
+    phase: &str,
+) -> HistoryResult<()> {
     if rank < 2 || names.trim().is_empty() {
         return Ok(());
     }
-    let streaming = scalar(
-        tx,
-        "SELECT count(*) FROM pg_stat_replication WHERE state='streaming' AND sync_state IN ('sync','quorum')",
+    let rows = tx.query(
+        "SELECT application_name::text, state::text, sync_state::text \
+         FROM pg_stat_replication",
         Vec::new(),
     )?;
-    if !standby_satisfied(rank, names, streaming) {
-        return Err(HistoryError::Busy);
+    let replicas = rows
+        .iter()
+        .map(|row| {
+            let state: String = row.get(1)?;
+            Ok(Replica {
+                name: row.get(0)?,
+                streaming: state == "streaming",
+                sync_state: row.get(2)?,
+            })
+        })
+        .collect::<HistoryResult<Vec<_>>>()?;
+    if !standby_satisfied(rank, names, &replicas) {
+        // The quorum is missing, not the Store: name the waiting operation
+        // instead of a holderless `Busy`.
+        return Err(HistoryError::BusyOp(Box::new(OpConflict::new(
+            GcIntentKind::Compaction,
+            "store",
+            Some(phase.to_owned()),
+            hex(op_id),
+            false,
+        ))));
     }
     Ok(())
 }
@@ -760,17 +904,51 @@ fn owner_state(session: &Arc<Session>, op: &OpRow) -> HistoryResult<Option<Strin
 /// backend_start)` proof, scoped to this database and never the caller. Used
 /// only for a recorded owner the server reports `idle` (it cannot finish the
 /// op); a live owner is `Busy`, never killed.
+/// The recorded owner's `client_addr`, when the server still reports it.
+fn owner_client_addr(session: &Arc<Session>, op: &OpRow) -> HistoryResult<Option<String>> {
+    let (Some(pid), Some(start)) = (op.pid, op.backend_start.as_deref()) else {
+        return Ok(None);
+    };
+    stage(session, |tx| {
+        let rows = tx.query(
+            "SELECT client_addr::text FROM pg_stat_activity \
+              WHERE pid=$1 AND backend_start::text=$2",
+            vec![Param::I64(pid), Param::Text(start.to_owned())],
+        )?;
+        let Some(row) = rows.first() else {
+            return Ok(None);
+        };
+        Ok(row.get::<Option<String>>(0)?)
+    })
+}
+
 fn terminate_owner(session: &Arc<Session>, op: &OpRow) -> HistoryResult<bool> {
     let (Some(pid), Some(start)) = (op.pid, op.backend_start.as_deref()) else {
         return Ok(false);
     };
-    stage(session, |tx| {
-        let rows = tx.query(
+    // Spec 8 lost COMMIT: pid, `backend_start` AND `usename` prove the
+    // backend; a row written before the `usename` column matches on the
+    // first two facts alone.
+    let (sql, params) = match op.usename.as_deref() {
+        Some(user) => (
+            "SELECT pg_terminate_backend(a.pid, 30000) FROM pg_stat_activity a \
+              WHERE a.pid=$1 AND a.backend_start::text=$2 AND a.usename::text=$3 \
+                AND a.datname=current_database() AND a.pid<>pg_backend_pid()",
+            vec![
+                Param::I64(pid),
+                Param::Text(start.to_owned()),
+                Param::Text(user.to_owned()),
+            ],
+        ),
+        None => (
             "SELECT pg_terminate_backend(a.pid, 30000) FROM pg_stat_activity a \
               WHERE a.pid=$1 AND a.backend_start::text=$2 AND a.datname=current_database() \
                 AND a.pid<>pg_backend_pid()",
             vec![Param::I64(pid), Param::Text(start.to_owned())],
-        )?;
+        ),
+    };
+    stage(session, |tx| {
+        let rows = tx.query(sql, params)?;
         let terminated: Option<i64> = rows.first().map(|row| row.get(0)).transpose()?;
         Ok(terminated.unwrap_or(0) != 0)
     })
@@ -822,7 +1000,22 @@ fn settle_leftover(
         if op.pid != Some(current_backend_pid(session)?) {
             if let Some(state) = owner_state(session, &op)? {
                 if state != "idle" {
-                    return Err(HistoryError::Busy);
+                    // A live owner stays Busy, naming the op and the backend.
+                    let op_id = compaction_intent(session, schema)?.unwrap_or([0u8; 16]);
+                    let client_addr = owner_client_addr(session, &op)?;
+                    let conflict = OpConflict::new(
+                        GcIntentKind::Compaction,
+                        "store",
+                        Some(op.phase.clone()),
+                        hex(&op_id),
+                        false,
+                    )
+                    .with_backend(
+                        op.pid,
+                        client_addr,
+                        op.backend_start.clone(),
+                    );
+                    return Err(HistoryError::BusyOp(Box::new(conflict)));
                 }
                 // The backend is alive but not executing the op: terminate it
                 // with the (pid, backend_start) pair (§12), then adopt it as a
@@ -883,6 +1076,7 @@ fn swap(
     tuple: &GcTuple,
     mark: &MarkResult,
     built: &Built,
+    op_id: &[u8; 16],
 ) -> HistoryResult<Swapped> {
     let physical_before = relation_bytes(session, schema, &["pack", "object_location"])?;
     let rank = effective_sync_rank(session)?;
@@ -910,9 +1104,14 @@ fn swap(
         if digest(tx)? != mark.live_heads_digest() {
             return Err(HistoryError::Conflict("live heads moved after the mark"));
         }
-        // Copy the owner (and a default ACL, when one exists) before the swap.
-        copy_owner(tx, schema, &scratch, "pack")?;
-        copy_owner(tx, schema, &scratch, "object_location")?;
+        // The ACL lives on the tables this transaction drops, so read it
+        // first; the owner and both ACL levels are replayed on the NEW tables
+        // after `SET SCHEMA`, when they are the schema's tables again. A
+        // `GRANT` before the drop would name the table that is about to go.
+        let acls = [
+            ("pack", read_acl(tx, schema, "pack")?),
+            ("object_location", read_acl(tx, schema, "object_location")?),
+        ];
         tx.batch(&format!(
             "DROP TABLE {schema}.object_location;\
              DROP TABLE {schema}.pack;\
@@ -921,6 +1120,11 @@ fn swap(
              CREATE TRIGGER pack_immutable BEFORE UPDATE OR DELETE ON {schema}.pack \
               FOR EACH ROW EXECUTE FUNCTION {schema}.pack_immutable();"
         ))?;
+        // Owner, PUBLIC grants, grant options and column ACLs, on the tables
+        // that survive.
+        for (table, acl) in &acls {
+            apply_acl(tx, schema, table, acl)?;
+        }
         verify_swap(tx, schema, mark, tuple, &built.dead)?;
         let applied = scalar(
             tx,
@@ -956,7 +1160,7 @@ fn swap(
             .first()
             .ok_or(HistoryError::Integrity("standby names"))?
             .get(0)?;
-        standby_check(tx, rank, &names)?;
+        standby_check(tx, rank, &names, &op_id, "swap")?;
         Ok(Swapped {
             physical_before,
             physical_after: 0,
@@ -968,9 +1172,10 @@ fn swap(
         Ok(swapped) => swapped,
         Err(HistoryError::Busy) => {
             // §8 step 5: roll back first, then drop the scratch schema in a
-            // new transaction, and report Busy with the holder detail.
+            // new transaction, and report Busy with the holder detail (the
+            // backend holding the base table's ACCESS EXCLUSIVE lock).
             let _ = drop_scratch(session, &scratch);
-            return Err(HistoryError::Busy);
+            return Err(swap_busy(session, schema, op_id)?);
         }
         Err(other) => return Err(other),
     };
@@ -979,6 +1184,48 @@ fn swap(
         physical_after,
         ..result
     })
+}
+
+/// The `Busy` a contended swap reports: the compaction identity with the
+/// backend holding one of the two base tables, read from
+/// `pg_locks`/`pg_stat_activity`.
+fn swap_busy(
+    session: &Arc<Session>,
+    schema: &str,
+    op_id: &[u8; 16],
+) -> HistoryResult<HistoryError> {
+    let mut conflict = OpConflict::new(
+        GcIntentKind::Compaction,
+        "store",
+        Some("swap".to_owned()),
+        hex(op_id),
+        false,
+    );
+    let holder = stage(session, |tx| {
+        let rows = tx.query(
+            "SELECT a.pid::bigint, a.client_addr::text, a.backend_start::text \
+               FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid \
+               JOIN pg_class c ON c.oid=l.relation \
+               JOIN pg_namespace n ON n.oid=c.relnamespace \
+              WHERE n.nspname=$1 AND c.relkind='r' \
+                AND l.mode='AccessExclusiveLock' AND l.granted \
+                AND a.pid <> pg_backend_pid() \
+              ORDER BY a.backend_start LIMIT 1",
+            vec![Param::Text(schema.to_owned())],
+        )?;
+        let Some(row) = rows.first() else {
+            return Ok(None);
+        };
+        Ok(Some((
+            row.get::<i64>(0)?,
+            row.get::<Option<String>>(1)?,
+            row.get::<Option<String>>(2)?,
+        )))
+    })?;
+    if let Some((pid, client_addr, backend_start)) = holder {
+        conflict = conflict.with_backend(Some(pid), client_addr, backend_start);
+    }
+    Ok(HistoryError::BusyOp(Box::new(conflict)))
 }
 
 fn tables_of(session: &Arc<Session>, schema: &str) -> HistoryResult<Vec<String>> {
@@ -1024,7 +1271,93 @@ fn read_tuple(tx: &Transaction<'_>, schema: &str) -> HistoryResult<GcTuple> {
     })
 }
 
-fn copy_owner(tx: &Transaction<'_>, schema: &str, scratch: &str, table: &str) -> HistoryResult<()> {
+/// The owner, table ACL and column ACLs of one payload table, read before the
+/// swap drops the table that holds them.
+struct TableAcl {
+    owner: String,
+    table: Vec<AclGrant>,
+    columns: Vec<(String, Vec<AclGrant>)>,
+}
+
+/// One parsed `aclitem`: the grantee (`PUBLIC` for the empty grantee), the
+/// privilege names and whether they carry the grant option.
+struct AclGrant {
+    grantee: String,
+    privileges: Vec<&'static str>,
+    grant_option: bool,
+}
+
+/// The privilege a PostgreSQL ACL letter names; `MAINTAIN` exists from 17.
+fn privilege_name(letter: char) -> Option<&'static str> {
+    Some(match letter {
+        'r' => "SELECT",
+        'w' => "UPDATE",
+        'a' => "INSERT",
+        'd' => "DELETE",
+        'D' => "TRUNCATE",
+        'x' => "REFERENCES",
+        't' => "TRIGGER",
+        'm' => "MAINTAIN",
+        _ => return None,
+    })
+}
+
+/// Parses newline-separated `aclitem`s, dropping the owner's own implicit
+/// entry (recreated by `ALTER TABLE ... OWNER TO`) and splitting a privilege
+/// list into its plain and grant-option parts.
+fn acl_items(acl: &str) -> Vec<AclGrant> {
+    let mut grants = Vec::new();
+    for line in acl.lines().filter(|line| !line.is_empty()) {
+        let Some((grantee, rest)) = line.split_once('=') else {
+            continue;
+        };
+        let Some((letters, grantor)) = rest.split_once('/') else {
+            continue;
+        };
+        if grantee == grantor {
+            continue;
+        }
+        let mut plain = Vec::new();
+        let mut optioned = Vec::new();
+        let chars: Vec<char> = letters.chars().collect();
+        let mut index = 0;
+        while index < chars.len() {
+            let letter = chars[index];
+            let option = chars.get(index + 1) == Some(&'*');
+            if let Some(name) = privilege_name(letter) {
+                if option {
+                    optioned.push(name);
+                } else {
+                    plain.push(name);
+                }
+            }
+            index += if option { 2 } else { 1 };
+        }
+        let grantee = if grantee.is_empty() {
+            "PUBLIC".to_owned()
+        } else {
+            quote_ident(grantee)
+        };
+        if !plain.is_empty() {
+            grants.push(AclGrant {
+                grantee: grantee.clone(),
+                privileges: plain,
+                grant_option: false,
+            });
+        }
+        if !optioned.is_empty() {
+            grants.push(AclGrant {
+                grantee,
+                privileges: optioned,
+                grant_option: true,
+            });
+        }
+    }
+    grants
+}
+
+/// Reads one payload table's owner and both ACL levels.
+fn read_acl(tx: &Transaction<'_>, schema: &str, table: &str) -> HistoryResult<TableAcl> {
     let rows = tx.query(
         "SELECT pg_get_userbyid(c.relowner)::text, COALESCE(array_to_string(c.relacl,E'\\n'),'') \
          FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace \
@@ -1038,60 +1371,72 @@ fn copy_owner(tx: &Transaction<'_>, schema: &str, scratch: &str, table: &str) ->
         return Err(HistoryError::Integrity("compaction owner"));
     }
     let owner: String = rows[0].get(0)?;
-    tx.batch(&format!(
-        "ALTER TABLE {scratch}.{} OWNER TO {}",
+    let table_acl: String = rows[0].get(1)?;
+    let column_rows = tx.query(
+        "SELECT a.attname::text, COALESCE(array_to_string(a.attacl,E'\\n'),'') \
+         FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid \
+         JOIN pg_namespace n ON n.oid=c.relnamespace \
+         WHERE n.nspname=$1 AND c.relname=$2 AND a.attacl IS NOT NULL AND a.attnum>0 \
+         ORDER BY a.attnum",
+        vec![
+            Param::Text(schema.to_owned()),
+            Param::Text(table.to_owned()),
+        ],
+    )?;
+    let mut columns = Vec::new();
+    for row in &column_rows {
+        let name: String = row.get(0)?;
+        let acl: String = row.get(1)?;
+        columns.push((name, acl_items(&acl)));
+    }
+    Ok(TableAcl {
+        owner,
+        table: acl_items(&table_acl),
+        columns,
+    })
+}
+
+/// One `GRANT` statement for an `aclitem`. A column ACL names the column after
+/// each privilege (`GRANT SELECT (c), UPDATE (c) ...`); the table ACL has no
+/// column list.
+fn grant_statement(schema: &str, table: &str, grant: &AclGrant, column: Option<&str>) -> String {
+    let privileges = match column {
+        Some(column) => grant
+            .privileges
+            .iter()
+            .map(|name| format!("{name} ({})", quote_ident(column)))
+            .collect::<Vec<_>>()
+            .join(", "),
+        None => grant.privileges.join(", "),
+    };
+    format!(
+        "GRANT {privileges} ON TABLE {schema}.{} TO {}{}",
         quote_ident(table),
-        quote_ident(&owner)
+        grant.grantee,
+        if grant.grant_option {
+            " WITH GRANT OPTION"
+        } else {
+            ""
+        }
+    )
+}
+
+/// Replays one table's owner and ACLs on the table that is now in `schema`.
+fn apply_acl(tx: &Transaction<'_>, schema: &str, table: &str, acl: &TableAcl) -> HistoryResult<()> {
+    tx.batch(&format!(
+        "ALTER TABLE {schema}.{} OWNER TO {}",
+        quote_ident(table),
+        quote_ident(&acl.owner)
     ))?;
-    let acl: String = rows[0].get(1)?;
-    for line in acl.lines().filter(|line| !line.is_empty()) {
-        if let Some(grant) = grant_of(line, schema, table) {
-            tx.batch(&grant)?;
+    for grant in &acl.table {
+        tx.batch(&grant_statement(schema, table, grant, None))?;
+    }
+    for (column, grants) in &acl.columns {
+        for grant in grants {
+            tx.batch(&grant_statement(schema, table, grant, Some(column)))?;
         }
     }
     Ok(())
-}
-
-/// One `relacl` entry as a `GRANT` on `schema.table`, or `None` when the
-/// entry is the owner's own implicit grant (`owner=arwdDxt/owner`).
-fn grant_of(line: &str, schema: &str, table: &str) -> Option<String> {
-    let (grantee, rest) = line.split_once('=')?;
-    let (privileges, grantor) = rest.split_once('/')?;
-    if grantee.is_empty() {
-        return None;
-    }
-    // The owner's implicit self-grant is re-created by ALTER TABLE OWNER.
-    if grantee == grantor {
-        return None;
-    }
-    let names: Vec<&str> = privileges
-        .chars()
-        .filter_map(|letter| {
-            Some(match letter {
-                'r' => "SELECT",
-                'w' => "UPDATE",
-                'a' => "INSERT",
-                'd' => "DELETE",
-                'D' => "TRUNCATE",
-                'x' => "REFERENCES",
-                't' => "TRIGGER",
-                _ => return None,
-            })
-        })
-        .collect();
-    if names.is_empty() {
-        return None;
-    }
-    let target = if grantee.is_empty() {
-        "PUBLIC".to_owned()
-    } else {
-        quote_ident(grantee)
-    };
-    Some(format!(
-        "GRANT {} ON TABLE {schema}.{} TO {target}",
-        names.join(","),
-        quote_ident(table)
-    ))
 }
 
 fn verify_swap(
@@ -1197,6 +1542,11 @@ fn cleanup(
              DELETE FROM {schema}.init_entry;\
              DELETE FROM {schema}.init_host_file;"
         ))?;
+        // §11: `cleanup` is written even when the totals were already
+        // applied by the run being resumed.
+        tx.batch(&format!(
+            "UPDATE {schema}.gc_op SET phase='cleanup' WHERE id=1"
+        ))?;
         if !totals_applied {
             tx.query(
                 &format!(
@@ -1211,9 +1561,7 @@ fn cleanup(
                 ],
             )?;
             tx.query(
-                &format!(
-                    "UPDATE {schema}.gc_op SET totals_applied=TRUE,phase='cleanup' WHERE id=1"
-                ),
+                &format!("UPDATE {schema}.gc_op SET totals_applied=TRUE WHERE id=1"),
                 Vec::new(),
             )?;
         }
@@ -1323,6 +1671,13 @@ fn round(
         schema,
         "mark",
     )?;
+    // §11: the op row names the live phase while the run is in it.
+    stage(session, |tx| {
+        tx.batch(&format!(
+            "UPDATE {schema}.gc_op SET phase='build' WHERE id=1"
+        ))?;
+        Ok(())
+    })?;
     metrics.begin_phase(CompactPhase::PostgresBuild);
     let mut built = build(session, schema, &scratch, &mark, &tuple)?;
     metrics.end_phase();
@@ -1335,7 +1690,15 @@ fn round(
         "build",
     )?;
     metrics.begin_phase(CompactPhase::PostgresSwap);
-    let swapped = swap(handles, session, schema, &tuple, &mark, &built)?;
+    let swapped = swap(
+        handles,
+        session,
+        schema,
+        &tuple,
+        &mark,
+        &built,
+        &request.op_id,
+    )?;
     metrics.end_phase();
     stop(
         request,
@@ -1470,6 +1833,48 @@ fn report(
     }
 }
 
+/// True while the schema holds an Init or merge working row. Admission
+/// already refuses a live Init/merge intent; this catches leftover rows of
+/// an operation whose intent was lost, which Phase C must not wipe silently.
+fn unfinished_work(session: &Arc<Session>, schema: &str) -> HistoryResult<bool> {
+    stage(session, |tx| {
+        for table in [
+            "merge_operation",
+            "merge_record",
+            "init_operation",
+            "init_entry",
+            "init_host_file",
+        ] {
+            let name = format!("{schema}.{table}");
+            let rows = tx.query(
+                "SELECT (to_regclass($1) IS NOT NULL)::int",
+                vec![Param::Text(name.clone())],
+            )?;
+            if rows
+                .first()
+                .map(|row| row.get::<i64>(0))
+                .transpose()?
+                .unwrap_or(0)
+                == 0
+            {
+                continue;
+            }
+            let rows = tx.query(&format!("SELECT count(*) FROM {name}"), Vec::new())?;
+            if rows
+                .first()
+                .map(|row| row.get::<i64>(0))
+                .transpose()?
+                .unwrap_or(0)
+                > 0
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    })
+}
+
+/// Runs one §8 PostgreSQL Store compaction on this Store's session.
 impl PostgresHandles {
     /// Runs one §8 PostgreSQL Store compaction on this Store's session.
     ///
@@ -1499,8 +1904,17 @@ impl PostgresHandles {
         if let Some(missing) = compaction_missing(&session)? {
             return Err(HistoryError::Unsupported(missing));
         }
+        // §5: an unfinished Init or merge holds the Store; a compaction must
+        // refuse rather than wipe its working rows in Phase C.
+        if unfinished_work(&session, &schema)? {
+            return Err(HistoryError::Busy);
+        }
         let generation = read_generation(&session, &schema)?;
         metrics.generation_before = u64::try_from(generation).unwrap_or(0);
+        // Spec 5.1/§9: the exclusive Store key is taken before the leftover op
+        // is judged, so a G+1 resume or a G cleanup is serialized like the
+        // run that follows it, and no live owner is terminated off-key.
+        let claim = self.history.claim_store_exclusive()?;
         if let Some(receipt) = settle_leftover(self, &session, &schema, metrics)? {
             return Ok(receipt);
         }
@@ -1515,10 +1929,13 @@ impl PostgresHandles {
             request.owner_boot.as_deref(),
         )
         .with_phase(Some("mark"));
+        // The registration takes its own level of the same key; dropping the
+        // claim then leaves exactly that level held until `gc_release`.
         self.history.gc_register(&intent)?;
+        drop(claim);
         let result = (|| {
             let rank = effective_sync_rank(&session)?;
-            standby_precheck(&session, rank)?;
+            standby_precheck(&session, rank, &request.op_id, "mark")?;
             round(self, &session, &schema, request, metrics)
         })();
         if result.is_err() {
@@ -1532,19 +1949,91 @@ impl PostgresHandles {
 mod tests {
     use super::{standby_satisfied, sync_name, sync_rank};
 
+    fn replica(name: &str, sync_state: &str) -> Replica {
+        Replica {
+            name: name.to_owned(),
+            streaming: true,
+            sync_state: sync_state.to_owned(),
+        }
+    }
+
     #[test]
-    fn the_standby_predicate_waits_only_for_a_named_standby() {
+    fn the_standby_setting_parses_first_any_and_a_bare_list() {
+        let first = super::standby_requirement("FIRST 1 (s1)").unwrap();
+        assert!(first.first);
+        assert_eq!(first.count, 1);
+        assert_eq!(first.members, ["s1"]);
+        let any = super::standby_requirement("ANY 2 (s1, s2)").unwrap();
+        assert!(!any.first);
+        assert_eq!(any.count, 2);
+        assert_eq!(any.members, ["s1", "s2"]);
+        let bare = super::standby_requirement("s1, s2").unwrap();
+        assert!(bare.first);
+        assert_eq!(bare.count, 2, "a bare list is FIRST over every name");
+        let star = super::standby_requirement("*").unwrap();
+        assert!(star.any_name);
+        assert_eq!(star.count, 1);
+        assert!(super::standby_requirement("  ").is_none());
+    }
+
+    #[test]
+    fn the_standby_predicate_counts_matching_sync_states() {
         // Below remote_write, or with no names, no standby is required.
-        assert!(standby_satisfied(0, "", 0));
-        assert!(standby_satisfied(1, "", 0));
-        assert!(standby_satisfied(2, "", 0));
-        assert!(standby_satisfied(4, "  ", 0));
-        // At or above remote_write with names, a streaming sync/quorum
-        // standby must exist.
-        assert!(!standby_satisfied(2, "FIRST 1 (s1)", 0));
-        assert!(!standby_satisfied(4, "ANY 1 (s1)", 0));
-        assert!(standby_satisfied(2, "FIRST 1 (s1)", 1));
-        assert!(standby_satisfied(3, "ANY 2 (s1,s2)", 1));
+        assert!(standby_satisfied(0, "", &[]));
+        assert!(standby_satisfied(1, "", &[]));
+        assert!(standby_satisfied(2, "", &[]));
+        assert!(standby_satisfied(4, "  ", &[]));
+        // At or above remote_write with names, a streaming standby whose
+        // `sync_state` is the form's must exist.
+        assert!(!standby_satisfied(2, "FIRST 1 (s1)", &[]));
+        assert!(!standby_satisfied(4, "ANY 1 (s1)", &[]));
+        assert!(standby_satisfied(
+            2,
+            "FIRST 1 (s1)",
+            &[replica("s1", "sync")]
+        ));
+        assert!(!standby_satisfied(
+            2,
+            "FIRST 1 (s1)",
+            &[replica("s1", "potential")]
+        ));
+        assert!(
+            !standby_satisfied(2, "FIRST 1 (s1)", &[replica("s2", "sync")]),
+            "a name the setting does not list never counts"
+        );
+        // One of ANY 2 is not a quorum: the old count-only test was wrong.
+        assert!(!standby_satisfied(
+            3,
+            "ANY 2 (s1,s2)",
+            &[replica("s1", "quorum")]
+        ));
+        assert!(standby_satisfied(
+            3,
+            "ANY 2 (s1,s2)",
+            &[replica("s1", "quorum"), replica("s2", "quorum")]
+        ));
+        assert!(
+            !standby_satisfied(
+                3,
+                "ANY 2 (s1,s2)",
+                &[replica("s1", "quorum"), replica("s2", "async")]
+            ),
+            "an async member does not make the quorum"
+        );
+        // A bare list is FIRST over all listed names.
+        assert!(!standby_satisfied(2, "s1,s2", &[replica("s1", "sync")]));
+        assert!(standby_satisfied(
+            2,
+            "s1,s2",
+            &[replica("s1", "sync"), replica("s2", "sync")]
+        ));
+        // `*` matches any streaming standby.
+        assert!(standby_satisfied(2, "*", &[replica("anything", "sync")]));
+        assert!(!standby_satisfied(2, "*", &[]));
+        // An async standby is never counted.
+        let mut async_replica = replica("s1", "sync");
+        async_replica.streaming = false;
+        assert!(!standby_satisfied(2, "FIRST 1 (s1)", &[async_replica]));
     }
 
     #[test]

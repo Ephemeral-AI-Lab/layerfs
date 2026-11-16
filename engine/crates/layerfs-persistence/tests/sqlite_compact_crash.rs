@@ -393,17 +393,17 @@ fn assert_recovery(recovery: Recovery<'_>) {
     } = recovery;
     let reopened = reopen(store);
 
-    // The admission intent is released before the seal (T-G5), so only a
-    // crash before that release still leaves it; a rebuilt Store was copied
-    // without it (`build` clears `gc_intent`).
+    // §5.1: the intent stays in the live Store through build and verify and
+    // is cleared from the staged copy at settle, so an old Store keeps it and
+    // an installed `G + 1` has already dropped it.
     let listed = intents(&reopened);
-    if case.failpoint == CompactFailpoint::BeforeSeal {
+    if case.installed {
+        assert!(listed.is_empty(), "the settled intent at {case:?}");
+    } else {
         assert_eq!(listed.len(), 1, "admission intent at {case:?}");
         assert_eq!(listed[0].op_id, op);
         assert_eq!(listed[0].kind, GcIntentKind::Compaction);
         assert_eq!(listed[0].scope_kind, GcScopeKind::Store);
-    } else {
-        assert!(listed.is_empty(), "the intent was released at {case:?}");
     }
 
     // Wholly old or wholly new: never a mixed Store.
@@ -953,5 +953,41 @@ fn real_process_sigkill_skipped_outside_linux() {
     eprintln!(
         "skipped: the real-process SIGKILL compaction test requires Linux, not {}",
         std::env::consts::OS
+    );
+}
+
+/// §5: a compaction refuses while an Init/merge working row is present, so a
+/// rebuild never wipes an operation it was not admitted to touch.
+#[test]
+fn unfinished_init_or_merge_rows_refuse_compaction() {
+    let (_temp, handles, path) = create_store();
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let table = |name: &str| {
+        connection
+            .query_row(
+                "SELECT count(*) FROM sqlite_schema WHERE type='table' AND name=?1",
+                [name],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap()
+            > 0
+    };
+    if !table("init_operation") {
+        connection
+            .execute_batch(include_str!("../sql/sqlite/acquisition/schema.sql"))
+            .unwrap();
+    }
+    connection
+        .execute(
+            "INSERT INTO init_operation(owner_epoch,phase,source_device,source_inode,stack_id,scope) \
+             VALUES(1,1,zeroblob(8),zeroblob(8),zeroblob(16),zeroblob(32))",
+            [],
+        )
+        .unwrap();
+    drop(connection);
+    let error = handles.compact(&request(99)).unwrap_err();
+    assert!(
+        matches!(error, layerfs_history::HistoryError::Busy),
+        "an unfinished Init must refuse the compaction: {error:?}"
     );
 }

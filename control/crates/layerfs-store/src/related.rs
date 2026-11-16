@@ -15,4 +15,7 @@ pub struct Related {
     /// `backup.restore`: refused while another live process holds the Store
     /// or a Sandbox of one of its projects is recorded.
     pub store_idle: Check,
+    /// `project.delete`: refused `Busy` while a Sandbox of the project is
+    /// recorded, even with nothing mounted.
+    pub can_remove_project: Check,
 }

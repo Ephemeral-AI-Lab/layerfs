@@ -116,12 +116,19 @@ pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
         Some((start, boot)) => (Some(start), Some(boot)),
         None => (None, None),
     };
+    let op_id = admission::op_id();
+    let (owner_runtime, owner_boot) = admission::owner_tokens(&format!(
+        "compact:{}",
+        layerfs_bridge::sdk_values::hex(&op_id)
+    ));
     let receipt = handles
         .compact(&CompactRequest {
-            op_id: admission::op_id(),
+            op_id,
             owner_pid: Some(std::process::id()),
             owner_pid_start,
             owner_pid_boot,
+            owner_runtime: Some(owner_runtime),
+            owner_boot: Some(owner_boot),
             failpoint: crash_failpoint(),
             ..CompactRequest::default()
         })
@@ -173,12 +180,19 @@ fn compact_postgresql(record: &StoreRecord, home: &Path, store: &str) -> Outcome
         Some((start, boot)) => (Some(start), Some(boot)),
         None => (None, None),
     };
+    let op_id = admission::op_id();
+    let (owner_runtime, owner_boot) = admission::owner_tokens(&format!(
+        "compact:{}",
+        layerfs_bridge::sdk_values::hex(&op_id)
+    ));
     let receipt = handles
         .compact(&CompactRequest {
-            op_id: admission::op_id(),
+            op_id,
             owner_pid: Some(std::process::id()),
             owner_pid_start,
             owner_pid_boot,
+            owner_runtime: Some(owner_runtime),
+            owner_boot: Some(owner_boot),
             ..CompactRequest::default()
         })
         .map_err(lookup::history)?;

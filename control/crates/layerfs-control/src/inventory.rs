@@ -191,6 +191,24 @@ pub fn can_change_machine(home: &Path, name: &str) -> Result<()> {
     ))
 }
 
+/// `project.delete`: refused `Busy` while a Sandbox of `project`
+/// (`<store>/<project>`) is recorded, so a live Sandbox cannot outlive its
+/// project's Store rows. `detail.related` lists them as `{kind, name}`; an
+/// unreachable Sandbox is still a live user and keeps holding.
+pub fn can_remove_project(home: &Path, project: &str) -> Result<()> {
+    let sandboxes = sandboxes_of_project(home, project)?;
+    if sandboxes.is_empty() {
+        return Ok(());
+    }
+    let message = match sandboxes.as_slice() {
+        [sandbox] => format!("Sandbox {sandbox} of {project} is running"),
+        many => format!("Sandboxes {} of {project} are running", many.join(", ")),
+    };
+    let mut refusal = refused("Busy", message);
+    refusal.detail = SdkValue::map([("related", SdkValue::List(related("sandbox", &sandboxes)))]);
+    Err(refusal)
+}
+
 /// `store.push`, `store.pull`, `store.remove`, `store.disconnect` and
 /// `backup.restore`: refused `InUse` while
 /// another live process holds Store `store` (its lease) or a Sandbox of one

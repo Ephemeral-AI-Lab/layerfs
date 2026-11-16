@@ -72,6 +72,7 @@ CREATE TABLE gc_op (
     artifact TEXT,
     pid INTEGER,
     backend_start TEXT,
+    usename TEXT,
     incarnation INTEGER
 ) STRICT;
 

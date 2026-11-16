@@ -460,6 +460,16 @@ pub struct Application {
     /// worker's late `clear_fence` skip a newer worker's fence.
     pub(super) fences: Mutex<Vec<Option<(u64, transport::CloseHandle)>>>,
 }
+
+impl Drop for Application {
+    fn drop(&mut self) {
+        if let Ok(mut state) = self.state.lock() {
+            if let Some(service) = state.startup.service.take() {
+                service.close_bound();
+            }
+        }
+    }
+}
 impl Application {
     pub(super) fn start(setup: DaemonSetup) -> Result<Arc<Self>, ApplicationError> {
         let l = setup.limits;

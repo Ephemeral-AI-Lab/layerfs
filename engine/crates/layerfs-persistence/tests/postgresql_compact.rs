@@ -562,8 +562,8 @@ fn a_busy_swap_records_a_failed_outcome_and_a_busy_refusal() {
     blocker.batch_execute("ROLLBACK").unwrap();
 
     assert!(
-        matches!(error, layerfs_history::HistoryError::Busy),
-        "{error:?}"
+        matches!(error, layerfs_history::HistoryError::BusyOp(_)),
+        "the swap refusal names the holder: {error:?}"
     );
     assert_bounded(&metrics);
     assert_eq!(value(&metrics, "compact.runs", &[]), 1);
@@ -829,6 +829,199 @@ fn retained_roots_survive_a_rebuild_that_collects_a_deleted_project() {
     clean(&schema.open());
 }
 
+/// Finding 1: a non-owner grantee, a `PUBLIC` grant, a grant option and a
+/// column ACL all survive the swap. Replaying them before the drop wrote them
+/// on the table that was about to disappear, so the new table came back with
+/// an empty ACL (reproduced on PostgreSQL 17).
+#[test]
+fn a_rebuild_keeps_the_owner_and_every_acl_level() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "acl");
+    let handles = schema.create();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let _dead = whole_file(&handles, b"a pack the acl rebuild replaces");
+
+    let suffix = format!("{}_{}", std::process::id(), "acl");
+    let grantee = format!("lfs_acl_grantee_{suffix}");
+    let public = format!("lfs_acl_public_{suffix}");
+    let mut admin = postgres::Client::connect(&url, postgres::NoTls).unwrap();
+    for role in [&grantee, &public] {
+        admin
+            .batch_execute(&format!("DROP ROLE IF EXISTS {role}"))
+            .ok();
+        admin
+            .batch_execute(&format!("CREATE ROLE {role} NOLOGIN"))
+            .unwrap();
+    }
+    let s = schema.selection.schema.clone();
+    admin
+        .batch_execute(&format!(
+            "GRANT SELECT ON TABLE {s}.pack TO {grantee}; \
+             GRANT UPDATE ON TABLE {s}.object_location TO {grantee} WITH GRANT OPTION; \
+             GRANT SELECT (object_id) ON TABLE {s}.object_location TO {grantee}; \
+             GRANT SELECT ON TABLE {s}.pack TO PUBLIC"
+        ))
+        .unwrap();
+
+    handles.compact(&request(71)).unwrap();
+
+    let table_privilege =
+        |admin: &mut postgres::Client, role: &str, table: &str, privilege: &str| -> bool {
+            admin
+                .query_one(
+                    "SELECT has_table_privilege($1::name, $2, $3)",
+                    &[&role, &format!("{s}.{table}"), &privilege],
+                )
+                .unwrap()
+                .get(0)
+        };
+    assert!(
+        table_privilege(&mut admin, &grantee, "pack", "SELECT"),
+        "the non-owner grantee keeps SELECT on the rebuilt pack table"
+    );
+    assert!(
+        table_privilege(&mut admin, &grantee, "object_location", "UPDATE"),
+        "the non-owner grantee keeps UPDATE on the rebuilt object_location table"
+    );
+    assert!(
+        table_privilege(
+            &mut admin,
+            &grantee,
+            "object_location",
+            "UPDATE WITH GRANT OPTION"
+        ),
+        "the grant option survives"
+    );
+    assert!(
+        table_privilege(&mut admin, &public, "pack", "SELECT"),
+        "a PUBLIC grant survives"
+    );
+    let column: bool = admin
+        .query_one(
+            "SELECT has_column_privilege($1::name, $2, $3, $4)",
+            &[
+                &grantee,
+                &format!("{s}.object_location"),
+                &"object_id",
+                &"SELECT",
+            ],
+        )
+        .unwrap()
+        .get(0);
+    assert!(column, "the column ACL survives");
+    let owner: String = admin
+        .query_one(
+            "SELECT pg_get_userbyid(relowner)::text FROM pg_class \
+              WHERE oid = to_regclass($1)",
+            &[&format!("{s}.pack")],
+        )
+        .unwrap()
+        .get(0);
+    let current: String = admin
+        .query_one("SELECT current_user::text", &[])
+        .unwrap()
+        .get(0);
+    assert_eq!(owner, current, "the owner is unchanged");
+
+    clean(&schema.open());
+    for role in [&grantee, &public] {
+        admin.batch_execute(&format!("DROP OWNED BY {role}")).ok();
+        admin
+            .batch_execute(&format!("DROP ROLE IF EXISTS {role}"))
+            .ok();
+    }
+}
+
+/// The advisory key the Store's exclusive intent uses (spec 5.2).
+fn store_advisory_key(binding: &[u8]) -> i64 {
+    let catalog = layerfs_history::CatalogId::derive(binding).unwrap();
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"layerfs/advisory/v1\0");
+    hasher.update(catalog.as_slice());
+    hasher.update(&[1u8]);
+    hasher.update(catalog.as_slice());
+    let digest = hasher.finalize();
+    let mut head = [0u8; 8];
+    head.copy_from_slice(&digest.as_bytes()[..8]);
+    i64::from_be_bytes(head)
+}
+
+/// Finding 6: the G+1 resume runs under the exclusive Store key. Holding the
+/// key from another session refuses the resume with `Busy`; before the claim
+/// was taken first, `settle_leftover` resumed and returned a receipt while
+/// the key was held elsewhere.
+#[test]
+fn a_g_plus_one_resume_takes_the_exclusive_store_key_first() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "resume_key");
+    let handles = schema.create();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let _dead = whole_file(&handles, b"a pack the resumed run collects");
+    let before = generation(&handles);
+    let error = handles
+        .compact(&request_at(72, CompactFailpoint::PostgresAfterSwap))
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        layerfs_history::HistoryError::UnknownOutcome
+    ));
+    assert_eq!(schema.count("gc_op"), 1, "the G+1 leftover is recorded");
+
+    let key = store_advisory_key(&schema.binding);
+    let mut admin = postgres::Client::connect(&url, postgres::NoTls).unwrap();
+    admin
+        .execute("SELECT pg_advisory_lock($1)", &[&key])
+        .unwrap();
+    let refused = handles.compact(&request(73)).unwrap_err();
+    let layerfs_history::HistoryError::BusyOp(state) = &refused else {
+        panic!("the held key refuses the resume with a typed Busy: {refused:?}");
+    };
+    assert!(
+        state.pid.is_some(),
+        "the key holder backend is named: {state:?}"
+    );
+    admin
+        .execute("SELECT pg_advisory_unlock($1)", &[&key])
+        .unwrap();
+    let receipt = handles.compact(&request(74)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_before, before);
+    assert_eq!(receipt.generation_after, before + 1);
+    assert_settled(&schema, 74);
+    clean(&schema.open());
+}
+
+/// Finding 6: the live phase is written into `gc_op`, not only recorded in
+/// the report: a run stopped after the build leaves `build`, and a resumed
+/// G+1 run writes `cleanup`.
+#[test]
+fn a_rebuild_writes_the_build_and_cleanup_phases_to_the_op() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "op_phases");
+    let handles = schema.create();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let _dead = whole_file(&handles, b"a pack the phase run collects");
+    let error = handles
+        .compact(&request_at(75, CompactFailpoint::PostgresAfterBuild))
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        layerfs_history::HistoryError::UnknownOutcome
+    ));
+    let phase: String = schema
+        .client()
+        .query_one("SELECT phase FROM gc_op WHERE id=1", &[])
+        .unwrap()
+        .get(0);
+    assert_eq!(phase, "build", "the live Phase A phase is recorded");
+    handles.compact(&request(76)).unwrap();
+    assert_settled(&schema, 76);
+    clean(&schema.open());
+}
+
 #[test]
 fn a_lost_swap_reply_is_resumed_by_the_next_compact() {
     let Some(url) = url() else { return };
@@ -948,9 +1141,14 @@ fn an_exclusive_table_lock_makes_the_swap_busy() {
         .unwrap();
     let error = handles.compact(&request(7)).unwrap_err();
     blocker.batch_execute("ROLLBACK").unwrap();
+    let layerfs_history::HistoryError::BusyOp(state) = &error else {
+        panic!("a 55P03 lock at the swap is a typed Busy, got {error:?}");
+    };
+    assert_eq!(state.entity, "store");
+    assert_eq!(state.phase.as_deref(), Some("swap"));
     assert!(
-        matches!(error, layerfs_history::HistoryError::Busy),
-        "a 55P03 lock at the swap is Busy, got {error:?}"
+        state.pid.is_some(),
+        "the blocker backend is named: {state:?}"
     );
 }
 
@@ -1031,8 +1229,16 @@ fn park_backend(schema: &Schema, table: &str) {
     let mut client = schema.client();
     client
         .batch_execute(&format!(
+            // `gc_op` gains the live `build` phase before Phase B, so parking
+            // every update would stop the run before Phase A; only the swap
+            // phase parks there. Other tables park on every update.
             "CREATE OR REPLACE FUNCTION {schema}.{name}() RETURNS trigger LANGUAGE plpgsql AS \
-             $fn$ BEGIN PERFORM pg_sleep(120); RETURN NEW; END $fn$;\
+             $fn$ BEGIN \
+               IF TG_TABLE_NAME = 'gc_op' THEN \
+                 IF NEW.phase = 'swap' THEN PERFORM pg_sleep(120); END IF; \
+               ELSE PERFORM pg_sleep(120); END IF; \
+               RETURN NEW; \
+             END $fn$;\
              CREATE TRIGGER {name} BEFORE UPDATE ON {schema}.{table} \
               FOR EACH ROW EXECUTE FUNCTION {schema}.{name}();",
             schema = schema.selection.schema,
@@ -1153,6 +1359,7 @@ fn spawn_round(
 fn a_killed_backend_before_the_swap_commit_leaves_the_store_at_g() {
     let Some(url) = url() else { return };
     let schema = Schema::new(&url, "kill_before_commit");
+    schema.drop_scratch(41);
     let setup = schema.create();
     let live = filesystem_root(&setup, 1);
     initialize(&setup, 1, live);
@@ -1186,7 +1393,9 @@ fn a_killed_backend_before_the_swap_commit_leaves_the_store_at_g() {
     // The documented leftover of an interrupted round: Phase M's op row keeps
     // the owner, Phase A's scratch schema and the dead set remain.
     let (op_pid, op_start, op_phase) = op_owner(&schema).expect("the op row survives the kill");
-    assert_eq!((op_pid, op_phase), (pid, "mark".to_owned()));
+    // §11: the live Phase A phase was written before the build, so the last
+    // committed phase is `build`; Phase B's `swap` write rolled back.
+    assert_eq!((op_pid, op_phase), (pid, "build".to_owned()));
     assert_eq!(op_start, start);
     assert!(
         schema.scratch_exists(41),
@@ -1235,6 +1444,7 @@ fn a_killed_backend_before_the_swap_commit_leaves_the_store_at_g() {
 fn a_killed_backend_during_phase_c_resumes_at_g_plus_1() {
     let Some(url) = url() else { return };
     let schema = Schema::new(&url, "kill_phase_c");
+    schema.drop_scratch(43);
     let setup = schema.create();
     let live = filesystem_root(&setup, 1);
     initialize(&setup, 1, live);
