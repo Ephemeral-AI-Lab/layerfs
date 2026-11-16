@@ -115,3 +115,23 @@ impl Service {
         Ok(())
     }
 }
+
+impl Service {
+    /// The Commit-with-construct face the unix Service names: the
+    /// Windows face has no retained custody producer, so Commit always
+    /// runs the captured path (execute_control).
+    pub fn execute<'a, C>(&self, request: &layerfs_bridge::control::Request, _construct: C) -> Result<super::Success, super::Failure>
+    where
+        C: FnOnce(
+            &layerfs_storage::Save<'a>,
+            layerfs_overlay::Capture,
+            &layerfs_history::BranchSnapshot,
+        ) -> Result<layerfs_content::filesystem::FilesystemRootId, crate::store::CommitError>,
+    {
+        self.execute_control(request)
+    }
+
+    /// The post-commit reclaim the unix face runs: the Windows entry
+    /// keeps no observation state to reclaim.
+    pub fn reclaim_after_commit(&self, _token: layerfs_bridge::control::WorkspaceToken) {}
+}

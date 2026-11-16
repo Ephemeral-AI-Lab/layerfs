@@ -13,7 +13,7 @@ mod dirty;
 mod export;
 #[cfg(unix)]
 mod export_helper;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 mod failure;
 #[cfg(unix)]
 mod force;
@@ -35,7 +35,7 @@ mod registry;
 mod registry_windows;
 #[cfg(windows)]
 mod operations_windows;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 mod serve;
 #[cfg(target_os = "linux")]
 mod serving;
@@ -54,8 +54,8 @@ pub(crate) use observation::{reply_token, request_token};
 pub use registry::Service;
 #[cfg(windows)]
 pub use registry_windows::Service;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub(crate) use serve::answer_call;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub use serve::{ServeCause, ServeFailure, Served};
 pub use types::{Failure, KernelEvidence, KernelFailure, Success};
