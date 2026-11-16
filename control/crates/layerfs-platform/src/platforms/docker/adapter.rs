@@ -9,7 +9,7 @@ use crate::reach::{dial, Loopback};
 use crate::setup::forward::refuse;
 use crate::setup::guest::Guest;
 use crate::setup::{tool, Status};
-use crate::spec::{Bundle, Forward, Running, Spec, Tools};
+use crate::spec::{Bundle, Forward, NameLimit, Running, Spec, Tools};
 
 /// Why a Sandbox daemon's port is not forwarded: the worker container's
 /// port is published when it starts (`docker run -p`), which is the only
@@ -45,6 +45,12 @@ impl Adapter for Docker {
         } else {
             Err(refused(spec, "runs in-process; its files are the host's"))
         }
+    }
+    fn name_limit(&self) -> Option<NameLimit> {
+        None
+    }
+    fn data_volume(&self, spec: &Spec) -> Option<String> {
+        Some(crate::setup::vm::data_volume(spec))
     }
     fn create(&self, spec: &Spec, _bundle: &Bundle) -> Result<Running, MachineError> {
         Err(refused(spec, "is built in and never created"))

@@ -89,6 +89,31 @@ pub fn sandbox_live(host: &Host) -> Result<Arc<SandboxState>, SdkRefusal> {
     Ok(state)
 }
 
+/// How long ending a process's idle daemon sessions may take in all when it
+/// is about to exit: a daemon that does not answer in time is left a dropped
+/// connection, as before.
+pub const SESSION_END: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// Ends the idle daemon sessions of every Sandbox this process reached
+/// (`Controls::end_idle`), all inside `within`: what a one-shot process does
+/// when its call is over, so its exit is not a dropped connection in each
+/// daemon's log. It takes no record lock, never fails and sends nothing
+/// twice. Answers how many sessions ended.
+pub fn end_idle_sessions(within: std::time::Duration) -> usize {
+    let deadline = std::time::Instant::now() + within;
+    // the table is held only for single steps, and is whole after a
+    // holder's panic (layerfs-project#177)
+    let live: Vec<Arc<SandboxState>> = SANDBOXES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .values()
+        .cloned()
+        .collect();
+    live.iter()
+        .map(|state| state.controls.end_idle(deadline))
+        .sum()
+}
+
 impl SandboxState {
     /// Its runtime; a forwarded Sandbox's is its machine's, which this
     /// process does not run (its commands go through the worker).

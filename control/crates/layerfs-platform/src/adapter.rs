@@ -8,7 +8,7 @@ use crate::platform::{HostOs, Platform};
 use crate::platforms::{apple_container, docker, lima, native};
 use crate::setup::guest::Guest;
 use crate::setup::{State, Status};
-use crate::spec::{Bundle, Forward, Running, Spec, Tools};
+use crate::spec::{Bundle, Forward, NameLimit, Running, Spec, Tools};
 
 /// What a platform does; implemented once per platform folder.
 pub(crate) trait Adapter: Sync {
@@ -17,6 +17,14 @@ pub(crate) trait Adapter: Sync {
     fn probe(&self, tools: &Tools, host: HostOs, missing: &mut Vec<String>) -> Option<String>;
     /// How the host reaches a running machine's guest.
     fn guest(&self, spec: &Spec) -> Result<Guest, MachineError>;
+    /// The provider's own limit on a VM's name on this host, from its
+    /// settings alone; `None`: only the plain-name rule. Asks the provider
+    /// nothing.
+    fn name_limit(&self) -> Option<NameLimit>;
+    /// The provider's name of the volume or disk that holds the machine's
+    /// data (`/layerfs/data`), from the spec alone; `None`: the machine
+    /// has none of its own. Asks the provider nothing.
+    fn data_volume(&self, spec: &Spec) -> Option<String>;
     /// Makes the machine and starts its worker.
     fn create(&self, spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError>;
     /// Deletes the machine.

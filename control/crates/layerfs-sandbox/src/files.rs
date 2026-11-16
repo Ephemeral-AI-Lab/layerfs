@@ -153,7 +153,8 @@ fn local_fields(
     let boot = record
         .boot
         .ok_or_else(|| refused("Failed", "local Sandbox daemon has no boot id"))?;
-    let directory = crate::launch::local::directory(host.deploy(), &state.id, None)?;
+    // the directory its start launched it in, under the name it gave it
+    let directory = crate::launch::local::directory(host.deploy(), &state.id, &state.name, None)?;
     Ok(DaemonRecord::local(Local {
         platform,
         name: state.name.clone(),

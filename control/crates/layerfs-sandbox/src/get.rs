@@ -20,7 +20,10 @@ pub struct GetRequest {
 
 /// One Workspace its Sandbox's daemon lists (#536 C3).
 pub struct ListedWorkspace {
-    /// The daemon's item, as it answered it.
+    /// The daemon's item, as it answered it, with what the side that keeps
+    /// the Workspace's record added (layerfs-project#178): the commands
+    /// `running` in it and its `overlay_bytes`. A worker from before those
+    /// fields answers neither, and the item then has neither.
     pub item: SdkValue,
     /// Its kernel path: the item's `path`, or the daemon's `directory`
     /// from a worker that does not give it.
@@ -100,6 +103,20 @@ pub struct Got {
     /// Its daemon's control-capacity read model (#540), when a running
     /// Sandbox answered the bounded read (#543).
     pub daemon_capacity: Option<CapacityModel>,
+    /// How many Workspaces a Sandbox holds at once: control's own constant
+    /// ([`crate::lifecycle::WORKSPACES`]), not a daemon setting, so it is
+    /// there whatever the Sandbox's state (layerfs-project#178, D10).
+    pub workspace_capacity: u32,
+    /// Its daemon process as the side that runs it saw it
+    /// (layerfs-project#164), as fields a get shows: `daemon` (`{ pid,
+    /// started_at }`), `usage` (its cgroup's `{ cpu_usec, memory_current,
+    /// memory_peak, pids }`, or null) and, with a null `usage`,
+    /// `usage_reason`. They ride the Workspace list's own answer, read
+    /// there by path with no daemon call; this home's own record answers
+    /// them when it runs the Sandbox and the list was not answered. Both
+    /// null, `not_observed`, when the side that runs it did not answer;
+    /// empty from a worker of a build before them.
+    pub process: Vec<(String, SdkValue)>,
 }
 
 /// Its record with one page of its Workspaces. Reading never clears an
@@ -124,6 +141,7 @@ pub fn get(home: &Path, events: &mut Events<'_>, request: &GetRequest) -> Result
         ),
         None => Ok(Ok(SdkValue::Null)),
     };
+    let mut answered = None;
     let (all, down_reason, down, gone) = match listed {
         Ok(Err(refusal)) if refusal.code == "NoSuchSandbox" => (Vec::new(), None, None, true),
         // a route that runs the call in a machine's worker, or here, is told
@@ -137,15 +155,18 @@ pub fn get(home: &Path, events: &mut Events<'_>, request: &GetRequest) -> Result
             };
             (Vec::new(), Some(refusal.message), Down::of(&tagged), false)
         }
-        Ok(workspaces) => match workspaces?.get("workspaces") {
-            Some(SdkValue::List(items)) => (
-                items.iter().map(|i| listed_workspace(name, i)).collect(),
-                None,
-                None,
-                false,
-            ),
-            _ => (Vec::new(), None, None, false),
-        },
+        Ok(workspaces) => {
+            let answer = answered.insert(workspaces?);
+            match answer.get("workspaces") {
+                Some(SdkValue::List(items)) => (
+                    items.iter().map(|i| listed_workspace(name, i)).collect(),
+                    None,
+                    None,
+                    false,
+                ),
+                _ => (Vec::new(), None, None, false),
+            }
+        }
         Err(Unreached(why)) => {
             let down = Down::of(&why);
             (Vec::new(), Some(why.message), down, false)
@@ -157,6 +178,15 @@ pub fn get(home: &Path, events: &mut Events<'_>, request: &GetRequest) -> Result
     // this read never fails a get (#540, #543)
     let unreachable = down_reason.is_some();
     let daemon_capacity = capacity(&home, events, &record, gone, state, unreachable);
+    let process = match answered {
+        // the side that runs it answered the list, with what it saw
+        Some(answer @ SdkValue::Map(_)) => crate::run_folder::process_of(&answer),
+        // not answered: this home's record says, when it names the process
+        _ => match record.daemon().filter(|daemon| daemon.pid().is_some()) {
+            Some(daemon) => crate::inspect::process::observed(daemon),
+            None => crate::inspect::process::not_observed(),
+        },
+    };
     Ok(Got {
         state,
         record,
@@ -165,6 +195,8 @@ pub fn get(home: &Path, events: &mut Events<'_>, request: &GetRequest) -> Result
         down,
         next,
         daemon_capacity,
+        workspace_capacity: crate::lifecycle::WORKSPACES,
+        process,
     })
 }
 

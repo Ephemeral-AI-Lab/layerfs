@@ -402,7 +402,14 @@ fn merge(report: SdkValue, checks: &mut Checks) {
 }
 
 /// Worker-only fixed-root observation; no Store routes or caller-controlled paths.
+/// With `leftovers: true` it answers this root's leftover walk instead
+/// (`leftovers::walk_in_worker`, layerfs-project#180): the same read-only
+/// operation, with no Sandbox named.
 pub(crate) fn worker_diagnose(root: &Path, args: SdkValue) -> Outcome {
+    #[cfg(unix)]
+    if args.get_bool("leftovers") {
+        return Ok(super::leftovers::walk_in_worker(root, &args));
+    }
     let name = args
         .get_text("name")
         .ok_or_else(|| refused("InvalidInput", "sandbox diagnostic name"))?;

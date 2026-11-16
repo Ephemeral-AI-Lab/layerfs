@@ -17,22 +17,25 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 /// `path` as a private folder, with its parents.
 pub fn private_dir(path: &Path) -> Result<(), SdkRefusal> {
     #[cfg(unix)]
-    let made = {
-        use std::os::unix::fs::DirBuilderExt;
-        fs::DirBuilder::new().recursive(true).mode(0o700).create(path)
-    };
-    // Windows: privacy is the account's DACL, not mode bits.
-    #[cfg(not(unix))]
-    let made = fs::DirBuilder::new().recursive(true).create(path);
-    made.map_err(|error| refused("Failed", format!("{}: {error}", path.display())))
+    {
+        fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(path)
+            .map_err(|error| refused("Failed", format!("{}: {error}", path.display())))
+    }
+    // Windows: the directory ACL carries its privacy face.
+    #[cfg(windows)]
+    fs::create_dir_all(path).map_err(|error| refused("Failed", format!("{}: {error}", path.display())))
 }
 
 /// Lets others pass through (o+x, never read) `dir` and each folder from
 /// `home` down to it: a namespaces Sandbox's commands run as another
 /// identity and must reach their Workspace below `dir`. The folders stay
 /// unlistable by others; folders above `home` are not changed.
-#[cfg(unix)]
 pub fn traversable(home: &Path, dir: &Path) -> Result<(), SdkRefusal> {
+    #[cfg(unix)]
+    {
     use std::os::unix::fs::PermissionsExt;
     for folder in dir.ancestors().take_while(|f| f.starts_with(home)) {
         let mode = fs::metadata(folder).map_err(failed)?.permissions().mode();
@@ -42,12 +45,9 @@ pub fn traversable(home: &Path, dir: &Path) -> Result<(), SdkRefusal> {
         }
     }
     Ok(())
-}
-
-/// Windows: folder traversal is governed by the account's ACLs; the
-/// namespaces identity traversal this mirrors is a unix concept.
-#[cfg(not(unix))]
-pub fn traversable(_home: &Path, _dir: &Path) -> Result<(), SdkRefusal> {
+    }
+    #[cfg(windows)]
+    let _ = (home, dir);
     Ok(())
 }
 
@@ -78,14 +78,18 @@ pub fn write_record(path: &Path, value: &SdkValue) -> Result<(), SdkRefusal> {
     let unique = NEXT.fetch_add(1, Ordering::Relaxed);
     let temporary = parent.join(format!(".{name}.{}.{unique}.tmp", std::process::id()));
     #[cfg(unix)]
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(&temporary)
-        .map_err(failed)?;
-    #[cfg(not(unix))]
+    let mut file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&temporary)
+            .map_err(failed)?
+    };
+    // Windows: the record file ACL carries its privacy face.
+    #[cfg(windows)]
     let mut file = fs::OpenOptions::new()
         .write(true)
         .create(true)
@@ -177,26 +181,45 @@ pub fn with_field(value: SdkValue, name: &str, field: SdkValue) -> SdkValue {
     SdkValue::Map(fields)
 }
 
-/// Appends one JSON line to `log/<name>`.
+/// `log/uncertain.jsonl`: the only record of uncertain outcomes, so it is
+/// never rotated (layerfs-project#179 D8).
+pub const UNCERTAIN: &str = "uncertain.jsonl";
+
+/// Appends one JSON line to `log/<name>`: the file is opened, written and
+/// closed, so no writer holds it across a rotation. Past 16 MiB it then
+/// rotates once to `log/<stem>.1.jsonl`, as the call log does, under a
+/// non-blocking `flock` on `log/rotate.lock`; a writer that does not get
+/// the lock skips the rotation, and a rotation that fails changes no
+/// outcome. [`UNCERTAIN`] never rotates.
 pub fn log_line(home: &Path, name: &str, value: &SdkValue) -> Result<(), SdkRefusal> {
     let dir = super::paths::log_dir(home);
     private_dir(&dir)?;
+    let path = dir.join(name);
     #[cfg(unix)]
+    let mut file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .mode(0o600)
+            .open(&path)
+            .map_err(failed)?
+    };
+    #[cfg(windows)]
     let mut file = fs::OpenOptions::new()
         .append(true)
         .create(true)
-        .mode(0o600)
-        .open(dir.join(name))
-        .map_err(failed)?;
-    #[cfg(not(unix))]
-    let mut file = fs::OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(dir.join(name))
+        .open(&path)
         .map_err(failed)?;
     let mut text = json::print(&to_hex(value.clone()));
     text.push('\n');
-    file.write_all(text.as_bytes()).map_err(failed)
+    file.write_all(text.as_bytes()).map_err(failed)?;
+    let size = file.metadata().map_or(0, |meta| meta.len());
+    drop(file);
+    if size > crate::logs::ROTATE_AT && name != UNCERTAIN {
+        crate::logs::rotate(&super::paths::log_rotate_lock(home), &path);
+    }
+    Ok(())
 }
 
 /// Milliseconds since the Unix epoch.

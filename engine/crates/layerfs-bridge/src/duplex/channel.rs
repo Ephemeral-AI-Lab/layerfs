@@ -256,7 +256,20 @@ impl Receiver {
                 return Err(ChannelError::Quarantined);
             }
             fence_attempted = true;
-            self.stream.shutdown(Shutdown::Both).map_err(Into::into)
+            match self.stream.shutdown(Shutdown::Both) {
+                // the peer's end already closed this socket's read side:
+                // macOS answers a shutdown of it NotConnected and leaves the
+                // write side open, so that side is closed on its own
+                Err(error) if error.kind() == std::io::ErrorKind::NotConnected => {
+                    match self.stream.shutdown(Shutdown::Write) {
+                        Err(error) if error.kind() != std::io::ErrorKind::NotConnected => {
+                            Err(error.into())
+                        }
+                        _ => Ok(()),
+                    }
+                }
+                other => other.map_err(Into::into),
+            }
         })();
         result.map_err(|cause| {
             Box::new(super::PeerEndFailure {

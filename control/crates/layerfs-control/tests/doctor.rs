@@ -146,6 +146,42 @@ fn a_clean_home_is_ok_with_no_findings() {
     std::fs::remove_dir_all(home).unwrap();
 }
 
+/// The run root's ancestors are 0700, or 0701 once a namespaces Sandbox's
+/// commands must pass through them (`home::traversable`): doctor accepts
+/// both and its message names both (layerfs-project#180). A folder its
+/// group or others may list is still an error.
+#[test]
+fn a_home_folder_is_0700_or_0701_and_the_message_names_both() {
+    let home = new_home("modes-0701");
+    layerfs_control::migrate::open(&home).unwrap();
+    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
+    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
+    let run = paths::run_root(&home);
+    std::fs::create_dir(&run).unwrap();
+    std::fs::set_permissions(&run, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let ancestors = [home.join("machine"), paths::machine_dir(&home, "native")];
+    for mode in [0o700, 0o701] {
+        for folder in &ancestors {
+            std::fs::set_permissions(folder, std::fs::Permissions::from_mode(mode)).unwrap();
+        }
+        let report = doctor(&home).unwrap();
+        assert_eq!(report.get("ok"), Some(&SdkValue::Bool(true)), "{report:?}");
+        assert!(findings(&report).is_empty(), "{mode:o}: {report:?}");
+    }
+    std::fs::set_permissions(&ancestors[0], std::fs::Permissions::from_mode(0o755)).unwrap();
+    let report = doctor(&home).unwrap();
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(false)), "{report:?}");
+    let found = findings(&report);
+    assert_eq!(found.len(), 1, "{found:?}");
+    let (severity, _, _, message, fix) = &found[0];
+    assert_eq!(severity, "error");
+    for part in ["mode 0755", "0700", "0701"] {
+        assert!(message.contains(part), "{part}: {message}");
+    }
+    assert!(fix.contains("chmod g-rwx,o-rw"), "{fix}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
 #[test]
 fn a_store_folder_others_may_pass_through_is_an_error_naming_chmod_700() {
     // #534: the daemon refuses a Store folder with any group/other bit, so

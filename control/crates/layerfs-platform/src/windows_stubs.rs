@@ -151,3 +151,10 @@ impl StubState {
     }
 }
 }
+
+
+/// The provider name limit: no VM provider face runs on Windows
+/// (#454); native has none, every VM provider answers None.
+pub fn name_limit(_platform: Platform) -> Option<crate::NameLimit> {
+    None
+}

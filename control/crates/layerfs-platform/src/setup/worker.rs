@@ -6,7 +6,8 @@ use super::guest::{Guest, EXEC};
 use super::tool;
 use crate::error::{Code, MachineError};
 use crate::facts;
-use crate::spec::{Bundle, Endpoint, Spec, BUNDLE, DATA, IMAGE, STATE, WORKER_PORT};
+use crate::spec::{Bundle, Endpoint, Spec, BUNDLE, DATA, IMAGE, STATE, WORKER_LOG, WORKER_PORT};
+use layerfs_bridge::log_file::ROTATE_AT;
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::path::Path;
 use std::thread;
@@ -28,12 +29,40 @@ mount -o remount,rw /proc/sys 2>/dev/null || true
 echo 0 > /proc/sys/user/max_user_namespaces
 cat /proc/sys/user/max_user_namespaces"#;
 
+/// What a launcher's shell runs before it starts a worker whose output it
+/// appends to `$LAYERFS_WORKER_LOG` ([`WORKER_LOG`]): the log's folder
+/// (0700) and file (0600), a log an older build left in `/layerfs/state`
+/// moved in, and the one rotation. A start that finds the log past 16 MiB
+/// renames it to `worker.1.log`, replacing an older one; a smaller log is
+/// appended to, so the lines of the run before stay in it and its readers'
+/// positions hold across a restart. Nothing rotates it while the worker
+/// runs: a rename would not move the worker's descriptor. Each start then
+/// marks where its lines begin. Used by every machine kind's launcher,
+/// once no earlier worker runs.
+pub(crate) fn log_start() -> String {
+    format!(
+        r#"( umask 077
+  mkdir -p "${{LAYERFS_WORKER_LOG%/*}}"
+  if [ -f /layerfs/state/worker.log ] && [ ! -e "$LAYERFS_WORKER_LOG" ]; then
+    mv /layerfs/state/worker.log "$LAYERFS_WORKER_LOG"
+  fi
+  if [ -f "$LAYERFS_WORKER_LOG" ] && [ "$(wc -c < "$LAYERFS_WORKER_LOG")" -gt {ROTATE_AT} ]; then
+    mv -f "$LAYERFS_WORKER_LOG" "${{LAYERFS_WORKER_LOG%.log}}.1.log"
+  fi
+  echo "layerfs worker: launched $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$LAYERFS_WORKER_LOG"
+  chmod 600 "$LAYERFS_WORKER_LOG" )"#
+    )
+}
+
 /// Step 3: ends a worker an earlier start left (by its pid, if that pid's
 /// command line is still exactly the bundle's `layerfs worker`: a guest
 /// that restarted reuses pids, even this script's own), then starts it
-/// detached as root, its settings in its environment and its secret in a file.
-/// It serves until `machine.stop` ends it (#535 D11).
-const LAUNCH: &str = r#"s=/layerfs/state
+/// detached as root, its settings in its environment, its secret in a file
+/// and its output appended to its log ([`log_start`]). It serves until
+/// `machine.stop` ends it (#535 D11).
+fn launch_script() -> String {
+    format!(
+        r#"s=/layerfs/state
 if [ -f $s/worker.pid ]; then
   p=$(cat $s/worker.pid)
   # exactly the bundle's worker: a guest that restarted reuses its pids
@@ -42,8 +71,13 @@ if [ -f $s/worker.pid ]; then
     while kill -0 "$p" 2>/dev/null && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done
   fi
 fi
-LAYERFS_WORKER_LISTEN="$1" LAYERFS_WORKER_SECRET=$s/secret setsid nohup "$2/layerfs" worker >> $s/worker.log 2>&1 < /dev/null &
-echo $! > $s/worker.pid"#;
+LAYERFS_WORKER_LOG="$3"
+{}
+LAYERFS_WORKER_LISTEN="$1" LAYERFS_WORKER_SECRET=$s/secret setsid nohup "$2/layerfs" worker >> "$LAYERFS_WORKER_LOG" 2>&1 < /dev/null &
+echo $! > $s/worker.pid"#,
+        log_start()
+    )
+}
 
 /// One readiness look: whether the worker still runs, then the guest's TCP sockets.
 const LOOK: &str = r#"p=$(cat /layerfs/state/worker.pid 2>/dev/null)
@@ -132,34 +166,40 @@ pub(crate) fn launch(
     let secret = tool::secret()?;
     guest.write_file(tools, &format!("{STATE}/secret"), &secret)?;
     let listen = format!("{bind}:{WORKER_PORT}");
-    guest.script(tools, "starting the worker", LAUNCH, &[&listen, BUNDLE])?;
-    ready(spec, guest, WORKER_PORT, address)?;
+    let script = launch_script();
+    let args = [listen.as_str(), BUNDLE, WORKER_LOG];
+    guest.script(tools, "starting the worker", &script, &args)?;
+    ready(spec, guest, WORKER_PORT, address, &|| None)?;
     Ok(Endpoint { address, secret })
 }
 
 /// The readiness wait (not a retry): until the worker listens on
 /// `guest_port` in the guest and the host's loopback `address` accepts a
 /// connection, at most [`READY`]. A worker that ends meanwhile is reported
-/// with its log's end.
+/// with its log's end. `gone` is asked when a look cannot run in the guest:
+/// it answers the log's end where the guest itself stopped with its worker
+/// (docker's worker container), `None` where it still runs.
 pub(crate) fn ready(
     spec: &Spec,
     guest: &Guest,
     guest_port: u16,
     address: SocketAddr,
+    gone: &dyn Fn() -> Option<String>,
 ) -> Result<(), MachineError> {
     let deadline = Instant::now() + READY;
     let mut guest_ready = false;
     loop {
         if !guest_ready {
             let out = guest.exec(&spec.tools, &["sh", "-c", LOOK], EXEC)?;
-            if out.stdout.starts_with("ended") {
+            let ended = match out.stdout.starts_with("ended") {
+                true => Some(log_tail(spec, guest)),
+                false if out.ok() => None,
+                false => gone(),
+            };
+            if let Some(said) = ended {
                 return Err(MachineError::new(
                     Code::Failed,
-                    format!(
-                        "the worker of {} ended: {}",
-                        spec.name,
-                        log_tail(spec, guest)
-                    ),
+                    format!("the worker of {} ended: {said}", spec.name),
                 ));
             }
             guest_ready = out.ok() && facts::listening(&out.stdout, guest_port);
@@ -182,14 +222,11 @@ pub(crate) fn ready(
     }
 }
 
+/// The last lines of the worker's log, read in the guest.
 fn log_tail(spec: &Spec, guest: &Guest) -> String {
-    let argv = [
-        "sh",
-        "-c",
-        "tail -n 8 /layerfs/state/worker.log 2>/dev/null",
-    ];
+    let script = format!("tail -n 8 {WORKER_LOG} 2>/dev/null");
     guest
-        .exec(&spec.tools, &argv, EXEC)
+        .exec(&spec.tools, &["sh", "-c", &script], EXEC)
         .map(|out| out.stdout.trim().replace('\n', "; "))
         .unwrap_or_else(|e| e.message)
 }

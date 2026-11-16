@@ -91,14 +91,18 @@ Workspace, confined by its Sandbox backend, not by this list.
 
 ## Profiles
 
-Each call belongs to exactly one bucket, `work` (listed by both profiles) or
-`admin` (listed only by `admin`); none is excluded
+Each call belongs to exactly one bucket: `work` (listed by both profiles),
+`admin` (listed only by `admin`), `ui` (listed by neither: `UI_CALLS`, the
+monitoring reads a UI polls, which no agent is offered) or `none` (no tool in
+either)
 ([`profiles.js`](../../../../api/mcp/src/profiles.js)):
 
 | Bucket | Calls |
 | --- | --- |
 | `work` | the `branch`, `commit`, `file` and `workspace` families; `project.list`, `project.get`, `project.export`, `sandbox.list`, `sandbox.get` |
-| `admin` | `project.init`, `project.remove`, `sandbox.create`, `sandbox.close`; the `machine`, `store`, `backup` and `logs` families |
+| `admin` | `project.init`, `project.remove`, `sandbox.create`, `sandbox.close`; the `machine` (but `machine.stats` and `machine.files`), `store` and `backup` families; `logs.list`, `logs.reset` |
+| `ui` (no profile) | `sandbox.files`, `machine.stats`, `machine.files`, `logs.machine`, `logs.sandbox` |
+| `none` | the `doctor` family (`doctor.fix`): like `layerfs doctor` itself, which is outside the table and no tool, removing a leftover is a person's repair |
 
 `work` lets an agent read a project, work on Branches and files (each write
 is one explicit Commit), run in a mounted Workspace and export a snapshot.
@@ -111,7 +115,7 @@ built addon).
 
 <!-- BEGIN GENERATED: api/mcp/scripts/gen-profiles.mjs -->
 
-73 calls: 38 in `work`, 35 in `admin` only; `--profile admin` lists all 73.
+79 calls: 38 in `work`, 35 in `admin` only, 5 in no profile (`ui`), 1 no tool; `--profile admin` lists 73.
 
 | Call | Bucket | Profiles that list it | Why |
 | --- | --- | --- | --- |
@@ -151,6 +155,7 @@ built addon).
 | `sandbox.list` | work | work, admin | read a Sandbox and its Workspaces (work); starting and closing one is administration |
 | `sandbox.get` | work | work, admin | read a Sandbox and its Workspaces (work); starting and closing one is administration |
 | `sandbox.close` | admin | admin | stop a Sandbox; administration |
+| `sandbox.files` | ui | none | a monitoring read a UI polls (a machine's stats, files or worker log, a Sandbox's daemon log or files); offered to no agent |
 | `workspace.mount` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
 | `workspace.exec` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
 | `workspace.exec_cancel` | work | work, admin | mount, run in, commit and unmount a Workspace explicitly; nothing is implicit |
@@ -164,6 +169,8 @@ built addon).
 | `machine.load` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.prune` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.status` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
+| `machine.stats` | ui | none | a monitoring read a UI polls (a machine's stats, files or worker log, a Sandbox's daemon log or files); offered to no agent |
+| `machine.files` | ui | none | a monitoring read a UI polls (a machine's stats, files or worker log, a Sandbox's daemon log or files); offered to no agent |
 | `machine.start` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.stop` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
 | `machine.create` | admin | admin | machines hold Stores and workers; creating, changing and removing them is administration |
@@ -188,6 +195,9 @@ built addon).
 | `backup.restore` | admin | admin | upload and restore a Store on a bucket; administration |
 | `logs.list` | admin | admin | read and clear the home's call log; administration |
 | `logs.reset` | admin | admin | read and clear the home's call log; administration |
+| `logs.machine` | ui | none | a monitoring read a UI polls (a machine's stats, files or worker log, a Sandbox's daemon log or files); offered to no agent |
+| `logs.sandbox` | ui | none | a monitoring read a UI polls (a machine's stats, files or worker log, a Sandbox's daemon log or files); offered to no agent |
+| `doctor.fix` | none | none | remove a leftover the doctor's report listed; like `layerfs doctor` itself, a person's repair and no MCP tool |
 
 <!-- END GENERATED -->
 

@@ -23,7 +23,6 @@ use layerfs_home::helpers;
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_machine::worker::Unreached;
-use layerfs_store::lease;
 use layerfs_store::resolve::{self, Target};
 use std::net::SocketAddr;
 use std::path::Path;
@@ -306,10 +305,30 @@ pub fn host(home: &Path, record: &SandboxRecord, target: &Target, message: Messa
 
 /// `sandbox.get`'s Workspace list of forwarded Sandbox `record`: a daemon
 /// that cannot be reached is [`Unreached`], which the get reports as down.
+/// The commands `running` in each Workspace come from this home's exec
+/// records. Each `overlay_bytes` comes from the Sandbox's machine, where
+/// its run folder is, and so do the daemon process fields (`daemon`,
+/// `usage`, `usage_reason`; layerfs-project#164): one bounded inspect
+/// request to that machine's worker ([`crate::inspect::overlay_sizes`], no
+/// lease, no daemon), sent for a Sandbox with no Workspace too, put on the
+/// list with [`crate::run_folder::merged`]. A worker that refuses or does
+/// not answer leaves the sizes null and the process not observed; the list
+/// is answered either way.
 pub fn list(home: &Path, record: &SandboxRecord) -> std::result::Result<Outcome, Unreached> {
     match served(home, record, Call::ListWorkspaces { path: None }) {
         Err(refusal) if refusal.code == "Unavailable" => Err(Unreached(refusal)),
-        other => Ok(other),
+        Err(refusal) => Ok(Err(refusal)),
+        Ok(listed) => {
+            let namespaces = crate::run_folder::namespaces(&listed);
+            // Windows: the overlay sizes face waits for the monitoring port (#179).
+            #[cfg(unix)]
+            let read =
+                crate::inspect::overlay_sizes(home, record.machine(), record.name(), &namespaces)
+                    .unwrap_or_else(|_| crate::run_folder::not_observed());
+            #[cfg(windows)]
+            let read = crate::run_folder::not_observed();
+            Ok(Ok(crate::run_folder::merged(listed, Some(&read))))
+        }
     }
 }
 
@@ -320,15 +339,16 @@ pub fn capacity(home: &Path, record: &SandboxRecord) -> Outcome {
     served(home, record, Call::Capacity)
 }
 
-/// Host `call` on forwarded Sandbox `record` in this process, under the
-/// Store's lease (the Sandbox half of `workspace::direct::call`).
+/// Host `call` on forwarded Sandbox `record` in this process (the Sandbox
+/// half of `workspace::direct::call`). Both calls it serves are
+/// `sandbox.get`'s reads, which ask only the daemon: it takes no Store
+/// lease, opens no Store and writes nothing (layerfs-project#181).
 fn served(home: &Path, record: &SandboxRecord, call: Call) -> Outcome {
     let home = home.to_path_buf();
     if let Some(machine) = layerfs_machine::record::MachineRecord::read(&home, record.machine())? {
         machine.not_held()?;
     }
     let target = resolve::target(&home, record.project().unwrap_or(""))?;
-    let _lease = lease::hold(&home, &target.store)?;
     dispatch::call(host(&home, record, &target, Message::Absent), call)
 }
 

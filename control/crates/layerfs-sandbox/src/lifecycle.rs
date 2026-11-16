@@ -95,10 +95,11 @@ pub fn setup(
 /// A Sandbox name prefix when the deployment sets none.
 pub const PREFIX: &str = "layerfs-";
 
-/// Sandbox `id`'s runtime name (its id is its name in the home), on every
-/// backend: `<prefix><id>`. The prefix is the deployment's (`lfs-<home id>-`
-/// from the home; `layerfs-` by default), so a Sandbox's directory says
-/// whose it is.
+/// A new Sandbox `id`'s runtime name (its id is its name in the home), on
+/// every backend: `<prefix><id>`. The prefix is the deployment's
+/// (`layerfs-<home id8>-` from the home; `layerfs-` by default), so a
+/// Sandbox's directory says whose it is. A Sandbox already recorded keeps
+/// the name its record holds ([`recorded_names`]).
 pub fn sandbox_name(deploy: Option<&Deploy>, id: &str) -> Result<String, SdkRefusal> {
     let prefix = deploy
         .and_then(|d| d.container_prefix.as_deref())
@@ -106,6 +107,22 @@ pub fn sandbox_name(deploy: Option<&Deploy>, id: &str) -> Result<String, SdkRefu
         .unwrap_or(PREFIX);
     layerfs_home::names::SandboxName::parse(id)?;
     Ok(format!("{prefix}{id}"))
+}
+
+/// The names a record of Sandbox `id` may hold in this deployment, each
+/// exactly: the one a new Sandbox gets ([`sandbox_name`]) and, where the
+/// deployment names the earlier prefix (`lfs-<home id8>-`,
+/// layerfs-project#180), the one a Sandbox made under it keeps. A recorded
+/// name is compared with these whole; no prefix is stripped from it.
+pub fn recorded_names(deploy: Option<&Deploy>, id: &str) -> Result<Vec<String>, SdkRefusal> {
+    let mut names = vec![sandbox_name(deploy, id)?];
+    let legacy = deploy
+        .and_then(|d| d.legacy_prefix.as_deref())
+        .filter(|prefix| !prefix.is_empty());
+    if let Some(prefix) = legacy {
+        names.push(format!("{prefix}{id}"));
+    }
+    Ok(names)
 }
 
 /// The labels of Sandbox `id` of `project`: what it is, whose, and which. Saved in its record, so a reopen expects the same.

@@ -1,7 +1,7 @@
 //! The LayerFS home and its records (#536 §7.8; cut from `layerfs-control`
 //! by layerfs-project#103): the home's layout and record files, its locks,
 //! the one in-flight intent (`op`), typed names, call outcomes and event
-//! streams (`events`), secrets, the call trace, the call log (`logs`, #659) and the process identity records name. It knows no
+//! streams (`events`), secrets, the call trace, the call log (`logs`, #659), the cursor reader of a log and its rotated file (`tail`) and the process identity records name. It knows no
 //! entity: machines, Stores, Sandboxes and Workspaces build on it.
 // Windows carries one audited unsafe FFI module (flock's LockFileEx);
 // forbid cannot be allowed back on, so it stays a hard deny there.
@@ -21,5 +21,6 @@ pub mod op;
 pub mod outcome;
 pub mod process;
 pub mod secrets;
+pub mod tail;
 #[doc(hidden)]
 pub mod trace;

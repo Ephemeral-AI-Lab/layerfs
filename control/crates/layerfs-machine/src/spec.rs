@@ -2,6 +2,7 @@
 //! [`MachineRecord`] and `machine/<name>/worker.json` (endpoint and
 //! secret; 0600, while the worker runs). Nothing in the adapters
 //! reads the home.
+pub use super::record::vm_name;
 use super::record::MachineRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{self, paths, write_record};
@@ -38,7 +39,7 @@ pub fn ensure_built_ins(home: &Path, id: &str) -> Result<()> {
     {
         return Ok(());
     }
-    write_built_ins(home)?;
+    write_built_ins(home, id)?;
     ENSURED
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -46,7 +47,7 @@ pub fn ensure_built_ins(home: &Path, id: &str) -> Result<()> {
     Ok(())
 }
 
-fn write_built_ins(home: &Path) -> Result<()> {
+fn write_built_ins(home: &Path, id: &str) -> Result<()> {
     let missing = |name: &str| -> Result<bool> { Ok(MachineRecord::read(home, name)?.is_none()) };
     if !layerfs_home::names::BUILT_IN
         .iter()
@@ -57,7 +58,7 @@ fn write_built_ins(home: &Path) -> Result<()> {
     let _lock = home::lock::take(home)?;
     for name in layerfs_home::names::BUILT_IN {
         if missing(name)? {
-            MachineRecord::built_in(name).write(home)?;
+            MachineRecord::built_in(name, id).write(home)?;
         }
     }
     Ok(())
@@ -71,16 +72,6 @@ pub fn machine_of(home: &Path, name: &str) -> Result<MachineRecord> {
     let record = MachineRecord::of(home, name)?;
     record.not_held()?;
     Ok(record)
-}
-
-/// The provider's name for a machine's VM: `lfs-<home id prefix>-<machine>`,
-/// so two homes on one host never share a VM (O33).
-pub fn vm_name(home_id: &str, name: &str) -> String {
-    let plain: String = name
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect();
-    format!("lfs-{}-{plain}", &home_id[..8])
 }
 
 fn int(record: &MachineRecord, name: &str, default: i64) -> i64 {
@@ -113,10 +104,7 @@ pub fn provider_spec(home: &Path, home_id: &str, record: &MachineRecord) -> Resu
     Ok(Spec {
         name: name.to_owned(),
         kind,
-        vm_name: record
-            .text("vm_name")
-            .map(str::to_owned)
-            .unwrap_or_else(|| vm_name(home_id, name)),
+        vm_name: record.provider_name(home_id),
         cpus: int(record, "cpus", DEFAULT_CPUS) as u32,
         memory: int(record, "memory", DEFAULT_MEMORY) as u64,
         disk: int(record, "disk", DEFAULT_DISK) as u64,

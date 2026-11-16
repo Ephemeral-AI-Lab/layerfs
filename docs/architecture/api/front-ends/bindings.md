@@ -25,11 +25,12 @@ client `node` or `python`. The home defaults to `LAYERFS_HOME`, else
 api/crates/layerfs-node (cdylib, napi 2.16, napi4)
   call.rs  table()  -> layerfs_api::table_json()
            call()   -> AsyncTask: call_json once; events -> threadsafe fn
-           close()  -> close_idle(0)
+           close()  -> close_idle(0), end_idle_sessions(250 ms)
            doctor() -> AsyncTask: doctor_options_json
 api/node/src
   index.js    table, families, client(), bind(), doctor(), close(),
-              default export and the ten family exports
+              default export and the family exports (the doctor family's
+              `fix` is on the `doctor` function: `doctor.fix`)
   native.js   loads layerfs.node (the package's own, or LAYERFS_NATIVE)
   values.js   encode / decode: exact whole numbers, {"base64": ...}
   errors.js   LayerFSError { code, message, detail }
@@ -69,7 +70,7 @@ links it and holds the build and type scripts.
 
 | Test | Checks |
 | --- | --- |
-| [`calls.mjs`](../../../../api/node/test/calls.mjs) | ten families, every function; required-argument refusals; a Store, Init with progress, file and Branch calls, bytes, a folder scope; the call log's `client` and `log_tag` |
+| [`calls.mjs`](../../../../api/node/test/calls.mjs) | eleven families, every function; required-argument refusals; a Store, Init with progress, file and Branch calls, bytes, a folder scope; the call log's `client` and `log_tag` |
 | [`shell.mjs`](../../../../api/node/test/shell.mjs) | the command and the package refuse every call alike; a live Store read both ways (needs `target/debug/layerfs`) |
 | [`events.mjs`](../../../../api/node/test/events.mjs), [`progress.mjs`](../../../../api/node/test/progress.mjs) | handler failures, delivery before settling, exec output through functions and `stream: true` (exec half needs `LAYERFS_DAEMON`) |
 | [`values.mjs`](../../../../api/node/test/values.mjs) | exact `bigint`, refused values, bytes and the one-key map |
@@ -93,7 +94,8 @@ api/crates/layerfs-python (cdylib "_native", PyO3, abi3-py310)
   call.rs  call(name, args, home=None, scope=None, on_event=None)
              py.detach: call_json once; each event: attach, on_event(text)
 api/python/src/layerfs
-  __init__.py   doctor(), close(), the ten families of the default client
+  __init__.py   doctor() (with the doctor family's `doctor.fix`), close(),
+                the families of the default client
   _client.py    TABLE, FAMILIES, Client, client(), _bind
   aio.py        AsyncClient: the same calls as coroutines
   _values.py    encode / decode

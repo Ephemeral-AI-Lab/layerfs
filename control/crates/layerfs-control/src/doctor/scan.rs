@@ -330,7 +330,8 @@ fn link(path: &Path, entity: (&str, &str), findings: &mut Findings) -> bool {
 }
 
 /// A folder others may list or change, or its group may use, is an error;
-/// others may pass through (0701).
+/// others may pass through: 0700, or 0701 on the run root's ancestors
+/// under the namespaces backend (`home::traversable`), are both right.
 fn folder(path: &Path, entity: (&str, &str), findings: &mut Findings) {
     if link(path, entity, findings) {
         return;
@@ -339,7 +340,8 @@ fn folder(path: &Path, entity: (&str, &str), findings: &mut Findings) {
         findings.error(
             entity,
             format!(
-                "{} has mode {mode:04o}; the home's folders are 0700",
+                "{} has mode {mode:04o}; the home's folders are 0700, or 0701 where a \
+                 Sandbox's commands pass through",
                 path.display()
             ),
             format!("`chmod g-rwx,o-rw {}`", path.display()),

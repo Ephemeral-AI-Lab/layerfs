@@ -51,6 +51,8 @@ pub mod image_tar;
 #[doc(hidden)]
 #[cfg(unix)]
 pub mod images;
+/// Inspection: logs and sizes read on one route for every machine kind.
+pub mod inspect;
 #[doc(hidden)]
 pub mod launch;
 #[doc(hidden)]
@@ -66,6 +68,8 @@ pub mod registry;
 pub mod reopen;
 #[doc(hidden)]
 pub mod route;
+#[doc(hidden)]
+pub mod run_folder;
 #[doc(hidden)]
 pub mod runtime;
 #[doc(hidden)]

@@ -31,6 +31,7 @@ pub use support::{KernelRoute, StoreKind};
 mod daemon_types;
 mod daemon_wire;
 pub mod initial_record;
+pub mod log_file;
 pub mod os_bytes;
 pub mod process;
 pub mod store;

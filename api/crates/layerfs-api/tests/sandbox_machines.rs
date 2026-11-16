@@ -426,7 +426,7 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
 /// Removes the docker worker container and data volume of the home `id`,
 /// whatever its test did.
 fn remove_worker(id: &str) {
-    let worker = format!("lfs-{}-docker", &id[..8]);
+    let worker = format!("layerfs-{}-docker", &id[..8]);
     let volume = format!("{worker}-data");
     for args in [
         ["rm", "-f", worker.as_str()],

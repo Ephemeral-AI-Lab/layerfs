@@ -6,9 +6,20 @@
 //! a running Sandbox's daemon capacity (a best-effort query, bounded to 2 s).
 //! Each finding names the call that fixes it. It takes no lock: a home
 //! that changes meanwhile may be reported as it was part way.
+//!
+//! It also lists what interrupted operations left on `native` and on each
+//! running machine (`leftovers`, one bounded walk per side), and
+//! `doctor.fix` removes one of them under its guard (`leftover_fix`): the
+//! one call here that changes anything (layerfs-project#180).
 mod capacity;
 mod checks;
 mod convert;
+#[cfg(unix)]
+pub mod leftover_fix;
+#[cfg(unix)]
+pub mod leftover_report;
+#[cfg(unix)]
+pub mod leftovers;
 mod report;
 mod scan;
 mod workers;

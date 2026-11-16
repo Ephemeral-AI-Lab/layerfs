@@ -138,7 +138,9 @@ impl Drop for Guard {
 /// which is not retried.
 pub fn guard(directory: &Path) -> Result<Guard> {
     let deadline = std::time::Instant::now() + IN_PROCESS_WAIT;
-    let mut held = helpers::lock(&HELD)?;
+    // a set changed in one step: taken back from a panicked holder, as
+    // the guard's drop takes it (layerfs-project#177)
+    let mut held = HELD.lock().unwrap_or_else(|error| error.into_inner());
     while held.contains(directory) {
         let remaining = deadline.saturating_duration_since(std::time::Instant::now());
         if remaining.is_zero() {
@@ -149,7 +151,7 @@ pub fn guard(directory: &Path) -> Result<Guard> {
         }
         held = FREED
             .wait_timeout(held, remaining)
-            .map_err(|_| refused("Failed", "discovery turn poisoned"))?
+            .unwrap_or_else(|error| error.into_inner())
             .0;
     }
     held.insert(directory.to_owned());

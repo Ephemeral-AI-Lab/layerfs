@@ -4,6 +4,8 @@
 
 The doctor observes a home, or one explicitly selected target in it, and
 reports what is wrong and the step that fixes it, without changing anything.
+Its one call that changes something, `doctor.fix`, removes a leftover the
+report listed.
 
 | | |
 | --- | --- |
@@ -12,7 +14,7 @@ reports what is wrong and the step that fixes it, without changing anything.
 | Source | [`layerfs-control/src/doctor`](../../../../control/crates/layerfs-control/src/doctor), [`layerfs-api/src/doctor`](../../../../api/crates/layerfs-api/src/doctor), [`layerfs-cli/src/doctor.rs`](../../../../api/crates/layerfs-cli/src/doctor.rs) |
 | Uses | [Home](../home/README.md), [Machines](../machines/README.md) and [workers](../machines/workers-and-reach.md), [Stores and projects](../stores-and-projects/README.md), [Sandboxes](../sandboxes/README.md), [Backups](../backups/README.md), [Store diagnostics](../../engine/store/diagnostics.md), [Daemon control calls](../../engine/daemon/control-calls.md), [Bridge](../../engine/bridge/README.md) |
 | Used by | [Front ends](../../api/front-ends/README.md): `layerfs doctor`, `doctor()` in Node and Python |
-| Flows | none: the doctor is outside the call table and its dispatcher |
+| Flows | none: the report is outside the call table and its dispatcher; `doctor.fix` is a table call ([SDK](../../api/sdk/doctor.md)) |
 
 ## Picture
 
@@ -30,7 +32,7 @@ reports what is wrong and the step that fixes it, without changing anything.
    (checks.md)               |
    detect -> scan            +-- host     install, local records, df
    -> checks -> capacity     +-- machine  record, provider, worker
-   -> workers                +-- sandbox  record, saved route, daemon
+   -> workers -> leftovers   +-- sandbox  record, saved route, daemon
              |               +-- store    integrity | connection
              v               +-- backup   config, list [, write test]
    { ok, findings }          v
@@ -45,7 +47,8 @@ reports what is wrong and the step that fixes it, without changing anything.
 | --- | --- | --- |
 | Parse options once | Empty or null options select the whole-home survey; otherwise `target` is required, `name` is required for every target but `host` (which refuses one), unknown or duplicate keys are refused, before any home or probe is read | [`options.rs`](../../../../api/crates/layerfs-api/src/doctor/options.rs) |
 | Route outside the call table | `doctor_with_options` calls `doctor` or `doctor_target`; neither goes through ordinary dispatch, which could initialize or convert a home | [`run.rs`](../../../../api/crates/layerfs-api/src/doctor/run.rs), [`dispatch.rs`](../../../../control/crates/layerfs-control/src/doctor/dispatch.rs) |
-| Survey the whole home | `layerfs doctor` with no target: records, modes, references, intents, leases, partial copies, worker builds and Sandbox daemon capacity; see [Checks](checks.md) | [`report.rs`](../../../../control/crates/layerfs-control/src/doctor/report.rs) |
+| Survey the whole home | `layerfs doctor` with no target: records, modes, references, intents, leases, partial copies, worker builds, Sandbox daemon capacity and what interrupted operations left on disk; see [Checks](checks.md) | [`report.rs`](../../../../control/crates/layerfs-control/src/doctor/report.rs) |
+| Remove one leftover | `layerfs doctor fix <id>` (`doctor.fix`), the family's one table call: one attempt on the entry's machine, under that kind's guard; see [Leftovers](checks.md#leftovers) | [`leftover_fix.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_fix.rs), [`fix.rs`](../../../../api/crates/layerfs-api/src/doctor/fix.rs) |
 | Diagnose one target | Six targets (below), each with a stable entity, operation and default overall budget | [`target.rs`](../../../../control/crates/layerfs-control/src/doctor/target.rs), [`dispatch.rs`](../../../../control/crates/layerfs-control/src/doctor/dispatch.rs) |
 | Bound every probe | `Budget::limit(max)` gives each probe the smaller of its own cap and the remaining overall budget; when the budget ends, `diagnostic.deadline` is added as `unknown` | [`target.rs`](../../../../control/crates/layerfs-control/src/doctor/target.rs), [`dispatch.rs`](../../../../control/crates/layerfs-control/src/doctor/dispatch.rs) |
 | Report checks | Each check has `id`/`code`, `outcome`, `severity`, `message`, `evidence`, `fix`, `blocked_by`, `observed_ms`, `duration_ms`; see [Check report](checks.md#check-report) | [`check_report.rs`](../../../../control/crates/layerfs-control/src/doctor/check_report.rs) |
@@ -161,12 +164,13 @@ reconcile that fails leaves `possible_retained_key` and `owned_version`.
 
 | Rule | Enforced by |
 | --- | --- |
-| The doctor changes nothing: no lock, lease, record write, conversion, stale-lease removal, machine start or deployment; an absent home stays absent | [`mod.rs`](../../../../control/crates/layerfs-control/src/doctor/mod.rs), [`dispatch.rs`](../../../../control/crates/layerfs-control/src/doctor/dispatch.rs), [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs) |
+| The report changes nothing: no lock, lease, record write, conversion, stale-lease removal, machine start or deployment; an absent home stays absent. Only `doctor.fix` removes anything, and only the one entry its id names | [`mod.rs`](../../../../control/crates/layerfs-control/src/doctor/mod.rs), [`dispatch.rs`](../../../../control/crates/layerfs-control/src/doctor/dispatch.rs), [`host_target.rs`](../../../../control/crates/layerfs-control/src/doctor/host_target.rs) |
 | Options are validated before any home or probe is read: `quick` only for `store.integrity`, `write_test` only for `backup.connection` | [`options.rs`](../../../../api/crates/layerfs-api/src/doctor/options.rs), [`dispatch.rs`](../../../../control/crates/layerfs-control/src/doctor/dispatch.rs) |
 | No probe outlives the overall budget | [`target.rs`](../../../../control/crates/layerfs-control/src/doctor/target.rs) |
 | `ok` means no error was counted, not health: `blocked`, `unknown` or truncation make `complete` false, and a confirmed `fail` stays after a later timeout | [`check_report.rs`](../../../../control/crates/layerfs-control/src/doctor/check_report.rs) |
 | One attempt: a lost worker, daemon or S3 reply is `unknown`; nothing is resent, replayed or retried | [`diagnostic.rs`](../../../../control/crates/layerfs-machine/src/worker/diagnostic.rs), [`sandbox_channel.rs`](../../../../control/crates/layerfs-control/src/doctor/sandbox_channel.rs), [`backup_target.rs`](../../../../control/crates/layerfs-control/src/doctor/backup_target.rs) |
-| A worker receives only `worker.ping`, `doctor.sandbox` or `store.diagnose`, after a compatible hello, and answers from its fixed root, never a caller path | [`diagnostic.rs`](../../../../control/crates/layerfs-machine/src/worker/diagnostic.rs), [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
+| A `doctor.fix` id holds a machine, a kind and a name, never a path: the removing side derives the path under its own root, refuses a link on the way, and checks the guard at that moment | [`leftovers.rs`](../../../../control/crates/layerfs-control/src/doctor/leftovers.rs) `Kind::path`, [`leftover_fix.rs`](../../../../control/crates/layerfs-control/src/doctor/leftover_fix.rs) `fix_on` |
+| A target's worker receives only `worker.ping`, `doctor.sandbox` or `store.diagnose`, after a compatible hello, and answers from its fixed root, never a caller path; the survey's leftover walk is one more `doctor.sandbox` request (`leftovers: true`), and `doctor.fix` is the worker's only doctor operation that changes its machine | [`diagnostic.rs`](../../../../control/crates/layerfs-machine/src/worker/diagnostic.rs), [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
 | The backup write test writes only after versioning is `Enabled`, and deletes only the version it owns; a refused or colliding PUT authorizes no delete | [`backup_target.rs`](../../../../control/crates/layerfs-control/src/doctor/backup_target.rs) |
 | Secrets and arbitrary record fields are not reported | [`backup_target.rs`](../../../../control/crates/layerfs-control/src/doctor/backup_target.rs), [`machine_target.rs`](../../../../control/crates/layerfs-control/src/doctor/machine_target.rs) |
 
@@ -194,6 +198,8 @@ Give each a wall limit of at most 120 s.
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
 | [`doctor.rs`](../../../../control/crates/layerfs-control/tests/doctor.rs) | `cargo +1.85.1 test --locked -p layerfs-control --test doctor` | macOS, Linux | One finding per planted problem with its fix; a layout 2 home is not converted; capacity warnings; nothing written |
+| [`doctor_leftovers.rs`](../../../../control/crates/layerfs-control/tests/doctor_leftovers.rs) | `cargo +1.85.1 test --locked -p layerfs-control --test doctor_leftovers` | macOS, Linux | Each kind of leftover reported on `native` and through a stand-in worker, removed by `doctor.fix` and gone from the next report; every guard's `InUse`; crafted ids remove nothing; a walk past its bound is not complete. The mount-point rule is checked on its own function, simulated |
+| [`worker_fault_store.rs`](../../../../control/crates/layerfs-control/tests/worker_fault_store.rs) | `cargo +1.85.1 test --locked -p layerfs-control --features worker-fault --test worker_fault_store` | macOS, Linux | A `project init` whose answer is lost names its copy in `log/uncertain.jsonl`; the report shows it `fixable` with `not_before` |
 | [`doctor_host.rs`](../../../../control/crates/layerfs-control/tests/doctor_host.rs) | `cargo +1.85.1 test --locked -p layerfs-control --test doctor_host` | macOS, Linux | Absent home stays absent; no worker dial; concurrent record rewrites leave the result incomplete |
 | [`doctor_report.rs`](../../../../control/crates/layerfs-control/tests/doctor_report.rs) | `cargo +1.85.1 test --locked -p layerfs-control --test doctor_report` | any | `unknown`/`blocked` are incomplete without an error; retention bounds |
 | [`doctor_machine_target.rs`](../../../../control/crates/layerfs-control/tests/doctor_machine_target.rs) | `cargo +1.85.1 test --locked -p layerfs-control --features machine --test doctor_machine_target` | macOS, Linux | Stand-in providers and worker peers: dependencies block, the home is unchanged |
@@ -208,4 +214,4 @@ qualify live Docker, Lima, Apple Container, R2 or MinIO installations.
 
 | Page | What it covers |
 | --- | --- |
-| [Checks](checks.md) | The whole-home survey (scan, record checks, layout 2 conversion, worker builds, daemon capacity) and both report shapes |
+| [Checks](checks.md) | The whole-home survey (scan, record checks, layout 2 conversion, worker builds, daemon capacity, leftovers and `doctor.fix`) and both report shapes |

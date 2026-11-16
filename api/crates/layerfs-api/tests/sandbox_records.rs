@@ -200,8 +200,10 @@ fn a_worker_replaces_a_removed_project_s_record() {
         secret: "s".to_owned(),
     };
     let fresh = SdkValue::map([("name", t("app")), ("created", SdkValue::Int(2))]);
+    // a Workspace status: `sandbox.get`'s own reads write no record
+    // (layerfs-project#181)
     let request = SdkValue::map([
-        ("op", t("sandbox.list_workspaces")),
+        ("op", t("backend.daemon.workspace.status")),
         ("store", t("shop")),
         ("project", t("app")),
         (

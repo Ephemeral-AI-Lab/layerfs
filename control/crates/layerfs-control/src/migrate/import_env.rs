@@ -73,25 +73,19 @@ fn machine_of(sandbox: &str) -> Option<&'static str> {
     }
 }
 
-/// A built-in machine's record, made as the first call makes it.
-fn built_in(home: &Path, name: &str) -> Result<std::path::PathBuf> {
+/// A built-in machine's record, made as the first call makes it (in the
+/// home with id `id`).
+fn built_in(home: &Path, id: &str, name: &str) -> Result<std::path::PathBuf> {
     let path = paths::machine_record(home, name);
     if read_record(&path)?.is_none() {
-        write_entity(
-            &path,
-            &SdkValue::map([
-                ("name", SdkValue::text(name)),
-                ("platform", SdkValue::text(name)),
-                ("created", SdkValue::Int(now_ms())),
-            ]),
-        )?;
+        layerfs_machine::record::MachineRecord::built_in(name, id).write(home)?;
     }
     Ok(path)
 }
 
-fn machines(home: &Path, env: &[(String, String)], report: &mut Report) -> Result<()> {
-    let native = built_in(home, "native")?;
-    let docker = built_in(home, "docker")?;
+fn machines(home: &Path, id: &str, env: &[(String, String)], report: &mut Report) -> Result<()> {
+    let native = built_in(home, id, "native")?;
+    let docker = built_in(home, id, "docker")?;
     if let Some(daemon) = get(env, "LAYERFS_DAEMON") {
         fill(
             &native,
@@ -279,10 +273,10 @@ const SECRET_OR_GONE: [(&str, &str); 4] = [
 
 /// Runs import-env on `home` with `env` (the process environment).
 pub fn import_env(home: &Path, env: &[(String, String)]) -> Outcome {
-    super::open(home)?;
+    let id = super::open(home)?.id;
     let _lock = lock::take(home)?;
     let mut report = Report::default();
-    machines(home, env, &mut report)?;
+    machines(home, &id, env, &mut report)?;
     bucket(home, env, &mut report)?;
     stores(home, env, &mut report)?;
     for (setting, why) in SECRET_OR_GONE {

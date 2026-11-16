@@ -20,4 +20,12 @@ nix = { version = "=0.31.3", features = [
     "user",
     "sched",
     "process",
+    # readdir on a descriptor, for inspection listings (layerfs-project#178)
+    "dir",
 ] }
+
+# `statx` with `STATX_MNT_ID`, which nix does not wrap: every `stat` of an
+# inspection read on Linux (layerfs-project#178 isolation rule 5, security
+# rule 1). The version the lockfile already holds.
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { version = "=1.1.5", features = ["fs"] }

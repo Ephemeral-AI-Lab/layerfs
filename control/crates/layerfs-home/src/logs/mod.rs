@@ -8,9 +8,13 @@ mod unix;
 mod windows;
 
 #[cfg(unix)]
-pub use unix::{append, read, reset, Filter};
+pub use unix::{append, read, reset, Filter, ROTATE_AT};
+#[cfg(unix)]
+pub(crate) use unix::rotate;
 #[cfg(windows)]
-pub use windows::{append, read, reset, Filter};
+pub use windows::{append, read, reset, Filter, ROTATE_AT};
+#[cfg(windows)]
+pub(crate) use windows::rotate;
 
 /// Whether the call log is on for this process.
 pub fn enabled() -> bool {

@@ -5,4 +5,4 @@ pub mod files;
 pub mod inspect;
 pub mod store;
 pub use dispatch::dispatch;
-pub use inspect::{snapshot, WorkspaceView};
+pub use inspect::{snapshot, workspaces, WorkspaceView};

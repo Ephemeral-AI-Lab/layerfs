@@ -1,3 +1,5 @@
+/// The size a log rotates at, the same constant the unix face uses.
+pub const ROTATE_AT: u64 = layerfs_bridge::log_file::ROTATE_AT;
 // The Windows stub of the call log (#659): the log is off, append is a
 // no-op, and the reads answer Unsupported - the per-call file semantics
 // (O_APPEND rotation under flock) are the port gap, disclosed. The
@@ -45,4 +47,11 @@ pub fn read(
         "Unsupported",
         "the call log is not ported to Windows yet (#659)",
     ))
+}
+
+
+/// Rotation: the current file renames to its rotated name, best effort.
+pub(crate) fn rotate(_lock: &std::path::Path, file: &std::path::Path) {
+    let rotated = layerfs_bridge::log_file::rotated(file);
+    let _ = std::fs::rename(file, rotated);
 }

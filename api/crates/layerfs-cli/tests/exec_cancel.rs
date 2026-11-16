@@ -6,8 +6,13 @@
 //! its background children gone; cancelling an ended command answers
 //! `ended`; unmount and close are refused `Busy` while a command runs and
 //! `force` cancels it first; a stale record (its owner gone) is ended,
-//! removed and logged. The live half needs the native daemon at
-//! LAYERFS_DAEMON; without it, it says NOT_RUN.
+//! removed and logged. While that command runs, `sandbox.get` from this
+//! other process lists it under its Workspace's `running` with the log tag
+//! of the call that started it and its program, beside the Workspace's
+//! `overlay_bytes` and the Sandbox's `workspace_capacity`
+//! (layerfs-project#178); once it ended, it is listed no more. The live
+//! half needs the native daemon at LAYERFS_DAEMON; without it, it says
+//! NOT_RUN.
 use layerfs_api::home;
 use layerfs_bridge::control::SdkValue;
 use std::io::{BufRead, BufReader};
@@ -53,11 +58,16 @@ fn refused(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> String {
     call(home, name, args, &mut |_| {}).unwrap_err().0
 }
 
-/// `layerfs workspace exec <ws> <script> --exec-id <id>`, started.
+/// The log tag of every command [`started`] starts.
+const TAG: &str = "dsh:s9:t1";
+
+/// `layerfs workspace exec <ws> <script> --exec-id <id>`, started, its call
+/// tagged [`TAG`].
 fn started(home: &Path, ws: &str, script: &str, id: &str) -> Child {
     Command::new(LAYERFS)
         .args(["workspace", "exec", ws, script, "--exec-id", id])
         .env("LAYERFS_HOME", home)
+        .env("LAYERFS_LOGS_TAG", TAG)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .process_group(0)
@@ -220,6 +230,35 @@ fn exec_ids_records_and_cancel_on_native() {
         .get_int("pgid")
         .unwrap();
     assert_eq!(record.get_text("route"), Some("local"));
+    // ...its record names the call's log tag and the command's program
+    assert_eq!(record.get_text("tag"), Some(TAG), "{record:?}");
+    assert_eq!(record.get_text("program"), Some("sleep"), "{record:?}");
+    // ...`sandbox.get`, from this other process, lists it with them,
+    // beside the Workspace's overlay size and the Sandbox's Workspace slots
+    let listed = |got: &SdkValue| match got.get("workspaces") {
+        Some(SdkValue::List(items)) if items.len() == 1 => items[0].clone(),
+        _ => panic!("{got:?}"),
+    };
+    let got = ok(&home, "sandbox.get", &[("name", t("s1"))]);
+    assert_eq!(got.get_int("workspace_capacity"), Some(16), "{got:?}");
+    let workspace = listed(&got);
+    let running = SdkValue::List(vec![SdkValue::map([
+        ("exec_id", t("long-1")),
+        ("started", record.get("started").cloned().unwrap()),
+        ("tag", t(TAG)),
+        ("program", t("sleep")),
+    ])]);
+    assert_eq!(workspace.get("running"), Some(&running), "{got:?}");
+    let run = std::fs::read_dir(home.join("machine/native/run"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.join("overlay").is_dir())
+        .expect("the Sandbox's run folder");
+    let namespace = workspace.get_int("namespace").unwrap();
+    let overlay = run.join(format!("overlay/{namespace}.sqlite"));
+    let bytes = i64::try_from(std::fs::metadata(&overlay).unwrap().len()).unwrap();
+    assert!(bytes > 0, "{}", overlay.display());
+    assert_eq!(workspace.get_int("overlay_bytes"), Some(bytes), "{got:?}");
     // ...the same id is refused while it runs
     let duplicate = [ws(), ("command", t("true")), ("exec_id", t("long-1"))];
     assert_eq!(refused(&home, "workspace.exec", &duplicate), "Exists");
@@ -249,6 +288,10 @@ fn exec_ids_records_and_cancel_on_native() {
     // cancelling it again: it ended
     let again = ok(&home, "workspace.exec_cancel", &cancel);
     assert_eq!(again.get_text("outcome"), Some("ended"));
+    // ...and a get lists it no more
+    let got = ok(&home, "sandbox.get", &[("name", t("s1"))]);
+    let none = SdkValue::List(Vec::new());
+    assert_eq!(listed(&got).get("running"), Some(&none), "{got:?}");
 
     // a command started with no exec id: `--progress` prints the id control
     // made as its first line on stderr, and another process cancels by it

@@ -13,6 +13,14 @@ IMPL = re.compile(
     r"\b(?:struct|enum|trait|impl|union|static|const|let|if|else|match|loop|while|for)\b|\bmacro_rules\s*!"
 )
 DOC_CODE = re.compile(r"^\s*(?:///|//!)\s*```", re.MULTILINE)
+# The one test-only cargo feature product source may name (layerfs-project#177,
+# #179 E, owner 2026-11-15): the worker's fault switches, in the worker server's
+# own files of layerfs-control and nowhere else. No shipped build turns it on:
+# `worker_fault_violations` refuses a default or a manifest that names it.
+WORKER_FAULT = "worker-fault"
+WORKER_FAULT_CFG = re.compile(r'feature\s*=\s*"worker-fault"')
+WORKER_FAULT_OWNER = "layerfs-control"
+WORKER_FAULT_FILES = ("src/worker_server.rs", "src/worker_server/")
 UNSAFE = re.compile(r"\bunsafe\b")
 
 # Crates whose `unsafe` surface is bounded. layerfs-storage keeps one audited
@@ -531,6 +539,41 @@ def unsafe_violations(path, source):
     return found
 
 
+def worker_fault_cfg(path, body):
+    """True for a cfg that names only the worker-fault feature, in the worker server's files."""
+    parts = path.parts
+    if crate_name(path) != WORKER_FAULT_OWNER or "src" not in parts:
+        return False
+    relative = "/".join(parts[parts.index("src") :])
+    if relative != WORKER_FAULT_FILES[0] and not relative.startswith(WORKER_FAULT_FILES[1]):
+        return False
+    rest, named = WORKER_FAULT_CFG.subn("", body)
+    return named > 0 and not TEST_CFG.search(rest)
+
+
+def worker_fault_violations(source):
+    """No default feature and no dependency edge turns the worker-fault feature on."""
+    manifest = tomllib.loads(source)
+    name = manifest.get("package", {}).get("name")
+    found = []
+    features = manifest.get("features", {})
+    if name != WORKER_FAULT_OWNER and WORKER_FAULT in features:
+        found.append((1, f"{WORKER_FAULT} is {WORKER_FAULT_OWNER}'s feature alone: {name}"))
+    for feature, enabled in features.items():
+        if feature != WORKER_FAULT and any(WORKER_FAULT in item for item in enabled):
+            found.append((1, f"feature {feature} of {name} turns {WORKER_FAULT} on; it is for tests only"))
+    kinds = ("dependencies", "build-dependencies", "dev-dependencies")
+    sections = [manifest.get(key, {}) for key in kinds]
+    for target in manifest.get("target", {}).values():
+        sections.extend(target.get(key, {}) for key in kinds)
+    for section in sections:
+        for alias, specification in section.items():
+            wanted = specification.get("features", []) if isinstance(specification, dict) else []
+            if any(WORKER_FAULT in item for item in wanted):
+                found.append((1, f"dependency {alias} of {name} turns {WORKER_FAULT} on; it is for tests only"))
+    return found
+
+
 def violations(path, source):
     """Return line/reason pairs; intentionally reject marker text in comments too."""
     found = []
@@ -546,6 +589,8 @@ def violations(path, source):
     for match in ATTR.finditer(source):
         body = match[1].strip()
         if TEST_ATTR.match(body) or (re.match(r"cfg(?:_attr)?\b", body) and TEST_CFG.search(body)):
+            if re.match(r"cfg\b", body) and worker_fault_cfg(path, body):
+                continue
             found.append((source.count("\n", 0, match.start()) + 1, "test-only attribute in product source"))
     for match in CFG_MACRO.finditer(source):
         if TEST_CFG.search(match[1]):
@@ -631,7 +676,7 @@ def main():
     manifests = {root / "Cargo.toml" for root in crate_directories(root) if (root / "Cargo.toml").is_file()}
     packages = {manifest.parent: tomllib.loads(manifest.read_text())["package"]["name"] for manifest in manifests}
     for manifest in sorted(manifests):
-        for line, reason in dependency_violations(manifest.read_text()):
+        for line, reason in dependency_violations(manifest.read_text()) + worker_fault_violations(manifest.read_text()):
             print(f"{manifest.relative_to(root)}:{line}: {reason}")
             failures += 1
     parsed = {

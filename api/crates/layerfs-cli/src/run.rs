@@ -25,6 +25,17 @@ pub fn main(words: Vec<String>) -> ExitCode {
         },
         Some("worker") if words.len() == 1 => worker::main(),
         Some("import-env") if words.len() == 1 => import_env(),
+        // `doctor fix <id>` is the table's call; every other `doctor` is
+        // the report, outside the table
+        Some("doctor") if words.get(1).map(String::as_str) == Some("fix") => {
+            if words[2..].iter().any(|w| w == "-h" || w == "--help") {
+                return help::print(&["doctor", "fix"]);
+            }
+            match layerfs_api::find("doctor.fix") {
+                Some(call) => one(call, &words[2..]),
+                None => wrong("no call `doctor fix`".to_owned()),
+            }
+        }
         Some("doctor") => crate::doctor::main(&words[1..]),
         Some(family) => {
             let Some(name) = words.get(1) else {
@@ -214,6 +225,10 @@ fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
     // sqlite Store leaves no write-ahead log behind (lane K2: a later
     // `store push` refused it)
     layerfs_api::close_idle(std::time::Duration::ZERO);
+    // and its idle Sandbox daemon connections end their sessions, so this
+    // process's exit is not a dropped connection in the daemon's log and
+    // retained failures (layerfs-project#181). Bounded; the result is ready.
+    layerfs_api::end_idle_sessions(layerfs_api::SESSION_END);
     if switches.events {
         return crate::framed::finish(outcome, framing_failed);
     }

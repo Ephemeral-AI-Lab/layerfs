@@ -1,15 +1,18 @@
 //! General helpers every entity uses (moved from `sandbox/registry.rs`,
-//! layerfs-project#103): a refused poisoned lock, a required text argument
-//! and fresh random bytes.
+//! layerfs-project#103): the lock of a process table, a required text
+//! argument and fresh random bytes.
 use crate::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::sync::{Mutex, MutexGuard};
 
-/// A lock, refused when a holder panicked.
+/// The lock of a table each holder changes in one step (one insert, remove
+/// or lookup of a map or set), so the table is whole whenever a holder
+/// panics: its guard is taken back from a panicked holder, and a panic in
+/// one call never refuses the calls after it (layerfs-project#177). State a
+/// panic can leave half-changed takes its own lock, not this one. It never
+/// refuses; the result keeps its callers' shape.
 pub fn lock<T>(mutex: &Mutex<T>) -> Result<MutexGuard<'_, T>, SdkRefusal> {
-    mutex
-        .lock()
-        .map_err(|_| refused("Failed", "binding state poisoned"))
+    Ok(mutex.lock().unwrap_or_else(|poison| poison.into_inner()))
 }
 
 /// A required text field `name` of a map (`value`, a record's or a frame's).
