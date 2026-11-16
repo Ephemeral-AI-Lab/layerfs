@@ -146,6 +146,11 @@ fn a_successful_rebuild_emits_phases_outcome_and_report_gauges() {
         .saturating_add(receipt.kept_waste.inode_blocks_bytes);
     assert_eq!(value(&metrics, "compact.kept_waste_bytes", &[]), kept);
     assert_eq!(
+        metric(&metrics, "compact.mark_bytes", &[]),
+        None,
+        "§11 markBytes is the PostgreSQL Phase M metric; a SQLite run reports none"
+    );
+    assert_eq!(
         value(&metrics, "compact.residue_bytes", &[]),
         receipt.residue.bytes,
         "a successful settle leaves no residue"

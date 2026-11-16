@@ -16,7 +16,10 @@
 //! `project.init`, `project.export`, `project.delete`, `project.list` and
 //! `doctor.fix` run one operation on this machine (`ops`),
 //! with `home` set to the worker's own root (the machine's data disk),
-//! never a path the caller sends. Answers are
+//! never a path the caller sends. There is no `store.compact` operation:
+//! compaction is local-only (spec S6 deviation D5,
+//! `core/docs/issues/project-41/gc-42-decisions.md`), and the caller refuses a
+//! remote sqlite Store before it dials this worker. Answers are
 //! `{ value }` or `{ refused }`, after any `{ event }` frames.
 //!
 //! A request may carry `home_id`, the caller's home id: the root is not a

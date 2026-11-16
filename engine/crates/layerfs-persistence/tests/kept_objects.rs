@@ -279,6 +279,13 @@ fn a_dead_record_in_a_retained_raw_group_is_exact_kept_waste() {
         expected,
         "only the dead record's framed extent is kept waste"
     );
+    // A whole-file record names no other object, so the walk decodes no
+    // payload; it still acquires the record's group header, which is body
+    // bytes on the wire and is what this metric measures.
+    assert!(
+        mark.mark_bytes() > 0,
+        "the walk reads the record's group extent"
+    );
 }
 
 #[test]
@@ -361,6 +368,25 @@ fn a_retained_tree_and_inode_are_kept_with_their_packs() {
         .unwrap();
     assert_eq!(objects.waste().inode_blocks_bytes(), blocks as u64);
     assert_eq!(objects.waste().dead_in_retained_packs_bytes(), 0);
+    // §11 `markBytes`: the reference-bearing tree pages are decoded from their
+    // pack bodies, each live pack counted once. The measurement is stable and
+    // bounded by the Store's stored bytes.
+    let total: i64 = f
+        .raw()
+        .query_row("SELECT COALESCE(SUM(length),0) FROM pack", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert!(
+        mark.mark_bytes() > 0,
+        "the tree walk reads reference-bearing pack bodies"
+    );
+    assert!(mark.mark_bytes() <= u64::try_from(total).unwrap());
+    assert_eq!(
+        mark.mark_bytes(),
+        f.handles.history.mark().unwrap().mark_bytes(),
+        "the mark reads the same body bytes once on a second mark"
+    );
 }
 
 #[test]

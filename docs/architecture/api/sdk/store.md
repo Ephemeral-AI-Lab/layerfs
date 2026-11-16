@@ -392,9 +392,16 @@ definite failure before the rename keeps the old Store and the generation `G`,
 while an installed-but-uncertain reply stays at `G + 1` and is reported, never
 deleted. A Store with less than 10% wholly dead packs takes the `none` path:
 it marks only, writes nothing and reports `dead_bytes_refined ==
-dead_bytes_bound`. A sqlite Store on another machine is `Unsupported`: the
-rebuild is local to the machine that holds the file and the worker has no
-compaction route, so run the call there.
+dead_bytes_bound`.
+
+**Local-only route (documented S6 deviation, #42 D5).** A sqlite Store on
+another machine is `Unsupported` and is never sent to that machine's worker:
+spec S6 says compaction runs on the machine that holds the file, but 2.0
+implements only `place::plan`'s `Local` route and refuses before it opens the
+Store or dials anything. The worker has no `store.compact` operation. Run the
+call on that machine; the deviation and its owner-sign-off request are in
+[`gc-42-decisions.md`](../../../../core/docs/issues/project-41/gc-42-decisions.md)
+D5, and the control route table names the same exception.
 
 ```text
 JS      await layerfs.store.compact(name)
@@ -408,10 +415,14 @@ with the report's snake_case fields: `dead_bytes_bound`,
 `physical_shrink`, `kept_waste {dead_in_retained_packs_bytes, delta_bases
 {bytes, references}, inode_blocks_bytes}`, `peak_temp_bytes`, `residue`,
 `estimate` and `zero_reason`; a field the backend capped would be `{value, cap}` (2.0 caps none).
+`mark_bytes` is not a result field: PostgreSQL records the §11 `markBytes`
+transfer metric as `compact.mark_bytes` (a #52 measurement: the distinct
+live-pack body extents its Phase M walk reads, each pack counted once), and
+SQLite, whose payload sweep runs in the build copy, reports no value.
 
 | Error | When | Source |
 | --- | --- | --- |
-| `NoSuchStore`, `Unsupported` | a missing Store; a sqlite Store on another machine, because compaction is local-only (no worker route); a non-private Store directory; an unsupported filesystem; or a PostgreSQL Store in a build without the `postgresql` feature | [`compact.rs`](../../../../control/crates/layerfs-store/src/compact.rs) |
+| `NoSuchStore`, `Unsupported` | a missing Store; a sqlite Store on another machine, because compaction is local-only by the documented S6 deviation (#42 D5) and never takes the worker route; a non-private Store directory; an unsupported filesystem; or a PostgreSQL Store in a build without the `postgresql` feature | [`compact.rs`](../../../../control/crates/layerfs-store/src/compact.rs) |
 | `MountsActive`, `Busy`, `Unresolved` | a mount, long-lived client or operation holds the Store, or a dead owner left an uncertain one | spec §5 |
 | `StaleStore`, `Conflict` | a connection bypassed admission, or the sealed identity changed | spec §7, §10 |
 | `Capacity` | a real allocation refusal during the rebuild; the old Store is kept | spec §7 |

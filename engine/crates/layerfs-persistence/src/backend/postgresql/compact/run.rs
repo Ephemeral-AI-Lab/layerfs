@@ -47,6 +47,8 @@ pub(crate) fn round(
 ) -> HistoryResult<CompactReceipt> {
     metrics.begin_phase(CompactPhase::PostgresMark);
     let (mark, tuple) = handles.history.mark_gc()?;
+    // §11 `markBytes`: the distinct live-pack body bytes this mark read.
+    metrics.mark_bytes = mark.mark_bytes();
     load_visited(session, schema, &mark)?;
     let stored = u64::try_from(total_stored(session, schema)?).unwrap_or(0);
     let live = u64::try_from(live_stored(session, schema)?).unwrap_or(0);

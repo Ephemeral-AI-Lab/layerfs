@@ -199,6 +199,10 @@ impl RunMetrics {
             dead_bytes_refined: self.dead_bytes_refined,
             kept_waste: self.kept_waste,
             residue_bytes: self.residue_bytes,
+            // §11 `markBytes` is the PostgreSQL Phase M transfer metric; the
+            // SQLite mark reads only metadata bodies and sweeps the payload in
+            // the build copy, so SQLite reports no value.
+            mark_bytes: None,
             phase_nanos: self.phase_nanos,
             total_nanos,
             leftover_settled: self.leftover_settled,

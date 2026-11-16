@@ -8,17 +8,17 @@
 > table indexes them, and this file is retired.
 
 **Why.** The #41 implementation and the #711 fix-branch integration need a
-different reading than the frozen sentences in eleven places: seven contract
+different reading than the frozen sentences in twelve places: seven contract
 amendments (A1–A7, mostly refusal detail shapes, one additive sidecar field,
-one `gc_op` column and the snake_case rendering rule) and four SQLite
-implementation deviations (D1–D4) that the frozen text either forbids or does
+one `gc_op` column and the snake_case rendering rule) and five SQLite
+implementation deviations (D1–D5) that the frozen text either forbids or does
 not describe. `gc-spec-gaps.md` (one of the implementation notes moved out of
 the tree; its decisions are folded into these entries where they carry contract
 text) already flagged two of the seven as "#42 correction"; this note is the
 complete list, and it changes no product behaviour.
 
 The seven A entries were written directly into the frozen file while #41 was
-implemented and were backed out before review (commit `122a168502`). The four D
+implemented and were backed out before review (commit `122a168502`). The five D
 entries are present in the shipped SQLite code and are recorded here so the
 contract and the implementation do not drift apart.
 
@@ -101,7 +101,7 @@ contract and the implementation do not drift apart.
 
 ---
 
-## D. SQLite implementation deviations (4)
+## D. SQLite implementation deviations (5)
 
 These four are in the shipped code
 (`engine/crates/layerfs-persistence/src/backend/sqlite/compact.rs`) and cannot
@@ -187,6 +187,34 @@ matches the frozen text or records the deviation.
 - **Runbook consequence:** `store.status` shows `cleanup` on SQLite after the
   install point; the runbook's phase list includes it.
 
+### D5. S6/§7: `store.compact` is local-only; a remote sqlite Store is `Unsupported`
+
+- **Frozen:** S6 "A SQLite Store compacts on the machine where it lives
+  (`place::plan`, `control/crates/layerfs-store/src/place.rs:40-49`)"; §7
+  "Runs as one operation on the Store's machine (S6)."
+- **Implemented:** the call consults `place::plan` but runs compaction only on
+  the `Local` branch, in the caller's process. Its `Worker` branch is refused
+  `Unsupported` before the Store is opened or the machine is dialled, and the
+  worker has no `store.compact` operation at all. A sqlite Store pushed to a
+  machine (`docker`, `lima`, `apple-container`) therefore cannot be compacted
+  from the home that owns the record; the owner pushes it back to `native`,
+  compacts there, and pushes it again. `store.compact` of a PostgreSQL Store
+  is unchanged: the call dials the Store's recorded URL itself.
+- **Reason:** the worker route needs a worker-side compaction operation, the
+  Store record and lease read under the worker's root, and a crash/resume
+  answer for a call whose run can be hours long; 2.0 ships the local engine
+  and the transfer route (`store.push`/`store.pull`) instead. The refusal is
+  named, never a silent local run on the wrong file.
+- **Decision requested:** accept local-only for 2.0 as a deviation from S6
+  (and say so in the API and control docs, which now name #42 D5), or require
+  the worker `store.compact` route before the contract closes.
+- **Consequence:** `store.compact` of a Store whose record names another
+  machine is `Unsupported` with "local-only: run it on that Store's machine
+  (S6 deviation #42 D5; the worker has no compaction route)"; the operation is
+  refused before any effect. `api/crates/layerfs-api/tests/store_family.rs`
+  `compact_of_a_remote_sqlite_store_is_a_documented_local_only_refusal` pins
+  it.
+
 ---
 
 ## Evidence basis used by D2 and the runbook
@@ -218,6 +246,6 @@ rotational (HDD) backing — not NVMe** (88 vCPU across two Xeon E5-2699C v4,
 ## Request
 
 Please record A1–A7 as #42 items (or amend the frozen text) and accept or
-reject D1–D4 individually when the owner signs off. Until then the
-implementation follows the frozen text except where D1–D4 are named, and the
+reject D1–D5 individually when the owner signs off. Until then the
+implementation follows the frozen text except where D1–D5 are named, and the
 spec file in this branch is byte-identical to the frozen version.

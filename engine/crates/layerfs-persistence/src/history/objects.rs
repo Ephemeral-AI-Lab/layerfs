@@ -148,6 +148,7 @@ pub struct MarkResult {
     history: KeptHistory,
     objects: KeptObjects,
     live_heads_digest: [u8; 32],
+    mark_bytes: u64,
 }
 
 impl MarkResult {
@@ -164,6 +165,21 @@ impl MarkResult {
     /// BLAKE3 over the §6.4 live-heads vector at the mark's fixed generation.
     pub fn live_heads_digest(&self) -> [u8; 32] {
         self.live_heads_digest
+    }
+
+    /// The distinct live-pack body bytes this walk read: the §11 `markBytes`
+    /// transfer metric on PostgreSQL (a #52 measurement, not a report field).
+    ///
+    /// A whole-body read counts the pack's body; a scoped acquisition counts
+    /// the group extents it transferred, which the group cache asks for only
+    /// once. The bounded directory prefix every retained pack costs the
+    /// `keptWaste` attribution is not a body read, and a later whole-body read
+    /// replaces the partial extents it covers. A metadata header read still
+    /// acquires the record's group, so any non-empty closure transfers some
+    /// body bytes; the SQLite §7 payload sweep runs in the build copy, so
+    /// SQLite does not report this value.
+    pub fn mark_bytes(&self) -> u64 {
+        self.mark_bytes
     }
 }
 
@@ -291,10 +307,12 @@ fn mark_recorded(
     let source = ClosureSource {
         mechanics: tx.mechanics(),
         locations: &located.locations,
+        read_bytes: std::cell::RefCell::new(BTreeMap::new()),
     };
     let roots = roots(tx)?;
     let closure = walk(&source, &capacities, policy.construction(), roots, visit)?;
     let waste = waste(tx, &source, &located, &closure)?;
+    let mark_bytes = source.read_bytes();
     let digest = live_heads_digest(tx)?;
     let objects = KeptObjects {
         objects: closure.visited.keys().copied().collect(),
@@ -305,6 +323,7 @@ fn mark_recorded(
         history,
         objects,
         live_heads_digest: digest,
+        mark_bytes,
     })
 }
 
@@ -399,6 +418,36 @@ struct ClosureSource<'a> {
     mechanics: &'a dyn crate::backend::Mechanics,
     /// Every locator, exactly as the one `gc_object_locations` read returned it.
     locations: &'a BTreeMap<ObjectId, ObjectLocation>,
+    /// pack -> the body bytes this mark read from it: a whole body, or the
+    /// disjoint group extents it acquired. The sum is
+    /// [`MarkResult::mark_bytes`]: a pack read in several groups counts each
+    /// extent once, and a later whole-body read replaces the partial sum.
+    read_bytes: std::cell::RefCell<BTreeMap<i64, u64>>,
+}
+
+impl ClosureSource<'_> {
+    /// Records a whole-body read of `pack_id`. The full extent is the pack's
+    /// body, so it replaces any group extents already counted for the pack.
+    fn note_whole_body(&self, pack_id: i64, bytes: u64) {
+        let mut read = self.read_bytes.borrow_mut();
+        let entry = read.entry(pack_id).or_insert(0);
+        *entry = (*entry).max(bytes);
+    }
+
+    /// Records one scoped acquisition's body bytes, capped at the pack's
+    /// declared length. The group cache asks for only groups it does not hold,
+    /// so the extents are disjoint; the controls each acquisition repeats can
+    /// still not make a pack count for more than its body.
+    fn note_scoped_body(&self, pack_id: i64, bytes: u64, length: u64) {
+        let mut read = self.read_bytes.borrow_mut();
+        let entry = read.entry(pack_id).or_insert(0);
+        *entry = entry.saturating_add(bytes).min(length);
+    }
+
+    /// The distinct pack body bytes this mark read.
+    fn read_bytes(&self) -> u64 {
+        self.read_bytes.borrow().values().copied().sum()
+    }
 }
 
 /// The complete encoded groups one mark walk demands from one pack.
@@ -485,7 +534,9 @@ impl Source for ClosureSource<'_> {
         if !found.is_empty() || pack.info().pack_id != pack_id {
             return Err(StorageError::Integrity("mark pack binding"));
         }
-        Ok(pack.into_parts().1)
+        let body = pack.into_parts().1;
+        self.note_whole_body(pack_id, u64::try_from(body.len()).unwrap_or(u64::MAX));
+        Ok(body)
     }
 
     fn pack_prefix(
@@ -515,12 +566,22 @@ impl Source for ClosureSource<'_> {
         match reply {
             AcquiredPackRead::Whole(row) => {
                 let (info, body) = row.into_parts();
+                self.note_whole_body(pack_id, u64::try_from(body.len()).unwrap_or(u64::MAX));
                 Ok(PackAcquisition::Whole {
                     info: Some(info),
                     body,
                 })
             }
             AcquiredPackRead::Units(row) => {
+                // The selected complete groups are the physical body bytes
+                // this scoped read transfers; the group cache asks for each
+                // group once, so the extents do not repeat.
+                let length = u64::try_from(row.info().length).unwrap_or(u64::MAX);
+                self.note_scoped_body(
+                    pack_id,
+                    u64::try_from(row.acquired_bytes()).unwrap_or(u64::MAX),
+                    length,
+                );
                 Ok(PackAcquisition::Units(PackUnit::from_acquired(row)?))
             }
         }

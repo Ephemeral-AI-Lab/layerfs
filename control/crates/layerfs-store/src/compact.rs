@@ -5,9 +5,12 @@
 //! closes the Store this process holds open: a call still running on it is
 //! `InUse`, before any effect. It then opens the Store's own session, runs
 //! the §7 (SQLite) or §8 (PostgreSQL) compaction and answers the §11 report.
-//! A SQLite Store on another machine is `Unsupported` here: compaction is
-//! local-only and the worker has no compaction route; run it on that Store's
-//! machine.
+//! A SQLite Store on another machine is `Unsupported` and is never sent to
+//! that machine's worker. Spec S6 says the rebuild runs on the machine that
+//! holds the file; 2.0 implements that only through `place::plan`'s `Local`
+//! route. This local-only reading is the documented contract deviation D5 in
+//! `core/docs/issues/project-41/gc-42-decisions.md` (with the API and control
+//! docs); run the call on that machine.
 use crate::identity;
 #[cfg(feature = "postgresql")]
 use crate::identity::Kind;
@@ -91,7 +94,9 @@ pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
         Executor::Worker(_) => {
             return Err(refused(
                 "Unsupported",
-                format!("store.compact of Store {store} is local-only: run it on that Store's machine (no worker route)"),
+                format!(
+                    "store.compact of Store {store} is local-only: run it on that Store's machine (S6 deviation #42 D5; the worker has no compaction route)"
+                ),
             ))
         }
     }

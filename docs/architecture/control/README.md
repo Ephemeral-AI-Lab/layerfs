@@ -73,6 +73,7 @@ machine's worker, or in a Sandbox's daemon.
 | `store.push`, `store.pull` | phases, records, locks | `store.file` steps on the source and target | — | [`sqlite/transfer/phases.rs`](../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
 | `store.remove` | records, locks | `store.file` `remove` | — | [`sqlite/remove.rs`](../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
 | `store.status`, `store.list` | records, leases | `store.file` `stat`, when reached | — | [`status.rs`](../../../control/crates/layerfs-store/src/status.rs), [`list.rs`](../../../control/crates/layerfs-store/src/list.rs) |
+| `store.compact` | all of it on the Store's own machine: PostgreSQL dials its URL, a sqlite file here rebuilds in this process | —: never forwarded (a remote sqlite Store is `Unsupported`, the documented S6 deviation #42 D5) | — | [`compact.rs`](../../../control/crates/layerfs-store/src/compact.rs) |
 | `store.attach` | records; dials itself for `native` | `store.reach`: the machine's own check | — | [`layerfs-control/src/store.rs`](../../../control/crates/layerfs-control/src/store.rs) |
 | `backup.create` | uploads to the bucket | `store.file` `stage`, `read`, `unstage` | — | [`backup/create.rs`](../../../control/crates/layerfs-store/src/backup/create.rs) |
 | `machine.*`, `store.create`, `store.connect`, `store.disconnect`, `store.detach`, `backup.connect`, `backup.disconnect`, `backup.list`, `backup.restore` | all of it | — | — | [Machines](machines/README.md), [Backups](backups/README.md) |

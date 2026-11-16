@@ -208,6 +208,10 @@ pub struct CompactRunObservation {
     pub kept_waste: CompactKeptWaste,
     /// §11 `residue.bytes`.
     pub residue_bytes: u64,
+    /// The distinct live-pack body bytes the Phase M mark read, when the
+    /// backend measures it (§11 `markBytes`; a #52 metric, not a report
+    /// field). `None` for a backend that does not report the transfer.
+    pub mark_bytes: Option<u64>,
     /// The completed phases and their inclusive durations.
     pub phase_nanos: Vec<(CompactPhase, u64)>,
     /// The run's whole duration.
@@ -249,6 +253,9 @@ struct LastRun {
     dead_bytes_refined: u64,
     kept_waste: CompactKeptWaste,
     residue_bytes: u64,
+    /// §11 `markBytes` when the backend measured it (PostgreSQL); `None` on a
+    /// backend whose mark does not report the transfer (`SQLite`).
+    mark_bytes: Option<u64>,
 }
 
 /// One process's compaction metric totals.
@@ -325,6 +332,7 @@ impl CompactMetrics {
             dead_bytes_refined: run.dead_bytes_refined,
             kept_waste: run.kept_waste.clone(),
             residue_bytes: run.residue_bytes,
+            mark_bytes: run.mark_bytes,
         });
     }
 
@@ -431,6 +439,9 @@ impl CompactMetrics {
                     .saturating_add(last.kept_waste.inode_blocks_bytes),
             ));
             samples.push(sample("compact.residue_bytes", &[], last.residue_bytes));
+            if let Some(mark_bytes) = last.mark_bytes {
+                samples.push(sample("compact.mark_bytes", &[], mark_bytes));
+            }
             samples.push(sample(
                 "compact.generation",
                 &[("which", "before")],
