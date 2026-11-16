@@ -228,11 +228,18 @@ owner-final measurement (#42 item 44). The alternative build (clone + delete +
 `incremental_vacuum`, below a size threshold on reflink filesystems) is
 recorded in D2 and is not adopted.
 
-## 9. Implementation notes: deviations and the D2 build decision (D1–D4)
+The per-GB rates above were measured on the earlier whole-file-only fixture
+(one whole-file object per pack, one genesis Layer per project). The current
+harness (`tools/ci/gc-bench.md`) models Layer history depth, cross-project
+shared content and delta chains and records the cold-cache method and 3-run
+variance; re-measure the arm before quoting a rate against the current
+fixture. The gated 50 GB owner-final arm has not been re-run on it.
 
-Three frozen sentences still differ (D1, D3, D4); D2 is the settled build
+## 9. Implementation notes: deviations and the D2 build decision (D1–D5)
+
+Four frozen sentences still differ (D1, D3, D4, D5); D2 is the settled build
 decision (the fresh-copy rebuild, which now follows the frozen sentence). All
-four are recorded in [`gc-42-decisions.md`](gc-42-decisions.md); none changes
+five are recorded in [`gc-42-decisions.md`](gc-42-decisions.md); none changes
 the artifact set, the op record or the next-call adoption.
 
 | Entry | Frozen sentence | Implemented |
@@ -241,8 +248,9 @@ the artifact set, the op record or the next-call adoption.
 | D2 (S5/§3/§7) | "copies only retained rows into a fresh Store"; peak old + new + visited | fresh-copy build (pack-as-unit, indexes and triggers after the load); peak old + new (§8) — **now matches the frozen sentence** |
 | D3 (§3/§7 step 1.5) | `none` writes nothing; delete the scratch and stop | `none` spills the closure to `<store>.compact-visited`, counts it in `peakTempBytes` and deletes it before replying; the mark and its intent are one transaction that is rolled back, so no `kept_node`/`gc_intent` row and no WAL frame survives; no residue survives |
 | D4 (§11) | SQLite phases `mark`, `build`, `verify`, `install` | the settle also writes `cleanup` (§1) |
+| D5 (S6/§7) | "A SQLite Store compacts on the machine where it lives"; §7 "Runs as one operation on the Store's machine (S6)" | `store.compact` is local-only: its `Worker` branch is refused `Unsupported` before the Store is opened; a pushed sqlite Store is compacted after `store.push` back to `native` |
 
-Operators do not need to act on D1–D4 during an incident: the artifact set, the
+Operators do not need to act on D1–D5 during an incident: the artifact set, the
 op record and the next-call adoption are unchanged. They matter when reading
 the phase or the reported peak, and to a client that compares the frozen text
 with the shipped report.
