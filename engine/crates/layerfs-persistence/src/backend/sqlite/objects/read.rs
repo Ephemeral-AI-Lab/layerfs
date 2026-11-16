@@ -64,3 +64,56 @@ pub(crate) fn read(
     }
     Ok(())
 }
+
+/// The bounded control/directory prefix of one pack and its declared length.
+///
+/// The pack directory sits at the head of the body, so a metadata-only scan
+/// reads at most `limit` bytes instead of the rest of the pack. A pack shorter
+/// than `limit` comes whole; the declared length is returned separately so the
+/// caller can still parse the header against it.
+pub(crate) fn prefix(
+    tx: &Transaction<'_>,
+    id: i64,
+    limit: usize,
+) -> Result<Option<(usize, Vec<u8>)>, PersistenceError> {
+    if id <= 0 || limit == 0 {
+        return Err(PersistenceError::Malformed);
+    }
+    if tx.layout().uses_units() {
+        // A unit-layout pack keeps its header and directory in `control`; that
+        // column is exactly the bounded prefix, so no body range is read.
+        let mut rows = tx.query(
+            "SELECT length,control FROM pack WHERE pack_id=?",
+            vec![Param::I64(id)],
+        )?;
+        let Some(row) = rows.pop() else {
+            return Ok(None);
+        };
+        let length = row.get::<i64>(0).map_err(|_| PersistenceError::Malformed)?;
+        let control = row
+            .get::<Vec<u8>>(1)
+            .map_err(|_| PersistenceError::Malformed)?;
+        let length = usize::try_from(length).map_err(|_| PersistenceError::Malformed)?;
+        if control.len() > limit {
+            return Err(PersistenceError::Malformed);
+        }
+        return Ok(Some((length, control)));
+    }
+    let limit = i64::try_from(limit).map_err(|_| PersistenceError::Malformed)?;
+    let mut rows = tx.query(
+        "SELECT length,substr(body,1,?) FROM pack WHERE pack_id=?",
+        vec![Param::I64(limit), Param::I64(id)],
+    )?;
+    let Some(row) = rows.pop() else {
+        return Ok(None);
+    };
+    let length = row.get::<i64>(0).map_err(|_| PersistenceError::Malformed)?;
+    let body = row
+        .get::<Vec<u8>>(1)
+        .map_err(|_| PersistenceError::Malformed)?;
+    let length = usize::try_from(length).map_err(|_| PersistenceError::Malformed)?;
+    if body.len() != length.min(limit as usize) {
+        return Err(PersistenceError::Malformed);
+    }
+    Ok(Some((length, body)))
+}

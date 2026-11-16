@@ -29,6 +29,7 @@ use crate::{MarkResult, PostgresHandles};
 use layerfs_history::error::{HistoryError, HistoryResult};
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::HistoryCatalog;
+use postgres::types::Type;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
@@ -301,16 +302,29 @@ fn load_visited(session: &Arc<Session>, schema: &str, mark: &MarkResult) -> Hist
              CREATE TEMP TABLE pg_temp.gc_visited(object_id bytea PRIMARY KEY) ON COMMIT PRESERVE ROWS;\
              CREATE TEMP TABLE pg_temp.gc_live_pack(pack_id bigint PRIMARY KEY) ON COMMIT PRESERVE ROWS;",
         )?;
-        let bytes = objects.iter().map(Vec::len).sum::<usize>() as u64;
-        tx.typed(
-            "INSERT INTO pg_temp.gc_visited(object_id) SELECT unnest($1::bytea[])",
-            &[&objects],
-            bytes,
+        // A large visited set is a bulk load, not a parameter array: COPY
+        // streams it without one round trip per row and without SQL text that
+        // grows with the mark. The ids were bound in memory for the array form;
+        // here each row is written straight from the mark.
+        tx.copy_in(
+            "COPY pg_temp.gc_visited(object_id) FROM STDIN (FORMAT binary)",
+            &[Type::BYTEA],
+            |writer| {
+                for id in &objects {
+                    writer.write(&[id])?;
+                }
+                Ok(())
+            },
         )?;
-        tx.typed(
-            "INSERT INTO pg_temp.gc_live_pack(pack_id) SELECT unnest($1::bigint[])",
-            &[&packs],
-            8 * packs.len() as u64,
+        tx.copy_in(
+            "COPY pg_temp.gc_live_pack(pack_id) FROM STDIN (FORMAT binary)",
+            &[Type::INT8],
+            |writer| {
+                for pack in &packs {
+                    writer.write(&[pack])?;
+                }
+                Ok(())
+            },
         )?;
         let _ = schema;
         Ok(())

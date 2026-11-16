@@ -81,4 +81,13 @@ pub(crate) trait Mechanics {
     fn signatures(&self, out: &mut Vec<SignatureRow>) -> Result<(), PersistenceError>;
     fn read_packs(&self, ids: &[i64], out: &mut Vec<PersistedPack>)
         -> Result<(), PersistenceError>;
+    /// The bounded control/directory prefix of one pack and its declared
+    /// length, or `None` when this engine has no bounded prefix read.
+    fn pack_prefix(
+        &self,
+        _id: i64,
+        _limit: usize,
+    ) -> Result<Option<(usize, Vec<u8>)>, PersistenceError> {
+        Ok(None)
+    }
 }

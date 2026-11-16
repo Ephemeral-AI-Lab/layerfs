@@ -1,6 +1,6 @@
 //! Whole and ranged pack reads; read budgets are checked before any body.
 use super::super::session::{rows, transaction::Transaction};
-use crate::backend::records::{pack_info, BackendError, Record};
+use crate::backend::records::{pack_info, BackendError, Param, Record};
 use layerfs_storage::{
     location::PackInfo,
     policy,
@@ -146,4 +146,38 @@ fn read_with<T>(
         bytes.copy_from_slice(&slice);
         Ok(())
     })
+}
+
+/// The bounded control/directory prefix of one pack and its declared length.
+///
+/// `substring` on an externally stored bytea fetches only the requested range,
+/// so a metadata-only pack scan never reads the bodies behind the directory.
+pub(crate) fn prefix(
+    tx: &Transaction<'_>,
+    id: i64,
+    limit: usize,
+) -> Result<Option<(usize, Vec<u8>)>, PersistenceError> {
+    if id <= 0 || limit == 0 {
+        return Err(PersistenceError::Malformed);
+    }
+    let limit = i32::try_from(limit).map_err(|_| PersistenceError::Malformed)?;
+    let rows = tx.query(
+        &format!(
+            "SELECT length,substring(body FROM 1 FOR $2) FROM {}.pack WHERE pack_id=$1",
+            tx.schema
+        ),
+        vec![Param::I64(id), Param::I64(i64::from(limit))],
+    )?;
+    let Some(row) = rows.first() else {
+        return Ok(None);
+    };
+    let length = row.get::<i64>(0).map_err(|_| PersistenceError::Malformed)?;
+    let body = row
+        .get::<Vec<u8>>(1)
+        .map_err(|_| PersistenceError::Malformed)?;
+    let length = usize::try_from(length).map_err(|_| PersistenceError::Malformed)?;
+    if body.len() != length.min(limit as usize) {
+        return Err(PersistenceError::Malformed);
+    }
+    Ok(Some((length, body)))
 }
