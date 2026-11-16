@@ -805,6 +805,7 @@ dependencies = [
  "layerfs-storage",
  "layerfs-store-service",
  "layerfs-telemetry",
+ "layerfs-winfsp",
  "layerfs-workspace",
  "nix",
 ]

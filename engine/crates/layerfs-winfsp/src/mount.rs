@@ -106,14 +106,15 @@ pub fn interface() -> ffi::FSP_FILE_SYSTEM_INTERFACE {
     }
 }
 
-/// Mounts one Workspace: the daemon services carry it, every wired
-/// operation answers, and the mount point names a drive or directory.
+/// Mounts one Workspace over any mount services: every wired operation
+/// answers, and the mount point names a drive or directory. The daemon
+/// crate wraps its BoundWorkspace in Mounted and calls this.
 pub fn mount_workspace(
     mount_point: &str,
-    workspace: std::sync::Arc<layerfs_daemon::store::BoundWorkspace>,
+    services: std::sync::Arc<dyn layerfs_mount_ports::ports::MountServices>,
 ) -> Result<Mounted, String> {
     let context = Context {
-        services: std::sync::Arc::new(layerfs_daemon::Mounted(workspace)),
+        services,
         fence: layerfs_mount_ports::ports::Fence::default(),
         mount: crate::services::mint_mount(),
     };

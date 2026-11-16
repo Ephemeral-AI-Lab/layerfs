@@ -31,3 +31,6 @@ nix = { version = "=0.31.3", features = ["fs", "user", "process", "resource"] }
 [dev-dependencies]
 blake3 = { version = "=1.8.5", default-features = false }
 layerfs-project = { path = "../layerfs-project" }
+
+[target.'cfg(windows)'.dependencies]
+layerfs-winfsp = { path = "../layerfs-winfsp" }

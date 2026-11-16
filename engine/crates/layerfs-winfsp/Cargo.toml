@@ -9,9 +9,9 @@ layerfs-mount-ports = { path = "../layerfs-mount-ports" }
 layerfs-overlay = { path = "../layerfs-overlay" }
 layerfs-workspace = { path = "../layerfs-workspace" }
 layerfs-content = { path = "../../../core/crates/layerfs-content" }
-layerfs-daemon = { path = "../layerfs-daemon" }
 
 [dev-dependencies]
+layerfs-daemon = { path = "../layerfs-daemon" }
 layerfs-project = { path = "../layerfs-project" }
 layerfs-store-service = { path = "../layerfs-store-service" }
 layerfs-bridge = { path = "../layerfs-bridge" }

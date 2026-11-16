@@ -5,7 +5,9 @@ mod attach;
 mod cleanup;
 #[cfg(target_os = "linux")]
 mod detach;
+#[cfg(unix)]
 mod diagnostic;
+#[cfg(unix)]
 mod dirty;
 #[cfg(unix)]
 mod export;
@@ -19,7 +21,7 @@ mod force;
 mod inspect;
 #[cfg(unix)]
 mod invalidate;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 mod kernel;
 #[cfg(unix)]
 mod observation;
@@ -40,9 +42,11 @@ mod unmount;
 pub use export::{ExportServing, ExportServingConfig, Helper, Mounter, HELPER_WAIT};
 #[cfg(unix)]
 pub use kernel::{KernelConfig, KernelServing};
+#[cfg(unix)]
 pub(crate) use observation::{reply_token, request_token};
 #[cfg(unix)]
 pub use registry::Service;
+#[cfg(unix)]
 pub(crate) use serve::answer_call;
 #[cfg(unix)]
 pub use serve::{ServeCause, ServeFailure, Served};

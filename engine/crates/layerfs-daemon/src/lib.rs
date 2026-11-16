@@ -28,7 +28,6 @@ pub use layerfs_store_service::{
     ServiceClass, WorkspacePanic,
 };
 
-#[cfg(unix)]
 pub mod control;
 
 #[cfg(unix)]

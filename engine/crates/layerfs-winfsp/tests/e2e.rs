@@ -36,9 +36,10 @@ fn binds_and_mounts_a_workspace() {
             },
         )
         .expect("bind");
-    let mounted =
-        layerfs_winfsp::mount_workspace("Y:", std::sync::Arc::new(bound.workspace))
-            .expect("mount");
+    let services = std::sync::Arc::new(layerfs_daemon::Mounted(std::sync::Arc::new(
+        bound.workspace,
+    )));
+    let mounted = layerfs_winfsp::mount_workspace("Y:", services).expect("mount");
     let entries: Vec<_> = std::fs::read_dir("Y:").expect("read the mounted root").collect();
     assert!(!entries.is_empty(), "the seed answers through the mount");
     drop(mounted);
