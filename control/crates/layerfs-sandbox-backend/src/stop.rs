@@ -108,6 +108,23 @@ pub fn cancel(stop: &Stop, grace: Duration) -> io::Result<Cancelled> {
     }
 }
 
+/// Ends the command `stop` names once with the kill alone, no `SIGTERM`
+/// first: a cancel already answered as `SIGKILL` (it came before the
+/// handle was told) leaves the command no grace, and its exit reports 137.
+/// A command with nothing left running is [`Cancelled::Ended`].
+pub fn kill(stop: &Stop) -> io::Result<Cancelled> {
+    match stop {
+        #[cfg(target_os = "linux")]
+        Stop::Cgroup { path } => killed(&crate::backend::namespaces::ExecGroup(path)),
+        #[cfg(not(target_os = "linux"))]
+        Stop::Cgroup { .. } => Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "a cgroup stop handle is acted on by the Linux kernel that holds it",
+        )),
+        Stop::Group { pgid, leader } => killed(&crate::local::groups::Led(*pgid, *leader)),
+    }
+}
+
 /// What a stop handle acts on: its running processes, a signal to all of
 /// them, and the kill that cannot be refused.
 pub(crate) trait Stoppable {
@@ -126,6 +143,14 @@ fn ended(group: &dyn Stoppable, grace: Duration) -> io::Result<Cancelled> {
     group.signal(Signal::SIGTERM)?;
     if gone(group, grace)? {
         return Ok(Cancelled::Signalled(Signal::SIGTERM));
+    }
+    killed(group)
+}
+
+/// The kill, then up to [`KILL_WAIT`] for its processes to be gone.
+fn killed(group: &dyn Stoppable) -> io::Result<Cancelled> {
+    if !group.running()? {
+        return Ok(Cancelled::Ended);
     }
     group.kill()?;
     if gone(group, KILL_WAIT)? {
