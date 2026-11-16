@@ -492,7 +492,11 @@ fn two_commands_run_at_once_in_one_workspace_on_native() {
     let third = ok(
         &home,
         "workspace.exec",
-        &[ws(), ("command", t("echo beside")), ("exec_id", t("both-c"))],
+        &[
+            ws(),
+            ("command", t("echo beside")),
+            ("exec_id", t("both-c")),
+        ],
     );
     assert_eq!(third.get_text("kind"), Some("exit:0"), "{third:?}");
     assert!(!execs.join("both-c.json").exists());
@@ -505,22 +509,113 @@ fn two_commands_run_at_once_in_one_workspace_on_native() {
         ok(&home, "workspace.exec_cancel", &args)
     };
     let cancelled = cancel("both-a");
-    assert_eq!(cancelled.get_text("outcome"), Some("cancelled"), "{cancelled:?}");
+    assert_eq!(
+        cancelled.get_text("outcome"),
+        Some("cancelled"),
+        "{cancelled:?}"
+    );
     let answer = answered(first);
     assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
-    assert!(!group_runs(a_group), "the cancelled command's group still runs");
+    assert!(
+        !group_runs(a_group),
+        "the cancelled command's group still runs"
+    );
     assert!(group_runs(b_group), "the other command was ended too");
     assert!(execs.join("both-b.json").exists());
     assert_eq!(running_ids(&home), ["both-b"]);
 
     let cancelled = cancel("both-b");
-    assert_eq!(cancelled.get_text("outcome"), Some("cancelled"), "{cancelled:?}");
+    assert_eq!(
+        cancelled.get_text("outcome"),
+        Some("cancelled"),
+        "{cancelled:?}"
+    );
     let answer = answered(second);
     assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
     assert!(running_ids(&home).is_empty());
 
     ok(&home, "workspace.unmount", &[ws()]);
     ok(&home, "sandbox.close", &[("name", t("s1"))]);
+    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+/// A forced `machine.stop` of `native` cancels each Sandbox's running
+/// command before its runtime stops, as a forced close does: the exec
+/// answers `cancelled`, not the `exit:137` of the runtime's kill. Live only.
+#[test]
+fn forced_native_machine_stop_cancels_running_commands() {
+    let Ok(daemon) = std::env::var("LAYERFS_DAEMON") else {
+        eprintln!("NOT_RUN: LAYERFS_DAEMON unset, no live Sandbox");
+        return;
+    };
+    let home = tempdir("stop-home");
+    home::open(&home).unwrap();
+    home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    let folder = tempdir("stop-folder");
+    std::fs::write(folder.join("README.md"), "stop\n").unwrap();
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    ok(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/api")),
+            ("folder", t(&folder.display().to_string())),
+        ],
+    );
+    ok(
+        &home,
+        "branch.fork",
+        &[
+            ("project", t("shop/api")),
+            ("name", t("dev")),
+            ("from_branch", t("main")),
+        ],
+    );
+    let sandbox = [
+        ("project", t("shop/api")),
+        ("name", t("s1")),
+        ("machine", t("native")),
+    ];
+    ok(&home, "sandbox.create", &sandbox);
+    let mount = [("sandbox", t("s1")), ("branch", t("dev")), ("name", t("w"))];
+    let wsid = ok(&home, "workspace.mount", &mount)
+        .get_text("workspace")
+        .unwrap()
+        .to_owned();
+    let child = started(&home, "s1:w", "sleep 600", "stop-1");
+    let record = recorded(
+        &home
+            .join("sandbox/s1/workspace")
+            .join(&wsid)
+            .join("exec/stop-1.json"),
+    );
+    let pgid = record
+        .get("stop")
+        .unwrap()
+        .get("group")
+        .unwrap()
+        .get_int("pgid")
+        .unwrap();
+    let force = [("name", t("native")), ("force", SdkValue::Bool(true))];
+    let stopped = ok(&home, "machine.stop", &force);
+    assert_eq!(
+        stopped.get("stopped_sandboxes"),
+        Some(&SdkValue::List(vec![t("s1")])),
+        "{stopped:?}"
+    );
+    let answer = answered(child);
+    assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
+    assert!(!group_runs(pgid), "the command's group still runs");
+    // its record was settled, not left for a later close
+    let execs = home.join("sandbox/s1/workspace").join(&wsid).join("exec");
+    assert!(!execs.join("stop-1.json").exists());
+    let _ = call(
+        &home,
+        "sandbox.close",
+        &[("name", t("s1")), ("force", SdkValue::Bool(true))],
+        &mut |_| {},
+    );
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&folder);
 }
