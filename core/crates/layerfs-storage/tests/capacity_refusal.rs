@@ -1,4 +1,5 @@
-//! A definite persistence refusal for lack of space is recognised (#379).
+//! A definite persistence refusal for lack of capacity is recognised
+//! (#379, #42 §10).
 use layerfs_storage::{port::PersistenceError, StorageError};
 
 fn refused(status: &str) -> StorageError {
@@ -15,8 +16,9 @@ fn only_a_definite_capacity_refusal_counts() {
     assert!(!StorageError::from(PersistenceError::Uncertain).is_capacity_refusal());
     assert!(!StorageError::from(PersistenceError::Busy).is_capacity_refusal());
     assert!(!StorageError::from(PersistenceError::Malformed).is_capacity_refusal());
-    // A declared format bound is not a full disk.
-    assert!(!StorageError::CapacityExceeded {
+    // A declared bound refused the offered value before any write, so it is a
+    // capacity refusal too (§10), even though it is not a full disk.
+    assert!(StorageError::CapacityExceeded {
         what: "pack.assembled_length",
         limit: 1,
         actual: 2,

@@ -398,10 +398,13 @@ pub(crate) fn persist_mark(
     })
 }
 
+/// Clears the transient mark state of a round that installs nothing: the dead
+/// set, the op row and the §6.1 `kept_node` closure the mark wrote. A
+/// Store carries no mark state after the call, as its none path promises.
 pub(crate) fn clear_round(session: &Arc<Session>, schema: &str) -> HistoryResult<()> {
     stage(session, |tx| {
         tx.batch(&format!(
-            "DELETE FROM {schema}.gc_dead; DELETE FROM {schema}.gc_op;"
+            "DELETE FROM {schema}.gc_dead; DELETE FROM {schema}.gc_op; DELETE FROM {schema}.kept_node;"
         ))?;
         Ok(())
     })
