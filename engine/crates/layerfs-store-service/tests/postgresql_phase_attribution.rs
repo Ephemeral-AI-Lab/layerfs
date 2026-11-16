@@ -5,7 +5,8 @@
 //!
 //! Each case opens a fresh daemon Store, as `sandbox.create` starts a fresh
 //! daemon, so every connection, light check and statement prepare a case
-//! pays is counted where it happens:
+//! pays is counted where it happens (the server-side statement counts need
+//! `pg_stat_statements` preloaded; without it the test prints NOT_RUN):
 //!
 //! - `create.reach`: the caller's held read session (control
 //!   `store/reader.rs`): attach with the light check, find the project.
@@ -86,10 +87,13 @@ fn postgresql_case_attribution() {
     let schema = format!("lfs94_attr_{}", std::process::id());
     let selection = PostgresSelection::new(&url, &schema);
     let result = std::panic::catch_unwind(|| {
+        let Some(mut server) = Server::connect(&url) else {
+            return;
+        };
+        server.calibrate();
+        let server = Rc::new(RefCell::new(server));
         // the Branch the cases mount by name (`BRANCH`)
         initialize(&dir, &selection);
-        let server = Rc::new(RefCell::new(Server::connect(&url)));
-        server.borrow_mut().calibrate();
         connect_anatomy(&url, &selection);
         let run = Run {
             dir: dir.clone(),
@@ -600,13 +604,44 @@ type Statements = HashMap<i64, (i64, String)>;
 struct Server {
     client: postgres::Client,
 }
+/// Report an unavailable `pg_stat_statements` fixture as NOT_RUN, naming
+/// E55000 when the library is simply not preloaded.
+fn not_run(context: &str, error: postgres::Error) {
+    let code = error.code().map_or("unavailable", |code| code.code());
+    if code == "55000" {
+        eprintln!("NOT_RUN: pg_stat_statements is not preloaded (E55000: {error}); {context}");
+    } else {
+        eprintln!(
+            "NOT_RUN: pg_stat_statements is unavailable (SQLSTATE {code}: {error}); {context}"
+        );
+    }
+}
+
 impl Server {
-    fn connect(url: &str) -> Self {
+    /// The server-side statement observer, or `None` with a NOT_RUN note when
+    /// the fixture cannot provide `pg_stat_statements` (not installed or not
+    /// loaded via `shared_preload_libraries`, SQLSTATE 55000).
+    fn connect(url: &str) -> Option<Self> {
         let mut client = postgres::Client::connect(url, postgres::NoTls).unwrap();
-        client
-            .batch_execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
-            .unwrap();
-        Self { client }
+        if let Err(error) =
+            client.batch_execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
+        {
+            not_run(
+                "the phase attribution needs its server statement counters",
+                error,
+            );
+            return None;
+        }
+        match client.query("SELECT 1 FROM pg_stat_statements LIMIT 1", &[]) {
+            Ok(_) => Some(Self { client }),
+            Err(error) => {
+                not_run(
+                    "the phase attribution needs its server statement counters",
+                    error,
+                );
+                None
+            }
+        }
     }
     /// One `SELECT 1` simple-query round trip, 100 times, from this process.
     fn calibrate(&mut self) {
