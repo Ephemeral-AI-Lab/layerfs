@@ -3,10 +3,12 @@
 //! status reads only the `<store>.compact-op` sidecar and never opens the
 //! Store database.
 use layerfs_bridge::control::SdkValue;
+use layerfs_content::ObjectId;
 use layerfs_home::home::{paths, private_dir, write_entity};
 use layerfs_home::names::StoreName;
 use layerfs_persistence::{
-    CompactKeptWaste, CompactPath, CompactReceipt, CompactReport, CompactResidue, CompactZeroReason,
+    CompactKeptWaste, CompactPath, CompactReceipt, CompactReport, CompactResidue,
+    CompactZeroReason, KeptWaste,
 };
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -135,6 +137,39 @@ fn a_capped_reference_list_carries_its_cap() {
     );
     // The bytes are still the whole kept set's bytes.
     assert_eq!(bases.get_int("bytes"), Some(6));
+}
+
+/// A mark over the delta-base cap records that it cut its list, and the §11
+/// projection renders `{value, cap}` from that mark. The bug was that the mark
+/// truncated its list before the projection could see the cut, so the capped
+/// shape never reached the wire.
+#[test]
+fn a_mark_over_the_delta_base_cap_renders_value_and_cap() {
+    let references: Vec<ObjectId> = (0..=layerfs_persistence::DELTA_BASE_REFERENCES_CAP)
+        .map(|index| {
+            let mut bytes = [0u8; 32];
+            bytes[..8].copy_from_slice(&(index as u64).to_le_bytes());
+            ObjectId::from_bytes(&bytes).unwrap()
+        })
+        .collect();
+    let waste = KeptWaste::from_parts(0, 12, references, 0);
+    let mut receipt = receipt();
+    receipt.kept_waste = CompactKeptWaste::from_waste(&waste);
+    let wire = layerfs_store::report::compact_report(&CompactReport::from(&receipt));
+    let bases = wire.get("kept_waste").unwrap().get("delta_bases").unwrap();
+    let references = bases.get("references").unwrap();
+    assert_eq!(
+        texts(references.get("value").unwrap()).len(),
+        layerfs_persistence::DELTA_BASE_REFERENCES_CAP,
+        "the wire keeps exactly the cap's identities"
+    );
+    assert_eq!(
+        references.get_int("cap"),
+        Some(layerfs_persistence::DELTA_BASE_REFERENCES_CAP as i64),
+        "a mark that cut its list renders the cap (S7)"
+    );
+    // The byte total is still the whole kept set's bytes.
+    assert_eq!(bases.get_int("bytes"), Some(12));
 }
 
 #[test]

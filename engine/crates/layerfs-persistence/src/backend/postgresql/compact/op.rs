@@ -352,7 +352,7 @@ pub(crate) fn persist_mark(
              SELECT 'signature',int8send(cs.slot) FROM {schema}.content_signature cs \
               WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=cs.object_id) \
              UNION ALL \
-             SELECT 'digest',fd.digest FROM {schema}.file_digest fd \
+             SELECT 'digest',fd.root FROM {schema}.file_digest fd \
               WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=fd.root)"
         ))?;
         let logical = scalar(
@@ -427,14 +427,6 @@ pub(crate) fn history_rows(session: &Arc<Session>, schema: &str) -> HistoryResul
         &format!(
             "SELECT (SELECT COUNT(*) FROM {schema}.\"commit\")+(SELECT COUNT(*) FROM {schema}.layer)"
         ),
-        Vec::new(),
-    )
-}
-
-pub(crate) fn total_stored(session: &Arc<Session>, schema: &str) -> HistoryResult<i64> {
-    scalar_session(
-        session,
-        &format!("SELECT COALESCE(SUM(length)::bigint,0) FROM {schema}.pack"),
         Vec::new(),
     )
 }

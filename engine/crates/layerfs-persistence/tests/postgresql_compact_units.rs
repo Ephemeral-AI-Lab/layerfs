@@ -5,7 +5,7 @@
 
 use layerfs_persistence::internals::{
     decode_kept_waste, effective_rank, encode_kept_waste, report, standby_satisfied, sync_name,
-    sync_rank, Replica,
+    sync_rank, takes_rebuild_path, Replica,
 };
 use layerfs_persistence::{CompactKeptWaste, CompactPath, CompactResidue};
 
@@ -106,4 +106,19 @@ fn a_resumed_rebuild_with_no_relation_delta_explains_no_shrink() {
         .zero_reasons
         .iter()
         .any(|zero| zero.field == "backendReusable" && zero.reason == "postgresql-in-place"));
+}
+
+/// §3 decides over the mark's snapshot totals. A publication after the mark
+/// lifts a live Store total; the same retained set then reads as mostly dead
+/// against that later total, so the round must keep the mark's denominator.
+#[test]
+fn the_rebuild_decision_uses_the_mark_snapshot_total() {
+    // The mark measured 1000 stored with 950 retained: 5% dead, below the
+    // threshold, so the round takes `none`.
+    assert!(!takes_rebuild_path(1_000, 950));
+    // The same retained set against a live total moved to 2000 by a post-mark
+    // publication would read as >50% dead and rebuild the Store.
+    assert!(takes_rebuild_path(2_000, 950));
+    // The round passes the mark's 1000, so the decision stays `none`.
+    assert!(!takes_rebuild_path(1_000, 950));
 }

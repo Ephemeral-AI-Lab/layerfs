@@ -1872,3 +1872,191 @@ fn every_postgresql_failpoint_leaves_a_resumable_leftover() {
         assert!(reopened.history.layer_stack(stack.id).unwrap().is_some());
     }
 }
+
+/// AC-28, AC-43 (Phase C signature arm): a `content_signature` slot the mark
+/// listed as dead can be rewritten by a save between the mark and Phase C. The
+/// mark's high-water stamp keeps the newer row; the old unconditional
+/// delete-by-slot would have removed a live signature.
+#[test]
+fn a_signature_slot_rewritten_after_the_mark_survives_cleanup() {
+    let Some(url) = url() else { return };
+    let f = Fixture::new(&url, "sigstamp");
+    let live = tree(&f, whole_file(&f, b"signature live content"), 1);
+    let _stack = initialize(&f.handles, 1, live);
+    let dead = saved_whole_file(&f.handles, b"the mark collects this signature");
+    // Enough dead packs that the rebuilt tables are smaller than the source.
+    for index in 0..64u8 {
+        let _ = saved_whole_file(&f.handles, &[0x41u8.wrapping_add(index); 96]);
+    }
+    let schema = &f.schema;
+    let before = generation(&f.handles);
+    let error = f
+        .handles
+        .compact(&request_at(0x40, CompactFailpoint::PostgresAfterSwap))
+        .unwrap_err();
+    assert!(matches!(error, HistoryError::UnknownOutcome));
+    assert_eq!(db_generation(schema), before + 1);
+    assert_eq!(schema.count("gc_op"), 1, "the op still names Phase C");
+
+    // The mark's highest signature stamp, and the dead object's slot.
+    let mark_stamp = schema.scalar("SELECT mark_stamp FROM {s}.gc_op WHERE id=1");
+    let dead_bytes = dead.as_bytes().to_vec();
+    let row = schema
+        .client()
+        .query_one(
+            &format!(
+                "SELECT slot FROM {}.content_signature WHERE object_id=$1",
+                schema.selection.schema
+            ),
+            &[&dead_bytes.as_slice()],
+        )
+        .expect("the dead object's signature slot");
+    let slot: i64 = row.get(0);
+
+    // A save after the swap, then a re-record of the dead slot with a newer
+    // stamp (both steps are what a publication between mark and Phase C does).
+    let late = saved_whole_file(&f.handles, b"signature written after the swap");
+    let late_row = schema
+        .client()
+        .query_one(
+            &format!(
+                "SELECT signature FROM {}.content_signature WHERE object_id=$1",
+                schema.selection.schema
+            ),
+            &[&late.as_bytes().as_slice()],
+        )
+        .expect("the late object's signature");
+    let signature: Vec<u8> = late_row.get(0);
+    let first = slot + 1;
+    let base = mark_stamp + 1;
+    let new_stamp = base + (first - base).rem_euclid(8192);
+    assert!(new_stamp > mark_stamp);
+    schema
+        .client()
+        .execute(
+            &format!(
+                "UPDATE {}.content_signature SET object_id=$1,stamp=$2,signature=$3 WHERE slot=$4",
+                schema.selection.schema
+            ),
+            &[
+                &late.as_bytes().as_slice(),
+                &new_stamp,
+                &signature.as_slice(),
+                &slot,
+            ],
+        )
+        .expect("rewrite the slot after the mark");
+
+    let receipt = f.handles.compact(&request(0x41)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_before, before);
+    assert_eq!(receipt.generation_after, before + 1);
+    assert_eq!(
+        schema.scalar(&format!(
+            "SELECT count(*) FROM {{s}}.content_signature WHERE slot={slot} AND object_id=decode('{}','hex')",
+            hex(late.as_bytes())
+        )),
+        1,
+        "the post-mark slot update survives the high-water stamp"
+    );
+    assert_settled(schema, 0x40);
+    let reopened = schema.open();
+    assert_doctor_clean(&reopened);
+    assert!(reopened.history.layer_stack(_stack.id).unwrap().is_some());
+}
+
+/// AC-18, AC-28, AC-43 (Phase C digest arm): a post-mark re-record updates the
+/// same `(digest, length)` row to a live root. The dead set names the root the
+/// mark saw, so the newer row is not deleted by its digest.
+#[test]
+fn a_digest_root_updated_after_the_mark_survives_cleanup() {
+    let Some(url) = url() else { return };
+    let f = Fixture::new(&url, "digestroot");
+    let retained_payload = pseudo_bytes(131_072, 0x77);
+    let retained = chunked_file(&f, &retained_payload);
+    let live = tree(&f, retained, 1);
+    let _stack = initialize(&f.handles, 1, live);
+    let dead_payload = pseudo_bytes(131_072, 0x88);
+    let dead = chunked_file(&f, &dead_payload);
+    let dead_digest = *blake3::hash(&dead_payload).as_bytes();
+    let retained_digest = *blake3::hash(&retained_payload).as_bytes();
+    f.handles
+        .history
+        .record_file_digests(&[
+            FileDigest {
+                root: *dead.as_bytes(),
+                length: dead_payload.len() as u64,
+                digest: dead_digest,
+            },
+            FileDigest {
+                root: *retained.as_bytes(),
+                length: retained_payload.len() as u64,
+                digest: retained_digest,
+            },
+        ])
+        .unwrap();
+    for index in 0..64u8 {
+        let _ = saved_whole_file(&f.handles, &[0x51u8.wrapping_add(index); 96]);
+    }
+    let schema = &f.schema;
+    let before = generation(&f.handles);
+    let error = f
+        .handles
+        .compact(&request_at(0x42, CompactFailpoint::PostgresAfterSwap))
+        .unwrap_err();
+    assert!(matches!(error, HistoryError::UnknownOutcome));
+    assert_eq!(db_generation(schema), before + 1);
+    assert_eq!(schema.count("gc_op"), 1, "the op still names Phase C");
+    assert_eq!(
+        schema.scalar(&format!(
+            "SELECT count(*) FROM {{s}}.gc_dead WHERE kind='digest' AND id=decode('{}','hex')",
+            hex(dead.as_bytes())
+        )),
+        1,
+        "the dead set names the dead root"
+    );
+
+    // A re-record after the mark moves the same (digest,length) row to a live
+    // root. (The hint is deliberately inconsistent for the test; only the
+    // cleanup's membership key is under test.)
+    schema
+        .client()
+        .execute(
+            &format!(
+                "UPDATE {}.file_digest SET root=$1 WHERE digest=$2 AND length=$3",
+                schema.selection.schema
+            ),
+            &[
+                &retained.as_bytes().as_slice(),
+                &dead_digest.as_slice(),
+                &i64::try_from(dead_payload.len()).unwrap(),
+            ],
+        )
+        .expect("move the digest root after the mark");
+
+    let receipt = f.handles.compact(&request(0x43)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_before, before);
+    assert_eq!(receipt.generation_after, before + 1);
+    assert_eq!(
+        digest_rows(schema, &dead_digest),
+        1,
+        "the post-mark root update survives Phase C"
+    );
+    let root: Vec<u8> = schema
+        .client()
+        .query_one(
+            &format!(
+                "SELECT root FROM {}.file_digest WHERE digest=$1 AND length=$2",
+                schema.selection.schema
+            ),
+            &[
+                &dead_digest.as_slice(),
+                &i64::try_from(dead_payload.len()).unwrap(),
+            ],
+        )
+        .expect("the surviving digest row")
+        .get(0);
+    assert_eq!(root, retained.as_bytes().to_vec());
+    assert_settled(schema, 0x42);
+}

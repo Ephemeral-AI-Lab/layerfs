@@ -23,7 +23,7 @@ pub use codec::{
     CodecProfile, CompressionWorkspace, DecompressionWorkspace, DECODE_WORKSPACE_BYTES,
     ENCODE_WORKSPACE_BYTES, GROUP_LIMIT,
 };
-pub use decode::{framed_record, GroupCache};
+pub use decode::{framed_record, framed_record_count, GroupCache};
 pub use full::{encode_full, encode_prefix, lane_body_limit, raw_payload, EncodedRecord};
 pub use pack_cache::{PackCache, PackCacheWork};
 pub use pack_units::{GroupSlice, PackAcquisition, PackUnit};

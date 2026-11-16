@@ -200,12 +200,15 @@ impl CompactKeptWaste {
     /// [`DELTA_BASE_REFERENCES_CAP`] identities. Both backends project their
     /// receipt through this constructor so the cap cannot drift.
     pub fn from_waste(waste: &KeptWaste) -> Self {
-        let (references, capped) = cap_delta_references(waste.delta_base_references());
+        let (references, cut) = cap_delta_references(waste.delta_base_references());
         Self {
             dead_in_retained_packs_bytes: waste.dead_in_retained_packs_bytes(),
             delta_bases_bytes: waste.delta_bases_bytes(),
             delta_base_references: references,
-            delta_base_references_capped: capped,
+            // The mark already bounded its own list, so its recorded cut is the
+            // authority; `cut` covers a cap that ever becomes tighter than the
+            // mark's bound.
+            delta_base_references_capped: waste.delta_base_references_capped() || cut,
             inode_blocks_bytes: waste.inode_blocks_bytes(),
         }
     }

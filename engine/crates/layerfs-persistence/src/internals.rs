@@ -8,7 +8,7 @@
 pub use crate::backend::postgresql::compact::{decode_kept_waste, encode_kept_waste, report};
 #[cfg(feature = "postgresql")]
 pub use crate::backend::postgresql::compact::{
-    effective_rank, standby_satisfied, sync_name, sync_rank, Replica,
+    effective_rank, standby_satisfied, sync_name, sync_rank, takes_rebuild_path, Replica,
 };
 pub use crate::backend::sqlite::compact::{
     cap_delta_references, io_error, peak_temp_bytes, receipt, DELTA_BASE_REFERENCES_CAP,

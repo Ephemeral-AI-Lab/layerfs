@@ -27,7 +27,8 @@ use layerfs_storage::{
     encoding::pool::PoolReader,
     encoding::{
         delta::read::{locator_key, BodyCaches, ChainBases, ChainCounters, Resolver},
-        framed_record, DecompressionWorkspace, GroupCache, PackAcquisition, PackCache, PackUnit,
+        framed_record, framed_record_count, DecompressionWorkspace, GroupCache, PackAcquisition,
+        PackCache, PackUnit,
     },
     location::{ObjectLocation, PackInfo, SignatureRow},
     pack::layout::{self, GroupCodec, PackLane},
@@ -62,10 +63,35 @@ pub struct KeptWaste {
     dead_in_retained_packs_bytes: u64,
     delta_bases_bytes: u64,
     delta_base_references: Vec<ObjectId>,
+    /// Whether [`Self::delta_base_references`] was cut at
+    /// [`MAX_KEPT_WASTE_REFERENCES`] before it was stored.
+    delta_base_references_capped: bool,
     inode_blocks_bytes: u64,
 }
 
 impl KeptWaste {
+    /// One mark's kept-waste accounting. The reference list is the full set the
+    /// mark reached; it is cut at [`MAX_KEPT_WASTE_REFERENCES`] here, and the
+    /// cut is recorded so the §11 projection still renders `{value, cap}` even
+    /// though the stored list is already bounded.
+    #[doc(hidden)]
+    pub fn from_parts(
+        dead_in_retained_packs_bytes: u64,
+        delta_bases_bytes: u64,
+        mut delta_base_references: Vec<ObjectId>,
+        inode_blocks_bytes: u64,
+    ) -> Self {
+        let delta_base_references_capped = delta_base_references.len() > MAX_KEPT_WASTE_REFERENCES;
+        delta_base_references.truncate(MAX_KEPT_WASTE_REFERENCES);
+        Self {
+            dead_in_retained_packs_bytes,
+            delta_bases_bytes,
+            delta_base_references,
+            delta_base_references_capped,
+            inode_blocks_bytes,
+        }
+    }
+
     /// Stored bytes of records in retained packs that no reached object owns.
     pub fn dead_in_retained_packs_bytes(&self) -> u64 {
         self.dead_in_retained_packs_bytes
@@ -83,6 +109,12 @@ impl KeptWaste {
     /// the report payload unbounded.
     pub fn delta_base_references(&self) -> &[ObjectId] {
         &self.delta_base_references
+    }
+
+    /// Whether [`Self::delta_base_references`] was cut at
+    /// [`MAX_KEPT_WASTE_REFERENCES`] before it was stored.
+    pub fn delta_base_references_capped(&self) -> bool {
+        self.delta_base_references_capped
     }
 
     /// Bytes of `inode_value_block` rows, which 2.0 keeps in full (§6.4).
@@ -817,8 +849,9 @@ fn waste(
         let header = layout::parse_directory_header(&prefix, used).map_err(storage)?;
         let views = layout::directory_group_views(&prefix, header).map_err(storage)?;
         // A wholly dead group's stored extent is known from the directory. A
-        // retained Raw group that still holds a dead record is read on its own,
-        // so its exact per-record split never costs the whole pack body.
+        // retained Raw group whose inventory no longer accounts for every
+        // record is read on its own, so its exact per-record split never costs
+        // the whole pack body.
         let mut mixed_raw = Vec::new();
         for (number, view) in views.iter().enumerate() {
             let records = groups.and_then(|groups| groups.get(&number));
@@ -828,9 +861,7 @@ fn waste(
                 dead_in_retained_packs_bytes = dead_in_retained_packs_bytes
                     .saturating_add(u64::try_from(view.end - view.start).unwrap_or(u64::MAX));
             } else if view.codec == GroupCodec::Raw
-                && records.is_some_and(|records| {
-                    records.values().any(|id| !closure.visited.contains_key(id))
-                })
+                && group_may_hide_dead_records(*view, records, closure)
             {
                 mixed_raw.push((number, *view));
             }
@@ -852,16 +883,8 @@ fn waste(
                 return Err(HistoryError::Integrity("mark group acquisition"));
             }
             let records = groups.and_then(|groups| groups.get(&number));
-            if let Some(records) = records {
-                for (record, id) in records {
-                    if closure.visited.contains_key(id) {
-                        continue;
-                    }
-                    let framed = framed_record(slice.bytes, *record).map_err(storage)?;
-                    dead_in_retained_packs_bytes = dead_in_retained_packs_bytes
-                        .saturating_add(u64::try_from(framed.len()).unwrap_or(u64::MAX));
-                }
-            }
+            dead_in_retained_packs_bytes = dead_in_retained_packs_bytes
+                .saturating_add(dead_raw_record_bytes(slice.bytes, records, closure)?);
         }
     }
     let deltas: Vec<ObjectId> = closure
@@ -873,10 +896,9 @@ fn waste(
         total.saturating_add(closure.widths.get(id).copied().unwrap_or(0))
     });
     // The report names at most this many kept delta bases. The byte total stays
-    // exact; only the list is bounded, so a pathological chain cannot make the
-    // report payload unbounded.
-    let mut delta_base_references = deltas;
-    delta_base_references.truncate(MAX_KEPT_WASTE_REFERENCES);
+    // exact; only the list is bounded, and [`KeptWaste::from_parts`] records
+    // that it was cut so the §11 projection can render `{value, cap}`.
+    let delta_base_references = deltas;
     let inode = tx.query(INODE_BLOCKS, Vec::<Param>::new())?;
     let mut inode_blocks_bytes = 0u64;
     for row in &inode {
@@ -884,12 +906,61 @@ fn waste(
         inode_blocks_bytes =
             inode_blocks_bytes.saturating_add(u64::try_from(length).unwrap_or(u64::MAX));
     }
-    Ok(KeptWaste {
+    Ok(KeptWaste::from_parts(
         dead_in_retained_packs_bytes,
         delta_bases_bytes,
         delta_base_references,
         inode_blocks_bytes,
-    })
+    ))
+}
+
+/// Whether a retained Raw group's `object_location` inventory still explains
+/// its whole stored extent. A rebuild copies a retained pack whole but keeps
+/// only the reached records' rows, so a later mark sees a dead record that no
+/// row names; comparing the directory extent with the live records' framing and
+/// widths detects that case without reading the body.
+fn group_may_hide_dead_records(
+    view: layout::GroupView,
+    records: Option<&BTreeMap<usize, ObjectId>>,
+    closure: &Closure,
+) -> bool {
+    let (live_records, live_width) = records.map_or((0u64, 0u64), |records| {
+        records.values().fold((0u64, 0u64), |(count, width), id| {
+            if closure.visited.contains_key(id) {
+                (
+                    count + 1,
+                    width.saturating_add(closure.widths.get(id).copied().unwrap_or(0)),
+                )
+            } else {
+                (count, width)
+            }
+        })
+    });
+    let extent = u64::try_from(view.end - view.start).unwrap_or(u64::MAX);
+    extent != 4 + 4 * live_records + live_width
+}
+
+/// The framed bytes of every record in a Raw group that no reached object owns,
+/// including a record whose `object_location` row a rebuild did not retain. The
+/// caller passes a group body it already read.
+fn dead_raw_record_bytes(
+    group: &[u8],
+    records: Option<&BTreeMap<usize, ObjectId>>,
+    closure: &Closure,
+) -> HistoryResult<u64> {
+    let count = framed_record_count(group).map_err(storage)?;
+    let mut dead = 0u64;
+    for record in 0..count {
+        let live = records
+            .and_then(|records| records.get(&record))
+            .is_some_and(|id| closure.visited.contains_key(id));
+        if live {
+            continue;
+        }
+        let framed = framed_record(group, record).map_err(storage)?;
+        dead = dead.saturating_add(u64::try_from(framed.len()).unwrap_or(u64::MAX));
+    }
+    Ok(dead)
 }
 
 /// One retained pack's dead bytes, exact over a complete body.
@@ -909,21 +980,18 @@ fn pack_waste(
             // No reached object owns any record of this group, so its stored
             // extent stays only because the pack is retained.
             dead = dead.saturating_add(u64::try_from(view.end - view.start).unwrap_or(u64::MAX));
-        } else if view.codec == GroupCodec::Raw {
+        } else if view.codec == GroupCodec::Raw
+            && group_may_hide_dead_records(view, records, closure)
+        {
             // An exact per-record split is possible only when the body is
             // stored uncompressed. A compressed group's bytes cannot be
             // attributed to one record, so a retained group contributes
             // nothing and the error stays conservative.
-            if let Some(records) = records {
-                for (record, id) in records {
-                    if closure.visited.contains_key(id) {
-                        continue;
-                    }
-                    let framed =
-                        framed_record(&body[view.start..view.end], *record).map_err(storage)?;
-                    dead = dead.saturating_add(u64::try_from(framed.len()).unwrap_or(u64::MAX));
-                }
-            }
+            dead = dead.saturating_add(dead_raw_record_bytes(
+                &body[view.start..view.end],
+                records,
+                closure,
+            )?);
         }
     }
     Ok(dead)
