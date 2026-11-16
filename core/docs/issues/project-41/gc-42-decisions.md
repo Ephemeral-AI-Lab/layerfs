@@ -167,14 +167,19 @@ measured implementation of this branch.
   says "On `none`, delete the scratch and stop: no `.compact`, no
   `.compact-visited`, no residue."
 - **Implemented:** both paths spill the closure into `<store>.compact-visited`
-  (the metadata walk needs a bounded-memory visited set). On `none` the scratch
-  is written, deleted before the call replies, and counted in `peakTempBytes`;
-  no `.compact`, no residue and no generation change survive the call. The
-  mark's transient `kept_node` rows are cleared and the intent released.
-- **Decision requested:** say "nothing is written **that survives the call**"
-  and count the transient visited scratch in `peakTempBytes` (the §11 table
-  already names the visited scratch as part of `peakTempBytes`). Alternative is
-  an in-memory visited set, which the measurement rules out for large Stores.
+  (the metadata walk needs a bounded-memory visited set). The §6.1 closure and
+  the §5.1 admission intent are one write transaction: on `none` it is rolled
+  back, so no `kept_node` row, no `gc_intent` row and no WAL frame is
+  committed, and the live Store keeps its pre-call `(size, mtime, change
+  counter)`. Only the scratch is written; it is deleted before the call
+  replies and counted in `peakTempBytes`, so no `.compact`, no residue and no
+  generation change survive the call.
+- **Decision requested:** say "nothing is written **that survives the call**":
+  the Store file is untouched (the mark and its intent are a rolled-back
+  transaction), and only the transient visited scratch is written, counted in
+  `peakTempBytes` and deleted before the reply (the §11 table already names the
+  visited scratch as part of `peakTempBytes`). Alternative is an in-memory
+  visited set, which the measurement rules out for large Stores.
 
 ### D4. §11: SQLite records a fifth observable phase, `cleanup`, during settle
 

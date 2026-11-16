@@ -113,10 +113,11 @@ installed → it records the outcome. A dead owner's op is adopted; only a live 
 - 1.0 Stores convert offline (§4.1); no online migration.
 - **Three SQLite deviations from the frozen text remain** (D1, D3, D4), plus
   the settled D2 build decision; all are recorded in
-  [`gc-42-decisions.md`](gc-42-decisions.md): the bulk load runs with
+  [`gc-42-decisions.md`](gc-42-decisions.md): the fresh bulk load runs with
   `foreign_keys=OFF`; the rebuild is the fresh-copy build (no whole-Store copy,
-  no `VACUUM`, peak old + new, §8 — it now follows S5); `none` writes a
-  transient visited scratch; the settle records a `cleanup` phase.
+  no `VACUUM`, peak old + new, §8 — it now follows S5); `none` writes only a
+  transient visited scratch and rolls its mark transaction back; the settle
+  records a `cleanup` phase.
 
 ## 6. First 10 minutes
 
@@ -238,7 +239,7 @@ the artifact set, the op record or the next-call adoption.
 |---|---|---|
 | D1 (§7 step 4) | `PRAGMA foreign_keys=ON` outside the transaction | the fresh bulk load runs `foreign_keys=OFF`; the step 6 `foreign_key_check` on the `immutable=1` open is the guard |
 | D2 (S5/§3/§7) | "copies only retained rows into a fresh Store"; peak old + new + visited | fresh-copy build (pack-as-unit, indexes and triggers after the load); peak old + new (§8) — **now matches the frozen sentence** |
-| D3 (§3/§7 step 1.5) | `none` writes nothing; delete the scratch and stop | `none` spills the closure to `<store>.compact-visited`, deletes it before replying, counts it in `peakTempBytes`; no residue survives |
+| D3 (§3/§7 step 1.5) | `none` writes nothing; delete the scratch and stop | `none` spills the closure to `<store>.compact-visited`, counts it in `peakTempBytes` and deletes it before replying; the mark and its intent are one transaction that is rolled back, so no `kept_node`/`gc_intent` row and no WAL frame survives; no residue survives |
 | D4 (§11) | SQLite phases `mark`, `build`, `verify`, `install` | the settle also writes `cleanup` (§1) |
 
 Operators do not need to act on D1–D4 during an incident: the artifact set, the

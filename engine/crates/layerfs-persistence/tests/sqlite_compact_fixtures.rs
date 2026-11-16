@@ -458,6 +458,20 @@ fn scalar0(path: &Path, sql: &str) -> i64 {
     connection.query_row(sql, [], |row| row.get(0)).unwrap()
 }
 
+/// The Store file's `(size, mtime, database change counter)`: the tuple the
+/// install fence seals, so an equal tuple across a call means no write was
+/// committed to the file.
+fn store_file_tuple(path: &Path) -> (u64, std::time::SystemTime, u32) {
+    use std::io::{Read as _, Seek as _, SeekFrom};
+    let metadata = std::fs::metadata(path).unwrap();
+    let modified = metadata.modified().unwrap();
+    let mut file = std::fs::File::open(path).unwrap();
+    let mut header = [0u8; 4];
+    file.seek(SeekFrom::Start(24)).unwrap();
+    file.read_exact(&mut header).unwrap();
+    (metadata.len(), modified, u32::from_be_bytes(header))
+}
+
 fn pack_of(path: &Path, id: ObjectId) -> Option<i64> {
     let connection = rusqlite::Connection::open(path).unwrap();
     match connection.query_row(
@@ -912,6 +926,11 @@ fn empty_none_case() -> Json {
         (0, 0, 0, 0)
     );
     let generation_before = generation(&handles);
+    // Close the seeding session so its WAL is checkpointed: the tuple below is
+    // then the quiesced file the `none` call must leave untouched.
+    drop(handles);
+    let handles = reopen(&path);
+    let file_before = store_file_tuple(&path);
     let receipt = handles.compact(&request(0x70)).unwrap();
     assert_eq!(receipt.path, CompactPath::None);
     assert_eq!(receipt.generation_before, generation_before);
@@ -946,7 +965,12 @@ fn empty_none_case() -> Json {
     assert_eq!(
         scalar0(&path, "SELECT count(*) FROM gc_intent"),
         0,
-        "the none path leaves no admission intent"
+        "the rolled-back mark leaves no admission intent"
+    );
+    assert_eq!(
+        store_file_tuple(&path),
+        file_before,
+        "the none path commits no write: the Store file is unchanged"
     );
     let reopened = reopen(&path);
     assert_eq!(generation(&reopened), generation_before);
@@ -978,6 +1002,7 @@ fn no_dead_none_case() -> Json {
     let before = totals(&path);
     let generation_before = generation(&handles);
     let mark = handles.history.mark().unwrap();
+    let mark_rows = i64::try_from(mark.history().len()).unwrap();
     assert_eq!(
         mark.live_heads_digest(),
         handles.history.mark().unwrap().live_heads_digest(),
@@ -988,6 +1013,11 @@ fn no_dead_none_case() -> Json {
     assert_eq!(facts.dead_bytes, 0, "no wholly dead pack exists");
     let digest = mark.live_heads_digest();
     let live_packs = mark.objects().packs().to_vec();
+    // Quiesce the test's own mark write, so the tuple below is the file the
+    // `none` call must leave untouched.
+    drop(handles);
+    let handles = reopen(&path);
+    let file_before = store_file_tuple(&path);
     let receipt = handles.compact(&request(0x71)).unwrap();
     assert_eq!(receipt.path, CompactPath::None);
     assert_eq!(receipt.generation_before, generation_before);
@@ -1011,6 +1041,21 @@ fn no_dead_none_case() -> Json {
         .iter()
         .any(|zero| zero.field == "deadBytesBound" && zero.reason == "no-waste"));
     assert_no_artifacts(&path);
+    assert_eq!(
+        scalar0(&path, "SELECT count(*) FROM kept_node"),
+        mark_rows,
+        "the rolled-back mark restores the pre-call kept_node closure untouched"
+    );
+    assert_eq!(
+        scalar0(&path, "SELECT count(*) FROM gc_intent"),
+        0,
+        "the rolled-back mark leaves no admission intent"
+    );
+    assert_eq!(
+        store_file_tuple(&path),
+        file_before,
+        "the none path commits no write: the Store file is unchanged"
+    );
 
     let reopened = reopen(&path);
     assert_eq!(generation(&reopened), generation_before);
