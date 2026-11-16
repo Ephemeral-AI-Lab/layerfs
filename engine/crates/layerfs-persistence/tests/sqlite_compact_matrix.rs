@@ -1506,11 +1506,7 @@ fn generate_report() -> String {
         "  T-G66 measured the 50 GB arm once per path on the old build (see the runbook"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  disk-headroom section); the 30% arm remains [E]."
-    )
-    .unwrap();
+    writeln!(out, "  disk-headroom section); the 30% arm remains [E].").unwrap();
     writeln!(out).unwrap();
     writeln!(out, "## Matrix (SQLite half)").unwrap();
     writeln!(out).unwrap();
@@ -1689,11 +1685,7 @@ fn generate_report() -> String {
         "  Store (three `none` + three `rebuild` runs; `CAPACITY_DURABLE=1` adds a"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  WAL/FULL control) into"
-    )
-    .unwrap();
+    writeln!(out, "  WAL/FULL control) into").unwrap();
     writeln!(
         out,
         "  `sqlite_compact_capacity_measure.json`; it is opt-in because the fixture is"

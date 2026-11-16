@@ -149,7 +149,9 @@ fn copy_rule(table: &str) -> Copy {
         "layer_stack" => {
             Copy::Where("layer_stack_id IN (SELECT node_id FROM src.kept_node WHERE kind='stack')")
         }
-        "layer" => Copy::Where("layer_id IN (SELECT node_id FROM src.kept_node WHERE kind='layer')"),
+        "layer" => {
+            Copy::Where("layer_id IN (SELECT node_id FROM src.kept_node WHERE kind='layer')")
+        }
         "commit" => {
             Copy::Where("commit_id IN (SELECT node_id FROM src.kept_node WHERE kind='commit')")
         }
@@ -433,19 +435,14 @@ pub(crate) fn build(
         .busy_timeout(std::time::Duration::ZERO)
         .map_err(db_error)?;
     connection
-        .execute(
-            "ATTACH DATABASE ?1 AS src",
-            params![immutable_uri(store)],
-        )
+        .execute("ATTACH DATABASE ?1 AS src", params![immutable_uri(store)])
         .map_err(db_error)?;
     connection
         .execute(
             "ATTACH DATABASE ?1 AS scratch",
-            params![
-                visited
-                    .to_str()
-                    .ok_or(HistoryError::InvalidInput("compaction path"))?
-            ],
+            params![visited
+                .to_str()
+                .ok_or(HistoryError::InvalidInput("compaction path"))?],
         )
         .map_err(db_error)?;
     let (page_size, auto_vacuum, user_version, application_id) = page_settings(&connection)?;
