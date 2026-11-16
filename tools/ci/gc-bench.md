@@ -47,8 +47,9 @@ export TMPDIR=/path/to/large/scratch     # >=3.4x the live bytes
 export CARGO_NET_GIT_FETCH_WITH_CLI=true # flaky HTTPS git on the container host
 ```
 
-`TMPDIR` is the run's scratch filesystem. The 50 GB rebuild needs >=155 GB
-free; the 10 GB arm needs >=32 GB. TMPDIR must not be inside the repository.
+`TMPDIR` is the run's scratch filesystem. The fresh-copy rebuild needs the old
+Store plus about one new Store: >=110 GB for the 50 GB arm (with margin) and
+>=22 GB for the 10 GB arm. TMPDIR must not be inside the repository.
 
 ## Commands
 
@@ -104,8 +105,10 @@ Per arm (`none`, `rebuild`), per run and as median/min/max:
 
 - `downtimeSeconds` / `wallMicros` — the compaction call's wall time;
 - `phasesNanos` (`mark`, `build`, `verify`, `install`) and `phaseTotalNanos`;
-- `peakTempBytes` — the section 11 receipt — plus `sampledPeakTempBytes` and
-  the per-artifact `sampledTemp` (staged copy, journal, visited, rewrite tmp);
+- `peakTempBytes` — the section 11 receipt (the new Store + the visited
+  scratch on the fresh-copy build) — plus `sampledPeakTempBytes` and the
+  per-artifact `sampledTemp` (the staged file, journal, visited, rewrite tmp;
+  the fresh path samples a zero journal and rewrite);
 - `processIo.writeBytes` / `wchar` / `readBytes` / `rchar` — the process's
   `/proc/self/io` delta across the run;
 - `newFileBytes`, `oldFileBytes`, `physicalShrink`, `copyBytes` and

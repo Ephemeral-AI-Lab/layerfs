@@ -29,7 +29,7 @@ mod run;
 mod types;
 mod verify;
 
-pub use build::{journal_bound_bytes, peak_temp_bytes};
+pub use build::peak_temp_bytes;
 pub use op::{compact_op_status, CompactOpStatus};
 pub use types::io_error;
 pub use types::{cap_delta_references, DELTA_BASE_REFERENCES_CAP};

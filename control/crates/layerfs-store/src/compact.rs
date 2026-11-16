@@ -52,7 +52,7 @@ fn crash_failpoint() -> Option<CompactFailpoint> {
     match std::env::var(CRASH_FAILPOINT_ENV).ok()?.as_str() {
         "BeforeSeal" => Some(CompactFailpoint::BeforeSeal),
         "AfterSeal" => Some(CompactFailpoint::AfterSeal),
-        "BeforeVacuum" => Some(CompactFailpoint::BeforeVacuum),
+        "BeforeLoad" => Some(CompactFailpoint::BeforeLoad),
         "AfterBuild" => Some(CompactFailpoint::AfterBuild),
         "DuringVerify" => Some(CompactFailpoint::DuringVerify),
         "BeforeInstall" => Some(CompactFailpoint::BeforeInstall),

@@ -835,13 +835,14 @@ impl FootprintSampler {
     }
 }
 
-/// The §11 peak-temp receipt on a moderate fixture. The run really does create
-/// the pre-truncate staged copy, a rollback journal (the prune and the rewrite)
-/// and SQLite's unlinked rewrite temp database, and the receipt must bound all
-/// of them; the old `new + visited` formula fails the sampled journal. The
-/// fixture is ~40 MB, not the 50 GB T-G66 arm: the same code path, sampled.
+/// The §11 peak-temp receipt on a moderate fixture. The fresh-copy build writes
+/// only the new Store and keeps the `visited` scratch; it creates no staged
+/// whole-Store copy, no rollback journal and no rewrite temp database. The
+/// receipt must bound the fresh file plus the scratch and must not claim the
+/// removed artifacts. The fixture is ~40 MB, not the 50 GB T-G66 arm: the same
+/// code path, sampled.
 #[test]
-fn the_peak_temp_receipt_covers_the_staged_copy_and_the_rollback_journal() {
+fn the_peak_temp_receipt_covers_the_fresh_store_and_the_visited_scratch() {
     const GROUPS: u64 = 16;
     const GROUP: u64 = 48;
     const OBJECT_BYTES: usize = 40 * 1024;
@@ -874,15 +875,15 @@ fn the_peak_temp_receipt_covers_the_staged_copy_and_the_rollback_journal() {
     );
     assert!(
         footprint.staged > 0,
-        "the staged copy must be sampled: {footprint:?}"
+        "the fresh file must be sampled while it is built: {footprint:?}"
     );
-    assert!(
-        footprint.journal > 0,
-        "the rollback journal must be sampled: {footprint:?}"
+    assert_eq!(
+        footprint.journal, 0,
+        "the fresh path writes no rollback journal: {footprint:?}"
     );
-    assert!(
-        footprint.rewrite > 0,
-        "the unlinked rewrite temp database must be sampled: {footprint:?}"
+    assert_eq!(
+        footprint.rewrite, 0,
+        "the fresh path opens no rewrite temp database: {footprint:?}"
     );
     assert!(
         footprint.visited > 0,
@@ -895,12 +896,11 @@ fn the_peak_temp_receipt_covers_the_staged_copy_and_the_rollback_journal() {
         receipt.peak_temp_bytes
     );
     assert!(
-        receipt.peak_temp_bytes >= new_bytes + footprint.journal + footprint.visited,
-        "peakTempBytes {} must cover the new file {} plus the sampled {}-byte journal \
-         and {}-byte visited scratch",
+        receipt.peak_temp_bytes >= new_bytes + footprint.visited,
+        "peakTempBytes {} must cover the new file {} plus the sampled {}-byte visited \
+         scratch, and claim no removed artifact",
         receipt.peak_temp_bytes,
         new_bytes,
-        footprint.journal,
         footprint.visited
     );
     assert!(

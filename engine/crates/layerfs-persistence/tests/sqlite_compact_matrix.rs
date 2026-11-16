@@ -1211,7 +1211,7 @@ const MATRIX: [Row; 60] = [
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_measure.json",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_capacity.rs#capacity_measure",
                     "engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure.json"],
-        note: "The tiny three-run arm is median 28.2 ms. T-G61 measured a real 9.987 GB Store with 3 runs per arm: `none` at 8.88% dead (median 149.318 s) and `rebuild` at 10.00% dead (median 246.371 s, mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s), plus one WAL/FULL rebuild at 284.078 s; profile, host and toolchain are declared in the fixture, and the warm page cache is declared below. T-G66 later measured the 50 GB arm once per path; the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]." },
+        note: "The tiny three-run arm is median 32.1 ms. T-G61 measured a real 9.987 GB Store on the whole-Store `VACUUM INTO` build (3 runs per arm): `none` at 8.88% dead median 149.318 s and `rebuild` at 10.00% dead median 246.371 s (mark 149.089 s / build 94.317 s / verify 0.312 s / install 1.916 s), plus a WAL/FULL control at 284.078 s. Re-measured on this branch with the fresh-copy build on the same 9.987 GB fixture: `rebuild` median 118.438 s (mark 74.462-75.704 s / build 18.190-19.209 s / quick-check verify 4.330-4.377 s / install 19.197-23.673 s), peak 9.144 GB; `none` median 88.439 s (82.0-149.9 s; this Sandbox shares the host). T-G66 later measured the 50 GB arm once per path; the 30% arm, each removal type, the plain `VACUUM INTO` comparison and PostgreSQL timings remain deferred/[E]." },
     Row { id: "AC-58", backend: Backend::Sqlite, tier: "E2", status: Status::Covered,
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_before_copy",
@@ -1432,40 +1432,85 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  real **9.987 GB** Store: `none` at 8.88% dead (three runs, median 149.318 s)"
+        "  real **9.987 GB** Store. On the superseded whole-Store `VACUUM INTO` build:"
     )
     .unwrap();
     writeln!(
         out,
-        "  and `rebuild` at 10.00% dead (three runs, median 246.371 s; mark 149.089 s,"
+        "  `none` at 8.88% dead (three runs, median 149.318 s) and `rebuild` at 10.00%"
     )
     .unwrap();
     writeln!(
         out,
-        "  build 94.317 s, verify 0.312 s, install 1.916 s; dead 1.011 GB, shrink"
+        "  dead (three runs, median 246.371 s; mark 149.089 s, build 94.317 s, verify"
     )
     .unwrap();
     writeln!(
         out,
-        "  1.017 GB; the T-G72 peak bound is 29.481 GB, the old formula 9.144 GB),"
+        "  0.312 s, install 1.916 s; dead 1.011 GB, shrink 1.017 GB; the T-G72 packed"
     )
     .unwrap();
     writeln!(
         out,
-        "  plus one WAL/FULL rebuild (284.078 s). The numbers are in"
+        "  peak bound 29.481 GB, the old `new + visited` formula 9.144 GB), plus a"
+    )
+    .unwrap();
+    writeln!(out, "  WAL/FULL control (284.078 s).").unwrap();
+    writeln!(
+        out,
+        "  Re-measured on this branch with the fresh-copy build on the same fixture:"
     )
     .unwrap();
     writeln!(
         out,
-        "  `tests/fixtures/sqlite_compact_capacity_measure.json`. T-G66 then measured"
+        "  `rebuild` median 118.438 s (mark 74.462-75.704 s, build 18.190-19.209 s,"
     )
     .unwrap();
     writeln!(
         out,
-        "  the 50 GB arm once per path (see the runbook disk-headroom section); the"
+        "  quick-check verify 4.330-4.377 s, install 19.197-23.673 s; dead 1.011 GB,"
     )
     .unwrap();
-    writeln!(out, "  30% arm remains [E].").unwrap();
+    writeln!(
+        out,
+        "  shrink 1.016-1.018 GB, peak **9.144 GB** = the fresh Store + visited) and"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  `none` median 88.439 s (82.0-149.9 s; this Sandbox shares the host with other"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  runs). The fresh build phase is about 5x shorter (18-19 s against 92-104 s);"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  the verify adds a ~4 s `quick_check` page scan and the install pays a"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  ~19 s `sync_all` for the freshly written 9.1 GB, both inside the 118 s total."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  The numbers are in `tests/fixtures/sqlite_compact_capacity_measure.json`."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  T-G66 measured the 50 GB arm once per path on the old build (see the runbook"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  disk-headroom section); the 30% arm remains [E]."
+    )
+    .unwrap();
     writeln!(out).unwrap();
     writeln!(out, "## Matrix (SQLite half)").unwrap();
     writeln!(out).unwrap();
@@ -1641,7 +1686,12 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  Store (three `none` + three `rebuild` runs, one WAL/FULL control) into"
+        "  Store (three `none` + three `rebuild` runs; `CAPACITY_DURABLE=1` adds a"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  WAL/FULL control) into"
     )
     .unwrap();
     writeln!(
@@ -1720,12 +1770,17 @@ fn generate_report() -> String {
     .unwrap();
     writeln!(
         out,
-        "  plus T-G61's real 9.987 GB capacity fixture with three runs per arm"
+        "  plus the real 9.987 GB capacity fixture with three runs per arm"
     )
     .unwrap();
     writeln!(
         out,
-        "  (`none` 149.318 s median, `rebuild` 246.371 s median, phase sums recorded)."
+        "  (`none` 88.439 s median, fresh `rebuild` 118.438 s median; the superseded"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  whole-Store build recorded 149.318 s / 246.371 s median on the same fixture)."
     )
     .unwrap();
     writeln!(
@@ -1797,6 +1852,42 @@ fn generate_report() -> String {
     )
     .unwrap();
     writeln!(out, "  the mark is CPU-bound at ~62 MB/s, not cache-bound.").unwrap();
+    writeln!(out).unwrap();
+    writeln!(
+        out,
+        "- Fresh-copy re-measurement (this branch): Docker Sandbox `fxfresh`"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  (Linux x86_64, 88 vCPU, 135 GB RAM, ext4 `/dev/sda2` run directory),"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  rustc 1.85.1, release profile, `SqlitePersistenceProfile::Disposable`"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  (WAL/OFF), `CAPACITY_MEASURE=1 UPDATE_CAPACITY=1`, TMPDIR on the ext4 run"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  directory; the test ran 870 s and reused the same 9.987 GB fixture shape."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  The Sandbox shares its host with other runs: the three `none` marks span"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  82.0-149.9 s while the three `rebuild` marks stay 74.5-75.7 s."
+    )
+    .unwrap();
     writeln!(
         out,
         "- Docker Sandbox `t123csbx` (Linux x86_64, tmpfs `/tmp`, overlayfs"

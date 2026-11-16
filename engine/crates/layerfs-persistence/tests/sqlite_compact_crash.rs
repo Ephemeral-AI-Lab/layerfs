@@ -650,9 +650,8 @@ crash_at!(
 /// assertions as `assert_crash_state` / `assert_recovery`.
 ///
 /// Nine points are covered: the mark phase (`BeforeSeal`, `AfterSeal`); the
-/// copy (`BeforeVacuum`, immediately before `VACUUM INTO` because SQLite runs
-/// that copy as one uninterruptible call, so a kill cannot be injected inside
-/// it); verification (`DuringVerify`); the rename boundary (`DuringRename`);
+/// load (`BeforeLoad`, immediately before the fresh file's first write);
+/// verification (`DuringVerify`); the rename boundary (`DuringRename`);
 /// and the earlier build, install and settle points.
 ///
 /// Linux only: `SIGKILL` delivery and `ExitStatusExt::signal` are asserted
@@ -688,7 +687,7 @@ mod real_process {
         match text {
             "BeforeSeal" => CompactFailpoint::BeforeSeal,
             "AfterSeal" => CompactFailpoint::AfterSeal,
-            "BeforeVacuum" => CompactFailpoint::BeforeVacuum,
+            "BeforeLoad" => CompactFailpoint::BeforeLoad,
             "DuringVerify" => CompactFailpoint::DuringVerify,
             "DuringRename" => CompactFailpoint::DuringRename,
             "AfterBuild" => CompactFailpoint::AfterBuild,
@@ -871,14 +870,13 @@ mod real_process {
         true,
         false
     );
-    // The copy: SQLite runs `VACUUM INTO` as one call that cannot be
-    // interrupted deterministically, so this arm stops immediately before it.
-    // The in-process `DuringCopy` arm keeps the torn-target state; this real
-    // kill proves the crash with the visited scratch and before the staged
-    // file exists.
+    // The build: this arm stops immediately before the fresh file's first
+    // write. The in-process `DuringCopy` arm keeps the torn-target state; this
+    // real kill proves the crash with the visited scratch and before the
+    // staged file exists.
     sigkill_at!(
         sigkill_during_copy,
-        CompactFailpoint::BeforeVacuum,
+        CompactFailpoint::BeforeLoad,
         "build",
         false,
         false,

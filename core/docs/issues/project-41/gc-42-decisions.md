@@ -101,62 +101,65 @@ contract and the implementation do not drift apart.
 
 ---
 
-## D. SQLite implementation deviations (4)
+## D. SQLite implementation notes: three deviations and the D2 build decision
 
-These four are in the shipped code
-(`engine/crates/layerfs-persistence/src/backend/sqlite/compact.rs`) and cannot
-be described as "the frozen text is followed". Each paragraph states the frozen
-sentence, the behavior, and the decision requested on #42. None changes
-behaviour on this branch: the code stays as measured, and the entry either
-matches the frozen text or records the deviation.
+This section keeps four records. D1, D3 and D4 are deviations from the frozen
+text that the shipped code still carries. D2 is the build decision that
+replaced the whole-Store copy: the fresh-copy rebuild now follows S5's "fresh
+Store" sentence, and the earlier `VACUUM INTO` + delete + `VACUUM` build is
+historical. Each paragraph states the frozen sentence, the behavior and the
+decision. The code in
+`engine/crates/layerfs-persistence/src/backend/sqlite/compact/` is the
+measured implementation of this branch.
 
-### D1. §7 step 4: the prune runs with `foreign_keys=OFF` and `defer_foreign_keys=ON`
+### D1. §7 step 4: the fresh load runs with `foreign_keys=OFF`
 
 - **Frozen:** "`PRAGMA foreign_keys=ON` outside the transaction (inside it the
   pragma is a no-op), then one rollback-journal transaction."
-- **Implemented:** the artifact is opened with `foreign_keys=OFF` and
-  `defer_foreign_keys=ON` for the prune. With enforcement on, SQLite's
-  deferred-constraint counter survives the delete order the staged copy needs
-  and the `COMMIT` is refused `SQLITE_CONSTRAINT_FOREIGNKEY`, even though
-  `pragma_foreign_key_check` reports the final row set clean. The final state
-  is proven by the §7 step 6 `foreign_key_check` on an `immutable=1` open
-  before the rename.
-- **Decision requested:** record the deviation (the pragma is off for the
-  prune, the post-prune check is the guard) or require a delete order that
-  commits under enforcement. The current code is the tested, reproduced
-  behavior.
+- **Implemented:** the fresh file's bulk load runs with `foreign_keys=OFF` and
+  copies only the retained rows, in foreign-key order. The final state is
+  proven by the §7 step 6 `foreign_key_check` on an `immutable=1` open before
+  the rename, and the load never deletes from an enforced Store because there
+  is no prune: the old whole-Store copy's delete order (which the deferred
+  counter refused even with a clean final row set) is gone. The pragma stays
+  off for the load so the ordering cannot turn a clean retained set into a
+  `SQLITE_CONSTRAINT_FOREIGNKEY` commit.
+- **Decision requested:** record the deviation (the pragma is off for the load,
+  the post-load check is the guard) or require enforcement during the copy.
+  The current code is the tested, reproduced behavior.
 
-### D2. S5/§3/§7: keep the whole-Store `VACUUM INTO` + delete rebuild; peak is 2.9× the Store
+### D2. S5/§3/§7: the rebuild is the fresh-copy build; peak is old + the new Store
 
 - **Frozen:** S5 says "A rebuild copies only retained rows into a fresh Store";
   §7 step 4 describes the payload sweep; §3 says a rebuild copies at least
   nine live bytes per byte freed below the 10% threshold; §7's cost sentence
-  bounds peak disk as old Store + new Store + journal/WAL + visited.
-- **Implemented:** the build writes the whole sealed Store with `VACUUM INTO`
-  to `<store>.compact`, prunes dead rows with a journaled `DELETE`, then
-  `VACUUM`s the staged file into its final size. Measured on a 49.999 GB Store
-  at 10.0% dead: `rebuild` 5,131.835 s (85.5 min), real temp peak
-  **143.1 GB above the pre-rebuild baseline (~2.9× the Store)**, receipt bound
-  **147.609 GB**; total footprint old + peak ≈ 198 GB (3.9×). The §13 /
-  #42 item 24 target was about 2–3 minutes of downtime and ≤ old + 1.1 × live.
-- **Decision (owner, this branch): do not change the algorithm.** S5's
-  "fresh Store" is satisfied by the staged copy (pack rows are never updated
-  or deleted in the live Store), and the measured 2.9× peak is the number the
-  operator docs and runbook must state. The speed/peak gap is recorded as a
-  follow-up (#42), not fixed here.
+  bounds peak disk as old Store + new Store + visited.
+- **Implemented (superseding the earlier whole-Store copy):** the build
+  creates `<store>.compact` with the sealed Store's schema, copies only the
+  rows the mark retained (pack-as-unit), builds the secondary indexes and
+  triggers after the bulk load, verifies the fresh file and renames it. It
+  stages no whole-Store copy, writes no prune journal and runs no `VACUUM`.
+  The earlier `VACUUM INTO` + delete + `VACUUM` build wrote the retained bytes
+  about four times over and needed a ~2.9× peak; §11's `peakTempBytes` for
+  SQLite is now the new Store plus the visited scratch.
+- **Measured:** the validated prototype (`tools/bench/freshcopy/`, branch
+  `val-freshcopy`) on a 10 GiB store-shaped fixture: fresh 32.5 s, 1.007× live
+  written, peak 1.003× `(old + live)`; the old build 120.8 s, 4.03× written,
+  1.577× peak. The 50 GB `VACUUM`-build numbers in `gc-runbook.md` are
+  historical and are replaced by this cost model.
+- **Decision (owner, this branch): the fresh-copy build is the default
+  rebuild.** The old build's 50 GB measurement (5,131.835 s, 143.1 GB sampled
+  peak, 147.609 GB bound) stays the record for that algorithm only.
 - **Alternative recorded, not adopted:** "clone + delete + incremental
   vacuum" — `fs::copy`/`copy_file_range` (reflink on xfs/btrfs) the sealed
   file, delete dead rows in the clone with `journal_mode=OFF`, run
   `incremental_vacuum` until the free list is empty, verify, rename. It follows
-  dead bytes instead of live bytes and can hold peak near one Store copy. It
-  needs a #42 S5/§3 entry, and it is proposed **only below a size threshold**
-  (reflink filesystems; ext4 falls back to a single ordered live-row copy),
-  where it does not pay for the extra ordering complexity. Not in this PR: the
-  fix branches stabilize the current algorithm.
-- **Runbook consequence:** a 50 GB `rebuild` at ~10% dead needs **≥150 GB free
-  (≥155 GB with margin)**, and ≥115 GB at ≤30% dead [E]; re-check free space
-  before every rebuild. The runbook carries this (see its "Disk headroom"
-  section).
+  dead bytes instead of live bytes and can hold peak near one Store copy. It is
+  not adopted: the fresh copy already writes ~1.0× live and needs no reflink
+  size threshold.
+- **Runbook consequence:** a rebuild needs old Store + about one live Store
+  (+ margin) free, not 2.9× the Store; re-check free space before every
+  rebuild. The runbook carries this (see its "Disk headroom" section).
 
 ### D3. §3/§7 step 1.5: the `none` path writes a transient visited scratch
 

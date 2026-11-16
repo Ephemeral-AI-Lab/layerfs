@@ -31,9 +31,9 @@ settle writes it while it removes the artifact set.
   **before** `CREATE SCHEMA` (§8). Never INSERT/UPDATE/DELETE `gc_intent`, `gc_dead`,
   marker tables or `project_epoch` by hand.
 
-**Free space.** A SQLite `rebuild` holds a peak of about **2.9× the Store**
-(147.609 GB receipt bound, 143.1 GB sampled at 50 GB). Check the free space on
-the Store's filesystem and its temp directory before every rebuild: see §8.
+**Free space.** A SQLite `rebuild` holds the old Store plus about one new
+Store (the retained bytes) and the visited scratch. Check the free space on the
+Store's filesystem and its temp directory before every rebuild: see §8.
 
 ## 2. `Unresolved`, live vs dead owner, lost reply
 
@@ -111,16 +111,18 @@ installed → it records the outcome. A dead owner's op is adopted; only a live 
   and frees no bytes; objects reachable only via the path are retained (§6.2, decisions 16/35).
 - **No path-level physical reclaim:** path-aware walk and per-entry page pruning are follow-ups; `keptWaste` has no page component (§6.2).
 - 1.0 Stores convert offline (§4.1); no online migration.
-- **Four SQLite deviations from the frozen text** are recorded in
-  [`gc-42-decisions.md`](gc-42-decisions.md) D1–D4: the prune runs with
-  `foreign_keys=OFF` + `defer_foreign_keys=ON`; the build is the whole-Store
-  `VACUUM INTO` + delete with a ~2.9× peak (§8); `none` writes a transient
-  visited scratch; the settle records a `cleanup` phase.
+- **Three SQLite deviations from the frozen text remain** (D1, D3, D4), plus
+  the settled D2 build decision; all are recorded in
+  [`gc-42-decisions.md`](gc-42-decisions.md): the bulk load runs with
+  `foreign_keys=OFF`; the rebuild is the fresh-copy build (no whole-Store copy,
+  no `VACUUM`, peak old + new, §8 — it now follows S5); `none` writes a
+  transient visited scratch; the settle records a `cleanup` phase.
 
 ## 6. First 10 minutes
 
-0. Check free space first (§8): ≥150 GB (≥155 GB with margin) for a 50 GB
-   rebuild at ~10% dead, ≥115 GB at ≤30% dead [E]. A full disk is `Capacity`.
+0. Check free space first (§8): the old Store plus about one new Store and
+   its visited scratch — roughly the Store's size again (with margin). A full
+   disk is `Capacity`.
 1. `layerfs store status <store>`: read `state`, `holders`, `op.phase`, `op.uncertain`. Don't kill a live owner; `Busy` is expected.
 2. `Unresolved`: prove the owner dead (home pid/start, or PG `pid`+`backend_start`), then
    re-run `layerfs store compact <store>` to adopt. For a lost PG swap reply, use §2 on a second connection.
@@ -196,43 +198,46 @@ Store 1,111,203,840 -> 1,111,310,336 B on first open.
 
 ## 8. Disk headroom and peak temp for a SQLite rebuild (S5, D2)
 
-The rebuild keeps the whole-Store `VACUUM INTO` + delete + `VACUUM` algorithm
+The rebuild writes a fresh Store with only the retained rows
 (S5; decision D2 in [`gc-42-decisions.md`](gc-42-decisions.md)). Peak temp is
-bounded by the run's artifacts — the pre-truncate staged copy, the new file,
-the rollback-journal bound and the visited scratch — and is **≈2.9× the
-Store**: at 49.999 GB and 10.0% dead the receipt bound is 147.609 GB and the
-sampled peak is 143.1 GB above the pre-rebuild baseline (total footprint
-old + peak ≈ 3.9×). Reserve free space before a rebuild on both the Store's
-filesystem and its temp directory:
+the new file plus the visited scratch; there is no whole-Store staged copy, no
+rollback journal and no `VACUUM` rewrite. Peak disk is therefore
+
+    old Store + (retained bytes + visited scratch) + margin
+
+The retained bytes are at most the live bytes, so the run needs roughly the
+Store's size again, never a multiple of it. The validated prototype measured
+1.007× live written and a 1.003× `(old + live)` peak on a 10 GiB fixture (the
+earlier `VACUUM INTO` build wrote 4.03× and peaked at 1.577×). Reserve free
+space before a rebuild on both the Store's filesystem and its temp directory:
 
 | Store / dead share | Reserve |
 |---|---|
-| 50 GB, ~10% dead | **≥150 GB (≥155 GB with margin)** [M: 143.1 GB sampled, 147.609 GB bound] |
-| 50 GB, ≤30% dead | ≥115 GB [E] |
-| 10 GB, ~10% dead | ~30 GB [M: 29.481 GB bound] |
+| any `rebuild` | old Store + about one live Store (the retained bytes) + a margin |
 | any `none` run | a few GB (the visited scratch only) |
+| 50 GB Store, ~10% dead | about the Store's size again [E] |
 
 Per-GB rates on the measured host class (**Dell PowerEdge R730, PERC H730 Mini
 controller, rotational HDD — not NVMe**; 88 vCPU, 125–135 GB visible RAM,
-ext4): `none` mark 35.9 s/live GB cold (32.7 s/stored GB), `rebuild` mark
-17.2 s/live GB, build **93.0 s/new GB** at 50 GB (10.3 s/new GB at 10 GB, which
-fitted the page cache; it moves ~141 GB to keep 45.8 GB at ~33 MB/s), verify
-1.87 s/new GB, install 7.311 s. The 10 GB arm is the agent budget; the 50 GB
-arm is the owner-final measurement (#42 item 44) and its numbers do not scale
-linearly from the 10 GB ones. The alternative build (clone + delete +
+ext4): the historical `VACUUM INTO` arm measured mark 17.2 s/live GB, build
+93.0 s/new GB at 50 GB and 10.3 s/new GB at 10 GB, verify 1.87 s/new GB,
+install 7.311 s. The fresh-copy prototype's 10 GiB run measured 32.5 s against
+120.8 s for that build; the 10 GB arm is the agent budget, the 50 GB arm is the
+owner-final measurement (#42 item 44). The alternative build (clone + delete +
 `incremental_vacuum`, below a size threshold on reflink filesystems) is
-recorded in D2 and is not adopted in this PR.
+recorded in D2 and is not adopted.
 
-## 9. Implementation deviations from the frozen text (D1–D4)
+## 9. Implementation notes: deviations and the D2 build decision (D1–D4)
 
-The shipped SQLite code differs from four frozen sentences; all four are
-recorded in [`gc-42-decisions.md`](gc-42-decisions.md) and none changes
-behaviour on this branch.
+Three frozen sentences still differ (D1, D3, D4); D2 is the settled build
+decision (the fresh-copy rebuild, which now follows the frozen sentence). All
+four are recorded in [`gc-42-decisions.md`](gc-42-decisions.md); none changes
+the artifact set, the op record or the next-call adoption.
 
 | Entry | Frozen sentence | Implemented |
 |---|---|---|
-| D1 (§7 step 4) | `PRAGMA foreign_keys=ON` outside the transaction | prune runs `foreign_keys=OFF` + `defer_foreign_keys=ON`; the step 6 `foreign_key_check` on the `immutable=1` open is the guard |
-| D2 (S5/§3/§7) | "copies only retained rows into a fresh Store"; peak old + new + journal + visited | whole-Store `VACUUM INTO` + delete + `VACUUM`; peak ≈2.9× the Store (§8) |
+| D1 (§7 step 4) | `PRAGMA foreign_keys=ON` outside the transaction | the fresh bulk load runs `foreign_keys=OFF`; the step 6 `foreign_key_check` on the `immutable=1` open is the guard |
+| D2 (S5/§3/§7) | "copies only retained rows into a fresh Store"; peak old + new + visited | fresh-copy build (pack-as-unit, indexes and triggers after the load); peak old + new (§8) — **now matches the frozen sentence** |
 | D3 (§3/§7 step 1.5) | `none` writes nothing; delete the scratch and stop | `none` spills the closure to `<store>.compact-visited`, deletes it before replying, counts it in `peakTempBytes`; no residue survives |
 | D4 (§11) | SQLite phases `mark`, `build`, `verify`, `install` | the settle also writes `cleanup` (§1) |
 

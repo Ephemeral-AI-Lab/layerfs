@@ -11,7 +11,7 @@
   "liveObjects": 69399,
   "initialDeadObjects": 6770,
   "deadFractionPermille": 88,
-  "fixtureBuildSeconds": 150.0,
+  "fixtureBuildSeconds": 153.0,
   "noneDeadBytes": 887601160,
   "noneTotalBytes": 9986795475,
   "rebuildDeadBytes": 1011104896,
@@ -24,14 +24,14 @@
   "none": {
     "path": "none",
     "runs": 3,
-    "micros": [148519470, 149703782, 149318362],
-    "medianMicros": 149318362,
-    "minMicros": 148519470,
-    "maxMicros": 149703782,
+    "micros": [88439257, 149872558, 81976632],
+    "medianMicros": 88439257,
+    "minMicros": 81976632,
+    "maxMicros": 149872558,
     "deadBytesBound": [887601160, 887601160, 887601160],
     "deadBytesRefined": [887601160, 887601160, 887601160],
     "physicalShrink": [0, 0, 0],
-    "peakTempBytes": [0, 0, 0],
+    "peakTempBytes": [3907584, 3907584, 3907584],
     "oldFileBytes": [10034614272, 10034696192, 10034696192],
     "newFileBytes": [10034696192, 10034696192, 10034696192],
     "generationBefore": [7, 7, 7],
@@ -40,7 +40,7 @@
     "packCountAfter": [76870, 76870, 76870],
     "addedDeadObjects": [0, 0, 0],
     "phasesNanos": {
-      "mark": [148512076807, 149699478879, 149314062028],
+      "mark": [88430870569, 149851898684, 81969123156],
       "build": [0, 0, 0],
       "verify": [0, 0, 0],
       "install": [0, 0, 0]
@@ -49,41 +49,26 @@
   "rebuild": {
     "path": "rebuild",
     "runs": 3,
-    "micros": [246370906, 255548454, 243305751],
-    "medianMicros": 246370906,
-    "minMicros": 243305751,
-    "maxMicros": 255548454,
+    "micros": [118439584, 117398388, 122409299],
+    "medianMicros": 118439584,
+    "minMicros": 117398388,
+    "maxMicros": 122409299,
     "deadBytesBound": [1011104896, 1011104896, 1011104896],
     "deadBytesRefined": [1011104896, 1011104896, 1011104896],
-    "physicalShrink": [1018978304, 1016524800, 1016504320],
-    "peakTempBytes": [9143750656, 9143750656, 9143750656],
-    "oldFileBytes": [10158751744, 10156294144, 10156273664],
-    "newFileBytes": [9139773440, 9139773440, 9139773440],
+    "physicalShrink": [1018499072, 1015803904, 1015808000],
+    "peakTempBytes": [9144160256, 9144160256, 9144160256],
+    "oldFileBytes": [10158669824, 10155974656, 10155978752],
+    "newFileBytes": [9140252672, 9140252672, 9140252672],
     "generationBefore": [7, 8, 9],
     "generationAfter": [8, 9, 10],
     "packCountBefore": [77812, 77812, 77812],
     "packCountAfter": [70100, 70100, 70100],
     "addedDeadObjects": [942, 7712, 7712],
     "phasesNanos": {
-      "mark": [149758815060, 148589673893, 149088791304],
-      "build": [94316711529, 104423746881, 91945016315],
-      "verify": [311503029, 431132794, 286831239],
-      "install": [1913022088, 2035474103, 1915532558]
-    }
-  },
-  "durableRebuild": {
-    "path": "rebuild",
-    "runs": 1,
-    "micros": [284078209],
-    "deadBytesBound": [1011104896],
-    "physicalShrink": [1016483840],
-    "peakTempBytes": [9143750656],
-    "addedDeadObjects": [7712],
-    "phasesNanos": {
-      "mark": [149687630706],
-      "build": [132235308703],
-      "verify": [267889954],
-      "install": [1816879571]
+      "mark": [75649242842, 74462390390, 75703843769],
+      "build": [19208629362, 18189788923, 18694444140],
+      "verify": [4376584615, 4358685920, 4329712889],
+      "install": [19196851358, 20379175980, 23672947936]
     }
   }
 }

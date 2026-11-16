@@ -11,22 +11,17 @@ use std::path::Path;
 /// database).
 pub(crate) const OP_SUFFIX: &str = ".compact-op";
 
-/// The staged rebuild Store beside the live one.
+/// The fresh rebuild Store beside the live one.
 pub(crate) const COMPACT_SUFFIX: &str = ".compact";
 
 /// The §6.3 visited scratch database.
 pub(crate) const VISITED_SUFFIX: &str = ".compact-visited";
 
-/// Upper bound on the rollback-journal header: SQLite pads it to the
-/// filesystem's sector size and writes a header for each transaction. Two
-/// sectors cover the prune and rewrite headers.
-pub(crate) const JOURNAL_HEADER_BOUND: u64 = 8192;
-
 /// The full SQLite artifact set of §9, without the variable `-mj*` journals:
-/// the fixed staged and visited artifacts plus the incomplete op record
-/// (`.compact-op.tmp`), which an op write that died before its rename leaves.
-/// `.compact-vacuum` is not part of it: SQLite's `VACUUM` writes its rewrite to
-/// an unlinked `etilqs_*` temp database, never beside the Store.
+/// the fixed staged fresh file and visited artifact plus the incomplete op
+/// record (`.compact-op.tmp`), which an op write that died before its rename
+/// leaves. The fresh file is built with `journal_mode=OFF`, so a crash leaves a
+/// partial `.compact` with no rollback journal; the settle deletes it.
 pub(crate) const ARTIFACT_SUFFIXES: [&str; 7] = [
     COMPACT_SUFFIX,
     ".compact-journal",
@@ -89,18 +84,18 @@ pub enum CompactFailpoint {
     AfterSeal,
     /// Inside the build, before the visited scratch or the copy is written.
     BeforeCopy,
-    /// Inside the build, immediately before `VACUUM INTO` starts the copy.
-    /// SQLite runs that copy as one uninterruptible call, so a real-process
-    /// `SIGKILL` cannot land inside it; the real-kill arm stops here with the
-    /// visited scratch present and the staged file not yet created. The
-    /// in-process `DuringCopy` arm keeps the torn-target state.
-    BeforeVacuum,
-    /// Inside the build, after `VACUUM INTO` produced `<store>.compact` and
-    /// before the copy is pruned: the state a crash during the copy leaves.
+    /// Inside the build, immediately before the fresh file's first write.
+    /// The fresh file does not exist yet; the real-kill arm stops here with
+    /// the visited scratch present and no staged name on disk. The in-process
+    /// `DuringCopy` arm keeps the torn-target state.
+    BeforeLoad,
+    /// Inside the build, after the fresh file's schema is created and before
+    /// the retained rows are copied: the state a crash inside the bulk load
+    /// leaves.
     DuringCopy,
-    /// After the staged `<store>.compact` is built and compacted.
+    /// After the fresh `<store>.compact` is built, indexed and switched to WAL.
     AfterBuild,
-    /// The staged Store's `VACUUM INTO` meets a bounded filesystem (ENOSPC).
+    /// The fresh Store's first write meets a bounded filesystem (ENOSPC).
     CapacityAtBuild,
     /// After the staged file is switched to WAL and checkpointed.
     AfterWalSwitch,
@@ -133,7 +128,7 @@ impl CompactFailpoint {
         match self {
             Self::BeforeSeal | Self::BeforeSealRead | Self::AfterSeal => "mark",
             Self::BeforeCopy
-            | Self::BeforeVacuum
+            | Self::BeforeLoad
             | Self::DuringCopy
             | Self::AfterBuild
             | Self::CapacityAtBuild

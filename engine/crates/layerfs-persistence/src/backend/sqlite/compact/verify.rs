@@ -188,9 +188,9 @@ pub(crate) struct VerifyInput<'a> {
 }
 
 /// The §7 step 6 verification through an `immutable=1` reader: schema identity,
-/// foreign keys, row counts against the mark, both live-heads digests, the
-/// allocator tuple and the recomputed totals. `quick_check` and the full doctor
-/// stay separate commands.
+/// foreign keys, a cheap `quick_check` (a page scan with no payload readback),
+/// row counts against the mark, both live-heads digests, the allocator tuple
+/// and the recomputed totals. The full doctor stays a separate command.
 pub(crate) fn verify(
     input: VerifyInput<'_>,
     request: &CompactRequest,
@@ -219,6 +219,15 @@ pub(crate) fn verify(
     };
     if count("SELECT count(*) FROM pragma_foreign_key_check")? != 0 {
         return Err(HistoryError::Integrity("staged Store foreign key"));
+    }
+    // §7 step 6: `quick_check` proves the copied pages and indexes are
+    // well-formed without reading any payload column back; the full
+    // `integrity_check` and the doctor stay separate commands.
+    let quick: String = connection
+        .query_row("PRAGMA quick_check", params![], |row| row.get(0))
+        .map_err(db_error)?;
+    if quick != "ok" {
+        return Err(HistoryError::Integrity("staged Store quick_check"));
     }
     if count("SELECT count(*) FROM object_location")? != mark.objects().len() as u64 {
         return Err(HistoryError::Integrity("staged Store object count"));
