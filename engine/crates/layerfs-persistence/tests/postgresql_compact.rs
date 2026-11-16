@@ -34,6 +34,10 @@ use layerfs_persistence::compact_metrics::CompactMetricsCapture;
 use layerfs_persistence::{
     CompactFailpoint, CompactPath, CompactRequest, PostgresHandles, PostgresSelection,
 };
+use layerfs_storage::port::acquisition::{
+    Acquisition, AcquisitionError, Begin, EntryKey, HostIdentity, NewEntry, Owner, EVIDENCE_BYTES,
+    WRITE_WINDOW_ROWS,
+};
 use layerfs_storage::{port::PackPersistence, Storage, StoragePolicy};
 use support::metrics::{assert_bounded, metric, value};
 use support::{branch_id, name, stack};
@@ -2014,4 +2018,242 @@ fn an_unrecorded_schema_at_the_store_scratch_name_is_exists() {
     assert_eq!(db_generation(&schema), before + 1);
     assert!(!schema.scratch_exists(), "the recorded scratch is gone");
     assert_eq!(schema.count("gc_op"), 0, "the adopted op is settled");
+}
+
+// --- F50-1: Phase C must never touch a live Init ---------------------------
+
+/// The advisory key the test-only parking trigger waits on. It is not a Store
+/// key: those derive from the catalog identity (`blake3("layerfs/advisory/v1")`).
+const PARK_KEY: i64 = 0x4c46_5350_4331;
+
+fn init_meta(mode: u32) -> layerfs_content::filesystem::attributes::PortableMetadata {
+    layerfs_content::filesystem::attributes::PortableMetadata {
+        mode,
+        mtime_seconds: 0,
+        mtime_nanoseconds: 0,
+    }
+}
+
+fn init_root_entry() -> NewEntry {
+    NewEntry {
+        key: EntryKey {
+            parent: None,
+            name: Vec::new(),
+        },
+        position: Some(0),
+        kind: layerfs_content::inode_leaf::InodeKind::Directory,
+        metadata: init_meta(0o755),
+        target_root: None,
+        host_path: Some(b"/source".to_vec()),
+        host: None,
+    }
+}
+
+fn init_file_entry(position: u64) -> NewEntry {
+    NewEntry {
+        key: EntryKey {
+            parent: Some(0),
+            name: format!("f{position:06}").into_bytes(),
+        },
+        position: Some(position),
+        kind: layerfs_content::inode_leaf::InodeKind::RegularFile,
+        metadata: init_meta(0o644),
+        target_root: None,
+        host_path: Some(format!("/source/f{position:06}").into_bytes()),
+        host: Some(HostIdentity {
+            device: 1,
+            inode: position,
+            evidence: [7; EVIDENCE_BYTES],
+        }),
+    }
+}
+
+fn init_root_of(position: u64) -> ObjectId {
+    ObjectId::for_bytes(&position.to_be_bytes())
+}
+
+/// Starts an Init in the port's session and commits its root and `files`
+/// regular files, as a live Init's walk does before the compaction reaches
+/// Phase C.
+fn begin_init(port: &dyn Acquisition, files: u64) -> Owner {
+    let owner = port
+        .begin(&Begin {
+            source_device: 1,
+            source_inode: 2,
+            stack: [3; 16],
+            scope: ObjectId::for_bytes(b"live-init"),
+        })
+        .expect("Init begin");
+    port.put_entries(owner, &[init_root_entry()])
+        .expect("Init root");
+    for start in (1..=files).step_by(2_000) {
+        let window: Vec<_> = (start..=files.min(start + 1_999))
+            .map(init_file_entry)
+            .collect();
+        port.put_entries(owner, &window).expect("Init files");
+    }
+    owner
+}
+
+/// Completes and releases the Init whose rows Phase C must have left alone.
+fn finish_init(port: &dyn Acquisition, owner: Owner, files: u64) {
+    for start in (1..=files).step_by(2_000) {
+        let roots: Vec<_> = (start..=files.min(start + 1_999))
+            .map(|n| (n, init_root_of(n)))
+            .collect();
+        port.complete_files(owner, &roots).expect("Init file roots");
+    }
+    port.set_directory_roots(owner, &[(0, ObjectId::for_bytes(b"root"))])
+        .expect("Init directory root");
+    assert_eq!(
+        port.work(owner).expect("Init work").held_rows,
+        1 + 2 * files
+    );
+    loop {
+        if port
+            .dispose(owner, WRITE_WINDOW_ROWS)
+            .expect("Init dispose")
+            .released
+        {
+            break;
+        }
+    }
+    assert_eq!(port.work(owner), Err(AcquisitionError::Stale));
+}
+
+/// A statement trigger on `commit` — the cleanup batch's first table — parks
+/// Phase C until the test unlocks [`PARK_KEY`], so the Init really begins after
+/// the `unfinished_work` check and while the cleanup transaction is open.
+fn park_phase_c(schema: &Schema) {
+    let mut client = schema.client();
+    client
+        .batch_execute(&format!(
+            "CREATE OR REPLACE FUNCTION {s}.lfs_test_park_phase_c() RETURNS trigger \
+             LANGUAGE plpgsql AS $fn$ BEGIN \
+               PERFORM pg_advisory_xact_lock({key}); RETURN NULL; \
+             END $fn$;\
+             CREATE TRIGGER lfs_test_park_phase_c BEFORE DELETE ON {s}.\"commit\" \
+              FOR EACH STATEMENT EXECUTE FUNCTION {s}.lfs_test_park_phase_c();",
+            s = schema.selection.schema,
+            key = PARK_KEY,
+        ))
+        .expect("the Phase C parking trigger");
+}
+
+fn unpark_phase_c(schema: &Schema) {
+    let mut client = schema.client();
+    let _ = client.batch_execute(&format!(
+        "DROP TRIGGER IF EXISTS lfs_test_park_phase_c ON {s}.\"commit\";\
+         DROP FUNCTION IF EXISTS {s}.lfs_test_park_phase_c();",
+        s = schema.selection.schema,
+    ));
+}
+
+/// Waits until the compaction's own backend is parked on [`PARK_KEY`], so the
+/// Init starts after `unfinished_work` and before the batch's init deletes.
+fn wait_for_phase_c_park(schema: &Schema) {
+    let pattern = format!("%{}.\"commit\"%", schema.selection.schema);
+    let mut client = schema.client();
+    for _ in 0..4_800 {
+        let parked: i64 = client
+            .query_one(
+                "SELECT count(*) FROM pg_stat_activity \
+                  WHERE datname=current_database() AND state='active' \
+                    AND wait_event_type='Lock' AND wait_event='advisory' \
+                    AND query LIKE $1 AND pid<>pg_backend_pid()",
+                &[&pattern],
+            )
+            .expect("pg_stat_activity")
+            .get(0);
+        if parked > 0 {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    panic!("the Phase C cleanup was not parked");
+}
+
+/// F50-1: Phase C must never delete a live Init's working rows. The
+/// `unfinished_work` check refuses a Store that already holds Init rows, but an
+/// Init that begins after that check is live: Phase C used to empty the three
+/// tables wholesale, so the run rolled back on the FK (`23503`) after the swap
+/// had committed, or silently deleted an empty `init_operation` whose next
+/// write then failed.
+///
+/// The test parks Phase C on a test-only statement trigger, starts and commits
+/// a well-formed Init in another session while the cleanup transaction waits,
+/// then lets the run finish. The Init's record, entries and host binds survive,
+/// and the Init still completes.
+#[test]
+fn phase_c_never_deletes_a_live_init() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "live_init");
+    schema.drop_scratch(55);
+    let setup = schema.create();
+    let live = filesystem_root(&setup, 1);
+    initialize(&setup, 1, live);
+    let _dead = whole_file(&setup, b"a pack the rebuild collects");
+    let before = generation(&setup);
+    let files = 8_u64;
+
+    // Park Phase C: the cleanup batch's first statement deletes from `commit`,
+    // and the statement trigger waits on a key this connection holds.
+    let mut control = schema.client();
+    control
+        .batch_execute(&format!("SELECT pg_advisory_lock({PARK_KEY})"))
+        .expect("the Phase C park key");
+    park_phase_c(&schema);
+    let child = spawn_round(schema.selection.clone(), schema.binding.clone(), 55, None);
+    wait_for_phase_c_park(&schema);
+
+    // A live Init starts now: its session opens after the swap committed at
+    // `G + 1` (a session opened before the swap is fenced at `G` and could not
+    // begin), and its operation begins after `unfinished_work` while Phase C
+    // is still running. Its working rows commit and stay open.
+    let init = schema.open();
+    let owner = begin_init(&init.acquisition, files);
+    let entries = 1 + i64::try_from(files).unwrap();
+    assert_eq!(schema.count("init_operation"), 1);
+    assert_eq!(schema.count("init_entry"), entries);
+    assert_eq!(
+        schema.count("init_host_file"),
+        i64::try_from(files).unwrap()
+    );
+
+    // Release Phase C and let the compaction finish.
+    control
+        .batch_execute(&format!("SELECT pg_advisory_unlock({PARK_KEY})"))
+        .expect("the Phase C park release");
+    let receipt = child.join().expect("the compaction thread").unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_before, before);
+    assert_eq!(receipt.generation_after, before + 1);
+    assert_settled(&schema, 55);
+
+    // Phase C left the live operation's record and every working row alone.
+    assert_eq!(
+        schema.count("init_operation"),
+        1,
+        "a live operation record survives Phase C"
+    );
+    assert_eq!(
+        schema.count("init_entry"),
+        entries,
+        "live entries survive Phase C"
+    );
+    assert_eq!(
+        schema.count("init_host_file"),
+        i64::try_from(files).unwrap(),
+        "live host binds survive Phase C"
+    );
+
+    // ... and it still completes: roots, directory root, then release.
+    finish_init(&init.acquisition, owner, files);
+    assert_eq!(
+        schema.count("init_operation"),
+        0,
+        "the Init released its own record"
+    );
+    unpark_phase_c(&schema);
+    clean(&schema.open());
 }

@@ -433,9 +433,6 @@ fn settle(
              DELETE FROM {schema}.path_removed pr WHERE NOT EXISTS (SELECT 1 FROM {schema}.layer_stack s WHERE s.layer_stack_id=pr.layer_stack_id);\
              DELETE FROM {schema}.project_epoch pe WHERE NOT EXISTS (SELECT 1 FROM {schema}.layer_stack s WHERE s.layer_stack_id=pe.layer_stack_id);\
              DELETE FROM {schema}.binding_hint_block;\
-             DELETE FROM {schema}.init_operation;\
-             DELETE FROM {schema}.init_entry;\
-             DELETE FROM {schema}.init_host_file;\
              DELETE FROM {schema}.kept_node;"
         ))?;
         tx.batch(&format!(
@@ -500,6 +497,14 @@ fn settle(
 /// (one layer stack's closed closure per transaction, then the signature and
 /// digest sets), settle the totals once, and clear the op. The Store is usable
 /// at `G + 1` throughout, and the retained object set is asserted exactly.
+///
+/// §8: Phase C never touches Init's three working tables. `unfinished_work`
+/// refuses a Store that already holds one, but an Init can begin after that
+/// check and is live: emptying the tables wholesale here would roll this
+/// transaction back on the FK (`23503`) after the swap committed, or silently
+/// delete an empty `init_operation` whose next write then fails. Acquisition
+/// owns that cleanup: its release empties the tables under the lane,
+/// `ACCESS EXCLUSIVE`, the emptiness check and a savepoint.
 pub(crate) fn cleanup(
     handles: &PostgresHandles,
     session: &Arc<Session>,
