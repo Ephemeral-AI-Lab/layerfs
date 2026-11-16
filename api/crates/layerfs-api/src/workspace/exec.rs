@@ -35,6 +35,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             message => message,
         },
         exec_id: args.get_text("exec_id").map(str::to_owned),
+        tag: context.tag.clone(),
     };
     let (home, events) = context.parts();
     exec(home, events, &request)

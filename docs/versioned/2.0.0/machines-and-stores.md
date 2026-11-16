@@ -28,7 +28,9 @@ the [contract](../../architecture/control/machines/platforms.md#removed-platform
 - "Platform" is only a machine's kind. A caller never chooses how a
   Sandbox runs; the kind decides.
 - `machine list` answers every machine, each with `supports` (`sqlite`,
-  `postgresql_sandbox` and the `reason` when not), its platform's row of the
+  `postgresql_sandbox` and the `reason` when not, and `log`: whether the
+  machine has a worker whose log can be read, which is never the case on
+  `native`), its platform's row of the
   support table, and its live `state` as `machine status` reads it
   (`native` is always `ready`; the built-in `docker` shows `stopped` until
   `machine start docker`). `machine platforms` answers each platform on this host:
@@ -78,9 +80,20 @@ layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
 
 - Defaults: 2 CPUs, 4 GiB memory, 20 GiB disk. Sizes are bytes, or text
   with `K`, `M` or `G`.
-- Each VM machine has one VM named `lfs-<first 8 digits of the home
-  id>-<name>`, one data disk mounted at `/layerfs/data` that holds many
-  Stores, and one worker.
+- Each VM machine has one VM named `layerfs-<first 8 digits of the home
+  id>-<name>` (a machine made before the `layerfs-` prefix keeps its
+  recorded `lfs-...` name), one data disk mounted at `/layerfs/data` that
+  holds many Stores, and one worker. A VM name keeps no punctuation, so a
+  name that differs from another machine's only in `.`, `_` or `-` is
+  refused `Exists`; a new machine's name is at most 46 characters (the VM
+  name is at most 63, and the prefix takes 17). A `lima` machine's name
+  is usually shorter still: Lima refuses an instance whose socket path
+  `<Lima home>/<VM name>/ssh.sock.<16 digits>` reaches 104 characters
+  (the Lima home is `LIMA_HOME`, else `~/.lima`, with its links
+  resolved). `machine create` checks this before anything is made and
+  refuses a longer name `InvalidInput`, stating the longest name that
+  fits on this host: 59 characters less the length of the Lima home's
+  path (39 where that is the 20-character `/Users/<name>/.lima`).
 - `image` is the image its Sandboxes run in. The default Sandbox image (owner
   decision O36) is LayerFS's runtime image
   `layerfs-352-runtime:node24-https-apt-20261024` (image digest
@@ -392,7 +405,10 @@ $ layerfs store pull shop --progress       # run (2026-11-08: docker, lima, appl
   `max(1 GiB, 10%)` free first. The caller holds its lease meanwhile and
   records the project when the worker answers. A failure while copying
   deletes the copy; a lost answer is `Unknown`, names the copy that may
-  remain, and records nothing in the home. Not run on a real VM.
+  remain (in its message and in a line of `log/uncertain.jsonl`, with the
+  Init's deadline), and records nothing in the home. `layerfs doctor` lists
+  such a copy and [`layerfs doctor fix`](calls.md#layerfs-doctor-fix-id)
+  removes it an hour after that deadline. Not run on a real VM.
 - A Sandbox of a sqlite project runs only on the Store's machine.
 
 ### PostgreSQL Stores

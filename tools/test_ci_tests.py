@@ -27,6 +27,19 @@ class SelectionAgainstTheTree(unittest.TestCase):
         self.assertEqual(flags.count("--test"), len({name for _, name in fast}))
         self.assertNotIn("mount_control", flags)
 
+    def test_featured_targets_exist_are_gated_and_grouped_by_feature(self):
+        sources = {(package, name): source for package, name, source in ci_tests.test_targets(self.meta)}
+        features = {package["name"]: package["features"] for package in self.meta["packages"]}
+        for (package, name), (feature, _) in ci_tests.FEATURED.items():
+            self.assertIn(feature, features[package])
+            self.assertNotIn(feature, features[package].get("default", []))
+            self.assertIn(f'#![cfg(feature = "{feature}")]', sources[(package, name)].read_text().splitlines())
+            self.assertNotIn((package, name), ci_tests.NIGHTLY)
+        groups = list(ci_tests.featured_groups())
+        targets = "--test worker_fault --test worker_fault_inspect --test worker_fault_store"
+        self.assertIn(("layerfs-control", "worker-fault", targets), groups)
+        self.assertEqual(len(groups), len({(package, feature) for package, feature, _ in groups}))
+
     def test_mount_group_includes_moved_sdk_targets(self):
         mount = ci_tests.mount_targets(self.meta)
         names = {name for _, name in mount}

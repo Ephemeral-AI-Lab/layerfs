@@ -25,8 +25,8 @@ on:
       - ".github/workflows/ci.yml"
       - "!**/*.md"
   pull_request:
-    # off for pull requests into layerfs_v2_0_0 (owner, 2026-11-07)
-    branches-ignore: [layerfs_v2_0_0]
+    # CI runs only for main: pull requests into any other branch run nothing (owner, 2026-11-16)
+    branches: [main]
     paths:
       - "core/**"
       - "engine/**"

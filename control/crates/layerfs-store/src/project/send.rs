@@ -41,12 +41,62 @@ const MIN_PIECE: usize = 64 << 10;
 
 /// What one copy names.
 pub struct Copy<'a> {
+    /// The caller's home, whose `log/uncertain.jsonl` names a copy that may
+    /// remain.
+    pub home: &'a Path,
     pub store: &'a str,
     pub name: &'a str,
     pub machine: &'a str,
     pub folder: &'a Path,
     /// The staging folder's id on the machine.
     pub id: String,
+    /// The Init's `timeoutMs`: with the time a request went out, the
+    /// deadline after which nothing of this Init can still be running.
+    pub timeout_ms: i64,
+}
+
+/// One line of `log/uncertain.jsonl` naming a copy that may remain.
+pub struct Left<'a> {
+    pub store: &'a str,
+    pub project: &'a str,
+    pub machine: &'a str,
+    /// The copy's id: `incoming/init-<copy>` under the machine's worker root.
+    pub copy: &'a str,
+    /// `send` (a part's answer was lost) or `install` (the Init's was).
+    pub phase: &'a str,
+    /// When the request whose answer was lost went out, in ms since the
+    /// epoch, and the Init's `timeoutMs`.
+    pub sent_ms: i64,
+    pub timeout_ms: i64,
+}
+
+/// Appends to `home`'s `log/uncertain.jsonl` that a copy may remain on its
+/// machine after an uncertain end (layerfs-project#180):
+/// `{ at, call: "project.init", store, project, machine, copy, phase,
+/// deadline, message }`. `deadline` (ms since the epoch) is when the request
+/// went out plus the Init's `timeoutMs`: nothing of this Init runs past it.
+/// `doctor.fix` removes the copy only when such a line names it and that
+/// deadline passed long enough ago. A log that cannot be written changes no
+/// outcome.
+pub fn log_left(home: &Path, left: &Left<'_>, message: &str) {
+    let _ = layerfs_home::home::log_line(
+        home,
+        "uncertain.jsonl",
+        &SdkValue::map([
+            ("at", SdkValue::Int(layerfs_home::home::now_ms())),
+            ("call", SdkValue::text("project.init")),
+            ("store", SdkValue::text(left.store)),
+            ("project", SdkValue::text(left.project)),
+            ("machine", SdkValue::text(left.machine)),
+            ("copy", SdkValue::text(left.copy)),
+            ("phase", SdkValue::text(left.phase)),
+            (
+                "deadline",
+                SdkValue::Int(left.sent_ms.saturating_add(left.timeout_ms)),
+            ),
+            ("message", SdkValue::text(message)),
+        ]),
+    );
 }
 
 /// A fresh copy id: 16 hex digits.

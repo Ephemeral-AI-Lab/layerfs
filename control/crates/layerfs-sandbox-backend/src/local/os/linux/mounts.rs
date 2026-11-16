@@ -65,6 +65,25 @@ pub(crate) fn filesystem(path: &Path) -> io::Result<String> {
     })
 }
 
+/// Every mount a `mountinfo` table's text names (this process's, or
+/// another process's for its namespace): its id, its mount point and its
+/// filesystem type, in table order. Reading a table touches no mount.
+pub(crate) fn table(text: &str) -> Vec<(u64, PathBuf, String)> {
+    let mut found = Vec::new();
+    for line in text.lines() {
+        let fields: Vec<&str> = line.split(' ').collect();
+        let Some(separator) = fields.iter().position(|field| *field == "-") else {
+            continue;
+        };
+        let id = fields.first().and_then(|id| id.parse().ok());
+        if let (Some(id), Some(point), Some(kind)) = (id, fields.get(4), fields.get(separator + 1))
+        {
+            found.push((id, PathBuf::from(unescape(point)), (*kind).to_owned()));
+        }
+    }
+    found
+}
+
 fn unescape(text: &str) -> String {
     let bytes = text.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());

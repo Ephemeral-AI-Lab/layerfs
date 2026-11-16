@@ -58,7 +58,12 @@ pub fn in_worker(root: &Path, frame: &InitFrame) -> Outcome {
     };
     let added = add();
     if let Err(why) = super::staged::remove(&staged) {
-        eprintln!("layerfs worker: left {}: {}", staged.display(), why.message);
+        // one line of worker.log: the message names an entry of the copy,
+        // whose name is the caller's and may hold a newline
+        let why: String = (why.message.chars())
+            .map(|c| if c.is_control() { ' ' } else { c })
+            .collect();
+        eprintln!("layerfs worker: left {}: {why}", staged.display());
     }
     added
 }

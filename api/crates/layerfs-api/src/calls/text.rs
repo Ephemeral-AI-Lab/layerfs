@@ -29,7 +29,7 @@ fn run(
     };
     let (args, scope) = match read() {
         Ok(read) => read,
-        Err(refusal) => return refuse_early(home, name, client, refusal),
+        Err(refusal) => return refuse_early(families, home, name, client, refusal),
     };
     let mut send = |event: SdkValue| events(json::print(&event));
     call_scoped(

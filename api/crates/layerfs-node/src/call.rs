@@ -46,12 +46,15 @@ pub fn call(
 }
 
 /// Closes every Store this process holds open with no call running, which
-/// releases its leases (outside the call table): what a process calls
-/// before it exits. A later call opens its Store again. Answers how many
-/// Stores it closed.
+/// releases its leases (outside the call table), and ends its idle Sandbox
+/// daemon sessions inside a short bound (layerfs-project#181): what a
+/// process calls before it exits. A later call opens its Store and its
+/// daemon connection again. Answers how many Stores it closed.
 #[napi]
 pub fn close() -> u32 {
-    u32::try_from(layerfs_api::close_idle(std::time::Duration::ZERO)).unwrap_or(u32::MAX)
+    let closed = layerfs_api::close_idle(std::time::Duration::ZERO);
+    layerfs_api::end_idle_sessions(layerfs_api::SESSION_END);
+    u32::try_from(closed).unwrap_or(u32::MAX)
 }
 
 /// `layerfs doctor` (report-only, outside the call table) on `home` (else

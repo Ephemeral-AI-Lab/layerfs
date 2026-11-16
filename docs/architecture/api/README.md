@@ -2,7 +2,7 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The public surface: the `layerfs-api` call table with its one dispatcher, and the front ends (the `layerfs` command, Node, Python and a local MCP server) that expose its **76 calls in 10 families** with the same names and arguments.
+The public surface: the `layerfs-api` call table with its one dispatcher, and the front ends (the `layerfs` command, Node, Python and a local MCP server) that expose its **82 calls in 11 families** with the same names and arguments (the MCP server lists 76: five monitoring calls are for a UI only, and `doctor.fix` is no tool).
 
 | | |
 | --- | --- |
@@ -34,7 +34,7 @@ The public surface: the `layerfs-api` call table with its one dispatcher, and th
 
 | Part | What it holds | Source |
 | --- | --- | --- |
-| `families()` | the ten families in help order: `project`, `branch`, `commit`, `file`, `sandbox`, `workspace`, `machine`, `store`, `backup`, `logs` | [`lib.rs`](../../../api/crates/layerfs-api/src/lib.rs) |
+| `families()` | the eleven families in help order: `project`, `branch`, `commit`, `file`, `sandbox`, `workspace`, `machine`, `store`, `backup`, `logs`, `doctor` | [`lib.rs`](../../../api/crates/layerfs-api/src/lib.rs) |
 | `calls/` | the table types, argument checks, folder scope, dispatcher, argv rendering, key casing, text form, platform policy and call context | [`calls/`](../../../api/crates/layerfs-api/src/calls), [Calls](calls/README.md) |
 | `<family>/` | one file per call, `<family>/<call>.rs`; the family's `mod.rs` lists them in help order. Each `run` builds one typed request and calls one control-crate function | [`src/`](../../../api/crates/layerfs-api/src), [SDK](sdk/README.md) |
 | `doctor/` | explicit diagnostics outside the call table (`layerfs doctor`) | [`doctor/mod.rs`](../../../api/crates/layerfs-api/src/doctor/mod.rs) |
@@ -85,7 +85,7 @@ give each call's own arguments, answer and errors.
 
 | Test or example | Command | Platform | Shows |
 | --- | --- | --- | --- |
-| [`calls_table.rs`](../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host | 76 calls in ten families; one source file per call; refusals before any effect |
+| [`calls_table.rs`](../../../api/crates/layerfs-api/tests/calls_table.rs) | `cargo +1.85.1 test --locked -p layerfs-api --test calls_table` | any Unix host | 82 calls in eleven families; one source file per call; refusals before any effect |
 | [`coverage.mjs`](../../../api/node/test/coverage.mjs) | `node --test api/node/test/coverage.mjs` | macOS or Linux, with the built addon, Python module and CLI | every front end matches the table |
 | [`file-history.mjs`](../../../api/node/examples/file-history.mjs) | `node api/node/examples/file-history.mjs` | macOS or Linux, with the built addon | a Store, Init, file writes and history reads |
 

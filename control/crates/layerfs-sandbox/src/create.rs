@@ -56,6 +56,16 @@ pub fn create(
             format!("a Sandbox is not named {name}: that names a built-in machine (H §7.6)"),
         ));
     }
+    // `<name>.root` in the run folder is Sandbox `<name>`'s private root
+    if name.ends_with(".root") {
+        return Err(refused(
+            "InvalidInput",
+            format!(
+                "a Sandbox is not named {name}: a name ending in `.root` is the run folder's \
+                 name for another Sandbox's private root"
+            ),
+        ));
+    }
     // the Store's place, a move and the name are checked under the lock
     // that claims the name, so a store.push or pull cannot pass between them
     let _lock = home::lock::take(&home)?;

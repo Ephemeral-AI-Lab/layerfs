@@ -208,7 +208,8 @@ fn start_named(
         mounts: Default::default(),
     };
     let recorded = (|| {
-        mark_owner(&self::directory(host.deploy(), id, None)?, directory)?;
+        let own = self::directory(host.deploy(), id, &state.name, None)?;
+        mark_owner(&own, directory)?;
         crate::files::save_sandbox(
             &state.directory,
             &state,
@@ -304,14 +305,16 @@ fn launch_options(
     })
 }
 
-/// Where this deployment puts Sandbox `id`:
-/// `<deploy.localDir>/<prefix><id>`, computed from the
+/// Where this deployment puts Sandbox `id` under its runtime name `name`
+/// (the one its start launched, or the one its record holds, which the
+/// caller checked): `<deploy.localDir>/<name>`, computed from the
 /// configuration, as a record's directory must be. With no deploy.localDir
 /// configured, `recorded` (a record's own parent directory) stands in for
 /// it: a call on a Sandbox follows its record (#529).
 pub fn directory(
     deploy: Option<&Deploy>,
     id: &str,
+    name: &str,
     recorded: Option<&Path>,
 ) -> Result<PathBuf, SdkRefusal> {
     let root = deploy
@@ -327,14 +330,13 @@ pub fn directory(
                 ),
             )
         })?;
-    let name = crate::lifecycle::sandbox_name(deploy, id)?;
     let plain = |path: &Path| {
         !path
             .components()
             .any(|c| matches!(c, Component::ParentDir | Component::CurDir))
     };
     let single = matches!(
-        Path::new(&name).components().collect::<Vec<_>>()[..],
+        Path::new(name).components().collect::<Vec<_>>()[..],
         [Component::Normal(_)]
     );
     if !root.is_absolute() || !plain(root) || !single {

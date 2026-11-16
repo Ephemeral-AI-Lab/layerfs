@@ -57,7 +57,8 @@ pub fn print(topic: &[&str]) -> ExitCode {
                 "{}layerfs <family> <call> <arguments> [--options] [--text]\n\n",
                 crate::banner::banner()
             );
-            for family in layerfs_api::families() {
+            // `doctor`'s one call is shown with the doctor's own line below
+            for family in (layerfs_api::families().iter()).filter(|f| f.name != "doctor") {
                 let calls: Vec<String> = family.calls().iter().map(|c| shell(c.call)).collect();
                 let family_name = if std::io::stdout().is_terminal() {
                     crate::banner::paint(family.name, "1")
@@ -82,12 +83,16 @@ pub fn print(topic: &[&str]) -> ExitCode {
                 )
             };
             text.push_str(&format!(
-                "\n  {:<10} report what is wrong in the home, changing nothing [--text]\n  {:<10} write this environment's 1.1.0 settings as records, once\n  {:<10} serve this machine's worker (inside a machine)\n  {:<10} this help; `layerfs help <family> [<call>]` for more\n\n",
+                "\n  {:<10} report what is wrong in the home, changing nothing [--text]; `doctor fix <id>` removes one leftover it listed\n  {:<10} write this environment's 1.1.0 settings as records, once\n  {:<10} serve this machine's worker (inside a machine)\n  {:<10} this help; `layerfs help <family> [<call>]` for more\n\n",
                 doc_title, imp_title, wrk_title, hlp_title
             ));
             text.push_str("The home is LAYERFS_HOME, else ~/.layerfs. Exit 0: done; 2: wrong command line; 125: refused.\n");
             output::print(&text)
         }
+        ["doctor", "fix"] => match layerfs_api::find("doctor.fix") {
+            Some(call) => output::print(&described(call)),
+            None => unknown(topic),
+        },
         ["doctor", rest @ ..] => crate::doctor::help(rest),
         [family] if layerfs_api::families().iter().any(|f| f.name == *family) => {
             let calls = layerfs_api::calls();

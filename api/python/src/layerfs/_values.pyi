@@ -30,11 +30,25 @@ class Entity(TypedDict):
     kind: str
     name: str
 
+class DoctorLeftover(TypedDict):
+    """What an interrupted operation left, on a finding of the legacy
+    report; ``doctor.fix(id)`` removes it when ``fixable``."""
+
+    machine: str
+    kind: Literal["run-folder", "empty-root", "init-copy", "backup-staging", "image-tmp", "image-part"]
+    path: str
+    bytes: int | None
+    age: int
+    id: str
+    fixable: bool
+    not_before: NotRequired[int]
+
 class Finding(TypedDict):
     severity: Literal["error", "warning"]
     entity: Entity
     message: str
     fix: str
+    leftover: NotRequired[DoctorLeftover]
 
 class DoctorCheck(TypedDict):
     id: str
@@ -49,9 +63,16 @@ class DoctorCheck(TypedDict):
     observed_ms: int
     duration_ms: int | None
 
+class LeftoverWalk(TypedDict):
+    machine: str
+    complete: bool
+    image_locks: int
+    unmount_markers: int
+
 class DoctorReport(TypedDict):
     ok: bool
     findings: list[Finding]
+    leftovers: NotRequired[list[LeftoverWalk]]
     complete: NotRequired[bool]
     checks: NotRequired[list[DoctorCheck]]
     truncated: NotRequired[bool]

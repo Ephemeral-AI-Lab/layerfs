@@ -37,6 +37,9 @@ pub struct ExecRequest {
     pub message: Message,
     /// The caller's exec id; control makes one when it is `None`.
     pub exec_id: Option<String>,
+    /// The call's log tag, kept in the command's record while it runs
+    /// (`sandbox.get` shows it under `running`).
+    pub tag: Option<String>,
 }
 
 /// `workspace.exec_cancel(ws, exec_id, { grace_ms })`.
@@ -64,7 +67,9 @@ pub fn exec(home: &Path, events: &mut Events<'_>, request: &ExecRequest) -> Answ
     let running = match &at.workspace {
         Some(workspace) => {
             let wsid = workspace.id().unwrap_or_default();
-            let mut kept = ExecRecord::new(&id, wsid, (&at.path, workspace.name()));
+            let command = request.command.as_deref().unwrap_or("");
+            let mut kept = ExecRecord::new(&id, wsid, (&at.path, workspace.name()))
+                .started_by(request.tag.as_deref(), command);
             kept.route = Route::Machine(at.record.machine().to_owned());
             let mut remote = |found: &ExecRecord, grace| {
                 crate::exec::remote::remote(events, (&at.home, &at.record), found, grace)
@@ -82,6 +87,7 @@ pub fn exec(home: &Path, events: &mut Events<'_>, request: &ExecRequest) -> Answ
         spool: false,
         exec_id: Some(id.to_string()),
         workspace: (at.workspace.as_ref()).and_then(|w| w.id().map(str::to_owned)),
+        tag: request.tag.clone(),
     };
     let asked = Asked {
         call,

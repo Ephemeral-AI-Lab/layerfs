@@ -9,8 +9,9 @@
 use crate::record::StoreRef;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
-use layerfs_machine::worker::{self, Endpoint, EventSink, Unreached};
+use layerfs_machine::worker::{self, Budget, Endpoint, EventSink, Unreached};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -50,6 +51,24 @@ pub fn on_machine(home: &Path, machine: &str) -> Result<Executor> {
     if let Some(record) = layerfs_machine::record::MachineRecord::read(home, machine)? {
         record.not_held()?;
     }
+    on_machine_read(home, machine)
+}
+
+/// How long a read ([`Worker::read`]) waits for its machine's worker: the
+/// connection, the answer to the secret, and the whole answer (12 s in
+/// all; layerfs-project#178).
+pub const READ: Budget = Budget {
+    connect: Duration::from_secs(2),
+    hello: Duration::from_secs(2),
+    answer: Duration::from_secs(8),
+};
+
+/// [`on_machine`] for a call that only reads (layerfs-project#179 A):
+/// where it runs while a machine operation holds the machine's intent too,
+/// since a start that is failing is when its worker's log is wanted. A
+/// worker that is stopping answers `Unavailable` when called. No lease,
+/// no Store, no write.
+pub fn on_machine_read(home: &Path, machine: &str) -> Result<Executor> {
     if layerfs_machine::runs_here(home, machine)? {
         return Ok(Executor::Local);
     }
@@ -83,6 +102,31 @@ impl Worker {
     ) -> Outcome {
         self.attempt(op, request, events)
             .unwrap_or_else(|Unreached(refusal)| Err(refusal))
+    }
+
+    /// Runs read-only worker operation `op` once with `request`, waiting at
+    /// most `budget` for each step. A worker that is not recorded, does
+    /// not answer or does not answer in time is `Unavailable`: the
+    /// operation changes nothing, so a lost answer is not `Unknown`.
+    pub fn read(&mut self, op: &str, request: SdkValue, budget: Budget) -> Outcome {
+        let request = worker::request(op, request)?;
+        let endpoint = match &self.endpoint {
+            Some(endpoint) => endpoint.clone(),
+            None => recorded(&self.home, &self.machine)?,
+        };
+        let outcome = worker::send_within(&endpoint, op, &request, budget)
+            .map_err(|Unreached(why)| stopped(&self.machine, why))?;
+        self.endpoint = Some(endpoint);
+        outcome.map_err(|refusal| match refusal.code.as_str() {
+            "Unknown" => refused(
+                "Unavailable",
+                format!(
+                    "machine {}'s worker did not answer {op} in time ({}); {op} changes nothing",
+                    self.machine, refusal.message
+                ),
+            ),
+            _ => refusal,
+        })
     }
 
     /// [`Worker::call`] whose `events` may refuse one: the connection then

@@ -361,6 +361,7 @@ class AsyncSandboxFamily:
         *,
         page_size: int | None = None,
         page_pos: int | None = None,
+        live: bool | None = None,
         log_tag: str | None = None,
     ) -> Result:
         """every Sandbox in the home, or one project's"""
@@ -375,6 +376,19 @@ class AsyncSandboxFamily:
         """a Sandbox and its Workspaces"""
     async def close(self, name: str, *, force: bool | None = None, log_tag: str | None = None) -> Result:
         """stop a Sandbox"""
+    async def files(
+        self,
+        sandbox: str,
+        path: str | None = None,
+        *,
+        depth: int | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        length: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a Sandbox's files: its roots, or a folder or file under its home or in its root"""
 
 class AsyncWorkspaceFamily:
     async def mount(self, sandbox: str, branch: str, *, name: str | None = None, log_tag: str | None = None) -> Result:
@@ -452,6 +466,21 @@ class AsyncMachineFamily:
         """remove a Sandbox image from a machine, or every unused one"""
     async def status(self, name: str, *, log_tag: str | None = None) -> Result:
         """a machine's live state, free disk and tool version"""
+    async def stats(self, machine: str, *, log_tag: str | None = None) -> Result:
+        """a machine's observed processors, memory and data disk, its Stores' sizes and live Sandboxes"""
+    async def files(
+        self,
+        machine: str,
+        path: str | None = None,
+        *,
+        depth: int | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        length: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a machine's files: its LayerFS folders by role, or a folder or file of the machine"""
     async def start(
         self,
         name: str,
@@ -601,6 +630,30 @@ class AsyncLogsFamily:
         """the calls made against this home, newest first"""
     async def reset(self, *, log_tag: str | None = None) -> Result:
         """clear this home's call log"""
+    async def machine(
+        self,
+        machine: str,
+        *,
+        cursor: str | None = None,
+        before: str | None = None,
+        limit: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a machine's worker log: its last lines, or the lines after or before a cursor"""
+    async def sandbox(
+        self,
+        sandbox: str,
+        *,
+        cursor: str | None = None,
+        before: str | None = None,
+        limit: int | None = None,
+        log_tag: str | None = None,
+    ) -> Result:
+        """a Sandbox's daemon log: its last lines, or the lines after or before a cursor"""
+
+class AsyncDoctorFamily:
+    async def fix(self, id: str, *, log_tag: str | None = None) -> Result:
+        """remove one leftover `layerfs doctor` listed, under its guard"""
 
 class AsyncClient:
     project: AsyncProjectFamily
@@ -613,6 +666,7 @@ class AsyncClient:
     store: AsyncStoreFamily
     backup: AsyncBackupFamily
     logs: AsyncLogsFamily
+    doctor: AsyncDoctorFamily
     def __init__(self, home: str | PathLike[str] | None = None, scope: Scope | Mapping[str, str | None] | None = None) -> None: ...
 
 def client(home: str | PathLike[str] | None = None, scope: Scope | Mapping[str, str | None] | None = None) -> AsyncClient: ...
@@ -627,5 +681,6 @@ machine: AsyncMachineFamily
 store: AsyncStoreFamily
 backup: AsyncBackupFamily
 logs: AsyncLogsFamily
+doctor: AsyncDoctorFamily
 
-__all__ = ['AsyncClient', 'LayerFSError', 'client', 'project', 'branch', 'commit', 'file', 'sandbox', 'workspace', 'machine', 'store', 'backup', 'logs']
+__all__ = ['AsyncClient', 'LayerFSError', 'client', 'project', 'branch', 'commit', 'file', 'sandbox', 'workspace', 'machine', 'store', 'backup', 'logs', 'doctor']

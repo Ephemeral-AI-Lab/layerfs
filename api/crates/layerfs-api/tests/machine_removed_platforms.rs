@@ -51,6 +51,7 @@ fn shows_removed(machine: &SdkValue, platform: &str, reason: &str) {
         Some(&SdkValue::Bool(false))
     );
     assert_eq!(supports.get_text("reason"), Some(reason));
+    assert_eq!(supports.get("log"), Some(&SdkValue::Bool(false)));
 }
 
 #[test]

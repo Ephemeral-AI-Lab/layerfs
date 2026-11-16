@@ -156,19 +156,35 @@ pub fn with_field(value: SdkValue, name: &str, field: SdkValue) -> SdkValue {
     SdkValue::Map(fields)
 }
 
-/// Appends one JSON line to `log/<name>`.
+/// `log/uncertain.jsonl`: the only record of uncertain outcomes, so it is
+/// never rotated (layerfs-project#179 D8).
+pub const UNCERTAIN: &str = "uncertain.jsonl";
+
+/// Appends one JSON line to `log/<name>`: the file is opened, written and
+/// closed, so no writer holds it across a rotation. Past 16 MiB it then
+/// rotates once to `log/<stem>.1.jsonl`, as the call log does, under a
+/// non-blocking `flock` on `log/rotate.lock`; a writer that does not get
+/// the lock skips the rotation, and a rotation that fails changes no
+/// outcome. [`UNCERTAIN`] never rotates.
 pub fn log_line(home: &Path, name: &str, value: &SdkValue) -> Result<(), SdkRefusal> {
     let dir = super::paths::log_dir(home);
     private_dir(&dir)?;
+    let path = dir.join(name);
     let mut file = fs::OpenOptions::new()
         .append(true)
         .create(true)
         .mode(0o600)
-        .open(dir.join(name))
+        .open(&path)
         .map_err(failed)?;
     let mut text = json::print(&to_hex(value.clone()));
     text.push('\n');
-    file.write_all(text.as_bytes()).map_err(failed)
+    file.write_all(text.as_bytes()).map_err(failed)?;
+    let size = file.metadata().map_or(0, |meta| meta.len());
+    drop(file);
+    if size > crate::logs::ROTATE_AT && name != UNCERTAIN {
+        crate::logs::rotate(&super::paths::log_rotate_lock(home), &path);
+    }
+    Ok(())
 }
 
 /// Milliseconds since the Unix epoch.

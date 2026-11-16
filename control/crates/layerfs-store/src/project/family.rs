@@ -340,11 +340,13 @@ fn init_on_worker(
     }
     let total = send::measure(Path::new(folder), name)?;
     let copy = send::Copy {
+        home: &home,
         store,
         name,
         machine,
         folder: Path::new(folder),
         id: send::new_id()?,
+        timeout_ms: timeout,
     };
     send::room(&mut worker, &copy, total)?;
     // the lease is taken under the Store's lock with the record read there
@@ -359,6 +361,7 @@ fn init_on_worker(
     }
     .encode();
     progress(events, "install", None);
+    let sent_ms = layerfs_home::home::now_ms();
     let added = worker.call("project.init", request, &mut |event| events.event(event));
     drop(lease);
     let added = added.map_err(|mut refusal| {
@@ -368,6 +371,19 @@ fn init_on_worker(
                 "{}; the worker removes its copy {left} when its Init ends",
                 refusal.message
             );
+            // the worker's Init ends by its own deadline, counted from when
+            // it read this request, moments after this: the hour `doctor.fix`
+            // waits past the recorded deadline covers the difference
+            let left = send::Left {
+                store,
+                project: name,
+                machine,
+                copy: &copy.id,
+                phase: "install",
+                sent_ms,
+                timeout_ms: timeout,
+            };
+            send::log_left(&home, &left, &refusal.message);
         }
         refusal
     })?;
