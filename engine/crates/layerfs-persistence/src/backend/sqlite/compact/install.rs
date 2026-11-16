@@ -178,10 +178,7 @@ pub(crate) fn settle(
     // residue `clear_artifacts` could not remove keeps it, so the next run
     // adopts the recorded leftover instead of refusing the staged name as an
     // unrecorded `Exists`; `abort_before_install` gates the same way.
-    if settled
-        && residue.artifacts.is_empty()
-        && std::fs::symlink_metadata(&record_path).is_ok()
-    {
+    if settled && residue.artifacts.is_empty() && std::fs::symlink_metadata(&record_path).is_ok() {
         let bytes = std::fs::metadata(&record_path).map_or(0, |metadata| metadata.len());
         if std::fs::remove_file(&record_path).is_err()
             && std::fs::symlink_metadata(&record_path).is_ok()

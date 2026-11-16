@@ -158,10 +158,7 @@ fn a_non_directory_component_is_refused_while_a_leaf_symlink_is_hidden() {
     for method in ["fs.read", "fs.stat"] {
         for path in ["/link/f", "/dlink/f", "/a.txt/f"] {
             let refusal = fixture
-                .try_call(
-                    method,
-                    vec![("branch", text("work")), ("path", text(path))],
-                )
+                .try_call(method, vec![("branch", text("work")), ("path", text(path))])
                 .expect_err("a read below a non-directory");
             assert_eq!(refusal.code, "InvalidInput", "{method} {path}: {refusal:?}");
         }

@@ -1526,11 +1526,7 @@ fn generate_report() -> String {
         "  75,524 live objects, 8.8% dead) ran three times per arm on 2026-11-16 and"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  its receipt is committed as"
-    )
-    .unwrap();
+    writeln!(out, "  its receipt is committed as").unwrap();
     writeln!(
         out,
         "  `tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`: `rebuild`"
@@ -1800,11 +1796,7 @@ fn generate_report() -> String {
         "  ~10 GB and the ignored test is not part of a normal suite. The gc_bench"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  medium fixture B arm (three runs) is the committed"
-    )
-    .unwrap();
+    writeln!(out, "  medium fixture B arm (three runs) is the committed").unwrap();
     writeln!(
         out,
         "  `sqlite_compact_capacity_measure_gc_bench.json` receipt, not fixture A."

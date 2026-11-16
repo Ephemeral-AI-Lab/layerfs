@@ -647,7 +647,10 @@ fn an_unrecorded_non_removable_artifact_does_not_strand_the_store() {
     let reopened = reopen(&path);
     assert_eq!(generation(&reopened), before);
     assert!(located(&reopened, live), "the live object survives");
-    assert!(located(&reopened, dead), "the dead pack is still stored at G");
+    assert!(
+        located(&reopened, dead),
+        "the dead pack is still stored at G"
+    );
 
     // The obstacle gone, the next run rebuilds from `G` and leaves a clean
     // Store: the refusal was recoverable, never a stranded state.
