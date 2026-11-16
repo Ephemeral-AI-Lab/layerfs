@@ -11,7 +11,7 @@
 //! kernels Sandboxes run on live in the
 //! `layerfs-platform` crate (host only).
 // unsafe only in local/os/linux/seccomp.rs (the namespaces command filter's
-// two prctl calls); the macOS process facts (proc_pidinfo) moved with
+// two prctl calls and the helper's clone3 into a cgroup); the macOS process facts (proc_pidinfo) moved with
 // LocalProcess to layerfs_bridge::process (layerfs-project#112)
 #![deny(unsafe_code)]
 #[cfg(unix)]

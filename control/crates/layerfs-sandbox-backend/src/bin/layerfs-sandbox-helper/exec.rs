@@ -1,28 +1,37 @@
-//! The exec stage: one command inside a running Sandbox. The helper joins the
-//! Sandbox's cgroup first (after entering the Sandbox's mount namespace this
-//! host path no longer resolves), opens the three namespace handles, then
-//! enters them. Its child is created inside the Sandbox's PID namespace, runs
+//! The exec stage: one command inside a running Sandbox. The helper opens
+//! the Sandbox's cgroup (and the command's, below), then forks itself into
+//! the Sandbox's group (`clone3` with `CLONE_INTO_CGROUP`,
+//! `local::OneThread`): the child does the work, inside the group, so the
+//! Sandbox's `cgroup.kill` ends it and its stop finds the group empty only
+//! once it is gone; the parent, outside it, only waits and ends as the child
+//! did. No process ever moves between groups: a move (a pid written to
+//! `cgroup.procs`) waits for an RCU grace period, 5–28 ms after an idle
+//! spell, which every command used to pay. The child opens the three
+//! namespace handles, then enters them (after entering the Sandbox's mount
+//! namespace the host's cgroup and `/proc` paths no longer resolve). Its own
+//! child, the command, is created inside the Sandbox's PID namespace, runs
 //! as the requested uid:gid and inherits no-new-privs, so file capabilities
 //! and setuid bits cannot raise it again. Just before exec it installs the
 //! filter that refuses it a user namespace (`local::deny_user_namespaces`,
 //! D-8); a command whose filter cannot be installed never starts.
 //!
 //! With `--command-cgroup <group>` (a command with its own group,
-//! layerfs-project#113) the helper opens that group's `cgroup.procs` before
-//! entering the namespaces, and the command's child process moves itself
-//! into it just before exec (`local::start_in_cgroup`). The helper itself
-//! is never in the command's group, so a cancel's signals and `cgroup.kill`
-//! reach the command and what it started, never the helper, which then
-//! reports how the command ended; a child that cannot join never runs.
-//! Once the command runs (its exec succeeded, so it is in its group), the
-//! helper writes one byte to its standard input, which the backend gives
-//! it as one end of a socket: only then is the command's stop handle
-//! recorded, so a cancel never finds the group empty while the command is
-//! still to start. The command itself gets no standard input.
+//! layerfs-project#113) the command is created inside that group, opened
+//! before entering the namespaces; with none it is created in the
+//! Sandbox's. The helper itself is never in the command's group, so a
+//! cancel's signals and `cgroup.kill` reach the command and what it
+//! started, never the helper, which then reports how the command ended; a
+//! command that cannot be created there never runs. Once the command runs
+//! (its exec succeeded), the helper writes one byte to its standard input,
+//! which the backend gives it as one end of a socket: only then is the
+//! command's stop handle recorded, so a cancel never finds the group empty
+//! while the command is still to start. The command itself gets no
+//! standard input.
 //!
 //! With `--trace <file>` (a traced call, `LAYERFS_TRACE_STEP`) it writes
 //! when each stage ended to that file, which the worker made, once the
-//! command ended ([`Stamps`]).
+//! command ended ([`Stamps`]). `helper.cgroup_join` is the fork into the
+//! Sandbox's group.
 //!
 //! With `--runtime <dir>` (a Sandbox with the bundle's runtime layer, R5,
 //! bound at `<dir>` inside it) the command's `PATH` gets `<dir>/bin` at its
@@ -30,16 +39,23 @@
 //! `PATH` inside the Sandbox, so an image's own `bash` wins, and an image with
 //! none (alpine, distroless) runs the runtime's static `bash` instead of
 //! failing.
+use layerfs_sandbox_backend::local::OneThread;
 use nix::{
     sched::{setns, CloneFlags},
-    sys::prctl::set_no_new_privs,
+    sys::{
+        prctl::set_no_new_privs,
+        signal::{kill, Signal},
+        wait::{waitpid, WaitStatus},
+    },
+    unistd::Pid,
 };
 use std::{
     ffi::OsString,
     fs::{self, File},
-    io::Write,
+    io::{self, Read, Write},
     os::fd::AsFd,
-    os::unix::process::{CommandExt, ExitStatusExt},
+    os::unix::fs::OpenOptionsExt,
+    os::unix::process::CommandExt,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     time::{SystemTime, UNIX_EPOCH},
@@ -63,15 +79,20 @@ struct Run {
 /// never reads it as a command's exit code.
 pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
     let run = parse(arguments)?;
-    // opened before the Sandbox's mount namespace hides this host path
+    // opened before the Sandbox's mount namespace hides these host paths
     let mut stamps = Stamps::open(run.trace.as_deref());
     stamps.mark("helper.start");
-    // opened before the Sandbox's mount namespace hides this host path
-    let command_procs = match &run.command_cgroup {
-        Some(group) => Some(procs(group)?),
+    let process = OneThread::open().map_err(|error| format!("this helper's threads: {error}"))?;
+    let sandbox = group(&run.cgroup)?;
+    let command_group = match &run.command_cgroup {
+        Some(path) => Some(group(path)?),
         None => None,
     };
-    join(&run.cgroup)?;
+    let fork = process.fork_into(Some(sandbox.as_fd()));
+    match fork.map_err(|error| format!("starting in the Sandbox's cgroup: {error}"))? {
+        Some(child) => return Ok(mirror(pid(child))),
+        None => drop(sandbox),
+    }
     stamps.mark("helper.cgroup_join");
     let namespaces = Namespaces::open(run.init)?;
     namespaces.enter()?;
@@ -94,11 +115,8 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
         let path = layerfs_bridge::sandbox_runtime::search_path(&path, runtime);
         command.env("PATH", path);
     }
-    if let Some(procs) = command_procs {
-        layerfs_sandbox_backend::local::start_in_cgroup(&mut command, procs);
-    }
     layerfs_sandbox_backend::local::deny_user_namespaces(&mut command);
-    let mut child = match command.spawn() {
+    let child = match start(&process, &mut command, command_group.as_ref()) {
         Ok(child) => child,
         // the command never started: this stage's own failure, which must
         // never look like the command's status
@@ -106,24 +124,75 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
     };
     stamps.mark("helper.bash_spawn");
     // the command is in its group: the backend may record its stop handle
-    if run.command_cgroup.is_some() {
+    if command_group.is_some() {
         let ready = std::io::stdin().as_fd().try_clone_to_owned();
         if let Err(error) = ready.and_then(|fd| File::from(fd).write_all(b"r")) {
-            let _ = child.kill();
-            let _ = child.wait();
+            let _ = kill(child, Signal::SIGKILL);
+            let _ = wait(child);
             fail(&format!("telling the command started: {error}"));
         }
         stamps.mark("helper.ready");
     }
-    let status = child
-        .wait()
-        .map_err(|error| format!("waiting for the command: {error}"))?;
+    let code = wait(child).map_err(|error| format!("waiting for the command: {error}"))?;
     stamps.mark("helper.bash");
     stamps.write();
-    Ok(status
-        .code()
-        .or_else(|| status.signal().map(|signal| 128 + signal))
-        .unwrap_or(super::EXIT_FAILURE))
+    Ok(code)
+}
+
+/// Starts `command` in a child created inside `group` (this process's own
+/// group with none), and returns once it runs: its exec succeeded, which
+/// closes the close-on-exec pipe its child would otherwise report why it
+/// could not on.
+fn start(process: &OneThread, command: &mut Command, group: Option<&File>) -> io::Result<Pid> {
+    let (mut said, told) = nix::unistd::pipe2(nix::fcntl::OFlag::O_CLOEXEC)
+        .map(|(read, write)| (File::from(read), File::from(write)))?;
+    let Some(child) = process.fork_into(group.map(|group| group.as_fd()))? else {
+        drop(said);
+        let error = command.exec();
+        let code = error.raw_os_error().unwrap_or(nix::libc::EIO);
+        let _ = (&told).write_all(&code.to_ne_bytes());
+        std::process::exit(super::EXIT_FAILURE)
+    };
+    drop(told);
+    let child = pid(child);
+    let mut reason = Vec::new();
+    said.read_to_end(&mut reason)?;
+    let Ok(code) = <[u8; 4]>::try_from(reason.get(..4).unwrap_or_default()) else {
+        return Ok(child);
+    };
+    let _ = wait(child);
+    Err(io::Error::from_raw_os_error(i32::from_ne_bytes(code)))
+}
+
+/// The exit code of child `child`, 128 + signal for one a signal ended.
+fn wait(child: Pid) -> io::Result<i32> {
+    loop {
+        match waitpid(child, None) {
+            Ok(WaitStatus::Exited(_, code)) => return Ok(code),
+            Ok(WaitStatus::Signaled(_, signal, _)) => return Ok(128 + signal as i32),
+            Ok(_) | Err(nix::errno::Errno::EINTR) => continue,
+            Err(errno) => return Err(errno.into()),
+        }
+    }
+}
+
+/// The fork's parent ends as its child, which does the work, ended: with
+/// its exit code, or with a signal when a signal ended it (the Sandbox
+/// stopped under it, or it failed), so the backend reads the same either way
+/// as from a helper that did the work itself.
+fn mirror(child: Pid) -> i32 {
+    loop {
+        match waitpid(child, None) {
+            Ok(WaitStatus::Exited(_, code)) => return code,
+            Ok(WaitStatus::Signaled(..)) => end(),
+            Ok(_) | Err(nix::errno::Errno::EINTR) => continue,
+            Err(_) => end(),
+        }
+    }
+}
+
+fn pid(child: u32) -> Pid {
+    Pid::from_raw(child as i32)
 }
 
 /// The stage times of a traced command: `<step> <microseconds since the
@@ -189,29 +258,26 @@ impl Namespaces {
 /// A container's search path, for a command started with none.
 const CONTAINER_PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
-/// Group `cgroup`'s process list, opened to move a process into it.
-fn procs(cgroup: &Path) -> Result<File, String> {
+/// Group `cgroup`'s directory, opened to create a process inside it.
+fn group(cgroup: &Path) -> Result<File, String> {
     fs::OpenOptions::new()
-        .write(true)
-        .open(cgroup.join("cgroup.procs"))
+        .read(true)
+        .custom_flags(nix::libc::O_DIRECTORY)
+        .open(cgroup)
         .map_err(|error| format!("opening {}: {error}", cgroup.display()))
-}
-
-/// The Sandbox's cgroup, joined by this helper (and so by a command with no
-/// group of its own), so the Sandbox's `cgroup.kill` ends them too.
-fn join(cgroup: &Path) -> Result<(), String> {
-    let pid = nix::unistd::getpid().as_raw();
-    let mut file =
-        procs(cgroup).map_err(|error| format!("joining the Sandbox's cgroup: {error}"))?;
-    file.write_all(pid.to_string().as_bytes())
-        .map_err(|error| format!("joining the Sandbox's cgroup: {error}"))
 }
 
 /// Ends this stage the way only a failure can: with a signal, never an exit
 /// code, so the caller cannot read it as the command's status.
 fn fail(message: &str) -> ! {
     eprintln!("layerfs-sandbox-helper: {message}");
-    let _ = nix::sys::signal::raise(nix::sys::signal::Signal::SIGKILL);
+    end()
+}
+
+/// `SIGKILL` to this process by its pid, not `raise`: a forked child's C
+/// library may still hold its parent's thread id.
+fn end() -> ! {
+    let _ = kill(nix::unistd::getpid(), Signal::SIGKILL);
     std::process::abort()
 }
 

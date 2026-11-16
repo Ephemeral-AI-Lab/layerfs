@@ -14,8 +14,15 @@
 //! filtered by its own numbers; an ABI the filter does not know is killed.
 //!
 //! The only `unsafe` of this crate on Linux: the two `prctl` calls in the
-//! command's process, between fork and exec. No seccomp crate is used.
-use nix::libc::{self, sock_filter, sock_fprog};
+//! command's process, between fork and exec, and the helper's `clone3`
+//! ([`OneThread::fork_into`]), which creates the helper inside its
+//! Sandbox's cgroup and each command inside its own (layerfs-project#113)
+//! without moving a process. No seccomp crate is used.
+use nix::{
+    fcntl::OFlag,
+    libc::{self, sock_filter, sock_fprog},
+    sys::stat::Mode,
+};
 use std::{io, os::unix::process::CommandExt, process::Command};
 
 /// Offsets into the kernel's `struct seccomp_data`: the call's number, its
@@ -134,22 +141,87 @@ fn program() -> Vec<sock_filter> {
     program
 }
 
-/// Makes `command` start in the cgroup whose `cgroup.procs` is `procs`
-/// (opened by the caller, whose credentials the kernel checks the move
-/// against): its process writes `0` there just before exec, so the
-/// command and everything it starts are in that group while its parent
-/// never is (layerfs-project#113). A failed move fails the spawn: the
-/// command never runs outside its group.
-pub fn start_in_cgroup(command: &mut Command, procs: std::fs::File) {
-    // SAFETY: the hook runs in the forked child before exec. It allocates
-    // nothing and takes no lock: one `write` system call on a descriptor
-    // opened before the fork, which is async-signal-safe.
-    #[allow(unsafe_code)]
-    unsafe {
-        command.pre_exec(move || {
-            use std::io::Write;
-            (&procs).write_all(b"0")
-        });
+/// `CLONE_INTO_CGROUP` (linux/sched.h, Linux 5.7): `libc` declares it with
+/// a type it overflows.
+const CLONE_INTO_CGROUP: u64 = 0x2_0000_0000;
+
+/// A process with one thread, which may therefore fork without exec: the
+/// namespaces helper (layerfs-project#113). It keeps its PID namespace's
+/// `/proc` open and checks `<pid>/task` there before each fork, so the
+/// check reads the calling process's own threads in a forked child too, and
+/// after it entered a Sandbox's mount namespace, where `/proc/self` no
+/// longer resolves.
+pub struct OneThread(std::os::fd::OwnedFd);
+
+impl OneThread {
+    /// This process, refused unless it has one thread.
+    pub fn open() -> io::Result<Self> {
+        let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_CLOEXEC;
+        let process = Self(nix::fcntl::open("/proc", flags, Mode::empty())?);
+        process.check()?;
+        Ok(process)
+    }
+
+    fn check(&self) -> io::Result<()> {
+        let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_CLOEXEC;
+        let task = format!("{}/task", nix::unistd::getpid());
+        let mut task = nix::dir::Dir::openat(&self.0, task.as_str(), flags, Mode::empty())?;
+        let mut threads = 0;
+        for entry in task.iter() {
+            if !matches!(entry?.file_name().to_bytes(), b"." | b"..") {
+                threads += 1;
+            }
+        }
+        match threads {
+            1 => Ok(()),
+            _ => Err(io::Error::other("forking needs a process with one thread")),
+        }
+    }
+
+    /// Forks this process, its child created inside the cgroup whose
+    /// directory `group` is open (`clone3` with `CLONE_INTO_CGROUP`), or
+    /// in this process's own with none. Nothing moves between groups, so
+    /// the kernel takes its process-migration lock only as a reader and
+    /// waits for no RCU grace period, which a write of a pid to
+    /// `cgroup.procs` does (5–28 ms measured per write after an idle spell).
+    /// The caller gets the child's pid; the child gets `None`.
+    pub fn fork_into(&self, group: Option<std::os::fd::BorrowedFd<'_>>) -> io::Result<Option<u32>> {
+        use std::os::fd::AsRawFd;
+        self.check()?;
+        let (flags, cgroup) = match group {
+            Some(group) => (CLONE_INTO_CGROUP, group.as_raw_fd() as u64),
+            None => (0, 0),
+        };
+        let mut arguments = libc::clone_args {
+            flags,
+            pidfd: 0,
+            child_tid: 0,
+            parent_tid: 0,
+            exit_signal: libc::SIGCHLD as u64,
+            stack: 0,
+            stack_size: 0,
+            tls: 0,
+            set_tid: 0,
+            set_tid_size: 0,
+            cgroup,
+        };
+        let size = std::mem::size_of::<libc::clone_args>();
+        // SAFETY: with no CLONE_VM and no stack this is a fork: the child
+        // gets its own copy of the address space and continues here. The
+        // process has one thread (checked just above, and only that thread
+        // could have started another since), so no lock or allocator state
+        // is held by a thread the child lacks. No fork handler runs; the C
+        // library's guard locks against other threads, of which there are
+        // none. `arguments` outlives the call, which reads it once.
+        #[allow(unsafe_code)]
+        let pid = unsafe { libc::syscall(libc::SYS_clone3, &mut arguments, size) };
+        match pid {
+            -1 => Err(io::Error::last_os_error()),
+            0 => Ok(None),
+            pid => u32::try_from(pid)
+                .map(Some)
+                .map_err(|_| io::Error::other("clone3 child process id width")),
+        }
     }
 }
 
