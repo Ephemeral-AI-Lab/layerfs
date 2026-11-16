@@ -16,11 +16,13 @@ use super::provider::HistoryProvider;
 use super::rows::{cell, object};
 use super::transaction::Transaction;
 use crate::backend::records::Param;
+use crate::backend::sqlite::session::transaction::Completion;
 use layerfs_content::filesystem::{FilesystemRoot, InodeScope};
 use layerfs_content::inode_leaf::INODE_VALUE_BYTES;
 use layerfs_content::object::decode_references;
 use layerfs_content::{ConstructionPolicy, ObjectId, ObjectRole};
 use layerfs_history::error::{HistoryError, HistoryResult};
+use layerfs_history::records::GcIntent;
 use layerfs_storage::{
     encoding::pool::PoolReader,
     encoding::{
@@ -269,6 +271,47 @@ impl HistoryProvider {
             }),
             #[cfg(feature = "postgresql")]
             crate::backend::Engine::Postgres(_) => self.write_snapshot(mark),
+        }
+    }
+
+    /// The §6.3 compaction mark under one admission intent, as one write
+    /// transaction whose caller decides whether it survives.
+    ///
+    /// `decide` sees the completed [`MarkResult`] and returns `true` to keep
+    /// the transaction (a `rebuild`) or `false` to roll it back (a `none`). §5.1
+    /// registers the exclusive operation intent inside the same transaction, so
+    /// a rollback takes it with the closure: the live Store then keeps no
+    /// `kept_node` row, no `gc_intent` row and no committed WAL frame, and the
+    /// §3 `none` path writes nothing that survives the call. The §6.3 visited
+    /// scratch is a separate temp database on both paths; the caller deletes it
+    /// after a rollback and keeps it for the rebuild's build phase.
+    pub(crate) fn mark_for_compaction(
+        &self,
+        scratch: &Path,
+        intent: &GcIntent,
+        decide: impl FnOnce(&MarkResult) -> HistoryResult<bool>,
+    ) -> HistoryResult<(MarkResult, bool)> {
+        match &self.engine {
+            crate::backend::Engine::Sqlite(session) => session.run_decided(true, |backend| {
+                let tx = Transaction::new(backend);
+                super::admission::register_in(&tx, intent, false)?;
+                let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
+                let mark = mark_recorded(&tx, Some(&sink))?;
+                sink.finish()?;
+                let keep = decide(&mark)?;
+                let completion = if keep {
+                    Completion::Commit
+                } else {
+                    Completion::Rollback
+                };
+                Ok(((mark, keep), completion))
+            }),
+            #[cfg(feature = "postgresql")]
+            crate::backend::Engine::Postgres(_) => {
+                let mark = self.write_snapshot(mark)?;
+                let keep = decide(&mark)?;
+                Ok((mark, keep))
+            }
         }
     }
 }

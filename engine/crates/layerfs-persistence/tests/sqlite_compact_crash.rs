@@ -5,7 +5,8 @@
 //! exact artifact set, the live objects still readable, the admission record
 //! and the op/phase/uncertain `store.status` projection. It then runs the next
 //! `store.compact` and asserts it settles (installed) or rebuilds (pre-install)
-//! and leaves a clean Store.
+//! and leaves a clean Store: no intent and no `kept_node` row from either the
+//! recorded run or the `none` recovery's rolled-back mark.
 //!
 //! The expectations below are backend-neutral data; a PostgreSQL harness can
 //! reuse the same table with its own failpoints and its own artifact set.
@@ -377,6 +378,15 @@ struct Recovery<'a> {
     op: [u8; 16],
 }
 
+fn table_rows(path: &Path, table: &str) -> i64 {
+    let connection = rusqlite::Connection::open(path).unwrap();
+    connection
+        .query_row(&format!("SELECT count(*) FROM {table}"), [], |row| {
+            row.get(0)
+        })
+        .unwrap()
+}
+
 /// Reopens the crashed Store, asserts the §9 state (wholly old or wholly new,
 /// live data readable, exact artifacts) and then proves the next
 /// `store.compact` settles or rebuilds and leaves a clean Store.
@@ -483,6 +493,14 @@ fn assert_recovery(recovery: Recovery<'_>) {
     );
     assert!(!located(&final_handles, dead), "the dead pack is collected");
     assert!(intents(&final_handles).is_empty(), "the intent is released");
+    // The recorded run's transient §6.1 closure is settled too: an installed
+    // leftover carries the copy the build made and a pre-install one carries
+    // the committed mark's rows, and the next run must leave neither behind.
+    assert_eq!(
+        table_rows(store, "kept_node"),
+        0,
+        "the settled mark leaves no kept_node rows at {case:?}"
+    );
     // Closure and the full doctor both pass on the settled Store.
     final_handles.history.mark().unwrap();
     clean(&final_handles);

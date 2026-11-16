@@ -6,7 +6,6 @@ use super::build::pack_lengths;
 use super::build::BuildInput;
 use super::install::abort_before_install;
 use super::install::abort_run;
-use super::install::clear_artifacts;
 use super::install::install_fence;
 use super::install::prepare_target;
 use super::install::remove_scratch;
@@ -29,7 +28,6 @@ use super::types::CompactPath;
 use super::types::CompactReceipt;
 use super::types::CompactRequest;
 use super::types::CompactResidue;
-use super::types::MarkTuple;
 use super::verify::immutable_digest;
 use super::verify::immutable_tuple;
 use super::verify::live_tuple;
@@ -43,7 +41,7 @@ use layerfs_history::error::HistoryResult;
 use layerfs_history::records::GcIntent;
 use layerfs_history::records::GcIntentKind;
 use layerfs_history::records::GcScopeKind;
-use layerfs_history::HistoryCatalog;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 impl SqliteHandles {
@@ -101,8 +99,6 @@ impl SqliteHandles {
             // §7 step 1: the exclusive lane first, so the generation this run
             // records cannot move between the mark, the seal and the rename.
             let lane = session.hold_lane().map_err(HistoryError::from)?;
-            // §7 step 1's sealed source's WAL is emptied after admission, so
-            // the intent's own write is checkpointed with it.
             let live = live_tuple(&session)?;
             let generation = u64::try_from(live.generation)
                 .map_err(|_| HistoryError::Integrity("Store generation"))?;
@@ -110,10 +106,10 @@ impl SqliteHandles {
             settle_leftover(&history, &store, generation, metrics)?;
 
             let op_id = request.op_id;
-            // Spec 5.1: the exclusive operation intent is registered before
-            // the first checkpoint, so a removal sees an admitted compaction
-            // even while the WAL is being emptied, and the whole run is one
-            // admitted sequence.
+            // Spec 5.1: the operation intent is written inside the mark's one
+            // write transaction, *before* the first checkpoint. A `none`
+            // decision rolls that transaction back, so the intent (like the
+            // transient `kept_node` rows) never reaches the live Store.
             let intent = GcIntent::operation(
                 op_id,
                 GcIntentKind::Compaction,
@@ -125,7 +121,11 @@ impl SqliteHandles {
                 request.owner_boot.as_deref(),
             )
             .with_phase(Some("mark"));
-            history.gc_register(&intent)?;
+            // The op record is written before the mark so a crash inside the
+            // mark transaction (which creates the §6.3 visited scratch before
+            // it decides) leaves a *recorded* run for the next call to adopt,
+            // never an unrecorded staged name (§9). The mark phase overwrites
+            // it once the mark's tuple and digest are known.
             let mut op = RunOp {
                 op_id,
                 generation: live.generation,
@@ -138,85 +138,92 @@ impl SqliteHandles {
                 live_heads_digest: [0u8; 32],
             };
             if let Err(error) = op.write(&store) {
-                let _ = history.gc_release(&op_id);
                 return Err(error);
             }
-            // §7 step 1: with the lane held, no writer can append while the
-            // intent, the op record and the WAL are settled together.
-            if let Err(error) = session.checkpoint_holding() {
-                let _ = history.gc_release(&op_id);
-                let _ = std::fs::remove_file(op_path(&store));
-                return Err(HistoryError::from(error));
-            }
-            // §8: the registration, the mark and the totals read are one
-            // admitted sequence. A definite failure here releases the intent
-            // before the artifact set and the op record go, so the Store is
-            // left exactly as it was and no later call meets BusyOp.
+
             metrics.begin_phase(CompactPhase::Mark);
-            let admitted =
-                (|| -> HistoryResult<(MarkResult, MarkTuple, u64, u64, CompactKeptWaste, u64)> {
-                    // §6.3: the visited set is streamed into the temp-file table while the
-                    // walk discovers objects, so the build joins it instead of a second pass.
-                    let mark = history.mark_with_scratch(&visited_path(&store))?;
-                    let tuple = live_tuple(&session)?;
-                    op.tuple = tuple.clone();
-                    op.live_heads_digest = mark.live_heads_digest();
-                    op.phase = "mark".to_owned();
-                    op.write(&store)?;
-                    let lengths = pack_lengths(&session)?;
-                    let total = lengths.values().copied().fold(0u64, u64::saturating_add);
-                    let mut live_stored = 0u64;
-                    for pack in mark.objects().packs() {
-                        let length = lengths
-                            .get(pack)
-                            .ok_or(HistoryError::Integrity("mark pack"))?;
-                        live_stored = live_stored.saturating_add(*length);
-                    }
-                    let dead = total.saturating_sub(live_stored);
-                    let kept_waste = CompactKeptWaste::from_waste(mark.objects().waste());
-                    let history_rows = u64::try_from(tuple.history_rows).unwrap_or(0);
-                    Ok((mark, tuple, total, dead, kept_waste, history_rows))
-                })();
-            let (mark, tuple, total, dead, kept_waste, history_rows) = match admitted {
-                Ok(admitted) => admitted,
+            // Every pack descriptor is fixed while the lane is held, so the
+            // §6.4 decision reads them once around the mark instead of asking
+            // the Store per reached pack.
+            let lengths = match pack_lengths(&session) {
+                Ok(lengths) => lengths,
+                Err(error) => {
+                    let _ = std::fs::remove_file(op_path(&store));
+                    return Err(error);
+                }
+            };
+            let total = lengths.values().copied().fold(0u64, u64::saturating_add);
+            let decide = |mark: &MarkResult| -> HistoryResult<bool> {
+                let live_stored = live_stored_bytes(&lengths, mark)?;
+                let dead = total.saturating_sub(live_stored);
+                Ok(total > 0 && dead.saturating_mul(10) >= total)
+            };
+            // §5.1/§6.3/§8: the registration, the §6.1 closure and the §6.2
+            // walk are ONE write transaction. `rebuild` commits it; `none`
+            // rolls it back, so §3's `nothing is written` holds in the Store's
+            // own file: no `kept_node` row, no `gc_intent` row and no committed
+            // WAL frame survive the call. The visited scratch is the separate
+            // temp database §6.3 allows; `none` deletes it below.
+            let decided = history.mark_for_compaction(&visited_path(&store), &intent, decide);
+            let (mark, rebuild) = match decided {
+                Ok(decided) => decided,
+                Err(error) => {
+                    // The rolled-back mark released nothing, and a sink that
+                    // already finished leaves its scratch for us to drop.
+                    let _ = remove_scratch(&visited_path(&store));
+                    let _ = std::fs::remove_file(op_path(&store));
+                    return Err(error);
+                }
+            };
+            let tuple = match live_tuple(&session) {
+                Ok(tuple) => tuple,
                 Err(error) => {
                     abort_run(&history, &store, &op_id);
                     return Err(error);
                 }
             };
-            let rebuild = total > 0 && dead.saturating_mul(10) >= total;
-            metrics.end_phase();
+            let live_stored = match live_stored_bytes(&lengths, &mark) {
+                Ok(live_stored) => live_stored,
+                Err(error) => {
+                    abort_run(&history, &store, &op_id);
+                    return Err(error);
+                }
+            };
+            let dead = total.saturating_sub(live_stored);
+            let kept_waste = CompactKeptWaste::from_waste(mark.objects().waste());
+            let history_rows = u64::try_from(tuple.history_rows).unwrap_or(0);
 
             if !rebuild {
-                // §3/§6.3 `none`: mark only. The mark streamed the closure to
-                // `<store>.compact-visited`; the none path deletes it before it
-                // replies and counts it in `peakTempBytes`, so the live Store
-                // keeps no mark state. The transient `kept_node` rows the mark
-                // wrote are cleared and the admission intent released, so the
-                // generation is unchanged.
+                // §3/§6.3 `none`: the mark's write transaction was rolled back,
+                // so the live Store keeps no mark state and no admission
+                // intent. Only the visited scratch was written, and it counts
+                // in `peakTempBytes` until it is deleted before the reply.
                 let scratch = visited_path(&store);
                 let visited_bytes = match std::fs::metadata(&scratch) {
                     Ok(metadata) => metadata.len(),
                     Err(_) => {
-                        abort_run(&history, &store, &op_id);
+                        abort_before_install(&store, None);
                         return Err(HistoryError::Integrity("visited scratch"));
                     }
                 };
                 if let Err(error) = remove_scratch(&scratch) {
-                    abort_run(&history, &store, &op_id);
+                    abort_before_install(&store, None);
                     return Err(error);
                 }
-                if let Err(error) = history.clear_kept_node() {
-                    abort_run(&history, &store, &op_id);
-                    return Err(error);
+                let (free, page) = match live_page_metrics(&session) {
+                    Ok(metrics) => metrics,
+                    Err(error) => {
+                        abort_before_install(&store, None);
+                        return Err(error);
+                    }
+                };
+                metrics.end_phase();
+                if std::fs::remove_file(op_path(&store)).is_err()
+                    && std::fs::symlink_metadata(op_path(&store)).is_ok()
+                {
+                    abort_before_install(&store, None);
+                    return Err(HistoryError::Integrity("compaction record"));
                 }
-                let (free, page) = live_page_metrics(&session)?;
-                history.gc_release(&op_id)?;
-                // The mark created the visited scratch even on this path; the
-                // `none` answer leaves no residue, exactly as it leaves no
-                // staged Store.
-                let _ = clear_artifacts(&store);
-                let _ = std::fs::remove_file(op_path(&store));
                 let _ = sync_directory(&store);
                 drop(lane);
                 return Ok(receipt(
@@ -236,7 +243,22 @@ impl SqliteHandles {
             }
 
             // §7 step 2: a stop here leaves the open session, the writer lane,
-            // the admission intent and the op record; the live Store is at `G`.
+            // the committed intent, the visited scratch and the op record; the
+            // live Store is at `G`.
+            op.tuple = tuple.clone();
+            op.live_heads_digest = mark.live_heads_digest();
+            op.phase = "mark".to_owned();
+            if let Err(error) = op.write(&store) {
+                abort_run(&history, &store, &op_id);
+                return Err(error);
+            }
+            // §7 step 1: with the lane held, no writer can append while the
+            // intent, the op record and the WAL are settled together.
+            if let Err(error) = session.checkpoint_holding() {
+                abort_run(&history, &store, &op_id);
+                return Err(HistoryError::from(error));
+            }
+            metrics.end_phase();
             stop_at(request, CompactFailpoint::BeforeSeal, &op, &store)?;
 
             // §7 step 2 onward: seal and rebuild. Only the session remains.
@@ -424,4 +446,17 @@ impl SqliteHandles {
             ))
         }
     }
+}
+
+/// The stored bytes of every pack the mark retains, from the one read of the
+/// Store's fixed pack descriptors the run takes while it holds the lane.
+fn live_stored_bytes(lengths: &BTreeMap<i64, u64>, mark: &MarkResult) -> HistoryResult<u64> {
+    let mut live = 0u64;
+    for pack in mark.objects().packs() {
+        let length = lengths
+            .get(pack)
+            .ok_or(HistoryError::Integrity("mark pack"))?;
+        live = live.saturating_add(*length);
+    }
+    Ok(live)
 }

@@ -390,8 +390,12 @@ fn validate_mount(tx: &Transaction<'_>, intent: &GcIntent) -> HistoryResult<()> 
     }
 }
 
-/// One registration in its own write transaction.
-fn register_in(tx: &Transaction<'_>, intent: &GcIntent, _postgres: bool) -> HistoryResult<()> {
+/// One registration inside the caller's write transaction.
+pub(super) fn register_in(
+    tx: &Transaction<'_>,
+    intent: &GcIntent,
+    _postgres: bool,
+) -> HistoryResult<()> {
     validate_mount(tx, intent)?;
     let found = settle_dead(tx, conflicts_for(tx, intent)?)?;
     if !found.is_empty() {

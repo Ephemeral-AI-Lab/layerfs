@@ -114,8 +114,9 @@ installed → it records the outcome. A dead owner's op is adopted; only a live 
 - **Four SQLite deviations from the frozen text** are recorded in
   [`gc-42-decisions.md`](gc-42-decisions.md) D1–D4: the prune runs with
   `foreign_keys=OFF` + `defer_foreign_keys=ON`; the build is the whole-Store
-  `VACUUM INTO` + delete with a ~2.9× peak (§8); `none` writes a transient
-  visited scratch; the settle records a `cleanup` phase.
+  `VACUUM INTO` + delete with a ~2.9× peak (§8); `none` writes only a transient
+  visited scratch and rolls its mark transaction back; the settle records a
+  `cleanup` phase.
 
 ## 6. First 10 minutes
 
@@ -233,7 +234,7 @@ behaviour on this branch.
 |---|---|---|
 | D1 (§7 step 4) | `PRAGMA foreign_keys=ON` outside the transaction | prune runs `foreign_keys=OFF` + `defer_foreign_keys=ON`; the step 6 `foreign_key_check` on the `immutable=1` open is the guard |
 | D2 (S5/§3/§7) | "copies only retained rows into a fresh Store"; peak old + new + journal + visited | whole-Store `VACUUM INTO` + delete + `VACUUM`; peak ≈2.9× the Store (§8) |
-| D3 (§3/§7 step 1.5) | `none` writes nothing; delete the scratch and stop | `none` spills the closure to `<store>.compact-visited`, deletes it before replying, counts it in `peakTempBytes`; no residue survives |
+| D3 (§3/§7 step 1.5) | `none` writes nothing; delete the scratch and stop | `none` spills the closure to `<store>.compact-visited`, counts it in `peakTempBytes` and deletes it before replying; the mark and its intent are one transaction that is rolled back, so no `kept_node`/`gc_intent` row and no WAL frame survives |
 | D4 (§11) | SQLite phases `mark`, `build`, `verify`, `install` | the settle also writes `cleanup` (§1) |
 
 Operators do not need to act on D1–D4 during an incident: the artifact set, the

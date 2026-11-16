@@ -225,28 +225,6 @@ pub(crate) fn clear_installed_mark(store: &Path, op_id: &[u8; 16]) -> bool {
     cleared && closed
 }
 
-/// Releases the compaction's admission intent after the seal, when the run
-/// holds no session: the row is in the Store file, so one raw delete on the
-/// live path is enough. A failure keeps the op record, which the next run's
-/// `settle_leftover` adopts (§9).
-pub(crate) fn release_intent(store: &Path, op_id: &[u8; 16]) -> bool {
-    let Ok(connection) = Connection::open_with_flags(
-        store,
-        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    ) else {
-        return false;
-    };
-    let _ = connection.busy_timeout(std::time::Duration::from_secs(5));
-    let deleted = connection
-        .execute(
-            &format!("DELETE FROM gc_intent WHERE op_id=x'{}'", hex(op_id)),
-            params![],
-        )
-        .is_ok();
-    let closed = connection.close().is_ok();
-    deleted && closed
-}
-
 /// Removes the §6.3 visited scratch a `none` path created: the file and any
 /// journal SQLite might have left. `none` replies only after it is gone, so it
 /// leaves no residue (§6.3, §9).
@@ -266,12 +244,12 @@ pub(crate) fn remove_scratch(scratch: &Path) -> HistoryResult<()> {
 }
 
 /// Drops every artifact and the op record after a definite failure before the
-/// rename; the live Store is unchanged apart from the seal's checkpoint and the
-/// release of the admission intent (§8/§9). `op_id` names the intent to release
-/// when the run no longer holds a session; `None` means it was already released
-/// before the seal.
+/// rename; the live Store is unchanged apart from the seal's checkpoint, the
+/// released admission intent and the cleared `kept_node` closure the committed
+/// mark left (§8/§9). `op_id` names the intent to release when the run no
+/// longer holds a session; `None` means the session already released both.
 pub(crate) fn abort_before_install(store: &Path, op_id: Option<&[u8; 16]>) {
-    let released = op_id.is_none_or(|op_id| release_intent(store, op_id));
+    let released = op_id.is_none_or(|op_id| clear_installed_mark(store, op_id));
     let residue = clear_artifacts(store);
     if residue.artifacts.is_empty() && released {
         let _ = std::fs::remove_file(op_path(store));
@@ -279,14 +257,16 @@ pub(crate) fn abort_before_install(store: &Path, op_id: Option<&[u8; 16]>) {
     let _ = sync_directory(store);
 }
 
-/// Releases the admission intent of a definite failure before the seal and
-/// then removes the artifact set and the op record. When the release itself
-/// fails the op record is kept as the next run's recovery breadcrumb (§9):
-/// deleting it would leave a live intent that no later call could settle.
+/// Releases the admission intent and the transient §6.1 `kept_node` closure of
+/// a definite failure before the seal, then removes the artifact set and the op
+/// record. When the release itself fails the op record is kept as the next
+/// run's recovery breadcrumb (§9): deleting it would leave a live intent that
+/// no later call could settle.
 pub(crate) fn abort_run(history: &crate::HistoryProvider, store: &Path, op_id: &[u8; 16]) {
     if history.gc_release(op_id).is_ok() {
-        // The intent is already gone; only the artifact set and the record
-        // remain to be dropped.
+        // The committed mark's closure is transient state: no abort may leave
+        // it behind for a later run to mistake for a mark.
+        let _ = history.clear_kept_node();
         abort_before_install(store, None);
     }
 }
@@ -329,8 +309,12 @@ pub(crate) fn settle_leftover(
     if op.generation > current {
         return Err(HistoryError::Integrity("compaction record generation"));
     }
-    // Adopt the recorded owner's admission intent before its artifact is gone.
+    // Adopt the recorded owner's admission intent before its artifact is gone,
+    // and clear the transient §6.1 `kept_node` closure its mark left: the
+    // installed Store carries a copy of it, and a pre-install leftover carries
+    // the committed mark's rows in the live Store.
     history.gc_release(&op.op_id)?;
+    history.clear_kept_node()?;
     let residue = clear_artifacts(store);
     if !residue.artifacts.is_empty() {
         return Err(HistoryError::Integrity(

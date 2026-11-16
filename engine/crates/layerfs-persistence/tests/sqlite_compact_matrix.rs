@@ -1216,7 +1216,7 @@ const MATRIX: [Row; 60] = [
         evidence: &["engine/crates/layerfs-persistence/tests/sqlite_compact_fixtures.rs#the_sqlite_compaction_receipts_match_the_golden_transcript",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_before_copy",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs#crash_during_copy"],
-        note: "none deletes the scratch and leaves no .compact; rebuild keeps the visited scratch through the build; step 2 writes only on rebuild." },
+        note: "none rolls its mark transaction back (no kept_node row, no gc_intent row, no committed WAL frame), deletes the scratch and leaves no .compact; rebuild commits the mark and keeps the visited scratch through the build; step 2 writes only on rebuild." },
     Row { id: "AC-59", backend: Backend::Sqlite, tier: "E2", status: Status::Executed,
         evidence: &["runner#arm_checkpoint_busy", "runner#arm_seal",
                     "engine/crates/layerfs-persistence/tests/sqlite_compact.rs#a_store_replaced_between_seal_and_install_is_stale"],

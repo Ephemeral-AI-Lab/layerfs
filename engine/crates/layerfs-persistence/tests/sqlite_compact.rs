@@ -782,6 +782,20 @@ fn a_capacity_failure_leaves_the_store_unchanged() {
     clean(&final_handles);
 }
 
+/// The Store file's `(size, mtime, database change counter)`: the same tuple the
+/// install fence seals, so an equal tuple across a call means no write was
+/// committed to the file.
+fn store_file_tuple(path: &Path) -> (u64, std::time::SystemTime, u32) {
+    use std::io::{Read as _, Seek as _, SeekFrom};
+    let metadata = std::fs::metadata(path).unwrap();
+    let modified = metadata.modified().unwrap();
+    let mut file = std::fs::File::open(path).unwrap();
+    let mut header = [0u8; 4];
+    file.seek(SeekFrom::Start(24)).unwrap();
+    file.read_exact(&mut header).unwrap();
+    (metadata.len(), modified, u32::from_be_bytes(header))
+}
+
 /// The raw table counts a compaction must leave behind; the Store is closed
 /// after `compact` consumes its handles, so a plain read is safe.
 fn table_count(path: &Path, table: &str) -> i64 {
@@ -808,14 +822,21 @@ mark_stamp=0\nhistory_rows=0\nlive_heads_digest={zeros}\n"
 }
 
 /// #711 finding 1: a `none` compaction writes nothing into the live Store's
-/// persistent state. The mark's transient `kept_node` rows are cleared, the
-/// admission intent released, and the §6.3 visited scratch created and deleted
-/// before the reply (it is the none path's `peakTempBytes`).
+/// persistent state. The §6.1 closure and the §5.1 admission intent are one
+/// write transaction, and the `none` decision rolls it back: no `kept_node`
+/// row, no `gc_intent` row and no WAL frame is committed, so the Store file's
+/// `(size, mtime, change counter)` is unchanged. The §6.3 visited scratch is
+/// created, counted in `peakTempBytes` and deleted before the reply.
 #[test]
 fn a_none_path_leaves_no_mark_state() {
     let (_temp, handles, path) = create_store();
     let live = filesystem_root(&handles, 1);
     initialize(&handles, 1, live);
+    // Close the seeding session first: its close checkpoints the WAL, so the
+    // tuple below is the quiesced file the `none` call must leave untouched.
+    drop(handles);
+    let handles = reopen(&path);
+    let before = store_file_tuple(&path);
     assert_eq!(table_count(&path, "kept_node"), 0);
     let receipt = handles.compact(&request(0x75)).unwrap();
     assert_eq!(receipt.path, CompactPath::None);
@@ -831,12 +852,17 @@ fn a_none_path_leaves_no_mark_state() {
     assert_eq!(
         table_count(&path, "kept_node"),
         0,
-        "the none path leaves no mark state in the live Store"
+        "the rolled-back mark leaves no mark state in the live Store"
     );
     assert_eq!(
         table_count(&path, "gc_intent"),
         0,
-        "the none path leaves no admission intent"
+        "the rolled-back mark leaves no admission intent"
+    );
+    assert_eq!(
+        store_file_tuple(&path),
+        before,
+        "the none path commits no write: the Store file is unchanged"
     );
     clean(&reopen(&path));
 }
