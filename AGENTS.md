@@ -289,9 +289,10 @@ The workflow's §5 keeps the cache-credit failure these rules came from.
 - **CI reports; it never gates** (owner, 2026-10-23). `.github/workflows/ci.yml`
   runs fmt, guards, Clippy and the fast tests after a push or pull request,
   `nightly.yml` the slow and FUSE mount tests, `format.yml` the Ruff check;
-  [tools/ci_tests.py](tools/ci_tests.py) picks the lanes. Neither `ci.yml` nor
-  `format.yml` runs for a pull request into `layerfs_v2_0_0` (owner,
-  2026-11-07). Nothing runs before a push and nothing is required: do not wait
+  [tools/ci_tests.py](tools/ci_tests.py) picks the lanes. CI runs only for
+  `main`: pushes to it and pull requests into it (owner, 2026-11-16);
+  `layerfs_v2_0_0` and every other branch run no lane, stacked pull
+  requests included. Nothing runs before a push and nothing is required: do not wait
   for CI or treat a green run as verification. Verify the changed scope with
   the [product checks](engine/AGENTS.md#checks-and-completion) and report
   checks and gaps. `tools/preflight.sh` stays retired; restore no equivalent
