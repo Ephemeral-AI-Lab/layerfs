@@ -31,6 +31,8 @@ mod observation;
 mod operations;
 #[cfg(unix)]
 mod registry;
+#[cfg(windows)]
+mod registry_windows;
 #[cfg(unix)]
 mod serve;
 #[cfg(target_os = "linux")]
@@ -48,6 +50,8 @@ pub use kernel::{KernelConfig, KernelServing};
 pub(crate) use observation::{reply_token, request_token};
 #[cfg(unix)]
 pub use registry::Service;
+#[cfg(windows)]
+pub use registry_windows::Service;
 #[cfg(unix)]
 pub(crate) use serve::answer_call;
 #[cfg(unix)]
