@@ -1,7 +1,7 @@
 //! The inspect route: where a request runs ([`ask`]), the worker's side of
 //! it ([`in_worker`]), the one match on its kind ([`serve`]) and how a
 //! side finds a Sandbox's run folder ([`run_folder`]).
-use super::{admit, files, live, log, machine, on_owner, overlay, stats, Budget, Side};
+use super::{admit, files, live, log, machine, on_owner, overlay, space, stats, Budget, Side};
 use crate::record::SandboxRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
@@ -38,7 +38,8 @@ pub fn in_worker(root: &Path, args: SdkValue) -> Outcome {
 
 /// One admitted request `{ kind, .. }` on `side`. A kind made of many
 /// units of work (a folder walk) is handed `budget` and checks it between
-/// them: a folder walk between entries, `machine_stats` between Stores and
+/// them: a folder walk between entries (`machine_space`'s too),
+/// `machine_stats` between Stores and
 /// between Sandboxes, `sandboxes_live` between Sandboxes. The other kinds
 /// each read one window or a few sizes.
 pub fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Outcome {
@@ -51,6 +52,7 @@ pub fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Outcome {
         // layerfs-project#164
         stats::KIND => stats::serve(side, request, budget),
         live::KIND => live::serve(side, request, budget),
+        space::KIND => space::serve(side, request, budget),
         other => Err(refused(
             "InvalidInput",
             format!("this build has no inspect kind `{other}`"),

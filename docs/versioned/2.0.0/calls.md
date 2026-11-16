@@ -9,7 +9,7 @@ one file per call under its family in
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 79 calls in eleven families. `layerfs help` lists them, and
+There are 80 calls in eleven families. `layerfs help` lists them, and
 `layerfs help <family> [<call>]` prints one family or one call.
 
 ## How a call is written
@@ -450,7 +450,7 @@ form.
   Routes.
 - Not run for this manual.
 
-### `machine` (14)
+### `machine` (15)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -462,6 +462,7 @@ form.
 | `prune` | `name`, `image`? | `unused` | removes one unpacked image, or with `unused` every one no Sandbox uses but the machine's default: `{removed, freed}` (`freed` measured on the filesystem); an image in use is `InUse` |
 | `status` | `name` | — | a machine's live state, free disk and tool version; `op` while a create or remove holds it (#536 H6) |
 | `stats` | `machine` | — | what a machine has and uses now: processors, memory and data disk, each sqlite Store's size, how many of its Sandboxes have a running daemon (#164). For a UI that polls: it writes no call-log line |
+| `space` | `machine` | — | where a machine's data disk goes: each Store, each Sandbox's run folder, the image cache and LayerFS's logs, and what the disk uses that is not LayerFS's. For a UI: it writes no call-log line |
 | `files` | `machine`, `[path]` | `depth`, `cursor`, `limit`, `offset`, `length` (int) | a machine's LayerFS folders by role, one page of a folder, or one window of a file (#178). For a UI that shows a tree: it writes no call-log line |
 | `start` | `name` | — | starts a stopped machine and its worker and waits until ready; a running one, and `native`, answer at once (#535 P1) |
 | `stop` | `name` | — | stops a machine's worker and, where it has one, its VM; disks stay; `InUse` while Sandboxes run on it (#535 P1) |
@@ -520,6 +521,36 @@ $ layerfs machine status native
   ```text
   $ layerfs machine stats native
   {"machine":"native","platform":"native","observed_at":1794776707857,"worker":null,"resources":{"cpus":14,"memory_total":38654705664,"memory_used":31340068864,"disk_total":994662584320,"disk_used":641705943040,"disk_free":352956641280,"cpu_busy_usec":null,"cpu_total_usec":null,"scope":"host","reason":"cpu_unsupported"},"data_disk":{"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs","volume":null,"inodes_free":3446842200},"stores":[{"name":"shop","bytes":217088,"allocated":217088}],"sandboxes":{"recorded":1,"live":1,"items":[{"name":"web","live":true,"started_at":1794776100211,"usage":null,"usage_reason":"host_process"}]},"complete":true}
+  ```
+- `space` answers `{machine, platform, observed_at, disk, layerfs,
+  outside, parts, stores, sandboxes, unreadable, complete}`: one bounded
+  walk of LayerFS's own folders where the machine's data is, every size the
+  blocks it takes (a file with several names once).
+  - `disk`: `{total, used, free, path, fs, scope}`, the filesystem `stats`
+    measures. `layerfs` is the sum of `parts`, and `outside` is `used` less
+    `layerfs`: what the disk holds that is not LayerFS's (on `vm_disk`,
+    Docker's images, build cache and other volumes). It is `null` unless
+    the walk finished.
+  - `parts`: `{stores, sandboxes, images, other_runs, logs, other}`: the
+    Store folders, the Sandboxes' run folders, the image cache, run folders
+    no recorded Sandbox names, `log/` and `trace/`, and the records.
+  - `stores`: `[{name, bytes}]`; `sandboxes`: one row per recorded Sandbox,
+    `{name, bytes, overlays, writes, home, log, runtime}`: its Workspaces'
+    overlay databases, its own writable layer (what its commands wrote
+    outside Workspaces), its `HOME`, its daemon log and its copies of the
+    daemon and runtime. A row whose run folder was not measured has `null`
+    sizes and `reason` (`no_run_folder`, `outside_run_root`,
+    `record_unreadable`, `deadline`); a row the bound ended inside keeps
+    what it counted, with `deadline`.
+  - `complete`: `false`, with `reason: "deadline"`, when the walk stopped at
+    250,000 entries or 4 s; every number is then a lower bound. `unreadable`
+    counts folders it could not list (`reason` adds `unreadable`).
+  A Workspace mount point and a private root are never entered or
+  `stat`ed, no file is opened and the home itself is never listed. It
+  starts nothing and takes no lock.
+  ```text
+  $ layerfs machine space native
+  {"machine":"native","platform":"native","observed_at":1794817324800,"disk":{"total":994662584320,"used":677787914240,"free":316874670080,"path":"/Users/me/.layerfs","fs":"apfs","scope":"host_fs"},"layerfs":14168064,"outside":677773746176,"parts":{"stores":2277376,"sandboxes":11833344,"images":0,"other_runs":0,"logs":8192,"other":49152},"stores":[{"name":"shop","bytes":2277376}],"sandboxes":[{"name":"web","bytes":11833344,"overlays":8675328,"writes":0,"home":3145728,"log":4096,"runtime":8192}],"unreadable":0,"complete":true}
   ```
 - `files` reads what is on a machine (#178); its options, pages and file
   windows are those of [`sandbox files`](#sandbox-files), and the whole call

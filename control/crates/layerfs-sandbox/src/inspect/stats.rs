@@ -58,24 +58,10 @@ pub(super) const KIND: &str = "machine_stats";
 /// starts it. No lock, lease, Store open or write, here or there.
 pub fn machine_stats(home: &Path, machine: &MachineName) -> Outcome {
     let name = machine.as_str();
-    let record = MachineRecord::read(home, name)?;
-    let platform = (record.as_ref())
-        .and_then(MachineRecord::platform_name)
-        .unwrap_or(if name == "native" { "native" } else { "" })
-        .to_owned();
-    let names =
-        |names: Vec<String>| SdkValue::List(names.into_iter().map(SdkValue::Text).collect());
-    let stores = (layerfs_store::record::stores(home)?.iter())
-        .filter(|store| store.machine().ok().as_deref() == Some(name))
-        .map(|store| store.name().to_owned())
-        .collect();
-    let sandboxes: Vec<String> = (crate::record::sandboxes(home)?.iter())
-        .filter(|sandbox| sandbox.machine() == name)
-        .map(|sandbox| sandbox.name().to_owned())
-        .collect();
-    let recorded = i64::try_from(sandboxes.len()).unwrap_or(i64::MAX);
-    let request = SdkValue::map([("stores", names(stores)), ("sandboxes", names(sandboxes))]);
-    let answer = super::ask(home, name, KIND, request)?;
+    let placed = placed(home, name)?;
+    let recorded = i64::try_from(placed.sandboxes.len()).unwrap_or(i64::MAX);
+    let answer = super::ask(home, name, KIND, placed.request())?;
+    let (record, platform) = (placed.record, placed.platform);
 
     let part = |field: &str| answer.get(field).cloned().unwrap_or_default();
     let (measured, holds) = scopes(&platform);
@@ -127,6 +113,55 @@ pub fn machine_stats(home: &Path, machine: &MachineName) -> Outcome {
     ))
 }
 
+/// What the home records on a machine, as `machine.stats` and
+/// `machine.space` send it to the side that holds its data.
+pub(super) struct Placed {
+    pub(super) record: Option<MachineRecord>,
+    /// Its platform's name (`native` for the built-in machine with no
+    /// record; empty when unknown).
+    pub(super) platform: String,
+    /// The sqlite Stores and the Sandboxes the home places on it.
+    pub(super) stores: Vec<String>,
+    pub(super) sandboxes: Vec<String>,
+}
+
+impl Placed {
+    /// The request `{ stores, sandboxes }`.
+    pub(super) fn request(&self) -> SdkValue {
+        let names = |names: &[String]| SdkValue::List(names.iter().map(SdkValue::text).collect());
+        SdkValue::map([
+            ("stores", names(&self.stores)),
+            ("sandboxes", names(&self.sandboxes)),
+        ])
+    }
+}
+
+/// What the home records on machine `name`.
+pub(super) fn placed(
+    home: &Path,
+    name: &str,
+) -> Result<Placed, layerfs_bridge::control::SdkRefusal> {
+    let record = MachineRecord::read(home, name)?;
+    let platform = (record.as_ref())
+        .and_then(MachineRecord::platform_name)
+        .unwrap_or(if name == "native" { "native" } else { "" })
+        .to_owned();
+    let stores = (layerfs_store::record::stores(home)?.iter())
+        .filter(|store| store.machine().ok().as_deref() == Some(name))
+        .map(|store| store.name().to_owned())
+        .collect();
+    let sandboxes = (crate::record::sandboxes(home)?.iter())
+        .filter(|sandbox| sandbox.machine() == name)
+        .map(|sandbox| sandbox.name().to_owned())
+        .collect();
+    Ok(Placed {
+        record,
+        platform,
+        stores,
+        sandboxes,
+    })
+}
+
 /// What a machine of `platform`'s values measure: whose processors and
 /// memory (`resources.scope`), and what the filesystem holding its data is
 /// (`data_disk.scope`).
@@ -140,7 +175,7 @@ pub fn machine_stats(home: &Path, machine: &MachineName) -> Outcome {
 /// The docker row goes by this host's system, which the caller knows and
 /// a worker in a container cannot tell: Docker Desktop on Linux, which
 /// also runs a VM, reads as `host_fs`.
-fn scopes(platform: &str) -> (&'static str, &'static str) {
+pub(super) fn scopes(platform: &str) -> (&'static str, &'static str) {
     match platform {
         "native" => ("host", "host_fs"),
         "docker" if cfg!(target_os = "linux") => ("engine_host", "host_fs"),
