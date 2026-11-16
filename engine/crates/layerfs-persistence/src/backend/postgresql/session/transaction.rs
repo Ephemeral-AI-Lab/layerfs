@@ -19,6 +19,11 @@ pub(crate) enum Mode {
     Read,
     /// A write, serialized behind the lane row unless nested in a held lane.
     Write,
+    /// A writable repeatable-read snapshot that never waits for the lane row:
+    /// the mark's closure and its `kept_node` write see one fixed snapshot
+    /// while publications continue. A second mark is the only row-level
+    /// contention, and it reports the engine's serialization failure.
+    Snapshot,
     /// A write of new immutable rows only (pack bodies), without the lane.
     Stage,
     /// One publication: pack bodies first, without the lane, then the lane
@@ -214,6 +219,15 @@ impl Session {
         self.run_as(mode, body)
     }
 
+    /// One writable repeatable-read snapshot without the publication lane.
+    /// Used by the mark, whose only writes are `kept_node` rows.
+    pub(crate) fn run_snapshot<T, E: From<BackendError> + OutcomeError>(
+        &self,
+        body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
+    ) -> Result<T, E> {
+        self.run_as(Mode::Snapshot, body)
+    }
+
     /// Immutable rows (packs, locations, inode values) read without a
     /// transaction, as on SQLite: no row they read ever changes.
     pub(crate) fn read_immutable<T, E: From<BackendError> + OutcomeError>(
@@ -257,6 +271,7 @@ impl Session {
         }
         let begin = match mode {
             Mode::Read => self.settings.read_begin(),
+            Mode::Snapshot => self.settings.snapshot_begin(),
             Mode::Write => self.settings.write_begin(!turn.nested),
             Mode::Stage => self.settings.write_begin(false),
             Mode::Publish => self.settings.publish_begin(),

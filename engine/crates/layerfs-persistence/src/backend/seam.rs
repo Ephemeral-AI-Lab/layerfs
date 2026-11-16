@@ -81,4 +81,25 @@ pub(crate) trait Mechanics {
     fn signatures(&self, out: &mut Vec<SignatureRow>) -> Result<(), PersistenceError>;
     fn read_packs(&self, ids: &[i64], out: &mut Vec<PersistedPack>)
         -> Result<(), PersistenceError>;
+    /// The bounded control/directory prefix of one pack and its declared
+    /// length, or `None` when this engine has no bounded prefix read.
+    fn pack_prefix(
+        &self,
+        _id: i64,
+        _limit: usize,
+    ) -> Result<Option<(usize, Vec<u8>)>, PersistenceError> {
+        Ok(None)
+    }
+    /// One pack through the caller's bounded range plan: only the control
+    /// prefix and the selected complete groups are read, never the body behind
+    /// them. The storage port owns the plan and the returned units.
+    fn read_scoped_pack(
+        &self,
+        _id: i64,
+        _plan: &mut dyn layerfs_storage::port::PackReadPlan,
+    ) -> Result<layerfs_storage::port::AcquiredPackRead, PersistenceError> {
+        Err(PersistenceError::Refused {
+            status: "pack range read".to_owned(),
+        })
+    }
 }

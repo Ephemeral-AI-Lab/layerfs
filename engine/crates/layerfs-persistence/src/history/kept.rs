@@ -169,7 +169,7 @@ impl HistoryProvider {
     /// the same rows. Nothing else is written; the object closure (§6.2) starts
     /// from the returned [`KeptHistory::commits`] and [`KeptHistory::layers`].
     pub fn mark_history_closure(&self) -> HistoryResult<KeptHistory> {
-        self.write(mark)
+        self.write_snapshot(mark)
     }
 }
 

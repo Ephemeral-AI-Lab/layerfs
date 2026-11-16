@@ -16,6 +16,13 @@
 //! §7's step-4 payload sweep cannot discover another live object on SQLite.
 //! `deadBytesRefined` therefore equals `deadBytesBound`, as §11 requires for
 //! the `none` path.
+//!
+//! §6.3's visited set is a temp-file table: the mark streams one row per
+//! discovered object into `<store>.compact-visited` while it walks, the build
+//! attaches that file as `scratch`, and the `none`/abort paths delete it with
+//! the rest of the artifact set. A crash at `BeforeSeal` therefore leaves the
+//! visited scratch beside the live Store, where a real `SIGKILL` also leaves
+//! the writer's WAL; the recorded op names it, so the next run settles it.
 
 use super::lifecycle::seal::SealedFacts;
 use super::schema;
@@ -26,7 +33,6 @@ use crate::compact_metrics::{
     self, CompactOutcome, CompactPhase, CompactRefusal, CompactRunObservation,
 };
 use crate::{KeptWaste, MarkResult, SqliteHandles};
-use layerfs_content::ObjectId;
 use layerfs_history::error::{HistoryError, HistoryResult};
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::HistoryCatalog;
@@ -568,9 +574,10 @@ fn artifact_paths(store: &Path) -> Vec<PathBuf> {
         .iter()
         .map(|suffix| with_suffix(store, suffix))
         .collect();
-    let name = store
-        .file_name()
-        .map_or_else(|| store.as_os_str().to_os_string(), |name| name.to_os_string());
+    let name = store.file_name().map_or_else(
+        || store.as_os_str().to_os_string(),
+        |name| name.to_os_string(),
+    );
     let mut prefix = name;
     prefix.push(".compact-mj");
     let prefix = prefix.to_string_lossy().into_owned();
@@ -720,22 +727,6 @@ fn pack_lengths(session: &Arc<Session>) -> HistoryResult<BTreeMap<i64, u64>> {
         .map_err(Into::into)
 }
 
-fn object_packs(session: &Arc<Session>) -> HistoryResult<BTreeMap<ObjectId, i64>> {
-    session
-        .run::<_, BackendError>(false, |tx| {
-            let rows = tx.query("SELECT object_id,pack_id FROM object_location", vec![])?;
-            let mut packs = BTreeMap::new();
-            for row in &rows {
-                let bytes: Vec<u8> = row.get(0)?;
-                let pack: i64 = row.get(1)?;
-                let id = ObjectId::from_bytes(&bytes).map_err(|_| BackendError::Integrity)?;
-                packs.insert(id, pack);
-            }
-            Ok(packs)
-        })
-        .map_err(Into::into)
-}
-
 fn live_page_metrics(session: &Arc<Session>) -> HistoryResult<(u64, u64)> {
     session
         .run::<_, BackendError>(false, |tx| {
@@ -825,69 +816,6 @@ fn file_heads_digest(connection: &Connection) -> HistoryResult<[u8; 32]> {
     Ok(*hasher.finalize().as_bytes())
 }
 
-/// Writes the §6.3 visited set and the retained pack set to the scratch
-/// database the §7 copy joins against. The scratch runs `journal_mode=OFF`, so
-/// it leaves no journal of its own.
-fn write_visited(
-    scratch: &Path,
-    mark: &MarkResult,
-    packs: &BTreeMap<ObjectId, i64>,
-) -> HistoryResult<u64> {
-    if std::fs::symlink_metadata(scratch).is_ok() {
-        return Err(HistoryError::Exists("staged compaction artifact"));
-    }
-    let connection = Connection::open_with_flags(
-        scratch,
-        OpenFlags::SQLITE_OPEN_READ_WRITE
-            | OpenFlags::SQLITE_OPEN_CREATE
-            | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )
-    .map_err(db_error)?;
-    connection
-        .busy_timeout(std::time::Duration::ZERO)
-        .map_err(db_error)?;
-    connection
-        .execute_batch(
-            "PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF;\
-CREATE TABLE visited (\
- object_id BLOB PRIMARY KEY CHECK(length(object_id)=32),\
- pack_id INTEGER NOT NULL\
-) STRICT, WITHOUT ROWID;\
-CREATE TABLE live_pack (pack_id INTEGER PRIMARY KEY) STRICT, WITHOUT ROWID;",
-        )
-        .map_err(db_error)?;
-    connection.execute_batch("BEGIN IMMEDIATE").map_err(db_error)?;
-    {
-        let mut visited = connection
-            .prepare("INSERT OR IGNORE INTO visited(object_id,pack_id) VALUES(?1,?2)")
-            .map_err(db_error)?;
-        let mut live = connection
-            .prepare("INSERT OR IGNORE INTO live_pack(pack_id) VALUES(?1)")
-            .map_err(db_error)?;
-        for pack in mark.objects().packs() {
-            live.execute(params![pack]).map_err(db_error)?;
-        }
-        for id in mark.objects().objects() {
-            let pack = packs
-                .get(id)
-                .ok_or(HistoryError::Integrity("mark object locator"))?;
-            visited
-                .execute(params![id.as_bytes().as_slice(), pack])
-                .map_err(db_error)?;
-        }
-    }
-    connection.execute_batch("COMMIT").map_err(db_error)?;
-    connection.close().map_err(|(_, error)| db_error(error))?;
-    for suffix in ["-journal", "-wal", "-shm"] {
-        let mut sidecar = scratch.as_os_str().to_os_string();
-        sidecar.push(suffix);
-        if std::fs::symlink_metadata(sidecar).is_ok() {
-            return Err(HistoryError::Integrity("visited scratch sidecar"));
-        }
-    }
-    Ok(std::fs::metadata(scratch).map_err(io_error)?.len())
-}
-
 /// What the staged rebuild produced, for the report and the install fence.
 struct Built {
     target: PathBuf,
@@ -945,9 +873,7 @@ fn table_present(connection: &Connection, name: &str) -> HistoryResult<bool> {
 /// The sealed Store and the mark a staged build is measured against.
 struct BuildInput<'a> {
     facts: &'a SealedFacts,
-    mark: &'a MarkResult,
     tuple: &'a MarkTuple,
-    packs: &'a BTreeMap<ObjectId, i64>,
     layout: crate::SqlitePackLayout,
     synchronous: i64,
 }
@@ -962,22 +888,23 @@ fn build(
 ) -> HistoryResult<Built> {
     let BuildInput {
         facts,
-        mark,
         tuple,
-        packs,
         layout,
         synchronous,
     } = input;
     let store = &facts.path;
     let target = compact_path(store);
     let visited = visited_path(store);
-    for staged in [&target, &visited] {
-        if std::fs::symlink_metadata(staged).is_ok() {
-            return Err(HistoryError::Exists("staged compaction artifact"));
-        }
+    // The mark already streamed the §6.3 visited set into `visited`; only the
+    // staged Store is judged here. A missing scratch means the mark's table
+    // did not survive its own transaction.
+    if std::fs::symlink_metadata(&target).is_ok() {
+        return Err(HistoryError::Exists("staged compaction artifact"));
     }
+    let visited_bytes = std::fs::metadata(&visited)
+        .map_err(|_| HistoryError::Integrity("visited scratch"))?
+        .len();
     stop_at(request, CompactFailpoint::BeforeCopy, op, store)?;
-    let visited_bytes = write_visited(&visited, mark, packs)?;
     if capacity {
         // §7 step 3 on a bounded filesystem: `VACUUM INTO` has already created
         // the staged file when the write meets ENOSPC. The abort path removes
@@ -996,9 +923,7 @@ fn build(
     source
         .execute("VACUUM INTO ?1", params![target_text])
         .map_err(db_error)?;
-    source
-        .close()
-        .map_err(|(_, error)| db_error(error))?;
+    source.close().map_err(|(_, error)| db_error(error))?;
     // The copy produced the staged file but has not pruned or verified it.
     stop_at(request, CompactFailpoint::DuringCopy, op, store)?;
     // The staged copy holds the source's whole extent until the final
@@ -1069,7 +994,11 @@ PRAGMA defer_foreign_keys=ON;",
     connection
         .execute_batch(&format!(
             "ATTACH DATABASE '{}' AS scratch;",
-            quote(visited.to_str().ok_or(HistoryError::InvalidInput("compaction path"))?)
+            quote(
+                visited
+                    .to_str()
+                    .ok_or(HistoryError::InvalidInput("compaction path"))?
+            )
         ))
         .map_err(db_error)?;
 
@@ -1195,9 +1124,7 @@ metadata=(SELECT COALESCE(SUM(length),0) FROM pack WHERE domain=0) WHERE id=1;",
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .map_err(db_error)?;
-    connection
-        .close()
-        .map_err(|(_, error)| db_error(error))?;
+    connection.close().map_err(|(_, error)| db_error(error))?;
 
     // §7 step 5: switch to WAL, checkpoint, and leave no sidecar.
     let connection = Connection::open_with_flags(
@@ -1225,9 +1152,7 @@ metadata=(SELECT COALESCE(SUM(length),0) FROM pack WHERE domain=0) WHERE id=1;",
     if busy != 0 {
         return Err(HistoryError::Busy);
     }
-    connection
-        .close()
-        .map_err(|(_, error)| db_error(error))?;
+    connection.close().map_err(|(_, error)| db_error(error))?;
     for suffix in ["-wal", "-shm", "-journal"] {
         let mut sidecar = target.as_os_str().to_os_string();
         sidecar.push(suffix);
@@ -1265,11 +1190,7 @@ struct VerifyInput<'a> {
 /// foreign keys, row counts against the mark, both live-heads digests, the
 /// allocator tuple and the recomputed totals. `quick_check` and the full doctor
 /// stay separate commands.
-fn verify(
-    input: VerifyInput<'_>,
-    request: &CompactRequest,
-    op: &RunOp,
-) -> HistoryResult<()> {
+fn verify(input: VerifyInput<'_>, request: &CompactRequest, op: &RunOp) -> HistoryResult<()> {
     let VerifyInput {
         store,
         built,
@@ -1346,10 +1267,7 @@ fn verify(
             },
         )
         .map_err(db_error)?;
-    if totals.0 != totals.1
-        || totals.2 != totals.3
-        || totals.4 != totals.5
-        || totals.6 != totals.7
+    if totals.0 != totals.1 || totals.2 != totals.3 || totals.4 != totals.5 || totals.6 != totals.7
     {
         return Err(HistoryError::Integrity("staged Store totals"));
     }
@@ -1364,18 +1282,14 @@ fn verify(
     {
         return Err(HistoryError::Integrity("staged Store build totals"));
     }
-    connection
-        .close()
-        .map_err(|(_, error)| db_error(error))?;
+    connection.close().map_err(|(_, error)| db_error(error))?;
     Ok(())
 }
 
 fn file_free_bytes(target: &Path) -> HistoryResult<u64> {
     let measure = open_immutable(target)?;
     let (free, page) = file_page_metrics(&measure)?;
-    measure
-        .close()
-        .map_err(|(_, error)| db_error(error))?;
+    measure.close().map_err(|(_, error)| db_error(error))?;
     Ok(free.saturating_mul(page))
 }
 
@@ -1401,9 +1315,10 @@ fn sidecar_present(path: &Path) -> Option<PathBuf> {
             return Some(sidecar);
         }
     }
-    let name = path
-        .file_name()
-        .map_or_else(|| path.as_os_str().to_os_string(), |name| name.to_os_string());
+    let name = path.file_name().map_or_else(
+        || path.as_os_str().to_os_string(),
+        |name| name.to_os_string(),
+    );
     let mut prefix = name;
     prefix.push("-mj");
     let prefix = prefix.to_string_lossy().into_owned();
@@ -1441,9 +1356,7 @@ fn install_fence(facts: &SealedFacts, tuple: &MarkTuple) -> HistoryResult<()> {
     }
     let connection = open_immutable(&facts.path)?;
     let current = file_tuple(&connection)?;
-    connection
-        .close()
-        .map_err(|(_, error)| db_error(error))?;
+    connection.close().map_err(|(_, error)| db_error(error))?;
     if &current != tuple {
         return Err(HistoryError::Conflict("the sealed Store changed"));
     }
@@ -1460,7 +1373,8 @@ fn prepare_target(target: &Path) -> HistoryResult<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(target, std::fs::Permissions::from_mode(0o600)).map_err(io_error)?;
+        std::fs::set_permissions(target, std::fs::Permissions::from_mode(0o600))
+            .map_err(io_error)?;
     }
     let file = std::fs::OpenOptions::new()
         .read(true)
@@ -1492,12 +1406,10 @@ fn clear_artifacts(store: &Path) -> CompactResidue {
             // §11: residue is what the settle left behind. An artifact that
             // was removed is not residue, so its bytes are not counted.
             bytes = bytes.saturating_add(metadata.len());
-            left.push(
-                path.file_name()
-                    .map_or_else(|| path.display().to_string(), |name| {
-                        name.to_string_lossy().into_owned()
-                    }),
-            );
+            left.push(path.file_name().map_or_else(
+                || path.display().to_string(),
+                |name| name.to_string_lossy().into_owned(),
+            ));
         }
     }
     CompactResidue {
@@ -1663,18 +1575,14 @@ fn stop_at(
 fn immutable_tuple(path: &Path) -> HistoryResult<MarkTuple> {
     let connection = open_immutable(path)?;
     let tuple = file_tuple(&connection)?;
-    connection
-        .close()
-        .map_err(|(_, error)| db_error(error))?;
+    connection.close().map_err(|(_, error)| db_error(error))?;
     Ok(tuple)
 }
 
 fn immutable_digest(path: &Path) -> HistoryResult<[u8; 32]> {
     let connection = open_immutable(path)?;
     let digest = file_heads_digest(&connection)?;
-    connection
-        .close()
-        .map_err(|(_, error)| db_error(error))?;
+    connection.close().map_err(|(_, error)| db_error(error))?;
     Ok(digest)
 }
 
@@ -1867,7 +1775,9 @@ impl SqliteHandles {
             metrics.begin_phase(CompactPhase::Mark);
             let admitted =
                 (|| -> HistoryResult<(MarkResult, MarkTuple, u64, u64, CompactKeptWaste, u64)> {
-                    let mark = history.mark()?;
+                    // §6.3: the visited set is streamed into the temp-file table while the
+                    // walk discovers objects, so the build joins it instead of a second pass.
+                    let mark = history.mark_with_scratch(&visited_path(&store))?;
                     let tuple = live_tuple(&session)?;
                     op.tuple = tuple.clone();
                     op.live_heads_digest = mark.live_heads_digest();
@@ -1902,6 +1812,10 @@ impl SqliteHandles {
                 // removed; nothing is rebuilt and the generation is unchanged.
                 let (free, page) = live_page_metrics(&session)?;
                 history.gc_release(&op_id)?;
+                // The mark created the visited scratch even on this path; the
+                // `none` answer leaves no residue, exactly as it leaves no
+                // staged Store.
+                let _ = clear_artifacts(&store);
                 let _ = std::fs::remove_file(op_path(&store));
                 drop(lane);
                 return Ok(receipt(
@@ -1925,13 +1839,6 @@ impl SqliteHandles {
             stop_at(request, CompactFailpoint::BeforeSeal, &op, &store)?;
 
             // §7 step 2 onward: seal and rebuild. Only the session remains.
-            let object_packs = match object_packs(&session) {
-                Ok(packs) => packs,
-                Err(error) => {
-                    abort_run(&history, &store, &op_id);
-                    return Err(error);
-                }
-            };
             // §8/§9: release the admission intent while the Store is still
             // reachable. Every failure below runs after the seal, when this
             // process can no longer run SQL on the Store; without this release
@@ -1987,9 +1894,7 @@ impl SqliteHandles {
             let built = match build(
                 BuildInput {
                     facts: &facts,
-                    mark: &mark,
                     tuple: &tuple,
-                    packs: &object_packs,
                     layout,
                     synchronous,
                 },
@@ -2144,8 +2049,7 @@ impl RunMetrics {
     /// without changing the error the caller receives.
     fn finish(mut self, result: &HistoryResult<CompactReceipt>) {
         self.end_phase();
-        let total_nanos =
-            u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        let total_nanos = u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
         let (outcome, refusal) = match result {
             Ok(receipt) => {
                 self.generation_after = receipt.generation_after;
@@ -2195,7 +2099,7 @@ impl RunMetrics {
 
 #[cfg(test)]
 mod tests {
-    use super::{journal_bound_bytes, io_error, Built};
+    use super::{io_error, journal_bound_bytes, Built};
     use layerfs_history::HistoryError;
 
     /// §7 step 3 on a bounded filesystem: `ENOSPC`, `EDQUOT` and `EFBIG` are

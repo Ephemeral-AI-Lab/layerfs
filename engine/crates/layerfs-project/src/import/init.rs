@@ -100,13 +100,15 @@ pub fn init_observed(
     // Admission: an Init shares the project scope with removals and is
     // visible as a holder until it finishes or fails.
     let op = admission_op_id(request.stack);
+    let (runtime, boot) = owner_tokens(op);
     let intent = layerfs_history::records::GcIntent::shared(
         op,
         layerfs_history::records::GcIntentKind::Init,
         layerfs_history::records::GcScopeKind::Project,
         request.stack.as_slice(),
     )
-    .named(Some(request.name.as_str()), None);
+    .named(Some(request.name.as_str()), None)
+    .owned(Some(&runtime), Some(&boot));
     let admitted = match catalog.gc_register(&intent) {
         Ok(()) => true,
         // A catalog without admission cannot exclude a removal; Init still
@@ -318,5 +320,50 @@ impl Drop for InitAdmission<'_> {
         if !self.released && self.admitted {
             let _ = self.catalog.gc_release(&self.op_id);
         }
+    }
+}
+
+/// This process's owner evidence for one Init: its pid/start and PID
+/// namespace, and this boot. The boot token carries the operation so two
+/// shared intents of one project from one process stay distinct.
+fn owner_tokens(op: [u8; 16]) -> (String, String) {
+    let pid = std::process::id();
+    let suffix = op
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        let start = layerfs_bridge::process::stat(pid)
+            .map(|stat| stat.start)
+            .unwrap_or(0);
+        let boot = layerfs_bridge::process::boot().unwrap_or(0);
+        let namespace = {
+            #[cfg(target_os = "linux")]
+            {
+                std::fs::read_link("/proc/self/ns/pid")
+                    .ok()
+                    .and_then(|target| target.to_str().map(str::to_owned))
+                    .and_then(|text| {
+                        text.strip_prefix("pid:[")
+                            .and_then(|body| body.strip_suffix(']'))
+                            .and_then(|body| body.parse::<u64>().ok())
+                    })
+                    .map(|inode| format!("@ns:{inode}"))
+                    .unwrap_or_default()
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                String::new()
+            }
+        };
+        (
+            format!("pid:{pid}@{start}{namespace}"),
+            format!("boot:{boot:032x}:{suffix}"),
+        )
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        (format!("pid:{pid}"), format!("boot:unknown:{suffix}"))
     }
 }

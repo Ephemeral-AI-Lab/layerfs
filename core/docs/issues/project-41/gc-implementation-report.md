@@ -45,8 +45,9 @@ retained-pack waste, delta bases and all `inode_value_block` rows.
 **SQLite rebuild.** `SqliteHandles::compact` holds `writer_admission` from
 checkpoint through rename, runs `wal_checkpoint(TRUNCATE)` (busy is `Busy`; the
 WAL is never unlinked), seals `(size, mtime, db-header change counter)`,
-attaches the old file `immutable=1`, builds `.compact-visited`, runs
-`VACUUM INTO .compact`, and in one transaction keeps retained rows, deletes the
+streams the visited set into `.compact-visited` while the mark walks the
+closure, attaches the old file `immutable=1`, runs `VACUUM INTO .compact`, and
+in one transaction keeps retained rows, deletes the
 complement, sets `G + 1`, recomputes `store_totals` and clears
 `binding_hint_block`. Verification checks schema, foreign keys, counts, both
 digests, allocator and totals; install rechecks sidecars and `-mj*`, applies

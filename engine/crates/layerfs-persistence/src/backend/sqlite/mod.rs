@@ -2,6 +2,7 @@
 //! grouped by role (#506 A1).
 pub(crate) mod acquisition;
 pub(crate) mod compact;
+pub(crate) mod compact_visit;
 pub(crate) mod heads;
 pub(crate) mod lane;
 pub(crate) mod lifecycle;

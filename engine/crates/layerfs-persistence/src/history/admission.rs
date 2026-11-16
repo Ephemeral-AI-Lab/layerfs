@@ -191,6 +191,116 @@ fn conflict(intent: &GcIntent) -> OpConflict {
     )
 }
 
+/// This process's PID-namespace inode, when the platform names one. A pid
+/// is only meaningful inside the namespace that wrote it.
+fn current_namespace() -> Option<u64> {
+    #[cfg(target_os = "linux")]
+    {
+        let target = std::fs::read_link("/proc/self/ns/pid").ok()?;
+        let text = target.to_str()?;
+        text.strip_prefix("pid:[")?.strip_suffix(']')?.parse().ok()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+/// This boot's id, parsed from the kernel's textual form.
+fn current_boot() -> Option<u128> {
+    #[cfg(target_os = "linux")]
+    {
+        let text = std::fs::read_to_string("/proc/sys/kernel/random/boot_id").ok()?;
+        u128::from_str_radix(text.trim().replace('-', "").as_str(), 16).ok()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+/// The state letter and start time `/proc/<pid>/stat` names, when it exists.
+fn process_stat(pid: u32) -> Option<(u8, u64)> {
+    #[cfg(target_os = "linux")]
+    {
+        let text = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+        let rest = text.rsplit_once(')')?.1.trim_start();
+        let mut fields = rest.split_whitespace();
+        let state = fields.next()?.as_bytes().first().copied()?;
+        // The fields after `state` are ppid, pgrp, session, tty_nr, tpgid,
+        // flags, minflt, cminflt, majflt, cmajflt, utime, stime, cutime,
+        // cstime, priority, nice, num_threads, itrealvalue, starttime.
+        let start = fields.nth(18)?.parse().ok()?;
+        Some((state, start))
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = pid;
+        None
+    }
+}
+
+/// The pid, start time and PID namespace an `owner_runtime` token names.
+fn parse_runtime(text: &str) -> Option<(u32, u64, Option<u64>)> {
+    let body = text.strip_prefix("pid:")?;
+    let (facts, namespace) = match body.split_once("@ns:") {
+        Some((facts, namespace)) => (facts, Some(namespace.parse().ok()?)),
+        None => (body, None),
+    };
+    let (pid, start) = facts.split_once('@')?;
+    Some((pid.parse().ok()?, start.parse().ok()?, namespace))
+}
+
+/// The boot id an `owner_boot` token names, before its unique suffix.
+fn parse_boot(text: &str) -> Option<u128> {
+    u128::from_str_radix(text.strip_prefix("boot:")?.split(':').next()?, 16).ok()
+}
+
+/// True only when this process can prove `intent`'s owner is gone: the same
+/// boot and PID namespace, and the recorded process id/start no longer runs.
+///
+/// A `machine.stop` or SIGKILL leaves the intent row behind, so a mount whose
+/// owner was killed in this same container namespace can be adopted on the
+/// next admission instead of holding its scope forever. Another boot, another
+/// machine or another container is never proved dead: it stays live and
+/// unreachable, and is still reported as a holder.
+fn owner_dead(intent: &GcIntent) -> bool {
+    let (Some(runtime), Some(boot)) = (
+        intent.owner_runtime.as_deref(),
+        intent.owner_boot.as_deref(),
+    ) else {
+        return false;
+    };
+    let Some((pid, start, namespace)) = parse_runtime(runtime) else {
+        return false;
+    };
+    let Some(namespace) = namespace else {
+        return false;
+    };
+    if current_namespace() != Some(namespace) || current_boot() != parse_boot(boot) {
+        return false;
+    }
+    match process_stat(pid) {
+        Some((state, observed)) => observed != start || matches!(state, b'Z' | b'X' | b'x'),
+        None => true,
+    }
+}
+
+/// Adopts the rows whose owner is provably dead: their operation cannot still
+/// be running, so their intent is deleted and does not hold the scope. The
+/// caller reports the rows that remain.
+fn settle_dead(tx: &Transaction<'_>, found: Vec<GcIntent>) -> HistoryResult<Vec<GcIntent>> {
+    let mut live = Vec::with_capacity(found.len());
+    for intent in found {
+        if owner_dead(&intent) {
+            release_in(tx, &intent.op_id)?;
+        } else {
+            live.push(intent);
+        }
+    }
+    Ok(live)
+}
+
 /// The refusal a non-empty conflict set reports: an uncertain owner is
 /// `Unresolved`, a live mount is `MountsActive`, any other live operation is
 /// `Busy`.
@@ -277,7 +387,7 @@ fn validate_mount(tx: &Transaction<'_>, intent: &GcIntent) -> HistoryResult<()> 
 /// One registration in its own write transaction.
 fn register_in(tx: &Transaction<'_>, intent: &GcIntent, _postgres: bool) -> HistoryResult<()> {
     validate_mount(tx, intent)?;
-    let found = conflicts_for(tx, intent)?;
+    let found = settle_dead(tx, conflicts_for(tx, intent)?)?;
     if !found.is_empty() {
         return Err(classify(&found));
     }
@@ -509,14 +619,17 @@ pub(crate) fn remove_branch(
             lock_scope(tx, catalog, 3, branch.as_slice(), false)?;
         }
         epoch_share(tx, postgres, record.stack)?;
-        let found = query(
+        let found = settle_dead(
             tx,
-            ALL_BRANCH,
-            params![
-                Some(record.stack.as_slice().to_vec()),
-                branch.as_slice().to_vec(),
-                intent.op_id.to_vec()
-            ],
+            query(
+                tx,
+                ALL_BRANCH,
+                params![
+                    Some(record.stack.as_slice().to_vec()),
+                    branch.as_slice().to_vec(),
+                    intent.op_id.to_vec()
+                ],
+            )?,
         )?;
         if !found.is_empty() {
             return Err(classify(&found));
@@ -569,14 +682,17 @@ pub(crate) fn delete_stack(
             lock_scope(tx, catalog, 2, stack.as_slice(), false)?;
         }
         epoch_share(tx, postgres, stack)?;
-        let found = query(
+        let found = settle_dead(
             tx,
-            ALL_PROJECT,
-            params![
-                stack.as_slice().to_vec(),
-                Some(record.name.as_str().to_owned()),
-                intent.op_id.to_vec()
-            ],
+            query(
+                tx,
+                ALL_PROJECT,
+                params![
+                    stack.as_slice().to_vec(),
+                    Some(record.name.as_str().to_owned()),
+                    intent.op_id.to_vec()
+                ],
+            )?,
         )?;
         if !found.is_empty() {
             return Err(classify(&found));
@@ -618,14 +734,17 @@ pub(crate) fn remove_path(
             lock_scope(tx, catalog, 2, request.stack.as_slice(), false)?;
         }
         epoch_share(tx, postgres, request.stack)?;
-        let found = query(
+        let found = settle_dead(
             tx,
-            ALL_PROJECT,
-            params![
-                request.stack.as_slice().to_vec(),
-                intent.project.clone(),
-                intent.op_id.to_vec()
-            ],
+            query(
+                tx,
+                ALL_PROJECT,
+                params![
+                    request.stack.as_slice().to_vec(),
+                    intent.project.clone(),
+                    intent.op_id.to_vec()
+                ],
+            )?,
         )?;
         if !found.is_empty() {
             return Err(classify(&found));

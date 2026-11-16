@@ -8,9 +8,9 @@ mod support;
 
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::{
-    AddLayerOutcome, AddLayerRequest, BranchId, CommitId, CommitMeta, CommitOutcome,
-    CommitRequest, CommitVia, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig,
-    HistoryError, LayerStackId, LayerStackRecord, StackInitialization,
+    AddLayerOutcome, AddLayerRequest, BranchId, CommitId, CommitMeta, CommitOutcome, CommitRequest,
+    CommitVia, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryError,
+    LayerStackId, LayerStackRecord, StackInitialization,
 };
 use layerfs_persistence::{
     compact_op_status, CompactFailpoint, CompactPath, CompactReport, CompactReportSource,
@@ -19,7 +19,8 @@ use layerfs_persistence::{
 };
 use layerfs_storage::{
     port::acquisition::{Acquisition, Begin},
-    port::PackPersistence, Storage, StoragePolicy,
+    port::PackPersistence,
+    Storage, StoragePolicy,
 };
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -87,7 +88,6 @@ fn visited_path(store: &Path) -> PathBuf {
     PathBuf::from(name)
 }
 
-
 fn whole_file(handles: &SqliteHandles, bytes: &[u8]) -> ObjectId {
     let object = FinalizedObject::new(
         ObjectRole::WholeFile,
@@ -115,13 +115,17 @@ fn filesystem_root(handles: &SqliteHandles, seed: u8) -> ObjectId {
             attributes::PortableMetadata,
             directory::{encode_directory_page, DirectoryPage},
             inode::{encode_inode_page, InodePage},
-            root::profile_id, scope_for_seed, FilesystemRoot,
+            root::profile_id,
+            scope_for_seed, FilesystemRoot,
         },
         inode_leaf::{InodeKind, InodeMetadata, InodeValue},
     };
     let directory = FinalizedObject::new(
         ObjectRole::DirectoryLeaf,
-        encode_directory_page(&DirectoryPage::Leaf { entries: Vec::new() }).unwrap(),
+        encode_directory_page(&DirectoryPage::Leaf {
+            entries: Vec::new(),
+        })
+        .unwrap(),
     )
     .unwrap();
     let directory_id = directory.id();
@@ -147,13 +151,7 @@ fn filesystem_root(handles: &SqliteHandles, seed: u8) -> ObjectId {
     .unwrap()
     .with_references(vec![directory_id]);
     let inode_id = inode.id();
-    let root = FilesystemRoot::new(
-        profile_id(),
-        scope_for_seed([1; 32]),
-        1,
-        inode_id,
-    )
-    .unwrap();
+    let root = FilesystemRoot::new(profile_id(), scope_for_seed([1; 32]), 1, inode_id).unwrap();
     let object = FinalizedObject::new(ObjectRole::FilesystemRoot, root.encode().unwrap())
         .unwrap()
         .with_references(vec![inode_id]);
@@ -191,12 +189,14 @@ fn commit(handles: &SqliteHandles, branch: BranchId, candidate_root: ObjectId) -
     let snapshot = handles.history.branch(branch).unwrap().unwrap();
     let expected_root = match snapshot.head_commit {
         Some(head) => handles.history.commit(head).unwrap().unwrap().root,
-        None => handles
-            .history
-            .layer(snapshot.base_layer)
-            .unwrap()
-            .unwrap()
-            .root,
+        None => {
+            handles
+                .history
+                .layer(snapshot.base_layer)
+                .unwrap()
+                .unwrap()
+                .root
+        }
     };
     match handles
         .history
@@ -540,7 +540,10 @@ fn a_leftover_op_reports_its_phase_and_state() {
     let reopened = reopen(&path);
     let receipt = reopened.compact(&request(22)).unwrap();
     assert_eq!(receipt.path, CompactPath::Rebuild);
-    assert!(compact_op_status(&path).is_none(), "the op record is settled");
+    assert!(
+        compact_op_status(&path).is_none(),
+        "the op record is settled"
+    );
     assert!(receipt.residue.artifacts.is_empty());
     assert_eq!(receipt.residue.bytes, 0);
     assert!(receipt.residue.reason.is_none());
@@ -862,4 +865,62 @@ fn acquisition_layout_opens_compacts_and_clears_working_rows() {
     assert!(!located(&final_handles, dead));
     assert_eq!(acquisition_rows(&path), 0, "working rows are cleared");
     clean(&final_handles);
+}
+
+/// §6.3: the mark itself streams the visited set into `<store>.compact-visited`
+/// as it discovers objects, so the build has no second in-memory map to write.
+#[test]
+fn the_mark_streams_its_visited_set_into_the_scratch_table() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let dead = whole_file(&handles, b"reached by no retained root");
+    let scratch = visited_path(&path);
+    let mark = handles.history.mark_with_scratch(&scratch).unwrap();
+    assert!(scratch.exists(), "the mark writes the temp-file table");
+    let connection =
+        rusqlite::Connection::open_with_flags(&scratch, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .unwrap();
+    let rows: i64 = connection
+        .query_row("SELECT count(*) FROM visited", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(
+        u64::try_from(rows).unwrap(),
+        mark.objects().len() as u64,
+        "one row per reached object"
+    );
+    let packs: i64 = connection
+        .query_row("SELECT count(*) FROM live_pack", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(
+        u64::try_from(packs).unwrap(),
+        mark.objects().packs().len() as u64,
+        "one row per retained pack"
+    );
+    let present: i64 = connection
+        .query_row(
+            "SELECT count(*) FROM visited WHERE object_id=?1",
+            rusqlite::params![live.as_bytes().as_slice()],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(present, 1, "the reached root has a row");
+    let absent: i64 = connection
+        .query_row(
+            "SELECT count(*) FROM visited WHERE object_id=?1",
+            rusqlite::params![dead.as_bytes().as_slice()],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(absent, 0, "a dead object is not in the visited set");
+    for suffix in ["-journal", "-wal", "-shm"] {
+        let mut sidecar = scratch.as_os_str().to_os_string();
+        sidecar.push(suffix);
+        assert!(
+            !PathBuf::from(sidecar).exists(),
+            "the table leaves no journal sidecar"
+        );
+    }
+    drop(connection);
+    std::fs::remove_file(&scratch).unwrap();
 }

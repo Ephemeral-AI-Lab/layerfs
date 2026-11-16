@@ -12,6 +12,9 @@ pub(crate) fn statement(key: &str) -> Result<&'static str, BackendError> {
         "statistics_totals" => Ok(include_str!(
             "../../../../sql/postgresql/queries/history/statistics_totals.sql"
         )),
+        "gc_object_locations" => Ok(
+            "SELECT object_id,pack_id,group_number::bigint,record_number::bigint,role::bigint,canonical_length::bigint FROM object_location ORDER BY pack_id,group_number,record_number",
+        ),
         "gc_epoch_read" => Ok(include_str!(
             "../../../../sql/postgresql/queries/history/gc_epoch_read.sql"
         )),

@@ -346,6 +346,67 @@ fn a_missing_epoch_row_is_conflict_and_release_is_idempotent() {
     ));
 }
 
+/// A mount whose owner is provably dead (the same boot and PID namespace, a
+/// pid that does not run) no longer blocks a removal: the removal adopts the
+/// row, while a live owner still reports a holder.
+#[cfg(target_os = "linux")]
+fn dead_mount(stack: LayerStackId, branch: BranchId, tag: u8) -> GcIntent {
+    let namespace = {
+        let target = std::fs::read_link("/proc/self/ns/pid").unwrap();
+        let text = target.to_str().unwrap();
+        text.strip_prefix("pid:[")
+            .unwrap()
+            .strip_suffix(']')
+            .unwrap()
+            .to_owned()
+    };
+    let boot = std::fs::read_to_string("/proc/sys/kernel/random/boot_id").unwrap();
+    let boot = u128::from_str_radix(boot.trim().replace('-', "").as_str(), 16).unwrap();
+    GcIntent::shared(
+        op(tag),
+        GcIntentKind::Mount,
+        GcScopeKind::Branch,
+        branch.as_slice(),
+    )
+    .in_project(stack.as_slice())
+    .named(Some("proj"), Some("work"))
+    .placed(Some([tag; 32]), Some("sandbox"), Some("machine"))
+    .owned(
+        Some(&format!("pid:4294967295@0@ns:{namespace}")),
+        Some(&format!("boot:{boot:032x}:ws:{tag}")),
+    )
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_dead_mount_owner_is_settled_and_does_not_hold_the_scope() {
+    let temp = Temp::new("admission-dead-owner");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+    // The recorded owner does not run: the removal adopts its row instead of
+    // reporting `MountsActive` forever after a `machine.stop`/SIGKILL.
+    history
+        .gc_register(&dead_mount(project_id, branch, 23))
+        .unwrap();
+    let live = mount(project_id, branch, 24);
+    history.gc_register(&live).unwrap();
+    let refusal = history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 25))
+        .expect_err("a live owner holds");
+    assert!(
+        matches!(refusal, HistoryError::MountsActive(_)),
+        "{refusal:?}"
+    );
+    history.gc_release(&op(24)).unwrap();
+    history
+        .gc_remove_branch(branch, 2_000, &removal(project_id, 26))
+        .unwrap();
+    assert!(history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .unwrap()
+        .is_empty());
+}
+
 fn hex16(bytes: &[u8; 16]) -> String {
     let mut out = String::with_capacity(32);
     for byte in bytes {

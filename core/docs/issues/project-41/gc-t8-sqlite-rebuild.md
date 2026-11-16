@@ -28,22 +28,28 @@ types. The `GcIntent` admission row is registered through the T6
    sidecar equivalent of `gc_op`) and registers one Store-scoped
    `gc_intent(kind='compaction')` row with the tuple: generation, mark serial,
    mark pack id, digest, totals, stamp, phase, owner tokens.
-4. **Mark.** `mark()` runs in its write transaction under the same lane. The
-   §6.1 history closure is written to `kept_node`; the §6.2 closure follows
-   logical references and delta bases to its fixpoint, so the packs it keeps
-   are already the refined live set. `deadBytesBound` and
+4. **Mark.** `mark_with_scratch()` runs in its write transaction under the
+   same lane. The §6.1 history closure is written to `kept_node`; the §6.2
+   closure follows logical references and delta bases to its fixpoint, so the
+   packs it keeps are already the refined live set. Every reached object is
+   streamed, as it is discovered, into the §6.3 visited scratch
+   `<store>.compact-visited` (`journal_mode=OFF`, one row per object and its
+   locating pack plus the live-pack set), so no second in-memory
+   `object_id -> pack` map is built. `deadBytesBound` and
    `deadBytesRefined` are therefore equal on both §3 paths.
 5. **Path.** `rebuild iff SUM(pack.length) > 0 AND dead * 10 >= SUM(pack.length)`.
-   `none` clears its intent and op record and returns; it writes no Store
-   table and creates no artifact, so no scratch exists to delete.
+   `none` clears its intent and op record, removes the visited scratch the
+   mark streamed, and returns; it writes no Store table and leaves no
+   artifact.
 6. **Seal.** `Session::seal_holding(writer)` checkpoints, checked-closes,
    checks `-wal`/`-shm`/`-journal`, and captures `(size, mtime, change
    counter)` while the lane is still held (§7 step 1). The sealed tuple and
    the §6.4 `live_heads_digest` are then re-read through an `immutable=1`
    handle and compared with the mark; a difference is `Conflict`.
-7. **Build.** `<store>.compact-visited` (`journal_mode=OFF`) holds the visited
-   object and live-pack sets. `VACUUM INTO <store>.compact` copies the sealed
-   file compactly; inside one transaction the retained rows are kept and the
+7. **Build.** `<store>.compact-visited` (`journal_mode=OFF`) already holds the
+   visited object and live-pack sets from step 4; the build attaches it as
+   `scratch` and never rewrites it. `VACUUM INTO <store>.compact` copies the
+   sealed file compactly; inside one transaction the retained rows are kept and the
    complement deleted (dead packs/pack units, unreferenced locations,
    signatures and digests, history/lineage/catalog rows outside `kept_node`,
    markers of collected rows, merge scratch, `gc_intent`/`gc_dead`/`gc_op`,
@@ -110,7 +116,9 @@ rollback journal (T-G66 finding, T-G72 fix). Upstream issue: [Ephemeral-AI-Lab/l
 - retained Commit/Layer history and its objects survive a rebuild; the full
   doctor passes on the installed Store;
 - a stray `<store>.compact` with no op record is `Exists` and not deleted;
-- `AfterBuild` leaves the staged Store, visited scratch and op record; the
+- `BeforeSeal` leaves the visited scratch (streamed by the mark), the op
+  record and, for a real `SIGKILL`, the writer's WAL; `AfterBuild` leaves the
+  staged Store, visited scratch and op record; the
   reopened Store is still at `G`, and the next call settles and rebuilds;
 - `AfterInstall` leaves the installed Store at `G + 1` and the op record; the
   next call judges it and settles;

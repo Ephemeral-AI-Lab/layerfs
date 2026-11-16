@@ -21,6 +21,12 @@ pub trait Source {
     }
     /// Complete declared pack bytes, without capacity padding.
     fn pack_bytes(&self, pack_id: i64) -> StorageResult<Vec<u8>>;
+    /// The bounded control/directory prefix of one pack, with its declared
+    /// length. A metadata-only scan reads this instead of the whole body; a
+    /// source that cannot answer returns `None` and the caller reads the body.
+    fn pack_prefix(&self, _pack_id: i64, _limit: usize) -> StorageResult<Option<(usize, Vec<u8>)>> {
+        Ok(None)
+    }
     /// Acquires the complete encoded groups needed by this bounded physical
     /// demand. `whole_for_reuse` requests whole materialization before I/O when
     /// this owner already retained another group. Custom sources use whole bodies.

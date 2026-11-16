@@ -54,4 +54,18 @@ impl Mechanics for Transaction<'_> {
     ) -> Result<(), PersistenceError> {
         super::objects::read::read(self, ids, out)
     }
+    fn pack_prefix(
+        &self,
+        id: i64,
+        limit: usize,
+    ) -> Result<Option<(usize, Vec<u8>)>, PersistenceError> {
+        super::objects::read::prefix(self, id, limit)
+    }
+    fn read_scoped_pack(
+        &self,
+        id: i64,
+        plan: &mut dyn layerfs_storage::port::PackReadPlan,
+    ) -> Result<layerfs_storage::port::AcquiredPackRead, PersistenceError> {
+        super::objects::selection::read_scoped(self, id, plan)
+    }
 }

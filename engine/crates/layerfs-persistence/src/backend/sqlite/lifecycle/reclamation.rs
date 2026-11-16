@@ -36,6 +36,12 @@ pub(crate) fn job(tx: &Transaction<'_>, pages: u32) -> Result<SpaceReclamation, 
 
 /// Accumulate less than one fixed job of reuse headroom during live cleanup.
 /// Release and explicit maintenance use a minimum of one, draining the tail.
+///
+/// SQLite 3.40 relocates exactly one page for each `PRAGMA incremental_vacuum`
+/// statement and ignores the argument's fan-out, so one statement cannot honour
+/// a 512-page budget. The job steps the pragma inside this one short
+/// transaction until the free list is empty, the page budget is spent, or the
+/// free list stops shrinking, and reports the pages it actually removed.
 pub(crate) fn job_when(
     tx: &Transaction<'_>,
     pages: u32,
@@ -48,10 +54,24 @@ pub(crate) fn job_when(
     };
     let before = free(tx)?;
     if before >= minimum_free_pages {
-        // SQLite moves/truncates at most this many pages. The enclosing
-        // ordinary short transaction supplies the selected sync and
-        // definite/uncertain outcome handling; no whole-file rebuild.
-        tx.query(&format!("PRAGMA incremental_vacuum({pages})"), vec![])?;
+        let mut budget = u64::from(pages);
+        let mut remaining = before;
+        while remaining > 0 && budget > 0 {
+            // The enclosing ordinary short transaction supplies the selected
+            // sync and definite/uncertain outcome handling; no whole-file
+            // rebuild and no extra transaction per page.
+            tx.query(
+                &format!("PRAGMA incremental_vacuum({})", budget.min(remaining)),
+                vec![],
+            )?;
+            let after = free(tx)?;
+            let reclaimed = remaining.saturating_sub(after);
+            if reclaimed == 0 {
+                break;
+            }
+            budget = budget.saturating_sub(reclaimed);
+            remaining = after;
+        }
     }
     let remaining = free(tx)?;
     let reclaimed = before

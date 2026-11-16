@@ -26,25 +26,33 @@ pub fn op_id() -> [u8; 16] {
 
 /// A `branch.remove` intent at Branch scope.
 pub fn branch_removal(stack: &LayerStackRecord, branch: &BranchRecord) -> GcIntent {
-    GcIntent::operation(
-        op_id(),
-        GcIntentKind::Removal,
-        GcScopeKind::Branch,
-        branch.id.as_slice(),
+    let op = op_id();
+    owned(
+        GcIntent::operation(
+            op,
+            GcIntentKind::Removal,
+            GcScopeKind::Branch,
+            branch.id.as_slice(),
+        )
+        .in_project(stack.id.as_slice())
+        .named(Some(stack.name.as_str()), Some(branch.name.as_str())),
+        op,
     )
-    .in_project(stack.id.as_slice())
-    .named(Some(stack.name.as_str()), Some(branch.name.as_str()))
 }
 
 /// A `project.delete` or `project.remove_file` intent at project scope.
 pub fn project_removal(stack: &LayerStackRecord) -> GcIntent {
-    GcIntent::operation(
-        op_id(),
-        GcIntentKind::Removal,
-        GcScopeKind::Project,
-        stack.id.as_slice(),
+    let op = op_id();
+    owned(
+        GcIntent::operation(
+            op,
+            GcIntentKind::Removal,
+            GcScopeKind::Project,
+            stack.id.as_slice(),
+        )
+        .named(Some(stack.name.as_str()), None),
+        op,
     )
-    .named(Some(stack.name.as_str()), None)
 }
 
 /// A `project.delete` intent when only the stack id is known.
@@ -57,12 +65,79 @@ pub fn project_removal_from_id(stack: LayerStackId) -> GcIntent {
 /// and marker and reuses the identity there, so one row is taken and released
 /// once, never two competing rows.
 pub fn project_removal_at(stack: LayerStackId, op: [u8; 16]) -> GcIntent {
-    GcIntent::operation(
+    owned(
+        GcIntent::operation(
+            op,
+            GcIntentKind::Removal,
+            GcScopeKind::Project,
+            stack.as_slice(),
+        ),
         op,
-        GcIntentKind::Removal,
-        GcScopeKind::Project,
-        stack.as_slice(),
     )
+}
+
+/// A lowercase hex token, used to keep one process's owner tokens distinct.
+fn hex16(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push_str(&format!("{byte:02x}"));
+    }
+    out
+}
+
+/// This process's PID-namespace inode, when the platform names one. A pid is
+/// only meaningful inside the namespace that wrote it.
+fn pid_namespace() -> Option<u64> {
+    #[cfg(target_os = "linux")]
+    {
+        let target = std::fs::read_link("/proc/self/ns/pid").ok()?;
+        let text = target.to_str()?;
+        text.strip_prefix("pid:[")?.strip_suffix(']')?.parse().ok()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+/// The owner evidence every intent records: this process (`pid` and its start
+/// time, plus the PID namespace that makes the id meaningful) and this boot.
+/// A later admission in the same namespace can prove the owner gone after a
+/// `machine.stop` or SIGKILL; a call in another namespace (another machine or
+/// container) never does. The boot token carries a unique suffix (the
+/// operation or Workspace id), because the schema's
+/// `UNIQUE(scope_kind, scope_id, owner_boot)` must still admit two intents of
+/// one scope from one process.
+#[must_use]
+pub fn owner_tokens(suffix: &str) -> (String, String) {
+    let pid = std::process::id();
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        let start = layerfs_bridge::process::stat(pid)
+            .map(|stat| stat.start)
+            .unwrap_or(0);
+        let boot = layerfs_bridge::process::boot().unwrap_or(0);
+        let namespace = match pid_namespace() {
+            Some(namespace) => format!("@ns:{namespace}"),
+            None => String::new(),
+        };
+        (
+            format!("pid:{pid}@{start}{namespace}"),
+            format!("boot:{boot:032x}:{suffix}"),
+        )
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        (format!("pid:{pid}"), format!("boot:unknown:{suffix}"))
+    }
+}
+
+/// The owner tokens of one operation identity, unique within its scope.
+fn owned(mut intent: GcIntent, op: [u8; 16]) -> GcIntent {
+    let (runtime, boot) = owner_tokens(&format!("op:{}", hex16(&op)));
+    intent.owner_runtime = Some(runtime);
+    intent.owner_boot = Some(boot);
+    intent
 }
 
 /// A mount intent at Branch scope, naming its project identity for the
@@ -75,6 +150,7 @@ pub fn mount_intent(
     place: &layerfs_bridge::control::MountPlace,
 ) -> GcIntent {
     let body: [u8; 32] = workspace.as_slice().try_into().unwrap_or([0u8; 32]);
+    let (runtime, boot) = owner_tokens(&format!("ws:{}", hex16(&body)));
     GcIntent::shared(
         op_id(),
         GcIntentKind::Mount,
@@ -88,6 +164,7 @@ pub fn mount_intent(
         place.sandbox.as_deref(),
         place.machine.as_deref(),
     )
+    .owned(Some(&runtime), Some(&boot))
 }
 
 /// A short-lived shared intent (Init or merge), released on success or drop.
@@ -109,6 +186,7 @@ impl<'a> SharedIntent<'a> {
         let op = op_id();
         let intent = GcIntent::shared(op, kind, GcScopeKind::Project, stack.id.as_slice())
             .named(Some(stack.name.as_str()), branch);
+        let intent = owned(intent, op);
         let admitted = match catalog.gc_register(&intent) {
             Ok(()) => true,
             Err(layerfs_history::HistoryError::Unsupported(_)) => false,

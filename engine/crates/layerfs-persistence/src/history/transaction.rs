@@ -67,4 +67,19 @@ impl HistoryProvider {
             Engine::Postgres(session) => session.run(true, |b| f(&Transaction { backend: b })),
         }
     }
+    /// The mark's write: one fixed repeatable-read snapshot on PostgreSQL
+    /// without the publication lane, and the ordinary implicit write
+    /// transaction on SQLite (whose single writer is already the exclusion).
+    /// Only `kept_node` rows are written, so publications into other tables
+    /// never wait for a mark, and a second mark is the only row contention.
+    pub(crate) fn write_snapshot<T>(
+        &self,
+        f: impl FnOnce(&Transaction<'_>) -> HistoryResult<T>,
+    ) -> HistoryResult<T> {
+        match &self.engine {
+            Engine::Sqlite(session) => session.run(true, |b| f(&Transaction { backend: b })),
+            #[cfg(feature = "postgresql")]
+            Engine::Postgres(session) => session.run_snapshot(|b| f(&Transaction { backend: b })),
+        }
+    }
 }
