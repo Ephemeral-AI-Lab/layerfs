@@ -4,8 +4,11 @@
 //! daemon recorded names this host's bundle folder; a machine that needs
 //! the Linux bundle names `linux-<arch>` and the tool that places it. One
 //! test, because it sets the process's environment.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 #![cfg(feature = "machine")]
 use layerfs_api::home;
+
 use layerfs_bridge::control::SdkValue;
 use std::path::{Path, PathBuf};
 

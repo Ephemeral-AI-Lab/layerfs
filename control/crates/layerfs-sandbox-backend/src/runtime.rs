@@ -5,9 +5,12 @@
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use crate::backend::host_process;
 #[cfg(target_os = "linux")]
+#[cfg(target_os = "linux")]
 use crate::backend::namespaces::{self, NamespaceProvider};
-use crate::backend::{adapter, Backend};
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use crate::backend::adapter;
+use crate::types::kind::Backend;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use crate::host_process::HostProcessProvider;
 use crate::{
     Bind, ExecExit, LaunchPhase, LaunchRequest, LocalRecord, ProviderCapabilities,
@@ -30,27 +33,40 @@ pub enum Runtime {
     /// commands entering them as a nonroot identity (Linux).
     #[cfg(target_os = "linux")]
     Namespaces(NamespaceProvider),
+    /// The Windows native runtime: directory Sandboxes, commands spawned
+    /// into them as this user; no daemon (A1, #454 for the WinFsp mount).
+    #[cfg(target_os = "windows")]
+    HostProcess(HostProcessProvider),
 }
 
 impl Runtime {
     /// The backend this runtime is.
     pub fn backend(&self) -> Backend {
         match self {
-            #[cfg(target_os = "macos")]
+            #[cfg(windows)]
             Self::HostProcess(_) => Backend::HostProcess,
             #[cfg(target_os = "linux")]
             Self::Namespaces(_) => Backend::Namespaces,
         }
     }
 
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     pub fn capabilities(&self) -> Result<ProviderCapabilities, RuntimeError> {
         Ok(adapter(self.backend()).capabilities())
+    }
+
+    /// Windows: no adapter runs; the stub face carries no capabilities.
+    #[cfg(windows)]
+    pub fn capabilities(&self) -> Result<ProviderCapabilities, RuntimeError> {
+        Err(RuntimeError::Unsupported("the Windows host_process port carries capabilities (#454)".into()))
     }
 
     /// Local resource ownership, checked by API before encoding daemon topology.
     /// Nonlocal providers return None. No resource is created by this observation.
     pub fn local_directory(&self, name: &str) -> Result<Option<PathBuf>, RuntimeError> {
         match self {
+            #[cfg(windows)]
+            Self::HostProcess(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
             #[cfg(target_os = "macos")]
             Self::HostProcess(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
             #[cfg(target_os = "linux")]
@@ -62,6 +78,8 @@ impl Runtime {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     pub fn native_paths(&self, name: &str) -> Result<crate::local::LocalPaths, RuntimeError> {
         match self {
+            #[cfg(windows)]
+            Self::HostProcess(provider) => provider.paths(name),
             #[cfg(target_os = "macos")]
             Self::HostProcess(provider) => provider.paths(name),
             #[cfg(target_os = "linux")]
@@ -85,6 +103,8 @@ impl Runtime {
         binds: Vec<Bind>,
     ) -> Result<Sandbox, Box<LaunchFailure>> {
         match self {
+            #[cfg(windows)]
+            Self::HostProcess(provider) => provider.launch(request).map(Sandbox::Windows),
             #[cfg(target_os = "macos")]
             Self::HostProcess(_) if !binds.is_empty() => Err(Box::new(LaunchFailure {
                 phase: LaunchPhase::Validate,
@@ -109,6 +129,8 @@ impl Runtime {
         record: &SandboxRecord,
     ) -> Result<Sandbox, Box<WireFailure>> {
         match self {
+            #[cfg(windows)]
+            Self::HostProcess(provider) => provider.reopen(id, record).map(Sandbox::Windows),
             #[cfg(target_os = "macos")]
             Self::HostProcess(provider) => provider.reopen(id, record).map(Sandbox::HostProcess),
             #[cfg(target_os = "linux")]
@@ -125,6 +147,8 @@ impl Runtime {
         record: &SandboxRecord,
     ) -> Result<Sandbox, Box<WireFailure>> {
         match self {
+            #[cfg(windows)]
+            Self::HostProcess(provider) => provider.reopen(id, record).map(Sandbox::Windows),
             #[cfg(target_os = "macos")]
             Self::HostProcess(provider) => provider
                 .reopen_stopped(id, record)
@@ -144,12 +168,36 @@ pub enum Sandbox {
     HostProcess(host_process::Sandbox),
     #[cfg(target_os = "linux")]
     Namespaces(Box<namespaces::Sandbox>),
+    /// Windows: nothing launches; the variant carries the records face
+    /// until the host_process port (#454).
+    #[cfg(windows)]
+    Windows(WindowsStub),
+}
+
+/// The Windows host-process face: its directory tree under the runtime root
+/// and its labels. No daemon runs (the in-process route); exec spawns
+/// commands straight into the directory (A1; the WinFsp mount is A2).
+#[cfg(windows)]
+#[derive(Debug)]
+pub struct WindowsStub {
+    pub id: crate::types::SandboxId,
+    pub root: std::path::PathBuf,
+    /// Its Sandbox directory (the runtime root plus its name).
+    pub directory: std::path::PathBuf,
+    /// Its labels, as recorded at launch.
+    pub labels: Vec<(String, String)>,
+    /// Whether its stop completed.
+    pub stopped: bool,
+    /// Whether its directory was deleted.
+    pub deleted: bool,
 }
 
 impl Sandbox {
     /// The backend that launched it.
     pub fn backend(&self) -> Backend {
         match self {
+            #[cfg(windows)]
+            Self::Windows(_) => Backend::HostProcess,
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(_) => Backend::HostProcess,
             #[cfg(target_os = "linux")]
@@ -159,6 +207,8 @@ impl Sandbox {
 
     pub fn identity(&self) -> ContainerId {
         match self {
+            #[cfg(windows)]
+            Self::Windows(stub) => stub.id.clone().into(),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.identity(),
             #[cfg(target_os = "linux")]
@@ -168,6 +218,10 @@ impl Sandbox {
 
     pub fn endpoint(&self) -> Result<SocketAddr, Box<WireFailure>> {
         match self {
+            #[cfg(windows)]
+            Self::Windows(_) => Err(WireFailure::local(RuntimeError::Unsupported(
+                "the Windows Sandbox has no daemon endpoint (A1; the WinFsp mount is A2, #454)",
+            ))),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.endpoint(),
             #[cfg(target_os = "linux")]
@@ -183,6 +237,8 @@ impl Sandbox {
         stderr: &mut (dyn Write + Send),
     ) -> Result<ExecExit, Box<WireFailure>> {
         match self {
+            #[cfg(windows)]
+            Self::Windows(stub) => crate::backend::host_process::exec_windows::run(&stub.directory, request),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.run(request, stdout, stderr),
             #[cfg(target_os = "linux")]
@@ -200,6 +256,8 @@ impl Sandbox {
         stderr: &mut (dyn Write + Send),
     ) -> Result<ExecExit, Box<WireFailure>> {
         match self {
+            #[cfg(windows)]
+            Self::Windows(stub) => crate::backend::host_process::exec_windows::run(&stub.directory, request),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.run_in(request, Some(slot), stdout, stderr),
             #[cfg(target_os = "linux")]
@@ -212,6 +270,11 @@ impl Sandbox {
     /// command group); a host-process group is known only at its spawn.
     pub fn exec_stop(&self, workspace: &str, exec: &str) -> Option<Stop> {
         match self {
+            #[cfg(windows)]
+            Self::Windows(_) => {
+                let _ = (workspace, exec);
+                None
+            }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(_) => {
                 let _ = (workspace, exec);
@@ -226,6 +289,9 @@ impl Sandbox {
     /// so it ends with the Sandbox.
     pub fn track(&self, pid: u32, start_time: u64) -> Result<(), Box<WireFailure>> {
         match self {
+            #[cfg(windows)]
+            // no process group owns it; a command ends with its own child
+            Self::Windows(_) => Ok(()),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.track(pid, start_time),
             // its cgroup owns every process the Sandbox started, whatever
@@ -237,6 +303,13 @@ impl Sandbox {
 
     pub fn log_tail(&self, lines: u16, cap: usize) -> Result<Vec<u8>, Box<WireFailure>> {
         match self {
+            #[cfg(windows)]
+            Self::Windows(stub) => {
+                let log = std::fs::read(stub.directory.join("daemon.log"))
+                    .map_err(|e| WireFailure::local(RuntimeError::Io(e)))?;
+                let from = log.len().saturating_sub(cap as usize);
+                Ok(log[from..].to_vec())
+            }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.log_tail(lines, cap),
             #[cfg(target_os = "linux")]
@@ -246,6 +319,14 @@ impl Sandbox {
 
     pub fn inspect(&self) -> Result<SandboxInspection, Box<WireFailure>> {
         match self {
+            #[cfg(windows)]
+            Self::Windows(stub) => Ok(SandboxInspection {
+                identity: stub.id.clone().into(),
+                running: !stub.stopped && !stub.deleted,
+                exit_code: None,
+                process_id: None,
+                scratch_bytes: None,
+            }),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => {
                 sandbox.reap();
@@ -273,6 +354,11 @@ impl Sandbox {
 
     pub fn stop(&mut self, timeout_seconds: u16) -> Result<(), Box<WireFailure>> {
         match self {
+            #[cfg(windows)]
+            Self::Windows(stub) => {
+                stub.stopped = true;
+                Ok(())
+            }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.stop(timeout_seconds),
             #[cfg(target_os = "linux")]
@@ -282,6 +368,14 @@ impl Sandbox {
 
     pub fn delete(&mut self) -> Result<(), Box<WireFailure>> {
         match self {
+            #[cfg(windows)]
+            Self::Windows(stub) => {
+                std::fs::remove_dir_all(&stub.directory)
+                    .map_err(|e| WireFailure::local(RuntimeError::Io(e)))?;
+                stub.deleted = true;
+                stub.stopped = true;
+                Ok(())
+            }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.delete(),
             #[cfg(target_os = "linux")]
@@ -293,6 +387,8 @@ impl Sandbox {
     /// deleted with it.
     pub fn scratch_directory(&self) -> String {
         match self {
+            #[cfg(windows)]
+            Self::Windows(stub) => stub.directory.join("tmp").display().to_string(),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.tmp().display().to_string(),
             #[cfg(target_os = "linux")]
@@ -303,6 +399,15 @@ impl Sandbox {
     /// Physical facts for the binding's existing record format, when this is native.
     pub fn local_record(&self) -> Option<LocalRecord> {
         match self {
+            #[cfg(windows)]
+            Self::Windows(stub) => stub.directory.file_name().map(|name| LocalRecord {
+                name: name.to_string_lossy().into_owned(),
+                pid: 0,
+                start_time: 0,
+                boot: None,
+                port: 0,
+                labels: stub.labels.clone(),
+            }),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(sandbox) => sandbox.local_record(),
             #[cfg(target_os = "linux")]
@@ -313,6 +418,8 @@ impl Sandbox {
     /// Persisted deployment facts for reopening this runtime instance.
     pub fn record(&self) -> Option<SandboxRecord> {
         match self {
+            #[cfg(windows)]
+            Self::Windows(_) => self.local_record().map(SandboxRecord::Local),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::HostProcess(_) => self.local_record().map(SandboxRecord::Local),
             #[cfg(target_os = "linux")]

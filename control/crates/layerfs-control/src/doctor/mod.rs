@@ -14,8 +14,11 @@
 mod capacity;
 mod checks;
 mod convert;
+#[cfg(unix)]
 pub mod leftover_fix;
+#[cfg(unix)]
 pub mod leftover_report;
+#[cfg(unix)]
 pub mod leftovers;
 mod report;
 mod scan;

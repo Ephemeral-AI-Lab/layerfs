@@ -1,21 +1,21 @@
 //! Namespace construction and Store Init/seal/install composition.
-#![forbid(unsafe_code)]
+// Windows carries one audited unsafe FFI module (import host_id's
+// GetFileInformationByHandle surface); forbid cannot be allowed back on, so
+// it stays a hard deny there and the audited module opts in. Unix keeps the
+// absolute forbid.
+#![cfg_attr(not(windows), forbid(unsafe_code))]
+#![cfg_attr(windows, deny(unsafe_code))]
 #![deny(missing_docs)]
 mod import;
 pub mod store;
 pub use error::{ProjectError, ProjectResult, RetainedAcquisition, SourceRefusal};
-#[cfg(unix)]
 pub(crate) use import::backing;
-#[cfg(unix)]
 pub(crate) use import::batch;
 pub(crate) use import::error;
-#[cfg(unix)]
 pub(crate) use import::files;
 pub(crate) use import::init;
-#[cfg(unix)]
 pub(crate) use import::namespace;
 pub use import::observe::{InitCounters, InitCounts, InitStep};
-#[cfg(unix)]
 pub(crate) use import::scan;
 pub use init::{init, init_observed, InitRequest, Initialized};
 

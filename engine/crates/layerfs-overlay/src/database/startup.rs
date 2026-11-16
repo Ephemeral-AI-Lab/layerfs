@@ -66,7 +66,9 @@ fn initialize(path: &Path, config: ProfileConfig, template: Option<&Path>) -> Cr
     let mut work = CreationWork::default();
     let mut allocation = None;
     let result = (|| {
-        if !cfg!(any(target_os = "macos", target_os = "linux")) {
+        // Windows opens the same overlay database in-process (#454).
+        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+        {
             return Err(crate::OverlayError::UnsupportedPlatform);
         }
         let mut options = OpenOptions::new();

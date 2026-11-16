@@ -12,9 +12,14 @@
 pub mod install;
 mod install_file;
 pub mod install_types;
+// The daemon runtime (operator, service, telemetry, control, application)
+// is the unix daemon; Windows reaches Stores in-process (#352 F-020) and
+// this crate contributes install/install_types only.
+#[cfg(unix)]
 mod operator;
 mod service;
 pub use service::{request as mount_request, Mounted};
+#[cfg(unix)]
 pub mod telemetry;
 pub use layerfs_store_service::{bootstrap, install as shared_install, store};
 

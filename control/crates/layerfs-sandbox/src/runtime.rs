@@ -106,6 +106,8 @@ pub fn platform(named: Option<&str>, deploy: &Deploy) -> Result<String, SdkRefus
     let implied = match backend {
         Backend::Namespaces if docker_machine => "docker",
         _ if cfg!(target_os = "macos") => "mac",
+        // Windows runs the same host_process Sandbox as macOS (A1)
+        _ if cfg!(target_os = "windows") => "mac",
         _ => "linux",
     };
     let Some(named) = named else {
@@ -131,6 +133,7 @@ pub fn platform(named: Option<&str>, deploy: &Deploy) -> Result<String, SdkRefus
             format!(
                 "platform {named} does not run the deployment's Sandbox backend ({}) on this host",
                 match backend {
+                    #[cfg(windows)]
                     Backend::HostProcess => NATIVE,
                     Backend::Namespaces => NAMESPACES,
                 }
@@ -143,6 +146,8 @@ pub fn platform(named: Option<&str>, deploy: &Deploy) -> Result<String, SdkRefus
 /// A running Sandbox's `runtime`, as its record names it.
 pub fn kind(runtime: &Sandbox) -> &'static str {
     match runtime {
+        #[cfg(windows)]
+        Sandbox::Windows(_) => NATIVE,
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         Sandbox::HostProcess(_) => NATIVE,
         #[cfg(target_os = "linux")]

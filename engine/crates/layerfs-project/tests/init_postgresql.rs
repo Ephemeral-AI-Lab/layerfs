@@ -18,7 +18,7 @@ use layerfs_storage::{port::PersistenceError, Storage, StoragePolicy};
 use layerfs_telemetry::timer::Timing;
 use std::{
     fs,
-    os::unix::fs::symlink,
+
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
@@ -66,8 +66,18 @@ fn source(root: &Path) -> PathBuf {
         .collect();
     fs::write(source.join("a/large.bin"), large).unwrap();
     fs::write(source.join("a/b/c/file"), b"deep").unwrap();
-    symlink("n00003", source.join("wide/aa-link")).unwrap();
-    symlink("../missing", source.join("a/dangling")).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+        symlink("n00003", source.join("wide/aa-link")).unwrap();
+        symlink("../missing", source.join("a/dangling")).unwrap();
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::symlink_file;
+        symlink_file("n00003", source.join("wide/aa-link")).unwrap();
+        symlink_file("../missing", source.join("a/dangling")).unwrap();
+    }
     fs::hard_link(source.join("wide/n00007"), source.join("a/alias")).unwrap();
     fs::hard_link(source.join("wide/n00007"), source.join("a/b/alias-two")).unwrap();
     source

@@ -94,13 +94,44 @@ impl Allocation {
             work: self.work.get(),
         })
     }
+    /// Windows: no nlink/blocks facts; the file identity rides the open
+    /// handle, and allocated bytes read as the logical length (NTFS sparse
+    /// accounting is a later refinement, #454).
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    pub(crate) fn new(_file: File, _path: &Path) -> OverlayResult<Self> {
-        Err(OverlayError::UnsupportedPlatform)
+    pub(crate) fn new(file: File, path: &Path) -> OverlayResult<Self> {
+        let meta = file.metadata()?;
+        if !meta.is_file() {
+            return Err(OverlayError::Invalid("allocation file identity"));
+        }
+        Ok(Self {
+            file,
+            device: 0,
+            inode: 0,
+            path: path.to_owned(),
+            work: Cell::new(AllocationWork::default()),
+            high_water: Cell::new(meta.len()),
+        })
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     pub(crate) fn state(&self) -> OverlayResult<AllocationState> {
-        Err(OverlayError::UnsupportedPlatform)
+        let mut work = self.work.get();
+        work.observations = work.observations.saturating_add(1);
+        self.work.set(work);
+        let meta = self.file.metadata()?;
+        let path = std::fs::symlink_metadata(&self.path)?;
+        if !path.is_file() {
+            return Err(OverlayError::Invalid("allocation path identity"));
+        }
+        let allocated = meta.len();
+        self.high_water.set(self.high_water.get().max(allocated));
+        Ok(AllocationState {
+            logical_bytes: meta.len(),
+            allocated_bytes: allocated,
+            high_water_allocated_bytes: self.high_water.get(),
+            reserved_tail_bytes: 0,
+            cleanup_headroom_bytes: 0,
+            work: self.work.get(),
+        })
     }
     pub(crate) fn work(&self) -> AllocationWork {
         self.work.get()
@@ -119,9 +150,16 @@ impl Allocation {
         // those are not ordinary writable capacity. Retain the original cause.
         Ok(filesystem.blocks_available() == 0)
     }
+    /// Windows: the volume free-space answer is the volume-guard port
+    /// (#454); until it lands the honest answer is not-full and the writer
+    /// fails on a full disk itself.
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     pub(crate) fn device_full(&self) -> OverlayResult<bool> {
-        Err(OverlayError::UnsupportedPlatform)
+        self.state()?;
+        let mut work = self.work.get();
+        work.capacity_checks = work.capacity_checks.saturating_add(1);
+        self.work.set(work);
+        Ok(false)
     }
 }
 

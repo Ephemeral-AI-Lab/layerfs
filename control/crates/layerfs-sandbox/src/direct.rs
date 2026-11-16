@@ -320,9 +320,13 @@ pub fn list(home: &Path, record: &SandboxRecord) -> std::result::Result<Outcome,
         Err(refusal) => Ok(Err(refusal)),
         Ok(listed) => {
             let namespaces = crate::run_folder::namespaces(&listed);
+            // Windows: the overlay sizes face waits for the monitoring port (#179).
+            #[cfg(unix)]
             let read =
                 crate::inspect::overlay_sizes(home, record.machine(), record.name(), &namespaces)
                     .unwrap_or_else(|_| crate::run_folder::not_observed());
+            #[cfg(windows)]
+            let read = crate::run_folder::not_observed();
             Ok(Ok(crate::run_folder::merged(listed, Some(&read))))
         }
     }

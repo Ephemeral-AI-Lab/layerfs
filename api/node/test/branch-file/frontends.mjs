@@ -11,8 +11,9 @@ import { decode, encode } from "../../src/values.js";
 
 const root = fileURLToPath(new URL("../../../../", import.meta.url));
 const driver = fileURLToPath(new URL("../contract/driver.py", import.meta.url));
-const python = process.env.LAYERFS_PYTHON ?? "python3";
-const command = process.env.LAYERFS_CLI ?? join(root, "target/debug/layerfs");
+const exe = process.platform === "win32" ? ".exe" : "";
+const python = process.env.LAYERFS_PYTHON ?? (process.platform === "win32" ? "python" : "python3");
+const command = process.env.LAYERFS_CLI ?? join(root, `target/debug/layerfs${exe}`);
 const specs = new Map(table.map(s => [`${s.family}.${s.call}`, s]));
 
 export function semantics(value) {

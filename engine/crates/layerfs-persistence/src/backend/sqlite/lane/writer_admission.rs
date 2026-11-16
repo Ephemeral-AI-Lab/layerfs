@@ -10,9 +10,26 @@ use {
     std::fs::File,
 };
 
+#[cfg(windows)]
+use std::ffi::c_void;
+
+/// A kernel mutex handle:Send by construction (HANDLEs are owned,
+/// thread-affine only in wait calls that take &self).
+#[cfg(windows)]
+#[derive(Clone, Copy)]
+pub(crate) struct MutexHandle(*mut c_void);
+
+#[cfg(windows)]
+unsafe impl Send for MutexHandle {}
+#[cfg(windows)]
+unsafe impl Sync for MutexHandle {}
+
 pub(crate) struct Writer {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     lock: Flock<File>,
+    /// The named mutex this lane holds, by store directory hash.
+    #[cfg(windows)]
+    mutex: MutexHandle,
 }
 
 impl Writer {
@@ -49,7 +66,23 @@ impl Writer {
                 Err(_) => Err(BackendError::Integrity),
             }
         }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        #[cfg(target_os = "macos")]
+        {
+            // Darwin's flock conflicts with SQLite's open-file locks.
+            // Host Init is sole-owner; cross-session contention
+            // retains exact SQLite Busy.
+            let _ = path;
+            Ok(Self {})
+        }
+        #[cfg(windows)]
+        {
+            // The named-mutex lane (Plan B): one kernel mutex per Store
+            // directory, held for one short writer job, so multi-opener
+            // contention serializes instead of colliding on SQLite Busy.
+            let mutex = unsafe { windows_acquire(path) }?;
+            Ok(Self { mutex: MutexHandle(mutex) })
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         {
             let _ = path;
             Err(BackendError::Integrity)
@@ -84,9 +117,25 @@ impl Writer {
                 Err(_) => Err(BackendError::Integrity),
             }
         }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        #[cfg(target_os = "windows")]
         {
-            // As `acquire`: no advisory lane on these platforms.
+            // The same lane, one non-blocking attempt (0 ms).
+            let name = windows_name(path);
+            let mutex = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
+            if mutex.is_null() {
+                return Err(BackendError::Integrity);
+            }
+            let wait = unsafe { WaitForSingleObject(mutex, 0) };
+            if wait == WAIT_OBJECT_0 {
+                Ok(Some(Self { mutex: MutexHandle(mutex) }))
+            } else {
+                unsafe { CloseHandle(mutex) };
+                Ok(None)
+            }
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        {
+            // No advisory lane on other platforms.
             Self::acquire(path).map(Some)
         }
     }
@@ -104,11 +153,13 @@ impl Writer {
         }
         #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         {
+            // The lane's hold is owned by the Writer; on Windows the
+            // mutex releases on drop, so the explicit path is a no-op.
+            let _ = self;
             Ok(())
         }
     }
 }
-
 impl crate::backend::sqlite::session::connection::State {
     pub(crate) fn finish_writer(&mut self) -> Result<(), BackendError> {
         if self.quarantined {
@@ -124,5 +175,73 @@ impl crate::backend::sqlite::session::connection::State {
             }
         }
         Ok(())
+    }
+}
+
+
+#[cfg(windows)]
+impl Drop for Writer {
+    fn drop(&mut self) {
+        if !self.mutex.0.is_null() {
+            unsafe { windows_release(self.mutex.0) };
+        }
+    }
+}
+
+/// The kernel mutex name for one Store directory: a stable hash of its
+/// canonical text, namespaced so no other product collides.
+#[cfg(windows)]
+fn windows_name(path: &Path) -> Vec<u16> {
+    use std::hash::{Hash, Hasher};
+    let text = path.to_string_lossy();
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut hasher);
+    let hash = hasher.finish();
+    format!("Local\\LayerFS-WriterLane-{hash:016x}\0")
+        .encode_utf16()
+        .collect()
+}
+
+#[cfg(windows)]
+extern "system" {
+    fn CreateMutexW(
+        attributes: *const c_void,
+        initial_owner: i32,
+        name: *const u16,
+    ) -> *mut c_void;
+    fn WaitForSingleObject(handle: *mut c_void, milliseconds: u32) -> u32;
+    fn ReleaseMutex(handle: *mut c_void) -> i32;
+    fn CloseHandle(handle: *mut c_void) -> i32;
+    fn GetLastError() -> u32;
+}
+
+const WAIT_OBJECT_0: u32 = 0;
+const ERROR_ALREADY_EXISTS: u32 = 183;
+
+/// Opens (or creates) the lane mutex and takes it with one bounded wait.
+#[cfg(windows)]
+unsafe fn windows_acquire(path: &Path) -> Result<*mut c_void, BackendError> {
+    let name = windows_name(path);
+    let mutex = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
+    if mutex.is_null() {
+        return Err(BackendError::Integrity);
+    }
+    // One bounded kernel wait, matching the unix lane's single blocking
+    // acquisition; INFINITE is correct here because the lane is short.
+    let wait = unsafe { WaitForSingleObject(mutex, 0xFFFFFFFF) };
+    if wait != WAIT_OBJECT_0 {
+        unsafe { CloseHandle(mutex) };
+        return Err(BackendError::Integrity);
+    }
+    let _ = ERROR_ALREADY_EXISTS;
+    let _ = GetLastError;
+    Ok(mutex)
+}
+
+#[cfg(windows)]
+unsafe fn windows_release(mutex: *mut c_void) {
+    unsafe {
+        ReleaseMutex(mutex);
+        CloseHandle(mutex);
     }
 }

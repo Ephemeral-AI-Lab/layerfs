@@ -82,6 +82,7 @@ fn no_worker(machine: &str) -> SdkRefusal {
 /// before?, has_more }` (`layerfs_home::tail::read`). A machine with no
 /// worker (every `native`) is `Unsupported`; one whose worker does not
 /// answer is `Unavailable`; nothing is started.
+#[cfg(unix)]
 pub fn machine_log(home: &Path, machine: &MachineName, window: &Window) -> Outcome {
     let machine = machine.as_str();
     tail::check(
@@ -102,6 +103,7 @@ pub fn machine_log(home: &Path, machine: &MachineName, window: &Window) -> Outco
 /// holds no run folder for it; a machine whose worker does not answer is
 /// `Unavailable`. A daemon that has ended leaves its log readable while
 /// its run folder is there.
+#[cfg(unix)]
 pub fn sandbox_log(home: &Path, name: &str, window: &Window) -> Outcome {
     tail::check(
         "logs.sandbox",
@@ -130,6 +132,7 @@ pub(super) fn machine(side: &Side<'_>, args: &SdkValue) -> Outcome {
 }
 
 /// [`sandbox_log`] on the side that holds the Sandbox's run folder.
+#[cfg(unix)]
 pub(super) fn sandbox(side: &Side<'_>, args: &SdkValue) -> Outcome {
     let folder = super::run_folder(side, args.get_text("sandbox").unwrap_or(""))?;
     Window::of(args).read(&Pair::of(folder.join(DAEMON_LOG)), "logs.sandbox")

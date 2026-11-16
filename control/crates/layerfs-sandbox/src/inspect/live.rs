@@ -52,6 +52,7 @@ impl Live {
 /// the route's own admission and deadlines. A machine that records no
 /// worker is not asked a second way and nothing starts it: its Sandboxes
 /// are `None` with [`MACHINE_STOPPED`].
+#[cfg(unix)]
 pub fn sandboxes_live(home: &Path, records: &[SandboxRecord]) -> Vec<Live> {
     // each machine of the page, with the places of its Sandboxes
     let mut machines: Vec<(&str, Vec<usize>)> = Vec::new();

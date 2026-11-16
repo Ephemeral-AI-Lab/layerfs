@@ -27,9 +27,24 @@ pub enum KernelServing {}
 #[cfg(target_os = "linux")]
 pub use super::serving::KernelServing;
 
+/// The Windows Ready state: one mounted WinFsp file system (A2, #454).
+/// The point names the directory it is mounted at; dropping the inner
+/// mount unmounts. No detach facts: the in-process mount has no
+/// kernel-session teardown states.
+#[cfg(windows)]
+pub(super) struct WinReady {
+    pub mounted: layerfs_winfsp::Mounted,
+    pub point: std::path::PathBuf,
+    /// The bound Workspace its mount serves; commit runs on it.
+    pub workspace: std::sync::Arc<crate::store::BoundWorkspace>,
+}
 /// The registry is the sole authority for which connection an entry owns.
 pub(super) enum Kernel {
     Unattached,
+    /// Windows (A2, 454): the in-process WinFsp mount; attach routes
+    /// through layerfs-winfsp mount_workspace instead of a kernel session.
+    #[cfg(windows)]
+    Ready(Box<WinReady>),
     /// One Attach is admitted, or its engine outcome is unknown.
     Attaching,
     #[cfg(target_os = "linux")]
@@ -40,10 +55,13 @@ pub(super) enum Kernel {
     #[cfg(target_os = "linux")]
     Retained(Box<super::serving::Kept>),
     /// NFS route: a serving export the host client has mounted.
+    #[cfg(unix)]
     Exported(Box<super::export::Exported>),
     /// NFS route: a terminal operation owns the export.
+    #[cfg(unix)]
     ExportLeaving(Box<super::export::ExportLeaving>),
     /// NFS route: export custody a teardown could not finish disposing.
+    #[cfg(unix)]
     ExportKept(Box<super::export::ExportKept>),
 }
 impl Kernel {
@@ -57,7 +75,10 @@ impl Kernel {
         };
         match self {
             Self::Unattached => plain(MountPhase::Unattached),
+            #[cfg(windows)]
+            Self::Ready(_) => plain(MountPhase::Ready),
             Self::Attaching => plain(MountPhase::Attaching),
+            #[cfg(unix)]
             Self::Exported(_) | Self::ExportLeaving(_) | Self::ExportKept(_) => {
                 super::export::block(self).unwrap_or_else(|| plain(MountPhase::Unattached))
             }

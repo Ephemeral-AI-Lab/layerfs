@@ -17,6 +17,10 @@ layerfs-machine = { path = "../layerfs-machine" }
 layerfs-store = { path = "../layerfs-store" }
 # How a Sandbox runs on its machine's kernel: native or namespaces.
 layerfs-sandbox-backend = { path = "../layerfs-sandbox-backend" }
+
+[target.'cfg(windows)'.dependencies]
+layerfs-daemon = { path = "../../../engine/crates/layerfs-daemon" }
+layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
 libc = "=0.2.189"
 
 [features]

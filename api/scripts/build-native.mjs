@@ -6,7 +6,7 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
-const suffix = { darwin: "dylib", linux: "so" }[process.platform];
+const suffix = { darwin: "dylib", linux: "so", win32: "dll" }[process.platform];
 if (!suffix) throw new Error(`native addon builds require macOS or Linux, got ${process.platform}`);
 const usage = "usage: build-native.mjs [--debug] [--features postgresql,tls]";
 const flags = process.argv.slice(2);
@@ -39,7 +39,9 @@ const result = spawnSync("cargo", [
 ], { cwd: root, stdio: "inherit", env: { ...process.env, CARGO_TARGET_DIR: target, RUSTFLAGS: rustflags } });
 if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status ?? 1);
-const artifact = join(target, profile, `liblayerfs_node.${suffix}`);
+// Windows MSVC puts no lib prefix on a cdylib; unix does.
+const stem = process.platform === "win32" ? "layerfs_node" : "liblayerfs_node";
+const artifact = join(target, profile, `${stem}.${suffix}`);
 const output = process.env.LAYERFS_NATIVE_OUTPUT
   ? resolve(root, process.env.LAYERFS_NATIVE_OUTPUT)
   : fileURLToPath(new URL("../node/layerfs.node", import.meta.url));

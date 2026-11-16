@@ -16,7 +16,14 @@ pub(crate) const CALL: Call = call(
 );
 
 /// Runs `doctor.fix`.
+#[cfg(unix)]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let id = args.get_text("id").unwrap_or("");
     layerfs_control::doctor::leftover_fix::fix(&context.home, id)
+}
+
+// Windows: the leftover fix waits for the monitoring port (#180).
+#[cfg(windows)]
+fn run(_context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
+    Err(layerfs_home::outcome::refused("Unsupported", "doctor.fix walks leftovers on the unix face today (#180)"))
 }

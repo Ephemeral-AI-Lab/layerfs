@@ -170,13 +170,10 @@ pub struct Creating(std::fs::File);
 impl Creating {
     /// Takes the lock without waiting; `Busy` while a create holds it.
     pub fn take(home: &Path, store: &str) -> Result<Self> {
-        use std::os::unix::fs::OpenOptionsExt;
         let file = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(false)
-            .mode(0o600)
-            .custom_flags(libc::O_NOFOLLOW)
             .open(paths::store_dir(home, store).join("backup.lock"))
             .map_err(failed)?;
         if !try_lock(&file, true).map_err(failed)? {

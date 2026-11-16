@@ -176,6 +176,8 @@ impl Session {
         creation_layout: crate::SqlitePackLayout,
         creation_acquisition: crate::SqliteAcquisitionSchema,
     ) -> Result<Self, BackendError> {
+        // The engine is the same SQLite everywhere; the platform list was
+        // the pre-Windows build boundary (#454).
         Self::connect_mode(
             path,
             writable,
@@ -206,7 +208,10 @@ impl Session {
         creation_acquisition: crate::SqliteAcquisitionSchema,
         diagnostic: bool,
     ) -> Result<Self, BackendError> {
-        if !cfg!(any(target_os = "macos", target_os = "linux")) {
+        // Windows joins the sole-kernel answers: one Windows kernel
+        // coordinates the Store sqlite locks exactly as macOS one does
+        // (#454); the volume-guard allowlist is the follow-up.
+        if !cfg!(any(target_os = "macos", target_os = "linux", target_os = "windows")) {
             return Err(BackendError::Integrity);
         }
         // A writable open runs PRAGMA and schema statements that write, so it

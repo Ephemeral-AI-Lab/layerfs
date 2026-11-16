@@ -27,8 +27,11 @@
 //!   removes its Store, and leaves the machines running.
 //!
 //! A test whose settings are missing says NOT_RUN and passes.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths};
+
 use layerfs_bridge::control::SdkValue;
 use std::path::{Path, PathBuf};
 

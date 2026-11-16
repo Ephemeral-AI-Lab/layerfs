@@ -184,12 +184,26 @@ pub fn start(
     {
         crate::launch::local::start((host, platform), directory, store, backend)
     }
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    // Windows: the A1 directory Sandbox with its record; the mount
+    // lifecycle runs through the in-process daemon assembly (#454).
+    #[cfg(windows)]
+    {
+        drop((store, backend, platform));
+        let id = host.sandbox().map(|s| s.to_string()).unwrap_or_default();
+        let made = crate::lifecycle_windows::start(host, directory, &id)?;
+        // A refused live state leaves no half-made Sandbox behind.
+        let _ = std::fs::remove_dir_all(made);
+        Err(refused(
+            "Unsupported",
+            "the Sandbox directory and record are created; its live state waits on the Controls face the daemon-assembly batch completes (#454)",
+        ))
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
     {
         drop((directory, store, backend, platform));
         Err(refused(
             "Unsupported",
-            "a Sandbox runs on Linux (namespaces) or macOS (native)",
+            "a Sandbox runs on Linux, macOS or Windows",
         ))
     }
 }

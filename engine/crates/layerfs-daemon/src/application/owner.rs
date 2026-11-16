@@ -449,8 +449,10 @@ pub struct Application {
     pub(super) instance: [u8; 32],
     pub(super) owner: Owner,
     /// Fixed shared kernel workers, entered before control readiness.
+    #[cfg(unix)]
     pub(super) kernel: Option<Arc<crate::control::KernelServing>>,
     /// NFS serving of the native route, when selected.
+    #[cfg(unix)]
     pub(super) export: Option<Arc<crate::control::ExportServing>>,
     pub(super) state: Mutex<State>,
     pub(super) changed: Condvar,
@@ -564,24 +566,29 @@ impl Application {
             },
             None => None,
         };
-        let kernel = match super::filesystem::assemble(&setup) {
-            Ok(kernel) => kernel,
-            Err(cause) => {
-                return Err(ApplicationError::AfterOverlay {
-                    owner: Box::new(owner),
-                    cause: Box::new(ApplicationError::Io(cause)),
-                })
-            }
+        #[cfg(unix)]
+        let (kernel, export) = {
+            let kernel = match super::filesystem::assemble(&setup) {
+                Ok(kernel) => kernel,
+                Err(cause) => {
+                    return Err(ApplicationError::AfterOverlay {
+                        owner: Box::new(owner),
+                        cause: Box::new(ApplicationError::Io(cause)),
+                    })
+                }
+            };
+            let export = match super::filesystem::assemble_export(&setup) {
+                Ok(export) => export,
+                Err(cause) => {
+                    return Err(ApplicationError::AfterOverlay {
+                        owner: Box::new(owner),
+                        cause: Box::new(ApplicationError::Io(cause)),
+                    })
+                }
+            };
+            (kernel, export)
         };
-        let export = match super::filesystem::assemble_export(&setup) {
-            Ok(export) => export,
-            Err(cause) => {
-                return Err(ApplicationError::AfterOverlay {
-                    owner: Box::new(owner),
-                    cause: Box::new(ApplicationError::Io(cause)),
-                })
-            }
-        };
+        #[cfg(unix)]
         let service = existing.as_ref().map(|opened| {
             super::filesystem::service(
                 opened.store.clone(),
@@ -591,6 +598,11 @@ impl Application {
                 l.serial_low_water,
             )
         });
+        // Windows: control alone assembles over the twin registry (#454).
+        #[cfg(windows)]
+        let service = existing
+            .as_ref()
+            .map(|opened| super::filesystem::service(opened.store.clone(), &owner, l.serial_low_water));
         let phase = if service.is_some() {
             DaemonPhase::ControlReady
         } else {
@@ -601,7 +613,9 @@ impl Application {
             setup,
             instance,
             owner,
+            #[cfg(unix)]
             kernel,
+            #[cfg(unix)]
             export,
             state: Mutex::new(State {
                 startup: Startup {

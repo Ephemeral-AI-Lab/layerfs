@@ -3,7 +3,7 @@
 //! keep a record alive (moved from the Store leases, layerfs-project#103).
 //! The facts come from `layerfs_bridge::process`, not a driver (#112).
 use layerfs_bridge::control::SdkValue;
-use layerfs_bridge::process::LocalProcess;
+pub use layerfs_bridge::process::LocalProcess;
 use std::sync::OnceLock;
 
 /// This process as leases name it, read once; `None` where the kernel does
@@ -42,6 +42,7 @@ pub fn recorded_alive(value: &SdkValue) -> bool {
 
 /// Whether process `pid` is alive on this host. Ids 0 and above `i32::MAX`
 /// name no single process (`kill` would read them as a group): never alive.
+#[cfg(unix)]
 pub fn alive(pid: u32) -> bool {
     use nix::errno::Errno;
     let id = match i32::try_from(pid) {
@@ -55,19 +56,44 @@ pub fn alive(pid: u32) -> bool {
     }
 }
 
+/// Windows: alive when a fresh observation succeeds (the absolute creation
+/// time is the identity; observe fails for a gone or inaccessible pid).
+#[cfg(windows)]
+pub fn alive(pid: u32) -> bool {
+    if pid == 0 {
+        return false;
+    }
+    LocalProcess::observe(pid).is_ok()
+}
+
 /// Whether `pid` is alive and, when its start time and boot were recorded,
 /// still the same process.
 pub fn alive_as(pid: u32, start: Option<u64>, boot: Option<u128>) -> bool {
     if !alive(pid) {
         return false;
     }
-    match (start, boot) {
-        (Some(start), Some(boot)) => LocalProcess {
-            pid,
-            start,
-            boot: Some(boot),
+    #[cfg(unix)]
+    {
+        match (start, boot) {
+            (Some(start), Some(boot)) => LocalProcess {
+                pid,
+                start,
+                boot: Some(boot),
+            }
+            .alive(),
+            _ => true,
         }
-        .alive(),
-        _ => true,
+    }
+    // Windows: the recorded start is compared against a fresh observation
+    // (the same judgement unix makes in its own units).
+    #[cfg(windows)]
+    {
+        let _ = boot;
+        match start {
+            Some(recorded) => LocalProcess::observe(pid)
+                .map(|now| now.start == recorded)
+                .unwrap_or(false),
+            None => true,
+        }
     }
 }

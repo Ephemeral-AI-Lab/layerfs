@@ -35,9 +35,15 @@ fn tree(source: &std::path::Path) -> usize {
     }
     fs::write(source.join("c/deep/x"), b"x\n").unwrap();
     fs::write(source.join("z"), b"z\n").unwrap();
-    std::os::unix::fs::symlink("f0", source.join("a/link")).unwrap();
-    std::os::unix::fs::symlink("f1", source.join("a/still")).unwrap();
-    std::os::unix::fs::symlink("..", source.join("a/sub/up")).unwrap();
+    let symlink = |target: &str, at: std::path::PathBuf| {
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target, at).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_file(target, at).unwrap();
+    };
+    symlink("f0", source.join("a/link"));
+    symlink("f1", source.join("a/still"));
+    symlink("..", source.join("a/sub/up"));
     // a, sub, b, b2, c, deep: 6; files 8 + 9 + 1 + 1; links 3
     6 + 8 + 9 + 1 + 1 + 3
 }

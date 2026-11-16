@@ -2,7 +2,10 @@
 //! native, a folder Inited into it as a live add, file and Branch calls on
 //! it, the Store pushed to a worker machine and read there, then the project
 //! removed.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home::{self, paths, write_record};
+
 use layerfs_bridge::control::SdkValue;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};

@@ -1,0 +1,22 @@
+[package]
+name = "layerfs-winfsp"
+version = "2.0.0"
+edition = "2021"
+description = "The Workspace filesystem face on Windows: WinFsp callbacks over the shared mount services (454 A2)"
+
+[dependencies]
+layerfs-mount-ports = { path = "../layerfs-mount-ports" }
+layerfs-overlay = { path = "../layerfs-overlay" }
+layerfs-workspace = { path = "../layerfs-workspace" }
+layerfs-content = { path = "../../../core/crates/layerfs-content" }
+
+[dev-dependencies]
+layerfs-daemon = { path = "../layerfs-daemon" }
+layerfs-project = { path = "../layerfs-project" }
+layerfs-store-service = { path = "../layerfs-store-service" }
+layerfs-bridge = { path = "../layerfs-bridge" }
+layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
+layerfs-history = { path = "../../../core/crates/layerfs-history" }
+layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
+layerfs-persistence = { path = "../layerfs-persistence" }
+layerfs-overlay = { path = "../layerfs-overlay" }

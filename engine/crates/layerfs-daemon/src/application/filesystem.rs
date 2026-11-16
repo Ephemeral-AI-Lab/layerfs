@@ -1,9 +1,9 @@
 //! Kernel serving assembly over the daemon's one Store and one overlay owner.
-use crate::{
-    control::{ExportServing, ExportServingConfig, Helper, KernelServing, Mounter, Service},
-    store::Store,
-    Owner,
-};
+use crate::control::Service;
+use crate::store::Store;
+use crate::Owner;
+#[cfg(unix)]
+use crate::control::{ExportServing, ExportServingConfig, Helper, KernelServing, Mounter};
 use layerfs_bridge::daemon_setup::DaemonSetup;
 use layerfs_bridge::KernelRoute;
 use std::{path::Path, sync::Arc};
@@ -17,12 +17,14 @@ pub const NFS_FLUSH: &str = "LAYERFS_NFS_FLUSH";
 
 /// Whether this daemon serves its mounts over NFS. The setup chooses the
 /// route; macOS has no other route: there `check_route` accepts only NFS.
+#[cfg(unix)]
 pub(super) fn nfs_route(setup: &DaemonSetup) -> bool {
     cfg!(target_os = "macos") || setup.route == KernelRoute::Nfs
 }
 
 /// The provider's route choice, asserted before anything is served: `fuse`
 /// or `nfs`, and only `nfs` on macOS.
+#[cfg(unix)]
 pub(super) fn check_route(route: KernelRoute) -> std::io::Result<()> {
     match route {
         KernelRoute::Nfs => Ok(()),
@@ -35,6 +37,7 @@ pub(super) fn check_route(route: KernelRoute) -> std::io::Result<()> {
 }
 /// NFS serving for the native route, from the protected setup and the
 /// declared helper overrides. Nothing is mounted until an explicit Attach.
+#[cfg(unix)]
 pub(super) fn assemble_export(setup: &DaemonSetup) -> std::io::Result<Option<Arc<ExportServing>>> {
     if !nfs_route(setup) {
         return Ok(None);
@@ -79,6 +82,7 @@ pub(super) fn assemble_export(setup: &DaemonSetup) -> std::io::Result<Option<Arc
     Ok(Some(Arc::new(serving)))
 }
 
+#[cfg(unix)]
 /// Control and kernel serving share the same Store handle and overlay owner;
 /// the Service's registry stays the sole authority for every mount. The
 /// Store takes its explicit serial low-water here, before any Workspace.
@@ -96,12 +100,29 @@ pub(super) fn service(
         (None, None) => Service::new(store, owner),
     })
 }
+
+
+/// Control serving share the same Store handle; the Service registry
+/// stays the sole authority for every mount (the Windows face, #454).
+#[cfg(windows)]
+pub(super) fn service(
+    store: Arc<Store>,
+    owner: &Owner,
+    serial_low_water: u64,
+) -> Arc<Service> {
+    store.set_serial_low_water(serial_low_water);
+    let capacity = owner.configuration().namespaces;
+    Arc::new(Service::new(store, capacity))
+}
 /// Kernel serving is a Linux capability; elsewhere control alone is assembled.
-#[cfg(not(target_os = "linux"))]
-pub(super) fn assemble(_setup: &DaemonSetup) -> std::io::Result<Option<Arc<KernelServing>>> {
+#[cfg(target_os = "macos")]
+pub(super) fn assemble(_setup: &DaemonSetup) -> std::io::Result<Option<Arc<crate::control::KernelServing>>> {
     Ok(None)
 }
+
+// Windows: no kernel serving face; the owner asks service directly (#454).
 #[cfg(target_os = "linux")]
+#[cfg(unix)]
 pub(super) use linux::assemble;
 #[cfg(target_os = "linux")]
 mod linux {

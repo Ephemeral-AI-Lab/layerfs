@@ -1,4 +1,5 @@
 //! Frozen v2 matched component screen for publication accounting. No SDK/FUSE timing claim.
+//! Unix-only facts; on Windows the screen prints its reason and exits.
 use layerfs_history::*;
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{Storage, StoragePolicy};
@@ -36,6 +37,12 @@ fn fixture() -> Vec<Vec<u8>> {
         })
         .collect()
 }
+#[cfg(not(unix))]
+fn main() {
+    eprintln!("this screen measures unix stat blocks; not offered on Windows");
+}
+
+#[cfg(unix)]
 fn main() {
     assert_eq!(
         std::env::var("SCREEN_SCENARIO").as_deref(),

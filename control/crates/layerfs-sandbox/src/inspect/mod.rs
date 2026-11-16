@@ -24,30 +24,70 @@
 //! `open::hold`, `daemon::pool` or `route`'s host operations. Admission and
 //! deadlines are `owner`'s; the caller's wait for a worker is
 //! `place::READ`.
+#[cfg(unix)]
+#[cfg(unix)]
 mod files;
 mod host;
+#[cfg(unix)]
+#[cfg(unix)]
 mod live;
 mod log;
+#[cfg(unix)]
+#[cfg(unix)]
 mod machine;
+#[cfg(unix)]
 mod overlay;
 mod owner;
 pub mod process;
+#[cfg(unix)]
+#[cfg(unix)]
 mod root;
+#[cfg(unix)]
 mod roots;
+#[cfg(unix)]
 mod route;
+#[cfg(unix)]
 mod stats;
 
 pub use crate::deploy::Side;
+#[cfg(unix)]
+#[cfg(unix)]
 pub use files::{
     sandbox_files, sandbox_page, FilesRequest, DEPTH, ENTRIES, MAX_DEPTH, MAX_ENTRIES, MAX_WINDOW,
     WINDOW,
 };
+
+/// Windows: the live read face waits for the monitoring port (#179);
+/// the type shape stays for the list response.
+#[cfg(windows)]
+mod live_win {
+    /// One Sandbox run/live observation (#179).
+    #[derive(Clone, Debug)]
+    pub struct Live {
+        /// Whether the daemon process runs.
+        pub live: Option<bool>,
+        /// Why `live` is `None`.
+        pub reason: Option<String>,
+    }
+    /// The reason a machine that records no worker answers.
+    pub const MACHINE_STOPPED: &str = "machine_stopped";
+}
+#[cfg(unix)]
 pub use live::{sandboxes_live, Live, MACHINE_STOPPED};
-pub use log::{machine_log, sandbox_log, Window};
+#[cfg(windows)]
+pub use live_win::{Live, MACHINE_STOPPED};
+#[cfg(unix)]
+pub use log::{machine_log, sandbox_log};
+pub use log::Window;
+#[cfg(unix)]
 pub use machine::{machine_files, machine_page};
+#[cfg(unix)]
 pub use overlay::overlay_sizes;
 pub use owner::{admit, on_owner, running, Budget, HARD, PERMITS, SOFT};
+#[cfg(unix)]
 pub use route::{ask, in_worker, serve, OP};
+#[cfg(unix)]
 pub use stats::machine_stats;
 
+#[cfg(unix)]
 use route::run_folder;

@@ -153,6 +153,7 @@ pub fn doctor(home: &Path) -> Outcome {
             super::checks::check(home, &scanned, &mut findings)?;
             super::capacity::check(home, &scanned, &mut findings);
             super::workers::check(home, &scanned, &mut findings);
+            #[cfg(unix)]
             super::leftover_report::check(home, &scanned, &mut findings);
         }
     }

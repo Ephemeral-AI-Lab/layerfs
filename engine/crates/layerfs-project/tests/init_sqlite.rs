@@ -4,12 +4,12 @@
 //! the explicit before-file-creation refusal.
 mod support;
 use layerfs_history::HistoryCatalogConfig;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 use layerfs_persistence::SqliteAcquisitionSchema;
 use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::StoragePolicy;
 use support::*;
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
 #[test]
 fn an_unsupported_platform_refuses_the_store_before_any_file_exists() {
     use layerfs_storage::port::PersistenceError;
@@ -32,7 +32,7 @@ fn an_unsupported_platform_refuses_the_store_before_any_file_exists() {
         assert!(!store.exists(), "a refused Store creates no file");
     }
 }
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 #[test]
 fn selected_profiles_init_100_and_1000_pass_the_full_namespace_oracle() {
     for selected in DEVELOPMENT_PROFILES {

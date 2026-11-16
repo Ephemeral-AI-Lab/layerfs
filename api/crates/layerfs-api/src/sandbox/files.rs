@@ -5,6 +5,7 @@ use crate::calls::table::{a, call, opt, Call, FILES};
 use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::outcome::Outcome;
+#[cfg(unix)]
 use layerfs_sandbox::inspect::{sandbox_files, FilesRequest};
 
 /// Its table entry. It is quiet: a UI reads a folder on every expand, and
@@ -28,7 +29,14 @@ pub(crate) const CALL: Call = call(
 /// file: `{ kind: "file", size, offset, content, binary, next }`. It is
 /// read where the Sandbox's run folder is; it takes no lock or lease, asks
 /// no daemon and writes nothing (layerfs-project#178).
+#[cfg(unix)]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let sandbox = args.get_text("sandbox").unwrap_or("");
     sandbox_files(&context.home, sandbox, &FilesRequest::of(args))
+}
+
+// Windows: the sandbox files read waits for the monitoring port.
+#[cfg(windows)]
+fn run(_context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
+    Err(layerfs_home::outcome::refused("Unsupported", "sandbox.files reads on the unix face today (#178)"))
 }

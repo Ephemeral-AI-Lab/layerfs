@@ -1,0 +1,173 @@
+//! The Windows control registry: the Service face over the same
+//! Store, with the in-process WinFsp Ready state where the unix
+//! Service holds its kernel session or NFS export (#454).
+use super::Failure;
+use layerfs_history::WorkspaceId;
+use layerfs_store_service::store::Store;
+use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
+
+/// One admitted Workspace control slot: its binding, or the Ready
+/// mount the WinFsp face attached.
+pub(super) enum Entry {
+    /// Its bind is admitted; no mount yet.
+    Bound,
+    /// The WinFsp mount answers its filesystem calls (A2).
+    Ready(Box<super::kernel::WinReady>),
+}
+
+/// The Windows Service: the same Store and capacity admission, the
+/// entries map with the WinFsp Ready face.
+pub struct Service {
+    pub(crate) store: Arc<Store>,
+    entries: Mutex<BTreeMap<WorkspaceId, Entry>>,
+    capacity: usize,
+}
+
+impl Service {
+    /// Binds control at its configured capacity.
+    pub fn new(store: Arc<Store>, capacity: usize) -> Self {
+        Self {
+            store,
+            entries: Mutex::new(BTreeMap::new()),
+            capacity,
+        }
+    }
+
+    /// One admission attempt: the capacity and duplicate checks the
+    /// unix registry makes, before any effect.
+    pub(super) fn admit(&self, workspace: WorkspaceId) -> Result<(), Failure> {
+        let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
+        if entries.contains_key(&workspace) {
+            return Err(Failure::Rejected(
+                layerfs_bridge::control::ControlCode::Busy,
+                "Workspace incarnation already admitted",
+            ));
+        }
+        if entries.len() == self.capacity {
+            return Err(Failure::Rejected(
+                layerfs_bridge::control::ControlCode::Capacity,
+                "daemon Workspace capacity",
+            ));
+        }
+        entries.insert(workspace, Entry::Bound);
+        Ok(())
+    }
+}
+
+impl Service {
+    /// Attaches the admitted Workspace over WinFsp at one directory under
+    /// `mounts`: the real mount needs the driver; the entry move and the
+    /// mount are one step once it is installed.
+    pub(super) fn attach_ready(
+        &self,
+        workspace: WorkspaceId,
+        mounts: &std::path::Path,
+        services: std::sync::Arc<dyn layerfs_mount_ports::ports::MountServices>,
+        bound: std::sync::Arc<crate::store::BoundWorkspace>,
+    ) -> Result<(), Failure> {
+        let point = mounts.join(format!("ws-{:?}", workspace));
+        let mounted =
+            layerfs_winfsp::mount_workspace(point.to_string_lossy().as_ref(), services)
+                .map_err(|error| Failure::Rejected(
+                    layerfs_bridge::control::ControlCode::Invalid,
+                    "winfsp mount failed",
+                ))?;
+        let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
+        entries.insert(
+            workspace,
+            Entry::Ready(Box::new(super::kernel::WinReady {
+                mounted,
+                point,
+                workspace: bound,
+            })),
+        );
+        Ok(())
+    }
+}
+
+impl Service {
+    /// Commits the Ready Workspace: the same captured commit the unix
+    /// face runs, on the bound Workspace its mount serves.
+    pub(super) fn commit_ready(
+        &self,
+        workspace: WorkspaceId,
+        options: &layerfs_store_service::store::CommitOptions,
+    ) -> Result<layerfs_store_service::store::CommitSuccess, Failure> {
+        let entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
+        match entries.get(&workspace) {
+            Some(Entry::Ready(ready)) => ready
+                .workspace
+                .commit_captured(options)
+                .map_err(Failure::Commit),
+            _ => Err(Failure::Rejected(
+                layerfs_bridge::control::ControlCode::Invalid,
+                "workspace not attached",
+            )),
+        }
+    }
+
+    /// Unmounts the Ready Workspace: dropping the Mounted unmounts, and
+    /// the entry leaves the map; a bound-not-attached entry is removed.
+    pub(super) fn unmount(&self, workspace: WorkspaceId) -> Result<(), Failure> {
+        let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
+        entries.remove(&workspace);
+        Ok(())
+    }
+}
+
+impl Service {
+    /// The Commit-with-construct face the unix Service names: the
+    /// Windows face has no retained custody producer, so Commit always
+    /// runs the captured path (execute_control).
+    pub fn execute<'a, C>(&self, request: &layerfs_bridge::control::Request, _construct: C) -> Result<super::Success, super::Failure>
+    where
+        C: FnOnce(
+            &layerfs_storage::Save<'a>,
+            layerfs_overlay::Capture,
+            &layerfs_history::BranchSnapshot,
+        ) -> Result<layerfs_content::filesystem::FilesystemRootId, crate::store::CommitError>,
+    {
+        self.execute_control(request)
+    }
+
+    /// The post-commit reclaim the unix face runs: the Windows entry
+    /// keeps no observation state to reclaim.
+    pub fn reclaim_after_commit(&self, _token: layerfs_bridge::control::WorkspaceToken) {}
+}
+
+impl Service {
+    /// Serves control on one loopback listener until it closes: the
+    /// in-process daemon face (#454). Each accepted connection is one
+    /// Control; the channel layer (its handshake and admission) runs
+    /// unchanged over the loopback pair.
+    pub fn serve_loopback(self: &std::sync::Arc<Self>, caller: [u8; 32]) -> std::io::Result<(std::net::SocketAddr, [u8; 32])> {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+        let address = listener.local_addr()?;
+        // The listener keypair: its public half is what a caller expects.
+        let keys = layerfs_bridge::duplex::generate_keypair()
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "keypair"))?;
+        let service = self.clone();
+        // One keypair per listener; the caller learns its public half
+        // (the returned value) and both sides expect their agreed peer.
+        let expected = caller;
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { break };
+                let service = service.clone();
+                let private = keys.private;
+                let expected = expected;
+                std::thread::spawn(move || {
+                    let mut connection =
+                        match layerfs_bridge::duplex::accept(stream, &private, expected) {
+                            Ok(connection) => connection,
+                            Err(_) => return,
+                        };
+                    let _ = service.serve_one_control(&mut connection);
+                });
+            }
+        });
+        let server_public = keys.public;
+        Ok((address, server_public))
+    }
+}

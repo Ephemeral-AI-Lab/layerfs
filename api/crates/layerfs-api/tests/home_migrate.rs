@@ -1,7 +1,10 @@
 //! The one conversion of a 1.1.0 home into the 2.0 layout (#533 step 4),
 //! then on into layout 3 (#536 §5): a 1.1.0 home with every kind of record
 //! converts, and a second run changes nothing.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home::{self, paths, read_record, Layout};
+
 use layerfs_bridge::control::{Answer, Reply, SdkValue};
 use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
 use layerfs_bucket::backup::{link as state, Direction, Provider, Remotes, Transfer};

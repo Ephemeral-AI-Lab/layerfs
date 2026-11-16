@@ -66,21 +66,48 @@ pub fn update(home: &Path, request: &MachineUpdate) -> Outcome {
 
 /// `machine.images`: the Sandbox images on this machine, and the host's
 /// Docker images it can copy.
+#[cfg(unix)]
 pub fn images(home: &Path, name: &MachineName) -> Outcome {
     layerfs_sandbox::images::list(home, name)
 }
 
-/// `machine.load`: copies an image to this machine without a Sandbox.
+/// machine.load: copies an image to this machine without a Sandbox.
+#[cfg(unix)]
 pub fn load(home: &Path, events: &mut Events<'_>, name: &MachineName, image: &str) -> Outcome {
     layerfs_sandbox::image_load::machine_load(home, events, name, image)
 }
 
-/// `machine.prune`: removes one image, or every unused one.
+/// machine.prune: removes one image, or every unused one.
+#[cfg(unix)]
 pub fn prune(home: &Path, name: &MachineName, image: Option<&str>, unused: bool) -> Outcome {
     layerfs_sandbox::images::prune(home, name, image, unused)
 }
 
+// Windows: the Docker image face is the unix runtime; refused until its own port (#454).
+#[cfg(windows)]
+/// Windows refuses the machine Docker image face until its own port (#454).
+pub fn images(_home: &Path, _name: &MachineName) -> Outcome {
+    crate::machine_images_not_ported()
+}
+#[cfg(windows)]
+/// Windows refuses the machine Docker image face until its own port (#454).
+pub fn load(_home: &Path, _events: &mut Events<'_>, _name: &MachineName, _image: &str) -> Outcome {
+    crate::machine_images_not_ported()
+}
+#[cfg(windows)]
+/// Windows refuses the machine Docker image face until its own port (#454).
+pub fn prune(_home: &Path, _name: &MachineName, _image: Option<&str>, _unused: bool) -> Outcome {
+    crate::machine_images_not_ported()
+}
+
 /// Explicit crash stop of a machine and this home's Sandboxes, preserving data.
+#[cfg(unix)]
 pub fn stop_force(home: &Path, name: &MachineName) -> Outcome {
     crate::machine_force::stop(home, name)
+}
+
+#[cfg(windows)]
+/// Windows refuses the crash-stop face until its own port (#454).
+pub fn stop_force(_home: &Path, _name: &MachineName) -> Outcome {
+    crate::machine_images_not_ported()
 }

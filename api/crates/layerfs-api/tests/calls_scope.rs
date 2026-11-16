@@ -2,7 +2,10 @@
 //! its project allows only the calls it covers; `commit.get` pages to the
 //! end; `branch.get` and `commit.get` keep 1.1.0's `NoSuch*` codes; a
 //! scoped `branch.list` filters every page, not the first.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home::{self, paths, write_record};
+
 use layerfs_api::Scope;
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;

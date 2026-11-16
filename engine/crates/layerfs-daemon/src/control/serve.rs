@@ -109,6 +109,10 @@ pub(crate) fn answer_call(
             Err(failure) => Reply::Refused(failure.wire()),
         };
         let id = original.call.id;
+        // Telemetry observation is the unix face; Windows answers plain.
+#[cfg(windows)]
+        let answer = Answer { id, reply }.encode().map_err(ServeCause::Protocol)?;
+        #[cfg(unix)]
         let answer = match telemetry {
             None => Answer { id, reply }.encode(),
             // Telemetry that does not fit beside the reply gives way to a

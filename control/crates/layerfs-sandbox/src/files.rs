@@ -30,11 +30,18 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// This process's effective uid and gid: a native Sandbox's command
 /// identity (its commands run as this user).
+#[cfg(unix)]
 pub fn user() -> (u32, u32) {
     (
         layerfs_home::home::flock::euid(),
         layerfs_home::home::flock::egid(),
     )
+}
+
+/// Windows: no separate euid/egid face; the session user is the owner.
+#[cfg(windows)]
+pub fn user() -> (u32, u32) {
+    (0, 0)
 }
 /// The folder of the Sandbox a call names (`sandbox`, its name):
 /// `<root>/sandbox/<name>/`, in the home on `native` and for a Sandbox
@@ -66,6 +73,15 @@ pub fn save_sandbox(
     let platform = platform.to_owned();
     let runtime = state.runtime()?;
     let daemon = match runtime {
+        // Windows: nothing launches; the daemon face waits for the
+        // host_process port (#454).
+        #[cfg(windows)]
+        Sandbox::Windows(_) => {
+            return Err(refused(
+                "Unsupported",
+                "no Sandbox daemon on the Windows stub face; the host_process port carries it (#454)",
+            ));
+        }
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         Sandbox::HostProcess(runtime) => {
             let record = runtime
@@ -113,6 +129,8 @@ pub fn save_sandbox(
 /// native (macOS) one, FUSE for every other.
 pub fn route(runtime: &Sandbox) -> &'static str {
     match runtime {
+        #[cfg(windows)]
+        _ => unreachable!("the Windows stub face has no runtime arm"),
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         Sandbox::HostProcess(_) => "nfs",
         #[cfg(target_os = "linux")]

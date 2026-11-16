@@ -236,7 +236,6 @@ fn create_empty(
     policy: layerfs_storage::StoragePolicy,
     made: &mut MadeDirectory,
 ) -> Result<SealedStore> {
-    use std::os::unix::fs::PermissionsExt;
     // the one ownership rule an install uses too: this call's own `mkdir`
     *made = match layerfs_store_service::install::make_private_directory(global).map_err(failed)? {
         layerfs_store_service::install::Made::ThisCall => MadeDirectory::ThisCall,
@@ -265,8 +264,12 @@ fn create_empty(
             })
             .map_err(|error| refused("Failed", format!("Store create: {error:?}")))?;
         // a daemon opens only a Store file only its user can read
-        std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600))
-            .map_err(failed)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600))
+                .map_err(failed)?;
+        }
         layerfs_store_service::install::absent(&target).map_err(failed)?;
         std::fs::rename(&temporary, &target).map_err(failed)?;
         Ok(sealed)

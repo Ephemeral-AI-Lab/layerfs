@@ -1,5 +1,7 @@
 //! `sandbox.list`: one page of the Sandbox records.
 use super::family::{page, Page};
+#[cfg(unix)]
+#[cfg(unix)]
 use super::inspect::Live;
 use super::record::SandboxRecord;
 use layerfs_bridge::control::SdkRefusal;
@@ -25,6 +27,7 @@ pub struct Listed {
     pub next: Option<usize>,
     /// With `live`: whether each of `items`' daemon process runs, in their
     /// order.
+    #[cfg(unix)]
     pub live: Option<Vec<Live>>,
 }
 
@@ -41,6 +44,15 @@ pub fn list(home: &Path, request: &ListRequest) -> Result<Listed, SdkRefusal> {
         .filter(|r| only.is_none() || r.project() == only)
         .collect();
     let (items, next) = page(items, request.page);
+#[cfg(unix)]
     let live = (request.live).then(|| super::inspect::sandboxes_live(home, &items));
-    Ok(Listed { items, next, live })
+    // Windows: the live face waits for the monitoring port (#179).
+    #[cfg(windows)]
+    let live: Option<Vec<super::inspect::Live>> = None;
+    #[cfg(unix)]
+    let listed = Listed { items, next, live };
+    // Windows: no live face (the monitoring port is the #179 follow-up).
+    #[cfg(windows)]
+    let listed = Listed { items, next };
+    Ok(listed)
 }

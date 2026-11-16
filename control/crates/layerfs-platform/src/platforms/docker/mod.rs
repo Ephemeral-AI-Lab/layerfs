@@ -1,10 +1,11 @@
 //! `docker`: the built-in machine whose kernel is Docker's (Docker Desktop's
-//! VM, or the Linux host). On macOS and Linux its worker is one detached,
-//! privileged container behind a secret on a loopback-published port, which
-//! opens its sqlite Stores in a Docker volume (DECISIONS, H §7.7 row) and
-//! runs `namespaces` Sandboxes inside itself as a VM's worker does (D-8).
-//! Docker through WSL2 (Windows) is not designed and answers `Unsupported`.
+//! VM, or the Linux host). On macOS and Linux its worker is one detached
+//! container behind a secret on a loopback-published port, which opens its
+//! sqlite Stores in a Docker volume (DECISIONS, H §7.7 row). Docker through
+//! WSL2 (Windows) is not designed and answers `Unsupported`.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod adapter;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod cli;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod images;
@@ -17,6 +18,7 @@ mod profile;
 mod unix;
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 mod windows;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) use adapter::ADAPTER;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) use images::cached_image;

@@ -3,6 +3,7 @@ use std::path::Path;
 
 /// Bytes available to this caller on the filesystem containing `path`.
 /// Uses filesystem allocation units, with checked arithmetic; never writes.
+#[cfg(unix)]
 pub fn filesystem_available(path: &Path) -> std::io::Result<u64> {
     let filesystem = nix::sys::statvfs::statvfs(path).map_err(std::io::Error::from)?;
     // `fsblkcnt_t` is `u32` on macOS but `u64` on Linux, so `u64::from`
@@ -36,6 +37,7 @@ pub struct Filesystem {
 
 /// The filesystem containing `path`, read with two system calls; never
 /// writes and walks nothing.
+#[cfg(unix)]
 pub fn filesystem(path: &Path) -> std::io::Result<Filesystem> {
     let found = nix::sys::statvfs::statvfs(path).map_err(std::io::Error::from)?;
     let unit = u128::from(found.fragment_size());
@@ -79,8 +81,23 @@ fn kind(path: &Path) -> std::io::Result<String> {
 }
 
 /// The type of the filesystem containing `path`.
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
 fn kind(path: &Path) -> std::io::Result<String> {
     let found = nix::sys::statfs::statfs(path).map_err(std::io::Error::from)?;
     Ok(found.filesystem_type_name().to_owned())
+}
+
+
+/// Windows: the volume faces wait for the volume-guard port (#454);
+/// availability never refuses for room.
+#[cfg(windows)]
+pub fn filesystem_available(_path: &Path) -> std::io::Result<u64> {
+    Ok(u64::MAX)
+}
+
+#[cfg(windows)]
+/// Windows: the volume faces wait for the volume-guard port (#454);
+/// the answer names an unbounded filesystem.
+pub fn filesystem(_path: &Path) -> std::io::Result<Filesystem> {
+    Ok(Filesystem { total: 0, used: 0, free: u64::MAX, inodes_free: None, kind: String::new() })
 }

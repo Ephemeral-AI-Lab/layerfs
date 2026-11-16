@@ -5,6 +5,7 @@ use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::names::MachineName;
 use layerfs_home::outcome::Outcome;
+#[cfg(unix)]
 use layerfs_sandbox::inspect::{machine_log, Window};
 
 /// Its table entry.
@@ -20,7 +21,14 @@ pub(crate) const CALL: Call = call(
 /// Runs `logs.machine`: `{ lines: [{ text, continued? }], cursor, before?,
 /// has_more }`, read in the machine's worker. It takes no lock or lease,
 /// starts nothing and writes nothing (layerfs-project#178).
+#[cfg(unix)]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let machine = MachineName::parse(args.get_text("machine").unwrap_or(""))?;
     machine_log(&context.home, &machine, &Window::of(args))
+}
+
+// Windows: the worker-log read waits for the monitoring port (#178).
+#[cfg(windows)]
+fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    Err(layerfs_home::outcome::refused("Unsupported", "logs.machine reads a worker log on the unix face today (#178)"))
 }

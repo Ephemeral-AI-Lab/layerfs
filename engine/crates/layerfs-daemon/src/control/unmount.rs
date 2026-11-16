@@ -217,8 +217,9 @@ impl Service {
         }
         failure
     }
-    /// FUSE Attach is a Linux capability; elsewhere only NFS serving attaches.
-    #[cfg(not(target_os = "linux"))]
+    /// FUSE Attach is a Linux capability; macOS serves only through NFS.
+    /// Windows attaches the in-process WinFsp mount (A2, #454).
+    #[cfg(any(target_os = "macos"))]
     pub(super) fn attach(
         &self,
         token: WorkspaceToken,
@@ -231,5 +232,17 @@ impl Service {
             layerfs_bridge::control::ControlCode::Invalid,
             "kernel serving requires Linux",
         ))
+    }
+
+    /// Windows: attach binds the Workspace over the WinFsp mount at one
+    /// directory under the kernel config mounts root (#454).
+    #[cfg(windows)]
+    pub(super) fn attach(
+        &self,
+        token: WorkspaceToken,
+        _timing: &layerfs_telemetry::timer::TimingScope<'_, layerfs_telemetry::timer::Active>,
+    ) -> Result<Success, Failure> {
+        let _ = token;
+        super::attach_windows::attach_winfsp()
     }
 }

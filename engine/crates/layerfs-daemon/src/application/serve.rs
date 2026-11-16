@@ -94,13 +94,22 @@ impl Application {
         };
         match result {
             Ok(installed) => {
-                state.startup.service = Some(super::filesystem::service(
+                                #[cfg(unix)]
+                let service = super::filesystem::service(
                     installed.opened.store.clone(),
                     &self.owner,
                     self.kernel.as_ref(),
                     self.export.as_ref(),
                     l.serial_low_water,
-                ));
+                );
+                // Windows: control alone over the twin registry (#454).
+                #[cfg(windows)]
+                let service = super::filesystem::service(
+                    installed.opened.store.clone(),
+                    &self.owner,
+                    l.serial_low_water,
+                );
+                state.startup.service = Some(service);
                 state.startup.installed = Some(installed);
                 state.startup.phase = DaemonPhase::ControlReady;
                 self.changed.notify_all();
@@ -118,13 +127,21 @@ impl Application {
                     && failure.opened.is_some();
                 if ready {
                     let opened = failure.opened.as_ref().expect("validated original Store");
-                    state.startup.service = Some(super::filesystem::service(
+                    #[cfg(unix)]
+                    let service = super::filesystem::service(
                         opened.store.clone(),
                         &self.owner,
                         self.kernel.as_ref(),
                         self.export.as_ref(),
                         l.serial_low_water,
-                    ));
+                    );
+                    #[cfg(windows)]
+                    let service = super::filesystem::service(
+                        opened.store.clone(),
+                        &self.owner,
+                        l.serial_low_water,
+                    );
+                    state.startup.service = Some(service);
                     state.startup.phase = DaemonPhase::ControlReady;
                 } else {
                     state.startup.phase = DaemonPhase::Retained;

@@ -130,7 +130,17 @@ pub fn check(store: &Path) -> Result<&'static str, Unsupported> {
             ))),
         }
     }
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    // Windows native (#454, D2): one Windows kernel coordinates the
+    // Store's SQLite locks exactly as macOS's one kernel does; the sole
+    // opener process is the in-process route (#352 F-020). NTFS carries the
+    // locks; a per-filesystem allowlist arrives with the volume-guard port.
+    #[cfg(windows)]
+    {
+        let _ = store;
+        Ok("ntfs")
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
     {
         let _ = store;
         Err(Unsupported(

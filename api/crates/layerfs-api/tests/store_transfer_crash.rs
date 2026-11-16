@@ -5,7 +5,10 @@
 //! leave, and its owner is then made gone. The calls that clear what is left
 //! are the ones the refusals and the doctor name. A worker served in this
 //! process stands in for the machine.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home::{self, paths, read_record, write_record};
+
 use layerfs_bridge::control::SdkValue;
 use std::net::TcpListener;
 use std::panic::AssertUnwindSafe;

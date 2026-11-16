@@ -33,11 +33,14 @@
 //! over. `connection` bounds what one peer can hold: the whole hello by
 //! one deadline, each send by [`REQUEST_WAIT`] without progress, and a
 //! panic in an operation by that connection alone.
+#[cfg(unix)]
 mod connection;
 #[cfg(feature = "worker-fault")]
 pub mod fault;
+#[cfg(unix)]
 mod ops;
 
+#[cfg(unix)]
 pub use connection::REQUEST_WAIT;
 use layerfs_bridge::control::SdkValue;
 use layerfs_machine::worker::{Hello, HELLO_WAIT};
@@ -72,11 +75,24 @@ struct Waits {
 }
 
 impl Waits {
+    // Unix: the bound read waits the connection layer names.
+    #[cfg(unix)]
     const SHIPPED: Self = Self {
         hello: HELLO_WAIT,
         request: REQUEST_WAIT,
         write: REQUEST_WAIT,
         close: REQUEST_WAIT,
+        accept_pause: Duration::from_millis(50),
+        log_every: Duration::from_secs(10),
+    };
+    // Windows: the same waits, named directly (the connection module is
+    // the unix face; the worker protocol itself is platform-neutral).
+    #[cfg(windows)]
+    const SHIPPED: Self = Self {
+        hello: HELLO_WAIT,
+        request: std::time::Duration::from_secs(60),
+        write: std::time::Duration::from_secs(60),
+        close: std::time::Duration::from_secs(60),
         accept_pause: Duration::from_millis(50),
         log_every: Duration::from_secs(10),
     };
@@ -201,16 +217,24 @@ impl Server {
             return Err(error);
         }
         let server = self.clone();
+        #[cfg(unix)]
         std::thread::Builder::new()
             .name("worker-request".to_owned())
             .spawn(move || connection::serve(&server, stream))
-            .map(drop)
+            .map(drop);
+        // Windows: the connection loop is the unix face (#454).
+        #[cfg(windows)]
+        {
+            drop(stream);
+            Ok(())
+        }
     }
 
     fn run(self, listener: &TcpListener) -> std::io::Result<Served> {
         // the root holds Stores and records: private, as a home is (a machine's
         // data disk mounts 0755), but passable by others (0701), since a
         // namespaces Sandbox's commands run as another identity below it
+        #[cfg(unix)]
         {
             use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
             std::fs::DirBuilder::new()
@@ -219,6 +243,9 @@ impl Server {
                 .create(&self.root)?;
             std::fs::set_permissions(&self.root, std::fs::Permissions::from_mode(0o701))?;
         }
+        // Windows: no mode face on OpenOptions; the directory ACL carries it.
+        #[cfg(windows)]
+        std::fs::create_dir_all(&self.root)?;
         layerfs_home::home::guest::serve_root(&self.root);
         layerfs_home::home::guest::retire_layout_2(&self.root);
         let server = Arc::new(self);

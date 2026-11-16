@@ -1,5 +1,8 @@
 //! SDK Init closes the Store and returns exact original outcomes.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::{InitError, InitRequest, ProjectApi};
+
 use layerfs_bridge::provision::{ProviderKind, StoreProfile};
 use layerfs_content::{
     file::FileView,

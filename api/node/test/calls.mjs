@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, chmodSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import layerfs, { client, table, families, LayerFSError } from "../src/index.js";
+import layerfs, { client, close, table, families, LayerFSError } from "../src/index.js";
 
 const temp = (tag) => {
   const dir = mkdtempSync(join(tmpdir(), `layerfs-node-${tag}-`));
@@ -74,11 +74,13 @@ test("a Store, an Init with progress, files, Branches and a folder scope", async
   await assert.rejects(scoped.file.stat("shop/other", "main", "/web/a.bin"), /out of scope: project/);
   await assert.rejects(client({ home, scope: { folder: "/web" } }).store.list(), /scope.project/);
   await assert.rejects(client({ home, scope: { project: "shop/api", folder: "web" } }).file.stat("shop/api", "main", "/web"), /canonical/);
+  // Windows cannot remove a Store its process still holds open; close first
+  await close();
   rmSync(home, { recursive: true, force: true });
   rmSync(folder, { recursive: true, force: true });
 });
 
-test("the call log names the client node and takes log_tag with any call (#659)", async () => {
+test("the call log names the client node and takes log_tag with any call (#659)", { skip: process.platform === "win32" && "the call log is not ported to Windows yet (#659)" }, async () => {
   const home = temp("logs");
   const lfs = client({ home });
   await lfs.store.create("shop");

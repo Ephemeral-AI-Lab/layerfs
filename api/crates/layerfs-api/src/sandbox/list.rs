@@ -37,7 +37,11 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         live: args.get("live") == Some(&SdkValue::Bool(true)),
     };
     let listed = list(&context.home, &request)?;
+    #[cfg(unix)]
     let mut live = listed.live.map(Vec::into_iter);
+    // Windows: no live face (the monitoring port is the #179 follow-up).
+    #[cfg(windows)]
+    let mut live: Option<std::vec::IntoIter<layerfs_sandbox::inspect::Live>> = None;
     let items = (listed.items.iter()).map(|record| {
         let item = record.to_sdk(View::List);
         let Some(found) = live.as_mut().and_then(Iterator::next) else {

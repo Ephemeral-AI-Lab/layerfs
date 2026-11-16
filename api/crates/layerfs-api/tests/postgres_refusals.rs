@@ -5,7 +5,10 @@
 //! nothing listens, so a request would fail with another code. A
 //! PostgreSQL Store's calls take its lease (#536 §8), so `store.disconnect`
 //! refuses `InUse` while another process holds it.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home::{self, paths, write_record};
+
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

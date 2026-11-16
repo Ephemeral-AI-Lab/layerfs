@@ -181,9 +181,12 @@ fn diff_preserves_hardlink_identity_type_changes_and_hunk_omission() {
 #[test]
 fn directory_metadata_is_emitted_and_counted_by_both_diff_routes() {
     let fixture = Fixture::new("sdk-diff-directory-metadata", |source| {
-        use std::os::unix::fs::PermissionsExt;
         fs::create_dir(source.join("mode")).unwrap();
-        fs::set_permissions(source.join("mode"), fs::Permissions::from_mode(0o755)).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(source.join("mode"), fs::Permissions::from_mode(0o755)).unwrap();
+        }
         fs::write(source.join("tail"), b"before\n").unwrap();
         2
     });
@@ -264,7 +267,10 @@ fn byte_limited_windows_preserve_diff_grep_and_glob_membership() {
                 };
                 fs::write(source.join("wide").join(name(n)), text).unwrap();
             }
+            #[cfg(unix)]
             std::os::unix::fs::symlink(name(count - 1), source.join("wide/link")).unwrap();
+            #[cfg(windows)]
+            std::os::windows::fs::symlink_file(name(count - 1), source.join("wide/link")).unwrap();
             count + 4
         });
         fixture.fork("changed");

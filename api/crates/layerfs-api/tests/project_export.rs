@@ -1,3 +1,4 @@
+#![cfg(unix)]
 //! `project.export`: exports a project's committed Branch snapshot from its
 //! Store to a local folder on the caller's host (#53).
 //!

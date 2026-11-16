@@ -1,7 +1,10 @@
 //! A folder scope confines `branch.fork` and `branch.publish` references:
 //! `from_commit` and `commit` pass the same check as every other Commit or
 //! Branch reference, and a refusal comes before any effect (#30, #33).
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home;
+
 use layerfs_api::Scope;
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;

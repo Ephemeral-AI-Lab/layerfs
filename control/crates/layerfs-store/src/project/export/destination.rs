@@ -5,6 +5,7 @@ use layerfs_bridge::control::SdkRefusal;
 use layerfs_bridge::sdk_values::hex;
 use layerfs_home::outcome::{failed, refused};
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Component, Path, PathBuf};
 
@@ -153,7 +154,7 @@ impl StagingGuard {
         let random = layerfs_home::helpers::random()?;
         let staging = parent.join(format!(".layerfs-export-{}", hex(&random[..8])));
         fs::DirBuilder::new()
-            .mode(0o700)
+            
             .create(&staging)
             .map_err(|e| {
                 let code = if e.raw_os_error() == Some(libc::ENOSPC) {

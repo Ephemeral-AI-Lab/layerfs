@@ -14,7 +14,10 @@ use crate::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
+#[cfg(unix)]
 use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt};
+#[cfg(windows)]
+use std::os::windows::fs::FileExt;
 use std::path::{Path, PathBuf};
 
 /// How much of a file a reader takes at a time.
@@ -64,7 +67,21 @@ impl Identity {
         let head = head(file)?;
         let first = head.split(|byte| *byte == b'\n').next().unwrap_or(&[]);
         Ok(Self {
+            #[cfg(unix)]
             inode: file.metadata()?.ino(),
+            #[cfg(windows)]
+            inode: {
+                let meta = file.metadata()?;
+                meta.len()
+                    ^ meta
+                        .modified()
+                        .map(|t| {
+                            t.duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_nanos() as u64)
+                                .unwrap_or(0)
+                        })
+                        .unwrap_or(0)
+            },
             first: fnv(first),
         })
     }
@@ -82,7 +99,21 @@ impl Identity {
             None => 0,
         };
         Ok(Self {
+            #[cfg(unix)]
             inode: file.metadata()?.ino(),
+            #[cfg(windows)]
+            inode: {
+                let meta = file.metadata()?;
+                meta.len()
+                    ^ meta
+                        .modified()
+                        .map(|t| {
+                            t.duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_nanos() as u64)
+                                .unwrap_or(0)
+                        })
+                        .unwrap_or(0)
+            },
             first,
         })
     }
@@ -99,7 +130,22 @@ fn head(file: &File) -> std::io::Result<Vec<u8>> {
     let mut head = vec![0u8; HEAD];
     let mut filled = 0;
     while filled < head.len() {
+#[cfg(unix)]
         let read = file.read_at(&mut head[filled..], filled as u64)?;
+        #[cfg(windows)]
+        let read = {
+            use std::io::{Read, Seek, SeekFrom};
+            let mut clone = file.try_clone()?;
+            let mut taken = 0usize;
+            clone.seek(SeekFrom::Start(filled as u64))?;
+            loop {
+                match clone.read(&mut head[filled + taken..])? {
+                    0 => break,
+                    n => taken += n,
+                }
+            }
+            taken
+        };
         if read == 0 {
             break;
         }
@@ -209,7 +255,15 @@ impl<'f> Backward<'f> {
             let take = CHUNK.min(self.at);
             self.at -= take;
             let mut chunk = vec![0u8; take as usize];
+#[cfg(unix)]
             self.file.read_exact_at(&mut chunk, self.at)?;
+            #[cfg(windows)]
+            {
+                use std::io::{Read, Seek, SeekFrom};
+                let mut clone = self.file.try_clone()?;
+                clone.seek(SeekFrom::Start(self.at))?;
+                clone.read_exact(&mut chunk)?;
+            }
             chunk.extend_from_slice(&self.buffer);
             self.buffer = chunk;
         }
@@ -229,10 +283,15 @@ impl Open {
     /// File `index` of `pair`, or `None` when it is not there.
     fn of(pair: &Pair, index: usize) -> Result<Option<Self>, SdkRefusal> {
         // never through a link, and never waiting on a FIFO put in its place
+        #[cfg(unix)]
         let opened = OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
             .open(pair.files()[index]);
+        // Windows: no O_NOFOLLOW/O_NONBLOCK face; a reparse point reads as
+        // its target and a FIFO is rare enough that a plain open is honest.
+        #[cfg(windows)]
+        let opened = OpenOptions::new().read(true).open(pair.files()[index]);
         let file = match opened {
             Ok(file) => file,
             Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
@@ -258,7 +317,15 @@ impl Open {
     /// Bytes `start..end`, which the file holds.
     fn window(&self, start: u64, end: u64) -> Result<Vec<u8>, SdkRefusal> {
         let mut bytes = vec![0u8; (end - start) as usize];
+#[cfg(unix)]
         self.file.read_exact_at(&mut bytes, start).map_err(failed)?;
+        #[cfg(windows)]
+        {
+            use std::io::{Read, Seek, SeekFrom};
+            let mut clone = self.file.try_clone().map_err(failed)?;
+            clone.seek(SeekFrom::Start(start)).map_err(failed)?;
+            clone.read_exact(&mut bytes).map_err(failed)?;
+        }
         Ok(bytes)
     }
 

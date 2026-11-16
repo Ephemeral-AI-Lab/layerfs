@@ -10,10 +10,7 @@ use layerfs_content::{
 use std::{
     collections::{BTreeMap, VecDeque},
     fs,
-    os::unix::{
-        ffi::OsStrExt,
-        fs::{symlink, MetadataExt},
-    },
+    path::PathBuf,
     path::PathBuf,
     sync::Arc,
 };
@@ -79,8 +76,14 @@ fn wide_nested_aliased_root_equals_the_whole_namespace_constructor() {
     }
     fs::write(source.join("wide/zz-dir/inner"), b"inner").unwrap();
     fs::write(source.join("a/b/c/file"), b"deep").unwrap();
-    symlink("n00003", source.join("wide/aa-link")).unwrap();
-    symlink("../missing", source.join("a/dangling")).unwrap();
+    let link = |target: &str, at: std::path::PathBuf| {
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target, at).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_file(target, at).unwrap();
+    };
+    link("n00003", source.join("wide/aa-link"));
+    link("../missing", source.join("a/dangling"));
     fs::hard_link(source.join("wide/n00007"), source.join("a/alias")).unwrap();
     fs::hard_link(source.join("wide/n00007"), source.join("a/b/alias-two")).unwrap();
     let expected = expected_positions(&fixture);
@@ -224,7 +227,10 @@ fn very_wide_directory_is_ordered_through_many_windows() {
     let long = "missing/".repeat(120);
     for n in 0..VERY_WIDE {
         let name = (n * 7919) % VERY_WIDE;
-        symlink(format!("{long}{name}"), wide.join(format!("s{name:05}"))).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(format!("{long}{name}"), wide.join(format!("s{name:05}"))).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_file(format!("{long}{name}"), wide.join(format!("s{name:05}"))).unwrap();
     }
     let store = support::storage(Arc::new(MemoryMetadata::default()));
     let history = MemoryHistory::default();

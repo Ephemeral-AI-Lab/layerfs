@@ -157,7 +157,26 @@ impl Fixture {
         }
     }
     pub fn cleanup(self) {
-        std::fs::remove_dir_all(self.directory).unwrap();
+        // Windows: a just-dropped Store's file handles can close a beat
+        // after the last reference; one bounded settling try, then the
+        // failure is real.
+        let removed = std::fs::remove_dir_all(&self.directory);
+        if removed.is_err() && cfg!(windows) {
+            // Windows cannot unlink an open file, and a report a test still
+            // holds keeps the Store's sqlite handles open past this call
+            // (unix unlinks them blind). Wait one bounded beat for drops;
+            // still blocked, leak the unique directory and say so - the
+            // test's answer does not depend on it.
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            if std::fs::remove_dir_all(&self.directory).is_err() {
+                eprintln!(
+                    "cleanup leaked {} (Store handles still open)",
+                    self.directory.display()
+                );
+            }
+            return;
+        }
+        removed.unwrap();
     }
 }
 

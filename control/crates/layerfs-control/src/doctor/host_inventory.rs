@@ -1,9 +1,10 @@
 //! Metadata of the management paths Host actually observes, never runtime trees.
 use super::Budget;
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
-    os::unix::fs::MetadataExt,
     path::Path,
 };
 
@@ -22,13 +23,19 @@ impl Inventory {
         path.hash(&mut hash);
         let exists = match std::fs::symlink_metadata(path) {
             Ok(meta) => {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::MetadataExt;
+                    (meta.ino(), meta.dev(), meta.mode()).hash(&mut hash);
+                }
                 // Directory membership is fingerprinted by selected children,
                 // not volatile mtime/size from SQLite/log/runtime bookkeeping.
-                (meta.ino(), meta.dev(), meta.mode()).hash(&mut hash);
                 if meta.is_symlink() {
                     return Err(());
                 }
+                #[cfg(unix)]
                 if !meta.is_dir() {
+                    use std::os::unix::fs::MetadataExt as _;
                     (meta.len(), meta.mtime(), meta.mtime_nsec()).hash(&mut hash);
                 }
                 true

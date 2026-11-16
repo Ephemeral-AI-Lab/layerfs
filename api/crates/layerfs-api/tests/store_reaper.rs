@@ -1,7 +1,10 @@
 //! The Store connection reaper stays under #535 D11 (manual machine
 //! lifecycle): it frees an open Store this process no longer uses. No real
 //! waiting: the reaper's own pass is run with a chosen idle period.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home::{self};
+
 use layerfs_bridge::control::SdkValue;
 use layerfs_store::lease;
 use std::os::unix::fs::PermissionsExt;

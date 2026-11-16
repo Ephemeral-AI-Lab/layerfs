@@ -2,7 +2,10 @@
 //! name unique across the home, the wrong-machine refusal, mount, exec,
 //! status, commit, unmount and close. The live half needs the macOS (or
 //! Linux, as root) daemon at LAYERFS_DAEMON; without it, it says NOT_RUN.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home::{self, paths, write_record};
+
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

@@ -184,11 +184,19 @@ pub fn push(
     wal.push("-wal");
     let live = length(store).map_err(local)? + length(Path::new(&wal)).map_err(local)?;
     let needed = live + STORE_HEADROOM_BYTES;
-    let filesystem = nix::sys::statvfs::statvfs(directory)
-        .map_err(|error| PushFailure::Invalid(format!("{}: {error}", directory.display())))?;
-    let available =
-        u128::from(filesystem.blocks_available()) * u128::from(filesystem.fragment_size());
-    let available = u64::try_from(available).unwrap_or(u64::MAX);
+    #[cfg(unix)]
+    let available = {
+        let filesystem = nix::sys::statvfs::statvfs(directory)
+            .map_err(|error| PushFailure::Invalid(format!("{}: {error}", directory.display())))?;
+        let available =
+            u128::from(filesystem.blocks_available()) * u128::from(filesystem.fragment_size());
+        u64::try_from(available).unwrap_or(u64::MAX)
+    };
+    // Windows: the free-space gate needs the volume-guard port (#454); until
+    // then the check is not offered and creation relies on the writer failing
+    // when the disk runs out.
+    #[cfg(not(unix))]
+    let available = u64::MAX;
     if available < needed {
         return Err(PushFailure::Space {
             directory: directory.to_owned(),

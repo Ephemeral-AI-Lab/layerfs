@@ -5,7 +5,10 @@
 //! it, a gone owner's certain intent is ignored, `sandbox.get` shows the
 //! intent, `sandbox.list` pages, and a worker replaces a project record
 //! left by a removed project of the same name.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home::{self, paths, read_record, versioned, write_record};
+
 use layerfs_api::worker;
 use layerfs_bridge::control::SdkValue;
 use std::net::TcpListener;

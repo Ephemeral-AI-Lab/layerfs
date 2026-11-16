@@ -10,8 +10,11 @@
 //! forwarded record. It does not prove an `ssh -L` carries the port, nor
 //! a guest runtime (exec stays on the worker; `sandbox_direct.rs`).
 //! Needs the macOS daemon at LAYERFS_DAEMON; without it, NOT_RUN.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 #![cfg(all(target_os = "macos", feature = "machine"))]
 use layerfs_api::home::{self, paths, read_record, write_record};
+
 use layerfs_api::worker::{read_frame, write_frame};
 use layerfs_bridge::control::SdkValue;
 use std::net::{SocketAddr, TcpListener};

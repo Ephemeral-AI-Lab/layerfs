@@ -19,7 +19,7 @@ use std::{
     collections::BTreeMap,
     ffi::OsStr,
     fs,
-    os::unix::{ffi::OsStrExt, fs::symlink},
+
     sync::Arc,
 };
 use support::{
@@ -79,7 +79,18 @@ fn acquire_and_verify(
     )
     .unwrap();
     for (name, target) in &links {
-        symlink(OsStr::from_bytes(target), fixture.source.join(name)).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStrExt;
+            std::os::unix::fs::symlink(OsStr::from_bytes(target), fixture.source.join(name)).unwrap();
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::ffi::OsStringExt;
+            let wide: Vec<u16> = target.chunks_exact(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+            std::os::windows::fs::symlink_file(std::ffi::OsString::from_wide(&wide), fixture.source.join(name)).unwrap();
+        }
     }
     let initialized = fixture.run_with(store, history, acquisition);
     assert_eq!(initialized.namespace_work.regular_aliases, 1);

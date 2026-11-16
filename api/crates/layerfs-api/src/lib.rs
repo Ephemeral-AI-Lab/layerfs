@@ -58,7 +58,9 @@ pub use layerfs_machine::running;
 /// The worker protocol (`layerfs-machine`) and its server (`layerfs-control`),
 /// as the front ends used them before the control split (layerfs-project#104).
 pub mod worker {
-    pub use layerfs_control::worker_server::{serve, Served, REQUEST_WAIT};
+    #[cfg(unix)]
+pub use layerfs_control::worker_server::REQUEST_WAIT;
+pub use layerfs_control::worker_server::{serve, Served};
     pub use layerfs_machine::worker::*;
 }
 pub use layerfs_control::store::close_idle;

@@ -2,7 +2,10 @@
 //! a Store with a running Sandbox is `InUse` before any request is sent,
 //! and the Sandbox's project records stay. The bucket record names a port
 //! nothing listens on, so a request would fail as `Failed` or `Unknown`.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home::{self, paths, read_record, write_record};
+
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

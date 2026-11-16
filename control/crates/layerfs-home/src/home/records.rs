@@ -7,6 +7,7 @@ use crate::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::fs;
 use std::io::Write;
+#[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -15,11 +16,17 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 
 /// `path` as a private folder, with its parents.
 pub fn private_dir(path: &Path) -> Result<(), SdkRefusal> {
-    fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(path)
-        .map_err(|error| refused("Failed", format!("{}: {error}", path.display())))
+    #[cfg(unix)]
+    {
+        fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(path)
+            .map_err(|error| refused("Failed", format!("{}: {error}", path.display())))
+    }
+    // Windows: the directory ACL carries its privacy face.
+    #[cfg(windows)]
+    fs::create_dir_all(path).map_err(|error| refused("Failed", format!("{}: {error}", path.display())))
 }
 
 /// Lets others pass through (o+x, never read) `dir` and each folder from
@@ -27,6 +34,8 @@ pub fn private_dir(path: &Path) -> Result<(), SdkRefusal> {
 /// identity and must reach their Workspace below `dir`. The folders stay
 /// unlistable by others; folders above `home` are not changed.
 pub fn traversable(home: &Path, dir: &Path) -> Result<(), SdkRefusal> {
+    #[cfg(unix)]
+    {
     use std::os::unix::fs::PermissionsExt;
     for folder in dir.ancestors().take_while(|f| f.starts_with(home)) {
         let mode = fs::metadata(folder).map_err(failed)?.permissions().mode();
@@ -35,6 +44,10 @@ pub fn traversable(home: &Path, dir: &Path) -> Result<(), SdkRefusal> {
                 .map_err(failed)?;
         }
     }
+    Ok(())
+    }
+    #[cfg(windows)]
+    let _ = (home, dir);
     Ok(())
 }
 
@@ -64,11 +77,23 @@ pub fn write_record(path: &Path, value: &SdkValue) -> Result<(), SdkRefusal> {
     // one name per write: threads of one process never share a temporary
     let unique = NEXT.fetch_add(1, Ordering::Relaxed);
     let temporary = parent.join(format!(".{name}.{}.{unique}.tmp", std::process::id()));
+    #[cfg(unix)]
+    let mut file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&temporary)
+            .map_err(failed)?
+    };
+    // Windows: the record file ACL carries its privacy face.
+    #[cfg(windows)]
     let mut file = fs::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
-        .mode(0o600)
         .open(&temporary)
         .map_err(failed)?;
     let mut text = json::print(&to_hex(value.clone()));
@@ -170,10 +195,20 @@ pub fn log_line(home: &Path, name: &str, value: &SdkValue) -> Result<(), SdkRefu
     let dir = super::paths::log_dir(home);
     private_dir(&dir)?;
     let path = dir.join(name);
+    #[cfg(unix)]
+    let mut file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .mode(0o600)
+            .open(&path)
+            .map_err(failed)?
+    };
+    #[cfg(windows)]
     let mut file = fs::OpenOptions::new()
         .append(true)
         .create(true)
-        .mode(0o600)
         .open(&path)
         .map_err(failed)?;
     let mut text = json::print(&to_hex(value.clone()));

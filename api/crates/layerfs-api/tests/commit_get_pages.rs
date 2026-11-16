@@ -1,7 +1,10 @@
 //! `commit.get` pages a Branch's Commits to the end, past the reply budget
 //! of one page; `branch.get` and `commit.get` keep 1.1.0's `NoSuch*` codes
 //! (S §2.9). #533 review, group calls.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home;
+
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

@@ -164,9 +164,17 @@ pub fn usage_in(root: &Path, id: &str) -> (SdkValue, Option<&'static str>) {
 /// usage }`, with `usage_reason` when `usage` or one of its values is
 /// null for a known cause. `sandbox.get`
 /// shows these three fields as they are.
+#[cfg(unix)]
 pub fn observed(daemon: &DaemonRecord) -> Vec<(String, SdkValue)> {
     let (usage, reason) = usage(daemon, Path::new(CGROUP_ROOT));
     fields(shown(daemon), usage, reason)
+}
+
+/// Windows: the directory Sandbox A1 face names no daemon process group;
+/// the not-observed fields are the honest answer.
+#[cfg(windows)]
+pub fn observed(_daemon: &DaemonRecord) -> Vec<(String, SdkValue)> {
+    not_observed()
 }
 
 /// The same fields for a Sandbox whose side did not answer: both null,

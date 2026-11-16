@@ -1,7 +1,10 @@
 //! The conversion of a layout 2 home (2.0) into layout 3 (#536 §5, H10):
 //! one with closed Sandboxes converts and answers every call as before; one
 //! with anything live is refused `InUse`, naming each, and left as it was.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home::{self, paths, read_record, write_record, Layout, LAYOUT_VERSION};
+
 use layerfs_bridge::control::{Answer, Reply, SdkValue};
 use layerfs_bridge::process::LocalProcess;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};

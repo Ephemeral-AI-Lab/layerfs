@@ -2,7 +2,10 @@
 //! its call opened before it ends, folding the write-ahead log in, even
 //! while that call's idle checkpoint is still running. Its own test binary:
 //! `close_idle` acts on every Store this process holds.
+#![cfg(unix)] // unix stat/lock semantics; the Windows face is its own port
+
 use layerfs_api::home::{self};
+
 use layerfs_bridge::control::SdkValue;
 use layerfs_home::home::paths;
 use layerfs_store::lease;

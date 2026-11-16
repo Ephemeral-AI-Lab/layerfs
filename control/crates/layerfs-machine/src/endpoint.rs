@@ -60,11 +60,13 @@ fn start(
     let bundle = stage(events, "bundle-validation", super::bundle::bundle)?;
     // the docker worker's container runs the bundle's image when the
     // machine names none (P5)
+    #[cfg(unix)]
     if spec.kind == Platform::Docker && spec.os_image.is_none() {
         spec.os_image = Some(stage(events, "sandbox-image", || {
             super::image::docker_default(home)
         })?);
     }
+    // Windows: the docker image face waits for the machine port (#454).
     let Some(running) = stage(events, "provider-and-worker", || {
         adapters::start(&spec, &bundle).map_err(refusal)
     })?
