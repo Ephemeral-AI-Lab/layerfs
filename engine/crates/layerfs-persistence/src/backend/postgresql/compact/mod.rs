@@ -24,4 +24,5 @@ mod swap;
 mod sync;
 mod types;
 
+pub use report::{decode_kept_waste, encode_kept_waste, report};
 pub use sync::{effective_rank, standby_satisfied, sync_name, sync_rank, Replica};

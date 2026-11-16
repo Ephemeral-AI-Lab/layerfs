@@ -6,8 +6,9 @@ use crate::backend::sqlite::compact::CompactReceipt;
 use crate::backend::sqlite::compact::CompactResidue;
 use crate::backend::sqlite::compact::CompactZeroReason;
 
+/// §11: the report for one PostgreSQL rebuild or `none` run.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn report(
+pub fn report(
     path: CompactPath,
     generation_before: u64,
     generation_after: u64,
@@ -111,7 +112,7 @@ const KEPT_WASTE_HEADER: usize = 1 + 8 + 8 + 8 + 1 + 4;
 /// `u64` byte totals, the capped flag, a big-endian `u32` reference count and
 /// the identity bytes. The caller's references are already capped by
 /// [`CompactKeptWaste::from_waste`].
-pub(crate) fn encode_kept_waste(waste: &CompactKeptWaste) -> Vec<u8> {
+pub fn encode_kept_waste(waste: &CompactKeptWaste) -> Vec<u8> {
     let mut out = Vec::with_capacity(KEPT_WASTE_HEADER + waste.delta_base_references.len() * 32);
     out.push(KEPT_WASTE_VERSION);
     out.extend_from_slice(&waste.dead_in_retained_packs_bytes.to_be_bytes());
@@ -128,9 +129,7 @@ pub(crate) fn encode_kept_waste(waste: &CompactKeptWaste) -> Vec<u8> {
 
 /// Decodes [`encode_kept_waste`]; a malformed blob is `Integrity`, never a
 /// silently zero report.
-pub(crate) fn decode_kept_waste(
-    bytes: &[u8],
-) -> layerfs_history::error::HistoryResult<CompactKeptWaste> {
+pub fn decode_kept_waste(bytes: &[u8]) -> layerfs_history::error::HistoryResult<CompactKeptWaste> {
     use layerfs_history::error::HistoryError;
     let header = bytes
         .get(..KEPT_WASTE_HEADER)
@@ -172,61 +171,4 @@ pub(crate) fn decode_kept_waste(
         delta_base_references_capped,
         inode_blocks_bytes,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::decode_kept_waste;
-    use super::encode_kept_waste;
-    use super::report;
-    use crate::backend::sqlite::compact::CompactKeptWaste;
-    use crate::backend::sqlite::compact::CompactPath;
-    use crate::backend::sqlite::compact::CompactResidue;
-
-    /// The `gc_op.kept_waste` bytea round-trips the whole §11 part, references
-    /// and capped flag included; a corrupt blob is refused, never zeroed.
-    #[test]
-    fn kept_waste_round_trips_through_the_op_blob() {
-        let waste = CompactKeptWaste {
-            dead_in_retained_packs_bytes: 5,
-            delta_bases_bytes: 7,
-            delta_base_references: vec![[9; 32], [10; 32]],
-            delta_base_references_capped: true,
-            inode_blocks_bytes: 11,
-        };
-        let bytes = encode_kept_waste(&waste);
-        assert_eq!(decode_kept_waste(&bytes).unwrap(), waste);
-        let mut broken = bytes;
-        broken[0] = 2;
-        assert!(decode_kept_waste(&broken).is_err());
-    }
-
-    /// A resumed `G + 1` run with dead bytes and no relation delta reports
-    /// `no-shrink` rather than the misleading `no-waste`.
-    #[test]
-    fn a_resumed_rebuild_with_no_relation_delta_explains_no_shrink() {
-        let receipt = report(
-            CompactPath::Rebuild,
-            1,
-            2,
-            60,
-            60,
-            46,
-            0,
-            0,
-            CompactKeptWaste::default(),
-            57_344,
-            CompactResidue::default(),
-            1_000,
-            1,
-        );
-        assert!(receipt
-            .zero_reasons
-            .iter()
-            .any(|zero| zero.field == "physicalShrink" && zero.reason == "no-shrink"));
-        assert!(receipt
-            .zero_reasons
-            .iter()
-            .any(|zero| zero.field == "backendReusable" && zero.reason == "postgresql-in-place"));
-    }
 }

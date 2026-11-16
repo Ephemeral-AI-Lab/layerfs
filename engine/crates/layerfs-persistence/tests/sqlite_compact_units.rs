@@ -3,7 +3,8 @@
 //! product-boundary guard).
 
 use layerfs_history::HistoryError;
-use layerfs_persistence::internals::{io_error, peak_temp_bytes};
+use layerfs_persistence::internals::{io_error, peak_temp_bytes, receipt};
+use layerfs_persistence::{CompactKeptWaste, CompactPath, CompactResidue};
 
 /// §7 step 3 on a bounded filesystem: `ENOSPC`, `EDQUOT` and `EFBIG` are the
 /// report's `Capacity` refusal, never a corruption verdict.
@@ -64,4 +65,66 @@ fn delta_base_references_are_capped_and_the_cap_is_reported() {
     let (references, capped) = cap_delta_references(&long);
     assert_eq!(references.len(), DELTA_BASE_REFERENCES_CAP);
     assert!(capped, "a list at the cap is reported as capped");
+}
+
+/// A rebuild whose source Store had no free pages names that absence; it
+/// does not claim there was no waste (there were 100 dead bytes).
+#[test]
+fn a_rebuild_without_free_pages_explains_no_free_pages() {
+    let receipt = receipt(
+        CompactPath::Rebuild,
+        1,
+        2,
+        100,
+        10,
+        0,
+        64,
+        CompactKeptWaste::default(),
+        64,
+        CompactResidue::default(),
+        1_000,
+        2,
+    );
+    assert!(receipt
+        .zero_reasons
+        .iter()
+        .any(|zero| zero.field == "backendReusable" && zero.reason == "no-free-pages"));
+    assert!(
+        receipt
+            .zero_reasons
+            .iter()
+            .all(|zero| zero.field != "physicalShrink"),
+        "a nonzero shrink carries no zero reason"
+    );
+}
+
+/// A rebuild can collect dead bytes and still measure no file delta; that
+/// is `no-shrink`, never the misleading `no-waste`.
+#[test]
+fn a_rebuild_with_waste_but_no_shrink_explains_no_shrink() {
+    let receipt = receipt(
+        CompactPath::Rebuild,
+        1,
+        2,
+        100,
+        10,
+        4_096,
+        0,
+        CompactKeptWaste::default(),
+        64,
+        CompactResidue::default(),
+        1_000,
+        2,
+    );
+    assert!(receipt
+        .zero_reasons
+        .iter()
+        .any(|zero| zero.field == "physicalShrink" && zero.reason == "no-shrink"));
+    assert!(
+        receipt
+            .zero_reasons
+            .iter()
+            .all(|zero| !(zero.field == "physicalShrink" && zero.reason == "no-waste")),
+        "a zero delta with dead bytes is not no-waste"
+    );
 }
