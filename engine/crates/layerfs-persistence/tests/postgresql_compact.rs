@@ -2188,7 +2188,7 @@ fn wait_for_phase_c_park(schema: &Schema) {
 fn phase_c_never_deletes_a_live_init() {
     let Some(url) = url() else { return };
     let schema = Schema::new(&url, "live_init");
-    schema.drop_scratch(55);
+    schema.drop_scratch();
     let setup = schema.create();
     let live = filesystem_root(&setup, 1);
     initialize(&setup, 1, live);
