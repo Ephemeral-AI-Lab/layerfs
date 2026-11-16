@@ -176,6 +176,28 @@ message and never fails the run. `LAYERFS_TEST_EXPECT_AMCHECK` (any value)
 makes `postgresql_diagnostic` assert `store.database.relations.summary` is
 `Pass`; the `store-ext4` full job sets it after creating the extensions.
 
+### Optional server features and their NOT_RUN cases
+
+A few PostgreSQL targets need server features beyond a plain Store schema.
+Each one checks the fixture first and prints `NOT_RUN` with the reason instead
+of failing when the feature is absent, so the same harness covers both a
+trust-authenticated scratch server and the fully provisioned CI lane:
+
+- `postgresql_phase_attribution` and `postgresql_round_trips` read
+  `pg_stat_statements` for their server-side statement deltas. The library must
+  be preloaded (`shared_preload_libraries` includes `pg_stat_statements`) and
+  the test database must allow `CREATE EXTENSION pg_stat_statements`. Without
+  it both print `NOT_RUN: pg_stat_statements is not preloaded (E55000 …)`;
+  creating the extension alone is not enough, because the view refuses to run.
+- `postgresql_doctor_access`'s wrong-password case needs password
+  authentication (scram-sha-256 or md5). With trust or peer authentication the
+  server accepts any password, so the case prints `NOT_RUN`; the saved
+  authority, schema and unreachable-endpoint transport assertions still run.
+- Its TLS case needs `ssl = on` with a self-signed server certificate, so
+  `sslmode=require` fails normal certificate validation. With `ssl = off` it
+  prints `NOT_RUN`, and the unreachable-endpoint case still checks transport
+  distinctness.
+
 ### Credentials and TLS
 
 The PostgreSQL test fixtures and the doctor's admin client connect with
@@ -284,6 +306,7 @@ does, because they link the same test profile from a cold cache, and carry a
 | `… is on 'tmpfs', which cannot carry a Store.` | `/tmp` (or another tmpfs/overlay) was chosen | pick ext4, xfs or btrfs on Linux, apfs or hfs on macOS |
 | a suite fails with `filesystem 0x… at … does not carry SQLite locks` | `TMPDIR` or `CARGO_TARGET_DIR` escaped the harness (exported by hand) | let the harness set both; do not override them to a scratch directory |
 | `NOT_RUN: LAYERFS_TEST_POSTGRES_URL is unset` | no PostgreSQL server | expected; set the variable to run those cases |
+| `NOT_RUN: pg_stat_statements is not preloaded (E55000 …)` | the measurement targets read server statement counts, and `CREATE EXTENSION` alone does not load the library | add `pg_stat_statements` to `shared_preload_libraries` on the scratch server to measure; otherwise those targets skip and the rest of the suites stay green |
 | `store.database.relations=Unknown` and a compaction test fails on `clean` | `amcheck` was never created in the test database | `CREATE EXTENSION IF NOT EXISTS amcheck;`, then re-run; the harness warns when `psql` can see it is missing |
 | `NOT_RUN: LAYERFS_TEST_POSTGRES_MISSING_URL is unset` (or `…_REPLICA_URL`) from `postgresql_doctor_physical` | the physical target's extra cases need an amcheck-free database and a physical standby; without them those cases skip | expected in the full sweep; set both (see [the physical doctor's extra servers](#the-physical-doctors-extra-servers)) and run that target separately for the physical coverage |
 | `error: TLS support is disabled` or psql prompts for a password | the fixtures use `NoTls` and read the conninfo only | put `password=…` in the connection string and use `sslmode=disable` on a private route |

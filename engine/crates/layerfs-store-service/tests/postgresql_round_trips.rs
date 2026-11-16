@@ -7,9 +7,9 @@
 //! happened. Each scenario prints one line `ROUND_TRIPS <json>` with stable
 //! keys; counts are the evidence, `ms` is a diagnostic. The SQLite test always
 //! runs (its wire counters are zero; statements and transactions are real).
-//! The PostgreSQL test needs `LAYERFS_TEST_POSTGRES_URL` and reports NOT_RUN
-//! without it; when `pg_stat_statements` can be enabled in the test database
-//! each scenario also carries the server's per-statement call deltas.
+//! The PostgreSQL test needs `LAYERFS_TEST_POSTGRES_URL` and a server with
+//! `pg_stat_statements` preloaded, and reports NOT_RUN without either; each
+//! scenario then also carries the server's per-statement call deltas.
 //!
 //! Commit scenarios also carry `phase_sql`: the inclusive SQL work of each
 //! Store-service Commit phase (`capture`, `construct`, `finish`,
@@ -94,6 +94,10 @@ fn postgresql_round_trip_counts() {
     let schema = format!("lfs62_rt_{}", std::process::id());
     let selection = PostgresSelection::new(&url, &schema);
     let result = std::panic::catch_unwind(|| {
+        let Some(mut server) = Server::connect(&url) else {
+            return;
+        };
+        server.calibrate();
         let handles =
             PostgresHandles::create(&selection, StoragePolicy::frozen_default(), &catalog())
                 .unwrap();
@@ -101,13 +105,9 @@ fn postgresql_round_trip_counts() {
         let branch = initialize(&dir, &storage, &handles.history, &handles.acquisition);
         drop(storage);
         drop(handles);
-        let mut server = Server::connect(&url);
-        if let Some(server) = &mut server {
-            server.calibrate();
-        }
         let run = Run {
             backend: "postgresql",
-            server: server.map(std::cell::RefCell::new),
+            server: Some(std::cell::RefCell::new(server)),
         };
         let before = run.server_snapshot();
         let session = PostgresHandles::open_read_only(&selection, BINDING, CURSOR).unwrap();
@@ -663,13 +663,41 @@ type Statements = HashMap<i64, (i64, i64, String)>;
 struct Server {
     client: postgres::Client,
 }
+/// Report an unavailable `pg_stat_statements` fixture as NOT_RUN, naming
+/// E55000 when the library is simply not preloaded.
+fn not_run(context: &str, error: postgres::Error) {
+    let code = error.code().map_or("unavailable", |code| code.code());
+    if code == "55000" {
+        eprintln!("NOT_RUN: pg_stat_statements is not preloaded (E55000: {error}); {context}");
+    } else {
+        eprintln!(
+            "NOT_RUN: pg_stat_statements is unavailable (SQLSTATE {code}: {error}); {context}"
+        );
+    }
+}
+
 impl Server {
+    /// The server-side statement observer, or `None` with a NOT_RUN note when
+    /// the fixture cannot provide `pg_stat_statements` (not installed or not
+    /// loaded via `shared_preload_libraries`, SQLSTATE 55000).
     fn connect(url: &str) -> Option<Self> {
         let mut client = postgres::Client::connect(url, postgres::NoTls).ok()?;
-        match client.batch_execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements") {
-            Ok(()) => Some(Self { client }),
+        if let Err(error) =
+            client.batch_execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
+        {
+            not_run(
+                "the PostgreSQL round-trip counts need its server statement counters",
+                error,
+            );
+            return None;
+        }
+        match client.query("SELECT 1 FROM pg_stat_statements LIMIT 1", &[]) {
+            Ok(_) => Some(Self { client }),
             Err(error) => {
-                println!("ROUND_TRIPS_NOTE pg_stat_statements unavailable: {error}");
+                not_run(
+                    "the PostgreSQL round-trip counts need its server statement counters",
+                    error,
+                );
                 None
             }
         }
