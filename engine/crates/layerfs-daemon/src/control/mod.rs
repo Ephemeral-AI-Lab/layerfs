@@ -23,6 +23,8 @@ mod inspect;
 mod invalidate;
 #[cfg(any(unix, windows))]
 mod kernel;
+#[cfg(windows)]
+mod attach_windows;
 #[cfg(unix)]
 mod observation;
 #[cfg(unix)]
