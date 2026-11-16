@@ -548,6 +548,12 @@ WHERE sql IS NOT NULL AND substr(name,1,7)!='sqlite_' ORDER BY type,name",
     connection
         .execute_batch("DETACH DATABASE src;DETACH DATABASE scratch;")
         .map_err(db_error)?;
+    // Before the staged file enters WAL mode: Apple's SQLite turns the
+    // persistent-WAL flag on by default, which would keep the staged `-wal`
+    // and `-shm` beside the fresh file after close and trip the sidecar fence
+    // at the end of the build. The seal and a snapshot clear it the same way.
+    #[cfg(target_os = "macos")]
+    crate::backend::sqlite::lifecycle::file_control::disable_persistent_wal(&connection)?;
     let mode: String = connection
         .query_row("PRAGMA journal_mode=wal", params![], |row| row.get(0))
         .map_err(db_error)?;

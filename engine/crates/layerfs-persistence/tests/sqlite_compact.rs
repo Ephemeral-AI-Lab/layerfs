@@ -537,6 +537,135 @@ fn an_installed_but_unsettled_run_is_judged_at_g_plus_one() {
     assert!(!compact_path(&path).exists());
 }
 
+/// The staged artifact name the tests below make non-removable: a directory,
+/// which `remove_file` refuses, so `clear_artifacts` reports it as residue.
+fn stuck_artifact(store: &Path) -> PathBuf {
+    let mut name = store.as_os_str().to_os_string();
+    name.push(".compact-visited-journal");
+    PathBuf::from(name)
+}
+
+/// The test-only `CompactRequest::before_install_hook` runs after the admission
+/// leftover check and before the install fence: it stages the stuck artifact so
+/// the settle meets a non-removable residue (§9).
+fn stage_stuck_artifact(store: &Path) {
+    std::fs::create_dir(stuck_artifact(store)).expect("stage the stuck artifact");
+}
+
+/// §9/§11: a settle that leaves a residue keeps the op record, so the next run
+/// adopts the recorded leftover instead of refusing an unrecorded staged name
+/// as `Exists`. While the artifact cannot be removed the recorded leftover is
+/// refused and the Store is untouched; once it is gone the next run settles it
+/// and leaves no residue.
+#[test]
+fn a_settle_residue_keeps_the_op_record_recoverable() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let dead = whole_file(&handles, b"a pack the rebuild would collect");
+    let before = generation(&handles);
+    let staged = CompactRequest {
+        op_id: [24; 16],
+        before_install_hook: Some(stage_stuck_artifact),
+        ..CompactRequest::default()
+    };
+
+    let receipt = handles.compact(&staged).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    let stuck = stuck_artifact(&path);
+    assert_eq!(
+        receipt.residue.artifacts,
+        vec![stuck
+            .file_name()
+            .expect("artifact name")
+            .to_string_lossy()
+            .into_owned()],
+        "the settle reports the artifact it cannot remove: {:?}",
+        receipt.residue
+    );
+    assert!(stuck.is_dir(), "the stuck artifact remains");
+    assert!(
+        compact_op_status(&path).is_some(),
+        "a settle residue keeps the op record as the next run's breadcrumb"
+    );
+
+    // The recorded leftover is refused while the artifact cannot be removed;
+    // the record still names it.
+    let reopened = reopen(&path);
+    let error = reopened.compact(&request(25)).unwrap_err();
+    assert!(
+        matches!(error, HistoryError::Integrity(_)),
+        "the recorded residue is refused: {error:?}"
+    );
+    assert!(
+        compact_op_status(&path).is_some(),
+        "the record survives the refusal"
+    );
+
+    // The artifact removable, the recorded leftover settles: the next run
+    // removes the record and leaves a clean Store.
+    std::fs::remove_dir(&stuck).expect("clear the stuck artifact");
+    let reopened = reopen(&path);
+    let receipt = reopened.compact(&request(26)).unwrap();
+    assert_eq!(receipt.path, CompactPath::None);
+    assert_eq!(receipt.generation_before, before + 1);
+    assert_eq!(receipt.generation_after, before + 1);
+    assert!(
+        receipt.residue.artifacts.is_empty(),
+        "residue after recovery: {:?}",
+        receipt.residue
+    );
+    assert!(compact_op_status(&path).is_none(), "the record settles");
+    assert!(!op_path(&path).exists());
+    let final_handles = reopen(&path);
+    assert_eq!(generation(&final_handles), before + 1);
+    assert!(!located(&final_handles, dead), "the dead pack is collected");
+    clean(&final_handles);
+}
+
+/// §9: with no op record, a non-removable artifact is refused as `Exists` and
+/// nothing is deleted or installed, so the no-record branch does not strand the
+/// Store: once the artifact is gone the next run recovers from `G`.
+#[test]
+fn an_unrecorded_non_removable_artifact_does_not_strand_the_store() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let dead = whole_file(&handles, b"a pack the rebuild would collect");
+    let before = generation(&handles);
+    let stuck = stuck_artifact(&path);
+    std::fs::create_dir(&stuck).expect("stage the unrecorded artifact");
+
+    let error = handles.compact(&request(27)).unwrap_err();
+    assert!(
+        matches!(error, HistoryError::Exists(_)),
+        "the unrecorded artifact is refused: {error:?}"
+    );
+    assert!(compact_op_status(&path).is_none(), "no record is written");
+    assert!(stuck.is_dir(), "the refusal deletes nothing");
+    // The live Store is untouched: same generation, same stored objects.
+    let reopened = reopen(&path);
+    assert_eq!(generation(&reopened), before);
+    assert!(located(&reopened, live), "the live object survives");
+    assert!(located(&reopened, dead), "the dead pack is still stored at G");
+
+    // The obstacle gone, the next run rebuilds from `G` and leaves a clean
+    // Store: the refusal was recoverable, never a stranded state.
+    std::fs::remove_dir(&stuck).expect("clear the unrecorded artifact");
+    let receipt = reopened.compact(&request(28)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_before, before);
+    assert_eq!(receipt.generation_after, before + 1);
+    assert!(
+        receipt.residue.artifacts.is_empty(),
+        "residue after recovery: {:?}",
+        receipt.residue
+    );
+    let final_handles = reopen(&path);
+    assert!(!located(&final_handles, dead), "the dead pack is collected");
+    clean(&final_handles);
+}
+
 #[test]
 fn the_report_projects_every_section_11_field() {
     let (_temp, handles, _path) = create_store();
