@@ -17,7 +17,6 @@ use std::{
     os::unix::process::{CommandExt, ExitStatusExt},
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    time::Duration,
 };
 
 impl Sandbox {
@@ -216,7 +215,7 @@ impl Sandbox {
 /// byte on `ready`), then tells `slot` its stop handle. Bounded by the
 /// helper: its exit ends the wait, with nothing told (the command did not
 /// start). A slot that refuses it as interrupted (a cancel came first) has
-/// the command ended at once and runs on to its exit, which then reports
+/// the command ended at once with the kill and runs on to its exit, which then reports
 /// the signal; any other refusal ends it too and is the error returned.
 fn told(mut ready: UnixStream, path: &Path, slot: ExecSlot<'_>) -> Option<io::Error> {
     let mut byte = [0u8; 1];
@@ -227,7 +226,9 @@ fn told(mut ready: UnixStream, path: &Path, slot: ExecSlot<'_>) -> Option<io::Er
         path: path.to_path_buf(),
     };
     let error = (slot.spawned)(&handle).err()?;
-    let _ = stop::cancel(&handle, Duration::ZERO);
+    // the cancel was answered as SIGKILL: no SIGTERM first, which a
+    // default disposition makes fatal at once and reports as 143
+    let _ = stop::kill(&handle);
     (error.kind() != io::ErrorKind::Interrupted).then_some(error)
 }
 
