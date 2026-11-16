@@ -1,4 +1,4 @@
-//! `store.compact`: reclaim dead bytes from one sqlite Store.
+//! `store.compact`: reclaim dead bytes from one Store.
 use crate::calls::table::Kind::Name;
 use crate::calls::table::{a, call, Call};
 use crate::calls::Context;
@@ -12,7 +12,7 @@ pub(crate) const CALL: Call = call(
     "compact",
     &[a("name", Name)],
     &[],
-    "reclaim dead bytes from one sqlite Store",
+    "reclaim dead bytes from one Store",
     run,
 );
 

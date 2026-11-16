@@ -39,9 +39,7 @@ fn idle(_home: &Path, _name: &str) -> Result<(), SdkRefusal> {
 }
 
 fn related() -> Related {
-    Related {
-        store_idle: idle,
-    }
+    Related { store_idle: idle }
 }
 
 /// A home with machine `box` (a Lima VM) whose calls the worker at `address`

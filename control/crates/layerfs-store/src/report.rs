@@ -76,7 +76,10 @@ pub fn compact_report(report: &CompactReport) -> SdkValue {
                             ("references", SdkValue::List(references)),
                         ]),
                     ),
-                    ("inode_blocks_bytes", int(report.kept_waste.inode_blocks_bytes)),
+                    (
+                        "inode_blocks_bytes",
+                        int(report.kept_waste.inode_blocks_bytes),
+                    ),
                 ]),
             ),
             ("peak_temp_bytes", int(report.peak_temp_bytes)),

@@ -64,7 +64,7 @@ export function whyOf(spec) {
   if (spec.family === "project" && spec.call === "delete") return "retire a project in its Store and remove its home entry; administration; a folder scope refuses it";
   if (spec.family === "project" && spec.call === "remove_file") return "hide one absolute path from every node at or below its marker frontier; administration; a folder scope refuses it";
   if (spec.family === "branch" && spec.call === "remove") return "retire one Branch in its Store; administration; a folder scope refuses it";
-  if (spec.family === "store" && spec.call === "compact") return "reclaim one sqlite Store's dead bytes; administration; a folder scope refuses it";
+  if (spec.family === "store" && spec.call === "compact") return "reclaim one Store's dead bytes; administration; a folder scope refuses it";
   if (spec.family === "sandbox" && spec.call === "create") return "start a Sandbox process; administration";
   if (spec.family === "sandbox" && spec.call === "close") return "stop a Sandbox; administration";
   if (spec.family === "project" && spec.call === "export") return "export a Branch snapshot to a local folder under a launch-time --export-root; a folder scope refuses it";

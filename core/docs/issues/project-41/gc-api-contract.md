@@ -78,8 +78,10 @@ names are logical, not rendered (§10, §11). A busy checkpoint, a live owner an
   project delete <project>`, `layerfs project remove-file <project> <path>`, `layerfs store compact <store>` (the runbook
   already uses the last); results are the rendered snake_case map (§1, §10).
 - `store.status` while compacting (§11): `op = {id, name, phase, started, uncertain}` from `gc_op` (PostgreSQL, Store-side) or
-  the home op (SQLite; a remote home via `step_on`); `state` is `busy`/`unresolved`; phases `mark`/`build`/`verify`/`install`
-  (SQLite) and `mark`/`build`/`swap`/`cleanup` (PostgreSQL); there is no `PROGRESS` option (#42 item 40).
+  `<store>.compact-op` (SQLite, the sidecar the spec calls the home op; a remote Store via `step_on`); `id` is the recorded
+  `op_id` — 16 bytes, rendered as `op-<32 lowercase hex>` — not a row number or a fresh id; `state` is `busy`/`unresolved`;
+  phases `mark`/`build`/`verify`/`install` (SQLite) and `mark`/`build`/`swap`/`cleanup` (PostgreSQL); there is no `PROGRESS`
+  option (#42 item 40).
 
 ## 5. Implementation checklist (T11)
 

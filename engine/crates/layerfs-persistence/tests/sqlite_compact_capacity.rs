@@ -146,7 +146,10 @@ fn save_whole_files(handles: &SqliteHandles, payloads: &[Vec<u8>]) -> Vec<Object
 fn publish_group(handles: &SqliteHandles, index: u64, roots: &[ObjectId]) {
     let directory = FinalizedObject::new(
         ObjectRole::DirectoryLeaf,
-        encode_directory_page(&DirectoryPage::Leaf { entries: Vec::new() }).expect("directory"),
+        encode_directory_page(&DirectoryPage::Leaf {
+            entries: Vec::new(),
+        })
+        .expect("directory"),
     )
     .expect("directory leaf");
     let directory_id = directory.id();
@@ -191,10 +194,12 @@ fn publish_group(handles: &SqliteHandles, index: u64, roots: &[ObjectId]) {
     let leaf_id = leaf.id();
     let root = FilesystemRoot::new(profile_id(), scope_for_seed([1; 32]), 1, leaf_id)
         .expect("filesystem root");
-    let root_object =
-        FinalizedObject::new(ObjectRole::FilesystemRoot, root.encode().expect("root encode"))
-            .expect("filesystem root object")
-            .with_references(vec![leaf_id]);
+    let root_object = FinalizedObject::new(
+        ObjectRole::FilesystemRoot,
+        root.encode().expect("root encode"),
+    )
+    .expect("filesystem root object")
+    .with_references(vec![leaf_id]);
     let root_id = root_object.id();
     save_batch(handles, vec![directory, leaf, root_object]);
 
@@ -495,9 +500,11 @@ fn capacity_measure() {
     let group_size = env_u64("CAPACITY_GROUP", DEFAULT_GROUP);
     let initial_dead = env_u64("CAPACITY_DEAD_OBJECTS", DEFAULT_DEAD_OBJECTS);
     let runs_per_arm = env_u64("CAPACITY_RUNS", 3).max(1);
-    let object_bytes =
-        usize::try_from(env_u64("CAPACITY_OBJECT_BYTES", DEFAULT_OBJECT_BYTES as u64))
-            .expect("object bytes");
+    let object_bytes = usize::try_from(env_u64(
+        "CAPACITY_OBJECT_BYTES",
+        DEFAULT_OBJECT_BYTES as u64,
+    ))
+    .expect("object bytes");
     let live_objects = groups.saturating_mul(group_size);
     let durable = std::env::var_os("CAPACITY_DURABLE").is_some();
     let keep = std::env::var_os("CAPACITY_KEEP").is_some();
@@ -580,7 +587,12 @@ fn capacity_measure() {
             object_bytes,
         );
         dead_seed = seed;
-        let measured = measured(&store, SqlitePersistenceProfile::Disposable, 100 + run, added);
+        let measured = measured(
+            &store,
+            SqlitePersistenceProfile::Disposable,
+            100 + run,
+            added,
+        );
         assert_eq!(measured.path, "rebuild", "10% dead takes the rebuild path");
         eprintln!(
             "capacity_measure: rebuild run {} -> {} us, dead {} B, shrink {} B, peak {} B",
@@ -680,12 +692,14 @@ fn capacity_measure() {
     );
     println!("{json}");
     if std::env::var_os("UPDATE_CAPACITY").is_some() {
-        let out = std::env::var_os("CAPACITY_OUT").map(PathBuf::from).unwrap_or_else(|| {
-            Path::new(env!("CARGO_MANIFEST_DIR")).join(
-                "../../../engine/crates/layerfs-persistence/tests/fixtures/\
+        let out = std::env::var_os("CAPACITY_OUT")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                Path::new(env!("CARGO_MANIFEST_DIR")).join(
+                    "../../../engine/crates/layerfs-persistence/tests/fixtures/\
                  sqlite_compact_capacity_measure.json",
-            )
-        });
+                )
+            });
         update_fixture(&out, &json);
         eprintln!("capacity_measure: wrote {}", out.display());
     }
@@ -696,7 +710,6 @@ fn capacity_measure() {
         eprintln!("capacity_measure: removing {}", temp.path().display());
     }
 }
-
 
 // ---- the peak-temp receipt covers the whole run's temp artifacts ------------
 
@@ -791,10 +804,7 @@ impl FootprintSampler {
                     journal_at.fetch_max(journal, Ordering::Relaxed);
                     visited_at.fetch_max(visited, Ordering::Relaxed);
                     rewrite_at.fetch_max(rewrite, Ordering::Relaxed);
-                    total.fetch_max(
-                        staged + journal + visited + rewrite,
-                        Ordering::Relaxed,
-                    );
+                    total.fetch_max(staged + journal + visited + rewrite, Ordering::Relaxed);
                     std::thread::sleep(Duration::from_micros(200));
                 }
             })

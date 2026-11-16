@@ -292,8 +292,8 @@ are recorded in §7 instead.
 - **`project.remove` retired.** Old clients get `InvalidInput`, MCP reports an
   unknown tool, and the CLI exits 2; there is no compatibility alias.
 - `remove_file` reclaims no bytes in 2.0; a path-aware walk is a follow-up.
-  PostgreSQL ACL replay is best-effort, and `markBytes` is a #52 metric, not a
-  report field. Compaction metrics are process-local with no SDK or CLI
+  PostgreSQL ACL replay is best-effort, and `markBytes` is a #52 metric,
+  deferred and not implemented here, not a report field. Compaction metrics are process-local with no SDK or CLI
   renderer, and PostgreSQL compactions have no metrics yet.
 - AC-60's real standby arms and the reserved-pack race of AC-42 are deferred;
   AC-28/41/43 have T12.3b evidence and AC-35's advisory-key refcount does not.
@@ -390,7 +390,9 @@ clippy), `task-g66b` (50 GB measurement), `task-g72` (peak-temp bound) and
 - **Final test evidence on `32ae51ca` (T-G75 re-run).** 271 passed / 0 failed
   / 3 ignored (`layerfs-persistence`; T-G24 recorded 264/0/2), 214/0/15
   (`layerfs-store-service`) and 59/0/0 (`layerfs-store`), 544 passed / 0
-  failed / 18 ignored in all. The five SQLite compaction targets re-ran to
+  failed / 18 ignored in all. The same command re-run on the PR's tree
+  measured 544 passed / 0 failed / 18 ignored again; the total is 544, not
+  554. The five SQLite compaction targets re-ran to
   `sqlite_compact` 20, `sqlite_compact_crash` 23, `sqlite_compact_fixtures`
   1, `sqlite_compact_matrix` 1 runner (8 arms) and `sqlite_compact_capacity`
   1 passed + 1 ignored (the opt-in 50 GB arm). The PostgreSQL lanes were not
@@ -468,7 +470,7 @@ clippy), `task-g66b` (50 GB measurement), `task-g72` (peak-temp bound) and
   | 12 | `branch.remove` live | host CLI `layerfs branch remove` | live on 2.0.0/`4e65ebbae`, re-probed T-G75; `help branch` lists `remove`; probe on a missing name returns `NoSuchBranch` |
   | 13 | doctor clean after cutover | `layerfs doctor` | `{"ok":true,"findings":[]}`; 145 Branches retired (20 empty + 125 superseded), 162 remained then and 174 are live on `32ae51ca`; removal is soft, so a name returns only after `store compact` |
   | 14 | clippy clean | `cargo clippy -p layerfs-persistence -p layerfs-store-service --all-targets --features postgresql --no-deps -- -D warnings` | T-G75: exit 0, zero warnings |
-  | 15 | final suite re-run | `cargo test -p layerfs-persistence -p layerfs-store-service -p layerfs-store --no-fail-fast` | T-G75: 544 passed / 0 failed / 18 ignored; the five SQLite compaction targets keep 20/23/1(+1 ignored)/1/1 |
+  | 15 | final suite re-run | `cargo test -p layerfs-persistence -p layerfs-store-service -p layerfs-store --no-fail-fast` | T-G75: 544 passed / 0 failed / 18 ignored; the five SQLite compaction targets keep `sqlite_compact` 20, `sqlite_compact_crash` 23, `sqlite_compact_fixtures` 1, `sqlite_compact_matrix` 1 and `sqlite_compact_capacity` 1 passed + 1 ignored (the opt-in 50 GB arm) |
 
   `git diff --check` is clean on the closeout Branch.
 - **How to run.**

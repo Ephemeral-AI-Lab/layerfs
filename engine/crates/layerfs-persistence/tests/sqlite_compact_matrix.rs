@@ -34,12 +34,12 @@
 mod support;
 
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectId, ObjectRole};
+use layerfs_history::records::{FileDigest, GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{
     BranchId, CommitId, CommitMeta, CommitOutcome, CommitRequest, CommitVia, ForkRequest,
-    ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryError, LayerStackId,
-    LayerStackRecord, StackInitialization,
+    ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryError, LayerStackId, LayerStackRecord,
+    StackInitialization,
 };
-use layerfs_history::records::{FileDigest, GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_persistence::{
     compact_op_status, CompactFailpoint, CompactPath, CompactRequest, PersistenceConfig,
     SqliteHandles, SqlitePersistenceProfile,
@@ -163,7 +163,10 @@ fn filesystem_root(handles: &SqliteHandles, seed: u8) -> ObjectId {
     };
     let directory = FinalizedObject::new(
         ObjectRole::DirectoryLeaf,
-        encode_directory_page(&DirectoryPage::Leaf { entries: Vec::new() }).unwrap(),
+        encode_directory_page(&DirectoryPage::Leaf {
+            entries: Vec::new(),
+        })
+        .unwrap(),
     )
     .unwrap();
     let directory_id = directory.id();
@@ -326,7 +329,10 @@ fn arm_sidecar_at_install() {
         HistoryError::Conflict(text) => assert_eq!(text, "Store sidecar at install"),
         other => panic!("expected the sidecar Conflict, got {other:?}"),
     }
-    assert!(!compact_path(&path).exists(), "Conflict leaves no staged Store");
+    assert!(
+        !compact_path(&path).exists(),
+        "Conflict leaves no staged Store"
+    );
     assert!(
         !visited_path(&path).exists(),
         "Conflict leaves no visited scratch"
@@ -368,9 +374,7 @@ fn arm_status_phases() {
 
         // A pre-install stop rebuilds at G + 1; an installed one settles.
         let reopened = reopen(&path);
-        let receipt = reopened
-            .compact(&request(op[0].wrapping_add(20)))
-            .unwrap();
+        let receipt = reopened.compact(&request(op[0].wrapping_add(20))).unwrap();
         if *installed {
             assert_eq!(receipt.path, CompactPath::None);
             assert_eq!(receipt.generation_before, before + 1);
@@ -474,7 +478,10 @@ fn arm_digest_row_after_collection() {
     let receipt = handles.compact(&request(80)).unwrap();
     assert_eq!(receipt.path, CompactPath::Rebuild);
     let reopened = reopen(&path);
-    assert!(!located(&reopened, dead_root), "the named root was collected");
+    assert!(
+        !located(&reopened, dead_root),
+        "the named root was collected"
+    );
     assert_eq!(
         reopened.history.file_roots(&[(digest, length)]).unwrap(),
         vec![None],
@@ -536,7 +543,12 @@ fn mounted_store() -> (Temp, SqliteHandles, PathBuf, LayerStackId, BranchId) {
     initialize(&handles, 1, live);
     let stack = support::stack(1);
     let branch = support::branch_id(1);
-    let head = handles.history.layer_stack(stack).unwrap().unwrap().head_layer;
+    let head = handles
+        .history
+        .layer_stack(stack)
+        .unwrap()
+        .unwrap()
+        .head_layer;
     handles
         .history
         .fork(&ForkRequest {
@@ -554,7 +566,14 @@ fn mounted_store() -> (Temp, SqliteHandles, PathBuf, LayerStackId, BranchId) {
 /// excludes a mount and a second compaction.
 fn arm_mount_and_compaction_exclude_each_other() {
     let (_temp, handles, path, stack, branch) = mounted_store();
-    let mount = mount_intent(stack, branch, 81, [0x81; 32], "sandbox-t123c", "machine-t123c");
+    let mount = mount_intent(
+        stack,
+        branch,
+        81,
+        [0x81; 32],
+        "sandbox-t123c",
+        "machine-t123c",
+    );
     handles.history.gc_register(&mount).unwrap();
 
     let error = handles.compact(&request(82)).unwrap_err();
@@ -563,14 +582,20 @@ fn arm_mount_and_compaction_exclude_each_other() {
             assert_eq!(state.holders.len(), 1, "{state:?}");
             let holder = &state.holders[0];
             assert_eq!(holder.kind, GcIntentKind::Mount);
-            assert_eq!(holder.workspace.as_deref(), Some(hex16(&[0x81; 32]).as_str()));
+            assert_eq!(
+                holder.workspace.as_deref(),
+                Some(hex16(&[0x81; 32]).as_str())
+            );
             assert_eq!(holder.sandbox.as_deref(), Some("sandbox-t123c"));
             assert_eq!(holder.machine.as_deref(), Some("machine-t123c"));
             assert_eq!(holder.op, hex16(&[81; 16]));
         }
         other => panic!("expected MountsActive, got {other:?}"),
     }
-    assert!(!compact_path(&path).exists(), "a refused run stages no Store");
+    assert!(
+        !compact_path(&path).exists(),
+        "a refused run stages no Store"
+    );
     assert!(!visited_path(&path).exists(), "and no visited scratch");
     assert!(!op_path(&path).exists(), "and no op record");
     let reopened = reopen(&path);
@@ -600,7 +625,10 @@ fn arm_mount_and_compaction_exclude_each_other() {
     }
     let second = reopen(&path).compact(&request(85)).unwrap_err();
     assert!(matches!(second, HistoryError::BusyOp(_)), "{second:?}");
-    assert!(!op_path(&path).exists(), "a refused second run leaves no op");
+    assert!(
+        !op_path(&path).exists(),
+        "a refused second run leaves no op"
+    );
     reopened.history.gc_release(&compaction.op_id).unwrap();
     drop(reopened);
 
@@ -732,7 +760,12 @@ fn arm_commit_during_rebuild() {
         .expect("the Commit survives the rebuild");
     assert_eq!(record.root.as_bytes(), &root);
     assert_eq!(
-        reopened.history.branch(branch).unwrap().unwrap().head_commit,
+        reopened
+            .history
+            .branch(branch)
+            .unwrap()
+            .unwrap()
+            .head_commit,
         Some(id)
     );
     clean(&reopened);
@@ -770,9 +803,7 @@ fn arm_random_store_shapes() {
         }
         let before = handles.history.mark().unwrap().live_heads_digest();
         let before_generation = generation(&handles);
-        let receipt = handles
-            .compact(&request(60 + case))
-            .unwrap();
+        let receipt = handles.compact(&request(60 + case)).unwrap();
         assert_eq!(receipt.path, CompactPath::Rebuild, "case {case}");
         assert_eq!(receipt.generation_before, before_generation);
         assert_eq!(receipt.generation_after, before_generation + 1);
@@ -814,9 +845,7 @@ fn arm_measurement() {
         }
         let before = generation(&handles);
         let started = Instant::now();
-        let receipt = handles
-            .compact(&request(70 + run))
-            .unwrap();
+        let receipt = handles.compact(&request(70 + run)).unwrap();
         let micros = u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
         assert_eq!(receipt.path, CompactPath::Rebuild);
         assert_eq!(receipt.generation_after, before + 1);
@@ -902,9 +931,18 @@ const ARMS: [(&str, fn()); 11] = [
     ("arm_status_phases", arm_status_phases),
     ("arm_error_codes", arm_error_codes),
     ("arm_seal", arm_seal),
-    ("arm_digest_row_after_collection", arm_digest_row_after_collection),
-    ("arm_mount_and_compaction_exclude_each_other", arm_mount_and_compaction_exclude_each_other),
-    ("arm_mount_during_compaction_is_busy", arm_mount_during_compaction_is_busy),
+    (
+        "arm_digest_row_after_collection",
+        arm_digest_row_after_collection,
+    ),
+    (
+        "arm_mount_and_compaction_exclude_each_other",
+        arm_mount_and_compaction_exclude_each_other,
+    ),
+    (
+        "arm_mount_during_compaction_is_busy",
+        arm_mount_during_compaction_is_busy,
+    ),
     ("arm_commit_during_rebuild", arm_commit_during_rebuild),
     ("arm_random_store_shapes", arm_random_store_shapes),
     ("arm_measurement", arm_measurement),
@@ -1230,8 +1268,7 @@ fn status_label(status: Status) -> &'static str {
 /// added: the in-process `crash_at!` arms, the `sigkill_at!` arms and the
 /// crash child itself are every test the suite declares on Linux.
 fn crash_suite_counts() -> (usize, usize) {
-    let path =
-        repo_root().join("engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs");
+    let path = repo_root().join("engine/crates/layerfs-persistence/tests/sqlite_compact_crash.rs");
     let text = std::fs::read_to_string(&path).unwrap_or_else(|_| {
         panic!(
             "missing {}; the crash suite the report counts",
@@ -1248,12 +1285,18 @@ fn crash_suite_counts() -> (usize, usize) {
 fn generate_report() -> String {
     use std::fmt::Write as _;
     let count = |status: Status| MATRIX.iter().filter(|row| row.status == status).count();
-    let both = MATRIX.iter().filter(|row| row.backend == Backend::Both).count();
+    let both = MATRIX
+        .iter()
+        .filter(|row| row.backend == Backend::Both)
+        .count();
     let sqlite = MATRIX
         .iter()
         .filter(|row| row.backend == Backend::Sqlite)
         .count();
-    let pg = MATRIX.iter().filter(|row| row.backend == Backend::Pg).count();
+    let pg = MATRIX
+        .iter()
+        .filter(|row| row.backend == Backend::Pg)
+        .count();
     let mut out = String::new();
     writeln!(out, "# T12.3a: SQLite acceptance-matrix runner report").unwrap();
     writeln!(out).unwrap();
@@ -1322,11 +1365,7 @@ fn generate_report() -> String {
         "  child placeholder), not the 13 recorded below. Those arms still kill a"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  re-executed test child, so T-G65 added"
-    )
-    .unwrap();
+    writeln!(out, "  re-executed test child, so T-G65 added").unwrap();
     writeln!(
         out,
         "  `api/crates/layerfs-cli/tests/sqlite_compact_process_kill.rs`: 8 SIGKILL"
@@ -1402,11 +1441,7 @@ fn generate_report() -> String {
         "  numbers are in `tests/fixtures/sqlite_compact_capacity_measure.json`; the"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  50 GB arms and the 30% arm remain [E]."
-    )
-    .unwrap();
+    writeln!(out, "  50 GB arms and the 30% arm remain [E].").unwrap();
     writeln!(out).unwrap();
     writeln!(out, "## Matrix (SQLite half)").unwrap();
     writeln!(out).unwrap();
@@ -1471,11 +1506,7 @@ fn generate_report() -> String {
         "  at install is `Conflict(\"Store sidecar at install\")` with no artifact,"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  no op and an unchanged generation."
-    )
-    .unwrap();
+    writeln!(out, "  no op and an unchanged generation.").unwrap();
     writeln!(
         out,
         "- AC-51: `arm_status_phases` - stop points at mark, build, verify and install"
@@ -1501,11 +1532,7 @@ fn generate_report() -> String {
         "- AC-59: `arm_seal` - a successful seal leaves no sidecar, reports the main-file"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  bytes and a SQLite version, and the file reopens."
-    )
-    .unwrap();
+    writeln!(out, "  bytes and a SQLite version, and the file reopens.").unwrap();
     writeln!(
         out,
         "- AC-04 / AC-05: `arm_random_store_shapes` - a seeded property arm over six"
@@ -1531,11 +1558,7 @@ fn generate_report() -> String {
         "  root the rebuild collected, so the row goes; recording the same content"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  again succeeds and points at the new root."
-    )
-    .unwrap();
+    writeln!(out, "  again succeeds and points at the new root.").unwrap();
     writeln!(
         out,
         "- AC-07 / AC-49: `arm_mount_and_compaction_exclude_each_other` - a live mount"
@@ -1561,11 +1584,7 @@ fn generate_report() -> String {
         "  compaction intent refuses a mount with `BusyOp`, and the next run adopts"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  the leftover and rebuilds."
-    )
-    .unwrap();
+    writeln!(out, "  the leftover and rebuilds.").unwrap();
     writeln!(
         out,
         "- AC-49: `arm_commit_during_rebuild` - a Commit started inside the install"
@@ -1690,11 +1709,7 @@ fn generate_report() -> String {
         "  Its 50 GB projection, the 30% arm, PG `ACCESS EXCLUSIVE` duration and the"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  plain `VACUUM INTO` comparison are deferred/[E]."
-    )
-    .unwrap();
+    writeln!(out, "  plain `VACUUM INTO` comparison are deferred/[E].").unwrap();
     writeln!(out).unwrap();
     writeln!(out, "## Status and report projection").unwrap();
     writeln!(out).unwrap();
@@ -1723,11 +1738,7 @@ fn generate_report() -> String {
         "render; the runner still asserts the recorded SQLite phases directly, so"
     )
     .unwrap();
-    writeln!(
-        out,
-        "AC-51 does not depend on the projection alone."
-    )
-    .unwrap();
+    writeln!(out, "AC-51 does not depend on the projection alone.").unwrap();
     writeln!(out).unwrap();
     writeln!(out, "## Run environment").unwrap();
     writeln!(out).unwrap();
@@ -1761,11 +1772,7 @@ fn generate_report() -> String {
         "  135 GB page cache and no cache drop ran between the three runs of an arm;"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  the mark is CPU-bound at ~62 MB/s, not cache-bound."
-    )
-    .unwrap();
+    writeln!(out, "  the mark is CPU-bound at ~62 MB/s, not cache-bound.").unwrap();
     writeln!(
         out,
         "- Docker Sandbox `t123csbx` (Linux x86_64, tmpfs `/tmp`, overlayfs"
@@ -1776,21 +1783,13 @@ fn generate_report() -> String {
         "  `/var/tmp`), rustc 1.85.1, `SqlitePersistenceProfile::Disposable`"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  (WAL/OFF), `CARGO_TARGET_DIR=/tmp/target-t123c`."
-    )
-    .unwrap();
+    writeln!(out, "  (WAL/OFF), `CARGO_TARGET_DIR=/tmp/target-t123c`.").unwrap();
     writeln!(
         out,
         "- Verified here: `sqlite_compact_matrix` (1 test); the persistence suites"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  `sqlite_compact` (20), `sqlite_compact_crash` (13),"
-    )
-    .unwrap();
+    writeln!(out, "  `sqlite_compact` (20), `sqlite_compact_crash` (13),").unwrap();
     writeln!(
         out,
         "  `sqlite_compact_fixtures` (1), `admission` (5), `path_removal` (3),"
@@ -1831,11 +1830,7 @@ fn generate_report() -> String {
         "  project_delete` (15) and `compact_report_status` (3)."
     )
     .unwrap();
-    writeln!(
-        out,
-        "  All of those pass on the merged branch."
-    )
-    .unwrap();
+    writeln!(out, "  All of those pass on the merged branch.").unwrap();
     writeln!(
         out,
         "- The control `restore_install` arm that opens a Store needs ext4/xfs/btrfs;"
@@ -1856,11 +1851,7 @@ fn generate_report() -> String {
         "  not a matrix result; the cited API tests are validated by source name only"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  in this run."
-    )
-    .unwrap();
+    writeln!(out, "  in this run.").unwrap();
     out
 }
 
@@ -1888,7 +1879,11 @@ fn validate_registry(executed: &BTreeSet<String>) {
         assert!(!row.evidence.is_empty(), "{} has no evidence", row.id);
         for entry in row.evidence {
             if let Some(arm) = entry.strip_prefix("runner#") {
-                assert!(executed.contains(arm), "{} names unexecuted arm {arm}", row.id);
+                assert!(
+                    executed.contains(arm),
+                    "{} names unexecuted arm {arm}",
+                    row.id
+                );
                 continue;
             }
             let (file, function) = entry.split_once('#').unwrap_or((entry, ""));
@@ -1905,7 +1900,9 @@ fn validate_registry(executed: &BTreeSet<String>) {
         }
         if row.status == Status::Executed {
             assert!(
-                row.evidence.iter().any(|entry| entry.starts_with("runner#")),
+                row.evidence
+                    .iter()
+                    .any(|entry| entry.starts_with("runner#")),
                 "{} is executed but names no arm",
                 row.id
             );

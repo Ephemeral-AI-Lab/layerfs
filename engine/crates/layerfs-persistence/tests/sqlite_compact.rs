@@ -8,9 +8,9 @@ mod support;
 
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::{
-    AddLayerOutcome, AddLayerRequest, BranchId, CommitId, CommitMeta, CommitOutcome,
-    CommitRequest, CommitVia, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig,
-    HistoryError, LayerStackId, LayerStackRecord, StackInitialization,
+    AddLayerOutcome, AddLayerRequest, BranchId, CommitId, CommitMeta, CommitOutcome, CommitRequest,
+    CommitVia, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryError,
+    LayerStackId, LayerStackRecord, StackInitialization,
 };
 use layerfs_persistence::{
     compact_op_status, CompactFailpoint, CompactPath, CompactReport, CompactReportSource,
@@ -19,7 +19,8 @@ use layerfs_persistence::{
 };
 use layerfs_storage::{
     port::acquisition::{Acquisition, Begin},
-    port::PackPersistence, Storage, StoragePolicy,
+    port::PackPersistence,
+    Storage, StoragePolicy,
 };
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -87,7 +88,6 @@ fn visited_path(store: &Path) -> PathBuf {
     PathBuf::from(name)
 }
 
-
 fn whole_file(handles: &SqliteHandles, bytes: &[u8]) -> ObjectId {
     let object = FinalizedObject::new(
         ObjectRole::WholeFile,
@@ -115,13 +115,17 @@ fn filesystem_root(handles: &SqliteHandles, seed: u8) -> ObjectId {
             attributes::PortableMetadata,
             directory::{encode_directory_page, DirectoryPage},
             inode::{encode_inode_page, InodePage},
-            root::profile_id, scope_for_seed, FilesystemRoot,
+            root::profile_id,
+            scope_for_seed, FilesystemRoot,
         },
         inode_leaf::{InodeKind, InodeMetadata, InodeValue},
     };
     let directory = FinalizedObject::new(
         ObjectRole::DirectoryLeaf,
-        encode_directory_page(&DirectoryPage::Leaf { entries: Vec::new() }).unwrap(),
+        encode_directory_page(&DirectoryPage::Leaf {
+            entries: Vec::new(),
+        })
+        .unwrap(),
     )
     .unwrap();
     let directory_id = directory.id();
@@ -147,13 +151,7 @@ fn filesystem_root(handles: &SqliteHandles, seed: u8) -> ObjectId {
     .unwrap()
     .with_references(vec![directory_id]);
     let inode_id = inode.id();
-    let root = FilesystemRoot::new(
-        profile_id(),
-        scope_for_seed([1; 32]),
-        1,
-        inode_id,
-    )
-    .unwrap();
+    let root = FilesystemRoot::new(profile_id(), scope_for_seed([1; 32]), 1, inode_id).unwrap();
     let object = FinalizedObject::new(ObjectRole::FilesystemRoot, root.encode().unwrap())
         .unwrap()
         .with_references(vec![inode_id]);
@@ -191,12 +189,14 @@ fn commit(handles: &SqliteHandles, branch: BranchId, candidate_root: ObjectId) -
     let snapshot = handles.history.branch(branch).unwrap().unwrap();
     let expected_root = match snapshot.head_commit {
         Some(head) => handles.history.commit(head).unwrap().unwrap().root,
-        None => handles
-            .history
-            .layer(snapshot.base_layer)
-            .unwrap()
-            .unwrap()
-            .root,
+        None => {
+            handles
+                .history
+                .layer(snapshot.base_layer)
+                .unwrap()
+                .unwrap()
+                .root
+        }
     };
     match handles
         .history
@@ -540,7 +540,10 @@ fn a_leftover_op_reports_its_phase_and_state() {
     let reopened = reopen(&path);
     let receipt = reopened.compact(&request(22)).unwrap();
     assert_eq!(receipt.path, CompactPath::Rebuild);
-    assert!(compact_op_status(&path).is_none(), "the op record is settled");
+    assert!(
+        compact_op_status(&path).is_none(),
+        "the op record is settled"
+    );
     assert!(receipt.residue.artifacts.is_empty());
     assert_eq!(receipt.residue.bytes, 0);
     assert!(receipt.residue.reason.is_none());

@@ -119,7 +119,10 @@ fn a_retired_or_absent_store_project_is_not_listed_or_got() {
     assert_eq!(names, vec!["live"]);
     // both stale home entries are still there; the Store, not the home, hides them
     for name in ["retired", "absent"] {
-        assert!(paths::project_record(&home, "shop", name).exists(), "{name}");
+        assert!(
+            paths::project_record(&home, "shop", name).exists(),
+            "{name}"
+        );
     }
 
     // project.get refuses a hidden project even with its home entry present,

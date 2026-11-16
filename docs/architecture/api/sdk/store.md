@@ -40,7 +40,7 @@ The `store` calls: create, connect, inspect, move, remove and compact the databa
 | [`store.push`](#storepush) | sqlite | `{ store, from, to, bytes, heads }` |
 | [`store.pull`](#storepull) | sqlite | `{ store, from, to, bytes, heads }` |
 | [`store.remove`](#storeremove) | sqlite | `{ removed: name }` |
-| [`store.compact`](#storecompact) | sqlite | `{ kind: "Compacted", ... }`, the §11 report |
+| [`store.compact`](#storecompact) | both | `{ kind: "Compacted", ... }`, the §11 report |
 | [`store.disconnect`](#storedisconnect) | PostgreSQL | `{ disconnected: name }` |
 
 A sqlite Store is made with the Disposable profile (WAL,
@@ -63,7 +63,7 @@ shows `cursor`, `binding` or `v`:
 | `incoming_on` | sqlite | a machine a certain-failed push left a partial `.incoming` copy on; the next push or remove deletes it ([`sqlite/transfer/resolve.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/resolve.rs)) |
 | `backups` | sqlite | one link per bucket: the file, its heads, the last `create` or `restore` ([`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs)) |
 | `url`, `schema`, `synchronous_commit`, `password`, `machines` | PostgreSQL | the URL without a password, always `layerfs`, the setting, the password reference, attached machines `{ url?, password?, checked? }` |
-| `op` | both | the recorded intent `{ id, name, phase, started, uncertain }` ([`op.rs`](../../../../control/crates/layerfs-home/src/op.rs)) |
+| `op` | both | the recorded intent `{ id, name, phase, started, uncertain }`; for a compaction `id` is the 16-byte operation id rendered `op-<32 lowercase hex>` ([`op.rs`](../../../../control/crates/layerfs-home/src/op.rs), [`status.rs`](../../../../control/crates/layerfs-store/src/status.rs)) |
 | `projects` | both | the home's project records for this Store, sorted |
 
 | `state` (list, status) | When, first match wins |
@@ -383,15 +383,18 @@ recorded, or a call in this process is running on it,
 
 ### store.compact
 
-Reclaims one sqlite Store's dead bytes by rebuilding it from its live history
-(spec §3, §7): the only byte-reclaiming call, with no confirm, force or dry
+Reclaims one Store's dead bytes by rebuilding it from its live history
+(spec §3, §7 on SQLite, §8 on PostgreSQL with the `postgresql` feature): the
+only byte-reclaiming call, with no confirm, force or dry
 run and no automatic collection. It writes its operation intent before the
 first checkpoint, verifies the rebuilt Store, and installs it by rename; a
 definite failure before the rename keeps the old Store and the generation `G`,
 while an installed-but-uncertain reply stays at `G + 1` and is reported, never
 deleted. A Store with less than 10% wholly dead packs takes the `none` path:
 it marks only, writes nothing and reports `dead_bytes_refined ==
-dead_bytes_bound`.
+dead_bytes_bound`. A sqlite Store on another machine is `Unsupported`: the
+rebuild is local to the machine that holds the file and the worker has no
+compaction route, so run the call there.
 
 ```text
 JS      await layerfs.store.compact(name)
@@ -404,11 +407,11 @@ with the report's snake_case fields: `dead_bytes_bound`,
 `dead_bytes_refined`, `logical_discarded`, `backend_reusable`,
 `physical_shrink`, `kept_waste {dead_in_retained_packs_bytes, delta_bases
 {bytes, references}, inode_blocks_bytes}`, `peak_temp_bytes`, `residue`,
-`estimate` and `zero_reason`; a capped field is `{value, cap}`.
+`estimate` and `zero_reason`; a field the backend capped would be `{value, cap}` (2.0 caps none).
 
 | Error | When | Source |
 | --- | --- | --- |
-| `NoSuchStore`, `Unsupported` | a missing Store, a PostgreSQL Store, a non-private Store directory, or an unsupported filesystem | [`compact.rs`](../../../../control/crates/layerfs-store/src/compact.rs) |
+| `NoSuchStore`, `Unsupported` | a missing Store; a sqlite Store on another machine, because compaction is local-only (no worker route); a non-private Store directory; an unsupported filesystem; or a PostgreSQL Store in a build without the `postgresql` feature | [`compact.rs`](../../../../control/crates/layerfs-store/src/compact.rs) |
 | `MountsActive`, `Busy`, `Unresolved` | a mount, long-lived client or operation holds the Store, or a dead owner left an uncertain one | spec §5 |
 | `StaleStore`, `Conflict` | a connection bypassed admission, or the sealed identity changed | spec §7, §10 |
 | `Capacity` | a real allocation refusal during the rebuild; the old Store is kept | spec §7 |

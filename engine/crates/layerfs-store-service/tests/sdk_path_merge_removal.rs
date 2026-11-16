@@ -57,10 +57,7 @@ fn hidden(fixture: &Fixture, branch: &str, path: &str) {
     };
     assert_eq!(paths.len(), 1, "{paths:?}");
     assert_eq!(paths[0].get_text("path"), Some(path), "{paths:?}");
-    assert!(
-        paths[0].get_int("frontier_serial").is_some(),
-        "{paths:?}"
-    );
+    assert!(paths[0].get_int("frontier_serial").is_some(), "{paths:?}");
 }
 
 /// The path is absent from the committed tree: above the frontier the read
@@ -203,7 +200,8 @@ fn a_recreated_removed_path_still_conflicts_as_an_ordinary_edit() {
     assert_eq!(visible(&fixture, "one", "/a"), "one\n");
     assert_eq!(visible(&fixture, "two", "/a"), "two\n");
 
-    let refusal = merge(&fixture, "one", "two", "conflicted").expect_err("an ordinary edit conflict");
+    let refusal =
+        merge(&fixture, "one", "two", "conflicted").expect_err("an ordinary edit conflict");
     assert_eq!(refusal.code, "Conflict", "{refusal:?}");
     let conflicts = match refusal.detail.get("conflicts") {
         Some(SdkValue::List(conflicts)) => conflicts,
@@ -262,7 +260,10 @@ fn a_merge_and_a_removal_started_together_never_leave_the_path_visible() {
         // fence is repeated with the marker in place.
         if let Err(refusal) = &remove_result {
             assert!(
-                matches!(refusal.code.as_str(), "MountsActive" | "Busy" | "Unresolved"),
+                matches!(
+                    refusal.code.as_str(),
+                    "MountsActive" | "Busy" | "Unresolved"
+                ),
                 "round {round}: {refusal:?}"
             );
             remove(&fixture, "/a");

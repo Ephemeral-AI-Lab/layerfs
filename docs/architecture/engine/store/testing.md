@@ -70,13 +70,16 @@ tools/ci/test_store_ext4.sh --list
 | --- | --- | --- |
 | `layerfs-persistence` | `heads`, `sqlite_publication` | Branch heads and a publication round trip |
 | `layerfs-store-service` | `kernel_guard`, `commit_pipeline` | the guard admits a private ext4 directory and refuses tmpfs; a Commit pipeline |
-| `layerfs-store` | `create_directory` | `store.create`'s directory ownership and its guard refusal |
-| `layerfs-api` | `store_family` | the Store family's call table |
+| `layerfs-store` | `create_directory`, `compact_report_status` | `store.create`'s directory ownership and guard refusal; the §11 report wire shape and the `store.status` compaction op |
+| `layerfs-api` | `store_family`, `calls_table`, `gc_calls`, `gc_trace` | the Store family and GC call tables, the four GC result shapes and the trace redaction |
+| `layerfs-cli` | `gc`, `sqlite_compact_process_kill` | the four GC commands and help; the real `layerfs store compact` process killed at the named failpoints (T-G65) |
 
 The full run is the unfiltered `layerfs-persistence`, `layerfs-store-service`
-and `layerfs-store` suites, plus every `store_*.rs` target found under
-`api/crates/layerfs-api/tests/`. Other API targets (machines, sandboxes,
-Docker) are not Store tests and are not run here.
+and `layerfs-store` suites, every `store_*.rs` target found under
+`api/crates/layerfs-api/tests/`, plus `calls_table`, `gc_calls`, `gc_trace`,
+`calls_scope`, `layerfs-cli`'s `gc` and `sqlite_compact_process_kill`. Other
+API targets (machines, sandboxes, Docker) are not Store tests and are not run
+here.
 
 ## What the harness sets
 
@@ -236,7 +239,7 @@ agent does not wait for it, and a green run is not verification of a change
 
 | Job | Trigger | Command | PostgreSQL |
 | --- | --- | --- | --- |
-| `store ext4 (--quick)` | push to `main` and pull requests touching `core/**`, `engine/**`, `control/**`, `api/crates/**` (not `layerfs-node`), `Cargo.*`, `.config/**`, `tools/ci/**`, `.cargo/**`; a markdown-only change does not run it | `tools/ci/test_store_ext4.sh --quick` | off |
+| `store ext4 (--quick)` | push to `main`; pull requests into any base, including `layerfs_v2_0_0` (the 2.0 release base), touching `core/**`, `engine/**`, `control/**`, `api/crates/**` (not `layerfs-node`), `Cargo.*`, `.config/**`, `tools/ci/**`, `.cargo/**`; a markdown-only change does not run it | `tools/ci/test_store_ext4.sh --quick` | off |
 | `store ext4 (--full, PostgreSQL 17)` | `schedule` (04:47 UTC) and manual dispatch | `tools/ci/test_store_ext4.sh --full` | a `postgres:17` service container |
 
 Both jobs set `LAYERFS_TEST_TMPDIR=/mnt/layerfs-store-tests`. On the

@@ -43,9 +43,7 @@ fn unused(home: &Path, name: &str) -> Result<(), SdkRefusal> {
 }
 
 fn related() -> Related {
-    Related {
-        store_idle: unused,
-    }
+    Related { store_idle: unused }
 }
 
 /// The downloaded Store, staged as `backup.restore` leaves it before the

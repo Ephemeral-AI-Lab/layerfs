@@ -1636,10 +1636,7 @@ fn export_omits_a_path_hidden_by_remove_file() {
         |service| {
             let call = layerfs_bridge::control::SdkCall {
                 method: "project.remove_file".to_owned(),
-                args: SdkValue::map([
-                    ("project", t("app")),
-                    ("path", t("/a.txt")),
-                ]),
+                args: SdkValue::map([("project", t("app")), ("path", t("/a.txt"))]),
             };
             layerfs_store_service::methods::call(service, &call)
         },

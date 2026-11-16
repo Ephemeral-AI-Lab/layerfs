@@ -82,8 +82,12 @@ fn a_marker_under_a_live_mount_is_refused_and_materializes_after_it_closes() {
     // path still has to materialize a marker written before the Workspace
     // binds, which the second Workspace below commits through.
     let fixture = Fixture::new("t55-workspace", |source| {
-        fs::write(source.join("a"), "a
-").unwrap();
+        fs::write(
+            source.join("a"),
+            "a
+",
+        )
+        .unwrap();
         1
     });
     fixture.fork("work");
@@ -127,16 +131,30 @@ fn a_workspace_commit_keeps_a_re_creation_above_the_marker() {
     // The Workspace then binds below the frontier, materializes the whiteout,
     // and writes the path again above it: the re-creation stays visible.
     let fixture = Fixture::new("t55-workspace-recreate", |source| {
-        fs::write(source.join("a"), "a
-").unwrap();
+        fs::write(
+            source.join("a"),
+            "a
+",
+        )
+        .unwrap();
         1
     });
     fixture.fork("work");
     remove(&fixture, "/a");
-    fixture.workspace_commit("work", &[Change::Create("/a", b"again
-")], 32, || {});
-    assert_eq!(visible(&fixture, "work", "/a"), "again
-");
+    fixture.workspace_commit(
+        "work",
+        &[Change::Create(
+            "/a", b"again
+",
+        )],
+        32,
+        || {},
+    );
+    assert_eq!(
+        visible(&fixture, "work", "/a"),
+        "again
+"
+    );
     fixture.cleanup();
 }
 

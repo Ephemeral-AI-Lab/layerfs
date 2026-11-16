@@ -27,12 +27,12 @@ pub mod open_args;
 #[doc(hidden)]
 pub mod place;
 pub mod postgresql;
-pub mod report;
 #[doc(hidden)]
 pub mod project;
 #[doc(hidden)]
 pub mod record;
 mod related;
+pub mod report;
 #[doc(hidden)]
 pub mod resolve;
 #[doc(hidden)]

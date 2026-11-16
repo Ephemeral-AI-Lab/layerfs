@@ -66,10 +66,7 @@ impl Session {
     /// `.layerfs-allocation-*` sibling; no automatic retry or deletion follows.
     pub(crate) fn seal(self) -> Result<SealedStore, PersistenceError> {
         let writer = {
-            let mut state = self
-                .state
-                .lock()
-                .map_err(|_| PersistenceError::Uncertain)?;
+            let mut state = self.state.lock().map_err(|_| PersistenceError::Uncertain)?;
             state.writer_hold.take()
         };
         let writer = match writer {
@@ -148,9 +145,10 @@ impl Session {
         let released = super::seal_allocation::release(&self.path, identity)?;
         #[cfg(not(target_os = "macos"))]
         let released = 0u64;
-        let metadata = std::fs::metadata(&self.path).map_err(|error| PersistenceError::Refused {
-            status: error.to_string(),
-        })?;
+        let metadata =
+            std::fs::metadata(&self.path).map_err(|error| PersistenceError::Refused {
+                status: error.to_string(),
+            })?;
         let modified = metadata
             .modified()
             .map_err(|error| PersistenceError::Refused {

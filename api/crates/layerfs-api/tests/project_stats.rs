@@ -203,3 +203,51 @@ fn budget_exhaustion_returns_partial_counts_with_a_reason() {
     std::fs::remove_dir_all(home).unwrap();
     std::fs::remove_dir_all(source).unwrap();
 }
+
+#[test]
+fn hidden_paths_are_not_counted() {
+    let home = folder("hidden-home");
+    call(&home, "store.create", &[("name", t("trees"))]);
+    let source = folder("hidden-source");
+    std::fs::write(source.join("keep"), "aa").unwrap();
+    std::fs::write(source.join("hide"), "bbb").unwrap();
+    std::fs::create_dir(source.join("sub")).unwrap();
+    std::fs::write(source.join("sub/inside"), "cccc").unwrap();
+    call(
+        &home,
+        "project.init",
+        &[
+            ("project", t("trees/p")),
+            ("folder", t(source.to_str().unwrap())),
+        ],
+    );
+    let before = call(&home, "project.stats", &[("project", t("trees/p"))]);
+    assert_eq!(before.get_int("files"), Some(3), "{before:?}");
+    assert_eq!(before.get_int("directories"), Some(1), "{before:?}");
+    let logical = before.get_int("logical").unwrap();
+    call(
+        &home,
+        "project.remove_file",
+        &[("project", t("trees/p")), ("path", t("/hide"))],
+    );
+    let after = call(&home, "project.stats", &[("project", t("trees/p"))]);
+    assert_eq!(after.get_int("files"), Some(2), "{after:?}");
+    assert_eq!(after.get_int("directories"), Some(1), "{after:?}");
+    assert_eq!(
+        after.get_int("logical"),
+        Some(logical),
+        "the pinned publication's logical size is unchanged"
+    );
+    // A removed directory hides its whole subtree.
+    call(
+        &home,
+        "project.remove_file",
+        &[("project", t("trees/p")), ("path", t("/sub"))],
+    );
+    let nested = call(&home, "project.stats", &[("project", t("trees/p"))]);
+    assert_eq!(nested.get_int("files"), Some(1), "{nested:?}");
+    assert_eq!(nested.get_int("directories"), Some(0), "{nested:?}");
+    layerfs_api::close_idle(std::time::Duration::ZERO);
+    std::fs::remove_dir_all(home).unwrap();
+    std::fs::remove_dir_all(source).unwrap();
+}

@@ -348,10 +348,7 @@ fn mark_and_finish(
     mut deleted_ms: i64,
     finish: Finish<'_>,
 ) -> Outcome {
-    let Finish {
-        effects,
-        admission,
-    } = finish;
+    let Finish { effects, admission } = finish;
     effects.prepare()?;
     let mut current = match intent {
         Some(intent) => intent,

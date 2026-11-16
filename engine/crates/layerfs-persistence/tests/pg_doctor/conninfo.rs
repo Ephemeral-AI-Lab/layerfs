@@ -203,7 +203,11 @@ mod tests {
             "host=h port=1 sslmode=disable options='-c role=r'"
         );
         assert_eq!(
-            with_host("host=127.0.0.1 port=5432 sslmode=disable", "127.0.0.1", 9000),
+            with_host(
+                "host=127.0.0.1 port=5432 sslmode=disable",
+                "127.0.0.1",
+                9000
+            ),
             "host=127.0.0.1 port=9000 sslmode=disable"
         );
         assert_eq!(
