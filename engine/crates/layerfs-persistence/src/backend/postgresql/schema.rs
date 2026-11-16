@@ -559,6 +559,8 @@ pub(crate) struct Checked {
     pub(crate) binding: Vec<u8>,
     pub(crate) policy: StoragePolicy,
     pub(crate) server_version: String,
+    /// The Store's `store_policy.trace_salt`, the keyed trace-hash salt.
+    pub(crate) trace_salt: [u8; 32],
 }
 
 /// The `history_meta` columns both checks read, then the policy row and the
@@ -569,7 +571,7 @@ fn meta_columns(s: &str) -> String {
         "encode(h.catalog_id,'hex'),h.catalog_incarnation,encode(h.binding_key,'hex'),\
          h.identity_format,h.schema_version,p.format_profile,p.small_file_threshold_bytes,\
          p.whole_file_delta_max_depth,p.chunk_delta_max_depth,p.metadata_delta_max_depth,\
-         p.schema_version,current_setting('server_version') \
+         p.schema_version,current_setting('server_version'),encode(p.trace_salt,'hex') \
          FROM {s}history_meta h, {s}store_policy p WHERE h.id=1 AND p.id=1"
     )
 }
@@ -667,12 +669,17 @@ pub(crate) fn check(
         .with_metadata_depth(byte(9)?)
         .validated()
         .map_err(|_| PersistenceError::Malformed)?;
+    let trace_salt: [u8; 32] = unhex(text(&row, at + 12)?)?
+        .as_slice()
+        .try_into()
+        .map_err(|_| PersistenceError::Malformed)?;
     Ok(Checked {
         incarnation: incarnation as u64,
         acquisition,
         binding: recorded,
         policy,
         server_version: text(&row, at + 11)?.to_owned(),
+        trace_salt,
     })
 }
 

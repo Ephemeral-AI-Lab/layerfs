@@ -1,8 +1,9 @@
 //! `project.delete`'s home path against a real local Store (T4.6): the
-//! control layer admits the project scope through `gc_register`/`gc_release`
-//! before its sidecar and marker, so a live mount refuses with
-//! `MountsActive` (its holders), a live operation with `Busy`, and a refusal
-//! leaves no sidecar, no marker and no leaked admission intent.
+//! control layer writes its sidecar naming the admission, then admits the
+//! project scope through `gc_register`/`gc_release`, so a live mount refuses
+//! with `MountsActive` (its holders) and a live operation with `Busy`; a
+//! refusal leaves a pending sidecar, no marker and no leaked admission
+//! intent.
 use layerfs_bridge::control::SdkValue;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::{HistoryName, LayerStackId, NamedSnapshot};
@@ -166,7 +167,7 @@ fn release(open: &OpenArgs, op: [u8; 16]) {
 }
 
 #[test]
-fn a_live_mount_refuses_the_delete_before_the_sidecar_and_leaves_no_intent() {
+fn a_live_mount_refuses_the_delete_after_the_sidecar_and_leaves_no_intent() {
     let Some((home, open, stack)) = shop("mount") else {
         return;
     };
@@ -181,8 +182,13 @@ fn a_live_mount_refuses_the_delete_before_the_sidecar_and_leaves_no_intent() {
     assert_eq!(holders[0].get_text("kind"), Some("mount"));
     assert_eq!(holders[0].get_text("sandbox"), Some("sandbox-9"));
 
-    // no sidecar pending, no marker and no leaked admission intent
-    assert_eq!(Intent::read(&home, "shop", "app").unwrap(), None);
+    // A pending sidecar names the identity, but no marker and no leaked
+    // admission intent.
+    let pending = Intent::read(&home, "shop", "app")
+        .unwrap()
+        .expect("the pending sidecar precedes the admission");
+    assert_eq!(pending.state, layerfs_store::project::delete::IntentState::Pending);
+    assert!(pending.op.is_some());
     assert!(paths::project_dir(&home, "shop", "app").is_dir());
     assert!(
         intents(&open, stack).is_empty(),
@@ -199,11 +205,32 @@ fn a_live_mount_refuses_the_delete_before_the_sidecar_and_leaves_no_intent() {
     })
     .unwrap();
 
-    // the mount goes and the same home path succeeds, releasing its admission
+    // The mount goes and the same home path retries the pending sidecar: it
+    // writes the marker and settles, keeping the entry for the next call.
     release(&open, [9; 16]);
     let outcome = remove(&home).unwrap();
     assert_eq!(outcome.get_text("kind"), Some("Removed"));
     assert_eq!(outcome.get_text("project"), Some("shop/app"));
+    assert!(
+        !outcome.get_bool("home_entry_removed"),
+        "a pending retry settles without finishing the entry"
+    );
+    assert!(paths::project_dir(&home, "shop", "app").is_dir());
+    let settled = Intent::read(&home, "shop", "app")
+        .unwrap()
+        .expect("the sidecar is marked");
+    assert_eq!(
+        settled.state,
+        layerfs_store::project::delete::IntentState::Marked
+    );
+    assert!(
+        intents(&open, stack).is_empty(),
+        "the admission was released"
+    );
+
+    // The marker is confirmed: the next call removes the entry and unlinks
+    // the sidecar.
+    let outcome = remove(&home).unwrap();
     assert!(outcome.get_bool("home_entry_removed"));
     assert!(!paths::project_dir(&home, "shop", "app").exists());
     assert_eq!(Intent::read(&home, "shop", "app").unwrap(), None);
@@ -215,7 +242,7 @@ fn a_live_mount_refuses_the_delete_before_the_sidecar_and_leaves_no_intent() {
 }
 
 #[test]
-fn a_live_operation_at_the_project_scope_is_busy_and_writes_no_sidecar() {
+fn a_live_operation_at_the_project_scope_is_busy_and_keeps_the_pending_sidecar() {
     let Some((home, open, stack)) = shop("busy") else {
         return;
     };
@@ -235,12 +262,26 @@ fn a_live_operation_at_the_project_scope_is_busy_and_writes_no_sidecar() {
 
     let refusal = remove(&home).expect_err("another removal holds the project");
     assert_eq!(refusal.code, "Busy", "{refusal:?}");
-    assert_eq!(Intent::read(&home, "shop", "app").unwrap(), None);
+    let pending = Intent::read(&home, "shop", "app")
+        .unwrap()
+        .expect("the pending sidecar stays");
+    assert_eq!(pending.state, layerfs_store::project::delete::IntentState::Pending);
+    assert!(pending.op.is_some());
     assert_eq!(intents(&open, stack).len(), 1, "only the test's own holder");
     assert_eq!(intents(&open, stack)[0].op_id, [7; 16]);
 
-    // the operation ends: the delete proceeds and releases its own admission
+    // The operation ends; the pending retry redos the marker, keeps the
+    // entry and releases its own admission.
     release(&open, [7; 16]);
+    let outcome = remove(&home).unwrap();
+    assert!(!outcome.get_bool("home_entry_removed"));
+    assert!(paths::project_dir(&home, "shop", "app").is_dir());
+    assert_eq!(
+        Intent::read(&home, "shop", "app").unwrap().unwrap().state,
+        layerfs_store::project::delete::IntentState::Marked
+    );
+    assert!(intents(&open, stack).is_empty());
+    // The marker is confirmed: the next call finishes the entry.
     assert!(remove(&home).unwrap().get_bool("home_entry_removed"));
     assert_eq!(Intent::read(&home, "shop", "app").unwrap(), None);
     assert!(intents(&open, stack).is_empty());

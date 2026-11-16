@@ -24,7 +24,9 @@ pub fn op_id() -> [u8; 16] {
     body
 }
 
-/// A `branch.remove` intent at Branch scope.
+/// A `branch.remove` intent at Branch scope, in its marker phase. A
+/// concurrent remove that meets this live intent reports `Busy` with
+/// `phase: "retire"` (spec §4.4, contract §2).
 pub fn branch_removal(stack: &LayerStackRecord, branch: &BranchRecord) -> GcIntent {
     let op = op_id();
     owned(
@@ -38,6 +40,7 @@ pub fn branch_removal(stack: &LayerStackRecord, branch: &BranchRecord) -> GcInte
         .named(Some(stack.name.as_str()), Some(branch.name.as_str())),
         op,
     )
+    .with_phase(Some("retire"))
 }
 
 /// A `project.delete` or `project.remove_file` intent at project scope.

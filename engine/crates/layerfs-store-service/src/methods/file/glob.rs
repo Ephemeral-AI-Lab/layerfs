@@ -11,7 +11,7 @@ pub fn glob(service: &StoreService, args: &SdkValue) -> Answer {
     let (stack, reader, snap) = snapshot_full(service, args)?;
     let pattern = text(args, "pattern")?;
     let path = optional_path(args)?;
-    let seen = visibility::Visibility::load(&service.store, &stack, &snap);
+    let seen = visibility::Visibility::load(&service.store, &stack, &snap)?;
     if snapshot::entry(&reader, &snap.tree, &path)?.is_some() {
         if let Some(refusal) = visibility::refuse(&path, &seen) {
             return Err(refusal);

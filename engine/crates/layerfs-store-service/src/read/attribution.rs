@@ -327,8 +327,8 @@ pub fn compare_bounded(
     let (Some(a), Some(b)) = (snapshot::text(reader, a)?, snapshot::text(reader, b)?) else {
         return Ok(unsupported("binary"));
     };
-    let left_seen = Visibility::for_snap(store, left);
-    let right_seen = Visibility::for_snap(store, right);
+    let left_seen = Visibility::for_snap(store, left)?;
+    let right_seen = Visibility::for_snap(store, right)?;
     Ok(align_bounded(
         store,
         reader,

@@ -61,7 +61,7 @@ pub fn list(
     };
     // §4.3: a hidden anchor refuses; a hidden older version ends the walk
     // instead of being skipped over.
-    let visibility = Visibility::for_stack(store, stack, Visibility::node_serial(store, start));
+    let visibility = Visibility::for_stack(store, stack, Visibility::node_serial(store, start)?)?;
     if entry(reader, args::root(store, start)?, path)?.is_some() {
         if let Some(frontier) = visibility.hidden_at(path, visibility.serial()) {
             return Err(Visibility::refusal(path, frontier));
@@ -135,7 +135,7 @@ pub fn list(
         // at the first one rather than listing it or walking past it.
         if now.is_some()
             && visibility
-                .hidden_at(path, Visibility::node_serial(store, node))
+                .hidden_at(path, Visibility::node_serial(store, node)?)
                 .is_some()
         {
             break;
@@ -146,7 +146,7 @@ pub fn list(
                 let found = entry(reader, args::root(store, p)?, path)?;
                 if found.is_some()
                     && visibility
-                        .hidden_at(path, Visibility::node_serial(store, p))
+                        .hidden_at(path, Visibility::node_serial(store, p)?)
                         .is_some()
                 {
                     hidden_before = true;

@@ -206,6 +206,7 @@ impl PostgresHandles {
         let catalog_id =
             CatalogId::derive(&checked.binding).map_err(|_| PersistenceError::Malformed)?;
         let digest_floor = checked.policy.small_file_threshold_bytes();
+        let trace_salt = checked.trace_salt;
         let _ = session.policy.set(checked.policy);
         let _ = session.server_version.set(checked.server_version);
         let (incarnation, tables) = (checked.incarnation, checked.acquisition);
@@ -227,6 +228,7 @@ impl PostgresHandles {
                     incarnation,
                     cursor_key,
                     digest_floor,
+                    trace_salt,
                 },
             },
         ))

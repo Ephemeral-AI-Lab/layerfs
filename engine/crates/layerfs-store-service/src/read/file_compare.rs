@@ -58,7 +58,7 @@ fn side(
     // never refuses, even when `allowMissing` is false.
     let raw = snapshot::entry(reader, &snap.tree, &selector.path)?;
     let hidden = if raw.is_some() {
-        Visibility::for_snap(store, &snap).hidden(&selector.path)
+        Visibility::for_snap(store, &snap)?.hidden(&selector.path)
     } else {
         None
     };
@@ -169,8 +169,8 @@ pub fn diff(
     let left_text = left.text.as_deref().unwrap_or("");
     let right_text = right.text.as_deref().unwrap_or("");
     let mut aligned = if reason.is_none() && options.extended {
-        let left_seen = Visibility::for_snap(store, &left.snap);
-        let right_seen = Visibility::for_snap(store, &right.snap);
+        let left_seen = Visibility::for_snap(store, &left.snap)?;
+        let right_seen = Visibility::for_snap(store, &right.snap)?;
         attribution::align(
             store,
             &reader,

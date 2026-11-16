@@ -275,7 +275,7 @@ fn run(
         ),
         // retires one project in the Store under this worker root and
         // removes the worker own entry (2.0, T4.5b): `{ store, stack_id,
-        // deleted_ms?, project?, op_id?, store_record? }`
+        // deleted_ms?, project?, op_id?, pending_retry?, store_record? }`
         "project.delete" => {
             let root = home_of(Some(root))?;
             delete_project(&root, &DeleteFrame::decode(&args)?)

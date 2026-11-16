@@ -8,7 +8,7 @@ use super::{layerstack, params};
 use crate::backend::records::Record as Row;
 use layerfs_history::error::{HistoryError, HistoryResult, Missing};
 use layerfs_history::identity::LayerStackId;
-use layerfs_history::path::path_key;
+use layerfs_history::path::trace_key;
 use layerfs_history::records::{
     PathRemovalKind, PathRemovalOutcome, PathRemovalRecord, PathRemovalRequest,
 };
@@ -30,18 +30,21 @@ fn marker(row: &Row) -> HistoryResult<PathRemovalRecord> {
     })
 }
 
-/// Inserts or advances one marker, without the UpToDate decision.
+/// Inserts or advances one marker, without the UpToDate decision. The key is
+/// the Store-salted trace hash of the stack and path (§4.3), never a
+/// Store-independent hash of the path.
 pub(crate) fn mark(
     tx: &Transaction<'_>,
     stack: LayerStackId,
     path: &[u8],
+    trace_salt: &[u8; 32],
     frontier_serial: u64,
     removed_ms: i64,
 ) -> HistoryResult<()> {
     if path.is_empty() {
         return Err(HistoryError::InvalidInput("removed path"));
     }
-    let key = path_key(path);
+    let key = trace_key(trace_salt, stack, path);
     let frontier =
         i64::try_from(frontier_serial).map_err(|_| HistoryError::Capacity("path frontier"))?;
     tx.execute(
@@ -55,11 +58,12 @@ pub(crate) fn mark(
 pub(crate) fn remove_path(
     tx: &Transaction<'_>,
     request: &PathRemovalRequest,
+    trace_salt: &[u8; 32],
 ) -> HistoryResult<PathRemovalOutcome> {
     if layerstack::layer_stack(tx, request.stack)?.is_none() {
         return Err(HistoryError::Missing(Missing::LayerStack));
     }
-    let key = path_key(&request.path);
+    let key = trace_key(trace_salt, request.stack, &request.path);
     let stored = one(
         tx,
         MARKER,
@@ -92,6 +96,7 @@ pub(crate) fn remove_path(
         tx,
         request.stack,
         &request.path,
+        trace_salt,
         frontier,
         request.removed_ms,
     )?;

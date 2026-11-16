@@ -223,7 +223,9 @@ impl ExportFrame {
 /// before the call and resends it on a retry; `project` and `store_record`
 /// are the caller context for the worker own entry and its Store open.
 /// `op_id` is the admission the caller already took, so the marker reuses it
-/// instead of scanning past a second row.
+/// instead of scanning past a second row. `pending_retry` says the caller
+/// retries an intent written before that admission, so the worker keeps its
+/// own entry for the call that finishes the delete.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DeleteFrame {
     /// The Store.
@@ -238,6 +240,9 @@ pub struct DeleteFrame {
     /// The admission operation identity the marker reuses, when the caller
     /// took one.
     pub op_id: Option<[u8; 16]>,
+    /// True when the caller retries a sidecar written before its admission
+    /// (no marker confirmed yet): the worker keeps its own entry.
+    pub pending_retry: Option<bool>,
     /// The Store record.
     pub store_record: Option<SdkValue>,
 }
@@ -271,7 +276,7 @@ pub struct DeleteReleaseFrame {
 }
 
 /// `project.delete` worker reply: `{kind: "Removed", project, stack_id,
-/// deleted_ms}`.
+/// deleted_ms, retired?}`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DeleteReply {
     /// The project the worker own entry named (or the Store name).
@@ -280,6 +285,10 @@ pub struct DeleteReply {
     pub stack: LayerStackId,
     /// The stored `deleted_ms` (a retry reuses it).
     pub deleted_ms: i64,
+    /// Whether the marker already existed (`Retired`); a caller retrying a
+    /// pending sidecar then finishes its entry. `None` from an older worker
+    /// is treated as a freshly written marker.
+    pub retired: Option<bool>,
 }
 
 impl DeleteFrame {
@@ -297,6 +306,10 @@ impl DeleteFrame {
                 .map(|p| ("project", SdkValue::text(p))),
         );
         fields.extend(self.op_id.map(|op| ("op_id", SdkValue::text(hex(&op)))));
+        fields.extend(
+            self.pending_retry
+                .map(|retry| ("pending_retry", SdkValue::Bool(retry))),
+        );
         fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
         map(fields)
     }
@@ -313,6 +326,10 @@ impl DeleteFrame {
             stack,
             deleted_ms: frame.get_int("deleted_ms"),
             op_id: frame.get_text("op_id").map(op_id).transpose()?,
+            pending_retry: frame.get("pending_retry").and_then(|value| match value {
+                SdkValue::Bool(retry) => Some(*retry),
+                _ => None,
+            }),
             store_record: frame.get("store_record").cloned(),
         })
     }
@@ -373,12 +390,17 @@ impl DeleteReleaseFrame {
 impl DeleteReply {
     /// The reply a worker sends.
     pub fn encode(&self) -> SdkValue {
-        map(vec![
+        let mut fields = vec![
             ("kind", SdkValue::text("Removed")),
             ("project", SdkValue::text(&self.project)),
             ("stack_id", SdkValue::text(hex(&self.stack.to_bytes()))),
             ("deleted_ms", SdkValue::Int(self.deleted_ms)),
-        ])
+        ];
+        fields.extend(
+            self.retired
+                .map(|retired| ("retired", SdkValue::Bool(retired))),
+        );
+        map(fields)
     }
 
     /// The reply fields; `kind` must be `Removed`.
@@ -401,6 +423,10 @@ impl DeleteReply {
             project,
             stack,
             deleted_ms,
+            retired: frame.get("retired").and_then(|value| match value {
+                SdkValue::Bool(retired) => Some(*retired),
+                _ => None,
+            }),
         })
     }
 }

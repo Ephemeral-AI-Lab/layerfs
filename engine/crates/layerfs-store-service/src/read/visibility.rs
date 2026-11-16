@@ -8,7 +8,8 @@
 //! top-level `removed_count` over the queried subtree, filtered before paging.
 
 use super::{snapshot, walk};
-use crate::store::{Store, StorePorts};
+use crate::history::lookup;
+use crate::store::{PortError, Store, StorePorts};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::merge::Rule;
 use layerfs_content::object::inode_leaf::InodeKind;
@@ -19,6 +20,15 @@ use layerfs_history::{
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+/// True for a provider whose catalog bodies return `Unsupported`; every
+/// other marker or serial read failure is a refusal, never "no markers".
+fn unsupported(error: &Arc<PortError>) -> bool {
+    matches!(
+        error.as_ref(),
+        PortError::History(HistoryError::Unsupported(_))
+    )
+}
+
 /// The markers and node position one snapshot's reads filter against.
 pub struct Visibility {
     serial: u64,
@@ -27,56 +37,71 @@ pub struct Visibility {
 
 impl Visibility {
     /// Loads the snapshot's serial and its project's markers. A provider that
-    /// does not implement the marker reads (a test double) sees none.
-    pub fn load(store: &Arc<Store>, stack: &LayerStackRecord, snap: &snapshot::Snap) -> Self {
+    /// does not implement the marker reads (a test double) sees none; any
+    /// other failure refuses rather than returning the removed bytes.
+    pub fn load(
+        store: &Arc<Store>,
+        stack: &LayerStackRecord,
+        snap: &snapshot::Snap,
+    ) -> Result<Self, SdkRefusal> {
         Self::for_stack(store, stack.id, snap.serial)
     }
 
     /// `load` when only the resolved snapshot is at hand.
-    pub fn for_snap(store: &Arc<Store>, snap: &snapshot::Snap) -> Self {
-        match Self::stack_of(store, snap.node) {
+    pub fn for_snap(store: &Arc<Store>, snap: &snapshot::Snap) -> Result<Self, SdkRefusal> {
+        match Self::stack_of(store, snap.node)? {
             Some(stack) => Self::for_stack(store, stack, snap.serial),
-            None => Self {
+            None => Ok(Self {
                 serial: snap.serial,
                 markers: Vec::new(),
-            },
+            }),
         }
     }
 
     /// `for_snap` for a node that has not been resolved into a snapshot.
-    pub fn for_node(store: &Arc<Store>, node: NodeId) -> Self {
-        match Self::stack_of(store, node) {
-            Some(stack) => Self::for_stack(store, stack, Self::node_serial(store, node)),
-            None => Self {
+    pub fn for_node(store: &Arc<Store>, node: NodeId) -> Result<Self, SdkRefusal> {
+        match Self::stack_of(store, node)? {
+            Some(stack) => Self::for_stack(store, stack, Self::node_serial(store, node)?),
+            None => Ok(Self {
                 serial: 0,
                 markers: Vec::new(),
-            },
+            }),
         }
     }
 
-    /// The stack a saved node belongs to.
-    fn stack_of(store: &Arc<Store>, node: NodeId) -> Option<LayerStackId> {
-        use crate::history::lookup;
+    /// The stack a saved node belongs to; a node that cannot be read refuses.
+    fn stack_of(store: &Arc<Store>, node: NodeId) -> Result<Option<LayerStackId>, SdkRefusal> {
         match node {
-            NodeId::Commit(id) => lookup::commit(store, id).ok().map(|record| record.stack),
-            NodeId::Layer(id) => lookup::layer(store, id).ok().map(|record| record.stack),
+            NodeId::Commit(id) => Ok(Some(lookup::commit(store, id)?.stack)),
+            NodeId::Layer(id) => Ok(Some(lookup::layer(store, id)?.stack)),
         }
     }
 
     /// `load` for a stack id and an explicit `history_serial`, for reads that
-    /// walk several nodes and therefore ask `hidden_at` per node.
-    pub fn for_stack(store: &Arc<Store>, stack: LayerStackId, serial: u64) -> Self {
-        let markers = store
-            .published(|history| history.path_removals(stack))
-            .unwrap_or_default();
-        Self { serial, markers }
+    /// walk several nodes and therefore ask `hidden_at` per node. Only a
+    /// provider without the marker reads sees none (this is the fail-closed
+    /// rule §4.3 needs: a read error must never show a removed path).
+    pub fn for_stack(
+        store: &Arc<Store>,
+        stack: LayerStackId,
+        serial: u64,
+    ) -> Result<Self, SdkRefusal> {
+        let markers = match store.published(|history| history.path_removals(stack)) {
+            Ok(markers) => markers,
+            Err(error) if unsupported(&error) => Vec::new(),
+            Err(error) => return Err(lookup::published(error)),
+        };
+        Ok(Self { serial, markers })
     }
 
-    /// The node's `history_serial`, or 0 for a provider that keeps none.
-    pub fn node_serial(store: &Arc<Store>, node: NodeId) -> u64 {
+    /// The node's `history_serial`, or 0 for a provider that keeps none. A
+    /// read failure refuses instead of silently treating the node as serial 0.
+    pub fn node_serial(store: &Arc<Store>, node: NodeId) -> Result<u64, SdkRefusal> {
         match store.published(|history| history.node_history_serial(node)) {
-            Ok(Some(serial)) => serial,
-            _ => 0,
+            Ok(Some(serial)) => Ok(serial),
+            Ok(None) => Ok(0),
+            Err(error) if unsupported(&error) => Ok(0),
+            Err(error) => Err(lookup::published(error)),
         }
     }
 
@@ -273,4 +298,22 @@ pub fn settle(mut value: SdkValue, visibility: &Visibility, removed: i64) -> Sdk
         fields.push(("removed_count".into(), SdkValue::Int(removed)));
     }
     value
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_unsupported_marker_reads_mean_no_markers() {
+        // A provider without the marker bodies sees none; every other read
+        // failure is a refusal, never an empty marker set (fail closed).
+        assert!(unsupported(&Arc::new(PortError::History(
+            HistoryError::Unsupported("path_removals")
+        ))));
+        assert!(!unsupported(&Arc::new(PortError::History(
+            HistoryError::Busy
+        ))));
+        assert!(!unsupported(&Arc::new(PortError::Poisoned)));
+    }
 }

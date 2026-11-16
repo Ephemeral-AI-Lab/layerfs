@@ -17,23 +17,32 @@
 //! that is there now.
 //!
 //! The worker op is `project.delete`; its frame is
-//! `{store, stack_id, deleted_ms?, project?, op_id?, store_record?}`. The two
-//! optional context fields are the ones the retired `project.remove` call sent: the
-//! worker opens the Store under its own root with the caller's `store_record`,
-//! and the project name lets its reply and its own home entry name the
-//! project. The worker saves the legacy own-project identity, writes the
-//! marker, removes its own entry and replies `{kind, project, stack_id,
-//! deleted_ms}`; the caller removes its own entry and echoes
-//! `home_entry_removed`.
+//! `{store, stack_id, deleted_ms?, project?, op_id?, pending_retry?,
+//! store_record?}`. The two optional context fields are the ones the retired
+//! `project.remove` call sent: the worker opens the Store under its own root
+//! with the caller's `store_record`, and the project name lets its reply and
+//! its own home entry name the project. The worker saves the legacy
+//! own-project identity, writes the marker, removes its own entry and replies
+//! `{kind, project, stack_id, deleted_ms, retired?}`; the caller removes its
+//! own entry and echoes `home_entry_removed`.
 //!
-//! Before any of that, the home path admits the project scope (T4.6,
-//! `project.delete.admit` on the worker route): the same `gc_register` the
-//! Store-side removals rely on, taken before the identity save, the sidecar
-//! and the marker. A live mount refuses `MountsActive` with its holders and a
-//! live operation `Busy`, with no sidecar written and no marker. The marker
-//! reuses the admission's operation identity, and the caller releases it on
-//! every exit path (`project.delete.release`), so a refused or failed call
-//! leaves no admission row behind.
+//! A caller retrying a sidecar it wrote *before* its admission (no marker
+//! confirmed yet) that finds the row still live and no marker only settles:
+//! it redoes the marker with the sidecar's `deleted_ms`, marks the sidecar
+//! and keeps the caller and worker entries. The next call finds the marker
+//! confirmed and finishes the entries. The normal delete and a retry whose
+//! marker was already there remove the entries in the same call.
+//!
+//! The sidecar is written with its admission identity *before* the home path
+//! admits the project scope (T4.6, `project.delete.admit` on the worker
+//! route): a crash between the registered row and its reply then leaves the
+//! identity on disk, so the retry re-registers the same row and settles it.
+//! The admission is the same `gc_register` the Store-side removals rely on. A
+//! live mount refuses `MountsActive` with its holders and a live operation
+//! `Busy`; the pending sidecar stays for the retry and no marker is written.
+//! The marker reuses the admission's operation identity, and the caller
+//! releases it on every exit path (`project.delete.release`), so a refused or
+//! failed call leaves no admission row behind.
 use crate::open_args::OpenArgs;
 use crate::place::{self, Executor, Worker};
 use crate::project::frame::{DeleteAdmitFrame, DeleteFrame, DeleteReleaseFrame, DeleteReply};
@@ -276,13 +285,13 @@ pub trait Effects {
     /// marker; idempotent on a retry.
     fn prepare(&mut self) -> Result<()>;
 
-    /// Takes the project-scope admission before the sidecar and the marker:
-    /// a live mount is `MountsActive` with its holders, a live operation
-    /// `Busy`, an uncertain owner `Unresolved`. A refusal registers nothing.
-    /// `reuse` is the identity the sidecar recorded for a retry; the same row
-    /// is re-registered under it, so a lost reply is settled, never met as a
-    /// second operation.
-    fn admit(&mut self, stack: LayerStackId, reuse: Option<[u8; 16]>) -> Result<Admission>;
+    /// Takes the project-scope admission under `op`, the identity the sidecar
+    /// recorded before this call: a live mount is `MountsActive` with its
+    /// holders, a live operation `Busy`, an uncertain owner `Unresolved`. A
+    /// refusal registers nothing under a new identity, and a retry
+    /// re-registers `op`'s own row instead of meeting it as another
+    /// operation.
+    fn admit(&mut self, stack: LayerStackId, op: [u8; 16]) -> Result<Admission>;
 
     /// Releases `admission` on every exit path: success, refusal and an
     /// unknown Store outcome. A provider without admission releases nothing.
@@ -290,7 +299,15 @@ pub trait Effects {
 
     /// Marks (or reclassifies) `admission`'s Stack, reusing the admission's
     /// operation identity. A retry passes the intent's `deleted_ms`.
-    fn mark(&mut self, admission: Admission, deleted_ms: i64) -> Result<Deletion>;
+    /// `pending_retry` is true when the caller is retrying a sidecar written
+    /// before it admitted (no marker confirmed yet): the worker route then
+    /// keeps its own entry, as the caller keeps its home entry.
+    fn mark(
+        &mut self,
+        admission: Admission,
+        deleted_ms: i64,
+        pending_retry: bool,
+    ) -> Result<Deletion>;
 
     /// Removes the caller's home entry; `Ok(())` when nothing remains.
     fn remove_entry(&mut self, entry: &Path) -> Result<()>;
@@ -337,44 +354,38 @@ struct Finish<'a> {
     admission: Admission,
 }
 
-/// The mutating part of `delete_with` after the project scope is admitted:
-/// the identity save, the sidecar, the marker and the entry removal (spec §4).
+/// The mutating part of `delete_with` after the sidecar is durable: the marker
+/// and the entry removal (spec §4). The sidecar names the admission, so the
+/// retry that redoes this marker reuses the same operation identity.
 fn mark_and_finish(
     home: &Path,
     store: &str,
     project: &str,
-    stack: LayerStackId,
-    intent: Option<Intent>,
+    mut current: Intent,
     mut deleted_ms: i64,
+    pending_retry: bool,
     finish: Finish<'_>,
 ) -> Outcome {
-    let Finish { effects, admission } = finish;
-    effects.prepare()?;
-    let mut current = match intent {
-        Some(intent) => intent,
-        None => Intent {
-            store: store.to_owned(),
-            project: project.to_owned(),
-            stack,
-            deleted_ms,
-            attempt_ms: now_ms(),
-            state: IntentState::Pending,
-            op: None,
-        },
-    };
-    // the sidecar names the admission, so a retry reuses it
-    current.op = Some(admission.op);
-    if current.state == IntentState::Pending {
-        current.attempt_ms = now_ms();
-        Intent::write(home, &current)?;
-    }
-
-    let deletion = effects.mark(admission, deleted_ms)?;
+    let Finish {
+        effects,
+        admission,
+    } = finish;
+    let deletion = effects.mark(admission, deleted_ms, pending_retry)?;
     deleted_ms = deletion.deleted_ms(deleted_ms);
     current.deleted_ms = deleted_ms;
     current.state = IntentState::Marked;
     current.attempt_ms = now_ms();
     Intent::write(home, &current)?;
+
+    // A retry of a sidecar written before the admission, whose marker was
+    // just written over a live row and no marker existed yet, settles only:
+    // the marker is now confirmed and the sidecar is `marked`, so the next
+    // call finishes the entry. The home and worker entries stay for that
+    // call; the normal delete path and a retry whose marker was already
+    // there (§ `Retired`) remove the entry now.
+    if pending_retry && matches!(deletion, Deletion::Marked { .. }) {
+        return Ok(removed(store, project, deleted_ms, false));
+    }
 
     let home_entry_removed = effects
         .remove_entry(&paths::project_dir(home, store, project))
@@ -394,10 +405,10 @@ fn mark_and_finish(
 /// removed without a marker. The same function serves the local and worker
 /// routes, and a fake in tests.
 ///
-/// The project scope is admitted before the identity save, the sidecar and
-/// the marker: a live mount is `MountsActive` with its holders and a live
-/// operation `Busy`, reported with no sidecar written and no marker. The
-/// admission is released on every exit path.
+/// The identity save and then the sidecar, naming the admission, precede the
+/// project scope's admission and the marker: a live mount is `MountsActive`
+/// with its holders and a live operation `Busy`, reported with the pending
+/// sidecar kept and no marker. The admission is released on every exit path.
 pub fn delete_with(
     home: &Path,
     store: &str,
@@ -409,15 +420,25 @@ pub fn delete_with(
     let record_stack = record.as_ref().and_then(stack_of);
     let mut intent = Intent::read(home, store, project)?;
 
-    // A different Stack id for the same name is a project made again: the
-    // stale intent must not touch its entry, so it is discarded and this
-    // call starts over against the record that is there now.
-    if let (Some(stale), Some(current)) = (&intent, record_stack) {
+    // The Stack the name resolves to now: the caller's listing first, then
+    // the record. A different Stack id for the same name is a project made
+    // again: the stale intent must not touch its entry, so it is discarded
+    // and this call starts over against the Stack that is there now. The
+    // listing is checked too: a re-created project whose home record is
+    // missing or names no Stack must not be deleted by an older intent.
+    let current_stack = stack.or(record_stack);
+    if let (Some(stale), Some(current)) = (&intent, current_stack) {
         if stale.stack != current {
             Intent::discard(home, store, project)?;
             intent = None;
         }
     }
+
+    // A sidecar read in `pending` was written before an earlier admission: a
+    // retry of it redoes the marker but does not finish the entry.
+    let pending_retry = intent
+        .as_ref()
+        .is_some_and(|intent| intent.state == IntentState::Pending);
 
     let (stack, deleted_ms) = match &intent {
         Some(intent) => (intent.stack, intent.deleted_ms),
@@ -458,17 +479,34 @@ pub fn delete_with(
         }
     }
 
-    // Admission before the identity save, the sidecar and the marker. A
-    // refusal returns here, so neither the sidecar nor the marker is written.
-    // A retry re-registers the identity its sidecar recorded; a refusal then
-    // releases that identity, never adopting it as a live operation.
-    let reuse = intent.as_ref().and_then(|intent| intent.op);
-    let admission = match effects.admit(stack, reuse) {
+    // The identity save, then the sidecar with its operation identity, then
+    // the admission, then the marker. Writing the sidecar first means a crash
+    // between the registered row and its reply leaves the identity on disk
+    // for the retry; a refusal keeps the pending sidecar and writes no
+    // marker.
+    effects.prepare()?;
+    let mut current = match intent {
+        Some(intent) => intent,
+        None => Intent {
+            store: store.to_owned(),
+            project: project.to_owned(),
+            stack,
+            deleted_ms,
+            attempt_ms: now_ms(),
+            state: IntentState::Pending,
+            op: None,
+        },
+    };
+    let op = current.op.unwrap_or_else(store_admission::op_id);
+    current.op = Some(op);
+    if current.state == IntentState::Pending {
+        current.attempt_ms = now_ms();
+        Intent::write(home, &current)?;
+    }
+    let admission = match effects.admit(stack, op) {
         Ok(admission) => admission,
         Err(refusal) => {
-            if let Some(op) = reuse {
-                let _ = effects.release(Admission::new(stack, op));
-            }
+            let _ = effects.release(Admission::new(stack, op));
             return Err(refusal);
         }
     };
@@ -476,9 +514,9 @@ pub fn delete_with(
         home,
         store,
         project,
-        stack,
-        intent,
+        current,
         deleted_ms,
+        pending_retry,
         Finish {
             effects: &mut *effects,
             admission,
@@ -532,12 +570,8 @@ impl Effects for Local {
         identity::save_record(&self.home, &self.store, &id)
     }
 
-    fn admit(&mut self, stack: LayerStackId, reuse: Option<[u8; 16]>) -> Result<Admission> {
-        let intent = match reuse {
-            Some(op) => store_admission::project_removal_at(stack, op),
-            None => store_admission::project_removal_from_id(stack),
-        };
-        let op = intent.op_id;
+    fn admit(&mut self, stack: LayerStackId, op: [u8; 16]) -> Result<Admission> {
+        let intent = store_admission::project_removal_at(stack, op);
         service::with_service(&self.open, |service| {
             match service.store.history().gc_register(&intent) {
                 Ok(()) => Ok(Admission::new(stack, op)),
@@ -560,7 +594,12 @@ impl Effects for Local {
         )
     }
 
-    fn mark(&mut self, admission: Admission, deleted_ms: i64) -> Result<Deletion> {
+    fn mark(
+        &mut self,
+        admission: Admission,
+        deleted_ms: i64,
+        _pending_retry: bool,
+    ) -> Result<Deletion> {
         let intent = store_admission::project_removal_at(admission.stack, admission.op);
         service::with_service(&self.open, |service| {
             delete_stack_with(&service.store, admission.stack, deleted_ms, &intent)
@@ -586,8 +625,7 @@ impl Effects for Remote {
         Ok(())
     }
 
-    fn admit(&mut self, stack: LayerStackId, reuse: Option<[u8; 16]>) -> Result<Admission> {
-        let op = reuse.unwrap_or_else(store_admission::op_id);
+    fn admit(&mut self, stack: LayerStackId, op: [u8; 16]) -> Result<Admission> {
         let frame = DeleteAdmitFrame {
             store: StoreName::parse(&self.store)?,
             stack,
@@ -627,13 +665,19 @@ impl Effects for Remote {
         Ok(())
     }
 
-    fn mark(&mut self, admission: Admission, deleted_ms: i64) -> Result<Deletion> {
+    fn mark(
+        &mut self,
+        admission: Admission,
+        deleted_ms: i64,
+        pending_retry: bool,
+    ) -> Result<Deletion> {
         let frame = DeleteFrame {
             store: StoreName::parse(&self.store)?,
             project: Some(self.project.clone()),
             stack: admission.stack,
             deleted_ms: Some(deleted_ms),
             op_id: Some(admission.op),
+            pending_retry: Some(pending_retry),
             store_record: Some(self.store_record.clone()),
         };
         let answer = self
@@ -646,8 +690,14 @@ impl Effects for Remote {
                 "the worker answered for another LayerStack",
             ));
         }
-        Ok(Deletion::Marked {
-            deleted_ms: reply.deleted_ms,
+        Ok(if reply.retired == Some(true) {
+            Deletion::Retired {
+                deleted_ms: reply.deleted_ms,
+            }
+        } else {
+            Deletion::Marked {
+                deleted_ms: reply.deleted_ms,
+            }
         })
     }
 
@@ -909,13 +959,24 @@ pub fn delete_project(root: &Path, frame: &DeleteFrame) -> Outcome {
         delete_stack_with(&service.store, frame.stack, requested, &intent)
     })?;
     let deleted_ms = deletion.deleted_ms(requested);
-    let project = remove_worker_entry(root, store, frame.stack, frame.project.as_deref())?
-        .or_else(|| frame.project.clone())
-        .unwrap_or_else(|| store.to_owned());
+    let retired = matches!(deletion, Deletion::Retired { .. });
+    // A caller retrying a sidecar written before its admission, over a live
+    // row with no marker, settles only: it keeps its home entry, so the
+    // worker keeps its own copy for the call that finishes the delete.
+    let deferred = frame.pending_retry.unwrap_or(false)
+        && matches!(deletion, Deletion::Marked { .. });
+    let project = if deferred {
+        frame.project.clone().unwrap_or_else(|| store.to_owned())
+    } else {
+        remove_worker_entry(root, store, frame.stack, frame.project.as_deref())?
+            .or_else(|| frame.project.clone())
+            .unwrap_or_else(|| store.to_owned())
+    };
     Ok(DeleteReply {
         project,
         stack: frame.stack,
         deleted_ms,
+        retired: Some(retired),
     }
     .encode())
 }

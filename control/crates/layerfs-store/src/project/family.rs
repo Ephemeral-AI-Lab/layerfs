@@ -163,20 +163,28 @@ pub fn get(home: &Path, project: &ProjectRef) -> Outcome {
 
 /// `project.list(store?, { page_size, page_pos })`, by Store then name.
 pub fn list(home: &Path, request: &ProjectList) -> Outcome {
-    let stores = match &request.store {
+    let stores: Vec<(String, StoreRecord)> = match &request.store {
         Some(store) => {
-            if !paths::store_record(home, store).exists() {
-                return Err(refused("NotFound", format!("no Store named {store}")));
-            }
-            vec![store.to_string()]
+            // A named listing agrees with `project.get` and every other Store
+            // call: a Store the home does not record is `NoSuchStore` (spec
+            // §4.2), never the home-level `NotFound`.
+            let record = StoreRecord::read(home, store)?.ok_or_else(|| {
+                refused("NoSuchStore", format!("no Store named {store}"))
+            })?;
+            vec![(store.to_string(), record)]
         }
-        None => paths::names(&home.join("store")).map_err(failed)?,
+        None => {
+            let mut records = Vec::new();
+            for store in paths::names(&home.join("store")).map_err(failed)? {
+                if let Some(record) = StoreRecord::read(home, &store)? {
+                    records.push((store, record));
+                }
+            }
+            records
+        }
     };
     let mut items = Vec::new();
-    for store in stores {
-        let Some(record) = StoreRecord::read(home, &store)? else {
-            continue;
-        };
+    for (store, record) in stores {
         // The listing is the Store's own filtered one (spec §4.2), read
         // where its calls run (T4.5c): a home entry whose project is hidden
         // or absent is not listed. An all-Stores listing omits a Store it

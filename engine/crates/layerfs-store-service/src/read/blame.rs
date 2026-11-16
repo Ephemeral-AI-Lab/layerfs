@@ -226,7 +226,7 @@ pub fn blame(
                 match found {
                     Some(_)
                         if visibility
-                            .hidden_at(path, Visibility::node_serial(store, p))
+                            .hidden_at(path, Visibility::node_serial(store, p)?)
                             .is_some() =>
                     {
                         None

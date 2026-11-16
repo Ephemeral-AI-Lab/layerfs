@@ -16,6 +16,11 @@
 //! - [`BoundWorkspace::materialize_removals`] writes the whiteout into a
 //!   mounted Workspace's overlay, so its view hides the path and a one-shot
 //!   `write`/`rm`/`mv`/`cp` sees the same absence the committed tree has.
+//!
+//! A merge that cannot materialize a whiteout refuses `Removed` with
+//! `{paths: [{path, frontier_serial}]}` (§4.3): a marker that names no valid
+//! tree path, or a path the derivation left in place, is listed as a full
+//! element sorted by normalized path bytes instead of being left visible.
 
 use crate::store::{BoundWorkspace, CommitError, PortError, Store};
 use crate::write::mutation::Mutation;
@@ -28,6 +33,7 @@ use layerfs_content::filesystem::{
 };
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{AuthenticatedObjects, ContentError};
+use layerfs_history::error::{RemovedPath, RemovedState};
 use layerfs_history::path::governs;
 use layerfs_history::{BranchSnapshot, HistoryError, LayerStackId, NodeId, PathRemovalRecord};
 use layerfs_storage::Save;
@@ -43,6 +49,10 @@ pub enum RemovalError {
     Ports(Arc<PortError>),
     /// The tree update was refused.
     Content(ContentError),
+    /// The marker names an entry this tree cannot whiteout: a path that is
+    /// not a valid tree path, or one the derivation left in place. A merge
+    /// refuses with `Removed` and the full elements (§4.3).
+    Unmaterializable(Vec<RemovedPath>),
 }
 
 impl From<ContentError> for RemovalError {
@@ -57,6 +67,9 @@ pub fn refusal(error: RemovalError) -> SdkRefusal {
         RemovalError::History(error) => crate::history::lookup::history(error),
         RemovalError::Ports(error) => crate::history::lookup::failed(error),
         RemovalError::Content(error) => crate::history::lookup::content(error),
+        RemovalError::Unmaterializable(paths) => crate::history::lookup::history(
+            HistoryError::Removed(Box::new(RemovedState::new(paths))),
+        ),
     }
 }
 
@@ -74,6 +87,9 @@ pub fn commit_error(error: RemovalError) -> CommitError {
             error,
             provider: None,
         },
+        RemovalError::Unmaterializable(paths) => CommitError::History(HistoryError::Removed(
+            Box::new(RemovedState::new(paths)),
+        )),
     }
 }
 
@@ -121,16 +137,41 @@ fn node_serial(store: &Arc<Store>, node: NodeId) -> Result<Option<u64>, RemovalE
     }
 }
 
+/// The governing maximum frontier of `path`: the maximum over the path and
+/// its `/`-boundary ancestors (§4.3).
+fn governing_frontier(markers: &[PathRemovalRecord], path: &[u8]) -> u64 {
+    markers
+        .iter()
+        .filter(|other| governs(&other.path, path))
+        .map(|other| other.frontier_serial)
+        .max()
+        .unwrap_or(0)
+}
+
+/// The valid tree components of `path`, or `None` when it is not a path a
+/// tree can name (a corrupted or legacy marker, which cannot be whiteouted).
+fn components(path: &str) -> Option<Vec<PathName>> {
+    if path.is_empty() {
+        return None;
+    }
+    path.split('/')
+        .filter(|name| !name.is_empty())
+        .map(|name| PathName::new(name).ok())
+        .collect()
+}
+
 /// The paths hidden at `node`: each marker whose governing frontier is at
 /// least the node's serial and whose entry exists in `root`, with a path an
-/// already selected ancestor governs left out.
+/// already selected ancestor governs left out. The full §10 elements carry
+/// the governing frontier for the `Removed` refusal. A marker that names no
+/// valid tree path is itself unmaterializable and refuses the build.
 pub fn hidden_paths(
     store: &Arc<Store>,
     stack: LayerStackId,
     reader: &dyn AuthenticatedObjects,
     root: FilesystemRootId,
     node: NodeId,
-) -> Result<Vec<String>, RemovalError> {
+) -> Result<Vec<RemovedPath>, RemovalError> {
     let Some(serial) = node_serial(store, node)? else {
         return Ok(Vec::new());
     };
@@ -140,30 +181,45 @@ pub fn hidden_paths(
     }
     let tree = TreeTable::open(reader, root)?;
     let mut paths = Vec::new();
+    let mut invalid = Vec::new();
     for marker in &markers {
         if marker.path.is_empty() {
             continue;
         }
-        let Ok(path) = std::str::from_utf8(&marker.path) else {
-            continue;
-        };
-        let frontier = markers
-            .iter()
-            .filter(|other| governs(&other.path, &marker.path))
-            .map(|other| other.frontier_serial)
-            .max()
-            .unwrap_or(0);
-        if frontier < serial || entry(reader, &tree, path)?.is_none() {
+        let frontier = governing_frontier(&markers, &marker.path);
+        if frontier < serial {
             continue;
         }
-        paths.push(path.to_owned());
+        let Ok(path) = std::str::from_utf8(&marker.path) else {
+            invalid.push(RemovedPath::new(
+                String::from_utf8_lossy(&marker.path),
+                frontier,
+            ));
+            continue;
+        };
+        let names = match components(path) {
+            Some(names) => names,
+            None => {
+                invalid.push(RemovedPath::new(path.to_owned(), frontier));
+                continue;
+            }
+        };
+        if entry_names(reader, &tree, &names)?.is_none() {
+            continue;
+        }
+        paths.push(RemovedPath::new(path.to_owned(), frontier));
     }
-    paths.sort_by_key(String::len);
-    let mut selected: Vec<String> = Vec::new();
+    if !invalid.is_empty() {
+        invalid.sort_by(|left, right| left.path.as_bytes().cmp(right.path.as_bytes()));
+        invalid.dedup_by(|left, right| left.path == right.path);
+        return Err(RemovalError::Unmaterializable(invalid));
+    }
+    paths.sort_by(|left, right| left.path.as_bytes().cmp(right.path.as_bytes()));
+    let mut selected: Vec<RemovedPath> = Vec::new();
     for path in paths {
         if selected
             .iter()
-            .any(|ancestor| governs(ancestor.as_bytes(), path.as_bytes()))
+            .any(|ancestor| governs(ancestor.path.as_bytes(), path.path.as_bytes()))
         {
             continue;
         }
@@ -178,10 +234,22 @@ fn entry(
     tree: &TreeTable,
     path: &str,
 ) -> Result<Option<EntryFacts>, ContentError> {
+    let names: Vec<PathName> = match components(path) {
+        Some(names) => names,
+        None => return Ok(None),
+    };
+    entry_names(reader, tree, &names)
+}
+
+/// The entry at already checked components of one immutable tree.
+fn entry_names(
+    reader: &dyn AuthenticatedObjects,
+    tree: &TreeTable,
+    names: &[PathName],
+) -> Result<Option<EntryFacts>, ContentError> {
     let mut serial = tree.root_serial();
-    for name in path.split('/').filter(|name| !name.is_empty()) {
-        let name = PathName::new(name).map_err(|_| ContentError::InvalidRecord("removed path"))?;
-        match tree.lookup(reader, serial, &name)? {
+    for name in names {
+        match tree.lookup(reader, serial, name)? {
             Some(child) => serial = child,
             None => return Ok(None),
         }
@@ -195,15 +263,15 @@ fn entry(
 fn updates(
     reader: &dyn AuthenticatedObjects,
     tree: &TreeTable,
-    paths: &[String],
+    paths: &[RemovedPath],
 ) -> Result<Vec<DirectoryUpdate>, ContentError> {
     let mut parents: BTreeMap<u64, Vec<(PathName, Option<u64>)>> = BTreeMap::new();
     for path in paths {
-        let names: Vec<&str> = path.split('/').filter(|name| !name.is_empty()).collect();
+        let names: Vec<String> = path.path.split('/').filter(|name| !name.is_empty()).map(str::to_owned).collect();
         let mut serial = tree.root_serial();
         for (index, name) in names.iter().enumerate() {
-            let name =
-                PathName::new(name).map_err(|_| ContentError::InvalidRecord("removed path"))?;
+            let name = PathName::new(name.as_str())
+                .map_err(|_| ContentError::InvalidRecord("removed path"))?;
             let Some(child) = tree.lookup(reader, serial, &name)? else {
                 break;
             };
@@ -229,7 +297,7 @@ fn derived(
     reader: &dyn AuthenticatedObjects,
     save: &Save<'_>,
     root: FilesystemRootId,
-    paths: &[String],
+    paths: &[RemovedPath],
 ) -> Result<FilesystemRootId, RemovalError> {
     if paths.is_empty() {
         return Ok(root);
@@ -268,7 +336,11 @@ pub fn derive_root(
     root: FilesystemRootId,
 ) -> Result<FilesystemRootId, RemovalError> {
     let paths = hidden_paths(store, stack, reader, root, node)?;
-    derived(reader, save, root, &paths)
+    if paths.is_empty() {
+        return Ok(root);
+    }
+    let derived_root = derived(reader, save, root, &paths)?;
+    Ok(derived_root)
 }
 
 /// A Commit's candidate root with every entry it inherited unchanged from
@@ -292,9 +364,13 @@ pub fn materialize_commit(
     let next = TreeTable::open(save, candidate)?;
     let mut remove = Vec::new();
     for path in &paths {
-        inherited(save, &base_tree, &next, path, &mut remove)?;
+        inherited(save, &base_tree, &next, &path.path, &mut remove)?;
     }
-    derived(save, save, candidate, &remove)
+    let selected: Vec<RemovedPath> = remove
+        .into_iter()
+        .map(|path| RemovedPath::new(path, 0))
+        .collect();
+    derived(save, save, candidate, &selected)
 }
 
 /// Collects the entries of `path` that `next` inherited unchanged from
@@ -355,7 +431,7 @@ impl BoundWorkspace {
         }
         let mut mutation = Mutation::new(self)?;
         for path in paths {
-            let absolute = format!("/{path}");
+            let absolute = format!("/{}", path.path);
             if mutation.optional(&absolute)?.is_some() {
                 mutation.remove(&absolute)?;
             }

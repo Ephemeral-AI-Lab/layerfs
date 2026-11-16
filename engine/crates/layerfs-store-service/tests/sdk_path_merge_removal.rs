@@ -13,6 +13,7 @@ mod installed;
 mod support;
 
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_store_service::history::lookup;
 use std::fs;
 use support::{write, Change, Fixture};
 
@@ -221,6 +222,49 @@ fn a_recreated_removed_path_still_conflicts_as_an_ordinary_edit() {
             vec![("branch", text("conflicted")), ("path", text("/a"))],
         )
         .expect_err("the conflicted merge created no Branch");
+    assert_eq!(missing.code, "NoSuchBranch", "{missing:?}");
+    fixture.cleanup();
+}
+
+
+#[test]
+fn a_merge_that_cannot_materialize_a_whiteout_is_refused_removed() {
+    let fixture = Fixture::new("t123c-unmaterializable", |source| {
+        fs::write(source.join("a"), "a\n").unwrap();
+        1
+    });
+    fixture.fork("left");
+    fixture.apply("left", vec![write("/l", "l\n")]);
+    fixture.fork("right");
+    fixture.apply("right", vec![write("/r", "r\n")]);
+
+    // A marker whose path no tree can name (a legacy or corrupted marker):
+    // the sides cannot whiteout it, so the merge refuses `Removed` with the
+    // full element instead of building a tree that leaves it visible.
+    let stack = lookup::project(&fixture.service.store, "installed").expect("installed project");
+    fixture
+        .service
+        .store
+        .history()
+        .mark_path_removed(stack.id, b"../bad", 1_000_000, 7)
+        .expect("write the malformed marker");
+    let refusal = merge(&fixture, "left", "right", "merged")
+        .expect_err("the merge cannot materialize the whiteout");
+    assert_eq!(refusal.code, "Removed", "{refusal:?}");
+    let paths = match refusal.detail.get("paths") {
+        Some(SdkValue::List(paths)) => paths,
+        other => panic!("Removed detail without paths: {other:?}"),
+    };
+    assert_eq!(paths.len(), 1, "{paths:?}");
+    assert_eq!(paths[0].get_text("path"), Some("../bad"), "{paths:?}");
+    assert_eq!(paths[0].get_int("frontier_serial"), Some(1_000_000));
+    // Nothing is created for a refused merge.
+    let missing = fixture
+        .try_call(
+            "fs.read",
+            vec![("branch", text("merged")), ("path", text("/a"))],
+        )
+        .expect_err("the refused merge created no Branch");
     assert_eq!(missing.code, "NoSuchBranch", "{missing:?}");
     fixture.cleanup();
 }

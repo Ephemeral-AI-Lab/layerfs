@@ -79,6 +79,8 @@ struct Fake {
     admitted: Vec<Admission>,
     /// Admissions released, in order.
     released: Vec<Admission>,
+    /// The `pending_retry` flag each marker attempt carried, in order.
+    pending_retries: Vec<bool>,
 }
 
 impl Fake {
@@ -96,6 +98,7 @@ impl Fake {
             mark_refusal: None,
             admitted: Vec::new(),
             released: Vec::new(),
+            pending_retries: Vec::new(),
         }
     }
 
@@ -130,12 +133,19 @@ impl Effects for Fake {
     fn admit(
         &mut self,
         stack: LayerStackId,
-        reuse: Option<[u8; 16]>,
+        op: [u8; 16],
     ) -> Result<Admission, SdkRefusal> {
         if self.refused() {
             return Err(self.refuse.clone().expect("refused above"));
         }
-        let admission = Admission::new(stack, reuse.unwrap_or([0x5a; 16]));
+        // The sidecar names this admission and is durable before the row is
+        // taken, so a crash between the row and its reply leaves it for the
+        // retry.
+        let pending = Intent::read(&self.home, &self.store, &self.project)
+            .unwrap()
+            .expect("the sidecar precedes the admission");
+        assert_eq!(pending.op, Some(op), "the sidecar names this admission");
+        let admission = Admission::new(stack, op);
         self.admitted.push(admission);
         Ok(admission)
     }
@@ -145,10 +155,16 @@ impl Effects for Fake {
         Ok(())
     }
 
-    fn mark(&mut self, admission: Admission, deleted_ms: i64) -> Result<Deletion, SdkRefusal> {
+    fn mark(
+        &mut self,
+        admission: Admission,
+        deleted_ms: i64,
+        pending_retry: bool,
+    ) -> Result<Deletion, SdkRefusal> {
         if let Some(refusal) = &self.mark_refusal {
             return Err(refusal.clone());
         }
+        self.pending_retries.push(pending_retry);
         self.seen.push((admission.stack, deleted_ms));
         let state = Intent::read(&self.home, &self.store, &self.project)
             .unwrap()
@@ -191,10 +207,11 @@ fn a_fresh_delete_marks_then_removes_the_entry_and_unlinks_the_intent() {
     assert!(outcome.get_bool("home_entry_removed"));
     assert_eq!(fake.seen.len(), 1);
     assert_eq!(fake.seen[0].0, stack);
+    assert_eq!(fake.pending_retries, [false], "a fresh delete is no retry");
     // the identity save precedes the intent, and the intent precedes the mark
     assert_eq!(fake.prepared, 1);
     assert_eq!(fake.states, [IntentState::Pending]);
-    // the project scope was admitted before the marker and released after
+    // the project scope was admitted after the sidecar and released after
     assert_eq!(fake.admitted.len(), 1);
     assert_eq!(fake.released, fake.admitted);
     assert!(!paths::project_dir(&home, store, project).exists());
@@ -203,7 +220,7 @@ fn a_fresh_delete_marks_then_removes_the_entry_and_unlinks_the_intent() {
 }
 
 #[test]
-fn a_refused_admission_writes_no_sidecar_and_leaves_no_intent() {
+fn a_refused_admission_keeps_a_pending_sidecar_and_writes_no_marker() {
     let refused_home = home("refused");
     let (store, project, stack) = ("shop", "app", stack(20));
     project_record(&refused_home, store, project, stack);
@@ -220,13 +237,18 @@ fn a_refused_admission_writes_no_sidecar_and_leaves_no_intent() {
     // the live mount's refusal is the call's, with its holders
     assert_eq!(refusal.code, "MountsActive");
     assert!(refusal.detail.get("holders").is_some());
-    // no identity save, no sidecar, no marker
-    assert_eq!(fake.prepared, 0);
+    // the identity save and the sidecar precede the admission; no marker
+    assert_eq!(fake.prepared, 1);
     assert!(fake.seen.is_empty(), "{:?}", fake.seen);
-    assert_eq!(Intent::read(&refused_home, store, project).unwrap(), None);
-    // the admission refused, so there is no admission to release
+    let pending = Intent::read(&refused_home, store, project)
+        .unwrap()
+        .expect("the pending sidecar precedes the admission");
+    assert_eq!(pending.state, IntentState::Pending);
+    let op = pending.op.expect("the sidecar names its admission");
+    // the refused admission registered nothing; the caller settles the
+    // identity it wrote without adopting a row
     assert!(fake.admitted.is_empty());
-    assert!(fake.released.is_empty());
+    assert_eq!(fake.released, [Admission::new(stack, op)]);
     // the home entry and the project's record stay
     assert!(paths::project_dir(&refused_home, store, project).is_dir());
     let _ = std::fs::remove_dir_all(&refused_home);
@@ -244,9 +266,16 @@ fn a_refused_admission_writes_no_sidecar_and_leaves_no_intent() {
     let mut fake = Fake::new(&busy_home, store, project, Vec::new()).refusing("Busy", conflict);
     let refusal = delete_with(&busy_home, store, project, Some(stack), &mut fake).unwrap_err();
     assert_eq!(refusal.code, "Busy");
-    assert_eq!(fake.prepared, 0);
+    assert_eq!(fake.prepared, 1);
     assert!(fake.seen.is_empty());
-    assert_eq!(Intent::read(&busy_home, store, project).unwrap(), None);
+    assert_eq!(
+        Intent::read(&busy_home, store, project)
+            .unwrap()
+            .expect("the pending sidecar stays")
+            .state,
+        IntentState::Pending
+    );
+    assert!(paths::project_dir(&busy_home, store, project).is_dir());
     let _ = std::fs::remove_dir_all(&busy_home);
 }
 
@@ -282,12 +311,13 @@ fn a_failed_marker_releases_the_admission_it_took() {
     fake.mark_refusal = Some(refused("Busy", "the project is held"));
     let refusal = delete_with(&home, store, project, Some(stack), &mut fake).unwrap_err();
     assert_eq!(refusal.code, "Busy");
-    // the admission taken before the sidecar is released on the failure
+    // the admission taken after the sidecar is released on the failure
     assert_eq!(fake.admitted.len(), 1);
     assert_eq!(fake.released, fake.admitted);
-    // the sidecar stays `pending` for the retry, and the entry stays
+    // the sidecar stays `pending`, naming the admission, and the entry stays
     let left = Intent::read(&home, store, project).unwrap().unwrap();
     assert_eq!(left.state, IntentState::Pending);
+    assert!(left.op.is_some(), "the sidecar names the admission");
     assert!(paths::project_dir(&home, store, project).is_dir());
     let _ = std::fs::remove_dir_all(&home);
 }
@@ -306,15 +336,16 @@ fn a_retired_retry_reuses_the_intent_deleted_ms_and_finishes_the_entry() {
     );
     let outcome = delete_with(&home, store, project, Some(stack), &mut fake).unwrap();
     assert_eq!(fake.seen, [(stack, 111)]);
+    assert_eq!(fake.pending_retries, [true], "a pending sidecar is a retry");
     assert_eq!(outcome.get_int("deleted_ms"), Some(222));
-    assert!(outcome.get_bool("home_entry_removed"));
+    assert!(outcome.get_bool("home_entry_removed"), "the marker was already there");
     assert!(!paths::project_dir(&home, store, project).exists());
     assert_eq!(Intent::read(&home, store, project).unwrap(), None);
     let _ = std::fs::remove_dir_all(&home);
 }
 
 #[test]
-fn a_live_row_with_a_live_intent_redoes_the_marker_then_finishes() {
+fn a_live_row_with_a_pending_intent_settles_the_marker_and_keeps_the_entry() {
     let home = home("marked");
     let (store, project, stack) = ("shop", "app", stack(3));
     project_record(&home, store, project, stack);
@@ -326,9 +357,31 @@ fn a_live_row_with_a_live_intent_redoes_the_marker_then_finishes() {
         vec![Deletion::Marked { deleted_ms: 111 }],
     );
     let outcome = delete_with(&home, store, project, Some(stack), &mut fake).unwrap();
-    // the live row has no marker, so the marker is redone with the same ms
+    // The sidecar was written before an earlier admission, the row is still
+    // live and there is no marker: the retry redoes the marker with the same
+    // deleted_ms, settles the sidecar and keeps the entry.
     assert_eq!(fake.seen, [(stack, 111)]);
     assert_eq!(fake.states, [IntentState::Pending]);
+    assert_eq!(fake.pending_retries, [true]);
+    assert!(fake.admitted[0].op.iter().any(|byte| *byte != 0));
+    assert_eq!(outcome.get_int("deleted_ms"), Some(111));
+    assert!(!outcome.get_bool("home_entry_removed"));
+    assert!(paths::project_dir(&home, store, project).is_dir(), "the entry stays");
+    let settled = Intent::read(&home, store, project)
+        .unwrap()
+        .expect("the sidecar is marked for the finishing call");
+    assert_eq!(settled.state, IntentState::Marked);
+    assert_eq!(settled.deleted_ms, 111);
+
+    // The marker is confirmed now: the next call finishes the entry.
+    let mut finish = Fake::new(
+        &home,
+        store,
+        project,
+        vec![Deletion::Retired { deleted_ms: 111 }],
+    );
+    let outcome = delete_with(&home, store, project, Some(stack), &mut finish).unwrap();
+    assert_eq!(finish.pending_retries, [false]);
     assert_eq!(outcome.get_int("deleted_ms"), Some(111));
     assert!(outcome.get_bool("home_entry_removed"));
     assert!(!paths::project_dir(&home, store, project).exists());
@@ -425,6 +478,29 @@ fn a_done_intent_settles_the_entry_without_a_second_marker() {
     assert!(fake.seen.is_empty(), "a done intent marks nothing");
     assert_eq!(outcome.get_int("deleted_ms"), Some(44));
     assert!(outcome.get_bool("home_entry_removed"));
+    assert_eq!(Intent::read(&home, store, project).unwrap(), None);
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn a_stale_intent_does_not_delete_a_project_the_listing_names_again() {
+    let home = home("recreated-listed");
+    let (store, project, old, new) = ("shop", "app", stack(8), stack(9));
+    // The re-created project has no readable home record yet (a partial
+    // creation or a stale entry), but its Store lists the new Stack: the
+    // listing is enough to see that the sidecar is stale.
+    Intent::write(&home, &intent(&home, store, project, old, 111)).unwrap();
+    let mut fake = Fake::new(
+        &home,
+        store,
+        project,
+        vec![Deletion::Marked { deleted_ms: 555 }],
+    );
+    let outcome = delete_with(&home, store, project, Some(new), &mut fake).unwrap();
+    assert_eq!(fake.seen.len(), 1);
+    assert_eq!(fake.seen[0].0, new, "the listing's Stack wins");
+    assert_ne!(fake.seen[0].1, 111, "the stale deleted_ms is not reused");
+    assert_eq!(outcome.get_int("deleted_ms"), Some(555));
     assert_eq!(Intent::read(&home, store, project).unwrap(), None);
     let _ = std::fs::remove_dir_all(&home);
 }
@@ -540,9 +616,11 @@ fn a_worker_reply_names_the_stack_and_deleted_ms() {
         project: "app".to_owned(),
         stack: first,
         deleted_ms: 42,
+        retired: Some(true),
     };
     let encoded = reply.encode();
     assert_eq!(encoded.get_text("kind"), Some("Removed"));
+    assert!(encoded.get_bool("retired"));
     assert_eq!(
         encoded.get_text("stack_id"),
         Some(hex(&first.to_bytes()).as_str())

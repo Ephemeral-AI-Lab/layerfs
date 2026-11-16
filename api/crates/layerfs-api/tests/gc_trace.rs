@@ -286,6 +286,7 @@ fn the_trace_key_is_salted_by_the_store_policy_salt() {
     assert_ne!(first, trace_key(&[1; 32], other, path));
 }
 
+
 #[test]
 fn store_compact_artifact_names_never_reach_the_log() {
     let _env = serial();

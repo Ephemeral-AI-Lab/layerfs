@@ -24,7 +24,7 @@ use layerfs_history::error::{
 #[cfg(feature = "postgresql")]
 use layerfs_history::identity::CatalogId;
 use layerfs_history::identity::{BranchId, LayerStackId};
-use layerfs_history::path::path_key;
+use layerfs_history::path::trace_key;
 use layerfs_history::records::{
     GcDeletion, GcIntent, GcIntentKind, GcScopeKind, PathRemovalKind, PathRemovalOutcome,
     PathRemovalRequest,
@@ -913,7 +913,7 @@ pub(crate) fn remove_path(
         if !found.is_empty() {
             return Err(classify(&found));
         }
-        let key = path_key(&request.path);
+        let key = trace_key(&provider.trace_salt, request.stack, &request.path);
         let stored = one(
             tx,
             "paths_marker",
@@ -958,6 +958,7 @@ pub(crate) fn remove_path(
             tx,
             request.stack,
             &request.path,
+            &provider.trace_salt,
             frontier,
             request.removed_ms,
         )?;

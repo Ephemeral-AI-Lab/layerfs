@@ -217,8 +217,8 @@ fn change(
     let visibility = Visibility::for_stack(
         &workspace.store,
         base.branch.stack,
-        Visibility::node_serial(&workspace.store, node),
-    );
+        Visibility::node_serial(&workspace.store, node)?,
+    )?;
     let reader: Arc<crate::store::StorePorts> = workspace.store.ports(base.scope);
     let tree = TreeTable::open(&*reader, FilesystemRootId(base.effective_root))
         .map_err(args::content)?;
