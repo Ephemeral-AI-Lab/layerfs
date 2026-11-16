@@ -34,7 +34,11 @@ CREATE TABLE gc_intent (
     op_id BLOB PRIMARY KEY CHECK (length(op_id) = 16),
     kind TEXT NOT NULL CHECK (kind IN ('mount','init','merge','removal','compaction')),
     scope_kind TEXT NOT NULL CHECK (scope_kind IN ('store','project','branch')),
-    scope_id BLOB,
+    scope_id BLOB CHECK (
+        (scope_kind = 'store' AND length(scope_id) = 32)
+        OR (scope_kind = 'project' AND length(scope_id) = 17 AND substr(scope_id, 1, 1) = X'31')
+        OR (scope_kind = 'branch' AND length(scope_id) = 17 AND substr(scope_id, 1, 1) = X'11')
+    ),
     workspace TEXT,
     sandbox TEXT,
     machine TEXT,
@@ -72,6 +76,7 @@ CREATE TABLE gc_op (
     artifact TEXT,
     pid INTEGER,
     backend_start TEXT,
+    usename TEXT,
     incarnation INTEGER
 ) STRICT;
 

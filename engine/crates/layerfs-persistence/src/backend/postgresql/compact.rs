@@ -26,7 +26,7 @@ use crate::compact_metrics::{
 };
 use crate::history::GcTuple;
 use crate::{MarkResult, PostgresHandles};
-use layerfs_history::error::{HistoryError, HistoryResult};
+use layerfs_history::error::{HistoryError, HistoryResult, OpConflict};
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::HistoryCatalog;
 use std::sync::Arc;
@@ -50,11 +50,13 @@ struct DeadTotals {
 #[derive(Clone, Debug)]
 struct OpRow {
     generation: i64,
+    phase: String,
     artifact: Option<String>,
     dead: DeadTotals,
     totals_applied: bool,
     pid: Option<i64>,
     backend_start: Option<String>,
+    usename: Option<String>,
 }
 
 /// What Phase A leaves for Phase B.
@@ -237,7 +239,7 @@ fn read_op(session: &Arc<Session>, schema: &str) -> HistoryResult<Option<OpRow>>
     stage(session, |tx| {
         let rows = tx.query(
             &format!(
-                "SELECT generation,artifact,dead_canonical,dead_stored,dead_metadata,dead_logical,totals_applied,pid,backend_start FROM {schema}.gc_op WHERE id=1"
+                "SELECT generation,phase,artifact,dead_canonical,dead_stored,dead_metadata,dead_logical,totals_applied,pid,backend_start,usename FROM {schema}.gc_op WHERE id=1"
             ),
             Vec::new(),
         )?;
@@ -246,16 +248,18 @@ fn read_op(session: &Arc<Session>, schema: &str) -> HistoryResult<Option<OpRow>>
         };
         Ok(Some(OpRow {
             generation: row.get(0)?,
-            artifact: row.get(1)?,
+            phase: row.get(1)?,
+            artifact: row.get(2)?,
             dead: DeadTotals {
-                canonical: row.get(2)?,
-                stored: row.get(3)?,
-                metadata: row.get(4)?,
-                logical: row.get(5)?,
+                canonical: row.get(3)?,
+                stored: row.get(4)?,
+                metadata: row.get(5)?,
+                logical: row.get(6)?,
             },
-            totals_applied: row.get::<i64>(6)? != 0,
-            pid: row.get(7)?,
-            backend_start: row.get(8)?,
+            totals_applied: row.get::<i64>(7)? != 0,
+            pid: row.get(8)?,
+            backend_start: row.get(9)?,
+            usename: row.get(10)?,
         }))
     })
 }
@@ -365,9 +369,9 @@ fn persist_mark(
         tx.query(
             &format!(
                 "INSERT INTO {schema}.gc_op \
-                 (id,generation,phase,scratch_schema,mark_serial,mark_pack_id,mark_digest,mark_totals,mark_stamp,started_ms,dead_canonical,dead_stored,dead_metadata,dead_logical,totals_applied,artifact,pid,backend_start,incarnation) \
-                 VALUES (1,$1,'mark',$2,$3,$4,$5,int8send($6)||int8send($7)||int8send($8)||int8send($9),$10,$11,0,0,0,$12,FALSE,$2,pg_backend_pid(),(SELECT backend_start::text FROM pg_stat_activity WHERE pid=pg_backend_pid()),$1) \
-                 ON CONFLICT (id) DO UPDATE SET generation=EXCLUDED.generation,phase=EXCLUDED.phase,scratch_schema=EXCLUDED.scratch_schema,mark_serial=EXCLUDED.mark_serial,mark_pack_id=EXCLUDED.mark_pack_id,mark_digest=EXCLUDED.mark_digest,mark_totals=EXCLUDED.mark_totals,mark_stamp=EXCLUDED.mark_stamp,started_ms=EXCLUDED.started_ms,dead_canonical=0,dead_stored=0,dead_metadata=0,dead_logical=EXCLUDED.dead_logical,totals_applied=FALSE,artifact=EXCLUDED.artifact,pid=EXCLUDED.pid,backend_start=EXCLUDED.backend_start,incarnation=EXCLUDED.incarnation"
+                 (id,generation,phase,scratch_schema,mark_serial,mark_pack_id,mark_digest,mark_totals,mark_stamp,started_ms,dead_canonical,dead_stored,dead_metadata,dead_logical,totals_applied,artifact,pid,backend_start,usename,incarnation) \
+                 VALUES (1,$1,'mark',$2,$3,$4,$5,int8send($6)||int8send($7)||int8send($8)||int8send($9),$10,$11,0,0,0,$12,FALSE,$2,pg_backend_pid(),(SELECT backend_start::text FROM pg_stat_activity WHERE pid=pg_backend_pid()),(SELECT usename::text FROM pg_stat_activity WHERE pid=pg_backend_pid()),$1) \
+                 ON CONFLICT (id) DO UPDATE SET generation=EXCLUDED.generation,phase=EXCLUDED.phase,scratch_schema=EXCLUDED.scratch_schema,mark_serial=EXCLUDED.mark_serial,mark_pack_id=EXCLUDED.mark_pack_id,mark_digest=EXCLUDED.mark_digest,mark_totals=EXCLUDED.mark_totals,mark_stamp=EXCLUDED.mark_stamp,started_ms=EXCLUDED.started_ms,dead_canonical=0,dead_stored=0,dead_metadata=0,dead_logical=EXCLUDED.dead_logical,totals_applied=FALSE,artifact=EXCLUDED.artifact,pid=EXCLUDED.pid,backend_start=EXCLUDED.backend_start,usename=EXCLUDED.usename,incarnation=EXCLUDED.incarnation"
             ),
             vec![
                 Param::I64(tuple.generation),
@@ -706,18 +710,29 @@ fn effective_sync_rank(session: &Arc<Session>) -> HistoryResult<u8> {
 }
 
 /// §8 step 10: the standby predicate checked before Phase M.
-fn standby_precheck(session: &Arc<Session>, rank: u8) -> HistoryResult<()> {
+fn standby_precheck(
+    session: &Arc<Session>,
+    rank: u8,
+    op_id: &[u8; 16],
+    phase: &str,
+) -> HistoryResult<()> {
     stage(session, |tx| {
         let rows = tx.query(
             "SELECT current_setting('synchronous_standby_names')",
             Vec::new(),
         )?;
         let names: String = rows[0].get(0)?;
-        standby_check(tx, rank, &names)
+        standby_check(tx, rank, &names, op_id, phase)
     })
 }
 
-fn standby_check(tx: &Transaction<'_>, rank: u8, names: &str) -> HistoryResult<()> {
+fn standby_check(
+    tx: &Transaction<'_>,
+    rank: u8,
+    names: &str,
+    op_id: &[u8; 16],
+    phase: &str,
+) -> HistoryResult<()> {
     if rank < 2 || names.trim().is_empty() {
         return Ok(());
     }
@@ -727,7 +742,16 @@ fn standby_check(tx: &Transaction<'_>, rank: u8, names: &str) -> HistoryResult<(
         Vec::new(),
     )?;
     if !standby_satisfied(rank, names, streaming) {
-        return Err(HistoryError::Busy);
+        // The quorum is missing, not the Store: name the waiting operation
+        // instead of a holderless Busy.
+        return Err(HistoryError::BusyOp(Box::new(OpConflict::new(
+            GcIntentKind::Compaction,
+            GcScopeKind::Store,
+            "store",
+            Some(phase.to_owned()),
+            hex(op_id),
+            false,
+        ))));
     }
     Ok(())
 }
@@ -756,21 +780,53 @@ fn owner_state(session: &Arc<Session>, op: &OpRow) -> HistoryResult<Option<Strin
     })
 }
 
+/// The recorded owner's client_addr, when the server still reports it.
+fn owner_client_addr(session: &Arc<Session>, op: &OpRow) -> HistoryResult<Option<String>> {
+    let (Some(pid), Some(start)) = (op.pid, op.backend_start.as_deref()) else {
+        return Ok(None);
+    };
+    stage(session, |tx| {
+        let rows = tx.query(
+            "SELECT client_addr::text FROM pg_stat_activity \
+              WHERE pid=$1 AND backend_start::text=$2",
+            vec![Param::I64(pid), Param::Text(start.to_owned())],
+        )?;
+        let Some(row) = rows.first() else {
+            return Ok(None);
+        };
+        Ok(row.get::<Option<String>>(0)?)
+    })
+}
+
 /// §12 PG privileges and reply: the two-argument `pg_terminate_backend(pid,
 /// backend_start)` proof, scoped to this database and never the caller. Used
 /// only for a recorded owner the server reports `idle` (it cannot finish the
-/// op); a live owner is `Busy`, never killed.
+/// op); a live owner is `Busy`, never killed. The recorded usename is proven
+/// too when the row has one.
 fn terminate_owner(session: &Arc<Session>, op: &OpRow) -> HistoryResult<bool> {
     let (Some(pid), Some(start)) = (op.pid, op.backend_start.as_deref()) else {
         return Ok(false);
     };
-    stage(session, |tx| {
-        let rows = tx.query(
+    let (sql, params) = match op.usename.as_deref() {
+        Some(user) => (
+            "SELECT pg_terminate_backend(a.pid, 30000) FROM pg_stat_activity a \
+              WHERE a.pid=$1 AND a.backend_start::text=$2 AND a.usename::text=$3 \
+                AND a.datname=current_database() AND a.pid<>pg_backend_pid()",
+            vec![
+                Param::I64(pid),
+                Param::Text(start.to_owned()),
+                Param::Text(user.to_owned()),
+            ],
+        ),
+        None => (
             "SELECT pg_terminate_backend(a.pid, 30000) FROM pg_stat_activity a \
               WHERE a.pid=$1 AND a.backend_start::text=$2 AND a.datname=current_database() \
                 AND a.pid<>pg_backend_pid()",
             vec![Param::I64(pid), Param::Text(start.to_owned())],
-        )?;
+        ),
+    };
+    stage(session, |tx| {
+        let rows = tx.query(sql, params)?;
         let terminated: Option<i64> = rows.first().map(|row| row.get(0)).transpose()?;
         Ok(terminated.unwrap_or(0) != 0)
     })
@@ -821,14 +877,30 @@ fn settle_leftover(
         // own uncertain round: adopt it without terminating itself.
         if op.pid != Some(current_backend_pid(session)?) {
             if let Some(state) = owner_state(session, &op)? {
+                let conflict = || -> HistoryResult<HistoryError> {
+                    let op_id = compaction_intent(session, schema)?.unwrap_or([0u8; 16]);
+                    let client_addr = owner_client_addr(session, &op)?;
+                    Ok(HistoryError::BusyOp(Box::new(
+                        OpConflict::new(
+                            GcIntentKind::Compaction,
+                            GcScopeKind::Store,
+                            "store",
+                            Some(op.phase.clone()),
+                            hex(&op_id),
+                            false,
+                        )
+                        .with_backend(op.pid, client_addr, op.backend_start.clone()),
+                    )))
+                };
                 if state != "idle" {
-                    return Err(HistoryError::Busy);
+                    // A live owner stays Busy, naming the op and the backend.
+                    return Err(conflict()?);
                 }
                 // The backend is alive but not executing the op: terminate it
                 // with the (pid, backend_start) pair (§12), then adopt it as a
                 // dead owner.
                 if !terminate_owner(session, &op)? {
-                    return Err(HistoryError::Busy);
+                    return Err(conflict()?);
                 }
             }
         }
@@ -883,6 +955,7 @@ fn swap(
     tuple: &GcTuple,
     mark: &MarkResult,
     built: &Built,
+    op_id: &[u8; 16],
 ) -> HistoryResult<Swapped> {
     let physical_before = relation_bytes(session, schema, &["pack", "object_location"])?;
     let rank = effective_sync_rank(session)?;
@@ -956,7 +1029,7 @@ fn swap(
             .first()
             .ok_or(HistoryError::Integrity("standby names"))?
             .get(0)?;
-        standby_check(tx, rank, &names)?;
+        standby_check(tx, rank, &names, op_id, "swap")?;
         Ok(Swapped {
             physical_before,
             physical_after: 0,
@@ -970,7 +1043,7 @@ fn swap(
             // §8 step 5: roll back first, then drop the scratch schema in a
             // new transaction, and report Busy with the holder detail.
             let _ = drop_scratch(session, &scratch);
-            return Err(HistoryError::Busy);
+            return Err(swap_busy(session, schema, op_id)?);
         }
         Err(other) => return Err(other),
     };
@@ -979,6 +1052,49 @@ fn swap(
         physical_after,
         ..result
     })
+}
+
+/// The Busy a contended swap reports: the compaction identity with the
+/// backend holding one of the base tables, read from pg_locks and
+/// pg_stat_activity.
+fn swap_busy(
+    session: &Arc<Session>,
+    schema: &str,
+    op_id: &[u8; 16],
+) -> HistoryResult<HistoryError> {
+    let mut conflict = OpConflict::new(
+        GcIntentKind::Compaction,
+        GcScopeKind::Store,
+        "store",
+        Some("swap".to_owned()),
+        hex(op_id),
+        false,
+    );
+    let holder = stage(session, |tx| {
+        let rows = tx.query(
+            "SELECT a.pid::bigint, a.client_addr::text, a.backend_start::text \
+               FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid \
+               JOIN pg_class c ON c.oid=l.relation \
+               JOIN pg_namespace n ON n.oid=c.relnamespace \
+              WHERE n.nspname=$1 AND c.relkind='r' \
+                AND l.mode='AccessExclusiveLock' AND l.granted \
+                AND a.pid <> pg_backend_pid() \
+              ORDER BY a.backend_start LIMIT 1",
+            vec![Param::Text(schema.to_owned())],
+        )?;
+        let Some(row) = rows.first() else {
+            return Ok(None);
+        };
+        Ok(Some((
+            row.get::<i64>(0)?,
+            row.get::<Option<String>>(1)?,
+            row.get::<Option<String>>(2)?,
+        )))
+    })?;
+    if let Some((pid, client_addr, backend_start)) = holder {
+        conflict = conflict.with_backend(Some(pid), client_addr, backend_start);
+    }
+    Ok(HistoryError::BusyOp(Box::new(conflict)))
 }
 
 fn tables_of(session: &Arc<Session>, schema: &str) -> HistoryResult<Vec<String>> {
@@ -1335,7 +1451,15 @@ fn round(
         "build",
     )?;
     metrics.begin_phase(CompactPhase::PostgresSwap);
-    let swapped = swap(handles, session, schema, &tuple, &mark, &built)?;
+    let swapped = swap(
+        handles,
+        session,
+        schema,
+        &tuple,
+        &mark,
+        &built,
+        &request.op_id,
+    )?;
     metrics.end_phase();
     stop(
         request,
@@ -1518,7 +1642,7 @@ impl PostgresHandles {
         self.history.gc_register(&intent)?;
         let result = (|| {
             let rank = effective_sync_rank(&session)?;
-            standby_precheck(&session, rank)?;
+            standby_precheck(&session, rank, &request.op_id, "mark")?;
             round(self, &session, &schema, request, metrics)
         })();
         if result.is_err() {

@@ -184,6 +184,7 @@ fn holder(intent: &GcIntent) -> GcHolder {
 fn conflict(intent: &GcIntent) -> OpConflict {
     OpConflict::new(
         intent.kind,
+        intent.scope_kind,
         entity(intent),
         intent.phase.clone(),
         hex(&intent.op_id),
@@ -360,10 +361,96 @@ fn xact_lock(tx: &Transaction<'_>, key: i64, shared: bool) -> HistoryResult<()> 
     Ok(())
 }
 
+#[cfg(feature = "postgresql")]
+const EMPTY_OP: [u8; 16] = [0u8; 16];
+
+/// The live intents one advisory-key scope names, in the vocabulary the
+/// shared lock failure needs to report a holder.
+#[cfg(feature = "postgresql")]
+fn scope_intents(tx: &Transaction<'_>, kind: u8, id: &[u8]) -> HistoryResult<Vec<GcIntent>> {
+    match kind {
+        1 => query(tx, ALL_STORE, params![EMPTY_OP.to_vec()]),
+        2 => query(
+            tx,
+            ALL_PROJECT,
+            params![id.to_vec(), Option::<String>::None, EMPTY_OP.to_vec()],
+        ),
+        3 => query(
+            tx,
+            ALL_BRANCH,
+            params![Option::<Vec<u8>>::None, id.to_vec(), EMPTY_OP.to_vec()],
+        ),
+        _ => Ok(Vec::new()),
+    }
+}
+
+/// The live session holding one advisory key, as pg_locks and
+/// pg_stat_activity report it: pid, client_addr and backend_start.
+#[cfg(feature = "postgresql")]
+fn advisory_holder(
+    tx: &Transaction<'_>,
+    key: i64,
+) -> HistoryResult<Option<(i64, Option<String>, Option<String>)>> {
+    let rows = tx.query("gc_advisory_holder", params![key])?;
+    let Some(row) = rows.first() else {
+        return Ok(None);
+    };
+    Ok(Some((
+        row.get::<i64>(0)?,
+        row.get::<Option<String>>(1)?,
+        row.get::<Option<String>>(2)?,
+    )))
+}
+
+/// The refusal a named transaction lock reports: the live intents at that
+/// scope (a mount is MountsActive, any other operation Busy with
+/// entity/phase/op), or, when no row exists, the backend the server names.
+#[cfg(feature = "postgresql")]
+fn lock_refusal(
+    tx: &Transaction<'_>,
+    kind: u8,
+    id: &[u8],
+    key: i64,
+) -> HistoryResult<HistoryError> {
+    let found = scope_intents(tx, kind, id)?;
+    if !found.is_empty() {
+        return Ok(classify(&found));
+    }
+    let scope = match kind {
+        2 => GcScopeKind::Project,
+        3 => GcScopeKind::Branch,
+        _ => GcScopeKind::Store,
+    };
+    let mut conflict = OpConflict::new(
+        if kind == 1 {
+            GcIntentKind::Compaction
+        } else {
+            GcIntentKind::Removal
+        },
+        scope,
+        if kind == 1 {
+            "store".to_owned()
+        } else {
+            hex(id)
+        },
+        None,
+        String::new(),
+        false,
+    );
+    if let Some((pid, client_addr, backend_start)) = advisory_holder(tx, key)? {
+        conflict = conflict.with_backend(Some(pid), client_addr, backend_start);
+    }
+    Ok(HistoryError::BusyOp(Box::new(conflict)))
+}
+
 /// PostgreSQL: the Store key a removal shares with every mount, taken first.
 #[cfg(feature = "postgresql")]
 fn lock_store_shared(tx: &Transaction<'_>, catalog: CatalogId) -> HistoryResult<()> {
-    xact_lock(tx, advisory_key(catalog, 1, catalog.as_slice()), true)
+    let key = advisory_key(catalog, 1, catalog.as_slice());
+    match xact_lock(tx, key, true) {
+        Ok(()) => Ok(()),
+        Err(_) => Err(lock_refusal(tx, 1, catalog.as_slice(), key)?),
+    }
 }
 
 /// PostgreSQL: one project or Branch key.
@@ -375,7 +462,11 @@ fn lock_scope(
     id: &[u8],
     shared: bool,
 ) -> HistoryResult<()> {
-    xact_lock(tx, advisory_key(catalog, kind, id), shared)
+    let key = advisory_key(catalog, kind, id);
+    match xact_lock(tx, key, shared) {
+        Ok(()) => Ok(()),
+        Err(_) => Err(lock_refusal(tx, kind, id, key)?),
+    }
 }
 
 fn epoch_share(tx: &Transaction<'_>, postgres: bool, stack: LayerStackId) -> HistoryResult<()> {
@@ -711,15 +802,60 @@ fn session_lock(
         })?;
         if found.is_empty() {
             let _ = session_unlock(session, catalog, &taken, shared);
-            return Err(if shared {
-                HistoryError::MountsActive(Box::new(MountHolders::new(Vec::new())))
-            } else {
-                HistoryError::Busy
-            });
+            return Err(session_lock_refusal(session, *kind, id, key, shared)?);
         }
         taken.push((*kind, id.clone()));
     }
     Ok(())
+}
+
+/// The refusal a failed session key reports: the intents at its scope, or the
+/// backend the server names; never a holderless MountsActive/Busy when a
+/// holder is available.
+#[cfg(feature = "postgresql")]
+fn session_lock_refusal(
+    session: &std::sync::Arc<crate::backend::postgresql::session::connection::Session>,
+    kind: u8,
+    id: &[u8],
+    key: i64,
+    shared: bool,
+) -> HistoryResult<HistoryError> {
+    let found = session.run(false, |tx| scope_intents(tx, kind, id))?;
+    if !found.is_empty() {
+        return Ok(classify(&found));
+    }
+    if shared {
+        return Ok(HistoryError::MountsActive(Box::new(MountHolders::new(
+            Vec::new(),
+        ))));
+    }
+    let scope = match kind {
+        2 => GcScopeKind::Project,
+        3 => GcScopeKind::Branch,
+        _ => GcScopeKind::Store,
+    };
+    let mut conflict = OpConflict::new(
+        if kind == 1 {
+            GcIntentKind::Compaction
+        } else {
+            GcIntentKind::Removal
+        },
+        scope,
+        if kind == 1 {
+            "store".to_owned()
+        } else {
+            hex(id)
+        },
+        None,
+        String::new(),
+        false,
+    );
+    if let Some((pid, client_addr, backend_start)) =
+        session.run(false, |tx| advisory_holder(tx, key))?
+    {
+        conflict = conflict.with_backend(Some(pid), client_addr, backend_start);
+    }
+    Ok(HistoryError::BusyOp(Box::new(conflict)))
 }
 
 #[cfg(feature = "postgresql")]

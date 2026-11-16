@@ -9,13 +9,29 @@
 //! reaches is kept through that node with its own edges, and a deleted project
 //! is excluded because every history edge is stack-local.
 use super::provider::HistoryProvider;
+use super::params;
 use super::rows::cell;
 use super::transaction::Transaction;
 use crate::backend::records::{Param, Record};
 use layerfs_history::error::{HistoryError, HistoryResult};
-use layerfs_history::identity::{BranchId, CommitId, LayerId, LayerStackId};
+use layerfs_history::identity::{BranchId, CommitId, LayerId, LayerStackId, NodeId};
 
 const CLEAR: &str = "kept_node_clear";
+const ROOTS: &str = "kept_node_roots";
+const KEPT_ROOTS: &str = "kept_node_kept_roots";
+const UNREACHABLE: &str = "history_unreachable_count";
+/// The statements that remove one Stack's unreachable history rows, in the
+/// order the deferred foreign keys need: children before their parents.
+const UNREACHABLE_DELETES: [&str; 8] = [
+    "history_remove_unreachable_commit",
+    "history_remove_unreachable_layer",
+    "history_remove_unreachable_branch",
+    "history_remove_unreachable_stack",
+    "history_remove_unreachable_lineage",
+    "history_remove_unreachable_commit_lineage",
+    "history_remove_unreachable_absorbed",
+    "history_remove_unreachable_reach",
+];
 const MARK: &str = "kept_node_mark";
 const READ: &str = "kept_node_read";
 
@@ -182,6 +198,76 @@ pub(super) fn mark(tx: &Transaction<'_>) -> HistoryResult<KeptHistory> {
         nodes.push(kept_node(row)?);
     }
     Ok(KeptHistory { nodes })
+}
+
+/// The retained history roots of one Stack: every Layer of a live Stack,
+/// which is the root set the mark closure itself starts from. A retired or
+/// deleted Stack has no roots. Node identities are Commits and Layers, so the
+/// Stack and Branch roots the closure also names are represented by the
+/// Layers that reach them.
+pub(super) fn retained_roots(
+    tx: &Transaction<'_>,
+    stack: LayerStackId,
+) -> HistoryResult<Vec<NodeId>> {
+    let rows = tx.query(ROOTS, params![stack.as_slice()])?;
+    roots(&rows)
+}
+
+/// The roots a mark recorded in kept_node for one Stack, for a caller that
+/// resolves them separately. A Stack no mark has reached yet falls back to
+/// the live roots.
+pub(super) fn kept_roots(tx: &Transaction<'_>, stack: LayerStackId) -> HistoryResult<Vec<NodeId>> {
+    let rows = tx.query(KEPT_ROOTS, params![stack.as_slice()])?;
+    if rows.is_empty() {
+        return retained_roots(tx, stack);
+    }
+    roots(&rows)
+}
+
+fn roots(rows: &[Record]) -> HistoryResult<Vec<NodeId>> {
+    rows.iter()
+        .map(|row| {
+            let id: Vec<u8> = cell(row, 0)?;
+            NodeId::from_slice(&id)
+        })
+        .collect()
+}
+
+/// How many history rows of one Stack the last mark did not retain. It is
+/// zero before any mark, when the closure that decides reachability is not
+/// recorded yet.
+pub(super) fn unreachable_count(
+    tx: &Transaction<'_>,
+    stack: LayerStackId,
+) -> HistoryResult<u64> {
+    let rows = tx.query(UNREACHABLE, params![stack.as_slice()])?;
+    let count: i64 = cell(
+        rows.first()
+            .ok_or(HistoryError::Integrity("unreachable count"))?,
+        0,
+    )?;
+    u64::try_from(count).map_err(|_| HistoryError::Integrity("unreachable count"))
+}
+
+/// Removes one Stack's unreachable history rows (the rows the last mark did
+/// not retain), returning how many were removed. Reachability is the
+/// kept_node closure a mark wrote; the same set a rebuild copies and a
+/// compaction collects. It runs in one write transaction.
+pub(super) fn remove_unreachable(
+    tx: &Transaction<'_>,
+    stack: LayerStackId,
+) -> HistoryResult<u64> {
+    let count = unreachable_count(tx, stack)?;
+    if count == 0 {
+        return Ok(0);
+    }
+    for key in &UNREACHABLE_DELETES[..5] {
+        tx.execute(key, params![stack.as_slice()])?;
+    }
+    for key in &UNREACHABLE_DELETES[5..] {
+        tx.execute(key, params![])?;
+    }
+    Ok(count)
 }
 
 fn kept_node(row: &Record) -> HistoryResult<KeptNode> {

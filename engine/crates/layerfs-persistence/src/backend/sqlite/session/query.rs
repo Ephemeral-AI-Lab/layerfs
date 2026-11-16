@@ -282,6 +282,39 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "kept_node_read" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/kept_node_read.sql"
         )),
+        "kept_node_roots" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/kept_node_roots.sql"
+        )),
+        "kept_node_kept_roots" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/kept_node_kept_roots.sql"
+        )),
+        "history_unreachable_count" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_unreachable_count.sql"
+        )),
+        "history_remove_unreachable_commit" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_commit.sql"
+        )),
+        "history_remove_unreachable_layer" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_layer.sql"
+        )),
+        "history_remove_unreachable_branch" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_branch.sql"
+        )),
+        "history_remove_unreachable_stack" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_stack.sql"
+        )),
+        "history_remove_unreachable_lineage" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_lineage.sql"
+        )),
+        "history_remove_unreachable_commit_lineage" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_commit_lineage.sql"
+        )),
+        "history_remove_unreachable_absorbed" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_absorbed.sql"
+        )),
+        "history_remove_unreachable_reach" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/history_remove_unreachable_reach.sql"
+        )),
         _ => Err(BackendError::Integrity),
     }
 }

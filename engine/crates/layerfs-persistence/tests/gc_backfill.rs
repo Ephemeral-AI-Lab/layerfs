@@ -338,6 +338,71 @@ fn commits_layers_and_epochs_are_backfilled_in_deterministic_order() {
     assert_eq!(recorded, definition(&sql));
 }
 
+/// Spec 4.1: Commits take their serials in `(created_ms, stack, id)` order, so
+/// two Commits created in the same millisecond still order by their Stack and
+/// then their identity, never by identity alone.
+#[test]
+fn equal_created_ms_commits_order_by_stack_then_identity() {
+    let t = Temp::new("gc-backfill-ties");
+    let path = t.join("db");
+    {
+        let handles = create(&path);
+        let one = initialize(&handles, 1);
+        let two = initialize(&handles, 2);
+        let a = branch_id(1);
+        let b = branch_id(2);
+        fork(&handles, one.id, a, 1, ForkSource::Layer(one.head_layer));
+        fork(&handles, two.id, b, 2, ForkSource::Layer(two.head_layer));
+        commit(&handles, a, 10);
+        commit(&handles, b, 20);
+        drop(handles);
+        let sql = rusqlite::Connection::open(&path).unwrap();
+        sql.execute("UPDATE \"commit\" SET created_ms=1000", [])
+            .unwrap();
+        drop(sql);
+        strip_position_state(&path);
+    }
+
+    writable(&path).expect("a pre-T1.4 Store opens writable");
+    let sql = rusqlite::Connection::open(&path).unwrap();
+    let mut commits: Vec<(Vec<u8>, Vec<u8>, i64)> = {
+        let mut statement = sql
+            .prepare("SELECT layer_stack_id,commit_id,history_serial FROM \"commit\"")
+            .unwrap();
+        let rows = statement
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap();
+        rows.map(|r| r.unwrap()).collect()
+    };
+    commits.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+    let ordered: Vec<i64> = commits.iter().map(|c| c.2).collect();
+    assert_eq!(
+        ordered,
+        (1..=ordered.len() as i64).collect::<Vec<_>>(),
+        "the serials follow (created_ms, stack, id), not identity alone"
+    );
+
+    // The genesis Layers follow every Commit, one per Stack in stack order,
+    // and the next serial is one above the highest assigned serial.
+    let genesis: Vec<i64> = {
+        let mut statement = sql
+            .prepare("SELECT history_serial FROM layer WHERE parent_layer_id IS NULL ORDER BY layer_stack_id")
+            .unwrap();
+        let rows = statement.query_map([], |r| r.get(0)).unwrap();
+        rows.map(|r| r.unwrap()).collect()
+    };
+    assert_eq!(
+        genesis,
+        (commits.len() as i64 + 1..=commits.len() as i64 + genesis.len() as i64).collect::<Vec<_>>(),
+        "genesis Layers take the next Store serials after the Commits"
+    );
+    assert_eq!(
+        next_serial(&sql),
+        commits.len() as i64 + genesis.len() as i64 + 1
+    );
+    drop(sql);
+}
+
 #[test]
 fn republishing_layers_share_their_source_commit_serial() {
     let t = Temp::new("gc-backfill-republish");

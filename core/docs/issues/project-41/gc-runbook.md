@@ -18,7 +18,7 @@
 - **PostgreSQL.** `store.status` reads the Store-side `gc_op` (§11). On a direct or session-pooled `psql`:
 
   ```sql
-  SELECT generation, phase, scratch_schema, artifact, pid, backend_start, incarnation FROM gc_op;
+  SELECT generation, phase, scratch_schema, artifact, pid, backend_start, usename, incarnation FROM gc_op;
   SELECT (SELECT count(*) FROM gc_dead), (SELECT catalog_incarnation FROM history_meta);
   SELECT kind, scope_kind, scope_id, state, uncertain, phase, artifact FROM gc_intent WHERE state <> 'done';
   SELECT nspname FROM pg_namespace WHERE nspname LIKE 'lfs_gc_%';
@@ -35,7 +35,7 @@
 it, the owning/next call settles it (§5.1, §10). A live owner is `Busy` — wait, don't kill it.
 
 1. Liveness comes from the recorded owner, not the clock: SQLite home op
-   `owner.pid`/`pid_start`/`pid_boot`; PG `gc_op.pid` + `backend_start` against `pg_stat_activity`.
+   `owner.pid`/`pid_start`/`pid_boot`; PG `gc_op.pid` + `backend_start` + `usename` against `pg_stat_activity`.
 2. Dead owner, uncertain op: run `layerfs store compact <store>` again; it adopts the dead
    op with the artifact/high-water in the record (§9). `sandbox.close`/`machine.remove`/
    `store.remove` clear their own ops; `logs.reset` cannot (§10). A removed machine record alone is no proof (§5.1).
@@ -52,7 +52,7 @@ it, the owning/next call settles it (§5.1, §10). A live owner is `Busy` — wa
       AND a.pid <> pg_backend_pid();
    ```
 
-   Check the boolean, poll until the `(pid, backend_start)` pair is gone, then read
+   Check the boolean, poll until the `(pid, backend_start, usename)` triple is gone, then read
    `history_meta.catalog_incarnation`: `G` = not committed, `G+1` = installed. Needs PG 14+
    and `pg_signal_backend`/membership, else `Unsupported` (§8). Never terminate a live owner to clear `Busy`.
 

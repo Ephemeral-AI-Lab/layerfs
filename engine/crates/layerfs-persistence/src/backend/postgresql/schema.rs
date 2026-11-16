@@ -514,7 +514,7 @@ fn backfill_position_serials(tx: &Transaction<'_>) -> Result<(), BackendError> {
     let base = next.max(commit_max.max(layer_max) + 1);
     tx.query(
         &format!(
-            "WITH ordered AS (SELECT commit_id,{base}+ROW_NUMBER() OVER (ORDER BY created_ms,commit_id)-1 AS serial FROM \"commit\" WHERE history_serial=0) UPDATE \"commit\" AS c SET history_serial=ordered.serial FROM ordered WHERE ordered.commit_id=c.commit_id AND c.history_serial=0"
+            "WITH ordered AS (SELECT commit_id,{base}+ROW_NUMBER() OVER (ORDER BY created_ms,layer_stack_id,commit_id)-1 AS serial FROM \"commit\" WHERE history_serial=0) UPDATE \"commit\" AS c SET history_serial=ordered.serial FROM ordered WHERE ordered.commit_id=c.commit_id AND c.history_serial=0"
         ),
         vec![],
     )?;
@@ -534,6 +534,13 @@ fn backfill_position_serials(tx: &Transaction<'_>) -> Result<(), BackendError> {
     )?;
     tx.query(
         "UPDATE layer AS l SET history_serial=(SELECT c.history_serial FROM \"commit\" AS c WHERE c.layer_stack_id=l.layer_stack_id AND c.commit_id=l.source_commit_id) WHERE l.history_serial=0 AND l.source_commit_id IS NOT NULL",
+        vec![],
+    )?;
+    // The rest: a Layer that neither opens a Stack nor republishes a Commit
+    // takes the next serials by its source Commit's creation order, then its
+    // Stack and identity.
+    tx.query(
+        "WITH ordered AS (SELECT layer_id,(SELECT COALESCE(MAX(history_serial),0)+1 FROM layer)+ROW_NUMBER() OVER (ORDER BY COALESCE(c.created_ms,0),l.layer_stack_id,l.layer_id)-1 AS serial FROM layer l LEFT JOIN \"commit\" c ON c.layer_stack_id=l.layer_stack_id AND c.commit_id=l.source_commit_id WHERE l.history_serial=0) UPDATE layer AS l SET history_serial=ordered.serial FROM ordered WHERE ordered.layer_id=l.layer_id AND l.history_serial=0",
         vec![],
     )?;
     tx.query(
