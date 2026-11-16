@@ -8,6 +8,18 @@ pub struct KernelMount {
     pub(crate) owner: u64,
     pub(crate) root: u64,
 }
+/// Windows (A2, #454): the in-process WinFsp mount mints its
+/// connection token here - the unix kernel handshake it otherwise
+/// comes from does not run; every value stays engine-unique.
+#[cfg(windows)]
+pub fn mint_windows(engine: u64, owner: u64, root: u64) -> KernelMount {
+    KernelMount {
+        engine,
+        owner,
+        root,
+    }
+}
+
 impl KernelMount {
     pub const fn engine(self) -> u64 {
         self.engine
