@@ -121,6 +121,32 @@ pub unsafe extern "system" fn read_directory(
     STATUS_SUCCESS
 }
 
+/// Read: the ports-backed data window (the serial is the handle the
+/// open made; the file context names it).
+pub unsafe extern "system" fn read(
+    fs: *mut FSP_FILE_SYSTEM,
+    file: *mut c_void,
+    buffer: *mut c_void,
+    offset: u64,
+    length: *mut u32,
+) -> NTSTATUS {
+    let Some(context) = (unsafe { context(fs) }) else {
+        return STATUS_NOT_IMPLEMENTED;
+    };
+    let serial = unsafe { *(file as *const u64) };
+    let want = if length.is_null() { 0 } else { unsafe { *length } };
+    let data = match crate::data::data(context, serial, serial, offset, want) {
+        Ok(data) => data,
+        Err(_) => return STATUS_NOT_IMPLEMENTED,
+    };
+    if !length.is_null() {
+        unsafe { *length = data.len() as u32 };
+    }
+    if !data.is_empty() {
+        unsafe { std::ptr::copy_nonoverlapping(data.as_ptr(), buffer.cast(), data.len()) };
+    }
+    STATUS_SUCCESS
+}
 /// Reads a NUL-terminated UTF-16 string.
 unsafe fn wide_to_string(ptr: *const u16) -> String {
     let mut len = 0usize;

@@ -53,7 +53,7 @@ pub struct FSP_FILE_SYSTEM_INTERFACE {
     pub Create: Option<unsafe extern "system" fn() -> NTSTATUS>,
     pub Open: Option<unsafe extern "system" fn(*mut FSP_FILE_SYSTEM, *const u16, u32, *mut c_void, *mut c_void, *const c_void, u32) -> NTSTATUS>,
     pub Overwrite: Option<unsafe extern "system" fn() -> NTSTATUS>,
-    pub Read: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub Read: Option<unsafe extern "system" fn(*mut FSP_FILE_SYSTEM, *mut c_void, *mut c_void, u64, *mut u32) -> NTSTATUS>,
     pub Write: Option<unsafe extern "system" fn() -> NTSTATUS>,
     pub Flush: Option<unsafe extern "system" fn() -> NTSTATUS>,
     pub GetFileInfo: Option<unsafe extern "system" fn() -> NTSTATUS>,

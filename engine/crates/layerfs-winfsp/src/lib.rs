@@ -5,6 +5,7 @@
 
 pub mod ffi;
 pub mod callbacks;
+pub mod data;
 pub mod directory;
 pub mod services;
 
