@@ -1323,6 +1323,22 @@ fn the_rebuild_report_and_markers_hold_on_postgresql() {
         f.handles.history.mark().unwrap().live_heads_digest(),
         "the digest is stable across marks"
     );
+    // AC-41: the Phase M mark reads live pack bodies (not the persisted dead
+    // table), each live pack counted once by the body extent it transferred.
+    let mark_bytes = mark.mark_bytes();
+    assert!(
+        mark_bytes > 0,
+        "AC-41: the reference-bearing closure reads pack bodies"
+    );
+    assert!(
+        mark_bytes <= sum_pack_lengths(schema),
+        "AC-41: markBytes is bounded by the Store's stored bytes"
+    );
+    assert_eq!(
+        mark_bytes,
+        f.handles.history.mark().unwrap().mark_bytes(),
+        "AC-41: markBytes is stable across marks"
+    );
     let literals = sqlite_literals("liveHeadsDigest");
     assert_eq!(literals.len(), 3, "the SQLite golden holds three digests");
     assert_eq!(

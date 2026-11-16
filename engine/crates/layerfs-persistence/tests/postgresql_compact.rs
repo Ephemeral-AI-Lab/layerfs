@@ -381,6 +381,11 @@ fn a_rebuild_records_bounded_metrics_with_pg_phases() {
     let live = filesystem_root(&handles, 1);
     initialize(&handles, 1, live);
     let _dead = whole_file(&handles, b"a pack the metrics rebuild collects");
+    // The same mark state the compaction's Phase M runs at: its body reads are
+    // the `compact.mark_bytes` gauge the run records.
+    let (mark, _) = handles.history.mark_gc().unwrap();
+    let mark_bytes = mark.mark_bytes();
+    assert!(mark_bytes > 0, "the mark reads the live pack bodies");
 
     let capture = CompactMetricsCapture::start();
     let receipt = handles.compact(&request(21)).unwrap();
@@ -399,6 +404,11 @@ fn a_rebuild_records_bounded_metrics_with_pg_phases() {
         1
     );
     assert!(value(&metrics, "compact.duration_ns", &[("statistic", "sum")]) > 0);
+    assert_eq!(
+        value(&metrics, "compact.mark_bytes", &[]),
+        mark_bytes,
+        "AC-41: the run records the Phase M mark's distinct body bytes"
+    );
     assert_eq!(
         value(&metrics, "compact.dead_bytes", &[("kind", "bound")]),
         receipt.dead_bytes_bound

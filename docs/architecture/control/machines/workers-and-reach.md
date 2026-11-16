@@ -159,6 +159,7 @@ waits at most 10 s; other operations wait as long as they run
 | --- | --- |
 | `worker.ping` | `{kind: "worker", version, pid}`; `args.capacity` adds `free_disk` of the root's filesystem |
 | `store.call` | one Store method on `store/<name>/store.sqlite` under the root, holding the Store's lease there |
+| `store.compact` | none: there is no compaction operation. A remote sqlite Store's `store.compact` is refused `Unsupported` before the worker is dialled (spec S6 deviation D5) |
 | `store.file` | one step of a Store push, pull, remove, stat or backup, with `progress` events for hashing steps |
 | `store.reach` | `store.attach`'s check of this machine's connection to a PostgreSQL Store |
 | `store.diagnose`, `doctor.sandbox` | doctor's read-only observations; `doctor.sandbox` with `leftovers: true` is the bounded walk for what interrupted operations left under the root |

@@ -45,6 +45,8 @@ pub(crate) struct RunMetrics {
     pub(crate) dead_bytes_refined: u64,
     pub(crate) kept_waste: CompactKeptWaste,
     pub(crate) residue_bytes: u64,
+    /// §11 `markBytes`: the Phase M mark's distinct live-pack body bytes.
+    pub(crate) mark_bytes: u64,
     pub(crate) leftover_settled: bool,
 }
 
@@ -60,6 +62,7 @@ impl RunMetrics {
             dead_bytes_refined: 0,
             kept_waste: CompactKeptWaste::default(),
             residue_bytes: 0,
+            mark_bytes: 0,
             leftover_settled: false,
         }
     }
@@ -128,6 +131,7 @@ impl RunMetrics {
             dead_bytes_refined: self.dead_bytes_refined,
             kept_waste: self.kept_waste,
             residue_bytes: self.residue_bytes,
+            mark_bytes: Some(self.mark_bytes),
             phase_nanos: self.phase_nanos,
             total_nanos,
             leftover_settled: self.leftover_settled,
