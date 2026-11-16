@@ -389,9 +389,9 @@ $ layerfs machine files native
 
 | Error | When |
 | --- | --- |
-| `InvalidInput` | an option outside its range; a `cursor` with no `path`, or not an entry of the folder; a path that is not absolute or holds a `..`; on `native`, a path outside the LayerFS folders; a `restricted`, `unreadable`, `system` or `mount` entry, or a path in one; a link at the end, or, in a LayerFS folder, on the way; a FIFO, socket or device; a path a link leads into a mount that is not entered |
+| `InvalidInput` | an option outside its range; a `cursor` with no `path`, or not an entry of the folder; a path that is not absolute or holds a `..`; on `native`, a path outside the LayerFS folders; a `restricted`, `unreadable`, `system` or `mount` entry, or a path in one; a link at the end, or, in a LayerFS folder, on the way; a FIFO, socket or device; a path a link leads into a mount that is not entered; a file or folder the system refuses to open (its permissions, or a link another user made in a shared folder such as `/tmp`) |
 | `NotFound` | no machine of that name; nothing is at the path |
-| `Unavailable` | the machine is stopped or its worker did not answer in 8 s; the read ran past 6 s. Nothing starts a machine |
+| `Unavailable` | the machine is stopped, or its worker did not greet in 2 s or answer in 8 s; the read ran past 6 s. Nothing starts a machine |
 | `Busy` | two inspection reads already run on that machine; read again |
 | `Unsupported` | a Linux kernel before 5.6 (no `openat2`), or before 5.8 for a path read from `/` (no mount id in `statx`); nothing else is tried |
 

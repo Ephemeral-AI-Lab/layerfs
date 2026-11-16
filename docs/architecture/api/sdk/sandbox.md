@@ -99,7 +99,8 @@ CLI     layerfs sandbox list [<project>] [--page-size <page-size>] [--page-pos <
 counts as 0 ([`family.rs`](../../../../control/crates/layerfs-sandbox/src/family.rs) `page`).
 Each item is the record (`View::List`). No machine, worker or daemon is
 asked, so `state` is `running` for any started Sandbox even when its machine
-is down, and never `lost`; `sandbox.get` asks
+is down (`gone` once a `machine.stop` with `force` has ended it), and never
+`lost`; `sandbox.get` asks
 ([`list.rs`](../../../../control/crates/layerfs-sandbox/src/list.rs)).
 
 With `live` (layerfs-project#164) each item of the page also says whether
@@ -284,7 +285,7 @@ through the root of the Sandbox's init process, on the machine that runs it
 
 | | In the root |
 | --- | --- |
-| Links | one on the way resolves inside the root (`/lib` of a merged-`/usr` image); the last name is never followed |
+| Links | one on the way resolves inside the root (`/lib` of a merged-`/usr` image); the last name is never followed. Where the kernel's `fs.protected_symlinks` is on, a path right under a link a command made in a sticky shared folder (`/tmp`) is `InvalidInput`: the kernel refuses the reader, which is not the link's owner |
 | `system` | `/proc`, `/sys`, `/dev`: listed, never `stat`ed or entered |
 | Mounts | entered when the type is `ext4`, `xfs`, `btrfs`, `zfs`, `f2fs`, `overlay` or `tmpfs` (the private `/tmp`, `/.layerfs/runtime`, the run folder and a bound Store's folder); any other is `mount` with its `fs`. A Workspace mount is `mount` with `workspace`, its id, and is never `stat`ed or entered |
 | What is opened | every file and folder: the Sandbox's files are its own, and there is no world-readable rule |
@@ -325,10 +326,10 @@ window is read: a sparse 10 GiB file answers a window near its end at once.
 
 | Error | When |
 | --- | --- |
-| `InvalidInput` | an option outside its range; a `cursor` with no `path`, or not an entry of the folder; a path that is not absolute or holds a `..`; for a Sandbox with no root of its own, a path outside its home (its run folder's `config/`, `overlay/`, `daemon.log` and Workspace mounts included); a symbolic link at the end, or, in the home, on the way, wherever it leads; a `system` entry or a path in one; a path a link leads into a mount that is not entered, or to what LayerFS keeps private; a FIFO, socket or device; a mount point or a path in one; a `restricted` entry or a path in one (`store.sqlite*`); a regular file with several names that the Sandbox's command user (the numeric uid of its daemon record, else 501) does not own |
+| `InvalidInput` | an option outside its range; a `cursor` with no `path`, or not an entry of the folder; a path that is not absolute or holds a `..`; for a Sandbox with no root of its own, a path outside its home (its run folder's `config/`, `overlay/`, `daemon.log` and Workspace mounts included); a symbolic link at the end, or, in the home, on the way, wherever it leads; a `system` entry or a path in one; a path a link leads into a mount that is not entered, or to what LayerFS keeps private; a FIFO, socket or device; a file or folder the system refuses to open (its permissions, or, in the root, a path under a link another user made in a shared folder such as `/tmp`, where the kernel's `fs.protected_symlinks` refuses the reader); a mount point or a path in one; a `restricted` entry or a path in one (`store.sqlite*`); a regular file with several names that the Sandbox's command user (the numeric uid of its daemon record, else 501) does not own |
 | `NotFound` | nothing is at the path |
 | `NoSuchSandbox` | no Sandbox of that name, or its machine holds no run folder for it |
-| `Unavailable` | the Sandbox's machine is stopped or its worker did not answer in 8 s; the read ran past 6 s; a path in the root of a Sandbox whose daemon is not running, or whose recorded process id now names another process. Nothing starts a machine or a Sandbox |
+| `Unavailable` | the Sandbox's machine is stopped, or its worker did not greet in 2 s or answer in 8 s; the read ran past 6 s; a path in the root of a Sandbox whose daemon is not running, or whose recorded process id now names another process. Nothing starts a machine or a Sandbox |
 | `Busy` | two inspection reads already run on that machine; read again |
 | `Unsupported` | a Linux kernel before 5.6 (no `openat2`), or before 5.8 for a path in the root (no mount id in `statx`); a path in the root read by a process that is not root (a native Linux home), or that may not read the init's root, each with its reason; nothing else is tried |
 

@@ -398,3 +398,25 @@ fn a_root_view_ends_only_in_the_mounts_its_caller_allowed_by_id() {
     assert!(open(&allowed, "proc/self/root/etc").is_err());
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn what_the_system_refuses_to_open_is_denied_not_a_failure() {
+    let dir = scratch("denied");
+    std::fs::create_dir(dir.join("closed")).unwrap();
+    std::fs::write(dir.join("closed/inside"), "x").unwrap();
+    std::fs::write(dir.join("file"), "x").unwrap();
+    let close = |name: &str| {
+        std::fs::set_permissions(dir.join(name), PermissionsExt::from_mode(0o000)).unwrap();
+    };
+    close("file");
+    close("closed");
+    if std::fs::File::open(dir.join("file")).is_ok() {
+        println!("NOT_RUN denied opens: this user (root) opens a file of mode 000");
+    } else {
+        let base = Base::open(&dir, View::Beneath).unwrap();
+        for path in ["file", "closed", "closed/inside"] {
+            assert!(matches!(open(&base, path), Err(Refused::Denied)), "{path}");
+        }
+    }
+    std::fs::set_permissions(dir.join("closed"), PermissionsExt::from_mode(0o700)).unwrap();
+}

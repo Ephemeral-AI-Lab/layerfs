@@ -449,12 +449,14 @@ impl<'a> Scope<'a> {
         if self.rules.system(relative) {
             return Class::System;
         }
-        let point = self.mounts.iter().find(|point| point.at == relative);
-        if let Some(point) = point.filter(|point| !point.crossed) {
-            return Class::Mount(Some(point.fs.clone()), None);
-        }
         let shown = self.shown.join(relative);
         let kept = roots::kept(self.root, &shown);
+        let point = self.mounts.iter().find(|point| point.at == relative);
+        if let Some(point) = point.filter(|point| !point.crossed) {
+            // a Workspace mount the table names keeps its id
+            let id = (kept == Kept::Workspace).then(|| self.workspace(&shown));
+            return Class::Mount(Some(point.fs.clone()), id.flatten());
+        }
         if kept == Kept::Workspace {
             return Class::Mount(None, self.workspace(&shown));
         }
@@ -579,6 +581,9 @@ pub(super) fn refusal(call: &str, path: &Path, why: Refused) -> SdkRefusal {
             "leaves the folder it is read in (another mount, or a folder moved meanwhile); it is not read",
         ),
         Refused::Mount => invalid("is in a mount this view does not enter; it is not read"),
+        Refused::Denied => invalid(
+            "may not be opened: the system refuses it (its permissions, or a link another user made in a shared folder); it is not read",
+        ),
         Refused::Special(kind) => invalid(&format!(
             "is {}; only files and folders are read",
             special(kind)

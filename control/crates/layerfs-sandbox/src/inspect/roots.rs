@@ -95,6 +95,10 @@ pub(super) fn kept(root: &Path, path: &Path) -> Kept {
             Some("config" | "overlay") => Kept::Restricted,
             Some(LOG) if names.len() == 5 => Kept::Log,
             Some(WORKSPACES) if names.len() > 5 => Kept::Workspace,
+            // the image cache's own locks, beside its unpacked images
+            Some(lock) if names.len() == 5 && named(3, "images") && lock.ends_with(".lock") => {
+                Kept::Restricted
+            }
             _ => Kept::Open,
         };
     }

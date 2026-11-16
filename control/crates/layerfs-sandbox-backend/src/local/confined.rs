@@ -128,6 +128,10 @@ pub enum Refused {
     /// What was opened is in a mount the view does not read: one its
     /// caller did not allow ([`Base::cross`]).
     Mount,
+    /// The system refuses the open: the file's or a folder's permissions,
+    /// or a link on the way that another user made in a shared sticky
+    /// folder (`fs.protected_symlinks`).
+    Denied,
     /// It is neither a regular file nor a folder.
     Special(Kind),
     /// This kernel cannot make a confined open; the reason.
@@ -143,6 +147,7 @@ impl From<Errno> for Refused {
             Errno::ENOENT | Errno::ENOTDIR | Errno::ESRCH => Self::Missing,
             Errno::ELOOP => Self::Symlink,
             Errno::EXDEV => Self::Outside,
+            Errno::EACCES => Self::Denied,
             // what an open of a socket answers (Linux, macOS)
             Errno::ENXIO | Errno::EOPNOTSUPP => Self::Special(Kind::Socket),
             Errno::ENOSYS => Self::Unsupported(

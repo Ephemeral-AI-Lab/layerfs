@@ -499,6 +499,36 @@ fn a_layerfs_folder_is_read_beneath_itself_and_keeps_what_layerfs_keeps() {
 }
 
 #[test]
+fn the_image_cache_keeps_its_locks_and_a_home_keeps_its_own_lock_files() {
+    let fx = machine("locks");
+    let data = &fx.data;
+    // the image cache: one lock and one sidecar per digest, beside the
+    // unpacked image
+    let images = fx.run.parent().unwrap().join("images");
+    let digest = format!("{:064x}", 7);
+    std::fs::write(images.join(format!("{digest}.2.lock")), "").unwrap();
+    std::fs::write(images.join(format!("{digest}.2.json")), "{}").unwrap();
+    let listed = at(data, &images, &[]).unwrap();
+    assert_eq!(
+        shown(&listed, &images),
+        [
+            format!("{digest}.2.json file"),
+            format!("{digest}.2.lock restricted")
+        ]
+    );
+    invalid(
+        at(data, &images.join(format!("{digest}.2.lock")), &[]),
+        "kept private by LayerFS",
+    );
+    let sidecar = at(data, &images.join(format!("{digest}.2.json")), &[]).unwrap();
+    assert_eq!(sidecar.get_text("content"), Some("{}"));
+    // a lock file a command wrote in its home is its own file: it is read
+    std::fs::write(fx.run.join("tmp/Cargo.lock"), "version = 4").unwrap();
+    let own = at(data, &fx.run.join("tmp/Cargo.lock"), &[]).unwrap();
+    assert_eq!(own.get_text("content"), Some("version = 4"));
+}
+
+#[test]
 fn a_home_reads_only_its_layerfs_folders() {
     let _turn = PERMITS.lock().unwrap_or_else(|poison| poison.into_inner());
     let fx = machine("native");
