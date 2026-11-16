@@ -22,8 +22,10 @@ pub struct GetRequest {
 pub struct ListedWorkspace {
     /// The daemon's item, as it answered it, with what the side that keeps
     /// the Workspace's record added (layerfs-project#178): the commands
-    /// `running` in it and its `overlay_bytes`. A worker from before those
-    /// fields answers neither, and the item then has neither.
+    /// `running` in it and its `overlay_bytes`, and, from the side that runs
+    /// the Sandbox, its own cgroup's `usage` with `usage_reason`
+    /// (`crate::run_folder::workspace_usage`). A worker from before those
+    /// fields answers none of them, and the item then has none.
     pub item: SdkValue,
     /// Its kernel path: the item's `path`, or the daemon's `directory`
     /// from a worker that does not give it.

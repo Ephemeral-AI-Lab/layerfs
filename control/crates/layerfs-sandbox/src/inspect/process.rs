@@ -8,7 +8,7 @@
 //! written.
 use crate::record::DaemonRecord;
 use layerfs_bridge::control::SdkValue;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// This kernel's unified cgroup v2 hierarchy, where the namespaces backend
 /// makes one group per Sandbox (`layerfs-sandbox-backend`
@@ -38,9 +38,19 @@ pub const NOT_SUPPORTED: &str = "not_supported";
 pub const NOT_OBSERVED: &str = "not_observed";
 /// Why a Sandbox's `live` is null: its daemon record names no process.
 pub const NO_PID: &str = "no_pid";
+/// Why a Workspace's `usage` is null while its Sandbox has a group: no
+/// command runs in it, so it has no `ws-<workspace>` group (the backend
+/// makes it for a command and removes it once none runs).
+pub const NO_COMMAND: &str = "no_command";
 
 /// The names of the fields [`observed`] answers.
 pub const FIELDS: [&str; 3] = ["daemon", "usage", "usage_reason"];
+/// The names of the fields [`workspaces`] answers.
+pub const WORKSPACE_FIELDS: [&str; 2] = ["workspace_usage", "workspace_usage_reason"];
+/// The most Workspace groups one read lists: a Sandbox holds
+/// `crate::lifecycle::WORKSPACES` at once, and a group something still runs
+/// in outlives its Workspace's unmount.
+const MOST_GROUPS: usize = 256;
 
 /// Whether the process `daemon` names is that process and runs: its id
 /// with its start time and boot when the record holds them, as
@@ -200,14 +210,34 @@ pub fn usage(daemon: &DaemonRecord, root: &Path) -> (SdkValue, Option<&'static s
 /// hierarchy, and with [`NO_CGROUP`] when the group is not there or `id`
 /// is no group's name.
 pub fn usage_in(root: &Path, id: &str) -> (SdkValue, Option<&'static str>) {
+    match sandbox_group(root, id) {
+        Ok(group) => group_usage(&group),
+        Err(reason) => (SdkValue::Null, Some(reason)),
+    }
+}
+
+/// The group of the Sandbox with runtime id `id` under cgroup v2 hierarchy
+/// `root`, or why there is none to read ([`CGROUP_V1`], [`NO_CGROUP`]).
+fn sandbox_group(root: &Path, id: &str) -> Result<PathBuf, &'static str> {
     if !root.join("cgroup.controllers").is_file() {
-        return (SdkValue::Null, Some(CGROUP_V1));
+        return Err(CGROUP_V1);
     }
-    let plain = |b: u8| b.is_ascii_alphanumeric() || b == b'-' || b == b'_';
     let group = root.join(GROUP).join(id);
-    if id.is_empty() || !id.bytes().all(plain) || !group.is_dir() {
-        return (SdkValue::Null, Some(NO_CGROUP));
+    if !plain(id) || !group.is_dir() {
+        return Err(NO_CGROUP);
     }
+    Ok(group)
+}
+
+/// Whether `name` can be one group's name: not empty, and nothing that
+/// leaves the folder it is read in.
+fn plain(name: &str) -> bool {
+    let plain = |b: u8| b.is_ascii_alphanumeric() || b == b'-' || b == b'_';
+    !name.is_empty() && name.bytes().all(plain)
+}
+
+/// What cgroup `group` has used, as [`usage_in`] shows it.
+fn group_usage(group: &Path) -> (SdkValue, Option<&'static str>) {
     let text = |file: &str| std::fs::read_to_string(group.join(file)).ok();
     let number = |text: Option<String>| {
         (text.and_then(|text| text.trim().parse::<i64>().ok()))
@@ -231,6 +261,72 @@ pub fn usage_in(root: &Path, id: &str) -> (SdkValue, Option<&'static str>) {
         ("oom_kills", number(keyed("memory.events", "oom_kill"))),
     ]);
     (usage, reason)
+}
+
+/// `sandbox.get`'s per-Workspace usage of the Sandbox `daemon` records,
+/// under cgroup v2 hierarchy `root` ([`CGROUP_ROOT`]): `workspace_usage`,
+/// one `{ workspace, usage, usage_reason? }` for each `ws-<workspace>`
+/// group of a namespaces Sandbox's group (the group its Workspace's
+/// commands run in, `layerfs-sandbox-backend` `namespaces/cgroup.rs`
+/// `exec_path`), at most [`MOST_GROUPS`], read as [`usage_in`] reads a
+/// Sandbox's. A Workspace with no group is not listed: no command runs in
+/// it ([`NO_COMMAND`]). The Sandbox's group gives its Workspace groups no
+/// memory or pids controller (it holds processes of its own, so cgroup v2
+/// lets it give none), so their `memory_*`, `pids` and `oom_kills` are
+/// null with [`NO_CONTROLLER`] on such a kernel; `cpu_usec` is always read.
+/// When no Workspace of the Sandbox can have a group, `workspace_usage`
+/// is null and `workspace_usage_reason` says why, with the words
+/// [`usage`] uses: [`HOST_PROCESS`], [`NOT_SUPPORTED`], [`CGROUP_V1`],
+/// [`NO_CGROUP`].
+pub fn workspaces(daemon: &DaemonRecord, root: &Path) -> Vec<(String, SdkValue)> {
+    let groups = match daemon.runtime() {
+        Some("namespaces") => match daemon.container() {
+            Some(id) => sandbox_group(root, id).map(|group| workspace_groups(&group)),
+            None => Err(NO_CGROUP),
+        },
+        Some("native") => Err(HOST_PROCESS),
+        _ => Err(NOT_SUPPORTED),
+    };
+    match groups {
+        Ok(groups) => vec![("workspace_usage".to_owned(), SdkValue::List(groups))],
+        Err(reason) => vec![
+            ("workspace_usage".to_owned(), SdkValue::Null),
+            ("workspace_usage_reason".to_owned(), SdkValue::text(reason)),
+        ],
+    }
+}
+
+/// The `ws-<workspace>` groups below Sandbox group `group`, each as
+/// `{ workspace, usage, usage_reason? }`; none when it cannot be listed
+/// (it ended while this read ran). A folder without `cgroup.procs` is not
+/// a group (it was removed while this read ran) and is skipped.
+fn workspace_groups(group: &Path) -> Vec<SdkValue> {
+    let Ok(entries) = std::fs::read_dir(group) else {
+        return Vec::new();
+    };
+    let mut groups: Vec<(String, PathBuf)> = (entries.flatten())
+        .filter_map(|entry| {
+            let name = entry.file_name().into_string().ok()?;
+            let workspace = name.strip_prefix("ws-").filter(|w| plain(w))?;
+            let path = entry.path();
+            path.join("cgroup.procs")
+                .is_file()
+                .then(|| (workspace.to_owned(), path))
+        })
+        .take(MOST_GROUPS)
+        .collect();
+    groups.sort();
+    (groups.into_iter())
+        .map(|(workspace, path)| {
+            let (usage, reason) = group_usage(&path);
+            let mut fields = vec![
+                ("workspace".to_owned(), SdkValue::Text(workspace)),
+                ("usage".to_owned(), usage),
+            ];
+            fields.extend(reason.map(|r| ("usage_reason".to_owned(), SdkValue::text(r))));
+            SdkValue::Map(fields)
+        })
+        .collect()
 }
 
 /// What a monitoring read shows of the process `daemon` names: `{ daemon,

@@ -20,7 +20,9 @@ pub(crate) const CALL: Call = call(
 /// Runs `sandbox.get`: its record with its derived `state`, one page of its
 /// `workspaces` (each with its `path`, `name` and `ws`, and, from the side
 /// that keeps its record, the commands `running` in it and its
-/// `overlay_bytes`, layerfs-project#178), why its machine did
+/// `overlay_bytes`, layerfs-project#178; and, from the side that runs the
+/// Sandbox, its own cgroup's `usage` with `usage_reason`, described
+/// below), why its machine did
 /// not answer (`down_reason`, with the partial `down` counts when the
 /// daemon's capacity notice carried them, #649), the daemon's
 /// `daemon_capacity` read model when the Sandbox answered it (#540), its
@@ -32,6 +34,21 @@ pub(crate) const CALL: Call = call(
 /// `usage` too) and
 /// `next_page_pos`. The library reads it best effort and bounded, so this
 /// layer only shows what it got.
+///
+/// Each Workspace's `usage` is what its own cgroup
+/// (`<Sandbox group>/ws-<workspace>`, the group its commands run in) has
+/// used, in the Sandbox `usage` shape: `{ cpu_usec, memory_current,
+/// memory_peak, memory_file, pids, oom_kills }`, each value null when the
+/// group has no such file. `usage_reason` is there when `usage` or one of
+/// its values is null: `no_controller` (the group has no memory or pids
+/// controller: a Sandbox's group holds processes of its own, so it gives
+/// its Workspace groups none and only `cpu_usec` is read), `no_command`
+/// (no command runs in it, so it has no group), `host_process`,
+/// `not_supported`, `cgroup_v1` or `no_cgroup` (as for the Sandbox's
+/// `usage`), or `not_observed` (the side that runs the Sandbox did not
+/// answer, or is a worker of a build before this field). Like
+/// `overlay_bytes`, both are present on every Workspace this build lists
+/// and absent only from a worker that predates them entirely.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let request = GetRequest {
         name: args.get_text("name").unwrap_or("").to_owned(),
