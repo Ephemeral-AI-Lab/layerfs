@@ -92,6 +92,18 @@ impl SqliteHandles {
             let acquisition_schema = session.acquisition;
             let synchronous = profile.synchronous;
 
+            // §5.1/§7 admission: a client that holds the Store keeps its
+            // sidecars, and the seal cannot remove one its owner keeps: it
+            // would fail `Conflict` only after the whole mark. Another
+            // process's open descriptions name that client, so the run
+            // refuses `Busy` here, before the lane, the intent and the mark,
+            // and leaves no artifact or op record. A crash remnant has no
+            // description and is not refused; the next clean seal removes it
+            // as before.
+            if crate::backend::sqlite::exclusion::held_by_other_process(&store) {
+                return Err(HistoryError::Busy);
+            }
+
             // §5: an unfinished Init or merge holds the Store; its working
             // rows are not wiped by a compaction that was never admitted.
             if unfinished_work(&store)? {

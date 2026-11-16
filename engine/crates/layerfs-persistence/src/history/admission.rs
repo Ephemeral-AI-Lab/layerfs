@@ -48,7 +48,7 @@ const ALL_PROJECT: &str = "gc_intent_all_project";
 const ALL_STORE: &str = "gc_intent_all_store";
 #[cfg(feature = "postgresql")]
 const BRANCH_STACK: &str = "gc_branch_stack_any";
-const EPOCH_SHARE: &str = "gc_epoch_share";
+const EPOCH_LOCK: &str = "gc_epoch_lock";
 
 #[cfg(feature = "postgresql")]
 const LOCK_XACT_SHARED: &str = "gc_lock_xact_shared";
@@ -260,43 +260,85 @@ fn parse_boot(text: &str) -> Option<u128> {
     u128::from_str_radix(text.strip_prefix("boot:")?.split(':').next()?, 16).ok()
 }
 
-/// True only when this process can prove `intent`'s owner is gone: the same
-/// boot and PID namespace, and the recorded process id/start no longer runs.
-///
-/// A `machine.stop` or SIGKILL leaves the intent row behind, so a mount whose
-/// owner was killed in this same container namespace can be adopted on the
-/// next admission instead of holding its scope forever. Another boot, another
-/// machine or another container is never proved dead: it stays live and
-/// unreachable, and is still reported as a holder.
-fn owner_dead(intent: &GcIntent) -> bool {
-    let (Some(runtime), Some(boot)) = (
-        intent.owner_runtime.as_deref(),
-        intent.owner_boot.as_deref(),
-    ) else {
-        return false;
-    };
-    let Some((pid, start, namespace)) = parse_runtime(runtime) else {
-        return false;
-    };
-    let Some(namespace) = namespace else {
-        return false;
-    };
-    if current_namespace() != Some(namespace) || current_boot() != parse_boot(boot) {
-        return false;
+/// This machine's owner evidence, captured once per admission: this boot and
+/// this process's PID namespace. Read once and compared per intent, so the
+/// check is bounded (one small read per admission, one `/proc` stat per
+/// same-namespace owner) and never scans the process table.
+pub(crate) struct OwnerView {
+    boot: Option<u128>,
+    namespace: Option<u64>,
+}
+
+impl OwnerView {
+    pub(crate) fn now() -> Self {
+        Self {
+            boot: current_boot(),
+            namespace: current_namespace(),
+        }
     }
-    match process_stat(pid) {
-        Some((state, observed)) => observed != start || matches!(state, b'Z' | b'X' | b'x'),
-        None => true,
+
+    /// True only when this process can prove `intent`'s owner is gone.
+    ///
+    /// A `machine.stop` or provider SIGKILL leaves the intent row behind, and
+    /// the recorded `(pid, start, namespace)` is meaningful only in its own
+    /// kernel:
+    /// - another boot of a local SQLite Store cannot still run: a SQLite Store
+    ///   is admitted only by processes on the machine that holds the file, so
+    ///   after that machine reboots every recorded owner is gone and its
+    ///   intents are adopted;
+    /// - another boot of a shared PostgreSQL Store may be a different machine
+    ///   that still runs the owner, and a different PID namespace on this boot
+    ///   may belong to a live Sandbox this process cannot inspect soundly
+    ///   (`/proc` may be a namespace view, and another user's processes may be
+    ///   unreadable). Both stay conservatively live: never adopted, still
+    ///   reported as a holder with its `sandbox`, `machine` and `op`, until
+    ///   its owner releases it or an operator settles it with
+    ///   `gc_mark_uncertain` and `gc_release`.
+    fn dead(&self, intent: &GcIntent, shared_store: bool) -> bool {
+        let (Some(runtime), Some(boot)) = (
+            intent.owner_runtime.as_deref(),
+            intent.owner_boot.as_deref(),
+        ) else {
+            return false;
+        };
+        let Some((pid, start, Some(namespace))) = parse_runtime(runtime) else {
+            return false;
+        };
+        let Some(recorded_boot) = parse_boot(boot) else {
+            return false;
+        };
+        let Some(here) = self.boot else {
+            return false;
+        };
+        if recorded_boot != here {
+            return !shared_store;
+        }
+        // Another namespace is not probed: this `/proc` may be one namespace's
+        // view and another user's processes may be unreadable, so absence
+        // there is not proof of death. Conservative and bounded: only this
+        // process's own namespace is checked.
+        if self.namespace != Some(namespace) {
+            return false;
+        }
+        match process_stat(pid) {
+            Some((state, observed)) => observed != start || matches!(state, b'Z' | b'X' | b'x'),
+            None => true,
+        }
     }
 }
 
 /// Adopts the rows whose owner is provably dead: their operation cannot still
 /// be running, so their intent is deleted and does not hold the scope. The
 /// caller reports the rows that remain.
-fn settle_dead(tx: &Transaction<'_>, found: Vec<GcIntent>) -> HistoryResult<Vec<GcIntent>> {
+fn settle_dead(
+    tx: &Transaction<'_>,
+    found: Vec<GcIntent>,
+    shared_store: bool,
+    owners: &OwnerView,
+) -> HistoryResult<Vec<GcIntent>> {
     let mut live = Vec::with_capacity(found.len());
     for intent in found {
-        if owner_dead(&intent) {
+        if owners.dead(&intent, shared_store) {
             release_in(tx, &intent.op_id)?;
         } else {
             live.push(intent);
@@ -391,9 +433,10 @@ fn validate_mount(tx: &Transaction<'_>, intent: &GcIntent) -> HistoryResult<()> 
 }
 
 /// One registration in its own write transaction.
-fn register_in(tx: &Transaction<'_>, intent: &GcIntent, _postgres: bool) -> HistoryResult<()> {
+fn register_in(tx: &Transaction<'_>, intent: &GcIntent, postgres: bool) -> HistoryResult<()> {
     validate_mount(tx, intent)?;
-    let found = settle_dead(tx, conflicts_for(tx, intent)?)?;
+    let owners = OwnerView::now();
+    let found = settle_dead(tx, conflicts_for(tx, intent)?, postgres, &owners)?;
     if !found.is_empty() {
         return Err(classify(&found));
     }
@@ -597,11 +640,22 @@ fn lock_scope(
     }
 }
 
-fn epoch_share(tx: &Transaction<'_>, postgres: bool, stack: LayerStackId) -> HistoryResult<()> {
+/// PostgreSQL: take the project epoch row a removal marker transaction will
+/// bump, `FOR UPDATE`, as the first statement that reads it in that
+/// transaction.
+///
+/// `FOR SHARE` here and `UPDATE ... epoch = epoch + 1` later was a classic
+/// lock upgrade: two removals in one project both held the shared row lock and
+/// then both waited to upgrade it, so PostgreSQL aborted one with `40P01`
+/// (deadlock). The exclusive lock orders them on the row: the loser waits for
+/// the winner's commit, then reads (and bumps) the value the winner wrote.
+/// SQLite's single `BEGIN IMMEDIATE` writer already excludes another marker
+/// transaction, so there the statement only proves the row exists.
+fn epoch_hold(tx: &Transaction<'_>, postgres: bool, stack: LayerStackId) -> HistoryResult<()> {
     if !postgres {
         return Ok(());
     }
-    let found = tx.query(EPOCH_SHARE, [stack.as_slice()])?;
+    let found = tx.query(EPOCH_LOCK, [stack.as_slice()])?;
     if found.len() != 1 {
         return Err(HistoryError::Conflict("project epoch"));
     }

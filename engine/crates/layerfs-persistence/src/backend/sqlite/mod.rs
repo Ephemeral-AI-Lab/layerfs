@@ -3,6 +3,7 @@
 pub(crate) mod acquisition;
 pub(crate) mod compact;
 pub(crate) mod compact_visit;
+pub(crate) mod exclusion;
 pub(crate) mod heads;
 pub(crate) mod lane;
 pub(crate) mod lifecycle;

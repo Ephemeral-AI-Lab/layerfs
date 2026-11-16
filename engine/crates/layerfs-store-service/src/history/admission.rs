@@ -106,9 +106,15 @@ fn pid_namespace() -> Option<u64> {
 /// The owner evidence every intent records: this process (`pid` and its start
 /// time, plus the PID namespace that makes the id meaningful) and this boot.
 /// A later admission in the same namespace can prove the owner gone after a
-/// `machine.stop` or SIGKILL; a call in another namespace (another machine or
-/// container) never does. The boot token carries a unique suffix (the
-/// operation or Workspace id), because the schema's
+/// `machine.stop` or SIGKILL. A call in another PID namespace stays
+/// conservatively live: `/proc` may be one namespace's view and another
+/// user's processes can be unreadable, so absence there never proves death;
+/// the holder it reports names the Sandbox, machine and operation, and its
+/// owner (or an operator with `gc_mark_uncertain` and `gc_release`) settles
+/// it. A local SQLite Store is bounded further: every admission runs on the
+/// machine that holds the file, so an intent from an earlier boot is provably
+/// gone and is adopted. The boot token carries a unique suffix (the operation
+/// or Workspace id), because the schema's
 /// `UNIQUE(scope_kind, scope_id, owner_boot)` must still admit two intents of
 /// one scope from one process.
 #[must_use]
