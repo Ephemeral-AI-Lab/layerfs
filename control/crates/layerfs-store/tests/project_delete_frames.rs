@@ -81,6 +81,7 @@ fn the_admission_and_release_frames_round_trip() {
         store: StoreName::parse("shop").unwrap(),
         stack,
         op,
+        project: Some("app".to_owned()),
         store_record: Some(record.clone()),
     };
     let encoded = admit.encode();
@@ -90,6 +91,7 @@ fn the_admission_and_release_frames_round_trip() {
             ("store", t("shop")),
             ("stack_id", t(&hex(&stack.to_bytes()))),
             ("op_id", t(&hex(&op))),
+            ("project", t("app")),
             ("store_record", record.clone()),
         ])
     );
@@ -106,6 +108,25 @@ fn the_admission_and_release_frames_round_trip() {
         map(vec![("store", t("shop")), ("op_id", t(&hex(&op)))])
     );
     assert_eq!(DeleteReleaseFrame::decode(&encoded).unwrap(), release);
+}
+
+#[test]
+fn an_unnamed_admit_frame_is_the_older_caller() {
+    // The caller that does not know the project's name omits `project`; the
+    // worker fills it from the Stack record, so the frame still decodes.
+    let stack = stack(6);
+    let op = [5u8; 16];
+    let frame = map(vec![
+        ("store", t("shop")),
+        ("stack_id", t(&hex(&stack.to_bytes()))),
+        ("op_id", t(&hex(&op))),
+    ]);
+    let decoded = DeleteAdmitFrame::decode(&frame).unwrap();
+    assert_eq!(decoded.project, None);
+    assert_eq!((decoded.stack, decoded.op), (stack, op));
+    assert_eq!(decoded.store_record, None);
+    // and the encode of an unnamed frame leaves the field out
+    assert_eq!(decoded.encode(), frame);
 }
 
 #[test]

@@ -101,17 +101,18 @@ const ALLOWED: &[Allow] = &[
         file: "history_remove_unreachable_reach.sql",
         markers: &[],
         returns_state: false,
-        reason: "§6.1/§7 mark cleanup: deletes `reach` rows whose key is no longer a base \
-                 `layer_stack` row; a retired row is still a base row until the rebuild \
-                 collects it, so this is not a visibility lookup",
+        reason: "§4.2 compaction's rebuild: the unreachable-row cleanup reads which Stacks \
+                 still exist so it drops only the `reach` rows of a collected Stack; it bounds \
+                 one collection under the Store write lane and renders nothing",
     },
     Allow {
         file: "history_unreachable_count.sql",
         markers: &[],
         returns_state: false,
-        reason: "§6.1/§7 mark: counts the unretained Commit/Layer/Branch/Stack rows a \
-                 rebuild collects, and the retired rows are exactly what it must count; \
-                 the retired markers would hide them from the count",
+        reason: "§4.2 compaction's mark: the count of one Stack's unreachable rows reads \
+                 `branch` and `layer_stack` by id to bound the collection the kept-node mark \
+                 is about to run, including rows a retired Stack leaves behind; it renders \
+                 nothing",
     },
     Allow {
         file: "layerstack_stack_head.sql",
@@ -174,13 +175,13 @@ fn words(sql: &str) -> Vec<&str> {
 /// an `UPDATE`/`INSERT` are not reads; `INSERT ... SELECT ... FROM` is.
 fn reads(sql: &str, table: &str) -> bool {
     let normalized = without_comments(sql).replace("{s}.", "");
-    let tokens = words(&normalized);
-    tokens.iter().enumerate().any(|(index, token)| {
-        let relation = token.eq_ignore_ascii_case("from") || token.eq_ignore_ascii_case("join");
-        let deleted = index > 0 && tokens[index - 1].eq_ignore_ascii_case("delete");
+    let words = words(&normalized);
+    words.iter().enumerate().any(|(index, word)| {
+        let relation = word.eq_ignore_ascii_case("from") || word.eq_ignore_ascii_case("join");
+        let deleted = index > 0 && words[index - 1].eq_ignore_ascii_case("delete");
         relation
             && !deleted
-            && tokens
+            && words
                 .get(index + 1)
                 .is_some_and(|next| next.eq_ignore_ascii_case(table))
     })
@@ -244,8 +245,9 @@ fn every_statement_reading_branch_or_layer_stack_is_filtered_or_allow_listed() {
         };
         assert!(
             has_filter(&statement.sql, markers),
-            "{name} ({}) reads `branch`/`layer_stack` without the §4.2 filter; add the \
+            "{} ({}) reads `branch`/`layer_stack` without the §4.2 filter; add the \
              NOT EXISTS markers or a reasoned allow-list entry: {}",
+            name,
             statement.backend,
             statement.sql.trim()
         );

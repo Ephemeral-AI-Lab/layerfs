@@ -166,7 +166,7 @@ waits at most 10 s; other operations wait as long as they run
 | `doctor.fix` | removes one such leftover, named by kind and name (never a path), under its guard ([Checks](../doctor/checks.md#leftovers)) |
 | `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native`, decoded into its typed request first |
 | `inspect` | one read-only inspect request `{ kind, .. }` (a window of `worker.log` or of a Sandbox's `daemon.log`, overlay file sizes with the Sandbox's process and usage, the machine's stats, which Sandboxes' daemons run) on a helper thread, two at a time, answered within 6 s; the operation adds `worker: { version, pid, started_at, protocol, bundle }` to the request ([Inspection](../sandboxes/inspect.md)) |
-| `project.stage`, `project.init`, `project.export`, `project.remove` | write one part of a folder copy; add it as a project; stream a pinned snapshot back; drop a project |
+| `project.stage`, `project.init`, `project.export`, `project.delete`, `project.delete.admit`, `project.delete.release` | write one part of a folder copy; add it as a project; stream a pinned snapshot back; admit, mark and release a project's deletion |
 | anything else | `InvalidInput`, "the worker has no operation …" |
 
 The worker uses its own root as the home and the Store file under it as

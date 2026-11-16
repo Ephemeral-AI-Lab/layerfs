@@ -69,7 +69,7 @@ machine's worker, or in a Sandbox's daemon.
 | the same on a sqlite Store, other machine | holds the lease, sends the record | `store.call`: opens `<root>/store/<s>/store.sqlite`, holds the lease there | — | `place.rs`, [`worker_server.rs`](../../../control/crates/layerfs-control/src/worker_server.rs) |
 | `project.init` | checks; walks and copies the folder | `project.stage` (parts), then `project.init` | — | [`project/family.rs`](../../../control/crates/layerfs-store/src/project/family.rs), [`project/send.rs`](../../../control/crates/layerfs-store/src/project/send.rs) |
 | `project.export` | destination checks, strict local writer, atomic rename | `project.export` streams pinned tree records | — | [`project/export/route.rs`](../../../control/crates/layerfs-store/src/project/export/route.rs) |
-| `project.remove` | record and lock work | `project.remove` | — | `project/family.rs` |
+| `project.delete` | record, durable intent and lock work | `project.delete.admit`, `project.delete`, `project.delete.release` | — | [`project/delete.rs`](../../../control/crates/layerfs-store/src/project/delete.rs), `project/family.rs` |
 | `store.push`, `store.pull` | phases, records, locks | `store.file` steps on the source and target | — | [`sqlite/transfer/phases.rs`](../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
 | `store.remove` | records, locks | `store.file` `remove` | — | [`sqlite/remove.rs`](../../../control/crates/layerfs-store/src/sqlite/remove.rs) |
 | `store.status`, `store.list` | records, leases | `store.file` `stat`, when reached | — | [`status.rs`](../../../control/crates/layerfs-store/src/status.rs), [`list.rs`](../../../control/crates/layerfs-store/src/list.rs) |

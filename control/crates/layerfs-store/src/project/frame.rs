@@ -249,7 +249,7 @@ pub struct DeleteFrame {
 
 /// `project.delete.admit`: register the caller's project-scope admission
 /// before it writes its sidecar and sends the marker (T4.6). The frame is
-/// `{store, stack_id, op_id, store_record?}`.
+/// `{store, stack_id, op_id, project?, store_record?}`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DeleteAdmitFrame {
     /// The Store.
@@ -258,6 +258,11 @@ pub struct DeleteAdmitFrame {
     pub stack: LayerStackId,
     /// The admission operation identity.
     pub op: [u8; 16],
+    /// The project's name, when the caller knows it: the registered intent
+    /// carries it, so a later `Busy`/`Unresolved` names the project rather
+    /// than the hex LayerStack id. An older caller omits it and the worker
+    /// fills it from the Stack record.
+    pub project: Option<String>,
     /// The Store record.
     pub store_record: Option<SdkValue>,
 }
@@ -336,20 +341,26 @@ impl DeleteFrame {
 }
 
 impl DeleteAdmitFrame {
-    /// The `project.delete.admit` frame: `{store, stack_id, op_id,
-    /// store_record?}`.
+    /// The `project.delete.admit` frame: `{store, stack_id, op_id, project?,
+    /// store_record?}`, `project` sent when the caller knows it.
     pub fn encode(&self) -> SdkValue {
         let mut fields = vec![
             ("store", SdkValue::text(self.store.as_str())),
             ("stack_id", SdkValue::text(hex(&self.stack.to_bytes()))),
             ("op_id", SdkValue::text(hex(&self.op))),
         ];
+        fields.extend(
+            self.project
+                .as_deref()
+                .map(|project| ("project", SdkValue::text(project))),
+        );
         fields.extend(self.store_record.clone().map(|r| ("store_record", r)));
         map(fields)
     }
 
     /// A `project.delete.admit` frame: its Store, Stack and operation
-    /// identity are required and checked.
+    /// identity are required and checked; an absent `project` is an unnamed
+    /// caller.
     pub fn decode(frame: &SdkValue) -> Result<Self> {
         let store = StoreName::parse(required(frame.get_text("store"), "store")?)?;
         let stack = stack_id(required(frame.get_text("stack_id"), "stack_id")?)?;
@@ -358,6 +369,7 @@ impl DeleteAdmitFrame {
             store,
             stack,
             op,
+            project: frame.get_text("project").map(str::to_owned),
             store_record: frame.get("store_record").cloned(),
         })
     }

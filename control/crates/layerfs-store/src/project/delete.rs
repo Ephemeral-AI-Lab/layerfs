@@ -52,8 +52,7 @@ use crate::{identity, lease, service};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::StoreManifest;
 use layerfs_bridge::sdk_values::{hex, unhex};
-use layerfs_history::HistoryError;
-use layerfs_history::LayerStackId;
+use layerfs_history::{HistoryCatalog, HistoryError, LayerStackId};
 use layerfs_home::events::Events;
 use layerfs_home::home::{now_ms, paths};
 use layerfs_home::names::{ProjectRef, StoreName};
@@ -293,8 +292,9 @@ pub trait Effects {
     /// holders, a live operation `Busy`, an uncertain owner `Unresolved`. A
     /// refusal registers nothing under a new identity, and a retry
     /// re-registers `op`'s own row instead of meeting it as another
-    /// operation.
-    fn admit(&mut self, stack: LayerStackId, op: [u8; 16]) -> Result<Admission>;
+    /// operation. `project` names the row, so a later caller meeting it
+    /// reports `{kind: "project", name}` rather than the hex LayerStack id.
+    fn admit(&mut self, stack: LayerStackId, op: [u8; 16], project: &str) -> Result<Admission>;
 
     /// Releases `admission` on every exit path: success, refusal and an
     /// unknown Store outcome. A provider without admission releases nothing.
@@ -503,7 +503,7 @@ pub fn delete_with(
         current.attempt_ms = now_ms();
         Intent::write(home, &current)?;
     }
-    let admission = match effects.admit(stack, op) {
+    let admission = match effects.admit(stack, op, project) {
         Ok(admission) => admission,
         Err(refusal) => {
             let _ = effects.release(Admission::new(stack, op));
@@ -570,8 +570,8 @@ impl Effects for Local {
         identity::save_record(&self.home, &self.store, &id)
     }
 
-    fn admit(&mut self, stack: LayerStackId, op: [u8; 16]) -> Result<Admission> {
-        let intent = store_admission::project_removal_at(stack, op);
+    fn admit(&mut self, stack: LayerStackId, op: [u8; 16], project: &str) -> Result<Admission> {
+        let intent = store_admission::project_removal_at(stack, op, Some(project));
         service::with_service(&self.open, |service| {
             match service.store.history().gc_register(&intent) {
                 Ok(()) => Ok(Admission::new(stack, op)),
@@ -600,7 +600,11 @@ impl Effects for Local {
         deleted_ms: i64,
         _pending_retry: bool,
     ) -> Result<Deletion> {
-        let intent = store_admission::project_removal_at(admission.stack, admission.op);
+        let intent = store_admission::project_removal_at(
+            admission.stack,
+            admission.op,
+            Some(self.project.as_str()),
+        );
         service::with_service(&self.open, |service| {
             delete_stack_with(&service.store, admission.stack, deleted_ms, &intent)
         })
@@ -719,6 +723,25 @@ fn worker_open(
     }
 }
 
+/// The project name a worker `project.delete*` op records: the caller's, or
+/// the Stack record's when the caller sent none, so a later `Busy` or
+/// `Unresolved` reports `{kind: "project", name}` rather than the hex
+/// LayerStack id. A Stack record that is already gone leaves the id, which is
+/// all the caller left to go on.
+fn worker_project(
+    history: &dyn HistoryCatalog,
+    stack: LayerStackId,
+    project: Option<String>,
+) -> Result<Option<String>> {
+    if project.is_some() {
+        return Ok(project);
+    }
+    Ok(history
+        .layer_stack(stack)
+        .map_err(lookup::history)?
+        .map(|record| record.name.as_str().to_owned()))
+}
+
 /// The `{kind: "Admitted", stack_id}` answer.
 fn admitted(stack: LayerStackId) -> SdkValue {
     SdkValue::map([
@@ -738,7 +761,10 @@ fn released(op: [u8; 16]) -> SdkValue {
 /// The worker's `project.delete.admit`: registers the caller's project-scope
 /// admission before the caller writes its sidecar and before the marker, so a
 /// live mount refuses with `MountsActive` (its holders reported) and a live
-/// operation with `Busy`, with no sidecar written.
+/// operation with `Busy`, with no sidecar written. The registered row names
+/// the project from the frame, or from the Stack record when the caller sent
+/// no name, so a later `Busy`/`Unresolved` reports `{kind: "project", name}`
+/// rather than the hex LayerStack id.
 pub fn admit_project(root: &Path, frame: &DeleteAdmitFrame) -> Outcome {
     let store_record = frame.store_record.clone().ok_or_else(|| {
         refused(
@@ -747,8 +773,9 @@ pub fn admit_project(root: &Path, frame: &DeleteAdmitFrame) -> Outcome {
         )
     })?;
     let open = worker_open(root, frame.store.as_str(), None, store_record);
-    let intent = store_admission::project_removal_at(frame.stack, frame.op);
     service::with_service(&open, |service| {
+        let project = worker_project(service.store.history(), frame.stack, frame.project.clone())?;
+        let intent = store_admission::project_removal_at(frame.stack, frame.op, project.as_deref());
         match service.store.history().gc_register(&intent) {
             Ok(()) => Ok(admitted(frame.stack)),
             // A provider without admission cannot exclude a removal; the
@@ -799,9 +826,10 @@ pub fn delete_project(root: &Path, frame: &DeleteFrame) -> Outcome {
         identity::save_record(root, store, &id)?;
     }
     let op = frame.op_id.unwrap_or_else(store_admission::op_id);
-    let intent = store_admission::project_removal_at(frame.stack, op);
     let requested = frame.deleted_ms.unwrap_or_else(now_ms);
     let deletion = service::with_service(&open, |service| {
+        let project = worker_project(service.store.history(), frame.stack, frame.project.clone())?;
+        let intent = store_admission::project_removal_at(frame.stack, op, project.as_deref());
         delete_stack_with(&service.store, frame.stack, requested, &intent)
     })?;
     let deleted_ms = deletion.deleted_ms(requested);
