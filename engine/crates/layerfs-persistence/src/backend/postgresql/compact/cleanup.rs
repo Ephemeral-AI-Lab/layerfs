@@ -6,6 +6,7 @@ use super::op::hex;
 use super::op::history_rows;
 use super::op::read_generation;
 use super::op::read_op;
+use super::op::scalar;
 use super::op::scalar_session;
 use super::op::stage;
 use super::op::RunMetrics;
@@ -227,23 +228,200 @@ pub(crate) fn settle_leftover(
     )))
 }
 
-/// Phase C: delete only the persisted `gc_dead` members, settle the totals
-/// once, and clear the op. The Store is usable at `G + 1` throughout.
-pub(crate) fn cleanup(
-    handles: &PostgresHandles,
+/// The mark-time watermarks recorded in `gc_op`, used only as guards: a row
+/// created after the mark is never a `gc_dead` member, and these keep a
+/// mis-keyed member from naming a newer row.
+fn mark_watermarks(session: &Arc<Session>, schema: &str) -> HistoryResult<(i64, i64, i64)> {
+    stage(session, |tx| {
+        let rows = tx.query(
+            &format!(
+                "SELECT COALESCE(mark_serial,0),COALESCE(mark_stamp,0),COALESCE(mark_visited,0) FROM {schema}.gc_op WHERE id=1"
+            ),
+            Vec::new(),
+        )?;
+        let row = rows
+            .first()
+            .ok_or(HistoryError::Integrity("compaction watermarks"))?;
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+    })
+}
+
+/// §8 step 11: the swap copied exactly the visited set, so the retained
+/// `object_location` must have `count(*) = count(DISTINCT object_id) =
+/// |visited|` before Phase C touches anything.
+fn assert_retained_object_set(
+    session: &Arc<Session>,
+    schema: &str,
+    visited: i64,
+) -> HistoryResult<()> {
+    stage(session, |tx| {
+        let objects = scalar(
+            tx,
+            &format!("SELECT count(*) FROM {schema}.object_location"),
+            Vec::new(),
+        )?;
+        let distinct = scalar(
+            tx,
+            &format!("SELECT count(DISTINCT object_id) FROM {schema}.object_location"),
+            Vec::new(),
+        )?;
+        // Phase A already asserted the exact `count = count(DISTINCT) =
+        // |visited|` on the scratch tables. The Store is usable at `G + 1`
+        // from the swap on, so a save that lands between the swap and this
+        // cleanup (or a resumed one) can only add object rows: the live set
+        // must never shrink below the mark's copy and must stay duplicate-free.
+        if objects != distinct || objects < visited {
+            return Err(HistoryError::Integrity("compaction retained object set"));
+        }
+        Ok(())
+    })
+}
+
+/// Every layer stack that has a dead row, ascending. One stack's dead rows
+/// form a closed reference unit (no retained row references them), so each
+/// stack can be deleted in its own transaction.
+fn dead_layer_stacks(session: &Arc<Session>, schema: &str) -> HistoryResult<Vec<Vec<u8>>> {
+    stage(session, |tx| {
+        let rows = tx.query(
+            &format!(
+                "SELECT s FROM ( \
+                   SELECT c.layer_stack_id AS s FROM {schema}.\"commit\" c \
+                    JOIN {schema}.gc_dead d ON d.kind='commit' AND d.id=c.commit_id \
+                   UNION SELECT l.layer_stack_id FROM {schema}.layer l \
+                    JOIN {schema}.gc_dead d ON d.kind='layer' AND d.id=l.layer_id \
+                   UNION SELECT b.layer_stack_id FROM {schema}.branch b \
+                    JOIN {schema}.gc_dead d ON d.kind='branch' AND d.id=b.branch_id \
+                   UNION SELECT g.id FROM {schema}.gc_dead g WHERE g.kind='stack' \
+                 ) u ORDER BY s"
+            ),
+            Vec::new(),
+        )?;
+        rows.iter()
+            .map(|row| row.get::<Vec<u8>>(0).map_err(Into::into))
+            .collect()
+    })
+}
+
+/// Deletes one stack's dead rows in one transaction. The FKs are deferred, so
+/// the commit sees a state where every dead reference inside the stack is gone
+/// together; every other stack is independent.
+fn delete_stack_batch(
+    session: &Arc<Session>,
+    schema: &str,
+    stack: &[u8],
+    mark_serial: i64,
+) -> HistoryResult<()> {
+    stage(session, |tx| {
+        let stack = Param::Bytes(stack.to_vec());
+        // The serial is a guard only: membership in `gc_dead` is the real
+        // filter, and a row created after the mark is never a member.
+        tx.query(
+            &format!(
+                "DELETE FROM {schema}.\"commit\" t USING {schema}.gc_dead d \
+                 WHERE d.kind='commit' AND d.id=t.commit_id AND t.layer_stack_id=$1 \
+                   AND (t.history_serial < $2 OR t.history_serial = 0)"
+            ),
+            vec![stack.clone(), Param::I64(mark_serial)],
+        )?;
+        tx.query(
+            &format!(
+                "DELETE FROM {schema}.layer t USING {schema}.gc_dead d \
+                 WHERE d.kind='layer' AND d.id=t.layer_id AND t.layer_stack_id=$1 \
+                   AND (t.history_serial < $2 OR t.history_serial = 0)"
+            ),
+            vec![stack.clone(), Param::I64(mark_serial)],
+        )?;
+        tx.query(
+            &format!(
+                "DELETE FROM {schema}.branch t USING {schema}.gc_dead d \
+                 WHERE d.kind='branch' AND d.id=t.branch_id AND t.layer_stack_id=$1"
+            ),
+            vec![stack.clone()],
+        )?;
+        tx.query(
+            &format!(
+                "DELETE FROM {schema}.layer_stack s USING {schema}.gc_dead d \
+                 WHERE d.kind='stack' AND d.id=s.layer_stack_id AND s.layer_stack_id=$1"
+            ),
+            vec![stack],
+        )?;
+        Ok(())
+    })
+}
+
+/// Deletes the `content_signature` rows whose exact `(slot, stamp)` is in the
+/// persisted dead set, in bounded batches. The pair makes a slot refilled
+/// after the mark (a new stamp) survive; `stamp <= mark_stamp` is the guard.
+/// The `gc_dead` rows stay until [`settle`], so a crash here resumes the same
+/// persisted set instead of re-deriving it.
+fn delete_dead_signatures(
+    session: &Arc<Session>,
+    schema: &str,
+    mark_stamp: i64,
+) -> HistoryResult<()> {
+    loop {
+        let deleted = stage(session, |tx| -> HistoryResult<usize> {
+            let rows = tx.query(
+                &format!(
+                    "WITH batch AS (SELECT d.id FROM {schema}.gc_dead d \
+                                    JOIN {schema}.content_signature cs \
+                                      ON cs.slot = ('x'||encode(substr(d.id,1,8),'hex'))::bit(64)::bigint \
+                                     AND cs.stamp = ('x'||encode(substr(d.id,9,8),'hex'))::bit(64)::bigint \
+                                    WHERE d.kind='signature' AND cs.stamp <= $1 \
+                                    ORDER BY d.id LIMIT 1000) \
+                     DELETE FROM {schema}.content_signature cs USING batch b \
+                      WHERE cs.slot = ('x'||encode(substr(b.id,1,8),'hex'))::bit(64)::bigint \
+                        AND cs.stamp = ('x'||encode(substr(b.id,9,8),'hex'))::bit(64)::bigint \
+                        AND cs.stamp <= $1 RETURNING cs.slot"
+                ),
+                vec![Param::I64(mark_stamp)],
+            )?;
+            Ok(rows.len())
+        })?;
+        if deleted == 0 {
+            return Ok(());
+        }
+    }
+}
+
+/// Deletes the `file_digest` rows whose root object is in the persisted dead
+/// set, in bounded batches. The dead set holds roots, not digests, so a row
+/// with a dead root is removed even when a different digest names it. The
+/// `gc_dead` rows stay until [`settle`], so a crash here resumes them.
+fn delete_dead_digests(session: &Arc<Session>, schema: &str) -> HistoryResult<()> {
+    loop {
+        let deleted = stage(session, |tx| -> HistoryResult<usize> {
+            let rows = tx.query(
+                &format!(
+                    "WITH batch AS (SELECT d.id FROM {schema}.gc_dead d \
+                                    JOIN {schema}.file_digest fd ON fd.root=d.id \
+                                    WHERE d.kind='digest' ORDER BY d.id LIMIT 1000) \
+                     DELETE FROM {schema}.file_digest fd USING batch b \
+                      WHERE fd.root=b.id RETURNING fd.digest"
+                ),
+                Vec::new(),
+            )?;
+            Ok(rows.len())
+        })?;
+        if deleted == 0 {
+            return Ok(());
+        }
+    }
+}
+
+/// The final Phase C transaction: remove the derived lineage rows, clear the
+/// advisory hints, settle the four totals once, assert the Store sums and
+/// clear the op. It runs after every dead row batch, so it holds no history
+/// delete.
+fn settle(
     session: &Arc<Session>,
     schema: &str,
     dead: DeadTotals,
     totals_applied: bool,
-    op_id: Option<[u8; 16]>,
 ) -> HistoryResult<()> {
     stage(session, |tx| {
         tx.batch(&format!(
-            "DELETE FROM {schema}.\"commit\" c WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='commit' AND d.id=c.commit_id);\
-             DELETE FROM {schema}.layer l WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='layer' AND d.id=l.layer_id);\
-             DELETE FROM {schema}.branch b WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='branch' AND d.id=b.branch_id);\
-             DELETE FROM {schema}.layer_stack s WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='stack' AND d.id=s.layer_stack_id);\
-             DELETE FROM {schema}.layer_lineage ll WHERE NOT EXISTS (SELECT 1 FROM {schema}.layer l WHERE l.layer_id=ll.layer_id);\
+            "DELETE FROM {schema}.layer_lineage ll WHERE NOT EXISTS (SELECT 1 FROM {schema}.layer l WHERE l.layer_id=ll.layer_id);\
              DELETE FROM {schema}.commit_lineage cl WHERE NOT EXISTS (SELECT 1 FROM {schema}.\"commit\" c WHERE c.commit_id=cl.commit_id);\
              DELETE FROM {schema}.absorbed a WHERE NOT EXISTS (SELECT 1 FROM {schema}.commit_lineage cl WHERE cl.run=a.run);\
              DELETE FROM {schema}.reach r WHERE r.key NOT IN (SELECT layer_stack_id FROM {schema}.layer_stack UNION SELECT run FROM {schema}.commit_lineage);\
@@ -251,15 +429,11 @@ pub(crate) fn cleanup(
              DELETE FROM {schema}.layer_stack_retired lr WHERE NOT EXISTS (SELECT 1 FROM {schema}.layer_stack s WHERE s.layer_stack_id=lr.layer_stack_id);\
              DELETE FROM {schema}.path_removed pr WHERE NOT EXISTS (SELECT 1 FROM {schema}.layer_stack s WHERE s.layer_stack_id=pr.layer_stack_id);\
              DELETE FROM {schema}.project_epoch pe WHERE NOT EXISTS (SELECT 1 FROM {schema}.layer_stack s WHERE s.layer_stack_id=pe.layer_stack_id);\
-             DELETE FROM {schema}.content_signature cs WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='signature' AND d.id=int8send(cs.slot));\
-             DELETE FROM {schema}.file_digest fd WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='digest' AND d.id=fd.digest);\
              DELETE FROM {schema}.binding_hint_block;\
              DELETE FROM {schema}.init_operation;\
              DELETE FROM {schema}.init_entry;\
              DELETE FROM {schema}.init_host_file;"
         ))?;
-        // §11: `cleanup` is written even when the totals were already
-        // applied by the run being resumed.
         tx.batch(&format!(
             "UPDATE {schema}.gc_op SET phase='cleanup' WHERE id=1"
         ))?;
@@ -315,7 +489,29 @@ pub(crate) fn cleanup(
             "DELETE FROM {schema}.gc_dead; DELETE FROM {schema}.gc_op;"
         ))?;
         Ok(())
-    })?;
+    })
+}
+
+/// Phase C: delete only the persisted `gc_dead` members, in bounded batches
+/// (one layer stack's closed closure per transaction, then the signature and
+/// digest sets), settle the totals once, and clear the op. The Store is usable
+/// at `G + 1` throughout, and the retained object set is asserted exactly.
+pub(crate) fn cleanup(
+    handles: &PostgresHandles,
+    session: &Arc<Session>,
+    schema: &str,
+    dead: DeadTotals,
+    totals_applied: bool,
+    op_id: Option<[u8; 16]>,
+) -> HistoryResult<()> {
+    let (mark_serial, mark_stamp, visited) = mark_watermarks(session, schema)?;
+    assert_retained_object_set(session, schema, visited)?;
+    for stack in dead_layer_stacks(session, schema)? {
+        delete_stack_batch(session, schema, &stack, mark_serial)?;
+    }
+    delete_dead_signatures(session, schema, mark_stamp)?;
+    delete_dead_digests(session, schema)?;
+    settle(session, schema, dead, totals_applied)?;
     if let Some(op) = op_id {
         let _ = handles.history.gc_release(&op);
     } else {

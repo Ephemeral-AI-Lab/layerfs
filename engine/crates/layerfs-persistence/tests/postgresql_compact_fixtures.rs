@@ -59,7 +59,6 @@ use layerfs_storage::{
 };
 use std::sync::Arc;
 
-const BINDING: &[u8] = b"doctor-adversarial";
 const CURSOR: [u8; 32] = [71; 32];
 const SCOPE_SEED: [u8; 32] = [11; 32];
 /// The T12.1 SQLite transcript: one literal vector for both backends.
@@ -112,9 +111,9 @@ fn hex(bytes: &[u8]) -> String {
     out
 }
 
-fn catalog() -> HistoryCatalogConfig {
+fn catalog(binding: &[u8]) -> HistoryCatalogConfig {
     HistoryCatalogConfig {
-        binding_key: BINDING.to_vec(),
+        binding_key: binding.to_vec(),
         cursor_key: CURSOR,
         incarnation: 7,
     }
@@ -132,25 +131,35 @@ fn url() -> Option<String> {
 struct Schema {
     url: String,
     selection: PostgresSelection,
+    /// This test's own catalog identity. The Store advisory key derives from
+    /// it and PostgreSQL advisory locks are server-wide, so parallel tests
+    /// must not share one binding.
+    binding: Vec<u8>,
 }
 
 impl Schema {
     fn new(url: &str, tag: &str) -> Self {
         let name = format!("lfs123b_{tag}_{}", std::process::id());
         let selection = PostgresSelection::new(url, name);
+        let binding = format!("postgresql-fixtures-{tag}-{}", std::process::id()).into_bytes();
         let schema = Self {
             url: url.to_owned(),
             selection,
+            binding,
         };
         schema.drop_schema();
         schema
     }
     fn open(&self) -> PostgresHandles {
-        PostgresHandles::open_writable(&self.selection, BINDING, CURSOR).expect("Store open")
+        PostgresHandles::open_writable(&self.selection, &self.binding, CURSOR).expect("Store open")
     }
     fn create(&self) -> PostgresHandles {
-        PostgresHandles::create(&self.selection, StoragePolicy::frozen_default(), &catalog())
-            .expect("Store creation")
+        PostgresHandles::create(
+            &self.selection,
+            StoragePolicy::frozen_default(),
+            &catalog(&self.binding),
+        )
+        .expect("Store creation")
     }
     fn client(&self) -> postgres::Client {
         let mut client = postgres::Client::connect(&self.url, postgres::NoTls).expect("client");
@@ -174,8 +183,17 @@ impl Schema {
     fn exists(&self, sql: &str) -> bool {
         self.scalar(sql) != 0
     }
-    fn scratch_exists(&self, op: u8) -> bool {
-        let scratch = format!("lfs_gc_{}", format!("{op:02x}").repeat(16));
+    fn scratch(&self) -> String {
+        let catalog = layerfs_history::CatalogId::derive(&self.binding).expect("catalog identity");
+        let mut name = String::from("lfs_gc_");
+        for byte in catalog.as_slice() {
+            name.push_str(&format!("{byte:02x}"));
+        }
+        name.truncate(63);
+        name
+    }
+    fn scratch_exists(&self) -> bool {
+        let scratch = self.scratch();
         self.exists(&format!(
             "SELECT (CASE WHEN EXISTS (SELECT 1 FROM pg_namespace WHERE nspname='{scratch}') THEN 1 ELSE 0 END)::bigint"
         ))
@@ -186,6 +204,8 @@ impl Schema {
                 "DROP SCHEMA IF EXISTS {} CASCADE",
                 self.selection.schema
             ));
+            let scratch = self.scratch();
+            let _ = client.batch_execute(&format!("DROP SCHEMA IF EXISTS {scratch} CASCADE"));
         }
     }
 }
@@ -951,7 +971,7 @@ fn assert_doctor_clean(handles: &PostgresHandles) {
 
 /// §9/§8: after a settle no op row, dead set, intent or scratch schema remains
 /// and every `store_totals` row equals the sum of the rows it summarises.
-fn assert_settled(schema: &Schema, op: u8) {
+fn assert_settled(schema: &Schema, _op: u8) {
     assert_eq!(schema.count("gc_op"), 0, "gc_op is cleared on settle");
     assert_eq!(schema.count("gc_dead"), 0, "gc_dead is cleared on settle");
     assert_eq!(
@@ -960,7 +980,7 @@ fn assert_settled(schema: &Schema, op: u8) {
         "the compaction intent is released"
     );
     assert!(
-        !schema.scratch_exists(op),
+        !schema.scratch_exists(),
         "the recorded scratch schema is dropped"
     );
     let logical = schema.scalar("SELECT logical FROM {s}.store_totals WHERE id=1");
@@ -1394,6 +1414,10 @@ fn the_rebuild_report_and_markers_hold_on_postgresql() {
     assert_eq!(receipt.dead_bytes_refined, receipt.dead_bytes_bound);
     assert!(receipt.physical_shrink > 0);
     assert!(receipt.peak_temp_bytes > 0);
+    assert!(
+        receipt.peak_temp_bytes >= payload_relation_bytes(schema),
+        "the peak covers the scratch relations plus the WAL, not a final size"
+    );
     assert!(receipt.estimate);
     assert_eq!(
         receipt.kept_waste.dead_in_retained_packs_bytes,
@@ -1547,6 +1571,18 @@ fn a_save_after_the_swap_survives_the_resumed_cleanup() {
     let live = tree(&f, whole_file(&f, b"late live content"), 1);
     let stack = initialize(&f.handles, 1, live);
     let dead = saved_whole_file(&f.handles, b"a pack Phase C collects");
+    // A file_digest row for a root no retained head reaches, so the persisted
+    // dead set names a digest root as well as signature slots.
+    f.handles
+        .history
+        .record_file_digests(&[FileDigest {
+            root: *dead.as_bytes(),
+            // At or above the Store's digest floor: the row is a hint for a
+            // chunked save, and the collection rule is the root, not the body.
+            length: 131_072,
+            digest: *blake3::hash(b"F50 dead digest root").as_bytes(),
+        }])
+        .unwrap();
     // Enough dead packs that the swapped tables are smaller than the source
     // tables, so the resumed `physicalShrink` is a nonzero carried value.
     for index in 0..64u8 {
@@ -1603,6 +1639,63 @@ fn a_save_after_the_swap_survives_the_resumed_cleanup() {
     let late = saved_whole_file(&f.handles, b"written between swap and cleanup");
     assert!(located(&f.handles, late));
     let late_pack = pack_of(schema, late).expect("a late pack");
+
+    // F50-3: the persisted dead set names exact content_signature (slot,
+    // stamp) pairs. Refill a dead slot with a newer stamp than the mark
+    // recorded; a slot-only delete would collect this post-mark row.
+    let dead_signature_sql = format!(
+        "SELECT id FROM {}.gc_dead WHERE kind='signature' ORDER BY id LIMIT 1",
+        schema.selection.schema
+    );
+    let dead_signature: Vec<u8> = schema
+        .client()
+        .query_one(&dead_signature_sql, &[])
+        .expect("a dead signature")
+        .get(0);
+    let slot = i64::from_be_bytes(dead_signature[..8].try_into().expect("slot width"));
+    let mark_stamp = schema.scalar("SELECT mark_stamp FROM {s}.gc_op WHERE id=1");
+    let base = mark_stamp + 1;
+    let delta = (slot - (base - 1).rem_euclid(8192)).rem_euclid(8192);
+    let refilled_stamp = base + delta;
+    assert!(refilled_stamp > mark_stamp);
+    let updated = schema
+        .client()
+        .execute(
+            &format!(
+                "UPDATE {}.content_signature SET stamp=$1,object_id=$2,signature=$3 WHERE slot=$4",
+                schema.selection.schema
+            ),
+            &[&refilled_stamp, &vec![0x5au8; 32], &vec![0x5bu8; 32], &slot],
+        )
+        .expect("refill the dead slot");
+    assert_eq!(updated, 1, "the dead slot exists at the mark");
+
+    // F50-2: the persisted dead set names file_digest roots, not digests. A
+    // row whose root is dead is collected even when a different digest names
+    // it, so a digest-keyed delete would leave this row behind.
+    let dead_root: Vec<u8> = schema
+        .client()
+        .query_one(
+            &format!(
+                "SELECT id FROM {}.gc_dead WHERE kind='digest' ORDER BY id LIMIT 1",
+                schema.selection.schema
+            ),
+            &[],
+        )
+        .expect("a dead digest root")
+        .get(0);
+    let inserted_dead_root = schema
+        .client()
+        .execute(
+            &format!(
+                "INSERT INTO {}.file_digest(digest,length,root) VALUES ($1,$2,$3)",
+                schema.selection.schema
+            ),
+            &[&vec![0x3cu8; 32], &999_999i64, &dead_root],
+        )
+        .expect("a dead-root digest row");
+    assert_eq!(inserted_dead_root, 1);
+
     let receipt = f.handles.compact(&request(0x32)).unwrap();
     assert_eq!(receipt.path, CompactPath::Rebuild);
     assert_eq!(receipt.generation_before, before);
@@ -1647,6 +1740,21 @@ fn a_save_after_the_swap_survives_the_resumed_cleanup() {
     );
     assert_eq!(pack_row(schema, late_pack), 1);
     assert!(!located(&f.handles, dead));
+    assert_eq!(
+        schema.scalar(&format!(
+            "SELECT count(*) FROM {{s}}.content_signature WHERE slot={slot} AND stamp={refilled_stamp}"
+        )),
+        1,
+        "F50-3: a signature slot refilled after the mark survives cleanup"
+    );
+    assert_eq!(
+        schema.scalar(&format!(
+            "SELECT count(*) FROM {{s}}.file_digest WHERE root=decode('{}','hex')",
+            hex(&dead_root)
+        )),
+        0,
+        "F50-2: a row whose dead root is in the set is collected"
+    );
     assert_phase_c_settled(schema, 0x31);
 
     let reopened = schema.open();
@@ -1824,7 +1932,7 @@ fn every_postgresql_failpoint_leaves_a_resumable_leftover() {
         );
         assert!(located(&f.handles, live), "{tag}: the live object stays");
         assert_eq!(
-            f.schema.scratch_exists(op),
+            f.schema.scratch_exists(),
             scratch,
             "{tag}: the scratch schema state"
         );

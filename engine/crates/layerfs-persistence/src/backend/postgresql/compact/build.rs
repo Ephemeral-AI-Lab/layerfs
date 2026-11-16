@@ -9,6 +9,7 @@ use super::types::DeadTotals;
 use crate::backend::postgresql::session::connection::Session;
 use crate::backend::postgresql::session::transaction::Transaction;
 use crate::backend::records::Param;
+use crate::diagnostic::postgresql_contract::check_table_objects;
 use crate::history::GcTuple;
 use crate::MarkResult;
 use layerfs_history::error::HistoryError;
@@ -134,6 +135,45 @@ pub(crate) fn create_scratch(
     })
 }
 
+/// Phase A copies about this many retained pack body bytes per transaction:
+/// a fixed row count would be unbounded in bytes for large packs.
+const PHASE_A_BATCH_BYTES: u64 = 1 << 30;
+
+/// One byte-bounded pack-id batch: `(pack_id, length)` pairs in ascending
+/// pack-id order, split so each batch carries at most about 1 GiB (at least
+/// one pack per batch).
+fn byte_batches(packs: &[(i64, u64)]) -> Vec<&[(i64, u64)]> {
+    let mut out = Vec::new();
+    let mut start = 0;
+    let mut bytes = 0u64;
+    for (index, (_, length)) in packs.iter().enumerate() {
+        if index > start && bytes.saturating_add(*length) > PHASE_A_BATCH_BYTES {
+            out.push(&packs[start..index]);
+            start = index;
+            bytes = 0;
+        }
+        bytes = bytes.saturating_add(*length);
+    }
+    if start < packs.len() {
+        out.push(&packs[start..]);
+    }
+    out
+}
+
+/// The run's peak temp so far: the scratch relations' size plus the WAL this
+/// session wrote since `wal_start`. Both terms grow through the copy, so the
+/// sample after each batch and the final sample bound the real peak; the
+/// post-build size alone under-reports the WAL headroom.
+fn peak_sample(session: &Arc<Session>, scratch: &str, wal_start: &str) -> HistoryResult<u64> {
+    let scratch_bytes = relation_bytes(session, scratch, &["pack", "object_location"])?;
+    let wal_bytes = scalar_session(
+        session,
+        "SELECT pg_wal_lsn_diff(pg_current_wal_lsn(), $1::text::pg_lsn)::bigint",
+        vec![Param::Text(wal_start.to_owned())],
+    )?;
+    Ok(scratch_bytes.saturating_add(u64::try_from(wal_bytes).unwrap_or(0)))
+}
+
 /// Phase A: copy retained rows in pack-id batches, each its own transaction;
 /// a retried batch first deletes its own range, so the copy is idempotent.
 pub(crate) fn build(
@@ -144,11 +184,40 @@ pub(crate) fn build(
     tuple: &GcTuple,
 ) -> HistoryResult<Built> {
     create_scratch(session, schema, scratch)?;
-    let packs: Vec<i64> = mark.objects().packs().to_vec();
-    let chunk = 512usize;
-    for batch in packs.chunks(chunk) {
-        let lo = batch[0];
-        let hi = batch[batch.len() - 1];
+    // The live packs with their source lengths, ascending: the byte batches
+    // and the per-batch range assertions both read this one list.
+    let live_packs: Vec<(i64, u64)> = stage(session, |tx| {
+        let rows = tx.query(
+            &format!(
+                "SELECT p.pack_id,p.length FROM {schema}.pack p \
+                 WHERE EXISTS (SELECT 1 FROM pg_temp.gc_live_pack v WHERE v.pack_id=p.pack_id) \
+                 ORDER BY p.pack_id"
+            ),
+            Vec::new(),
+        )?;
+        let mut out = Vec::with_capacity(rows.len());
+        for row in &rows {
+            let id: i64 = row.get(0)?;
+            let length = u64::try_from(row.get::<i64>(1)?).unwrap_or(0);
+            out.push((id, length));
+        }
+        Ok(out)
+    })?;
+    if live_packs.len() != mark.objects().packs().len() {
+        return Err(HistoryError::Integrity("compaction live pack list"));
+    }
+    let wal_start: String = stage(session, |tx| {
+        let rows = tx.query("SELECT pg_current_wal_lsn()::text", Vec::new())?;
+        rows.first()
+            .ok_or(HistoryError::Integrity("compaction wal start"))?
+            .get(0)
+            .map_err(Into::into)
+    })?;
+    let mut peak_temp = 0u64;
+    for batch in byte_batches(&live_packs) {
+        let lo = batch[0].0;
+        let hi = batch[batch.len() - 1].0;
+        let expected_packs = batch.len() as i64;
         stage(session, |tx| {
             tx.batch(&format!(
                 "DELETE FROM {scratch}.pack WHERE pack_id BETWEEN {lo} AND {hi};\
@@ -170,8 +239,56 @@ pub(crate) fn build(
                 ),
                 vec![Param::I64(lo), Param::I64(hi)],
             )?;
+            // Assert this batch's own pack_id range: the scratch range holds
+            // exactly the live packs and visited objects of the source range,
+            // and no object is duplicated.
+            let pack_rows = scalar(
+                tx,
+                &format!("SELECT count(*) FROM {scratch}.pack WHERE pack_id BETWEEN {lo} AND {hi}"),
+                Vec::new(),
+            )?;
+            let objects = scalar(
+                tx,
+                &format!(
+                    "SELECT count(*) FROM {scratch}.object_location WHERE pack_id BETWEEN {lo} AND {hi}"
+                ),
+                Vec::new(),
+            )?;
+            let distinct = scalar(
+                tx,
+                &format!(
+                    "SELECT count(DISTINCT object_id) FROM {scratch}.object_location WHERE pack_id BETWEEN {lo} AND {hi}"
+                ),
+                Vec::new(),
+            )?;
+            let source_objects = scalar(
+                tx,
+                &format!(
+                    "SELECT count(*) FROM {schema}.object_location l \
+                     WHERE l.pack_id BETWEEN {lo} AND {hi} \
+                     AND EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=l.object_id)"
+                ),
+                Vec::new(),
+            )?;
+            let source_distinct = scalar(
+                tx,
+                &format!(
+                    "SELECT count(DISTINCT l.object_id) FROM {schema}.object_location l \
+                     WHERE l.pack_id BETWEEN {lo} AND {hi} \
+                     AND EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=l.object_id)"
+                ),
+                Vec::new(),
+            )?;
+            if pack_rows != expected_packs
+                || objects != source_objects
+                || distinct != source_distinct
+                || objects != distinct
+            {
+                return Err(HistoryError::Integrity("compaction batch count"));
+            }
             Ok(())
         })?;
+        peak_temp = peak_temp.max(peak_sample(session, scratch, &wal_start)?);
     }
     stage(session, |tx| {
         tx.batch(&format!(
@@ -183,6 +300,19 @@ pub(crate) fn build(
         ))?;
         Ok(())
     })?;
+    // The contract entries for the two payload tables must hold on the scratch
+    // tables before the swap: `search_path=scratch` makes the deparsed names
+    // match the shipped manifest (the trigger/function entries need the
+    // Store-schema function and run in the swap instead).
+    let failures = stage(session, |tx| {
+        tx.batch(&format!("SET LOCAL search_path TO {scratch}, pg_catalog"))?;
+        check_table_objects(tx, &["pack", "object_location"], &["C", "I"])
+            .map_err(HistoryError::from)
+    })?;
+    if !failures.is_empty() {
+        return Err(HistoryError::Integrity("compaction scratch contract"));
+    }
+    peak_temp = peak_temp.max(peak_sample(session, scratch, &wal_start)?);
     let (objects, distinct, pack_rows) = stage(session, |tx| {
         let objects = scalar(
             tx,
@@ -201,11 +331,11 @@ pub(crate) fn build(
         )?;
         Ok((objects, distinct, pack_rows))
     })?;
-    if distinct != mark.objects().len() as i64 || objects != distinct {
+    if distinct != mark.objects().len() as i64
+        || objects != distinct
+        || pack_rows != mark.objects().packs().len() as i64
+    {
         return Err(HistoryError::Integrity("compaction object count"));
-    }
-    if pack_rows != mark.objects().packs().len() as i64 {
-        return Err(HistoryError::Integrity("compaction pack count"));
     }
     let (canonical, stored, metadata) = retained_totals(session, schema)?;
     let dead = DeadTotals {
@@ -214,10 +344,9 @@ pub(crate) fn build(
         metadata: tuple.metadata - metadata,
         logical: 0,
     };
-    let scratch_bytes = relation_bytes(session, scratch, &["pack", "object_location"])?;
     Ok(Built {
         scratch: scratch.to_owned(),
-        scratch_bytes,
+        peak_temp,
         dead,
     })
 }

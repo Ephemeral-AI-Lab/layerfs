@@ -8,7 +8,7 @@ mod lineage;
 #[cfg(feature = "postgresql")]
 mod postgresql;
 #[cfg(feature = "postgresql")]
-mod postgresql_contract;
+pub(crate) mod postgresql_contract;
 #[cfg(feature = "postgresql")]
 mod postgresql_contract_expected;
 mod reader;

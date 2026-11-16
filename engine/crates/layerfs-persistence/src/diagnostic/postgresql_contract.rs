@@ -57,3 +57,38 @@ pub(super) fn check(
     emit(observer,"store.schema.objects.summary",if failed>0{Outcome::Fail}else if incomplete{Outcome::Unknown}else{Outcome::Pass},format!("{checked} live constraints, indexes, triggers and immutable-pack trigger functions compared independently with the shipped schema-2 contract; {failed} differ"));
     Ok(())
 }
+
+/// Runs only the named contract kinds (`C` constraints, `I` indexes, `T`
+/// triggers, `F` functions) for `tables` against the live objects visible in
+/// this transaction's `search_path`, returning each mismatch as
+/// `<kind> <table>/<name>`. Compaction Phase A calls it on the scratch tables
+/// (constraints and indexes) and the swap calls it on the moved tables
+/// (trigger and function), so the copy cannot drift from the shipped DDL.
+pub(crate) fn check_table_objects(
+    tx: &Transaction<'_>,
+    tables: &[&str],
+    kinds: &[&str],
+) -> Result<Vec<String>, BackendError> {
+    let sql = format!(
+        "SELECT count(*)::bigint,COALESCE(bool_and(healthy<>0),false)::int::bigint,COALESCE(bool_and(btrim(regexp_replace(replace(definition,current_schema()||'.',''), '[[:space:]]+', ' ', 'g'))=$4),false)::int::bigint FROM ({}) actual WHERE kind=$1 AND relation=$2 AND name=$3",
+        OBJECTS.trim().trim_end_matches(';')
+    );
+    let mut failures = Vec::new();
+    for &(kind, table, name, definition) in EXPECTED {
+        if !kinds.contains(&kind) || (table != "_" && !tables.contains(&table)) {
+            continue;
+        }
+        let rows = tx.query(
+            &sql,
+            vec![kind, table, name, definition]
+                .into_iter()
+                .map(|value| Param::Text(value.to_owned()))
+                .collect(),
+        )?;
+        let row = rows.first().ok_or(BackendError::Integrity)?;
+        if row.get::<i64>(0)? != 1 || row.get::<i64>(1)? != 1 || row.get::<i64>(2)? != 1 {
+            failures.push(format!("{kind} {table}/{name}"));
+        }
+    }
+    Ok(failures)
+}

@@ -95,14 +95,17 @@ impl Schema {
     fn exists(&self, sql: &str) -> bool {
         self.scalar(sql) != 0
     }
-    fn scratch_exists(&self, op: u8) -> bool {
-        let scratch = format!("lfs_gc_{}", format!("{op:02x}").repeat(16));
+    fn scratch(&self) -> String {
+        scratch_schema(&self.binding)
+    }
+    fn scratch_exists(&self) -> bool {
+        let scratch = self.scratch();
         self.exists(&format!(
             "SELECT (CASE WHEN EXISTS (SELECT 1 FROM pg_namespace WHERE nspname='{scratch}') THEN 1 ELSE 0 END)::bigint"
         ))
     }
-    fn drop_scratch(&self, op: u8) {
-        let scratch = format!("lfs_gc_{}", format!("{op:02x}").repeat(16));
+    fn drop_scratch(&self) {
+        let scratch = self.scratch();
         if let Ok(mut client) = postgres::Client::connect(&self.url, postgres::NoTls) {
             let _ = client.batch_execute(&format!("DROP SCHEMA IF EXISTS {scratch} CASCADE"));
         }
@@ -113,6 +116,10 @@ impl Schema {
                 "DROP SCHEMA IF EXISTS {} CASCADE",
                 self.selection.schema
             ));
+            // The scratch name is per Store, so a failed run can leave one
+            // outside the Store schema; the disposable test drops both.
+            let scratch = self.scratch();
+            let _ = client.batch_execute(&format!("DROP SCHEMA IF EXISTS {scratch} CASCADE"));
         }
     }
 }
@@ -127,6 +134,18 @@ impl Drop for Schema {
 /// binding could see each other's intents while running in parallel.
 fn binding(tag: &str) -> Vec<u8> {
     format!("postgresql-compact-{tag}").into_bytes()
+}
+
+/// The deterministic per-Store scratch schema name: `lfs_gc_` plus the
+/// catalog identity, truncated to PostgreSQL's 63-byte identifier.
+fn scratch_schema(binding: &[u8]) -> String {
+    let catalog = layerfs_history::CatalogId::derive(binding).expect("catalog identity");
+    let mut name = String::from("lfs_gc_");
+    for byte in catalog.as_slice() {
+        name.push_str(&format!("{byte:02x}"));
+    }
+    name.truncate(63);
+    name
 }
 
 fn catalog(binding: &[u8]) -> HistoryCatalogConfig {
@@ -551,7 +570,7 @@ fn a_none_path_records_only_the_pg_mark_phase() {
 fn a_busy_swap_records_a_failed_outcome_and_a_busy_refusal() {
     let Some(url) = url() else { return };
     let schema = Schema::new(&url, "metrics_busy");
-    schema.drop_scratch(23);
+    schema.drop_scratch();
     let handles = schema.create();
     let live = filesystem_root(&handles, 1);
     initialize(&handles, 1, live);
@@ -703,7 +722,7 @@ fn clean(handles: &PostgresHandles) {
     );
 }
 
-fn assert_settled(schema: &Schema, op: u8) {
+fn assert_settled(schema: &Schema, _op: u8) {
     assert_eq!(schema.count("gc_op"), 0, "gc_op is cleared on settle");
     assert_eq!(schema.count("gc_dead"), 0, "gc_dead is cleared on settle");
     assert_eq!(
@@ -712,7 +731,7 @@ fn assert_settled(schema: &Schema, op: u8) {
         "the compaction intent is released"
     );
     assert!(
-        !schema.scratch_exists(op),
+        !schema.scratch_exists(),
         "the recorded scratch schema is dropped"
     );
     let logical = schema.scalar("SELECT logical FROM {s}.store_totals WHERE id=1");
@@ -1070,7 +1089,7 @@ fn a_lost_swap_reply_is_resumed_by_the_next_compact() {
 fn the_same_session_resumes_an_uncertain_round() {
     let Some(url) = url() else { return };
     let schema = Schema::new(&url, "same");
-    schema.drop_scratch(11);
+    schema.drop_scratch();
     let handles = schema.create();
     let live = filesystem_root(&handles, 1);
     initialize(&handles, 1, live);
@@ -1097,7 +1116,7 @@ fn the_same_session_resumes_an_uncertain_round() {
 fn an_idle_owner_backend_is_not_terminated_under_the_exclusive_key() {
     let Some(url) = url() else { return };
     let schema = Schema::new(&url, "terminate");
-    schema.drop_scratch(9);
+    schema.drop_scratch();
     let first = schema.create();
     let live = filesystem_root(&first, 1);
     initialize(&first, 1, live);
@@ -1136,7 +1155,7 @@ fn an_idle_owner_backend_is_not_terminated_under_the_exclusive_key() {
 fn an_exclusive_table_lock_makes_the_swap_busy() {
     let Some(url) = url() else { return };
     let schema = Schema::new(&url, "busy");
-    schema.drop_scratch(7);
+    schema.drop_scratch();
     let handles = schema.create();
     let live = filesystem_root(&handles, 1);
     initialize(&handles, 1, live);
@@ -1370,7 +1389,7 @@ fn spawn_round(
 fn a_killed_backend_before_the_swap_commit_leaves_the_store_at_g() {
     let Some(url) = url() else { return };
     let schema = Schema::new(&url, "kill_before_commit");
-    schema.drop_scratch(41);
+    schema.drop_scratch();
     let setup = schema.create();
     let live = filesystem_root(&setup, 1);
     initialize(&setup, 1, live);
@@ -1408,10 +1427,7 @@ fn a_killed_backend_before_the_swap_commit_leaves_the_store_at_g() {
     // committed phase is `build`; Phase B's `swap` write rolled back.
     assert_eq!((op_pid, op_phase), (pid, "build".to_owned()));
     assert_eq!(op_start, start);
-    assert!(
-        schema.scratch_exists(41),
-        "Phase A's scratch schema remains"
-    );
+    assert!(schema.scratch_exists(), "Phase A's scratch schema remains");
     assert!(schema.scalar("SELECT count(*) FROM {s}.gc_dead") > 0);
 
     // The owner is provably ended, and the admission intent the killed process
@@ -1455,7 +1471,7 @@ fn a_killed_backend_before_the_swap_commit_leaves_the_store_at_g() {
 fn a_killed_backend_during_phase_c_resumes_at_g_plus_1() {
     let Some(url) = url() else { return };
     let schema = Schema::new(&url, "kill_phase_c");
-    schema.drop_scratch(43);
+    schema.drop_scratch();
     let setup = schema.create();
     let live = filesystem_root(&setup, 1);
     initialize(&setup, 1, live);
@@ -1494,7 +1510,7 @@ fn a_killed_backend_during_phase_c_resumes_at_g_plus_1() {
     assert_eq!((op_pid, op_phase), (pid, "swap".to_owned()));
     assert_eq!(op_start, start);
     assert!(
-        !schema.scratch_exists(43),
+        !schema.scratch_exists(),
         "the swap transaction dropped the scratch before COMMIT"
     );
     assert!(schema.scalar("SELECT count(*) FROM {s}.gc_dead") > 0);
@@ -1566,7 +1582,7 @@ fn a_lost_swap_reply_from_an_ended_owner_resumes_at_g_plus_1() {
     assert_eq!(db_generation(&schema), before + 1);
     let (pid, start, phase) = wait_for_op_owner(&schema);
     assert_eq!(phase, "swap");
-    assert!(!schema.scratch_exists(45));
+    assert!(!schema.scratch_exists());
     assert!(schema.scalar("SELECT count(*) FROM {s}.gc_dead") > 0);
     // A simulated lost reply keeps the process alive and releases its intent;
     // the real kill below then proves the owner ended.
@@ -1746,6 +1762,46 @@ impl Role {
             .batch_execute(&format!("GRANT pg_read_all_stats TO {}", self.name))
             .expect("stats grant");
     }
+    /// Gives every Store table and sequence back to the fixture
+    /// administrator, so the role no longer owns what Phase B must drop.
+    fn disown(&self, schema: &Schema) {
+        let _setup = role_setup();
+        let mut admin = self.admin();
+        let owned: Vec<(String, String)> = admin
+            .query(
+                "SELECT c.relname::text, c.relkind::text FROM pg_class c \
+                 JOIN pg_namespace n ON n.oid = c.relnamespace \
+                 WHERE n.nspname = $1 AND c.relkind IN ('r', 'p', 'S')",
+                &[&schema.selection.schema],
+            )
+            .expect("schema relations")
+            .iter()
+            .map(|row| (row.get(0), row.get(1)))
+            .collect();
+        for (relation, kind) in owned {
+            let relation = relation.replace('"', "\"\"");
+            let keyword = if kind == "S" { "SEQUENCE" } else { "TABLE" };
+            admin
+                .batch_execute(&format!(
+                    "ALTER {keyword} \"{}\".\"{relation}\" OWNER TO CURRENT_USER",
+                    schema.selection.schema
+                ))
+                .expect("ownership transfer");
+        }
+    }
+    /// DML plus every ACL privilege with grant option, the strongest a
+    /// non-owner can hold; Phase B still needs ownership.
+    fn grant_table_privileges(&self, schema: &Schema) {
+        let _setup = role_setup();
+        self.admin()
+            .batch_execute(&format!(
+                "GRANT SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER \
+                   ON ALL TABLES IN SCHEMA {} TO {} WITH GRANT OPTION; \
+                 GRANT USAGE ON ALL SEQUENCES IN SCHEMA {} TO {} WITH GRANT OPTION",
+                schema.selection.schema, self.name, schema.selection.schema, self.name
+            ))
+            .expect("table grants");
+    }
     fn open(&self, schema: &Schema) -> PostgresHandles {
         let selection = PostgresSelection::new(&self.url, schema.selection.schema.clone());
         PostgresHandles::open_writable(&selection, &schema.binding, [71; 32]).expect("role open")
@@ -1789,7 +1845,7 @@ fn a_role_without_create_on_the_database_is_refused_as_unsupported() {
         matches!(&error, layerfs_history::HistoryError::Unsupported(m) if m.contains("CREATE on the database")),
         "{error:?}"
     );
-    assert!(!schema.scratch_exists(61), "no scratch schema was created");
+    assert!(!schema.scratch_exists(), "no scratch schema was created");
     assert_eq!(schema.count("gc_op"), 0, "no compaction op row");
     assert_eq!(db_generation(&schema), before, "nothing was marked");
 }
@@ -1810,7 +1866,7 @@ fn a_role_without_create_on_the_store_schema_is_refused_as_unsupported() {
         matches!(&error, layerfs_history::HistoryError::Unsupported(m) if m.contains("CREATE on the Store schema")),
         "{error:?}"
     );
-    assert!(!schema.scratch_exists(62), "no scratch schema was created");
+    assert!(!schema.scratch_exists(), "no scratch schema was created");
     assert_eq!(schema.count("gc_op"), 0, "no compaction op row");
     assert_eq!(db_generation(&schema), before, "nothing was marked");
 }
@@ -1832,7 +1888,7 @@ fn a_role_without_temp_is_refused_as_unsupported() {
         matches!(&error, layerfs_history::HistoryError::Unsupported(m) if m.contains("TEMP on the database")),
         "{error:?}"
     );
-    assert!(!schema.scratch_exists(63), "no scratch schema was created");
+    assert!(!schema.scratch_exists(), "no scratch schema was created");
     assert_eq!(schema.count("gc_op"), 0, "no compaction op row");
     assert_eq!(db_generation(&schema), before, "nothing was marked");
 }
@@ -1853,7 +1909,7 @@ fn a_role_without_pg_read_all_stats_is_refused_as_unsupported() {
         matches!(&error, layerfs_history::HistoryError::Unsupported(m) if m.contains("pg_read_all_stats")),
         "{error:?}"
     );
-    assert!(!schema.scratch_exists(64), "no scratch schema was created");
+    assert!(!schema.scratch_exists(), "no scratch schema was created");
     assert_eq!(schema.count("gc_op"), 0, "no compaction op row");
     assert_eq!(db_generation(&schema), before, "nothing was marked");
 }
@@ -1886,4 +1942,71 @@ fn a_fully_privileged_role_compacts() {
     );
     drop(handles);
     clean(&schema.open());
+}
+
+/// F50-4: the strongest non-owner role (DML and every table privilege with
+/// grant option, plus the five Store-wide privileges) still cannot `DROP` or
+/// `ALTER ... SET SCHEMA` the tables Phase B replaces. The precheck names the
+/// ownership it lacks before Phase M, never a raw `42501` after Phase A.
+#[test]
+fn a_role_without_table_ownership_is_refused_before_the_mark() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "privilege_owner");
+    let (setup, _live, _dead) = seed_rebuild(&schema);
+    let before = generation(&setup);
+
+    let role = Role::new(&schema, "no_owner");
+    role.grant_schema_create(&schema);
+    role.grant_database(true, true);
+    role.grant_read_all_stats();
+    role.disown(&schema);
+    role.grant_table_privileges(&schema);
+    let handles = role.open(&schema);
+    let error = handles.compact(&request(66)).unwrap_err();
+    assert!(
+        matches!(&error, layerfs_history::HistoryError::Unsupported(m) if m.contains("ownership of the Store's tables")),
+        "{error:?}"
+    );
+    assert!(!schema.scratch_exists(), "no scratch schema was created");
+    assert_eq!(schema.count("gc_op"), 0, "no compaction op row");
+    assert_eq!(db_generation(&schema), before, "nothing was marked");
+}
+
+/// F50-8: the scratch name is the Store's catalog identity, so it is
+/// deterministic per Store; a schema already at that name, which no recorded
+/// op names, is the `Exists` refusal rather than a silent reuse or a crash.
+#[test]
+fn an_unrecorded_schema_at_the_store_scratch_name_is_exists() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(&url, "scratch_exists");
+    let (handles, _live, _dead) = seed_rebuild(&schema);
+    let before = generation(&handles);
+    let scratch = schema.scratch();
+    let mut admin = postgres::Client::connect(&url, postgres::NoTls).unwrap();
+    admin
+        .batch_execute(&format!("CREATE SCHEMA {scratch}"))
+        .unwrap();
+    let error = handles.compact(&request(67)).unwrap_err();
+    assert!(
+        matches!(&error, layerfs_history::HistoryError::Exists(_)),
+        "{error:?}"
+    );
+    assert_eq!(db_generation(&schema), before, "nothing was swapped");
+    assert_eq!(
+        schema.count("gc_op"),
+        1,
+        "the mark recorded the named artifact"
+    );
+    admin
+        .batch_execute(&format!("DROP SCHEMA {scratch} CASCADE"))
+        .unwrap();
+    // The next call adopts the leftover at G, removes it, then re-marks.
+    let receipt = handles.compact(&request(68)).unwrap();
+    assert!(matches!(
+        receipt.path,
+        CompactPath::Rebuild | CompactPath::None
+    ));
+    assert_eq!(db_generation(&schema), before + 1);
+    assert!(!schema.scratch_exists(), "the recorded scratch is gone");
+    assert_eq!(schema.count("gc_op"), 0, "the adopted op is settled");
 }

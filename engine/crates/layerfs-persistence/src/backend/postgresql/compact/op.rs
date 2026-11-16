@@ -157,12 +157,43 @@ pub(crate) fn hex(bytes: &[u8]) -> String {
     out
 }
 
-pub(crate) fn scratch_name(op_id: &[u8; 16]) -> String {
-    format!("{SCRATCH_PREFIX}{}", hex(op_id))
+/// The deterministic, length-safe scratch schema name of one Store: the
+/// catalog identity, never the caller's operation id, so a crash on another
+/// machine can still name the artifact from the Store. `lfs_gc_` plus the
+/// truncated hex identity stays within PostgreSQL's 63-byte identifier.
+pub(crate) fn scratch_name(catalog_id: &[u8]) -> String {
+    let mut name = format!("{SCRATCH_PREFIX}{}", hex(catalog_id));
+    name.truncate(63);
+    name
 }
 
 pub(crate) fn quote_ident(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
+}
+
+/// The `pg_attribute`/`attstorage`/`reloptions`/`tablespace` fingerprint of
+/// one table. The mark records both payload tables' fingerprints in `gc_op`;
+/// the swap compares them with the tables it moves back into the Store, so a
+/// scratch table that lost a storage class, option or tablespace is an
+/// `Integrity` failure rather than a silent layout change.
+pub(crate) fn table_fingerprint(
+    tx: &Transaction<'_>,
+    schema: &str,
+    table: &str,
+) -> HistoryResult<String> {
+    let rows = tx.query(
+        "SELECT COALESCE((SELECT string_agg(a.attname::text || ':' || format_type(a.atttypid,a.atttypmod) || ':' || a.attnotnull::text || ':' || a.attstorage::text || ':' || COALESCE(a.attcompression::text,'') || ':' || a.attnum::text, ',' ORDER BY a.attnum) \
+           FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped),'') || '|' || \
+             COALESCE((SELECT t.spcname::text FROM pg_tablespace t WHERE t.oid=c.reltablespace),'') || '|' || \
+             COALESCE(array_to_string(c.reloptions,','),'') \
+         FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace \
+         WHERE n.nspname=$1 AND c.relname=$2",
+        vec![Param::Text(schema.to_owned()), Param::Text(table.to_owned())],
+    )?;
+    if rows.len() != 1 {
+        return Err(HistoryError::Integrity("compaction table fingerprint"));
+    }
+    rows[0].get(0).map_err(Into::into)
 }
 
 /// One write transaction on the Store session; scratch/DDL work never waits
@@ -316,6 +347,9 @@ pub(crate) fn load_visited(
                 Ok(())
             },
         )?;
+        // The Phase A copy and the dead-set query read both sets; analyze
+        // them after the bulk load so the planner sees the real cardinality.
+        tx.batch("ANALYZE pg_temp.gc_visited; ANALYZE pg_temp.gc_live_pack;")?;
         let _ = schema;
         Ok(())
     })
@@ -349,10 +383,10 @@ pub(crate) fn persist_mark(
              SELECT 'stack',s.layer_stack_id FROM {schema}.layer_stack s \
               WHERE NOT EXISTS (SELECT 1 FROM {schema}.kept_node k WHERE k.kind='stack' AND k.node_id=s.layer_stack_id) \
              UNION ALL \
-             SELECT 'signature',int8send(cs.slot) FROM {schema}.content_signature cs \
+             SELECT 'signature',int8send(cs.slot)||int8send(cs.stamp) FROM {schema}.content_signature cs \
               WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=cs.object_id) \
              UNION ALL \
-             SELECT 'digest',fd.digest FROM {schema}.file_digest fd \
+             SELECT 'digest',fd.root FROM {schema}.file_digest fd \
               WHERE NOT EXISTS (SELECT 1 FROM pg_temp.gc_visited v WHERE v.object_id=fd.root)"
         ))?;
         let logical = scalar(
@@ -367,12 +401,17 @@ pub(crate) fn persist_mark(
         )?;
         let started = now_ms();
         let kept_waste = encode_kept_waste(&CompactKeptWaste::from_waste(mark.objects().waste()));
+        let fingerprint = format!(
+            "{}|{}",
+            table_fingerprint(tx, schema, "pack")?,
+            table_fingerprint(tx, schema, "object_location")?
+        );
         tx.query(
             &format!(
                 "INSERT INTO {schema}.gc_op \
-                 (id,generation,phase,scratch_schema,mark_serial,mark_pack_id,mark_digest,mark_totals,mark_stamp,started_ms,dead_canonical,dead_stored,dead_metadata,dead_logical,physical_before,peak_temp,kept_waste,totals_applied,artifact,pid,backend_start,usename,incarnation) \
-                 VALUES (1,$1,'mark',$2,$3,$4,$5,int8send($6)||int8send($7)||int8send($8)||int8send($9),$10,$11,0,0,0,$12,0,0,$13,FALSE,$2,pg_backend_pid(),(SELECT backend_start::text FROM pg_stat_activity WHERE pid=pg_backend_pid()),(SELECT usename::text FROM pg_stat_activity WHERE pid=pg_backend_pid()),$1) \
-                 ON CONFLICT (id) DO UPDATE SET generation=EXCLUDED.generation,phase=EXCLUDED.phase,scratch_schema=EXCLUDED.scratch_schema,mark_serial=EXCLUDED.mark_serial,mark_pack_id=EXCLUDED.mark_pack_id,mark_digest=EXCLUDED.mark_digest,mark_totals=EXCLUDED.mark_totals,mark_stamp=EXCLUDED.mark_stamp,started_ms=EXCLUDED.started_ms,dead_canonical=0,dead_stored=0,dead_metadata=0,dead_logical=EXCLUDED.dead_logical,physical_before=0,peak_temp=0,kept_waste=EXCLUDED.kept_waste,totals_applied=FALSE,artifact=EXCLUDED.artifact,pid=EXCLUDED.pid,backend_start=EXCLUDED.backend_start,usename=EXCLUDED.usename,incarnation=EXCLUDED.incarnation"
+                 (id,generation,phase,scratch_schema,mark_serial,mark_pack_id,mark_digest,mark_totals,mark_stamp,started_ms,dead_canonical,dead_stored,dead_metadata,dead_logical,physical_before,peak_temp,kept_waste,totals_applied,artifact,pid,backend_start,usename,incarnation,op_id,mark_fingerprint,mark_visited) \
+                 VALUES (1,$1,'mark',$2,$3,$4,$5,int8send($6)||int8send($7)||int8send($8)||int8send($9),$10,$11,0,0,0,$12,0,0,$13,FALSE,$2,pg_backend_pid(),(SELECT backend_start::text FROM pg_stat_activity WHERE pid=pg_backend_pid()),(SELECT usename::text FROM pg_stat_activity WHERE pid=pg_backend_pid()),$1,$14,$15,$16) \
+                 ON CONFLICT (id) DO UPDATE SET generation=EXCLUDED.generation,phase=EXCLUDED.phase,scratch_schema=EXCLUDED.scratch_schema,mark_serial=EXCLUDED.mark_serial,mark_pack_id=EXCLUDED.mark_pack_id,mark_digest=EXCLUDED.mark_digest,mark_totals=EXCLUDED.mark_totals,mark_stamp=EXCLUDED.mark_stamp,started_ms=EXCLUDED.started_ms,dead_canonical=0,dead_stored=0,dead_metadata=0,dead_logical=EXCLUDED.dead_logical,physical_before=0,peak_temp=0,kept_waste=EXCLUDED.kept_waste,totals_applied=FALSE,artifact=EXCLUDED.artifact,pid=EXCLUDED.pid,backend_start=EXCLUDED.backend_start,usename=EXCLUDED.usename,incarnation=EXCLUDED.incarnation,op_id=EXCLUDED.op_id,mark_fingerprint=EXCLUDED.mark_fingerprint,mark_visited=EXCLUDED.mark_visited"
             ),
             vec![
                 Param::I64(tuple.generation),
@@ -388,9 +427,11 @@ pub(crate) fn persist_mark(
                 Param::I64(started),
                 Param::I64(logical),
                 Param::Bytes(kept_waste),
+                Param::Bytes(request.op_id.to_vec()),
+                Param::Text(fingerprint),
+                Param::I64(mark.objects().len() as i64),
             ],
         )?;
-        let _ = request;
         Ok(DeadTotals {
             logical,
             ..DeadTotals::default()

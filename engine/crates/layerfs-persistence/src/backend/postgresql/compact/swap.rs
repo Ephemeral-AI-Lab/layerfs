@@ -16,6 +16,7 @@ use super::types::Swapped;
 use crate::backend::postgresql::session::connection::Session;
 use crate::backend::postgresql::session::transaction::Transaction;
 use crate::backend::records::Param;
+use crate::diagnostic::postgresql_contract::check_table_objects;
 use crate::history::GcTuple;
 use crate::MarkResult;
 use crate::PostgresHandles;
@@ -86,7 +87,35 @@ pub(crate) fn swap(
         for (table, acl) in &acls {
             apply_acl(tx, schema, table, acl)?;
         }
+        // The mark recorded both source tables' pg_attribute/attstorage/
+        // reloptions/tablespace fingerprint; the moved scratch tables must
+        // carry it exactly, or the rebuild silently changed their layout.
+        let recorded: String = tx
+            .query(
+                &format!("SELECT COALESCE(mark_fingerprint,'') FROM {schema}.gc_op WHERE id=1"),
+                Vec::new(),
+            )?
+            .first()
+            .ok_or(HistoryError::Integrity("compaction fingerprint row"))?
+            .get(0)?;
+        let moved = format!(
+            "{}|{}",
+            super::op::table_fingerprint(tx, schema, "pack")?,
+            super::op::table_fingerprint(tx, schema, "object_location")?
+        );
+        if recorded != moved {
+            return Err(HistoryError::Integrity("compaction table fingerprint"));
+        }
         verify_swap(tx, schema, mark, tuple, &built.dead)?;
+        // The trigger and immutable-pack function entries need the
+        // Store-schema function, so they are verified here, bounded to the
+        // moved table, after the trigger exists.
+        tx.batch(&format!("SET LOCAL search_path TO {schema}, pg_catalog"))?;
+        let failures =
+            check_table_objects(tx, &["pack"], &["T", "F"]).map_err(HistoryError::from)?;
+        if !failures.is_empty() {
+            return Err(HistoryError::Integrity("compaction moved-table contract"));
+        }
         let applied = scalar(
             tx,
             &format!("SELECT totals_applied FROM {schema}.gc_op WHERE id=1"),
@@ -107,7 +136,7 @@ pub(crate) fn swap(
                 Param::I64(built.dead.stored),
                 Param::I64(built.dead.metadata),
                 Param::I64(i64::try_from(physical_before).unwrap_or(i64::MAX)),
-                Param::I64(i64::try_from(built.scratch_bytes).unwrap_or(i64::MAX)),
+                Param::I64(i64::try_from(built.peak_temp).unwrap_or(i64::MAX)),
             ],
         )?;
         tx.query(
@@ -130,7 +159,7 @@ pub(crate) fn swap(
         Ok(Swapped {
             physical_before,
             physical_after: 0,
-            peak_temp: built.scratch_bytes,
+            peak_temp: built.peak_temp,
             dead: built.dead,
         })
     });
