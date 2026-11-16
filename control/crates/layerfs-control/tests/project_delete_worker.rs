@@ -254,20 +254,30 @@ fn the_worker_path_writes_the_sidecar_then_admits_and_releases_after_the_marker(
         Ok(())
     })
     .unwrap();
-    let holder = GcIntent::operation(
-        [7; 16],
-        GcIntentKind::Removal,
-        GcScopeKind::Project,
-        stack.as_slice(),
-    )
-    .named(Some("app"), None);
-    with_service(&worker, |service| {
-        service.store.history().gc_register(&holder).unwrap();
-        Ok(())
-    })
-    .unwrap();
+    // A `project.delete` whose reply was lost left its project-scope
+    // admission live. The control's own frame names the project, so the row
+    // does too and the retry's `Busy` reports the project rather than the hex
+    // LayerStack id.
+    let lost_admit = layerfs_store::project::frame::DeleteAdmitFrame {
+        store: StoreName::parse("shop").unwrap(),
+        stack,
+        op: [7; 16],
+        project: Some("app".to_owned()),
+        store_record: Some(record.to_record().clone()),
+    };
+    layerfs_store::project::delete::admit_project(&root, &lost_admit).unwrap();
+    let held = intents(&worker, stack);
+    assert_eq!(held.len(), 1);
+    assert_eq!(
+        held[0].project.as_deref(),
+        Some("app"),
+        "the control's admission names the project"
+    );
     let refusal = remove(&home).expect_err("another removal holds the project");
     assert_eq!(refusal.code, "Busy", "{refusal:?}");
+    let entity = refusal.detail.get("entity").expect("entity");
+    assert_eq!(entity.get_text("kind"), Some("project"));
+    assert_eq!(entity.get_text("name"), Some("app"), "{refusal:?}");
     assert_eq!(
         layerfs_store::project::delete::Intent::read(&home, "shop", "app")
             .unwrap()

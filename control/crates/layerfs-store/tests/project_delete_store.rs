@@ -12,7 +12,8 @@ use layerfs_home::home::{layout, paths};
 use layerfs_home::names::{ProjectRef, StoreName};
 use layerfs_store::open_args::OpenArgs;
 use layerfs_store::project::add::{add_project, ProjectAdd};
-use layerfs_store::project::delete::{delete, Intent};
+use layerfs_store::project::delete::{admit_project, delete, Intent};
+use layerfs_store::project::frame::DeleteAdmitFrame;
 use layerfs_store::record::StoreRecord;
 use layerfs_store::service::with_service;
 use layerfs_store::sqlite::create::create;
@@ -291,5 +292,42 @@ fn a_live_operation_at_the_project_scope_is_busy_and_keeps_the_pending_sidecar()
     assert!(remove(&home).unwrap().get_bool("home_entry_removed"));
     assert_eq!(Intent::read(&home, "shop", "app").unwrap(), None);
     assert!(intents(&open, stack).is_empty());
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn an_unnamed_admission_names_the_project_for_a_later_refusal() {
+    let Some((home, open, stack)) = shop("unnamed-admit") else {
+        return;
+    };
+    // A `project.delete.admit` from a caller that does not send the name (an
+    // older control, or one that only knows the Stack): the worker fills the
+    // name from the Stack record, so the stored row still names the project.
+    let frame = DeleteAdmitFrame {
+        store: StoreName::parse("shop").unwrap(),
+        stack,
+        op: [7; 16],
+        project: None,
+        store_record: open.store_record.clone(),
+    };
+    let answer = admit_project(&home, &frame).unwrap();
+    assert_eq!(answer.get_text("kind"), Some("Admitted"), "{answer:?}");
+    let held = intents(&open, stack);
+    assert_eq!(held.len(), 1);
+    assert_eq!(
+        held[0].project.as_deref(),
+        Some("app"),
+        "an unnamed caller still names the row from the Stack record"
+    );
+
+    // A later `project.delete` meets that live row: the `Busy` detail names
+    // the project, never the hex LayerStack id.
+    let refusal = remove(&home).expect_err("the live admission holds the project");
+    assert_eq!(refusal.code, "Busy", "{refusal:?}");
+    let entity = refusal.detail.get("entity").expect("entity");
+    assert_eq!(entity.get_text("kind"), Some("project"));
+    assert_eq!(entity.get_text("name"), Some("app"), "{refusal:?}");
+    assert_eq!(intents(&open, stack).len(), 1, "only the test's own holder");
+    release(&open, [7; 16]);
     let _ = std::fs::remove_dir_all(&home);
 }

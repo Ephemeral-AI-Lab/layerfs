@@ -77,6 +77,8 @@ struct Fake {
     mark_refusal: Option<SdkRefusal>,
     /// Admissions taken, in order.
     admitted: Vec<Admission>,
+    /// The project name each admission carried, in order.
+    projects: Vec<String>,
     /// Admissions released, in order.
     released: Vec<Admission>,
     /// The `pending_retry` flag each marker attempt carried, in order.
@@ -97,6 +99,7 @@ impl Fake {
             refuse: None,
             mark_refusal: None,
             admitted: Vec::new(),
+            projects: Vec::new(),
             released: Vec::new(),
             pending_retries: Vec::new(),
         }
@@ -130,10 +133,18 @@ impl Effects for Fake {
         Ok(())
     }
 
-    fn admit(&mut self, stack: LayerStackId, op: [u8; 16]) -> Result<Admission, SdkRefusal> {
+    fn admit(
+        &mut self,
+        stack: LayerStackId,
+        op: [u8; 16],
+        project: &str,
+    ) -> Result<Admission, SdkRefusal> {
         if self.refused() {
             return Err(self.refuse.clone().expect("refused above"));
         }
+        // The admission row is stored: it must name the project, so a later
+        // caller meeting it reports `{kind: "project", name: <project>}`.
+        self.projects.push(project.to_owned());
         // The sidecar names this admission and is durable before the row is
         // taken, so a crash between the row and its reply leaves it for the
         // retry.
@@ -209,6 +220,11 @@ fn a_fresh_delete_marks_then_removes_the_entry_and_unlinks_the_intent() {
     assert_eq!(fake.states, [IntentState::Pending]);
     // the project scope was admitted after the sidecar and released after
     assert_eq!(fake.admitted.len(), 1);
+    assert_eq!(
+        fake.projects,
+        ["app".to_owned()],
+        "the admission names the project, not the Stack id"
+    );
     assert_eq!(fake.released, fake.admitted);
     assert!(!paths::project_dir(&home, store, project).exists());
     assert_eq!(Intent::read(&home, store, project).unwrap(), None);

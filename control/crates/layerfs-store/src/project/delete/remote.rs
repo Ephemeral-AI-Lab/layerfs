@@ -16,11 +16,14 @@ impl Effects for Remote {
         Ok(())
     }
 
-    fn admit(&mut self, stack: LayerStackId, op: [u8; 16]) -> Result<Admission> {
+    fn admit(&mut self, stack: LayerStackId, op: [u8; 16], project: &str) -> Result<Admission> {
         let frame = DeleteAdmitFrame {
             store: StoreName::parse(&self.store)?,
             stack,
             op,
+            // the row is stored: naming it makes a later `Busy`/`Unresolved`
+            // report the project rather than the hex LayerStack id
+            project: Some(project.to_owned()),
             store_record: Some(self.store_record.clone()),
         };
         let answer = match self

@@ -60,21 +60,28 @@ pub fn project_removal(stack: &LayerStackRecord) -> GcIntent {
 
 /// A `project.delete` intent when only the stack id is known.
 pub fn project_removal_from_id(stack: LayerStackId) -> GcIntent {
-    project_removal_at(stack, op_id())
+    project_removal_at(stack, op_id(), None)
 }
 
 /// A `project.delete` intent under an operation identity the caller already
 /// registered. The control layer admits the project scope before its sidecar
 /// and marker and reuses the identity there, so one row is taken and released
 /// once, never two competing rows.
-pub fn project_removal_at(stack: LayerStackId, op: [u8; 16]) -> GcIntent {
+///
+/// `project` is the name the caller knows, when it knows one: the intent is a
+/// stored row, and a later caller meeting it reports `Busy`/`Unresolved` with
+/// the row's entity name, so an unnamed intent would name the hex LayerStack
+/// id (spec §10). The worker fills it from the Stack record when the caller
+/// sent none.
+pub fn project_removal_at(stack: LayerStackId, op: [u8; 16], project: Option<&str>) -> GcIntent {
     owned(
         GcIntent::operation(
             op,
             GcIntentKind::Removal,
             GcScopeKind::Project,
             stack.as_slice(),
-        ),
+        )
+        .named(project, None),
         op,
     )
 }
