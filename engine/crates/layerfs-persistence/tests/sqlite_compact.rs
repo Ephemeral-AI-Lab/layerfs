@@ -17,11 +17,7 @@ use layerfs_persistence::{
     CompactRequest, PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePackLayout,
     SqlitePersistenceProfile,
 };
-use layerfs_storage::{
-    port::acquisition::{Acquisition, Begin},
-    port::PackPersistence,
-    Storage, StoragePolicy,
-};
+use layerfs_storage::{port::PackPersistence, Storage, StoragePolicy};
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use support::Temp;
@@ -928,19 +924,30 @@ fn acquisition_layout_opens_compacts_and_clears_working_rows() {
     );
     let live = filesystem_root(&handles, 1);
     initialize(&handles, 1, live);
-    // A live acquisition operation: the rebuild must clear its working rows.
-    let _owner = handles
-        .acquisition
-        .begin(&Begin {
-            source_device: 1,
-            source_inode: 2,
-            stack: [3; 16],
-            scope: ObjectId::for_bytes(b"acquisition scope"),
-        })
+    // A live acquisition leaves unfinished working rows; §5 refuses the
+    // compaction rather than wipe rows it was not admitted to touch.
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute(
+            "INSERT INTO init_operation(owner_epoch,phase,source_device,source_inode,stack_id,scope) \
+             VALUES(1,1,zeroblob(8),zeroblob(8),zeroblob(16),zeroblob(32))",
+            [],
+        )
         .unwrap();
+    drop(connection);
+    let error = handles.compact(&request(28)).unwrap_err();
+    assert!(
+        matches!(error, layerfs_history::HistoryError::Busy),
+        "an unfinished acquisition must refuse the compaction: {error:?}"
+    );
 
-    // The none path leaves the acquisition tables and their working rows.
-    let receipt = handles.compact(&request(28)).unwrap();
+    // Drop the stale working row; the none path then leaves the acquisition
+    // tables and takes no rebuild.
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection.execute("DELETE FROM init_operation", []).unwrap();
+    drop(connection);
+    let none_handles = reopen(&path);
+    let receipt = none_handles.compact(&request(28)).unwrap();
     assert_eq!(receipt.path, CompactPath::None);
     let reopened = reopen(&path);
     assert_eq!(

@@ -175,7 +175,7 @@ fn a_concurrent_remove_reports_busy_with_the_retire_phase() {
         .expect_err("the concurrent removal holds the Branch");
     assert_eq!(refused.code, "Busy", "{refused:?}");
     let entity = refused.detail.get("entity").expect("entity detail");
-    assert_eq!(entity.get_text("kind"), Some("removal"), "{entity:?}");
+    assert_eq!(entity.get_text("kind"), Some("branch"), "{entity:?}");
     assert_eq!(entity.get_text("name"), Some("gone"), "{entity:?}");
     assert_eq!(refused.detail.get_text("phase"), Some("retire"));
     assert_eq!(

@@ -4,7 +4,7 @@ project.list_branches -> refused InvalidInput "name must be text" null
 project.list_branches -> refused InvalidInput "pageSize must be in 1..=1000" null
 branch.fork -> ok {kind: "Forked", branch: "feat", base: "<hex>", head: null}
 branch.fork -> ok {kind: "Forked", branch: "other", base: "<hex>", head: null}
-branch.fork -> refused ReservedName "\"main\" names the project's main line" null
+branch.fork -> refused ReservedName "\"main\" names the project's main line" {}
 branch.fork -> refused NameTaken "name taken: NameHolder { kind: Branch, name: \"feat\", state: Live }" {holder: {kind: "branch", name: "feat", state: "live"}, source: "store"}
 branch.fork -> refused NoSuchBranch "Branch nope does not exist" null
 fs.write -> ok {kind: "Committed", branch: "feat", head: "<hex>", commit: {id: "<hex>", branch: "feat", parent: null, secondParent: null, base: "<hex>", root: "<hex>", via: "fs", message: "first", mergedFrom: null, time: <varies>, logical: 43, newCanonical: 957, newStored: <varies>, newMetadata: <varies>, displaced: null, lww: [], lwwTruncated: false}}
@@ -70,7 +70,7 @@ branch.merge -> ok {kind: "Merged", fastForward: false, branch: "both", head: "<
 fs.list -> ok {kind: "ok", snapshot: "both@<hex>", root: "<hex>", path: "/", items: [{name: "a.txt", path: "/a.txt", type: "file", inode: 2}, {name: "blob.bin", path: "/blob.bin", type: "file", inode: 3}, {name: "dir", path: "/dir", type: "dir", inode: 4}, {name: "left.txt", path: "/left.txt", type: "file", inode: 328}, {name: "right.txt", path: "/right.txt", type: "file", inode: 392}], hasMore: false, nextPagePos: null, removed_count: 0, at: {id: "<hex>", kind: "Commit", branch: "both", root: "<hex>"}}
 branch.merge -> refused NameTaken "name taken: NameHolder { kind: Branch, name: \"both\", state: Live }" {holder: {kind: "branch", name: "both", state: "live"}, source: "store"}
 branch.merge -> refused InvalidInput "merge takes two different sources" null
-branch.merge -> refused ReservedName "\"main\" names the project's main line" null
+branch.merge -> refused ReservedName "\"main\" names the project's main line" {}
 branch.publish -> ok {kind: "Added", source: {branch: "feat", commit: "<hex>"}, publishedLayer: {overwroteCount: 0, logical: 55, id: "<hex>", parent: "<hex>", root: "<hex>", sourceBranch: "feat", sourceCommit: "<hex>"}, basedOn: "<hex>", overwroteCount: 0, overwrote: [], overwroteHasMore: false}
 branch.publish -> ok {kind: "UpToDate", layer: "<hex>"}
 branch.fork -> ok {kind: "Forked", branch: "empty", base: "<hex>", head: null}
