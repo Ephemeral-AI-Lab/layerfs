@@ -328,10 +328,14 @@ or container, where the environment is passed differently.
 | 2 `DUMP`; 3 `UMNT`; 5 `EXPORT` | Empty list; success; one export with no groups |
 
 Client options are the daemon's `Mounter::host`. macOS:
-`vers=3,tcp,port={port},mountport={port},locallocks,nfc,noatime,actimeo=60,rsize=262144,wsize=262144,soft,intr,dumbtimer,timeo=300,retrans=6,mutejukebox,nobrowse`
+`vers=3,tcp,port={port},mountport={port},locallocks,nfc,noatime,actimeo=60,rsize=262144,wsize=262144,soft,intr,dumbtimer,timeo=300,retrans=6,mutejukebox,nobrowse,nordirplus`
 (`rsize`/`wsize` are `TRANSFER_WINDOW`); elsewhere
 `vers=3,proto=tcp,port={port},mountport={port},mountproto=tcp,nolock,actimeo=60`
 ([`export.rs`](../../../../engine/crates/layerfs-daemon/src/control/export.rs)).
+`nordirplus` turns READDIRPLUS off: a macOS client holding a directory's
+complete READDIRPLUS listing answers a `._` name absent from it with ENOENT
+and never asks the server, and this export serves AppleDouble companions
+without listing them, so every `._` name has to arrive as a LOOKUP.
 An NFS ready receipt has `abi_major == 0` and its `mount_id` is the port.
 
 ## Application SQLite databases on the NFS route

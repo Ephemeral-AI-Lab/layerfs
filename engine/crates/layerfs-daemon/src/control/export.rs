@@ -97,14 +97,18 @@ impl Mounter {
     /// access time: this export keeps one timestamp and shows it as atime,
     /// mtime and ctime alike, and `layerfs-nfs` decodes and drops a SETATTR's
     /// access time, so the update would cost one SETATTR per file a read or a
-    /// scan touches and change nothing.
+    /// scan touches and change nothing. `nordirplus` turns READDIRPLUS off:
+    /// a client holding a directory's complete READDIRPLUS listing answers a
+    /// `._` name absent from it with "not found" and never asks the server,
+    /// and this export never lists the AppleDouble companions it serves, so
+    /// every `._` name has to arrive as a LOOKUP.
     pub fn host() -> Self {
         let helper = |words: &[&str]| Helper(words.iter().map(|w| (*w).to_owned()).collect());
         if cfg!(target_os = "macos") {
             // `rsize`/`wsize` ask for the window FSINFO declares; the client
             // clamps to the smaller of the two.
             let options = format!(
-                "vers=3,tcp,port={{port}},mountport={{port}},locallocks,nfc,noatime,actimeo=60,rsize={WINDOW},wsize={WINDOW},soft,intr,dumbtimer,timeo=300,retrans=6,mutejukebox,nobrowse"
+                "vers=3,tcp,port={{port}},mountport={{port}},locallocks,nfc,noatime,actimeo=60,rsize={WINDOW},wsize={WINDOW},soft,intr,dumbtimer,timeo=300,retrans=6,mutejukebox,nobrowse,nordirplus"
             );
             Self {
                 mount: helper(&["/sbin/mount_nfs", "-o", &options, "127.0.0.1:/", "{dir}"]),
