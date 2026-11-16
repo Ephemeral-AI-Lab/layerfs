@@ -42,10 +42,16 @@ formats are introduced. No third-party source or dependency changes are implied.
 
 ## Checks and completion
 
-Core follows the engine guide's
+All product layers follow the
 [production size and responsibility rules](../engine/AGENTS.md#production-file-size-and-responsibility)
-and [checks](../engine/AGENTS.md#checks-and-completion), and the root guide's
-[rules you must not break](../AGENTS.md#rules-you-must-not-break). Build and
-test through the selected worktree's registered private resources from the
-root manifest. For docs-only changes verify local links/anchors, status,
-claims and whitespace; Rust/runtime checks do not apply.
+and [verification rules](../engine/AGENTS.md#checks-and-completion). Build and
+test through the selected worktree's registered private resources from the root
+manifest. Build tests first with `--no-run`, then execute each selection under an
+explicit wall timeout of at most 120 seconds. Preserve repository ARM64 flags,
+locked dependencies, exact failure custody, the Disposable-only execution policy
+and per-commit production LOC comparisons. Migrations retain cheap tests of
+surviving behavior and delete tests that require retired scaffolding, with the
+root guide's required behavior coverage and deletion record.
+
+For docs-only changes verify local links/anchors, status, claims and whitespace;
+Rust/runtime checks do not apply. CI reports after a push and never gates it.

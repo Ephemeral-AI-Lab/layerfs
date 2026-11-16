@@ -8,8 +8,9 @@ use crate::store::{PortError, Store};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::{ContentError, ObjectId};
 use layerfs_history::{
-    error::Missing, BranchRecord, CommitId, CommitRecord, HistoryError, HistoryName, LayerId,
-    LayerRecord, LayerStackRecord, NodeId,
+    error::{HolderKind, HolderState, Missing, NameSource, NameTakenState, RemovedState},
+    BranchRecord, CommitId, CommitRecord, HistoryError, HistoryName, LayerId, LayerRecord,
+    LayerStackRecord, NodeId,
 };
 use std::sync::Arc;
 
@@ -50,10 +51,83 @@ pub fn history(error: HistoryError) -> SdkRefusal {
         HistoryError::NotInHistory(_) => "NotInHistory",
         HistoryError::Busy => "Busy",
         HistoryError::Capacity(_) => "Capacity",
+        HistoryError::NameTaken(_) => "NameTaken",
+        HistoryError::Removed(_) => "Removed",
+        HistoryError::Conflict(_) => "Conflict",
+        HistoryError::StaleStore => "StaleStore",
+        HistoryError::Unsupported(_) => "Unsupported",
         HistoryError::UnknownOutcome => "Unknown",
         _ => "Failed",
     };
-    refuse(code, message, SdkValue::Null)
+    let detail = match error.cause() {
+        HistoryError::NameTaken(state) => name_taken_detail(state),
+        HistoryError::Removed(state) => removed_detail(state),
+        _ => SdkValue::Null,
+    };
+    refuse(code, message, detail)
+}
+
+fn name_taken_detail(state: &NameTakenState) -> SdkValue {
+    SdkValue::map([
+        (
+            "holder",
+            SdkValue::map([
+                (
+                    "kind",
+                    SdkValue::text(match state.holder.kind {
+                        HolderKind::Branch => "branch",
+                        HolderKind::Project => "project",
+                        // A newer history crate may add a holder kind; keep
+                        // the old daemon readable instead of failing.
+                        _ => "unknown",
+                    }),
+                ),
+                ("name", SdkValue::text(&state.holder.name)),
+                (
+                    "state",
+                    SdkValue::text(match state.holder.state {
+                        HolderState::Live => "live",
+                        HolderState::Retired => "retired",
+                        HolderState::Deleted => "deleted",
+                        // A newer history crate may add a holder state; keep
+                        // the old daemon readable instead of failing.
+                        _ => "unknown",
+                    }),
+                ),
+            ]),
+        ),
+        (
+            "source",
+            SdkValue::text(match state.source {
+                NameSource::Store => "store",
+                NameSource::Home => "home",
+                // A newer history crate may add a source; keep the old daemon
+                // readable instead of failing.
+                _ => "unknown",
+            }),
+        ),
+    ])
+}
+
+fn removed_detail(state: &RemovedState) -> SdkValue {
+    SdkValue::map([(
+        "paths",
+        SdkValue::List(
+            state
+                .paths
+                .iter()
+                .map(|path| {
+                    SdkValue::map([
+                        ("path", SdkValue::text(&path.path)),
+                        (
+                            "frontier_serial",
+                            SdkValue::Int(path.frontier_serial as i64),
+                        ),
+                    ])
+                })
+                .collect(),
+        ),
+    )])
 }
 
 /// A content failure as a refusal.

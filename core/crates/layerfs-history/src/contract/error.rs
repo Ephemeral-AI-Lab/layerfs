@@ -25,6 +25,99 @@ pub enum Missing {
     Catalog,
 }
 
+/// Which kind of record holds a name.
+///
+/// A later release may add a holder kind, so the enum is non-exhaustive: a
+/// caller matches it with a wildcard arm and never constructs it.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HolderKind {
+    /// A Branch.
+    Branch,
+    /// A project (LayerStack).
+    Project,
+}
+
+/// State of the record that holds a name.
+///
+/// A later release may add a state, so the enum is non-exhaustive: a
+/// caller matches it with a wildcard arm and never constructs it.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HolderState {
+    /// The record is live.
+    Live,
+    /// The record is retired by `branch.remove`.
+    Retired,
+    /// The project is deleted.
+    Deleted,
+}
+
+/// The record that holds a name.
+///
+/// A later release may add a field, so the struct is non-exhaustive:
+/// a caller reads its fields, and construction belongs to this crate.
+#[non_exhaustive]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NameHolder {
+    /// Record kind.
+    pub kind: HolderKind,
+    /// Name held.
+    pub name: String,
+    /// Holder state.
+    pub state: HolderState,
+}
+
+/// Where a name is held.
+///
+/// A later release may add a source, so the enum is non-exhaustive: a
+/// caller matches it with a wildcard arm and never constructs it.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NameSource {
+    /// The Store's own records.
+    Store,
+    /// A home project record.
+    Home,
+}
+
+/// Context for a `NameTaken` refusal.
+///
+/// A later release may add a field, so the struct is non-exhaustive:
+/// a caller reads its fields, and construction belongs to this crate.
+#[non_exhaustive]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NameTakenState {
+    /// The holder.
+    pub holder: NameHolder,
+    /// Where it is held.
+    pub source: NameSource,
+}
+
+/// One hidden path.
+///
+/// A later release may add a field, so the struct is non-exhaustive:
+/// a caller reads its fields, and construction belongs to this crate.
+#[non_exhaustive]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RemovedPath {
+    /// The request path.
+    pub path: String,
+    /// The governing frontier serial.
+    pub frontier_serial: u64,
+}
+
+/// Context for a `Removed` refusal.
+///
+/// A later release may add a field, so the struct is non-exhaustive:
+/// a caller reads its fields, and construction belongs to this crate.
+#[non_exhaustive]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RemovedState {
+    /// The hidden paths.
+    pub paths: Vec<RemovedPath>,
+}
+
 /// Expected versus observed Branch publication state.
 ///
 /// Both sides are reported, so a caller can distinguish a moved head from a
@@ -50,6 +143,14 @@ pub enum HistoryError {
     Missing(Missing),
     /// A required capability is not provided by this build or provider.
     Unsupported(&'static str),
+    /// A name is held by a live, retired or deleted record.
+    NameTaken(Box<NameTakenState>),
+    /// A path is hidden by `remove_file`.
+    Removed(Box<RemovedState>),
+    /// A required marker or fence row is missing or contradicts the request.
+    Conflict(&'static str),
+    /// The Store was replaced or moved under this handle.
+    StaleStore,
     /// Immediate metadata admission was refused; the caller may retry later.
     Busy,
     /// The content authority this catalog is bound to is not available.
@@ -89,11 +190,13 @@ pub enum HistoryError {
 
 impl HistoryError {
     /// True when the attempted mutation's persistence outcome is unknown.
+    #[must_use]
     pub fn unknown(&self) -> bool {
         matches!(self.cause(), Self::UnknownOutcome)
     }
 
     /// The typed failure itself; kept for callers that match through it.
+    #[must_use]
     pub fn cause(&self) -> &Self {
         self
     }
@@ -105,6 +208,10 @@ impl std::fmt::Display for HistoryError {
             Self::InvalidInput(what) => write!(formatter, "invalid input: {what}"),
             Self::Missing(what) => write!(formatter, "missing {what:?}"),
             Self::Unsupported(what) => write!(formatter, "unsupported: {what}"),
+            Self::NameTaken(state) => write!(formatter, "name taken: {:?}", state.holder),
+            Self::Removed(state) => write!(formatter, "removed: {} paths", state.paths.len()),
+            Self::Conflict(what) => write!(formatter, "conflict: {what}"),
+            Self::StaleStore => formatter.write_str("stale Store"),
             Self::Busy => formatter.write_str("busy"),
             Self::OwnershipUnavailable => formatter.write_str("ownership unavailable"),
             Self::Capacity(what) => write!(formatter, "capacity: {what}"),
@@ -128,3 +235,56 @@ impl std::error::Error for HistoryError {}
 
 /// Result of one history operation.
 pub type HistoryResult<T> = Result<T, HistoryError>;
+
+impl NameHolder {
+    /// Builds a holder for a typed `NameTaken` context.
+    pub fn new(kind: HolderKind, name: impl Into<String>, state: HolderState) -> Self {
+        Self {
+            kind,
+            name: name.into(),
+            state,
+        }
+    }
+}
+
+impl NameTakenState {
+    /// Builds the context of a `NameTaken` refusal.
+    pub fn new(holder: NameHolder, source: NameSource) -> Self {
+        Self { holder, source }
+    }
+}
+
+impl RemovedPath {
+    /// Builds one hidden path for a `Removed` refusal.
+    pub fn new(path: impl Into<String>, frontier_serial: u64) -> Self {
+        Self {
+            path: path.into(),
+            frontier_serial,
+        }
+    }
+}
+
+impl RemovedState {
+    /// Builds the context of a `Removed` refusal.
+    pub fn new(paths: Vec<RemovedPath>) -> Self {
+        Self { paths }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn constructors_build_the_typed_context() {
+        let holder = NameHolder::new(HolderKind::Branch, "main", HolderState::Retired);
+        let taken = NameTakenState::new(holder, NameSource::Store);
+        assert_eq!(taken.holder.name, "main");
+        assert_eq!(taken.holder.kind, HolderKind::Branch);
+        assert_eq!(taken.source, NameSource::Store);
+
+        let removed = RemovedState::new(vec![RemovedPath::new("a.txt", 7)]);
+        assert_eq!(removed.paths[0].path, "a.txt");
+        assert_eq!(removed.paths[0].frontier_serial, 7);
+    }
+}

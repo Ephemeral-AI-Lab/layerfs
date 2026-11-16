@@ -136,14 +136,6 @@ impl HistoryCatalog for HistoryProvider {
         self.read(|tx| super::lineage::overwritten(tx, layer, position, usize::from(limit)))
     }
 
-    fn published_layer(
-        &self,
-        branch: BranchId,
-        commit: CommitId,
-    ) -> HistoryResult<Option<LayerId>> {
-        self.read_statement(|tx| layerstack::published_source(tx, branch, commit))
-    }
-
     fn layer_history(
         &self,
         request: &LayerHistoryRequest,
@@ -182,6 +174,14 @@ impl HistoryCatalog for HistoryProvider {
         self.write(|tx| super::removal::remove_layerstack(tx, stack))
     }
 
+    fn mark_stack_deleted(&self, stack: LayerStackId, deleted_ms: i64) -> HistoryResult<()> {
+        self.write(|tx| layerstack::mark_stack_deleted(tx, stack, deleted_ms))
+    }
+
+    fn stack_deleted_ms(&self, stack: LayerStackId) -> HistoryResult<Option<i64>> {
+        self.read(|tx| layerstack::stack_deleted_ms(tx, stack))
+    }
+
     fn publish_lane(&self) -> HistoryResult<PublishLane> {
         match &self.engine {
             crate::backend::Engine::Sqlite(session) => {
@@ -208,5 +208,27 @@ impl HistoryCatalog for HistoryProvider {
 
     fn reserve_inodes(&self, request: &ReserveRequest) -> HistoryResult<Reservation> {
         self.write(|tx| allocation::reserve_inodes(tx, self.catalog_id, request))
+    }
+
+    fn mark_path_removed(
+        &self,
+        stack: LayerStackId,
+        path: &[u8],
+        frontier_serial: u64,
+        removed_ms: i64,
+    ) -> HistoryResult<()> {
+        self.write(|tx| super::paths::mark(tx, stack, path, frontier_serial, removed_ms))
+    }
+
+    fn remove_path(&self, request: &PathRemovalRequest) -> HistoryResult<PathRemovalOutcome> {
+        self.write(|tx| super::paths::remove_path(tx, request))
+    }
+
+    fn path_removals(&self, stack: LayerStackId) -> HistoryResult<Vec<PathRemovalRecord>> {
+        self.read(|tx| super::paths::markers(tx, stack))
+    }
+
+    fn node_history_serial(&self, node: NodeId) -> HistoryResult<Option<u64>> {
+        self.read_statement(|tx| super::position::node_serial(tx, node))
     }
 }

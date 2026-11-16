@@ -21,6 +21,7 @@ mod contract;
 pub use contract::catalog;
 pub use contract::error;
 pub use contract::identity;
+pub use contract::path;
 pub use contract::query;
 pub use contract::records;
 
@@ -34,6 +35,7 @@ pub use records::{
     BranchSnapshot, CommitHistoryRequest, CommitMeta, CommitOutcome, CommitRecord, CommitRequest,
     CommitStatistics, CommitVia, FileDigest, ForkRequest, ForkSource, InitStatistics,
     LayerHistoryRequest, LayerRecord, LayerStackRecord, MergeCommit, MergeHead, MergeSide, Page,
-    PageResult, RecordKind, Reservation, ReserveRequest, StackInitialization, StoreStatistics,
+    PageResult, PathRemovalKind, PathRemovalOutcome, PathRemovalRecord, PathRemovalRequest,
+    RecordKind, Reservation, ReserveRequest, StackInitialization, StoreStatistics,
     FILE_DIGEST_WINDOW, MAXIMUM_MESSAGE_BYTES, MAXIMUM_PAGE_RECORDS,
 };
