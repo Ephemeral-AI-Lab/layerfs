@@ -5,6 +5,7 @@
 
 pub mod ffi;
 pub mod callbacks;
+pub mod directory;
 pub mod services;
 
 pub mod mount;

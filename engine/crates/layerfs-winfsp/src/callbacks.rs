@@ -91,7 +91,8 @@ fn dot_entry(name: &str) -> Vec<u8> {
     bytes
 }
 
-/// ReadDirectory: the first window answers "." and ".."; a marker ends it.
+/// ReadDirectory: the ports-backed window over the DirectoryStream,
+/// falling to the static dot face when the services refuse.
 pub unsafe extern "system" fn read_directory(
     fs: *mut FSP_FILE_SYSTEM,
     _file: *mut c_void,
@@ -104,28 +105,18 @@ pub unsafe extern "system" fn read_directory(
     let Some(context) = (unsafe { context(fs) }) else {
         return STATUS_NOT_IMPLEMENTED;
     };
-    let _services: Arc<_> = match context.request() {
-        Ok(services) => services,
+    let marker_present = !marker.is_null() && unsafe { *marker } != 0;
+    let offset = if marker_present { 1 } else { 0 }; // past the dots
+    let window = match crate::directory::root_window(context, 1, offset) {
+        Ok(window) => window,
         Err(_) => return STATUS_NOT_IMPLEMENTED,
     };
-    let _ = block_on(async { () });
-    let marker_present = !marker.is_null() && unsafe { *marker } != 0;
-    if marker_present {
-        if !bytes_transferred.is_null() {
-            unsafe { *bytes_transferred = 0 };
-        }
-        return STATUS_SUCCESS;
-    }
-    let dot = dot_entry(".");
-    let dotdot = dot_entry("..");
-    let need = dot.len() + dotdot.len();
-    if (length as usize) < need {
+    if (length as usize) < window.len() {
         return STATUS_NOT_IMPLEMENTED;
     }
     unsafe {
-        std::ptr::copy_nonoverlapping(dot.as_ptr(), buffer.cast(), dot.len());
-        std::ptr::copy_nonoverlapping(dotdot.as_ptr(), (buffer as *mut u8).add(dot.len()), dotdot.len());
-        *bytes_transferred = need as u32;
+        std::ptr::copy_nonoverlapping(window.as_ptr(), buffer.cast(), window.len());
+        *bytes_transferred = window.len() as u32;
     }
     STATUS_SUCCESS
 }
