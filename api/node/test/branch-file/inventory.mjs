@@ -11,8 +11,8 @@ const root = fileURLToPath(new URL("../../../../", import.meta.url));
 const command = process.env.LAYERFS_CLI ?? join(root, "target/debug/layerfs");
 const docs = join(root, "docs/architecture/api/sdk");
 
-test("the SDK pages name all 82 current calls, one `### family.call` heading each", () => {
-  assert.equal(table.length, 82);
+test("the SDK pages name all 83 current calls, one `### family.call` heading each", () => {
+  assert.equal(table.length, 83);
   const families = [...new Set(table.map((spec) => spec.family))];
   assert.equal(families.length, 11);
   const index = readFileSync(join(docs, "README.md"), "utf8");
