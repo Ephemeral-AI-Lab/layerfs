@@ -161,13 +161,10 @@ and returns `home_entry_removed: true`. The durable delete intent
 `{stack_id, deleted_ms, attempt_ms}` lives outside the removed entry (or the
 entry is **not** renamed; one sidecar file at
 `<home>/store/<store>/delete/<project>.json` with
-`{store, project, stack_id, deleted_ms, attempt_ms, state, op_id}` is written
+`{store, project, stack_id, deleted_ms, attempt_ms, state}` is written
 (temp + fsync + rename + dir fsync) after the identity save and before the
 marker, with `pending|marked|done` updated atomically and unlinked after the
-entry removal. `op_id` is additive (an older sidecar without it is still
-valid): it records the project op the admit/mark attempt ran under, so the
-retry can settle a lost admit/mark reply instead of leaving it uncertain
-(§5.1, §10). The retry
+entry removal; the retry
 re-reads the Store by the recorded stack id and compares it with the home
 record, discarding a mismatch without touching a re-created project's entry;
 a retired row reuses `deleted_ms` and finishes the entry; a live row with no
@@ -206,7 +203,7 @@ untouched by the swap, cleared on settle) with columns `generation`,
 `mark_totals`, `mark_stamp` (`MAX(content_signature.stamp)`), `started_ms`,
 `dead_canonical`, `dead_stored`, `dead_metadata`,
 `dead_logical`, `totals_applied`, `artifact`, `pid`, `backend_start`,
-`usename`, `incarnation`. The `mark_*` columns are the first-statement tuple; the raw
+`incarnation`. The `mark_*` columns are the first-statement tuple; the raw
 head rows are hashed by the client. A GC-only `gc_dead(kind, id)` table (same additive step, never
 copied, truncated on settle) carries the full dead set; a single `gc_op` row
 cannot. SQLite keeps its phase in the
@@ -292,8 +289,7 @@ caller's record by stack id and allow-lists its retired stack.
   same position: the marker hides the path and a mount of the Branch that
   carries it whiteouts, so publish needs no whiteout of its own. A merge that
   cannot materialize the whiteout is refused `Removed` with
-  `detail {paths: [{path, frontier_serial}]}`, listing every unmaterializable
-  path as a full element, deduplicated and sorted by normalized path bytes.
+  `detail {paths: [...]}`.
 - A path explicitly re-created after the frontier is not a whiteout: the
   marker hides only content inherited from nodes at or below the frontier.
   In a merge of a head at or below the frontier with a head whose path was
@@ -321,11 +317,9 @@ caller's record by stack id and allow-lists its retired stack.
   `NotFound` once compaction collects it, never different bytes.
 - The result is `{kind: "Removed", project, path, frontier_serial,
   removed_ms}` or `{kind: "UpToDate", project, path, frontier_serial,
-  removed_ms}` (the stored values). A `Removed` refusal always carries the one
-  detail shape `{paths: [{path, frontier_serial}]}`: one element for
-  read/stat (the request path with its governing maximum frontier); a merge
-  lists every unmaterializable path, sorted by normalized path bytes.
-  `file.read`/`file.stat`
+  removed_ms}` (the stored values). Every refusal carries one detail shape:
+  `{paths: [{path, frontier_serial}]}` (one element for read/stat; the
+  governing maximum frontier and the request path). `file.read`/`file.stat`
   refuse `Removed` with it. `file.list`/`file.glob` omit hidden entries and
   report one top-level `removed_count` over the queried subtree (a hidden
   target path is `Removed`; a marked-but-absent path is not counted).
@@ -342,11 +336,11 @@ caller's record by stack id and allow-lists its retired stack.
   hidden at-or-below version (never skips past it), returning only visible
   versions. `file.blame` stops at the hidden version and attributes the
   remaining lines at the tip. `file.grep`/`file.blame` omit hidden
-  hits. `project.export` omits it; `file.cp` from a hidden source and
-  `file.edit` are `Removed`; `file.mv`/`file.rm` from a hidden path return the
-  `NotFound`/`NoSuchPath` wire code, not `Removed`, and `file.mv` to a hidden
-  path is a visible re-creation; `mkdir`/`apply` follow the same
-  construction rule; a post-frontier write is the visible re-creation.
+  hits. `project.export` omits it; a cp-from source is `Removed`; `file.edit`
+  is `Removed`; `file.mv` from a hidden path is `NotFound` and to a hidden
+  path is a visible re-creation; `mkdir`/`cp`/`apply` follow the same
+  construction rule; `file.rm` of a hidden path is `NotFound`; a
+  post-frontier write is the visible re-creation.
 - The call accepts an absolute POSIX path and converts it to the Store's
   normalized relative components (strip one leading `/`; `/a` and `a` are the
   same). It refuses `InvalidInput` for empty, `/`, `//a`, `a//b`, `a/`, `./a`,
@@ -979,9 +973,8 @@ reported as `markBytes`; the Phase A table copy itself moves no pack bytes.
 | Code | Status |
 |---|---|
 | `MountsActive`, `Busy`, `Unresolved`, `NotFound`, `NoSuchBranch`, `NoSuchCommit`, `NoSuchProject`, `NoSuchStore`, `Unsupported`, `ReservedName`, `Conflict`, `NameTaken`, `Capacity`, `Exists`, `InvalidInput` | existing (`Unresolved` now used by the four calls) |
-| `Unknown` | service/control-plane outcome, not a `HistoryError` code (§4, §4.2): a lost reply or an undeterminable Store listing; detail `{entity: {kind, name}, phase, op}`, with `phase`/`op` `null` when no durable op is known |
 | `StaleStore` | new; one `HistoryError` variant with an explicit mapping arm, because the `_ => "Failed"` wildcard (`engine/crates/layerfs-store-service/src/history/lookup.rs:54,64`) would hide it |
-| `Removed` | new; reading a path removed by `remove_file`; an explicit `HistoryError::Removed` arm in `lookup.rs` before the `_ => "Failed"` wildcard; detail always `{paths: [{path, frontier_serial}]}` — a merge lists every unmaterializable path, sorted by path bytes; `file.mv`/`file.rm` from a hidden path are the `NotFound`/`NoSuchPath` wire code, while `file.cp`/`file.edit` return `Removed` |
+| `Removed` | new; reading a path removed by `remove_file`; an explicit `HistoryError::Removed` arm in `lookup.rs` before the `_ => "Failed"` wildcard; detail `{paths: [{path, frontier_serial}]}` |
 
 
 - `project.init` whose name is held returns `NameTaken` (today it returns
@@ -1066,10 +1059,8 @@ inodeBlocksBytes}`; `residue` is `{bytes, artifacts: [string], reason?}`;
 top-level `estimate: bool`; a capped field is `{value, cap}`; `zeroReason`
 is per zero field with the closed vocabulary `empty-store`, `none-path`,
 `no-history`, `no-waste`, `postgresql-in-place`; `markBytes` is a #52 metric,
-not a result field. The names in this section (e.g. `deadBytesBound`,
-`keptWaste.deadInRetainedPacksBytes`) are logical Rust names only; the wire,
-SDK and CLI keys are snake_case (`dead_bytes_bound`,
-`kept_waste.dead_in_retained_packs_bytes`), per §10. On the `none` path `deadBytesRefined` equals `deadBytesBound` (no
+not a result field. The SDK/CLI render every key
+snake_case. On the `none` path `deadBytesRefined` equals `deadBytesBound` (no
 payload sweep runs below the threshold), and the report says so. `physicalShrink`
 reads the old size before the rename; `backendReusable` reads the SQLite
 free-page count × page size before it; `logicalDiscarded` is the summed

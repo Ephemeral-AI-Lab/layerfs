@@ -9,7 +9,6 @@
 use super::{source::WaveSource, state::State};
 use crate::{
     encoding::{
-        delta::select::ChainWalk,
         pool::{delta, leaf},
         EncodedRecord,
     },
@@ -58,7 +57,7 @@ impl State<'_> {
     ) -> StorageResult<EncodedRecord> {
         let input = PoolingLeaf::decode(object.canonical())?;
         let mut known = BTreeMap::<[u8; INODE_VALUE_BYTES], u32>::new();
-        let bases = self.pooled_bases(object.id(), advisory, &mut known)?;
+        let bases = self.pooled_bases(advisory, &mut known)?;
         // Values no base holds may still be ones this Save already assigned,
         // which is the common case while a whole tree is first saved.
         let mut candidates = BTreeSet::new();
@@ -181,7 +180,6 @@ impl State<'_> {
     /// another delta still gives its rows their ordinals.
     fn pooled_bases(
         &mut self,
-        target: ObjectId,
         advisory: &[ObjectId],
         known: &mut BTreeMap<[u8; INODE_VALUE_BYTES], u32>,
     ) -> StorageResult<Vec<Base>> {
@@ -203,11 +201,10 @@ impl State<'_> {
             let reader = &mut self.pool;
             let groups = &mut self.groups;
             let packs = &mut self.packs;
-            let walk = self.depths.cost_avoiding(
+            let Some(cost) = self.depths.cost_of(
                 &source,
                 &mut self.decode,
                 *id,
-                target,
                 |source, workspace, location| {
                     // The pool reader keeps the encoded account of a pooled chain
                     // (`chain_encoded` below), so the walk measures no width.
@@ -223,10 +220,8 @@ impl State<'_> {
                         )
                         .map(|base| crate::encoding::delta::read::ChainEdge { base, width: 0 })
                 },
-            )?;
-            let ChainWalk::Cost(cost) = walk else {
-                // A base whose chain names this leaf would close a cycle; an
-                // absent or dangling one cannot carry it.
+            )?
+            else {
                 continue;
             };
             let (body, canonical) = self.pool.leaf_parts_with_caches(
