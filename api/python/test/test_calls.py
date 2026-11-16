@@ -35,7 +35,7 @@ else:
     # Load the real aio module with private import stubs, without pretending a
     # native binding is available or exercising native calls against a mock.
     layerfs = None
-    families = ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs"]
+    families = ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "logs", "doctor"]
     package = types.ModuleType("_layerfs_aio_unit")
     package.__path__ = []
     dependencies = {

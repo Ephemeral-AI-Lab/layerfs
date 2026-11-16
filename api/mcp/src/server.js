@@ -36,8 +36,9 @@ const USAGE = `usage: layerfs-mcp [--profile work|admin] [--home DIR]
                   [--help] [--version]
 
   --profile work   the calls an agent works with (default)
-  --profile admin  every call, including machines, Stores, backups and
-                   project create/remove
+  --profile admin  every call, including machines, Stores, backups and the
+                   four GC calls project.delete, project.remove_file,
+                   branch.remove and store.compact
   --home DIR       the LayerFS home (default: LAYERFS_HOME, else ~/.layerfs)
   --scope-project  the folder scope's project, with --scope-folder
   --scope-folder   the folder scope; the library checks every scoped call

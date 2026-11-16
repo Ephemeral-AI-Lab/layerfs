@@ -14,16 +14,17 @@ library's call table as eleven families of functions, 83 calls in all:
 
 | Family | Calls |
 | --- | --- |
-| [`project`](../docs/architecture/api/sdk/project.md) | `init`, `list`, `get`, `stats`, `export`, `remove` |
-| [`branch`](../docs/architecture/api/sdk/branch.md) | `list`, `get`, `commits`, `get_commit`, `fork`, `merge`, `publish`, `diff` |
+| [`project`](../docs/architecture/api/sdk/project.md) | `init`, `list`, `get`, `stats`, `export`, `delete`, `remove_file` |
+| [`branch`](../docs/architecture/api/sdk/branch.md) | `list`, `get`, `commits`, `get_commit`, `fork`, `merge`, `publish`, `diff`, `remove` |
 | [`commit`](../docs/architecture/api/sdk/commit.md) | `list`, `get`, `diff` |
 | [`file`](../docs/architecture/api/sdk/file.md) | `read`, `stat`, `list`, `glob`, `grep`, `revision`, `blame`, `diff`, `write`, `edit`, `rm`, `mkdir`, `mv`, `cp`, `apply` |
-| [`sandbox`](../docs/architecture/api/sdk/sandbox.md) | `create`, `list`, `get`, `close` |
+| [`sandbox`](../docs/architecture/api/sdk/sandbox.md) | `create`, `list`, `get`, `close`, `files` |
 | [`workspace`](../docs/architecture/api/sdk/workspace.md) | `mount`, `exec`, `exec_cancel`, `commit`, `unmount`, `status` |
-| [`machine`](../docs/architecture/api/sdk/machine.md) | `list`, `platforms`, `get`, `status`, `start`, `stop`, `create`, `remove`, `update` |
-| [`store`](../docs/architecture/api/sdk/store.md) | `list`, `get`, `status`, `stats`, `create`, `connect`, `attach`, `detach`, `push`, `pull`, `remove`, `disconnect` |
+| [`machine`](../docs/architecture/api/sdk/machine.md) | `list`, `platforms`, `get`, `images`, `load`, `prune`, `status`, `stats`, `space`, `files`, `start`, `stop`, `create`, `remove`, `update` |
+| [`store`](../docs/architecture/api/sdk/store.md) | `list`, `get`, `status`, `stats`, `create`, `connect`, `attach`, `detach`, `push`, `pull`, `remove`, `compact`, `disconnect` |
 | [`backup`](../docs/architecture/api/sdk/backup.md) | `connect`, `disconnect`, `list`, `create`, `restore` |
 | [`logs`](../docs/architecture/api/sdk/logs.md) | `list`, `reset`, `machine`, `sandbox` |
+| [`doctor`](../docs/architecture/api/sdk/doctor.md) | `fix` |
 
 `layerfs.table` lists every call with its arguments and options; it is the
 source for the list above, for the `layerfs` command (`layerfs help`) and for
