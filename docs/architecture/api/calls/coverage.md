@@ -42,7 +42,7 @@ check and proves a missing, renamed or extra call is reported.
 
 <!-- BEGIN GENERATED: api/scripts/gen-coverage.mjs -->
 
-82 calls in 11 families, counted from the Node table. Calls present: Node 82, Python 82, Python `aio` 82, CLI 82, MCP 76 (38 in `work`, 38 admin only; 5 UI only, in no profile).
+83 calls in 11 families, counted from the Node table. Calls present: Node 83, Python 83, Python `aio` 83, CLI 83, MCP 76 (38 in `work`, 38 admin only; 6 UI only, in no profile).
 
 Argument names that are Python keywords: none.
 
@@ -103,6 +103,7 @@ Front-end problems: none.
 | `machine.prune` | name, ?image | unused | yes | yes | yes | yes | admin |
 | `machine.status` | name | - | yes | yes | yes | yes | admin |
 | `machine.stats` | machine | - | yes | yes | yes | yes | no (UI only) |
+| `machine.space` | machine | - | yes | yes | yes | yes | no (UI only) |
 | `machine.files` | machine, ?path | depth, cursor, limit, offset, length | yes | yes | yes | yes | no (UI only) |
 | `machine.start` | name | on_progress() | yes | yes | yes | yes (--progress) | admin |
 | `machine.stop` | name | force | yes | yes | yes | yes | admin |

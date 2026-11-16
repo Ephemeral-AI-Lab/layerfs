@@ -54,6 +54,34 @@ pub(crate) fn log_start() -> String {
     )
 }
 
+/// What a launcher's shell runs before it starts a worker, after
+/// [`log_start`] (layerfs-project#182 L4): where the worker would start at
+/// the root of a cgroup namespace of its own (the root has a `cgroup.type`
+/// file, which the real root never has: the docker machine's container,
+/// an Apple Container guest), every process of that root moves to a leaf
+/// `layerfs-worker`, and the root then gives its children the memory and
+/// pids controllers it lists and does not give yet, in one write. A cgroup
+/// that holds processes cannot give controllers; only the real root is
+/// exempt, and there (Lima, native Linux) nothing is moved or written.
+/// Idempotent: a second start finds the leaf and the controllers there. It
+/// never sets a limit; a failed write leaves one line in the worker's log
+/// and the worker starts as before, its Sandboxes' memory and process
+/// values null. `docker exec` and `container exec` join the leaf once the
+/// root gives controllers (runc falls back to the init process's group).
+pub(crate) const CGROUP_LEAF: &str = r#"c=/sys/fs/cgroup
+if [ -f $c/cgroup.type ] && [ -f $c/cgroup.controllers ] && mkdir -p $c/layerfs-worker 2>/dev/null; then
+  for p in $(cat $c/cgroup.procs); do echo "$p" > $c/layerfs-worker/cgroup.procs 2>/dev/null || true; done
+  w=""
+  for k in memory pids; do
+    case " $(cat $c/cgroup.controllers) " in *" $k "*)
+      case " $(cat $c/cgroup.subtree_control) " in *" $k "*) ;; *) w="$w +$k" ;; esac ;;
+    esac
+  done
+  if [ -n "$w" ] && ! echo $w > $c/cgroup.subtree_control 2>/dev/null; then
+    echo "layerfs worker: Sandboxes get no$w controller: writing it to $c/cgroup.subtree_control failed" >> "$LAYERFS_WORKER_LOG"
+  fi
+fi"#;
+
 /// Step 3: ends a worker an earlier start left (by its pid, if that pid's
 /// command line is still exactly the bundle's `layerfs worker`: a guest
 /// that restarted reuses pids, even this script's own), then starts it
@@ -73,6 +101,7 @@ if [ -f $s/worker.pid ]; then
 fi
 LAYERFS_WORKER_LOG="$3"
 {}
+{CGROUP_LEAF}
 LAYERFS_WORKER_LISTEN="$1" LAYERFS_WORKER_SECRET=$s/secret setsid nohup "$2/layerfs" worker >> "$LAYERFS_WORKER_LOG" 2>&1 < /dev/null &
 echo $! > $s/worker.pid"#,
         log_start()

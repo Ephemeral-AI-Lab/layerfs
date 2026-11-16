@@ -7,7 +7,7 @@
 //! record under its own root and checks the process it names by id, start
 //! time and boot ([`super::process::live`]). No daemon is asked.
 use super::{process, Budget, Side};
-use crate::record::SandboxRecord;
+use crate::record::{DaemonRecord, SandboxRecord};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
 use layerfs_home::names::SandboxName;
@@ -177,22 +177,31 @@ pub(super) type Checked = (Option<bool>, Option<&'static str>);
 /// Whether the daemon of each of Sandboxes `names` under `root` runs, and
 /// whether every one was checked: once `budget` is spent the rest are
 /// `None` with [`DEADLINE`]. A Sandbox with no record or no daemon record
-/// under `root` has no process: `Some(false)`.
-pub(super) fn checked(root: &Path, names: &[String], budget: &Budget) -> (Vec<Checked>, bool) {
+/// under `root` has no process: `Some(false)`. Beside each check, what
+/// `read` makes of its daemon record when it has one.
+pub(super) fn checked<T>(
+    root: &Path,
+    names: &[String],
+    budget: &Budget,
+    mut read: impl FnMut(&DaemonRecord) -> T,
+) -> (Vec<(Checked, Option<T>)>, bool) {
     let mut complete = true;
     let one = |name: &String| {
         if budget.spent() {
             complete = false;
-            return (None, Some(DEADLINE));
+            return ((None, Some(DEADLINE)), None);
         }
         let record = SandboxRecord::read_in(&paths::sandbox_dir(root, name), name);
         match record.as_ref().map(|r| r.as_ref().and_then(|r| r.daemon())) {
-            Err(_) => (None, Some(UNREADABLE)),
-            Ok(None) => (Some(false), None),
-            Ok(Some(daemon)) => match process::live(daemon) {
-                Ok(live) => (Some(live), None),
-                Err(reason) => (None, Some(reason)),
-            },
+            Err(_) => ((None, Some(UNREADABLE)), None),
+            Ok(None) => ((Some(false), None), None),
+            Ok(Some(daemon)) => {
+                let live = match process::live(daemon) {
+                    Ok(live) => (Some(live), None),
+                    Err(reason) => (None, Some(reason)),
+                };
+                (live, Some(read(daemon)))
+            }
         }
     };
     let checked = names.iter().map(one).collect();
@@ -205,18 +214,21 @@ pub(super) fn checked(root: &Path, names: &[String], budget: &Budget) -> (Vec<Ch
 pub(super) fn serve(side: &Side<'_>, request: &SdkValue, budget: &Budget) -> Outcome {
     let (Side::Home(root) | Side::Worker(root)) = side;
     let names = names(request)?;
-    let (checked, complete) = checked(root, &names, budget);
-    let items = names.iter().zip(checked).map(|(name, (live, reason))| {
-        let mut fields = vec![
-            ("name".to_owned(), SdkValue::text(name)),
-            (
-                "live".to_owned(),
-                live.map_or(SdkValue::Null, SdkValue::Bool),
-            ),
-        ];
-        fields.extend(reason.map(|reason| ("reason".to_owned(), SdkValue::text(reason))));
-        SdkValue::Map(fields)
-    });
+    let (checked, complete) = checked(root, &names, budget, |_| ());
+    let items = names
+        .iter()
+        .zip(checked)
+        .map(|(name, ((live, reason), _))| {
+            let mut fields = vec![
+                ("name".to_owned(), SdkValue::text(name)),
+                (
+                    "live".to_owned(),
+                    live.map_or(SdkValue::Null, SdkValue::Bool),
+                ),
+            ];
+            fields.extend(reason.map(|reason| ("reason".to_owned(), SdkValue::text(reason))));
+            SdkValue::Map(fields)
+        });
     let mut fields = vec![
         ("sandboxes".to_owned(), SdkValue::List(items.collect())),
         ("complete".to_owned(), SdkValue::Bool(complete)),

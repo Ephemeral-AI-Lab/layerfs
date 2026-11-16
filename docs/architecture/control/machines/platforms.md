@@ -64,7 +64,10 @@ runs `namespaces` Sandboxes inside it, as a VM's worker does.
      -e LAYERFS_WORKER_LOG=/layerfs/data/log/worker.log
      --entrypoint sh <image> -c ENTRY
    ENTRY: mkdir /layerfs/data/{store,sandbox} 0755; the log's folder and
-          its one rotation; echo $$ > /layerfs/state/worker.pid; wait
+          its one rotation; CGROUP_LEAF (every process of the namespace's
+          cgroup root into /sys/fs/cgroup/layerfs-worker, then
+          "+memory +pids" to the root's cgroup.subtree_control);
+          echo $$ > /layerfs/state/worker.pid; wait
           <= 60 s for the secret;
           exec /layerfs/bundle/layerfs worker >> "$LAYERFS_WORKER_LOG" 2>&1
    macOS: docker port <vm> 7070/tcp -> host port
@@ -89,7 +92,13 @@ volume, not to `docker logs`
 The secret goes into a private tmpfs after start, so it is in no command
 line or container config. The container is privileged in its own cgroup
 namespace so its worker has root, `/dev/fuse` and a writable cgroup v2 tree
-with `cgroup.kill`. It never writes `user.max_user_namespaces` (that would
+with `cgroup.kill`. Its cgroup root holds processes, and a cgroup that
+holds processes cannot give its children controllers (only the real root is
+exempt), so the entry moves them to a leaf first and the root then gives
+Sandbox groups memory and pids ([`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs)
+`CGROUP_LEAF`, layerfs-project#182 L4); `docker exec` then joins the leaf.
+The VM launcher runs the same lines, which act only at a namespace root (an
+Apple Container guest), never at a VM's real root (Lima). It never writes `user.max_user_namespaces` (that would
 change the whole Docker host); Sandbox commands rely on the seccomp
 filter. `machine update docker --docker <socket>` points the platform's own
 `docker` calls at another Engine; the socket is never mounted. A Sandbox

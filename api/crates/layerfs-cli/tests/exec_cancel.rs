@@ -10,8 +10,10 @@
 //! other process lists it under its Workspace's `running` with the log tag
 //! of the call that started it and its program, beside the Workspace's
 //! `overlay_bytes` and the Sandbox's `workspace_capacity`
-//! (layerfs-project#178); once it ended, it is listed no more. The live
-//! half needs the native daemon at LAYERFS_DAEMON; without it, it says
+//! (layerfs-project#178); once it ended, it is listed no more. Two commands
+//! run at once in one Workspace: a third runs and ends beside them, both
+//! are listed, and cancelling one leaves the other running. The live
+//! halves need the native daemon at LAYERFS_DAEMON; without it, they say
 //! NOT_RUN.
 use layerfs_api::home;
 use layerfs_bridge::control::SdkValue;
@@ -414,6 +416,206 @@ fn exec_ids_records_and_cancel_on_native() {
     assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
     assert!(!home.join("sandbox/s1").exists());
 
+    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+/// The exec ids `sandbox.get` lists under Sandbox `s1`'s one Workspace's
+/// `running`, oldest first.
+fn running_ids(home: &Path) -> Vec<String> {
+    let got = ok(home, "sandbox.get", &[("name", t("s1"))]);
+    let Some(SdkValue::List(items)) = got.get("workspaces") else {
+        panic!("{got:?}")
+    };
+    assert_eq!(items.len(), 1, "{got:?}");
+    let Some(SdkValue::List(running)) = items[0].get("running") else {
+        panic!("{got:?}")
+    };
+    running
+        .iter()
+        .map(|item| item.get_text("exec_id").unwrap().to_owned())
+        .collect()
+}
+
+#[test]
+fn two_commands_run_at_once_in_one_workspace_on_native() {
+    let Ok(daemon) = std::env::var("LAYERFS_DAEMON") else {
+        eprintln!("NOT_RUN: LAYERFS_DAEMON unset, no live Sandbox");
+        return;
+    };
+    let home = tempdir("both");
+    home::open(&home).unwrap();
+    home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    let folder = tempdir("both-folder");
+    std::fs::write(folder.join("README.md"), "both\n").unwrap();
+    let folder_text = folder.display().to_string();
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    ok(
+        &home,
+        "project.init",
+        &[("project", t("shop/api")), ("folder", t(&folder_text))],
+    );
+    ok(
+        &home,
+        "branch.fork",
+        &[
+            ("project", t("shop/api")),
+            ("name", t("dev")),
+            ("from_branch", t("main")),
+        ],
+    );
+    let sandbox = [
+        ("project", t("shop/api")),
+        ("name", t("s1")),
+        ("machine", t("native")),
+    ];
+    ok(&home, "sandbox.create", &sandbox);
+    let mount = [("sandbox", t("s1")), ("branch", t("dev")), ("name", t("w"))];
+    let mounted = ok(&home, "workspace.mount", &mount);
+    let wsid = mounted.get_text("workspace").unwrap().to_owned();
+    let execs = home.join("sandbox/s1/workspace").join(&wsid).join("exec");
+    let ws = || ("ws", t("s1:w"));
+
+    // two long commands, started one after the other, both run
+    let first = started(&home, "s1:w", "sleep 600", "both-a");
+    let a = recorded(&execs.join("both-a.json"));
+    let second = started(&home, "s1:w", "sleep 600", "both-b");
+    let b = recorded(&execs.join("both-b.json"));
+    let group = |record: &SdkValue| {
+        let stop = record.get("stop").unwrap().get("group").unwrap();
+        stop.get_int("pgid").unwrap()
+    };
+    let (a_group, b_group) = (group(&a), group(&b));
+    assert_ne!(a_group, b_group, "each command has its own stop handle");
+    assert!(group_runs(a_group) && group_runs(b_group));
+    // a third runs and ends while both run
+    let third = ok(
+        &home,
+        "workspace.exec",
+        &[
+            ws(),
+            ("command", t("echo beside")),
+            ("exec_id", t("both-c")),
+        ],
+    );
+    assert_eq!(third.get_text("kind"), Some("exit:0"), "{third:?}");
+    assert!(!execs.join("both-c.json").exists());
+    // a get lists both, oldest first
+    assert_eq!(running_ids(&home), ["both-a", "both-b"]);
+
+    // cancelling one leaves the other running
+    let cancel = |id: &str| {
+        let args = [ws(), ("exec_id", t(id)), ("grace_ms", SdkValue::Int(5000))];
+        ok(&home, "workspace.exec_cancel", &args)
+    };
+    let cancelled = cancel("both-a");
+    assert_eq!(
+        cancelled.get_text("outcome"),
+        Some("cancelled"),
+        "{cancelled:?}"
+    );
+    let answer = answered(first);
+    assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
+    assert!(
+        !group_runs(a_group),
+        "the cancelled command's group still runs"
+    );
+    assert!(group_runs(b_group), "the other command was ended too");
+    assert!(execs.join("both-b.json").exists());
+    assert_eq!(running_ids(&home), ["both-b"]);
+
+    let cancelled = cancel("both-b");
+    assert_eq!(
+        cancelled.get_text("outcome"),
+        Some("cancelled"),
+        "{cancelled:?}"
+    );
+    let answer = answered(second);
+    assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
+    assert!(running_ids(&home).is_empty());
+
+    ok(&home, "workspace.unmount", &[ws()]);
+    ok(&home, "sandbox.close", &[("name", t("s1"))]);
+    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+/// A forced `machine.stop` of `native` cancels each Sandbox's running
+/// command before its runtime stops, as a forced close does: the exec
+/// answers `cancelled`, not the `exit:137` of the runtime's kill. Live only.
+#[test]
+fn forced_native_machine_stop_cancels_running_commands() {
+    let Ok(daemon) = std::env::var("LAYERFS_DAEMON") else {
+        eprintln!("NOT_RUN: LAYERFS_DAEMON unset, no live Sandbox");
+        return;
+    };
+    let home = tempdir("stop-home");
+    home::open(&home).unwrap();
+    home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
+    let folder = tempdir("stop-folder");
+    std::fs::write(folder.join("README.md"), "stop\n").unwrap();
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    ok(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/api")),
+            ("folder", t(&folder.display().to_string())),
+        ],
+    );
+    ok(
+        &home,
+        "branch.fork",
+        &[
+            ("project", t("shop/api")),
+            ("name", t("dev")),
+            ("from_branch", t("main")),
+        ],
+    );
+    let sandbox = [
+        ("project", t("shop/api")),
+        ("name", t("s1")),
+        ("machine", t("native")),
+    ];
+    ok(&home, "sandbox.create", &sandbox);
+    let mount = [("sandbox", t("s1")), ("branch", t("dev")), ("name", t("w"))];
+    let wsid = ok(&home, "workspace.mount", &mount)
+        .get_text("workspace")
+        .unwrap()
+        .to_owned();
+    let child = started(&home, "s1:w", "sleep 600", "stop-1");
+    let record = recorded(
+        &home
+            .join("sandbox/s1/workspace")
+            .join(&wsid)
+            .join("exec/stop-1.json"),
+    );
+    let pgid = record
+        .get("stop")
+        .unwrap()
+        .get("group")
+        .unwrap()
+        .get_int("pgid")
+        .unwrap();
+    let force = [("name", t("native")), ("force", SdkValue::Bool(true))];
+    let stopped = ok(&home, "machine.stop", &force);
+    assert_eq!(
+        stopped.get("stopped_sandboxes"),
+        Some(&SdkValue::List(vec![t("s1")])),
+        "{stopped:?}"
+    );
+    let answer = answered(child);
+    assert!(answer.contains("\"kind\":\"cancelled\""), "{answer}");
+    assert!(!group_runs(pgid), "the command's group still runs");
+    // its record was settled, not left for a later close
+    let execs = home.join("sandbox/s1/workspace").join(&wsid).join("exec");
+    assert!(!execs.join("stop-1.json").exists());
+    let _ = call(
+        &home,
+        "sandbox.close",
+        &[("name", t("s1")), ("force", SdkValue::Bool(true))],
+        &mut |_| {},
+    );
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&folder);
 }

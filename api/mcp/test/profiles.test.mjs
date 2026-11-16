@@ -14,7 +14,7 @@ const nameOf = (spec) => `${spec.family}.${spec.call}`;
 
 test("every call is in exactly one bucket, and admin adds the work bucket", () => {
   assert.deepEqual(check(table), []);
-  assert.equal(table.length, 82);
+  assert.equal(table.length, 83);
   const buckets = table.map(bucketOf);
   assert.equal(buckets.filter((bucket) => bucket === "work").length, 38);
   assert.equal(buckets.filter((bucket) => bucket === "admin").length, 38);

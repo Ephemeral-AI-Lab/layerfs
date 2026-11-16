@@ -29,7 +29,7 @@ const WORK_CALLS = new Set(["project.list", "project.get", "project.stats", "pro
 const ADMIN_CALLS = new Set(["project.init", "project.delete", "project.remove_file", "branch.remove", "sandbox.create", "sandbox.close"]);
 
 /** Monitoring calls for a UI, which no profile lists (layerfs-project#178 D2, #164). */
-const UI_CALLS = new Set(["machine.stats", "machine.files", "logs.machine", "logs.sandbox", "sandbox.files"]);
+const UI_CALLS = new Set(["machine.stats", "machine.space", "machine.files", "logs.machine", "logs.sandbox", "sandbox.files"]);
 
 /** Families whose every call belongs to the `admin` profile. */
 const ADMIN_FAMILIES = new Set(["machine", "store", "backup", "logs"]);
@@ -75,7 +75,7 @@ export function bucketOf(spec) {
 
 /** Why this call is in its bucket: a line for the generated documentation table. */
 export function whyOf(spec) {
-  if (UI_CALLS.has(nameOf(spec))) return "a monitoring read a UI polls (a machine's stats, files or worker log, a Sandbox's daemon log or files); offered to no agent";
+  if (UI_CALLS.has(nameOf(spec))) return "a monitoring read a UI polls (a machine's stats, disk space, files or worker log, a Sandbox's daemon log or files); offered to no agent";
   if (spec.family === "project" && spec.call === "init") return "import a host folder into a Store; administration";
   if (spec.family === "project" && spec.call === "delete") return "retire a project in its Store and remove its home entry; administration; a folder scope refuses it";
   if (spec.family === "project" && spec.call === "remove_file") return "hide one absolute path from every node at or below its marker frontier; administration; a folder scope refuses it";

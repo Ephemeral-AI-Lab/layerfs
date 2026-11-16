@@ -26,8 +26,10 @@ pub(crate) const CALL: Call = call(
 /// `daemon_capacity` read model when the Sandbox answered it (#540), its
 /// `workspace_capacity` (how many Workspaces a Sandbox holds, always), its
 /// daemon process as its machine saw it (`daemon`: `{ pid, started_at }`,
-/// `usage`: its cgroup's `{ cpu_usec, memory_current, memory_peak, pids }`
-/// or null with `usage_reason`; layerfs-project#164) and
+/// `usage`: its cgroup's `{ cpu_usec, memory_current, memory_peak,
+/// memory_file, pids, oom_kills }` or null with `usage_reason`;
+/// layerfs-project#164, #182; the shape of each `machine.stats` row's
+/// `usage` too) and
 /// `next_page_pos`. The library reads it best effort and bounded, so this
 /// layer only shows what it got.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {

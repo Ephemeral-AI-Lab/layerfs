@@ -971,3 +971,122 @@ fn a_command_group_left_running_is_removed_with_its_sandbox() {
     sandbox.delete().unwrap();
     assert!(!sandbox_group.exists());
 }
+
+/// The `layerfs` directory gives Sandbox groups the memory and pids
+/// controllers it has and does not give yet, in one write, and nothing
+/// else (layerfs-project#182 L4); a write the kernel refuses (here a
+/// `cgroup.subtree_control` that cannot be opened for writing, as EBUSY or
+/// ENOENT are on a real hierarchy) is an error the caller only reports.
+/// Stand-in files in a scratch folder: needs neither root nor cgroup v2.
+#[test]
+fn the_layerfs_group_gives_only_the_controllers_it_has() {
+    let base = std::env::temp_dir().join(format!("lfs-give-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&base);
+    fs::create_dir_all(&base).unwrap();
+    let give = |controllers: &str, given: &str| -> (std::io::Result<()>, String) {
+        fs::write(base.join("cgroup.controllers"), controllers).unwrap();
+        fs::write(base.join("cgroup.subtree_control"), given).unwrap();
+        let outcome = layerfs_sandbox_backend::namespaces::give_controllers(&base);
+        (
+            outcome,
+            fs::read_to_string(base.join("cgroup.subtree_control")).unwrap(),
+        )
+    };
+    // both listed, neither given: one write of both
+    let (outcome, written) = give("cpuset cpu io memory hugetlb pids rdma\n", "");
+    assert!(outcome.is_ok());
+    assert_eq!(written, "+memory +pids");
+    // only what is listed, and never what is given already
+    assert_eq!(give("cpu memory\n", "").1, "+memory");
+    assert_eq!(give("cpu memory pids\n", "pids\n").1, "+memory");
+    // nothing to give: nothing written
+    assert_eq!(give("cpu io\n", "cpu\n").1, "cpu\n");
+    assert_eq!(give("memory pids\n", "memory pids\n").1, "memory pids\n");
+    // a refused write is an error, and the files are as they were
+    fs::write(base.join("cgroup.controllers"), "memory pids\n").unwrap();
+    fs::remove_file(base.join("cgroup.subtree_control")).unwrap();
+    fs::create_dir(base.join("cgroup.subtree_control")).unwrap();
+    assert!(layerfs_sandbox_backend::namespaces::give_controllers(&base).is_err());
+    // a group with no controller list (no cgroup v2 there) is an error too
+    fs::remove_file(base.join("cgroup.controllers")).unwrap();
+    assert!(layerfs_sandbox_backend::namespaces::give_controllers(&base).is_err());
+    fs::remove_dir_all(&base).unwrap();
+}
+
+/// The parent process id of `pid`, from its `/proc` status.
+fn parent(pid: &str) -> String {
+    let status = fs::read_to_string(format!("/proc/{pid}/status")).unwrap();
+    let line = status.lines().find(|line| line.starts_with("PPid:"));
+    line.unwrap()["PPid:".len()..].trim().to_owned()
+}
+
+#[test]
+fn a_command_and_its_helper_are_created_in_their_groups() {
+    if let Some(reason) = unavailable() {
+        eprintln!("SKIPPED namespaces exec groups: {reason}");
+        return;
+    }
+    let fixture = Fixture::new("groups");
+    let provider = fixture.provider().unwrap();
+    let sandbox = Arc::new(fixture.launch(&provider, "sandbox-1").unwrap());
+    let id = sandbox.identity().as_str().to_owned();
+    // a command with no group of its own is in the Sandbox's
+    let (code, out, _) = run(&sandbox, &["/bin/cat", "/proc/self/cgroup"], &[]);
+    assert_eq!(code, 0);
+    assert!(out.trim_end().ends_with(&format!("/layerfs/{id}")), "{out}");
+    // one process, the shell replaced by sleep: a shell that forks while
+    // the cancel's one SIGTERM pass reads the group would leave its new
+    // child to the kill after the grace
+    let (stop, thread) = started(&sandbox, "e4", "exec /bin/sleep 600");
+    let Stop::Cgroup { path } = &stop else {
+        unreachable!()
+    };
+    let procs = fs::read_to_string(path.join("cgroup.procs")).unwrap();
+    let command = procs.lines().next().unwrap().to_owned();
+    // the helper that waits for the command is in the Sandbox's group, so
+    // the Sandbox's cgroup.kill ends it; its own parent, which only waits
+    // for it, stays where the backend started it
+    let helper = parent(&command);
+    let cgroup = |pid: &str| fs::read_to_string(format!("/proc/{pid}/cgroup")).unwrap();
+    assert!(
+        cgroup(&helper)
+            .trim_end()
+            .ends_with(&format!("/layerfs/{id}")),
+        "{}",
+        cgroup(&helper)
+    );
+    let outer = parent(&helper);
+    assert_eq!(cgroup(&outer), cgroup("self"));
+    assert!(
+        !procs.lines().any(|pid| pid == helper || pid == outer),
+        "{procs}"
+    );
+    let outcome = cancel(&stop, Duration::from_secs(5)).unwrap();
+    assert_eq!(outcome, Cancelled::Signalled(Signal::SIGTERM));
+    assert_eq!(thread.join().unwrap(), Ok(143));
+    let mut sandbox = Arc::try_unwrap(sandbox).unwrap();
+    sandbox.stop(5).unwrap();
+    sandbox.delete().unwrap();
+}
+
+#[test]
+fn a_command_running_when_its_sandbox_is_killed_ends_without_a_status() {
+    if let Some(reason) = unavailable() {
+        eprintln!("SKIPPED namespaces kill under a command: {reason}");
+        return;
+    }
+    let fixture = Fixture::new("killed");
+    let provider = fixture.provider().unwrap();
+    let sandbox = Arc::new(fixture.launch(&provider, "sandbox-1").unwrap());
+    let sandbox_group = Path::new("/sys/fs/cgroup/layerfs").join(sandbox.identity().as_str());
+    let (_, thread) = started(&sandbox, "e5", "/bin/sleep 600");
+    // what a stop writes first: the helper is in the group, so it ends with
+    // the command and its exec is a failure, never the command's exit code
+    fs::write(sandbox_group.join("cgroup.kill"), "1").unwrap();
+    let failure = thread.join().unwrap().unwrap_err();
+    assert!(failure.contains("without a status"), "{failure}");
+    let mut sandbox = Arc::try_unwrap(sandbox).unwrap();
+    sandbox.stop(5).unwrap();
+    sandbox.delete().unwrap();
+    assert!(!sandbox_group.exists());
+}

@@ -9,7 +9,7 @@ one file per call under its family in
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 82 calls in eleven families. `layerfs help` lists them, and
+There are 83 calls in eleven families. `layerfs help` lists them, and
 `layerfs help <family> [<call>]` prints one family or one call.
 
 ## How a call is written

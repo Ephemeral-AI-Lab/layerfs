@@ -26,6 +26,10 @@ const ROLE: &str = "layerfs.role=machine-worker";
 /// it) where the readiness look reads it, waits (bounded) for its secret,
 /// then becomes the worker, whose output is appended to that log: on the
 /// data volume, it stays when the next start replaces the container.
+/// Before anything else is exec'd into the container's cgroup namespace,
+/// its processes move to a leaf and its root gives Sandboxes the memory and
+/// pids controllers ([`worker::CGROUP_LEAF`], layerfs-project#182 L4); each
+/// start makes a new container, so each start does it.
 fn entry() -> String {
     format!(
         r#"set -e
@@ -33,11 +37,13 @@ umask 022
 mkdir -p /layerfs/data/store /layerfs/data/sandbox
 chmod 755 /layerfs/data /layerfs/data/store /layerfs/data/sandbox
 {}
+{}
 echo $$ > /layerfs/state/worker.pid
 i=0
 while [ ! -s /layerfs/state/secret ]; do i=$((i+1)); [ $i -le 600 ] || exit 1; sleep 0.1; done
 exec /layerfs/bundle/layerfs worker >> "$LAYERFS_WORKER_LOG" 2>&1"#,
-        worker::log_start()
+        worker::log_start(),
+        worker::CGROUP_LEAF
     )
 }
 
