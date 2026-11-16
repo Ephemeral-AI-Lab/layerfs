@@ -17,6 +17,7 @@ pub(crate) fn remove_branch(
     let catalog = provider.catalog_id;
     let _ = catalog;
     provider.write(|tx| {
+        let owners = OwnerView::now();
         let record = branch::branch(tx, branch)?.ok_or(HistoryError::Missing(Missing::Branch))?;
         #[cfg(feature = "postgresql")]
         if postgres {
@@ -33,14 +34,14 @@ pub(crate) fn remove_branch(
             )?;
             let found: Vec<GcIntent> = found
                 .into_iter()
-                .filter(|intent| !owner_dead(intent))
+                .filter(|intent| !owners.dead(intent, postgres))
                 .collect();
             if !found.is_empty() {
                 return Err(classify(&found));
             }
             lock_scope(tx, catalog, 3, branch.as_slice(), false)?;
         }
-        epoch_share(tx, postgres, record.stack)?;
+        epoch_hold(tx, postgres, record.stack)?;
         let found = settle_dead(
             tx,
             query(
@@ -52,6 +53,8 @@ pub(crate) fn remove_branch(
                     intent.op_id.to_vec()
                 ],
             )?,
+            postgres,
+            &owners,
         )?;
         if !found.is_empty() {
             return Err(classify(&found));
@@ -72,6 +75,7 @@ pub(crate) fn delete_stack(
     let catalog = provider.catalog_id;
     let _ = catalog;
     provider.write(|tx| {
+        let owners = OwnerView::now();
         if let Some(recorded) = layerstack::stack_deleted_ms(tx, stack)? {
             return Ok(GcDeletion::Retired {
                 deleted_ms: recorded,
@@ -100,14 +104,14 @@ pub(crate) fn delete_stack(
             )?;
             let found: Vec<GcIntent> = found
                 .into_iter()
-                .filter(|intent| !owner_dead(intent))
+                .filter(|intent| !owners.dead(intent, postgres))
                 .collect();
             if !found.is_empty() {
                 return Err(classify(&found));
             }
             lock_scope(tx, catalog, 2, stack.as_slice(), false)?;
         }
-        epoch_share(tx, postgres, stack)?;
+        epoch_hold(tx, postgres, stack)?;
         let found = settle_dead(
             tx,
             query(
@@ -119,6 +123,8 @@ pub(crate) fn delete_stack(
                     intent.op_id.to_vec()
                 ],
             )?,
+            postgres,
+            &owners,
         )?;
         if !found.is_empty() {
             return Err(classify(&found));
@@ -139,6 +145,7 @@ pub(crate) fn remove_path(
     let catalog = provider.catalog_id;
     let _ = catalog;
     provider.write(|tx| {
+        let owners = OwnerView::now();
         if layerstack::layer_stack(tx, request.stack)?.is_none() {
             return Err(HistoryError::Missing(Missing::LayerStack));
         }
@@ -156,14 +163,14 @@ pub(crate) fn remove_path(
             )?;
             let found: Vec<GcIntent> = found
                 .into_iter()
-                .filter(|intent| !owner_dead(intent))
+                .filter(|intent| !owners.dead(intent, postgres))
                 .collect();
             if !found.is_empty() {
                 return Err(classify(&found));
             }
             lock_scope(tx, catalog, 2, request.stack.as_slice(), false)?;
         }
-        epoch_share(tx, postgres, request.stack)?;
+        epoch_hold(tx, postgres, request.stack)?;
         let found = settle_dead(
             tx,
             query(
@@ -175,6 +182,8 @@ pub(crate) fn remove_path(
                     intent.op_id.to_vec()
                 ],
             )?,
+            postgres,
+            &owners,
         )?;
         if !found.is_empty() {
             return Err(classify(&found));

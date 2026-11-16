@@ -137,19 +137,20 @@ fn a_removed_branch_is_hidden_and_the_epoch_bumps_once() {
         Err(HistoryError::Missing(Missing::Branch))
     ));
 
-    // A retained Commit still forks, keeping the retired source Branch through
-    // the identity-only read (`branch_branch_by_id_any`, spec 4.4).
-    let forked = history
-        .fork(&ForkRequest {
+    // A Branch the marker retired no longer starts a fork, even from the
+    // Commit it retained: the re-read inside the transaction is the
+    // marker-filtered lookup, so the removal that landed first cannot be
+    // outlived by a fork it never admitted.
+    assert!(matches!(
+        history.fork(&ForkRequest {
             stack: stack(1),
             branch: branch_id(3),
             name: name("from-commit"),
             source: ForkSource::Commit { branch, commit },
-        })
-        .unwrap();
-    assert_eq!(forked.branch.name.as_str(), "from-commit");
-    let forked_snapshot = history.branch_snapshot(forked.branch.id).unwrap().unwrap();
-    assert_eq!(forked_snapshot.branch.head_commit, Some(commit));
+        }),
+        Err(HistoryError::Missing(Missing::Branch))
+    ));
+    assert!(history.branch(branch_id(3)).unwrap().is_none());
 
     // The name is still owned by the retired row, with a typed holder.
     let refusal = history
@@ -250,4 +251,45 @@ fn concurrent_removes_have_one_winner() {
             "{error:?}"
         );
     }
+}
+
+/// A live Branch's retained Commit still starts a fork through the
+/// marker-filtered re-read: only the removal marker hides a source.
+#[test]
+fn a_live_commit_source_still_forks() {
+    let temp = Temp::new("branch-removal-fork-live");
+    let history = catalog(&temp);
+    let (branch, _genesis) = project(&history, "proj");
+    let live = history.branch(branch).unwrap().unwrap();
+    let base = history.layer(live.base_layer).unwrap().unwrap().root;
+    let outcome = history
+        .commit_branch(&CommitRequest {
+            branch,
+            expected_head: live.head_commit,
+            expected_base: live.base_layer,
+            expected_root: base,
+            candidate_root: root(9),
+            profile: root(201),
+            scope: root(200),
+            second_parent: None,
+            meta: CommitMeta::new(CommitVia::Files),
+            force: false,
+        })
+        .unwrap();
+    let CommitOutcome::Committed { record, .. } = outcome else {
+        panic!("{outcome:?}");
+    };
+    let forked = history
+        .fork(&ForkRequest {
+            stack: stack(1),
+            branch: branch_id(2),
+            name: name("from-commit"),
+            source: ForkSource::Commit {
+                branch,
+                commit: record.id,
+            },
+        })
+        .unwrap();
+    assert_eq!(forked.branch.name.as_str(), "from-commit");
+    assert_eq!(forked.branch.head_commit, Some(record.id));
 }

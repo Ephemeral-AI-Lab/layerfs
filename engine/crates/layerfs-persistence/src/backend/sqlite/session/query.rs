@@ -255,6 +255,9 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "gc_epoch_share" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_epoch_share.sql"
         )),
+        "gc_epoch_lock" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_epoch_lock.sql"
+        )),
         "gc_kept_roots" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_kept_roots.sql"
         )),

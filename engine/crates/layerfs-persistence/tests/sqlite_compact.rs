@@ -51,6 +51,13 @@ fn reopen(path: &Path) -> SqliteHandles {
     .unwrap()
 }
 
+#[cfg(target_os = "linux")]
+fn beside(store: &Path, suffix: &str) -> PathBuf {
+    let mut name = store.as_os_str().to_os_string();
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
 fn request(op: u8) -> CompactRequest {
     CompactRequest {
         op_id: [op; 16],
@@ -281,6 +288,104 @@ fn an_empty_store_takes_the_none_path() {
     let reopened = reopen(&path);
     assert_eq!(generation(&reopened), before);
     reopened.history.mark().unwrap();
+}
+
+const FOREIGN_STORE: &str = "LAYERFS_COMPACTION_FOREIGN_STORE";
+const FOREIGN_READY: &str = "LAYERFS_COMPACTION_FOREIGN_READY";
+
+/// Child half of `another_client_holding_the_store_is_busy_at_admission`:
+/// opens the Store, announces readiness and holds it until killed.
+#[test]
+fn foreign_client_child() {
+    let Some(store) = std::env::var_os(FOREIGN_STORE) else {
+        return;
+    };
+    let ready = std::env::var_os(FOREIGN_READY).expect("the ready path");
+    let connection = rusqlite::Connection::open(Path::new(&store)).expect("the child's connection");
+    let _: i64 = connection
+        .query_row("SELECT count(*) FROM pack", [], |row| row.get(0))
+        .expect("a read through the held Store");
+    std::fs::write(&ready, b"ready").expect("announce readiness");
+    std::thread::sleep(std::time::Duration::from_secs(60));
+    drop(connection);
+}
+
+/// Kills and reaps the foreign client on every exit, so a failed assertion
+/// cannot leave it holding the Store for the rest of the test run.
+#[cfg(target_os = "linux")]
+struct Foreign(std::process::Child);
+
+#[cfg(target_os = "linux")]
+impl Drop for Foreign {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+/// §5.1/§7 admission: another process holds the Store open, so its `-shm`
+/// remains and the seal would refuse only after the whole mark. The run
+/// refuses `Busy` at admission instead, leaving no intent, op record or
+/// scratch. Once that client is gone (here a killed client, which also leaves
+/// the sidecars a crash leaves), the next run rebuilds.
+#[cfg(target_os = "linux")]
+#[test]
+fn another_client_holding_the_store_is_busy_at_admission() {
+    let (temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let _dead = whole_file(&handles, b"a pack the rebuild would collect");
+    let before = generation(&handles);
+    // `store.compact` closes this process's cached handle first; the Store is
+    // then cleanly closed and the foreign client is what holds it open.
+    handles.seal().expect("close the Store");
+    let ready = temp.join("foreign.ready");
+    let foreign = std::process::Command::new(std::env::current_exe().expect("test binary"))
+        .args(["--exact", "foreign_client_child", "--nocapture"])
+        .env(FOREIGN_STORE, &path)
+        .env(FOREIGN_READY, &ready)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("the foreign client");
+    let foreign = Foreign(foreign);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while !ready.exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the foreign client never opened the Store"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(
+        beside(&path, "-shm").exists(),
+        "the open client keeps the Store sidecar"
+    );
+
+    let refused = reopen(&path);
+    let error = refused.compact(&request(46)).unwrap_err();
+    assert!(matches!(error, HistoryError::Busy), "{error:?}");
+    assert!(
+        !compact_path(&path).exists(),
+        "no staged Store on admission Busy"
+    );
+    assert!(
+        !visited_path(&path).exists(),
+        "no mark scratch on admission Busy"
+    );
+    assert!(!op_path(&path).exists(), "no op record on admission Busy");
+
+    // The client is killed, leaving the sidecars a crash leaves. The next run
+    // is not refused by them: no process holds those descriptions, so the
+    // seal checkpoints, closes and removes them.
+    drop(foreign);
+    let reopened = reopen(&path);
+    assert_eq!(generation(&reopened), before, "the Store is unchanged");
+    let receipt = reopened.compact(&request(47)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    let final_handles = reopen(&path);
+    assert!(located(&final_handles, live), "the live root survives");
+    clean(&final_handles);
 }
 
 #[test]

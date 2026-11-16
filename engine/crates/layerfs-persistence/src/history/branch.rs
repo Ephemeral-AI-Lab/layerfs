@@ -25,8 +25,9 @@ use layerfs_history::records::{CommitRecord, LayerStackRecord};
 
 const BRANCH_BY_ID: &str = "branch_branch_by_id";
 
-/// The same row without the visibility filter: fork provenance and rendering
-/// keep a retired Branch's name and stack without resolving it for a caller.
+/// The same row without the visibility filter. Only rendering keeps a retired
+/// Branch's name and stack; every decision a caller can act on (fork source,
+/// name ownership, removal) uses the filtered [`branch`].
 const BRANCH_BY_ID_ANY: &str = "branch_branch_by_id_any";
 
 const BRANCH_BY_NAME: &str = "branch_branch_by_name";
@@ -44,8 +45,8 @@ pub(crate) fn branch(tx: &Transaction<'_>, id: BranchId) -> HistoryResult<Option
     one(tx, BRANCH_BY_ID, [id.as_slice()], branch_row)
 }
 
-/// Reads one Branch by identity without the visibility filter. Only fork
-/// provenance and rendering use it; every caller-facing lookup is filtered.
+/// Reads one Branch by identity without the visibility filter. Only
+/// rendering uses it; every caller-facing lookup is filtered.
 pub(crate) fn branch_any(
     tx: &Transaction<'_>,
     id: BranchId,
@@ -321,8 +322,16 @@ pub(crate) fn fork(tx: &Transaction<'_>, request: &ForkRequest) -> HistoryResult
             }
             (layer, None)
         }
-        ForkSource::Commit { branch, commit } => {
-            let source = branch_any(tx, branch)?.ok_or(HistoryError::Missing(Missing::Branch))?;
+        ForkSource::Commit {
+            branch: source_branch,
+            commit,
+        } => {
+            // The marker-filtered lookup: a Branch a removal retired before
+            // this point cannot start a fork, even from a Commit it retained.
+            // The unfiltered row would keep resolving provenance and let the
+            // fork outlive the removal that won the race.
+            let source =
+                self::branch(tx, source_branch)?.ok_or(HistoryError::Missing(Missing::Branch))?;
             if source.stack != request.stack {
                 return Err(HistoryError::Integrity("Branch ownership"));
             }

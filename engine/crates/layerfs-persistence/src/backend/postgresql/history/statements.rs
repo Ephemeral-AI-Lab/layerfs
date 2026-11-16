@@ -21,6 +21,9 @@ pub(crate) fn statement(key: &str) -> Result<&'static str, BackendError> {
         "gc_epoch_share" => Ok(include_str!(
             "../../../../sql/postgresql/queries/history/gc_epoch_share.sql"
         )),
+        "gc_epoch_lock" => Ok(include_str!(
+            "../../../../sql/postgresql/queries/history/gc_epoch_lock.sql"
+        )),
         "gc_lock_xact_shared" => Ok(include_str!(
             "../../../../sql/postgresql/queries/history/gc_lock_xact_shared.sql"
         )),

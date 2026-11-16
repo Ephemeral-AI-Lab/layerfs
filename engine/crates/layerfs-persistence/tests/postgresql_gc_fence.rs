@@ -829,3 +829,85 @@ fn a_write_from_a_session_opened_before_the_swap_is_stale() {
         layerfs_history::records::CommitOutcome::Committed { .. }
     ));
 }
+
+/// Two concurrent `branch.remove` calls in one project take the same epoch
+/// row. The marker transaction locks it `FOR UPDATE` first, so the second
+/// waits for the first and then bumps the value it read; both removals land
+/// with one epoch bump each instead of a `40P01` deadlock on a shared-lock
+/// upgrade.
+#[test]
+fn two_concurrent_branch_removes_in_one_project_are_ordered() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "concurrent_removal");
+    let binding = binding("concurrent_removal");
+    let first = schema.create(&binding, CURSOR);
+    let (project_id, work, genesis) = project(&first.history, 1);
+    let other = branch_id(2);
+    first
+        .history
+        .fork(&ForkRequest {
+            stack: project_id,
+            branch: other,
+            name: name("other"),
+            source: ForkSource::Layer(genesis),
+        })
+        .unwrap();
+    let second = schema.open(&binding, CURSOR).expect("a second session");
+    let (left, right) = std::thread::scope(|scope| {
+        let left = scope.spawn(|| {
+            first
+                .history
+                .gc_remove_branch(work, 1_000, &removal(project_id, 40))
+        });
+        let right = scope.spawn(|| {
+            second
+                .history
+                .gc_remove_branch(other, 2_000, &removal(project_id, 41))
+        });
+        (left.join().unwrap(), right.join().unwrap())
+    });
+    for result in [&left, &right] {
+        match result {
+            Ok(()) => {}
+            // A bounded lane wait is a definite typed refusal, never a panic.
+            Err(HistoryError::Busy) => {}
+            Err(other) => panic!("a removal refusal must be typed: {other:?}"),
+        }
+    }
+    assert_eq!(left.unwrap_or(()), ());
+    assert_eq!(right.unwrap_or(()), ());
+    assert_eq!(epoch(&mut schema.admin(), project_id), 2);
+    assert_eq!(branch_rows(&schema), 0, "both Branches are retired");
+}
+
+/// A shared Store may be admitted from another machine whose boot and PID
+/// namespace this one cannot observe, so a recorded owner on another boot
+/// stays conservatively live: it is reported as a holder and never adopted,
+/// until its owner releases it. (A local SQLite Store adopts the same row;
+/// see `admission.rs#an_earlier_boot_is_settled_on_a_local_store`.)
+#[test]
+fn another_boot_stays_conservatively_live_on_a_shared_store() {
+    let Some(url) = url() else { return };
+    let schema = Schema::new(url, "other_boot");
+    let binding = binding("other_boot");
+    let handles = schema.create(&binding, CURSOR);
+    let (project_id, branch, _genesis) = project(&handles.history, 1);
+    let mount = mount(project_id, branch, 50).owned(Some("pid:1@1@ns:1"), Some("boot:0:test:50"));
+    handles.history.gc_register(&mount).unwrap();
+    let refusal = handles
+        .history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 51))
+        .unwrap_err();
+    let HistoryError::MountsActive(state) = &refusal else {
+        panic!("a shared Store keeps an unobservable owner live: {refusal:?}");
+    };
+    assert_eq!(state.holders.len(), 1);
+    assert_eq!(state.holders[0].op, hex16(&op(50)));
+
+    handles.history.gc_release(&op(50)).unwrap();
+    handles
+        .history
+        .gc_remove_branch(branch, 2_000, &removal(project_id, 52))
+        .unwrap();
+    assert_eq!(epoch(&mut schema.admin(), project_id), 1);
+}

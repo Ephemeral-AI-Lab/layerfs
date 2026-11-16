@@ -411,6 +411,129 @@ fn a_dead_mount_owner_is_settled_and_does_not_hold_the_scope() {
         .is_empty());
 }
 
+/// This boot's id, as `current_boot` reads it.
+#[cfg(target_os = "linux")]
+fn this_boot() -> u128 {
+    let text = std::fs::read_to_string("/proc/sys/kernel/random/boot_id").unwrap();
+    u128::from_str_radix(text.trim().replace('-', "").as_str(), 16).unwrap()
+}
+
+/// This process's PID namespace inode.
+#[cfg(target_os = "linux")]
+fn this_namespace() -> u64 {
+    let target = std::fs::read_link("/proc/self/ns/pid").unwrap();
+    target
+        .to_str()
+        .unwrap()
+        .strip_prefix("pid:[")
+        .unwrap()
+        .strip_suffix(']')
+        .unwrap()
+        .parse()
+        .unwrap()
+}
+
+/// A mount whose recorded owner ran in `namespace` on `boot`.
+#[cfg(target_os = "linux")]
+fn placed_mount(
+    stack: LayerStackId,
+    branch: BranchId,
+    tag: u8,
+    namespace: u64,
+    boot: u128,
+) -> GcIntent {
+    GcIntent::shared(
+        op(tag),
+        GcIntentKind::Mount,
+        GcScopeKind::Branch,
+        branch.as_slice(),
+    )
+    .in_project(stack.as_slice())
+    .named(Some("proj"), Some("work"))
+    .placed(Some([tag; 32]), Some("sandbox"), Some("machine"))
+    .owned(
+        Some(&format!("pid:1@1@ns:{namespace}")),
+        Some(&format!("boot:{boot:032x}:test:{tag}")),
+    )
+}
+
+/// A same-boot owner in another PID namespace cannot be probed soundly from
+/// this one: `/proc` may be a view of one namespace, and another user's
+/// processes can be unreadable. It therefore stays explicitly and boundedly
+/// live — reported as a holder naming its Sandbox and machine, never adopted
+/// — and the settlement path is the owner's release, or an operator's
+/// `gc_mark_uncertain` followed by `gc_release`.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_cross_namespace_owner_stays_conservatively_live() {
+    let temp = Temp::new("admission-cross-namespace");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+    // On this boot, in a namespace this process cannot observe.
+    history
+        .gc_register(&placed_mount(
+            project_id,
+            branch,
+            31,
+            4_000_000_000,
+            this_boot(),
+        ))
+        .unwrap();
+    let refusal = history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 32))
+        .expect_err("an unobservable owner holds");
+    let HistoryError::MountsActive(state) = &refusal else {
+        panic!("{refusal:?}");
+    };
+    assert_eq!(state.holders.len(), 1);
+    assert_eq!(state.holders[0].sandbox.as_deref(), Some("sandbox"));
+    assert_eq!(state.holders[0].machine.as_deref(), Some("machine"));
+
+    // The owning call is gone; the operator settles the row, and only then
+    // does the Branch go.
+    history.gc_mark_uncertain(&op(31)).unwrap();
+    assert!(matches!(
+        history.gc_remove_branch(branch, 2_000, &removal(project_id, 33)),
+        Err(HistoryError::Unresolved(_))
+    ));
+    history.gc_release(&op(31)).unwrap();
+    history
+        .gc_remove_branch(branch, 3_000, &removal(project_id, 34))
+        .unwrap();
+    assert!(history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .unwrap()
+        .is_empty());
+}
+
+/// A SQLite Store is admitted only by processes on the machine that holds the
+/// file, so an owner recorded on an earlier boot cannot still be running: its
+/// intent is adopted rather than reported as a live holder forever.
+#[cfg(target_os = "linux")]
+#[test]
+fn an_earlier_boot_is_settled_on_a_local_store() {
+    let temp = Temp::new("admission-earlier-boot");
+    let history = catalog(&temp);
+    let (project_id, branch) = project(&history);
+    let earlier = this_boot().wrapping_add(1);
+    history
+        .gc_register(&placed_mount(
+            project_id,
+            branch,
+            33,
+            this_namespace(),
+            earlier,
+        ))
+        .unwrap();
+    history
+        .gc_remove_branch(branch, 1_000, &removal(project_id, 34))
+        .unwrap();
+    assert!(history
+        .gc_intents(GcScopeKind::Branch, branch.as_slice())
+        .unwrap()
+        .is_empty());
+}
+
 fn hex16(bytes: &[u8; 16]) -> String {
     let mut out = String::with_capacity(32);
     for byte in bytes {
