@@ -340,6 +340,13 @@ pub(crate) fn add_layer(
     tx: &Transaction<'_>,
     request: &AddLayerRequest,
 ) -> HistoryResult<AddLayerOutcome> {
+    // Spec 5: the fence opens before the Branch and Commit reads. The stack
+    // is read once to refuse a missing project with `Missing`, then the
+    // fence, then the stack is read again so a removal that committed in the
+    // window is visible (its row is filtered) instead of the stale head
+    // being extended.
+    let _ = layer_stack(tx, request.stack)?.ok_or(HistoryError::Missing(Missing::LayerStack))?;
+    let fence = super::epoch::open(tx, request.stack)?;
     let stack =
         layer_stack(tx, request.stack)?.ok_or(HistoryError::Missing(Missing::LayerStack))?;
     let branch =
@@ -352,9 +359,6 @@ pub(crate) fn add_layer(
     if commit.stack != request.stack {
         return Err(HistoryError::Integrity("Commit ownership"));
     }
-    // Spec 5: read the project epoch at the start of this write transaction;
-    // `confirm` below re-checks it before the transaction commits.
-    let fence = super::epoch::open(tx, request.stack)?;
     if let Some(id) = published_source(tx, request.branch, request.commit)? {
         let stored = layer(tx, id)?.ok_or(HistoryError::Integrity("Layer provenance"))?;
         if stored.stack != request.stack

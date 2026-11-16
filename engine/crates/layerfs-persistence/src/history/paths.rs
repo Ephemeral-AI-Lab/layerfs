@@ -82,6 +82,11 @@ pub(crate) fn remove_path(
         }
     }
     // The new frontier is the Store high-water, read in this transaction.
+    // Ordering audit (spec 5): SQLite's `BEGIN IMMEDIATE` already excludes
+    // every other writer from the whole marker transaction, so reading the
+    // frontier before the epoch bump cannot miss a Commit or Layer that
+    // commits in between; PostgreSQL uses `history::admission::remove_path`,
+    // which bumps the epoch before this read.
     let frontier = position::high_water(tx)?;
     mark(
         tx,

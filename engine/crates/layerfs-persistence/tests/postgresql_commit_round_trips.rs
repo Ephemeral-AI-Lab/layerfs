@@ -362,11 +362,13 @@ fn commit_store_calls_are_counted_on_both_engines() {
     assert_eq!((snapshot.round_trips, snapshot.transactions), (1, 0));
     // A reservation is BEGIN, one UPDATE … RETURNING, COMMIT.
     assert_eq!(pg("reserve").round_trips, 3);
-    // The lane: its BEGIN, the head read, commit_branch's BEGIN, joined
-    // snapshot, Commit insert, parent line, lineage insert, the position
-    // read, advance and COMMIT, the T6.5 epoch READ and its FOR SHARE
-    // re-check, and the lane's ROLLBACK.
-    assert_eq!(pg("lane + head + commit_branch").round_trips, 13);
+    // The lane: its BEGIN, the head read, commit_branch's BEGIN, the Branch
+    // probe, the post-fence re-read, Commit insert, parent line, lineage
+    // insert, the position read, advance and COMMIT, the T6.5 epoch READ and
+    // its FOR SHARE re-check, and the lane's ROLLBACK. The second Branch read
+    // is the spec §5 fence window: the probe learns the project, the fence
+    // opens, and the re-read sees a removal that committed in between.
+    assert_eq!(pg("lane + head + commit_branch").round_trips, 14);
     // #70: descriptors and bodies in one statement, found or missing.
     assert_eq!(pg("read_packs 2").round_trips, 1);
     assert_eq!(pg("read_packs missing").round_trips, 1);

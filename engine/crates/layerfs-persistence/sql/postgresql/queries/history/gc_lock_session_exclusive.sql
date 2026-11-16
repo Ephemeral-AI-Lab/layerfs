@@ -1,1 +1,1 @@
-SELECT 1 AS ok WHERE pg_try_advisory_lock($1::bigint);
+SELECT 1 AS ok, pg_backend_pid()::bigint AS pid WHERE pg_try_advisory_lock($1::bigint);

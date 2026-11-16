@@ -45,6 +45,15 @@ pub(crate) fn merge_branch(
     tx: &Transaction<'_>,
     request: &BranchMergeRequest,
 ) -> HistoryResult<BranchSnapshot> {
+    // Spec 5: the project epoch opens before the side, name and head reads.
+    // Every read below is filtered (a retired stack or Branch is missing), so
+    // a removal that committed before this line is visible, and one that
+    // commits after it changes the epoch `confirm` re-checks; a removal in
+    // between is never invisible.
+    if super::layerstack::layer_stack(tx, request.stack)?.is_none() {
+        return Err(HistoryError::Missing(Missing::LayerStack));
+    }
+    let fence = super::epoch::open(tx, request.stack)?;
     for (side, expected) in request.sides {
         let actual = side_node(tx, request, side)?;
         if actual == expected {
@@ -77,9 +86,6 @@ pub(crate) fn merge_branch(
     if let Some(state) = super::branch::name_taken(tx, request.stack, &request.name)? {
         return Err(HistoryError::NameTaken(Box::new(state)));
     }
-    // Spec 5: read the project epoch at the start of this write transaction;
-    // `confirm` below re-checks it before the transaction commits.
-    let fence = super::epoch::open(tx, request.stack)?;
     let (base, head) = match &request.head {
         MergeHead::Node(NodeId::Layer(layer)) => (*layer, None),
         MergeHead::Node(NodeId::Commit(commit)) => {
