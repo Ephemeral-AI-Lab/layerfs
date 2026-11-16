@@ -135,3 +135,34 @@ impl Service {
     /// keeps no observation state to reclaim.
     pub fn reclaim_after_commit(&self, _token: layerfs_bridge::control::WorkspaceToken) {}
 }
+
+impl Service {
+    /// Serves control on one loopback listener until it closes: the
+    /// in-process daemon face (#454). Each accepted connection is one
+    /// Control; the channel layer (its handshake and admission) runs
+    /// unchanged over the loopback pair.
+    pub fn serve_loopback(self: &std::sync::Arc<Self>) -> std::io::Result<std::net::SocketAddr> {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+        let address = listener.local_addr()?;
+        let service = self.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { break };
+                let service = service.clone();
+                std::thread::spawn(move || {
+                    let keys = match layerfs_bridge::duplex::generate_keypair() {
+                        Ok(keys) => keys,
+                        Err(_) => return,
+                    };
+                    let mut connection =
+                        match layerfs_bridge::duplex::accept(stream, &keys.private, keys.public) {
+                            Ok(connection) => connection,
+                            Err(_) => return,
+                        };
+                    let _ = service.serve_one_control(&mut connection);
+                });
+            }
+        });
+        Ok(address)
+    }
+}

@@ -9,6 +9,11 @@ pub struct Mounted {
     context: Option<Box<Context>>,
 }
 
+// SAFETY: the dispatcher reads the handle under its own
+// synchronization; the context box moves with the mount.
+unsafe impl Send for Mounted {}
+
+
 impl Drop for Mounted {
     fn drop(&mut self) {
         if !self.raw.is_null() {
