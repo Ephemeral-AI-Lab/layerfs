@@ -93,4 +93,11 @@ impl Mechanics for Transaction<'_> {
     ) -> Result<(), PersistenceError> {
         objects::read::read(self, ids, out)
     }
+    fn pack_prefix(
+        &self,
+        id: i64,
+        limit: usize,
+    ) -> Result<Option<(usize, Vec<u8>)>, PersistenceError> {
+        objects::read::prefix(self, id, limit)
+    }
 }

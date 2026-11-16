@@ -36,7 +36,12 @@ pub(super) fn references(
     })
 }
 
-pub(super) fn decode_references(
+/// Derives one object's direct logical references from its canonical body.
+///
+/// Grammar and role checks stay; identity is **not** re-hashed, so a caller
+/// that already authenticated the bytes (a mark resolves and authenticates each
+/// chain once) pays one hash rather than two.
+pub fn decode_references(
     role: ObjectRole,
     canonical: &[u8],
     policy: ConstructionPolicy,

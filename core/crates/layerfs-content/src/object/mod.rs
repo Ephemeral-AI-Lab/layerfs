@@ -13,6 +13,7 @@ mod output;
 mod predecessor;
 
 pub use crate::policy::{MAX_CANONICAL_OBJECT_BYTES, MAX_OBJECT_FIELD_BYTES};
+pub use admission::decode_references;
 pub use access::AuthenticatedObjects;
 pub use codec::{
     canonical_len, decode_bytes_object, encode_bytes_object, encode_bytes_object_to, BYTES_KIND,
