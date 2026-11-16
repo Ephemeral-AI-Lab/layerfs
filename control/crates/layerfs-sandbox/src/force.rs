@@ -52,7 +52,8 @@ pub fn native_free(home: &Path) -> Result<(), SdkRefusal> {
 
 /// Forced `sandbox.close` of the Sandbox `host` names, on this process's
 /// kernel: no daemon control call, Store open, active-Workspace refusal or
-/// retry. The backend's Stop checks the runtime identity and ends its
+/// retry. Its running commands are cancelled first, as every forced close
+/// does (`crate::exec::cancel::settle`). The backend's Stop checks the runtime identity and ends its
 /// mounts and processes; its Delete independently checks the physical
 /// detach before the runtime goes. Answers each recorded or `held`
 /// Workspace as `unknown`: its uncommitted changes end with the Sandbox.
@@ -76,6 +77,10 @@ pub fn close(host: &Host, held: &[String]) -> Outcome {
             unknown.push(path.to_owned());
         }
     }
+    // its running commands are each marked and cancelled first (D-10), so
+    // they answer `cancelled`, not the exit of the runtime's kill
+    let unreached = &mut crate::exec::cancel::unreached;
+    crate::exec::cancel::settle(&directory, &id, None, true, unreached)?;
     crate::reopen::recorded(host, &id, &value)?.stop_now()?;
     // The runtime is confirmed stopped from here on: a later failure says so,
     // so the record shows it stopped instead of as it was.
