@@ -174,7 +174,14 @@ pub(crate) fn settle(
     stop_at(request, CompactFailpoint::DuringSettle, op, store)?;
     let record_path = op_path(store);
     let settled = clear_installed_mark(store, &op.op_id);
-    if settled && std::fs::symlink_metadata(&record_path).is_ok() {
+    // §9/§11: the record settles only after the whole artifact set is gone. A
+    // residue `clear_artifacts` could not remove keeps it, so the next run
+    // adopts the recorded leftover instead of refusing the staged name as an
+    // unrecorded `Exists`; `abort_before_install` gates the same way.
+    if settled
+        && residue.artifacts.is_empty()
+        && std::fs::symlink_metadata(&record_path).is_ok()
+    {
         let bytes = std::fs::metadata(&record_path).map_or(0, |metadata| metadata.len());
         if std::fs::remove_file(&record_path).is_err()
             && std::fs::symlink_metadata(&record_path).is_ok()
