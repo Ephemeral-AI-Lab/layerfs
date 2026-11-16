@@ -7,7 +7,10 @@
 
 use super::params;
 use super::transaction::Transaction;
-use layerfs_history::error::{HistoryError, HistoryResult, Missing};
+use layerfs_history::error::{
+    HistoryError, HistoryResult, HolderKind, HolderState, Missing, NameHolder, NameSource,
+    NameTakenState,
+};
 use layerfs_history::identity::{BranchId, CatalogId, HistoryName, LayerStackId};
 use layerfs_history::records::{
     BranchRecord, BranchSnapshot, ForkRequest, ForkSource, Page, PageResult,
@@ -15,12 +18,16 @@ use layerfs_history::records::{
 use layerfs_history::NamedSnapshot;
 
 use super::query::{self, Context, Cursor, Range};
-use super::rows::{branch_row, commit_row, many, one, sql, stack_row};
+use super::rows::{branch_row, cell, commit_row, many, one, sql, stack_row};
 use crate::backend::records::{Record as Row, Value};
 use layerfs_content::ObjectId;
 use layerfs_history::records::{CommitRecord, LayerStackRecord};
 
 const BRANCH_BY_ID: &str = "branch_branch_by_id";
+
+/// The same row without the visibility filter: fork provenance and rendering
+/// keep a retired Branch's name and stack without resolving it for a caller.
+const BRANCH_BY_ID_ANY: &str = "branch_branch_by_id_any";
 
 const BRANCH_BY_NAME: &str = "branch_branch_by_name";
 
@@ -35,6 +42,55 @@ const INSERT_BRANCH: &str = "branch_insert_branch";
 /// Reads one Branch by identity.
 pub(crate) fn branch(tx: &Transaction<'_>, id: BranchId) -> HistoryResult<Option<BranchRecord>> {
     one(tx, BRANCH_BY_ID, [id.as_slice()], branch_row)
+}
+
+/// Reads one Branch by identity without the visibility filter. Only fork
+/// provenance and rendering use it; every caller-facing lookup is filtered.
+pub(crate) fn branch_any(
+    tx: &Transaction<'_>,
+    id: BranchId,
+) -> HistoryResult<Option<BranchRecord>> {
+    one(tx, BRANCH_BY_ID_ANY, [id.as_slice()], branch_row)
+}
+
+/// The typed `NameTaken` state for a name held in `stack`, live or retired;
+/// `None` when no Branch row holds it. The query reads the retired holder on
+/// purpose: a removed Branch still owns its name (spec 4.4).
+pub(crate) fn name_taken(
+    tx: &Transaction<'_>,
+    stack: LayerStackId,
+    name: &HistoryName,
+) -> HistoryResult<Option<NameTakenState>> {
+    one(
+        tx,
+        BRANCH_NAME_TAKEN,
+        params![stack.as_slice(), name.as_str()],
+        |row| {
+            let name = cell::<String>(row, 0)?;
+            let retired = cell::<i64>(row, 1)? != 0;
+            let state = if retired {
+                HolderState::Retired
+            } else {
+                HolderState::Live
+            };
+            Ok(NameTakenState::new(
+                NameHolder::new(HolderKind::Branch, name, state),
+                NameSource::Store,
+            ))
+        },
+    )
+}
+
+/// The typed refusal for a Branch name that a row already holds.
+pub(crate) fn taken(
+    tx: &Transaction<'_>,
+    stack: LayerStackId,
+    name: &HistoryName,
+) -> HistoryResult<HistoryError> {
+    match name_taken(tx, stack, name)? {
+        Some(state) => Ok(HistoryError::NameTaken(Box::new(state))),
+        None => Err(HistoryError::Integrity("Branch name")),
+    }
 }
 
 /// Reads one Branch by its name in a stack, through the unique name index.
@@ -242,18 +298,11 @@ pub(crate) fn fork(tx: &Transaction<'_>, request: &ForkRequest) -> HistoryResult
     if super::layerstack::layer_stack(tx, request.stack)?.is_none() {
         return Err(HistoryError::Missing(Missing::LayerStack));
     }
-    if branch(tx, request.branch)?.is_some() {
-        return Err(HistoryError::Integrity("Branch identity"));
+    if branch_any(tx, request.branch)?.is_some() {
+        return Err(taken(tx, request.stack, &request.name)?);
     }
-    if one(
-        tx,
-        BRANCH_NAME_TAKEN,
-        params![request.stack.as_slice(), request.name.as_str()],
-        |_| Ok(()),
-    )?
-    .is_some()
-    {
-        return Err(HistoryError::Integrity("Branch name"));
+    if let Some(state) = name_taken(tx, request.stack, &request.name)? {
+        return Err(HistoryError::NameTaken(Box::new(state)));
     }
     let (base_layer, head_commit) = match request.source {
         ForkSource::Layer(layer) => {
@@ -265,7 +314,8 @@ pub(crate) fn fork(tx: &Transaction<'_>, request: &ForkRequest) -> HistoryResult
             (layer, None)
         }
         ForkSource::Commit { branch, commit } => {
-            let source = self::branch(tx, branch)?.ok_or(HistoryError::Missing(Missing::Branch))?;
+            let source =
+                branch_any(tx, branch)?.ok_or(HistoryError::Missing(Missing::Branch))?;
             if source.stack != request.stack {
                 return Err(HistoryError::Integrity("Branch ownership"));
             }

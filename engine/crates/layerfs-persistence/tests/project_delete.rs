@@ -171,7 +171,8 @@ fn every_layer_stack_lookup_carries_the_marker_filter() {
     // The name-collision check is allow-listed: it must see a retired holder
     // so project.init/fork can answer NameTaken with its state.
     let taken = include_str!("../sql/sqlite/queries/history/layerstack_stack_name_taken.sql");
-    assert!(!taken.contains("layer_stack_retired"), "{taken}");
+    assert!(taken.contains("layer_stack_retired"), "{taken}");
+    assert!(taken.contains("CASE WHEN"), "the holder state is returned: {taken}");
 }
 
 #[test]

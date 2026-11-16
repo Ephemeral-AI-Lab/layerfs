@@ -4,6 +4,7 @@ pub mod branch;
 pub mod deletion;
 pub mod lookup;
 pub mod pages;
+pub mod removal;
 pub mod saved;
 mod units;
 

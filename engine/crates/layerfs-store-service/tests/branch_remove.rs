@@ -1,0 +1,137 @@
+//! #41 T3: `branch.remove` through the Store service and the typed
+//! `NameTaken`/`NoSuchBranch` fork syntax on an installed Store.
+#[path = "support/installed_store.rs"]
+#[allow(dead_code)]
+mod installed;
+#[path = "support/sdk.rs"]
+#[allow(dead_code)]
+mod support;
+
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_store_service::history::{lookup, removal};
+use std::fs;
+use support::Fixture;
+
+fn text(value: &str) -> SdkValue {
+    SdkValue::text(value)
+}
+
+fn refusal(fixture: &Fixture, method: &str, fields: Vec<(&str, SdkValue)>) -> SdkRefusal {
+    fixture
+        .try_call(method, fields)
+        .expect_err("the call is refused")
+}
+
+fn project(fixture: &Fixture) -> layerfs_history::LayerStackRecord {
+    lookup::project(&fixture.service.store, "installed").expect("installed project")
+}
+
+#[test]
+fn a_valid_absent_fork_source_is_no_such_branch() {
+    let fixture = Fixture::new("branch-remove-fork", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    let refused = refusal(
+        &fixture,
+        "branch.fork",
+        vec![("name", text("work")), ("from", text("ghost"))],
+    );
+    assert_eq!(refused.code, "NoSuchBranch");
+    assert_eq!(refused.message, "Branch ghost does not exist");
+}
+
+#[test]
+fn a_live_name_is_a_typed_name_taken() {
+    let fixture = Fixture::new("branch-remove-live", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    fixture.fork("feat");
+    let refused = refusal(
+        &fixture,
+        "branch.fork",
+        vec![("name", text("feat"))],
+    );
+    assert_eq!(refused.code, "NameTaken", "{refused:?}");
+    assert_eq!(refused.detail.get_text("source"), Some("store"));
+    let holder = refused.detail.get("holder").expect("holder detail");
+    assert_eq!(holder.get_text("kind"), Some("branch"));
+    assert_eq!(holder.get_text("name"), Some("feat"));
+    assert_eq!(holder.get_text("state"), Some("live"));
+}
+
+#[test]
+fn a_removed_branch_is_hidden_and_holds_its_name() {
+    let fixture = Fixture::new("branch-remove-service", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    fixture.fork("gone");
+    let stack = project(&fixture);
+    let branch = lookup::branch(&fixture.service.store, &stack, "gone").expect("Branch gone");
+    assert_eq!(branch.name.as_str(), "gone");
+
+    let removed = removal::remove(&fixture.service.store, &stack, "gone").expect("remove");
+    assert_eq!(removed.get_text("kind"), Some("Removed"));
+    assert_eq!(removed.get_text("project"), Some("installed"));
+    assert_eq!(removed.get_text("branch"), Some("gone"));
+    assert!(removed.get_int("removed_ms").is_some_and(|ms| ms >= 0));
+
+    // A second removal and every name resolution see no Branch.
+    let refused = removal::remove(&fixture.service.store, &stack, "gone")
+        .expect_err("a repeat is NoSuchBranch");
+    assert_eq!(refused.code, "NoSuchBranch", "{refused:?}");
+    let refused = refusal(
+        &fixture,
+        "branch.list_commits",
+        vec![("branch", text("gone"))],
+    );
+    assert_eq!(refused.code, "NoSuchBranch");
+    let refused = refusal(
+        &fixture,
+        "fs.read",
+        vec![("branch", text("gone")), ("path", text("/a.txt"))],
+    );
+    assert_eq!(refused.code, "NoSuchBranch");
+
+    // The Branch is gone from the listing.
+    let listed = fixture.call("project.list_branches", Vec::new());
+    let SdkValue::List(items) = listed.get("items").expect("items") else {
+        panic!("{listed:?}");
+    };
+    assert!(
+        !items.iter().any(|item| item.get_text("name") == Some("gone")),
+        "{listed:?}"
+    );
+
+    // A removed Branch still owns its name; the detail names the holder.
+    let refused = refusal(
+        &fixture,
+        "branch.fork",
+        vec![("name", text("gone"))],
+    );
+    assert_eq!(refused.code, "NameTaken", "{refused:?}");
+    let holder = refused.detail.get("holder").expect("holder detail");
+    assert_eq!(holder.get_text("kind"), Some("branch"));
+    assert_eq!(holder.get_text("name"), Some("gone"));
+    assert_eq!(holder.get_text("state"), Some("retired"));
+
+    // Forking from its old name resolves no Branch.
+    let refused = refusal(
+        &fixture,
+        "branch.fork",
+        vec![("name", text("from-gone")), ("from", text("gone"))],
+    );
+    assert_eq!(refused.code, "NoSuchBranch", "{refused:?}");
+
+    // `main` is reserved.
+    let refused = removal::remove(&fixture.service.store, &stack, "main")
+        .expect_err("main is reserved");
+    assert_eq!(refused.code, "ReservedName");
+    // Spec gaps G1: a code with no spec'd detail carries an empty detail.
+    assert!(
+        matches!(&refused.detail, SdkValue::Map(fields) if fields.is_empty()),
+        "{refused:?}"
+    );
+}

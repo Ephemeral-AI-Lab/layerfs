@@ -206,6 +206,10 @@ impl HistoryCatalog for HistoryProvider {
         self.write(|tx| merge::merge_branch(tx, request))
     }
 
+    fn mark_branch_removed(&self, branch: BranchId, removed_ms: i64) -> HistoryResult<()> {
+        self.write(|tx| super::removal::mark_branch_removed(tx, branch, removed_ms))
+    }
+
     fn reserve_inodes(&self, request: &ReserveRequest) -> HistoryResult<Reservation> {
         self.write(|tx| allocation::reserve_inodes(tx, self.catalog_id, request))
     }
