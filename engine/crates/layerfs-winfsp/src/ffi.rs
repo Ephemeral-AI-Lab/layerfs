@@ -1,51 +1,88 @@
-//! The hand-written WinFsp FFI: only what the mount face calls.
-//! The import library ships beside the WinFsp installation.
+//! The hand-written WinFsp FFI: the callback interface table and the
+//! file-system lifecycle entry points. Signatures use opaque pointers
+//! where the mount face does not read the fields yet.
 #![allow(non_snake_case, non_camel_case_types, dead_code)]
 
-use std::os::raw::{c_char, c_int, c_uint, c_void};
+use std::os::raw::{c_void, c_ulong};
 
-/// The file system callback table (a subset; fields the mount face reads).
-#[repr(C)]
-pub struct FSP_FILE_SYSTEM_INTERFACE {
-    pub GetVolumeInfo: *const c_void,
-    pub GetSecurityByName: *const c_void,
-    pub Create: *const c_void,
-    pub Open: *const c_void,
-    pub Close: *const c_void,
-    pub Read: *const c_void,
-    pub Write: *const c_void,
-    pub Flush: *const c_void,
-    pub GetFileInfo: *const c_void,
-    pub SetBasicInfo: *const c_void,
-    pub SetFileSize: *const c_void,
-    pub CanDelete: *const c_void,
-    pub Rename: *const c_void,
-    pub ReadDirectory: *const c_void,
-    pub Overwrite: *const c_void,
-    pub GetSecurity: *const c_void,
-    pub SetSecurity: *const c_void,
-}
+pub type NTSTATUS = i32;
+pub const STATUS_SUCCESS: NTSTATUS = 0;
+pub const STATUS_NOT_IMPLEMENTED: NTSTATUS = 0xC0000002u32 as i32;
+pub const STATUS_OBJECT_NAME_NOT_FOUND: NTSTATUS = 0xC0000034u32 as i32;
+/// FSP_FSD_INTERFACE_VERSION from winfsp.h.
+pub const FSP_FSD_INTERFACE_VERSION: u32 = 5;
 
-/// One file system's static description, as FspMount reads it.
+/// The file system handle.
 #[repr(C)]
 pub struct FSP_FILE_SYSTEM {
     pub UserContext: *mut c_void,
-    /// The interface pointer the mount owns.
-    pub Interface: *const FSP_FILE_SYSTEM_INTERFACE,
+}
+
+/// The volume parameters (a subset the create call reads; opaque rest).
+#[repr(C)]
+pub struct FSP_FSCTL_VOLUME_PARAMS {
+    pub SectorSize: u16,
+    pub SectorsPerAllocationUnit: u16,
+    pub MaxComponentLength: u16,
+    pub VolumeCreationTime: u64,
+    pub VolumeSerialNumber: u32,
+    pub FileInfoTimeout: u32,
+    pub CaseSensitiveSearch: u32,
+    pub CasePreservedNames: u32,
+    pub UnicodeOnDisk: u32,
+    pub PersistentAcls: u32,
+    pub ReparsePoints: u32,
+    pub ReparsePointsAccessCheck: u32,
+    pub NamedStreams: u32,
+    pub ReadOnlyVolume: u32,
+    pub PostCleanupWhenModifiedOnly: u32,
+    pub PassQueryDirectoryFileName: u32,
+    pub Uint16: [u8; 2],
+    pub FswDeviceId: u32,
+    pub Flags: u32,
+}
+
+/// The 23-slot callback table in WinFsp order (winfsp.h). Opaque
+/// pointer parameters fill as each operation lands.
+#[derive(Default)]
+#[repr(C)]
+pub struct FSP_FILE_SYSTEM_INTERFACE {
+    pub GetVolumeInfo: Option<unsafe extern "system" fn(*mut FSP_FILE_SYSTEM, *mut c_void) -> NTSTATUS>,
+    pub SetVolumeLabel: Option<unsafe extern "system" fn(*mut FSP_FILE_SYSTEM, *const u16, *mut c_void) -> NTSTATUS>,
+    pub GetSecurityByName: Option<unsafe extern "system" fn(*mut FSP_FILE_SYSTEM, *const u16, *mut u32, *mut c_void, *mut usize) -> NTSTATUS>,
+    pub Create: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub Open: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub Overwrite: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub Read: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub Write: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub Flush: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub GetFileInfo: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub SetBasicInfo: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub SetFileSize: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub CanDelete: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub Rename: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub GetSecurity: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub SetSecurity: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub ReadDirectory: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub ResolveReparsePoints: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub GetReparsePoint: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub SetReparsePoint: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub DeleteReparsePoint: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub GetStreamInfo: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub GetDirInfoByName: Option<unsafe extern "system" fn() -> NTSTATUS>,
+    pub Control: Option<unsafe extern "system" fn() -> NTSTATUS>,
 }
 
 extern "system" {
-    /// Mounts one file system: the volume prefix names it (a local path is
-    /// the Windows face).
-    pub fn FspMount(
-        P: *const c_void,
-        FileSystem: *mut *mut FSP_FILE_SYSTEM,
-        Params: *const c_void,
+    pub fn FspFileSystemCreate(
+        DevicePath: *const u16,
+        VolumeParams: *const FSP_FSCTL_VOLUME_PARAMS,
         Interface: *const FSP_FILE_SYSTEM_INTERFACE,
-        InterfaceVersion: c_uint,
-        Context: *mut c_void,
-    ) -> c_int;
-
-    /// Unmounts and frees one mounted file system.
-    pub fn FspUnmount(FileSystem: *mut FSP_FILE_SYSTEM) -> c_int;
+        PFileSystem: *mut *mut FSP_FILE_SYSTEM,
+    ) -> NTSTATUS;
+    pub fn FspFileSystemDelete(FileSystem: *mut FSP_FILE_SYSTEM);
+    pub fn FspFileSystemSetMountPoint(FileSystem: *mut FSP_FILE_SYSTEM, MountPoint: *const u16);
+    pub fn FspFileSystemRemoveMountPoint(FileSystem: *mut FSP_FILE_SYSTEM);
+    pub fn FspFileSystemStartDispatcher(FileSystem: *mut FSP_FILE_SYSTEM, ThreadCount: c_ulong) -> NTSTATUS;
+    pub fn FspFileSystemStopDispatcher(FileSystem: *mut FSP_FILE_SYSTEM);
 }

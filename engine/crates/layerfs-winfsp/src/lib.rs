@@ -6,6 +6,7 @@
 mod ffi;
 
 pub mod mount;
+pub use mount::{mount, Mounted};
 
 // The callbacks and the mount loop land with their steps; the skeleton
 // wires the crate into the workspace first.
