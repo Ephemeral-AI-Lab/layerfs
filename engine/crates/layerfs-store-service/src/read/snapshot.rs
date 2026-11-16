@@ -106,26 +106,57 @@ pub fn resolve(
 }
 
 /// The entry at a checked absolute path, if any.
+///
+/// A component before the last that exists but is not a directory (a symlink
+/// or a file) is refused `InvalidInput`: a name below such an entry is
+/// ill-typed, not absent, so `/link/f` must not read as an ordinary missing
+/// path.
 pub fn entry(
     reader: &StorePorts,
     tree: &TreeTable,
     path: &str,
 ) -> Result<Option<EntryFacts>, SdkRefusal> {
-    find(reader, tree, path)
+    find_with(reader, tree, path, true)
 }
 
-/// [`entry`] through any object reader, such as a call's memo.
+/// [`entry`] through any object reader, such as a call's memo. A component
+/// before the last that is not a directory reads as absent, for callers that
+/// build a path from the tree's own directory listings.
 pub fn find(
     reader: &dyn AuthenticatedObjects,
     tree: &TreeTable,
     path: &str,
 ) -> Result<Option<EntryFacts>, SdkRefusal> {
+    find_with(reader, tree, path, false)
+}
+
+/// The shared path walk. `strict` refuses a non-directory component before
+/// the last instead of reading past it as an absent path.
+fn find_with(
+    reader: &dyn AuthenticatedObjects,
+    tree: &TreeTable,
+    path: &str,
+    strict: bool,
+) -> Result<Option<EntryFacts>, SdkRefusal> {
     let mut serial = tree.root_serial();
-    for name in path.split('/').filter(|name| !name.is_empty()) {
+    let mut names = path.split('/').filter(|name| !name.is_empty()).peekable();
+    while let Some(name) = names.next() {
         let name = PathName::new(name).map_err(|_| invalid(format!("`{path}` is not valid")))?;
         match tree.lookup(reader, serial, &name).map_err(args::content)? {
             Some(child) => serial = child,
             None => return Ok(None),
+        }
+        if strict && names.peek().is_some() {
+            let value = tree
+                .value(reader, serial)
+                .map_err(args::content)?
+                .ok_or_else(|| args::failed("bound inode record"))?;
+            if value.kind != InodeKind::Directory {
+                return Err(invalid(format!(
+                    "`{}` is not a directory; `{path}` cannot be resolved",
+                    name.as_str()
+                )));
+            }
         }
     }
     Ok(tree
@@ -140,7 +171,7 @@ pub fn existing(
     snap: &Snap,
     path: &str,
 ) -> Result<EntryFacts, SdkRefusal> {
-    find(reader, &snap.tree, path)?.ok_or_else(|| {
+    find_with(reader, &snap.tree, path, true)?.ok_or_else(|| {
         refuse(
             "NoSuchPath",
             format!("{path} does not exist at {}", snap.label),
