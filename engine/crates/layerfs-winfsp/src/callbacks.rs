@@ -225,6 +225,77 @@ pub unsafe extern "system" fn can_delete(
 ) -> NTSTATUS {
     STATUS_SUCCESS
 }
+/// Create: the ports create mutation (file or directory), then open.
+pub unsafe extern "system" fn create(
+    fs: *mut FSP_FILE_SYSTEM,
+    file_name: *const u16,
+    create_options: u32,
+    _granted: u32,
+    _attributes: u32,
+    _security: *const c_void,
+    _allocation: u64,
+    file_context: *mut c_void,
+    file_info: *mut c_void,
+) -> NTSTATUS {
+    let Some(context) = (unsafe { context(fs) }) else {
+        return STATUS_NOT_IMPLEMENTED;
+    };
+    let name = unsafe { wide_to_string(file_name) };
+    // FILE_DIRECTORY_FILE is bit 0x00000001
+    let directory = create_options & 0x1 != 0;
+    let parent = 1u64; // the root serial
+    let leaf = name.trim_start_matches('\\').trim_start_matches('/');
+    if let Err(_) = crate::named::create(context, parent, leaf, directory) {
+        return STATUS_NOT_IMPLEMENTED;
+    }
+    if !file_context.is_null() {
+        let handle = Box::into_raw(Box::new(NEXT_HANDLE.fetch_add(1, Ordering::Relaxed)));
+        unsafe { *(file_context as *mut *mut u64) = handle.cast() };
+    }
+    if !file_info.is_null() {
+        let info = file_info.cast::<u32>();
+        unsafe { *info = if directory { 0x10 } else { 0x80 } };
+    }
+    STATUS_SUCCESS
+}
+
+/// SetBasicInfo: the attributes the ports face accepts answer; the
+/// rest (times) are owned by the Workspace.
+pub unsafe extern "system" fn set_basic_info(
+    _fs: *mut FSP_FILE_SYSTEM,
+    _file: *mut c_void,
+    _attributes: u32,
+    _creation: u64,
+    _access: u64,
+    _write: u64,
+    _change: u64,
+    _file_info: *mut c_void,
+) -> NTSTATUS {
+    STATUS_SUCCESS
+}
+
+/// Rename: the ports rename mutation under the root.
+pub unsafe extern "system" fn rename(
+    fs: *mut FSP_FILE_SYSTEM,
+    _file: *mut c_void,
+    file_name: *const u16,
+    new_file_name: *const u16,
+    replace: u32,
+) -> NTSTATUS {
+    let Some(context) = (unsafe { context(fs) }) else {
+        return STATUS_NOT_IMPLEMENTED;
+    };
+    let name = unsafe { wide_to_string(file_name) };
+    let new_name = unsafe { wide_to_string(new_file_name) };
+    let parent = 1u64;
+    let leaf = name.trim_start_matches('\\').trim_start_matches('/');
+    let new_leaf = new_name.trim_start_matches('\\').trim_start_matches('/');
+    let flags = if replace != 0 { 1 } else { 0 };
+    match crate::named::rename(context, parent, leaf, parent, new_leaf, flags) {
+        Ok(()) => STATUS_SUCCESS,
+        Err(_) => STATUS_NOT_IMPLEMENTED,
+    }
+}
 /// Reads a NUL-terminated UTF-16 string.
 unsafe fn wide_to_string(ptr: *const u16) -> String {
     let mut len = 0usize;

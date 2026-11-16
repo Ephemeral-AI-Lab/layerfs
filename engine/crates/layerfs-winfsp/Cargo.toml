@@ -8,6 +8,7 @@ description = "The Workspace filesystem face on Windows: WinFsp callbacks over t
 layerfs-mount-ports = { path = "../layerfs-mount-ports" }
 layerfs-overlay = { path = "../layerfs-overlay" }
 layerfs-workspace = { path = "../layerfs-workspace" }
+layerfs-content = { path = "../../../core/crates/layerfs-content" }
 layerfs-daemon = { path = "../layerfs-daemon" }
 
 [dev-dependencies]
