@@ -6,7 +6,8 @@
 //! marker in the same write transaction, and a compaction registers an
 //! exclusive Store intent. A live mount refuses a removal with
 //! `MountsActive`; a live operation refuses a mount or another removal with
-//! `Busy`; a dead or uncertain owner is `Unresolved`.
+//! `Busy`; a dead, uncertain owner is `Unresolved`, while a dead, certain one
+//! is adopted.
 //!
 //! PostgreSQL adds transaction-scoped advisory keys to a removal's marker
 //! transaction and session-scoped shared keys to a mount, so a removal on one
@@ -325,11 +326,22 @@ impl OwnerView {
             None => true,
         }
     }
+
+    /// True only when an observer may settle `intent` as dead: it is certain
+    /// and its owner is provably gone. An uncertain intent is never settled
+    /// by an observer, even when its owner is dead: the owning call (or an
+    /// operator's `gc_release`) clears it, so the scope reports `Unresolved`
+    /// (§5.1's dead-uncertain cell) instead of deleting the evidence that the
+    /// operation may not have finished.
+    fn settleable(&self, intent: &GcIntent, shared_store: bool) -> bool {
+        !intent.uncertain && self.dead(intent, shared_store)
+    }
 }
 
-/// Adopts the rows whose owner is provably dead: their operation cannot still
-/// be running, so their intent is deleted and does not hold the scope. The
-/// caller reports the rows that remain.
+/// Adopts the rows whose owner is provably dead and that are not uncertain:
+/// their operation cannot still be running, so their intent is deleted and
+/// does not hold the scope. The uncertain rows stay and the caller reports
+/// them as `Unresolved`.
 fn settle_dead(
     tx: &Transaction<'_>,
     found: Vec<GcIntent>,
@@ -338,7 +350,7 @@ fn settle_dead(
 ) -> HistoryResult<Vec<GcIntent>> {
     let mut live = Vec::with_capacity(found.len());
     for intent in found {
-        if owners.dead(&intent, shared_store) {
+        if owners.settleable(&intent, shared_store) {
             release_in(tx, &intent.op_id)?;
         } else {
             live.push(intent);
