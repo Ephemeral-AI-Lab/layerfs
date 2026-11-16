@@ -2436,7 +2436,7 @@ impl RunMetrics {
 #[cfg(test)]
 mod tests {
     use super::{
-        cap_delta_references, db_error, io_error, journal_bound_bytes, Built,
+        cap_delta_references, io_error, journal_bound_bytes, Built,
         DELTA_BASE_REFERENCES_CAP,
     };
     use layerfs_content::ObjectId;

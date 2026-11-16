@@ -1968,14 +1968,6 @@ mod tests {
         }
     }
 
-    fn replica(name: &str, sync_state: &str) -> Replica {
-        Replica {
-            name: name.to_owned(),
-            streaming: true,
-            sync_state: sync_state.to_owned(),
-        }
-    }
-
     #[test]
     fn the_standby_setting_parses_first_any_and_a_bare_list() {
         let first = super::standby_requirement("FIRST 1 (s1)").unwrap();
