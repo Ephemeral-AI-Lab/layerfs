@@ -107,7 +107,7 @@ impl Sandbox {
             .arg("--init")
             .arg(init.to_string())
             .arg("--cgroup")
-            .arg(&self.cgroup);
+            .arg(cgroup::helper_group(&self.cgroup));
         // the helper's stdin is one end of a socket: it writes one byte
         // there once the command is in its group, and its exit closes it
         let mut ready = None;

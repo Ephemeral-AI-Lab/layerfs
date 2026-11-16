@@ -141,8 +141,11 @@ fn snake(name: &str) -> String {
 /// What `sandbox.get` shows for the daemon's `items`: each item as the
 /// daemon answered it (its keys in snake_case, as the call surface shows
 /// every result), with its `path`, `name` and `ws`, no command `running`
-/// in it and no `overlay_bytes` (these fixtures have no run folder).
-fn shown(items: &[SdkValue]) -> Vec<BTreeMap<String, SdkValue>> {
+/// in it, no `overlay_bytes` (these fixtures have no run folder) and no
+/// cgroup `usage`, for `reason`: the Sandbox's own `usage_reason`
+/// (`host_process` for these host-process Sandboxes, `not_observed` when
+/// the side that runs one did not answer).
+fn shown(items: &[SdkValue], reason: &str) -> Vec<BTreeMap<String, SdkValue>> {
     items
         .iter()
         .map(|item| {
@@ -161,6 +164,8 @@ fn shown(items: &[SdkValue]) -> Vec<BTreeMap<String, SdkValue>> {
             fields.insert("ws".to_owned(), t(&ws));
             fields.insert("running".to_owned(), SdkValue::List(Vec::new()));
             fields.insert("overlay_bytes".to_owned(), SdkValue::Null);
+            fields.insert("usage".to_owned(), SdkValue::Null);
+            fields.insert("usage_reason".to_owned(), t(reason));
             fields
         })
         .collect()
@@ -470,7 +475,8 @@ fn running(got: &SdkValue, items: &[SdkValue]) {
     assert_eq!(got.get_text("name"), Some("s1"), "{got:?}");
     assert_eq!(got.get_text("project"), Some("shop/api"), "{got:?}");
     assert_eq!(got.get_text("state"), Some("running"), "{got:?}");
-    assert_eq!(workspaces(got), shown(items), "{got:?}");
+    let reason = got.get_text("usage_reason").unwrap_or("");
+    assert_eq!(workspaces(got), shown(items, reason), "{got:?}");
     assert_eq!(got.get("next_page_pos"), Some(&SdkValue::Null), "{got:?}");
     assert!(got.get("down_reason").is_none(), "{got:?}");
     assert!(got.get("down").is_none(), "{got:?}");
@@ -532,7 +538,8 @@ fn a_native_sandbox_s_get_takes_no_lease_and_writes_nothing() {
         untouched(&home);
         asked_workspaces_only(&seen);
         // a second get is the same answer, from the connection it kept
-        assert_eq!(workspaces(&get(&home).unwrap()), shown(&items));
+        let again = get(&home).unwrap();
+        assert_eq!(workspaces(&again), shown(&items, "host_process"));
         assert_eq!(seen.connections.load(Ordering::SeqCst), 1);
         assert_eq!(files(&home), before);
         untouched(&home);

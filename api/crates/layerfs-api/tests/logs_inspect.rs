@@ -589,7 +589,22 @@ fn a_forwarded_sandbox_s_run_folder_is_read_in_its_machine() {
         panic!("{sizes:?}")
     };
     let names: Vec<&str> = fields.iter().map(|(name, _)| name.as_str()).collect();
-    assert_eq!(names, ["overlay_sizes", "daemon", "usage", "usage_reason"]);
+    // and its Workspaces' cgroups, of which a host process has none
+    assert_eq!(
+        names,
+        [
+            "overlay_sizes",
+            "daemon",
+            "usage",
+            "usage_reason",
+            "workspace_usage",
+            "workspace_usage_reason"
+        ]
+    );
+    assert_eq!(
+        sizes.get_text("workspace_usage_reason"),
+        Some("host_process")
+    );
     assert_eq!(
         sizes.get("daemon").unwrap().get_int("pid"),
         Some(i64::from(std::process::id()))

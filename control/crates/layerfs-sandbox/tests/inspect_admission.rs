@@ -380,7 +380,8 @@ fn overlay_sizes_are_read_by_stat_without_opening_a_file() {
     // for a Workspace with no overlay file (2) and for the link (4)
     let sizes = inspect::overlay_sizes(&home, "native", "s1", &asked).unwrap();
     // with them, what this side sees of the Sandbox's daemon process
-    // (layerfs-project#164): the record names this test, a host process
+    // (layerfs-project#164): the record names this test, a host process,
+    // which has no cgroup for its Workspaces either
     let started = sizes.get("daemon").unwrap().get_int("started_at").unwrap();
     assert_eq!(
         layerfs_home::json::print(&sizes),
@@ -388,7 +389,8 @@ fn overlay_sizes_are_read_by_stat_without_opening_a_file() {
             concat!(
                 r#"{{"overlay_sizes":[{{"namespace":1,"bytes":8192}},{{"namespace":2,"bytes":null}},"#,
                 r#"{{"namespace":3,"bytes":0}},{{"namespace":4,"bytes":null}}],"#,
-                r#""daemon":{{"pid":{},"started_at":{}}},"usage":null,"usage_reason":"host_process"}}"#
+                r#""daemon":{{"pid":{},"started_at":{}}},"usage":null,"usage_reason":"host_process","#,
+                r#""workspace_usage":null,"workspace_usage_reason":"host_process"}}"#
             ),
             std::process::id(),
             started
