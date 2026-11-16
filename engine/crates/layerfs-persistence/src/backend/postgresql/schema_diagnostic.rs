@@ -127,6 +127,10 @@ init_operation removed_bytes bigint NO
 inode_value_block first_ordinal bigint NO
 inode_value_block last_ordinal bigint NO
 inode_value_block body bytea NO
+kept_node layer_stack_id bytea NO
+kept_node kind text NO
+kept_node node_id bytea NO
+kept_node serial bigint NO
 layer layer_id bytea NO
 layer layer_stack_id bytea NO
 layer parent_layer_id bytea YES

@@ -99,6 +99,17 @@ fn next_history_serial_column() -> &'static str {
     &HISTORY[start..end]
 }
 
+/// The `kept_node` table as `gc.sql` writes it: one appended statement at the
+/// end of the GC script, so removing exactly this text leaves the source a
+/// Store written before T7.1 recorded.
+fn kept_node_table() -> &'static str {
+    let start = GC
+        .find("CREATE TABLE kept_node (")
+        .expect("the GC schema holds kept_node");
+    let end = start + GC[start..].find(";\n").expect("kept_node ends") + 2;
+    &GC[start..end]
+}
+
 /// The `commit` and `layer` position column as `history.sql` writes it; it
 /// appears once in each of the two tables.
 fn history_serial_column() -> &'static str {
@@ -276,6 +287,7 @@ pub(crate) fn check(
         "path_removed",
         "history_meta",
         "inode_value_block",
+        "kept_node",
         "layer",
         "layer_lineage",
         "layer_stack",
@@ -558,6 +570,44 @@ impl super::session::connection::Session {
                 return Ok(());
             }
             tx.bootstrap(GC)?;
+            let definition = definition(tx.connection, tx.work)?;
+            tx.query(
+                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
+                vec![Param::Text(current), Param::Text(definition)],
+            )?;
+            Ok(())
+        })
+    }
+    /// Adds the `kept_node` history-closure table (T7.1) to a Store written
+    /// before it, then records the current schema: an additive migration
+    /// (REBUILD.md kind 2) under the same conditions as
+    /// [`Self::add_binding_hints`]. The table is empty until a mark writes it.
+    pub(crate) fn add_kept_node(&self) -> Result<(), BackendError> {
+        self.run::<_, BackendError>(true, |tx| {
+            let present = tx.query(
+                "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='kept_node'",
+                vec![],
+            )?;
+            if !present.is_empty() {
+                return Ok(());
+            }
+            let rows = tx.query(
+                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
+                vec![],
+            )?;
+            let Some(row) = rows.first() else {
+                return Ok(());
+            };
+            let current = source((self.layout, self.acquisition));
+            let recorded = row.get::<String>(0)?;
+            let without = current.replacen(kept_node_table(), "", 1);
+            let earlier = without.replacen(next_history_serial_column(), "", 1);
+            if (recorded != earlier && recorded != without)
+                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
+            {
+                return Ok(());
+            }
+            tx.bootstrap(kept_node_table())?;
             let definition = definition(tx.connection, tx.work)?;
             tx.query(
                 "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",

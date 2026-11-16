@@ -57,7 +57,7 @@ const ACQUISITION_TABLES: [&str; 3] = ["init_entry", "init_host_file", "init_ope
 /// (#90); a version 1 schema is refused at open, never converted.
 pub(crate) const SCHEMA_VERSION: i64 = 2;
 /// Every table of one Store schema, in name order.
-pub(crate) const TABLES: [&str; 26] = [
+pub(crate) const TABLES: [&str; 27] = [
     "absorbed",
     "binding_hint_block",
     "branch",
@@ -71,6 +71,7 @@ pub(crate) const TABLES: [&str; 26] = [
     "gc_op",
     "history_meta",
     "inode_value_block",
+    "kept_node",
     "layer",
     "layer_lineage",
     "layer_stack",
@@ -208,6 +209,79 @@ pub(crate) fn create(
         ],
     )?;
     Ok(())
+}
+
+/// The `kept_node` table as `gc.sql` writes it: one statement appended to the
+/// GC script, so removing exactly this text leaves the source a Store written
+/// before T7.1 recorded.
+fn kept_node_table() -> &'static str {
+    let start = GC
+        .find("CREATE TABLE kept_node (")
+        .expect("the GC schema holds kept_node");
+    let end = start + GC[start..].find(";\n").expect("kept_node ends") + 2;
+    &GC[start..end]
+}
+
+/// The recorded source of a Store written before [`kept_node_table`]: the
+/// current source with that one statement removed.
+fn pre_kept_node_source(acquisition: bool) -> String {
+    source(acquisition).replacen(kept_node_table(), "", 1)
+}
+
+/// Adds the `kept_node` history-closure table (T7.1) to a Store written
+/// before it, then records the current schema: an additive migration under
+/// the same conditions as [`add_gc`]. A schema that already has the table is
+/// left alone; a recorded source or definition that is not an earlier
+/// revision of the current one is refused, never migrated. The table is empty
+/// until a mark writes it.
+pub(crate) fn add_kept_node(session: &Session) -> Result<(), PersistenceError> {
+    // A Store that already has the table is left alone: one statement, no
+    // transaction and no lane wait.
+    let present = session.run_as::<_, BackendError>(Mode::Statement, |tx| {
+        let sql = format!(
+            "SELECT 1 FROM information_schema.tables WHERE table_schema='{}' AND table_name='kept_node' AND table_type='BASE TABLE'",
+            tx.schema
+        );
+        Ok(!tx.query(&sql, vec![])?.is_empty())
+    })?;
+    if present {
+        return Ok(());
+    }
+    session.run_as(Mode::Write, |tx| -> Result<(), PersistenceError> {
+        // Re-check under the lane: another process may have migrated first.
+        let present = tx.query(
+            "SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='kept_node' AND table_type='BASE TABLE'",
+            vec![],
+        )?;
+        if !present.is_empty() {
+            return Ok(());
+        }
+        let rows = tx.query(
+            "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
+            vec![],
+        )?;
+        let [row] = rows.as_slice() else {
+            return Err(BackendError::Integrity.into());
+        };
+        let recorded_source: String = row.get(0)?;
+        let acquisition = if is_earlier_source(&recorded_source, pre_kept_node_source(false)) {
+            false
+        } else if is_earlier_source(&recorded_source, pre_kept_node_source(true)) {
+            true
+        } else {
+            return Err(BackendError::Integrity.into());
+        };
+        if row.get::<String>(1)? != definition(tx)? {
+            return Err(BackendError::Integrity.into());
+        }
+        tx.batch(kept_node_table())?;
+        let definition = definition(tx)?;
+        tx.query(
+            "UPDATE history_meta SET schema_source=$1,schema_definition=$2 WHERE id=1",
+            vec![Param::Text(source(acquisition)), Param::Text(definition)],
+        )?;
+        Ok(())
+    })
 }
 
 /// Adds the GC marker, position and admission tables to a Store written

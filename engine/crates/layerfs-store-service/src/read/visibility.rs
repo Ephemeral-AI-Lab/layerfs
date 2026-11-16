@@ -5,13 +5,18 @@
 //! least `N`'s `history_serial` (`§4.3`). A marked-but-absent path hides
 //! nothing, so callers check existence first. Reads and stats refuse with one
 //! `Removed` detail; listings and globs omit hidden entries and report one
-//! top-level `removed_count`.
+//! top-level `removed_count` over the queried subtree, filtered before paging.
 
-use crate::read::snapshot::Snap;
-use crate::store::Store;
+use super::{snapshot, walk};
+use crate::store::{Store, StorePorts};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_content::merge::Rule;
+use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_history::error::{RemovedPath, RemovedState};
-use layerfs_history::{HistoryError, LayerStackRecord, PathRemovalRecord};
+use layerfs_history::{
+    HistoryError, LayerStackId, LayerStackRecord, NodeId, PathRemovalRecord,
+};
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 /// The markers and node position one snapshot's reads filter against.
@@ -23,33 +28,99 @@ pub struct Visibility {
 impl Visibility {
     /// Loads the snapshot's serial and its project's markers. A provider that
     /// does not implement the marker reads (a test double) sees none.
-    pub fn load(store: &Arc<Store>, stack: &LayerStackRecord, snap: &Snap) -> Self {
-        let serial = snap.serial;
-        let markers = match store.published(|history| history.path_removals(stack.id)) {
+    pub fn load(store: &Arc<Store>, stack: &LayerStackRecord, snap: &snapshot::Snap) -> Self {
+        Self::for_stack(store, stack.id, snap.serial)
+    }
+
+    /// `load` when only the resolved snapshot is at hand.
+    pub fn for_snap(store: &Arc<Store>, snap: &snapshot::Snap) -> Self {
+        match Self::stack_of(store, snap.node) {
+            Some(stack) => Self::for_stack(store, stack, snap.serial),
+            None => Self {
+                serial: snap.serial,
+                markers: Vec::new(),
+            },
+        }
+    }
+
+    /// `for_snap` for a node that has not been resolved into a snapshot.
+    pub fn for_node(store: &Arc<Store>, node: NodeId) -> Self {
+        match Self::stack_of(store, node) {
+            Some(stack) => Self::for_stack(store, stack, Self::node_serial(store, node)),
+            None => Self {
+                serial: 0,
+                markers: Vec::new(),
+            },
+        }
+    }
+
+    /// The stack a saved node belongs to.
+    fn stack_of(store: &Arc<Store>, node: NodeId) -> Option<LayerStackId> {
+        use crate::history::lookup;
+        match node {
+            NodeId::Commit(id) => lookup::commit(store, id).ok().map(|record| record.stack),
+            NodeId::Layer(id) => lookup::layer(store, id).ok().map(|record| record.stack),
+        }
+    }
+
+    /// `load` for a stack id and an explicit `history_serial`, for reads that
+    /// walk several nodes and therefore ask `hidden_at` per node.
+    pub fn for_stack(store: &Arc<Store>, stack: LayerStackId, serial: u64) -> Self {
+        let markers = match store.published(|history| history.path_removals(stack)) {
             Ok(markers) => markers,
             Err(_) => Vec::new(),
         };
         Self { serial, markers }
     }
 
-    /// The governing frontier for a path: the maximum marker frontier over the
-    /// path and its `/`-boundary ancestors, if any marker applies.
-    fn frontier(&self, path: &str) -> Option<u64> {
-        let relative = path.strip_prefix('/').unwrap_or(path);
+    /// The node's `history_serial`, or 0 for a provider that keeps none.
+    pub fn node_serial(store: &Arc<Store>, node: NodeId) -> u64 {
+        match store.published(|history| history.node_history_serial(node)) {
+            Ok(Some(serial)) => serial,
+            _ => 0,
+        }
+    }
+
+    /// The snapshot position the marker frontier is compared against.
+    pub fn serial(&self) -> u64 {
+        self.serial
+    }
+
+    /// The governing frontier for a relative path: the maximum marker frontier
+    /// over the path and its `/`-boundary ancestors, if any marker applies.
+    fn frontier(&self, relative: &[u8]) -> Option<u64> {
         if relative.is_empty() {
             return None;
         }
         self.markers
             .iter()
-            .filter(|marker| layerfs_history::path::governs(&marker.path, relative.as_bytes()))
+            .filter(|marker| layerfs_history::path::governs(&marker.path, relative))
             .map(|marker| marker.frontier_serial)
             .max()
     }
 
+    /// The governing frontier when the entry at `relative` (without the leading
+    /// `/`) is hidden at node `serial`.
+    pub fn hidden_relative_at(&self, relative: &[u8], serial: u64) -> Option<u64> {
+        let frontier = self.frontier(relative)?;
+        (frontier >= serial).then_some(frontier)
+    }
+
+    /// The governing frontier when the entry at `relative` is hidden at this
+    /// node. Callers that already hold the path bytes (the export walk) avoid a
+    /// UTF-8 round trip.
+    pub fn hidden_relative(&self, relative: &[u8]) -> Option<u64> {
+        self.hidden_relative_at(relative, self.serial)
+    }
+
+    /// The governing frontier when the entry at `path` is hidden at `serial`.
+    pub fn hidden_at(&self, path: &str, serial: u64) -> Option<u64> {
+        self.hidden_relative_at(path.strip_prefix('/').unwrap_or(path).as_bytes(), serial)
+    }
+
     /// The governing frontier when the entry at `path` is hidden at this node.
     pub fn hidden(&self, path: &str) -> Option<u64> {
-        let frontier = self.frontier(path)?;
-        (frontier >= self.serial).then_some(frontier)
+        self.hidden_at(path, self.serial)
     }
 
     /// The refusal for one hidden read or stat, `{paths: [{path, frontier_serial}]}`.
@@ -57,6 +128,112 @@ impl Visibility {
         crate::history::lookup::history(HistoryError::Removed(Box::new(RemovedState::new(vec![
             RemovedPath::new(path, frontier_serial),
         ]))))
+    }
+
+    /// The number of hidden entries directly inside `dir` whose entries exist
+    /// at this snapshot: the `removed_count` of a listing, independent of the
+    /// page. A marker on a path below a direct child is not counted here.
+    pub fn hidden_children(
+        &self,
+        reader: &StorePorts,
+        snap: &snapshot::Snap,
+        dir: &str,
+    ) -> Result<i64, SdkRefusal> {
+        if self.markers.is_empty() {
+            return Ok(0);
+        }
+        let mut count = 0;
+        for marker in &self.markers {
+            let Ok(relative) = std::str::from_utf8(&marker.path) else {
+                continue;
+            };
+            if relative.is_empty() {
+                continue;
+            }
+            let parent = match relative.rsplit_once('/') {
+                Some((parent, _)) => format!("/{parent}"),
+                None => "/".to_owned(),
+            };
+            if parent != dir {
+                continue;
+            }
+            let full = format!("/{relative}");
+            if snapshot::entry(reader, &snap.tree, &full)?.is_some()
+                && self.hidden(&full).is_some()
+            {
+                count += 1;
+            }
+        }
+        Ok(count)
+    }
+
+    /// The number of hidden entries at or below `path` that the glob `pattern`
+    /// matches: the `removed_count` of a glob, independent of the page. Only
+    /// hidden subtrees are walked, so a snapshot with no marker counts nothing.
+    pub fn hidden_matches(
+        &self,
+        reader: &StorePorts,
+        snap: &snapshot::Snap,
+        path: &str,
+        pattern: &str,
+    ) -> Result<i64, SdkRefusal> {
+        if self.markers.is_empty() {
+            return Ok(0);
+        }
+        let rule = Rule::glob(pattern);
+        let root = path.trim_start_matches('/');
+        let mut found: BTreeSet<String> = BTreeSet::new();
+        let mut walked: Vec<String> = Vec::new();
+        for marker in &self.markers {
+            let Ok(relative) = std::str::from_utf8(&marker.path) else {
+                continue;
+            };
+            if relative.is_empty() {
+                continue;
+            }
+            if Self::under(root, relative).is_none() {
+                continue;
+            }
+            if walked
+                .iter()
+                .any(|hidden| layerfs_history::path::governs(hidden.as_bytes(), relative.as_bytes()))
+            {
+                // Already counted when the governing hidden directory was walked.
+                continue;
+            }
+            let full = format!("/{relative}");
+            let Some(entry) = snapshot::entry(reader, &snap.tree, &full)? else {
+                continue;
+            };
+            if self.hidden(&full).is_none() {
+                continue;
+            }
+            if rule.matches_path(&full) {
+                found.insert(full.clone());
+            }
+            if entry.value.kind == InodeKind::Directory {
+                walked.push(relative.to_owned());
+                walk::walk_within(reader, snap, &full, None, |child, _| {
+                    if rule.matches_path(child) {
+                        found.insert(child.to_owned());
+                    }
+                    Ok(true)
+                })?;
+            }
+        }
+        Ok(found.len() as i64)
+    }
+
+    /// The path `relative` within the query root `root` (both without a
+    /// leading `/`; an empty root is the whole tree), or `None` outside it.
+    fn under<'p>(root: &str, relative: &'p str) -> Option<&'p str> {
+        if root.is_empty() || relative == root {
+            Some(relative)
+        } else {
+            relative
+                .strip_prefix(root)
+                .and_then(|rest| rest.strip_prefix('/'))
+        }
     }
 }
 
@@ -67,10 +244,9 @@ pub fn refuse(path: &str, visibility: &Visibility) -> Option<SdkRefusal> {
         .map(|frontier| Visibility::refusal(path, frontier))
 }
 
-/// Removes hidden entries from a list or glob answer and adds `removed_count`.
-/// Entries themselves exist, so only marked-and-present paths are counted.
-pub fn filter(mut value: SdkValue, visibility: &Visibility) -> SdkValue {
-    let mut removed = 0i64;
+/// Replaces a list or glob answer: hidden entries are dropped and the one
+/// top-level `removed_count` is the caller's page-independent total.
+pub fn settle(mut value: SdkValue, visibility: &Visibility, removed: i64) -> SdkValue {
     if let SdkValue::Map(fields) = &mut value {
         if let Some((_, SdkValue::List(items))) = fields.iter_mut().find(|(k, _)| k == "items") {
             items.retain(|item| {
@@ -81,15 +257,7 @@ pub fn filter(mut value: SdkValue, visibility: &Visibility) -> SdkValue {
                         .map(str::to_owned)
                         .unwrap_or_default(),
                 };
-                if path.is_empty() {
-                    return true;
-                }
-                if visibility.hidden(&path).is_some() {
-                    removed += 1;
-                    false
-                } else {
-                    true
-                }
+                path.is_empty() || visibility.hidden(&path).is_none()
             });
         }
         fields.push(("removed_count".into(), SdkValue::Int(removed)));

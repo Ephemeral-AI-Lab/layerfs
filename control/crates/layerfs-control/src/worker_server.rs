@@ -10,8 +10,8 @@
 //! build sends nothing more and closes. Then a request `{ op, args }`, read with at most
 //! [`REQUEST_WAIT`] between bytes. `worker.ping` answers who it is;
 //! `store.call`, `store.file`, `store.reach`, `sandbox.host`, `project.stage`,
-//! `project.init`, `project.export`, `project.remove` and `project.delete` run
-//! one operation on this machine,
+//! `project.init`, `project.export`, `project.remove`, `project.delete` and
+//! `project.list` run one operation on this machine,
 //! with `home` set to the worker's own root (the machine's data disk),
 //! never a path the caller sends. Answers are
 //! `{ value }` or `{ refused }`, after any `{ event }` frames.
@@ -31,7 +31,10 @@ use layerfs_machine::worker::{
 use layerfs_store::project::delete::delete_project;
 use layerfs_store::project::discovery::home_of;
 use layerfs_store::project::export::in_worker as export_in_worker;
-use layerfs_store::project::frame::{DeleteFrame, ExportFrame, InitFrame, RemoveFrame, StageFrame};
+use layerfs_store::project::frame::{
+    DeleteFrame, ExportFrame, InitFrame, ListingFrame, RemoveFrame, StageFrame,
+};
+use layerfs_store::project::listing::list_projects;
 use layerfs_store::project::{init::in_worker, remove::remove_project, staged};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -282,6 +285,10 @@ fn run(
             let root = home_of(Some(root))?;
             delete_project(&root, &DeleteFrame::decode(&args)?)
         }
+        // reads the Store's own filtered project listing under this worker
+        // root, the same `layerfs_project::store::projects` a local Store
+        // uses (2.0, T4.5c): `{ store, store_record? }`
+        "project.list" => list_projects(root, &ListingFrame::decode(&args)?),
         // writes or discards one part of a caller's folder copy under this
         // worker's root (#536 H11a)
         "project.stage" => staged::run(root, &StageFrame::decode(args)?),

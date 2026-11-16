@@ -23,6 +23,8 @@ pub(crate) enum Engine {
 /// Named history statements in one open engine transaction.
 pub(crate) trait HistoryStatements {
     fn history(&self, key: &str, params: Vec<Param>) -> Result<Vec<Record>, BackendError>;
+    /// The same open transaction's physical object and metadata access.
+    fn mechanics(&self) -> &dyn Mechanics;
     /// One statement over parallel column arrays, where the engine binds
     /// arrays (PostgreSQL: one round trip for many rows). `None`: the
     /// engine has no such statement and the caller runs its per-row one.

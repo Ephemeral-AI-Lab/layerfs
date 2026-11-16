@@ -182,6 +182,7 @@ impl PostgresHandles {
         let session = Arc::new(Session::connect(selection, writable)?);
         if writable {
             schema::add_gc(&session)?;
+            schema::add_kept_node(&session)?;
             schema::add_position_state(&session)?;
             schema::add_position_columns(&session)?;
         }

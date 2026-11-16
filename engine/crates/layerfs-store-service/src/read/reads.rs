@@ -4,6 +4,7 @@ use super::{
     cached::{self, Cached},
     search,
     snapshot::{answer, existing, header, kind_name, size, Snap},
+    visibility::Visibility,
     walk, window,
 };
 use crate::history::lookup::{self as args, invalid, Answer, Arg};
@@ -100,7 +101,13 @@ pub fn stat(reader: &StorePorts, snap: &Snap, path: &str) -> Answer {
 
 /// One page of the directory at `path`, `paging` (limit, offset) from the
 /// caller.
-pub fn list(reader: &StorePorts, snap: &Snap, path: &str, paging: Arg<(usize, u64)>) -> Answer {
+pub fn list(
+    reader: &StorePorts,
+    snap: &Snap,
+    path: &str,
+    seen: &Visibility,
+    paging: Arg<(usize, u64)>,
+) -> Answer {
     let cached = Cached::new(reader)?;
     // One memo for the call (#352 011.a1): the entries' inode lookups share
     // the inode table's upper pages, read once, so an entry costs its leaf.
@@ -128,6 +135,12 @@ pub fn list(reader: &StorePorts, snap: &Snap, path: &str, paging: Arg<(usize, u6
         .map_err(args::content)?;
         let mut taken = Vec::new();
         for (name, serial) in &page.entries {
+            if seen
+                .hidden(&layerfs_content::compare::tree::join(path, name))
+                .is_some()
+            {
+                continue;
+            }
             if skipped < pos {
                 skipped += 1;
                 continue;
@@ -181,6 +194,7 @@ pub fn grep(
     snap: &Snap,
     pattern: &str,
     path: &str,
+    seen: &Visibility,
     limit: usize,
     pos: u64,
 ) -> Answer {
@@ -200,7 +214,7 @@ pub fn grep(
     let cached = Cached::new(reader)?;
     let mut window = Vec::new();
     walk::walk_within(&cached, snap, path, None, |file, entry| {
-        if entry.value.kind == InodeKind::RegularFile {
+        if entry.value.kind == InodeKind::RegularFile && seen.hidden(file).is_none() {
             window.push((file.to_owned(), entry));
         }
         if window.len() == cached::ROOTS {
@@ -302,6 +316,7 @@ pub fn glob(
     snap: &Snap,
     pattern: &str,
     path: &str,
+    seen: &Visibility,
     limit: usize,
     pos: u64,
 ) -> Answer {
@@ -311,6 +326,9 @@ pub fn glob(
     let cached = Cached::new(reader)?;
     let within = walk::leading(pattern);
     walk::walk_within(&cached, snap, path, within, |file, _| {
+        if seen.hidden(file).is_some() {
+            return Ok(true);
+        }
         if !rule.matches_path(file) {
             return Ok(true);
         }

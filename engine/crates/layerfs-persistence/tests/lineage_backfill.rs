@@ -19,7 +19,7 @@ const GC: &str = include_str!("../sql/sqlite/gc.sql");
 /// appears once in each of the two tables (T1.2a).
 const HISTORY_SERIAL: &str = "    history_serial INTEGER NOT NULL DEFAULT 0,\n";
 /// The `store_policy` salt column as `metadata.sql` writes it (T1.2a).
-const TRACE_SALT: &str = " trace_salt BLOB NOT NULL DEFAULT (X'0000000000000000000000000000000000000000000000000000000000000000') CHECK(length(trace_salt)=32)\n";
+const TRACE_SALT: &str = ",\n trace_salt BLOB NOT NULL DEFAULT (X'0000000000000000000000000000000000000000000000000000000000000000') CHECK(length(trace_salt)=32)";
 /// The `history_meta` next serial column as `history.sql` writes it (T1.4).
 const NEXT_SERIAL: &str = "    next_history_serial INTEGER NOT NULL DEFAULT 1,\n";
 
@@ -74,7 +74,7 @@ fn make_old(path: &std::path::Path) {
          DROP TABLE layer_lineage; DROP TABLE commit_lineage; DROP TABLE absorbed; DROP TABLE reach; \
          DROP TABLE merge_operation; DROP TABLE merge_record; DROP TABLE file_digest; \
          DROP TABLE branch_retired; DROP TABLE layer_stack_retired; DROP TABLE path_removed; \
-         DROP TABLE project_epoch; DROP TABLE gc_intent; DROP TABLE gc_op; DROP TABLE gc_dead;",
+         DROP TABLE project_epoch; DROP TABLE gc_intent; DROP TABLE gc_op; DROP TABLE gc_dead; DROP TABLE kept_node;",
     )
     .unwrap();
     let source: String = sql

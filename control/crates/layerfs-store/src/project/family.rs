@@ -10,10 +10,10 @@
 use crate::calls::Page;
 use crate::lease;
 use crate::open_args::OpenArgs;
-use crate::place::{self, Executor};
+use crate::place::{self, Executor, Worker};
 use crate::project::add::{add_project, ProjectAdd};
 use crate::project::discovery::home_of;
-use crate::project::frame::{InitFrame, RemoveFrame};
+use crate::project::frame::{InitFrame, ListingFrame, ListingReply, RemoveFrame};
 use crate::project::postgres_init::PgProjectAdd;
 use crate::project::record::ProjectRecord;
 use crate::record::{StoreRecord, StoreRef};
@@ -58,19 +58,20 @@ struct LiveProject {
 }
 
 /// The live projects Store `store` lists, after the retired/hidden ones are
-/// filtered out (spec §4.2). `None` means this route cannot list the Store
-/// here (a sqlite Store on another machine, T4.5b); the home entries are
-/// then left as the records say. A Store that cannot be listed is `Err`.
+/// filtered out (spec §4.2). Every route reads the listing where the
+/// Store's calls run (T4.5c): in this process for a sqlite Store on this
+/// machine and for a PostgreSQL Store, in the machine's worker for a sqlite
+/// Store on another machine. A Store that cannot be listed is `Err`.
 fn live_projects(
     home: &Path,
     store: &str,
     record: &StoreRecord,
-) -> std::result::Result<Option<Vec<LiveProject>>, SdkRefusal> {
+) -> std::result::Result<Vec<LiveProject>, SdkRefusal> {
     let store_ref = record.store_ref()?;
-    if let Executor::Worker(_) = place::plan(home, store_ref)? {
-        return Ok(None);
-    }
     record.unblocked()?;
+    if let Executor::Worker(mut worker) = place::plan(home, store_ref)? {
+        return live_projects_on_worker(&mut worker, store, record);
+    }
     let (store_path, postgresql) = match store_ref {
         StoreRef::Postgres { .. } => (
             record.postgresql_key(home, store),
@@ -92,15 +93,37 @@ fn live_projects(
             .published(layerfs_project::store::projects)
             .map_err(failed)
     })?;
-    Ok(Some(
-        stacks
-            .into_iter()
-            .map(|stack| LiveProject {
-                name: stack.name.as_str().to_owned(),
-                stack: stack.id.to_bytes().to_vec(),
-            })
-            .collect(),
-    ))
+    Ok(stacks
+        .into_iter()
+        .map(|stack| LiveProject {
+            name: stack.name.as_str().to_owned(),
+            stack: stack.id.to_bytes().to_vec(),
+        })
+        .collect())
+}
+
+/// The listing a worker-backed Store sends (T4.5c): the worker runs the
+/// same `layerfs_project::store::projects` under its own root, so a project
+/// retired in the Store is hidden here as it is for a local one.
+fn live_projects_on_worker(
+    worker: &mut Worker,
+    store: &str,
+    record: &StoreRecord,
+) -> std::result::Result<Vec<LiveProject>, SdkRefusal> {
+    let frame = ListingFrame {
+        store: StoreName::parse(store)?,
+        store_record: Some(record.to_record().clone()),
+    };
+    let answer = worker.call("project.list", frame.encode(), &mut |_| {})?;
+    let reply = ListingReply::decode(&answer)?;
+    Ok(reply
+        .projects
+        .into_iter()
+        .map(|project| LiveProject {
+            name: project.name,
+            stack: project.stack.to_bytes().to_vec(),
+        })
+        .collect())
 }
 
 /// Whether `project` is in `live`: by the stack id its record holds, or,
@@ -126,12 +149,11 @@ fn summary(home: &Path, store: &str, name: &str, record: &StoreRecord, view: Vie
 /// entry remains (spec §4.2).
 pub fn get(home: &Path, project: &ProjectRef) -> Outcome {
     let target = resolve::target(home, &project.to_string())?;
-    if let Some(live) = live_projects(home, &target.store, &target.record)? {
-        let record = ProjectRecord::read(home, &target.store, &target.project)?
-            .ok_or_else(|| refused("NoSuchProject", format!("no project {project}")))?;
-        if !listed(&record, &target.project, &live) {
-            return Err(refused("NoSuchProject", format!("no project {project}")));
-        }
+    let live = live_projects(home, &target.store, &target.record)?;
+    let record = ProjectRecord::read(home, &target.store, &target.project)?
+        .ok_or_else(|| refused("NoSuchProject", format!("no project {project}")))?;
+    if !listed(&record, &target.project, &live) {
+        return Err(refused("NoSuchProject", format!("no project {project}")));
     }
     Ok(summary(
         home,
@@ -158,10 +180,10 @@ pub fn list(home: &Path, request: &ProjectList) -> Outcome {
         let Some(record) = StoreRecord::read(home, &store)? else {
             continue;
         };
-        // The listing is the Store's own filtered one (spec §4.2): a home
-        // entry whose project is hidden or absent is not listed. An
-        // all-Stores listing omits a Store it cannot list; a named one
-        // reports the refusal.
+        // The listing is the Store's own filtered one (spec §4.2), read
+        // where its calls run (T4.5c): a home entry whose project is hidden
+        // or absent is not listed. An all-Stores listing omits a Store it
+        // cannot list; a named one reports the refusal.
         let live = match live_projects(home, &store, &record) {
             Ok(live) => live,
             Err(refusal) => {
@@ -172,13 +194,11 @@ pub fn list(home: &Path, request: &ProjectList) -> Outcome {
             }
         };
         for name in paths::names(&paths::store_dir(home, &store).join("project")).map_err(failed)? {
-            if let Some(live) = &live {
-                let Some(project) = ProjectRecord::read(home, &store, &name)? else {
-                    continue;
-                };
-                if !listed(&project, &name, live) {
-                    continue;
-                }
+            let Some(project) = ProjectRecord::read(home, &store, &name)? else {
+                continue;
+            };
+            if !listed(&project, &name, &live) {
+                continue;
             }
             items.push(summary(home, &store, &name, &record, View::List));
         }

@@ -126,7 +126,8 @@ fn one_shot_creators_see_a_removed_path_as_absent_and_recreate_it_visibly() {
     }
     remove(&fixture, "/a");
 
-    // Removing or moving from a hidden path is the absence the tree has.
+    // Removing or moving from a hidden path is the absence the tree has;
+    // edit and a cp source are `Removed` (T5.6, §4.3).
     let refusal = fixture
         .try_call("fs.rm", vec![("branch", text("rm")), ("path", text("/a"))])
         .expect_err("hidden rm");
@@ -152,7 +153,7 @@ fn one_shot_creators_see_a_removed_path_as_absent_and_recreate_it_visibly() {
             ],
         )
         .expect_err("hidden cp source");
-    assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
+    assert_eq!(refusal.code, "Removed", "{refusal:?}");
     let refusal = fixture
         .try_call(
             "fs.edit",
@@ -164,7 +165,7 @@ fn one_shot_creators_see_a_removed_path_as_absent_and_recreate_it_visibly() {
             ],
         )
         .expect_err("hidden edit");
-    assert_eq!(refusal.code, "NoSuchPath", "{refusal:?}");
+    assert_eq!(refusal.code, "Removed", "{refusal:?}");
 
     // Writing, moving or copying to the path, or writing it, is a visible
     // re-creation.

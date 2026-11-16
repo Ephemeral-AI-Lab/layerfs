@@ -252,6 +252,30 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "gc_epoch_share" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/gc_epoch_share.sql"
         )),
+        "gc_kept_roots" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_kept_roots.sql"
+        )),
+        "gc_object_locations" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_object_locations.sql"
+        )),
+        "gc_live_stacks" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_live_stacks.sql"
+        )),
+        "gc_live_branches" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_live_branches.sql"
+        )),
+        "gc_inode_blocks" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/gc_inode_blocks.sql"
+        )),
+        "kept_node_clear" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/kept_node_clear.sql"
+        )),
+        "kept_node_mark" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/kept_node_mark.sql"
+        )),
+        "kept_node_read" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/kept_node_read.sql"
+        )),
         _ => Err(BackendError::Integrity),
     }
 }

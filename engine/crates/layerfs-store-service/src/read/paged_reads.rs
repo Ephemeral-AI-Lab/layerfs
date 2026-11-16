@@ -5,6 +5,7 @@ use super::{
     query::{self, ResultPage, Work},
     search,
     snapshot::{self, Snap},
+    visibility::Visibility,
     walk,
 };
 use crate::{
@@ -129,6 +130,7 @@ pub fn list(
     reader: &StorePorts,
     snap: &Snap,
     path: &str,
+    visibility: &Visibility,
     page: ResultPage,
 ) -> args::Answer {
     let key = key(snap, "list", path, "", page);
@@ -165,6 +167,12 @@ pub fn list(
         .map_err(args::content)?;
         let mut selected = Vec::new();
         for (name, serial) in &batch.entries {
+            if visibility
+                .hidden(&join(path, name))
+                .is_some()
+            {
+                continue;
+            }
             work.step()?;
             if seen < skip {
                 seen += 1;
@@ -225,6 +233,7 @@ pub fn glob(
     snap: &Snap,
     pattern: &str,
     path: &str,
+    visibility: &Visibility,
     page: ResultPage,
 ) -> args::Answer {
     let key = key(snap, "glob", path, pattern, page);
@@ -249,6 +258,9 @@ pub fn glob(
     let (mut work, mut seen, mut items, mut more, mut last) =
         (Work::default(), 0u64, Vec::new(), false, None);
     while let Some((file, _)) = walker.next()? {
+        if visibility.hidden(&file).is_some() {
+            continue;
+        }
         work.step()?;
         if !rule.matches_path(&file) {
             continue;
@@ -290,6 +302,7 @@ pub fn grep(
     snap: &Snap,
     pattern: &str,
     path: &str,
+    visibility: &Visibility,
     page: ResultPage,
 ) -> args::Answer {
     let key = key(snap, "grep", path, pattern, page);
@@ -325,6 +338,9 @@ pub fn grep(
             None => walker.next()?,
         };
         let Some((file, entry)) = next else { break };
+        if visibility.hidden(&file).is_some() {
+            continue;
+        }
         work.step()?;
         if entry.value.kind != InodeKind::RegularFile {
             continue;
