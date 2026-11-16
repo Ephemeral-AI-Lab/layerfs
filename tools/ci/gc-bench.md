@@ -246,10 +246,56 @@ asks for three runs and a range: one of the three runs was 41% above the
 minimum. These numbers are a harness receipt only; qualify a capacity number on
 the declared R730 class with an applied cold method.
 
+## Committed receipts and the two 10 GB runs
+
+Two different generated fixtures carry the 10 GB evidence, and they are not
+interchangeable:
+
+- **Fixture A (9.987 GB pack), the `capacity_measure` test.**
+  `engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure.json`
+  is written by the opt-in `sqlite_compact_capacity.rs#capacity_measure` test.
+  On the superseded whole-Store `VACUUM INTO` build, `rebuild` was 246.371 s
+  median; the fresh-copy build on the same fixture A is 118.438 s median
+  (`none` 88.439 s). The same-fixture comparison is **2.08x**.
+- **Fixture B (9.789 GB live, 10.731 GB pack, 16 projects x 52 Layers), the
+  `gc_bench` example.** `tools/ci/gc_capacity_final.sh medium` ran three times
+  per arm on 2026-11-16 and the receipt is committed as
+  `engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`:
+  `rebuild` median **133.076 s** (runs 132.274-134.601 s, 1.75% relative
+  range; mark 82.050 s, build 23.469 s, verify 6.060 s, install 21.011 s;
+  peak temp 9.836 GB, shrink 1.093 GB) and `none` median 82.683 s. It is a
+  different synthetic Store from fixture A, so 133.076 s is **not** the other
+  side of the 246.371 s -> 118.438 s comparison. An earlier PR body divided
+  246.371 s by 133.076 s and called it 1.85x; that mixed the two fixtures and
+  is withdrawn.
+
+The [validation run](#validation-run-not-a-capacity-claim) table above was an
+earlier harness exercise on the same fixture-B shape but a different host and
+cache state; it is not this committed receipt.
+
+### Section 13 measurement fields
+
+The committed fixture-B receipt declares or records:
+
+- `profile`: `SqlitePersistenceProfile::Disposable` - `journal_mode=wal`,
+  `synchronous=OFF` (the `synchronous_commit` equivalent), `page_size=4096` as
+  the creation profile sets it;
+- bytes written: per-run `processIo.writeBytes` (median 9,839,857,664 B for
+  `rebuild`, 7,086,080 B for `none`) and `wchar`;
+- peak disk: `peakTempBytes` (9,836,421,120 B median) and `sampledTemp`;
+- cache: `warm (drop_caches refused)` - 6 of 6 drops refused;
+- host: declared R730/PERC/rotational class, detected `unknown / ssd-or-unknown`.
+
+Recorded deviations from section 13: the `gc-bench/1` receipt does **not**
+record the SQLite version or WAL bytes, and `page_size`/`synchronous_commit`
+are declared from the creation profile rather than sampled with `PRAGMA` at
+run time. A receipt for a capacity claim must add those four fields; the
+fixture-A `capacity_measure` JSON has the same gap.
+
 ## Not a registered benchmark family
 
 This is a measurement harness for the GC section 13 arms, not a new registered
 `fs-bench-pro` family: it produces the per-host capacity receipt the capacity
 model asks for, including the E3 median/range for the medium arm. The 50 GB arm
-is a single run per arm, as section 13 specifies, and its result stays
+is a single run per arm, as #42 item 44 specifies, and its result stays
 owner-only until the owner records it.

@@ -416,8 +416,12 @@ rotational (HDD) backing — not NVMe** (88 vCPU across two Xeon E5-2699C v4,
   records the realized fixture shape, the cold-cache method and the 3-run
   variance (`tools/ci/gc-bench.md`, `examples/gc_bench/gc_fixture.rs`). These
   numbers are evidence for the earlier shape: the gated 50 GB owner-final arm
-  has **not** been re-run on the current fixture, and the 10 GB arm has not been
-  re-measured with the new shape and cold-cache method.
+  has **not** been re-run on the current fixture. The 10 GB arm **was**
+  re-measured on the current shape on 2026-11-16 (`rebuild` median 133.076 s,
+  `none` 82.683 s, three runs per arm, warm overlayfs cache); its receipt is
+  `engine/crates/layerfs-persistence/tests/fixtures/sqlite_compact_capacity_measure_gc_bench.json`.
+  It is a different generated fixture from the `capacity_measure` 9.987 GB run,
+  so the two 10 GB numbers are not interchangeable.
 
 ## Request
 

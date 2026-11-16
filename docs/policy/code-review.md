@@ -136,8 +136,10 @@ applies.
 R = required, C = required when the condition holds, — = not needed.
 "Report" means the exact command, its timeout and its outcome. List failures
 one by one, and list tests that already fail on the base against the base.
-Nothing runs on PRs into `layerfs_v2_0_0` automatically, so this evidence is
-the author's word plus whatever the reviewer runs again.
+The report-only `store-ext4` Store lane runs on PRs into any base,
+including `layerfs_v2_0_0` ([AGENTS.md](../../AGENTS.md) §4); no other lane
+does, so this evidence is otherwise the author's word plus whatever the
+reviewer runs again.
 
 | Evidence | P0 | P1 | P2 | P3 |
 | --- | --- | --- | --- | --- |
@@ -252,8 +254,8 @@ never a public issue.
 
 Each PR and issue carries one priority, one or more topics and one type. The
 author sets them and the reviewer or triager corrects them. They are set by
-hand until a report-only workflow is approved (nothing else runs on PRs into
-`layerfs_v2_0_0`).
+hand until a report-only workflow is approved (no other workflow runs on PRs
+into `layerfs_v2_0_0`; the `store-ext4` Store lane does).
 
 **Priority: exactly one.** On a PR it is the tier; on an issue it is the
 priority from the severity and urgency table. Search separates the two:
