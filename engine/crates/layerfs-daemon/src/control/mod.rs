@@ -33,6 +33,8 @@ mod operations;
 mod registry;
 #[cfg(windows)]
 mod registry_windows;
+#[cfg(windows)]
+mod operations_windows;
 #[cfg(unix)]
 mod serve;
 #[cfg(target_os = "linux")]
