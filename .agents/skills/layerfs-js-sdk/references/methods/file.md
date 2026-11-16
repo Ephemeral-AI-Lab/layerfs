@@ -9,11 +9,12 @@
 // reads: the Branch's head, or the Commit given
 file.read(project, branch, path, commit?, { start_line, end_line })
 file.stat(project, branch, path, commit?)
-file.list(project, branch, path, commit?, { page_size, page_pos })
-file.glob(project, branch, path, pattern, commit?, { page_size, page_pos })
-file.grep(project, branch, path, pattern, commit?, { page_size, page_pos })
-file.blame(project, branch, path, commit?, { from_line })
-file.diff(project, left_branch, left_path, right_branch, right_path, { left_commit, right_commit })
+file.list(project, branch, path, commit?, { page_size, page, page_pos })
+file.glob(project, branch, path, pattern, commit?, { page_size, page, page_pos })
+file.grep(project, branch, path, pattern, commit?, { page_size, page, page_pos })
+file.revision(project, branch, path, { at_commit, traversal, page, page_size, continuation })
+file.blame(project, branch, path, commit?, { from_line, line_count })
+file.diff(project, left_branch, left_path, right_branch, right_path, { left_commit, right_commit, include_attribution, allow_missing, page, page_size })
 
 // writes: one Commit on the Branch's head each
 file.write(project, branch, path, content, { message, mode })
@@ -165,6 +166,35 @@ over. It searches everything under `path`, `node_modules` included, so keep
  "items":[{"path":"/src/index.js","line":1,"text":"export const retries = 1;\n","line_truncated":false}],
  "skipped":0,"has_more":false,"next_page_pos":null}
 ```
+
+## `file.revision`
+
+Saved changes to one literal path, deletions and metadata-only changes
+included; no rename or copy ancestry is inferred.
+
+```js
+const rev = await layerfs.file.revision(P, "work", "/src/index.js", { page_size: 20 });
+console.log(rev.items.map((c) => `${c.kind} ${c.ref.id.slice(0, 12)}`).join("\n"));
+```
+
+```json
+{"kind":"ok","at":{"id":"12ad2061f04f…","kind":"Commit","branch":"work","root":"f55fa9660a73…"},
+ "path":"/src/index.js","traversal":"provenance",
+ "items":[{"candidate_index":0,"ref":{"id":"12ad2061f04f…","kind":"Commit","branch":"work","root":"f55fa9660a73…"},
+   "compared_to":{"id":"12c7ef811a49…","kind":"Commit","branch":"work","root":"0a12a8d94231…"},
+   "kind":"Modified","changes":{"content":true,"metadata":true,"identity":false,"attribution":null},
+   "message":"add retries","recorded_at":1793574061147,"time_status":"recorded"}],
+ "page":1,"page_size":20,"has_more":false,"end_of_query":true,"continuation":null,
+ "scan":{"complete":true,"candidates_examined":1,"reasons":[]}}
+```
+
+`traversal` is `provenance` (default: a Commit's first parent or base Layer,
+a Layer's source Commit or parent Layer, as blame walks) or `branch` (a side
+Branch's first parents, or `main`'s Layers in publication order). `at_commit`
+pins a full Commit or Layer id; reuse the first answer's `at.id`. A path that
+never existed answers an exhausted empty list. The request admits 10,000
+visited records and 64 MiB of content comparison; past either it answers a
+partial page with `scan.complete: false`, never a silent cap.
 
 ## `file.blame`
 

@@ -7,10 +7,11 @@
 > (`{"items":[]}`, seen live).
 
 ```js
-sandbox.create(project, name, machine?, { image })
+sandbox.create(project, name, machine?, { image, on_progress })
 sandbox.list(project?, { page_size, page_pos })
 sandbox.get(name, { page_size, page_pos })
 sandbox.close(name, { force })
+sandbox.files(sandbox, path?, { depth, cursor, limit, offset, length })
 ```
 
 A Sandbox is named (unique in the home), bound to one project when created, and
@@ -167,6 +168,35 @@ of it runs.
   creating process lives, otherwise the record goes and the name is free
   (`{ closed, was }`, `was` being `gone` or `unresolved`; for an unresolved
   create, `left` says a Sandbox may remain on its machine).
+
+## `sandbox.files`
+
+`sandbox.files(sandbox, path?, { depth, cursor, limit, offset, length })`
+
+Reads what is in a Sandbox: its roots, one page of a folder, or one window of
+a file, in its home and, for a Sandbox with a root of its own, in that root.
+It is a read for a UI that shows a tree: no lock, no lease, no daemon call,
+nothing written, no call-log line, and the MCP server does not list it.
+
+With no `path` it answers the roots that exist, each with a `role`:
+`workspace` (one per mounted Workspace), `home`, `log` and, for a Sandbox with
+its own root, `root` (`/`). `depth` is 1 (default) to 32; `limit` is 1 to
+1000 (default 500); `cursor` is a page's `next`; `offset` and `length` take
+a file window (default 0 and 256 KiB, at most 1 MiB).
+
+A folder answers `{ kind: "folder", entries, next, has_more, reason? }`; an
+entry is `{ path, depth, kind, size, mode, mtime }`, `kind` one of `file`,
+`folder`, `symlink`, `mount`, `restricted` or `other`. A file answers
+`{ kind: "file", size, offset, content, binary, next }`; `binary` is true when
+the window holds a NUL byte, and `content` is then empty.
+
+Errors: `InvalidInput` (an option out of range, a `cursor` with no `path`, a
+path that is not absolute or holds `..`, a symlink or a private entry, a path
+outside the home when the Sandbox has no root of its own); `NotFound`;
+`NoSuchSandbox`; `Unavailable` (the machine is stopped, its worker does not
+answer, or the root is read while its daemon is not running); `Busy` (two
+inspection reads already run on that machine); `Unsupported` (a kernel too old
+for `openat2`, or a non-root reader of the root).
 
 ## Sandbox lifetime
 
