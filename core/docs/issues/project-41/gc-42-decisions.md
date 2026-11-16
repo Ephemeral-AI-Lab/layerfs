@@ -8,23 +8,24 @@
 > table indexes them, and this file is retired.
 
 **Why.** The #41 implementation and the #711 fix-branch integration need a
-different reading than the frozen sentences in eleven places: seven contract
-amendments (A1–A7, mostly refusal detail shapes, one additive sidecar field,
-one `gc_op` column and the snake_case rendering rule) and four SQLite
+different reading than the frozen sentences in twelve places: eight contract
+amendments (A1–A8, mostly refusal detail shapes, one additive sidecar field,
+four `gc_op` columns and the snake_case rendering rule) and four SQLite
 implementation deviations (D1–D4) that the frozen text either forbids or does
 not describe. `gc-spec-gaps.md` (one of the implementation notes moved out of
 the tree; its decisions are folded into these entries where they carry contract
-text) already flagged two of the seven as "#42 correction"; this note is the
+text) already flagged two of the earlier seven as "#42 correction"; this note is the
 complete list, and it changes no product behaviour.
 
-The seven A entries were written directly into the frozen file while #41 was
-implemented and were backed out before review (commit `122a168502`). The four D
+The seven A entries before A8 were written directly into the frozen file
+while #41 was implemented and were backed out before review (commit
+`122a168502`); A8 is added by this note for the same sign-off. The four D
 entries are present in the shipped SQLite code and are recorded here so the
 contract and the implementation do not drift apart.
 
 ---
 
-## A. Contract amendments (7)
+## A. Contract amendments (8)
 
 ### A1. §4.1 `project.delete` sidecar gains `op_id` (additive)
 
@@ -98,6 +99,63 @@ contract and the implementation do not drift apart.
   `kept_waste.dead_in_retained_packs_bytes`), per §10.
 - **Reason:** the single sentence did not say which names are logical and
   which are rendered; examples remove the ambiguity.
+
+---
+
+### A8. §11 report: canonical `logicalDiscarded`, source-Store `backendReusable`, two more zero reasons, and the pre-release `gc_op` columns
+
+- **Frozen:** §11 defines `logicalDiscarded` as "the collected history rows'
+  `logical` bytes (the `store_totals.logical` delta)"; `backendReusable` as
+  "SQLite: rebuild = the new artifact's `freelist_count * page_size` before
+  the rename (normally 0), none = the live Store's; PostgreSQL: 0"; and the
+  zero vocabulary as `empty-store`, `none-path`, `no-history`,
+  `no-waste`, `postgresql-in-place`.
+- **Proposed:**
+  - `logicalDiscarded` is the **canonical bytes of the collected objects**,
+    deduplicated by object id: a tree shared by several collected roots counts
+    once, and a collected object that no history row reaches (an orphan)
+    still counts. SQLite reports `tuple.canonical - built.canonical` after
+    the install; PostgreSQL reports `swapped.dead.canonical`. It is not the
+    `store_totals.logical` delta and not a sum over history rows, which
+    double-counts shared trees and misses an orphan.
+  - `backendReusable` is the **source Store's pre-mark free-page bytes**:
+    `freelist_count * page_size`, sampled before the mark, on a rebuild. That
+    is the space the run judges and reclaims; the freshly vacuumed target is
+    empty by construction and names nothing. The `none` path keeps the live
+    Store's count, and PostgreSQL stays 0 (`postgresql-in-place`).
+  - the §11 zero vocabulary gains two words: `no-free-pages` (a SQLite rebuild
+    reports `backendReusable = 0`, so the source Store had no reusable free
+    pages) and `no-shrink` (a rebuild collected dead bytes but
+    `physicalShrink = 0`, as a resumed `G + 1` run can). Neither is
+    explained as `no-waste`.
+- **Schema (pre-release):** PostgreSQL's `gc_op` also carries
+  `physical_before BIGINT NOT NULL DEFAULT 0`, `peak_temp BIGINT NOT NULL
+  DEFAULT 0` and `kept_waste BYTEA`, written at the swap so a resumed
+  rebuild reports the swap's measured shrink, peak temp and retained waste
+  instead of zero placeholders. 2.0.0 is unreleased, so the columns go into
+  the 2.0 schema creation in place: there is **no additive open-time step**
+  (`add_*`) and no compatibility arm for a 2.0 `gc_op` created before them
+  (the Disposable profile, §2, and item 42). `kept_waste` is a versioned
+  encoding of the §11 `keptWaste`: one version byte (1), three big-endian
+  `u64` byte totals, the capped flag, a big-endian `u32` reference count
+  and the identity bytes.
+- **Reason:** the frozen sentences describe history-row accounting as object
+  accounting (a shared tree is counted twice and an orphan is missed) and
+  name a target artifact that is empty by construction, so the report never
+  names the free space a rebuild reclaimed. The two zero words keep a zero
+  honest where `no-waste` conflated "nothing was collected" with "the size
+  did not change"; the `gc_op` columns are what let a resumed rebuild finish
+  the report from the swap's own measurements.
+- **Implementation:** the #711 report fix (`fix711-report2`, head
+  `129c4b59c7`) carries the code: the canonical `logicalDiscarded` on both
+  backends, the source-Store `backendReusable` sample, the two zero words and
+  the `gc_op` columns.
+- **Where:** `engine/crates/layerfs-persistence/src/report.rs` (the shared
+  `CompactReport`), `.../backend/sqlite/compact/{run,receipt}.rs`,
+  `.../backend/postgresql/compact/{run,report}.rs` and
+  `engine/crates/layerfs-persistence/sql/postgresql/gc.sql`. The wire keys
+  stay snake_case (`logical_discarded`, `backend_reusable`, `zero_reasons`)
+  under A7.
 
 ---
 
@@ -217,7 +275,7 @@ rotational (HDD) backing — not NVMe** (88 vCPU across two Xeon E5-2699C v4,
 
 ## Request
 
-Please record A1–A7 as #42 items (or amend the frozen text) and accept or
+Please record A1–A8 as #42 items (or amend the frozen text) and accept or
 reject D1–D4 individually when the owner signs off. Until then the
-implementation follows the frozen text except where D1–D4 are named, and the
-spec file in this branch is byte-identical to the frozen version.
+implementation follows the frozen text except where A8 and D1–D4 are named,
+and the spec file in this branch is byte-identical to the frozen version.
