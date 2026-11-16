@@ -22,6 +22,11 @@ implemented and were backed out before review (commit `122a168502`). The four D
 entries are present in the shipped SQLite code and are recorded here so the
 contract and the implementation do not drift apart.
 
+G7 records one **deferred design decision** (the install-only lane). It
+continues the retired G1–G6 series, changes no contract text and keeps the
+frozen whole-lane exclusion; its measurements live under
+`tools/bench/installlane/`.
+
 ---
 
 ## A. Contract amendments (7)
@@ -187,6 +192,103 @@ matches the frozen text or records the deviation.
 - **Runbook consequence:** `store.status` shows `cleanup` on SQLite after the
   install point; the runbook's phase list includes it.
 
+## G. Deferred design decision (1)
+
+G1–G6 were the retired implementation-note entries (their contract-carrying
+decisions are folded into A/D above). G7 continues the numbering as a
+**deferred design decision**: it recommends no contract text change and no
+code change, and it records the measurements that settle the question.
+
+### G7. §7/§10: the install-only lane stays deferred (#42)
+
+- **Frozen:** §7 step 1 takes the persistence writer guard before the
+  checkpoint and holds it through step 7's rename; §10 repeats that compaction
+  holds `lane::writer_admission` from the seal through the rename, and install
+  requires the sealed `(size, mtime, db-header change counter)` and the catalog
+  tuple unchanged, otherwise `Conflict` with no writes. §8's Phase M records a
+  catalog tuple and Phase B re-checks it for equality, so PostgreSQL has the
+  same fence.
+- **Proposed and measured (not adopted):** mark on the build's read snapshot,
+  release the lane, let writers commit during the build, and take the lane
+  again only for install. `tools/bench/installlane/` implements the contract
+  that would need: an open high-water mark, an incremental re-mark of roots
+  committed after it, a delta copy of newly-live packs/objects/metadata, a
+  bounded WAL, and a replacement for the sealed-tuple equality fence. It is a
+  store-shaped model (10 GiB / 10,240 packs, 25% dead, content-addressed
+  dedupe references onto skipped packs), not product code; the 50 GB arm was
+  not run. Raw numbers and the method are in
+  `tools/bench/installlane/RESULTS.md`.
+- **Measured (10 GiB model, fresh-copy build):** build 18.96 s for 8.04 GB.
+  With the build snapshot open, 6,348 commits wrote 6.35 GiB (348 MiB/s) and
+  the WAL reached **7.36 GB**. The re-mark scan took 0.88 s; the closure delta
+  was 6,380 packs / 6.69 GB (6,348 new + 32 skipped packs reached by dedupe)
+  and copied in 40.78 s (164 MiB/s). The checkpoint took **38.43 s for
+  7.38 GB (183 MiB/s)**; verify 0.57 s. The install-only fence (checkpoint +
+  delta + verify) is **80.65 s — 4.25× the fastest measured build** and about
+  2.5× the 32.5 s premise. Checkpoint throughput across the small probes was
+  156–183 MiB/s against a 176–420 MiB/s writer rate, and
+  `wal_checkpoint(TRUNCATE)` returned `busy` on every call while writers
+  committed (0/430 and 0/3,105 succeeded); the backlog grew +366 MiB/s.
+  The prototype ran on the sandbox machine filesystem (Python 3.11.2,
+  SQLite 3.40.1); these rates are host-specific and do not replace the R730
+  evidence basis below.
+- **Why deferred, three independent reasons:**
+  1. **No bounded WAL.** The backlog cannot drain while writers commit
+     (checkpoint slower than writers; `TRUNCATE` always `busy`). A cap with no
+     checkpointer is a hard pause: at a 256 MiB cap the writers committed
+     256 MiB and then stalled 17.33 s of a 10 s build. That is the frozen
+     whole-build exclusion again, with a WAL on disk.
+  2. **No bounded delta.** Content-addressed dedupe lets a post-mark commit
+     reference a pre-mark object whose pack the mark skipped. A "new packs
+     only" delta lost 8 reachable objects in a 64 MiB probe; the closure
+     re-mark recovered them but copied the skipped pack too. A post-mark
+     commit re-referencing the whole skipped set produced a delta of **1.00×
+     the dead set with zero new bytes written**. The delta is bounded by what
+     the rebuild exists to free, not by post-mark writes.
+  3. **No shorter outage.** The fence is longer than the build it replaces and
+     still needs a final quiesce: a delta watermark is always behind the newest
+     commit (verifying at w2 missed 1,984 objects; the catch-up after writers
+     stopped verified clean). The frozen tuple fence also always fails once
+     writers continue (mark tuple `(7665, 10241, 81920, 10.74 GB)` vs current
+     `(14013, 16589, 81920, 17.39 GB)`).
+- **Correctness is reachable, but not cheaply:** the closure re-mark verified
+  (112,353/112,353 objects, `missing=0`, `extra=0`), so the mechanism works.
+  What it needs is a new state machine: the open mark, its high-water tuple,
+  the delta watermark and the delta set must be durable and crash-resumable,
+  and writers must be quiesced for the final catch-up + checkpoint + swap.
+- **Exact contract changes it would require** (none made here):
+  1. §7 step 1 / §10: seal, then *release* the writer lane; keep the sealed
+     file uncheckpointable (the `immutable=1` attachment already guarantees
+     it) and admit writers for the build; re-acquire for install.
+  2. §6.1 / §7 / §8 Phase M: record an **open** mark tuple
+     `(catalog_incarnation, live_heads_digest, next_history_serial,
+     next_pack_id, next_ordinal, store_totals canonical/stored/metadata/
+     logical)`; a later publication no longer makes the run `Conflict`.
+  3. §7 steps 4/6/7 and §8 Phase B: replace the tuple-equality fence with an
+     incremental re-mark from the tuple, a delta copy (a pack reached only by
+     a base or a dedupe reference is copied whole), a re-verify over the
+     post-delta frame, then a final quiesce, catch-up delta and swap.
+  4. §9 / §10: add the WAL cap/backpressure contract (what a commit above the
+     cap does, the maximum backlog, the latency/refusal shape) and the final
+     catch-up fence; the SQLite seal check becomes a delta-watermark check.
+  5. §4.1 / §9: persist the open mark tuple, the delta watermark and the delta
+     set in `gc_op`/the sidecar so a crash during the delta is adoptable, and
+     add that crash/recovery row to §9's matrix.
+  6. §8 PostgreSQL: Phase M/B's equality re-check must accept the same delta
+     path (or the entry must say PostgreSQL is out of scope); PG's Phase C
+     already allows commits after the swap, but not during Phase M→B.
+  7. §11: report `remarkSeconds`, `deltaPacks`, `deltaBytes`,
+     `walBytesAtInstall` and `backpressureSeconds`, and make `peakTempBytes`
+     path-dependent (target + WAL/delta temp + visited) instead of the
+     `VACUUM INTO` formula.
+  8. §5 / S5: state the dedupe rule — a post-mark commit may reference a
+     pre-mark object whose pack the mark skipped, so "newly written packs" is
+     not a delta bound; the bound is the dead set.
+- **Decision:** defer install-only for 2.0.0 and keep the frozen whole-lane
+  exclusion. The prototype and its measurements stay under
+  `tools/bench/installlane/`; no product code, schema or spec text changes.
+
+
 ---
 
 ## Evidence basis used by D2 and the runbook
@@ -218,6 +320,7 @@ rotational (HDD) backing — not NVMe** (88 vCPU across two Xeon E5-2699C v4,
 ## Request
 
 Please record A1–A7 as #42 items (or amend the frozen text) and accept or
-reject D1–D4 individually when the owner signs off. Until then the
+reject D1–D4 individually when the owner signs off, and accept G7 as the
+record of a deferred design (it changes no contract text). Until then the
 implementation follows the frozen text except where D1–D4 are named, and the
 spec file in this branch is byte-identical to the frozen version.
