@@ -153,23 +153,24 @@ pub unsafe extern "system" fn write(
     file: *mut c_void,
     buffer: *const c_void,
     offset: u64,
-    length: *mut u32,
-    _write_through: u32,
-    _transacted: *mut c_void,
+    length: u32,
+    _to_end: u32,
+    _constrained: u32,
+    transferred: *mut u32,
+    _file_info: *mut c_void,
 ) -> NTSTATUS {
     let Some(context) = (unsafe { context(fs) }) else {
         return STATUS_NOT_IMPLEMENTED;
     };
     let serial = unsafe { *(file as *const u64) };
-    let want = if length.is_null() { 0 } else { unsafe { *length } };
-    let mut data = vec![0u8; want as usize];
-    if want > 0 {
-        unsafe { std::ptr::copy_nonoverlapping(buffer as *const u8, data.as_mut_ptr(), want as usize) };
+    let mut data = vec![0u8; length as usize];
+    if length > 0 {
+        unsafe { std::ptr::copy_nonoverlapping(buffer as *const u8, data.as_mut_ptr(), length as usize) };
     }
     match crate::write::write(context, serial, serial, offset, data) {
         Ok(end) => {
-            if !length.is_null() {
-                unsafe { *length = (end - offset) as u32 };
+            if !transferred.is_null() {
+                unsafe { *transferred = (end - offset) as u32 };
             }
             STATUS_SUCCESS
         }
@@ -189,6 +190,41 @@ pub unsafe extern "system" fn get_file_info(
     STATUS_SUCCESS
 }
 
+/// Flush: the Workspace owns its durability; nothing held here.
+pub unsafe extern "system" fn flush(
+    _fs: *mut FSP_FILE_SYSTEM,
+    _file: *mut c_void,
+    _file_info: *mut c_void,
+) -> NTSTATUS {
+    STATUS_SUCCESS
+}
+
+/// SetFileSize: truncation and growth by the ports attributes input.
+pub unsafe extern "system" fn set_file_size(
+    fs: *mut FSP_FILE_SYSTEM,
+    file: *mut c_void,
+    new_size: u64,
+    _allocation: u32,
+    _file_info: *mut c_void,
+) -> NTSTATUS {
+    let Some(context) = (unsafe { context(fs) }) else {
+        return STATUS_NOT_IMPLEMENTED;
+    };
+    let serial = unsafe { *(file as *const u64) };
+    match crate::write::truncate(context, serial, new_size) {
+        Ok(()) => STATUS_SUCCESS,
+        Err(_) => STATUS_NOT_IMPLEMENTED,
+    }
+}
+
+/// CanDelete: allowed; the mutation face performs the removal.
+pub unsafe extern "system" fn can_delete(
+    _fs: *mut FSP_FILE_SYSTEM,
+    _file: *mut c_void,
+    _name: *const u16,
+) -> NTSTATUS {
+    STATUS_SUCCESS
+}
 /// Reads a NUL-terminated UTF-16 string.
 unsafe fn wide_to_string(ptr: *const u16) -> String {
     let mut len = 0usize;
