@@ -417,6 +417,18 @@ struct PackFacts {
     dead: Vec<i64>,
 }
 
+/// The Store file's reusable backend bytes: `freelist_count * page_size`.
+fn free_page_bytes(path: &Path) -> u64 {
+    let connection = rusqlite::Connection::open(path).unwrap();
+    let free: i64 = connection
+        .query_row("PRAGMA freelist_count", [], |row| row.get(0))
+        .unwrap();
+    let page: i64 = connection
+        .query_row("PRAGMA page_size", [], |row| row.get(0))
+        .unwrap();
+    u64::try_from(free.saturating_mul(page)).unwrap_or(0)
+}
+
 fn pack_facts(path: &Path, live_packs: &[i64]) -> PackFacts {
     let connection = rusqlite::Connection::open(path).unwrap();
     let mut statement = connection
@@ -1310,12 +1322,18 @@ fn rebuild_case() -> Json {
         facts.total
     );
 
+    let reusable_before = free_page_bytes(&path);
     let receipt = handles.compact(&request(0x72)).unwrap();
     assert_eq!(receipt.path, CompactPath::Rebuild);
     assert_eq!(receipt.generation_before, generation_before);
     assert_eq!(receipt.generation_after, generation_before + 1);
     assert_eq!(receipt.dead_bytes_bound, facts.dead_bytes);
     assert_eq!(receipt.dead_bytes_refined, receipt.dead_bytes_bound);
+    assert_eq!(
+        receipt.backend_reusable, reusable_before,
+        "backendReusable is the source Store's reusable free pages, not the \
+         freshly vacuumed target's empty freelist"
+    );
     assert!(receipt.physical_shrink > 0);
     assert!(receipt.peak_temp_bytes > 0);
     assert!(receipt.estimate);
@@ -1334,12 +1352,17 @@ fn rebuild_case() -> Json {
     let reopened = reopen(&path);
     assert_eq!(generation(&reopened), generation_before + 1);
     let after = totals(&path);
+    // #711: `logicalDiscarded` is the canonical bytes of the collected
+    // objects (shared objects once), not the history rows' `logical` sum; the
+    // history delta for this fixture is only 160 bytes, while over 180 kB of
+    // canonical objects are actually discarded.
     assert_eq!(
         receipt.logical_discarded,
-        before.logical - after.logical,
-        "logicalDiscarded is the history logical delta"
+        before.canonical - after.canonical,
+        "logicalDiscarded is the canonical bytes of the collected objects"
     );
     assert_eq!(before.logical - after.logical, 160); // C4 + stack B genesis + C5 + Lb
+    assert!(receipt.logical_discarded > 160);
     assert_eq!(after.stored, sum_pack_lengths(&path));
     assert_eq!(after.canonical, sum_canonical(&path));
     assert_eq!(after.metadata, sum_metadata_packs(&path));

@@ -120,7 +120,9 @@ pub(crate) fn round(
         schema,
         "swap",
     )?;
-    let logical_discarded = u64::try_from(swapped.dead.logical).unwrap_or(0);
+    // §11: the collected objects' canonical bytes, deduplicated by object id,
+    // not the history rows' `logical` sum (which double counts shared trees).
+    let logical_discarded = u64::try_from(swapped.dead.canonical).unwrap_or(0);
     metrics.begin_phase(CompactPhase::PostgresCleanup);
     cleanup(
         handles,

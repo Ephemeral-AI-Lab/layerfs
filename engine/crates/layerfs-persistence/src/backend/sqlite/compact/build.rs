@@ -11,7 +11,6 @@ use super::types::CompactFailpoint;
 use super::types::CompactRequest;
 use super::types::MarkTuple;
 use super::types::JOURNAL_HEADER_BOUND;
-use super::verify::file_free_bytes;
 use super::verify::open_immutable;
 use crate::backend::records::BackendError;
 use crate::backend::sqlite::lifecycle::seal::SealedFacts;
@@ -110,7 +109,6 @@ pub(crate) struct Built {
     pub(crate) canonical: u64,
     pub(crate) stored: u64,
     pub(crate) metadata: u64,
-    pub(crate) free_bytes: u64,
 }
 
 impl Built {
@@ -469,7 +467,6 @@ metadata=(SELECT COALESCE(SUM(length),0) FROM pack WHERE domain=0) WHERE id=1;",
         }
     }
     let target_bytes = std::fs::metadata(&target).map_err(io_error)?.len();
-    let free_bytes = file_free_bytes(&target)?;
     Ok(Built {
         target,
         target_bytes,
@@ -480,6 +477,5 @@ metadata=(SELECT COALESCE(SUM(length),0) FROM pack WHERE domain=0) WHERE id=1;",
         canonical: u64::try_from(totals.1).unwrap_or(0),
         stored: u64::try_from(totals.2).unwrap_or(0),
         metadata: u64::try_from(totals.3).unwrap_or(0),
-        free_bytes,
     })
 }

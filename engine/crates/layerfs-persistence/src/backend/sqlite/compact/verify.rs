@@ -128,19 +128,6 @@ pub(crate) fn file_tuple(connection: &Connection) -> HistoryResult<MarkTuple> {
         .map_err(db_error)
 }
 
-pub(crate) fn file_page_metrics(connection: &Connection) -> HistoryResult<(u64, u64)> {
-    let free: i64 = connection
-        .query_row("PRAGMA freelist_count", params![], |row| row.get(0))
-        .map_err(db_error)?;
-    let page: i64 = connection
-        .query_row("PRAGMA page_size", params![], |row| row.get(0))
-        .map_err(db_error)?;
-    Ok((
-        u64::try_from(free).map_err(|_| HistoryError::Integrity("freelist count"))?,
-        u64::try_from(page).map_err(|_| HistoryError::Integrity("page size"))?,
-    ))
-}
-
 pub(crate) fn file_heads_digest(connection: &Connection) -> HistoryResult<[u8; 32]> {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"layerfs/live-heads/v1\0");
@@ -289,13 +276,6 @@ pub(crate) fn verify(
     }
     connection.close().map_err(|(_, error)| db_error(error))?;
     Ok(())
-}
-
-pub(crate) fn file_free_bytes(target: &Path) -> HistoryResult<u64> {
-    let measure = open_immutable(target)?;
-    let (free, page) = file_page_metrics(&measure)?;
-    measure.close().map_err(|(_, error)| db_error(error))?;
-    Ok(free.saturating_mul(page))
 }
 
 pub(crate) fn immutable_tuple(path: &Path) -> HistoryResult<MarkTuple> {

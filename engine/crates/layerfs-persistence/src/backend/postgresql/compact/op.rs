@@ -1,5 +1,7 @@
 //! §8 Phase M: the `gc_op` row, the mark tuple, the scratch helpers and the run metrics.
 
+use super::report::decode_kept_waste;
+use super::report::encode_kept_waste;
 use super::types::DeadTotals;
 use super::types::OpRow;
 use super::types::SCRATCH_PREFIX;
@@ -196,7 +198,7 @@ pub(crate) fn read_op(session: &Arc<Session>, schema: &str) -> HistoryResult<Opt
     stage(session, |tx| {
         let rows = tx.query(
             &format!(
-                "SELECT generation,phase,artifact,dead_canonical,dead_stored,dead_metadata,dead_logical,totals_applied,pid,backend_start FROM {schema}.gc_op WHERE id=1"
+                "SELECT generation,phase,artifact,dead_canonical,dead_stored,dead_metadata,dead_logical,totals_applied,pid,backend_start,physical_before,peak_temp,kept_waste,mark_totals FROM {schema}.gc_op WHERE id=1"
             ),
             Vec::new(),
         )?;
@@ -216,8 +218,29 @@ pub(crate) fn read_op(session: &Arc<Session>, schema: &str) -> HistoryResult<Opt
             totals_applied: row.get::<i64>(7)? != 0,
             pid: row.get(8)?,
             backend_start: row.get(9)?,
+            physical_before: u64::try_from(row.get::<i64>(10)?).unwrap_or(0),
+            peak_temp: u64::try_from(row.get::<i64>(11)?).unwrap_or(0),
+            kept_waste: match row.get::<Option<Vec<u8>>>(12)? {
+                Some(bytes) => decode_kept_waste(&bytes)?,
+                None => CompactKeptWaste::default(),
+            },
+            total_stored: match row.get::<Option<Vec<u8>>>(13)? {
+                Some(bytes) => stored_at_mark(&bytes)?,
+                None => 0,
+            },
         }))
     })
+}
+
+/// `store_totals.stored` from the `mark_totals` blob (`int8send` of logical,
+/// canonical, stored and metadata, in that order).
+fn stored_at_mark(blob: &[u8]) -> HistoryResult<i64> {
+    let bytes = blob
+        .get(16..24)
+        .ok_or(HistoryError::Integrity("compaction mark totals"))?;
+    let mut value = [0u8; 8];
+    value.copy_from_slice(bytes);
+    Ok(i64::from_be_bytes(value))
 }
 
 pub(crate) fn set_phase(session: &Arc<Session>, schema: &str, phase: &str) -> HistoryResult<()> {
@@ -339,12 +362,13 @@ pub(crate) fn persist_mark(
             Vec::new(),
         )?;
         let started = now_ms();
+        let kept_waste = encode_kept_waste(&CompactKeptWaste::from_waste(mark.objects().waste()));
         tx.query(
             &format!(
                 "INSERT INTO {schema}.gc_op \
-                 (id,generation,phase,scratch_schema,mark_serial,mark_pack_id,mark_digest,mark_totals,mark_stamp,started_ms,dead_canonical,dead_stored,dead_metadata,dead_logical,totals_applied,artifact,pid,backend_start,usename,incarnation) \
-                 VALUES (1,$1,'mark',$2,$3,$4,$5,int8send($6)||int8send($7)||int8send($8)||int8send($9),$10,$11,0,0,0,$12,FALSE,$2,pg_backend_pid(),(SELECT backend_start::text FROM pg_stat_activity WHERE pid=pg_backend_pid()),(SELECT usename::text FROM pg_stat_activity WHERE pid=pg_backend_pid()),$1) \
-                 ON CONFLICT (id) DO UPDATE SET generation=EXCLUDED.generation,phase=EXCLUDED.phase,scratch_schema=EXCLUDED.scratch_schema,mark_serial=EXCLUDED.mark_serial,mark_pack_id=EXCLUDED.mark_pack_id,mark_digest=EXCLUDED.mark_digest,mark_totals=EXCLUDED.mark_totals,mark_stamp=EXCLUDED.mark_stamp,started_ms=EXCLUDED.started_ms,dead_canonical=0,dead_stored=0,dead_metadata=0,dead_logical=EXCLUDED.dead_logical,totals_applied=FALSE,artifact=EXCLUDED.artifact,pid=EXCLUDED.pid,backend_start=EXCLUDED.backend_start,usename=EXCLUDED.usename,incarnation=EXCLUDED.incarnation"
+                 (id,generation,phase,scratch_schema,mark_serial,mark_pack_id,mark_digest,mark_totals,mark_stamp,started_ms,dead_canonical,dead_stored,dead_metadata,dead_logical,physical_before,peak_temp,kept_waste,totals_applied,artifact,pid,backend_start,usename,incarnation) \
+                 VALUES (1,$1,'mark',$2,$3,$4,$5,int8send($6)||int8send($7)||int8send($8)||int8send($9),$10,$11,0,0,0,$12,0,0,$13,FALSE,$2,pg_backend_pid(),(SELECT backend_start::text FROM pg_stat_activity WHERE pid=pg_backend_pid()),(SELECT usename::text FROM pg_stat_activity WHERE pid=pg_backend_pid()),$1) \
+                 ON CONFLICT (id) DO UPDATE SET generation=EXCLUDED.generation,phase=EXCLUDED.phase,scratch_schema=EXCLUDED.scratch_schema,mark_serial=EXCLUDED.mark_serial,mark_pack_id=EXCLUDED.mark_pack_id,mark_digest=EXCLUDED.mark_digest,mark_totals=EXCLUDED.mark_totals,mark_stamp=EXCLUDED.mark_stamp,started_ms=EXCLUDED.started_ms,dead_canonical=0,dead_stored=0,dead_metadata=0,dead_logical=EXCLUDED.dead_logical,physical_before=0,peak_temp=0,kept_waste=EXCLUDED.kept_waste,totals_applied=FALSE,artifact=EXCLUDED.artifact,pid=EXCLUDED.pid,backend_start=EXCLUDED.backend_start,usename=EXCLUDED.usename,incarnation=EXCLUDED.incarnation"
             ),
             vec![
                 Param::I64(tuple.generation),
@@ -359,6 +383,7 @@ pub(crate) fn persist_mark(
                 Param::I64(tuple.stamp),
                 Param::I64(started),
                 Param::I64(logical),
+                Param::Bytes(kept_waste),
             ],
         )?;
         let _ = request;
@@ -385,6 +410,18 @@ pub(crate) fn live_stored(session: &Arc<Session>, schema: &str) -> HistoryResult
         &format!(
             "SELECT COALESCE(SUM(p.length)::bigint,0) FROM {schema}.pack p \
              WHERE EXISTS (SELECT 1 FROM pg_temp.gc_live_pack v WHERE v.pack_id=p.pack_id)"
+        ),
+        Vec::new(),
+    )
+}
+
+/// The Store's retained-plus-collected history row count. Before Phase C it is
+/// the mark's `history_rows`; the resumed report uses it for its zero reasons.
+pub(crate) fn history_rows(session: &Arc<Session>, schema: &str) -> HistoryResult<i64> {
+    scalar_session(
+        session,
+        &format!(
+            "SELECT (SELECT COUNT(*) FROM {schema}.\"commit\")+(SELECT COUNT(*) FROM {schema}.layer)"
         ),
         Vec::new(),
     )

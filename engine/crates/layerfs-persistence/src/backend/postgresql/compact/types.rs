@@ -25,6 +25,15 @@ pub(crate) struct OpRow {
     pub(crate) totals_applied: bool,
     pub(crate) pid: Option<i64>,
     pub(crate) backend_start: Option<String>,
+    /// `pg_total_relation_size(pack,object_location)` before the swap, so a
+    /// resumed `G + 1` report can still answer `physicalShrink`.
+    pub(crate) physical_before: u64,
+    /// The scratch schema's extent at the end of Phase A, the run's peak temp.
+    pub(crate) peak_temp: u64,
+    /// The mark's kept-waste accounting, for a resumed `G + 1` report.
+    pub(crate) kept_waste: crate::backend::sqlite::compact::CompactKeptWaste,
+    /// `store_totals.stored` at the mark, for the resumed report's zero reasons.
+    pub(crate) total_stored: i64,
 }
 
 /// What Phase A leaves for Phase B.

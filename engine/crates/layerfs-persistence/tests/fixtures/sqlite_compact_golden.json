@@ -350,7 +350,7 @@
       ]
     },
     "receipt": {
-      "backendReusable": 0,
+      "backendReusable": 32768,
       "deadBytesBound": 182635,
       "deadBytesRefined": 182635,
       "estimate": true,
@@ -367,7 +367,7 @@
         },
         "inodeBlocksBytes": 665
       },
-      "logicalDiscarded": 160,
+      "logicalDiscarded": 182465,
       "path": "rebuild",
       "peakTempBytes": 1537112,
       "physicalShrink": 221184,
@@ -376,12 +376,7 @@
         "bytes": 0,
         "reason": null
       },
-      "zeroReasons": [
-        {
-          "field": "backendReusable",
-          "reason": "no-waste"
-        }
-      ]
+      "zeroReasons": []
     },
     "totalsAfter": {
       "canonical": 134988,

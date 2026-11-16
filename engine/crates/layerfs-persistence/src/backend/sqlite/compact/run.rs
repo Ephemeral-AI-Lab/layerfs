@@ -108,6 +108,12 @@ impl SqliteHandles {
                 .map_err(|_| HistoryError::Integrity("Store generation"))?;
             metrics.generation_before = generation;
             settle_leftover(&history, &store, generation, metrics)?;
+            // §11 `backendReusable` is the Store's reusable backend space, not
+            // the freshly `VACUUM`ed target's free list (which is empty by
+            // construction): measure the source Store before the mark, so a
+            // rebuild reports the free pages the run judges and reclaims.
+            let (source_free, source_page) = live_page_metrics(&session)?;
+            let source_reusable = source_free.saturating_mul(source_page);
 
             let op_id = request.op_id;
             // Spec 5.1: the exclusive operation intent is registered before
@@ -404,9 +410,12 @@ impl SqliteHandles {
             stop_at(request, CompactFailpoint::AfterInstall, &op, &store)?;
             guard.release()?;
             let residue = settle(&store, request, &op)?;
-            let logical_discarded = u64::try_from(tuple.logical)
+            // §11 `logicalDiscarded` is the canonical bytes of the objects the
+            // rebuild collects, not the history rows' `logical` sum: a shared
+            // tree counts once and a collected orphan object still counts.
+            let logical_discarded = u64::try_from(tuple.canonical)
                 .unwrap_or(0)
-                .saturating_sub(built.logical);
+                .saturating_sub(built.canonical);
             let physical_shrink = facts.bytes.saturating_sub(built.target_bytes);
             Ok(receipt(
                 CompactPath::Rebuild,
@@ -414,7 +423,7 @@ impl SqliteHandles {
                 generation.saturating_add(1),
                 dead,
                 logical_discarded,
-                built.free_bytes,
+                source_reusable,
                 physical_shrink,
                 kept_waste,
                 built.peak_temp_bytes(),

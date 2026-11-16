@@ -878,6 +878,17 @@ fn sum_pack_lengths(schema: &Schema) -> u64 {
     u64::try_from(schema.scalar("SELECT COALESCE(SUM(length)::bigint,0) FROM {s}.pack")).unwrap()
 }
 
+/// `pg_total_relation_size` of the two payload tables, the sample
+/// `physicalShrink` uses.
+fn payload_relation_bytes(schema: &Schema) -> u64 {
+    u64::try_from(schema.scalar(
+        "SELECT COALESCE(SUM(pg_total_relation_size(c.oid))::bigint,0) FROM pg_class c \
+             JOIN pg_namespace n ON n.oid=c.relnamespace \
+             WHERE n.nspname='{s}' AND c.relname IN ('pack','object_location')",
+    ))
+    .unwrap()
+}
+
 fn sum_canonical(schema: &Schema) -> u64 {
     u64::try_from(
         schema.scalar("SELECT COALESCE(SUM(canonical_length)::bigint,0) FROM {s}.object_location"),
@@ -1396,11 +1407,15 @@ fn the_rebuild_report_and_markers_hold_on_postgresql() {
     let reopened = schema.open();
     assert_eq!(generation(&reopened), generation_before + 1);
     let after = totals(schema);
+    // #711: canonical bytes of the collected objects, deduplicated by object,
+    // not the history-tree `logical` delta (which is only the 160 C4/stack-B/
+    // C5/Lb rows here).
     assert_eq!(
         receipt.logical_discarded,
-        before.logical - after.logical,
-        "logicalDiscarded is the history logical delta"
+        before.canonical - after.canonical,
+        "logicalDiscarded is the canonical bytes of the collected objects"
     );
+    assert!(receipt.logical_discarded > 160);
     assert_eq!(before.logical - after.logical, 160);
     assert_eq!(after.stored, sum_pack_lengths(schema));
     assert_eq!(after.canonical, sum_canonical(schema));
@@ -1516,6 +1531,11 @@ fn a_save_after_the_swap_survives_the_resumed_cleanup() {
     let live = tree(&f, whole_file(&f, b"late live content"), 1);
     let stack = initialize(&f.handles, 1, live);
     let dead = saved_whole_file(&f.handles, b"a pack Phase C collects");
+    // Enough dead packs that the swapped tables are smaller than the source
+    // tables, so the resumed `physicalShrink` is a nonzero carried value.
+    for index in 0..64u8 {
+        let _ = saved_whole_file(&f.handles, &[0x31u8.wrapping_add(index); 96]);
+    }
     let before = generation(&f.handles);
     let error = f
         .handles
@@ -1550,6 +1570,19 @@ fn a_save_after_the_swap_survives_the_resumed_cleanup() {
         "the op records its owner backend"
     );
 
+    // #711: the swap persists the report state the original reply would
+    // have carried; a resumed G+1 call must report it, not zeros.
+    let op_dead_stored = schema.scalar("SELECT dead_stored FROM {s}.gc_op WHERE id=1");
+    let op_dead_canonical = schema.scalar("SELECT dead_canonical FROM {s}.gc_op WHERE id=1");
+    let op_physical_before = schema.scalar("SELECT physical_before FROM {s}.gc_op WHERE id=1");
+    let op_peak_temp = schema.scalar("SELECT peak_temp FROM {s}.gc_op WHERE id=1");
+    assert_eq!(
+        schema.scalar("SELECT CASE WHEN kept_waste IS NULL THEN 0::bigint ELSE 1::bigint END FROM {s}.gc_op WHERE id=1"),
+        1,
+        "the mark's kept waste is persisted for the resumed report"
+    );
+    let physical_after = payload_relation_bytes(schema);
+
     // AC-28: a publication after the swap is not in `gc_dead`.
     let late = saved_whole_file(&f.handles, b"written between swap and cleanup");
     assert!(located(&f.handles, late));
@@ -1558,6 +1591,40 @@ fn a_save_after_the_swap_survives_the_resumed_cleanup() {
     assert_eq!(receipt.path, CompactPath::Rebuild);
     assert_eq!(receipt.generation_before, before);
     assert_eq!(receipt.generation_after, before + 1);
+    assert_eq!(
+        receipt.dead_bytes_bound,
+        u64::try_from(op_dead_stored).unwrap(),
+        "the resumed report carries the op's deadBytesBound"
+    );
+    assert_eq!(receipt.dead_bytes_refined, receipt.dead_bytes_bound);
+    assert_eq!(
+        receipt.logical_discarded,
+        u64::try_from(op_dead_canonical).unwrap(),
+        "the resumed report carries the op's canonical logicalDiscarded"
+    );
+    assert_eq!(
+        receipt.physical_shrink,
+        u64::try_from(op_physical_before - i64::try_from(physical_after).unwrap()).unwrap(),
+        "the resumed report derives the shrink from the pre-swap relation size"
+    );
+    assert!(receipt.physical_shrink > 0);
+    assert_eq!(
+        receipt.peak_temp_bytes,
+        u64::try_from(op_peak_temp).unwrap(),
+        "the resumed report carries the op's peak temp"
+    );
+    assert!(
+        receipt.kept_waste.inode_blocks_bytes > 0,
+        "the resumed report carries the mark's kept waste"
+    );
+    assert!(
+        receipt
+            .zero_reasons
+            .iter()
+            .all(|zero| zero.field != "physicalShrink" && zero.field != "logicalDiscarded"),
+        "a resumed rebuild with collected bytes answers its zeros: {:?}",
+        receipt.zero_reasons
+    );
     assert!(
         located(&f.handles, late),
         "the late write survives the high-water bound"
