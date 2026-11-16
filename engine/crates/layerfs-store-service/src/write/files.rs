@@ -207,6 +207,9 @@ fn change(
     // already whiteouts a hidden path, so its absence there is ambiguous.
     // The base view distinguishes a hidden path (a `Removed` refusal for
     // `edit` and a cp source) from a genuinely absent one (`NoSuchPath`).
+    // `rm` and `mv`-from read only the private overlay, where a hidden path is
+    // already a whiteout, so they report it as absent: `NoSuchPath`, this
+    // method table's wire spelling of §4.3's `NotFound` for those two calls.
     let base = workspace
         .snapshot()
         .map_err(crate::write::mutation::failure)?;
@@ -240,6 +243,7 @@ fn change(
             },
             Change::Mkdir { path, mode } => mutation.mkdir(path, *mode),
             Change::Chmod { path, mode } => mutation.chmod(path, *mode),
+            // `rm` treats a hidden path as absent for the same reason.
             Change::Rm { path } => mutation.remove(path),
             Change::Cp { from, to } => match mutation.copy(from, to, index as u64) {
                 Err(refusal) if refusal.code == "NoSuchPath" => match removed(from)? {
@@ -248,6 +252,9 @@ fn change(
                 },
                 other => other,
             },
+            // A hidden `from` is absent to the overlay, so `mv`-from answers
+            // `NoSuchPath` (see the `NotFound` mapping above); unlike
+            // `edit`/`cp`-from it does not consult the base view.
             Change::Mv { from, to } => mutation.rename(from, to),
         })()
         .map_err(|mut e| {

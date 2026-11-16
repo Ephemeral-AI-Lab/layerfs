@@ -155,8 +155,12 @@ already holds as it is.
 | `tag` | per-call `log_tag`, else `LAYERFS_LOGS_TAG`; at most 128 bytes, no control characters, else dropped |
 
 Values are cut to 200 characters. Content and Json arguments and the Text
-arguments `command`, `message`, `old`, `new`, `password` and `url` are
-logged as `<N bytes>`.
+arguments `command`, `message`, `old`, `new`, `password`, `url` and every
+path argument (`path`, `left_path`, `right_path`, `from_path`, `to_path`,
+`path_prefix`) are logged as `<N bytes>` of the normalized form, one leading
+`/` stripped (`/a` and `a` are both `<1 bytes>`); a glob or grep `pattern`
+counts its own bytes. A refusal contributes only its code: its message and
+`detail` are never logged.
 
 No line is written for a running or killed call, worker requests, a
 call's internal parts, commands outside the call table (`help`,

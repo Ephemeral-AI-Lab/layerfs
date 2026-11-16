@@ -10,15 +10,18 @@ use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectId, Obje
 use layerfs_history::{
     AddLayerOutcome, AddLayerRequest, BranchId, CommitId, CommitMeta, CommitOutcome,
     CommitRequest, CommitVia, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig,
-    LayerStackId, LayerStackRecord, StackInitialization,
+    HistoryError, LayerStackId, LayerStackRecord, StackInitialization,
 };
 use layerfs_persistence::{
-    CompactFailpoint, CompactPath, CompactRequest, PersistenceConfig, SqliteHandles,
+    compact_op_status, CompactFailpoint, CompactPath, CompactReport, CompactReportSource,
+    CompactRequest, PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePackLayout,
     SqlitePersistenceProfile,
 };
 use layerfs_storage::{
+    port::acquisition::{Acquisition, Begin},
     port::PackPersistence, Storage, StoragePolicy,
 };
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use support::Temp;
 
@@ -434,6 +437,117 @@ fn an_installed_but_unsettled_run_is_judged_at_g_plus_one() {
 }
 
 #[test]
+fn the_report_projects_every_section_11_field() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let _ = whole_file(&handles, b"dead");
+    let before = generation(&handles);
+    let receipt = handles.compact(&request(30)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    let report = CompactReport::from(&receipt);
+    assert_eq!(report.path, CompactPath::Rebuild);
+    assert_eq!(report.generation.before, before);
+    assert_eq!(report.generation.after, before + 1);
+    assert_eq!(report.dead_bytes_bound, receipt.dead_bytes_bound);
+    assert_eq!(report.dead_bytes_refined, report.dead_bytes_bound);
+    assert_eq!(report.logical_discarded, receipt.logical_discarded);
+    assert_eq!(report.backend_reusable, receipt.backend_reusable);
+    assert_eq!(report.physical_shrink, receipt.physical_shrink);
+    assert_eq!(report.kept_waste, receipt.kept_waste);
+    assert_eq!(report.peak_temp_bytes, receipt.peak_temp_bytes);
+    assert_eq!(report.residue, receipt.residue);
+    assert!(report.estimate);
+    assert_eq!(report.zero_reasons, receipt.zero_reasons);
+    assert!(
+        report
+            .zero_reasons
+            .iter()
+            .all(|zero| zero.wire_field() != "dead_bytes_bound"),
+        "a rebuild with dead bytes does not explain a zero"
+    );
+    // `From` and the shared source trait project the same report.
+    assert_eq!(report, receipt.compact_report());
+}
+
+#[test]
+fn the_empty_store_report_explains_its_zeros() {
+    let (_temp, handles, path) = create_store();
+    let receipt = handles.compact(&request(31)).unwrap();
+    let report = CompactReport::from(&receipt);
+    assert_eq!(report.path, CompactPath::None);
+    assert_eq!(report.generation.before, report.generation.after);
+    assert_eq!(report.dead_bytes_refined, report.dead_bytes_bound);
+    assert!(report.estimate);
+    assert!(
+        report.zero_reasons.iter().any(|zero| {
+            zero.field == "deadBytesBound"
+                && zero.wire_field() == "dead_bytes_bound"
+                && zero.reason == "empty-store"
+        }),
+        "the empty store names its zero: {:?}",
+        report.zero_reasons
+    );
+    assert!(report.residue.artifacts.is_empty());
+    assert!(compact_op_status(&path).is_none(), "none settles its op");
+}
+
+#[test]
+fn a_leftover_op_reports_its_phase_and_state() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let _ = whole_file(&handles, b"dead");
+    let before = generation(&handles);
+    let error = handles
+        .compact(&CompactRequest {
+            op_id: [21; 16],
+            owner_pid: Some(std::process::id()),
+            failpoint: Some(CompactFailpoint::AfterBuild),
+            ..CompactRequest::default()
+        })
+        .unwrap_err();
+    assert!(
+        matches!(error, layerfs_history::HistoryError::UnknownOutcome),
+        "{error:?}"
+    );
+    let op = compact_op_status(&path).expect("the leftover op record is readable");
+    assert_eq!(op.op_id, [21; 16]);
+    assert_eq!(op.generation, i64::try_from(before).unwrap());
+    assert_eq!(op.phase, "build");
+    assert_eq!(op.owner_pid, Some(std::process::id()));
+    assert!(op.started_ms > 0);
+
+    let busy = op.status(true);
+    assert_eq!(busy.id, "op-15151515151515151515151515151515");
+    assert_eq!(busy.name, "store.compact");
+    assert_eq!(busy.phase, "build");
+    assert_eq!(busy.started, op.started_ms);
+    assert!(busy.uncertain, "an unsettled record is uncertain");
+    assert_eq!(busy.state, "busy");
+    assert_eq!(
+        busy.phases,
+        &["mark", "build", "verify", "install"][..],
+        "the SQLite phase order"
+    );
+
+    let leftover = op.status(false);
+    assert!(leftover.uncertain);
+    assert_eq!(leftover.state, "unresolved");
+    assert_eq!(leftover.phase, "build");
+
+    // The next run settles the recorded leftover: artifact, intent and op go.
+    let reopened = reopen(&path);
+    let receipt = reopened.compact(&request(22)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert!(compact_op_status(&path).is_none(), "the op record is settled");
+    assert!(receipt.residue.artifacts.is_empty());
+    assert_eq!(receipt.residue.bytes, 0);
+    assert!(receipt.residue.reason.is_none());
+    assert!(!compact_path(&path).exists());
+}
+
+#[test]
 fn generation_increases_once_per_installed_rebuild() {
     let (_temp, handles, path) = create_store();
     let first = filesystem_root(&handles, 1);
@@ -452,5 +566,300 @@ fn generation_increases_once_per_installed_rebuild() {
     let final_handles = reopen(&path);
     assert_eq!(generation(&final_handles), start + 2);
     assert!(located(&final_handles, first));
+    clean(&final_handles);
+}
+
+// --- Fences, thresholds, grouped and acquisition layouts (T8.1) ---
+
+thread_local! {
+    /// The Store file the install-fence test renames over the sealed path.
+    static REPLACEMENT: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+}
+
+/// The test-only hook CompactRequest::before_install_hook runs: replace the
+/// Store path with the prepared file after the seal and before the rename.
+fn replace_store(path: &Path) {
+    let replacement = REPLACEMENT
+        .with(|slot| slot.borrow_mut().take())
+        .expect("a prepared replacement");
+    std::fs::rename(&replacement, path).expect("replace the sealed Store");
+}
+
+/// The stored length of every pack, read after the Store is closed.
+fn pack_lengths(path: &Path) -> Vec<u64> {
+    let connection =
+        rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .expect("read-only Store");
+    let mut statement = connection
+        .prepare("SELECT length FROM pack ORDER BY pack_id")
+        .expect("pack rows");
+    let rows = statement
+        .query_map([], |row| row.get::<_, i64>(0))
+        .expect("pack lengths");
+    rows.map(|row| u64::try_from(row.expect("a pack length")).expect("nonnegative"))
+        .collect()
+}
+
+/// Every acquisition working row the rebuild must clear.
+fn acquisition_rows(path: &Path) -> i64 {
+    let connection =
+        rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .expect("read-only Store");
+    ["init_operation", "init_entry", "init_host_file"]
+        .iter()
+        .map(|table| {
+            connection
+                .query_row(&format!("SELECT count(*) FROM {table}"), [], |row| {
+                    row.get::<_, i64>(0)
+                })
+                .expect("acquisition row count")
+        })
+        .sum()
+}
+
+fn create_with(
+    layout: SqlitePackLayout,
+    acquisition: SqliteAcquisitionSchema,
+) -> (Temp, SqliteHandles, PathBuf) {
+    let temp = Temp::new("sqlite-compact-layout");
+    let path = temp.join("store.sqlite");
+    let handles = SqliteHandles::create(
+        PersistenceConfig::sqlite(path.clone())
+            .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+            .with_sqlite_pack_layout(layout)
+            .with_sqlite_acquisition(acquisition),
+        StoragePolicy::frozen_default(),
+        &HistoryCatalogConfig {
+            binding_key: BINDING.to_vec(),
+            cursor_key: [71; 32],
+            incarnation: 7,
+        },
+    )
+    .unwrap();
+    (temp, handles, path)
+}
+
+/// One Store whose live whole-file roots are retained and whose dead
+/// whole-file packs no retained root reaches.
+///
+/// Every object has the same canonical length, so every pack has the same
+/// stored length: the wholly dead byte ratio is dead / (live + dead) exactly.
+fn ratio_store(live: usize, dead: usize) -> (Temp, SqliteHandles, PathBuf) {
+    let (temp, handles, path) = create_store();
+    for index in 0..live {
+        let root = whole_file(&handles, format!("live-{index:06}").as_bytes());
+        initialize(&handles, u8::try_from(index + 1).unwrap(), root);
+    }
+    for index in 0..dead {
+        let _ = whole_file(&handles, format!("dead-{index:06}").as_bytes());
+    }
+    (temp, handles, path)
+}
+
+#[test]
+fn nine_percent_wholly_dead_bytes_take_the_none_path() {
+    let (_temp, handles, path) = ratio_store(91, 9);
+    let before = generation(&handles);
+    let receipt = handles.compact(&request(20)).unwrap();
+    assert_eq!(receipt.path, CompactPath::None);
+    assert_eq!(receipt.generation_after, before);
+    assert!(!compact_path(&path).exists());
+    assert!(!op_path(&path).exists());
+    let lengths = pack_lengths(&path);
+    assert_eq!(lengths.len(), 100, "one pack per object: {lengths:?}");
+    let unit = lengths[0];
+    assert!(lengths.iter().all(|length| *length == unit));
+    assert_eq!(receipt.dead_bytes_bound, 9 * unit);
+    assert!(
+        9 * unit * 10 < 100 * unit,
+        "9% wholly dead bytes are below the threshold"
+    );
+}
+
+#[test]
+fn ten_percent_wholly_dead_bytes_rebuild_at_the_threshold() {
+    let (_temp, handles, path) = ratio_store(90, 10);
+    let before = generation(&handles);
+    let receipt = handles.compact(&request(21)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_before, before);
+    assert_eq!(receipt.generation_after, before + 1);
+    let lengths = pack_lengths(&path);
+    assert_eq!(
+        lengths.len(),
+        90,
+        "ten dead packs are collected: {lengths:?}"
+    );
+    let unit = lengths[0];
+    assert!(lengths.iter().all(|length| *length == unit));
+    assert_eq!(receipt.dead_bytes_bound, 10 * unit);
+    assert!(
+        10 * unit * 10 >= (90 + 10) * unit,
+        "exactly 10% wholly dead bytes take the rebuild path"
+    );
+}
+
+#[test]
+fn thirty_percent_wholly_dead_bytes_rebuild_above_the_threshold() {
+    let (_temp, handles, path) = ratio_store(70, 30);
+    let before = generation(&handles);
+    let receipt = handles.compact(&request(22)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_after, before + 1);
+    let lengths = pack_lengths(&path);
+    assert_eq!(lengths.len(), 70, "thirty dead packs are collected");
+    let unit = lengths[0];
+    assert!(lengths.iter().all(|length| *length == unit));
+    assert_eq!(receipt.dead_bytes_bound, 30 * unit);
+    assert!(30 * unit * 10 > (70 + 30) * unit);
+}
+
+#[test]
+fn a_store_replaced_between_seal_and_install_is_stale() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let _ = whole_file(&handles, b"a pack the rebuild would collect");
+
+    // A second valid Store at the same generation: replacing the path with it
+    // changes the (dev, ino) pair and leaves size, mtime and counter unrelated.
+    let (_replacement_temp, replacement_handles, replacement_path) = create_store();
+    let replacement_generation = generation(&replacement_handles);
+    replacement_handles.seal().unwrap();
+    REPLACEMENT.with(|slot| *slot.borrow_mut() = Some(replacement_path));
+
+    let request = CompactRequest {
+        op_id: [23; 16],
+        before_install_hook: Some(replace_store),
+        ..CompactRequest::default()
+    };
+    let error = handles.compact(&request).unwrap_err();
+    assert!(matches!(error, HistoryError::StaleStore), "{error:?}");
+
+    // No install: every artifact is gone and the replacement is untouched.
+    assert!(!compact_path(&path).exists());
+    assert!(!visited_path(&path).exists());
+    assert!(!op_path(&path).exists());
+    let reopened = reopen(&path);
+    assert_eq!(generation(&reopened), replacement_generation);
+}
+
+#[test]
+fn a_store_replaced_under_an_open_handle_is_stale_at_the_next_transaction() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+
+    let (_replacement_temp, replacement_handles, replacement_path) = create_store();
+    replacement_handles.seal().unwrap();
+    std::fs::rename(&replacement_path, &path).unwrap();
+
+    // The handle still owns the old inode; the fence refuses before anything runs.
+    let error = handles.history.mark().unwrap_err();
+    assert!(matches!(error, HistoryError::StaleStore), "{error:?}");
+}
+
+#[test]
+fn a_capacity_failure_leaves_the_store_unchanged() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let dead = whole_file(&handles, b"a pack the rebuild would collect");
+    let before = generation(&handles);
+    let error = handles
+        .compact(&request_at(24, CompactFailpoint::CapacityAtBuild))
+        .unwrap_err();
+    assert!(matches!(error, HistoryError::Capacity(_)), "{error:?}");
+    assert!(!compact_path(&path).exists());
+    assert!(!visited_path(&path).exists());
+    assert!(!op_path(&path).exists());
+    let reopened = reopen(&path);
+    assert_eq!(generation(&reopened), before, "the old Store is unchanged");
+    assert!(located(&reopened, dead), "nothing was collected");
+    let receipt = reopened.compact(&request(25)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    let final_handles = reopen(&path);
+    assert!(!located(&final_handles, dead));
+    clean(&final_handles);
+}
+
+fn layout_round_trip(layout: SqlitePackLayout) {
+    let (_temp, handles, path) = create_with(layout, SqliteAcquisitionSchema::Absent);
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+
+    // The none path: the stored layout opens and a mark-only run leaves it.
+    let receipt = handles.compact(&request(26)).unwrap();
+    assert_eq!(receipt.path, CompactPath::None);
+    let reopened = reopen(&path);
+    assert_eq!(reopened.profile().pack_layout, layout);
+
+    // A rebuild collects a wholly dead pack and preserves the layout.
+    let dead = whole_file(&reopened, b"a wholly dead pack in a grouped layout");
+    let before = generation(&reopened);
+    let receipt = reopened.compact(&request(27)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_after, before + 1);
+    let final_handles = reopen(&path);
+    assert_eq!(final_handles.profile().pack_layout, layout);
+    assert!(located(&final_handles, live));
+    assert!(!located(&final_handles, dead));
+    clean(&final_handles);
+}
+
+#[test]
+fn group_rows_layout_opens_compacts_and_takes_none() {
+    layout_round_trip(SqlitePackLayout::GroupRows);
+}
+
+#[test]
+fn group_rows_indexed_layout_opens_compacts_and_takes_none() {
+    layout_round_trip(SqlitePackLayout::GroupRowsIndexed);
+}
+
+#[test]
+fn acquisition_layout_opens_compacts_and_clears_working_rows() {
+    let (_temp, handles, path) =
+        create_with(SqlitePackLayout::GroupRows, SqliteAcquisitionSchema::Tables);
+    assert_eq!(
+        handles.profile().acquisition,
+        SqliteAcquisitionSchema::Tables
+    );
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    // A live acquisition operation: the rebuild must clear its working rows.
+    let _owner = handles
+        .acquisition
+        .begin(&Begin {
+            source_device: 1,
+            source_inode: 2,
+            stack: [3; 16],
+            scope: ObjectId::for_bytes(b"acquisition scope"),
+        })
+        .unwrap();
+
+    // The none path leaves the acquisition tables and their working rows.
+    let receipt = handles.compact(&request(28)).unwrap();
+    assert_eq!(receipt.path, CompactPath::None);
+    let reopened = reopen(&path);
+    assert_eq!(
+        reopened.profile().acquisition,
+        SqliteAcquisitionSchema::Tables
+    );
+
+    // A rebuild clears the working rows and keeps the acquisition tables.
+    let dead = whole_file(&reopened, b"a wholly dead pack with acquisition tables");
+    let before = generation(&reopened);
+    let receipt = reopened.compact(&request(29)).unwrap();
+    assert_eq!(receipt.path, CompactPath::Rebuild);
+    assert_eq!(receipt.generation_after, before + 1);
+    let final_handles = reopen(&path);
+    assert_eq!(
+        final_handles.profile().acquisition,
+        SqliteAcquisitionSchema::Tables
+    );
+    assert!(located(&final_handles, live));
+    assert!(!located(&final_handles, dead));
+    assert_eq!(acquisition_rows(&path), 0, "working rows are cleared");
     clean(&final_handles);
 }

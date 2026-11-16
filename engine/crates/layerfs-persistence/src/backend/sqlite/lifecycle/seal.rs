@@ -1,5 +1,6 @@
 //! Sole-owner host seal; never available through the daemon's Store ports.
 use crate::backend::sqlite::lane::writer_admission::Writer;
+use crate::backend::sqlite::lifecycle::identity::FileIdentity;
 use crate::backend::sqlite::session::connection::Session;
 use crate::backend::sqlite::session::query;
 use crate::backend::sqlite::session::rows;
@@ -25,6 +26,8 @@ pub(crate) struct SealedFacts {
     pub(crate) modified: SystemTime,
     /// The database header change counter (big-endian bytes 24..28).
     pub(crate) change_counter: u32,
+    /// The file's §10 `(dev, ino)` while the lane was still held.
+    pub(crate) identity: Option<FileIdentity>,
 }
 
 impl SealedFacts {
@@ -159,6 +162,10 @@ impl Session {
             released
         };
         let change_counter = read_change_counter(&self.path)?;
+        let identity =
+            FileIdentity::capture(&self.path).map_err(|error| PersistenceError::Refused {
+                status: error.to_string(),
+            })?;
         Ok((
             SealedFacts {
                 path: self.path.clone(),
@@ -167,6 +174,7 @@ impl Session {
                 bytes,
                 modified,
                 change_counter,
+                identity,
             },
             writer,
         ))

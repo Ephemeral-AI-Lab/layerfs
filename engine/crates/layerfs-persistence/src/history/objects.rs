@@ -37,6 +37,7 @@ const LOCATIONS: &str = "gc_object_locations";
 const LIVE_STACKS: &str = "gc_live_stacks";
 const LIVE_BRANCHES: &str = "gc_live_branches";
 const INODE_BLOCKS: &str = "gc_inode_blocks";
+const TUPLE: &str = "gc_tuple_read";
 
 /// The bytes a mark keeps that no retained root actually needs (§6.2, §11).
 ///
@@ -151,6 +152,76 @@ impl MarkResult {
     pub fn live_heads_digest(&self) -> [u8; 32] {
         self.live_heads_digest
     }
+}
+
+/// The Store tuple a compaction records as its mark's first statement and
+/// re-checks before the swap (§8 Phase B): the generation, the serial and pack
+/// allocators, the four Store totals, the signature stamp and the history row
+/// count the mark ran at.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct GcTuple {
+    /// The catalog incarnation (the Store generation G).
+    pub generation: i64,
+    /// The next history serial the mark saw.
+    pub next_history_serial: i64,
+    /// store_policy.next_pack_id at the mark.
+    pub next_pack_id: i64,
+    /// store_policy.next_ordinal at the mark.
+    pub next_ordinal: i64,
+    /// store_totals.logical at the mark.
+    pub logical: i64,
+    /// store_totals.canonical at the mark.
+    pub canonical: i64,
+    /// store_totals.stored at the mark.
+    pub stored: i64,
+    /// store_totals.metadata at the mark.
+    pub metadata: i64,
+    /// The highest content_signature stamp at the mark.
+    pub stamp: i64,
+    /// count(commit) + count(layer) at the mark.
+    pub history_rows: i64,
+}
+
+impl HistoryProvider {
+    /// The T7.2 mark with the §8 mark tuple read as its first statement.
+    ///
+    /// The tuple and the closure are one write transaction: a publication that
+    /// lands before the tuple is read is part of the mark, and one that lands
+    /// after it moves at least one tuple field, so Phase B abandons.
+    pub fn mark_gc(&self) -> HistoryResult<(MarkResult, GcTuple)> {
+        self.write(mark_gc)
+    }
+
+    /// The §6.4 live-heads digest of the Store as it is now, without a mark.
+    pub fn live_heads_digest(&self) -> HistoryResult<[u8; 32]> {
+        self.read(live_heads_digest)
+    }
+}
+
+fn mark_gc(tx: &Transaction<'_>) -> HistoryResult<(MarkResult, GcTuple)> {
+    let tuple = gc_tuple(tx)?;
+    let mark = mark(tx)?;
+    Ok((mark, tuple))
+}
+
+fn gc_tuple(tx: &Transaction<'_>) -> HistoryResult<GcTuple> {
+    let rows = tx.query(TUPLE, Vec::<Param>::new())?;
+    if rows.len() != 1 {
+        return Err(HistoryError::Integrity("Store tuple"));
+    }
+    let row = &rows[0];
+    Ok(GcTuple {
+        generation: cell(row, 0)?,
+        next_history_serial: cell(row, 1)?,
+        next_pack_id: cell(row, 2)?,
+        next_ordinal: cell(row, 3)?,
+        logical: cell(row, 4)?,
+        canonical: cell(row, 5)?,
+        stored: cell(row, 6)?,
+        metadata: cell(row, 7)?,
+        stamp: cell(row, 8)?,
+        history_rows: cell(row, 9)?,
+    })
 }
 
 impl HistoryProvider {

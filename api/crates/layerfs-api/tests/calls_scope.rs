@@ -116,6 +116,16 @@ fn a_scope_refuses_every_call_it_does_not_cover() {
         ("store.list", &[]),
         ("project.remove", &[("project", t("shop/api"))]),
         (
+            "branch.remove",
+            &[("project", t("shop/api")), ("branch", t("main"))],
+        ),
+        ("project.delete", &[("project", t("shop/api"))]),
+        (
+            "project.remove_file",
+            &[("project", t("shop/api")), ("path", t("/web/a"))],
+        ),
+        ("store.compact", &[("name", t("shop"))]),
+        (
             "project.init",
             &[("project", t("shop/x")), ("folder", t("/tmp"))],
         ),

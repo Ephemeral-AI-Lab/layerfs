@@ -114,28 +114,63 @@ impl CompactPath {
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CompactFailpoint {
+    /// Before the seal, while the open session, the writer lane and the
+    /// admission intent are still held.
+    BeforeSeal,
+    /// After the seal returns and before the sealed file is read back.
+    BeforeSealRead,
     /// After the seal and the sealed-state comparison, before any artifact.
     AfterSeal,
+    /// Inside the build, before the visited scratch or the copy is written.
+    BeforeCopy,
+    /// Inside the build, after `VACUUM INTO` produced `<store>.compact` and
+    /// before the copy is pruned: the state a crash during the copy leaves.
+    DuringCopy,
     /// After the staged `<store>.compact` is built and compacted.
     AfterBuild,
+    /// The staged Store's `VACUUM INTO` meets a bounded filesystem (ENOSPC).
+    CapacityAtBuild,
     /// After the staged file is switched to WAL and checkpointed.
     AfterWalSwitch,
+    /// Inside the verification, after the schema and row-count checks.
+    DuringVerify,
     /// After the immutable verification passes.
     AfterVerify,
     /// Immediately before the rename would run.
     BeforeInstall,
+    /// After the rename and before the directory fsync (rename/journal).
+    DuringRename,
     /// After the rename and directory fsync.
     AfterInstall,
+    /// Inside the settle, after the artifact set is removed and before the op
+    /// record.
+    DuringSettle,
+    /// PostgreSQL: after Phase M wrote the op and the dead set, before Phase A.
+    PostgresAfterMark,
+    /// PostgreSQL: after Phase A built and verified the scratch tables.
+    PostgresAfterBuild,
+    /// PostgreSQL: after Phase B committed the swap, before Phase C.
+    PostgresAfterSwap,
+    /// PostgreSQL: after Phase C settled the op.
+    PostgresAfterCleanup,
 }
 
 impl CompactFailpoint {
     /// The phase the sidecar records for this stop point.
     const fn phase(self) -> &'static str {
         match self {
-            Self::AfterSeal => "mark",
-            Self::AfterBuild => "build",
-            Self::AfterWalSwitch | Self::AfterVerify | Self::BeforeInstall => "verify",
-            Self::AfterInstall => "install",
+            Self::BeforeSeal | Self::BeforeSealRead | Self::AfterSeal => "mark",
+            Self::BeforeCopy
+            | Self::DuringCopy
+            | Self::AfterBuild
+            | Self::CapacityAtBuild
+            | Self::AfterWalSwitch => "build",
+            Self::DuringVerify | Self::AfterVerify | Self::BeforeInstall => "verify",
+            Self::DuringRename | Self::AfterInstall | Self::DuringSettle => "install",
+            Self::PostgresAfterMark => "mark",
+            Self::PostgresAfterBuild => "build",
+            Self::PostgresAfterSwap => "swap",
+            Self::PostgresAfterCleanup => "cleanup",
         }
     }
 }
@@ -149,8 +184,21 @@ pub struct CompactRequest {
     pub owner_runtime: Option<String>,
     /// Owning boot token, for the op and intent records.
     pub owner_boot: Option<String>,
+    /// The owning process id, so `store.status` can tell a live run from a
+    /// leftover (§11). The kernel start time and boot id, when known, keep a
+    /// reused id from passing as the owner.
+    pub owner_pid: Option<u32>,
+    /// The owner's kernel start time (the lease's second field).
+    pub owner_pid_start: Option<u64>,
+    /// The owner's kernel boot id (the lease's third field).
+    pub owner_pid_boot: Option<u128>,
     /// A test-only stop point; production callers leave it `None`.
     pub failpoint: Option<CompactFailpoint>,
+    /// A test-only hook called after verification and immediately before the
+    /// §10 install fence, so a test can replace the Store under the sealed
+    /// handle. Production callers leave it `None`.
+    #[doc(hidden)]
+    pub before_install_hook: Option<fn(&Path)>,
 }
 
 /// The `keptWaste` §11 part of a compaction report.
@@ -210,6 +258,24 @@ pub struct CompactZeroReason {
     pub reason: &'static str,
 }
 
+impl CompactZeroReason {
+    /// The §10 wire key this reason names: the §11 logical name rendered
+    /// snake_case, the same mapping the report serializer uses.
+    #[must_use]
+    pub fn wire_field(self) -> &'static str {
+        match self.field {
+            "deadBytesBound" => "dead_bytes_bound",
+            "deadBytesRefined" => "dead_bytes_refined",
+            "logicalDiscarded" => "logical_discarded",
+            "backendReusable" => "backend_reusable",
+            "physicalShrink" => "physical_shrink",
+            "keptWaste" => "kept_waste",
+            "peakTempBytes" => "peak_temp_bytes",
+            other => other,
+        }
+    }
+}
+
 /// The §11 report `store.compact` returns.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompactReceipt {
@@ -248,6 +314,9 @@ struct RunOp {
     generation: i64,
     phase: String,
     started_ms: i64,
+    owner_pid: Option<u32>,
+    owner_pid_start: Option<u64>,
+    owner_pid_boot: Option<u128>,
     tuple: MarkTuple,
     live_heads_digest: [u8; 32],
 }
@@ -256,6 +325,7 @@ impl RunOp {
     fn encode(&self) -> String {
         format!(
             "version=1\nop_id={}\ngeneration={}\nphase={}\nstarted_ms={}\n\
+owner_pid={}\nowner_pid_start={}\nowner_pid_boot={}\n\
 catalog_id={}\nnext_history_serial={}\nnext_pack_id={}\nnext_ordinal={}\n\
 mark_serial={}\nmark_pack_id={}\nmark_digest={}\nmark_totals={},{},{},{}\nmark_stamp={}\nhistory_rows={}\n\
 live_heads_digest={}\n",
@@ -263,6 +333,9 @@ live_heads_digest={}\n",
             self.generation,
             self.phase,
             self.started_ms,
+            self.owner_pid.map_or_else(String::new, |pid| pid.to_string()),
+            self.owner_pid_start.map_or_else(String::new, |start| start.to_string()),
+            self.owner_pid_boot.map_or_else(String::new, |boot| format!("{boot:032x}")),
             hex(&self.tuple.catalog_id),
             self.tuple.next_history_serial,
             self.tuple.next_pack_id,
@@ -310,6 +383,18 @@ live_heads_digest={}\n",
         let generation: i64 = values.get("generation")?.parse().ok()?;
         let phase = (*values.get("phase")?).to_owned();
         let started_ms: i64 = values.get("started_ms")?.parse().ok()?;
+        let owner_pid = values
+            .get("owner_pid")
+            .filter(|text| !text.is_empty())
+            .and_then(|text| text.parse().ok());
+        let owner_pid_start = values
+            .get("owner_pid_start")
+            .filter(|text| !text.is_empty())
+            .and_then(|text| text.parse().ok());
+        let owner_pid_boot = values
+            .get("owner_pid_boot")
+            .filter(|text| !text.is_empty())
+            .and_then(|text| u128::from_str_radix(text, 16).ok());
         let catalog_id = unhex_vec(values.get("catalog_id")?)?;
         let tuple = MarkTuple {
             catalog_id,
@@ -330,10 +415,85 @@ live_heads_digest={}\n",
             generation,
             phase,
             started_ms,
+            owner_pid,
+            owner_pid_start,
+            owner_pid_boot,
             tuple,
             live_heads_digest,
         })
     }
+}
+
+/// The operation a Store's `<store>.compact-op` records, as `store.status`
+/// (T10.1) projects it: the operation identity, the generation the run started
+/// at, its phase, its owner and whether its outcome is known. A settled run
+/// removes the record, so [`compact_op_status`] returns `None`.
+#[doc(hidden)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CompactOpStatus {
+    /// The 16-byte operation identity.
+    pub op_id: [u8; 16],
+    /// The generation the run started at.
+    pub generation: i64,
+    /// The recorded phase: `admission`, `mark`, `build`, `verify` or `install`.
+    pub phase: String,
+    /// When the run started, in Unix milliseconds.
+    pub started_ms: i64,
+    /// The owning process id, when the run recorded one.
+    pub owner_pid: Option<u32>,
+    /// The owner's kernel start time, when recorded.
+    pub owner_pid_start: Option<u64>,
+    /// The owner's kernel boot id, when recorded.
+    pub owner_pid_boot: Option<u128>,
+    /// True while the record remains: the run did not settle, so its outcome
+    /// is unknown. `store.status` reports `busy` while the owner lives and
+    /// `unresolved` once it is gone.
+    pub uncertain: bool,
+}
+
+impl CompactOpStatus {
+    /// The `store.status` projection of this operation; `alive` says whether
+    /// the owning process is still running. A live owner is `busy`, a gone one
+    /// left an uncertain `unresolved` outcome. `uncertain` stays the record's
+    /// own fact: it is true for every unsettled run, live or leftover.
+    #[must_use]
+    pub fn status(&self, alive: bool) -> crate::report::CompactStatus {
+        // A read in the admission window still projects a §11 phase: the run
+        // is about to mark, and `admission` is not one of the four.
+        let phase = if self.phase == "admission" {
+            "mark".to_owned()
+        } else {
+            self.phase.clone()
+        };
+        crate::report::CompactStatus {
+            id: format!("op-{}", hex(&self.op_id)),
+            name: "store.compact",
+            phase,
+            started: self.started_ms,
+            uncertain: self.uncertain,
+            state: if alive { "busy" } else { "unresolved" },
+            phases: &crate::report::SQLITE_COMPACT_PHASES,
+        }
+    }
+}
+
+/// Reads the operation `<store>.compact-op` records, or `None` when the Store
+/// has no compaction record. `store.status` (T10.1) uses this to show the
+/// operation, its phase and its uncertain outcome; a settled run removes the
+/// record (§9).
+#[doc(hidden)]
+#[must_use]
+pub fn compact_op_status(store: &Path) -> Option<CompactOpStatus> {
+    RunOp::read(store).map(|op| CompactOpStatus {
+        op_id: op.op_id,
+        generation: op.generation,
+        phase: op.phase,
+        started_ms: op.started_ms,
+        owner_pid: op.owner_pid,
+        owner_pid_start: op.owner_pid_start,
+        owner_pid_boot: op.owner_pid_boot,
+        uncertain: true,
+    })
 }
 
 fn now_ms() -> i64 {
@@ -731,6 +891,9 @@ fn build(
     packs: &BTreeMap<ObjectId, i64>,
     layout: crate::SqlitePackLayout,
     synchronous: i64,
+    capacity: bool,
+    request: &CompactRequest,
+    op: &RunOp,
 ) -> HistoryResult<Built> {
     let store = &facts.path;
     let target = compact_path(store);
@@ -740,7 +903,15 @@ fn build(
             return Err(HistoryError::Exists("staged compaction artifact"));
         }
     }
+    stop_at(request, CompactFailpoint::BeforeCopy, op, store)?;
     let visited_bytes = write_visited(&visited, mark, packs)?;
+    if capacity {
+        // §7 step 3 on a bounded filesystem: `VACUUM INTO` has already created
+        // the staged file when the write meets ENOSPC. The abort path removes
+        // it and the live Store is unchanged.
+        std::fs::write(&target, b"staged").map_err(io_error)?;
+        return Err(io_error(std::io::Error::from_raw_os_error(28)));
+    }
 
     let source = open_immutable(store)?;
     let target_text = target
@@ -752,6 +923,8 @@ fn build(
     source
         .close()
         .map_err(|(_, error)| db_error(error))?;
+    // The copy produced the staged file but has not pruned or verified it.
+    stop_at(request, CompactFailpoint::DuringCopy, op, store)?;
 
     let connection = Connection::open_with_flags(
         &target,
@@ -998,11 +1171,14 @@ metadata=(SELECT COALESCE(SUM(length),0) FROM pack WHERE domain=0) WHERE id=1;",
 /// allocator tuple and the recomputed totals. `quick_check` and the full doctor
 /// stay separate commands.
 fn verify(
+    store: &Path,
     built: &Built,
     mark: &MarkResult,
     tuple: &MarkTuple,
     layout: crate::SqlitePackLayout,
     acquisition: crate::SqliteAcquisitionSchema,
+    request: &CompactRequest,
+    op: &RunOp,
 ) -> HistoryResult<()> {
     let connection = open_immutable(&built.target)?;
     schema::check(
@@ -1029,6 +1205,7 @@ fn verify(
     if count("SELECT count(*) FROM kept_node")? != mark.history().len() as u64 {
         return Err(HistoryError::Integrity("staged Store history count"));
     }
+    stop_at(request, CompactFailpoint::DuringVerify, op, store)?;
     if file_heads_digest(&connection)? != mark.live_heads_digest() {
         return Err(HistoryError::Conflict(
             "staged Store live heads differ from the mark",
@@ -1147,6 +1324,18 @@ fn sidecar_present(path: &Path) -> Option<PathBuf> {
 /// §7 step 7's fence before the rename: no sidecar, the same `G`, the same
 /// catalog identity and the sealed `(size, mtime, change counter)`.
 fn install_fence(facts: &SealedFacts, tuple: &MarkTuple) -> HistoryResult<()> {
+    // §10: the path must still name the sealed file. A replacement is
+    // `StaleStore` before the rename could install over a different Store.
+    if let Some(sealed) = facts.identity {
+        match sealed.names(&facts.path) {
+            Ok(true) => {}
+            Ok(false) => return Err(HistoryError::StaleStore),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Err(HistoryError::StaleStore);
+            }
+            Err(_) => return Err(HistoryError::Integrity("Store identity at install")),
+        }
+    }
     for path in [&facts.path, &compact_path(&facts.path)] {
         if sidecar_present(path).is_some() {
             return Err(HistoryError::Conflict("Store sidecar at install"));
@@ -1192,8 +1381,8 @@ fn sync_directory(store: &Path) -> HistoryResult<()> {
     Ok(())
 }
 
-/// Removes the fixed artifact set and reports what remains, measuring the
-/// bytes before deletion.
+/// Removes the fixed artifact set and reports only what remains, so a
+/// successful settle has a zero residue (§11).
 fn clear_artifacts(store: &Path) -> CompactResidue {
     let mut bytes = 0u64;
     let mut left = Vec::new();
@@ -1201,8 +1390,10 @@ fn clear_artifacts(store: &Path) -> CompactResidue {
         let Ok(metadata) = std::fs::symlink_metadata(&path) else {
             continue;
         };
-        bytes = bytes.saturating_add(metadata.len());
         if std::fs::remove_file(&path).is_err() && std::fs::symlink_metadata(&path).is_ok() {
+            // §11: residue is what the settle left behind. An artifact that
+            // was removed is not residue, so its bytes are not counted.
+            bytes = bytes.saturating_add(metadata.len());
             left.push(
                 path.file_name()
                     .map_or_else(|| path.display().to_string(), |name| {
@@ -1220,25 +1411,28 @@ fn clear_artifacts(store: &Path) -> CompactResidue {
 
 /// Settles one run: the artifact set is removed first, the op record last
 /// (§9: the op is settled only after removal).
-fn settle(store: &Path) -> CompactResidue {
+fn settle(store: &Path, request: &CompactRequest, op: &RunOp) -> HistoryResult<CompactResidue> {
     let mut residue = clear_artifacts(store);
-    let op = op_path(store);
-    if std::fs::symlink_metadata(&op).is_ok() {
-        let bytes = std::fs::metadata(&op).map_or(0, |metadata| metadata.len());
-        if std::fs::remove_file(&op).is_err() && std::fs::symlink_metadata(&op).is_ok() {
+    // §9: the op settles only after the artifact set is gone. A crash here
+    // leaves the installed `G + 1` and the record for the next run.
+    stop_at(request, CompactFailpoint::DuringSettle, op, store)?;
+    let record_path = op_path(store);
+    if std::fs::symlink_metadata(&record_path).is_ok() {
+        let bytes = std::fs::metadata(&record_path).map_or(0, |metadata| metadata.len());
+        if std::fs::remove_file(&record_path).is_err()
+            && std::fs::symlink_metadata(&record_path).is_ok()
+        {
             residue.bytes = residue.bytes.saturating_add(bytes);
-            residue.artifacts.push(
-                op.file_name()
-                    .map_or_else(|| op.display().to_string(), |name| {
-                        name.to_string_lossy().into_owned()
-                    }),
-            );
+            residue.artifacts.push(record_path.file_name().map_or_else(
+                || record_path.display().to_string(),
+                |name| name.to_string_lossy().into_owned(),
+            ));
         }
     }
     if !residue.artifacts.is_empty() && residue.reason.is_none() {
         residue.reason = Some("the artifact set could not be removed".to_owned());
     }
-    residue
+    Ok(residue)
 }
 
 /// Drops every artifact and the op record after a definite failure before the
@@ -1247,6 +1441,16 @@ fn abort_before_install(store: &Path) {
     let residue = clear_artifacts(store);
     if residue.artifacts.is_empty() {
         let _ = std::fs::remove_file(op_path(store));
+    }
+}
+
+/// Releases the admission intent of a definite failure before the seal and
+/// then removes the artifact set and the op record. When the release itself
+/// fails the op record is kept as the next run's recovery breadcrumb (§9):
+/// deleting it would leave a live intent that no later call could settle.
+fn abort_run(history: &crate::HistoryProvider, store: &Path, op_id: &[u8; 16]) {
+    if history.gc_release(op_id).is_ok() {
+        abort_before_install(store);
     }
 }
 
@@ -1493,6 +1697,9 @@ impl SqliteHandles {
                 generation: live.generation,
                 phase: "admission".to_owned(),
                 started_ms: now_ms(),
+                owner_pid: request.owner_pid,
+                owner_pid_start: request.owner_pid_start,
+                owner_pid_boot: request.owner_pid_boot,
                 tuple: live.clone(),
                 live_heads_digest: [0u8; 32],
             };
@@ -1509,26 +1716,40 @@ impl SqliteHandles {
             )
             .with_phase(Some("mark"));
             history.gc_register(&intent)?;
-            let mark = history.mark()?;
-            let tuple = live_tuple(&session)?;
-            op.tuple = tuple.clone();
-            op.live_heads_digest = mark.live_heads_digest();
-            op.phase = "mark".to_owned();
-            op.write(&store)?;
-
-            let lengths = pack_lengths(&session)?;
-            let total = lengths.values().copied().fold(0u64, u64::saturating_add);
-            let mut live_stored = 0u64;
-            for pack in mark.objects().packs() {
-                let length = lengths
-                    .get(pack)
-                    .ok_or(HistoryError::Integrity("mark pack"))?;
-                live_stored = live_stored.saturating_add(*length);
-            }
-            let dead = total.saturating_sub(live_stored);
+            // §8: the registration, the mark and the totals read are one
+            // admitted sequence. A definite failure here releases the intent
+            // before the artifact set and the op record go, so the Store is
+            // left exactly as it was and no later call meets BusyOp.
+            let admitted =
+                (|| -> HistoryResult<(MarkResult, MarkTuple, u64, u64, CompactKeptWaste, u64)> {
+                    let mark = history.mark()?;
+                    let tuple = live_tuple(&session)?;
+                    op.tuple = tuple.clone();
+                    op.live_heads_digest = mark.live_heads_digest();
+                    op.phase = "mark".to_owned();
+                    op.write(&store)?;
+                    let lengths = pack_lengths(&session)?;
+                    let total = lengths.values().copied().fold(0u64, u64::saturating_add);
+                    let mut live_stored = 0u64;
+                    for pack in mark.objects().packs() {
+                        let length = lengths
+                            .get(pack)
+                            .ok_or(HistoryError::Integrity("mark pack"))?;
+                        live_stored = live_stored.saturating_add(*length);
+                    }
+                    let dead = total.saturating_sub(live_stored);
+                    let kept_waste = CompactKeptWaste::from_mark(mark.objects().waste());
+                    let history_rows = u64::try_from(tuple.history_rows).unwrap_or(0);
+                    Ok((mark, tuple, total, dead, kept_waste, history_rows))
+                })();
+            let (mark, tuple, total, dead, kept_waste, history_rows) = match admitted {
+                Ok(admitted) => admitted,
+                Err(error) => {
+                    abort_run(&history, &store, &op_id);
+                    return Err(error);
+                }
+            };
             let rebuild = total > 0 && dead.saturating_mul(10) >= total;
-            let kept_waste = CompactKeptWaste::from_mark(mark.objects().waste());
-            let history_rows = u64::try_from(tuple.history_rows).unwrap_or(0);
 
             if !rebuild {
                 // §3 `none`: mark only. The intent is cleared and the op record
@@ -1553,8 +1774,27 @@ impl SqliteHandles {
                 ));
             }
 
+            // §7 step 2: a stop here leaves the open session, the writer lane,
+            // the admission intent and the op record; the live Store is at `G`.
+            stop_at(request, CompactFailpoint::BeforeSeal, &op, &store)?;
+
             // §7 step 2 onward: seal and rebuild. Only the session remains.
-            let object_packs = object_packs(&session)?;
+            let object_packs = match object_packs(&session) {
+                Ok(packs) => packs,
+                Err(error) => {
+                    abort_run(&history, &store, &op_id);
+                    return Err(error);
+                }
+            };
+            // §8/§9: release the admission intent while the Store is still
+            // reachable. Every failure below runs after the seal, when this
+            // process can no longer run SQL on the Store; without this release
+            // a live intent would refuse every later GC operation. The held
+            // writer lane still excludes writers through the install, and a
+            // crash leaves the op record for the next run to settle.
+            if let Err(error) = history.gc_release(&op_id) {
+                return Err(error);
+            }
             drop(history);
             drop(storage);
             let mut guard = WriterGuard::new(lane.into_writer());
@@ -1565,6 +1805,8 @@ impl SqliteHandles {
                 Err(error) => return Err(seal_error(error)),
             };
             guard.put(writer);
+            // §7 step 1.5: the sealed file is about to be read back.
+            stop_at(request, CompactFailpoint::BeforeSealRead, &op, &store)?;
 
             // §7 step 1.5's fence: the seal must not have moved the generation
             // or the heads the mark recorded.
@@ -1594,6 +1836,9 @@ impl SqliteHandles {
             }
             stop_at(request, CompactFailpoint::AfterSeal, &op, &store)?;
 
+            op.phase = "build".to_owned();
+            op.write(&store)?;
+            let capacity = request.failpoint == Some(CompactFailpoint::CapacityAtBuild);
             let built = match build(
                 &facts,
                 &mark,
@@ -1601,8 +1846,14 @@ impl SqliteHandles {
                 &object_packs,
                 layout,
                 synchronous,
+                capacity,
+                request,
+                &op,
             ) {
                 Ok(built) => built,
+                // A stop point leaves the crash state on purpose: never abort
+                // an artifact set a recorded run names (§9).
+                Err(HistoryError::UnknownOutcome) => return Err(HistoryError::UnknownOutcome),
                 Err(error) => {
                     abort_before_install(&store);
                     return Err(error);
@@ -1611,12 +1862,32 @@ impl SqliteHandles {
             stop_at(request, CompactFailpoint::AfterBuild, &op, &store)?;
             stop_at(request, CompactFailpoint::AfterWalSwitch, &op, &store)?;
 
-            if let Err(error) = verify(&built, &mark, &tuple, layout, acquisition_schema) {
+            op.phase = "verify".to_owned();
+            if let Err(error) = op.write(&store) {
+                abort_before_install(&store);
+                return Err(error);
+            }
+            if let Err(error) = verify(
+                &store,
+                &built,
+                &mark,
+                &tuple,
+                layout,
+                acquisition_schema,
+                request,
+                &op,
+            ) {
+                if matches!(error, HistoryError::UnknownOutcome) {
+                    return Err(error);
+                }
                 abort_before_install(&store);
                 return Err(error);
             }
             stop_at(request, CompactFailpoint::AfterVerify, &op, &store)?;
 
+            if let Some(hook) = request.before_install_hook {
+                hook(&facts.path);
+            }
             if let Err(error) = install_fence(&facts, &tuple) {
                 abort_before_install(&store);
                 return Err(error);
@@ -1634,14 +1905,19 @@ impl SqliteHandles {
                 let _ = op.write(&store);
                 return Err(HistoryError::UnknownOutcome);
             }
+            // §7 step 7: the rename happened; a crash before the directory
+            // fsync leaves an installed-but-uncertain `G + 1`.
+            stop_at(request, CompactFailpoint::DuringRename, &op, &store)?;
             if let Err(_error) = sync_directory(&facts.path) {
                 op.phase = "install".to_owned();
                 let _ = op.write(&store);
                 return Err(HistoryError::UnknownOutcome);
             }
+            op.phase = "install".to_owned();
+            let _ = op.write(&store);
             stop_at(request, CompactFailpoint::AfterInstall, &op, &store)?;
             guard.release()?;
-            let residue = settle(&store);
+            let residue = settle(&store, request, &op)?;
             let logical_discarded = u64::try_from(tuple.logical)
                 .unwrap_or(0)
                 .saturating_sub(built.logical);
@@ -1661,5 +1937,31 @@ impl SqliteHandles {
                 history_rows,
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::io_error;
+    use layerfs_history::HistoryError;
+
+    /// §7 step 3 on a bounded filesystem: `ENOSPC`, `EDQUOT` and `EFBIG` are
+    /// the report's `Capacity` refusal, never a corruption verdict.
+    #[test]
+    fn bounded_filesystem_errors_are_capacity() {
+        for code in [28, 122, 27, 69] {
+            let error = io_error(std::io::Error::from_raw_os_error(code));
+            assert!(
+                matches!(error, HistoryError::Capacity(_)),
+                "errno {code}: {error:?}"
+            );
+        }
+    }
+
+    /// Every other I/O failure keeps the integrity classification.
+    #[test]
+    fn another_io_error_is_integrity() {
+        let error = io_error(std::io::Error::from_raw_os_error(5));
+        assert!(matches!(error, HistoryError::Integrity(_)), "{error:?}");
     }
 }

@@ -113,15 +113,25 @@ the guard refuses direct Store access; it is unrelated to this change.
 
 ## Gaps (for T10/T12)
 
-- The `(dev, ino)` `StaleStore` fence (§10) is not implemented in the SQLite
-  session; install excludes admitted writers by the held lane, not by a
-  per-transaction inode check.
-- `Capacity` mapping is implemented (`SQLITE_FULL`/`TOOBIG`/`NOMEM`, `ENOSPC`,
-  `EDQUOT`, `EFBIG`) but no capacity/failpoint test asserts it.
-- The 9%/10%/30% boundary and the `GroupRows`/`GroupRowsIndexed` and
-  acquisition layouts are implemented (unit tables conditional, acquisition
-  rows cleared, `sqlite_sequence` preserved) but exercised only on the
-  Monolithic layout. The `postgresql` feature is not built here.
+- ~~The `(dev, ino)` `StaleStore` fence (§10) is not implemented in the SQLite
+  session.~~ Implemented in T8.1: `Session` records `(dev, ino)` at open and
+  refuses the next explicit transaction, read-only snapshot or immutable read
+  with `StaleStore`; the install fence compares the same pair with
+  `SealedFacts` before the rename.
+- ~~`Capacity` mapping is implemented but no capacity/failpoint test asserts
+  it.~~ T8.1 adds `CompactFailpoint::CapacityAtBuild` (ENOSPC after the staged
+  file exists) and unit tests for the `ENOSPC`/`EDQUOT`/`EFBIG` mapping.
+- ~~The 9%/10%/30% boundary and the `GroupRows`/`GroupRowsIndexed` and
+  acquisition layouts are exercised only on the Monolithic layout.~~ T8.1
+  exercises 9% (`none`), 10% (rebuild at the boundary) and 30% (rebuild), both
+  grouped layouts on the `none` and rebuild paths, and the acquisition layout
+  on open/`none`/rebuild with its working rows cleared. The `postgresql`
+  feature is not built here.
+- A definite pre-install failure now releases its `gc_intent` while the Store
+  is still open (T8.1): the admission row cannot be cleared after the seal,
+  and a live intent that outlived its op record refused every later GC call
+  `BusyOp`. The op record is kept only when the release itself fails, as the
+  next run's recovery breadcrumb (§9).
 - Peak temp is the new file plus the visited scratch; journal/WAL sizes
   after the checkpoint are zero and are not added.
 - The mark runs before the seal under the same lane (the spec's step 1.5 runs
