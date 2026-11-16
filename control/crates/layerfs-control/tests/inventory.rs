@@ -118,6 +118,21 @@ fn relationships_are_read_from_the_records() {
     assert!(inventory::sandboxes_of_project(&home, "docs/api")
         .unwrap()
         .is_empty());
+    // §5: an open Sandbox of the project refuses `project.delete` with
+    // `Busy`, even with nothing mounted.
+    let refusal = inventory::can_remove_project(&home, "docs/web").unwrap_err();
+    assert_eq!(refusal.code, "Busy");
+    assert_eq!(refusal.message, "Sandbox b of docs/web is running");
+    assert_eq!(
+        refusal.detail.get("related"),
+        Some(&SdkValue::List(vec![SdkValue::map([
+            ("kind", SdkValue::text("sandbox")),
+            ("name", SdkValue::text("b"))
+        ])]))
+    );
+    let refusal = inventory::can_remove_project(&home, "shop/api").unwrap_err();
+    assert_eq!(refusal.code, "Busy");
+    assert!(inventory::can_remove_project(&home, "docs/api").is_ok());
     let _ = std::fs::remove_dir_all(&home);
 }
 

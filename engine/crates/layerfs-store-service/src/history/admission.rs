@@ -26,25 +26,33 @@ pub fn op_id() -> [u8; 16] {
 
 /// A `branch.remove` intent at Branch scope.
 pub fn branch_removal(stack: &LayerStackRecord, branch: &BranchRecord) -> GcIntent {
-    GcIntent::operation(
-        op_id(),
-        GcIntentKind::Removal,
-        GcScopeKind::Branch,
-        branch.id.as_slice(),
+    let op = op_id();
+    owned(
+        GcIntent::operation(
+            op,
+            GcIntentKind::Removal,
+            GcScopeKind::Branch,
+            branch.id.as_slice(),
+        )
+        .in_project(stack.id.as_slice())
+        .named(Some(stack.name.as_str()), Some(branch.name.as_str())),
+        op,
     )
-    .in_project(stack.id.as_slice())
-    .named(Some(stack.name.as_str()), Some(branch.name.as_str()))
 }
 
 /// A `project.delete` or `project.remove_file` intent at project scope.
 pub fn project_removal(stack: &LayerStackRecord) -> GcIntent {
-    GcIntent::operation(
-        op_id(),
-        GcIntentKind::Removal,
-        GcScopeKind::Project,
-        stack.id.as_slice(),
+    let op = op_id();
+    owned(
+        GcIntent::operation(
+            op,
+            GcIntentKind::Removal,
+            GcScopeKind::Project,
+            stack.id.as_slice(),
+        )
+        .named(Some(stack.name.as_str()), None),
+        op,
     )
-    .named(Some(stack.name.as_str()), None)
 }
 
 /// A `project.delete` intent when only the stack id is known.
@@ -57,24 +65,85 @@ pub fn project_removal_from_id(stack: LayerStackId) -> GcIntent {
 /// and marker and reuses the identity there, so one row is taken and released
 /// once, never two competing rows.
 pub fn project_removal_at(stack: LayerStackId, op: [u8; 16]) -> GcIntent {
-    GcIntent::operation(
+    owned(
+        GcIntent::operation(
+            op,
+            GcIntentKind::Removal,
+            GcScopeKind::Project,
+            stack.as_slice(),
+        ),
         op,
-        GcIntentKind::Removal,
-        GcScopeKind::Project,
-        stack.as_slice(),
     )
+}
+
+/// This process's PID-namespace inode, when the platform names one. An
+/// intent's owner can only be judged alive or dead from a process that shares
+/// its namespace: a pid in another namespace (another container or machine)
+/// names something else here, so it is never proved dead.
+fn pid_namespace() -> Option<u64> {
+    #[cfg(target_os = "linux")]
+    {
+        let target = std::fs::read_link("/proc/self/ns/pid").ok()?;
+        let text = target.to_str()?;
+        text.strip_prefix("pid:[")?.strip_suffix(']')?.parse().ok()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+/// The owner evidence every intent records: this process (`pid` and its start
+/// time, plus the PID namespace that makes the id meaningful) and this boot.
+/// A later call in the same namespace can prove the owner gone; a call in
+/// another namespace (another machine or container) never does. The boot
+/// token also carries a unique suffix (Workspace or operation id), because
+/// the schema's `UNIQUE(scope_kind, scope_id, owner_boot)` must still admit
+/// two intents of one scope from one process.
+#[must_use]
+pub fn owner_tokens(suffix: &str) -> (String, String) {
+    let pid = std::process::id();
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        let start = layerfs_bridge::process::stat(pid)
+            .map(|stat| stat.start)
+            .unwrap_or(0);
+        let boot = layerfs_bridge::process::boot().unwrap_or(0);
+        let namespace = match pid_namespace() {
+            Some(namespace) => format!("@ns:{namespace}"),
+            None => String::new(),
+        };
+        (
+            format!("pid:{pid}@{start}{namespace}"),
+            format!("boot:{boot:032x}:{suffix}"),
+        )
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        (format!("pid:{pid}"), format!("boot:unknown:{suffix}"))
+    }
+}
+
+/// The owner tokens of one operation identity, unique within its scope.
+fn owned(mut intent: GcIntent, op: [u8; 16]) -> GcIntent {
+    let (runtime, boot) = owner_tokens(&format!("op:{}", lookup::hex(&op)));
+    intent.owner_runtime = Some(runtime);
+    intent.owner_boot = Some(boot);
+    intent
 }
 
 /// A mount intent at Branch scope, naming its project identity for the
 /// PostgreSQL key derivation. The Workspace is always placed; the Sandbox
 /// and machine are placed only when the caller that mounted knows them
-/// (a daemon mount does; a private Store-call Workspace does not).
+/// (a daemon mount does; a private Store-call Workspace does not). The owner
+/// evidence is always recorded, so a gone mount can be told from a live one.
 pub fn mount_intent(
     workspace: layerfs_history::WorkspaceId,
     snapshot: &layerfs_history::BranchSnapshot,
     place: &layerfs_bridge::control::MountPlace,
 ) -> GcIntent {
     let body: [u8; 32] = workspace.as_slice().try_into().unwrap_or([0u8; 32]);
+    let (runtime, boot) = owner_tokens(&format!("ws:{}", lookup::hex(&body)));
     GcIntent::shared(
         op_id(),
         GcIntentKind::Mount,
@@ -88,6 +157,24 @@ pub fn mount_intent(
         place.sandbox.as_deref(),
         place.machine.as_deref(),
     )
+    .owned(Some(&runtime), Some(&boot))
+}
+
+/// Releases one intent. When the Store refuses the delete, the owner has gone
+/// (a failed unmount or a lost bind): the row is marked uncertain instead of
+/// staying `live`, so a later call reports `Unresolved` and the owning call
+/// can settle it, rather than every GC call meeting `MountsActive` forever.
+pub fn release_or_mark(
+    catalog: &dyn HistoryCatalog,
+    op_id: &[u8; 16],
+) -> Result<(), layerfs_history::HistoryError> {
+    match catalog.gc_release(op_id) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            let _ = catalog.gc_mark_uncertain(op_id);
+            Err(error)
+        }
+    }
 }
 
 /// A short-lived shared intent (Init or merge), released on success or drop.
@@ -108,7 +195,9 @@ impl<'a> SharedIntent<'a> {
     ) -> Result<Self, SdkRefusal> {
         let op = op_id();
         let intent = GcIntent::shared(op, kind, GcScopeKind::Project, stack.id.as_slice())
-            .named(Some(stack.name.as_str()), branch);
+            .named(Some(stack.name.as_str()), branch)
+            .with_phase(Some(kind.as_str()));
+        let intent = owned(intent, op);
         let admitted = match catalog.gc_register(&intent) {
             Ok(()) => true,
             Err(layerfs_history::HistoryError::Unsupported(_)) => false,
@@ -138,7 +227,9 @@ impl<'a> SharedIntent<'a> {
 impl Drop for SharedIntent<'_> {
     fn drop(&mut self) {
         if !self.released && self.admitted {
-            let _ = self.catalog.gc_release(&self.op_id);
+            // A release that is refused leaves the row uncertain, so a later
+            // call reports `Unresolved` instead of a permanent `Busy`.
+            let _ = release_or_mark(self.catalog, &self.op_id);
         }
     }
 }

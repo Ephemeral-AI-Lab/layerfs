@@ -192,6 +192,112 @@ fn conflict(intent: &GcIntent) -> OpConflict {
     )
 }
 
+/// This process's PID-namespace inode, when the platform names one. A pid
+/// is only meaningful inside the namespace that wrote it.
+fn current_namespace() -> Option<u64> {
+    #[cfg(target_os = "linux")]
+    {
+        let target = std::fs::read_link("/proc/self/ns/pid").ok()?;
+        let text = target.to_str()?;
+        text.strip_prefix("pid:[")?.strip_suffix(']')?.parse().ok()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+/// This boot's id, parsed from the kernel's textual form.
+fn current_boot() -> Option<u128> {
+    #[cfg(target_os = "linux")]
+    {
+        let text = std::fs::read_to_string("/proc/sys/kernel/random/boot_id").ok()?;
+        u128::from_str_radix(text.trim().replace('-', "").as_str(), 16).ok()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+/// The state letter and start time `/proc/<pid>/stat` names, when it exists.
+fn process_stat(pid: u32) -> Option<(u8, u64)> {
+    #[cfg(target_os = "linux")]
+    {
+        let text = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+        let rest = text.rsplit_once(')')?.1.trim_start();
+        let mut fields = rest.split_whitespace();
+        let state = fields.next()?.as_bytes().first().copied()?;
+        // The fields after `state` are ppid, pgrp, session, tty_nr, tpgid,
+        // flags, minflt, cminflt, majflt, cmajflt, utime, stime, cutime,
+        // cstime, priority, nice, num_threads, itrealvalue, starttime.
+        let start = fields.nth(18)?.parse().ok()?;
+        Some((state, start))
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = pid;
+        None
+    }
+}
+
+/// The pid, start time and PID namespace an `owner_runtime` token names.
+fn parse_runtime(text: &str) -> Option<(u32, u64, Option<u64>)> {
+    let body = text.strip_prefix("pid:")?;
+    let (facts, namespace) = match body.split_once("@ns:") {
+        Some((facts, namespace)) => (facts, Some(namespace.parse().ok()?)),
+        None => (body, None),
+    };
+    let (pid, start) = facts.split_once('@')?;
+    Some((pid.parse().ok()?, start.parse().ok()?, namespace))
+}
+
+/// The boot id an `owner_boot` token names, before its unique suffix.
+fn parse_boot(text: &str) -> Option<u128> {
+    u128::from_str_radix(text.strip_prefix("boot:")?.split(':').next()?, 16).ok()
+}
+
+/// True only when this process can prove `intent`'s owner is gone: the same
+/// boot and PID namespace, and the recorded process id/start no longer runs.
+/// Another boot, another machine or another container is never proved dead;
+/// it stays live-but-unreachable and is reported as a holder.
+fn owner_dead(intent: &GcIntent) -> bool {
+    let (Some(runtime), Some(boot)) = (
+        intent.owner_runtime.as_deref(),
+        intent.owner_boot.as_deref(),
+    ) else {
+        return false;
+    };
+    let Some((pid, start, namespace)) = parse_runtime(runtime) else {
+        return false;
+    };
+    let Some(namespace) = namespace else {
+        return false;
+    };
+    if current_namespace() != Some(namespace) || current_boot() != parse_boot(boot) {
+        return false;
+    }
+    match process_stat(pid) {
+        Some((state, observed)) => observed != start || matches!(state, b'Z' | b'X' | b'x'),
+        None => true,
+    }
+}
+
+/// Adopts the rows whose owner is provably dead: their operation cannot still
+/// be running, so their intent is deleted and does not hold the scope. The
+/// caller reports the rows that remain.
+fn settle_dead(tx: &Transaction<'_>, found: Vec<GcIntent>) -> HistoryResult<Vec<GcIntent>> {
+    let mut live = Vec::with_capacity(found.len());
+    for intent in found {
+        if owner_dead(&intent) {
+            release_in(tx, &intent.op_id)?;
+        } else {
+            live.push(intent);
+        }
+    }
+    Ok(live)
+}
+
 /// The refusal a non-empty conflict set reports: an uncertain owner is
 /// `Unresolved`, a live mount is `MountsActive`, any other live operation is
 /// `Busy`.
@@ -199,9 +305,11 @@ fn classify(found: &[GcIntent]) -> HistoryError {
     if let Some(dead) = found.iter().find(|intent| intent.uncertain) {
         return HistoryError::Unresolved(Box::new(conflict(dead)));
     }
+    // A mount is a holder; an Init or a merge is another operation and is
+    // `Busy` with its phase, never `MountsActive` (§5).
     let holders: Vec<GcHolder> = found
         .iter()
-        .filter(|intent| intent.kind.shared())
+        .filter(|intent| intent.kind == GcIntentKind::Mount)
         .map(holder)
         .collect();
     if !holders.is_empty() {
@@ -278,7 +386,7 @@ fn validate_mount(tx: &Transaction<'_>, intent: &GcIntent) -> HistoryResult<()> 
 /// One registration in its own write transaction.
 fn register_in(tx: &Transaction<'_>, intent: &GcIntent, _postgres: bool) -> HistoryResult<()> {
     validate_mount(tx, intent)?;
-    let found = conflicts_for(tx, intent)?;
+    let found = settle_dead(tx, conflicts_for(tx, intent)?)?;
     if !found.is_empty() {
         return Err(classify(&found));
     }
@@ -354,6 +462,9 @@ fn advisory_key(catalog: CatalogId, kind: u8, id: &[u8]) -> i64 {
 }
 
 #[cfg(feature = "postgresql")]
+const EMPTY_OP: [u8; 16] = [0u8; 16];
+
+#[cfg(feature = "postgresql")]
 fn xact_lock(tx: &Transaction<'_>, key: i64, shared: bool) -> HistoryResult<()> {
     let found = tx.query(
         if shared {
@@ -373,11 +484,8 @@ fn xact_lock(tx: &Transaction<'_>, key: i64, shared: bool) -> HistoryResult<()> 
     Ok(())
 }
 
-#[cfg(feature = "postgresql")]
-const EMPTY_OP: [u8; 16] = [0u8; 16];
-
-/// The live intents one advisory-key scope names, in the vocabulary the
-/// shared lock failure needs to report a holder.
+/// The intents one advisory-key scope names, in the vocabulary the shared
+/// lock failure needs to report a holder.
 #[cfg(feature = "postgresql")]
 fn scope_intents(tx: &Transaction<'_>, kind: u8, id: &[u8]) -> HistoryResult<Vec<GcIntent>> {
     match kind {
@@ -396,13 +504,14 @@ fn scope_intents(tx: &Transaction<'_>, kind: u8, id: &[u8]) -> HistoryResult<Vec
     }
 }
 
-/// The live session holding one advisory key, as pg_locks and
-/// pg_stat_activity report it: pid, client_addr and backend_start.
+/// The live session holding one advisory key, as `pg_locks`/`pg_stat_activity`
+/// report it: pid, `client_addr` and `backend_start`.
 #[cfg(feature = "postgresql")]
 fn advisory_holder(
     tx: &Transaction<'_>,
     key: i64,
 ) -> HistoryResult<Option<(i64, Option<String>, Option<String>)>> {
+    // PostgreSQL-only text: `statement()` resolves it through the PG set.
     let rows = tx.query("gc_advisory_holder", params![key])?;
     let Some(row) = rows.first() else {
         return Ok(None);
@@ -414,9 +523,9 @@ fn advisory_holder(
     )))
 }
 
-/// The refusal a named transaction lock reports: the live intents at that
-/// scope (a mount is MountsActive, any other operation Busy with
-/// entity/phase/op), or, when no row exists, the backend the server names.
+/// The refusal a named lock reports: the live intents at that scope (a mount
+/// is `MountsActive`, any other operation `Busy` with `{entity,phase,op}`),
+/// or, when no row exists, the backend the server names.
 #[cfg(feature = "postgresql")]
 fn lock_refusal(
     tx: &Transaction<'_>,
@@ -531,13 +640,11 @@ fn keys_for_release(
     })
 }
 
-/// The exclusive Store key a compaction takes before it settles a leftover op,
-/// so two compactions can never settle the same `gc_op` at once. The
+/// The exclusive Store key a compaction takes before it settles a leftover
+/// op, so two compactions can never settle the same `gc_op` at once. The
 /// registration that follows takes its own key level; dropping the claim
-/// leaves that level held for `gc_release`. This also proves the recorded
-/// owner of a leftover is not still inside the op: if it were, it would hold
-/// this key. On SQLite this is a no-op: the lane and the one write transaction
-/// are the exclusion.
+/// leaves that one held for `gc_release`. On SQLite this is a no-op: the lane
+/// and the single write transaction are the exclusion.
 #[cfg(feature = "postgresql")]
 pub(crate) struct StoreClaim<'a> {
     provider: &'a HistoryProvider,
@@ -566,6 +673,8 @@ impl HistoryProvider {
 
 #[cfg(feature = "postgresql")]
 impl StoreClaim<'_> {
+    /// Releases the claim's one key level, leaving the level a registration
+    /// took in the meantime held.
     fn unlock(&mut self) {
         if self.held {
             if let Engine::Postgres(session) = &self.provider.engine {
@@ -656,20 +765,27 @@ pub(crate) fn remove_branch(
                     intent.op_id.to_vec()
                 ],
             )?;
+            let found: Vec<GcIntent> = found
+                .into_iter()
+                .filter(|intent| !owner_dead(intent))
+                .collect();
             if !found.is_empty() {
                 return Err(classify(&found));
             }
             lock_scope(tx, catalog, 3, branch.as_slice(), false)?;
         }
         epoch_share(tx, postgres, record.stack)?;
-        let found = query(
+        let found = settle_dead(
             tx,
-            ALL_BRANCH,
-            params![
-                Some(record.stack.as_slice().to_vec()),
-                branch.as_slice().to_vec(),
-                intent.op_id.to_vec()
-            ],
+            query(
+                tx,
+                ALL_BRANCH,
+                params![
+                    Some(record.stack.as_slice().to_vec()),
+                    branch.as_slice().to_vec(),
+                    intent.op_id.to_vec()
+                ],
+            )?,
         )?;
         if !found.is_empty() {
             return Err(classify(&found));
@@ -716,20 +832,27 @@ pub(crate) fn delete_stack(
                     intent.op_id.to_vec()
                 ],
             )?;
+            let found: Vec<GcIntent> = found
+                .into_iter()
+                .filter(|intent| !owner_dead(intent))
+                .collect();
             if !found.is_empty() {
                 return Err(classify(&found));
             }
             lock_scope(tx, catalog, 2, stack.as_slice(), false)?;
         }
         epoch_share(tx, postgres, stack)?;
-        let found = query(
+        let found = settle_dead(
             tx,
-            ALL_PROJECT,
-            params![
-                stack.as_slice().to_vec(),
-                Some(record.name.as_str().to_owned()),
-                intent.op_id.to_vec()
-            ],
+            query(
+                tx,
+                ALL_PROJECT,
+                params![
+                    stack.as_slice().to_vec(),
+                    Some(record.name.as_str().to_owned()),
+                    intent.op_id.to_vec()
+                ],
+            )?,
         )?;
         if !found.is_empty() {
             return Err(classify(&found));
@@ -765,20 +888,27 @@ pub(crate) fn remove_path(
                     intent.op_id.to_vec()
                 ],
             )?;
+            let found: Vec<GcIntent> = found
+                .into_iter()
+                .filter(|intent| !owner_dead(intent))
+                .collect();
             if !found.is_empty() {
                 return Err(classify(&found));
             }
             lock_scope(tx, catalog, 2, request.stack.as_slice(), false)?;
         }
         epoch_share(tx, postgres, request.stack)?;
-        let found = query(
+        let found = settle_dead(
             tx,
-            ALL_PROJECT,
-            params![
-                request.stack.as_slice().to_vec(),
-                intent.project.clone(),
-                intent.op_id.to_vec()
-            ],
+            query(
+                tx,
+                ALL_PROJECT,
+                params![
+                    request.stack.as_slice().to_vec(),
+                    intent.project.clone(),
+                    intent.op_id.to_vec()
+                ],
+            )?,
         )?;
         if !found.is_empty() {
             return Err(classify(&found));
@@ -900,7 +1030,7 @@ fn session_lock(
 }
 
 /// The refusal a failed session key reports: the intents at its scope, or the
-/// backend the server names; never a holderless MountsActive/Busy when a
+/// backend the server names; never a holderless `MountsActive`/`Busy` when a
 /// holder is available.
 #[cfg(feature = "postgresql")]
 fn session_lock_refusal(
@@ -910,6 +1040,8 @@ fn session_lock_refusal(
     key: i64,
     shared: bool,
 ) -> HistoryResult<HistoryError> {
+    // A read transaction, not `Mode::Statement`: the intent queries are the
+    // search-path ones the write path uses.
     let found = session.run(false, |statements| {
         scope_intents(&Transaction::new(statements), kind, id)
     })?;

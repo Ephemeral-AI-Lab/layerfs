@@ -66,6 +66,7 @@ fn init(stack: layerfs_history::LayerStackId, tag: u8) -> GcIntent {
         stack.as_slice(),
     )
     .named(Some("proj"), None)
+    .with_phase(Some("init"))
     .owned(Some("runtime-a"), Some(&format!("boot-{tag}")))
 }
 
@@ -77,6 +78,7 @@ fn merge(stack: layerfs_history::LayerStackId, tag: u8) -> GcIntent {
         stack.as_slice(),
     )
     .named(Some("proj"), Some("merged"))
+    .with_phase(Some("merge"))
     .owned(Some("runtime-a"), Some(&format!("boot-{tag}")))
 }
 
@@ -426,10 +428,11 @@ fn init_and_merge_are_project_holders() {
         .history
         .gc_delete_stack(project_id, 1_000, &removal(project_id, 6))
         .unwrap_err();
-    let HistoryError::MountsActive(state) = &refusal else {
-        panic!("{refusal:?}");
+    let HistoryError::BusyOp(state) = &refusal else {
+        panic!("an Init is a Busy operation, not a mount: {refusal:?}");
     };
-    assert_eq!(state.holders[0].kind, GcIntentKind::Init);
+    assert_eq!(state.kind, GcIntentKind::Init);
+    assert_eq!(state.phase.as_deref(), Some("init"));
     handles.history.gc_release(&op(5)).unwrap();
 
     handles.history.gc_register(&merge(project_id, 7)).unwrap();
@@ -437,10 +440,11 @@ fn init_and_merge_are_project_holders() {
         .history
         .gc_remove_path(&path_request(project_id), &removal(project_id, 8))
         .unwrap_err();
-    let HistoryError::MountsActive(state) = &refusal else {
-        panic!("{refusal:?}");
+    let HistoryError::BusyOp(state) = &refusal else {
+        panic!("a merge is a Busy operation, not a mount: {refusal:?}");
     };
-    assert_eq!(state.holders[0].kind, GcIntentKind::Merge);
+    assert_eq!(state.kind, GcIntentKind::Merge);
+    assert_eq!(state.phase.as_deref(), Some("merge"));
     handles.history.gc_release(&op(7)).unwrap();
 
     handles

@@ -568,9 +568,10 @@ fn artifact_paths(store: &Path) -> Vec<PathBuf> {
         .iter()
         .map(|suffix| with_suffix(store, suffix))
         .collect();
-    let name = store
-        .file_name()
-        .map_or_else(|| store.as_os_str().to_os_string(), |name| name.to_os_string());
+    let name = store.file_name().map_or_else(
+        || store.as_os_str().to_os_string(),
+        |name| name.to_os_string(),
+    );
     let mut prefix = name;
     prefix.push(".compact-mj");
     let prefix = prefix.to_string_lossy().into_owned();
@@ -856,7 +857,9 @@ CREATE TABLE visited (\
 CREATE TABLE live_pack (pack_id INTEGER PRIMARY KEY) STRICT, WITHOUT ROWID;",
         )
         .map_err(db_error)?;
-    connection.execute_batch("BEGIN IMMEDIATE").map_err(db_error)?;
+    connection
+        .execute_batch("BEGIN IMMEDIATE")
+        .map_err(db_error)?;
     {
         let mut visited = connection
             .prepare("INSERT OR IGNORE INTO visited(object_id,pack_id) VALUES(?1,?2)")
@@ -996,9 +999,7 @@ fn build(
     source
         .execute("VACUUM INTO ?1", params![target_text])
         .map_err(db_error)?;
-    source
-        .close()
-        .map_err(|(_, error)| db_error(error))?;
+    source.close().map_err(|(_, error)| db_error(error))?;
     // The copy produced the staged file but has not pruned or verified it.
     stop_at(request, CompactFailpoint::DuringCopy, op, store)?;
     // The staged copy holds the source's whole extent until the final
@@ -1069,7 +1070,11 @@ PRAGMA defer_foreign_keys=ON;",
     connection
         .execute_batch(&format!(
             "ATTACH DATABASE '{}' AS scratch;",
-            quote(visited.to_str().ok_or(HistoryError::InvalidInput("compaction path"))?)
+            quote(
+                visited
+                    .to_str()
+                    .ok_or(HistoryError::InvalidInput("compaction path"))?
+            )
         ))
         .map_err(db_error)?;
 
@@ -1126,7 +1131,6 @@ DELETE FROM project_epoch WHERE layer_stack_id NOT IN \
 (SELECT layer_stack_id FROM layer_stack);\
 DELETE FROM merge_record;\
 DELETE FROM merge_operation;\
-DELETE FROM gc_intent;\
 DELETE FROM gc_dead;\
 DELETE FROM gc_op;",
         );
@@ -1159,6 +1163,14 @@ metadata=(SELECT COALESCE(SUM(length),0) FROM pack WHERE domain=0) WHERE id=1;",
             tuple.generation + 1
         ));
         connection.execute_batch(&deletes).map_err(db_error)?;
+        // §5.1: the run's own admission row survives into `<store>.compact`;
+        // every other row is already excluded by admission.
+        connection
+            .execute(
+                "DELETE FROM gc_intent WHERE op_id <> ?1",
+                params![op.op_id.as_slice()],
+            )
+            .map_err(db_error)?;
         Ok(())
     })();
     match staged {
@@ -1195,9 +1207,7 @@ metadata=(SELECT COALESCE(SUM(length),0) FROM pack WHERE domain=0) WHERE id=1;",
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .map_err(db_error)?;
-    connection
-        .close()
-        .map_err(|(_, error)| db_error(error))?;
+    connection.close().map_err(|(_, error)| db_error(error))?;
 
     // §7 step 5: switch to WAL, checkpoint, and leave no sidecar.
     let connection = Connection::open_with_flags(
@@ -1225,9 +1235,7 @@ metadata=(SELECT COALESCE(SUM(length),0) FROM pack WHERE domain=0) WHERE id=1;",
     if busy != 0 {
         return Err(HistoryError::Busy);
     }
-    connection
-        .close()
-        .map_err(|(_, error)| db_error(error))?;
+    connection.close().map_err(|(_, error)| db_error(error))?;
     for suffix in ["-wal", "-shm", "-journal"] {
         let mut sidecar = target.as_os_str().to_os_string();
         sidecar.push(suffix);
@@ -1265,11 +1273,7 @@ struct VerifyInput<'a> {
 /// foreign keys, row counts against the mark, both live-heads digests, the
 /// allocator tuple and the recomputed totals. `quick_check` and the full doctor
 /// stay separate commands.
-fn verify(
-    input: VerifyInput<'_>,
-    request: &CompactRequest,
-    op: &RunOp,
-) -> HistoryResult<()> {
+fn verify(input: VerifyInput<'_>, request: &CompactRequest, op: &RunOp) -> HistoryResult<()> {
     let VerifyInput {
         store,
         built,
@@ -1346,10 +1350,7 @@ fn verify(
             },
         )
         .map_err(db_error)?;
-    if totals.0 != totals.1
-        || totals.2 != totals.3
-        || totals.4 != totals.5
-        || totals.6 != totals.7
+    if totals.0 != totals.1 || totals.2 != totals.3 || totals.4 != totals.5 || totals.6 != totals.7
     {
         return Err(HistoryError::Integrity("staged Store totals"));
     }
@@ -1364,18 +1365,14 @@ fn verify(
     {
         return Err(HistoryError::Integrity("staged Store build totals"));
     }
-    connection
-        .close()
-        .map_err(|(_, error)| db_error(error))?;
+    connection.close().map_err(|(_, error)| db_error(error))?;
     Ok(())
 }
 
 fn file_free_bytes(target: &Path) -> HistoryResult<u64> {
     let measure = open_immutable(target)?;
     let (free, page) = file_page_metrics(&measure)?;
-    measure
-        .close()
-        .map_err(|(_, error)| db_error(error))?;
+    measure.close().map_err(|(_, error)| db_error(error))?;
     Ok(free.saturating_mul(page))
 }
 
@@ -1401,9 +1398,10 @@ fn sidecar_present(path: &Path) -> Option<PathBuf> {
             return Some(sidecar);
         }
     }
-    let name = path
-        .file_name()
-        .map_or_else(|| path.as_os_str().to_os_string(), |name| name.to_os_string());
+    let name = path.file_name().map_or_else(
+        || path.as_os_str().to_os_string(),
+        |name| name.to_os_string(),
+    );
     let mut prefix = name;
     prefix.push("-mj");
     let prefix = prefix.to_string_lossy().into_owned();
@@ -1441,9 +1439,7 @@ fn install_fence(facts: &SealedFacts, tuple: &MarkTuple) -> HistoryResult<()> {
     }
     let connection = open_immutable(&facts.path)?;
     let current = file_tuple(&connection)?;
-    connection
-        .close()
-        .map_err(|(_, error)| db_error(error))?;
+    connection.close().map_err(|(_, error)| db_error(error))?;
     if &current != tuple {
         return Err(HistoryError::Conflict("the sealed Store changed"));
     }
@@ -1460,7 +1456,8 @@ fn prepare_target(target: &Path) -> HistoryResult<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(target, std::fs::Permissions::from_mode(0o600)).map_err(io_error)?;
+        std::fs::set_permissions(target, std::fs::Permissions::from_mode(0o600))
+            .map_err(io_error)?;
     }
     let file = std::fs::OpenOptions::new()
         .read(true)
@@ -1492,12 +1489,10 @@ fn clear_artifacts(store: &Path) -> CompactResidue {
             // §11: residue is what the settle left behind. An artifact that
             // was removed is not residue, so its bytes are not counted.
             bytes = bytes.saturating_add(metadata.len());
-            left.push(
-                path.file_name()
-                    .map_or_else(|| path.display().to_string(), |name| {
-                        name.to_string_lossy().into_owned()
-                    }),
-            );
+            left.push(path.file_name().map_or_else(
+                || path.display().to_string(),
+                |name| name.to_string_lossy().into_owned(),
+            ));
         }
     }
     CompactResidue {
@@ -1534,12 +1529,40 @@ fn settle(store: &Path, request: &CompactRequest, op: &RunOp) -> HistoryResult<C
 }
 
 /// Drops every artifact and the op record after a definite failure before the
-/// rename; the live Store is unchanged apart from the seal's checkpoint.
-fn abort_before_install(store: &Path) {
+/// rename; the live Store is unchanged apart from the seal's checkpoint. The
+/// admission intent kept in the live file is released first: a definite
+/// failure must not leave a live row a later removal meets as a holder.
+fn abort_before_install(store: &Path, op_id: &[u8; 16]) {
+    // The live file still carries the row. A refused release keeps the op
+    // record as the next run's recovery breadcrumb: removing it would leave
+    // a live intent that no later call could settle.
+    let released = release_intent_at(store, op_id).is_ok();
     let residue = clear_artifacts(store);
-    if residue.artifacts.is_empty() {
+    if released && residue.artifacts.is_empty() {
         let _ = std::fs::remove_file(op_path(store));
     }
+}
+
+/// Deletes one intent from the Store file at `store` (the sealed `G` file or
+/// the installed `G + 1`), without reopening a Store session or its lane.
+fn release_intent_at(store: &Path, op_id: &[u8; 16]) -> HistoryResult<()> {
+    let connection = Connection::open_with_flags(
+        store,
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(db_error)?;
+    connection
+        .busy_timeout(std::time::Duration::ZERO)
+        .map_err(db_error)?;
+    let released = connection
+        .execute(
+            "DELETE FROM gc_intent WHERE op_id = ?1",
+            params![op_id.as_slice()],
+        )
+        .map_err(db_error);
+    let _ = connection.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)");
+    let _ = connection.close();
+    released.map(|_| ())
 }
 
 /// Releases the admission intent of a definite failure before the seal and
@@ -1548,7 +1571,7 @@ fn abort_before_install(store: &Path) {
 /// deleting it would leave a live intent that no later call could settle.
 fn abort_run(history: &crate::HistoryProvider, store: &Path, op_id: &[u8; 16]) {
     if history.gc_release(op_id).is_ok() {
-        abort_before_install(store);
+        abort_before_install(store, op_id);
     }
 }
 
@@ -1583,6 +1606,47 @@ fn settle_leftover(
     }
     metrics.leftover_settled = true;
     Ok(())
+}
+
+/// True while the Store holds an Init or merge working row. Admission
+/// already refuses a live Init/merge intent; this catches the leftover rows
+/// of an operation whose intent was lost, which a rebuild must not wipe
+/// without refusing (§5).
+fn unfinished_work(store: &Path) -> HistoryResult<bool> {
+    if std::fs::symlink_metadata(store).is_err() {
+        return Ok(false);
+    }
+    let connection = Connection::open_with_flags(
+        store,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(db_error)?;
+    connection
+        .busy_timeout(std::time::Duration::ZERO)
+        .map_err(db_error)?;
+    let _ = connection.execute_batch("PRAGMA query_only=ON");
+    let mut found = false;
+    for table in [
+        "merge_operation",
+        "merge_record",
+        "init_operation",
+        "init_entry",
+        "init_host_file",
+    ] {
+        if table_present(&connection, table)? {
+            let count: i64 = connection
+                .query_row(&format!("SELECT count(*) FROM {table}"), params![], |row| {
+                    row.get(0)
+                })
+                .map_err(db_error)?;
+            if count > 0 {
+                found = true;
+                break;
+            }
+        }
+    }
+    let _ = connection.close();
+    Ok(found)
 }
 
 /// A writer held across the seal, install and settle, released on every exit.
@@ -1663,18 +1727,14 @@ fn stop_at(
 fn immutable_tuple(path: &Path) -> HistoryResult<MarkTuple> {
     let connection = open_immutable(path)?;
     let tuple = file_tuple(&connection)?;
-    connection
-        .close()
-        .map_err(|(_, error)| db_error(error))?;
+    connection.close().map_err(|(_, error)| db_error(error))?;
     Ok(tuple)
 }
 
 fn immutable_digest(path: &Path) -> HistoryResult<[u8; 32]> {
     let connection = open_immutable(path)?;
     let digest = file_heads_digest(&connection)?;
-    connection
-        .close()
-        .map_err(|(_, error)| db_error(error))?;
+    connection.close().map_err(|(_, error)| db_error(error))?;
     Ok(digest)
 }
 
@@ -1818,12 +1878,17 @@ impl SqliteHandles {
             let acquisition_schema = session.acquisition;
             let synchronous = profile.synchronous;
 
+            // §5: an unfinished Init or merge holds the Store; its working
+            // rows are not wiped by a compaction that was never admitted.
+            if unfinished_work(&store)? {
+                return Err(HistoryError::Busy);
+            }
+
             // §7 step 1: the exclusive lane first, so the generation this run
             // records cannot move between the mark, the seal and the rename.
             let lane = session.hold_lane().map_err(HistoryError::from)?;
-            // §7 step 1: the sealed source's WAL is emptied before the closure.
-            // The lane is already held, so no writer can append meanwhile.
-            session.checkpoint_holding().map_err(HistoryError::from)?;
+            // §7 step 1's sealed source's WAL is emptied after admission, so
+            // the intent's own write is checkpointed with it.
             let live = live_tuple(&session)?;
             let generation = u64::try_from(live.generation)
                 .map_err(|_| HistoryError::Integrity("Store generation"))?;
@@ -1831,18 +1896,10 @@ impl SqliteHandles {
             settle_leftover(&history, &store, generation, metrics)?;
 
             let op_id = request.op_id;
-            let mut op = RunOp {
-                op_id,
-                generation: live.generation,
-                phase: "admission".to_owned(),
-                started_ms: now_ms(),
-                owner_pid: request.owner_pid,
-                owner_pid_start: request.owner_pid_start,
-                owner_pid_boot: request.owner_pid_boot,
-                tuple: live.clone(),
-                live_heads_digest: [0u8; 32],
-            };
-            op.write(&store)?;
+            // Spec 5.1: the exclusive operation intent is registered before
+            // the first checkpoint, so a removal sees an admitted compaction
+            // even while the WAL is being emptied, and the whole run is one
+            // admitted sequence.
             let intent = GcIntent::operation(
                 op_id,
                 GcIntentKind::Compaction,
@@ -1854,11 +1911,28 @@ impl SqliteHandles {
                 request.owner_boot.as_deref(),
             )
             .with_phase(Some("mark"));
-            if let Err(error) = history.gc_register(&intent) {
-                // A definite admission refusal started nothing: the run's op
-                // record must not outlive it as a false leftover (§9).
-                let _ = std::fs::remove_file(op_path(&store));
+            history.gc_register(&intent)?;
+            let mut op = RunOp {
+                op_id,
+                generation: live.generation,
+                phase: "admission".to_owned(),
+                started_ms: now_ms(),
+                owner_pid: request.owner_pid,
+                owner_pid_start: request.owner_pid_start,
+                owner_pid_boot: request.owner_pid_boot,
+                tuple: live.clone(),
+                live_heads_digest: [0u8; 32],
+            };
+            if let Err(error) = op.write(&store) {
+                let _ = history.gc_release(&op_id);
                 return Err(error);
+            }
+            // §7 step 1: with the lane held, no writer can append while the
+            // intent, the op record and the WAL are settled together.
+            if let Err(error) = session.checkpoint_holding() {
+                let _ = history.gc_release(&op_id);
+                let _ = std::fs::remove_file(op_path(&store));
+                return Err(HistoryError::from(error));
             }
             // §8: the registration, the mark and the totals read are one
             // admitted sequence. A definite failure here releases the intent
@@ -1932,13 +2006,10 @@ impl SqliteHandles {
                     return Err(error);
                 }
             };
-            // §8/§9: release the admission intent while the Store is still
-            // reachable. Every failure below runs after the seal, when this
-            // process can no longer run SQL on the Store; without this release
-            // a live intent would refuse every later GC operation. The held
-            // writer lane still excludes writers through the install, and a
-            // crash leaves the op record for the next run to settle.
-            history.gc_release(&op_id)?;
+            // §5.1: the intent stays in the Store through build and verify;
+            // the staged copy carries it, so the installed `G + 1` keeps it
+            // until `settle` clears it. A definite failure after the seal
+            // releases it from whichever live file is there.
             drop(history);
             drop(storage);
             let mut guard = WriterGuard::new(lane.into_writer());
@@ -1957,24 +2028,24 @@ impl SqliteHandles {
             let sealed_tuple = match immutable_tuple(&facts.path) {
                 Ok(tuple) => tuple,
                 Err(error) => {
-                    abort_before_install(&store);
+                    abort_before_install(&store, &op_id);
                     return Err(error);
                 }
             };
             if sealed_tuple != tuple {
-                abort_before_install(&store);
+                abort_before_install(&store, &op_id);
                 return Err(HistoryError::Conflict("the Store changed after the mark"));
             }
             match immutable_digest(&facts.path) {
                 Ok(digest) if digest == mark.live_heads_digest() => {}
                 Ok(_) => {
-                    abort_before_install(&store);
+                    abort_before_install(&store, &op_id);
                     return Err(HistoryError::Conflict(
                         "the Store heads changed after the mark",
                     ));
                 }
                 Err(error) => {
-                    abort_before_install(&store);
+                    abort_before_install(&store, &op_id);
                     return Err(error);
                 }
             }
@@ -2002,7 +2073,7 @@ impl SqliteHandles {
                 // an artifact set a recorded run names (§9).
                 Err(HistoryError::UnknownOutcome) => return Err(HistoryError::UnknownOutcome),
                 Err(error) => {
-                    abort_before_install(&store);
+                    abort_before_install(&store, &op_id);
                     return Err(error);
                 }
             };
@@ -2013,7 +2084,7 @@ impl SqliteHandles {
             metrics.begin_phase(CompactPhase::Verify);
             op.phase = "verify".to_owned();
             if let Err(error) = op.write(&store) {
-                abort_before_install(&store);
+                abort_before_install(&store, &op_id);
                 return Err(error);
             }
             if let Err(error) = verify(
@@ -2031,7 +2102,7 @@ impl SqliteHandles {
                 if matches!(error, HistoryError::UnknownOutcome) {
                     return Err(error);
                 }
-                abort_before_install(&store);
+                abort_before_install(&store, &op_id);
                 return Err(error);
             }
             stop_at(request, CompactFailpoint::AfterVerify, &op, &store)?;
@@ -2042,11 +2113,18 @@ impl SqliteHandles {
                 hook(&facts.path);
             }
             if let Err(error) = install_fence(&facts, &tuple) {
-                abort_before_install(&store);
+                abort_before_install(&store, &op_id);
+                return Err(error);
+            }
+            // §5.1: the staged copy kept the intent through build and verify;
+            // it is cleared at settle, before the rename makes it live. The
+            // private staged file cannot race another Store opener.
+            if let Err(error) = release_intent_at(&built.target, &op_id) {
+                abort_before_install(&store, &op_id);
                 return Err(error);
             }
             if let Err(error) = prepare_target(&built.target) {
-                abort_before_install(&store);
+                abort_before_install(&store, &op_id);
                 return Err(error);
             }
             stop_at(request, CompactFailpoint::BeforeInstall, &op, &store)?;
@@ -2144,8 +2222,7 @@ impl RunMetrics {
     /// without changing the error the caller receives.
     fn finish(mut self, result: &HistoryResult<CompactReceipt>) {
         self.end_phase();
-        let total_nanos =
-            u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        let total_nanos = u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
         let (outcome, refusal) = match result {
             Ok(receipt) => {
                 self.generation_after = receipt.generation_after;
@@ -2195,7 +2272,7 @@ impl RunMetrics {
 
 #[cfg(test)]
 mod tests {
-    use super::{journal_bound_bytes, io_error, Built};
+    use super::{io_error, journal_bound_bytes, Built};
     use layerfs_history::HistoryError;
 
     /// §7 step 3 on a bounded filesystem: `ENOSPC`, `EDQUOT` and `EFBIG` are

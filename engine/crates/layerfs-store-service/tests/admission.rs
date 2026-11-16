@@ -9,12 +9,72 @@ mod support;
 
 use layerfs_bridge::control::SdkValue;
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
-use layerfs_store_service::history::{deletion, lookup, removal};
+use layerfs_history::WorkspaceId;
+use layerfs_store_service::history::{admission, deletion, lookup, removal};
 use std::fs;
 use support::Fixture;
 
 fn text(value: &str) -> SdkValue {
     SdkValue::text(value)
+}
+
+/// Finding 5: a mount intent records who owns it (pid/start, boot, machine,
+/// Sandbox and Workspace), so a gone owner can be marked uncertain and a
+/// removal reports `Unresolved` instead of `MountsActive` forever. Releasing
+/// the row is the owning call's settlement.
+#[test]
+fn a_mount_intent_records_owner_evidence_and_settles_unresolved() {
+    let fixture = Fixture::new("admission-evidence", |source| {
+        fs::write(source.join("a.txt"), b"a\n").unwrap();
+        1
+    });
+    fixture.fork("work");
+    let stack = lookup::project(&fixture.service.store, "installed").expect("project");
+    let branch = lookup::branch(&fixture.service.store, &stack, "work").expect("branch");
+    let history = fixture.service.store.history();
+    let snapshot = history
+        .branch_snapshot(branch.id)
+        .expect("snapshot")
+        .expect("the Branch");
+    let workspace = WorkspaceId::from_authority([7; 32]).expect("workspace");
+    let place = layerfs_bridge::control::MountPlace::new(Some("sandbox-7"), Some("machine-7"));
+    let intent = admission::mount_intent(workspace, &snapshot, &place);
+    let runtime = intent.owner_runtime.clone().expect("runtime evidence");
+    let boot = intent.owner_boot.clone().expect("boot evidence");
+    assert!(runtime.starts_with("pid:"), "{runtime}");
+    assert!(boot.starts_with("boot:"), "{boot}");
+    assert!(
+        boot.contains(&lookup::hex(&[7; 32])),
+        "the token names its Workspace: {boot}"
+    );
+    assert_eq!(intent.machine.as_deref(), Some("machine-7"));
+    assert_eq!(intent.sandbox.as_deref(), Some("sandbox-7"));
+
+    history.gc_register(&intent).expect("admit the mount");
+    let stored = history
+        .gc_intents(GcScopeKind::Branch, branch.id.as_slice())
+        .expect("intents");
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].owner_runtime.as_deref(), Some(runtime.as_str()));
+    assert_eq!(stored[0].owner_boot.as_deref(), Some(boot.as_str()));
+
+    // The production caller's effect when a release is refused: the row is
+    // uncertain, so admission reports `Unresolved`.
+    history
+        .gc_mark_uncertain(&intent.op_id)
+        .expect("mark uncertain");
+    let refused = removal::remove(&fixture.service.store, &stack, "work")
+        .expect_err("an uncertain owner holds");
+    assert_eq!(refused.code, "Unresolved", "{refused:?}");
+    assert_eq!(
+        refused.detail.get_text("op"),
+        Some(lookup::hex(&intent.op_id).as_str())
+    );
+
+    // The owning call settles the row by releasing it.
+    history.gc_release(&intent.op_id).expect("settle");
+    removal::remove(&fixture.service.store, &stack, "work").expect("removal after settlement");
+    fixture.cleanup();
 }
 
 #[test]

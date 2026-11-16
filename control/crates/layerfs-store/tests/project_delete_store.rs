@@ -15,6 +15,7 @@ use layerfs_store::project::delete::{delete, Intent};
 use layerfs_store::record::StoreRecord;
 use layerfs_store::service::with_service;
 use layerfs_store::sqlite::create::create;
+use layerfs_store::Related;
 use layerfs_store_service::history::lookup;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -92,13 +93,22 @@ fn shop(tag: &str) -> Option<(PathBuf, OpenArgs, LayerStackId)> {
     Some((home, open, stack))
 }
 
-/// `project.delete shop/app` through the control-layer home path.
+fn unused(_: &std::path::Path, _: &str) -> Result<(), layerfs_bridge::control::SdkRefusal> {
+    Ok(())
+}
+
+/// `project.delete shop/app` through the control-layer home path; the
+/// Sandbox check is a no-op here (that check has its own inventory test).
 fn remove(home: &std::path::Path) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
     let mut sink = |_| {};
     delete(
         home,
         &mut Events::new(&mut sink),
         &ProjectRef::parse("shop/app").unwrap(),
+        Related {
+            store_idle: unused,
+            can_remove_project: unused,
+        },
     )
 }
 

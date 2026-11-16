@@ -868,7 +868,7 @@ fn standby_check(
         .collect::<HistoryResult<Vec<_>>>()?;
     if !standby_satisfied(rank, names, &replicas) {
         // The quorum is missing, not the Store: name the waiting operation
-        // instead of a holderless Busy.
+        // instead of a holderless `Busy`.
         return Err(HistoryError::BusyOp(Box::new(OpConflict::new(
             GcIntentKind::Compaction,
             GcScopeKind::Store,
@@ -1167,7 +1167,8 @@ fn swap(
         Ok(swapped) => swapped,
         Err(HistoryError::Busy) => {
             // §8 step 5: roll back first, then drop the scratch schema in a
-            // new transaction, and report Busy with the holder detail.
+            // new transaction, and report Busy with the holder detail (the
+            // backend holding the base table's ACCESS EXCLUSIVE lock).
             let _ = drop_scratch(session, &scratch);
             return Err(swap_busy(session, schema, op_id)?);
         }
@@ -1186,9 +1187,9 @@ fn swap(
     })
 }
 
-/// The Busy a contended swap reports: the compaction identity with the
-/// backend holding one of the base tables, read from pg_locks and
-/// pg_stat_activity.
+/// The `Busy` a contended swap reports: the compaction identity with the
+/// backend holding one of the two base tables, read from
+/// `pg_locks`/`pg_stat_activity`.
 fn swap_busy(
     session: &Arc<Session>,
     schema: &str,
@@ -1543,6 +1544,11 @@ fn cleanup(
              DELETE FROM {schema}.init_entry;\
              DELETE FROM {schema}.init_host_file;"
         ))?;
+        // §11: `cleanup` is written even when the totals were already
+        // applied by the run being resumed.
+        tx.batch(&format!(
+            "UPDATE {schema}.gc_op SET phase='cleanup' WHERE id=1"
+        ))?;
         if !totals_applied {
             tx.query(
                 &format!(
@@ -1557,9 +1563,7 @@ fn cleanup(
                 ],
             )?;
             tx.query(
-                &format!(
-                    "UPDATE {schema}.gc_op SET totals_applied=TRUE,phase='cleanup' WHERE id=1"
-                ),
+                &format!("UPDATE {schema}.gc_op SET totals_applied=TRUE WHERE id=1"),
                 Vec::new(),
             )?;
         }
@@ -1669,6 +1673,13 @@ fn round(
         schema,
         "mark",
     )?;
+    // §11: the op row names the live phase while the run is in it.
+    stage(session, |tx| {
+        tx.batch(&format!(
+            "UPDATE {schema}.gc_op SET phase='build' WHERE id=1"
+        ))?;
+        Ok(())
+    })?;
     metrics.begin_phase(CompactPhase::PostgresBuild);
     let mut built = build(session, schema, &scratch, &mark, &tuple)?;
     metrics.end_phase();
@@ -1824,6 +1835,48 @@ fn report(
     }
 }
 
+/// True while the schema holds an Init or merge working row. Admission
+/// already refuses a live Init/merge intent; this catches leftover rows of
+/// an operation whose intent was lost, which Phase C must not wipe silently.
+fn unfinished_work(session: &Arc<Session>, schema: &str) -> HistoryResult<bool> {
+    stage(session, |tx| {
+        for table in [
+            "merge_operation",
+            "merge_record",
+            "init_operation",
+            "init_entry",
+            "init_host_file",
+        ] {
+            let name = format!("{schema}.{table}");
+            let rows = tx.query(
+                "SELECT (to_regclass($1) IS NOT NULL)::int",
+                vec![Param::Text(name.clone())],
+            )?;
+            if rows
+                .first()
+                .map(|row| row.get::<i64>(0))
+                .transpose()?
+                .unwrap_or(0)
+                == 0
+            {
+                continue;
+            }
+            let rows = tx.query(&format!("SELECT count(*) FROM {name}"), Vec::new())?;
+            if rows
+                .first()
+                .map(|row| row.get::<i64>(0))
+                .transpose()?
+                .unwrap_or(0)
+                > 0
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    })
+}
+
+/// Runs one §8 PostgreSQL Store compaction on this Store's session.
 impl PostgresHandles {
     /// Runs one §8 PostgreSQL Store compaction on this Store's session.
     ///
@@ -1852,6 +1905,11 @@ impl PostgresHandles {
         // `42501` from whichever statement happened to run first.
         if let Some(missing) = compaction_missing(&session)? {
             return Err(HistoryError::Unsupported(missing));
+        }
+        // §5: an unfinished Init or merge holds the Store; a compaction must
+        // refuse rather than wipe its working rows in Phase C.
+        if unfinished_work(&session, &schema)? {
+            return Err(HistoryError::Busy);
         }
         // Spec 5.1/§9: the exclusive Store key is taken before the leftover op
         // is judged, so two compactions can never settle the same `gc_op` at
@@ -1898,6 +1956,14 @@ impl PostgresHandles {
 #[cfg(test)]
 mod tests {
     use super::{standby_satisfied, sync_name, sync_rank, Replica};
+
+    fn replica(name: &str, sync_state: &str) -> Replica {
+        Replica {
+            name: name.to_owned(),
+            streaming: true,
+            sync_state: sync_state.to_owned(),
+        }
+    }
 
     fn replica(name: &str, sync_state: &str) -> Replica {
         Replica {

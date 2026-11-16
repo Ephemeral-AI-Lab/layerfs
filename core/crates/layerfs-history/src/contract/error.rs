@@ -366,11 +366,11 @@ pub struct OpConflict {
     /// Whether its owner is uncertain.
     pub uncertain: bool,
     /// The PostgreSQL holder's backend pid, when the refusal came from a lock
-    /// or a recorded owner; None on SQLite and on an unknown holder.
+    /// or a recorded owner; `None` on SQLite and on an unknown holder.
     pub pid: Option<i64>,
-    /// The PostgreSQL holder's client_addr, when the server reports one.
+    /// The PostgreSQL holder's `client_addr`, when the server reports one.
     pub client_addr: Option<String>,
-    /// The PostgreSQL holder's backend_start.
+    /// The PostgreSQL holder's `backend_start`.
     pub backend_start: Option<String>,
 }
 
@@ -398,7 +398,7 @@ impl OpConflict {
         }
     }
 
-    /// Adds the PostgreSQL holder a / read names.
+    /// Adds the PostgreSQL holder a `pg_locks`/`pg_stat_activity` read names.
     #[must_use]
     pub fn with_backend(
         mut self,
