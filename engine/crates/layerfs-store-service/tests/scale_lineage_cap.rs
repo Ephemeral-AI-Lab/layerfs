@@ -182,7 +182,15 @@ fn sdk_merge(fixture: &Fixture, branch: &str, with: &str, name: &str) -> Work {
 
 fn sdk_publish(fixture: &Fixture, branch: &str) -> (Work, SdkValue) {
     let before = fixture.work();
-    let published = fixture.call("branch.publish", vec![("branch", text(branch))]);
+    // These publishes measure the deliberate-overwrite path (#691), so they
+    // ask for it: a default publish now refuses to skip main's Layers.
+    let published = fixture.call(
+        "branch.publish",
+        vec![
+            ("branch", text(branch)),
+            ("force", SdkValue::Bool(true)),
+        ],
+    );
     assert_eq!(published.get_text("kind"), Some("Added"), "{published:?}");
     (fixture.since(before), published)
 }

@@ -4,8 +4,8 @@
 //! `b`. When one side contains the other it is a fast-forward to the newer
 //! node; otherwise the sides are merged against their merge base in one Save,
 //! with `a`'s `/.lww`, and a clean result becomes one Commit with two parents.
-//! A conflict creates nothing. Publishing is overwrite-only and reports
-//! the main Layers it skipped.
+//! A conflict creates nothing. Publishing is a compare-and-swap on main's
+//! head by default, and reports the main Layers a forced publication skipped.
 use super::lookup::{
     self as args, branch_node, commit_value, hex, history, invalid, layer_value, node_text, refuse,
     root, short, Answer,
@@ -17,9 +17,9 @@ use layerfs_content::{
     merge::{merge_roots, MergeInput, MergeUnit, RulesFrom, Units},
 };
 use layerfs_history::{
-    AddLayerOutcome, AddLayerRequest, BranchId, BranchMergeRequest, CommitHistoryRequest,
-    CommitMeta, CommitVia, ForkRequest, ForkSource, LayerHistoryRequest, LayerId, LayerStackRecord,
-    MergeCommit, MergeHead, MergeSide, NodeId, MAXIMUM_PAGE_RECORDS,
+    AddLayerOutcome, AddLayerRequest, BranchId, BranchMergeRequest, CommitHistoryRequest, CommitId,
+    CommitMeta, CommitVia, ForkRequest, ForkSource, HistoryError, LayerHistoryRequest, LayerId,
+    LayerStackRecord, MergeCommit, MergeHead, MergeSide, NodeId, MAXIMUM_PAGE_RECORDS,
 };
 use layerfs_workspace::InodeSerials;
 use std::sync::Arc;
@@ -682,12 +682,21 @@ fn merge_inner(
 }
 
 /// Publishes `commit` (the Branch's head when absent) of `branch` as main's
-/// next Layer: overwrite-only.
+/// next Layer.
+///
+/// By default the publication is refused `HeadMoved` when it would replace a
+/// Layer main gained since the Branch forked; a Branch may publish again over
+/// its own earlier Layers. `expected_base` and `expected_head`, when given,
+/// are strict compare-and-swap expectations, and `force` deliberately keeps
+/// the older overwrite-only behavior. Nothing is written on a refusal.
 pub fn publish(
     store: &Arc<Store>,
     stack: &LayerStackRecord,
     branch: &layerfs_history::BranchRecord,
     commit: Option<NodeId>,
+    expected_base: Option<LayerId>,
+    expected_head: Option<CommitId>,
+    force: bool,
 ) -> Answer {
     let commit = match commit {
         Some(node) => match node {
@@ -702,6 +711,27 @@ pub fn publish(
             )
         })?,
     };
+    if let Some(expected) = expected_head {
+        if expected != commit {
+            return Err(moved_head(branch, expected, commit));
+        }
+    }
+    // A caller-named base is a strict compare-and-swap: main must still be
+    // the Layer the caller read. Without one, publishing is allowed while it
+    // cannot drop a Layer main gained since the Branch forked: main is still
+    // at the fork point, or its head is this Branch's own earlier publication.
+    if let Some(expected) = expected_base {
+        if stack.head_layer != expected {
+            return Err(moved_base(expected, stack.head_layer));
+        }
+    }
+    if !force && !safe_to_publish(store, stack, branch, commit)? {
+        return Err(skipped(branch, branch.base_layer, stack.head_layer));
+    }
+    // The stack head read here is checked in `add_layer`'s write transaction,
+    // so a publication that lands between the check above and the write is
+    // not overwritten: it is refused instead. `force` asks for the previous
+    // overwrite-only behavior, still CAS'd against a concurrent publication.
     let outcome = store
         .history()
         .add_layer(&AddLayerRequest {
@@ -711,7 +741,14 @@ pub fn publish(
             expected_stack_head: stack.head_layer,
             expected_branch_base: branch.base_layer,
         })
-        .map_err(history)?;
+        .map_err(|error| {
+            if let HistoryError::StackMoved { actual, .. } = error.cause() {
+                if !force {
+                    return skipped(branch, branch.base_layer, *actual);
+                }
+            }
+            history(error)
+        })?;
     Ok(match outcome {
         AddLayerOutcome::Added { layer } => {
             // The overwritten Layers are read after the publication, one
@@ -748,6 +785,90 @@ pub fn publish(
             ("headLayer", SdkValue::text(hex(head.as_slice()))),
         ]),
     })
+}
+
+/// Whether publishing `commit` cannot drop a Layer `main` gained since the
+/// Branch forked: main is at the fork point, or its head is this Branch's own
+/// publication and the Commit contains that publication's source.
+fn safe_to_publish(
+    store: &Arc<Store>,
+    stack: &LayerStackRecord,
+    branch: &layerfs_history::BranchRecord,
+    commit: CommitId,
+) -> Result<bool, SdkRefusal> {
+    if stack.head_layer == branch.base_layer {
+        return Ok(true);
+    }
+    let head = args::layer(store, stack.head_layer)?;
+    if head.stack != stack.id || head.source_branch != Some(branch.id) {
+        return Ok(false);
+    }
+    let Some(source) = head.source_commit else {
+        return Ok(false);
+    };
+    if source == commit {
+        return Ok(true);
+    }
+    store
+        .history()
+        .is_ancestor(NodeId::Commit(source), NodeId::Commit(commit))
+        .map_err(history)
+}
+
+/// A refusal for a main that is not the Layer the caller expected.
+fn moved_base(expected: LayerId, actual: LayerId) -> SdkRefusal {
+    refuse(
+        "HeadMoved",
+        format!(
+            "main is at {}, not the expected base {}; read main again and publish, or pass force to overwrite",
+            short(NodeId::Layer(actual)),
+            short(NodeId::Layer(expected)),
+        ),
+        SdkValue::map([
+            ("expectedBase", SdkValue::text(hex(expected.as_slice()))),
+            ("actualBase", SdkValue::text(hex(actual.as_slice()))),
+        ]),
+    )
+}
+
+/// A refusal for a publication that would replace main's head with a tree
+/// that does not contain it.
+fn skipped(branch: &layerfs_history::BranchRecord, base: LayerId, head: LayerId) -> SdkRefusal {
+    refuse(
+        "HeadMoved",
+        format!(
+            "publishing {} would skip main's Layer {}: its fork point is {}; merge main into {} and publish again, or pass force to overwrite",
+            branch.name.as_str(),
+            short(NodeId::Layer(head)),
+            short(NodeId::Layer(base)),
+            branch.name.as_str(),
+        ),
+        SdkValue::map([
+            ("expectedBase", SdkValue::text(hex(base.as_slice()))),
+            ("actualBase", SdkValue::text(hex(head.as_slice()))),
+        ]),
+    )
+}
+
+/// A refusal for a Branch head that is not the expected Commit.
+fn moved_head(
+    branch: &layerfs_history::BranchRecord,
+    expected: CommitId,
+    actual: CommitId,
+) -> SdkRefusal {
+    refuse(
+        "HeadMoved",
+        format!(
+            "{} head moved: expected {} but it is {}; read the Branch again and publish the Commit you expect",
+            branch.name.as_str(),
+            short(NodeId::Commit(expected)),
+            short(NodeId::Commit(actual)),
+        ),
+        SdkValue::map([
+            ("expectedHead", SdkValue::text(hex(expected.as_slice()))),
+            ("actualHead", SdkValue::text(hex(actual.as_slice()))),
+        ]),
+    )
 }
 
 /// Up to `limit` Layers `layer` overwrote after `position`, newest first, and

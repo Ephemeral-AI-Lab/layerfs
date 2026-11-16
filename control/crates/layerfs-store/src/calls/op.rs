@@ -305,7 +305,10 @@ impl StoreOp<'_> {
                 .json("units", r.units.as_ref()),
             Self::Publish(r) => args
                 .text("branch", &r.branch)
-                .opt("commit", r.commit.as_deref()),
+                .opt("commit", r.commit.as_deref())
+                .opt("expectedBase", r.expected_base.as_deref())
+                .opt("expectedHead", r.expected_head.as_deref())
+                .boolean("force", r.force),
             Self::BranchRemove(r) => args.text("branch", &r.branch),
             Self::DiffBranches(r) => args
                 .text("from", &r.from_branch)
