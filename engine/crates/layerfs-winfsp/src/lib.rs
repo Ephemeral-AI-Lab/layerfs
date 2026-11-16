@@ -3,7 +3,8 @@
 //! `layerfs-fuse` does for FUSE (#454 A2). The FFI to winfsp.dll is
 //! hand-written - no new dependency - beside its import library.
 
-mod ffi;
+pub mod ffi;
+pub mod callbacks;
 
 pub mod mount;
 pub use mount::{mount, Mounted};

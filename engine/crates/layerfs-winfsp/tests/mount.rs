@@ -1,10 +1,11 @@
-//! One real mount on an empty interface: the drive appears and lists.
+//! One real mount with the first callbacks: the volume answers.
 //! Skips when the WinFsp driver service is absent (fsptool install).
 #![cfg(windows)]
+use layerfs_winfsp::ffi::FSP_FILE_SYSTEM_INTERFACE;
 use layerfs_winfsp::mount;
 
 #[test]
-fn mounts_an_empty_file_system() {
+fn mounts_with_the_first_callbacks() {
     let installed = std::process::Command::new("sc")
         .args(["query", "WinFsp"])
         .output()
@@ -14,8 +15,13 @@ fn mounts_an_empty_file_system() {
         eprintln!("skipped: the WinFsp driver service is not installed (run fsptool install as admin)");
         return;
     }
-    let mounted = mount("Y:", Default::default()).expect("mount");
-    let listing = std::fs::read_dir("Y:").expect("list the mounted drive");
-    assert_eq!(listing.count(), 0, "an empty interface lists nothing");
+    let interface = FSP_FILE_SYSTEM_INTERFACE {
+        GetVolumeInfo: Some(layerfs_winfsp::callbacks::get_volume_info),
+        GetSecurityByName: Some(layerfs_winfsp::callbacks::get_security_by_name),
+        ..Default::default()
+    };
+    let mounted = mount("Y:", interface).expect("mount");
+    let meta = std::fs::metadata("Y:\\").expect("the mounted root answers");
+    assert!(meta.is_dir());
     drop(mounted);
 }
