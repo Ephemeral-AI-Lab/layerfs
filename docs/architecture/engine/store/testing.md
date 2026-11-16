@@ -11,6 +11,7 @@ the harness that enforces it before cargo spends a build.
 | Harness | [`tools/ci/test_store_ext4.sh`](../../../../tools/ci/test_store_ext4.sh) |
 | Suites | `layerfs-persistence`, `layerfs-store-service`, `layerfs-store`, and the `store_*` targets of `layerfs-api` |
 | Guard | [`kernel_guard.rs`](../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
+| CI | [`.github/workflows/store-ext4.yml`](../../../../.github/workflows/store-ext4.yml) |
 | Related | [Store](README.md), [SQLite](sqlite.md), [PostgreSQL](postgresql.md), [Diagnostics](diagnostics.md) |
 
 ## Why the tests need ext4
@@ -132,16 +133,145 @@ LAYERFS_TEST_POSTGRES_URL='host=127.0.0.1 port=55433 user=postgres password=… 
   LAYERFS_TEST_TMPDIR=/mnt/ext4/layerfs-store-tests tools/ci/test_store_ext4.sh
 ```
 
+### Server and extensions
+
 Use PostgreSQL 17 or newer. The Store schema itself needs 16 or newer for
 `STORAGE PLAIN` ([PostgreSQL](postgresql.md)), and the PostgreSQL suites are
 qualified on 17.x, so 17 is the supported version for tests.
 
-Each PostgreSQL test creates and drops its own schema: point the variable at a
+The full-mode doctor calls `amcheck`'s `verify_heapam` and `bt_index_check` for
+every heap and ready B-tree relation, and it never installs an extension itself
+([Diagnostics](diagnostics.md)). Create the contrib extensions in the test
+database before a full audit:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS amcheck;
+CREATE EXTENSION IF NOT EXISTS pgstattuple;
+```
+
+```bash
+psql "$LAYERFS_TEST_POSTGRES_URL" -c 'CREATE EXTENSION IF NOT EXISTS amcheck;'
+```
+
+`amcheck` is the required one: without it a full audit reports each relation as
+`store.database.relations=Unknown`, because no supported function exists, and
+`store.database.relations.summary` is `Unknown` too. That is missing coverage,
+not corruption, but the PostgreSQL compaction tests assert that a rebuilt Store
+audits cleanly with no `Fail` or `Unknown` observation. On a fresh cluster that
+never created the extension, the five `clean()` assertions in
+`postgresql_compact.rs` fail with exactly that finding; the
+`assert_doctor_clean` assertions in `postgresql_compact_fixtures.rs` depend on
+it too. `pgstattuple` is the companion contrib module; the current diagnostic
+calls only `amcheck`, but the CI lane creates both so the scratch server
+matches the qualified setup.
+
+The push lane is SQLite-only and does not need any of this. When
+`LAYERFS_TEST_POSTGRES_URL` is set, the harness asks `psql` whether the
+extensions exist and warns with the `CREATE EXTENSION` command when `amcheck`
+is missing; an absent `psql` or an unreachable server downgrades that to a
+message and never fails the run. `LAYERFS_TEST_EXPECT_AMCHECK` (any value)
+makes `postgresql_diagnostic` assert `store.database.relations.summary` is
+`Pass`; the `store-ext4` full job sets it after creating the extensions.
+
+### Credentials and TLS
+
+The PostgreSQL test fixtures and the doctor's admin client connect with
+`postgres::Client::connect(…, NoTls)`, not through the Store's TLS policy. The
+connection string must therefore carry its own password and must not require a
+TLS handshake: use `sslmode=disable` on loopback or a private route, and
+`password=…` unless the server uses trust authentication. `sslmode=require` or
+`verify-full` is fine for the Store sessions, but the test fixtures reject it.
+Do not put a password in a job log; pass the whole connection string through
+the environment, as the workflow does with a scratch trust-authenticated
+service.
+
+### The physical doctor's extra servers
+
+`postgresql_doctor_physical` needs two servers beyond the primary:
+
+| Variable | What it must be |
+| --- | --- |
+| `LAYERFS_TEST_POSTGRES_MISSING_URL` | a second database (or server) where `amcheck` is **not** installed; the test asserts that the missing extension is `Unknown` and that the doctor did not install it |
+| `LAYERFS_TEST_POSTGRES_REPLICA_URL` | a physical standby of the primary, in recovery (`pg_is_in_recovery()` is true), with the test's schema replicated within 5 s |
+
+Create the amcheck-free database on the same scratch server, for example:
+
+```bash
+psql "$LAYERFS_TEST_POSTGRES_URL" -c 'CREATE DATABASE layerfs_no_amcheck'
+LAYERFS_TEST_POSTGRES_MISSING_URL='host=127.0.0.1 port=5432 user=postgres dbname=layerfs_no_amcheck sslmode=disable'
+```
+
+Both variables are optional: with the primary URL set, a test that needs one
+and finds it unset prints `NOT_RUN: LAYERFS_TEST_POSTGRES_MISSING_URL is unset`
+(or the replica variable) and returns. The `store-ext4` full job has no physical
+standby and sets neither, so those extra cases print `NOT_RUN` and the target
+stays green. Run the target separately with both for the physical coverage.
+
+Each PostgreSQL test creates and drops its own schema: point the variables at a
 scratch server, never at a schema that holds a Store you care about, and make
 sure the server is reachable from the process that runs the tests (inside a
 Sandbox, `127.0.0.1` is the Sandbox). Without the variable the PostgreSQL test
 files print `NOT_RUN: LAYERFS_TEST_POSTGRES_URL is unset` and check nothing;
 the SQLite Store suites still run and still need the supported filesystem.
+
+### Compaction tests and per-test bindings
+
+The T9 PostgreSQL compaction suite (`postgresql_compact.rs`) gives every test
+its own catalog binding, `postgresql-compact-<tag>`. PostgreSQL advisory locks
+are server-wide, not schema-scoped, so two tests that shared a binding would
+exclude each other while running in parallel even though each owns its schema.
+The per-test binding fix is already in place; keep it when adding a case. Those
+tests need only `LAYERFS_TEST_POSTGRES_URL`, `amcheck` and the supported
+`LAYERFS_TEST_TMPDIR`, not the physical doctor's two extra URLs.
+
+## CI
+
+[`.github/workflows/store-ext4.yml`](../../../../.github/workflows/store-ext4.yml)
+runs this harness in the repository's report-only CI. It adds no test
+selection: every target it runs is already in the push or nightly lane that
+[`tools/ci_tests.py`](../../../../tools/ci_tests.py) chooses; it runs them where
+their guard admits a Store. Like the other lanes it is not a required check, an
+agent does not wait for it, and a green run is not verification of a change
+([AGENTS.md](../../../../AGENTS.md) §4).
+
+| Job | Trigger | Command | PostgreSQL |
+| --- | --- | --- | --- |
+| `store ext4 (--quick)` | push to `main` and pull requests touching `core/**`, `engine/**`, `control/**`, `api/crates/**` (not `layerfs-node`), `Cargo.*`, `.config/**`, `tools/ci/**`, `.cargo/**`; a markdown-only change does not run it | `tools/ci/test_store_ext4.sh --quick` | off |
+| `store ext4 (--full, PostgreSQL 17)` | `schedule` (04:47 UTC) and manual dispatch | `tools/ci/test_store_ext4.sh --full` | a `postgres:17` service container |
+
+Both jobs set `LAYERFS_TEST_TMPDIR=/mnt/layerfs-store-tests`. On the
+`ubuntu-24.04` runner `/mnt` is a separate ext4 data disk and `/tmp` is tmpfs;
+the prepare step creates the directory, hands it to the runner user (it belongs
+to `root` on the image) and asserts the filesystem with `findmnt`, so a runner
+image without an ext4 `/mnt` fails in that step instead of as a guard refusal
+inside a suite. The harness then sets `TMPDIR`, `CARGO_TARGET_DIR` and
+`CARGO_HOME` itself, as it does locally.
+
+The scheduled job sets `LAYERFS_TEST_POSTGRES_URL` to
+`host=127.0.0.1 port=5432 user=postgres dbname=postgres sslmode=disable`
+against that scratch service container, with trust authentication, so every
+suite runs its PostgreSQL cases. Each PostgreSQL test creates and drops its own
+schema, nothing outlives the run, and the runner reaches the container's
+published port on `127.0.0.1`. The push job leaves the variable unset, so its
+PostgreSQL cases print `NOT_RUN` and only the SQLite suites run.
+
+Before the suites, the full job installs `postgresql-client` and creates
+`amcheck` and `pgstattuple` in the service container's database, then sets
+`LAYERFS_TEST_EXPECT_AMCHECK=1` so `postgresql_diagnostic` asserts the
+full-mode relation summary is `Pass`. A server that did not take the extension
+fails in that step with its name, instead of as five `Unknown` findings inside
+the compaction suite. The job also runs `postgresql_doctor_physical`. It needs
+`LAYERFS_TEST_POSTGRES_MISSING_URL` and `LAYERFS_TEST_POSTGRES_REPLICA_URL` for
+its extra cases; the full job provides neither, so those cases print `NOT_RUN`
+and the target stays green. Run it separately with both for that coverage
+(above).
+
+The harness moves `CARGO_HOME` and `CARGO_TARGET_DIR` onto
+`LAYERFS_TEST_TMPDIR`, so these jobs do not restore the checkout-scoped
+`Swatinem/rust-cache` the other workflows use: it would restore a `target/`
+that the harness never reads. They install `mold` as the fast lane's `test` job
+does, because they link the same test profile from a cold cache, and carry a
+60-minute (`--quick`) or 120-minute (`--full`) job timeout.
 
 ## Troubleshooting
 
@@ -151,6 +281,9 @@ the SQLite Store suites still run and still need the supported filesystem.
 | `… is on 'tmpfs', which cannot carry a Store.` | `/tmp` (or another tmpfs/overlay) was chosen | pick ext4, xfs or btrfs on Linux, apfs or hfs on macOS |
 | a suite fails with `filesystem 0x… at … does not carry SQLite locks` | `TMPDIR` or `CARGO_TARGET_DIR` escaped the harness (exported by hand) | let the harness set both; do not override them to a scratch directory |
 | `NOT_RUN: LAYERFS_TEST_POSTGRES_URL is unset` | no PostgreSQL server | expected; set the variable to run those cases |
+| `store.database.relations=Unknown` and a compaction test fails on `clean` | `amcheck` was never created in the test database | `CREATE EXTENSION IF NOT EXISTS amcheck;`, then re-run; the harness warns when `psql` can see it is missing |
+| `NOT_RUN: LAYERFS_TEST_POSTGRES_MISSING_URL is unset` (or `…_REPLICA_URL`) from `postgresql_doctor_physical` | the physical target's extra cases need an amcheck-free database and a physical standby; without them those cases skip | expected in the full sweep; set both (see [the physical doctor's extra servers](#the-physical-doctors-extra-servers)) and run that target separately for the physical coverage |
+| `error: TLS support is disabled` or psql prompts for a password | the fixtures use `NoTls` and read the conninfo only | put `password=…` in the connection string and use `sslmode=disable` on a private route |
 | `fatal: unable to access 'https://github.com/…/fuser.git'` or a TLS error | the pinned `fuser` git dependency could not be fetched | the harness sets `CARGO_NET_GIT_FETCH_WITH_CLI=true` and `GIT_SSL_NO_VERIFY=true`; check egress to `github.com` |
 | `has mode 0755 … fix with chmod 700` | a left-over Store directory with group/other access | remove the named directory; the guard never changes permissions |
 | `Updating crates.io index` stays silent for minutes | the sandbox network can stall cargo's multiplexed sparse-index connection | re-run with `CARGO_HTTP_MULTIPLEXING=false`; the download cache resumes where it stopped |

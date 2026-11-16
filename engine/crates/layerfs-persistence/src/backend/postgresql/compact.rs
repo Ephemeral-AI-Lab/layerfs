@@ -11,6 +11,7 @@
 //! crash (or a lost COMMIT reply) is judged by the next `store.compact`:
 //! generation `G` removes the artifact, `G + 1` resumes cleanup.
 
+use super::access::compaction_missing;
 use super::session::{
     connection::Session,
     transaction::{Mode, Transaction},
@@ -20,13 +21,16 @@ use crate::backend::sqlite::compact::{
     CompactFailpoint, CompactKeptWaste, CompactPath, CompactReceipt, CompactRequest,
     CompactResidue, CompactZeroReason,
 };
+use crate::compact_metrics::{
+    self, CompactOutcome, CompactPhase, CompactRefusal, CompactRunObservation,
+};
 use crate::history::GcTuple;
 use crate::{MarkResult, PostgresHandles};
 use layerfs_history::error::{HistoryError, HistoryResult};
 use layerfs_history::records::{GcIntent, GcIntentKind, GcScopeKind};
 use layerfs_history::HistoryCatalog;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// The §3 rebuild threshold: rebuild when dead * 10 >= stored.
 const THRESHOLD: u64 = 10;
@@ -66,6 +70,113 @@ struct Swapped {
     physical_after: u64,
     peak_temp: u64,
     dead: DeadTotals,
+}
+
+/// The phase clock and §11 values one measured PostgreSQL compaction observes.
+///
+/// Phase M times the intent, the mark and the wholly-dead-pack decision, Phase
+/// A the scratch copy, Phase B the swap, and Phase C the cleanup — also when a
+/// later call resumes an installed `G + 1` leftover. The `pg_` phase values
+/// keep these distinct from the SQLite §7 phases in the process totals.
+struct RunMetrics {
+    started: Instant,
+    phase: Option<(CompactPhase, Instant)>,
+    phase_nanos: Vec<(CompactPhase, u64)>,
+    generation_before: u64,
+    generation_after: u64,
+    dead_bytes_bound: u64,
+    dead_bytes_refined: u64,
+    kept_waste: CompactKeptWaste,
+    residue_bytes: u64,
+    leftover_settled: bool,
+}
+
+impl RunMetrics {
+    fn start() -> Self {
+        Self {
+            started: Instant::now(),
+            phase: None,
+            phase_nanos: Vec::new(),
+            generation_before: 0,
+            generation_after: 0,
+            dead_bytes_bound: 0,
+            dead_bytes_refined: 0,
+            kept_waste: CompactKeptWaste::default(),
+            residue_bytes: 0,
+            leftover_settled: false,
+        }
+    }
+
+    /// Ends the current phase and starts `phase`; a phase is inclusive wall
+    /// time, never an exclusive CPU decomposition.
+    fn begin_phase(&mut self, phase: CompactPhase) {
+        self.end_phase();
+        self.phase = Some((phase, Instant::now()));
+    }
+
+    fn end_phase(&mut self) {
+        if let Some((phase, started)) = self.phase.take() {
+            self.phase_nanos.push((
+                phase,
+                u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX),
+            ));
+        }
+    }
+
+    /// Records this run once, whatever its result. The outcome and refusal
+    /// come from the typed error, so a `Busy`/`Unresolved` refusal is counted
+    /// without changing the error the caller receives.
+    fn finish(mut self, result: &HistoryResult<CompactReceipt>) {
+        self.end_phase();
+        let total_nanos = u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        let (outcome, refusal) = match result {
+            Ok(receipt) => {
+                // A resumed `G + 1` round reports the original run's
+                // generation, so the receipt is the authority here.
+                self.generation_before = receipt.generation_before;
+                self.generation_after = receipt.generation_after;
+                self.dead_bytes_bound = receipt.dead_bytes_bound;
+                self.dead_bytes_refined = receipt.dead_bytes_refined;
+                self.kept_waste = receipt.kept_waste.clone();
+                self.residue_bytes = receipt.residue.bytes;
+                let outcome = match receipt.path {
+                    CompactPath::Rebuild => CompactOutcome::Rebuild,
+                    CompactPath::None => CompactOutcome::None,
+                };
+                (outcome, None)
+            }
+            Err(error) => {
+                if !error.unknown() {
+                    self.generation_after = self.generation_before;
+                }
+                (
+                    if error.unknown() {
+                        CompactOutcome::Uncertain
+                    } else {
+                        CompactOutcome::Failed
+                    },
+                    match error {
+                        HistoryError::Busy | HistoryError::BusyOp(_) => Some(CompactRefusal::Busy),
+                        HistoryError::Unresolved(_) => Some(CompactRefusal::Unresolved),
+                        _ => None,
+                    },
+                )
+            }
+        };
+        compact_metrics::record_run(&CompactRunObservation {
+            outcome,
+            generation_before: self.generation_before,
+            generation_after: self.generation_after,
+            dead_bytes_bound: self.dead_bytes_bound,
+            dead_bytes_refined: self.dead_bytes_refined,
+            kept_waste: self.kept_waste,
+            residue_bytes: self.residue_bytes,
+            phase_nanos: self.phase_nanos,
+            total_nanos,
+            leftover_settled: self.leftover_settled,
+            refusal,
+        });
+    }
 }
 
 fn now_ms() -> i64 {
@@ -699,6 +810,7 @@ fn settle_leftover(
     handles: &PostgresHandles,
     session: &Arc<Session>,
     schema: &str,
+    metrics: &mut RunMetrics,
 ) -> HistoryResult<Option<CompactReceipt>> {
     let Some(op) = read_op(session, schema)? else {
         return Ok(None);
@@ -720,6 +832,7 @@ fn settle_leftover(
                 }
             }
         }
+        metrics.begin_phase(CompactPhase::PostgresCleanup);
         if let Some(artifact) = &op.artifact {
             drop_scratch(session, artifact)?;
         }
@@ -730,13 +843,18 @@ fn settle_leftover(
             ))?;
             Ok(())
         })?;
+        metrics.end_phase();
+        metrics.leftover_settled = true;
         return Ok(None);
     }
     if current != op.generation + 1 {
         return Err(HistoryError::Integrity("compaction op generation"));
     }
+    metrics.begin_phase(CompactPhase::PostgresCleanup);
     let op_id = compaction_intent(session, schema)?;
     cleanup(handles, session, schema, op.dead, op.totals_applied, op_id)?;
+    metrics.end_phase();
+    metrics.leftover_settled = true;
     Ok(Some(report(
         CompactPath::Rebuild,
         u64::try_from(op.generation).unwrap_or(0),
@@ -1153,7 +1271,9 @@ fn round(
     session: &Arc<Session>,
     schema: &str,
     request: &CompactRequest,
+    metrics: &mut RunMetrics,
 ) -> HistoryResult<CompactReceipt> {
+    metrics.begin_phase(CompactPhase::PostgresMark);
     let (mark, tuple) = handles.history.mark_gc()?;
     load_visited(session, schema, &mark)?;
     let stored = u64::try_from(total_stored(session, schema)?).unwrap_or(0);
@@ -1176,6 +1296,7 @@ fn round(
     };
     let rebuild = stored > 0 && dead_bytes.saturating_mul(THRESHOLD) >= stored;
     if !rebuild {
+        metrics.end_phase();
         clear_round(session, schema)?;
         let _ = handles.history.gc_release(&request.op_id);
         return Ok(report(
@@ -1194,6 +1315,7 @@ fn round(
             mark.history().len() as u64,
         ));
     }
+    metrics.end_phase();
     stop(
         request,
         CompactFailpoint::PostgresAfterMark,
@@ -1201,7 +1323,9 @@ fn round(
         schema,
         "mark",
     )?;
+    metrics.begin_phase(CompactPhase::PostgresBuild);
     let mut built = build(session, schema, &scratch, &mark, &tuple)?;
+    metrics.end_phase();
     built.dead.logical = mark_dead.logical;
     stop(
         request,
@@ -1210,7 +1334,9 @@ fn round(
         schema,
         "build",
     )?;
+    metrics.begin_phase(CompactPhase::PostgresSwap);
     let swapped = swap(handles, session, schema, &tuple, &mark, &built)?;
+    metrics.end_phase();
     stop(
         request,
         CompactFailpoint::PostgresAfterSwap,
@@ -1219,6 +1345,7 @@ fn round(
         "swap",
     )?;
     let logical_discarded = u64::try_from(swapped.dead.logical).unwrap_or(0);
+    metrics.begin_phase(CompactPhase::PostgresCleanup);
     cleanup(
         handles,
         session,
@@ -1227,6 +1354,7 @@ fn round(
         false,
         Some(request.op_id),
     )?;
+    metrics.end_phase();
     stop(
         request,
         CompactFailpoint::PostgresAfterCleanup,
@@ -1351,10 +1479,29 @@ impl PostgresHandles {
     /// deletes only the persisted dead set. The caller keeps its session; the
     /// Store is usable at `G + 1` from the swap on.
     pub fn compact(&self, request: &CompactRequest) -> HistoryResult<CompactReceipt> {
+        let mut metrics = RunMetrics::start();
+        let result = self.compact_measured(request, &mut metrics);
+        metrics.finish(&result);
+        result
+    }
+
+    /// The measured body of [`Self::compact`]; `metrics` observes it.
+    fn compact_measured(
+        &self,
+        request: &CompactRequest,
+        metrics: &mut RunMetrics,
+    ) -> HistoryResult<CompactReceipt> {
         let session = self.storage.session.clone();
         let schema = session.settings.schema.clone();
-        let _ = read_generation(&session, &schema)?;
-        if let Some(receipt) = settle_leftover(self, &session, &schema)? {
+        // AC-44: a restricted role is refused before the intent, the mark and
+        // the scratch schema; the missing privilege is named, never a raw
+        // `42501` from whichever statement happened to run first.
+        if let Some(missing) = compaction_missing(&session)? {
+            return Err(HistoryError::Unsupported(missing));
+        }
+        let generation = read_generation(&session, &schema)?;
+        metrics.generation_before = u64::try_from(generation).unwrap_or(0);
+        if let Some(receipt) = settle_leftover(self, &session, &schema, metrics)? {
             return Ok(receipt);
         }
         let intent = GcIntent::operation(
@@ -1372,7 +1519,7 @@ impl PostgresHandles {
         let result = (|| {
             let rank = effective_sync_rank(&session)?;
             standby_precheck(&session, rank)?;
-            round(self, &session, &schema, request)
+            round(self, &session, &schema, request, metrics)
         })();
         if result.is_err() {
             let _ = self.history.gc_release(&request.op_id);

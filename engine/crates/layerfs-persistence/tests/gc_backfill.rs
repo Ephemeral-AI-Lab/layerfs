@@ -314,7 +314,7 @@ fn commits_layers_and_epochs_are_backfilled_in_deterministic_order() {
     // One epoch row per project, both zero.
     let rows = epochs(&sql);
     assert_eq!(rows.len(), 2);
-    let mut expected = vec![stack_one, stack_two];
+    let mut expected = [stack_one, stack_two];
     expected.sort_by(|a, b| a.as_slice().cmp(b.as_slice()));
     for (row, expected) in rows.iter().zip(expected.iter()) {
         assert_eq!(row.0, expected.as_slice());

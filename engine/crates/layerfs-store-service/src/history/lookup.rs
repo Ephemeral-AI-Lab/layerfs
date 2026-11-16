@@ -129,21 +129,21 @@ fn mounts_detail(state: &layerfs_history::MountHolders) -> SdkValue {
                     holder
                         .workspace
                         .as_ref()
-                        .map_or(SdkValue::Null, |value| SdkValue::text(value)),
+                        .map_or(SdkValue::Null, SdkValue::text),
                 ),
                 (
                     "sandbox",
                     holder
                         .sandbox
                         .as_ref()
-                        .map_or(SdkValue::Null, |value| SdkValue::text(value)),
+                        .map_or(SdkValue::Null, SdkValue::text),
                 ),
                 (
                     "machine",
                     holder
                         .machine
                         .as_ref()
-                        .map_or(SdkValue::Null, |value| SdkValue::text(value)),
+                        .map_or(SdkValue::Null, SdkValue::text),
                 ),
                 ("op", SdkValue::text(&holder.op)),
             ])
@@ -163,10 +163,7 @@ fn op_detail(state: &layerfs_history::OpConflict) -> SdkValue {
         ),
         (
             "phase",
-            state
-                .phase
-                .as_ref()
-                .map_or(SdkValue::Null, |value| SdkValue::text(value)),
+            state.phase.as_ref().map_or(SdkValue::Null, SdkValue::text),
         ),
         ("op", SdkValue::text(&state.op)),
         ("uncertain", SdkValue::Bool(state.uncertain)),

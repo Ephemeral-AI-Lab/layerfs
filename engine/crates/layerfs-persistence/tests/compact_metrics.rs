@@ -8,13 +8,14 @@ mod support;
 
 use layerfs_content::{encode_whole_file_payload, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::HistoryError;
-use layerfs_persistence::compact_metrics::{CompactMetrics, CompactMetricsCapture};
+use layerfs_persistence::compact_metrics::CompactMetricsCapture;
 use layerfs_persistence::{
     CompactFailpoint, CompactPath, CompactRequest, PersistenceConfig, SqliteHandles,
     SqlitePersistenceProfile,
 };
 use layerfs_storage::{Storage, StoragePolicy};
 use std::path::{Path, PathBuf};
+use support::metrics::{assert_bounded, metric, value};
 use support::Temp;
 
 const BINDING: &[u8] = b"sqlite-compact-metrics-test-binding";
@@ -78,84 +79,6 @@ fn whole_file(handles: &SqliteHandles, bytes: &[u8]) -> ObjectId {
     save.accept(object.clone()).unwrap();
     save.finish().unwrap();
     object.id()
-}
-
-/// The value of one sample, or `None` when this run did not emit it.
-fn metric(metrics: &CompactMetrics, name: &str, labels: &[(&str, &str)]) -> Option<u64> {
-    metrics
-        .samples()
-        .into_iter()
-        .find(|sample| {
-            sample.name == name
-                && labels
-                    .iter()
-                    .all(|(key, value)| sample.label(key) == Some(*value))
-        })
-        .map(|sample| sample.value)
-}
-
-fn value(metrics: &CompactMetrics, name: &str, labels: &[(&str, &str)]) -> u64 {
-    metric(metrics, name, labels).unwrap_or_else(|| {
-        panic!(
-            "no sample {name} {labels:?}; emitted: {:?}",
-            metrics.samples()
-        )
-    })
-}
-
-/// Bounded cardinality: every label key is a closed dimension and every value
-/// is one the enums name, never a Store name, path, operation id or artifact.
-fn assert_bounded(metrics: &CompactMetrics) {
-    let keys = [
-        "outcome",
-        "code",
-        "kind",
-        "reason",
-        "state",
-        "objective",
-        "result",
-        "phase",
-        "statistic",
-        "which",
-        "part",
-    ];
-    let values = [
-        "rebuild",
-        "none",
-        "failed",
-        "uncertain",
-        "busy",
-        "unresolved",
-        "mark",
-        "build",
-        "verify",
-        "install",
-        "run",
-        "leftover",
-        "count",
-        "sum",
-        "max",
-        "before",
-        "after",
-        "bound",
-        "refined",
-        "dead_in_retained_packs",
-        "delta_bases",
-        "inode_blocks",
-        "residue_free",
-        "generation",
-        "pass",
-        "fail",
-    ];
-    for sample in metrics.samples() {
-        for (key, label) in &sample.labels {
-            assert!(keys.contains(key), "non-closed label key {key}");
-            assert!(
-                values.contains(label),
-                "non-closed label value {label} for {key}"
-            );
-        }
-    }
 }
 
 #[test]

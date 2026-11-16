@@ -1,4 +1,5 @@
-//! Bounded metrics and SLO signals for SQLite Store compaction.
+//! Bounded metrics and SLO signals for SQLite (§7) and PostgreSQL (§8)
+//! Store compaction.
 //!
 //! Every metric a real `store.compact` or `store.status` path records goes
 //! through this module. Label values come from closed enums ([`CompactOutcome`],
@@ -17,7 +18,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::sync::{Mutex, OnceLock};
 
-/// The outcome of one SQLite compaction call.
+/// The outcome of one Store compaction call.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum CompactOutcome {
     /// A rebuild installed at `G -> G + 1`.
@@ -43,7 +44,13 @@ impl CompactOutcome {
     }
 }
 
-/// One SQLite phase a run may time (§11: `mark`, `build`, `verify`, `install`).
+/// One phase a run may time.
+///
+/// SQLite (§7) reports `mark`, `build`, `verify` and `install`. PostgreSQL
+/// (§8) reports its own Phase M (`pg_mark`), Phase A (`pg_build`), Phase B
+/// (`pg_swap`) and Phase C (`pg_cleanup`). The two backends' values are
+/// distinct, so a process total never blends a SQLite phase with a PostgreSQL
+/// phase of a different meaning, and every value stays a closed enum string.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum CompactPhase {
     /// The §7 step 1 mark and the wholly-dead-pack decision.
@@ -54,6 +61,17 @@ pub enum CompactPhase {
     Verify,
     /// The install and its settle.
     Install,
+    /// PostgreSQL §8 Phase M: the intent, the T7.2 mark and the persisted
+    /// `gc_dead` set.
+    PostgresMark,
+    /// PostgreSQL §8 Phase A: copy the retained payload into the scratch
+    /// schema.
+    PostgresBuild,
+    /// PostgreSQL §8 Phase B: swap `pack`/`object_location` at `G -> G + 1`.
+    PostgresSwap,
+    /// PostgreSQL §8 Phase C: delete the persisted dead set and settle the
+    /// totals, also for a resumed `G + 1` leftover.
+    PostgresCleanup,
 }
 
 impl CompactPhase {
@@ -65,6 +83,10 @@ impl CompactPhase {
             Self::Build => "build",
             Self::Verify => "verify",
             Self::Install => "install",
+            Self::PostgresMark => "pg_mark",
+            Self::PostgresBuild => "pg_build",
+            Self::PostgresSwap => "pg_swap",
+            Self::PostgresCleanup => "pg_cleanup",
         }
     }
 }

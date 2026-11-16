@@ -66,10 +66,9 @@ impl Visibility {
     /// `load` for a stack id and an explicit `history_serial`, for reads that
     /// walk several nodes and therefore ask `hidden_at` per node.
     pub fn for_stack(store: &Arc<Store>, stack: LayerStackId, serial: u64) -> Self {
-        let markers = match store.published(|history| history.path_removals(stack)) {
-            Ok(markers) => markers,
-            Err(_) => Vec::new(),
-        };
+        let markers = store
+            .published(|history| history.path_removals(stack))
+            .unwrap_or_default();
         Self { serial, markers }
     }
 

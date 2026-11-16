@@ -16,20 +16,22 @@ use std::path::Path;
 ///
 /// While a compaction runs, or after a dead owner left one, `op` is that run's
 /// projection and `state` is `busy`/`unresolved` (§11); `phases` names the
-/// backend's ordered phases. The compaction record is read from
-/// `<store>.compact-op` alone: the Store database and its artifacts are never
-/// opened for it.
+/// backend's ordered phases. A sqlite compaction record is read from
+/// `<store>.compact-op` alone, and a PostgreSQL one from the Store-side
+/// `gc_op` with its `gc_intent` on one status query (T10.5): neither opens
+/// the Store database, changes a schema, nor reads an artifact.
 pub fn status(home: &Path, name: &str) -> Outcome {
     let record = record_of(home, name)?;
     let (holders, _) = lease::read_holders(home, name)?;
     let mut down = None;
     let mut more = Vec::new();
     let store_ref = record.store_ref()?;
-    let mut compaction = SdkValue::Null;
+    let compaction: SdkValue;
     if let StoreRef::Postgres { .. } = store_ref {
         more.push(("server", crate::postgresql::connect::status(&record)));
-        // A PostgreSQL compaction's op lives in the Store's `gc_op`; T9 reads
-        // it here with its rebuild. This path reads no file.
+        // T10.5: a PostgreSQL compaction's op is the Store's `gc_op` row read
+        // with its `gc_intent`; this path opens no Store and reads no file.
+        compaction = crate::postgresql::connect::compact_status(&record);
     } else {
         more.push(("machine", SdkValue::text(store_ref.machine()?)));
         // the file's size where it lives, starting nothing (P4), and the

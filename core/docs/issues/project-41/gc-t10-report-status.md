@@ -74,7 +74,7 @@ backend-only field, so PostgreSQL reports its zeros through the same keys
 wire change. `store.status` reads the Store-side `gc_op` at the same point in
 `status.rs`; nothing is read from a file there.
 
-## Metrics and SLO signals (T10.3)
+## Metrics and SLO signals (T10.3, PostgreSQL T10.4)
 
 `engine/crates/layerfs-persistence/src/compact_metrics.rs` publishes the
 compaction observations from the real `store.compact` and `store.status`
@@ -85,8 +85,9 @@ paths:
   `compact.retries{reason}`, `compact.status{state}` and
   `compact.slo{objective,result}` (`residue_free`, `generation`);
 - duration aggregates: `compact.phase.duration_ns{phase,statistic}` for
-  `mark`/`build`/`verify`/`install` and `compact.duration_ns{statistic}`, each
-  with `count`, `sum` and `max`;
+  `mark`/`build`/`verify`/`install` on SQLite and
+  `pg_mark`/`pg_build`/`pg_swap`/`pg_cleanup` on PostgreSQL, and
+  `compact.duration_ns{statistic}`, each with `count`, `sum` and `max`;
 - the last successful run's §11 gauges: `compact.dead_bytes{kind}`,
   `compact.kept_waste{part}`, `compact.kept_waste_bytes`,
   `compact.residue_bytes` and `compact.generation{which}`.
@@ -94,12 +95,26 @@ paths:
 Labels come only from closed enums: outcome, phase, refusal code, settle kind,
 retry reason, status state, SLO objective/result, statistic and report key. A
 Store name, path, operation id or artifact name is never a label, so metric
-cardinality is fixed. A `none` run times only `mark`; a rebuild times all four
-phases; a failure or unknown run records its outcome and total but publishes
-no report gauge; a run that settles an earlier leftover adds `leftover` to
+cardinality is fixed. A SQLite `none` run times only `mark` and a PostgreSQL
+`none` run only `pg_mark`; a rebuild times all four phases its backend names;
+a failure or unknown run records its outcome and total but publishes no report
+gauge; a run that settles an earlier leftover adds `leftover` to
 `compact.settles` and `compact.retries`. A `Busy`/`Unresolved` refusal that
-stops the call before a run is counted once by the control path, and a refusal
-the measured run itself produces is counted by that run.
+stops a SQLite call before a run is counted once by the control path, and a
+refusal a measured run itself produces (either backend) is counted by that
+run.
+
+PostgreSQL §8 emits the same observation from
+`backend/postgresql/compact.rs`: its `RunMetrics` times Phase M/A/B/C as
+`pg_mark`/`pg_build`/`pg_swap`/`pg_cleanup`. Those are distinct closed values,
+not aliases of the SQLite phases, so a process total never blends a SQLite
+phase with a PostgreSQL phase of another meaning. It records the same §11
+gauges from the PostgreSQL receipt (where `dead_bytes_refined ==
+dead_bytes_bound`, `backend_reusable = 0` and `residue` is empty) and maps
+`Busy`/`BusyOp` to `compact.refusals{code="busy"}` and `Unresolved` to
+`code="unresolved"`. A resumed `G + 1` leftover records Phase C, the receipt's
+original `generation {before, after}` and the `leftover` settle/retry; a `G`
+leftover is settled before the new round.
 
 The registry follows the telemetry crate's rules (fixed low-cardinality
 labels, recording never changes a result). `store.compact` has no new public
@@ -109,12 +124,21 @@ metrics call: `snapshot()` reads the process totals and
 ## Tests
 
 - `engine/crates/layerfs-persistence/tests/compact_metrics.rs`: a successful
-  rebuild (all four phase durations, outcome, dead/kept-waste/residue/generation
-  gauges and both SLO checks), the `none` path (only `mark` timed, generation
-  kept), a stopped `AfterBuild` run followed by the leftover settle
-  (`uncertain` outcome, then `rebuild` + `retries{leftover}` +
-  `settles{leftover}`), and a definite failure with no report gauge. Every
-  capture also asserts closed label keys and values.
+  SQLite rebuild (all four phase durations, outcome,
+  dead/kept-waste/residue/generation gauges and both SLO checks), the `none`
+  path (only `mark` timed, generation kept), a stopped `AfterBuild` run
+  followed by the leftover settle (`uncertain` outcome, then `rebuild` +
+  `retries{leftover}` + `settles{leftover}`), and a definite failure with no
+  report gauge.
+- `engine/crates/layerfs-persistence/tests/postgresql_compact.rs`: the same
+  capture on a real PostgreSQL Store: a successful rebuild (the four `pg_*`
+  phases, outcome and the same report gauges and SLO checks), the `none` path
+  (only `pg_mark`), a Busy swap refusal (`failed` +
+  `refusals{code="busy"}`, phases M/A/B, no report gauge) and an uncertain
+  leftover intent refusal (`failed` + `refusals{code="unresolved"}`, no phase,
+  no report gauge).
+- `engine/crates/layerfs-persistence/tests/support/metrics.rs`: the one
+  closed label-key/value assertion both capture tests use.
 - `engine/crates/layerfs-persistence/tests/sqlite_compact.rs`:
   `the_report_projects_every_section_11_field`,
   `the_empty_store_report_explains_its_zeros`,
@@ -127,13 +151,30 @@ metrics call: `snapshot()` reads the process totals and
   `delta_bases.references` hex), and `store.status` projects an idle Store,
   a live owner's record and a leftover one (`op`, `state`, `phases`), and the
   `compact.status{state}` metric of each read.
+- `engine/crates/layerfs-persistence/tests/postgresql_status.rs` (T10.5): on a
+  real PostgreSQL Store, an idle Store projects null; a live non-idle owner
+  projects `busy` with `uncertain`; a gone owner projects `unresolved`; each
+  `mark`/`build`/`swap` failpoint projects its recorded phase from the scratch
+  name after `gc_intent` is released; and a completed run leaves no row.
+- `control/crates/layerfs-store/tests/postgresql_status.rs` (T10.5): the same
+  projection through the control `store.status` call on a real PostgreSQL
+  Store: no row projects `idle` with `op`/`phases` null; a live
+  `pg_stat_activity` owner projects `busy`; the gone owner projects
+  `unresolved`; each of `mark`/`build`/`swap`/`cleanup` is projected from the
+  row; the bounded `compact.status{state}` samples are emitted once each; and
+  a Store whose row was removed is idle again.
 
 ## Gaps
 
 - The compaction metrics are emitted into the process registry only; no SDK
   call or CLI command renders `snapshot()` yet.
-- T9's PostgreSQL rebuild has no metrics of its own yet.
-- T9's PostgreSQL rebuild and its `gc_op` status read are not implemented;
-  the trait and the status comment are the only PostgreSQL pieces.
+- PostgreSQL compaction metrics cover the run and its admission/refusal paths.
+  T10.5 supplies the PostgreSQL `store.status` source: `status.rs` reads the
+  Store-side `gc_op` with its `gc_intent` on one status query (no Store open)
+  and projects `busy`/`unresolved` and the `mark`/`build`/`swap`/`cleanup`
+  phases, so `compact.status{state}` now has both sources.
+- No control-level test joins `store.compact` and `store.status` in one run:
+  the control case writes the rows a compaction leaves and checks the
+  projection, while the persistence suites run the compactions themselves.
 - The `{value, cap}` capped-field shape is not produced: the SQLite receipt
   has no cap today.

@@ -20,7 +20,7 @@ use layerfs_store::sqlite::create::create;
 use layerfs_store_service::history::lookup;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -298,10 +298,11 @@ fn the_worker_path_admits_before_the_sidecar_and_releases_after_the_marker() {
 }
 
 /// A fake worker on `listener`: answers its secret, answers each request with
-/// `reply`, and shares back the requests it read.
-fn fake_worker(
+/// `reply`, and shares back the requests it read. A `None` answer drops the
+/// connection without a reply, as a lost answer does.
+fn fake_worker_with(
     listener: TcpListener,
-    reply: impl Fn(&SdkValue) -> SdkValue + Send + 'static,
+    reply: impl Fn(&SdkValue) -> Option<SdkValue> + Send + 'static,
 ) -> Arc<Mutex<Vec<SdkValue>>> {
     let seen: Arc<Mutex<Vec<SdkValue>>> = Arc::default();
     let requests = seen.clone();
@@ -325,10 +326,20 @@ fn fake_worker(
             };
             let answer = reply(&request);
             requests.lock().unwrap().push(request);
-            let _ = write_frame(&mut stream, &answer);
+            if let Some(answer) = answer {
+                let _ = write_frame(&mut stream, &answer);
+            }
         }
     });
     seen
+}
+
+/// [`fake_worker_with`] of a worker that always answers.
+fn fake_worker(
+    listener: TcpListener,
+    reply: impl Fn(&SdkValue) -> SdkValue + Send + 'static,
+) -> Arc<Mutex<Vec<SdkValue>>> {
+    fake_worker_with(listener, move |request| Some(reply(request)))
 }
 
 /// The `op` of one request the fake worker read.
@@ -547,4 +558,95 @@ fn hex_decode(text: &str) -> Vec<u8> {
         .step_by(2)
         .map(|at| u8::from_str_radix(&text[at..at + 2], 16).unwrap())
         .collect()
+}
+
+#[test]
+fn a_lost_worker_reply_is_unknown_and_keeps_the_sidecar_for_the_retry() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let stack = LayerStackId::from_authority([6; 16]);
+    let home = caller_home("fake-lost", &address, stack);
+    // The first marker attempt loses its answer; the second (the retry)
+    // retires the Stack with the sidecar's `deleted_ms`.
+    let attempts = Arc::new(AtomicU32::new(0));
+    let count = attempts.clone();
+    let seen = fake_worker_with(listener, move |request| match op_of(request) {
+        "project.delete.admit" => Some(admitted_for(stack)),
+        "project.delete" => {
+            if count.fetch_add(1, Ordering::SeqCst) == 0 {
+                None
+            } else {
+                Some(removed_for(stack, 42))
+            }
+        }
+        "project.delete.release" => Some(released_for(request)),
+        other => panic!("unexpected op {other}"),
+    });
+
+    let refusal = remove(&home).expect_err("the marker answer was lost");
+    assert_eq!(refusal.code, "Unknown", "{refusal:?}");
+    // The sidecar stays `pending`, naming the admission, and the entry stays
+    // for the retry: an unknown outcome is never reported clean.
+    let intent = layerfs_store::project::delete::Intent::read(&home, "shop", "app")
+        .unwrap()
+        .expect("the pending sidecar stays");
+    assert_eq!(
+        intent.state,
+        layerfs_store::project::delete::IntentState::Pending
+    );
+    let op = intent.op.expect("the sidecar names its admission");
+    assert!(paths::project_dir(&home, "shop", "app").is_dir());
+    let requests = seen.lock().unwrap();
+    let ops: Vec<&str> = requests.iter().map(op_of).collect();
+    assert_eq!(
+        ops,
+        [
+            "project.delete.admit",
+            "project.delete",
+            "project.delete.release"
+        ],
+        "{requests:?}"
+    );
+    let first = sent_op(&requests[0]);
+    assert_eq!(sent_op(&requests[1]), first);
+    assert_eq!(sent_op(&requests[2]), first);
+    assert_eq!(hex_decode(&first), op.to_vec());
+    drop(requests);
+
+    // The retry re-registers the same identity and finishes the entry.
+    let outcome = remove(&home).expect("the retry settles the unknown outcome");
+    assert_eq!(outcome.get_text("kind"), Some("Removed"));
+    assert_eq!(outcome.get_int("deleted_ms"), Some(42));
+    assert!(outcome.get_bool("home_entry_removed"));
+    assert!(!paths::project_dir(&home, "shop", "app").exists());
+    assert_eq!(
+        layerfs_store::project::delete::Intent::read(&home, "shop", "app").unwrap(),
+        None,
+        "the retry unlinked the sidecar"
+    );
+    let requests = seen.lock().unwrap();
+    let ops: Vec<&str> = requests.iter().map(op_of).collect();
+    assert_eq!(
+        ops,
+        [
+            "project.delete.admit",
+            "project.delete",
+            "project.delete.release",
+            "project.delete.admit",
+            "project.delete",
+            "project.delete.release"
+        ],
+        "{requests:?}"
+    );
+    let same: Vec<&str> = requests[3..].iter().map(sent_op_ref).collect();
+    assert_eq!(same, [first.as_str(), first.as_str(), first.as_str()]);
+    drop(requests);
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// The `op_id` a request's args carry, borrowed.
+fn sent_op_ref(request: &SdkValue) -> &str {
+    args_of(request)
+        .get_text("op_id")
+        .expect("the frame names its admission")
 }

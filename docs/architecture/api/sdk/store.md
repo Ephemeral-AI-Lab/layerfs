@@ -130,7 +130,14 @@ leases are ignored, not removed
 password reference is resolved here and the server dialed once; a
 PostgreSQL Store is never `down` (an unreachable server shows in `server`)
 ([`status.rs`](../../../../control/crates/layerfs-store/src/status.rs)). It is
-the call an `Unresolved` refusal names. Errors: `NotFound`; `InvalidInput` (a
+the call an `Unresolved` refusal names. When a compaction runs on a sqlite
+Store, `op` is read from `<store>.compact-op`; on a PostgreSQL Store it is
+the Store-side `gc_op` row with its `gc_intent`, read by one status query
+with no Store session and no artifact read. Either way `state` is `busy`
+while the owner lives and `unresolved` once it is gone, `uncertain` stays
+the record's own fact, and `phases` names the backend's order (`mark`,
+`build`, `verify`, `install` on sqlite; `mark`, `build`, `swap`, `cleanup`
+on PostgreSQL). Errors: `NotFound`; `InvalidInput` (a
 record of unknown kind); `Unavailable` (a 1.1.0 Store whose machine is not
 known; `layerfs import-env` fixes it).
 

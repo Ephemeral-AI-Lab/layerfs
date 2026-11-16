@@ -21,13 +21,51 @@ use layerfs_home::events::Events;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_persistence::compact_metrics::{self, CompactRefusal};
-use layerfs_persistence::{
-    CompactReport, CompactRequest, PersistenceConfig, SqliteHandles, SqlitePersistenceProfile,
-};
 #[cfg(feature = "postgresql")]
 use layerfs_persistence::PostgresHandles;
+use layerfs_persistence::{
+    CompactFailpoint, CompactReport, CompactRequest, PersistenceConfig, SqliteHandles,
+    SqlitePersistenceProfile,
+};
 use layerfs_store_service::history::{admission, lookup};
 use std::path::Path;
+
+/// The T-G65 crash harness's gate: the real `layerfs store compact` process it
+/// starts carries this socket, and the SQLite engine stops at the failpoint
+/// below instead of reporting an unknown outcome. Ordinary callers set
+/// neither variable, so a run carries no failpoint.
+const CRASH_GATE_ENV: &str = "LAYERFS_COMPACT_CRASH_GATE";
+/// The stop point the crash harness names; honored only beside the gate.
+const CRASH_FAILPOINT_ENV: &str = "LAYERFS_COMPACT_CRASH_FAILPOINT";
+
+/// The failpoint the crash harness named, or `None` in every ordinary run.
+///
+/// A failpoint alone would stop the run in-process; the gate makes the stop
+/// observable to the harness, which then `SIGKILL`s this process. Requiring
+/// both keeps the hook inert for production callers and for builds without
+/// the engine's Unix-socket gate.
+#[cfg(unix)]
+fn crash_failpoint() -> Option<CompactFailpoint> {
+    std::env::var_os(CRASH_GATE_ENV)?;
+    match std::env::var(CRASH_FAILPOINT_ENV).ok()?.as_str() {
+        "BeforeSeal" => Some(CompactFailpoint::BeforeSeal),
+        "AfterSeal" => Some(CompactFailpoint::AfterSeal),
+        "BeforeVacuum" => Some(CompactFailpoint::BeforeVacuum),
+        "AfterBuild" => Some(CompactFailpoint::AfterBuild),
+        "DuringVerify" => Some(CompactFailpoint::DuringVerify),
+        "BeforeInstall" => Some(CompactFailpoint::BeforeInstall),
+        "DuringRename" => Some(CompactFailpoint::DuringRename),
+        "AfterInstall" => Some(CompactFailpoint::AfterInstall),
+        "DuringSettle" => Some(CompactFailpoint::DuringSettle),
+        _ => None,
+    }
+}
+
+/// No gate, no failpoint: a stop would hang the run in-process.
+#[cfg(not(unix))]
+fn crash_failpoint() -> Option<CompactFailpoint> {
+    None
+}
 
 /// `store.compact(name)`: reclaim one sqlite Store's dead bytes, answering
 /// the §11 report.
@@ -84,6 +122,7 @@ pub fn compact(home: &Path, _events: &mut Events<'_>, store: &str) -> Outcome {
             owner_pid: Some(std::process::id()),
             owner_pid_start,
             owner_pid_boot,
+            failpoint: crash_failpoint(),
             ..CompactRequest::default()
         })
         .map_err(lookup::history)?;

@@ -404,19 +404,30 @@ fn get_in(tx: &Transaction<'_>, op_id: &[u8; 16]) -> HistoryResult<Option<GcInte
     one(tx, GET, [op_id.as_slice()], intent_row)
 }
 
+/// The PostgreSQL advisory keys one release unlocks, and whether its intent
+/// was shared.
+#[cfg(feature = "postgresql")]
+struct ReleaseKeys {
+    keys: Vec<(u8, Vec<u8>)>,
+    shared: bool,
+}
+
 #[cfg(feature = "postgresql")]
 fn keys_for_release(
     tx: &Transaction<'_>,
     catalog: CatalogId,
     intent: &GcIntent,
-) -> HistoryResult<(Vec<(u8, Vec<u8>)>, bool)> {
+) -> HistoryResult<ReleaseKeys> {
     let mut intent = intent.clone();
     if intent.scope_kind == GcScopeKind::Branch && intent.project_id.is_none() {
         intent.project_id = one(tx, BRANCH_STACK, [intent.scope_id.as_slice()], |row| {
             cell::<Vec<u8>>(row, 0)
         })?;
     }
-    Ok((advisory_keys(catalog, &intent), intent.kind.shared()))
+    Ok(ReleaseKeys {
+        keys: advisory_keys(catalog, &intent),
+        shared: intent.kind.shared(),
+    })
 }
 
 /// Registers one shared (`mount`, `init`, `merge`) or exclusive
@@ -453,7 +464,7 @@ pub(crate) fn release(provider: &HistoryProvider, op_id: &[u8; 16]) -> HistoryRe
                 release_in(tx, op_id)?;
                 Ok(Some(keys_for_release(tx, provider.catalog_id, &intent)?))
             })?;
-            if let Some((keys, shared)) = found {
+            if let Some(ReleaseKeys { keys, shared }) = found {
                 let _ = session_unlock(session, provider.catalog_id, &keys, shared);
             }
             Ok(())

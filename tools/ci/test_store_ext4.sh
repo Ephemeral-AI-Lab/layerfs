@@ -42,7 +42,13 @@
 #   LAYERFS_TEST_CARGO_TARGET_DIR
 #                              default $LAYERFS_TEST_TMPDIR/target
 #   LAYERFS_TEST_POSTGRES_URL  libpq connection string; enables the postgresql
-#                              feature on every suite and the PostgreSQL cases
+#                              feature on every suite and the PostgreSQL cases.
+#                              Full-mode diagnostics need amcheck created in
+#                              that database (see testing.md); the harness
+#                              warns when psql can see that it is missing.
+#   LAYERFS_TEST_EXPECT_AMCHECK
+#                              assert a Pass relation summary in
+#                              postgresql_diagnostic (optional)
 #   Arguments after `--` are appended to every `cargo test` (e.g. -- --nocapture).
 #
 # Exit status: 0 every suite passed; 1 at least one failed; 2 wrong command line
@@ -286,6 +292,53 @@ run_cargo() {
   fi
 }
 
+# ---- The PostgreSQL prerequisites -----------------------------------------
+#
+# The full-mode doctor calls amcheck's verify_heapam and bt_index_check on
+# every heap and ready B-tree relation, and the PostgreSQL compaction suites
+# assert a clean full audit. A database without amcheck reports
+# store.database.relations=Unknown, so those tests fail with a diagnostic
+# finding, not an environment refusal. The engine never installs the
+# extension: warn, never fail, so the SQLite-only lane and a deliberately
+# amcheck-free server stay usable. psql is optional too; without it the check
+# is skipped with a clear message.
+postgresql_extension_count() {
+  psql "$LAYERFS_TEST_POSTGRES_URL" -X -A -t -v ON_ERROR_STOP=1 \
+    -c "SELECT count(*) FROM pg_catalog.pg_extension WHERE extname='$1'" 2>/dev/null
+}
+
+warn_about_postgresql_prerequisites() {
+  if ! command -v psql >/dev/null 2>&1; then
+    printf '%s\n' \
+      "test_store_ext4: LAYERFS_TEST_POSTGRES_URL is set but psql is not on PATH;" \
+      "  the amcheck precondition was not checked. Full-mode diagnostics report" \
+      "  store.database.relations=Unknown without it. Create it out of band:" \
+      "    CREATE EXTENSION IF NOT EXISTS amcheck;" >&2
+    return 0
+  fi
+  local extension count
+  for extension in amcheck pgstattuple; do
+    if ! count=$(postgresql_extension_count "$extension"); then
+      printf 'test_store_ext4: cannot query LAYERFS_TEST_POSTGRES_URL; the %s precondition was not checked.\n' "$extension" >&2
+      return 0
+    fi
+    if [ "${count:-0}" -gt 0 ]; then
+      continue
+    fi
+    if [ "$extension" = amcheck ]; then
+      printf '%s\n' \
+        "test_store_ext4: warning: the PostgreSQL test database has no amcheck extension." \
+        "  The full-mode doctor reports store.database.relations=Unknown and the" \
+        "  PostgreSQL compaction suites fail their clean-audit assertions (T-G14)." \
+        "  Create it in that database, then re-run:" \
+        "    psql \"\$LAYERFS_TEST_POSTGRES_URL\" -c 'CREATE EXTENSION IF NOT EXISTS amcheck;'" >&2
+    else
+      printf 'test_store_ext4: note: %s is not installed (companion extension; amcheck is the required one).\n' "$extension" >&2
+    fi
+  done
+  return 0
+}
+
 printf '%s\n' \
   "Store test harness" \
   "  repository:          $root" \
@@ -296,6 +349,10 @@ printf '%s\n' \
   "  jobs (-j):           $jobs" \
   "  mode:                $mode" \
   "  PostgreSQL:          $([ -n "${LAYERFS_TEST_POSTGRES_URL:-}" ] && echo 'on (LAYERFS_TEST_POSTGRES_URL set)' || echo 'off (LAYERFS_TEST_POSTGRES_URL unset; PostgreSQL cases print NOT_RUN)')"
+
+if [ -n "${LAYERFS_TEST_POSTGRES_URL:-}" ] && [ "$list_only" -eq 0 ]; then
+  warn_about_postgresql_prerequisites
+fi
 
 if [ "$mode" = quick ]; then
   run_cargo layerfs-persistence --test heads --test sqlite_publication

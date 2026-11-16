@@ -10,9 +10,21 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant},
 };
+pub mod conninfo;
 pub mod namespace;
 pub mod proxy;
 pub const BINDING: &[u8] = b"doctor-postgres-acceptance";
+/// An auxiliary server the physical doctor's extra cases need, or `None`
+/// with the usual NOT_RUN note. The primary `LAYERFS_TEST_POSTGRES_URL`
+/// still drives the rest of the target.
+pub fn auxiliary_url(variable: &str) -> Option<String> {
+    let url = std::env::var(variable).ok();
+    if url.is_none() {
+        eprintln!("NOT_RUN: {variable} is unset");
+    }
+    url
+}
+
 pub struct Fixture {
     pub selection: PostgresSelection,
     pub writer: Option<PostgresHandles>,
@@ -70,9 +82,10 @@ impl Fixture {
         self.roles.push(role.clone());
         role
     }
+    /// The same selection with `role` applied to every connection.
     pub fn restricted(&self, role: &str) -> PostgresSelection {
         let mut result = self.selection.clone();
-        result.url.push_str(&format!("&options=-c%20role%3D{role}"));
+        result.url = conninfo::with_option(&result.url, "options", &format!("-c role={role}"));
         result
     }
     pub fn fingerprint(&mut self) -> Vec<(String, i64, String)> {
