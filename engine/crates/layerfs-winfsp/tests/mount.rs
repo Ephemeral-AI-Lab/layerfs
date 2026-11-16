@@ -30,6 +30,8 @@ fn mounts_with_the_first_callbacks() {
     let interface = FSP_FILE_SYSTEM_INTERFACE {
         GetVolumeInfo: Some(layerfs_winfsp::callbacks::get_volume_info),
         GetSecurityByName: Some(layerfs_winfsp::callbacks::get_security_by_name),
+        Open: Some(layerfs_winfsp::callbacks::open),
+        ReadDirectory: Some(layerfs_winfsp::callbacks::read_directory),
         ..Default::default()
     };
     let context = Context {
@@ -40,5 +42,7 @@ fn mounts_with_the_first_callbacks() {
     let mounted = mount("Y:", interface, context).expect("mount");
     let meta = std::fs::metadata("Y:").expect("the mounted root answers");
     assert!(meta.is_dir());
+    let entries: Vec<_> = std::fs::read_dir("Y:").expect("read the mounted root").collect();
+    assert_eq!(entries.len(), 2, "the two dot entries");
     drop(mounted);
 }
