@@ -62,20 +62,24 @@ pub(crate) fn receipt(
     if physical_shrink == 0 {
         zero_reasons.push(CompactZeroReason {
             field: "physicalShrink",
-            reason: if path == CompactPath::None {
-                "none-path"
-            } else {
-                "no-waste"
+            reason: match path {
+                CompactPath::None => "none-path",
+                // A rebuild with dead bytes but a zero file delta is a real
+                // measurement, not "no waste": name the missing shrink.
+                CompactPath::Rebuild if dead_bytes == 0 => "no-waste",
+                CompactPath::Rebuild => "no-shrink",
             },
         });
     }
     if backend_reusable == 0 {
         zero_reasons.push(CompactZeroReason {
             field: "backendReusable",
-            reason: if path == CompactPath::None {
-                "none-path"
-            } else {
-                "no-waste"
+            reason: match path {
+                CompactPath::None => "none-path",
+                // A rebuild reclaims the source Store's free pages into the new
+                // artifact; a zero names the absent reusable space, never the
+                // dead bytes it just collected.
+                CompactPath::Rebuild => "no-free-pages",
             },
         });
     }
@@ -204,5 +208,75 @@ impl RunMetrics {
             leftover_settled: self.leftover_settled,
             refusal,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::receipt;
+    use super::CompactKeptWaste;
+    use super::CompactPath;
+    use super::CompactResidue;
+
+    /// A rebuild whose source Store had no free pages names that absence; it
+    /// does not claim there was no waste (there were 100 dead bytes).
+    #[test]
+    fn a_rebuild_without_free_pages_explains_no_free_pages() {
+        let receipt = receipt(
+            CompactPath::Rebuild,
+            1,
+            2,
+            100,
+            10,
+            0,
+            64,
+            CompactKeptWaste::default(),
+            64,
+            CompactResidue::default(),
+            1_000,
+            2,
+        );
+        assert!(receipt
+            .zero_reasons
+            .iter()
+            .any(|zero| zero.field == "backendReusable" && zero.reason == "no-free-pages"));
+        assert!(
+            receipt
+                .zero_reasons
+                .iter()
+                .all(|zero| zero.field != "physicalShrink"),
+            "a nonzero shrink carries no zero reason"
+        );
+    }
+
+    /// A rebuild can collect dead bytes and still measure no file delta; that
+    /// is `no-shrink`, never the misleading `no-waste`.
+    #[test]
+    fn a_rebuild_with_waste_but_no_shrink_explains_no_shrink() {
+        let receipt = receipt(
+            CompactPath::Rebuild,
+            1,
+            2,
+            100,
+            10,
+            4_096,
+            0,
+            CompactKeptWaste::default(),
+            64,
+            CompactResidue::default(),
+            1_000,
+            2,
+        );
+        assert!(receipt
+            .zero_reasons
+            .iter()
+            .any(|zero| zero.field == "physicalShrink" && zero.reason == "no-shrink"));
+        assert!(
+            receipt
+                .zero_reasons
+                .iter()
+                .all(|zero| !(zero.field == "physicalShrink" && zero.reason == "no-waste")),
+            "a zero delta with dead bytes is not no-waste"
+        );
     }
 }

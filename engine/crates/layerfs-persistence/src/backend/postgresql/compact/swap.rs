@@ -95,14 +95,19 @@ pub(crate) fn swap(
         if applied != 0 {
             return Err(HistoryError::Integrity("compaction totals already applied"));
         }
+        // §11: the swap records everything a resumed `G + 1` report cannot
+        // recompute after the old tables are gone: the pre-swap relation size,
+        // the Phase-A peak and the mark's kept waste.
         tx.query(
             &format!(
-                "UPDATE {schema}.gc_op SET phase='swap',dead_canonical=$1,dead_stored=$2,dead_metadata=$3 WHERE id=1"
+                "UPDATE {schema}.gc_op SET phase='swap',dead_canonical=$1,dead_stored=$2,dead_metadata=$3,physical_before=$4,peak_temp=$5 WHERE id=1"
             ),
             vec![
                 Param::I64(built.dead.canonical),
                 Param::I64(built.dead.stored),
                 Param::I64(built.dead.metadata),
+                Param::I64(i64::try_from(physical_before).unwrap_or(i64::MAX)),
+                Param::I64(i64::try_from(built.scratch_bytes).unwrap_or(i64::MAX)),
             ],
         )?;
         tx.query(

@@ -247,7 +247,9 @@ pub struct CompactResidue {
 pub struct CompactZeroReason {
     /// The report field the reason explains.
     pub field: &'static str,
-    /// One word of the §11 closed vocabulary.
+    /// One word of the §11 vocabulary. The #711 report-semantics fix adds
+    /// `no-free-pages` (a rebuild whose source Store had no reusable pages) and
+    /// `no-shrink` (a rebuild with dead bytes but no physical file delta).
     pub reason: &'static str,
 }
 

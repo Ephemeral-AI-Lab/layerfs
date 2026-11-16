@@ -1,7 +1,9 @@
 //! §8 Phase C: cleanup, the owner guards and §9 leftover settling.
 
+use super::build::relation_bytes;
 use super::op::clear_round;
 use super::op::hex;
+use super::op::history_rows;
 use super::op::read_generation;
 use super::op::read_op;
 use super::op::scalar_session;
@@ -12,7 +14,6 @@ use super::types::DeadTotals;
 use super::types::OpRow;
 use crate::backend::postgresql::session::connection::Session;
 use crate::backend::records::Param;
-use crate::backend::sqlite::compact::CompactKeptWaste;
 use crate::backend::sqlite::compact::CompactPath;
 use crate::backend::sqlite::compact::CompactReceipt;
 use crate::backend::sqlite::compact::CompactResidue;
@@ -199,23 +200,30 @@ pub(crate) fn settle_leftover(
     }
     metrics.begin_phase(CompactPhase::PostgresCleanup);
     let op_id = compaction_intent(session, schema)?;
+    // §11: Phase C deletes history, signature and digest rows but no `pack` or
+    // `object_location` row, so the relation size read before the resumed
+    // cleanup is the swap's `physical_after` the original reply would have
+    // measured. The op carries the rest of the original report.
+    let physical_after = relation_bytes(session, schema, &["pack", "object_location"])?;
+    let rows = history_rows(session, schema)?;
     cleanup(handles, session, schema, op.dead, op.totals_applied, op_id)?;
     metrics.end_phase();
     metrics.leftover_settled = true;
+    let dead_bytes = u64::try_from(op.dead.stored).unwrap_or(0);
     Ok(Some(report(
         CompactPath::Rebuild,
         u64::try_from(op.generation).unwrap_or(0),
         u64::try_from(current).unwrap_or(0),
+        dead_bytes,
+        dead_bytes,
+        u64::try_from(op.dead.canonical).unwrap_or(0),
         0,
-        0,
-        u64::try_from(op.dead.logical).unwrap_or(0),
-        0,
-        0,
-        CompactKeptWaste::default(),
-        0,
+        op.physical_before.saturating_sub(physical_after),
+        op.kept_waste.clone(),
+        op.peak_temp,
         CompactResidue::default(),
-        0,
-        0,
+        u64::try_from(op.total_stored).unwrap_or(0),
+        u64::try_from(rows).unwrap_or(0),
     )))
 }
 
