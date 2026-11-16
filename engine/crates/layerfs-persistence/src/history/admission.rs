@@ -259,8 +259,12 @@ fn parse_boot(text: &str) -> Option<u128> {
 
 /// True only when this process can prove `intent`'s owner is gone: the same
 /// boot and PID namespace, and the recorded process id/start no longer runs.
-/// Another boot, another machine or another container is never proved dead;
-/// it stays live-but-unreachable and is reported as a holder.
+///
+/// A `machine.stop` or SIGKILL leaves the intent row behind, so a mount whose
+/// owner was killed in this same container namespace can be adopted on the
+/// next admission instead of holding its scope forever. Another boot, another
+/// machine or another container is never proved dead: it stays live and
+/// unreachable, and is still reported as a holder.
 fn owner_dead(intent: &GcIntent) -> bool {
     let (Some(runtime), Some(boot)) = (
         intent.owner_runtime.as_deref(),

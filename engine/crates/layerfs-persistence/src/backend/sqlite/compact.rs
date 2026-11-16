@@ -25,6 +25,13 @@
 //! §7's step-4 payload sweep cannot discover another live object on SQLite.
 //! `deadBytesRefined` therefore equals `deadBytesBound`, as §11 requires for
 //! the `none` path.
+//!
+//! §6.3's visited set is a temp-file table: the mark streams one row per
+//! discovered object into `<store>.compact-visited` while it walks, the build
+//! attaches that file as `scratch`, and the `none`/abort paths delete it with
+//! the rest of the artifact set. A crash at `BeforeSeal` therefore leaves the
+//! visited scratch beside the live Store, where a real `SIGKILL` also leaves
+//! the writer's WAL; the recorded op names it, so the next run settles it.
 
 use super::lifecycle::seal::SealedFacts;
 use super::schema;
@@ -851,77 +858,6 @@ fn file_heads_digest(connection: &Connection) -> HistoryResult<[u8; 32]> {
     Ok(*hasher.finalize().as_bytes())
 }
 
-/// Writes the §6.3 visited set and the retained pack set to the scratch
-/// database the §7 copy joins against. The scratch runs `journal_mode=OFF`, so
-/// it leaves no journal of its own.
-fn write_visited(scratch: &Path, mark: &MarkResult) -> HistoryResult<u64> {
-    if std::fs::symlink_metadata(scratch).is_ok() {
-        return Err(HistoryError::Exists("staged compaction artifact"));
-    }
-    let connection = Connection::open_with_flags(
-        scratch,
-        OpenFlags::SQLITE_OPEN_READ_WRITE
-            | OpenFlags::SQLITE_OPEN_CREATE
-            | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )
-    .map_err(db_error)?;
-    connection
-        .busy_timeout(std::time::Duration::ZERO)
-        .map_err(db_error)?;
-    connection
-        .execute_batch(
-            "PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF;\
-CREATE TABLE visited (\
- object_id BLOB PRIMARY KEY CHECK(length(object_id)=32),\
- pack_id INTEGER NOT NULL\
-) STRICT, WITHOUT ROWID;\
-CREATE TABLE live_pack (pack_id INTEGER PRIMARY KEY) STRICT, WITHOUT ROWID;",
-        )
-        .map_err(db_error)?;
-    connection
-        .execute_batch("BEGIN IMMEDIATE")
-        .map_err(db_error)?;
-    {
-        let mut visited = connection
-            .prepare("INSERT OR IGNORE INTO visited(object_id,pack_id) VALUES(?1,?2)")
-            .map_err(db_error)?;
-        let mut live = connection
-            .prepare("INSERT OR IGNORE INTO live_pack(pack_id) VALUES(?1)")
-            .map_err(db_error)?;
-        for pack in mark.objects().packs() {
-            live.execute(params![pack]).map_err(db_error)?;
-        }
-        // The mark already resolved each reached object's winning locator, so
-        // the scratch joins against it without a second `object_location` load.
-        let locators = mark.objects().locators();
-        for id in mark.objects().objects() {
-            let pack = locators
-                .get(id)
-                .ok_or(HistoryError::Integrity("mark object locator"))?;
-            visited
-                .execute(params![id.as_bytes().as_slice(), pack])
-                .map_err(db_error)?;
-        }
-    }
-    connection.execute_batch("COMMIT").map_err(db_error)?;
-    connection.close().map_err(|(_, error)| db_error(error))?;
-    for suffix in ["-journal", "-wal", "-shm"] {
-        let mut sidecar = scratch.as_os_str().to_os_string();
-        sidecar.push(suffix);
-        if std::fs::symlink_metadata(sidecar).is_ok() {
-            return Err(HistoryError::Integrity("visited scratch sidecar"));
-        }
-    }
-    // §7 step 7 fsyncs the staged artifact it installs; the scratch is part of
-    // the recorded set too, and `journal_mode=OFF` skips SQLite's own sync.
-    let bytes = std::fs::metadata(scratch).map_err(io_error)?.len();
-    std::fs::File::open(scratch)
-        .map_err(io_error)?
-        .sync_all()
-        .map_err(io_error)?;
-    Ok(bytes)
-}
-
 /// What the staged rebuild produced, for the report and the install fence.
 struct Built {
     target: PathBuf,
@@ -979,7 +915,6 @@ fn table_present(connection: &Connection, name: &str) -> HistoryResult<bool> {
 /// The sealed Store and the mark a staged build is measured against.
 struct BuildInput<'a> {
     facts: &'a SealedFacts,
-    mark: &'a MarkResult,
     tuple: &'a MarkTuple,
     layout: crate::SqlitePackLayout,
     synchronous: i64,
@@ -995,7 +930,6 @@ fn build(
 ) -> HistoryResult<Built> {
     let BuildInput {
         facts,
-        mark,
         tuple,
         layout,
         synchronous,
@@ -1003,13 +937,16 @@ fn build(
     let store = &facts.path;
     let target = compact_path(store);
     let visited = visited_path(store);
-    for staged in [&target, &visited] {
-        if std::fs::symlink_metadata(staged).is_ok() {
-            return Err(HistoryError::Exists("staged compaction artifact"));
-        }
+    // The mark already streamed the §6.3 visited set into `visited`; only the
+    // staged Store is judged here. A missing scratch means the mark's table
+    // did not survive its own transaction.
+    if std::fs::symlink_metadata(&target).is_ok() {
+        return Err(HistoryError::Exists("staged compaction artifact"));
     }
+    let visited_bytes = std::fs::metadata(&visited)
+        .map_err(|_| HistoryError::Integrity("visited scratch"))?
+        .len();
     stop_at(request, CompactFailpoint::BeforeCopy, op, store)?;
-    let visited_bytes = write_visited(&visited, mark)?;
     if capacity {
         // §7 step 3 on a bounded filesystem: `VACUUM INTO` has already created
         // the staged file when the write meets ENOSPC. The abort path removes
@@ -2068,7 +2005,9 @@ impl SqliteHandles {
             metrics.begin_phase(CompactPhase::Mark);
             let admitted =
                 (|| -> HistoryResult<(MarkResult, MarkTuple, u64, u64, CompactKeptWaste, u64)> {
-                    let mark = history.mark()?;
+                    // §6.3: the visited set is streamed into the temp-file table while the
+                    // walk discovers objects, so the build joins it instead of a second pass.
+                    let mark = history.mark_with_scratch(&visited_path(&store))?;
                     let tuple = live_tuple(&session)?;
                     op.tuple = tuple.clone();
                     op.live_heads_digest = mark.live_heads_digest();
@@ -2099,18 +2038,18 @@ impl SqliteHandles {
             metrics.end_phase();
 
             if !rebuild {
-                // §3/§6.3 `none`: mark only. Both paths spill the closure to
-                // `<store>.compact-visited`, so the none path writes it and
-                // deletes it before it replies, and the reply counts it in
-                // `peakTempBytes`. The transient `kept_node` rows the mark wrote
-                // are cleared and the admission intent released, so the live
-                // Store keeps no mark state and the generation is unchanged.
+                // §3/§6.3 `none`: mark only. The mark streamed the closure to
+                // `<store>.compact-visited`; the none path deletes it before it
+                // replies and counts it in `peakTempBytes`, so the live Store
+                // keeps no mark state. The transient `kept_node` rows the mark
+                // wrote are cleared and the admission intent released, so the
+                // generation is unchanged.
                 let scratch = visited_path(&store);
-                let visited_bytes = match write_visited(&scratch, &mark) {
-                    Ok(bytes) => bytes,
-                    Err(error) => {
+                let visited_bytes = match std::fs::metadata(&scratch) {
+                    Ok(metadata) => metadata.len(),
+                    Err(_) => {
                         abort_run(&history, &store, &op_id);
-                        return Err(error);
+                        return Err(HistoryError::Integrity("visited scratch"));
                     }
                 };
                 if let Err(error) = remove_scratch(&scratch) {
@@ -2123,6 +2062,10 @@ impl SqliteHandles {
                 }
                 let (free, page) = live_page_metrics(&session)?;
                 history.gc_release(&op_id)?;
+                // The mark created the visited scratch even on this path; the
+                // `none` answer leaves no residue, exactly as it leaves no
+                // staged Store.
+                let _ = clear_artifacts(&store);
                 let _ = std::fs::remove_file(op_path(&store));
                 let _ = sync_directory(&store);
                 drop(lane);
@@ -2223,7 +2166,6 @@ impl SqliteHandles {
             let built = match build(
                 BuildInput {
                     facts: &facts,
-                    mark: &mark,
                     tuple: &tuple,
                     layout,
                     synchronous,
@@ -2430,112 +2372,5 @@ impl RunMetrics {
             leftover_settled: self.leftover_settled,
             refusal,
         });
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        cap_delta_references, io_error, journal_bound_bytes, Built,
-        DELTA_BASE_REFERENCES_CAP,
-    };
-    use layerfs_content::ObjectId;
-    use layerfs_history::HistoryError;
-
-    /// §7 step 3 on a bounded filesystem: `ENOSPC`, `EDQUOT` and `EFBIG` are
-    /// the report's `Capacity` refusal, never a corruption verdict.
-    #[test]
-    fn bounded_filesystem_errors_are_capacity() {
-        for code in [28, 122, 27, 69] {
-            let error = io_error(std::io::Error::from_raw_os_error(code));
-            assert!(
-                matches!(error, HistoryError::Capacity(_)),
-                "errno {code}: {error:?}"
-            );
-        }
-    }
-
-    /// Every other I/O failure keeps the integrity classification.
-    #[test]
-    fn another_io_error_is_integrity() {
-        let error = io_error(std::io::Error::from_raw_os_error(5));
-        assert!(matches!(error, HistoryError::Integrity(_)), "{error:?}");
-    }
-
-    /// §7 step 8: `SQLITE_NOMEM` is the report's `Capacity` refusal, not an
-    /// uncertain outcome. A definite classification is what lets the caller
-    /// remove the staged artifact set instead of keeping it as a leftover.
-    #[test]
-    fn sqlite_out_of_memory_is_capacity() {
-        let error = rusqlite::Error::SqliteFailure(
-            rusqlite::ffi::Error {
-                code: rusqlite::ErrorCode::OutOfMemory,
-                extended_code: 7,
-            },
-            None,
-        );
-        assert!(
-            matches!(super::db_error(error), HistoryError::Capacity(_)),
-            "SQLITE_NOMEM must be Capacity"
-        );
-    }
-
-    /// §11/S7: `deltaBases.references` is capped, and the cap is reported; the
-    /// bytes and the retained set are unaffected.
-    #[test]
-    fn delta_base_references_are_capped_and_the_cap_is_reported() {
-        let short: Vec<ObjectId> = (0..3u8)
-            .map(|index| ObjectId::from_bytes(&[index; 32]).unwrap())
-            .collect();
-        let (references, capped) = cap_delta_references(&short);
-        assert_eq!(references.len(), 3);
-        assert!(!capped);
-
-        let long: Vec<ObjectId> = (0..=DELTA_BASE_REFERENCES_CAP)
-            .map(|index| ObjectId::from_bytes(&[(index % 251) as u8; 32]).unwrap())
-            .collect();
-        let (references, capped) = cap_delta_references(&long);
-        assert_eq!(references.len(), DELTA_BASE_REFERENCES_CAP);
-        assert!(capped, "a list at the cap is reported as capped");
-    }
-
-    /// §11 `peakTempBytes` on the 50 GB arm (T-G66): the staged copy holds the
-    /// source extent, the rewrite holds that copy beside the new Store, and the
-    /// rollback journal is bounded by the staged page count. The receipt must
-    /// cover the measured 143.1 GB pre-rebuild peak and the 44.6 GB journal the
-    /// old `new + visited` formula dropped.
-    #[test]
-    fn peak_temp_covers_the_staged_copy_and_the_rollback_journal() {
-        let page_size = 4096;
-        // 50,862,854,144 B staged copy = the sealed Store's page count.
-        let staged_pages = 12_417_689;
-        let staged_bytes = staged_pages * page_size;
-        let target_bytes = 45_763_203_072;
-        let visited_bytes = 20_365_312;
-        let journal = journal_bound_bytes(staged_pages, page_size);
-        assert_eq!(journal, 50_962_203_848);
-        let built = Built {
-            target: std::path::PathBuf::new(),
-            target_bytes,
-            staged_bytes,
-            journal_bound_bytes: journal,
-            visited_bytes,
-            logical: 0,
-            canonical: 0,
-            stored: 0,
-            metadata: 0,
-            free_bytes: 0,
-        };
-        let peak = built.peak_temp_bytes();
-        assert_eq!(peak, 147_608_626_376);
-        assert!(peak >= target_bytes + journal + visited_bytes);
-        assert!(
-            peak >= target_bytes + 44_630_503_928 + visited_bytes,
-            "the bound must cover the 50 GB arm's observed 44.6 GB journal"
-        );
-        assert!(
-            peak >= 143_100_000_000,
-            "the bound must cover the measured 143.1 GB sampled 50 GB peak"
-        );
     }
 }

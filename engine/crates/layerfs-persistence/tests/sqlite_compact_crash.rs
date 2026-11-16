@@ -540,7 +540,7 @@ crash_at!(
     "mark",
     false,
     false,
-    false
+    true
 );
 crash_at!(
     crash_before_seal_read,
@@ -548,7 +548,7 @@ crash_at!(
     "mark",
     false,
     false,
-    false
+    true
 );
 crash_at!(
     crash_after_seal,
@@ -556,7 +556,7 @@ crash_at!(
     "mark",
     false,
     false,
-    false
+    true
 );
 crash_at!(
     crash_before_copy,
@@ -564,7 +564,7 @@ crash_at!(
     "build",
     false,
     false,
-    false
+    true
 );
 crash_at!(
     crash_during_copy,
@@ -850,16 +850,16 @@ mod real_process {
         };
     }
 
-    // The mark phase: the open session and admission intent at `BeforeSeal`
-    // (the real kill leaves the writer's WAL sidecars), and the sealed Store
-    // with the recorded intent at `AfterSeal`.
+    // The mark phase: the open session, the admission intent and the visited
+    // scratch at `BeforeSeal` (the real kill leaves the writer's WAL
+    // sidecars), and the sealed, intent-released Store at `AfterSeal`.
     sigkill_at!(
         sigkill_before_seal,
         CompactFailpoint::BeforeSeal,
         "mark",
         false,
         false,
-        false,
+        true,
         true
     );
     sigkill_at!(
@@ -868,14 +868,14 @@ mod real_process {
         "mark",
         false,
         false,
-        false,
+        true,
         false
     );
     // The copy: SQLite runs `VACUUM INTO` as one call that cannot be
     // interrupted deterministically, so this arm stops immediately before it.
     // The in-process `DuringCopy` arm keeps the torn-target state; this real
-    // kill proves the crash after the visited scratch exists and before the
-    // staged file does.
+    // kill proves the crash with the visited scratch and before the staged
+    // file exists.
     sigkill_at!(
         sigkill_during_copy,
         CompactFailpoint::BeforeVacuum,

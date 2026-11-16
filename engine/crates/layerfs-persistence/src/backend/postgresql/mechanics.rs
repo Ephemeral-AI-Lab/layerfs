@@ -100,4 +100,11 @@ impl Mechanics for Transaction<'_> {
     ) -> Result<Option<(usize, Vec<u8>)>, PersistenceError> {
         objects::read::prefix(self, id, limit)
     }
+    fn read_scoped_pack(
+        &self,
+        id: i64,
+        plan: &mut dyn layerfs_storage::port::PackReadPlan,
+    ) -> Result<layerfs_storage::port::AcquiredPackRead, PersistenceError> {
+        objects::read::scoped(self, id, plan)
+    }
 }

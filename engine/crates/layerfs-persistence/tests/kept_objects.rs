@@ -25,7 +25,7 @@ use layerfs_history::{
 };
 use layerfs_persistence::SqliteHandles;
 use layerfs_storage::{
-    encoding::{encode_full, encode_prefix, raw_payload, CompressionWorkspace},
+    encoding::{encode_full, encode_prefix, framed_record, raw_payload, CompressionWorkspace},
     location::{ObjectLocation, PackDomain},
     pack::{assemble, build_group, layout, PackLane},
     port::{PackPersistence, Publication, PublishedPack, Reserve},
@@ -186,6 +186,99 @@ fn publish_groups(f: &Fixture, objects: &[FinalizedObject]) -> (i64, Vec<u8>) {
         })
         .unwrap();
     (reserved.first_pack_id, body)
+}
+
+/// Publishes one Raw group holding every object as its own record, so a
+/// retained group can mix a reached and an unreached record.
+fn publish_group_records(f: &Fixture, objects: &[FinalizedObject]) -> (i64, Vec<u8>) {
+    let capacities = StorageCapacities::from_policy(f.policy).unwrap();
+    let mut workspace = CompressionWorkspace::new().unwrap();
+    let mut profile = SaveProfile::default();
+    let records: Vec<_> = objects
+        .iter()
+        .map(|object| {
+            encode_full(
+                object.canonical(),
+                object.role(),
+                &capacities,
+                &mut workspace,
+                &mut profile,
+            )
+            .unwrap()
+            .record
+        })
+        .collect();
+    let group = build_group(PackLane::WholeFile, &records, None).unwrap();
+    assert_eq!(group.codec, layout::GroupCodec::Raw);
+    let body = assemble(PackLane::WholeFile, &[group]).unwrap();
+    let reserved = f
+        .handles
+        .storage
+        .reserve(Reserve {
+            packs: 1,
+            ordinals: 0,
+        })
+        .unwrap();
+    f.handles
+        .storage
+        .publish(&Publication {
+            packs: vec![PublishedPack::seal(
+                reserved.first_pack_id,
+                PackDomain::Payload,
+                Arc::new(body.clone()),
+            )],
+            objects: objects
+                .iter()
+                .enumerate()
+                .map(|(record, object)| ObjectLocation {
+                    object_id: object.id(),
+                    role: object.role(),
+                    canonical_length: object.canonical_len(),
+                    pack_id: reserved.first_pack_id,
+                    group_number: 0,
+                    record_number: record,
+                })
+                .collect(),
+            ..Publication::default()
+        })
+        .unwrap();
+    (reserved.first_pack_id, body)
+}
+
+#[test]
+fn a_dead_record_in_a_retained_raw_group_is_exact_kept_waste() {
+    let f = Fixture::new();
+    let live = FinalizedObject::new(
+        ObjectRole::WholeFile,
+        encode_whole_file_payload(b"the reached record").unwrap(),
+    )
+    .unwrap();
+    let dead = FinalizedObject::new(
+        ObjectRole::WholeFile,
+        encode_whole_file_payload(b"the unreached record in the same group").unwrap(),
+    )
+    .unwrap();
+    let (pack, body) = publish_group_records(&f, &[live.clone(), dead.clone()]);
+    let header = layout::parse_header(&body).unwrap();
+    assert_eq!(header.group_count, 1);
+    let view = layout::group_view(&body, header, 0).unwrap();
+    let group = &body[view.start..view.end];
+    let expected = framed_record(group, 1).unwrap().len() as u64;
+    assert!(expected > 0);
+
+    let stack = initialize(&f.handles, 1, live.id());
+    fork(&f.handles, stack.id, branch_id(1), 1);
+
+    let mark = f.handles.history.mark().unwrap();
+    let objects = mark.objects();
+    assert!(objects.contains(live.id()));
+    assert!(!objects.contains(dead.id()));
+    assert_eq!(objects.packs(), &[pack]);
+    assert_eq!(
+        objects.waste().dead_in_retained_packs_bytes(),
+        expected,
+        "only the dead record's framed extent is kept waste"
+    );
 }
 
 #[test]

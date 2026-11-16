@@ -79,10 +79,17 @@ pub fn project_removal_at(stack: LayerStackId, op: [u8; 16]) -> GcIntent {
     )
 }
 
-/// This process's PID-namespace inode, when the platform names one. An
-/// intent's owner can only be judged alive or dead from a process that shares
-/// its namespace: a pid in another namespace (another container or machine)
-/// names something else here, so it is never proved dead.
+/// A lowercase hex token, used to keep one process's owner tokens distinct.
+fn hex16(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push_str(&format!("{byte:02x}"));
+    }
+    out
+}
+
+/// This process's PID-namespace inode, when the platform names one. A pid is
+/// only meaningful inside the namespace that wrote it.
 fn pid_namespace() -> Option<u64> {
     #[cfg(target_os = "linux")]
     {
@@ -98,11 +105,12 @@ fn pid_namespace() -> Option<u64> {
 
 /// The owner evidence every intent records: this process (`pid` and its start
 /// time, plus the PID namespace that makes the id meaningful) and this boot.
-/// A later call in the same namespace can prove the owner gone; a call in
-/// another namespace (another machine or container) never does. The boot
-/// token also carries a unique suffix (Workspace or operation id), because
-/// the schema's `UNIQUE(scope_kind, scope_id, owner_boot)` must still admit
-/// two intents of one scope from one process.
+/// A later admission in the same namespace can prove the owner gone after a
+/// `machine.stop` or SIGKILL; a call in another namespace (another machine or
+/// container) never does. The boot token carries a unique suffix (the
+/// operation or Workspace id), because the schema's
+/// `UNIQUE(scope_kind, scope_id, owner_boot)` must still admit two intents of
+/// one scope from one process.
 #[must_use]
 pub fn owner_tokens(suffix: &str) -> (String, String) {
     let pid = std::process::id();
@@ -129,7 +137,7 @@ pub fn owner_tokens(suffix: &str) -> (String, String) {
 
 /// The owner tokens of one operation identity, unique within its scope.
 fn owned(mut intent: GcIntent, op: [u8; 16]) -> GcIntent {
-    let (runtime, boot) = owner_tokens(&format!("op:{}", lookup::hex(&op)));
+    let (runtime, boot) = owner_tokens(&format!("op:{}", hex16(&op)));
     intent.owner_runtime = Some(runtime);
     intent.owner_boot = Some(boot);
     intent
@@ -146,7 +154,7 @@ pub fn mount_intent(
     place: &layerfs_bridge::control::MountPlace,
 ) -> GcIntent {
     let body: [u8; 32] = workspace.as_slice().try_into().unwrap_or([0u8; 32]);
-    let (runtime, boot) = owner_tokens(&format!("ws:{}", lookup::hex(&body)));
+    let (runtime, boot) = owner_tokens(&format!("ws:{}", hex16(&body)));
     GcIntent::shared(
         op_id(),
         GcIntentKind::Mount,

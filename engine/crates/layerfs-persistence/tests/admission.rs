@@ -353,6 +353,7 @@ fn a_missing_epoch_row_is_conflict_and_release_is_idempotent() {
 /// A mount whose owner is provably dead (the same boot and PID namespace, a
 /// pid that does not run) no longer blocks a removal: the removal adopts the
 /// row, while a live owner still reports a holder.
+#[cfg(target_os = "linux")]
 fn dead_mount(stack: LayerStackId, branch: BranchId, tag: u8) -> GcIntent {
     let namespace = {
         let target = std::fs::read_link("/proc/self/ns/pid").unwrap();
@@ -380,21 +381,27 @@ fn dead_mount(stack: LayerStackId, branch: BranchId, tag: u8) -> GcIntent {
     )
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn a_dead_mount_owner_is_settled_and_does_not_hold_the_scope() {
     let temp = Temp::new("admission-dead-owner");
     let history = catalog(&temp);
     let (project_id, branch) = project(&history);
     // The recorded owner does not run: the removal adopts its row instead of
-    // reporting `MountsActive` forever.
-    history.gc_register(&dead_mount(project_id, branch, 23)).unwrap();
+    // reporting `MountsActive` forever after a `machine.stop`/SIGKILL.
+    history
+        .gc_register(&dead_mount(project_id, branch, 23))
+        .unwrap();
     let live = mount(project_id, branch, 24);
     history.gc_register(&live).unwrap();
     let refusal = history
         .gc_remove_branch(branch, 1_000, &removal(project_id, 25))
         .expect_err("a live owner holds");
-    assert!(matches!(refusal, HistoryError::MountsActive(_)), "{refusal:?}");
-    history.gc_release(&live.op_id).unwrap();
+    assert!(
+        matches!(refusal, HistoryError::MountsActive(_)),
+        "{refusal:?}"
+    );
+    history.gc_release(&op(24)).unwrap();
     history
         .gc_remove_branch(branch, 2_000, &removal(project_id, 26))
         .unwrap();

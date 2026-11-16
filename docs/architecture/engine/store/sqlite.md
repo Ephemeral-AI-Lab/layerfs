@@ -158,7 +158,7 @@ quarantines the session and keeps the lock
 | macOS extent release | Unused extents past logical EOF move to a same-volume scratch, which is removed; no logical byte is copied or truncated. The one module allowed `unsafe` | [`seal_allocation.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/seal_allocation.rs), [`file_control.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/file_control.rs) |
 | `snapshot` | One read transaction; page size, `auto_vacuum`, `user_version` and `application_id` carry over; destination must not exist; a busy source is `Busy`, never retried; a failed copy may leave a file for the caller to remove | [`snapshot.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/snapshot.rs) |
 | Free-space guard | A pack batch must leave 64 MiB after counting its bytes twice (WAL, then file); metadata-only batches are not guarded | [`headroom.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/headroom.rs) |
-| `reclaim_space(pages)` | `1..=RECLAMATION_PAGE_LIMIT` (512) pages by `incremental_vacuum`, one short write; only Stores created with `auto_vacuum=2` | [`reclamation.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/reclamation.rs) |
+| `reclaim_space(pages)` | `1..=RECLAMATION_PAGE_LIMIT` (512) pages by `incremental_vacuum`, stepped in one short write until the free list is empty or the page budget is spent (SQLite 3.40 removes one page per statement, not `N`); only Stores created with `auto_vacuum=2` | [`reclamation.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/reclamation.rs) |
 
 ## Heads
 

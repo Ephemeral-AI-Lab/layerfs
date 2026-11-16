@@ -25,15 +25,19 @@ use layerfs_storage::{
     encoding::pool::PoolReader,
     encoding::{
         delta::read::{locator_key, BodyCaches, ChainBases, ChainCounters, Resolver},
-        framed_record, DecompressionWorkspace, GroupCache, PackCache,
+        framed_record, DecompressionWorkspace, GroupCache, PackAcquisition, PackCache, PackUnit,
     },
-    location::{ObjectLocation, SignatureRow},
-    pack::layout::{self, GroupCodec},
-    port::PACK_READ_PREFIX_BYTES,
+    location::{ObjectLocation, PackInfo, SignatureRow},
+    pack::layout::{self, GroupCodec, PackLane},
+    port::{
+        AcquiredPackRead, PackRange, PackReadChoice, PackReadPlan, PersistenceError,
+        PACK_READ_PREFIX_BYTES,
+    },
     source::Source,
     StorageCapacities, StorageError,
 };
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 const ROOTS: &str = "gc_kept_roots";
 const LOCATIONS: &str = "gc_object_locations";
@@ -98,7 +102,6 @@ impl KeptWaste {
 pub struct KeptObjects {
     objects: Vec<ObjectId>,
     packs: Vec<i64>,
-    locators: BTreeMap<ObjectId, i64>,
     waste: KeptWaste,
 }
 
@@ -111,14 +114,6 @@ impl KeptObjects {
     /// Every pack holding a reached object, in ascending pack order.
     pub fn packs(&self) -> &[i64] {
         &self.packs
-    }
-
-    /// The winning locator pack of every reached object, in the same identity
-    /// order as [`Self::objects`] (§6.2). A rebuild's visited scratch joins
-    /// against it, so `object_location` is read once by the mark, not again by
-    /// the scratch writer.
-    pub fn locators(&self) -> &BTreeMap<ObjectId, i64> {
-        &self.locators
     }
 
     /// The bytes the mark keeps without a retained root needing them.
@@ -207,7 +202,7 @@ impl HistoryProvider {
     /// lands before the tuple is read is part of the mark, and one that lands
     /// after it moves at least one tuple field, so Phase B abandons.
     pub fn mark_gc(&self) -> HistoryResult<(MarkResult, GcTuple)> {
-        self.write(mark_gc)
+        self.write_snapshot(mark_gc)
     }
 
     /// The §6.4 live-heads digest of the Store as it is now, without a mark.
@@ -251,11 +246,41 @@ impl HistoryProvider {
     /// the mark and leaves no `kept_node` row behind. Nothing is compacted; the
     /// returned [`MarkResult`] is the rebuild path's input.
     pub fn mark(&self) -> HistoryResult<MarkResult> {
-        self.write(mark)
+        self.write_snapshot(mark)
+    }
+
+    /// The §6.3 compaction mark: the same closure and digest, with every
+    /// reached object streamed into the compaction's temp-file visited table
+    /// (`<store>.compact-visited`) as it is discovered. The §7 build attaches
+    /// that same file, so it never rebuilds an in-memory `object_id -> pack`
+    /// map from a second `object_location` scan. On PostgreSQL the visited set
+    /// is the `pg_temp` table the Phase M mark fills, so the path is unused.
+    ///
+    /// A failed mark drops the sink, which removes the scratch; the caller's
+    /// artifact set never keeps a half-written table.
+    pub fn mark_with_scratch(&self, scratch: &Path) -> HistoryResult<MarkResult> {
+        match &self.engine {
+            crate::backend::Engine::Sqlite(session) => session.run(true, |backend| {
+                let tx = Transaction::new(backend);
+                let sink = crate::backend::sqlite::compact_visit::VisitSink::create(scratch)?;
+                let mark = mark_recorded(&tx, Some(&sink))?;
+                sink.finish()?;
+                Ok(mark)
+            }),
+            #[cfg(feature = "postgresql")]
+            crate::backend::Engine::Postgres(_) => self.write_snapshot(mark),
+        }
     }
 }
 
 fn mark(tx: &Transaction<'_>) -> HistoryResult<MarkResult> {
+    mark_recorded(tx, None)
+}
+
+fn mark_recorded(
+    tx: &Transaction<'_>,
+    visit: Option<&crate::backend::sqlite::compact_visit::VisitSink>,
+) -> HistoryResult<MarkResult> {
     let history = kept::mark(tx)?;
     let policy = tx.mechanics().policy().map_err(storage)?;
     let capacities = StorageCapacities::from_policy(policy).map_err(storage)?;
@@ -268,17 +293,12 @@ fn mark(tx: &Transaction<'_>) -> HistoryResult<MarkResult> {
         locations: &located.locations,
     };
     let roots = roots(tx)?;
-    let closure = walk(&source, &capacities, policy.construction(), roots)?;
+    let closure = walk(&source, &capacities, policy.construction(), roots, visit)?;
     let waste = waste(tx, &source, &located, &closure)?;
     let digest = live_heads_digest(tx)?;
     let objects = KeptObjects {
         objects: closure.visited.keys().copied().collect(),
         packs: closure.packs(),
-        locators: closure
-            .visited
-            .iter()
-            .map(|(id, location)| (*id, location.pack_id))
-            .collect(),
         waste,
     };
     Ok(MarkResult {
@@ -381,6 +401,68 @@ struct ClosureSource<'a> {
     locations: &'a BTreeMap<ObjectId, ObjectLocation>,
 }
 
+/// The complete encoded groups one mark walk demands from one pack.
+///
+/// A metadata-only walk needs one record header per object and one delta edge
+/// per record, so the demand is sparse; the plan selects those exact group
+/// ranges and the backend reads only them, never the body behind the
+/// directory. A dense demand or a cache that already holds another group of
+/// the pack still materializes the whole body once.
+struct MarkGroups<'a> {
+    pack_id: i64,
+    groups: &'a [usize],
+    whole: bool,
+}
+
+impl PackReadPlan for MarkGroups<'_> {
+    fn select(
+        &mut self,
+        info: PackInfo,
+        prefix: &[u8],
+    ) -> Result<PackReadChoice, PersistenceError> {
+        if info.pack_id != self.pack_id || self.groups.is_empty() {
+            return Err(PersistenceError::Malformed);
+        }
+        let header = layout::parse_directory_header(prefix, info.length)
+            .map_err(|_| PersistenceError::Malformed)?;
+        if self.whole || header.lane == PackLane::Singleton || info.length <= PACK_READ_PREFIX_BYTES
+        {
+            return Ok(PackReadChoice::Whole);
+        }
+        let views = layout::directory_group_views(prefix, header)
+            .map_err(|_| PersistenceError::Malformed)?;
+        let mut ranges: Vec<PackRange> = Vec::new();
+        let mut useful = 0usize;
+        let mut previous = None;
+        for &group in self.groups {
+            if previous.is_some_and(|prior| prior >= group) {
+                return Err(PersistenceError::Malformed);
+            }
+            previous = Some(group);
+            let view = *views.get(group).ok_or(PersistenceError::Malformed)?;
+            useful = useful
+                .checked_add(view.end - view.start)
+                .ok_or(PersistenceError::Malformed)?;
+            if let Some(prior) = ranges
+                .last_mut()
+                .filter(|prior| prior.offset + prior.length == view.start)
+            {
+                prior.length += view.end - view.start;
+            } else {
+                ranges.push(PackRange {
+                    offset: view.start,
+                    length: view.end - view.start,
+                });
+            }
+        }
+        if useful >= info.length.div_ceil(2) || ranges.len() > 4 {
+            Ok(PackReadChoice::Whole)
+        } else {
+            Ok(PackReadChoice::Ranges(ranges))
+        }
+    }
+}
+
 impl Source for ClosureSource<'_> {
     fn ordered_dependencies(&self) -> bool {
         false
@@ -415,6 +497,35 @@ impl Source for ClosureSource<'_> {
             .pack_prefix(pack_id, limit)
             .map_err(StorageError::from)
     }
+    fn acquire_groups(
+        &self,
+        pack_id: i64,
+        groups: &[usize],
+        whole_for_reuse: bool,
+    ) -> Result<PackAcquisition, StorageError> {
+        let mut plan = MarkGroups {
+            pack_id,
+            groups,
+            whole: whole_for_reuse,
+        };
+        let reply = self
+            .mechanics
+            .read_scoped_pack(pack_id, &mut plan)
+            .map_err(StorageError::from)?;
+        match reply {
+            AcquiredPackRead::Whole(row) => {
+                let (info, body) = row.into_parts();
+                Ok(PackAcquisition::Whole {
+                    info: Some(info),
+                    body,
+                })
+            }
+            AcquiredPackRead::Units(row) => {
+                Ok(PackAcquisition::Units(PackUnit::from_acquired(row)?))
+            }
+        }
+    }
+
     fn inode_values(&self, ordinals: &[u32]) -> Result<Vec<[u8; INODE_VALUE_BYTES]>, StorageError> {
         let mut rows = Vec::new();
         self.mechanics
@@ -457,6 +568,7 @@ fn walk(
     capacities: &StorageCapacities,
     construction: ConstructionPolicy,
     roots: Vec<ObjectId>,
+    visit: Option<&crate::backend::sqlite::compact_visit::VisitSink>,
 ) -> HistoryResult<Closure> {
     let mut packs = PackCache::new();
     let mut pool = PoolReader::new();
@@ -538,6 +650,11 @@ fn walk(
                     next.push(base);
                 }
             }
+            if let Some(visit) = visit {
+                // Streaming rows as objects are discovered keeps the scratch a
+                // complete §6.2 closure at every step, not a post-pass copy.
+                visit.visit(id, location.pack_id)?;
+            }
             closure.visited.insert(id, location);
         }
         frontier = next;
@@ -562,73 +679,86 @@ fn waste(
     let mut dead_in_retained_packs_bytes = 0u64;
     for pack_id in closure.packs() {
         let groups = located.inventory.get(&pack_id);
-        let prefix = source
-            .pack_prefix(pack_id, PACK_READ_PREFIX_BYTES)
-            .map_err(storage)?;
-        // A pack row may reserve more capacity than it uses; the header names
+        // The pack row may reserve more capacity than it uses; the header names
         // the used length. Everything below parses against `used`, never the
-        // reserved capacity, and a prefix that already covers `used` is the
-        // whole body.
-        let body = match prefix {
-            Some((capacity, mut prefix)) if prefix.len() >= layout::USED_OFFSET + 4 => {
-                let used = {
-                    let field = &prefix[layout::USED_OFFSET..layout::USED_OFFSET + 4];
-                    u32::from_le_bytes(
-                        field
-                            .try_into()
-                            .map_err(|_| HistoryError::Integrity("mark pack length"))?,
-                    ) as usize
-                };
-                if used < layout::HEADER_LEN || used > capacity {
-                    return Err(HistoryError::Integrity("mark pack length"));
-                }
-                if prefix.len() > used {
-                    prefix.truncate(used);
-                }
-                if prefix.len() == used {
-                    Some(prefix)
-                } else {
-                    let header =
-                        layout::parse_directory_header(&prefix, used).map_err(storage)?;
-                    let views =
-                        layout::directory_group_views(&prefix, header).map_err(storage)?;
-                    let needs_body = views.iter().enumerate().any(|(number, view)| {
-                        let records = groups.and_then(|groups| groups.get(&number));
-                        let live = records.is_some_and(|records| {
-                            records.values().any(|id| closure.visited.contains_key(id))
-                        });
-                        let dead = records.is_some_and(|records| {
-                            records.values().any(|id| !closure.visited.contains_key(id))
-                        });
-                        live && dead && view.codec == GroupCodec::Raw
-                    });
-                    if needs_body {
-                        None
-                    } else {
-                        for (number, view) in views.iter().enumerate() {
-                            let records = groups.and_then(|groups| groups.get(&number));
-                            let live = records.is_some_and(|records| {
-                                records.values().any(|id| closure.visited.contains_key(id))
-                            });
-                            if !live {
-                                dead_in_retained_packs_bytes = dead_in_retained_packs_bytes
-                                    .saturating_add(
-                                        u64::try_from(view.end - view.start).unwrap_or(u64::MAX),
-                                    );
-                            }
-                        }
+        // reserved capacity. A prefix that already covers `used` is the body.
+        let Some((capacity, prefix)) = source
+            .pack_prefix(pack_id, PACK_READ_PREFIX_BYTES)
+            .map_err(storage)?
+        else {
+            return Err(HistoryError::Integrity("mark pack directory"));
+        };
+        if prefix.len() < layout::USED_OFFSET + 4 {
+            return Err(HistoryError::Integrity("mark pack length"));
+        }
+        let used = {
+            let field = &prefix[layout::USED_OFFSET..layout::USED_OFFSET + 4];
+            u32::from_le_bytes(
+                field
+                    .try_into()
+                    .map_err(|_| HistoryError::Integrity("mark pack length"))?,
+            ) as usize
+        };
+        if used < layout::HEADER_LEN || used > capacity {
+            return Err(HistoryError::Integrity("mark pack length"));
+        }
+        if prefix.len() >= used {
+            dead_in_retained_packs_bytes = dead_in_retained_packs_bytes.saturating_add(pack_waste(
+                &prefix[..used],
+                groups,
+                closure,
+            )?);
+            continue;
+        }
+        let header = layout::parse_directory_header(&prefix, used).map_err(storage)?;
+        let views = layout::directory_group_views(&prefix, header).map_err(storage)?;
+        // A wholly dead group's stored extent is known from the directory. A
+        // retained Raw group that still holds a dead record is read on its own,
+        // so its exact per-record split never costs the whole pack body.
+        let mut mixed_raw = Vec::new();
+        for (number, view) in views.iter().enumerate() {
+            let records = groups.and_then(|groups| groups.get(&number));
+            let live = records
+                .is_some_and(|records| records.values().any(|id| closure.visited.contains_key(id)));
+            if !live {
+                dead_in_retained_packs_bytes = dead_in_retained_packs_bytes
+                    .saturating_add(u64::try_from(view.end - view.start).unwrap_or(u64::MAX));
+            } else if view.codec == GroupCodec::Raw
+                && records.is_some_and(|records| {
+                    records.values().any(|id| !closure.visited.contains_key(id))
+                })
+            {
+                mixed_raw.push((number, *view));
+            }
+        }
+        if mixed_raw.is_empty() {
+            continue;
+        }
+        let numbers: Vec<usize> = mixed_raw.iter().map(|(number, _)| *number).collect();
+        let mut cache = PackCache::new();
+        cache
+            .acquire_groups(source, pack_id, &numbers)
+            .map_err(storage)?;
+        for (number, view) in mixed_raw {
+            let slice = cache
+                .group(source, pack_id, number)
+                .map_err(storage)?
+                .ok_or(HistoryError::Integrity("mark group acquisition"))?;
+            if slice.view.start != view.start || slice.view.end != view.end {
+                return Err(HistoryError::Integrity("mark group acquisition"));
+            }
+            let records = groups.and_then(|groups| groups.get(&number));
+            if let Some(records) = records {
+                for (record, id) in records {
+                    if closure.visited.contains_key(id) {
                         continue;
                     }
+                    let framed = framed_record(slice.bytes, *record).map_err(storage)?;
+                    dead_in_retained_packs_bytes = dead_in_retained_packs_bytes
+                        .saturating_add(u64::try_from(framed.len()).unwrap_or(u64::MAX));
                 }
             }
-            _ => None,
-        };
-        let body = match body {
-            Some(body) => body,
-            None => source.pack_bytes(pack_id).map_err(storage)?,
-        };
-        dead_in_retained_packs_bytes = dead_in_retained_packs_bytes
-            .saturating_add(pack_waste(&body, groups, closure)?);
+        }
     }
     let deltas: Vec<ObjectId> = closure
         .bases
@@ -685,7 +815,8 @@ fn pack_waste(
                     if closure.visited.contains_key(id) {
                         continue;
                     }
-                    let framed = framed_record(&body[view.start..view.end], *record).map_err(storage)?;
+                    let framed =
+                        framed_record(&body[view.start..view.end], *record).map_err(storage)?;
                     dead = dead.saturating_add(u64::try_from(framed.len()).unwrap_or(u64::MAX));
                 }
             }
