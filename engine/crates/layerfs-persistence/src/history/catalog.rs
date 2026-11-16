@@ -136,6 +136,14 @@ impl HistoryCatalog for HistoryProvider {
         self.read(|tx| super::lineage::overwritten(tx, layer, position, usize::from(limit)))
     }
 
+    fn published_layer(
+        &self,
+        branch: BranchId,
+        commit: CommitId,
+    ) -> HistoryResult<Option<LayerId>> {
+        self.read_statement(|tx| layerstack::published_source(tx, branch, commit))
+    }
+
     fn layer_history(
         &self,
         request: &LayerHistoryRequest,
