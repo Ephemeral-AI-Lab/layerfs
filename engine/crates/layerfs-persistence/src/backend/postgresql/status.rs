@@ -107,6 +107,8 @@ pub struct PostgresCompactOpStatus {
     pub owner_pid: Option<i64>,
     /// The owning backend's `backend_start`, when the row records one.
     pub owner_backend_start: Option<String>,
+    /// The owning role's `usename`, when the row records one.
+    pub owner_usename: Option<String>,
     /// The owning process runtime `gc_intent` recorded, when it left one.
     pub owner_runtime: Option<String>,
     /// The owning process boot id `gc_intent` recorded, when it left one.
@@ -172,10 +174,11 @@ pub fn compact_status(
     let sql = format!(
         "SELECT o.generation,o.phase,o.started_ms,o.pid,o.backend_start,o.artifact,\
                 o.mark_serial,o.mark_pack_id,o.mark_digest,\
-                i.op_id,i.owner_runtime,i.owner_boot,i.state,\
+                i.op_id,i.owner_runtime,i.owner_boot,i.state,o.usename,\
                 EXISTS (SELECT 1 FROM pg_stat_activity a \
                          WHERE a.datname=current_database() AND a.pid=o.pid \
                            AND a.backend_start::text=o.backend_start \
+                           AND (o.usename IS NULL OR a.usename::text=o.usename) \
                            AND a.state IS DISTINCT FROM 'idle') \
            FROM {table}.gc_op o \
            LEFT JOIN LATERAL (SELECT op_id,owner_runtime,owner_boot,state \
@@ -211,6 +214,7 @@ pub fn compact_status(
         started_ms: row.try_get(2).map_err(failed)?,
         owner_pid: row.try_get(3).map_err(failed)?,
         owner_backend_start: row.try_get(4).map_err(failed)?,
+        owner_usename: row.try_get(13).map_err(failed)?,
         owner_runtime: row.try_get(10).map_err(failed)?,
         owner_boot: row.try_get(11).map_err(failed)?,
         intent_state: row.try_get(12).map_err(failed)?,
@@ -220,7 +224,7 @@ pub fn compact_status(
         // A remaining row is an unsettled run: the record's own fact. It is
         // never inferred from the owner's liveness.
         uncertain: true,
-        alive: row.try_get(13).map_err(failed)?,
+        alive: row.try_get(14).map_err(failed)?,
     };
     let _ = client.close();
     Ok(Some(op))

@@ -36,6 +36,9 @@ pub(crate) fn statement(key: &str) -> Result<&'static str, BackendError> {
         "gc_unlock_session_exclusive" => Ok(include_str!(
             "../../../../sql/postgresql/queries/history/gc_unlock_session_exclusive.sql"
         )),
+        "gc_advisory_holder" => Ok(include_str!(
+            "../../../../sql/postgresql/queries/history/gc_advisory_holder.sql"
+        )),
         other => crate::backend::sqlite::session::query::history(other),
     }
 }

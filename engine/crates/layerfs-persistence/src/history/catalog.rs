@@ -249,6 +249,22 @@ impl HistoryCatalog for HistoryProvider {
         self.read_statement(|tx| super::position::node_serial(tx, node))
     }
 
+    fn retained_roots(&self, stack: LayerStackId) -> HistoryResult<Vec<NodeId>> {
+        self.read(|tx| super::kept::retained_roots(tx, stack))
+    }
+
+    fn get_retained_roots(&self, stack: LayerStackId) -> HistoryResult<Vec<NodeId>> {
+        self.read(|tx| super::kept::kept_roots(tx, stack))
+    }
+
+    fn remove_unreachable(&self, stack: LayerStackId, dry_run: bool) -> HistoryResult<u64> {
+        if dry_run {
+            self.read(|tx| super::kept::unreachable_count(tx, stack))
+        } else {
+            self.write(|tx| super::kept::remove_unreachable(tx, stack))
+        }
+    }
+
     fn gc_register(&self, intent: &GcIntent) -> HistoryResult<()> {
         super::admission::register(self, intent)
     }

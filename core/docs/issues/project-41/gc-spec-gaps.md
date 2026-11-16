@@ -87,6 +87,36 @@ the reused `deleted_ms`. Operator visibility is the sidecar and the call log, no
 "Home listing" cases (hidden, entry present, retry true). T3/T5 unaffected.
 **Correction.** None; §4 already states this. A residue field in the result would be a #42 amendment.
 
+## G7. `Busy`/`Unresolved` detail: resource scope kind and PostgreSQL holder (§5.1, §10)
+**Spec.** §5.1 and §10 give `Busy`/`Unresolved` the shape `{entity: {kind, name}, phase, op}`.
+The entity is the Store, project or Branch the operation holds, so `entity.kind` is the
+resource scope kind (`store`, `project`, `branch`), not the operation kind (which stays a
+separate internal fact). The spec is silent on naming the backend that holds a lock.
+**Decision.** `entity.kind` is the scope kind. On PostgreSQL the detail also carries the
+holder as `pid`, `client_addr` and `backend_start`, read from `pg_locks` (a contended
+swap) or `pg_stat_activity` (a recorded owner); each is `null` when no holder can be read,
+and all three are `null` on SQLite. The fields are additive, so a client that reads only
+`entity`/`phase`/`op` is unaffected, and `Unresolved` uses the same shape.
+**Impact.** T3/T5 (`remove`) and T4 (`delete`) report the refusal through `lookup.rs`; T9/T10
+populate the PG holder; T12 asserts `pid` names the blocker for a `55P03` swap and a held
+advisory key.
+**Correction.** Yes: a §10 sentence adding the optional PostgreSQL holder fields (or stating
+they are implementation evidence) would remove the ambiguity.
+
+## G8. `kept_node` closed-table shape (§6.1, §7.2)
+**Spec.** §6.1 names the closure's roots and edges; §7.2 copies the retained rows.
+**Decision.** `kept_node(layer_stack_id, kind, node_id, serial)` is a closed
+`(kind, node_id)` set: `kind` is `commit`, `layer`, `branch` or `stack`; `node_id` is
+the tagged identity of that kind (33 bytes with tag `0x12`/`0x32`, 17 bytes with tag
+`0x11`/`0x31`); `serial` is the node's own `history_serial`, `0` for a Branch and a
+Stack, which have none. Both providers enforce the kind/identity agreement as a table
+CHECK, so a row whose kind and tagged bytes disagree cannot be written. The table is
+never copied by a conversion or migrated from an older Store; an add-time step creates
+it empty ([`add_kept_node`]).
+**Impact.** T7 (`kept_node_mark`/`kept_node_read`), T9/T10 (Phase M dead set), T12
+(rebuild keeps the retained rows and drops the rest).
+**Correction.** None; this restates the implemented shape.
+
 ## Cross-cutting
 
 - Every refusal keeps one code and one stable message (§12 error matrix); these decisions add no code and no field.

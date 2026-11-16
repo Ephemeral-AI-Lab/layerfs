@@ -561,9 +561,14 @@ fn a_busy_swap_records_a_failed_outcome_and_a_busy_refusal() {
     let metrics = capture.finish();
     blocker.batch_execute("ROLLBACK").unwrap();
 
+    let layerfs_history::HistoryError::BusyOp(state) = &error else {
+        panic!("a 55P03 lock at the swap is a typed Busy, got {error:?}");
+    };
+    assert_eq!(state.entity, "store");
+    assert_eq!(state.phase.as_deref(), Some("swap"));
     assert!(
-        matches!(error, layerfs_history::HistoryError::Busy),
-        "{error:?}"
+        state.pid.is_some(),
+        "the blocker backend is named: {state:?}"
     );
     assert_bounded(&metrics);
     assert_eq!(value(&metrics, "compact.runs", &[]), 1);
@@ -948,9 +953,14 @@ fn an_exclusive_table_lock_makes_the_swap_busy() {
         .unwrap();
     let error = handles.compact(&request(7)).unwrap_err();
     blocker.batch_execute("ROLLBACK").unwrap();
+    let layerfs_history::HistoryError::BusyOp(state) = &error else {
+        panic!("a 55P03 lock at the swap is a typed Busy, got {error:?}");
+    };
+    assert_eq!(state.entity, "store");
+    assert_eq!(state.phase.as_deref(), Some("swap"));
     assert!(
-        matches!(error, layerfs_history::HistoryError::Busy),
-        "a 55P03 lock at the swap is Busy, got {error:?}"
+        state.pid.is_some(),
+        "the blocker backend is named: {state:?}"
     );
 }
 

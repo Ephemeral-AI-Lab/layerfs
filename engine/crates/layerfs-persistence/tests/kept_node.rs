@@ -388,3 +388,94 @@ fn an_empty_store_marks_nothing() {
     assert!(kept.is_empty());
     assert!(kept_rows(&path).is_empty());
 }
+
+#[test]
+fn retained_roots_read_the_live_layers_and_removal_follows_the_marked_closure() {
+    let temp = Temp::new("kept-roots-removal");
+    let path = temp.join("store.sqlite");
+    let handles = create(&path);
+    let one = initialize(&handles, 1);
+    let two = initialize(&handles, 2);
+    let first = branch_id(1);
+    fork(&handles, one.id, first, 1);
+    let kept_commit = commit(&handles, first, 9);
+    let kept_layer = publish(&handles, one.id, first);
+    let second = branch_id(2);
+    fork(&handles, two.id, second, 2);
+    let gone_commit = commit(&handles, second, 10);
+    let gone_layer = publish(&handles, two.id, second);
+
+    // Before any mark the roots are computed from the live Stacks: every
+    // Layer of a live Stack, and none of a retired one.
+    let roots = handles.history.retained_roots(one.id).unwrap();
+    assert!(roots.contains(&NodeId::Layer(kept_layer.id)));
+    assert!(roots.contains(&NodeId::Layer(one.head_layer)));
+    assert!(!roots.contains(&NodeId::Layer(gone_layer.id)));
+    assert_eq!(
+        handles.history.get_retained_roots(two.id).unwrap(),
+        handles.history.retained_roots(two.id).unwrap()
+    );
+
+    handles.history.mark_history_closure().unwrap();
+    assert_eq!(
+        handles.history.get_retained_roots(one.id).unwrap(),
+        roots,
+        "the mark records the same roots it computed"
+    );
+    assert_eq!(
+        handles.history.remove_unreachable(one.id, true).unwrap(),
+        0,
+        "a live project has no unreachable row"
+    );
+
+    // A deleted project's rows are unreachable once a mark records the live
+    // closure; a dry run counts them and the real removal deletes them.
+    handles.history.mark_stack_deleted(two.id, 2_000).unwrap();
+    handles.history.mark_history_closure().unwrap();
+    let dry = handles.history.remove_unreachable(two.id, true).unwrap();
+    assert!(dry > 0, "the deleted project has rows to collect");
+    assert_eq!(
+        handles.history.remove_unreachable(two.id, false).unwrap(),
+        dry
+    );
+    let sql = rusqlite::Connection::open(&path).unwrap();
+    assert_eq!(
+        sql.query_row(
+            "SELECT count(*) FROM layer_stack WHERE layer_stack_id=?1",
+            rusqlite::params![two.id.as_slice()],
+            |r| r.get::<_, i64>(0)
+        )
+        .unwrap(),
+        0,
+        "the deleted project's row is gone"
+    );
+    assert_eq!(
+        sql.query_row(
+            "SELECT count(*) FROM \"commit\" WHERE commit_id=?1",
+            rusqlite::params![gone_commit.id.as_slice()],
+            |r| r.get::<_, i64>(0)
+        )
+        .unwrap(),
+        0,
+        "its Commits are gone"
+    );
+    assert_eq!(
+        sql.query_row(
+            "SELECT count(*) FROM layer WHERE layer_id=?1",
+            rusqlite::params![gone_layer.id.as_slice()],
+            |r| r.get::<_, i64>(0)
+        )
+        .unwrap(),
+        0,
+        "its Layers are gone"
+    );
+    drop(sql);
+
+    // The live project and its history are untouched.
+    assert!(handles.history.layer_stack(one.id).unwrap().is_some());
+    assert!(handles.history.commit(kept_commit.id).unwrap().is_some());
+    assert!(handles.history.layer(kept_layer.id).unwrap().is_some());
+    assert_eq!(handles.history.remove_unreachable(one.id, true).unwrap(), 0);
+    drop(handles);
+    drop(writable(&path).expect("the Store still opens"));
+}

@@ -1,16 +1,16 @@
 
 CREATE TABLE branch_retired (
-    branch_id BYTEA PRIMARY KEY CHECK (length(branch_id) = 17),
+    branch_id BYTEA PRIMARY KEY CHECK (length(branch_id) = 17 AND get_byte(branch_id, 0) = 17),
     removed_ms BIGINT NOT NULL CHECK (removed_ms >= 0),
     FOREIGN KEY (branch_id) REFERENCES branch(branch_id) ON DELETE CASCADE
 );
 CREATE TABLE layer_stack_retired (
-    layer_stack_id BYTEA PRIMARY KEY CHECK (length(layer_stack_id) = 17),
+    layer_stack_id BYTEA PRIMARY KEY CHECK (length(layer_stack_id) = 17 AND get_byte(layer_stack_id, 0) = 49),
     deleted_ms BIGINT NOT NULL CHECK (deleted_ms >= 0),
     FOREIGN KEY (layer_stack_id) REFERENCES layer_stack(layer_stack_id) ON DELETE CASCADE
 );
 CREATE TABLE path_removed (
-    layer_stack_id BYTEA NOT NULL CHECK (length(layer_stack_id) = 17),
+    layer_stack_id BYTEA NOT NULL CHECK (length(layer_stack_id) = 17 AND get_byte(layer_stack_id, 0) = 49),
     path_key BYTEA NOT NULL CHECK (length(path_key) = 32),
     path BYTEA NOT NULL CHECK (length(path) BETWEEN 1 AND 4096),
     frontier_serial BIGINT NOT NULL CHECK (frontier_serial >= 0),
@@ -19,7 +19,7 @@ CREATE TABLE path_removed (
     FOREIGN KEY (layer_stack_id) REFERENCES layer_stack(layer_stack_id) ON DELETE CASCADE
 );
 CREATE TABLE project_epoch (
-    layer_stack_id BYTEA PRIMARY KEY CHECK (length(layer_stack_id) = 17),
+    layer_stack_id BYTEA PRIMARY KEY CHECK (length(layer_stack_id) = 17 AND get_byte(layer_stack_id, 0) = 49),
     epoch BIGINT NOT NULL DEFAULT 0 CHECK (epoch >= 0),
     FOREIGN KEY (layer_stack_id) REFERENCES layer_stack(layer_stack_id) ON DELETE CASCADE
 );
@@ -27,7 +27,11 @@ CREATE TABLE gc_intent (
     op_id BYTEA PRIMARY KEY CHECK (length(op_id) = 16),
     kind TEXT NOT NULL CHECK (kind IN ('mount','init','merge','removal','compaction')),
     scope_kind TEXT NOT NULL CHECK (scope_kind IN ('store','project','branch')),
-    scope_id BYTEA,
+    scope_id BYTEA CHECK (
+        (scope_kind = 'store' AND length(scope_id) = 32)
+        OR (scope_kind = 'project' AND length(scope_id) = 17 AND get_byte(scope_id, 0) = 49)
+        OR (scope_kind = 'branch' AND length(scope_id) = 17 AND get_byte(scope_id, 0) = 17)
+    ),
     workspace TEXT,
     sandbox TEXT,
     machine TEXT,
@@ -64,6 +68,7 @@ CREATE TABLE gc_op (
     artifact TEXT,
     pid BIGINT,
     backend_start TEXT,
+    usename TEXT,
     incarnation BIGINT
 );
 CREATE TABLE gc_dead (
@@ -78,7 +83,9 @@ CREATE TABLE kept_node (
     serial BIGINT NOT NULL DEFAULT 0 CHECK (serial >= 0),
     PRIMARY KEY (layer_stack_id, kind, node_id),
     CHECK (
-        (kind IN ('commit','layer') AND length(node_id) = 33)
-        OR (kind IN ('branch','stack') AND length(node_id) = 17)
+        (kind = 'commit' AND length(node_id) = 33 AND get_byte(node_id, 0) = 18)
+        OR (kind = 'layer' AND length(node_id) = 33 AND get_byte(node_id, 0) = 50)
+        OR (kind = 'branch' AND length(node_id) = 17 AND get_byte(node_id, 0) = 17)
+        OR (kind = 'stack' AND length(node_id) = 17 AND get_byte(node_id, 0) = 49)
     )
 );

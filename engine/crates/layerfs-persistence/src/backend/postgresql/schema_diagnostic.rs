@@ -83,6 +83,7 @@ gc_op totals_applied boolean NO
 gc_op artifact text YES
 gc_op pid bigint YES
 gc_op backend_start text YES
+gc_op usename text YES
 gc_op incarnation bigint YES
 history_meta id bigint NO
 history_meta catalog_id bytea NO
