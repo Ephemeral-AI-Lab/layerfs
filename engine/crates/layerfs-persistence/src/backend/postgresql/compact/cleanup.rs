@@ -237,6 +237,9 @@ pub(crate) fn cleanup(
     totals_applied: bool,
     op_id: Option<[u8; 16]>,
 ) -> HistoryResult<()> {
+    // §6.1: the mark's `kept_node` closure is working state, not
+    // retained history. The settle clears it with the dead set so the installed
+    // Store carries no mark state afterwards, as SQLite's settle does.
     stage(session, |tx| {
         tx.batch(&format!(
             "DELETE FROM {schema}.\"commit\" c WHERE EXISTS (SELECT 1 FROM {schema}.gc_dead d WHERE d.kind='commit' AND d.id=c.commit_id);\
@@ -256,7 +259,8 @@ pub(crate) fn cleanup(
              DELETE FROM {schema}.binding_hint_block;\
              DELETE FROM {schema}.init_operation;\
              DELETE FROM {schema}.init_entry;\
-             DELETE FROM {schema}.init_host_file;"
+             DELETE FROM {schema}.init_host_file;\
+             DELETE FROM {schema}.kept_node;"
         ))?;
         // §11: `cleanup` is written even when the totals were already
         // applied by the run being resumed.

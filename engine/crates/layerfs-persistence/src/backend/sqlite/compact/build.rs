@@ -188,6 +188,14 @@ UNION SELECT run FROM src.commit_lineage WHERE commit_id IN \
     }
 }
 
+/// The `store_policy` columns the rebuild copies, named explicitly: the fresh
+/// file's schema is a copy of the source's `sqlite_master`, so `SELECT *` would
+/// follow whatever column order that schema happens to have. The named list
+/// keeps the one policy row bound to the columns already validated at open.
+const STORE_POLICY_COLUMNS: &str = "id,schema_version,format_profile,small_file_threshold_bytes,\
+whole_file_delta_max_depth,chunk_delta_max_depth,metadata_delta_max_depth,\
+next_pack_id,next_ordinal,trace_salt";
+
 /// The retained-row copy, in foreign-key order. Tables the sealed Store does
 /// not have (an older layout) are absent; [`copy_rows`] skips them.
 const COPY_ORDER: [&str; 30] = [
@@ -295,6 +303,10 @@ fn copy_rows(
                 format!(
                     "INSERT INTO main.{name} SELECT * FROM src.{name} WHERE op_id=x'{}'",
                     hex(&op.op_id)
+                )
+            } else if table == "store_policy" {
+                format!(
+                    "INSERT INTO main.{name} ({STORE_POLICY_COLUMNS}) SELECT {STORE_POLICY_COLUMNS} FROM src.{name}"
                 )
             } else {
                 match copy_rule(table) {

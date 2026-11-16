@@ -7,7 +7,7 @@ use postgres::{types::Type, Row};
 /// reply and is `Unknown`, never guessed either way.
 pub(crate) fn error(e: &postgres::Error) -> BackendError {
     if let Some(code) = e.code() {
-        return state(code.code());
+        return sqlstate(code.code());
     }
     if e.is_closed() {
         return BackendError::Unknown;
@@ -19,17 +19,33 @@ pub(crate) fn error(e: &postgres::Error) -> BackendError {
     }
 }
 
-fn state(code: &str) -> BackendError {
+/// Classifies one SQLSTATE. Only the codes that definitively mean the Store
+/// ran out of a resource are `Capacity`; a class prefix is not enough, because
+/// class 53 also carries the transient connection shortage and class 54 also
+/// carries statement-complexity refusals. A code without a rule is `Unknown`,
+/// never a guessed verdict.
+pub fn sqlstate(code: &str) -> BackendError {
     match code {
         // lock_not_available (lock_timeout), deadlock, serialization failure.
         "55P03" | "40P01" | "40001" => BackendError::Busy,
+        // too_many_connections: transient, and this caller already holds a
+        // session, so it is retryable rather than a capacity verdict.
+        "53300" => BackendError::Busy,
         "25006" => BackendError::ReadOnly,
         "57014" => BackendError::Cancelled,
-        _ if code.starts_with("53") || code.starts_with("54") => BackendError::Capacity,
+        // Insufficient resources, definite: disk full, out of memory, a
+        // configuration limit, and the class-generic program limit.
+        "53100" | "53200" | "53400" | "54000" => BackendError::Capacity,
+        // 54001/54011/54023 (statement too complex, too many columns or
+        // arguments) are statement refusals, not a capacity refusal. They keep
+        // the class-54 verdict of a definite failure, so the caller never
+        // treats them as retryable or as an unknown outcome.
+        _ if code.starts_with("54") => BackendError::Integrity,
         _ if code.starts_with("23") || code.starts_with("22") || code.starts_with("42") => {
             BackendError::Integrity
         }
-        // Connection, shutdown and internal failures: the outcome is unknown.
+        // Connection, shutdown, resource-class and internal failures: the
+        // outcome is unknown.
         _ => BackendError::Unknown,
     }
 }

@@ -707,6 +707,11 @@ fn assert_settled(schema: &Schema, op: u8) {
     assert_eq!(schema.count("gc_op"), 0, "gc_op is cleared on settle");
     assert_eq!(schema.count("gc_dead"), 0, "gc_dead is cleared on settle");
     assert_eq!(
+        schema.count("kept_node"),
+        0,
+        "the transient mark closure is cleared on settle"
+    );
+    assert_eq!(
         schema.count_where("SELECT count(*) FROM {s}.gc_intent WHERE kind='compaction'"),
         0,
         "the compaction intent is released"
