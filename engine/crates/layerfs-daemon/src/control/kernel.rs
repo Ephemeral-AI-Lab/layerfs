@@ -35,6 +35,8 @@ pub use super::serving::KernelServing;
 pub(super) struct WinReady {
     pub mounted: layerfs_winfsp::Mounted,
     pub point: std::path::PathBuf,
+    /// The bound Workspace its mount serves; commit runs on it.
+    pub workspace: std::sync::Arc<crate::store::BoundWorkspace>,
 }
 /// The registry is the sole authority for which connection an entry owns.
 pub(super) enum Kernel {
