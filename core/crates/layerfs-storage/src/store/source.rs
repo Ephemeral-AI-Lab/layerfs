@@ -24,11 +24,7 @@ pub trait Source {
     /// The bounded control/directory prefix of one pack, with its declared
     /// length. A metadata-only scan reads this instead of the whole body; a
     /// source that cannot answer returns `None` and the caller reads the body.
-    fn pack_prefix(
-        &self,
-        _pack_id: i64,
-        _limit: usize,
-    ) -> StorageResult<Option<(usize, Vec<u8>)>> {
+    fn pack_prefix(&self, _pack_id: i64, _limit: usize) -> StorageResult<Option<(usize, Vec<u8>)>> {
         Ok(None)
     }
     /// Acquires the complete encoded groups needed by this bounded physical

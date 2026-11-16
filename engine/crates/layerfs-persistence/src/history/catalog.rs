@@ -242,7 +242,16 @@ impl HistoryCatalog for HistoryProvider {
         frontier_serial: u64,
         removed_ms: i64,
     ) -> HistoryResult<()> {
-        self.write(|tx| super::paths::mark(tx, stack, path, &self.trace_salt, frontier_serial, removed_ms))
+        self.write(|tx| {
+            super::paths::mark(
+                tx,
+                stack,
+                path,
+                &self.trace_salt,
+                frontier_serial,
+                removed_ms,
+            )
+        })
     }
 
     fn remove_path(&self, request: &PathRemovalRequest) -> HistoryResult<PathRemovalOutcome> {

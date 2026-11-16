@@ -187,7 +187,10 @@ fn a_live_mount_refuses_the_delete_after_the_sidecar_and_leaves_no_intent() {
     let pending = Intent::read(&home, "shop", "app")
         .unwrap()
         .expect("the pending sidecar precedes the admission");
-    assert_eq!(pending.state, layerfs_store::project::delete::IntentState::Pending);
+    assert_eq!(
+        pending.state,
+        layerfs_store::project::delete::IntentState::Pending
+    );
     assert!(pending.op.is_some());
     assert!(paths::project_dir(&home, "shop", "app").is_dir());
     assert!(
@@ -265,7 +268,10 @@ fn a_live_operation_at_the_project_scope_is_busy_and_keeps_the_pending_sidecar()
     let pending = Intent::read(&home, "shop", "app")
         .unwrap()
         .expect("the pending sidecar stays");
-    assert_eq!(pending.state, layerfs_store::project::delete::IntentState::Pending);
+    assert_eq!(
+        pending.state,
+        layerfs_store::project::delete::IntentState::Pending
+    );
     assert!(pending.op.is_some());
     assert_eq!(intents(&open, stack).len(), 1, "only the test's own holder");
     assert_eq!(intents(&open, stack)[0].op_id, [7; 16]);

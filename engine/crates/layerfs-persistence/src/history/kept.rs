@@ -8,8 +8,8 @@
 //! origin/displaced node) to its fixpoint. A retired Branch a retained node
 //! reaches is kept through that node with its own edges, and a deleted project
 //! is excluded because every history edge is stack-local.
-use super::provider::HistoryProvider;
 use super::params;
+use super::provider::HistoryProvider;
 use super::rows::cell;
 use super::transaction::Transaction;
 use crate::backend::records::{Param, Record};
@@ -245,10 +245,7 @@ fn roots(rows: &[Record]) -> HistoryResult<Vec<NodeId>> {
 /// How many history rows of one Stack the last mark did not retain. It is
 /// zero before any mark, when the closure that decides reachability is not
 /// recorded yet.
-pub(super) fn unreachable_count(
-    tx: &Transaction<'_>,
-    stack: LayerStackId,
-) -> HistoryResult<u64> {
+pub(super) fn unreachable_count(tx: &Transaction<'_>, stack: LayerStackId) -> HistoryResult<u64> {
     let rows = tx.query(UNREACHABLE, params![stack.as_slice()])?;
     let count: i64 = cell(
         rows.first()
@@ -262,10 +259,7 @@ pub(super) fn unreachable_count(
 /// not retain), returning how many were removed. Reachability is the
 /// kept_node closure a mark wrote; the same set a rebuild copies and a
 /// compaction collects. It runs in one write transaction.
-pub(super) fn remove_unreachable(
-    tx: &Transaction<'_>,
-    stack: LayerStackId,
-) -> HistoryResult<u64> {
+pub(super) fn remove_unreachable(tx: &Transaction<'_>, stack: LayerStackId) -> HistoryResult<u64> {
     let count = unreachable_count(tx, stack)?;
     if count == 0 {
         return Ok(0);

@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 /// True for a provider whose catalog bodies return `Unsupported`; every
 /// other marker or serial read failure is a refusal, never "no markers".
-fn unsupported(error: &Arc<PortError>) -> bool {
+pub fn unsupported(error: &Arc<PortError>) -> bool {
     matches!(
         error.as_ref(),
         PortError::History(HistoryError::Unsupported(_))
@@ -294,22 +294,4 @@ pub fn settle(mut value: SdkValue, visibility: &Visibility, removed: i64) -> Sdk
         fields.push(("removed_count".into(), SdkValue::Int(removed)));
     }
     value
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn only_unsupported_marker_reads_mean_no_markers() {
-        // A provider without the marker bodies sees none; every other read
-        // failure is a refusal, never an empty marker set (fail closed).
-        assert!(unsupported(&Arc::new(PortError::History(
-            HistoryError::Unsupported("path_removals")
-        ))));
-        assert!(!unsupported(&Arc::new(PortError::History(
-            HistoryError::Busy
-        ))));
-        assert!(!unsupported(&Arc::new(PortError::Poisoned)));
-    }
 }

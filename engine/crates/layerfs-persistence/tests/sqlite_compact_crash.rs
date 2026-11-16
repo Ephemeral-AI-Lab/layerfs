@@ -852,7 +852,7 @@ mod real_process {
 
     // The mark phase: the open session, the admission intent and the visited
     // scratch at `BeforeSeal` (the real kill leaves the writer's WAL
-    // sidecars), and the sealed, intent-released Store at `AfterSeal`.
+    // sidecars), and the sealed Store with the recorded intent at `AfterSeal`.
     sigkill_at!(
         sigkill_before_seal,
         CompactFailpoint::BeforeSeal,

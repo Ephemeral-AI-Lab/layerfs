@@ -412,21 +412,3 @@ impl OpConflict {
         self
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn constructors_build_the_typed_context() {
-        let holder = NameHolder::new(HolderKind::Branch, "main", HolderState::Retired);
-        let taken = NameTakenState::new(holder, NameSource::Store);
-        assert_eq!(taken.holder.name, "main");
-        assert_eq!(taken.holder.kind, HolderKind::Branch);
-        assert_eq!(taken.source, NameSource::Store);
-
-        let removed = RemovedState::new(vec![RemovedPath::new("a.txt", 7)]);
-        assert_eq!(removed.paths[0].path, "a.txt");
-        assert_eq!(removed.paths[0].frontier_serial, 7);
-    }
-}

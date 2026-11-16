@@ -168,9 +168,8 @@ pub fn list(home: &Path, request: &ProjectList) -> Outcome {
             // A named listing agrees with `project.get` and every other Store
             // call: a Store the home does not record is `NoSuchStore` (spec
             // §4.2), never the home-level `NotFound`.
-            let record = StoreRecord::read(home, store)?.ok_or_else(|| {
-                refused("NoSuchStore", format!("no Store named {store}"))
-            })?;
+            let record = StoreRecord::read(home, store)?
+                .ok_or_else(|| refused("NoSuchStore", format!("no Store named {store}")))?;
             vec![(store.to_string(), record)]
         }
         None => {

@@ -5,6 +5,9 @@
 mod backend;
 pub mod compact_metrics;
 pub mod diagnostic;
+/// Test-only re-exports for unit checks that live outside product source.
+#[doc(hidden)]
+pub mod internals;
 mod storage;
 mod store;
 pub(crate) use store::config;
@@ -20,8 +23,7 @@ pub use backend::postgresql::status::{
 pub use backend::sqlite::acquisition::AcquisitionProvider;
 pub use backend::sqlite::compact::{
     compact_op_status, CompactFailpoint, CompactKeptWaste, CompactOpStatus, CompactPath,
-    CompactReceipt, CompactRequest, CompactResidue, CompactZeroReason,
-    DELTA_BASE_REFERENCES_CAP,
+    CompactReceipt, CompactRequest, CompactResidue, CompactZeroReason, DELTA_BASE_REFERENCES_CAP,
 };
 pub use backend::sqlite::heads::{heads_digest, read_heads};
 #[cfg(any(target_os = "macos", target_os = "linux"))]

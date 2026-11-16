@@ -77,7 +77,6 @@ fn remove(
         .unwrap()
 }
 
-
 #[test]
 fn the_marker_key_is_the_store_salted_trace_hash() {
     let temp = Temp::new("path-removal-key");
@@ -96,9 +95,11 @@ fn the_marker_key_is_the_store_salted_trace_hash() {
         )
         .unwrap();
     let salt: Vec<u8> = connection
-        .query_row("SELECT trace_salt FROM store_policy WHERE id=1", [], |row| {
-            row.get(0)
-        })
+        .query_row(
+            "SELECT trace_salt FROM store_policy WHERE id=1",
+            [],
+            |row| row.get(0),
+        )
         .unwrap();
     let salt: [u8; 32] = salt.try_into().unwrap();
     assert_eq!(key, trace_key(&salt, shop, b"a/b").to_vec());

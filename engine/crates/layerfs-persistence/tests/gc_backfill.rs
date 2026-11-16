@@ -393,7 +393,8 @@ fn equal_created_ms_commits_order_by_stack_then_identity() {
     };
     assert_eq!(
         genesis,
-        (commits.len() as i64 + 1..=commits.len() as i64 + genesis.len() as i64).collect::<Vec<_>>(),
+        (commits.len() as i64 + 1..=commits.len() as i64 + genesis.len() as i64)
+            .collect::<Vec<_>>(),
         "genesis Layers take the next Store serials after the Commits"
     );
     assert_eq!(

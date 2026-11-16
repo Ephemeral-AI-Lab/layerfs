@@ -17,11 +17,7 @@ use layerfs_persistence::{
     CompactRequest, PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePackLayout,
     SqlitePersistenceProfile,
 };
-use layerfs_storage::{
-    port::acquisition::{Acquisition, Begin},
-    port::PackPersistence,
-    Storage, StoragePolicy,
-};
+use layerfs_storage::{port::PackPersistence, Storage, StoragePolicy};
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use support::Temp;
@@ -791,7 +787,9 @@ fn a_capacity_failure_leaves_the_store_unchanged() {
 fn table_count(path: &Path, table: &str) -> i64 {
     let connection = rusqlite::Connection::open(path).unwrap();
     connection
-        .query_row(&format!("SELECT count(*) FROM {table}"), [], |row| row.get(0))
+        .query_row(&format!("SELECT count(*) FROM {table}"), [], |row| {
+            row.get(0)
+        })
         .unwrap()
 }
 
@@ -881,7 +879,10 @@ fn a_leftover_record_for_another_generation_is_refused() {
         stray.exists(),
         "a record at another generation deletes nothing it names"
     );
-    assert!(op_path(&path).exists(), "the record stays for its own Store");
+    assert!(
+        op_path(&path).exists(),
+        "the record stays for its own Store"
+    );
 }
 
 fn layout_round_trip(layout: SqlitePackLayout) {
@@ -948,7 +949,9 @@ fn acquisition_layout_opens_compacts_and_clears_working_rows() {
     // Drop the stale working row; the none path then leaves the acquisition
     // tables and takes no rebuild.
     let connection = rusqlite::Connection::open(&path).unwrap();
-    connection.execute("DELETE FROM init_operation", []).unwrap();
+    connection
+        .execute("DELETE FROM init_operation", [])
+        .unwrap();
     drop(connection);
     let none_handles = reopen(&path);
     let receipt = none_handles.compact(&request(28)).unwrap();

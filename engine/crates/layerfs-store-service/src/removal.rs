@@ -87,9 +87,9 @@ pub fn commit_error(error: RemovalError) -> CommitError {
             error,
             provider: None,
         },
-        RemovalError::Unmaterializable(paths) => CommitError::History(HistoryError::Removed(
-            Box::new(RemovedState::new(paths)),
-        )),
+        RemovalError::Unmaterializable(paths) => {
+            CommitError::History(HistoryError::Removed(Box::new(RemovedState::new(paths))))
+        }
     }
 }
 
@@ -267,7 +267,12 @@ fn updates(
 ) -> Result<Vec<DirectoryUpdate>, ContentError> {
     let mut parents: BTreeMap<u64, Vec<(PathName, Option<u64>)>> = BTreeMap::new();
     for path in paths {
-        let names: Vec<String> = path.path.split('/').filter(|name| !name.is_empty()).map(str::to_owned).collect();
+        let names: Vec<String> = path
+            .path
+            .split('/')
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned)
+            .collect();
         let mut serial = tree.root_serial();
         for (index, name) in names.iter().enumerate() {
             let name = PathName::new(name.as_str())

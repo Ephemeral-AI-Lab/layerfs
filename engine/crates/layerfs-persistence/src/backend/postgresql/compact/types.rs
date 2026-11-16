@@ -1,0 +1,43 @@
+//! §8 compaction types and constants: the dead totals, the op row and the built/swapped run.
+
+/// The §3 rebuild threshold: rebuild when dead * 10 >= stored.
+pub(crate) const THRESHOLD: u64 = 10;
+
+/// `lfs_gc_<hex>`: the deterministic scratch schema name.
+pub(crate) const SCRATCH_PREFIX: &str = "lfs_gc_";
+
+/// The three wholly dead domains the swap records before COMMIT.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct DeadTotals {
+    pub(crate) canonical: i64,
+    pub(crate) stored: i64,
+    pub(crate) metadata: i64,
+    pub(crate) logical: i64,
+}
+
+/// One compaction op row, as the next call judges it.
+#[derive(Clone, Debug)]
+pub(crate) struct OpRow {
+    pub(crate) generation: i64,
+    pub(crate) phase: String,
+    pub(crate) artifact: Option<String>,
+    pub(crate) dead: DeadTotals,
+    pub(crate) totals_applied: bool,
+    pub(crate) pid: Option<i64>,
+    pub(crate) backend_start: Option<String>,
+}
+
+/// What Phase A leaves for Phase B.
+pub(crate) struct Built {
+    pub(crate) scratch: String,
+    pub(crate) scratch_bytes: u64,
+    pub(crate) dead: DeadTotals,
+}
+
+/// What the swap records for the report and Phase C.
+pub(crate) struct Swapped {
+    pub(crate) physical_before: u64,
+    pub(crate) physical_after: u64,
+    pub(crate) peak_temp: u64,
+    pub(crate) dead: DeadTotals,
+}

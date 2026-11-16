@@ -11,8 +11,7 @@ use crate::backend::sqlite::compact::{
 
 /// The phases a SQLite compaction passes, in order (§11): a run that crashes
 /// leaves its record at the phase it reached.
-pub const SQLITE_COMPACT_PHASES: [&str; 5] =
-    ["mark", "build", "verify", "install", "cleanup"];
+pub const SQLITE_COMPACT_PHASES: [&str; 5] = ["mark", "build", "verify", "install", "cleanup"];
 
 /// The PostgreSQL §8 compaction phases, in order: Phase M mark, Phase A
 /// build, Phase B swap and Phase C cleanup. These are the values a

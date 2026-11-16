@@ -130,11 +130,7 @@ impl Effects for Fake {
         Ok(())
     }
 
-    fn admit(
-        &mut self,
-        stack: LayerStackId,
-        op: [u8; 16],
-    ) -> Result<Admission, SdkRefusal> {
+    fn admit(&mut self, stack: LayerStackId, op: [u8; 16]) -> Result<Admission, SdkRefusal> {
         if self.refused() {
             return Err(self.refuse.clone().expect("refused above"));
         }
@@ -338,7 +334,10 @@ fn a_retired_retry_reuses_the_intent_deleted_ms_and_finishes_the_entry() {
     assert_eq!(fake.seen, [(stack, 111)]);
     assert_eq!(fake.pending_retries, [true], "a pending sidecar is a retry");
     assert_eq!(outcome.get_int("deleted_ms"), Some(222));
-    assert!(outcome.get_bool("home_entry_removed"), "the marker was already there");
+    assert!(
+        outcome.get_bool("home_entry_removed"),
+        "the marker was already there"
+    );
     assert!(!paths::project_dir(&home, store, project).exists());
     assert_eq!(Intent::read(&home, store, project).unwrap(), None);
     let _ = std::fs::remove_dir_all(&home);
@@ -366,7 +365,10 @@ fn a_live_row_with_a_pending_intent_settles_the_marker_and_keeps_the_entry() {
     assert!(fake.admitted[0].op.iter().any(|byte| *byte != 0));
     assert_eq!(outcome.get_int("deleted_ms"), Some(111));
     assert!(!outcome.get_bool("home_entry_removed"));
-    assert!(paths::project_dir(&home, store, project).is_dir(), "the entry stays");
+    assert!(
+        paths::project_dir(&home, store, project).is_dir(),
+        "the entry stays"
+    );
     let settled = Intent::read(&home, store, project)
         .unwrap()
         .expect("the sidecar is marked for the finishing call");

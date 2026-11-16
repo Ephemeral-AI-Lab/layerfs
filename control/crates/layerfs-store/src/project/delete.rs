@@ -67,6 +67,9 @@ use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+mod remote;
+use remote::{listed_stack, open_args, Remote};
+
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// The state the durable intent records (`pending`, `marked`, `done`).
@@ -366,10 +369,7 @@ fn mark_and_finish(
     pending_retry: bool,
     finish: Finish<'_>,
 ) -> Outcome {
-    let Finish {
-        effects,
-        admission,
-    } = finish;
+    let Finish { effects, admission } = finish;
     let deletion = effects.mark(admission, deleted_ms, pending_retry)?;
     deleted_ms = deletion.deleted_ms(deleted_ms);
     current.deleted_ms = deleted_ms;
@@ -612,160 +612,6 @@ impl Effects for Local {
 }
 
 /// The Store-side opens of `project.delete` in a sqlite Store's worker.
-struct Remote {
-    worker: Worker,
-    store: String,
-    project: String,
-    store_record: SdkValue,
-}
-
-impl Effects for Remote {
-    fn prepare(&mut self) -> Result<()> {
-        // the worker saves its own legacy identity before its marker
-        Ok(())
-    }
-
-    fn admit(&mut self, stack: LayerStackId, op: [u8; 16]) -> Result<Admission> {
-        let frame = DeleteAdmitFrame {
-            store: StoreName::parse(&self.store)?,
-            stack,
-            op,
-            store_record: Some(self.store_record.clone()),
-        };
-        let answer = match self
-            .worker
-            .call("project.delete.admit", frame.encode(), &mut |_| {})
-        {
-            Ok(answer) => answer,
-            Err(refusal) => {
-                // The request went out, so the worker may have registered the
-                // row before its answer was lost: settle the identity before
-                // reporting the unknown outcome.
-                if refusal.code == "Unknown" {
-                    let _ = self.release(Admission::new(stack, op));
-                }
-                return Err(refusal);
-            }
-        };
-        if let Err(refusal) = admit_reply(&answer, stack) {
-            let _ = self.release(Admission::new(stack, op));
-            return Err(refusal);
-        }
-        Ok(Admission::new(stack, op))
-    }
-
-    fn release(&mut self, admission: Admission) -> Result<()> {
-        let frame = DeleteReleaseFrame {
-            store: StoreName::parse(&self.store)?,
-            op: admission.op,
-            store_record: Some(self.store_record.clone()),
-        };
-        self.worker
-            .call("project.delete.release", frame.encode(), &mut |_| {})?;
-        Ok(())
-    }
-
-    fn mark(
-        &mut self,
-        admission: Admission,
-        deleted_ms: i64,
-        pending_retry: bool,
-    ) -> Result<Deletion> {
-        let frame = DeleteFrame {
-            store: StoreName::parse(&self.store)?,
-            project: Some(self.project.clone()),
-            stack: admission.stack,
-            deleted_ms: Some(deleted_ms),
-            op_id: Some(admission.op),
-            pending_retry: Some(pending_retry),
-            store_record: Some(self.store_record.clone()),
-        };
-        let answer = self
-            .worker
-            .call("project.delete", frame.encode(), &mut |_| {})?;
-        let reply = DeleteReply::decode(&answer)?;
-        if reply.stack != admission.stack {
-            return Err(refused(
-                "Failed",
-                "the worker answered for another LayerStack",
-            ));
-        }
-        Ok(if reply.retired == Some(true) {
-            Deletion::Retired {
-                deleted_ms: reply.deleted_ms,
-            }
-        } else {
-            Deletion::Marked {
-                deleted_ms: reply.deleted_ms,
-            }
-        })
-    }
-
-    fn remove_entry(&mut self, entry: &Path) -> Result<()> {
-        remove_tree(entry)
-    }
-}
-
-/// Checks the worker's `project.delete.admit` answer.
-fn admit_reply(answer: &SdkValue, stack: LayerStackId) -> Result<()> {
-    if answer.get_text("kind") != Some("Admitted") {
-        return Err(refused(
-            "Failed",
-            "the worker project.delete admission is not `Admitted`",
-        ));
-    }
-    let answered = answer
-        .get_text("stack_id")
-        .and_then(unhex)
-        .and_then(|bytes| LayerStackId::from_slice(&bytes).ok());
-    if answered != Some(stack) {
-        return Err(refused("Failed", "the worker admitted another LayerStack"));
-    }
-    Ok(())
-}
-
-/// The `OpenArgs` a local Store call opens with. `record` is absent for a
-/// Store made by its own project Init, whose identity is the project entry.
-fn open_args(
-    home: &Path,
-    store: &str,
-    project: &str,
-    record: Option<&StoreRecord>,
-) -> Result<OpenArgs> {
-    let (store_path, postgresql) = match record {
-        Some(record) => match record.store_ref()? {
-            StoreRef::Postgres { .. } => (
-                record.postgresql_key(home, store),
-                Some(crate::postgresql::connect::selection(record)?),
-            ),
-            StoreRef::Sqlite { .. } => (paths::store_file(home, store), None),
-        },
-        None => (paths::store_file(home, store), None),
-    };
-    Ok(OpenArgs {
-        home: Some(home.to_path_buf()),
-        store: Some(store.to_owned()),
-        project: Some(project.to_owned()),
-        store_path: Some(store_path.display().to_string()),
-        store_record: record.map(|record| record.to_record().clone()),
-        postgresql,
-    })
-}
-
-/// The Stack id a Store lists for project `name`, for a record that does
-/// not name one (spec §4.2 fills it from the filtered listing by name).
-fn listed_stack(open: &OpenArgs, name: &str) -> Result<Option<LayerStackId>> {
-    service::with_service(open, |service| {
-        let stacks = service
-            .store
-            .published(layerfs_project::store::projects)
-            .map_err(failed)?;
-        Ok(stacks
-            .into_iter()
-            .find(|stack| stack.name.as_str() == name)
-            .map(|stack| stack.id))
-    })
-}
 
 /// `project.delete(project)`: retires project `project` in its Store and
 /// removes the caller's home entry. The marker is the commit point; a home
@@ -963,8 +809,8 @@ pub fn delete_project(root: &Path, frame: &DeleteFrame) -> Outcome {
     // A caller retrying a sidecar written before its admission, over a live
     // row with no marker, settles only: it keeps its home entry, so the
     // worker keeps its own copy for the call that finishes the delete.
-    let deferred = frame.pending_retry.unwrap_or(false)
-        && matches!(deletion, Deletion::Marked { .. });
+    let deferred =
+        frame.pending_retry.unwrap_or(false) && matches!(deletion, Deletion::Marked { .. });
     let project = if deferred {
         frame.project.clone().unwrap_or_else(|| store.to_owned())
     } else {

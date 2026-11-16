@@ -224,7 +224,6 @@ fn a_recreated_removed_path_still_conflicts_as_an_ordinary_edit() {
     fixture.cleanup();
 }
 
-
 #[test]
 fn a_merge_that_cannot_materialize_a_whiteout_is_refused_removed() {
     let fixture = Fixture::new("t123c-unmaterializable", |source| {

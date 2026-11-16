@@ -1315,11 +1315,7 @@ fn generate_report() -> String {
         "> AC-01..AC-60 dispositions (layerfs-project#52) win; this page records"
     )
     .unwrap();
-    writeln!(
-        out,
-        "> evidence and adds no contract. Regenerate with"
-    )
-    .unwrap();
+    writeln!(out, "> evidence and adds no contract. Regenerate with").unwrap();
     writeln!(
         out,
         "> `UPDATE_REPORT=1 cargo test -p layerfs-persistence --test sqlite_compact_matrix`."
@@ -1370,11 +1366,7 @@ fn generate_report() -> String {
         "  lifecycle guard (`unfinished_init_or_merge_rows_refuse_compaction`), which"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  is not a crash arm. Those arms still kill a"
-    )
-    .unwrap();
+    writeln!(out, "  is not a crash arm. Those arms still kill a").unwrap();
     writeln!(out, "  re-executed test child, so T-G65 added").unwrap();
     writeln!(
         out,
@@ -1386,11 +1378,7 @@ fn generate_report() -> String {
         "  arms on the built `layerfs store compact` process at mark, build, verify and"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  install, so AC-01 is `covered`."
-    )
-    .unwrap();
+    writeln!(out, "  install, so AC-01 is `covered`.").unwrap();
     writeln!(
         out,
         "- **Count reconciliation.** The T12.3c run recorded executed 8 / covered"
@@ -1411,11 +1399,7 @@ fn generate_report() -> String {
         "  are executed 8 / covered 30 / partial 16 / deferred 6; the 29/7 above"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  is the T12.3c snapshot, not a live gap."
-    )
-    .unwrap();
+    writeln!(out, "  is the T12.3c snapshot, not a live gap.").unwrap();
     writeln!(
         out,
         "- A `covered`/`partial` row names a file and test function that this runner"
@@ -1481,11 +1465,7 @@ fn generate_report() -> String {
         "  the 50 GB arm once per path (see the runbook disk-headroom section); the"
     )
     .unwrap();
-    writeln!(
-        out,
-        "  30% arm remains [E]."
-    )
-    .unwrap();
+    writeln!(out, "  30% arm remains [E].").unwrap();
     writeln!(out).unwrap();
     writeln!(out, "## Matrix (SQLite half)").unwrap();
     writeln!(out).unwrap();
