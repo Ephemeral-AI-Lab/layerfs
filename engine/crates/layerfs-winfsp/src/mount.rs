@@ -33,24 +33,24 @@ pub fn mount(
         SectorSize: 512,
         SectorsPerAllocationUnit: 1,
         MaxComponentLength: 255,
+        _pad0: 0,
         VolumeCreationTime: 0,
         VolumeSerialNumber: 0,
+        TransactTimeout: 0,
+        IrpTimeout: 0,
+        IrpCapacity: 0,
         FileInfoTimeout: 1000,
-        CaseSensitiveSearch: 0,
-        CasePreservedNames: 1,
-        UnicodeOnDisk: 1,
-        PersistentAcls: 1,
-        ReparsePoints: 0,
-        ReparsePointsAccessCheck: 0,
-        NamedStreams: 0,
-        ReadOnlyVolume: 0,
-        PostCleanupWhenModifiedOnly: 1,
-        PassQueryDirectoryFileName: 0,
-        Uint16: [0; 2],
-        FswDeviceId: 0,
-        Flags: 0,
+        // CasePreservedNames(1), UnicodeOnDisk(1),
+        // PersistentAcls(1), PostCleanupWhenModifiedOnly(13):
+        flags_a: 1 << 1 | 1 << 2 | 1 << 3 | 1 << 13,
+        flags_b: 0,
+        flags_c: 0,
+        flags_d: 0,
+        Prefix: [0; 32],
+        FileSystemName: [0; 32],
+        tail: [0; 96],
     };
-    let device: Vec<u16> = "LayerFS\0".encode_utf16().collect();
+    let device: Vec<u16> = "WinFsp.Disk\0".encode_utf16().collect();
     let point: Vec<u16> = mount_point.encode_utf16().chain(std::iter::once(0)).collect();
     let interface = Box::leak(Box::new(interface));
     let mut context = Box::new(context);

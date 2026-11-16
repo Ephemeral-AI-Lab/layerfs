@@ -18,30 +18,31 @@ pub struct FSP_FILE_SYSTEM {
     pub UserContext: *mut c_void,
 }
 
-/// The volume parameters (a subset the create call reads; opaque rest).
+/// The volume parameters: the exact 504-byte fsctl.h layout.
+/// The flag area is one bitfield block treated as u32 slots;
+/// the fields this mount face sets are named.
 #[repr(C)]
 pub struct FSP_FSCTL_VOLUME_PARAMS {
     pub SectorSize: u16,
     pub SectorsPerAllocationUnit: u16,
     pub MaxComponentLength: u16,
+    pub _pad0: u16,
     pub VolumeCreationTime: u64,
     pub VolumeSerialNumber: u32,
+    pub TransactTimeout: u32,
+    pub IrpTimeout: u32,
+    pub IrpCapacity: u32,
     pub FileInfoTimeout: u32,
-    pub CaseSensitiveSearch: u32,
-    pub CasePreservedNames: u32,
-    pub UnicodeOnDisk: u32,
-    pub PersistentAcls: u32,
-    pub ReparsePoints: u32,
-    pub ReparsePointsAccessCheck: u32,
-    pub NamedStreams: u32,
-    pub ReadOnlyVolume: u32,
-    pub PostCleanupWhenModifiedOnly: u32,
-    pub PassQueryDirectoryFileName: u32,
-    pub Uint16: [u8; 2],
-    pub FswDeviceId: u32,
-    pub Flags: u32,
+    /// Bitfield block: CaseSensitiveSearch through the flags.
+    pub flags_a: u32,
+    pub flags_b: u32,
+    pub flags_c: u32,
+    pub flags_d: u32,
+    pub Prefix: [u16; 32],
+    pub FileSystemName: [u16; 32],
+    /// The V1 tail (timeouts, fsext, reserved): zeroed.
+    pub tail: [u8; 96],
 }
-
 /// The 23-slot callback table in WinFsp order (winfsp.h). Opaque
 /// pointer parameters fill as each operation lands.
 #[derive(Default)]

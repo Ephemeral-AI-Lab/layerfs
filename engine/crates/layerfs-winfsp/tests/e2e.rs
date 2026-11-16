@@ -10,16 +10,18 @@ mod installed;
 #[allow(dead_code)]
 mod support;
 
-use layerfs_history::{BranchId, HistoryName, LayerStackId, WorkspaceId};
+use layerfs_history::WorkspaceId;
 use layerfs_store_service::store::BindRequest;
 
 #[test]
 fn binds_and_mounts_a_workspace() {
-    let driver = std::process::Command::new("sc")
-        .args(["query", "WinFsp"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
+    let driver = std::process::Command::new(
+        r"C:\Program Files (x86)\WinFsp\bin\fsptool-x64.exe",
+    )
+    .arg("lsdrv")
+    .output()
+    .map(|o| String::from_utf8_lossy(&o.stdout).contains("WinFsp"))
+    .unwrap_or(false);
     if !driver {
         eprintln!("skipped: the WinFsp driver service is not installed (run fsptool install as admin)");
         return;
@@ -35,10 +37,7 @@ fn binds_and_mounts_a_workspace() {
             sdk.owner.client(),
             BindRequest {
                 workspace: WorkspaceId::from_authority([7; 32]).unwrap(),
-                branch: BranchId::named(
-                    LayerStackId::from_authority([23; 16]),
-                    &HistoryName::new("main").unwrap(),
-                ),
+                branch: sdk.host.branch,
             },
         )
         .expect("bind");

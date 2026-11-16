@@ -18,11 +18,14 @@ impl MountServices for Empty {
 
 #[test]
 fn mounts_with_the_first_callbacks() {
-    let installed = std::process::Command::new("sc")
-        .args(["query", "WinFsp"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
+    // The driver loads without a service: fsptool lsdrv names it.
+    let installed = std::process::Command::new(
+        r"C:\Program Files (x86)\WinFsp\bin\fsptool-x64.exe",
+    )
+    .arg("lsdrv")
+    .output()
+    .map(|o| String::from_utf8_lossy(&o.stdout).contains("WinFsp"))
+    .unwrap_or(false);
     if !installed {
         eprintln!("skipped: the WinFsp driver service is not installed (run fsptool install as admin)");
         return;
