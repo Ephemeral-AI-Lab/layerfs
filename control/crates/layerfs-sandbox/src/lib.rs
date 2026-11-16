@@ -57,6 +57,8 @@ pub mod inspect;
 pub mod launch;
 #[doc(hidden)]
 pub mod lifecycle;
+#[cfg(windows)]
+mod lifecycle_windows;
 mod list;
 #[doc(hidden)]
 pub mod output;
