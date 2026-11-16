@@ -50,6 +50,7 @@ different string and is not what records store.
 | Launch options | `ProviderLaunchOptions::Local` | `::Namespaces` (identity, environment, image digest, archive) |
 | Record | `SandboxRecord::Local` | `SandboxRecord::Namespaces` (local facts + image) |
 | Process boundary | named process groups | cgroup v2 directory |
+| Kernel requirements | none | cgroup v2 with `cgroup.kill` (Linux 5.14), and `clone3` with `CLONE_INTO_CGROUP` allowed (Linux 5.7; not answered `ENOSYS` or `EPERM` by a seccomp filter around the worker): every command is created inside its cgroup, with no fallback |
 | Source | [`host_process/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/adapter.rs) | [`namespaces/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/adapter.rs) |
 
 Neither backend isolates the network (layerfs-project#164, #551): a

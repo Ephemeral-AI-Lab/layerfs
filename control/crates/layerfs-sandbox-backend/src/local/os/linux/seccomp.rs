@@ -216,13 +216,29 @@ impl OneThread {
         #[allow(unsafe_code)]
         let pid = unsafe { libc::syscall(libc::SYS_clone3, &mut arguments, size) };
         match pid {
-            -1 => Err(io::Error::last_os_error()),
+            -1 => Err(refused(io::Error::last_os_error(), group.is_some())),
             0 => Ok(None),
             pid => u32::try_from(pid)
                 .map(Some)
                 .map_err(|_| io::Error::other("clone3 child process id width")),
         }
     }
+}
+
+/// A fork into a cgroup this kernel, or a seccomp filter around this
+/// process, refuses (`ENOSYS`, `EPERM`), named as such: the namespaces
+/// backend requires it and has no other way to start a command.
+fn refused(error: io::Error, into_cgroup: bool) -> io::Error {
+    let name = match error.raw_os_error() {
+        Some(libc::ENOSYS) if into_cgroup => "ENOSYS",
+        Some(libc::EPERM) if into_cgroup => "EPERM",
+        _ => return error,
+    };
+    let message = format!(
+        "clone3 into a cgroup was refused by this kernel or its seccomp filter ({name}); the \
+         namespaces Sandbox backend requires clone3 with CLONE_INTO_CGROUP (Linux 5.7)"
+    );
+    io::Error::new(error.kind(), message)
 }
 
 /// Makes `command` run under the filter: in its process, after everything
