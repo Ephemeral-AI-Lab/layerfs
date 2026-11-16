@@ -3,6 +3,13 @@
 > Deferred 50 GB / §13 capacity model for `layerfs-project#41`. Adds no contract; [`LayerFS-GC-spec.md`](LayerFS-GC-spec.md) wins, `§N` cites it.
 > **[M]** = measured on the cited artifact; **[E]** = extrapolated from the stated assumptions. Nothing marked [E] is a measurement.
 > **T-G61** measured a real **10.0 GB** Store (`sqlite_compact_capacity_measure.json`): three `none` runs at 8.88% dead, three `rebuild` runs at 10.00% dead and one WAL/FULL rebuild. **T-G66** then measured the **50 GB** arm on the same host (`sqlite_compact_capacity_measure_50gb.json`): a **49.999 GB** pack-byte Store (384,850 packs, 347,490 live whole-file objects, 33,850 dead = 8.876%, built in 761.2 s), **one** `none` run and **one** `rebuild` run at 10.000% dead. One run per arm is what §13 asks of the 50 GB arm, not a three-run median; the 10 GB three-run medians stay the repeated-run basis. **The 50 GB numbers do not scale linearly from the 10 GB ones**: the 10 GB Store and its rebuild artifacts fitted the host's page cache, the 50 GB one does not, so its `rebuild` is **85.5 min** and its real temp peak on disk is **143.1 GB above the pre-rebuild baseline** (**~2.9×** the Store) — not the [E] ~20 min and 1.9×. **T-G72** replaced the receipt's `new + visited` peak with a documented bound over the run's temp artifacts (pre-truncate staged copy + new file + rollback journal + visited): **147.609 GB** for the same 50 GB `rebuild`, 3.2% above the sampled peak and no longer under-reporting the journal. The 30% dead, 50 GB-live/35 GB-live, each-removal-type and PostgreSQL `ACCESS EXCLUSIVE` arms remain [E].
+>
+> **item-44** adds the Cargo-example benchmark home and the final measurement
+> script for the section 13 arms (below and §7 step 6). The small arm is the
+> default and is the only one CI/agents run; the 10 GB medium arm is opt-in;
+> the 50 GB final arm is **owner-only and was not run**. The [M] numbers on
+> this page remain the T-G61/T-G66 host measurements; the item-44 harness is
+> how the owner re-measures the R730/PERC/rotational host class.
 
 ## 1. Measured basis
 
@@ -37,6 +44,49 @@ Per-GB rates measured on this host (GB = 10^9 B):
 | Install | ~1.9 s fixed | **7.311 s** | rename, fsync, settle |
 
 The mark dominates at 10 GB; at 50 GB the build phase dominates by 5.4× — the opposite. Do not extrapolate either phase linearly from the 10 GB arm: the 10 GB run was cache-optimistic, and the 50 GB build rate depends on free page cache and device write throughput rather than on CPU. Use the 50 GB [M] rates above for a 50 GB Store and re-measure with §7's harness on the target host.
+
+### Measurement harness and the final host class (item-44)
+
+The section 13 arms have a Cargo example home:
+[`gc_bench.rs`](../../../../engine/crates/layerfs-persistence/examples/gc_bench.rs)
+with its
+[`gc_fixture.rs`](../../../../engine/crates/layerfs-persistence/examples/gc_bench/gc_fixture.rs),
+driven by [`tools/ci/gc_capacity_final.sh`](../../../../tools/ci/gc_capacity_final.sh)
+(usage: [`tools/ci/gc-bench.md`](../../../../tools/ci/gc-bench.md)). It builds
+the same real Store through the public persistence/storage APIs and runs the
+`none` (~8.8% dead) and `rebuild` (10% dead) arms. The small ~30 MB fixture is
+the default and is the only arm CI/agents run; the 10 GB medium arm is opt-in
+(`GC_BENCH_MEDIUM=1`, three runs per arm); the 50 GB final arm is owner-only
+(below), one run per arm, and **was not run for item-44**.
+
+For every run the report records the compaction wall time (the operation
+window), the `mark`/`build`/`verify`/`install` phase durations, `peakTempBytes`
+from the section 11 receipt plus the sampled staged/journal/visited/rewrite
+footprint, the process's `/proc/self/io` byte counts and the new/old file
+sizes, and per-GB rates (wall s per stored/live GB, mark s per live GB, build s
+per new GB, mark/build MB/s, verify s per new GB, install seconds).
+`--cold-cache` drops the page cache before each measured run and records
+`warm (drop_caches refused)` instead of claiming a cold run when the privilege
+is missing.
+
+**Host class.** The final arm targets the owner's Dell PowerEdge R730 / PERC /
+rotational host, not NVMe; its nominal sequential rate is ~500/600 MB/s. The
+container does not expose DMI or `/sys/block`, so the runbook declares the
+class with `GC_BENCH_HOST_CLASS` and the rates with
+`GC_BENCH_NOMINAL_READ_MBS` / `GC_BENCH_NOMINAL_WRITE_MBS`; the JSON records
+both the declared and detected classes, `storageMedia`, `notNvme` and the
+nominal rates. Do not copy the NVMe 50 GB [M] rates above onto this class: the
+build phase is device-write-bound, and this host's rotational write rate is the
+limit. Record the host class, cache state and declared rates with every
+receipt.
+
+**The 50 GB final arm** is the T-G66 shape: 3510 groups x 99 whole-file
+objects x 131,071 B (45.56 GB live) and ~8.8% dead for the `none` arm; the
+`rebuild` arm re-crosses 10% before its single run. It needs a TMPDIR with
+>=155 GB free (the 2.90x receipt bound), runs one run per arm, and is gated by
+`GC_BENCH_OWNER=1`, `GC_BENCH_OWNER_APPROVED=1` and `GC_BENCH_FINAL_ACK=1`.
+Agents and CI leave it `NOT_RUN` until the owner runs and records it. There is
+no Durable arm: owner direction 2026-10-07 disabled Durable execution.
 
 ## 2. The 50 GB / 9% Store and the rule
 
@@ -112,11 +162,13 @@ PostgreSQL is not measured by AC-57; its server-side `INSERT ... SELECT` copy, i
 3. **Window/quiesce [M]:** SQLite **~27 min** quiet for a 50 GB `none` and **~85 min** for a 50 GB `rebuild`; the 10 GB values are 2.5 min each. No full doctor; expect `BusyOp`. A `Busy` owner: wait, do not terminate (runbook §2).
 4. **Recovery gate:** if `store.status.state` is `unresolved`, rerun `store.compact` to adopt the op; never hand-delete artifacts or `gc_intent`/`gc_dead` (runbook §2–§3).
 5. **Backup/alerts/failures:** `backup.create` before the first run ([`gc-rollout.md`](gc-rollout.md) §3; §9); alert on `Capacity`, `unresolved`, `retries`, nonzero `residue`, PG WAL/standby lag. `Capacity` → free space and rerun; uncertain → keep the new Store, settle `unknown`.
-6. **Re-measure per host.** `CAPACITY_MEASURE=1 UPDATE_CAPACITY=1 cargo test -p layerfs-persistence --release --test sqlite_compact_capacity -- --ignored --nocapture` with a TMPDIR of **>=3× the target** (the receipt bound is 2.90×; the measured temp peak was 143.1 GB). The 50 GB arm used `CAPACITY_GROUPS=3510 CAPACITY_DEAD_OBJECTS=33850 CAPACITY_RUNS=1 CAPACITY_KEEP=1 CAPACITY_OUT=<...>_50gb.json`; the mark is CPU-bound and the copy I/O-bound, so a host with faster SHA-256 and more page cache can be several times quicker.
+6. **Re-measure per host.** Use the item-44 harness: `tools/ci/gc_capacity_final.sh small` for the default check, `GC_BENCH_MEDIUM=1 tools/ci/gc_capacity_final.sh medium` for the 10 GB arm (three runs per arm), and the owner-only `... final` arm for 50 GB (one run per arm) with `GC_BENCH_OWNER=1 GC_BENCH_OWNER_APPROVED=1 GC_BENCH_FINAL_ACK=1`, a TMPDIR of **>=155 GB free** (the receipt bound is 2.90x; the measured temp peak was 143.1 GB), and the declared R730/PERC/rotational host class with its ~500/600 MB/s rates. The older direct route remains `CAPACITY_MEASURE=1 UPDATE_CAPACITY=1 cargo test -p layerfs-persistence --release --test sqlite_compact_capacity -- --ignored --nocapture`; the 50 GB arm used `CAPACITY_GROUPS=3510 CAPACITY_DEAD_OBJECTS=33850 CAPACITY_RUNS=1 CAPACITY_KEEP=1 CAPACITY_OUT=<...>_50gb.json`. The mark is CPU-bound and the copy I/O-bound, so a host with faster SHA-256 and more page cache can be several times quicker.
 
 ## Sources
 
 - [`LayerFS-GC-spec.md`](LayerFS-GC-spec.md): §3 threshold, §6.4 dead set, §7 SQLite rebuild/cost/Capacity, §8 PG phases/space/standby, §11 report and `peakTempBytes`, §13 deferred 50 GB arms and estimates.
 - [`gc-t12.3a-sqlite-matrix-report.md`](gc-t12.3a-sqlite-matrix-report.md) (AC-57) and `sqlite_compact_measure.json` (the tiny [M] numbers; its `peakTempBytes` is the T-G72 bound, 758,240 B); `sqlite_compact_capacity_measure.json` and `sqlite_compact_capacity.rs#capacity_measure` (the 10 GB [M] numbers); `sqlite_compact_capacity_measure_50gb.json` (the 50 GB [M] numbers, one run per arm). The two capacity JSONs still record the T-G66 old-formula `peakTempBytes` (45.784 GB at 50 GB); the T-G72 bounds in this page are arithmetic over their measured page counts and sizes, not a re-measurement.
+- [`gc_bench.rs`](../../../../engine/crates/layerfs-persistence/examples/gc_bench.rs), [`gc_fixture.rs`](../../../../engine/crates/layerfs-persistence/examples/gc_bench/gc_fixture.rs), [`gc_capacity_final.sh`](../../../../tools/ci/gc_capacity_final.sh) and [`gc-bench.md`](../../../../tools/ci/gc-bench.md): the item-44 harness. The final 50 GB arm is owner-only and `NOT_RUN`.
 - [`gc-t9-postgresql-rebuild.md`](gc-t9-postgresql-rebuild.md) (M/A/B/C, scratch schema, WAL/standby gaps) and [`gc-implementation-report.md`](gc-implementation-report.md) (status/metrics projection).
 - [`gc-runbook.md`](gc-runbook.md) and [`gc-rollout.md`](gc-rollout.md) (safe cleanup, rehearsal).
+
