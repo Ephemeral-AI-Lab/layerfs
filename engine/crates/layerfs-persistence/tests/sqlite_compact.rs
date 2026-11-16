@@ -527,8 +527,8 @@ fn a_leftover_op_reports_its_phase_and_state() {
     assert_eq!(busy.state, "busy");
     assert_eq!(
         busy.phases,
-        &["mark", "build", "verify", "install"][..],
-        "the SQLite phase order"
+        &["mark", "build", "verify", "install", "cleanup"][..],
+        "the SQLite phase order, including the cleanup settle"
     );
 
     let leftover = op.status(false);
@@ -781,6 +781,104 @@ fn a_capacity_failure_leaves_the_store_unchanged() {
     let final_handles = reopen(&path);
     assert!(!located(&final_handles, dead));
     clean(&final_handles);
+}
+
+/// The raw table counts a compaction must leave behind; the Store is closed
+/// after `compact` consumes its handles, so a plain read is safe.
+fn table_count(path: &Path, table: &str) -> i64 {
+    let connection = rusqlite::Connection::open(path).unwrap();
+    connection
+        .query_row(&format!("SELECT count(*) FROM {table}"), [], |row| row.get(0))
+        .unwrap()
+}
+
+/// Writes an op record the way `RunOp` does, with `generation` deliberately
+/// not the Store's.
+fn write_op_record(path: &Path, generation: u64) {
+    let zeros = "00".repeat(32);
+    let text = format!(
+        "version=1\nop_id=00112233445566778899aabbccddeeff\ngeneration={generation}\n\
+phase=mark\nstarted_ms=1\nowner_pid=\nowner_pid_start=\nowner_pid_boot=\n\
+catalog_id=0102030405060708090a0b0c0d0e0f10\nnext_history_serial=1\nnext_pack_id=1\n\
+next_ordinal=1\nmark_serial=0\nmark_pack_id=1\nmark_digest={zeros}\nmark_totals=0,0,0,0\n\
+mark_stamp=0\nhistory_rows=0\nlive_heads_digest={zeros}\n"
+    );
+    std::fs::write(op_path(path), text).unwrap();
+}
+
+/// #711 finding 1: a `none` compaction writes nothing into the live Store's
+/// persistent state. The mark's transient `kept_node` rows are cleared, the
+/// admission intent released, and the §6.3 visited scratch created and deleted
+/// before the reply (it is the none path's `peakTempBytes`).
+#[test]
+fn a_none_path_leaves_no_mark_state() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    assert_eq!(table_count(&path, "kept_node"), 0);
+    let receipt = handles.compact(&request(0x75)).unwrap();
+    assert_eq!(receipt.path, CompactPath::None);
+    assert!(
+        receipt.peak_temp_bytes > 0,
+        "the none path's visited scratch counts in peakTempBytes"
+    );
+    assert!(
+        !visited_path(&path).exists(),
+        "the none path deletes its visited scratch"
+    );
+    assert!(!op_path(&path).exists());
+    assert_eq!(
+        table_count(&path, "kept_node"),
+        0,
+        "the none path leaves no mark state in the live Store"
+    );
+    assert_eq!(
+        table_count(&path, "gc_intent"),
+        0,
+        "the none path leaves no admission intent"
+    );
+    clean(&reopen(&path));
+}
+
+/// #711 finding 4: the incomplete op record is an artifact of the recorded
+/// set, not an unrecorded staged name: the next run removes it and proceeds.
+#[test]
+fn an_incomplete_op_record_is_removed_rather_than_refused() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let mut temporary = op_path(&path).as_os_str().to_os_string();
+    temporary.push(".tmp");
+    let temporary = PathBuf::from(temporary);
+    std::fs::write(&temporary, b"version=1\n").unwrap();
+    let receipt = handles.compact(&request(0x76)).unwrap();
+    assert_eq!(receipt.path, CompactPath::None);
+    assert!(!temporary.exists(), "the incomplete record is removed");
+    clean(&reopen(&path));
+}
+
+/// #711 finding 5: §9 judges a leftover by the generation it names. A record at
+/// neither `G` nor `G-1` does not describe this Store, so it is refused and
+/// nothing it names is deleted.
+#[test]
+fn a_leftover_record_for_another_generation_is_refused() {
+    let (_temp, handles, path) = create_store();
+    let live = filesystem_root(&handles, 1);
+    initialize(&handles, 1, live);
+    let before = generation(&handles);
+    let stray = compact_path(&path);
+    std::fs::write(&stray, b"a staged file no generation names").unwrap();
+    write_op_record(&path, before + 5);
+    let error = handles.compact(&request(0x77)).unwrap_err();
+    assert!(
+        matches!(error, HistoryError::Integrity(_)),
+        "a record for another generation is Integrity: {error:?}"
+    );
+    assert!(
+        stray.exists(),
+        "a record at another generation deletes nothing it names"
+    );
+    assert!(op_path(&path).exists(), "the record stays for its own Store");
 }
 
 fn layout_round_trip(layout: SqlitePackLayout) {

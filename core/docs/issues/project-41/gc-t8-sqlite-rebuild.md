@@ -34,25 +34,36 @@ types. The `GcIntent` admission row is registered through the T6
    are already the refined live set. `deadBytesBound` and
    `deadBytesRefined` are therefore equal on both §3 paths.
 5. **Path.** `rebuild iff SUM(pack.length) > 0 AND dead * 10 >= SUM(pack.length)`.
-   `none` clears its intent and op record and returns; it writes no Store
-   table and creates no artifact, so no scratch exists to delete.
+   `none` writes the §6.3 `<store>.compact-visited` scratch, measures it into
+   `peakTempBytes`, deletes it, clears the mark's transient `kept_node` rows,
+   releases the admission intent and removes its op record. It changes no
+   persistent Store row and bumps no generation, and it leaves no artifact: the
+   live Store is exactly as it was before the call.
 6. **Seal.** `Session::seal_holding(writer)` checkpoints, checked-closes,
    checks `-wal`/`-shm`/`-journal`, and captures `(size, mtime, change
    counter)` while the lane is still held (§7 step 1). The sealed tuple and
    the §6.4 `live_heads_digest` are then re-read through an `immutable=1`
    handle and compared with the mark; a difference is `Conflict`.
 7. **Build.** `<store>.compact-visited` (`journal_mode=OFF`) holds the visited
-   object and live-pack sets. `VACUUM INTO <store>.compact` copies the sealed
-   file compactly; inside one transaction the retained rows are kept and the
-   complement deleted (dead packs/pack units, unreferenced locations,
-   signatures and digests, history/lineage/catalog rows outside `kept_node`,
-   markers of collected rows, merge scratch, `gc_intent`/`gc_dead`/`gc_op`,
-   acquisition working rows), `binding_hint_block` is cleared,
+   object and live-pack sets, joined from the mark's own object locators (the
+   mark reads `object_location` once). `VACUUM INTO <store>.compact` copies the
+   sealed file compactly; with `PRAGMA foreign_keys=OFF` and
+   `defer_foreign_keys=ON` (an explicit deviation from §7 step 4's
+   `foreign_keys=ON`: SQLite's deferred counter refuses a COMMIT on this
+   delete order even when `pragma_foreign_key_check` reports the same final
+   state clean — the verification's check is the guard), one transaction keeps
+   the retained rows and deletes the complement (dead packs/pack units,
+   unreferenced locations, signatures and digests, history/lineage/catalog rows
+   outside `kept_node`, markers of collected rows, merge scratch, every
+   `gc_intent` row except this run's own, `gc_dead`/`gc_op`, acquisition working
+   rows), `binding_hint_block` is cleared,
    `catalog_incarnation` becomes `G + 1`, and `store_totals` is recomputed
    from the retained rows with its `init_*` columns untouched. `VACUUM`, a
-   recreated `sqlite_sequence`, and a WAL switch with a zero-`busy` TRUNCATE
-   checkpoint finish the artifact. Package immutability triggers are dropped
-   for the delete and recreated from their stored SQL.
+   recreated (and checked never to fall) `sqlite_sequence`, and a WAL switch
+   with a zero-`busy` TRUNCATE checkpoint finish the artifact. Package
+   immutability triggers are dropped for the delete and recreated from their
+   stored SQL. Every artifact and the op record are fsynced (file) and the
+   Store directory is fsynced once the set is complete.
 8. **Verify.** An `immutable=1` reader runs `schema::check`,
    `foreign_key_check`, row counts against the mark (`object_location`,
    `pack`, `kept_node`), both live-heads digests, the allocator tuple, and the
@@ -62,21 +73,41 @@ types. The `GcIntent` admission row is registered through the T6
    artifact gets `chmod 0600` and `sync_all`, then `rename` and a directory
    fsync. A rename/fsync failure is installed-but-uncertain: the op record is
    kept at phase `install` and `UnknownOutcome` is returned.
-10. **Settle.** The artifact set is removed, then the op record. `residue`
-    reports anything that could not be removed.
+10. **Settle (`cleanup`).** The op records the `cleanup` phase, the artifact
+    set is removed, and only then are the admission intent and the transient
+    `kept_node` rows cleared from the installed Store in one raw transaction
+    (the run holds no session after the seal). The op record is removed last;
+    `residue` reports anything that could not be removed, and a failed intent
+    clear keeps the op record as the next run's recovery breadcrumb. Between
+    steps 6 and 10 the intent lives in the sealed file and then in the installed
+    Store, so a crash always leaves one a later `store.compact` adopts.
 
 ## Failure and leftovers (§9)
 
 The next `store.compact` reads `<store>.compact-op` under the lane. Because
 the lane was free, the recorded owner is gone: it releases that op's admission
 intent (`gc_release`), removes the named artifact set, and removes the op
-record, judging by the generation it read (`G` = not installed, `G + 1` or
-later = installed/advanced). An artifact set that no op record names is
-refused `Exists` and is never deleted. A definite pre-install failure deletes
-the artifact set and the op record; the old Store is unchanged apart from the
-checkpoint. Failpoints (`AfterSeal`, `AfterBuild`, `AfterWalSwitch`,
+record, judging by the generation it read (`G` = not installed, `G + 1` or a
+Store that advanced further = installed/advanced). A record from a *later*
+generation is `Integrity` and nothing it names is deleted. An artifact set that
+no op record names is refused `Exists` and is never deleted, except the
+incomplete `<store>.compact-op.tmp`, which is this Store's own op write that
+died before its rename (the open artifact list owns it). A definite
+pre-install failure deletes the artifact set and the op record (releasing the
+intent with a raw delete after the seal); the old Store is unchanged apart from
+the checkpoint and the transient `kept_node` rows, which the next compaction
+clears. Failpoints (`AfterSeal`, `AfterBuild`, `AfterWalSwitch`,
 `AfterVerify`, `BeforeInstall`, `AfterInstall`) exercise the crash state
 without killing the process.
+
+## Artifact set
+
+`<store>.compact{,-journal,-wal,-shm}`, `<store>.compact-visited` and its
+`-journal`, the variable `<store>.compact-mj*` super-journals, and the
+incomplete `<store>.compact-op.tmp`. `.compact-vacuum` is not an artifact:
+SQLite's `VACUUM` writes its rewrite to an unlinked `etilqs_*` temp database,
+never a file beside the Store; the old fixed list over-reported it. The op
+record `<store>.compact-op` is settled separately and is not an artifact.
 
 ## Report (§11)
 
@@ -84,11 +115,16 @@ without killing the process.
 `deadBytesBound`, `deadBytesRefined`, `logicalDiscarded`,
 `backendReusable` (free pages × page size), `physicalShrink` (old size − new),
 `keptWaste`, `peakTempBytes`, `residue`, `estimate` (`true`: §13) and one
-`zeroReason` per zero field from the closed vocabulary. `logicalDiscarded` is
+`zeroReason` per zero field from the closed vocabulary. `keptWaste.deltaBases`
+keeps at most `DELTA_BASE_REFERENCES_CAP` (1024) identities; when the list is
+cut the wire renders it `{value, cap}` (S7) and `bytes` stays the whole kept
+set's bytes. `store.status`'s SQLite phase list is now `mark`, `build`,
+`verify`, `install`, `cleanup` (§11 amendment, see `gc-spec-gaps.md` G7). `logicalDiscarded` is
 the collected history rows' `logical` bytes; `parallel` note: `estimate` is
 always true until #52 measures the arms.
 
-`peakTempBytes` is the §11 peak temporary space as a documented upper bound
+`peakTempBytes` on `none` is the bytes of the visited scratch the path creates
+and deletes; on `rebuild` it is the §11 peak temporary space as a documented upper bound
 (T-G72): `staged_bytes + journal_bound + target_bytes + visited_bytes`. The
 staged copy holds the sealed Store's whole extent until the rewrite truncates
 it (`VACUUM INTO`); the rewrite holds SQLite's unlinked temp database (the new
@@ -102,7 +138,14 @@ rollback journal (T-G66 finding, T-G72 fix). Upstream issue: [Ephemeral-AI-Lab/l
 
 `engine/crates/layerfs-persistence/tests/sqlite_compact.rs`:
 
-- empty Store → `none`, `zeroReason: empty-store`, unchanged generation;
+- empty Store → `none`, `zeroReason: empty-store`, unchanged generation, a
+  visited scratch created and deleted and counted in `peakTempBytes`;
+- a `none` path leaves no `kept_node` row and no `gc_intent` row
+  (`a_none_path_leaves_no_mark_state`);
+- an incomplete `.compact-op.tmp` is removed, not refused
+  (`an_incomplete_op_record_is_removed_rather_than_refused`);
+- a leftover record from another generation is `Integrity` and deletes nothing
+  (`a_leftover_record_for_another_generation_is_refused`);
 - no wholly dead pack → `none`, `deadBytesRefined == deadBytesBound`, no
   artifact, unchanged generation;
 - a wholly dead pack → `rebuild`, `G + 1`, dead object gone, retained object

@@ -393,18 +393,15 @@ fn assert_recovery(recovery: Recovery<'_>) {
     } = recovery;
     let reopened = reopen(store);
 
-    // The admission intent is released before the seal (T-G5), so only a
-    // crash before that release still leaves it; a rebuilt Store was copied
-    // without it (`build` clears `gc_intent`).
+    // §5.1/§9: the admission intent lives through the build and the install
+    // and is released at the `cleanup` settle, so every crash point below still
+    // leaves it (the installed Store carries the row the build copied) and the
+    // next `store.compact` adopts it.
     let listed = intents(&reopened);
-    if case.failpoint == CompactFailpoint::BeforeSeal {
-        assert_eq!(listed.len(), 1, "admission intent at {case:?}");
-        assert_eq!(listed[0].op_id, op);
-        assert_eq!(listed[0].kind, GcIntentKind::Compaction);
-        assert_eq!(listed[0].scope_kind, GcScopeKind::Store);
-    } else {
-        assert!(listed.is_empty(), "the intent was released at {case:?}");
-    }
+    assert_eq!(listed.len(), 1, "admission intent at {case:?}");
+    assert_eq!(listed[0].op_id, op);
+    assert_eq!(listed[0].kind, GcIntentKind::Compaction);
+    assert_eq!(listed[0].scope_kind, GcScopeKind::Store);
 
     // Wholly old or wholly new: never a mixed Store.
     let expected_generation = if case.installed { before + 1 } else { before };
@@ -636,7 +633,7 @@ crash_at!(
 crash_at!(
     crash_during_settle,
     CompactFailpoint::DuringSettle,
-    "install",
+    "cleanup",
     true,
     false,
     false
@@ -854,8 +851,8 @@ mod real_process {
     }
 
     // The mark phase: the open session and admission intent at `BeforeSeal`
-    // (the real kill leaves the writer's WAL sidecars), and the sealed,
-    // intent-released Store at `AfterSeal`.
+    // (the real kill leaves the writer's WAL sidecars), and the sealed Store
+    // with the recorded intent at `AfterSeal`.
     sigkill_at!(
         sigkill_before_seal,
         CompactFailpoint::BeforeSeal,
@@ -939,7 +936,7 @@ mod real_process {
     sigkill_at!(
         sigkill_during_settle,
         CompactFailpoint::DuringSettle,
-        "install",
+        "cleanup",
         true,
         false,
         false,

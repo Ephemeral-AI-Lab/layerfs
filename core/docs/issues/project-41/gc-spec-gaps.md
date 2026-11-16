@@ -94,3 +94,73 @@ the reused `deleted_ms`. Operator visibility is the sidecar and the call log, no
   never dropped or synthesized.
 - These decisions bind T3, T4, T5, T11, T12 and the T10 report; the frozen spec remains the authority and wins on
   disagreement.
+
+## G7. #711 SQLite compaction batch (implementation note)
+
+> Batch review of the SQLite §7 rewrite. The §11 phase list gains one entry and
+> the artifact set loses one; both are recorded here as proposed #42
+> amendments, and every other change keeps the frozen contract text.
+
+**Phase list (§11).** §11 lists `mark`, `build`, `verify`, `install` for SQLite.
+The settle is its own step after the install and before the op record is
+settled, so the run now records a fifth phase `cleanup` and the shared
+`SQLITE_COMPACT_PHASES` is `mark`, `build`, `verify`, `install`, `cleanup`. A
+crash between the install and the op settlement then reads `cleanup`, not
+`install`. The `install` stop points (`DuringRename`, `AfterInstall`) keep
+`install`. **Correction proposed:** add `cleanup` to §11's SQLite list.
+
+**Artifact set (§9).** `<store>.compact-op.tmp` is the incomplete op record an
+op write leaves when it dies before its rename; it is part of the artifact set
+and a record-less `.tmp` is removed, never refused as an unrecorded staged
+name. `<store>.compact-vacuum` was over-reported: SQLite's `VACUUM` writes its
+rewrite to an unlinked `etilqs_*` temp database in the process temp directory,
+never a file beside the Store, and the fixed list now omits it. **Correction
+proposed:** §9's artifact set is `<store>.compact{,-journal,-wal,-shm,
+-visited,-visited-journal,-op.tmp,-mj*}`.
+
+**`none` writes no Store state (§3, §6.3).** §6.3 says both paths spill the
+closure to `<store>.compact-visited`; the `none` path creates the scratch,
+measures it into `peakTempBytes`, deletes it, and clears the transient
+`kept_node` working table and its admission intent. `kept_node` is a working
+table: it is empty before and after every `store.compact`, so a `none` run
+leaves the live Store identical to its pre-call state (the mark's write
+transaction is compensated; a rollback-only mark remains a follow-up).
+
+**Intent lifetime (§5.1, §9).** The compaction intent is registered before the
+mark and is *not* released before the seal. It is copied into the staged
+`<store>.compact` (`build` deletes every other intent row), moves into the live
+Store at the rename, and is cleared in the `cleanup` settle after the artifact
+set is removed; the op record is removed last. A definite post-seal failure
+releases the intent with one raw delete on the path that still names the sealed
+file, and keeps the op record when that delete fails.
+
+**Capacity (§7 step 8).** `SQLITE_NOMEM` is `Capacity` like `SQLITE_FULL` and
+`SQLITE_TOOBIG`. It is a definite failure, not an uncertain outcome, so the
+staged artifact set and the op record are removed rather than kept as a
+leftover.
+
+**Foreign keys and `sqlite_sequence` (§7 step 4).** The pruning transaction
+keeps `PRAGMA foreign_keys=OFF` with `defer_foreign_keys=ON`, an explicit
+deviation from the step's `foreign_keys=ON`: with enforcement on, SQLite's
+deferred-constraint counter survives this delete order and the COMMIT is
+refused `SQLITE_CONSTRAINT_FOREIGNKEY` while `pragma_foreign_key_check` on the
+same final state reports it clean. The verification's
+`pragma_foreign_key_check` is the guard that proves the staged row set.
+Restored `sqlite_sequence` values are read back and must not fall below the
+source values.
+
+**Capping `keptWaste.references` (S7, §11).** `deltaBases.references` keeps at
+most `DELTA_BASE_REFERENCES_CAP` (1024) identities in ascending order; the wire
+renders a cut list as `{value, cap}` and `deltaBases.bytes` still counts the
+whole kept set. **Correction proposed:** §11's capped-field sentence names this
+cap.
+
+**S5 and the peak decision.** The rebuild algorithm is unchanged: the pack is
+still the unit that frees bytes, only retained rows are copied into a fresh
+Store, and no published `pack` row is updated or deleted in place (§7 step 4's
+`DELETE` runs in the staged copy, never in the live Store). `peakTempBytes`
+keeps the T-G72 documented bound (`staged_bytes + journal_bound + target_bytes +
+visited_bytes`) and the 50 GB decision recorded in
+[`gc-capacity-model.md`](gc-capacity-model.md): 147.609 GB = 2.90x the old file
+against a 143.1 GB sampled peak. The only addition is the `none` path's scratch
+term.

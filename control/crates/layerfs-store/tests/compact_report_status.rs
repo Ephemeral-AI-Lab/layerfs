@@ -92,6 +92,7 @@ fn receipt() -> CompactReceipt {
             dead_in_retained_packs_bytes: 5,
             delta_bases_bytes: 6,
             delta_base_references: vec![[7; 32]],
+            delta_base_references_capped: false,
             inode_blocks_bytes: 8,
         },
         peak_temp_bytes: 900,
@@ -112,6 +113,28 @@ fn receipt() -> CompactReceipt {
             },
         ],
     }
+}
+
+#[test]
+fn a_capped_reference_list_carries_its_cap() {
+    let mut capped = receipt();
+    capped.kept_waste.delta_base_references =
+        vec![[9; 32]; layerfs_persistence::DELTA_BASE_REFERENCES_CAP];
+    capped.kept_waste.delta_base_references_capped = true;
+    let wire = layerfs_store::report::compact_report(&CompactReport::from(&capped));
+    let bases = wire.get("kept_waste").unwrap().get("delta_bases").unwrap();
+    let references = bases.get("references").unwrap();
+    assert_eq!(
+        texts(references.get("value").unwrap()).len(),
+        layerfs_persistence::DELTA_BASE_REFERENCES_CAP
+    );
+    assert_eq!(
+        references.get_int("cap"),
+        Some(layerfs_persistence::DELTA_BASE_REFERENCES_CAP as i64),
+        "a capped field carries its cap (S7)"
+    );
+    // The bytes are still the whole kept set's bytes.
+    assert_eq!(bases.get_int("bytes"), Some(6));
 }
 
 #[test]
@@ -213,7 +236,7 @@ fn status_projects_the_sidecar_phase_and_state() {
     assert_eq!(op.get("uncertain"), Some(&SdkValue::Bool(true)));
     assert_eq!(
         texts(busy.get("phases").unwrap()),
-        ["mark", "build", "verify", "install"]
+        ["mark", "build", "verify", "install", "cleanup"]
     );
 
     // A gone owner leaves an uncertain op: unresolved, same phase, same id.

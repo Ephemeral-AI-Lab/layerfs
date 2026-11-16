@@ -405,7 +405,8 @@ sigkill_at!(
     true,
     false
 );
-// Installed at `G + 1`: after the rename, and partway through the settle.
+// Installed at `G + 1`: after the rename, and partway through the cleanup
+// settle (the phase §11 records for it).
 sigkill_at!(
     sigkill_after_install,
     "AfterInstall",
@@ -418,7 +419,7 @@ sigkill_at!(
 sigkill_at!(
     sigkill_during_settle,
     "DuringSettle",
-    "install",
+    "cleanup",
     true,
     false,
     false,

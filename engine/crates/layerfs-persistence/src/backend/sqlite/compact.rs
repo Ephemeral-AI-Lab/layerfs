@@ -9,7 +9,16 @@
 //! into place at `G → G+1`. The run's phase and mark tuple are kept beside the
 //! Store in `<store>.compact-op`, the SQLite equivalent of the PostgreSQL
 //! `gc_op` row (§11); the next `store.compact` judges a leftover by the Store
-//! generation (§9) and removes the artifact set it names.
+//! generation (`G` not installed, `G+1` installed; §9) and removes the artifact
+//! set it names.
+//!
+//! The admission intent lives through the build and the install and is cleared
+//! at the `cleanup` settle, after the artifact set is removed (§5.1, §9). The
+//! transient `kept_node` working table is emptied before every `store.compact`
+//! replies on both paths: a `none` run must leave the live Store exactly as it
+//! found it. §6.3 has both paths spill the closure to
+//! `<store>.compact-visited`, so `none` creates the scratch and deletes it
+//! before replying, and the rebuild keeps and reuses it.
 //!
 //! The T7.2 mark already resolves every logical reference and delta base, so
 //! the bytes of packs that hold no reached object are the refined dead bytes:
@@ -50,7 +59,11 @@ const VISITED_SUFFIX: &str = ".compact-visited";
 /// sectors cover the prune and rewrite headers.
 const JOURNAL_HEADER_BOUND: u64 = 8192;
 
-/// The full SQLite artifact set of §9, without the variable `-mj*` journals.
+/// The full SQLite artifact set of §9, without the variable `-mj*` journals:
+/// the fixed staged and visited artifacts plus the incomplete op record
+/// (`.compact-op.tmp`), which an op write that died before its rename leaves.
+/// `.compact-vacuum` is not part of it: SQLite's `VACUUM` writes its rewrite to
+/// an unlinked `etilqs_*` temp database, never beside the Store.
 const ARTIFACT_SUFFIXES: [&str; 7] = [
     COMPACT_SUFFIX,
     ".compact-journal",
@@ -58,7 +71,7 @@ const ARTIFACT_SUFFIXES: [&str; 7] = [
     ".compact-shm",
     VISITED_SUFFIX,
     ".compact-visited-journal",
-    ".compact-vacuum",
+    ".compact-op.tmp",
 ];
 
 /// The mark tuple a compaction records before its first checkpoint (§8 Phase M
@@ -181,7 +194,10 @@ impl CompactFailpoint {
             | Self::CapacityAtBuild
             | Self::AfterWalSwitch => "build",
             Self::DuringVerify | Self::AfterVerify | Self::BeforeInstall => "verify",
-            Self::DuringRename | Self::AfterInstall | Self::DuringSettle => "install",
+            Self::DuringRename | Self::AfterInstall => "install",
+            // §11: the settle is its own `cleanup` phase, so a crash after the
+            // install and before the op is settled reads `cleanup`.
+            Self::DuringSettle => "cleanup",
             Self::PostgresAfterMark => "mark",
             Self::PostgresAfterBuild => "build",
             Self::PostgresAfterSwap => "swap",
@@ -216,6 +232,12 @@ pub struct CompactRequest {
     pub before_install_hook: Option<fn(&Path)>,
 }
 
+/// The report keeps at most this many kept-waste delta-base identities (§11,
+/// S7): a rebuild of a Store with millions of bases must not serialise a
+/// multi-megabyte reference list into its receipt. The bytes still count the
+/// whole kept set.
+pub const DELTA_BASE_REFERENCES_CAP: usize = 1024;
+
 /// The `keptWaste` §11 part of a compaction report.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CompactKeptWaste {
@@ -223,23 +245,27 @@ pub struct CompactKeptWaste {
     pub dead_in_retained_packs_bytes: u64,
     /// Bytes of objects reached only as a delta base.
     pub delta_bases_bytes: u64,
-    /// The objects counted by [`Self::delta_bases_bytes`], in ascending order.
+    /// The objects counted by [`Self::delta_bases_bytes`], in ascending order,
+    /// capped at [`DELTA_BASE_REFERENCES_CAP`] entries.
     pub delta_base_references: Vec<[u8; 32]>,
+    /// Whether [`Self::delta_base_references`] was cut at the cap; the wire
+    /// renders a capped list as `{value, cap}` (S7).
+    pub delta_base_references_capped: bool,
     /// Bytes of `inode_value_block` rows, which 2.0 keeps in full.
     pub inode_blocks_bytes: u64,
 }
 
 impl CompactKeptWaste {
-    /// One mark's kept-waste accounting.
-    fn from_mark(waste: &KeptWaste) -> Self {
+    /// One mark's kept-waste accounting, capped at
+    /// [`DELTA_BASE_REFERENCES_CAP`] identities. Both backends project their
+    /// receipt through this constructor so the cap cannot drift.
+    pub fn from_waste(waste: &KeptWaste) -> Self {
+        let (references, capped) = cap_delta_references(waste.delta_base_references());
         Self {
             dead_in_retained_packs_bytes: waste.dead_in_retained_packs_bytes(),
             delta_bases_bytes: waste.delta_bases_bytes(),
-            delta_base_references: waste
-                .delta_base_references()
-                .iter()
-                .map(|id| *id.as_bytes())
-                .collect(),
+            delta_base_references: references,
+            delta_base_references_capped: capped,
             inode_blocks_bytes: waste.inode_blocks_bytes(),
         }
     }
@@ -251,6 +277,18 @@ impl CompactKeptWaste {
             && self.delta_bases_bytes == 0
             && self.inode_blocks_bytes == 0
     }
+}
+
+/// The report's `deltaBases.references`: the first [`DELTA_BASE_REFERENCES_CAP`]
+/// identities in ascending order, and whether the list was cut.
+fn cap_delta_references(ids: &[ObjectId]) -> (Vec<[u8; 32]>, bool) {
+    (
+        ids.iter()
+            .take(DELTA_BASE_REFERENCES_CAP)
+            .map(|id| *id.as_bytes())
+            .collect(),
+        ids.len() > DELTA_BASE_REFERENCES_CAP,
+    )
 }
 
 /// The `residue` §11 part of a compaction report.
@@ -370,9 +408,7 @@ live_heads_digest={}\n",
 
     fn write(&self, store: &Path) -> HistoryResult<()> {
         let path = op_path(store);
-        let mut temporary = path.as_os_str().to_os_string();
-        temporary.push(".tmp");
-        let temporary = PathBuf::from(temporary);
+        let temporary = op_temporary_path(store);
         std::fs::write(&temporary, self.encode()).map_err(io_error)?;
         if let Ok(file) = std::fs::File::open(&temporary) {
             let _ = file.sync_all();
@@ -561,6 +597,11 @@ fn op_path(store: &Path) -> PathBuf {
     with_suffix(store, OP_SUFFIX)
 }
 
+/// The incomplete op record an op write leaves when it dies before its rename.
+fn op_temporary_path(store: &Path) -> PathBuf {
+    with_suffix(&op_path(store), ".tmp")
+}
+
 /// The §9 SQLite artifact set: the fixed suffixes plus every multi-database
 /// super-journal the staged file may have left (`<store>.compact-mj*`).
 fn artifact_paths(store: &Path) -> Vec<PathBuf> {
@@ -720,22 +761,6 @@ fn pack_lengths(session: &Arc<Session>) -> HistoryResult<BTreeMap<i64, u64>> {
         .map_err(Into::into)
 }
 
-fn object_packs(session: &Arc<Session>) -> HistoryResult<BTreeMap<ObjectId, i64>> {
-    session
-        .run::<_, BackendError>(false, |tx| {
-            let rows = tx.query("SELECT object_id,pack_id FROM object_location", vec![])?;
-            let mut packs = BTreeMap::new();
-            for row in &rows {
-                let bytes: Vec<u8> = row.get(0)?;
-                let pack: i64 = row.get(1)?;
-                let id = ObjectId::from_bytes(&bytes).map_err(|_| BackendError::Integrity)?;
-                packs.insert(id, pack);
-            }
-            Ok(packs)
-        })
-        .map_err(Into::into)
-}
-
 fn live_page_metrics(session: &Arc<Session>) -> HistoryResult<(u64, u64)> {
     session
         .run::<_, BackendError>(false, |tx| {
@@ -828,11 +853,7 @@ fn file_heads_digest(connection: &Connection) -> HistoryResult<[u8; 32]> {
 /// Writes the §6.3 visited set and the retained pack set to the scratch
 /// database the §7 copy joins against. The scratch runs `journal_mode=OFF`, so
 /// it leaves no journal of its own.
-fn write_visited(
-    scratch: &Path,
-    mark: &MarkResult,
-    packs: &BTreeMap<ObjectId, i64>,
-) -> HistoryResult<u64> {
+fn write_visited(scratch: &Path, mark: &MarkResult) -> HistoryResult<u64> {
     if std::fs::symlink_metadata(scratch).is_ok() {
         return Err(HistoryError::Exists("staged compaction artifact"));
     }
@@ -867,8 +888,11 @@ CREATE TABLE live_pack (pack_id INTEGER PRIMARY KEY) STRICT, WITHOUT ROWID;",
         for pack in mark.objects().packs() {
             live.execute(params![pack]).map_err(db_error)?;
         }
+        // The mark already resolved each reached object's winning locator, so
+        // the scratch joins against it without a second `object_location` load.
+        let locators = mark.objects().locators();
         for id in mark.objects().objects() {
-            let pack = packs
+            let pack = locators
                 .get(id)
                 .ok_or(HistoryError::Integrity("mark object locator"))?;
             visited
@@ -885,7 +909,14 @@ CREATE TABLE live_pack (pack_id INTEGER PRIMARY KEY) STRICT, WITHOUT ROWID;",
             return Err(HistoryError::Integrity("visited scratch sidecar"));
         }
     }
-    Ok(std::fs::metadata(scratch).map_err(io_error)?.len())
+    // §7 step 7 fsyncs the staged artifact it installs; the scratch is part of
+    // the recorded set too, and `journal_mode=OFF` skips SQLite's own sync.
+    let bytes = std::fs::metadata(scratch).map_err(io_error)?.len();
+    std::fs::File::open(scratch)
+        .map_err(io_error)?
+        .sync_all()
+        .map_err(io_error)?;
+    Ok(bytes)
 }
 
 /// What the staged rebuild produced, for the report and the install fence.
@@ -947,7 +978,6 @@ struct BuildInput<'a> {
     facts: &'a SealedFacts,
     mark: &'a MarkResult,
     tuple: &'a MarkTuple,
-    packs: &'a BTreeMap<ObjectId, i64>,
     layout: crate::SqlitePackLayout,
     synchronous: i64,
 }
@@ -964,7 +994,6 @@ fn build(
         facts,
         mark,
         tuple,
-        packs,
         layout,
         synchronous,
     } = input;
@@ -977,7 +1006,7 @@ fn build(
         }
     }
     stop_at(request, CompactFailpoint::BeforeCopy, op, store)?;
-    let visited_bytes = write_visited(&visited, mark, packs)?;
+    let visited_bytes = write_visited(&visited, mark)?;
     if capacity {
         // §7 step 3 on a bounded filesystem: `VACUUM INTO` has already created
         // the staged file when the write meets ENOSPC. The abort path removes
@@ -1024,6 +1053,14 @@ fn build(
     let journal_bound_bytes = journal_bound_bytes(staged_pages, page_size);
     // The copied published-pack rows may be deleted in the artifact; the live
     // immutability triggers are restored before the file is verified.
+    // §7 step 4 asks for `foreign_keys=ON` outside the transaction (inside it
+    // the pragma is a no-op). The pruning keeps `foreign_keys=OFF` — an
+    // explicit, tested deviation: with enforcement on, SQLite's deferred
+    // constraint counter survives this delete order and the COMMIT is refused
+    // `SQLITE_CONSTRAINT_FOREIGNKEY` even though `pragma_foreign_key_check`
+    // reports the final row set clean. The verification's
+    // `pragma_foreign_key_check` proves that same final state, so the pragma is
+    // not the only guard.
     // `sqlite_sequence` is the acquisition operation counter: the copy keeps
     // every row the source had, and the sequence never falls (§4.1, §7).
     let sequences: Vec<(String, i64)> = if table_present(&connection, "sqlite_sequence")? {
@@ -1094,7 +1131,7 @@ PRAGMA defer_foreign_keys=ON;",
                 "Store totals disagree with the history rows",
             ));
         }
-        let mut deletes = String::from(
+        let mut deletes = format!(
             "DELETE FROM object_location WHERE object_id NOT IN \
 (SELECT object_id FROM scratch.visited);\
 DELETE FROM content_signature WHERE object_id NOT IN \
@@ -1126,9 +1163,10 @@ DELETE FROM project_epoch WHERE layer_stack_id NOT IN \
 (SELECT layer_stack_id FROM layer_stack);\
 DELETE FROM merge_record;\
 DELETE FROM merge_operation;\
-DELETE FROM gc_intent;\
+DELETE FROM gc_intent WHERE op_id<>x'{}';\
 DELETE FROM gc_dead;\
 DELETE FROM gc_op;",
+            hex(&op.op_id)
         );
         if units {
             deletes.push_str(
@@ -1186,6 +1224,22 @@ metadata=(SELECT COALESCE(SUM(length),0) FROM pack WHERE domain=0) WHERE id=1;",
             .map_err(db_error)?;
         for (name, seq) in &sequences {
             statement.execute(params![name, seq]).map_err(db_error)?;
+        }
+        drop(statement);
+        // §4.1/§7: the acquisition operation counter never falls. The copy
+        // keeps every row the source had, so a restored sequence below the
+        // source one is a rebuild bug, never a smaller Store.
+        for (name, seq) in &sequences {
+            let restored: i64 = connection
+                .query_row(
+                    "SELECT seq FROM sqlite_sequence WHERE name=?1",
+                    params![name],
+                    |row| row.get(0),
+                )
+                .map_err(db_error)?;
+            if restored < *seq {
+                return Err(HistoryError::Integrity("staged Store sqlite_sequence fell"));
+            }
         }
     }
     let totals: (i64, i64, i64, i64) = connection
@@ -1507,15 +1561,23 @@ fn clear_artifacts(store: &Path) -> CompactResidue {
     }
 }
 
-/// Settles one run: the artifact set is removed first, the op record last
-/// (§9: the op is settled only after removal).
+/// Settles one run (§9, §11 `cleanup`): the artifact set is removed, the
+/// admission intent and the transient `kept_node` rows are cleared from the
+/// installed Store, and the op record is removed last. The intent is released
+/// *after* the artifact set, so a crash anywhere in the settle leaves a record
+/// the next run adopts rather than a live intent no call can settle.
 fn settle(store: &Path, request: &CompactRequest, op: &RunOp) -> HistoryResult<CompactResidue> {
+    // §11: the settle records its own phase, so a crash here reads `cleanup`.
+    let mut cleaning = op.clone();
+    cleaning.phase = "cleanup".to_owned();
+    let _ = cleaning.write(store);
     let mut residue = clear_artifacts(store);
     // §9: the op settles only after the artifact set is gone. A crash here
     // leaves the installed `G + 1` and the record for the next run.
     stop_at(request, CompactFailpoint::DuringSettle, op, store)?;
     let record_path = op_path(store);
-    if std::fs::symlink_metadata(&record_path).is_ok() {
+    let settled = clear_installed_mark(store, &op.op_id);
+    if settled && std::fs::symlink_metadata(&record_path).is_ok() {
         let bytes = std::fs::metadata(&record_path).map_or(0, |metadata| metadata.len());
         if std::fs::remove_file(&record_path).is_err()
             && std::fs::symlink_metadata(&record_path).is_ok()
@@ -1527,19 +1589,97 @@ fn settle(store: &Path, request: &CompactRequest, op: &RunOp) -> HistoryResult<C
             ));
         }
     }
+    if !settled {
+        // The op record stays the next run's recovery breadcrumb (§9).
+        residue.artifacts.push(record_path.file_name().map_or_else(
+            || record_path.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        ));
+    }
+    let _ = sync_directory(store);
     if !residue.artifacts.is_empty() && residue.reason.is_none() {
         residue.reason = Some("the artifact set could not be removed".to_owned());
     }
     Ok(residue)
 }
 
+/// Clears the installed Store's admission intent and the transient §6.1
+/// `kept_node` rows in one raw transaction. After the seal the run holds no
+/// session, so this is the only handle on the Store; the writer lane is already
+/// released, and a busy Store keeps the op record for the next run instead.
+fn clear_installed_mark(store: &Path, op_id: &[u8; 16]) -> bool {
+    let Ok(connection) = Connection::open_with_flags(
+        store,
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    ) else {
+        return false;
+    };
+    let _ = connection.busy_timeout(std::time::Duration::from_secs(5));
+    let cleared = connection
+        .execute_batch(&format!(
+            "BEGIN IMMEDIATE;DELETE FROM gc_intent WHERE op_id=x'{}';DELETE FROM kept_node;COMMIT;",
+            hex(op_id)
+        ))
+        .is_ok();
+    if !cleared {
+        let _ = connection.execute_batch("ROLLBACK;");
+    }
+    let closed = connection.close().is_ok();
+    cleared && closed
+}
+
+/// Releases the compaction's admission intent after the seal, when the run
+/// holds no session: the row is in the Store file, so one raw delete on the
+/// live path is enough. A failure keeps the op record, which the next run's
+/// `settle_leftover` adopts (§9).
+fn release_intent(store: &Path, op_id: &[u8; 16]) -> bool {
+    let Ok(connection) = Connection::open_with_flags(
+        store,
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    ) else {
+        return false;
+    };
+    let _ = connection.busy_timeout(std::time::Duration::from_secs(5));
+    let deleted = connection
+        .execute(
+            &format!("DELETE FROM gc_intent WHERE op_id=x'{}'", hex(op_id)),
+            params![],
+        )
+        .is_ok();
+    let closed = connection.close().is_ok();
+    deleted && closed
+}
+
+/// Removes the §6.3 visited scratch a `none` path created: the file and any
+/// journal SQLite might have left. `none` replies only after it is gone, so it
+/// leaves no residue (§6.3, §9).
+fn remove_scratch(scratch: &Path) -> HistoryResult<()> {
+    let _ = std::fs::remove_file(scratch);
+    for suffix in ["-journal", "-wal", "-shm"] {
+        let mut sidecar = scratch.as_os_str().to_os_string();
+        sidecar.push(suffix);
+        let _ = std::fs::remove_file(PathBuf::from(sidecar));
+    }
+    if std::fs::symlink_metadata(scratch).is_ok() {
+        return Err(HistoryError::Integrity(
+            "the none path could not remove its visited scratch",
+        ));
+    }
+    Ok(())
+}
+
 /// Drops every artifact and the op record after a definite failure before the
-/// rename; the live Store is unchanged apart from the seal's checkpoint.
-fn abort_before_install(store: &Path) {
+/// rename; the live Store is unchanged apart from the seal's checkpoint and the
+/// release of the admission intent (§8/§9). `op_id` names the intent to release
+/// when the run no longer holds a session; `None` means it was already released
+/// before the seal.
+fn abort_before_install(store: &Path, op_id: Option<&[u8; 16]>) {
+    let released = op_id.is_none_or(|op_id| release_intent(store, op_id));
     let residue = clear_artifacts(store);
-    if residue.artifacts.is_empty() {
+    if residue.artifacts.is_empty() && released {
         let _ = std::fs::remove_file(op_path(store));
     }
+    let _ = sync_directory(store);
 }
 
 /// Releases the admission intent of a definite failure before the seal and
@@ -1548,7 +1688,9 @@ fn abort_before_install(store: &Path) {
 /// deleting it would leave a live intent that no later call could settle.
 fn abort_run(history: &crate::HistoryProvider, store: &Path, op_id: &[u8; 16]) {
     if history.gc_release(op_id).is_ok() {
-        abort_before_install(store);
+        // The intent is already gone; only the artifact set and the record
+        // remain to be dropped.
+        abort_before_install(store, None);
     }
 }
 
@@ -1558,18 +1700,38 @@ fn abort_run(history: &crate::HistoryProvider, store: &Path, op_id: &[u8; 16]) {
 fn settle_leftover(
     history: &crate::HistoryProvider,
     store: &Path,
-    _generation: u64,
+    generation: u64,
     metrics: &mut RunMetrics,
 ) -> HistoryResult<()> {
     let Some(op) = RunOp::read(store) else {
-        if artifact_paths(store)
-            .iter()
-            .any(|path| std::fs::symlink_metadata(path).is_ok())
-        {
+        // `.compact-op.tmp` without a record is this Store's own incomplete op
+        // write: the run died inside `RunOp::write`, before any artifact. It is
+        // removed here, and only a staged name no record names stays the §9
+        // `Exists` refusal.
+        let incomplete = op_temporary_path(store);
+        let unrecorded = artifact_paths(store)
+            .into_iter()
+            .filter(|path| path != &incomplete)
+            .any(|path| std::fs::symlink_metadata(&path).is_ok());
+        if unrecorded {
             return Err(HistoryError::Exists("unrecorded compaction artifact"));
+        }
+        if std::fs::symlink_metadata(&incomplete).is_ok() {
+            std::fs::remove_file(&incomplete).map_err(io_error)?;
         }
         return Ok(());
     };
+    // §9: the record names `G`. A Store still at `G` was never installed, so
+    // its artifact set is removed and the run is settled. At `G+1` (or a
+    // Store that advanced further past an older record) the rename installed a
+    // rebuild, so only the record and the intent it kept remain. A record from
+    // a *later* generation does not describe this Store, so nothing it names is
+    // deleted.
+    let current = i64::try_from(generation)
+        .map_err(|_| HistoryError::Integrity("Store generation"))?;
+    if op.generation > current {
+        return Err(HistoryError::Integrity("compaction record generation"));
+    }
     // Adopt the recorded owner's admission intent before its artifact is gone.
     history.gc_release(&op.op_id)?;
     let residue = clear_artifacts(store);
@@ -1883,7 +2045,7 @@ impl SqliteHandles {
                         live_stored = live_stored.saturating_add(*length);
                     }
                     let dead = total.saturating_sub(live_stored);
-                    let kept_waste = CompactKeptWaste::from_mark(mark.objects().waste());
+                    let kept_waste = CompactKeptWaste::from_waste(mark.objects().waste());
                     let history_rows = u64::try_from(tuple.history_rows).unwrap_or(0);
                     Ok((mark, tuple, total, dead, kept_waste, history_rows))
                 })();
@@ -1898,11 +2060,32 @@ impl SqliteHandles {
             metrics.end_phase();
 
             if !rebuild {
-                // §3 `none`: mark only. The intent is cleared and the op record
-                // removed; nothing is rebuilt and the generation is unchanged.
+                // §3/§6.3 `none`: mark only. Both paths spill the closure to
+                // `<store>.compact-visited`, so the none path writes it and
+                // deletes it before it replies, and the reply counts it in
+                // `peakTempBytes`. The transient `kept_node` rows the mark wrote
+                // are cleared and the admission intent released, so the live
+                // Store keeps no mark state and the generation is unchanged.
+                let scratch = visited_path(&store);
+                let visited_bytes = match write_visited(&scratch, &mark) {
+                    Ok(bytes) => bytes,
+                    Err(error) => {
+                        abort_run(&history, &store, &op_id);
+                        return Err(error);
+                    }
+                };
+                if let Err(error) = remove_scratch(&scratch) {
+                    abort_run(&history, &store, &op_id);
+                    return Err(error);
+                }
+                if let Err(error) = history.clear_kept_node() {
+                    abort_run(&history, &store, &op_id);
+                    return Err(error);
+                }
                 let (free, page) = live_page_metrics(&session)?;
                 history.gc_release(&op_id)?;
                 let _ = std::fs::remove_file(op_path(&store));
+                let _ = sync_directory(&store);
                 drop(lane);
                 return Ok(receipt(
                     CompactPath::None,
@@ -1913,7 +2096,7 @@ impl SqliteHandles {
                     free.saturating_mul(page),
                     0,
                     kept_waste,
-                    0,
+                    visited_bytes,
                     CompactResidue::default(),
                     total,
                     history_rows,
@@ -1925,28 +2108,37 @@ impl SqliteHandles {
             stop_at(request, CompactFailpoint::BeforeSeal, &op, &store)?;
 
             // §7 step 2 onward: seal and rebuild. Only the session remains.
-            let object_packs = match object_packs(&session) {
-                Ok(packs) => packs,
-                Err(error) => {
-                    abort_run(&history, &store, &op_id);
-                    return Err(error);
-                }
-            };
-            // §8/§9: release the admission intent while the Store is still
-            // reachable. Every failure below runs after the seal, when this
-            // process can no longer run SQL on the Store; without this release
-            // a live intent would refuse every later GC operation. The held
-            // writer lane still excludes writers through the install, and a
-            // crash leaves the op record for the next run to settle.
-            history.gc_release(&op_id)?;
+            // §5.1/§9: the admission intent is *not* released here. It is
+            // copied into `<store>.compact`, lives through the build and the
+            // install, and the cleanup settle clears it on the installed Store;
+            // a definite failure before the rename releases it with a raw
+            // delete (the run no longer holds a session), and a crash leaves the
+            // op record for the next run to adopt.
             drop(history);
             drop(storage);
             let mut guard = WriterGuard::new(lane.into_writer());
-            let session = Arc::try_unwrap(session).map_err(|_| HistoryError::Busy)?;
+            let session = match Arc::try_unwrap(session) {
+                Ok(session) => session,
+                Err(_) => {
+                    // A definite failure before the seal: the live Store is
+                    // unchanged, so its intent is released and the op record
+                    // removed. A held clone elsewhere is `Busy`, never unknown.
+                    abort_before_install(&store, Some(&op_id));
+                    return Err(HistoryError::Busy);
+                }
+            };
             let writer = guard.take();
             let (facts, writer) = match session.seal_holding(writer) {
                 Ok(sealed) => sealed,
-                Err(error) => return Err(seal_error(error)),
+                Err(error) => {
+                    let mapped = seal_error(error);
+                    if !mapped.unknown() {
+                        // Definite: nothing was installed, so the run leaves no
+                        // op record and no live intent behind.
+                        abort_before_install(&store, Some(&op_id));
+                    }
+                    return Err(mapped);
+                }
             };
             guard.put(writer);
             // §7 step 1.5: the sealed file is about to be read back.
@@ -1957,24 +2149,24 @@ impl SqliteHandles {
             let sealed_tuple = match immutable_tuple(&facts.path) {
                 Ok(tuple) => tuple,
                 Err(error) => {
-                    abort_before_install(&store);
+                    abort_before_install(&store, Some(&op_id));
                     return Err(error);
                 }
             };
             if sealed_tuple != tuple {
-                abort_before_install(&store);
+                abort_before_install(&store, Some(&op_id));
                 return Err(HistoryError::Conflict("the Store changed after the mark"));
             }
             match immutable_digest(&facts.path) {
                 Ok(digest) if digest == mark.live_heads_digest() => {}
                 Ok(_) => {
-                    abort_before_install(&store);
+                    abort_before_install(&store, Some(&op_id));
                     return Err(HistoryError::Conflict(
                         "the Store heads changed after the mark",
                     ));
                 }
                 Err(error) => {
-                    abort_before_install(&store);
+                    abort_before_install(&store, Some(&op_id));
                     return Err(error);
                 }
             }
@@ -1982,14 +2174,18 @@ impl SqliteHandles {
 
             metrics.begin_phase(CompactPhase::Build);
             op.phase = "build".to_owned();
-            op.write(&store)?;
+            if let Err(error) = op.write(&store) {
+                // A definite I/O failure after the seal: release the intent and
+                // drop the artifact set, so the next call does not meet BusyOp.
+                abort_before_install(&store, Some(&op_id));
+                return Err(error);
+            }
             let capacity = request.failpoint == Some(CompactFailpoint::CapacityAtBuild);
             let built = match build(
                 BuildInput {
                     facts: &facts,
                     mark: &mark,
                     tuple: &tuple,
-                    packs: &object_packs,
                     layout,
                     synchronous,
                 },
@@ -2002,10 +2198,16 @@ impl SqliteHandles {
                 // an artifact set a recorded run names (§9).
                 Err(HistoryError::UnknownOutcome) => return Err(HistoryError::UnknownOutcome),
                 Err(error) => {
-                    abort_before_install(&store);
+                    abort_before_install(&store, Some(&op_id));
                     return Err(error);
                 }
             };
+            // §7 step 7: every artifact and the op record are durable before
+            // the verification reads them back.
+            if let Err(error) = sync_directory(&store) {
+                abort_before_install(&store, Some(&op_id));
+                return Err(error);
+            }
             stop_at(request, CompactFailpoint::AfterBuild, &op, &store)?;
             stop_at(request, CompactFailpoint::AfterWalSwitch, &op, &store)?;
             metrics.end_phase();
@@ -2013,7 +2215,7 @@ impl SqliteHandles {
             metrics.begin_phase(CompactPhase::Verify);
             op.phase = "verify".to_owned();
             if let Err(error) = op.write(&store) {
-                abort_before_install(&store);
+                abort_before_install(&store, Some(&op_id));
                 return Err(error);
             }
             if let Err(error) = verify(
@@ -2031,7 +2233,7 @@ impl SqliteHandles {
                 if matches!(error, HistoryError::UnknownOutcome) {
                     return Err(error);
                 }
-                abort_before_install(&store);
+                abort_before_install(&store, Some(&op_id));
                 return Err(error);
             }
             stop_at(request, CompactFailpoint::AfterVerify, &op, &store)?;
@@ -2042,11 +2244,11 @@ impl SqliteHandles {
                 hook(&facts.path);
             }
             if let Err(error) = install_fence(&facts, &tuple) {
-                abort_before_install(&store);
+                abort_before_install(&store, Some(&op_id));
                 return Err(error);
             }
             if let Err(error) = prepare_target(&built.target) {
-                abort_before_install(&store);
+                abort_before_install(&store, Some(&op_id));
                 return Err(error);
             }
             stop_at(request, CompactFailpoint::BeforeInstall, &op, &store)?;
@@ -2195,7 +2397,11 @@ impl RunMetrics {
 
 #[cfg(test)]
 mod tests {
-    use super::{journal_bound_bytes, io_error, Built};
+    use super::{
+        cap_delta_references, db_error, io_error, journal_bound_bytes, Built,
+        DELTA_BASE_REFERENCES_CAP,
+    };
+    use layerfs_content::ObjectId;
     use layerfs_history::HistoryError;
 
     /// §7 step 3 on a bounded filesystem: `ENOSPC`, `EDQUOT` and `EFBIG` are
@@ -2216,6 +2422,43 @@ mod tests {
     fn another_io_error_is_integrity() {
         let error = io_error(std::io::Error::from_raw_os_error(5));
         assert!(matches!(error, HistoryError::Integrity(_)), "{error:?}");
+    }
+
+    /// §7 step 8: `SQLITE_NOMEM` is the report's `Capacity` refusal, not an
+    /// uncertain outcome. A definite classification is what lets the caller
+    /// remove the staged artifact set instead of keeping it as a leftover.
+    #[test]
+    fn sqlite_out_of_memory_is_capacity() {
+        let error = rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error {
+                code: rusqlite::ErrorCode::OutOfMemory,
+                extended_code: 7,
+            },
+            None,
+        );
+        assert!(
+            matches!(super::db_error(error), HistoryError::Capacity(_)),
+            "SQLITE_NOMEM must be Capacity"
+        );
+    }
+
+    /// §11/S7: `deltaBases.references` is capped, and the cap is reported; the
+    /// bytes and the retained set are unaffected.
+    #[test]
+    fn delta_base_references_are_capped_and_the_cap_is_reported() {
+        let short: Vec<ObjectId> = (0..3u8)
+            .map(|index| ObjectId::from_bytes(&[index; 32]).unwrap())
+            .collect();
+        let (references, capped) = cap_delta_references(&short);
+        assert_eq!(references.len(), 3);
+        assert!(!capped);
+
+        let long: Vec<ObjectId> = (0..=DELTA_BASE_REFERENCES_CAP)
+            .map(|index| ObjectId::from_bytes(&[(index % 251) as u8; 32]).unwrap())
+            .collect();
+        let (references, capped) = cap_delta_references(&long);
+        assert_eq!(references.len(), DELTA_BASE_REFERENCES_CAP);
+        assert!(capped, "a list at the cap is reported as capped");
     }
 
     /// §11 `peakTempBytes` on the 50 GB arm (T-G66): the staged copy holds the
