@@ -1,7 +1,7 @@
 //! GC benchmark home: measure the `none` and `rebuild` compaction paths on a
 //! generated SQLite Store and report wall time (downtime), the mark/build/
 //! verify/install phases, peak temporary bytes, bytes written, per-GB rates,
-//! cache state and the host class.
+//! run variance, cache state and method, host class and the fixture shape.
 //!
 //! Run it through the Cargo example target:
 //!
@@ -13,20 +13,28 @@
 //! `tools/ci/gc_capacity_final.sh` is the runbook entry point; it pins the
 //! environment, checks free space, and refuses the owner-only 50 GB arm.
 //!
+//! The fixture ([`gc_bench/gc_fixture.rs`](gc_bench/gc_fixture.rs)) is not the
+//! whole-file-only shape of the first harness: it publishes a real Layer
+//! history per project, a content pool shared across projects, and delta chains
+//! whose bases are kept only by their stored PREFIX records. Every content
+//! object is still a whole-file payload, which is the remaining documented gap.
+//!
 //! Scales (the medium arm is opt-in; the final arm is owner-only and is NOT
 //! run by CI or agents):
 //!
-//! | scale  | live bytes | runs | opt-in |
-//! |--------|------------|------|--------|
-//! | small  | ~30 MB     | 3    | none; the default |
-//! | medium | ~10 GB     | 3    | `--scale medium` |
-//! | final  | ~50 GB     | 1    | `GC_BENCH_OWNER=1 --owner-approved` |
+//! | scale  | live bytes | fixture shape | runs | opt-in |
+//! |--------|------------|---------------|------|--------|
+//! | small  | ~28 MB     | 4 projects x 4 Layers | 3 | none; the default |
+//! | medium | ~9.8 GB    | 16 projects x 52 Layers | 3 | `--scale medium` |
+//! | final  | ~45.6 GB   | 32 projects x 124 Layers | 1 | `GC_BENCH_OWNER=1 --owner-approved` |
 //!
-//! `--dry-run` prints the plan and allocates nothing. `--cold-cache` drops the
-//! page cache before every measured run (records a refusal instead of failing
-//! when the process lacks the privilege). `--keep` keeps the temporary Store.
+//! `--dry-run` prints the plan and allocates nothing. `--cold-cache` attempts a
+//! cold cache before every measured run: the default method is `drop_caches`
+//! (`sync` then write `3` to `/proc/sys/vm/drop_caches`), and
+//! `--cold-method cgroup-memory` records the finite `memory.max` of the cgroup
+//! the caller launched the harness in. A refused method is recorded as warm,
+//! never as cold. `--keep` keeps the temporary Store.
 //!
-//! The fixture module is [`gc_bench/gc_fixture.rs`](gc_bench/gc_fixture.rs).
 //! Only the Disposable (WAL/synchronous=OFF) profile is measured; owner
 //! direction 2026-10-07 disabled Durable execution indefinitely.
 
@@ -96,22 +104,42 @@ impl Scale {
 
     fn spec(self) -> FixtureSpec {
         match self {
+            // 4 projects x 4 Layers x 48 entries (6 shared, one delta target on
+            // the first 8 Layers) keeps the ~28 MB small arm and still carries
+            // history depth, sharing and delta bases.
             Self::Small => FixtureSpec {
                 groups: 16,
+                stacks: 4,
                 group_size: 48,
                 object_bytes: SMALL_OBJECT_BYTES,
+                shared_slots: 6,
+                shared_objects: 12,
+                delta_chains: 8,
+                delta_depth: 4,
             },
+            // 16 projects x 52 Layers x 99 entries, 12 shared slots per leaf and
+            // 2500 shared objects: ~9.79 GB live, the T-G61 shape.
             Self::Medium => FixtureSpec {
-                groups: 701,
+                groups: 832,
+                stacks: 16,
                 group_size: 99,
                 object_bytes: MAX_OBJECT_BYTES,
+                shared_slots: 12,
+                shared_objects: 2500,
+                delta_chains: 256,
+                delta_depth: 4,
             },
-            // 3510 * 99 * 131071 = 45.56 GB live; ~8.8% dead takes the pack
-            // total to ~50 GB, the T-G66 arm shape.
+            // 32 projects x 124 Layers keeps the T-G66 live bytes at ~45.6 GB;
+            // ~8.8% dead takes the pack total to ~50 GB. Owner-only.
             Self::Final => FixtureSpec {
-                groups: 3510,
+                groups: 3968,
+                stacks: 32,
                 group_size: 99,
                 object_bytes: MAX_OBJECT_BYTES,
+                shared_slots: 12,
+                shared_objects: 2500,
+                delta_chains: 256,
+                delta_depth: 4,
             },
         }
     }
@@ -132,6 +160,7 @@ struct Options {
     out: Option<PathBuf>,
     keep: bool,
     cold_cache: bool,
+    cold_method: ColdMethod,
     tmp: Option<PathBuf>,
     owner_approved: bool,
     host_class: Option<String>,
@@ -161,6 +190,17 @@ fn parse_options() -> Result<Option<Options>> {
     let mut out = env_value("GC_BENCH_OUT").map(PathBuf::from);
     let mut keep = env_flag("GC_BENCH_KEEP");
     let mut cold_cache = env_flag("GC_BENCH_COLD_CACHE");
+    let mut cold_method = env_value("GC_BENCH_COLD_METHOD")
+        .as_deref()
+        .map(|raw| {
+            ColdMethod::parse(raw).ok_or_else(|| {
+                refusal(format!(
+                    "unknown GC_BENCH_COLD_METHOD {raw:?}; expected drop_caches or cgroup-memory"
+                ))
+            })
+        })
+        .transpose()?
+        .unwrap_or(ColdMethod::DropCaches);
     let mut tmp = env_value("GC_BENCH_TMPDIR").map(PathBuf::from);
     let mut owner_approved = env_flag("GC_BENCH_OWNER_APPROVED");
     let mut host_class = env_value("GC_BENCH_HOST_CLASS");
@@ -201,6 +241,14 @@ fn parse_options() -> Result<Option<Options>> {
             "--tmpdir" => tmp = Some(PathBuf::from(value("--tmpdir")?)),
             "--keep" => keep = true,
             "--cold-cache" => cold_cache = true,
+            "--cold-method" => {
+                let raw = value("--cold-method")?;
+                cold_method = ColdMethod::parse(&raw).ok_or_else(|| {
+                    refusal(format!(
+                        "unknown cold method {raw:?}; expected drop_caches or cgroup-memory"
+                    ))
+                })?;
+            }
             "--owner-approved" => owner_approved = true,
             "--dry-run" => dry_run = true,
             "--host-class" => host_class = Some(value("--host-class")?),
@@ -231,6 +279,13 @@ fn parse_options() -> Result<Option<Options>> {
     } else {
         runs
     };
+    if cold_method != ColdMethod::DropCaches && !cold_cache {
+        return Err(refusal(
+            "--cold-method needs --cold-cache (or GC_BENCH_COLD_CACHE=1): a method without \
+             the request would be recorded as warm"
+                .to_owned(),
+        ));
+    }
     Ok(Some(Options {
         scale,
         runs,
@@ -238,6 +293,7 @@ fn parse_options() -> Result<Option<Options>> {
         out,
         keep,
         cold_cache,
+        cold_method,
         tmp,
         owner_approved,
         host_class,
@@ -251,18 +307,23 @@ fn print_help() {
         "gc_bench: measure the `none` and `rebuild` GC paths on a generated Store\n\
          \n\
          usage: gc_bench [--scale small|medium|final] [--runs N] [--out FILE]\n\
-         \x20              [--tmpdir DIR] [--cold-cache] [--keep] [--dry-run]\n\
-         \x20              [--owner-approved] [--host-class NAME]\n\
+         \x20              [--tmpdir DIR] [--cold-cache] [--cold-method M] [--keep]\n\
+         \x20              [--dry-run] [--owner-approved] [--host-class NAME]\n\
          \x20              [--nominal-read-mbs N] [--nominal-write-mbs N]\n\
          \n\
-         small   ~30 MB fixture, 3 runs per arm; the default\n\
-         medium  ~10 GB fixture, 3 runs per arm; opt-in (runbook --medium)\n\
-         final   ~50 GB fixture, 1 run per arm; owner-only and NOT run by agents\n\
+         small   ~28 MB fixture (4 projects x 4 Layers), 3 runs per arm; default\n\
+         medium  ~9.8 GB fixture (16 projects x 52 Layers), 3 runs per arm; opt-in\n\
+         final   ~45.6 GB live, 32 projects x 124 Layers, 1 run; owner-only, NOT run\n\
+         \n\
+         cold methods: drop_caches (default; needs privilege) or cgroup-memory\n\
+         (the caller sets a finite cgroup memory.max); a refused method is warm\n\
          \n\
          environment: GC_BENCH_SCALE GC_BENCH_RUNS GC_BENCH_OUT GC_BENCH_TMPDIR\n\
-         \x20            GC_BENCH_KEEP GC_BENCH_COLD_CACHE GC_BENCH_DRY_RUN\n\
-         \x20            GC_BENCH_GROUPS GC_BENCH_GROUP GC_BENCH_OBJECT_BYTES\n\
-         \x20            GC_BENCH_DEAD_SHARE (permille, default 88)\n\
+         \x20            GC_BENCH_KEEP GC_BENCH_COLD_CACHE GC_BENCH_COLD_METHOD\n\
+         \x20            GC_BENCH_DRY_RUN GC_BENCH_GROUPS GC_BENCH_STACKS\n\
+         \x20            GC_BENCH_GROUP GC_BENCH_OBJECT_BYTES GC_BENCH_SHARED_SLOTS\n\
+         \x20            GC_BENCH_SHARED_OBJECTS GC_BENCH_DELTA_CHAINS\n\
+         \x20            GC_BENCH_DELTA_DEPTH GC_BENCH_DEAD_SHARE (permille, default 88)\n\
          \x20            GC_BENCH_OWNER=1 GC_BENCH_OWNER_APPROVED=1 (final arm only)\n\
          \x20            GC_BENCH_HOST_CLASS GC_BENCH_NOMINAL_READ_MBS\n\
          \x20            GC_BENCH_NOMINAL_WRITE_MBS (declared host class)\n"
@@ -284,6 +345,35 @@ fn median(values: &[u64]) -> u64 {
     let mut sorted = values.to_vec();
     sorted.sort_unstable();
     sorted[sorted.len() / 2]
+}
+
+/// Population standard deviation of the per-run wall times, in seconds.
+fn wall_stddev_seconds(values: &[u64]) -> f64 {
+    if values.is_empty() {
+        return 0.0;
+    }
+    let count = values.len() as f64;
+    let mean = values.iter().map(|value| *value as f64).sum::<f64>() / count;
+    let variance = values
+        .iter()
+        .map(|value| {
+            let delta = *value as f64 - mean;
+            delta * delta
+        })
+        .sum::<f64>()
+        / count;
+    variance.sqrt() / 1e6
+}
+
+/// `(max - min) / median` for the same arm's runs; section 13 asks for a range,
+/// and the relative form compares arms of different sizes.
+fn relative_range(values: &[u64]) -> f64 {
+    let middle = median(values);
+    if middle == 0 {
+        0.0
+    } else {
+        (max(values).saturating_sub(min(values))) as f64 / middle as f64
+    }
 }
 
 fn json_string(value: &str) -> String {
@@ -337,25 +427,121 @@ fn proc_io() -> ProcIo {
     io
 }
 
+/// How a run tries to start with a cold page cache. The method is recorded in
+/// every run and in the report; a refused attempt is never reported as cold.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ColdMethod {
+    DropCaches,
+    CgroupMemory,
+}
+
+impl ColdMethod {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "drop_caches" => Some(Self::DropCaches),
+            "cgroup-memory" | "cgroup_memory" => Some(Self::CgroupMemory),
+            _ => None,
+        }
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::DropCaches => "drop_caches",
+            Self::CgroupMemory => "cgroup-memory",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
-struct CacheDrop {
-    dropped: bool,
+struct CacheState {
+    method: &'static str,
+    applied: bool,
     note: String,
 }
 
-fn drop_caches() -> CacheDrop {
+fn drop_caches() -> CacheState {
     let _ = Command::new("sync").status();
     match std::fs::write("/proc/sys/vm/drop_caches", "3\n") {
-        Ok(()) => CacheDrop {
-            dropped: true,
+        Ok(()) => CacheState {
+            method: ColdMethod::DropCaches.label(),
+            applied: true,
             note: "sync + echo 3 > /proc/sys/vm/drop_caches".to_owned(),
         },
-        Err(error) => CacheDrop {
-            dropped: false,
+        Err(error) => CacheState {
+            method: ColdMethod::DropCaches.label(),
+            applied: false,
             note: format!(
                 "sync + echo 3 > /proc/sys/vm/drop_caches refused ({error}); the run is warm"
             ),
         },
+    }
+}
+
+/// The caller launches the harness inside a cgroup whose `memory.max` is a
+/// finite limit; page cache the run faults in is charged to that cgroup and the
+/// kernel reclaims it at the limit instead of keeping the whole Store warm. The
+/// harness only verifies and records the limit: changing its own cgroup from
+/// inside would also throttle the process that supervises it.
+fn cgroup_memory() -> CacheState {
+    let read = |path: &str| {
+        std::fs::read_to_string(path)
+            .ok()
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty())
+    };
+    let v2 = read("/sys/fs/cgroup/memory.max");
+    let v1 = read("/sys/fs/cgroup/memory/memory.limit_in_bytes");
+    match v2.or(v1) {
+        Some(limit) => {
+            let finite = limit != "max"
+                && limit
+                    .parse::<u64>()
+                    .map(|bytes| bytes > 0 && bytes < mem_bytes())
+                    .unwrap_or(false);
+            if finite {
+                let current = read("/sys/fs/cgroup/memory.current")
+                    .or_else(|| read("/sys/fs/cgroup/memory/memory.usage_in_bytes"))
+                    .unwrap_or_else(|| "unknown".to_owned());
+                CacheState {
+                    method: ColdMethod::CgroupMemory.label(),
+                    applied: true,
+                    note: format!(
+                        "cgroup memory.max={limit} memory.current={current}; page cache charged \
+                         to this cgroup is reclaimed at the limit"
+                    ),
+                }
+            } else {
+                CacheState {
+                    method: ColdMethod::CgroupMemory.label(),
+                    applied: false,
+                    note: format!(
+                        "cgroup-memory requested but memory.max={limit} is not a finite limit \
+                         below MemTotal; launch the harness under a memory-limited cgroup \
+                         (systemd-run --scope -p MemoryMax=4G ...) or use --cold-method drop_caches"
+                    ),
+                }
+            }
+        }
+        None => CacheState {
+            method: ColdMethod::CgroupMemory.label(),
+            applied: false,
+            note: "cgroup-memory requested but no cgroup memory.max is readable; the run is warm"
+                .to_owned(),
+        },
+    }
+}
+
+fn cold_state(enabled: bool, method: ColdMethod) -> CacheState {
+    if !enabled {
+        return CacheState {
+            method: method.label(),
+            applied: false,
+            note: "warm: cold cache not requested".to_owned(),
+        };
+    }
+    match method {
+        ColdMethod::DropCaches => drop_caches(),
+        ColdMethod::CgroupMemory => cgroup_memory(),
     }
 }
 
@@ -496,7 +682,7 @@ struct Measured {
     phases: Vec<(String, u64)>,
     sampled: TempFootprint,
     io: ProcIo,
-    cache: CacheDrop,
+    cache: CacheState,
 }
 
 impl Measured {
@@ -552,19 +738,18 @@ fn request(op: u8) -> CompactRequest {
     }
 }
 
-fn measure(store: &Path, op: u8, added_objects: u64, cold_cache: bool) -> Result<Measured> {
+fn measure(
+    store: &Path,
+    op: u8,
+    added_objects: u64,
+    cold_cache: bool,
+    cold_method: ColdMethod,
+) -> Result<Measured> {
     let handles = gc_fixture::reopen(store);
     let pack_before = gc_fixture::pack_stats(store);
     let old_file_bytes = gc_fixture::physical_bytes(store);
 
-    let cache = if cold_cache {
-        drop_caches()
-    } else {
-        CacheDrop {
-            dropped: false,
-            note: "warm: --cold-cache not requested".to_owned(),
-        }
-    };
+    let cache = cold_state(cold_cache, cold_method);
 
     let io_before = proc_io();
     let sampler = FootprintSampler::start(store);
@@ -628,6 +813,12 @@ fn per_gb_object(runs: &[Measured]) -> String {
             .collect::<Vec<_>>(),
     );
     let wall = median(&runs.iter().map(|run| run.wall_micros).collect::<Vec<_>>());
+    let shrink = median(
+        &runs
+            .iter()
+            .map(|run| run.physical_shrink)
+            .collect::<Vec<_>>(),
+    );
     let mark = median_phase(runs, "mark");
     let build = median_phase(runs, "build");
     let verify = median_phase(runs, "verify");
@@ -648,6 +839,7 @@ fn per_gb_object(runs: &[Measured]) -> String {
     format!(
         "{{\n      \"wallSecondsPerStoredGb\": {:.3},\n      \
          \"wallSecondsPerLiveGb\": {:.3},\n      \
+         \"wallSecondsPerFreedGb\": {:.3},\n      \
          \"markSecondsPerStoredGb\": {:.3},\n      \
          \"markSecondsPerLiveGb\": {:.3},\n      \
          \"markMBs\": {:.1},\n      \
@@ -658,6 +850,7 @@ fn per_gb_object(runs: &[Measured]) -> String {
          \"newBytesPerFreedByte\": {:.3}\n    }}",
         seconds_per_micros_to_gb(wall, stored),
         seconds_per_micros_to_gb(wall, live),
+        seconds_per_micros_to_gb(wall, shrink),
         seconds_per_nanos_to_gb(mark, stored),
         seconds_per_nanos_to_gb(mark, live),
         if mark == 0 {
@@ -715,7 +908,8 @@ fn json_run(index: u64, run: &Measured) -> String {
          \"processIo\": {{\"writeBytes\": {}, \"wchar\": {}, \"readBytes\": {}, \
          \"rchar\": {}}},\n      \
          \"copyBytes\": {},\n      \"bytesCopiedPerFreedByte\": {:.3},\n      \
-         \"cacheDropped\": {},\n      \"packCountBefore\": {},\n      \
+         \"cacheApplied\": {},\n      \"cacheMethod\": \"{}\",\n      \
+         \"packCountBefore\": {},\n      \
          \"packCountAfter\": {},\n      \"phaseTotalNanos\": {}\n    }}",
         run.path,
         run.wall_micros,
@@ -748,11 +942,22 @@ fn json_run(index: u64, run: &Measured) -> String {
         run.io.rchar,
         run.copy_bytes(),
         run.bytes_copied_per_freed_byte(),
-        run.cache.dropped,
+        run.cache.applied,
+        run.cache.method,
         run.pack_before.count,
         run.pack_after.count,
         run.phases.iter().map(|(_, value)| *value).sum::<u64>(),
     )
+}
+
+fn json_delta_depths(depths: &[(u64, u64)]) -> String {
+    let entries = depths
+        .iter()
+        .filter(|(_, count)| *count > 0)
+        .map(|(depth, count)| format!("\"{depth}\": {count}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("{{{entries}}}")
 }
 
 fn json_arm(name: &str, runs: &[Measured]) -> String {
@@ -773,6 +978,8 @@ fn json_arm(name: &str, runs: &[Measured]) -> String {
          \"peakTempBytes\": {},\n      \"physicalShrink\": {},\n      \
          \"newFileBytes\": {},\n      \"processWriteBytes\": {}\n    }},\n    \
          \"minWallMicros\": {},\n    \"maxWallMicros\": {},\n    \
+         \"variance\": {{\"runs\": {}, \"wallSecondsStdDev\": {:.6}, \
+         \"wallRelativeRange\": {:.4}}},\n    \
          \"phasesMedianNanos\": {{\"mark\": {}, \"build\": {}, \"verify\": {}, \
          \"install\": {}}},\n    \"perGb\": {}\n  }}",
         runs.first().map(|run| run.path).unwrap_or(name),
@@ -786,6 +993,9 @@ fn json_arm(name: &str, runs: &[Measured]) -> String {
         median(&written),
         min(&wall),
         max(&wall),
+        runs.len(),
+        wall_stddev_seconds(&wall),
+        relative_range(&wall),
         median_phase(runs, "mark"),
         median_phase(runs, "build"),
         median_phase(runs, "verify"),
@@ -1121,16 +1331,22 @@ fn run() -> Result<()> {
         }
     }
 
-    let groups = env_u64("GC_BENCH_GROUPS").unwrap_or(spec.groups);
-    let group_size = env_u64("GC_BENCH_GROUP").unwrap_or(spec.group_size);
-    let object_bytes =
-        usize::try_from(env_u64("GC_BENCH_OBJECT_BYTES").unwrap_or(spec.object_bytes as u64))
-            .unwrap_or(spec.object_bytes);
     let spec = FixtureSpec {
-        groups,
-        group_size,
-        object_bytes,
+        groups: env_u64("GC_BENCH_GROUPS").unwrap_or(spec.groups),
+        stacks: env_u64("GC_BENCH_STACKS").unwrap_or(spec.stacks),
+        group_size: env_u64("GC_BENCH_GROUP").unwrap_or(spec.group_size),
+        object_bytes: usize::try_from(
+            env_u64("GC_BENCH_OBJECT_BYTES").unwrap_or(spec.object_bytes as u64),
+        )
+        .unwrap_or(spec.object_bytes),
+        shared_slots: env_u64("GC_BENCH_SHARED_SLOTS").unwrap_or(spec.shared_slots),
+        shared_objects: env_u64("GC_BENCH_SHARED_OBJECTS").unwrap_or(spec.shared_objects),
+        delta_chains: env_u64("GC_BENCH_DELTA_CHAINS").unwrap_or(spec.delta_chains),
+        delta_depth: env_u64("GC_BENCH_DELTA_DEPTH").unwrap_or(spec.delta_depth),
     };
+    if let Err(error) = spec.validate() {
+        return Err(refusal(format!("fixture spec: {error}")));
+    }
     let dead_share = env_u64("GC_BENCH_DEAD_SHARE").unwrap_or(88).min(999);
 
     if options.dry_run {
@@ -1146,17 +1362,25 @@ fn run() -> Result<()> {
             "{{\n  \"schema\": \"{SCHEMA}\",\n  \"notRun\": true,\n  \
              \"dryRun\": true,\n  \"scale\": \"{}\",\n  \"ownerOnly\": {},\n  \
              \"ownerApproved\": {},\n  \"runs\": {},\n  \
-             \"fixture\": {{\n    \"groups\": {},\n    \"groupSize\": {},\n    \
-             \"objectBytes\": {},\n    \"liveObjects\": {},\n    \
+             \"coldMethod\": \"{}\",\n  \
+             \"fixture\": {{\n    \"groups\": {},\n    \"stacks\": {},\n    \
+             \"groupSize\": {},\n    \"objectBytes\": {},\n    \
+             \"sharedObjects\": {},\n    \"deltaChains\": {},\n    \
+             \"deltaDepth\": {},\n    \"liveObjects\": {},\n    \
              \"livePayloadBytes\": {},\n    \"diskHeadroomBytes\": {}\n  }},\n  \
              \"host\": {},\n  \"command\": {}\n}}",
             scale.label(),
             scale == Scale::Final,
             options.owner_approved,
             runs,
+            options.cold_method.label(),
             spec.groups,
+            spec.stacks,
             spec.group_size,
             spec.object_bytes,
+            spec.shared_objects,
+            spec.delta_chains,
+            spec.delta_depth,
             spec.live_objects(),
             spec.live_payload_bytes(),
             spec.disk_headroom_bytes(),
@@ -1200,12 +1424,18 @@ fn run() -> Result<()> {
     );
     let store = scratch.join("store.sqlite");
     eprintln!(
-        "gc_bench: scale={} groups={} group={} objectBytes={} runs={} tmp={} store={}",
+        "gc_bench: scale={} groups={} stacks={} group={} objectBytes={} shared={} \
+         deltaChains={} deltaDepth={} runs={} coldMethod={} tmp={} store={}",
         scale.label(),
         spec.groups,
+        spec.stacks,
         spec.group_size,
         spec.object_bytes,
+        spec.shared_objects,
+        spec.delta_chains,
+        spec.delta_depth,
         runs,
+        options.cold_method.label(),
         scratch.display(),
         store.display()
     );
@@ -1217,18 +1447,30 @@ fn run() -> Result<()> {
         available as f64 / GB
     );
 
-    let (build_seconds, built) = gc_fixture::build_live(&store, spec);
+    let build = gc_fixture::build_live(&store, spec);
+    let build_seconds = build.seconds;
+    let built = build.pack_before;
     let dead_target = dead_share;
     let dead =
         gc_fixture::ensure_dead_share(&store, dead_target, 0, 1_000_000_000, spec.object_bytes);
     let after_dead = gc_fixture::pack_stats(&store);
     let physical_after_dead = gc_fixture::path_bytes(&store);
     eprintln!(
-        "gc_bench: fixture live={:.3} GB in {:.1} s ({:.1} MB/s); dead +{} objects -> \
-         {:.3} GB dead of {:.3} GB ({:.3}%)",
+        "gc_bench: fixture live={:.3} GB in {:.1} s ({:.1} MB/s); {} content objects \
+         ({} fresh, {} shared x {} refs, {} delta objects over {} chains), \
+         {} projects x {}-{} Layers; dead +{} objects -> {:.3} GB dead of {:.3} GB ({:.3}%)",
         spec.live_payload_bytes() as f64 / GB,
         build_seconds,
         spec.live_payload_bytes() as f64 / 1e6 / build_seconds.max(1e-9),
+        spec.live_objects(),
+        build.fresh_objects,
+        build.shared_objects,
+        build.shared_references,
+        build.delta_objects,
+        build.delta_chains,
+        build.stacks,
+        build.layers_min,
+        build.layers_max,
         dead.added_objects,
         dead.dead_bytes as f64 / GB,
         after_dead.total as f64 / GB,
@@ -1237,7 +1479,13 @@ fn run() -> Result<()> {
 
     let mut none_runs = Vec::new();
     for run in 0..runs {
-        let measured = measure(&store, 90u8.wrapping_add(run as u8), 0, options.cold_cache)?;
+        let measured = measure(
+            &store,
+            90u8.wrapping_add(run as u8),
+            0,
+            options.cold_cache,
+            options.cold_method,
+        )?;
         if measured.path != "none" {
             cleanup(&scratch, options.keep);
             return Err(refusal(format!(
@@ -1273,6 +1521,7 @@ fn run() -> Result<()> {
             100u8.wrapping_add(run as u8),
             added.added_objects,
             options.cold_cache,
+            options.cold_method,
         )?;
         if measured.path != "rebuild" {
             cleanup(&scratch, options.keep);
@@ -1297,12 +1546,12 @@ fn run() -> Result<()> {
         rebuild_runs.push(measured);
     }
 
-    let mut cache_drops = 0u64;
+    let mut cache_applied = 0u64;
     let mut cache_refused = 0u64;
     let mut cache_note = String::new();
     for run in none_runs.iter().chain(rebuild_runs.iter()) {
-        if run.cache.dropped {
-            cache_drops += 1;
+        if run.cache.applied {
+            cache_applied += 1;
         } else if options.cold_cache {
             cache_refused += 1;
             if cache_note.is_empty() {
@@ -1314,11 +1563,11 @@ fn run() -> Result<()> {
         cache_note = "warm: --cold-cache not requested".to_owned();
     }
     let cache_state = if !options.cold_cache {
-        "warm"
+        "warm".to_owned()
     } else if cache_refused == 0 {
-        "cold"
+        format!("cold ({})", options.cold_method.label())
     } else {
-        "warm (drop_caches refused)"
+        format!("warm ({} refused)", options.cold_method.label())
     };
 
     let mut out = String::new();
@@ -1331,10 +1580,17 @@ fn run() -> Result<()> {
         "{{\n  \"schema\": \"{SCHEMA}\",\n  \"generatedAtUnixMs\": {generated},\n  \
          \"notRun\": false,\n  \"scale\": \"{}\",\n  \"ownerOnly\": {},\n  \
          \"runsPerArm\": {},\n  \"profile\": \"SqlitePersistenceProfile::Disposable (WAL/OFF)\",\n  \
-         \"host\": {},\n  \"cache\": {{\n    \"requested\": {},\n    \"dropsSucceeded\": {},\n    \
-         \"dropsRefused\": {},\n    \"state\": {},\n    \"note\": {}\n  }},\n  \
-         \"fixture\": {{\n    \"groups\": {},\n    \"groupSize\": {},\n    \
-         \"objectBytes\": {},\n    \"liveObjects\": {},\n    \"livePayloadBytes\": {},\n    \
+         \"host\": {},\n  \"cache\": {{\n    \"requested\": {},\n    \"method\": \"{}\",\n    \
+         \"applied\": {},\n    \"refused\": {},\n    \"state\": {},\n    \"note\": {}\n  }},\n  \
+         \"fixture\": {{\n    \"groups\": {},\n    \"stacks\": {},\n    \
+         \"layersPerStackMin\": {},\n    \"layersPerStackMax\": {},\n    \
+         \"historyLayers\": {},\n    \"historyCommits\": {},\n    \
+         \"groupSize\": {},\n    \
+         \"objectBytes\": {},\n    \"freshObjects\": {},\n    \
+         \"sharedObjects\": {},\n    \"sharedReferences\": {},\n    \
+         \"deltaChains\": {},\n    \"deltaChainObjects\": {},\n    \
+         \"deltaChainMaxDepth\": {},\n    \"deltaChainsByDepth\": {},\n    \
+         \"liveObjects\": {},\n    \"livePayloadBytes\": {},\n    \
          \"packBytesAfterLive\": {},\n    \"packBytes\": {},\n    \"physicalBytes\": {},\n    \
          \"packLengthMin\": {},\n    \"packLengthMax\": {},\n    \
          \"deadBytes\": {},\n    \"deadFractionPermille\": {},\n    \
@@ -1346,14 +1602,30 @@ fn run() -> Result<()> {
         runs,
         json_host(&host),
         options.cold_cache,
-        cache_drops,
+        options.cold_method.label(),
+        cache_applied,
         cache_refused,
-        json_string(cache_state),
+        json_string(&cache_state),
         json_string(&cache_note),
         spec.groups,
+        spec.stacks,
+        build.layers_min,
+        build.layers_max,
+        build.history_layers,
+        build.history_commits,
         spec.group_size,
         spec.object_bytes,
-        spec.live_objects(),
+        build.fresh_objects,
+        build.shared_objects,
+        build.shared_references,
+        build.delta_chains,
+        build.delta_objects,
+        build.max_chain_depth,
+        json_delta_depths(&build.chains_by_depth),
+        build
+            .fresh_objects
+            .saturating_add(build.shared_objects)
+            .saturating_add(build.delta_objects),
         spec.live_payload_bytes(),
         built.total,
         after_dead.total,

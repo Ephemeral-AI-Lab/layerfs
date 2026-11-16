@@ -223,6 +223,13 @@ linearly from the 10 GB ones. The alternative build (clone + delete +
 `incremental_vacuum`, below a size threshold on reflink filesystems) is
 recorded in D2 and is not adopted in this PR.
 
+The per-GB rates above were measured on the earlier whole-file-only fixture
+(one whole-file object per pack, one genesis Layer per project). The current
+harness (`tools/ci/gc-bench.md`) models Layer history depth, cross-project
+shared content and delta chains and records the cold-cache method and 3-run
+variance; re-measure the arm before quoting a rate against the current
+fixture. The gated 50 GB owner-final arm has not been re-run on it.
+
 ## 9. Implementation deviations from the frozen text (D1–D4)
 
 The shipped SQLite code differs from four frozen sentences; all four are

@@ -214,6 +214,15 @@ rotational (HDD) backing — not NVMe** (88 vCPU across two Xeon E5-2699C v4,
 - The 50 GB numbers do **not** scale linearly from the 10 GB ones (the 10 GB
   Store and its artifacts fitted the page cache; the 50 GB one did not), so a
   capacity claim states per-GB rates with its arm and host.
+- **Fixture basis (2026-11-16, #711 review).** Every number above was measured
+  on the earlier whole-file-only fixture: one whole-file object per pack and one
+  genesis Layer per project. The harness now models real Layer history depth,
+  content shared across projects and delta chains kept only as bases, and it
+  records the realized fixture shape, the cold-cache method and the 3-run
+  variance (`tools/ci/gc-bench.md`, `examples/gc_bench/gc_fixture.rs`). These
+  numbers are evidence for the earlier shape: the gated 50 GB owner-final arm
+  has **not** been re-run on the current fixture, and the 10 GB arm has not been
+  re-measured with the new shape and cold-cache method.
 
 ## Request
 

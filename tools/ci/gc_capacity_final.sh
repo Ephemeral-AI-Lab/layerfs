@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
 # GC capacity measurement entry point (GC spec section 13 / item-44).
 #
-#   small   default: ~30 MB fixture, 3 runs per arm (`none`, `rebuild`)
-#   medium  opt-in: ~10 GB fixture, 3 runs per arm
-#   final   owner-only: ~50 GB fixture, 1 run per arm; NOT run by CI or agents
+#   small   default: ~28 MB live, 4 projects x 4 Layers, 3 runs per arm
+#   medium  opt-in: ~9.8 GB live, 16 projects x 52 Layers, 3 runs per arm
+#   final   owner-only: ~45.6 GB live / ~50 GB pack, 32 projects x 124 Layers,
+#           1 run per arm; NOT run by CI or agents
 #
-# The harness is `engine/crates/layerfs-persistence/examples/gc_bench.rs`.
-# It reports downtime, the mark/build/verify/install phases, peak temp bytes,
-# bytes written, per-GB rates, cache state and the host class. Only the
-# Disposable (WAL/synchronous=OFF) profile is built, per owner direction
-# 2026-10-07.
+# The harness is `engine/crates/layerfs-persistence/examples/gc_bench.rs`; its
+# fixture (`examples/gc_bench/gc_fixture.rs`) publishes real Layer history,
+# content shared across projects and delta chains kept as bases. It reports
+# downtime, the mark/build/verify/install phases, peak temp bytes, bytes
+# written, per-GB rates, 3-run variance, cache state/method and the host class.
+# Read `tools/ci/gc-bench.md` for the representativeness caveat, the cold-cache
+# method and the fixture shape. Only the Disposable (WAL/synchronous=OFF)
+# profile is built, per owner direction 2026-10-07.
 #
 # Usage:
 #   tools/ci/gc_capacity_final.sh [small|medium|final] [--cold-cache]
-#       [--out FILE] [--runs N] [--check]
+#       [--cold-method drop_caches|cgroup-memory] [--out FILE] [--runs N]
+#       [--check]
 #
 # Environment:
 #   TMPDIR / GC_BENCH_TMPDIR       scratch filesystem (>=3.4x the live bytes)
@@ -24,6 +29,7 @@
 #                                  "Dell PowerEdge R730 / PERC / rotational (not NVMe)"
 #   GC_BENCH_NOMINAL_READ_MBS      declared sequential read rate
 #   GC_BENCH_NOMINAL_WRITE_MBS     declared sequential write rate
+#   GC_BENCH_COLD_METHOD           default cold-cache method (drop_caches)
 #   GC_BENCH_MEDIUM=1              required to run the 10 GB arm
 #   GC_BENCH_OWNER=1               required to run the 50 GB arm
 #   GC_BENCH_OWNER_APPROVED=1      required to run the 50 GB arm
@@ -31,16 +37,17 @@
 #
 # The 50 GB arm is explicitly owner-only. This script is expected to be
 # invoked with `final` only by the owner; it refuses and prints the command
-# otherwise. It was NOT run for item-44.
+# otherwise. It was NOT run for this change, and no 50 GB number was produced.
 set -euo pipefail
 
 usage() {
-    sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,62p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 mode="small"
 out=""
 cold=0
+cold_method=""
 check=0
 keep=0
 runs=""
@@ -53,6 +60,10 @@ while (($#)); do
         --cold-cache)
             cold=1
             shift
+            ;;
+        --cold-method)
+            cold_method="${2:?--cold-method needs drop_caches or cgroup-memory}"
+            shift 2
             ;;
         --keep)
             keep=1
@@ -92,6 +103,7 @@ export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/target-gc-bench}"
 export TMPDIR="${GC_BENCH_TMPDIR:-${TMPDIR:-/tmp}}"
 export CARGO_NET_GIT_FETCH_WITH_CLI="${CARGO_NET_GIT_FETCH_WITH_CLI:-true}"
 jobs="${GC_BENCH_JOBS:-8}"
+cold_method="${cold_method:-${GC_BENCH_COLD_METHOD:-}}"
 mkdir -p "$CARGO_HOME" "$CARGO_TARGET_DIR" "$TMPDIR"
 
 # Declared host class: the off-host Linux container does not expose DMI or
@@ -133,7 +145,7 @@ require_space() {
 # item-44.
 if ((!check)) && [[ "$mode" == "medium" && "${GC_BENCH_MEDIUM:-}" != "1" ]]; then
     echo "gc_capacity_final: the 10 GB medium arm is opt-in; set GC_BENCH_MEDIUM=1" >&2
-    echo "  (it needs a TMPDIR with >=32 GiB free and takes minutes to hours)" >&2
+    echo "  (it needs a TMPDIR with >=34 GiB free and takes minutes to hours)" >&2
     exit 3
 fi
 if ((!check)) && [[ "$mode" == "final" ]] \
@@ -197,6 +209,9 @@ else
     args+=(--runs "$default_runs")
 fi
 ((cold)) && args+=(--cold-cache)
+if [[ -n "$cold_method" ]]; then
+    args+=(--cold-method "$cold_method")
+fi
 ((keep)) && args+=(--keep)
 if [[ "$scale" == "final" ]]; then
     args+=(--owner-approved)
@@ -216,12 +231,23 @@ print(f"  scale={data['scale']} runs/arm={data['runsPerArm']} profile={data['pro
 print(f"  host={host['hostClass']} source={host['hostClassSource']} "
       f"media={host['storageMedia']} notNvme={host['notNvme']} "
       f"nominalMB/s={host['nominalSequentialMBs']}")
-print(f"  cache={data['cache']['state']}")
+fixture = data["fixture"]
+print(f"  fixture: {fixture['stacks']} projects x {fixture['layersPerStackMin']}-"
+      f"{fixture['layersPerStackMax']} Layers, {fixture['historyLayers']} Layers / "
+      f"{fixture['historyCommits']} Commits, {fixture['sharedObjects']} shared objects "
+      f"({fixture['sharedReferences']} refs), {fixture['deltaChains']} delta chains "
+      f"depth {fixture['deltaChainMaxDepth']}, {fixture['liveObjects']} live objects")
+print(f"  cache: method={data['cache']['method']} state={data['cache']['state']} "
+      f"applied={data['cache']['applied']} refused={data['cache']['refused']}")
 for arm in ("none", "rebuild"):
     a = data["arms"][arm]
     g = a["perGb"]
+    v = a["variance"]
     print(f"  {arm}: downtime={a['median']['downtimeSeconds']:.3f}s "
+          f"range=[{a['minWallMicros']/1e6:.3f}, {a['maxWallMicros']/1e6:.3f}]s "
+          f"stddev={v['wallSecondsStdDev']:.3f}s rel={v['wallRelativeRange']:.4f} "
           f"s/GB-live={g['wallSecondsPerLiveGb']:.2f} "
+          f"s/GB-freed={g['wallSecondsPerFreedGb']:.2f} "
           f"peakTemp={a['median']['peakTempBytes']} "
           f"write={a['median']['processWriteBytes']}B")
 PY
