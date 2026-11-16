@@ -33,6 +33,9 @@ pub(crate) const SCHEMA: &str = concat!(
 );
 /// The Store tables a schema had before the GC tables ([`GC`]) were appended.
 const PRE_GC_SCHEMA: &str = include_str!("../../../sql/postgresql/schema.sql");
+/// The `history_meta` position column as `schema.sql` writes it; it sits on
+/// its own line, so removing the line leaves the text an older Store recorded.
+const NEXT_SERIAL: &str = " next_history_serial bigint NOT NULL DEFAULT 1,\n";
 /// The GC marker, position and admission tables; a Store written before them
 /// gains them at open ([`add_gc`]).
 const GC: &str = include_str!("../../../sql/postgresql/gc.sql");
@@ -127,6 +130,16 @@ fn pre_gc_source(acquisition: bool) -> String {
     }
 }
 
+/// The current source before [`NEXT_SERIAL`] was written.
+fn source_without_next_serial(acquisition: bool) -> String {
+    source(acquisition).replacen(NEXT_SERIAL, "", 1)
+}
+
+/// The pre-GC source before [`NEXT_SERIAL`] was written.
+fn pre_gc_source_without_next_serial(acquisition: bool) -> String {
+    pre_gc_source(acquisition).replacen(NEXT_SERIAL, "", 1)
+}
+
 /// Creates the new schema `tx.schema` with the Store and acquisition tables,
 /// its policy row and its catalog row, inside the caller's transaction. A
 /// schema of that name that already exists is refused before anything is
@@ -211,10 +224,16 @@ pub(crate) fn add_gc(session: &Session) -> Result<(), PersistenceError> {
             return Err(BackendError::Integrity.into());
         };
         let recorded_source: String = row.get(0)?;
-        let acquisition = match (recorded_source == pre_gc_source(false), recorded_source == pre_gc_source(true)) {
-            (true, _) => false,
-            (false, true) => true,
-            (false, false) => return Err(BackendError::Integrity.into()),
+        let acquisition = if recorded_source == pre_gc_source(false)
+            || recorded_source == pre_gc_source_without_next_serial(false)
+        {
+            false
+        } else if recorded_source == pre_gc_source(true)
+            || recorded_source == pre_gc_source_without_next_serial(true)
+        {
+            true
+        } else {
+            return Err(BackendError::Integrity.into());
         };
         let tables = tx.query(TABLE_NAMES, vec![])?;
         let actual: Vec<String> = tables.iter().map(|r| r.get(0)).collect::<Result<_, _>>()?;
@@ -230,6 +249,71 @@ pub(crate) fn add_gc(session: &Session) -> Result<(), PersistenceError> {
             return Err(BackendError::Integrity.into());
         }
         tx.batch(GC)?;
+        let definition = definition(tx)?;
+        tx.query(
+            "UPDATE history_meta SET schema_source=$1,schema_definition=$2 WHERE id=1",
+            vec![Param::Text(source(acquisition)), Param::Text(definition)],
+        )?;
+        Ok(())
+    })
+}
+
+/// Adds the position column `history_meta.next_history_serial` (T1.4) to a
+/// Store written before it, then records the current schema: an additive
+/// migration under the same conditions as [`add_gc`]. A schema that already
+/// has the column is left alone; a recorded source or definition that is not
+/// one of the earlier schemas is refused, never migrated. PostgreSQL has no
+/// `commit`/`layer` serial columns yet, so only the column and one
+/// `project_epoch` row per project are recorded here; the serial backfill is
+/// SQLite's.
+pub(crate) fn add_position_state(session: &Session) -> Result<(), PersistenceError> {
+    // A Store that already has the column is left alone: one statement, no
+    // transaction and no lane wait.
+    let present = session.run_as::<_, BackendError>(Mode::Statement, |tx| {
+        let sql = format!(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema='{}' AND table_name='history_meta' AND column_name='next_history_serial'",
+            tx.schema
+        );
+        Ok(!tx.query(&sql, vec![])?.is_empty())
+    })?;
+    if present {
+        return Ok(());
+    }
+    session.run_as(Mode::Write, |tx| -> Result<(), PersistenceError> {
+        // Re-check under the lane: another process may have migrated first.
+        let present = tx.query(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='history_meta' AND column_name='next_history_serial'",
+            vec![],
+        )?;
+        if !present.is_empty() {
+            return Ok(());
+        }
+        let rows = tx.query(
+            "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
+            vec![],
+        )?;
+        let [row] = rows.as_slice() else {
+            return Err(BackendError::Integrity.into());
+        };
+        let recorded_source: String = row.get(0)?;
+        let acquisition = if recorded_source == source(false)
+            || recorded_source == source_without_next_serial(false)
+        {
+            false
+        } else if recorded_source == source(true)
+            || recorded_source == source_without_next_serial(true)
+        {
+            true
+        } else {
+            return Err(BackendError::Integrity.into());
+        };
+        if row.get::<String>(1)? != definition(tx)? {
+            return Err(BackendError::Integrity.into());
+        }
+        tx.batch("ALTER TABLE history_meta ADD COLUMN next_history_serial bigint NOT NULL DEFAULT 1;")?;
+        tx.batch(
+            "INSERT INTO project_epoch(layer_stack_id, epoch) SELECT s.layer_stack_id, 0 FROM layer_stack s WHERE NOT EXISTS (SELECT 1 FROM project_epoch e WHERE e.layer_stack_id = s.layer_stack_id);",
+        )?;
         let definition = definition(tx)?;
         tx.query(
             "UPDATE history_meta SET schema_source=$1,schema_definition=$2 WHERE id=1",

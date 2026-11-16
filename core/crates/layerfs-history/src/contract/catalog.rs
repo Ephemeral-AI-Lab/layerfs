@@ -21,8 +21,8 @@ use crate::identity::{BranchId, CatalogId, CommitId, HistoryName, LayerId, Layer
 use crate::records::{
     AddLayerOutcome, AddLayerRequest, BranchMergeRequest, BranchRecord, BranchSnapshot,
     CommitHistoryRequest, CommitOutcome, CommitRecord, CommitRequest, ForkRequest,
-    LayerHistoryRequest, LayerRecord, LayerStackRecord, Page, PageResult, Reservation,
-    ReserveRequest, StackInitialization,
+    LayerHistoryRequest, LayerRecord, LayerStackRecord, Page, PageResult, PathRemovalOutcome,
+    PathRemovalRecord, PathRemovalRequest, Reservation, ReserveRequest, StackInitialization,
 };
 /// Checked inputs that establish one catalog binding.
 #[derive(Clone, Eq, PartialEq)]
@@ -329,6 +329,29 @@ pub trait HistoryCatalog: Send + Sync {
     ) -> HistoryResult<()> {
         Err(crate::error::HistoryError::Unsupported(
             "path removal marker",
+        ))
+    }
+
+    /// Applies one `project.remove_file` marker in one write transaction:
+    /// reads the Store high-water as the new frontier, returns `UpToDate`
+    /// when the path's marker already covers every project node, otherwise
+    /// advances the marker and the project epoch. The default refuses.
+    fn remove_path(&self, _request: &PathRemovalRequest) -> HistoryResult<PathRemovalOutcome> {
+        Err(crate::error::HistoryError::Unsupported("path removal"))
+    }
+
+    /// Every `path_removed` marker of one Stack. The default refuses.
+    fn path_removals(&self, _stack: LayerStackId) -> HistoryResult<Vec<PathRemovalRecord>> {
+        Err(crate::error::HistoryError::Unsupported(
+            "path removal markers",
+        ))
+    }
+
+    /// The `history_serial` a Commit or Layer records, if it exists. The
+    /// default refuses.
+    fn node_history_serial(&self, _node: NodeId) -> HistoryResult<Option<u64>> {
+        Err(crate::error::HistoryError::Unsupported(
+            "node history position",
         ))
     }
 

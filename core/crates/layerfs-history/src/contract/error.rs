@@ -147,6 +147,8 @@ pub enum HistoryError {
     NameTaken(Box<NameTakenState>),
     /// A path is hidden by `remove_file`.
     Removed(Box<RemovedState>),
+    /// A required marker or fence row is missing or contradicts the request.
+    Conflict(&'static str),
     /// The Store was replaced or moved under this handle.
     StaleStore,
     /// Immediate metadata admission was refused; the caller may retry later.
@@ -208,6 +210,7 @@ impl std::fmt::Display for HistoryError {
             Self::Unsupported(what) => write!(formatter, "unsupported: {what}"),
             Self::NameTaken(state) => write!(formatter, "name taken: {:?}", state.holder),
             Self::Removed(state) => write!(formatter, "removed: {} paths", state.paths.len()),
+            Self::Conflict(what) => write!(formatter, "conflict: {what}"),
             Self::StaleStore => formatter.write_str("stale Store"),
             Self::Busy => formatter.write_str("busy"),
             Self::OwnershipUnavailable => formatter.write_str("ownership unavailable"),

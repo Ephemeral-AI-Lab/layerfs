@@ -6,6 +6,7 @@ CREATE TABLE history_meta (
     binding_key BLOB NOT NULL CHECK (length(binding_key) BETWEEN 1 AND 128),
     identity_format INTEGER NOT NULL CHECK (identity_format = 3),
     schema_version INTEGER NOT NULL CHECK(schema_version=1),
+    next_history_serial INTEGER NOT NULL DEFAULT 1,
     schema_source TEXT NOT NULL,
     schema_definition TEXT NOT NULL
 ) STRICT;

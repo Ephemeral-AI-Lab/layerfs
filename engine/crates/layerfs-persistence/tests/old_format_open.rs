@@ -16,6 +16,8 @@ const GC: &str = include_str!("../sql/sqlite/gc.sql");
 /// format this fixture builds lacks them.
 const HISTORY_SERIAL: &str = "    history_serial INTEGER NOT NULL DEFAULT 0,\n";
 const TRACE_SALT: &str = " trace_salt BLOB NOT NULL DEFAULT (X'0000000000000000000000000000000000000000000000000000000000000000') CHECK(length(trace_salt)=32)\n";
+/// The `history_meta` next serial column as `history.sql` writes it (T1.4).
+const NEXT_SERIAL: &str = "    next_history_serial INTEGER NOT NULL DEFAULT 1,\n";
 
 /// The table's definition as the history schema writes it, with its trailing
 /// blank line: the text an old Store's recorded schema source lacks.
@@ -38,14 +40,15 @@ fn definition(sql: &rusqlite::Connection) -> String {
 
 /// Rewrites a fresh Store into the format the daemons before `49499abac`
 /// wrote: no `binding_hint` table (nor the later #353 lineage and #355 merge
-/// tables), no position columns, and the schema source and definition they
-/// recorded.
+/// tables), no position columns (including T1.4's next serial), and the
+/// schema source and definition they recorded.
 fn make_old(path: &std::path::Path) {
     let sql = rusqlite::Connection::open(path).unwrap();
     sql.execute_batch(
         "ALTER TABLE \"commit\" DROP COLUMN history_serial; \
          ALTER TABLE layer DROP COLUMN history_serial; \
          ALTER TABLE store_policy DROP COLUMN trace_salt; \
+         ALTER TABLE history_meta DROP COLUMN next_history_serial; \
          DROP TABLE binding_hint_block; DROP TABLE layer_lineage; DROP TABLE commit_lineage; \
          DROP TABLE absorbed; DROP TABLE reach; DROP TABLE merge_operation; \
          DROP TABLE merge_record; DROP TABLE file_digest; \
@@ -59,6 +62,7 @@ fn make_old(path: &std::path::Path) {
     let old = source
         .replacen(HISTORY_SERIAL, "", 2)
         .replacen(TRACE_SALT, "", 1)
+        .replacen(NEXT_SERIAL, "", 1)
         .replacen(&hint_table(), "", 1)
         .replacen(LINEAGE, "", 1)
         .replacen(SCRATCH, "", 1)

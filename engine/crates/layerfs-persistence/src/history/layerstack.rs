@@ -67,6 +67,7 @@ pub(crate) fn initialize_layerstack(
         return Err(HistoryError::Integrity("LayerStack name"));
     }
     let genesis = LayerId::derive(request.stack, None, request.genesis_root);
+    let serial = super::position::next_serial(tx)?;
     tx.execute(
         INSERT_STACK,
         params![
@@ -91,6 +92,7 @@ pub(crate) fn initialize_layerstack(
             Option::<Vec<u8>>::None,
             i64::try_from(request.logical).map_err(|_| HistoryError::Capacity("logical bytes"))?,
             Vec::<u8>::new(),
+            i64::try_from(serial).map_err(|_| HistoryError::Capacity("history serials"))?,
         ],
     )
     .map_err(sql)?;
@@ -382,6 +384,9 @@ pub(crate) fn add_layer(
         source_commit: Some(request.commit),
         logical: commit.meta.statistics.logical,
     };
+    // A Layer that republishes a Commit carries that Commit's serial.
+    let serial =
+        super::position::node_serial(tx, layerfs_history::NodeId::Commit(commit.id))?.unwrap_or(0);
     if !verify_layer(tx, &layer)? {
         tx.execute(
             INSERT_LAYER,
@@ -396,6 +401,7 @@ pub(crate) fn add_layer(
                 // Overwritten Layers are addressed by height (`overwritten`);
                 // only Layers published before #353 list them here.
                 Vec::<u8>::new(),
+                i64::try_from(serial).map_err(|_| HistoryError::Capacity("history serials"))?,
             ],
         )
         .map_err(sql)?;

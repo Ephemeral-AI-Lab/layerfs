@@ -636,3 +636,50 @@ pub struct InitStatistics {
     /// Init's wall time in milliseconds, up to the first Branch.
     pub millis: u64,
 }
+
+/// One `path_removed` marker as stored for a project.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PathRemovalRecord {
+    /// The normalized relative path the marker names.
+    pub path: Vec<u8>,
+    /// The Store high-water when the marker last advanced.
+    pub frontier_serial: u64,
+    /// When the marker last advanced, in milliseconds since the epoch.
+    pub removed_ms: i64,
+}
+
+/// Whether a `project.remove_file` call advanced the marker or found it current.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PathRemovalKind {
+    /// The marker advanced to a new frontier.
+    Removed,
+    /// No project node is above the marker's frontier; the stored values are returned.
+    UpToDate,
+}
+
+/// One `project.remove_file` request: the project, the normalized path and the
+/// time the caller observed.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PathRemovalRequest {
+    /// Project (LayerStack) the path is removed in.
+    pub stack: LayerStackId,
+    /// The normalized relative path bytes; `BLAKE3` keys the marker.
+    pub path: Vec<u8>,
+    /// When the call was made, in milliseconds since the epoch.
+    pub removed_ms: i64,
+}
+
+/// One `project.remove_file` result: the stored marker values.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PathRemovalOutcome {
+    /// Whether the call advanced the marker or found it current.
+    pub kind: PathRemovalKind,
+    /// Project (LayerStack) the marker belongs to.
+    pub stack: LayerStackId,
+    /// The stored normalized relative path.
+    pub path: Vec<u8>,
+    /// The stored frontier serial.
+    pub frontier_serial: u64,
+    /// The stored `removed_ms`.
+    pub removed_ms: i64,
+}
