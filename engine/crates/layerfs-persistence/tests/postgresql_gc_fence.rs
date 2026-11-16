@@ -888,8 +888,6 @@ fn two_concurrent_branch_removes_in_one_project_are_ordered() {
             Err(other) => panic!("a removal refusal must be typed: {other:?}"),
         }
     }
-    assert_eq!(left.unwrap_or(()), ());
-    assert_eq!(right.unwrap_or(()), ());
     assert_eq!(epoch(&mut schema.admin(), project_id), 2);
     assert_eq!(live_branch_rows(&schema), 0, "both Branches are retired");
 }

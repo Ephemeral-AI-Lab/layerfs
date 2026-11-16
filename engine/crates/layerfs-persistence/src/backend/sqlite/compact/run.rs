@@ -155,9 +155,7 @@ impl SqliteHandles {
                 tuple: live.clone(),
                 live_heads_digest: [0u8; 32],
             };
-            if let Err(error) = op.write(&store) {
-                return Err(error);
-            }
+            op.write(&store)?;
 
             metrics.begin_phase(CompactPhase::Mark);
             // Every pack descriptor is fixed while the lane is held, so the

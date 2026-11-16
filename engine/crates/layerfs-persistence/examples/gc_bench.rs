@@ -1570,6 +1570,11 @@ fn run() -> Result<()> {
         format!("warm ({} refused)", options.cold_method.label())
     };
 
+    let arms = format!(
+        "{},\n  {}",
+        json_arm("none", &none_runs),
+        json_arm("rebuild", &rebuild_runs)
+    );
     let mut out = String::new();
     let generated = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1638,11 +1643,7 @@ fn run() -> Result<()> {
         spec.live_payload_bytes() as f64 / 1e6 / build_seconds.max(1e-9),
         dead.seconds,
         dead.added_objects,
-        format!(
-            "{},\n  {}",
-            json_arm("none", &none_runs),
-            json_arm("rebuild", &rebuild_runs)
-        ),
+        arms,
     );
 
     emit(&out, &options.out)?;

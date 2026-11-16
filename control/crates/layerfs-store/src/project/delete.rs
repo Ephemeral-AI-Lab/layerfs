@@ -612,7 +612,7 @@ impl Effects for Local {
 }
 
 /// The Store-side opens of `project.delete` in a sqlite Store's worker.
-
+///
 /// `project.delete(project)`: retires project `project` in its Store and
 /// removes the caller's home entry. The marker is the commit point; a home
 /// removal failure is success with `home_entry_removed: false`, and the

@@ -2,6 +2,7 @@
 //! path-awareness of its base walk. Moved out of `operator/workspace.rs`:
 //! product source holds no tests (the product-boundary guard).
 
+#[allow(dead_code)]
 #[path = "support/installed_store.rs"]
 mod installed;
 
